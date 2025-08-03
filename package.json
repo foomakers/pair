@@ -1,0 +1,10 @@
+{
+  "name": "ai-assisted-dev-template",
+  "version": "1.0.0",
+  "description": "Template repository for AI-assisted development projects",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}
