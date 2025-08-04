@@ -208,12 +208,23 @@ Define comprehensive testing approach that ensures code quality, reliability, an
 - **Accessibility Testing**: WCAG compliance and usability validation
 - **Compatibility Testing**: Cross-platform and browser testing
 
+**TODO - Usability Testing Integration**: Define comprehensive usability testing methodology including:
+
+- Testing approach (moderated vs unmoderated, remote vs in-person)
+- Frequency and timing (per sprint, per release, ad-hoc)
+- User recruitment and sample size guidelines
+- Qualitative vs quantitative metrics collection
+- Budget considerations (free tools vs premium solutions)
+- Integration with UX Guidelines validation criteria
+
 ### Specialized Testing
 
 - **API Testing**: RESTful service validation and contract testing
 - **Database Testing**: Data integrity and query performance
 - **UI Testing**: Component behavior and user interaction
 - **Mobile Testing**: Responsive design and mobile-specific functionality
+
+**TODO**: Expand UI Testing section to include shadcn/ui component testing and visual regression testing patterns
 
 ---
 
