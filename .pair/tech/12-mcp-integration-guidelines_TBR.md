@@ -22,6 +22,13 @@ Define Model Context Protocol (MCP) integration patterns and standards that enha
 - Legacy system migration strategies
 - Business process automation
 
+**📝 TODO - Testing Strategy Integration:**
+
+- Define testing patterns for MCP server development and integration
+- Coordinate MCP testing with [Testing Strategy](07-testing-strategy_TBR.md) framework (unit/integration/e2e)
+- Specify testing requirements for context providers and tool integrations
+- Ensure MCP integration testing aligns with CI/CD pipeline and quality gates
+
 ---
 
 ## � Table of Contents

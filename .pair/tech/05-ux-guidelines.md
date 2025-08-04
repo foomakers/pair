@@ -767,13 +767,22 @@ For detailed technical performance optimization strategies, monitoring, and impl
 
 ### Usability Testing Framework
 
-**UX Success Criteria** (methodology defined in [Testing Strategy](07-testing-strategy_TBR.md)):
+**UX Design Considerations for Usability Testing:**
 
-- **User Flow Completion**: Critical user journeys completed without assistance
-- **Task Success Rate**: Target 95% completion rate for primary tasks
-- **Error Recovery**: Users can recover from errors within 2 interactions
-- **Satisfaction Score**: Target System Usability Scale (SUS) score above 70
-- **Accessibility Validation**: All user flows tested with assistive technologies
+- **Design for Testing**: Create designs that support usability testing scenarios
+- **User Flow Documentation**: Document key user journeys for testing validation
+- **Success Criteria Definition**: Define UX success metrics and benchmarks
+- **Accessibility Testing Support**: Design components that work with assistive technologies
+
+**UX Success Criteria:**
+
+- **User Flow Completion:** Critical user journeys completed without assistance
+- **Task Success Rate:** Target 95% completion rate for primary tasks
+- **Error Recovery:** Users can recover from errors within 2 interactions
+- **Satisfaction Score:** Target System Usability Scale (SUS) score above 70
+- **Accessibility Validation:** All user flows tested with assistive technologies
+
+**Detailed usability testing methodologies, tools, budget considerations, and implementation guidelines are covered in [Testing Strategy](07-testing-strategy_TBR.md).**
 
 ### UX Metrics and KPIs
 

@@ -2,25 +2,30 @@
 
 ## Purpose
 
-Define comprehensive testing approach that ensures code quality, reliability, and maintainability throughout the development lifecycle.
+Define comprehensive testing approach that ensures code quality, reliability, and maintainability throughout the development lifecycle, aligned with project architecture and [Definition of Done](06-definition-of-done.md).
 
 ## Scope
 
 **In Scope:**
 
-- Testing methodologies and strategies
-- Test automation frameworks and tools
-- Code coverage requirements and standards
-- Testing pyramid implementation (unit, integration, e2e)
-- Quality assurance processes and procedures
+- Testing methodologies and strategic approaches
+- Test automation frameworks and integration patterns
+- Code coverage requirements and quality standards
+- Testing pyramid implementation and distribution strategy
+- Quality assurance processes and development workflow integration
+- Testing patterns for architectural components and domain boundaries
+- Performance testing integration within testing strategy
+- End-to-end testing implementation guidelines and best practices
+- Usability testing methodologies and user acceptance testing procedures
 
 **Out of Scope:**
 
-- Production monitoring and alerting
-- User acceptance testing procedures
-- Performance load testing strategies
-- Security penetration testing
+- Production monitoring and alerting (see [Observability Guidelines](11-observability-guidelines_TBR.md))
+- UX design principles and component guidelines (see [UX Guidelines](05-ux-guidelines.md))
+- Detailed performance optimization strategies (see [Performance Guidelines](09-performance-guidelines_TBR.md))
+- Comprehensive security testing methodologies (see [Security Guidelines](10-security-guidelines_TBR.md))
 - Manual testing workflows and documentation
+- Detailed tool configurations (see [Technical Guidelines](03-technical-guidelines.md))
 
 ---
 
@@ -45,39 +50,45 @@ Define comprehensive testing approach that ensures code quality, reliability, an
 
 4. [🛠️ Testing Tools and Framework](#️-testing-tools-and-framework)
 
+   - [Framework Integration with Project Architecture](#framework-integration-with-project-architecture)
    - [Test Framework Selection Criteria](#test-framework-selection-criteria)
-   - [Common Framework Examples](#common-framework-examples)
-   - [Modern Testing Tools](#modern-testing-tools)
 
-5. [📊 Coverage Requirements](#-coverage-requirements)
+5. [🏗️ Architecture-Specific Testing](#️-architecture-specific-testing)
+
+   - [Next.js BFF Testing Patterns](#nextjs-bff-testing-patterns)
+   - [Fastify Bounded Context Testing](#fastify-bounded-context-testing)
+   - [Cross-Service Integration Testing](#cross-service-integration-testing)
+   - [Database Layer Testing](#database-layer-testing)
+
+6. [📊 Coverage Requirements](#-coverage-requirements)
 
    - [Minimum Coverage Targets](#minimum-coverage-targets)
    - [Coverage Quality Metrics](#coverage-quality-metrics)
 
-6. [🔄 Testing in Development Workflow](#-testing-in-development-workflow)
+7. [🔄 Testing in Development Workflow](#-testing-in-development-workflow)
 
    - [Development Phase Testing](#development-phase-testing)
    - [Code Review Testing](#code-review-testing)
    - [CI/CD Pipeline Testing](#cicd-pipeline-testing)
 
-7. [🔧 Modern Testing Integration](#-modern-testing-integration)
+8. [🔧 Modern Testing Integration](#-modern-testing-integration)
 
    - [Tool-Generated Tests](#tool-generated-tests)
    - [Tool-Assisted Test Maintenance](#tool-assisted-test-maintenance)
 
-8. [📋 Test Quality Gates](#-test-quality-gates)
+9. [📋 Test Quality Gates](#-test-quality-gates)
 
    - [Pre-Development](#pre-development)
    - [During Development](#during-development)
    - [Pre-Merge](#pre-merge)
    - [Post-Deployment](#post-deployment)
 
-9. [📈 Continuous Improvement](#-continuous-improvement)
+10. [📈 Continuous Improvement](#-continuous-improvement)
 
-   - [Testing Metrics](#testing-metrics)
-   - [Regular Reviews](#regular-reviews)
+    - [Testing Metrics](#testing-metrics)
+    - [Regular Reviews](#regular-reviews)
 
-10. [🧪 Testing Standards](#-testing-standards)
+11. [🧪 Testing Standards](#-testing-standards)
 
     - [Test Framework Configuration](#test-framework-configuration)
     - [Unit Testing Patterns](#unit-testing-patterns)
@@ -86,7 +97,24 @@ Define comprehensive testing approach that ensures code quality, reliability, an
     - [Integration Testing for APIs](#integration-testing-for-apis)
     - [Test Organization](#test-organization)
     - [Testing Philosophy](#testing-philosophy)
-    - [End-to-End Testing](#end-to-end-testing)
+
+12. [🌐 End-to-End Testing Implementation](#-end-to-end-testing-implementation)
+
+    - [E2E Testing Strategy](#e2e-testing-strategy)
+    - [Project Setup and Architecture](#project-setup-and-architecture)
+    - [Test Environment Management](#test-environment-management)
+    - [User Journey Testing Patterns](#user-journey-testing-patterns)
+    - [Cross-Service Integration Testing](#cross-service-integration-testing-patterns)
+    - [E2E CI/CD Integration](#e2e-cicd-integration)
+
+13. [👥 Usability Testing & User Acceptance](#-usability-testing--user-acceptance)
+
+    - [Testing Methodology](#testing-methodology)
+    - [Coordination with Testing Strategy](#coordination-with-testing-strategy)
+    - [Frequency & Timing Alignment](#frequency--timing-alignment)
+    - [User Recruitment & Sample Size Guidelines](#user-recruitment--sample-size-guidelines)
+    - [Budget Considerations](#budget-considerations)
+    - [Usability Validation Criteria](#usability-validation-criteria)
 
 ---
 
@@ -177,7 +205,7 @@ Define comprehensive testing approach that ensures code quality, reliability, an
 - Full system stack involvement
 - Real browser/environment simulation
 
-**Tool Assistance**: �
+**Tool Assistance**:
 
 - Suggest critical user path coverage
 - Generate test scenarios from user stories
@@ -203,65 +231,268 @@ Define comprehensive testing approach that ensures code quality, reliability, an
 
 ### Non-Functional Testing
 
-- **Performance Testing**: Response time and throughput validation
-- **Security Testing**: Vulnerability and access control verification
-- **Accessibility Testing**: WCAG compliance and usability validation
+- **Performance Testing**: Response time validation and load testing integration (detailed optimization in [Performance Guidelines](09-performance-guidelines_TBR.md))
+- **Security Testing**: Basic vulnerability checks (comprehensive testing in [Security Guidelines](10-security-guidelines_TBR.md))
+- **Accessibility Testing**: WCAG compliance validation (detailed standards in [Accessibility Guidelines](08-accessibility-guidelines_TBR.md))
 - **Compatibility Testing**: Cross-platform and browser testing
 
-**TODO - Usability Testing Integration**: Define comprehensive usability testing methodology including:
+#### Performance Testing Integration
 
-- Testing approach (moderated vs unmoderated, remote vs in-person)
-- Frequency and timing (per sprint, per release, ad-hoc)
-- User recruitment and sample size guidelines
-- Qualitative vs quantitative metrics collection
-- Budget considerations (free tools vs premium solutions)
-- Integration with UX Guidelines validation criteria
+**Unit Level Performance Testing:**
+
+- Benchmark critical algorithms and data processing functions
+- Memory usage validation for data-intensive operations
+- Execution time assertions for performance-critical code paths
+
+**Integration Level Performance Testing:**
+
+- API response time validation (< 200ms for critical endpoints)
+- Database query performance testing
+- External service integration timeout and retry testing
+
+**End-to-End Performance Testing:**
+
+- Page load time validation (< 3s for critical user flows)
+- Core Web Vitals measurement (LCP, FID, CLS)
+- Performance regression detection in CI/CD pipeline
 
 ### Specialized Testing
 
 - **API Testing**: RESTful service validation and contract testing
 - **Database Testing**: Data integrity and query performance
-- **UI Testing**: Component behavior and user interaction
+- **UI Testing**: Component behavior and user interaction with usability testing methodologies defined in this document
 - **Mobile Testing**: Responsive design and mobile-specific functionality
-
-**TODO**: Expand UI Testing section to include shadcn/ui component testing and visual regression testing patterns
 
 ---
 
 ## 🛠️ Testing Tools and Framework
 
+### Framework Integration with Project Architecture
+
+**Frontend & BFF Testing (Next.js):**
+
+- **Vitest**: Unit and integration testing (configured per [Technical Guidelines](03-technical-guidelines.md))
+- **React Testing Library**: Component testing for React components
+- **Next.js Test Utils**: API route and middleware testing
+
+**Bounded Context API Testing (Fastify):**
+
+- **Vitest**: Unit testing for domain logic
+- **Fastify Testing**: Integration testing with `app.inject()`
+- **Supertest**: Alternative for HTTP endpoint testing
+
+**Database Testing:**
+
+- **Prisma Test Client**: Type-safe database testing
+- **Redis Mock**: In-memory Redis testing for cache layer
+
+**E2E Testing:**
+
+- **Playwright**: Cross-browser testing (configured per [Technical Guidelines](03-technical-guidelines.md))
+- **Separate E2E Project**: Isolated test environment
+
 ### Test Framework Selection Criteria
 
-1. **AI Tool Compatibility**: Good support from AI coding assistants
-2. **Language Ecosystem**: Native support for project language
-3. **Assertion Library**: Rich assertion capabilities
-4. **Mocking Support**: Comprehensive mocking and stubbing
-5. **Reporting**: Clear test results and coverage reporting
+For detailed tool selection and configuration, see [Technical Guidelines](03-technical-guidelines.md).
 
-### Common Framework Examples
+1. **Project Architecture Compatibility**: Supports Next.js + Fastify stack
+2. **TypeScript Integration**: Full type safety across test suite
+3. **Domain-Driven Design Support**: Testing patterns for bounded contexts
+4. **AI Tool Compatibility**: Good support from modern development tools
+5. **Performance**: Fast execution for continuous testing
 
-- **JavaScript/TypeScript**: Jest, Vitest, Cypress, Playwright
-- **Python**: pytest, unittest, Selenium
-- **Java**: JUnit, TestNG, Mockito
-- **C#**: xUnit, NUnit, MSTest
+---
 
-### Modern Testing Tools
+## 🏗️ Architecture-Specific Testing
 
-- **Test Generation**: Modern IDE features for test case generation
-- **Test Maintenance**: Automated test updating tools
-- **Coverage Analysis**: Enhanced coverage gap identification
-- **Quality Assessment**: Automated test quality scoring
+### Next.js BFF Testing Patterns
+
+**API Route Testing:**
+
+```typescript
+// Testing Next.js API routes as BFF layer
+import { createMocks } from "node-mocks-http";
+import handler from "../pages/api/users/[id]";
+
+describe("/api/users/[id]", () => {
+  it("should return user data", async () => {
+    const { req, res } = createMocks({
+      method: "GET",
+      query: { id: "user-1" },
+    });
+
+    await handler(req, res);
+
+    expect(res._getStatusCode()).toBe(200);
+    const data = JSON.parse(res._getData());
+    expect(data.user.id).toBe("user-1");
+  });
+});
+```
+
+**Middleware Testing:**
+
+```typescript
+// Testing Next.js middleware
+import { NextRequest } from "next/server";
+import { middleware } from "../middleware";
+
+describe("middleware", () => {
+  it("should authenticate valid requests", async () => {
+    const request = new NextRequest("http://localhost:3000/protected", {
+      headers: { authorization: "Bearer valid-token" },
+    });
+
+    const response = await middleware(request);
+    expect(response.status).toBe(200);
+  });
+});
+```
+
+### Fastify Bounded Context Testing
+
+**Domain Service Testing:**
+
+```typescript
+// Testing domain services in bounded contexts
+import { createUserService } from "../services/user-service";
+import { createTestUserRepository } from "../test/fixtures";
+
+describe("UserService (Bounded Context)", () => {
+  it("should create user following domain rules", async () => {
+    const repository = createTestUserRepository();
+    const userService = createUserService(repository);
+
+    const result = await userService.createUser({
+      email: "test@example.com",
+      name: "Test User",
+    });
+
+    expect(result.success).toBe(true);
+    // Verify domain invariants are maintained
+    expect(result.data.status).toBe("PENDING_VERIFICATION");
+  });
+});
+```
+
+**Fastify Route Testing:**
+
+```typescript
+// Testing Fastify API endpoints
+import { build } from "../app";
+
+describe("User API (Bounded Context)", () => {
+  const app = build({ logger: false });
+
+  afterAll(() => app.close());
+
+  it("should create user via Fastify API", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/users",
+      payload: { name: "John Doe", email: "john@example.com" },
+    });
+
+    expect(response.statusCode).toBe(201);
+    const user = JSON.parse(response.payload);
+    expect(user.name).toBe("John Doe");
+  });
+});
+```
+
+### Cross-Service Integration Testing
+
+**BFF to Bounded Context Communication:**
+
+```typescript
+// Testing integration between Next.js BFF and Fastify services
+describe("BFF Integration", () => {
+  it("should aggregate data from multiple bounded contexts", async () => {
+    // Setup test services
+    const userService = createTestUserService();
+    const orderService = createTestOrderService();
+
+    // Test BFF aggregation logic
+    const userProfile = await getUserProfile("user-1", {
+      userService,
+      orderService,
+    });
+
+    expect(userProfile.user).toBeDefined();
+    expect(userProfile.recentOrders).toHaveLength(3);
+    expect(userProfile.preferences).toBeDefined();
+  });
+});
+```
+
+### Database Layer Testing
+
+**Prisma Repository Testing:**
+
+```typescript
+// Testing Prisma-based repositories
+import { PrismaClient } from "@prisma/client";
+import { createUserRepository } from "../repositories/user-repository";
+
+describe("UserRepository", () => {
+  const prisma = new PrismaClient();
+  const userRepository = createUserRepository(prisma);
+
+  beforeEach(async () => {
+    await prisma.user.deleteMany();
+  });
+
+  it("should store and retrieve user data", async () => {
+    const userData = { name: "Test User", email: "test@example.com" };
+
+    const createdUser = await userRepository.create(userData);
+    const foundUser = await userRepository.findById(createdUser.id);
+
+    expect(foundUser).toEqual(createdUser);
+  });
+});
+```
+
+**Redis Cache Testing:**
+
+```typescript
+// Testing Redis cache layer
+import { createCacheService } from "../services/cache-service";
+import { createTestRedisClient } from "../test/helpers";
+
+describe("CacheService", () => {
+  const redisClient = createTestRedisClient();
+  const cacheService = createCacheService(redisClient);
+
+  it("should cache and retrieve data", async () => {
+    const key = "user:123";
+    const data = { name: "Test User" };
+
+    await cacheService.set(key, data, 300);
+    const cached = await cacheService.get(key);
+
+    expect(cached).toEqual(data);
+  });
+});
+```
 
 ---
 
 ## 📊 Coverage Requirements
 
-### Minimum Coverage Targets
+### Minimum Coverage Targets (Aligned with [Definition of Done](06-definition-of-done.md))
 
-- **Unit Test Coverage**: 80% line coverage minimum
+- **Unit Test Coverage**: 80% line coverage minimum for business logic
 - **Branch Coverage**: 70% branch coverage for critical paths
 - **Integration Coverage**: 100% of API endpoints and integration points
 - **E2E Coverage**: 100% of critical user journeys
+
+### Architecture-Specific Coverage
+
+- **Next.js BFF Layer**: 80% coverage for API routes and middleware
+- **Fastify Bounded Contexts**: 80% coverage for domain services and controllers
+- **Database Layer**: 100% coverage for repository patterns and data access
+- **Cross-Service Integration**: 100% coverage for service-to-service communication
 
 ### Coverage Quality Metrics
 
@@ -317,33 +548,35 @@ Define comprehensive testing approach that ensures code quality, reliability, an
 
 ## 📋 Test Quality Gates
 
+These gates are integrated with [Definition of Done](06-definition-of-done.md) checklist:
+
 ### Pre-Development
 
-- [ ] Test plan defined based on requirements
-- [ ] Test environment setup and configuration
-- [ ] Test data preparation and management
-- [ ] Modern testing tools configured and ready
+- [ ] Test plan defined based on requirements and architecture
+- [ ] Test environment setup for Next.js + Fastify stack
+- [ ] Test data preparation for bounded contexts
+- [ ] Development tools configured per [Technical Guidelines](03-technical-guidelines.md)
 
 ### During Development
 
-- [ ] Tests written before or alongside implementation
-- [ ] Unit test coverage meets minimum thresholds
-- [ ] Integration tests cover component interactions
-- [ ] All tests pass consistently
+- [ ] Tests written before or alongside implementation (TDD)
+- [ ] Unit test coverage meets 80% threshold for business logic
+- [ ] Integration tests cover API endpoints and service interactions
+- [ ] All tests pass consistently in local environment
 
-### Pre-Merge
+### Pre-Merge (DoD Compliance)
 
 - [ ] Full test suite passes without failures
-- [ ] Coverage requirements met across all test types
+- [ ] Coverage requirements met per [Definition of Done](06-definition-of-done.md)
 - [ ] Test code reviewed and approved
-- [ ] Performance tests indicate acceptable performance
+- [ ] Security and performance tests indicate acceptable results (basic validation only)
 
 ### Post-Deployment
 
 - [ ] Smoke tests pass in production environment
-- [ ] Monitoring alerts configured for test failures
+- [ ] Monitoring configured per [Observability Guidelines](11-observability-guidelines_TBR.md)
 - [ ] Test results documented and analyzed
-- [ ] Feedback incorporated for future test improvements
+- [ ] Feedback incorporated for continuous improvement
 
 ---
 
@@ -1189,26 +1422,36 @@ it("should send notification email when user is activated", async () => {
 });
 ```
 
-### End-to-End Testing
+## 🌐 End-to-End Testing Implementation
 
-#### Project Separation for E2E Tests
+### E2E Testing Strategy
 
-E2E tests must run in a **separate project** from the application being tested to ensure:
+**Core Principles:**
 
-- Complete isolation of test dependencies
-- Independent deployment and scaling
-- Realistic production-like testing environment
-- No interference between test code and application code
+- **Separate Project Architecture**: E2E tests run in isolated project with independent dependencies
+- **Real System Testing**: Test against deployed or containerized application instances
+- **Critical Path Focus**: Cover essential user journeys and business-critical workflows
+- **Production-Like Environment**: Test in environments that mirror production setup
 
-#### E2E Project Structure
+**When to Write E2E Tests:**
+
+- Critical user registration and authentication flows
+- Payment and transaction processing
+- Data flow across multiple services/bounded contexts
+- Cross-browser compatibility requirements
+- Regulatory compliance workflows
+
+### Project Setup and Architecture
+
+**Recommended Project Structure:**
 
 ```
 workspace/
 ├── apps/
-│   ├── web/                    # Main application
-│   └── api/                    # Backend services
-├── services/
-│   └── payment/                # External services
+│   ├── web/                    # Main Next.js application
+│   └── api/                    # Fastify bounded context APIs
+├── packages/
+│   └── shared/                 # Shared libraries and types
 └── e2e/                        # Separate E2E test project
     ├── package.json            # Independent dependencies
     ├── playwright.config.ts    # Test configuration
@@ -1216,571 +1459,792 @@ workspace/
     │   ├── user-flows/         # User journey tests
     │   ├── api/                # API integration tests
     │   └── cross-service/      # Multi-service tests
-    └── fixtures/               # Test data and helpers
+    ├── fixtures/               # Test data and helpers
+    └── utils/                  # Test utilities and helpers
 ```
 
-#### Playwright Setup in Separate Project
+**Environment Isolation Benefits:**
 
-```typescript
-// e2e/playwright.config.ts
-import { defineConfig } from "@playwright/test";
+- No dependency conflicts with application code
+- Independent deployment and scaling of test suite
+- Realistic testing against production-like deployments
+- Clear separation of concerns between application and test code
 
-export default defineConfig({
-  testDir: "./tests",
-  fullyParallel: true,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 1 : undefined,
-  reporter: "html",
-  use: {
-    // Point to deployed or containerized application
-    baseURL: process.env.E2E_BASE_URL || "http://test-app:3000",
-    trace: "on-first-retry",
-    screenshot: "only-on-failure",
-  },
-  projects: [
-    {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
-    },
-    {
-      name: "firefox",
-      use: { ...devices["Desktop Firefox"] },
-    },
-    {
-      name: "webkit",
-      use: { ...devices["Desktop Safari"] },
-    },
-  ],
-  // No webServer - application runs independently
-  globalSetup: "./setup/global-setup.ts",
-  globalTeardown: "./setup/global-teardown.ts",
-});
+### Test Environment Management
+
+**Docker Compose Setup:**
+
+```yaml
+# docker-compose.e2e.yml
+version: "3.8"
+services:
+  web-app:
+    build: ./apps/web
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=test
+      - DATABASE_URL=postgresql://test:test@postgres:5432/e2e_test
+    depends_on:
+      - postgres
+      - redis
+
+  api-service:
+    build: ./apps/api
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=test
+      - DATABASE_URL=postgresql://test:test@postgres:5432/e2e_test
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=e2e_test
+      - POSTGRES_USER=test
+      - POSTGRES_PASSWORD=test
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
 ```
 
-#### Environment Setup for Isolated Testing
+**Environment Configuration:**
 
 ```typescript
-// e2e/setup/global-setup.ts
-import { chromium } from "@playwright/test";
-import { waitForServices } from "./wait-for-services";
-
-async function globalSetup() {
-  // Wait for all required services to be ready
-  await waitForServices([
-    process.env.E2E_BASE_URL || "http://test-app:3000",
-    process.env.E2E_API_URL || "http://test-api:4000",
-    process.env.E2E_DB_URL || "postgresql://test-db:5432",
-  ]);
-
-  // Setup test data
-  await setupTestDatabase();
-
-  console.log("✅ E2E environment ready");
-}
-
-async function setupTestDatabase() {
-  // Reset and seed test database
-  const response = await fetch(`${process.env.E2E_API_URL}/test/reset`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${process.env.E2E_ADMIN_TOKEN}` },
-  });
-
-  if (!response.ok) {
-    throw new Error("Failed to setup test database");
-  }
-}
-
-export default globalSetup;
-```
-
-```typescript
-// e2e/setup/wait-for-services.ts
-export const waitForServices = async (
-  urls: string[],
-  timeout = 60000
-): Promise<void> => {
-  const startTime = Date.now();
-
-  for (const url of urls) {
-    while (Date.now() - startTime < timeout) {
-      try {
-        const response = await fetch(`${url}/health`);
-        if (response.ok) {
-          console.log(`✅ Service ready: ${url}`);
-          break;
-        }
-      } catch (error) {
-        console.log(`⏳ Waiting for service: ${url}`);
-        await new Promise((resolve) => setTimeout(resolve, 2000));
-      }
-    }
-  }
-};
-```
-
-#### User Journey Testing Against Deployed Services
-
-```typescript
-// e2e/tests/user-flows/user-registration.spec.ts
-import { test, expect } from "@playwright/test";
-import { TestUser } from "../fixtures/test-users";
-
-test.describe("User Registration Flow", () => {
-  test("should complete full registration journey", async ({ page }) => {
-    // Test against deployed application
-    await page.goto("/register");
-
-    // Generate unique test data
-    const testUser = TestUser.create();
-
-    // Fill registration form
-    await page.fill('[data-testid="name-input"]', testUser.name);
-    await page.fill('[data-testid="email-input"]', testUser.email);
-    await page.fill('[data-testid="password-input"]', testUser.password);
-
-    // Submit form
-    await page.click('[data-testid="submit-button"]');
-
-    // Verify success message
-    await expect(page.locator('[data-testid="success-message"]')).toBeVisible();
-    await expect(page).toHaveURL("/welcome");
-
-    // Verify user was actually created in system
-    await verifyUserExistsInDatabase(testUser.email);
-  });
-
-  test("should handle registration with existing email", async ({ page }) => {
-    // Use pre-seeded test data
-    const existingUser = TestUser.existing();
-
-    await page.goto("/register");
-
-    await page.fill('[data-testid="email-input"]', existingUser.email);
-    await page.fill('[data-testid="name-input"]', "Jane Doe");
-    await page.fill('[data-testid="password-input"]', "Password123!");
-
-    await page.click('[data-testid="submit-button"]');
-
-    // Verify error message
-    await expect(page.locator('[data-testid="error-message"]')).toContainText(
-      "Email already exists"
-    );
-    await expect(page).toHaveURL("/register");
-  });
-});
-
-// Helper function to verify against real system
-async function verifyUserExistsInDatabase(email: string): Promise<void> {
-  const response = await fetch(
-    `${process.env.E2E_API_URL}/test/users/${email}`,
-    {
-      headers: { Authorization: `Bearer ${process.env.E2E_ADMIN_TOKEN}` },
-    }
-  );
-
-  expect(response.status).toBe(200);
-}
-```
-
-#### Cross-Service Integration Testing
-
-```typescript
-// e2e/tests/cross-service/payment-flow.spec.ts
-import { test, expect } from "@playwright/test";
-import { TestPayment } from "../fixtures/test-payments";
-
-test.describe("Payment Integration Flow", () => {
-  test("should process payment across all services", async ({ page }) => {
-    const testPayment = TestPayment.create();
-
-    // Step 1: Create order in main app
-    await page.goto("/checkout");
-    await fillCheckoutForm(page, testPayment);
-    await page.click('[data-testid="submit-payment"]');
-
-    // Step 2: Verify payment service was called
-    const paymentRecord = await verifyPaymentServiceCall(testPayment.orderId);
-    expect(paymentRecord.status).toBe("processed");
-
-    // Step 3: Verify inventory service updated
-    const inventoryUpdate = await verifyInventoryServiceUpdate(
-      testPayment.items
-    );
-    expect(inventoryUpdate.success).toBe(true);
-
-    // Step 4: Verify notification service sent emails
-    const emailsSent = await verifyNotificationServiceEmails(
-      testPayment.customerEmail
-    );
-    expect(emailsSent.length).toBeGreaterThan(0);
-
-    // Step 5: Verify final UI state
-    await expect(page.locator('[data-testid="payment-success"]')).toBeVisible();
-  });
-});
-
-// Service verification helpers
-async function verifyPaymentServiceCall(orderId: string) {
-  const response = await fetch(
-    `${process.env.E2E_PAYMENT_SERVICE_URL}/payments/${orderId}`,
-    {
-      headers: { Authorization: `Bearer ${process.env.E2E_SERVICE_TOKEN}` },
-    }
-  );
-  return response.json();
-}
-
-async function verifyInventoryServiceUpdate(items: PaymentItem[]) {
-  const response = await fetch(
-    `${process.env.E2E_INVENTORY_SERVICE_URL}/updates`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${process.env.E2E_SERVICE_TOKEN}` },
-      body: JSON.stringify({ items }),
-    }
-  );
-  return response.json();
-}
-```
-
-#### API End-to-End Testing Against Real Services
-
-```typescript
-// e2e/tests/api/user-api.spec.ts
-import { test, expect } from "@playwright/test";
-import { TestAuth } from "../fixtures/test-auth";
-
-test.describe("User API End-to-End", () => {
-  let authToken: string;
-  let userId: string;
-
-  test.beforeAll(async ({ request }) => {
-    // Authenticate against real auth service
-    const authResponse = await request.post(
-      `${process.env.E2E_API_URL}/auth/login`,
-      {
-        data: {
-          email: TestAuth.adminUser.email,
-          password: TestAuth.adminUser.password,
-        },
-      }
-    );
-
-    const { token } = await authResponse.json();
-    authToken = token;
-  });
-
-  test("should complete full user lifecycle", async ({ request }) => {
-    const testUser = TestUser.create();
-
-    // Create user via real API
-    const createResponse = await request.post(
-      `${process.env.E2E_API_URL}/users`,
-      {
-        headers: { Authorization: `Bearer ${authToken}` },
-        data: {
-          name: testUser.name,
-          email: testUser.email,
-        },
-      }
-    );
-
-    expect(createResponse.status()).toBe(201);
-    const { user } = await createResponse.json();
-    userId = user.id;
-
-    // Get user from real database
-    const getResponse = await request.get(
-      `${process.env.E2E_API_URL}/users/${userId}`,
-      {
-        headers: { Authorization: `Bearer ${authToken}` },
-      }
-    );
-
-    expect(getResponse.status()).toBe(200);
-    const fetchedUser = await getResponse.json();
-    expect(fetchedUser.user.email).toBe(testUser.email);
-
-    // Update user in real system
-    const updateResponse = await request.put(
-      `${process.env.E2E_API_URL}/users/${userId}`,
-      {
-        headers: { Authorization: `Bearer ${authToken}` },
-        data: { name: "Updated Name" },
-      }
-    );
-
-    expect(updateResponse.status()).toBe(200);
-    const updatedUser = await updateResponse.json();
-    expect(updatedUser.user.name).toBe("Updated Name");
-
-    // Delete user from real system
-    const deleteResponse = await request.delete(
-      `${process.env.E2E_API_URL}/users/${userId}`,
-      {
-        headers: { Authorization: `Bearer ${authToken}` },
-      }
-    );
-
-    expect(deleteResponse.status()).toBe(204);
-
-    // Verify deletion in real database
-    const verifyResponse = await request.get(
-      `${process.env.E2E_API_URL}/users/${userId}`,
-      {
-        headers: { Authorization: `Bearer ${authToken}` },
-      }
-    );
-
-    expect(verifyResponse.status()).toBe(404);
-  });
-});
-```
-
-#### Test Data Management for Separate Projects
-
-```typescript
-// e2e/fixtures/test-users.ts
-export class TestUser {
-  constructor(
-    public readonly name: string,
-    public readonly email: string,
-    public readonly password: string
-  ) {}
-
-  static create(): TestUser {
-    const timestamp = Date.now();
-    return new TestUser(
-      `Test User ${timestamp}`,
-      `test.user.${timestamp}@e2e.test`,
-      "TestPassword123!"
-    );
-  }
-
-  static existing(): TestUser {
-    // Pre-seeded user in test environment
-    return new TestUser(
-      "Existing User",
-      "existing.user@e2e.test",
-      "ExistingPassword123!"
-    );
-  }
-
-  static admin(): TestUser {
-    return new TestUser("Admin User", "admin@e2e.test", "AdminPassword123!");
-  }
-}
-
-// e2e/fixtures/test-auth.ts
-export class TestAuth {
-  static get adminUser() {
-    return {
-      email: process.env.E2E_ADMIN_EMAIL || "admin@e2e.test",
-      password: process.env.E2E_ADMIN_PASSWORD || "AdminPassword123!",
-    };
-  }
-
-  static get serviceToken() {
-    return process.env.E2E_SERVICE_TOKEN || "test-service-token";
-  }
-}
-```
-
-#### Environment Configuration for Separate E2E Project
-
-```typescript
-// e2e/.env.example
-# Application URLs (pointing to deployed/containerized apps)
-E2E_BASE_URL=http://test-app:3000
-E2E_API_URL=http://test-api:4000
-E2E_PAYMENT_SERVICE_URL=http://test-payment:5000
-E2E_INVENTORY_SERVICE_URL=http://test-inventory:6000
-
-# Test credentials
+// e2e/.env.test
+E2E_BASE_URL=http://localhost:3000
+E2E_API_URL=http://localhost:4000
+E2E_DB_URL=postgresql://test:test@localhost:5432/e2e_test
 E2E_ADMIN_EMAIL=admin@e2e.test
-E2E_ADMIN_PASSWORD=AdminPassword123!
-E2E_SERVICE_TOKEN=test-service-token-123
-
-# Database
-E2E_DB_URL=postgresql://test-db:5432/e2e_test
+E2E_ADMIN_PASSWORD=TestPassword123!
+E2E_SERVICE_TOKEN=test-service-token
 ```
 
-```json
-// e2e/package.json - Independent dependencies
-{
-  "name": "e2e-tests",
-  "private": true,
-  "scripts": {
-    "test": "playwright test",
-    "test:headed": "playwright test --headed",
-    "test:ui": "playwright test --ui",
-    "test:report": "playwright show-report"
-  },
-  "dependencies": {
-    "@playwright/test": "^1.40.0"
-  },
-  "devDependencies": {
-    "dotenv": "^16.0.0"
+### User Journey Testing Patterns
+
+**Page Object Model:**
+
+```typescript
+// e2e/pages/registration-page.ts
+export class RegistrationPage {
+  constructor(private page: Page) {}
+
+  async goto() {
+    await this.page.goto("/register");
+  }
+
+  async fillForm(userData: UserData) {
+    await this.page.fill('[data-testid="name-input"]', userData.name);
+    await this.page.fill('[data-testid="email-input"]', userData.email);
+    await this.page.fill('[data-testid="password-input"]', userData.password);
+  }
+
+  async submit() {
+    await this.page.click('[data-testid="submit-button"]');
+  }
+
+  async getSuccessMessage() {
+    return this.page.locator('[data-testid="success-message"]');
+  }
+
+  async getErrorMessage() {
+    return this.page.locator('[data-testid="error-message"]');
   }
 }
 ```
 
-#### Real System State Verification
+**User Journey Test Example:**
 
 ```typescript
-// e2e/helpers/system-verification.ts
-import { test } from "@playwright/test";
+// e2e/tests/user-flows/registration.spec.ts
+import { test, expect } from "@playwright/test";
+import { RegistrationPage } from "../pages/registration-page";
+import { TestUser } from "../fixtures/test-users";
+import { SystemVerification } from "../utils/system-verification";
 
-export const withSystemVerification = () => {
-  return {
-    verifyUserExists: async (email: string): Promise<boolean> => {
-      const response = await fetch(
-        `${process.env.E2E_API_URL}/test/users/${email}`,
-        {
-          headers: { Authorization: `Bearer ${process.env.E2E_SERVICE_TOKEN}` },
-        }
-      );
-      return response.status === 200;
-    },
+test.describe("User Registration Journey", () => {
+  let registrationPage: RegistrationPage;
+  let systemVerification: SystemVerification;
 
-    verifyEmailSent: async (to: string, subject: string): Promise<boolean> => {
-      // Verify in real email service or queue
-      const response = await fetch(
-        `${process.env.E2E_EMAIL_SERVICE_URL}/sent-emails`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${process.env.E2E_SERVICE_TOKEN}` },
-          body: JSON.stringify({ to, subject }),
-        }
-      );
-      const emails = await response.json();
-      return emails.some(
-        (email: any) => email.to === to && email.subject.includes(subject)
-      );
-    },
+  test.beforeEach(async ({ page }) => {
+    registrationPage = new RegistrationPage(page);
+    systemVerification = new SystemVerification();
+  });
 
-    verifyPaymentProcessed: async (orderId: string): Promise<boolean> => {
-      const response = await fetch(
-        `${process.env.E2E_PAYMENT_SERVICE_URL}/payments/${orderId}`,
-        {
-          headers: { Authorization: `Bearer ${process.env.E2E_SERVICE_TOKEN}` },
-        }
-      );
-      const payment = await response.json();
-      return payment.status === "processed";
-    },
-
-    verifyInventoryUpdated: async (
-      productId: string,
-      expectedQuantity: number
-    ): Promise<boolean> => {
-      const response = await fetch(
-        `${process.env.E2E_INVENTORY_SERVICE_URL}/products/${productId}`,
-        {
-          headers: { Authorization: `Bearer ${process.env.E2E_SERVICE_TOKEN}` },
-        }
-      );
-      const product = await response.json();
-      return product.quantity === expectedQuantity;
-    },
-  };
-};
-
-// Usage in tests
-test.describe("User Registration with System Verification", () => {
-  const system = withSystemVerification();
-
-  test("should persist user data across all services", async ({ page }) => {
+  test("should complete full registration flow", async () => {
+    // Arrange
     const testUser = TestUser.create();
 
-    await page.goto("/register");
-    await page.fill('[data-testid="email-input"]', testUser.email);
-    await page.fill('[data-testid="name-input"]', testUser.name);
-    await page.click('[data-testid="submit-button"]');
+    // Act
+    await registrationPage.goto();
+    await registrationPage.fillForm(testUser);
+    await registrationPage.submit();
 
-    // Verify user exists in real database
-    const userExists = await system.verifyUserExists(testUser.email);
+    // Assert - UI feedback
+    await expect(registrationPage.getSuccessMessage()).toBeVisible();
+    await expect(registrationPage.page).toHaveURL("/welcome");
+
+    // Assert - System state verification
+    const userExists = await systemVerification.verifyUserExists(
+      testUser.email
+    );
     expect(userExists).toBe(true);
 
-    // Verify welcome email sent via real email service
-    const emailSent = await system.verifyEmailSent(testUser.email, "Welcome");
+    const emailSent = await systemVerification.verifyWelcomeEmailSent(
+      testUser.email
+    );
     expect(emailSent).toBe(true);
+  });
+
+  test("should handle duplicate email registration", async () => {
+    // Arrange
+    const existingUser = TestUser.existing();
+
+    // Act
+    await registrationPage.goto();
+    await registrationPage.fillForm(existingUser);
+    await registrationPage.submit();
+
+    // Assert
+    await expect(registrationPage.getErrorMessage()).toContainText(
+      "Email already exists"
+    );
+    await expect(registrationPage.page).toHaveURL("/register");
   });
 });
 ```
 
-#### CI/CD Integration for Separate E2E Project
+### Cross-Service Integration Testing Patterns
+
+**Service Communication Testing:**
+
+```typescript
+// e2e/tests/cross-service/user-order-flow.spec.ts
+import { test, expect } from "@playwright/test";
+import { UserPage } from "../pages/user-page";
+import { OrderPage } from "../pages/order-page";
+import { SystemVerification } from "../utils/system-verification";
+
+test.describe("User-Order Integration Flow", () => {
+  test("should create order and update user history", async ({ page }) => {
+    const userPage = new UserPage(page);
+    const orderPage = new OrderPage(page);
+    const systemVerification = new SystemVerification();
+
+    // Step 1: Create user account
+    const testUser = await userPage.createAccount();
+
+    // Step 2: Create order
+    await orderPage.goto();
+    const order = await orderPage.createOrder({
+      items: [{ name: "Test Product", quantity: 1, price: 29.99 }],
+      userId: testUser.id,
+    });
+
+    // Step 3: Verify cross-service data consistency
+    const userProfile = await systemVerification.getUserProfile(testUser.id);
+    expect(userProfile.orderHistory).toContainEqual(
+      expect.objectContaining({
+        orderId: order.id,
+        status: "completed",
+      })
+    );
+
+    // Step 4: Verify inventory service was updated
+    const inventory = await systemVerification.getInventoryLevel(
+      "Test Product"
+    );
+    expect(inventory.available).toBe(inventory.previous - 1);
+  });
+});
+```
+
+**System Verification Utilities:**
+
+```typescript
+// e2e/utils/system-verification.ts
+export class SystemVerification {
+  private baseApiUrl = process.env.E2E_API_URL;
+  private serviceToken = process.env.E2E_SERVICE_TOKEN;
+
+  async verifyUserExists(email: string): Promise<boolean> {
+    const response = await fetch(
+      `${this.baseApiUrl}/test/users/by-email/${email}`,
+      {
+        headers: { Authorization: `Bearer ${this.serviceToken}` },
+      }
+    );
+    return response.status === 200;
+  }
+
+  async verifyWelcomeEmailSent(email: string): Promise<boolean> {
+    const response = await fetch(`${this.baseApiUrl}/test/emails/sent`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.serviceToken}`,
+      },
+      body: JSON.stringify({ to: email, subject: "Welcome" }),
+    });
+    const emails = await response.json();
+    return emails.length > 0;
+  }
+
+  async getUserProfile(userId: string) {
+    const response = await fetch(`${this.baseApiUrl}/users/${userId}/profile`, {
+      headers: { Authorization: `Bearer ${this.serviceToken}` },
+    });
+    return response.json();
+  }
+
+  async getInventoryLevel(productName: string) {
+    const response = await fetch(
+      `${this.baseApiUrl}/inventory/products/${productName}`,
+      {
+        headers: { Authorization: `Bearer ${this.serviceToken}` },
+      }
+    );
+    return response.json();
+  }
+}
+```
+
+### E2E CI/CD Integration
+
+**GitHub Actions Workflow:**
 
 ```yaml
 # .github/workflows/e2e-tests.yml
-name: E2E Tests
+name: End-to-End Tests
 
 on:
   push:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: "0 2 * * *" # Daily at 2 AM
 
 jobs:
   e2e-tests:
     runs-on: ubuntu-latest
-
-    services:
-      # Start real services in containers
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: e2e_test
-        ports:
-          - 5432:5432
-
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
+    timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      # Build and start application services
-      - name: Build application
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Start services
         run: |
-          docker-compose -f docker-compose.e2e.yml build
           docker-compose -f docker-compose.e2e.yml up -d
 
-      # Wait for services to be ready
       - name: Wait for services
         run: |
-          timeout 300 bash -c 'until curl -f http://localhost:3000/health; do sleep 5; done'
-          timeout 300 bash -c 'until curl -f http://localhost:4000/health; do sleep 5; done'
+          npm run wait-for-services
 
-      # Setup E2E test environment
-      - name: Setup E2E project
+      - name: Install E2E dependencies
         working-directory: ./e2e
         run: |
           npm ci
           npx playwright install
 
-      # Run E2E tests against real services
       - name: Run E2E tests
         working-directory: ./e2e
+        run: npx playwright test
         env:
           E2E_BASE_URL: http://localhost:3000
           E2E_API_URL: http://localhost:4000
-          E2E_ADMIN_EMAIL: admin@e2e.test
-          E2E_ADMIN_PASSWORD: ${{ secrets.E2E_ADMIN_PASSWORD }}
-        run: npx playwright test
 
-      # Upload results
       - name: Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: e2e-results
+          name: e2e-test-results
           path: e2e/test-results/
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+
+      - name: Cleanup services
+        if: always()
+        run: docker-compose -f docker-compose.e2e.yml down
 ```
+
+**Service Readiness Check:**
+
+```typescript
+// e2e/scripts/wait-for-services.ts
+const waitForServices = async (services: string[], timeout = 60000) => {
+  const startTime = Date.now();
+
+  for (const serviceUrl of services) {
+    console.log(`Waiting for ${serviceUrl}...`);
+
+    while (Date.now() - startTime < timeout) {
+      try {
+        const response = await fetch(`${serviceUrl}/health`);
+        if (response.ok) {
+          console.log(`✅ ${serviceUrl} is ready`);
+          break;
+        }
+      } catch (error) {
+        console.log(`⏳ ${serviceUrl} not ready yet...`);
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    }
+  }
+
+  console.log("🚀 All services are ready!");
+};
+
+waitForServices(["http://localhost:3000", "http://localhost:4000"]);
+```
+
+**Performance Integration in E2E:**
+
+```typescript
+// e2e/tests/performance/core-web-vitals.spec.ts
+import { test, expect } from "@playwright/test";
+
+test.describe("Core Web Vitals", () => {
+  test("should meet performance benchmarks on critical pages", async ({
+    page,
+  }) => {
+    // Navigate to page and measure Core Web Vitals
+    const response = await page.goto("/", { waitUntil: "networkidle" });
+
+    // Measure Largest Contentful Paint (LCP)
+    const lcp = await page.evaluate(() => {
+      return new Promise((resolve) => {
+        new PerformanceObserver((list) => {
+          const entries = list.getEntries();
+          const lastEntry = entries[entries.length - 1];
+          resolve(lastEntry.startTime);
+        }).observe({ entryTypes: ["largest-contentful-paint"] });
+      });
+    });
+
+    // Assert performance thresholds
+    expect(lcp).toBeLessThan(2500); // LCP should be under 2.5s
+    expect(response?.status()).toBe(200);
+
+    // Measure page load time
+    const loadTime = await page.evaluate(
+      () => performance.timing.loadEventEnd - performance.timing.navigationStart
+    );
+    expect(loadTime).toBeLessThan(3000); // Page load under 3s
+  });
+});
+```
+
+This comprehensive E2E implementation strategy provides clear guidelines for setting up, organizing, and maintaining end-to-end tests while ensuring they integrate properly with the overall testing strategy and CI/CD pipeline.
+
+---
+
+## 👥 Usability Testing & User Acceptance
+
+### Testing Methodology
+
+#### 1. Moderated Testing
+
+**Live Session Facilitation:**
+
+- Live session with facilitator present
+- Real-time observation and questioning
+- Deeper insights through think-aloud protocol
+- Higher cost but richer qualitative data
+- **Use case:** Complex workflows, exploratory research, critical user journeys
+
+**Implementation Process:**
+
+- Pre-session preparation with test scenarios
+- Live screen sharing or in-person observation
+- Real-time note-taking and follow-up questions
+- Post-session debriefing and analysis
+
+#### 2. Unmoderated Testing
+
+**Self-Guided Sessions:**
+
+- Self-guided user sessions
+- Task-based scenarios with screen recording
+- Larger sample sizes possible
+- Cost-effective for frequent testing
+- **Use case:** Specific feature validation, A/B testing, iterative improvements
+
+**Implementation Process:**
+
+- Automated test scenario distribution
+- Screen recording and interaction tracking
+- Quantitative data collection (completion rates, time on task)
+- Post-session analysis and pattern identification
+
+#### 3. Remote vs In-Person Testing
+
+**Remote Testing:**
+
+- **Advantages:** Lower cost, broader geographical reach, natural environment
+- **Tools:** Zoom, Teams, specialized usability testing platforms
+- **Best for:** Regular testing cycles, broad user base validation
+
+**In-Person Testing:**
+
+- **Advantages:** Better observation, technical setup control, stronger rapport
+- **Requirements:** Physical testing space, equipment setup
+- **Best for:** Deep-dive research, complex workflow validation
+
+**Hybrid Approach:**
+
+- Remote for broad insights and quick validation
+- In-person for deep dives and complex scenario testing
+
+### Coordination with Testing Strategy
+
+#### Integration Timeline
+
+**Cross-Testing Coordination:**
+
+```
+Sprint Testing Flow:
+1. Unit/Integration Tests (Dev) →
+2. E2E Tests (QA) →
+3. Performance/Security Tests (DevOps) →
+4. Usability Testing (UX) →
+5. User Acceptance (Business)
+```
+
+#### Pre-Usability Testing Requirements
+
+**Technical Prerequisites:**
+
+- Functional testing completion with 95%+ pass rate
+- E2E tests covering critical user journeys
+- Performance benchmarks within acceptable ranges
+- Accessibility automated testing passed
+
+**Integration Points:**
+
+- **Functional Testing Results:** Inform usability test scenarios
+- **Performance Data:** Set expectations for load time tolerance
+- **E2E Test Coverage:** Validate technical implementation before user testing
+- **Accessibility Results:** Ensure assistive technology compatibility
+
+#### Post-Usability Testing Actions
+
+**Feedback Integration:**
+
+- Document usability issues for development backlog
+- Coordinate with QA for regression testing of fixes
+- Update E2E tests to cover newly identified edge cases
+- Performance impact assessment of UX improvements
+
+### Frequency & Timing Alignment
+
+#### Per Sprint Integration (Agile Workflow)
+
+**Week 1: Planning Phase**
+
+- Usability test planning during sprint planning
+- Define test scenarios based on sprint deliverables
+- Coordinate with development team on feature readiness
+- Schedule testing sessions with recruited users
+
+**Week 2: Preparation Phase**
+
+- Recruit target users based on personas
+- Prepare detailed test scenarios and tasks
+- Set up testing environment and tools
+- Coordinate with development for staging environment access
+
+**Week 3: Execution Phase**
+
+- Execute unmoderated tests on completed features
+- Conduct moderated sessions for complex workflows
+- Real-time monitoring and initial data collection
+- Daily stand-up updates on testing progress
+
+**Week 4: Analysis & Integration Phase**
+
+- Analyze results and identify patterns
+- Integrate feedback into next sprint planning
+- Update test scenarios based on findings
+- Document lessons learned and methodology improvements
+
+#### Per Release Validation (Major Releases)
+
+**Pre-Release Testing (2 weeks before release):**
+
+- Comprehensive moderated testing with primary personas
+- Full user journey validation from onboarding to completion
+- Cross-browser and cross-device usability verification
+- Accessibility compliance validation with assistive technologies
+
+**Release Readiness Criteria:**
+
+- 95%+ task completion rate for primary user flows
+- No critical usability issues identified
+- Accessibility testing passed with assistive technologies
+- Performance impact on UX measured and acceptable
+
+#### Ad-Hoc Testing Triggers
+
+**Critical Issue Validation:**
+
+- Post-hotfix usability validation
+- User-reported issue investigation
+- Competitive analysis response testing
+
+**Feature Hypothesis Testing:**
+
+- New feature concept validation
+- A/B testing setup and analysis
+- User behavior pattern investigation
+
+### User Recruitment & Sample Size Guidelines
+
+#### Target User Distribution
+
+**Primary Personas (80% of participants):**
+
+- Main target audience for the application
+- Regular users with established workflows
+- Representative of core business use cases
+
+**Secondary Personas (20% of participants):**
+
+- Edge case users and alternative workflows
+- Users with different technical proficiency levels
+- Accessibility users requiring assistive technologies
+
+**Accessibility Users (Minimum 2 per major release):**
+
+- Users with visual, auditory, motor, or cognitive disabilities
+- Screen reader users for visual accessibility validation
+- Keyboard-only users for motor accessibility testing
+
+#### Sample Size Framework
+
+**Moderated Testing:**
+
+- **5-8 users per persona** (Nielsen's 85% issue discovery principle)
+- **3-5 sessions for exploratory research**
+- **8-12 users for comparative testing** (A/B scenarios)
+
+**Unmoderated Testing:**
+
+- **15-30 users for statistical significance**
+- **50+ users for quantitative behavior analysis**
+- **100+ users per variant for A/B testing**
+
+**Accessibility Testing:**
+
+- **3-5 users with relevant disabilities**
+- **2+ screen reader users for each major feature**
+- **2+ keyboard-only users for interaction validation**
+
+#### Recruitment Strategy
+
+**Internal Recruitment:**
+
+- Employee friends and family for early-stage testing
+- Internal stakeholder testing for business logic validation
+- Cross-team collaboration for domain expertise
+
+**Customer Base Recruitment:**
+
+- Existing users for feature validation and improvement
+- Customer interviews for deep workflow understanding
+- Beta user communities for advanced feature testing
+
+**Professional Recruitment:**
+
+- User research panel platforms (UserInterviews, Respondent)
+- Specialized accessibility testing communities
+- Demographic-specific recruitment for target markets
+
+**Community Recruitment:**
+
+- Social media and forum outreach
+- Industry-specific community engagement
+- University partnerships for diverse user testing
+
+### Budget Considerations
+
+#### Free/Low-Cost Tools
+
+**Session Recording & Analytics:**
+
+- **Hotjar:** Heatmaps, session recordings (free tier: 35 sessions/day)
+- **Google Analytics:** Behavior flow analysis, conversion tracking
+- **Microsoft Clarity:** Free session recordings and heatmaps
+
+**Communication & Moderation:**
+
+- **Zoom:** Remote moderated sessions with recording capabilities
+- **Microsoft Teams:** Built-in screen sharing and recording
+- **Google Meet:** Basic session facilitation
+
+**Feedback Collection:**
+
+- **Google Forms:** Free survey and feedback collection
+- **Typeform:** Enhanced form experience (free tier available)
+- **UserVoice:** Community feedback aggregation
+
+**Internal Testing:**
+
+- Employee and stakeholder testing sessions
+- Cross-team collaboration for domain validation
+- Guerrilla testing with available participants
+
+#### Premium Solution Investment
+
+**Professional Unmoderated Testing:**
+
+- **UserTesting:** Professional unmoderated testing ($49+ per video)
+- **Maze:** Unmoderated usability testing with advanced analytics ($99/month)
+- **UsabilityHub:** First-click tests, preference tests ($89/month)
+
+**Moderated Testing Platforms:**
+
+- **Lookback:** Live moderated testing platform ($200/month)
+- **User Interviews:** Professional participant recruitment ($200/month)
+- **Respondent:** High-quality participant sourcing ($300/month)
+
+**Advanced Analytics:**
+
+- **Optimal Workshop:** Card sorting, tree testing, first-click testing ($249/month)
+- **Hotjar Business:** Advanced analytics and unlimited recordings ($389/month)
+- **FullStory:** Comprehensive user session analysis ($199/month)
+
+#### Budget Allocation Strategy
+
+**Monthly Testing Budget Framework:**
+
+- **Startup/Small Team:** $500-1000/month
+
+  - Focus on free tools + occasional professional testing
+  - Internal testing + guerrilla methods
+  - 1-2 professional sessions per month
+
+- **Growing Company:** $1000-3000/month
+
+  - Mix of free and premium tools
+  - Regular professional testing cycles
+  - 4-6 professional sessions per month
+
+- **Enterprise:** $3000-5000/month
+  - Full premium tool suite
+  - Dedicated testing team resources
+  - 10+ professional sessions per month
+
+**Cost Per Participant Guidelines:**
+
+- **Internal/Free:** $0-10 (snacks, small thank-you gifts)
+- **Community/Guerrilla:** $10-25 (coffee cards, small incentives)
+- **Professional Recruitment:** $50-150 (depending on demographics and session length)
+- **Specialized Demographics:** $100-300 (professionals, accessibility users, niche markets)
+
+### Usability Validation Criteria
+
+#### Integration with Definition of Done
+
+**Quantitative Success Metrics:**
+
+**Task Completion Rates:**
+
+- **Primary user flows:** ≥85% completion rate
+- **Critical tasks:** ≥95% completion rate
+- **Secondary workflows:** ≥75% completion rate
+
+**Error Rate Thresholds:**
+
+- **Critical tasks:** ≤5% error rate
+- **Primary workflows:** ≤15% error rate
+- **Complex tasks:** ≤25% error rate
+
+**Performance Benchmarks:**
+
+- **Time on task:** Within 20% of benchmark for returning users
+- **First-time user success:** 70% task completion without assistance
+- **Expert user efficiency:** 90% of benchmark time for frequent users
+
+**Satisfaction Scoring:**
+
+- **System Usability Scale (SUS):** Score ≥68 (above average)
+- **Task-level satisfaction:** ≥4/5 average rating
+- **Overall experience rating:** ≥4/5 average rating
+
+#### Qualitative Success Criteria
+
+**User Understanding:**
+
+- **Mental model alignment:** Users understand information architecture
+- **Feature discoverability:** Key features found without guidance
+- **Error recovery:** Users can successfully recover from common errors
+
+**Accessibility Compliance:**
+
+- **Screen reader compatibility:** All user flows accessible via screen reader
+- **Keyboard navigation:** Complete functionality available via keyboard
+- **WCAG 2.1 AA compliance:** No critical accessibility violations
+
+**Cross-Platform Consistency:**
+
+- **Device parity:** Equal usability across desktop and mobile
+- **Browser consistency:** Identical user experience across supported browsers
+- **Performance impact:** Usability maintained under performance constraints
+
+#### Definition of Done Integration Checklist
+
+```
+UX Validation Requirements:
+□ Usability testing completed for new features
+□ Critical user journeys validated with target users
+□ Accessibility testing passed with assistive technologies
+□ Performance impact on UX measured and acceptable
+□ User feedback incorporated or documented for future iterations
+□ SUS score meets or exceeds target threshold (≥68)
+□ Task completion rates meet defined benchmarks
+□ Error rates within acceptable thresholds
+□ Cross-browser/device compatibility validated
+□ Documentation updated with usability findings
+```
+
+#### Continuous Improvement Framework
+
+**Baseline Establishment:**
+
+- Initial usability baseline measurement
+- Benchmark task completion times and satisfaction scores
+- Identify recurring usability patterns and issues
+
+**Iterative Improvement Tracking:**
+
+- Sprint-over-sprint usability metric tracking
+- A/B testing for usability improvement validation
+- Long-term user satisfaction trend analysis
+
+**Knowledge Management:**
+
+- Usability pattern library development
+- Common issue documentation and solutions
+- Best practice sharing across development teams
 
 ---
 

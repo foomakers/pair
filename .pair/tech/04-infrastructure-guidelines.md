@@ -18,6 +18,9 @@ Define infrastructure standards, deployment strategies, and operational practice
 - Platform-specific deployment patterns
 - Infrastructure as Code (Terraform, AWS CDK)
 - Repository strategy (GitHub recommended)
+- Testing infrastructure and environment setup
+- Test database provisioning and management
+- CI/CD testing phase integration
 
 **Out of Scope:**
 
@@ -26,6 +29,8 @@ Define infrastructure standards, deployment strategies, and operational practice
 - Performance monitoring and observability
 - Database design and data modeling
 - Third-party service integrations
+- Testing methodologies and test implementation (see [Testing Strategy](07-testing-strategy_TBR.md))
+- Performance testing strategies and tools (see [Performance Guidelines](09-performance-guidelines_TBR.md))
 
 **📝 Note**: This document must comprehensively cover:
 
@@ -82,7 +87,15 @@ Define infrastructure standards, deployment strategies, and operational practice
    - [Build Pipeline](#build-pipeline)
    - [Deployment Pipeline](#deployment-pipeline)
    - [Quality Gates](#quality-gates)
+   - [Testing Infrastructure Integration](#testing-infrastructure-integration)
    - [Secrets Management](#secrets-management)
+
+9. [🧪 Testing Infrastructure](#-testing-infrastructure)
+
+   - [Testing Environment Setup](#testing-environment-setup)
+   - [Test Database Management](#test-database-management)
+   - [Performance Testing Infrastructure](#performance-testing-infrastructure)
+   - [Test Service Dependencies](#test-service-dependencies)
 
 ---
 
@@ -332,6 +345,24 @@ services:
       timeout: 10s
       retries: 3
 
+  # Test Database (isolated for testing)
+  postgres_test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: app_test
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      - ./scripts/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # Cache Layer
   redis:
     image: redis:7-alpine
@@ -345,9 +376,24 @@ services:
       timeout: 10s
       retries: 3
 
+  # Test Cache (isolated for testing)
+  redis_test:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 volumes:
   postgres_data:
+  postgres_test_data:
   redis_data:
+  redis_test_data:
 ```
 
 **Development Scripts**:
@@ -357,9 +403,13 @@ volumes:
 {
   "scripts": {
     "dev:setup": "docker-compose -f docker-compose.local.yml up -d && npm run dev:wait && npm run db:migrate && npm run db:seed",
-    "dev:wait": "wait-on tcp:localhost:5432 tcp:localhost:6379",
+    "dev:wait": "wait-on tcp:localhost:5432 tcp:localhost:6379 tcp:localhost:5433 tcp:localhost:6380",
     "dev:teardown": "docker-compose -f docker-compose.local.yml down -v",
-    "dev:logs": "docker-compose -f docker-compose.local.yml logs -f"
+    "dev:logs": "docker-compose -f docker-compose.local.yml logs -f",
+    "test:setup": "npm run test:db:reset && npm run test:db:migrate && npm run test:db:seed",
+    "test:db:reset": "docker-compose -f docker-compose.local.yml restart postgres_test redis_test",
+    "test:db:migrate": "DATABASE_URL=postgresql://test_user:test_password@localhost:5433/app_test npm run db:migrate",
+    "test:db:seed": "DATABASE_URL=postgresql://test_user:test_password@localhost:5433/app_test npm run db:seed:test"
   }
 }
 ```
@@ -1119,32 +1169,57 @@ jobs:
 ```
 .github/
 ├── workflows/
-│   ├── ci.yml                    # Continuous Integration
-│   ├── cd-staging.yml           # Staging Deployment
-│   ├── cd-production.yml        # Production Deployment
+│   ├── ci.yml                    # Continuous Integration (All Branches)
+│   ├── build-and-publish.yml    # Build Artifacts (Main Branch Only)
+│   ├── deploy.yml                # Environment Deployment (Manual/Triggered)
 │   ├── infrastructure.yml       # Infrastructure Changes
 │   └── security.yml             # Security Scanning
 └── dependabot.yml               # Dependency Updates
 ```
 
-**Multi-Environment CI/CD Strategy**:
+**Optimized CI/CD Strategy**: Single artifact, multiple environment deployments
 
 ```yaml
-# .github/workflows/ci.yml
+# .github/workflows/ci.yml - Build and Test on Every Push
 name: Continuous Integration
 
 on:
   push:
-    branches: [main, develop]
+    branches: ["**"] # Trigger on all branches
   pull_request:
     branches: [main, develop]
 
 jobs:
   test:
+    name: Build and Test
     runs-on: ubuntu-latest
     strategy:
       matrix:
         node-version: [18, 20]
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - uses: actions/checkout@v4
@@ -1158,49 +1233,118 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run tests
-        run: pnpm test
+      - name: Type checking
+        run: pnpm type-check
 
       - name: Run linting
         run: pnpm lint
 
-      - name: Type checking
-        run: pnpm type-check
+      - name: Setup test database
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+          pnpm test:db:migrate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+
+      - name: Run unit tests
+        run: pnpm test:unit
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+
+      - name: Run integration tests
+        run: pnpm test:integration
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
 
       - name: Build applications
         run: pnpm build
+        env:
+          NODE_ENV: production
+
+      - name: Upload build artifacts (for main branch)
+        if: github.ref == 'refs/heads/main' && matrix.node-version == '20'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-${{ github.sha }}
+          path: |
+            apps/*/dist/
+            apps/*/.next/
+            apps/*/build/
+            packages/*/dist/
+          retention-days: 30
 
   security:
+    name: Security Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Run security audit
         run: pnpm audit
 
       - name: Dependency vulnerability scan
         uses: github/dependency-review-action@v4
+        if: github.event_name == 'pull_request'
 ```
 
-**Environment-Specific Deployment**:
+**Artifact Creation and Publishing**:
 
 ```yaml
-# .github/workflows/cd-staging.yml
-name: Deploy to Staging
+# .github/workflows/build-and-publish.yml - Create Single Artifact After Main Merge
+name: Build and Publish Artifacts
 
 on:
   push:
-    branches: [develop]
+    branches: [main]
   workflow_run:
     workflows: ["Continuous Integration"]
     types: [completed]
-    branches: [develop]
+    branches: [main]
 
 jobs:
-  deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+  build-and-publish:
+    name: Build and Publish Release Artifacts
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'push' }}
     runs-on: ubuntu-latest
-    environment: staging
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      docker-image: ${{ steps.docker.outputs.image }}
 
     steps:
       - uses: actions/checkout@v4
@@ -1214,20 +1358,282 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build for staging
+      - name: Generate version
+        id: version
+        run: |
+          VERSION=$(date +%Y%m%d%H%M%S)-${GITHUB_SHA:0:8}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Run final tests
+        run: |
+          pnpm test:db:migrate
+          pnpm test:unit
+          pnpm test:integration
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+
+      - name: Build production artifacts
         run: pnpm build
         env:
-          NODE_ENV: staging
-          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
-          REDIS_URL: ${{ secrets.STAGING_REDIS_URL }}
+          NODE_ENV: production
+          VERSION: ${{ env.VERSION }}
+
+      - name: Build Docker images
+        id: docker
+        run: |
+          # Build Docker images for each app
+          docker build -t myapp-web:${{ env.VERSION }} -f apps/web/Dockerfile .
+          docker build -t myapp-api:${{ env.VERSION }} -f apps/api/Dockerfile .
+
+          # Tag as latest
+          docker tag myapp-web:${{ env.VERSION }} myapp-web:latest
+          docker tag myapp-api:${{ env.VERSION }} myapp-api:latest
+
+          echo "image=myapp:${{ env.VERSION }}" >> $GITHUB_OUTPUT
+
+      - name: Save Docker images
+        run: |
+          docker save myapp-web:${{ env.VERSION }} myapp-api:${{ env.VERSION }} | gzip > docker-images-${{ env.VERSION }}.tar.gz
+
+      - name: Upload Docker artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-images-${{ env.VERSION }}
+          path: docker-images-${{ env.VERSION }}.tar.gz
+          retention-days: 90
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-${{ env.VERSION }}
+          path: |
+            apps/*/dist/
+            apps/*/.next/
+            apps/*/build/
+            packages/*/dist/
+          retention-days: 90
+
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ env.VERSION }}
+          release_name: Release v${{ env.VERSION }}
+          body: |
+            Automated release created from main branch
+            - Commit: ${{ github.sha }}
+            - Version: ${{ env.VERSION }}
+          draft: false
+          prerelease: false
+```
+
+**Environment Deployment**:
+
+````yaml
+# .github/workflows/deploy.yml - Deploy Single Artifact to Multiple Environments
+name: Deploy to Environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Version to deploy (leave empty for latest)'
+        required: false
+        type: string
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.environment }}
+      url: ${{ steps.deploy.outputs.url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version to deploy
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            # Get latest version from releases
+            VERSION=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' | sed 's/^v//')
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: docker-images-${{ env.VERSION }}
+          path: ./artifacts
+
+      - name: Load Docker images
+        run: |
+          gunzip -c ./artifacts/docker-images-${{ env.VERSION }}.tar.gz | docker load
+
+      - name: Setup environment configuration
+        run: |
+          case "${{ github.event.inputs.environment }}" in
+            staging)
+              echo "DEPLOY_URL=https://staging.myapp.com" >> $GITHUB_ENV
+              echo "DATABASE_URL=${{ secrets.STAGING_DATABASE_URL }}" >> $GITHUB_ENV
+              echo "REDIS_URL=${{ secrets.STAGING_REDIS_URL }}" >> $GITHUB_ENV
+              ;;
+            production)
+              echo "DEPLOY_URL=https://myapp.com" >> $GITHUB_ENV
+              echo "DATABASE_URL=${{ secrets.PROD_DATABASE_URL }}" >> $GITHUB_ENV
+              echo "REDIS_URL=${{ secrets.PROD_REDIS_URL }}" >> $GITHUB_ENV
+              ;;
+          esac
 
       - name: Deploy to Vercel
         if: contains(github.repository, 'vercel-app')
-        uses: amondnet/vercel-action@v25
+        id: deploy-vercel
+        run: |
+          # Retag with environment-specific config
+          docker tag myapp-web:${{ env.VERSION }} myapp-web:${{ github.event.inputs.environment }}
+
+          # Deploy to Vercel (example)
+          npx vercel --prod --token ${{ secrets.VERCEL_TOKEN }}
+          echo "url=${{ env.DEPLOY_URL }}" >> $GITHUB_OUTPUT
+
+      - name: Deploy to AWS
+        if: contains(github.repository, 'aws-app')
+        id: deploy-aws
+        run: |
+          # Configure AWS CLI
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set default.region ${{ secrets.AWS_REGION }}
+
+          # Deploy using ECS/EKS/Lambda depending on setup
+          case "${{ github.event.inputs.environment }}" in
+            staging)
+              # Deploy to staging cluster
+              aws ecs update-service --cluster staging-cluster --service myapp-service --force-new-deployment
+              ;;
+            production)
+              # Deploy to production cluster with approval
+              aws ecs update-service --cluster production-cluster --service myapp-service --force-new-deployment
+              ;;
+          esac
+          echo "url=${{ env.DEPLOY_URL }}" >> $GITHUB_OUTPUT
+
+      - name: Deploy to GCP
+        if: contains(github.repository, 'gcp-app')
+        id: deploy-gcp
+        run: |
+          # Authenticate with GCP
+          echo '${{ secrets.GCP_SA_KEY }}' | base64 -d > gcp-key.json
+          gcloud auth activate-service-account --key-file gcp-key.json
+          gcloud config set project ${{ secrets.GCP_PROJECT_ID }}
+
+          # Deploy to Cloud Run
+          gcloud run deploy myapp-${{ github.event.inputs.environment }} \
+            --image myapp-web:${{ env.VERSION }} \
+            --region us-central1 \
+            --set-env-vars "DATABASE_URL=${{ env.DATABASE_URL }},REDIS_URL=${{ env.REDIS_URL }}" \
+            --allow-unauthenticated
+          echo "url=${{ env.DEPLOY_URL }}" >> $GITHUB_OUTPUT
+
+      - name: Run deployment tests
+        run: |
+          # Wait for deployment to be ready
+          timeout 300 bash -c 'until curl -f ${{ env.DEPLOY_URL }}/health; do sleep 10; done'
+
+          # Run smoke tests
+          curl -f ${{ env.DEPLOY_URL }}/api/health
+
+          # Run environment-specific tests if needed
+          if [ "${{ github.event.inputs.environment }}" = "staging" ]; then
+            # Run more comprehensive tests on staging
+            pnpm test:e2e:staging
+          fi
+
+      - name: Notify deployment
+        if: always()
+        uses: 8398a7/action-slack@v3
         with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
+          status: ${{ job.status }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          text: |
+            Deployment to ${{ github.event.inputs.environment }} ${{ job.status }}
+            Version: ${{ env.VERSION }}
+            URL: ${{ env.DEPLOY_URL }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+**Schema CI/CD Complessivo**:
+
+```mermaid
+graph TD
+    A[Push to any branch] --> B[CI: ci.yml]
+    B --> C{Branch is main?}
+    C -->|No| D[Only build & test]
+    C -->|Yes| E[Build & Publish: build-and-publish.yml]
+
+    E --> F[Create single artifact]
+    F --> G[Store Docker images]
+    F --> H[Create GitHub Release]
+
+    I[Manual Deploy Trigger] --> J[Deploy: deploy.yml]
+    J --> K[Download artifacts]
+    K --> L{Environment?}
+
+    L -->|staging| M[Configure staging env]
+    L -->|production| N[Configure production env]
+
+    M --> O[Deploy with staging config]
+    N --> P[Deploy with production config]
+
+    O --> Q[Run smoke tests]
+    P --> Q
+    Q --> R[Send notifications]
+````
+
+**Vantaggi di questa strategia**:
+
+1. **Artifact Unico**: Un solo build per tutti gli ambienti, configurato runtime
+2. **Velocità**: Build solo su main, deployment istantaneo da artifacts
+3. **Consistenza**: Stesso codice testato su tutti gli ambienti
+4. **Tracciabilità**: Versioning chiaro e release GitHub
+5. **Flessibilità**: Deploy manuale con scelta di versione
+6. **Sicurezza**: Configurazione ambiente-specifica separata
+
+**Best Practice per Repository Secrets**:
+
+```yaml
+# Repository Secrets per ambiente
+Staging:
+  STAGING_DATABASE_URL: "..."
+  STAGING_REDIS_URL: "..."
+
+Production:
+  PROD_DATABASE_URL: "..."
+  PROD_REDIS_URL: "..."
+
+Deployment:
+  VERCEL_TOKEN: "..."
+  AWS_ACCESS_KEY_ID: "..."
+  AWS_SECRET_ACCESS_KEY: "..."
+  GCP_SA_KEY: "..."
+
+Notifications:
+  SLACK_WEBHOOK: "..."
           vercel-args: "--prod"
 
       - name: Deploy to AWS
@@ -1269,6 +1675,15 @@ jobs:
           approvers: team-leads,devops-team
           minimum-approvals: 2
 
+### 7.3 Monitoring e Osservabilità
+
+Le strategie CI/CD implementate richiedono monitoraggio per garantire performance e affidabilità.
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -1278,130 +1693,44 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run production tests
-        run: pnpm test:production
+      - name: Wait for services
+        run: |
+          timeout 60 bash -c 'until pg_isready -h localhost -p 5432; do sleep 1; done'
+          timeout 60 bash -c 'until redis-cli -h localhost -p 6379 ping; do sleep 1; done'
 
-      - name: Build for production
-        run: pnpm build
+      - name: Setup test database
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d test_db -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";"
+          npm run test:db:migrate
         env:
-          NODE_ENV: production
-          DATABASE_URL: ${{ secrets.PROD_DATABASE_URL }}
-          REDIS_URL: ${{ secrets.PROD_REDIS_URL }}
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
 
-      - name: Deploy to production
-        run: |
-          # Platform-specific deployment
-          echo "Deploying to production..."
+      - name: Run unit tests
+        run: pnpm test:unit
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
 
-      - name: Notify team
-        if: always()
-        uses: 8398a7/action-slack@v3
-        with:
-          status: ${{ job.status }}
-          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      - name: Run integration tests
+        run: pnpm test:integration
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+
+      - name: Run E2E tests
+        run: pnpm test:e2e
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          E2E_BASE_URL: http://localhost:3000
 ```
 
-**Infrastructure Automation**:
+**Test Database Management in CI/CD**:
 
-```yaml
-# .github/workflows/infrastructure.yml
-name: Infrastructure
-
-on:
-  pull_request:
-    paths: ["infrastructure/**"]
-  push:
-    branches: [main]
-    paths: ["infrastructure/**"]
-
-jobs:
-  terraform-plan:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.0
-          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
-
-      - name: Terraform Plan
-        id: plan
-        run: |
-          cd infrastructure/environments/staging
-          terraform init
-          terraform plan -out=tfplan -no-color
-
-      - name: Comment Plan
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const plan = fs.readFileSync('infrastructure/environments/staging/tfplan.txt', 'utf8');
-            const output = `#### Terraform Plan 📖
-            <details><summary>Show Plan</summary>
-
-            \`\`\`
-            ${plan}
-            \`\`\`
-
-            </details>`;
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            });
-
-  terraform-apply:
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    environment: infrastructure
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.0
-          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
-
-      - name: Terraform Apply
-        run: |
-          cd infrastructure/environments/staging
-          terraform init
-          terraform plan -out=tfplan
-          terraform apply tfplan
-```
-
-### Build Pipeline
-
-- **Automated Builds**: Triggered on code changes with proper validation
-- **Parallel Execution**: Optimize build times through parallel processing and matrix strategies
-- **Artifact Management**: GitHub Packages or external artifact storage with versioning
-- **Build Caching**: Intelligent caching using GitHub Actions cache and pnpm/npm cache
-- **Multi-Node Testing**: Test across multiple Node.js versions for compatibility
-
-### Deployment Pipeline
-
-- **Environment Promotion**: Automated promotion through environments (develop → staging → main → production)
-- **Approval Gates**: Manual approval requirements for production deployments using GitHub Environments
-- **Rollback Strategy**: Quick rollback capabilities through Git revert and re-deployment
-- **Deployment Notifications**: Team notifications via Slack, Teams, or email integrations
-- **Blue-Green Deployments**: Platform-specific deployment strategies with zero downtime
-
-### Quality Gates
-
-- **Security Scanning**: Container and dependency vulnerability scanning with Dependabot and security actions
-- **Performance Testing**: Automated performance validation in staging environment
-- **Integration Testing**: End-to-end testing in staging environments
-- **Compliance Checks**: Automated compliance and policy validation
-- **Code Quality**: ESLint, Prettier, and TypeScript checks as required gates
+- **Isolated Test Databases**: Each CI/CD run uses a fresh, isolated database instance
+- **Automated Migrations**: Test database schema automatically applied before test execution
+- **Test Data Seeding**: Consistent test data setup for reliable test execution
+- **Cleanup Strategy**: Test databases cleaned up after test completion
 
 ### Secrets Management
 
@@ -1457,6 +1786,402 @@ If ADR documents selection of alternative platforms, ensure similar capabilities
 
 ---
 
+## 🧪 Testing Infrastructure
+
+### Testing Environment Setup
+
+**Automated Test Environment Provisioning**: Consistent and reproducible test environments across local development and CI/CD pipelines.
+
+**Environment Isolation Strategy**:
+
+- **Local Testing**: Dedicated test database and cache instances via Docker Compose
+- **CI/CD Testing**: Ephemeral test services provisioned per pipeline run
+- **Staging Testing**: Persistent staging environment for integration and E2E testing
+- **Performance Testing**: Dedicated load testing infrastructure for performance validation
+
+**Test Environment Configuration**:
+
+```yaml
+# docker-compose.test.yml
+version: "3.8"
+
+services:
+  app-test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://test_user:test_password@postgres_test:5432/app_test
+      REDIS_URL: redis://redis_test:6379
+    depends_on:
+      postgres_test:
+        condition: service_healthy
+      redis_test:
+        condition: service_healthy
+    ports:
+      - "3001:3000"
+
+  postgres_test:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: app_test
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+    volumes:
+      - ./scripts/test-db-init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis_test:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+```
+
+### Test Database Management
+
+**Database Isolation and Management**: Separate test databases to ensure test isolation and data consistency.
+
+**Test Database Strategy**:
+
+```bash
+# Test database management scripts
+#!/bin/bash
+
+# Setup test database
+setup_test_db() {
+  echo "Setting up test database..."
+  docker-compose -f docker-compose.test.yml up -d postgres_test
+  wait-on tcp:localhost:5433
+
+  # Apply migrations
+  DATABASE_URL="postgresql://test_user:test_password@localhost:5433/app_test" \
+    npm run db:migrate
+
+  # Seed test data
+  DATABASE_URL="postgresql://test_user:test_password@localhost:5433/app_test" \
+    npm run db:seed:test
+}
+
+# Reset test database
+reset_test_db() {
+  echo "Resetting test database..."
+  docker-compose -f docker-compose.test.yml restart postgres_test
+  setup_test_db
+}
+
+# Cleanup test database
+cleanup_test_db() {
+  echo "Cleaning up test database..."
+  docker-compose -f docker-compose.test.yml down -v
+}
+```
+
+**Test Data Management**:
+
+```typescript
+// src/test/database.ts
+import { PrismaClient } from "@prisma/client";
+
+export class TestDatabase {
+  private prisma: PrismaClient;
+
+  constructor() {
+    this.prisma = new PrismaClient({
+      datasources: {
+        db: {
+          url: process.env.TEST_DATABASE_URL,
+        },
+      },
+    });
+  }
+
+  async setup(): Promise<void> {
+    await this.prisma.$connect();
+    await this.clearDatabase();
+    await this.seedTestData();
+  }
+
+  async teardown(): Promise<void> {
+    await this.clearDatabase();
+    await this.prisma.$disconnect();
+  }
+
+  private async clearDatabase(): Promise<void> {
+    const tablenames = await this.prisma.$queryRaw<
+      Array<{ tablename: string }>
+    >`SELECT tablename FROM pg_tables WHERE schemaname='public'`;
+
+    for (const { tablename } of tablenames) {
+      if (tablename !== "_prisma_migrations") {
+        await this.prisma.$executeRawUnsafe(
+          `TRUNCATE TABLE "public"."${tablename}" CASCADE;`
+        );
+      }
+    }
+  }
+
+  private async seedTestData(): Promise<void> {
+    // Seed consistent test data
+    await this.prisma.user.createMany({
+      data: [
+        { id: "test-user-1", email: "test1@example.com", name: "Test User 1" },
+        { id: "test-user-2", email: "test2@example.com", name: "Test User 2" },
+      ],
+    });
+  }
+}
+```
+
+### Performance Testing Infrastructure
+
+**Load Testing Environment Setup**: Dedicated infrastructure for performance testing and validation.
+
+**Performance Testing Strategy**:
+
+```yaml
+# docker-compose.perf.yml - Performance Testing Infrastructure
+version: "3.8"
+
+services:
+  app-perf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://perf_user:perf_password@postgres_perf:5432/app_perf
+      REDIS_URL: redis://redis_perf:6379
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
+    depends_on:
+      postgres_perf:
+        condition: service_healthy
+      redis_perf:
+        condition: service_healthy
+
+  postgres_perf:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: app_perf
+      POSTGRES_USER: perf_user
+      POSTGRES_PASSWORD: perf_password
+    volumes:
+      - postgres_perf_data:/var/lib/postgresql/data
+      - ./scripts/perf-db-init.sql:/docker-entrypoint-initdb.d/init.sql
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U perf_user"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  redis_perf:
+    image: redis:7-alpine
+    volumes:
+      - redis_perf_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  k6:
+    image: grafana/k6:latest
+    volumes:
+      - ./performance-tests:/scripts
+    command: run /scripts/load-test.js
+    depends_on:
+      - app-perf
+
+volumes:
+  postgres_perf_data:
+  redis_perf_data:
+```
+
+**Load Testing Integration in CI/CD**:
+
+```yaml
+# .github/workflows/performance.yml
+name: Performance Testing
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 2 * * *" # Daily at 2 AM
+
+jobs:
+  performance-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup performance testing environment
+        run: |
+          docker-compose -f docker-compose.perf.yml up -d app-perf postgres_perf redis_perf
+          # Wait for services to be ready
+          timeout 300 bash -c 'until curl -f http://localhost:3000/health; do sleep 5; done'
+
+      - name: Run performance tests
+        run: |
+          docker-compose -f docker-compose.perf.yml run --rm k6
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-results
+          path: performance-results/
+
+      - name: Cleanup
+        if: always()
+        run: docker-compose -f docker-compose.perf.yml down -v
+```
+
+### Test Service Dependencies
+
+**Service Integration Testing**: Docker Compose setup for testing service interactions and dependencies.
+
+**Test Service Architecture**:
+
+```yaml
+# docker-compose.integration.yml
+version: "3.8"
+
+services:
+  # Main application services
+  web-app:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile.test
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://test_user:test_password@postgres:5432/web_test
+      API_BASE_URL: http://api-service:3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api-service:
+        condition: service_started
+    ports:
+      - "3000:3000"
+
+  api-service:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.test
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://test_user:test_password@postgres:5432/api_test
+      REDIS_URL: redis://redis:6379
+      PAYMENT_SERVICE_URL: http://payment-mock:3002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      payment-mock:
+        condition: service_started
+    ports:
+      - "3001:3001"
+
+  # Mock external services
+  payment-mock:
+    build:
+      context: ./test/mocks/payment-service
+    environment:
+      NODE_ENV: test
+    ports:
+      - "3002:3002"
+
+  email-mock:
+    build:
+      context: ./test/mocks/email-service
+    environment:
+      NODE_ENV: test
+    ports:
+      - "3003:3003"
+
+  # Shared test infrastructure
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: test_db
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+    volumes:
+      - ./scripts/test-db-setup.sql:/docker-entrypoint-initdb.d/setup.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+```
+
+**Integration Test Execution**:
+
+```bash
+# scripts/run-integration-tests.sh
+#!/bin/bash
+
+set -e
+
+echo "Starting integration test environment..."
+docker-compose -f docker-compose.integration.yml up -d
+
+echo "Waiting for services to be ready..."
+wait-on http://localhost:3000/health http://localhost:3001/health
+
+echo "Running integration tests..."
+npm run test:integration
+
+echo "Cleaning up test environment..."
+docker-compose -f docker-compose.integration.yml down -v
+
+echo "Integration tests completed!"
+```
+
+**Test Infrastructure Checklist**:
+
+- [ ] **Test Environment Isolation**: Separate test databases and services
+- [ ] **Automated Test Setup**: Scripts for consistent test environment provisioning
+- [ ] **CI/CD Integration**: Test infrastructure integrated into deployment pipeline
+- [ ] **Performance Testing**: Dedicated performance testing infrastructure
+- [ ] **Service Mocking**: Mock external services for integration testing
+- [ ] **Test Data Management**: Consistent test data seeding and cleanup
+- [ ] **Environment Cleanup**: Proper cleanup of test resources after execution
+
+---
+
 ## 📋 Compliance
 
 This document supports the **Definition of Done** requirements:
@@ -1474,6 +2199,13 @@ This document supports the **Definition of Done** requirements:
 - ✅ Repository strategy aligned with GitHub recommendations
 - ✅ Technology decisions documented through ADR process
 - ✅ Service integration follows structured workflow
+- ✅ Testing environment setup automated and documented
+- ✅ Test database management integrated into infrastructure
+- ✅ CI/CD testing phases properly configured
+- ✅ Performance testing infrastructure established
+- ✅ Test service dependencies managed through Docker Compose
+
+---
 
 ## 🔗 Related Documents
 
@@ -1481,6 +2213,7 @@ This document should be read in conjunction with:
 
 - **[Architectural Guidelines](./01-architectural-guidelines.md)** - System design patterns and architectural decisions, including ADR processes
 - **[Technical Guidelines](./03-technical-guidelines.md)** - Technical standards and development workflow integration
+- **[Testing Strategy](./07-testing-strategy_TBR.md)** - Testing infrastructure requirements and CI/CD integration
 - **[Security Guidelines](./10-security-guidelines_TBR.md)** - Security implementation and practices for infrastructure
 - **[Observability Guidelines](./11-observability-guidelines_TBR.md)** - Monitoring and logging strategies for infrastructure
 - **[Performance Guidelines](./09-performance-guidelines_TBR.md)** - Performance optimization and requirements for infrastructure

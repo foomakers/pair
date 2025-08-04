@@ -227,17 +227,30 @@ For detailed coding standards, design patterns, and implementation guidelines, r
 
 ### Technical Debt Management
 
+**Technical Debt KPIs and Quality Gates:**
+
+- **Technical Debt Ratio**: Maintain technical debt ratio below 5% of total codebase
+- **Code Duplication**: Keep code duplication below 3% across all modules
+- **Quality Gate Thresholds**:
+  - **SonarQube**: Pass all quality gates with A-grade ratings
+  - **ESLint**: Zero critical errors, warnings below 10 per 1000 lines of code
+  - **TypeScript**: Strict mode compliance with zero `any` types in production code
+  - **Test Coverage**: Maintain minimum 80% code coverage for critical business logic
+
 **Identification:**
 
 - **Code Quality Metrics**: Automated detection of technical debt through static analysis
 - **Documentation**: Clear documentation of known technical debt items
 - **Prioritization**: Regular assessment and prioritization of technical debt
+- **Monitoring**: Continuous monitoring of technical debt KPIs with automated alerts
 
 **Management:**
 
 - **Dedicated Time**: Allocated time in development cycles for technical debt reduction
 - **Incremental Fixes**: Break down large technical debt items into manageable tasks
 - **Prevention**: Code review processes to prevent accumulation of new technical debt
+- **Quality Gates**: Automated quality gate enforcement in CI/CD pipeline
+- **Threshold Enforcement**: Build failures when technical debt thresholds are exceeded
 
 ### Internationalization & Localization
 

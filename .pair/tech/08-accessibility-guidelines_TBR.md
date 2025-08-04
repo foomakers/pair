@@ -1,5 +1,11 @@
 # Accessibility Guidelines
 
+<!-- TODO: Add specific accessibility KPIs/criteria from DoD:
+- Lighthouse accessibility scores (e.g., ≥ 95)
+- WCAG 2.1 AA compliance thresholds
+- Specific accessibility testing criteria
+-->
+
 ## Purpose
 
 Ensure digital products are accessible to all users, including t## 🛠️ Implementation Standards
@@ -32,6 +38,20 @@ Ensure digital products are accessible to all users, including t## 🛠️ Imple
 - Performance optimization techniques
 - Backend system accessibility considerations
 - Legal compliance and regulatory requirements
+
+**📝 TODO - Integration with Definition of Done:**
+
+- Define specific accessibility checklist for DoD compliance (WCAG 2.1 AA)
+- Specify accessibility testing tools and automated testing requirements
+- Create accessibility validation process aligned with DoD requirements
+- Define screen reader testing requirements and supported assistive technologies
+
+**📝 TODO - Testing Strategy Coordination:**
+
+- Align accessibility testing with [Testing Strategy](07-testing-strategy_TBR.md) automation (axe-core, Lighthouse)
+- Define accessibility testing at unit/integration/e2e levels per test pyramid
+- Coordinate accessibility testing tools with React Testing Library and Playwright
+- Ensure WCAG compliance validation is integrated into CI/CD pipeline testing
 
 ---
 

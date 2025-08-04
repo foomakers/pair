@@ -1,5 +1,12 @@
 # Performance Guidelines
 
+<!-- TODO: Add specific performance KPIs/criteria from DoD:
+- API response time thresholds (e.g., < 200ms)
+- Page load time targets (e.g., < 3s)
+- Lighthouse performance scores (e.g., ≥ 90)
+- Critical endpoint response times (e.g., < 200ms average)
+-->
+
 ## Purpose
 
 Define performance standards, optimization strategies, and monitoring practices that ensure optimal user experience while supporting development workflows for performance analysis and improvement.
@@ -21,6 +28,20 @@ Define performance standards, optimization strategies, and monitoring practices 
 - Network configuration and CDN setup
 - Third-party service performance management
 - Hardware specifications and requirements
+
+**📝 TODO - Integration with Definition of Done:**
+
+- Define specific performance benchmarks for DoD (currently: API < 200ms, page load < 3s)
+- Specify performance testing requirements and tools for automated gates
+- Create performance validation checklist aligned with DoD requirements
+- Define Lighthouse score thresholds (Performance ≥ 90, Accessibility ≥ 95)
+
+**📝 TODO - Testing Strategy Coordination:**
+
+- Align performance testing with [Testing Strategy](07-testing-strategy_TBR.md) test pyramid (unit/integration/e2e)
+- Define which performance tests are executed at each testing level
+- Coordinate performance testing tools with Vitest/Playwright configuration
+- Ensure load testing strategy aligns with CI/CD pipeline testing phases
 
 ---
 

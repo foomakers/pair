@@ -22,6 +22,20 @@ Define comprehensive security standards, practices, and protocols that protect a
 - Legal and regulatory compliance procedures
 - Third-party security audits and certifications
 
+**📝 TODO - Integration with Definition of Done:**
+
+- Define specific security checklist for DoD compliance
+- Specify vulnerability scanning tools and thresholds (no high/critical vulnerabilities)
+- Create security review process aligned with DoD requirements
+- Define SAST/DAST requirements for automated security gates
+
+**📝 TODO - Testing Strategy Coordination:**
+
+- Align security testing types with [Testing Strategy](07-testing-strategy_TBR.md) (SAST, DAST, IAST)
+- Define which security tests are mandatory vs optional per test pyramid (70/20/10%)
+- Coordinate security testing tools with testing framework configuration
+- Ensure security testing is integrated into CI/CD pipeline testing phases
+
 ---
 
 ## � Table of Contents

@@ -197,7 +197,7 @@ When creating a new bounded context (app or service), the following decisions mu
 - Document significant architectural decisions
 - Include context, options considered, and rationale
 - Review decisions regularly in sprint retrospectives
-- Maintain decisions in `/docs/adr/` directory
+- Maintain decisions in `/tech/adr/` directory
 
 **Generic ADR Template:**
 
