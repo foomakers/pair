@@ -4,6 +4,24 @@
 
 Ensure digital products are accessible to all users, including those with disabilities, while supporting development workflows that can help identify and implement accessibility best practices.
 
+## Scope
+
+**In Scope:**
+
+- Accessibility standards and WCAG compliance
+- Inclusive design principles and practices
+- Assistive technology support requirements
+- Accessibility testing tools and methodologies
+- Development workflow integration for accessibility
+
+**Out of Scope:**
+
+- Content strategy and copywriting guidelines
+- Visual design aesthetics and branding
+- Performance optimization techniques
+- Backend system accessibility considerations
+- Legal compliance and regulatory requirements
+
 ---
 
 ## 📋 Table of Contents

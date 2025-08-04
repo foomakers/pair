@@ -4,6 +4,24 @@
 
 Define comprehensive monitoring, logging, and alerting strategies that provide visibility into system behavior while supporting development workflows for proactive issue detection and resolution.
 
+## Scope
+
+**In Scope:**
+
+- Monitoring, logging, and alerting strategies
+- Observability tools and instrumentation
+- Metrics collection and analysis
+- Development workflow integration for observability
+- Proactive issue detection and resolution
+
+**Out of Scope:**
+
+- Infrastructure monitoring and hardware metrics
+- Business intelligence and analytics
+- Compliance reporting and audit trails
+- Third-party service monitoring
+- Enterprise monitoring solutions and governance
+
 ---
 
 ## � Table of Contents

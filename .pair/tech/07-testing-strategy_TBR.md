@@ -4,6 +4,24 @@
 
 Define comprehensive testing approach that ensures code quality, reliability, and maintainability throughout the development lifecycle.
 
+## Scope
+
+**In Scope:**
+
+- Testing methodologies and strategies
+- Test automation frameworks and tools
+- Code coverage requirements and standards
+- Testing pyramid implementation (unit, integration, e2e)
+- Quality assurance processes and procedures
+
+**Out of Scope:**
+
+- Production monitoring and alerting
+- User acceptance testing procedures
+- Performance load testing strategies
+- Security penetration testing
+- Manual testing workflows and documentation
+
 ---
 
 ## 📋 Table of Contents

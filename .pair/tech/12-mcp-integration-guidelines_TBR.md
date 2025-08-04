@@ -4,6 +4,24 @@
 
 Define Model Context Protocol (MCP) integration patterns and standards that enhance development workflows by providing structured context sharing between tools and development environments.
 
+## Scope
+
+**In Scope:**
+
+- MCP integration patterns and standards
+- Context sharing between development tools
+- AI-assisted development workflow integration
+- MCP server development and configuration
+- Tool interoperability and data exchange
+
+**Out of Scope:**
+
+- Custom protocol development beyond MCP
+- Enterprise system integration architecture
+- Third-party vendor integrations
+- Legacy system migration strategies
+- Business process automation
+
 ---
 
 ## � Table of Contents

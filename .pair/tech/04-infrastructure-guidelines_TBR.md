@@ -4,6 +4,31 @@
 
 Define infrastructure standards, deployment strategies, and operational practices that support scalable, reliable, and maintainable systems across all environments.
 
+## Scope
+
+**In Scope:**
+
+- Infrastructure standards and deployment strategies
+- Environment management (dev/staging/production)
+- Container orchestration and Docker strategies
+- CI/CD pipeline configuration
+- Local development deployment setups
+
+**Out of Scope:**
+
+- Application code and business logic
+- Security policies and compliance frameworks
+- Performance monitoring and observability
+- Database design and data modeling
+- Third-party service integrations
+
+**📝 Note**: This document must comprehensively cover:
+
+- **Local Development Deployment**: Docker Compose setup for complete local environment
+- **Environment Management**: Clear strategies for dev/staging/production environments
+- **Containerization Standards**: Docker standards for Next.js BFF and Fastify APIs
+- **Cross-Reference**: Integration with [Technical Guidelines](03-technical-guidelines_TBR.md) deployment requirements
+
 ---
 
 ## 📋 Table of Contents

@@ -4,6 +4,24 @@
 
 Define code structure, design patterns, and implementation standards that ensure high code quality, readability, and maintainability.
 
+## Scope
+
+**In Scope:**
+
+- Code structure and design patterns
+- Implementation standards and best practices
+- Framework-specific patterns (React/Next.js, TypeScript)
+- Code readability and maintainability guidelines
+- Design principles and coding conventions
+
+**Out of Scope:**
+
+- Infrastructure and deployment configurations
+- Performance optimization strategies
+- Security implementation details
+- Testing frameworks and strategies
+- Third-party library integration patterns
+
 ---
 
 ## 📋 Table of Contents

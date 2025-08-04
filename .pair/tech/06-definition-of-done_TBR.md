@@ -4,6 +4,24 @@
 
 Ensure consistent quality across all deliverables in the development process, providing clear criteria for determining when work is complete and ready for production.
 
+## Scope
+
+**In Scope:**
+
+- Quality gates and acceptance criteria
+- Code review and testing requirements
+- Technical compliance and standards verification
+- Security and performance validation
+- Documentation and deployment readiness
+
+**Out of Scope:**
+
+- Business requirements validation
+- Product owner acceptance processes
+- Marketing and launch preparations
+- Legal compliance and regulatory approval
+- Post-production support and maintenance
+
 ---
 
 ## 📋 Table of Contents

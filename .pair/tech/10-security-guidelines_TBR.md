@@ -4,6 +4,24 @@
 
 Define comprehensive security standards, practices, and protocols that protect applications, data, and users while supporting development workflows for security analysis and implementation.
 
+## Scope
+
+**In Scope:**
+
+- Security standards and best practices
+- Application security implementation guidelines
+- Security testing and vulnerability assessment
+- Data protection and privacy compliance
+- Development workflow security integration
+
+**Out of Scope:**
+
+- Infrastructure security and network policies
+- Enterprise security governance and compliance
+- Physical security and access controls
+- Legal and regulatory compliance procedures
+- Third-party security audits and certifications
+
 ---
 
 ## � Table of Contents

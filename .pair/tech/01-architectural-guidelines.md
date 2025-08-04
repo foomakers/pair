@@ -4,6 +4,24 @@
 
 Define system design patterns, structural choices, and architectural decisions that ensure scalability, maintainability, and quality.
 
+## Scope
+
+**In Scope:**
+
+- System architecture patterns and design principles
+- Repository structure and workspace organization
+- Architectural decision records (ADRs)
+- Scalability and maintainability patterns
+- System integration patterns
+
+**Out of Scope:**
+
+- Infrastructure deployment strategies
+- Specific technology implementations
+- Performance optimization techniques
+- Security implementation details
+- Testing strategies and methodologies
+
 ---
 
 ## 📋 Table of Contents

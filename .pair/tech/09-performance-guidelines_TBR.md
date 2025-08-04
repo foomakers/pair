@@ -4,6 +4,24 @@
 
 Define performance standards, optimization strategies, and monitoring practices that ensure optimal user experience while supporting development workflows for performance analysis and improvement.
 
+## Scope
+
+**In Scope:**
+
+- Performance standards and benchmarks
+- Optimization strategies and best practices
+- Performance monitoring tools and methodologies
+- Load testing and performance analysis
+- Development workflow integration for performance
+
+**Out of Scope:**
+
+- Infrastructure scaling and provisioning
+- Database optimization and tuning
+- Network configuration and CDN setup
+- Third-party service performance management
+- Hardware specifications and requirements
+
 ---
 
 ## 📋 Table of Contents

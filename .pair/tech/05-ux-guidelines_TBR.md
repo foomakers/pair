@@ -4,6 +4,24 @@
 
 Define user experience standards and design principles that ensure consistent, accessible, and intuitive interfaces.
 
+## Scope
+
+**In Scope:**
+
+- User experience standards and design principles
+- Interface design patterns and consistency guidelines
+- User interaction patterns and navigation standards
+- Visual design elements and styling guidelines
+- Usability principles and user-centered design
+
+**Out of Scope:**
+
+- Technical implementation details
+- Backend system design
+- Performance optimization strategies
+- Security requirements and compliance
+- Content strategy and copywriting guidelines
+
 ---
 
 ## 📋 Table of Contents
