@@ -20,10 +20,10 @@ Define comprehensive testing approach that ensures code quality, reliability, an
 
 **Out of Scope:**
 
-- Production monitoring and alerting (see [Observability Guidelines](11-observability-guidelines_TBR.md))
+- Production monitoring and alerting (see [Observability Guidelines](11-observability-guidelines.md))
 - UX design principles and component guidelines (see [UX Guidelines](05-ux-guidelines.md))
-- Detailed performance optimization strategies (see [Performance Guidelines](09-performance-guidelines_TBR.md))
-- Comprehensive security testing methodologies (see [Security Guidelines](10-security-guidelines_TBR.md))
+- Detailed performance optimization strategies (see [Performance Guidelines](09-performance-guidelines.md))
+- Comprehensive security testing methodologies (see [Security Guidelines](10-security-guidelines.md))
 - Manual testing workflows and documentation
 - Detailed tool configurations (see [Technical Guidelines](03-technical-guidelines.md))
 
@@ -231,9 +231,9 @@ Define comprehensive testing approach that ensures code quality, reliability, an
 
 ### Non-Functional Testing
 
-- **Performance Testing**: Response time validation and load testing integration (detailed optimization in [Performance Guidelines](09-performance-guidelines_TBR.md))
-- **Security Testing**: Basic vulnerability checks (comprehensive testing in [Security Guidelines](10-security-guidelines_TBR.md))
-- **Accessibility Testing**: WCAG compliance validation (detailed standards in [Accessibility Guidelines](08-accessibility-guidelines_TBR.md))
+- **Performance Testing**: Response time validation and load testing integration (detailed optimization in [Performance Guidelines](09-performance-guidelines.md))
+- **Security Testing**: Basic vulnerability checks (comprehensive testing in [Security Guidelines](10-security-guidelines.md))
+- **Accessibility Testing**: WCAG compliance validation (detailed standards in [Accessibility Guidelines](08-accessibility-guidelines.md))
 - **Compatibility Testing**: Cross-platform and browser testing
 
 #### Performance Testing Integration
@@ -574,7 +574,7 @@ These gates are integrated with [Definition of Done](06-definition-of-done.md) c
 ### Post-Deployment
 
 - [ ] Smoke tests pass in production environment
-- [ ] Monitoring configured per [Observability Guidelines](11-observability-guidelines_TBR.md)
+- [ ] Monitoring configured per [Observability Guidelines](11-observability-guidelines.md)
 - [ ] Test results documented and analyzed
 - [ ] Feedback incorporated for continuous improvement
 

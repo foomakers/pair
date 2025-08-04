@@ -48,7 +48,7 @@ Ensure digital products are accessible to all users, including t## 🛠️ Imple
 
 **📝 TODO - Testing Strategy Coordination:**
 
-- Align accessibility testing with [Testing Strategy](07-testing-strategy_TBR.md) automation (axe-core, Lighthouse)
+- Align accessibility testing with [Testing Strategy](07-testing-strategy.md) automation (axe-core, Lighthouse)
 - Define accessibility testing at unit/integration/e2e levels per test pyramid
 - Coordinate accessibility testing tools with React Testing Library and Playwright
 - Ensure WCAG compliance validation is integrated into CI/CD pipeline testing

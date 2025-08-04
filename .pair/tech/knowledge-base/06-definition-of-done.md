@@ -58,17 +58,17 @@ Complete checklist ordered by priority for each work item:
 - [ ] Tech guidance followed per [Technical Guidelines](03-technical-guidelines.md)
 - [ ] Technical approach aligns with [Architectural Guidelines](01-architectural-guidelines.md)
 - [ ] ADRs (Architectural Decision Records) followed per [Architectural Guidelines](01-architectural-guidelines.md)
-- [ ] Tests written per [Testing Strategy](07-testing-strategy_TBR.md)
-- [ ] All automated tests passing per [Testing Strategy](07-testing-strategy_TBR.md)
+- [ ] Tests written per [Testing Strategy](07-testing-strategy.md)
+- [ ] All automated tests passing per [Testing Strategy](07-testing-strategy.md)
 - [ ] Code review completed and approved
-- [ ] Security considerations identified, practices followed, and scanning passed per [Security Guidelines](10-security-guidelines_TBR.md)
-- [ ] Performance benchmarks met per [Performance Guidelines](09-performance-guidelines_TBR.md)
+- [ ] Security considerations identified, practices followed, and scanning passed per [Security Guidelines](10-security-guidelines.md)
+- [ ] Performance benchmarks met per [Performance Guidelines](09-performance-guidelines.md)
 - [ ] Quality gates passed per [Technical Guidelines](03-technical-guidelines.md)
-- [ ] Accessibility criteria met per [Accessibility Guidelines](08-accessibility-guidelines_TBR.md)
+- [ ] Accessibility criteria met per [Accessibility Guidelines](08-accessibility-guidelines.md)
 - [ ] UX criteria met per [UX Guidelines](05-ux-guidelines.md)
 - [ ] Feature under feature flag (if applicable)
 - [ ] IaaS implemented per [Infrastructure Guidelines](04-infrastructure-guidelines.md)
-- [ ] Monitoring configured per [Observability Guidelines](11-observability-guidelines_TBR.md)
+- [ ] Monitoring configured per [Observability Guidelines](11-observability-guidelines.md)
 - [ ] Deployment successful
 - [ ] Documentation updated and published
 
@@ -84,11 +84,11 @@ Complete checklist ordered by priority for each work item:
 | Tech Guidance             | Team Review            | High            | [Technical Guidelines](03-technical-guidelines.md)             |
 | Infrastructure            | DevOps Team            | Medium          | [Infrastructure Guidelines](04-infrastructure-guidelines.md)   |
 | UX Criteria               | UX/Dev Team            | Medium          | [UX Guidelines](05-ux-guidelines.md)                           |
-| Accessibility             | UX/Dev Team            | Medium          | [Accessibility Guidelines](08-accessibility-guidelines_TBR.md) |
-| Security Assessment       | Security Lead          | Medium          | [Security Guidelines](10-security-guidelines_TBR.md)           |
-| Performance               | Dev Team               | High            | [Performance Guidelines](09-performance-guidelines_TBR.md)     |
-| Testing Strategy          | Dev Team               | High            | [Testing Strategy](07-testing-strategy_TBR.md)                 |
-| Observability             | Dev Team               | High            | [Observability Guidelines](11-observability-guidelines_TBR.md) |
+| Accessibility             | UX/Dev Team            | Medium          | [Accessibility Guidelines](08-accessibility-guidelines.md) |
+| Security Assessment       | Security Lead          | Medium          | [Security Guidelines](10-security-guidelines.md)           |
+| Performance               | Dev Team               | High            | [Performance Guidelines](09-performance-guidelines.md)     |
+| Testing Strategy          | Dev Team               | High            | [Testing Strategy](07-testing-strategy.md)                 |
+| Observability             | Dev Team               | High            | [Observability Guidelines](11-observability-guidelines.md) |
 
 ---
 
@@ -168,31 +168,31 @@ All work items must satisfy these criteria before being considered complete. Ref
 
 ### 🔒 Security Assessment
 
-- **Vulnerability Scanning** → No high/critical vulnerabilities (see [Security Guidelines](10-security-guidelines_TBR.md))
+- **Vulnerability Scanning** → No high/critical vulnerabilities (see [Security Guidelines](10-security-guidelines.md))
 - **Security Review** → Manual security assessment completed
 - **Data Protection** → Proper handling of sensitive data and user information
 
 ### ♿ Accessibility Assessment
 
-- **WCAG 2.1 AA Compliance** → Standards met per [Accessibility Guidelines](08-accessibility-guidelines_TBR.md)
+- **WCAG 2.1 AA Compliance** → Standards met per [Accessibility Guidelines](08-accessibility-guidelines.md)
 - **Assistive Technology** → Tested with screen readers and keyboard navigation
 - **Accessibility Testing** → Automated and manual accessibility validation
 
 ### ⚡ Performance Assessment
 
-- **Performance Benchmarks** → Thresholds met per [Performance Guidelines](09-performance-guidelines_TBR.md)
+- **Performance Benchmarks** → Thresholds met per [Performance Guidelines](09-performance-guidelines.md)
 - **Load Testing** → Performance tested under expected conditions
-- **Optimization** → Standards met per [Performance Guidelines](09-performance-guidelines_TBR.md)
+- **Optimization** → Standards met per [Performance Guidelines](09-performance-guidelines.md)
 
 ### 🧪 Testing Requirements
 
-- **Test Coverage** → Standards met per [Testing Strategy](07-testing-strategy_TBR.md)
+- **Test Coverage** → Standards met per [Testing Strategy](07-testing-strategy.md)
 - **Test Quality** → Meaningful tests verifying behavior, not implementation
 - **Automated Tests** → All CI/CD pipeline tests passing
 
 ### � Operational Readiness
 
-- **Monitoring** → Health checks and observability per [Observability Guidelines](11-observability-guidelines_TBR.md)
+- **Monitoring** → Health checks and observability per [Observability Guidelines](11-observability-guidelines.md)
 - **Documentation** → Technical and deployment documentation updated
 - **Deployment** → Environment compatibility and rollback strategy tested
 
@@ -210,9 +210,9 @@ Automated quality gates integrated in CI/CD pipeline:
 
 ### ⚡ Performance
 
-- **Bundle Size** → Within limits defined in [Performance Guidelines](09-performance-guidelines_TBR.md)
-- **Response Time** → Standards met per [Performance Guidelines](09-performance-guidelines_TBR.md)
-- **Lighthouse** → Standards met per [Performance Guidelines](09-performance-guidelines_TBR.md) and [Accessibility Guidelines](08-accessibility-guidelines_TBR.md)
+- **Bundle Size** → Within limits defined in [Performance Guidelines](09-performance-guidelines.md)
+- **Response Time** → Standards met per [Performance Guidelines](09-performance-guidelines.md)
+- **Lighthouse** → Standards met per [Performance Guidelines](09-performance-guidelines.md) and [Accessibility Guidelines](08-accessibility-guidelines.md)
 
 ---
 
@@ -227,8 +227,8 @@ Automated quality gates integrated in CI/CD pipeline:
 ### Manual Reviews
 
 1. **Code Review** → Peer review focusing on maintainability
-2. **Security Review** → Manual assessment per [Security Guidelines](10-security-guidelines_TBR.md)
-3. **Accessibility Testing** → Manual validation per [Accessibility Guidelines](08-accessibility-guidelines_TBR.md)
+2. **Security Review** → Manual assessment per [Security Guidelines](10-security-guidelines.md)
+3. **Accessibility Testing** → Manual validation per [Accessibility Guidelines](08-accessibility-guidelines.md)
 4. **UX Review** → Design team approval for user-facing changes
 
 ---

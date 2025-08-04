@@ -31,7 +31,7 @@ Define comprehensive monitoring, logging, and alerting strategies that provide v
 
 **📝 TODO - Testing Strategy Coordination:**
 
-- Align observability setup with [Testing Strategy](07-testing-strategy_TBR.md) post-deployment testing gates
+- Align observability setup with [Testing Strategy](07-testing-strategy.md) post-deployment testing gates
 - Define monitoring requirements for test environments (unit/integration/e2e)
 - Coordinate test result monitoring and alerting with CI/CD pipeline testing phases
 - Ensure test failure monitoring and metrics collection align with observability standards

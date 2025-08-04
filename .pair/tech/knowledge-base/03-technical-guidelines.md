@@ -137,9 +137,9 @@ Define comprehensive technical standards including tech stack, tools, frameworks
 1. **Development Support**: Good tooling and development experience
 2. **Community Ecosystem**: Active community and extensive documentation
 3. **Type Safety**: Strong typing support for better code reliability
-4. **Testing Support**: Robust testing ecosystem (see [Testing Strategy](07-testing-strategy_TBR.md))
-5. **Performance**: Meets performance requirements defined in [Performance Guidelines](09-performance-guidelines_TBR.md)
-6. **Security**: Alignment with [Security Guidelines](10-security-guidelines_TBR.md) standards
+4. **Testing Support**: Robust testing ecosystem (see [Testing Strategy](07-testing-strategy.md))
+5. **Performance**: Meets performance requirements defined in [Performance Guidelines](09-performance-guidelines.md)
+6. **Security**: Alignment with [Security Guidelines](10-security-guidelines.md) standards
 
 ---
 
@@ -200,8 +200,8 @@ For detailed coding standards, design patterns, and implementation guidelines, r
 - **Logging**: Comprehensive error logging with context and stack traces
 - **User Experience**: User-friendly error messages without exposing system details
 - **Recovery**: Clear recovery paths and retry mechanisms where appropriate
-- **Security**: Error handling follows [Security Guidelines](10-security-guidelines_TBR.md) to prevent information leakage
-- **Monitoring**: Error tracking and alerting via [Observability Guidelines](11-observability-guidelines_TBR.md)
+- **Security**: Error handling follows [Security Guidelines](10-security-guidelines.md) to prevent information leakage
+- **Monitoring**: Error tracking and alerting via [Observability Guidelines](11-observability-guidelines.md)
 
 ### Versioning Strategy
 
@@ -301,8 +301,8 @@ For detailed coding standards, design patterns, and implementation guidelines, r
 - **Data Validation**: Input validation at system boundaries
 - **Rate Limiting**: Protection against abuse and overuse
 - **Circuit Breakers**: Resilience patterns for external dependencies
-- **Security Integration**: See [Security Guidelines](10-security-guidelines_TBR.md) for detailed security requirements
-- **Infrastructure Integration**: See [Infrastructure Guidelines](04-infrastructure-guidelines_TBR.md) for environment and deployment details
+- **Security Integration**: See [Security Guidelines](10-security-guidelines.md) for detailed security requirements
+- **Infrastructure Integration**: See [Infrastructure Guidelines](04-infrastructure-guidelines.md) for environment and deployment details
 
 ---
 
@@ -418,8 +418,8 @@ For detailed coding standards, design patterns, and implementation guidelines, r
 - **Type Safety**: TypeScript interfaces for all external API responses
 - **Error Handling**: Consistent error handling and fallback strategies
 - **Rate Limiting**: Respect external API rate limits and implement backoff strategies
-- **Security**: All external integrations follow [Security Guidelines](10-security-guidelines_TBR.md)
-- **Monitoring**: Integration health monitoring via [Observability Guidelines](11-observability-guidelines_TBR.md)
+- **Security**: All external integrations follow [Security Guidelines](10-security-guidelines.md)
+- **Monitoring**: Integration health monitoring via [Observability Guidelines](11-observability-guidelines.md)
 - **Cost Monitoring**: Track and monitor costs for all external service integrations
 
 ---
@@ -448,7 +448,7 @@ For detailed coding standards, design patterns, and implementation guidelines, r
 
 For comprehensive Model Context Protocol integration patterns and advanced AI-assisted development workflows, refer to:
 
-- **[MCP Integration Guidelines](12-mcp-integration-guidelines_TBR.md)**: Complete MCP implementation standards and context sharing protocols
+- **[MCP Integration Guidelines](12-mcp-integration-guidelines.md)**: Complete MCP implementation standards and context sharing protocols
 
 ### Implementation Requirements
 
@@ -827,16 +827,16 @@ class CachedFeatureFlagService implements FeatureFlagService {
 
 ### Quality Assurance
 
-- **Automated Testing**: Unit, integration, and end-to-end tests (see [Testing Strategy](07-testing-strategy_TBR.md))
+- **Automated Testing**: Unit, integration, and end-to-end tests (see [Testing Strategy](07-testing-strategy.md))
 - **Static Analysis**: Code quality and security scanning
-- **Performance Testing**: Load testing and performance monitoring (see [Performance Guidelines](09-performance-guidelines_TBR.md))
+- **Performance Testing**: Load testing and performance monitoring (see [Performance Guidelines](09-performance-guidelines.md))
 - **Documentation Updates**: Keep technical documentation current
 
 ### Testing Integration
 
 For comprehensive testing standards, strategies, and implementation details, refer to:
 
-- **[Testing Strategy](07-testing-strategy_TBR.md)**: Complete testing framework and quality assurance standards
+- **[Testing Strategy](07-testing-strategy.md)**: Complete testing framework and quality assurance standards
 
 ---
 
@@ -846,7 +846,7 @@ For comprehensive testing standards, strategies, and implementation details, ref
 
 For detailed deployment strategies, containerization standards, and infrastructure requirements, refer to the comprehensive documentation in:
 
-- **[Infrastructure Guidelines](04-infrastructure-guidelines_TBR.md)**: Complete deployment strategies and environment management
+- **[Infrastructure Guidelines](04-infrastructure-guidelines.md)**: Complete deployment strategies and environment management
 
 ### Technical Integration Points
 
@@ -861,11 +861,11 @@ For detailed deployment strategies, containerization standards, and infrastructu
 ### Build and Release Standards
 
 - **Type Safety**: Ensure TypeScript compilation passes before deployment
-- **Testing Requirements**: All tests pass as defined in [Testing Strategy](07-testing-strategy_TBR.md)
+- **Testing Requirements**: All tests pass as defined in [Testing Strategy](07-testing-strategy.md)
 - **Documentation**: llms.txt files generated and accessible post-deployment
-- **Security Compliance**: Deployment follows [Security Guidelines](10-security-guidelines_TBR.md)
-- **Performance Validation**: Performance criteria met per [Performance Guidelines](09-performance-guidelines_TBR.md)
-- **Observability**: Monitoring and logging configured per [Observability Guidelines](11-observability-guidelines_TBR.md)
+- **Security Compliance**: Deployment follows [Security Guidelines](10-security-guidelines.md)
+- **Performance Validation**: Performance criteria met per [Performance Guidelines](09-performance-guidelines.md)
+- **Observability**: Monitoring and logging configured per [Observability Guidelines](11-observability-guidelines.md)
 
 ---
 

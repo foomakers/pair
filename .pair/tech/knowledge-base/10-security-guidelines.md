@@ -31,7 +31,7 @@ Define comprehensive security standards, practices, and protocols that protect a
 
 **📝 TODO - Testing Strategy Coordination:**
 
-- Align security testing types with [Testing Strategy](07-testing-strategy_TBR.md) (SAST, DAST, IAST)
+- Align security testing types with [Testing Strategy](07-testing-strategy.md) (SAST, DAST, IAST)
 - Define which security tests are mandatory vs optional per test pyramid (70/20/10%)
 - Coordinate security testing tools with testing framework configuration
 - Ensure security testing is integrated into CI/CD pipeline testing phases

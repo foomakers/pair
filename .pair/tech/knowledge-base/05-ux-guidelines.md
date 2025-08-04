@@ -21,8 +21,8 @@ Define user experience standards and design principles that ensure consistent, a
 - Performance optimization strategies
 - Security requirements and compliance
 - Content strategy and copywriting guidelines
-- Usability testing methodologies and tools (see [Testing Strategy](07-testing-strategy_TBR.md))
-- Detailed accessibility standards and compliance (see [Accessibility Guidelines](08-accessibility-guidelines_TBR.md))
+- Usability testing methodologies and tools (see [Testing Strategy](07-testing-strategy.md))
+- Detailed accessibility standards and compliance (see [Accessibility Guidelines](08-accessibility-guidelines.md))
 - Legal accessibility compliance and certification
 
 ---
@@ -685,7 +685,7 @@ We follow a mobile-first approach with these standard breakpoints:
 
 ### UX and Accessibility Integration
 
-UX Guidelines focus on design principles that support accessibility. For detailed accessibility standards, technical implementation, testing frameworks, and compliance requirements, see [Accessibility Guidelines](08-accessibility-guidelines_TBR.md).
+UX Guidelines focus on design principles that support accessibility. For detailed accessibility standards, technical implementation, testing frameworks, and compliance requirements, see [Accessibility Guidelines](08-accessibility-guidelines.md).
 
 **UX Design Considerations:**
 
@@ -745,7 +745,7 @@ UX Guidelines focus on design principles that support accessibility. For detaile
 - **Connection Scenarios**: Test under various network conditions (3G, 4G, Wi-Fi)
 - **Usability Impact**: Measure how performance affects task completion and satisfaction
 
-For detailed technical performance optimization strategies, monitoring, and implementation guidelines, see [Performance Guidelines](09-performance-guidelines_TBR.md).
+For detailed technical performance optimization strategies, monitoring, and implementation guidelines, see [Performance Guidelines](09-performance-guidelines.md).
 
 ---
 
@@ -760,10 +760,10 @@ For detailed technical performance optimization strategies, monitoring, and impl
 
 ### Testing Integration
 
-- **Component Testing**: Visual and behavioral testing as defined in [Testing Strategy](07-testing-strategy_TBR.md)
+- **Component Testing**: Visual and behavioral testing as defined in [Testing Strategy](07-testing-strategy.md)
 - **Accessibility Testing**: Automated a11y validation integrated into development workflow
 - **Cross-Browser Testing**: Consistent experience validation across supported browsers
-- **Performance Testing**: UX performance metrics monitoring (see [Performance Guidelines](09-performance-guidelines_TBR.md))
+- **Performance Testing**: UX performance metrics monitoring (see [Performance Guidelines](09-performance-guidelines.md))
 
 ### Usability Testing Framework
 
@@ -782,7 +782,7 @@ For detailed technical performance optimization strategies, monitoring, and impl
 - **Satisfaction Score:** Target System Usability Scale (SUS) score above 70
 - **Accessibility Validation:** All user flows tested with assistive technologies
 
-**Detailed usability testing methodologies, tools, budget considerations, and implementation guidelines are covered in [Testing Strategy](07-testing-strategy_TBR.md).**
+**Detailed usability testing methodologies, tools, budget considerations, and implementation guidelines are covered in [Testing Strategy](07-testing-strategy.md).**
 
 ### UX Metrics and KPIs
 

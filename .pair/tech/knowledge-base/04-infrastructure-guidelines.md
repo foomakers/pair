@@ -29,15 +29,15 @@ Define infrastructure standards, deployment strategies, and operational practice
 - Performance monitoring and observability
 - Database design and data modeling
 - Third-party service integrations
-- Testing methodologies and test implementation (see [Testing Strategy](07-testing-strategy_TBR.md))
-- Performance testing strategies and tools (see [Performance Guidelines](09-performance-guidelines_TBR.md))
+- Testing methodologies and test implementation (see [Testing Strategy](07-testing-strategy.md))
+- Performance testing strategies and tools (see [Performance Guidelines](09-performance-guidelines.md))
 
 **📝 Note**: This document must comprehensively cover:
 
 - **Local Development Deployment**: Docker Compose setup for complete local environment
 - **Environment Management**: Clear strategies for dev/staging/production environments
 - **Containerization Standards**: Docker standards for Next.js BFF and Fastify APIs
-- **Cross-Reference**: Integration with [Technical Guidelines](03-technical-guidelines_TBR.md) deployment requirements
+- **Cross-Reference**: Integration with [Technical Guidelines](03-technical-guidelines.md) deployment requirements
 
 ---
 
@@ -185,7 +185,7 @@ Define infrastructure standards, deployment strategies, and operational practice
 
 - **Environment Files**: `.env.development` for development-specific configuration
 - **Service Endpoints**: Real external service URLs and credentials
-- **Feature Flags**: Environment-specific feature toggle configuration (see [Technical Guidelines](./03-technical-guidelines.md#feature-flag-management))
+- **Feature Flags**: Environment-specific feature toggle configuration (see [Technical Guidelines](03-technical-guidelines.md#feature-flag-management))
 - **Monitoring Integration**: Basic observability for development debugging
 
 ### Staging Environment
@@ -507,14 +507,14 @@ const createServiceConfig = (environment: string): ServiceConfig => {
 
 ### Infrastructure Extension Workflow
 
-**Architectural Decision Requirement**: New infrastructure components and external services must follow the ADR process defined in [Architectural Guidelines](./01-architectural-guidelines.md#architecture-decision-records-adrs).
+**Architectural Decision Requirement**: New infrastructure components and external services must follow the ADR process defined in [Architectural Guidelines](01-architectural-guidelines.md#architecture-decision-records-adrs).
 
-**Bounded Context Infrastructure**: When adding infrastructure for new bounded contexts (apps/services), also follow the [Bounded Context Decision Checklist](./01-architectural-guidelines.md#bounded-context-decision-checklist) for architectural consistency.
+**Bounded Context Infrastructure**: When adding infrastructure for new bounded contexts (apps/services), also follow the [Bounded Context Decision Checklist](01-architectural-guidelines.md#bounded-context-decision-checklist) for architectural consistency.
 
 **Process**:
 
 1. **Technology Evaluation**: When a new infrastructure component or external service is needed
-2. **ADR Creation**: Follow the ADR process and template defined in [Architectural Guidelines](./01-architectural-guidelines.md#architecture-decision-records-adrs)
+2. **ADR Creation**: Follow the ADR process and template defined in [Architectural Guidelines](01-architectural-guidelines.md#architecture-decision-records-adrs)
 3. **Implementation Planning**: Add infrastructure extension tasks to product backlog
 4. **Prioritization**: Schedule implementation based on business priority and technical dependencies
 
@@ -569,7 +569,7 @@ const createServiceConfig = (environment: string): ServiceConfig => {
 
 **Bounded Context Flexibility**: Each bounded context (app/service) can select the most appropriate platform based on requirements and constraints.
 
-**Platform Decision Requirements**: All platform selections must be documented through ADR process following [Architectural Guidelines](./01-architectural-guidelines.md#architecture-decision-records-adrs).
+**Platform Decision Requirements**: All platform selections must be documented through ADR process following [Architectural Guidelines](01-architectural-guidelines.md#architecture-decision-records-adrs).
 
 **Supported Platforms**:
 
@@ -770,7 +770,7 @@ spec:
 
 ### IaC Tool Selection
 
-**ADR Requirement**: Infrastructure as Code tool selection must be documented through ADR process following [Architectural Guidelines](./01-architectural-guidelines.md#architecture-decision-records-adrs).
+**ADR Requirement**: Infrastructure as Code tool selection must be documented through ADR process following [Architectural Guidelines](01-architectural-guidelines.md#architecture-decision-records-adrs).
 
 **Platform-Specific Recommendations**:
 
@@ -1146,7 +1146,7 @@ jobs:
 
 ### CI/CD Platform Selection
 
-**ADR Requirement**: CI/CD platform selection must be documented through ADR process following [Architectural Guidelines](./01-architectural-guidelines.md#architecture-decision-records-adrs).
+**ADR Requirement**: CI/CD platform selection must be documented through ADR process following [Architectural Guidelines](01-architectural-guidelines.md#architecture-decision-records-adrs).
 
 **Recommended Platform**: **GitHub Actions** for seamless integration with GitHub repositories.
 
@@ -2211,9 +2211,9 @@ This document supports the **Definition of Done** requirements:
 
 This document should be read in conjunction with:
 
-- **[Architectural Guidelines](./01-architectural-guidelines.md)** - System design patterns and architectural decisions, including ADR processes
-- **[Technical Guidelines](./03-technical-guidelines.md)** - Technical standards and development workflow integration
-- **[Testing Strategy](./07-testing-strategy_TBR.md)** - Testing infrastructure requirements and CI/CD integration
-- **[Security Guidelines](./10-security-guidelines_TBR.md)** - Security implementation and practices for infrastructure
-- **[Observability Guidelines](./11-observability-guidelines_TBR.md)** - Monitoring and logging strategies for infrastructure
-- **[Performance Guidelines](./09-performance-guidelines_TBR.md)** - Performance optimization and requirements for infrastructure
+- **[Architectural Guidelines](01-architectural-guidelines.md)** - System design patterns and architectural decisions, including ADR processes
+- **[Technical Guidelines](03-technical-guidelines.md)** - Technical standards and development workflow integration
+- **[Testing Strategy](07-testing-strategy.md)** - Testing infrastructure requirements and CI/CD integration
+- **[Security Guidelines](10-security-guidelines.md)** - Security implementation and practices for infrastructure
+- **[Observability Guidelines](11-observability-guidelines.md)** - Monitoring and logging strategies for infrastructure
+- **[Performance Guidelines](09-performance-guidelines.md)** - Performance optimization and requirements for infrastructure

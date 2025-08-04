@@ -230,7 +230,7 @@ When creating a new bounded context (app or service), the following decisions mu
 
 **Infrastructure-Specific ADRs:**
 
-For infrastructure and technology decisions, use the specialized process and checklist defined in [Infrastructure Guidelines](./04-infrastructure-guidelines_TBR.md#technology-integration-process), which includes:
+For infrastructure and technology decisions, use the specialized process and checklist defined in [Infrastructure Guidelines](04-infrastructure-guidelines.md#technology-integration-process), which includes:
 
 - Infrastructure-specific ADR considerations
 - Service addition workflow
@@ -264,8 +264,8 @@ This document supports the **Definition of Done** requirements:
 
 This document should be read in conjunction with:
 
-- **[Infrastructure Guidelines](./04-infrastructure-guidelines_TBR.md)** - Establishes deployment strategies, containerization, and operational practices that support the scalable architecture patterns defined here
-- **[Testing Strategy](./07-testing-strategy_TBR.md)** - Defines testing approaches that validate architectural decisions, including integration testing across bounded contexts and architectural testing patterns
-- **[Performance Guidelines](./09-performance-guidelines_TBR.md)** - Provides performance patterns and optimization strategies that complement architectural scalability decisions
-- **[Security Guidelines](./10-security-guidelines_TBR.md)** - Establishes security architecture patterns, authentication strategies, and security-by-design principles that integrate with the overall system architecture
-- **[Observability Guidelines](./11-observability-guidelines_TBR.md)** - Defines monitoring, logging, and tracing strategies that provide visibility into the distributed architecture and bounded context interactions
+- **[Infrastructure Guidelines](04-infrastructure-guidelines.md)** - Establishes deployment strategies, containerization, and operational practices that support the scalable architecture patterns defined here
+- **[Testing Strategy](07-testing-strategy.md)** - Defines testing approaches that validate architectural decisions, including integration testing across bounded contexts and architectural testing patterns
+- **[Performance Guidelines](09-performance-guidelines.md)** - Provides performance patterns and optimization strategies that complement architectural scalability decisions
+- **[Security Guidelines](10-security-guidelines.md)** - Establishes security architecture patterns, authentication strategies, and security-by-design principles that integrate with the overall system architecture
+- **[Observability Guidelines](11-observability-guidelines.md)** - Defines monitoring, logging, and tracing strategies that provide visibility into the distributed architecture and bounded context interactions

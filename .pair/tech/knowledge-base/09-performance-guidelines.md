@@ -38,7 +38,7 @@ Define performance standards, optimization strategies, and monitoring practices 
 
 **📝 TODO - Testing Strategy Coordination:**
 
-- Align performance testing with [Testing Strategy](07-testing-strategy_TBR.md) test pyramid (unit/integration/e2e)
+- Align performance testing with [Testing Strategy](07-testing-strategy.md) test pyramid (unit/integration/e2e)
 - Define which performance tests are executed at each testing level
 - Coordinate performance testing tools with Vitest/Playwright configuration
 - Ensure load testing strategy aligns with CI/CD pipeline testing phases
