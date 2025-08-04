@@ -68,6 +68,103 @@ The process is structured in 4 main levels:
 3. 🧩 **Customer-Facing Iterations** - User experience
 4. 🛠️ **Continuous Value Delivery** - Working software
 
+## ⚙️ CRITICAL: Review and Adapt Technical Guidelines
+
+**MANDATORY SECOND STEP**: Before starting any development work, you **MUST** review and adapt all documents in the `tech/` folder to match your specific technology stack, conventions, and guidelines. Remove all you don't want to consider
+
+### 📋 Technical Documents to Review
+
+The following documents contain **opinionated technical choices** that need to be customized for your project:
+
+- **`01-architectural-guidelines.md`** - Architectural patterns, repository structure, ADR processes
+- **`02-code-design-guidelines.md`** - Code organization, design patterns, implementation standards
+- **`03-technical-guidelines.md`** - Tech stack, development tools, feature flag management
+- **`04-infrastructure-guidelines.md`** - Deployment strategies, environment management, CI/CD
+- **`05-ux-guidelines.md`** - User experience standards and design principles
+- **`06-definition-of-done.md`** - Quality criteria and completion standards
+- **`07-testing-strategy.md`** - Testing frameworks, strategies, and quality gates
+- **`08-accessibility-guidelines.md`** - Accessibility standards and compliance
+- **`09-performance-guidelines.md`** - Performance requirements and optimization
+- **`10-security-guidelines.md`** - Security practices and compliance
+- **`11-observability-guidelines.md`** - Monitoring, logging, and alerting
+- **`12-mcp-integration-guidelines.md`** - Model Context Protocol integration
+
+### 🤖 LLM-Assisted Technical Review Process
+
+**Recommended Approach**: Use an LLM to help adapt these documents systematically:
+
+```markdown
+**Prompt Template for Technical Guidelines Review:**
+
+"I'm adapting this AI-Human pairing repository template for my specific project.
+
+**My Technology Stack:**
+
+- Frontend: [your frontend technology]
+- Backend: [your backend technology]
+- Database: [your database choice]
+- Infrastructure: [your cloud/deployment platform]
+- Additional tools: [any other specific tools]
+
+**My Team Context:**
+
+- Team size: [number]
+- Experience level: [junior/mid/senior]
+- Industry: [your industry/domain]
+- Compliance requirements: [any specific requirements]
+
+Please review the attached technical guideline document and:
+
+1. Identify sections that need adaptation for my stack
+2. Suggest specific changes while maintaining consistency with other technical documents
+3. Ensure all cross-references between documents remain valid
+4. Maintain the same level of detail and structure
+5. Preserve the ADR-based decision making approach
+6. Keep the feature flag requirements and other mandatory practices
+
+Focus on practical, actionable guidelines that fit my technology choices."
+```
+
+### 🔄 Consistency Maintenance Strategy
+
+**Cross-Document Coherence**: When adapting technical documents, ensure:
+
+- **Technology Stack Alignment**: All documents reference the same core technologies
+- **Naming Conventions**: Consistent terminology across all documents
+- **Process Integration**: Workflows and processes align between documents
+- **Cross-References**: Update all document cross-references when making changes
+- **Example Code**: Update code examples to match your chosen technologies
+- **Tool Recommendations**: Ensure tool suggestions are consistent and compatible
+
+**Review Checklist**:
+
+- [ ] All technology stack references updated consistently
+- [ ] Cross-references between documents verified and updated
+- [ ] Code examples adapted to your technologies
+- [ ] Tool recommendations aligned with your infrastructure choices
+- [ ] Naming conventions consistent across all documents
+- [ ] Process flows maintain coherence between documents
+- [ ] Mandatory practices (feature flags, ADRs, etc.) preserved
+- [ ] Team-specific adaptations documented
+
+### 🚨 Why This Step is Critical
+
+**Template Nature**: These documents are **templates** with opinionated choices that may not fit your project:
+
+- **Technology Stack**: Default choices may not match your preferences
+- **Team Structure**: Processes may need adjustment for your team size and experience
+- **Industry Requirements**: Compliance and security needs vary by industry
+- **Infrastructure Constraints**: Platform choices affect multiple documents
+- **Organizational Standards**: Your company may have existing standards to follow
+
+**Failure Risk**: Skipping this adaptation step can lead to:
+
+- Inconsistent technology choices across the project
+- Inappropriate tooling recommendations
+- Misaligned processes and workflows
+- Conflicting guidelines between documents
+- Reduced team adoption due to irrelevant standards
+
 ## 📚 Entry Points for Each Step
 
 Each process phase has a dedicated entry point in the `docs/` folder that provides specific instructions on how to collaborate with the LLM:
@@ -142,10 +239,12 @@ Control points for human validation
 ## 🚀 Quick Start
 
 1. **Read** `way-of-working.md` to understand the complete process
-2. **Identify** which phase you are in or want to start
-3. **Open** the corresponding `how-to-*` file in the `docs/` folder
-4. **Follow** the instructions to collaborate with the LLM
-5. **Validate** the result using the provided quality criteria
+2. **🚨 MANDATORY: Review and adapt** all `tech/` documents to your technology stack using LLM assistance
+3. **Verify cross-document consistency** after technical adaptations
+4. **Identify** which process phase you are in or want to start
+5. **Open** the corresponding `how-to-*` file in the `docs/` folder
+6. **Follow** the instructions to collaborate with the LLM
+7. **Validate** the result using the provided quality criteria
 
 ## 💡 Responsibility Matrix Symbols
 

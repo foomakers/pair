@@ -192,10 +192,51 @@ When creating a new bounded context (app or service), the following decisions mu
 
 ### Architecture Decision Records (ADRs)
 
+**General ADR Guidelines:**
+
 - Document significant architectural decisions
 - Include context, options considered, and rationale
 - Review decisions regularly in sprint retrospectives
 - Maintain decisions in `/docs/adr/` directory
+
+**Generic ADR Template:**
+
+```markdown
+# ADR-XXX: [Decision Title]
+
+## Status
+
+[Proposed | Accepted | Deprecated | Superseded]
+
+## Context
+
+- Business requirement or technical challenge
+- Current system state and limitations
+- Stakeholders and their concerns
+
+## Decision
+
+- Chosen solution and justification
+- Implementation approach
+- Impact on existing system
+
+## Consequences
+
+- Benefits of the decision
+- Trade-offs and limitations
+- Implementation requirements
+- Long-term implications
+```
+
+**Infrastructure-Specific ADRs:**
+
+For infrastructure and technology decisions, use the specialized process and checklist defined in [Infrastructure Guidelines](./04-infrastructure-guidelines_TBR.md#technology-integration-process), which includes:
+
+- Infrastructure-specific ADR considerations
+- Service addition workflow
+- Local development integration requirements
+- Environment configuration impact
+- Technology extension checklist
 
 ---
 

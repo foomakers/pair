@@ -330,4 +330,15 @@ Define comprehensive monitoring, logging, and alerting strategies that provide v
 
 ---
 
+## TODO
+
+**From Infrastructure Guidelines**: Verify integration of the following infrastructure monitoring topics:
+
+- Infrastructure Metrics (CPU, memory, disk, network utilization across all resources)
+- Container Monitoring (Docker/Kubernetes metrics, logs, and performance data)
+- Network Monitoring (service-to-service communication and network health)
+- Cost Monitoring (real-time cost tracking and optimization recommendations)
+- Alerting Infrastructure (multi-channel alerts, alert routing, intelligent alerting)
+- Capacity Planning (resource forecasting, performance baselines, scaling policies)
+
 This observability guidelines document ensures comprehensive system visibility while providing clear standards and practices for AI-assisted monitoring and incident response.

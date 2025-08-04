@@ -334,4 +334,13 @@ Define comprehensive security standards, practices, and protocols that protect a
 
 ---
 
+## TODO
+
+**From Infrastructure Guidelines**: Verify integration of the following infrastructure security topics:
+
+- Security Hardening (minimal attack surface, regular updates, access control)
+- Network Security (firewall rules, VPNs, network security groups)
+- Secrets Management (centralized secrets, secret rotation, access logging)
+- Infrastructure Access Control (role-based access control for all infrastructure components)
+
 This security guidelines document ensures comprehensive application security while providing clear standards and practices for tool-assisted security implementation and monitoring.
