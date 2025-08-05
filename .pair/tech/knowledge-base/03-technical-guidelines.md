@@ -881,3 +881,19 @@ This document supports the **Definition of Done** requirements:
 - ✅ Feature flag management implemented for all new functionality
 - ✅ Controlled rollout strategies defined and followed
 - ✅ Feature flag lifecycle managed with technical debt tracking
+
+---
+
+## 🔗 Related Documents
+
+Core references for technical implementation:
+
+- **[Architectural Guidelines](01-architectural-guidelines.md)** - _Architectural context guides tech choices_
+- **[Code Design Guidelines](02-code-design-guidelines.md)** - _Implementation details for tech stack_
+- **[Infrastructure Guidelines](04-infrastructure-guidelines.md)** - _Infrastructure hosts technical implementations_
+
+Supporting documents:
+
+- **[UX Guidelines](05-ux-guidelines.md)** - _Tech choices must support UX design_
+- **[Testing Strategy](07-testing-strategy.md)** - _Testing frameworks validate implementations_
+- **[Definition of Done](06-definition-of-done.md)** - _Quality gates validate tech compliance_

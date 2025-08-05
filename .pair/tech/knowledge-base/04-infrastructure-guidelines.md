@@ -30,7 +30,7 @@ Define infrastructure standards, deployment strategies, and operational practice
 - Database design and data modeling
 - Third-party service integrations
 - Testing methodologies and test implementation (see [Testing Strategy](07-testing-strategy.md))
-- Performance testing strategies and tools (see [Performance Guidelines](09-performance-guidelines.md))
+- Performance testing strategies and tools (see [Performance Guidelines](09-performance-guidelines_TBR.md))
 
 **📝 Note**: This document must comprehensively cover:
 
@@ -2209,11 +2209,12 @@ This document supports the **Definition of Done** requirements:
 
 ## 🔗 Related Documents
 
-This document should be read in conjunction with:
+Core references for infrastructure implementation:
 
-- **[Architectural Guidelines](01-architectural-guidelines.md)** - System design patterns and architectural decisions, including ADR processes
-- **[Technical Guidelines](03-technical-guidelines.md)** - Technical standards and development workflow integration
-- **[Testing Strategy](07-testing-strategy.md)** - Testing infrastructure requirements and CI/CD integration
-- **[Security Guidelines](10-security-guidelines.md)** - Security implementation and practices for infrastructure
-- **[Observability Guidelines](11-observability-guidelines.md)** - Monitoring and logging strategies for infrastructure
-- **[Performance Guidelines](09-performance-guidelines.md)** - Performance optimization and requirements for infrastructure
+- **[Architectural Guidelines](01-architectural-guidelines.md)** - _Architecture determines deployment patterns_
+- **[Technical Guidelines](03-technical-guidelines.md)** - _Tech stack requires specific infrastructure_
+- **[Testing Strategy](07-testing-strategy.md)** - _Testing requires infrastructure setup_
+
+Supporting documents:
+
+- **[Code Design Guidelines](02-code-design-guidelines.md)** - _Code organization influences containerization_

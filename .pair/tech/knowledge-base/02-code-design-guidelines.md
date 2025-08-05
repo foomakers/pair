@@ -619,6 +619,15 @@ module.exports = {
 };
 ```
 
+**Accessibility ESLint Configuration:**
+
+For comprehensive accessibility standards and ESLint integration, see [Accessibility Guidelines](08-accessibility-guidelines.md#eslint-accessibility-configuration) which provides:
+
+- Complete `react-a11y.js` extension with jsx-a11y plugin rules
+- WCAG compliance rules integration
+- Accessibility-specific linting standards aligned with [UX Guidelines](05-ux-guidelines.md)
+- Development workflow integration for accessibility validation
+
 #### Project-Specific Configuration
 
 ```javascript
@@ -2382,3 +2391,18 @@ This document supports the **Definition of Done** requirements:
 - ✅ Design patterns consistently applied
 - ✅ Self-documenting code standards followed
 - ✅ Best practices implemented
+
+---
+
+## 🔗 Related Documents
+
+Core references for code implementation:
+
+- **[Architectural Guidelines](01-architectural-guidelines.md)** - _Architectural patterns guide code organization_
+- **[Technical Guidelines](03-technical-guidelines.md)** - _Technology stack enables implementation_
+- **[UX Guidelines](05-ux-guidelines.md)** - _UI standards complement React patterns_
+
+Supporting documents:
+
+- **[Testing Strategy](07-testing-strategy.md)** - _Testing approaches verify code quality_
+- **[Definition of Done](06-definition-of-done.md)** - _Quality criteria validate code standards_

@@ -128,17 +128,34 @@ Use the default design system guidelines defined above, which can be easily upda
 
 ### Typography
 
-- **Font Hierarchy**: Clear heading and body text hierarchy
-- **Readability**: Sufficient contrast and appropriate font sizes
-- **Brand Typography**: Consistent with brand font choices
-- **Responsive Typography**: Scalable text across different devices
+**Design System:**
+
+- **Font Hierarchy**: Clear heading and body text hierarchy with consistent scale
+- **Brand Typography**: Consistent with brand font choices and design tokens
+- **Responsive Typography**: Scalable text across different devices using relative units
+
+**Accessibility Integration:**
+Typography design must meet accessibility standards from [Accessibility Guidelines](08-accessibility-guidelines.md):
+
+- Font size and readability compliance with [visual accessibility requirements](08-accessibility-guidelines.md#visual-accessibility)
+- Text sizing support for 200% zoom without horizontal scrolling
+- Typography patterns support screen reader and assistive technology navigation
 
 ### Color & Contrast
 
-- **Color Palette**: Defined primary, secondary, and accent colors
-- **Accessibility**: WCAG AA compliance for color contrast
+**Design System:**
+
+- **Color Palette**: Defined primary, secondary, and accent colors with design tokens
 - **Semantic Colors**: Consistent use of colors for success, warning, error states
 - **Dark Mode**: Support for light and dark themes where applicable
+- **Visual Hierarchy**: Color usage to establish clear content hierarchy
+
+**Accessibility Integration:**
+All color choices must meet accessibility standards defined in [Accessibility Guidelines](08-accessibility-guidelines.md):
+
+- Color contrast validation per WCAG 2.1 AA requirements
+- Color independence verification for accessible information design
+- Integration with [accessibility testing](08-accessibility-guidelines.md#testing-strategy-integration) validation processes
 
 ---
 
@@ -146,10 +163,18 @@ Use the default design system guidelines defined above, which can be easily upda
 
 ### shadcn/ui Integration
 
-- **Component Library**: Built on Radix UI primitives with Tailwind CSS
-- **Accessibility**: Radix UI provides WCAG-compliant components by default
-- **Customization**: Tailwind CSS for consistent design system implementation
-- **TypeScript Support**: Full type safety with React 18+ patterns
+**Design System Foundation:**
+
+- **Component Library**: Built on Radix UI primitives with Tailwind CSS for consistent design implementation
+- **TypeScript Support**: Full type safety with React 18+ patterns per [Code Design Guidelines](02-code-design-guidelines.md)
+- **Customization**: Design tokens and variant management through Tailwind CSS configuration
+
+**Accessibility Integration:**
+shadcn/ui accessibility features coordinate with [Accessibility Guidelines](08-accessibility-guidelines.md):
+
+- Radix UI provides WCAG-compliant components validated per [implementation standards](08-accessibility-guidelines.md#shadcnui-accessibility-integration)
+- Component accessibility patterns aligned with [testing strategy requirements](08-accessibility-guidelines.md#testing-strategy-integration)
+- Built-in keyboard navigation and ARIA support per accessibility compliance standards
 
 ### Component Usage Standards
 
@@ -537,8 +562,14 @@ We follow a mobile-first approach with these standard breakpoints:
 - **Mobile-First Design**: Start with mobile layouts and progressively enhance for larger screens
 - **Fluid Typography**: Use relative units (rem) with responsive scaling
 - **Layout Adaptation**: Adapt layouts based on available screen space
-- **Touch Targets**: Minimum touch target size of 44×44px for interactive elements
 - **Media Queries**: Use standard Tailwind breakpoints for consistency
+
+**Accessibility Integration:**
+Responsive design must coordinate with [Accessibility Guidelines](08-accessibility-guidelines.md) for motor accessibility:
+
+- Touch target specifications (minimum 44×44px) validated per [motor accessibility requirements](08-accessibility-guidelines.md#motor-accessibility)
+- Interactive element spacing ensures keyboard and touch accessibility
+- Responsive patterns support assistive technology navigation
 
 ```jsx
 // Example of responsive component implementation
@@ -745,7 +776,7 @@ UX Guidelines focus on design principles that support accessibility. For detaile
 - **Connection Scenarios**: Test under various network conditions (3G, 4G, Wi-Fi)
 - **Usability Impact**: Measure how performance affects task completion and satisfaction
 
-For detailed technical performance optimization strategies, monitoring, and implementation guidelines, see [Performance Guidelines](09-performance-guidelines.md).
+For detailed technical performance optimization strategies, monitoring, and implementation guidelines, see [Performance Guidelines](09-performance-guidelines_TBR.md).
 
 ---
 
@@ -763,7 +794,7 @@ For detailed technical performance optimization strategies, monitoring, and impl
 - **Component Testing**: Visual and behavioral testing as defined in [Testing Strategy](07-testing-strategy.md)
 - **Accessibility Testing**: Automated a11y validation integrated into development workflow
 - **Cross-Browser Testing**: Consistent experience validation across supported browsers
-- **Performance Testing**: UX performance metrics monitoring (see [Performance Guidelines](09-performance-guidelines.md))
+- **Performance Testing**: UX performance metrics monitoring (see [Performance Guidelines](09-performance-guidelines_TBR.md))
 
 ### Usability Testing Framework
 
@@ -830,3 +861,17 @@ This document supports the **Definition of Done** requirements:
 - ✅ User testing conducted and feedback incorporated
 - ✅ Smart UX integration patterns implemented
 - ✅ Performance standards achieved
+
+---
+
+## 🔗 Related Documents
+
+Core references for UX implementation:
+
+- **[Code Design Guidelines](02-code-design-guidelines.md)** - _Component patterns implement UX design_
+- **[Testing Strategy](07-testing-strategy.md)** - _Testing validates UX quality_
+
+Supporting documents:
+
+- **[Architectural Guidelines](01-architectural-guidelines.md)** - _Architecture supports scalable UI_
+- **[Definition of Done](06-definition-of-done.md)** - _Quality criteria validate UX compliance_

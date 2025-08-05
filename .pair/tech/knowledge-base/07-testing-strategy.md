@@ -234,6 +234,17 @@ Define comprehensive testing approach that ensures code quality, reliability, an
 - **Performance Testing**: Response time validation and load testing integration (detailed optimization in [Performance Guidelines](09-performance-guidelines.md))
 - **Security Testing**: Basic vulnerability checks (comprehensive testing in [Security Guidelines](10-security-guidelines.md))
 - **Accessibility Testing**: WCAG compliance validation (detailed standards in [Accessibility Guidelines](08-accessibility-guidelines.md))
+
+**Accessibility Testing Implementation:**
+
+For comprehensive accessibility testing patterns and examples, see [Accessibility Guidelines](08-accessibility-guidelines.md) which provides:
+
+- **React Testing Library Integration**: Complete axe-core integration examples for component testing
+- **Playwright Automation**: End-to-end accessibility testing patterns with axe-core
+- **Component-Level Testing**: Accessibility validation patterns for React components
+- **CI/CD Integration**: Lighthouse accessibility score validation in automated pipelines
+- **Testing Strategy Integration**: Accessibility testing across all levels of the test pyramid
+
 - **Compatibility Testing**: Cross-platform and browser testing
 
 #### Performance Testing Integration
@@ -2247,5 +2258,34 @@ UX Validation Requirements:
 - Best practice sharing across development teams
 
 ---
+
+## 📋 Compliance
+
+This document supports the **Definition of Done** requirements:
+
+- ✅ Comprehensive testing strategy implemented across all levels
+- ✅ Test coverage requirements met (unit 70%, integration 20%, e2e 10%)
+- ✅ Quality gates integrated into development workflow
+- ✅ Automated testing pipeline configured and operational
+- ✅ Performance testing integrated within testing strategy
+- ✅ Accessibility testing validated across test pyramid levels
+- ✅ Security testing patterns implemented and verified
+- ✅ Testing infrastructure properly configured and maintained
+
+---
+
+## 🔗 Related Documents
+
+**Core Integration:**
+
+- **[Architectural Guidelines](01-architectural-guidelines.md)** - _Architecture patterns determine testing strategies_
+- **[Code Design Guidelines](02-code-design-guidelines.md)** - _Testable code design enables effective testing_
+- **[Technical Guidelines](03-technical-guidelines.md)** - _Tech stack determines testing tools_
+- **[Infrastructure Guidelines](04-infrastructure-guidelines.md)** - _Infrastructure supports automated testing_
+
+**Supporting Documents:**
+
+- **[Definition of Done](06-definition-of-done.md)** - _Quality gates ensure testing completeness_
+- **[UX Guidelines](05-ux-guidelines.md)** - _UX testing validates user experience_
 
 This testing strategy ensures comprehensive quality assurance while leveraging modern development tools to enhance testing efficiency and coverage in the development process.

@@ -61,14 +61,14 @@ Complete checklist ordered by priority for each work item:
 - [ ] Tests written per [Testing Strategy](07-testing-strategy.md)
 - [ ] All automated tests passing per [Testing Strategy](07-testing-strategy.md)
 - [ ] Code review completed and approved
-- [ ] Security considerations identified, practices followed, and scanning passed per [Security Guidelines](10-security-guidelines.md)
-- [ ] Performance benchmarks met per [Performance Guidelines](09-performance-guidelines.md)
+- [ ] Security considerations identified, practices followed, and scanning passed per [Security Guidelines](10-security-guidelines_TBR.md)
+- [ ] Performance benchmarks met per [Performance Guidelines](09-performance-guidelines_TBR.md)
 - [ ] Quality gates passed per [Technical Guidelines](03-technical-guidelines.md)
 - [ ] Accessibility criteria met per [Accessibility Guidelines](08-accessibility-guidelines.md)
 - [ ] UX criteria met per [UX Guidelines](05-ux-guidelines.md)
 - [ ] Feature under feature flag (if applicable)
 - [ ] IaaS implemented per [Infrastructure Guidelines](04-infrastructure-guidelines.md)
-- [ ] Monitoring configured per [Observability Guidelines](11-observability-guidelines.md)
+- [ ] Monitoring configured per [Observability Guidelines](11-observability-guidelines_TBR.md)
 - [ ] Deployment successful
 - [ ] Documentation updated and published
 
@@ -84,11 +84,11 @@ Complete checklist ordered by priority for each work item:
 | Tech Guidance             | Team Review            | High            | [Technical Guidelines](03-technical-guidelines.md)             |
 | Infrastructure            | DevOps Team            | Medium          | [Infrastructure Guidelines](04-infrastructure-guidelines.md)   |
 | UX Criteria               | UX/Dev Team            | Medium          | [UX Guidelines](05-ux-guidelines.md)                           |
-| Accessibility             | UX/Dev Team            | Medium          | [Accessibility Guidelines](08-accessibility-guidelines.md) |
-| Security Assessment       | Security Lead          | Medium          | [Security Guidelines](10-security-guidelines.md)           |
-| Performance               | Dev Team               | High            | [Performance Guidelines](09-performance-guidelines.md)     |
-| Testing Strategy          | Dev Team               | High            | [Testing Strategy](07-testing-strategy.md)                 |
-| Observability             | Dev Team               | High            | [Observability Guidelines](11-observability-guidelines.md) |
+| Accessibility             | UX/Dev Team            | Medium          | [Accessibility Guidelines](08-accessibility-guidelines.md)     |
+| Security Assessment       | Security Lead          | Medium          | [Security Guidelines](10-security-guidelines_TBR.md)           |
+| Performance               | Dev Team               | High            | [Performance Guidelines](09-performance-guidelines_TBR.md)     |
+| Testing Strategy          | Dev Team               | High            | [Testing Strategy](07-testing-strategy.md)                     |
+| Observability             | Dev Team               | High            | [Observability Guidelines](11-observability-guidelines_TBR.md) |
 
 ---
 
@@ -168,7 +168,7 @@ All work items must satisfy these criteria before being considered complete. Ref
 
 ### 🔒 Security Assessment
 
-- **Vulnerability Scanning** → No high/critical vulnerabilities (see [Security Guidelines](10-security-guidelines.md))
+- **Vulnerability Scanning** → No high/critical vulnerabilities (see [Security Guidelines](10-security-guidelines_TBR.md))
 - **Security Review** → Manual security assessment completed
 - **Data Protection** → Proper handling of sensitive data and user information
 
@@ -180,9 +180,9 @@ All work items must satisfy these criteria before being considered complete. Ref
 
 ### ⚡ Performance Assessment
 
-- **Performance Benchmarks** → Thresholds met per [Performance Guidelines](09-performance-guidelines.md)
+- **Performance Benchmarks** → Thresholds met per [Performance Guidelines](09-performance-guidelines_TBR.md)
 - **Load Testing** → Performance tested under expected conditions
-- **Optimization** → Standards met per [Performance Guidelines](09-performance-guidelines.md)
+- **Optimization** → Standards met per [Performance Guidelines](09-performance-guidelines_TBR.md)
 
 ### 🧪 Testing Requirements
 
@@ -192,7 +192,7 @@ All work items must satisfy these criteria before being considered complete. Ref
 
 ### � Operational Readiness
 
-- **Monitoring** → Health checks and observability per [Observability Guidelines](11-observability-guidelines.md)
+- **Monitoring** → Health checks and observability per [Observability Guidelines](11-observability-guidelines_TBR.md)
 - **Documentation** → Technical and deployment documentation updated
 - **Deployment** → Environment compatibility and rollback strategy tested
 
@@ -232,5 +232,34 @@ Automated quality gates integrated in CI/CD pipeline:
 4. **UX Review** → Design team approval for user-facing changes
 
 ---
+
+## 📋 Compliance
+
+This Definition of Done serves as the **central quality framework** that ensures all deliverables meet comprehensive standards:
+
+- ✅ All technical guidelines compliance validated
+- ✅ Architectural standards verification completed
+- ✅ Code quality and design patterns verified
+- ✅ Security and performance benchmarks met
+- ✅ Accessibility and UX standards achieved
+- ✅ Testing requirements fulfilled across all levels
+- ✅ Infrastructure and deployment readiness confirmed
+- ✅ Documentation and observability requirements satisfied
+
+---
+
+## 🔗 Related Documents
+
+**Core Technical Standards:**
+
+- **[Architectural Guidelines](01-architectural-guidelines.md)** - _Architecture standards define quality baseline_
+- **[Code Design Guidelines](02-code-design-guidelines.md)** - _Code standards verified in checklist_
+- **[Technical Guidelines](03-technical-guidelines.md)** - _Tech compliance must be validated_
+- **[Infrastructure Guidelines](04-infrastructure-guidelines.md)** - _Deployment readiness ensures production quality_
+
+**Quality & User Experience:**
+
+- **[UX Guidelines](05-ux-guidelines.md)** - _UX standards ensure user-facing quality_
+- **[Testing Strategy](07-testing-strategy.md)** - _Testing validates feature completeness_
 
 This Definition of Done provides a clear, verifiable framework that ensures consistent quality while leveraging the detailed guidance in specialized technical documents.

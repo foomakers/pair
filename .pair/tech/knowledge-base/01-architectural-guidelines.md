@@ -262,10 +262,13 @@ This document supports the **Definition of Done** requirements:
 
 ## 🔗 Related Documents
 
-This document should be read in conjunction with:
+Core references for implementing architectural decisions:
 
-- **[Infrastructure Guidelines](04-infrastructure-guidelines.md)** - Establishes deployment strategies, containerization, and operational practices that support the scalable architecture patterns defined here
-- **[Testing Strategy](07-testing-strategy.md)** - Defines testing approaches that validate architectural decisions, including integration testing across bounded contexts and architectural testing patterns
-- **[Performance Guidelines](09-performance-guidelines.md)** - Provides performance patterns and optimization strategies that complement architectural scalability decisions
-- **[Security Guidelines](10-security-guidelines.md)** - Establishes security architecture patterns, authentication strategies, and security-by-design principles that integrate with the overall system architecture
-- **[Observability Guidelines](11-observability-guidelines.md)** - Defines monitoring, logging, and tracing strategies that provide visibility into the distributed architecture and bounded context interactions
+- **[Code Design Guidelines](02-code-design-guidelines.md)** - _Translates architecture into code patterns_
+- **[Technical Guidelines](03-technical-guidelines.md)** - _Defines technology stack implementing this architecture_
+- **[Infrastructure Guidelines](04-infrastructure-guidelines.md)** - _Deployment strategies for these patterns_
+
+Supporting documents:
+
+- **[Testing Strategy](07-testing-strategy.md)** - _Testing approaches for architectural validation_
+- **[Performance Guidelines](09-performance-guidelines_TBR.md)** - _Optimization strategies for scalability_
