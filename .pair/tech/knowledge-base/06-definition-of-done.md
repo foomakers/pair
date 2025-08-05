@@ -61,14 +61,14 @@ Complete checklist ordered by priority for each work item:
 - [ ] Tests written per [Testing Strategy](07-testing-strategy.md)
 - [ ] All automated tests passing per [Testing Strategy](07-testing-strategy.md)
 - [ ] Code review completed and approved
-- [ ] Security considerations identified, practices followed, and scanning passed per [Security Guidelines](10-security-guidelines_TBR.md)
-- [ ] Performance benchmarks met per [Performance Guidelines](09-performance-guidelines_TBR.md)
+- [ ] Security considerations identified, practices followed, and scanning passed per [Security Guidelines](10-security-guidelines.md)
+- [ ] Performance benchmarks met per [Performance Guidelines](09-performance-guidelines.md)
 - [ ] Quality gates passed per [Technical Guidelines](03-technical-guidelines.md)
 - [ ] Accessibility criteria met per [Accessibility Guidelines](08-accessibility-guidelines.md)
 - [ ] UX criteria met per [UX Guidelines](05-ux-guidelines.md)
 - [ ] Feature under feature flag (if applicable)
 - [ ] IaaS implemented per [Infrastructure Guidelines](04-infrastructure-guidelines.md)
-- [ ] Monitoring configured per [Observability Guidelines](11-observability-guidelines_TBR.md)
+- [ ] Monitoring configured per [Observability Guidelines](11-observability-guidelines.md)
 - [ ] Deployment successful
 - [ ] Documentation updated and published
 
@@ -76,19 +76,19 @@ Complete checklist ordered by priority for each work item:
 
 ## 🎯 Responsibility Matrix
 
-| Criteria                  | Primary Responsibility | Tool Assistance | Guidelines Reference                                           |
-| ------------------------- | ---------------------- | --------------- | -------------------------------------------------------------- |
-| Requirements & Acceptance | Team Review            | High            | [Code Design Guidelines](02-code-design-guidelines.md)         |
-| Technical Standards       | Team Review            | High            | [Architectural Guidelines](01-architectural-guidelines.md)     |
-| ADRs Compliance           | Team Review            | Medium          | [Architectural Guidelines](01-architectural-guidelines.md)     |
-| Tech Guidance             | Team Review            | High            | [Technical Guidelines](03-technical-guidelines.md)             |
-| Infrastructure            | DevOps Team            | Medium          | [Infrastructure Guidelines](04-infrastructure-guidelines.md)   |
-| UX Criteria               | UX/Dev Team            | Medium          | [UX Guidelines](05-ux-guidelines.md)                           |
-| Accessibility             | UX/Dev Team            | Medium          | [Accessibility Guidelines](08-accessibility-guidelines.md)     |
-| Security Assessment       | Security Lead          | Medium          | [Security Guidelines](10-security-guidelines_TBR.md)           |
-| Performance               | Dev Team               | High            | [Performance Guidelines](09-performance-guidelines_TBR.md)     |
-| Testing Strategy          | Dev Team               | High            | [Testing Strategy](07-testing-strategy.md)                     |
-| Observability             | Dev Team               | High            | [Observability Guidelines](11-observability-guidelines_TBR.md) |
+| Criteria                  | Primary Responsibility | Tool Assistance | Guidelines Reference                                         |
+| ------------------------- | ---------------------- | --------------- | ------------------------------------------------------------ |
+| Requirements & Acceptance | Team Review            | High            | [Code Design Guidelines](02-code-design-guidelines.md)       |
+| Technical Standards       | Team Review            | High            | [Architectural Guidelines](01-architectural-guidelines.md)   |
+| ADRs Compliance           | Team Review            | Medium          | [Architectural Guidelines](01-architectural-guidelines.md)   |
+| Tech Guidance             | Team Review            | High            | [Technical Guidelines](03-technical-guidelines.md)           |
+| Infrastructure            | DevOps Team            | Medium          | [Infrastructure Guidelines](04-infrastructure-guidelines.md) |
+| UX Criteria               | UX/Dev Team            | Medium          | [UX Guidelines](05-ux-guidelines.md)                         |
+| Accessibility             | UX/Dev Team            | Medium          | [Accessibility Guidelines](08-accessibility-guidelines.md)   |
+| Security Assessment       | Security Lead          | Medium          | [Security Guidelines](10-security-guidelines.md)             |
+| Performance               | Dev Team               | High            | [Performance Guidelines](09-performance-guidelines.md)       |
+| Testing Strategy          | Dev Team               | High            | [Testing Strategy](07-testing-strategy.md)                   |
+| Observability             | Dev Team               | High            | [Observability Guidelines](11-observability-guidelines.md)   |
 
 ---
 
@@ -168,7 +168,7 @@ All work items must satisfy these criteria before being considered complete. Ref
 
 ### 🔒 Security Assessment
 
-- **Vulnerability Scanning** → No high/critical vulnerabilities (see [Security Guidelines](10-security-guidelines_TBR.md))
+- **Vulnerability Scanning** → No high/critical vulnerabilities (see [Security Guidelines](10-security-guidelines.md))
 - **Security Review** → Manual security assessment completed
 - **Data Protection** → Proper handling of sensitive data and user information
 

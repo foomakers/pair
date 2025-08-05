@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define infrastructure standards, deployment strategies, and operational practices that support scalable, reliable, and maintainable systems across all environments.
+This document defines infrastructure standards, deployment strategies, and operational practices that enable scalable, reliable, and maintainable systems across all environments (local, development, staging, production).
 
 ## Scope
 
@@ -32,13 +32,6 @@ Define infrastructure standards, deployment strategies, and operational practice
 - Testing methodologies and test implementation (see [Testing Strategy](07-testing-strategy.md))
 - Performance testing strategies and tools (see [Performance Guidelines](09-performance-guidelines_TBR.md))
 
-**📝 Note**: This document must comprehensively cover:
-
-- **Local Development Deployment**: Docker Compose setup for complete local environment
-- **Environment Management**: Clear strategies for dev/staging/production environments
-- **Containerization Standards**: Docker standards for Next.js BFF and Fastify APIs
-- **Cross-Reference**: Integration with [Technical Guidelines](03-technical-guidelines.md) deployment requirements
-
 ---
 
 ## 📋 Table of Contents
@@ -54,6 +47,7 @@ Define infrastructure standards, deployment strategies, and operational practice
    - [Container Strategy](#container-strategy)
    - [Orchestration Platform](#orchestration-platform)
    - [Deployment Patterns](#deployment-patterns)
+   - [Infrastructure Security](#infrastructure-security)
 
 3. [🔧 Environment Configuration](#-environment-configuration)
 
@@ -65,7 +59,13 @@ Define infrastructure standards, deployment strategies, and operational practice
 
 4. [🐳 Local Development Setup](#-local-development-setup)
 
+   - [Docker Compose Configuration](#docker-compose-configuration)
+   - [Service Discovery and Integration](#service-discovery-and-integration)
+
 5. [🔧 Technology Integration Process](#-technology-integration-process)
+
+   - [Infrastructure Extension Workflow](#infrastructure-extension-workflow)
+   - [Service Addition Workflow](#service-addition-workflow)
 
 6. [☁️ Cloud & Production Platforms](#️-cloud--production-platforms)
 
@@ -79,15 +79,15 @@ Define infrastructure standards, deployment strategies, and operational practice
    - [IaC Tool Selection](#iac-tool-selection)
    - [Terraform Implementation](#terraform-implementation)
    - [AWS CDK Implementation](#aws-cdk-implementation)
+   - [IaC Best Practices](#iac-best-practices)
 
 8. [🔄 CI/CD Pipeline](#-cicd-pipeline)
 
    - [CI/CD Platform Selection](#cicd-platform-selection)
    - [GitHub Actions Implementation](#github-actions-implementation)
-   - [Build Pipeline](#build-pipeline)
-   - [Deployment Pipeline](#deployment-pipeline)
-   - [Quality Gates](#quality-gates)
-   - [Testing Infrastructure Integration](#testing-infrastructure-integration)
+   - [Optimized CI/CD Strategy](#optimized-cicd-strategy-single-artifact-multiple-environment-deployments)
+   - [Artifact Creation and Publishing](#artifact-creation-and-publishing)
+   - [Environment Deployment](#environment-deployment)
    - [Secrets Management](#secrets-management)
 
 9. [🧪 Testing Infrastructure](#-testing-infrastructure)
@@ -147,6 +147,42 @@ Define infrastructure standards, deployment strategies, and operational practice
 - **Health Checks**: Automated deployment verification and rollback
 - **Resource Limits**: Proper resource allocation and limits for all workloads
 - **Secrets Management**: Secure handling of sensitive configuration
+
+### Infrastructure Security
+
+**Network Security**:
+
+- **Firewall Configuration**: Configure firewall rules for proper network segmentation and traffic filtering
+- **VPN Setup**: Secure VPN configurations for remote access to infrastructure resources
+- **Network Security Groups**: Define and implement network-level access controls and traffic rules
+- **DDoS Protection**: Implement distributed denial of service attack mitigation strategies
+- **Network Monitoring**: Monitor network traffic patterns and detect security anomalies
+
+**Cloud Security**:
+
+- **Cloud Configuration Hardening**: Apply cloud-specific security best practices and configurations
+- **Identity and Access Management**: Configure cloud IAM policies with least privilege principles
+- **Cloud Resource Security**: Secure cloud storage, compute, and networking resources
+- **Compliance Configuration**: Implement cloud compliance frameworks (SOC 2, ISO 27001)
+- **Cloud Security Monitoring**: Monitor cloud resources for security events and configuration drift
+
+**Container Security**:
+
+- **Container Image Security**: Implement container image scanning for vulnerabilities and malware
+- **Runtime Security**: Monitor container runtime behavior for security threats and anomalies
+- **Registry Security**: Secure container registry access with proper authentication and authorization
+- **Container Configuration**: Apply security best practices for container deployment and orchestration
+- **Secret Management**: Secure handling of secrets and sensitive data in containerized environments
+
+**Infrastructure Security Monitoring**:
+
+- **Network Traffic Analysis**: Monitor and analyze network traffic for security threats and anomalies
+- **Infrastructure Event Logging**: Centralized logging of infrastructure security events and alerts
+- **Security Incident Detection**: Automated detection and alerting for infrastructure security incidents
+- **Compliance Monitoring**: Continuous monitoring of infrastructure compliance with security standards
+- **Threat Intelligence Integration**: Integrate threat intelligence feeds for proactive security monitoring
+
+_For application-level security practices, refer to [Security Guidelines](10-security-guidelines.md)_
 
 ---
 
@@ -1177,7 +1213,7 @@ jobs:
 └── dependabot.yml               # Dependency Updates
 ```
 
-**Optimized CI/CD Strategy**: Single artifact, multiple environment deployments
+### Optimized CI/CD Strategy (Single Artifact Multiple Environment Deployments)
 
 ```yaml
 # .github/workflows/ci.yml - Build and Test on Every Push
@@ -1298,7 +1334,7 @@ jobs:
         if: github.event_name == 'pull_request'
 ```
 
-**Artifact Creation and Publishing**:
+### Artifact Creation and Publishing
 
 ```yaml
 # .github/workflows/build-and-publish.yml - Create Single Artifact After Main Merge
@@ -1430,7 +1466,7 @@ jobs:
           prerelease: false
 ```
 
-**Environment Deployment**:
+### Environment Deployment
 
 ````yaml
 # .github/workflows/deploy.yml - Deploy Single Artifact to Multiple Environments
@@ -2211,10 +2247,8 @@ This document supports the **Definition of Done** requirements:
 
 Core references for infrastructure implementation:
 
-- **[Architectural Guidelines](01-architectural-guidelines.md)** - _Architecture determines deployment patterns_
-- **[Technical Guidelines](03-technical-guidelines.md)** - _Tech stack requires specific infrastructure_
-- **[Testing Strategy](07-testing-strategy.md)** - _Testing requires infrastructure setup_
-
-Supporting documents:
-
-- **[Code Design Guidelines](02-code-design-guidelines.md)** - _Code organization influences containerization_
+- **[Architectural Guidelines](01-architectural-guidelines.md)** - _Architecture determines deployment patterns and ADR requirements_
+- **[Technical Guidelines](03-technical-guidelines.md)** - _Tech stack requirements influence infrastructure choices_
+- **[Testing Strategy](07-testing-strategy.md)** - _Testing infrastructure setup and environment requirements_
+- **[Security Guidelines](10-security-guidelines.md)** - _Application-level security practices that complement infrastructure security_
+- **[Code Design Guidelines](02-code-design-guidelines.md)** - _Code organization influences containerization and deployment strategies_
