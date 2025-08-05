@@ -301,7 +301,7 @@ _Premium Options (Enterprise):_
 
 ### Monitoring Integration
 
-- **Observability Alignment**: Security monitoring integrated with [Observability Guidelines](11-observability-guidelines_TBR.md)
+- **Observability Alignment**: Security monitoring integrated with [Observability Guidelines](11-observability-guidelines.md)
 - **Performance Impact**: Monitor security measures impact on application performance
 - **Infrastructure Coordination**: Security monitoring aligned with [Infrastructure Guidelines](04-infrastructure-guidelines.md)
 
@@ -402,7 +402,7 @@ This Security Guidelines document ensures comprehensive application security sta
 **Supporting Documentation:**
 
 - **[Infrastructure Guidelines](04-infrastructure-guidelines.md)** - _Infrastructure security hardening, network protection, container security, and cloud security practices_
-- **[Observability Guidelines](11-observability-guidelines_TBR.md)** - _Security monitoring, alerting integration, and incident detection capabilities_
+- **[Observability Guidelines](11-observability-guidelines.md)** - _Security monitoring, alerting integration, and incident detection capabilities_
 - **[Code Design Guidelines](02-code-design-guidelines.md)** - _Secure coding patterns, implementation standards, and development best practices_
 
 **Architecture Alignment:**

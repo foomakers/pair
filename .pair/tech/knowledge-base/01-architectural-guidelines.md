@@ -271,4 +271,4 @@ Core references for implementing architectural decisions:
 Supporting documents:
 
 - **[Testing Strategy](07-testing-strategy.md)** - _Testing approaches for architectural validation_
-- **[Performance Guidelines](09-performance-guidelines_TBR.md)** - _Optimization strategies for scalability_
+- **[Performance Guidelines](09-performance-guidelines.md)** - _Optimization strategies for scalability_

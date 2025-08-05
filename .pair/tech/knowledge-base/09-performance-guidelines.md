@@ -14,7 +14,7 @@ Define performance standards, optimization strategies, and monitoring practices 
 - Load testing and performance analysis
 - Development workflow integration for performance
 
-**## **Out of Scope**
+**## **Out of Scope\*\*
 
 - Infrastructure scaling and provisioning
 - Database optimization and tuning
@@ -160,7 +160,7 @@ Define performance standards, optimization strategies, and monitoring practices 
 - **Data Filtering**: Server-side filtering to reduce payload size
 - **Compression**: Implement response compression (gzip/brotli)
 
-*Note: For database optimization, connection pooling, and infrastructure-level caching solutions, refer to [Infrastructure Guidelines](04-infrastructure-guidelines.md)*
+_Note: For database optimization, connection pooling, and infrastructure-level caching solutions, refer to [Infrastructure Guidelines](04-infrastructure-guidelines.md)_
 
 ### Resource Optimization
 
@@ -419,6 +419,6 @@ Core references for implementing and validating performance:
 Supporting documents:
 
 - **[Accessibility Guidelines](08-accessibility-guidelines.md)** – _Accessibility scores as part of performance benchmarks_
-- **[Observability Guidelines](11-observability-guidelines_TBR.md)** – _Monitoring and alerting for performance metrics_
+- **[Observability Guidelines](11-observability-guidelines.md)** – _Monitoring and alerting for performance metrics_
 
 This document provides a comprehensive framework for performance optimization, monitoring, and validation, ensuring all deliverables meet the required standards for speed, reliability, and user experience.

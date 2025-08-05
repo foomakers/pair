@@ -43,6 +43,7 @@ Ensure consistent quality across all deliverables in the development process, pr
 - [🧪 Quality Gates](#-quality-gates)
   - [📊 Code Quality](#-code-quality)
   - [⚡ Performance](#-performance)
+- [📈 Observability & Monitoring](#-observability--monitoring)
 - [🔍 Verification Process](#-verification-process)
   - [Automated Checks](#automated-checks)
   - [Manual Reviews](#manual-reviews)
@@ -180,9 +181,9 @@ All work items must satisfy these criteria before being considered complete. Ref
 
 ### ⚡ Performance Assessment
 
-- **Performance Benchmarks** → Thresholds met per [Performance Guidelines](09-performance-guidelines_TBR.md)
+- **Performance Benchmarks** → Thresholds met per [Performance Guidelines](09-performance-guidelines.md)
 - **Load Testing** → Performance tested under expected conditions
-- **Optimization** → Standards met per [Performance Guidelines](09-performance-guidelines_TBR.md)
+- **Optimization** → Standards met per [Performance Guidelines](09-performance-guidelines.md)
 
 ### 🧪 Testing Requirements
 
@@ -192,7 +193,7 @@ All work items must satisfy these criteria before being considered complete. Ref
 
 ### � Operational Readiness
 
-- **Monitoring** → Health checks and observability per [Observability Guidelines](11-observability-guidelines_TBR.md)
+- **Monitoring** → Health checks and observability per [Observability Guidelines](11-observability-guidelines.md)
 - **Documentation** → Technical and deployment documentation updated
 - **Deployment** → Environment compatibility and rollback strategy tested
 
@@ -216,7 +217,42 @@ Automated quality gates integrated in CI/CD pipeline:
 
 ---
 
-## � Verification Process
+## 📈 Observability & Monitoring
+
+Operational readiness requires robust observability practices to ensure system health, reliability, and rapid incident response. All deliverables must comply with the following observability requirements, aligned with [Observability Guidelines](11-observability-guidelines.md):
+
+### Monitoring Requirements
+
+- **Monitoring Coverage:** All critical services and components must be monitored for uptime, error rates, latency, and resource utilization.
+- **Alerting:** Automated alerts must be configured for key health indicators and threshold breaches.
+- **Dashboards:** Real-time dashboards should be available for system health, performance, and business metrics.
+
+### Logging Standards
+
+- **Structured Logging:** All logs must use structured formats (e.g., JSON) to enable automated parsing and analysis.
+- **Log Levels:** Use standardized log levels (info, warning, error, debug) across all services.
+- **Sensitive Data:** Logs must not contain sensitive or personal data.
+- **Centralized Logging:** All logs must be aggregated in a centralized logging system for search and analysis.
+
+### Observability Checklist
+
+- [ ] Monitoring configured for all critical services
+- [ ] Health check endpoints implemented and documented
+- [ ] Structured logging enabled and verified
+- [ ] Log aggregation and retention policies defined
+- [ ] Alerting rules and escalation paths documented
+- [ ] Dashboards available for operational metrics
+- [ ] Observability documentation updated
+
+### Health Check Endpoints & Monitoring Setup
+
+- **Health Check Endpoints:** Each service must expose a health check endpoint (e.g., `/healthz`) that reports on service status and dependencies.
+- **Readiness & Liveness Probes:** Implement readiness and liveness probes for containerized workloads.
+- **Monitoring Integration:** Health check endpoints must be integrated with monitoring systems for automated status tracking.
+
+Refer to [Observability Guidelines](11-observability-guidelines.md) for detailed implementation instructions.
+
+## 🔍 Verification Process
 
 ### Automated Checks
 

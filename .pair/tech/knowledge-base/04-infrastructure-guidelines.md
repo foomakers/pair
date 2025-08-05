@@ -30,7 +30,7 @@ This document defines infrastructure standards, deployment strategies, and opera
 - Database design and data modeling
 - Third-party service integrations
 - Testing methodologies and test implementation (see [Testing Strategy](07-testing-strategy.md))
-- Performance testing strategies and tools (see [Performance Guidelines](09-performance-guidelines_TBR.md))
+- Performance testing strategies and tools (see [Performance Guidelines](09-performance-guidelines.md))
 
 ---
 
@@ -48,6 +48,7 @@ This document defines infrastructure standards, deployment strategies, and opera
    - [Orchestration Platform](#orchestration-platform)
    - [Deployment Patterns](#deployment-patterns)
    - [Infrastructure Security](#infrastructure-security)
+   - [Infrastructure Monitoring & Observability](#infrastructure-monitoring--observability)
 
 3. [🔧 Environment Configuration](#-environment-configuration)
 
@@ -183,6 +184,55 @@ This document defines infrastructure standards, deployment strategies, and opera
 - **Threat Intelligence Integration**: Integrate threat intelligence feeds for proactive security monitoring
 
 _For application-level security practices, refer to [Security Guidelines](10-security-guidelines.md)_
+
+---
+
+## 🛡️ Infrastructure Monitoring & Observability
+
+Comprehensive monitoring and observability are essential for reliable, scalable, and cost-effective infrastructure. All environments must implement the following:
+
+### 1. Infrastructure Monitoring Coverage
+
+- **Resource Metrics**: Monitor CPU, memory, disk, and network utilization for all hosts, VMs, and cloud resources.
+- **Cloud-native Monitoring**: Use platform tools (AWS CloudWatch, GCP Monitoring, Vercel Analytics) for resource tracking.
+- **Custom Dashboards**: Aggregate metrics in dashboards (Grafana, Datadog, etc.) for real-time visibility.
+
+### 2. Container Monitoring
+
+- **Docker Metrics**: Collect container CPU, memory, disk I/O, and network stats using Docker stats, Prometheus, or cAdvisor.
+- **Kubernetes Monitoring**: Use Prometheus, Grafana, and native tools (Kube-state-metrics, Metrics Server) for pod/node metrics, resource quotas, and cluster health.
+- **Log Aggregation**: Centralize container logs using ELK stack, Loki, or cloud-native logging solutions.
+- **Performance Data**: Track application-level metrics (latency, error rates) via OpenTelemetry or platform integrations.
+
+### 3. Network Monitoring
+
+- **Service-to-Service Monitoring**: Trace requests and monitor network health between microservices using distributed tracing (Jaeger, Zipkin).
+- **Network Health**: Monitor latency, packet loss, and throughput for all critical network paths.
+- **Firewall & Security Group Monitoring**: Alert on configuration changes and suspicious traffic patterns.
+
+### 4. Cost Monitoring
+
+- **Real-Time Cost Tracking**: Integrate cloud cost management tools (AWS Cost Explorer, GCP Billing, Vercel Analytics) for daily spend visibility.
+- **Budget Alerts**: Set up automated alerts for budget thresholds and unexpected cost spikes.
+- **Optimization Recommendations**: Use platform recommendations and third-party tools (CloudHealth, Kubecost) to identify savings opportunities.
+
+### 5. Alerting Infrastructure
+
+- **Multi-Channel Alerts**: Route alerts to Slack, email, PagerDuty, or other channels based on severity and team.
+- **Alert Routing**: Use intelligent routing (on-call schedules, escalation policies) for critical incidents.
+- **Intelligent Alerting**: Implement anomaly detection and suppression to reduce alert fatigue.
+
+### 6. Capacity Planning
+
+- **Resource Forecasting**: Analyze historical usage to predict future resource needs.
+- **Performance Baselines**: Establish baselines for key metrics and monitor deviations.
+- **Scaling Policies**: Define auto-scaling rules for containers, VMs, and cloud resources based on utilization and demand.
+
+**Best Practices:**
+
+- All monitoring, alerting, and cost management configurations must be documented and reviewed regularly.
+- Integrate observability requirements into ADRs for new infrastructure components.
+- Reference [Observability Guidelines](08-observability-guidelines.md) for detailed instrumentation and monitoring standards.
 
 ---
 
@@ -1710,10 +1760,6 @@ jobs:
           secret: ${{ github.TOKEN }}
           approvers: team-leads,devops-team
           minimum-approvals: 2
-
-### 7.3 Monitoring e Osservabilità
-
-Le strategie CI/CD implementate richiedono monitoraggio per garantire performance e affidabilità.
           --health-timeout 5s
           --health-retries 5
 

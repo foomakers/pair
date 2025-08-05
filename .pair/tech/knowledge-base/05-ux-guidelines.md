@@ -776,7 +776,7 @@ UX Guidelines focus on design principles that support accessibility. For detaile
 - **Connection Scenarios**: Test under various network conditions (3G, 4G, Wi-Fi)
 - **Usability Impact**: Measure how performance affects task completion and satisfaction
 
-For detailed technical performance optimization strategies, monitoring, and implementation guidelines, see [Performance Guidelines](09-performance-guidelines_TBR.md).
+For detailed technical performance optimization strategies, monitoring, and implementation guidelines, see [Performance Guidelines](09-performance-guidelines.md).
 
 ---
 
@@ -794,7 +794,7 @@ For detailed technical performance optimization strategies, monitoring, and impl
 - **Component Testing**: Visual and behavioral testing as defined in [Testing Strategy](07-testing-strategy.md)
 - **Accessibility Testing**: Automated a11y validation integrated into development workflow
 - **Cross-Browser Testing**: Consistent experience validation across supported browsers
-- **Performance Testing**: UX performance metrics monitoring (see [Performance Guidelines](09-performance-guidelines_TBR.md))
+- **Performance Testing**: UX performance metrics monitoring (see [Performance Guidelines](09-performance-guidelines.md))
 
 ### Usability Testing Framework
 

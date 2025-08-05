@@ -83,12 +83,14 @@ Define comprehensive testing approach that ensures code quality, reliability, an
    - [Pre-Merge](#pre-merge)
    - [Post-Deployment](#post-deployment)
 
-10. [📈 Continuous Improvement](#-continuous-improvement)
+10. [🩺 Observability Integration](#-observability-integration)
+
+11. [📈 Continuous Improvement](#-continuous-improvement)
 
     - [Testing Metrics](#testing-metrics)
     - [Regular Reviews](#regular-reviews)
 
-11. [🧪 Testing Standards](#-testing-standards)
+12. [🧪 Testing Standards](#-testing-standards)
 
     - [Test Framework Configuration](#test-framework-configuration)
     - [Unit Testing Patterns](#unit-testing-patterns)
@@ -98,7 +100,7 @@ Define comprehensive testing approach that ensures code quality, reliability, an
     - [Test Organization](#test-organization)
     - [Testing Philosophy](#testing-philosophy)
 
-12. [🌐 End-to-End Testing Implementation](#-end-to-end-testing-implementation)
+13. [🌐 End-to-End Testing Implementation](#-end-to-end-testing-implementation)
 
     - [E2E Testing Strategy](#e2e-testing-strategy)
     - [Project Setup and Architecture](#project-setup-and-architecture)
@@ -107,7 +109,7 @@ Define comprehensive testing approach that ensures code quality, reliability, an
     - [Cross-Service Integration Testing](#cross-service-integration-testing-patterns)
     - [E2E CI/CD Integration](#e2e-cicd-integration)
 
-13. [👥 Usability Testing & User Acceptance](#-usability-testing--user-acceptance)
+14. [👥 Usability Testing & User Acceptance](#-usability-testing--user-acceptance)
 
     - [Testing Methodology](#testing-methodology)
     - [Coordination with Testing Strategy](#coordination-with-testing-strategy)
@@ -588,6 +590,41 @@ These gates are integrated with [Definition of Done](06-definition-of-done.md) c
 - [ ] Monitoring configured per [Observability Guidelines](11-observability-guidelines.md)
 - [ ] Test results documented and analyzed
 - [ ] Feedback incorporated for continuous improvement
+
+---
+
+## 🩺 Observability Integration
+
+### Alignment with Observability Guidelines
+
+Testing and observability are tightly integrated to ensure post-deployment quality and rapid issue detection. For full observability setup details, see [Observability Guidelines](11-observability-guidelines.md).
+
+#### Integration Points:
+
+- **Post-Deployment Testing Gates:**  
+  All post-deployment test results (smoke tests, E2E, performance) are monitored and reported using the same observability stack as production (e.g., Prometheus, Grafana, ELK, Datadog).
+- **Monitoring Requirements for Test Environments:**
+  - **Unit/Integration:**
+    - Local and CI environments should log test execution, failures, and performance metrics.
+    - Test environments must expose health endpoints and basic telemetry for CI/CD monitoring.
+  - **E2E:**
+    - E2E test environments mirror production monitoring (application logs, error rates, resource usage).
+    - Synthetic monitoring and alerting are configured for critical user journeys.
+- **Test Result Monitoring and Alerting:**
+  - CI/CD pipelines must push test results and coverage metrics to observability dashboards.
+  - Automated alerts are triggered for test failures, coverage drops, or performance regressions.
+  - Test run metrics (duration, pass/fail rate, flaky test rate) are tracked and visualized.
+- **Test Failure Monitoring and Metrics Collection:**
+  - All test failures are logged and correlated with deployment events.
+  - Metrics on test reliability, execution time, and defect escape rates are collected and reviewed.
+  - Observability tools are used to analyze trends and identify root causes for recurring test failures.
+
+#### Example Practices:
+
+- Integrate test result exporters (e.g., JUnit, Allure) with observability dashboards.
+- Use CI/CD hooks to send alerts to Slack/Teams for failed test gates.
+- Monitor test environment health and resource usage during test execution.
+- Align test metrics collection with production observability standards for consistency.
 
 ---
 
@@ -2287,5 +2324,6 @@ This document supports the **Definition of Done** requirements:
 
 - **[Definition of Done](06-definition-of-done.md)** - _Quality gates ensure testing completeness_
 - **[UX Guidelines](05-ux-guidelines.md)** - _UX testing validates user experience_
+- **[Observability Guidelines](11-observability-guidelines.md)** - _Monitoring and alerting for test and production environments_
 
 This testing strategy ensures comprehensive quality assurance while leveraging modern development tools to enhance testing efficiency and coverage in the development process.
