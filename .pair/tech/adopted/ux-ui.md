@@ -6,4 +6,4 @@ This document defines the **validated user experience and interface design decis
 
 **Who modifies this:** Development team with AI assistance (🤖🤝👨‍💻) during Epic breakdown and User Story refinement  
 **When:** During customer-facing iterations, user story creation, and UX validation sessions  
-**Authority:** All user interface implementations must follow these specifications
+**Authority:** All user interface implementations must follow these adopted standards

@@ -7,7 +7,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 ```
 .pair/
 ├── way-of-working.md          # 📋 Main process (START HERE!)
-├── getting-stared.md          # 🚀 This guide
+├── getting-started.md         # 🚀 This guide
 ├── docs/                      # 📚 Process guides for each development
 │   ├── 01-how-to-create-PRD_TBD.md
 │   ├── 02-how-to-create-and-prioritize-initiatives_TBD.md
@@ -44,10 +44,10 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
     │   ├── 09-performance-guidelines.md
     │   ├── 10-security-guidelines.md
     │   ├── 11-observability-guidelines.md
-    │   └── index.md
-    └── specifications/         # Technical specifications
+    │   └── README.md
+    └── adopted/                # Adopted standards and practices
         ├── architecture.md
-        ├── index.md
+        ├── README.md
         ├── infrastructure.md
         ├── tech-stack.md
         ├── ux-ui.md
@@ -58,7 +58,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 ### 📂 Folder Overview:
 
 - **`way-of-working.md`**: Main process documentation - the starting point to understand the entire workflow
-- **`getting-stared.md`**: This guide - essential information to get started with the framework
+- **`getting-started.md`**: This guide - essential information to get started with the framework
 - **`docs/`**: Step-by-step guides for collaborating with LLM at each development phase
   - Process guides (01-12): How-to documentation for each development phase
   - `PRD_example.md` & `PRD_template.md`: Product Requirements Document templates
@@ -70,7 +70,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 - **`tech/`**: Technical guidelines, architectural standards, and quality criteria
   - `adr/`: Architecture Decision Records
   - `knowledge-base/`: Comprehensive technical guidelines (01-11)
-  - `specifications/`: Technical specifications and architecture documentation
+  - `adopted/`: Currently adopted standards and practices
 
 ## 🎯 Quick Start
 

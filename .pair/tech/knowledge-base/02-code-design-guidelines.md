@@ -1481,7 +1481,7 @@ import { useAuth } from "@/features/authentication";
 
 ---
 
-## � TypeScript Standards
+## 📘 TypeScript Standards
 
 ### Version Management
 
@@ -1766,7 +1766,7 @@ export type { User, CreateUserRequest } from "./types";
 
 ---
 
-## �📦 Dependency Management
+## 📦 Dependency Management
 
 ### PNPM Workspace Configuration
 
@@ -2068,7 +2068,7 @@ pnpm catalog:check
 
 ---
 
-## � TypeScript Standards
+## 📘 TypeScript Standards
 
 ### Version Management
 

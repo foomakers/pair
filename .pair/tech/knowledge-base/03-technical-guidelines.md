@@ -71,14 +71,14 @@ Define comprehensive technical standards including tech stack, tools, frameworks
    - [MCP Integration](#mcp-integration)
    - [Implementation Requirements](#implementation-requirements)
 
-9. [� Feature Flag Management](#-feature-flag-management)
+9. [🚩 Feature Flag Management](#-feature-flag-management)
 
    - [Feature Flag Strategy](#feature-flag-strategy)
    - [Implementation Standards](#implementation-standards)
    - [Flag Lifecycle Management](#flag-lifecycle-management)
    - [Environment Configuration](#environment-configuration)
 
-10. [�🔄 Development Workflow](#-development-workflow)
+10. [🔄 Development Workflow](#-development-workflow)
 
     - [Git Workflow](#git-workflow)
     - [Quality Assurance](#quality-assurance)
@@ -460,7 +460,7 @@ For comprehensive Model Context Protocol integration patterns and advanced AI-as
 
 ---
 
-## � Feature Flag Management
+## 🚩 Feature Flag Management
 
 ### Feature Flag Strategy
 
@@ -816,7 +816,7 @@ class CachedFeatureFlagService implements FeatureFlagService {
 
 ---
 
-## �🔄 Development Workflow
+## 🔄 Development Workflow
 
 ### Git Workflow
 

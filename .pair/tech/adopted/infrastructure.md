@@ -6,4 +6,4 @@ This document defines the **validated infrastructure and deployment decisions** 
 
 **Who modifies this:** Development team with AI assistance (🤖🤝👨‍💻) during infrastructure planning and deployment optimization  
 **When:** During Strategic Preparation, Sprint Execution, and infrastructure evolution  
-**Authority:** All deployment and infrastructure implementations must follow these specifications
+**Authority:** All deployment and infrastructure implementations must follow these adopted standards

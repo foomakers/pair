@@ -1,8 +1,8 @@
-# 📋 Technical Specifications
+# 📋 Adopted Standards & Practices
 
-This directory contains the **validated technical specifications** for the project. These documents serve as the authoritative reference for all technical decisions that have been proposed by AI and validated by the development team throughout the development process outlined in the [way-of-working.md](../../way-of-working.md).
+This directory contains the **currently adopted standards and practices** for the project. These documents serve as the authoritative reference for all technical decisions that have been proposed by AI and validated by the development team throughout the development process outlined in the [way-of-working.md](../../way-of-working.md).
 
-## 📁 Specification Documents
+## 📁 Adopted Documents
 
 ### 🏗️ System Design
 
@@ -20,15 +20,15 @@ This directory contains the **validated technical specifications** for the proje
 
 ## 📝 Usage Guidelines
 
-These specifications documents are **decision records**, not guidelines. They contain:
+These adopted documents are **decision records**, not guidelines. They contain:
 
 - **Validated Choices**: Only decisions that have been proposed by AI and approved by the development team
-- **Implementation Authority**: All implementations must follow these specifications
+- **Implementation Authority**: All implementations must follow these adopted standards
 - **Cross-References**: Links to detailed guidelines in the [knowledge-base](../knowledge-base/) for explanations
 
 ## 🔄 Update Process
 
-Specifications are updated during specific phases of the development process:
+Adopted standards are updated during specific phases of the development process:
 
 1. **Strategic Preparation**: Architecture and tech-stack decisions
 2. **Customer-Facing Iterations**: UX/UI and infrastructure decisions
