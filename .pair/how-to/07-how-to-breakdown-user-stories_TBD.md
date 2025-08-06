@@ -16,5 +16,5 @@ TBD - This document will describe the process of analyzing and decomposing user 
 
 ## Related Documents
 
-- Previous: [05-how-to-breakdown-epics_TBD.md](./05-how-to-breakdown-epics_TBD.md)
-- Next: [07-how-to-refine-a-user-story_TBD.md](./07-how-to-refine-a-user-story_TBD.md)
+- Previous: [06-how-to-breakdown-epics_TBD.md](./06-how-to-breakdown-epics_TBD.md)
+- Next: [08-how-to-refine-a-user-story_TBD.md](./08-how-to-refine-a-user-story_TBD.md)

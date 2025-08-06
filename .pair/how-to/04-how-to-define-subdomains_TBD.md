@@ -16,5 +16,5 @@ TBD - This document will describe the process of identifying and defining busine
 
 ## Related Documents
 
-- Previous: [02-how-to-create-and-prioritize-initiatives_TBD.md](./02-how-to-create-and-prioritize-initiatives_TBD.md)
-- Next: [04-how-to-define-bounded-contexts_TBD.md](./04-how-to-define-bounded-contexts_TBD.md)
+- Previous: [02-how-to-create-and-prioritize-initiatives_TBD.md](./03-how-to-create-and-prioritize-initiatives_TBD.md)
+- Next: [05-how-to-define-bounded-contexts_TBD.md](./05-how-to-define-bounded-contexts_TBD.md)

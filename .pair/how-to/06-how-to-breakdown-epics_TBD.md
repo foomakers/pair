@@ -16,5 +16,5 @@ TBD - This document will describe the process of decomposing large epics into ma
 
 ## Related Documents
 
-- Previous: [04-how-to-define-bounded-contexts_TBD.md](./04-how-to-define-bounded-contexts_TBD.md)
-- Next: [06-how-to-breakdown-user-stories_TBD.md](./06-how-to-breakdown-user-stories_TBD.md)
+- Previous: [05-how-to-define-bounded-contexts_TBD.md](./05-how-to-define-bounded-contexts_TBD.md)
+- Next: [07-how-to-breakdown-user-stories_TBD.md](./07-how-to-breakdown-user-stories_TBD.md)

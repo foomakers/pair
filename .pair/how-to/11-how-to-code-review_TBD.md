@@ -16,5 +16,6 @@ TBD - This document will describe the process of conducting effective code revie
 
 ## Related Documents
 
-- Previous: [09-how-to-implement-a-task_TBD.md](./09-how-to-implement-a-task_TBD.md)
-- Next: [11-how-to-commit-and-push_TBD.md](./11-how-to-commit-and-push_TBD.md)
+- Previous: [10-how-to-implement-a-task_TBD.md](./10-how-to-implement-a-task_TBD.md)
+- Bootstrap Checklist: [03-how-to-complete-bootstrap-checklist_TBD.md](./03-how-to-complete-bootstrap-checklist_TBD.md)
+- Next: [12-how-to-commit-and-push_TBD.md](./12-how-to-commit-and-push_TBD.md)

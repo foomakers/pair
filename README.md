@@ -13,7 +13,7 @@ This repository serves as a template for AI-assisted development projects, provi
 
 2. **Review the AI development process**
 
-   - Check out the comprehensive guides in `.pair/docs/`
+   - Check out the comprehensive guides in `.pair/how-to/`
    - Understand the way of working in `.pair/way-of-working.md`
 
 3. **Define your project**
@@ -23,7 +23,7 @@ This repository serves as a template for AI-assisted development projects, provi
 
 ```
 ├── .pair/                          # AI-specific files and configurations
-│   ├── docs/                      # Development process documentation
+│   ├── how-to/                      # Development process documentation
 │   ├── product/                   # Product requirements and PRD
 │   ├── prompts/                   # Reusable prompts and templates
 │   ├── tech/                      # Technical guidelines and standards
@@ -42,14 +42,14 @@ This template is designed to work seamlessly with:
 - **GitHub Copilot**
 - **VS Code with Copilot**
 
-All AI tools can reference the comprehensive documentation in `.pair/docs/` and technical guidelines in `.pair/tech/` to understand your project's specific requirements and constraints.
+All AI tools can reference the comprehensive documentation in `.pair/how-to/` and technical guidelines in `.pair/tech/` to understand your project's specific requirements and constraints.
 
 ## 📋 Development Process
 
 1. **Strategic Preparation** → Define PRD and architecture in `.pair/product/` and `.pair/tech/`
-2. **Initiative Planning** → Break down using guides in `.pair/docs/`
+2. **Initiative Planning** → Break down using guides in `.pair/how-to/`
 3. **AI-Assisted Development** → Collaborate with AI tools using established patterns
-4. **Quality Assurance** → Follow definition of done in `.pair/tech/05-definition-of-done.md`
+4. **Quality Assurance** → Follow definition of done in `.pair/tech/knowledge-base/06-definition-of-done.md`
 
 See `.pair/way-of-working.md` for detailed process guidelines.
 
@@ -62,18 +62,18 @@ See `.pair/way-of-working.md` for detailed process guidelines.
 
 2. **Create your workspace structure**
 
-   - Add `apps/` directory for application code (monorepo structure)
-   - Add `packages/` directory for shared libraries
-   - Use the examples in `examples/` as reference
+   - Add an `apps/` folder for application code (monorepo structure)
+   - Add a `packages/` folder for shared libraries
+   - Use the examples in the `examples/` folder as reference
 
 3. **Follow the development process**
-   - Use guides in `.pair/docs/` for breaking down work
-   - Follow technical standards from `.pair/tech/`
-   - Ensure all work meets criteria in `.pair/tech/05-definition-of-done.md`
+   - Use the guides in `.pair/how-to/` for breaking down work
+   - Follow the technical standards in `.pair/tech/knowledge-base/`
+   - Ensure all work meets the criteria in `.pair/tech/knowledge-base/06-definition-of-done.md`
 
 ## 📚 Documentation
 
-- [Development Process Guides](.pair/docs/) - Step-by-step guides for breaking down work
-- [Product Requirements](.pair/product/PRD.md) - Template for defining product requirements
-- [Technical Guidelines](.pair/tech/) - Comprehensive technical standards and best practices
-- [Way of Working](.pair/way-of-working.md) - Process and collaboration guidelines
+- [Development Process Guides](.pair/how-to/) – Step-by-step guides for breaking down work
+- [Product Requirements](.pair/product/PRD.md) – Template for defining product requirements
+- [Technical Guidelines](.pair/tech/knowledge-base/) – Comprehensive technical standards and best practices
+- [Way of Working](.pair/way-of-working.md) – Process and collaboration guidelines

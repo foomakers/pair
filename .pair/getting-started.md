@@ -8,18 +8,19 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 .pair/
 ├── way-of-working.md          # 📋 Main process (START HERE!)
 ├── getting-started.md         # 🚀 This guide
-├── docs/                      # 📚 Process guides for each development
+├── how-to/                      # 📚 Process guides for each development
 │   ├── 01-how-to-create-PRD_TBD.md
 │   ├── 02-how-to-create-and-prioritize-initiatives_TBD.md
-│   ├── 03-how-to-define-subdomains_TBD.md
-│   ├── 04-how-to-define-bounded-contexts_TBD.md
-│   ├── 05-how-to-breakdown-epics_TBD.md
-│   ├── 06-how-to-breakdown-user-stories_TBD.md
-│   ├── 07-how-to-refine-a-user-story_TBD.md
-│   ├── 09-how-to-implement-a-task_TBD.md
-│   ├── 10-how-to-code-review_TBD.md
-│   ├── 11-how-to-commit-and-push_TBD.md
-│   ├── 12-how-to-create-a-pr_TBD.md
+│   ├── 03-how-to-complete-bootstrap-checklist_TBD.md
+│   ├── 04-how-to-define-subdomains_TBD.md
+│   ├── 05-how-to-define-bounded-contexts_TBD.md
+│   ├── 06-how-to-breakdown-epics_TBD.md
+│   ├── 07-how-to-breakdown-user-stories_TBD.md
+│   ├── 08-how-to-refine-a-user-story_TBD.md
+│   ├── 10-how-to-implement-a-task_TBD.md
+│   ├── 11-how-to-code-review_TBD.md
+│   ├── 12-how-to-commit-and-push_TBD.md
+│   ├── 13-how-to-create-a-pr_TBD.md
 │   ├── PRD_example.md
 │   ├── PRD_template.md
 │   └── _assets_structure.md
@@ -59,7 +60,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 
 - **`way-of-working.md`**: Main process documentation - the starting point to understand the entire workflow
 - **`getting-started.md`**: This guide - essential information to get started with the framework
-- **`docs/`**: Step-by-step guides for collaborating with LLM at each development phase
+- **`how-to/`**: Step-by-step guides for collaborating with LLM at each development phase
   - Process guides (01-12): How-to documentation for each development phase
   - `PRD_example.md` & `PRD_template.md`: Product Requirements Document templates
   - `_assets_structure.md`: Asset organization guidelines
@@ -76,7 +77,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 
 1. **Read** `way-of-working.md` to understand the development process
 2. **Adapt** technical guidelines in `tech/` folder to your technology stack
-3. **Follow** the process guides in `docs/` folder for each development phase
+3. **Follow** the process guides in `how-to/` folder for each development phase
 
 ## 🚨 Critical: Technical Guidelines Setup
 

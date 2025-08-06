@@ -16,5 +16,5 @@ TBD - This document will describe the process of defining bounded contexts withi
 
 ## Related Documents
 
-- Previous: [03-how-to-define-subdomains_TBD.md](./03-how-to-define-subdomains_TBD.md)
-- Next: [05-how-to-breakdown-epics_TBD.md](./05-how-to-breakdown-epics_TBD.md)
+- Previous: [04-how-to-define-subdomains_TBD.md](./04-how-to-define-subdomains_TBD.md)
+- Next: [06-how-to-breakdown-epics_TBD.md](./06-how-to-breakdown-epics_TBD.md)

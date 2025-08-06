@@ -17,4 +17,4 @@ TBD - This document will describe the process of creating strategic initiatives 
 ## Related Documents
 
 - Previous: [01-how-to-create-PRD_TBD.md](./01-how-to-create-PRD_TBD.md)
-- Next: [03-how-to-define-subdomains_TBD.md](./03-how-to-define-subdomains_TBD.md)
+- Next: [04-how-to-define-subdomains_TBD.md](./04-how-to-define-subdomains_TBD.md)

@@ -58,9 +58,10 @@ The process is designed to:
 
 1. **🤖🤝👨‍💻 PRD Creation** → Generate Product Requirements Document from user needs & market insights
 2. **🤖🤝👨‍💻 Initiative Prioritization** → Identify and rank initiatives by impact
-3. **🤖🤝👨‍💻 Subdomain Analysis** → Map relevant functional subdomains
-4. **🤖🤝👨‍💻 Bounded Context Definition** → Define boundaries to prevent ambiguity
-5. **🤖🤝👨‍💻 AI Context File Generation** → Connect PRD, initiatives, and technical specifications
+3. **🤖🤝👨‍💻 Bootstrap Checklist Completion** → Define technical context and operational framework through comprehensive project assessment
+4. **🤖🤝👨‍💻 Subdomain Analysis** → Map relevant functional subdomains
+5. **🤖🤝👨‍💻 Bounded Context Definition** → Define boundaries to prevent ambiguity
+6. **🤖🤝👨‍💻 AI Context File Generation** → Connect PRD, initiatives, bootstrap decisions, and technical specifications
 
 ### 🚀 Strategic Initiatives
 
@@ -71,7 +72,7 @@ The process is designed to:
 
 1. **🤖🤝👨‍💻 User Story Breakdown** → Decompose epics into granular stories
 2. **🤖🤝👨‍💻 Story Refinement** → Complete with description, scope, acceptance criteria, technical notes
-3. **🤖🤝👨‍💻 Sprint Planning** → Define a Sprint GOAL and select and prioritize stories for next sprint accordling
+3. **🤖🤝👨‍💻 Sprint Planning** → Define a Sprint GOAL and select and prioritize stories for next sprint accordingly
 
 ### 🛠️ Sprint Execution
 

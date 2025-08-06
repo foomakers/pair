@@ -15,5 +15,6 @@ TBD - This document will describe the process of breaking down refined user stor
 
 ## Related Documents
 
-- Previous: [07-how-to-refine-a-user-story_TBD.md](./07-how-to-refine-a-user-story_TBD.md)
-- Next: [09-how-to-implement-a-task_TBD.md](./09-how-to-implement-a-task_TBD.md)
+- Previous: [08-how-to-refine-a-user-story_TBD.md](./08-how-to-refine-a-user-story_TBD.md)
+- Bootstrap Checklist: [03-how-to-complete-bootstrap-checklist_TBD.md](./03-how-to-complete-bootstrap-checklist_TBD.md)
+- Next: [10-how-to-implement-a-task_TBD.md](./10-how-to-implement-a-task_TBD.md)

@@ -16,5 +16,6 @@ TBD - This document will describe the process of refining user stories through c
 
 ## Related Documents
 
-- Previous: [06-how-to-breakdown-user-stories_TBD.md](./06-how-to-breakdown-user-stories_TBD.md)
-- Next: [08-how-to-create-tasks_TBD.md](./08-how-to-create-tasks_TBD.md)
+- Previous: [07-how-to-breakdown-user-stories_TBD.md](./07-how-to-breakdown-user-stories_TBD.md)
+- Bootstrap Checklist: [03-how-to-complete-bootstrap-checklist_TBD.md](./03-how-to-complete-bootstrap-checklist_TBD.md)
+- Next: [09-how-to-create-tasks_TBD.md](./09-how-to-create-tasks_TBD.md)
