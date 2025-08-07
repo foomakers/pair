@@ -9,10 +9,10 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 ├── way-of-working.md          # 📋 Main process (START HERE!)
 ├── getting-started.md         # 🚀 This guide
 ├── how-to/                      # 📚 Process guides for each development
-│   ├── 01-how-to-create-PRD_TBD.md
-│   ├── 02-how-to-create-and-prioritize-initiatives_TBD.md
-│   ├── 03-how-to-complete-bootstrap-checklist_TBD.md
-│   ├── 04-how-to-define-subdomains_TBD.md
+│   ├── 01-how-to-create-PRD.md
+│   ├── 02-how-to-create-and-prioritize-initiatives.md
+│   ├── 03-how-to-complete-bootstrap-checklist.md
+│   ├── 04-how-to-define-subdomains.md
 │   ├── 05-how-to-define-bounded-contexts_TBD.md
 │   ├── 06-how-to-breakdown-epics_TBD.md
 │   ├── 07-how-to-breakdown-user-stories_TBD.md
