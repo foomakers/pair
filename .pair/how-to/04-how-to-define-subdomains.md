@@ -287,7 +287,7 @@ _Do these relationships accurately represent how your business operates? Are the
 
 ### Step 7: Subdomain Document Generation
 
-**AI Assistant Instructions:** Create comprehensive subdomain documentation:
+**AI Assistant Instructions:** Create comprehensive subdomain documentation, including a subdomain index.
 
 **Process**:
 
@@ -306,17 +306,23 @@ _"I'll now create the complete subdomain document incorporating all validated de
 
 _The document will follow our adopted standards format (concise, prescriptive, English) and serve as authoritative context for bounded context definition and team organization._
 
-_Should I generate the complete [`subdomain.md`](.pair/tech/adopted/subdomain.md) document with all validated content?"_
+_For the output, I will generate a separate file for each subdomain under the folder [`.pair/product/adopted/subdomain/`](.pair/product/adopted/subdomain/), creating the folder if it does not exist, with all validated content. Each subdomain will be saved in its own file (e.g., `.pair/product/adopted/subdomain/<subdomain-name>.md`)._
 
-### Step 8: Final Document Review and Storage
+_Additionally, I will generate a `README.md` file in the same folder. This file will contain a list of all subdomains, each with a link to its file and a brief description. The README.md will serve as an index and quick reference for the subdomain documentation._
 
-**AI Assistant Instructions:** Present final document for approval:
+_The README.md will also be submitted for developer review and must be revised according to any feedback, following the same validation process as the subdomain catalog and definitions._
+
+_Should I proceed to generate the individual subdomain files and the README.md index in [`.pair/product/adopted/subdomain/`](.pair/product/adopted/subdomain/)?"_
+
+### Step 8: Final Document and README.md Review and Storage
+
+**AI Assistant Instructions:** Present the complete subdomain documentation and the README.md index for approval.
 
 **Process**:
 
-1. **Present complete document summary:**
+1. **Present complete document and README.md summary:**
 
-_"Here's the final subdomain document summary:_
+_"Here's the final subdomain document summary and the generated README.md index:_
 
 ## **SUBDOMAIN ANALYSIS RESULTS**
 
@@ -336,7 +342,9 @@ _- **Bounded Context Candidates**: [X] potential contexts identified_
 _- **Team Structure**: [Recommended team-to-subdomain alignment]_
 _- **Integration Complexity**: [Assessment of system coordination needs]_
 
-_This document provides the foundation for bounded context definition and microservices architecture decisions. Is this ready for final storage in [`subdomain.md`](.pair/tech/adopted/subdomain.md)?"_
+_The documentation and the README.md index will be presented for developer review. The README.md must be revised according to any feedback, and the process will iterate until the developer approves both the subdomain files and the README.md index._
+
+_Once approved, the files will be stored as individual files in [`.pair/product/adopted/subdomain/`](.pair/product/adopted/subdomain/), one file per subdomain, plus the README.md index._
 
 ### Step 9: Iterative Updates Process
 
@@ -409,7 +417,7 @@ _Should I update the subdomain catalog to reflect these business model changes, 
 - [ ] Document follows adopted standards format (concise, prescriptive, English)
 - [ ] Update process established for initiative evolution
 - [ ] Complete subdomain model provides foundation for bounded context definition
-- [ ] Document stored in correct [`.pair/tech/adopted/subdomain.md`](.pair/tech/adopted/subdomain.md) location
+- [ ] Each subdomain stored in a separate file under [`.pair/product/adopted/subdomain/`](.pair/product/adopted/subdomain/) (folder created if not present)
 
 ## Common Pitfalls and Solutions
 
