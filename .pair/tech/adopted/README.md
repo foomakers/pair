@@ -1,43 +1,72 @@
 # 📋 Adopted Standards & Practices
 
-This directory contains the **currently adopted standards and practices** for the project. These documents serve as the authoritative reference for all technical decisions that have been proposed by AI and validated by the development team throughout the development process outlined in the [way-of-working.md](../../way-of-working.md).
+This directory contains the **adopted standards and practices** for the project. These documents serve as the authoritative source for all technical and process decisions, providing strict context for the AI assistant during vibecoding and development.
 
-## 📁 Adopted Documents
+## 📁 Document Requirements
+
+All adopted documents must:
+
+- Be written in **English**
+- Be **concise**: list only choices and decisions without explanations or rationale
+- Reference the [knowledge-base](../knowledge-base/) for details, explanations, and background information
+- Be **self-consistent** with compatible choices across library versions, user device targets, and deployment environments
+- Be **strict and prescriptive** with no ambiguity or open interpretation
+- Address all relevant points from the [bootstrap-checklist](../../assets/bootstrap-checklist.md)
+
+## 📁 Document Categories
 
 ### 🏗️ System Design
 
-- **[architecture.md](architecture.md)** - Validated architectural decisions and system boundaries
-- **[tech-stack.md](tech-stack.md)** - Validated technology stack and version decisions
+- **[architecture.md](architecture.md)** – Validated architectural decisions and system boundaries
+- **[tech-stack.md](tech-stack.md)** – Technology stack components with exact versions
 
 ### 🚀 Implementation & Operations
 
-- **[infrastructure.md](infrastructure.md)** - Validated infrastructure and deployment decisions
-- **[way-of-working.md](way-of-working.md)** - Validated development practices and team workflows
+- **[infrastructure.md](infrastructure.md)** – Infrastructure and deployment choices
+- **[way-of-working.md](way-of-working.md)** – Development practices and team workflows
 
 ### 🎨 User Experience
 
-- **[ux-ui.md](ux-ui.md)** - Validated UX/UI patterns and design system decisions
+- **[ux-ui.md](ux-ui.md)** – UX/UI patterns and design system choices
 
 ## 📝 Usage Guidelines
 
-These adopted documents are **decision records**, not guidelines. They contain:
+These documents are **decision records**, not guidelines:
 
-- **Validated Choices**: Only decisions that have been proposed by AI and approved by the development team
-- **Implementation Authority**: All implementations must follow these adopted standards
-- **Cross-References**: Links to detailed guidelines in the [knowledge-base](../knowledge-base/) for explanations
+- Contain only **validated choices** proposed by AI and approved by the team
+- Must be **implemented as written** with full compliance required
+- Reference the [knowledge-base](../knowledge-base/) for detailed explanations
+- Must reflect the current project state and be kept up to date
 
 ## 🔄 Update Process
 
-Adopted standards are updated during specific phases of the development process:
+Standards are updated during specific development phases:
 
-1. **Strategic Preparation**: Architecture and tech-stack decisions
-2. **Customer-Facing Iterations**: UX/UI and infrastructure decisions
-3. **Continuous Value Delivery**: Way of working and deployment decisions
-
-For detailed processes, see [way-of-working.md](../../way-of-working.md).
+1. **Strategic Preparation**: Architecture and tech-stack updates
+2. **Customer-Facing Iterations**: UX/UI and infrastructure updates
+3. **Continuous Value Delivery**: Way of working and deployment updates
 
 ## 🔗 Related Documentation
 
-- **[Knowledge Base](../knowledge-base/)** - Detailed technical guidelines and explanations
-- **[ADR](../adr/)** - Architecture Decision Records for significant architectural changes
-- **[Way of Working](../../way-of-working.md)** - Overall development process and collaboration patterns
+### Knowledge Base
+
+Detailed technical guidelines and explanations:
+
+- [01-architectural-guidelines.md](../knowledge-base/01-architectural-guidelines.md)
+- [02-code-design-guidelines.md](../knowledge-base/02-code-design-guidelines.md)
+- [03-technical-guidelines.md](../knowledge-base/03-technical-guidelines.md)
+- [04-infrastructure-guidelines.md](../knowledge-base/04-infrastructure-guidelines.md)
+- [05-ux-guidelines.md](../knowledge-base/05-ux-guidelines.md)
+- [06-definition-of-done.md](../knowledge-base/06-definition-of-done.md)
+- [07-testing-strategy.md](../knowledge-base/07-testing-strategy.md)
+- [08-accessibility-guidelines.md](../knowledge-base/08-accessibility-guidelines.md)
+- [09-performance-guidelines.md](../knowledge-base/09-performance-guidelines.md)
+- [10-security-guidelines.md](../knowledge-base/10-security-guidelines.md)
+- [11-observability-guidelines.md](../knowledge-base/11-observability-guidelines.md)
+- [README.md](../knowledge-base/README.md) – Knowledge Base Overview
+
+### Additional Resources
+
+- **[Bootstrap Checklist](../assets/bootstrap-checklist.md)** – Project Setup & Bootstrap Checklist with all relevant questions the adopted standards must address
+- **[ADR](../adr/)** – Architecture Decision Records for significant changes
+- **[Way of Working](../../way-of-working.md)** – Development process and collaboration patterns
