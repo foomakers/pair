@@ -13,8 +13,9 @@ TBD - This document will describe the process of analyzing and decomposing user 
 - Story dependencies identification
 - Estimation and sizing considerations
 - Definition of ready criteria
+- How to track new workspace setup as a user story or task in the first technical epic when required by an initiative
 
 ## Related Documents
 
-- Previous: [06-how-to-breakdown-epics_TBD.md](./06-how-to-breakdown-epics_TBD.md)
+- Previous: [06-how-to-breakdown-epics.md](./06-how-to-breakdown-epics.md)
 - Next: [08-how-to-refine-a-user-story_TBD.md](./08-how-to-refine-a-user-story_TBD.md)
