@@ -32,7 +32,7 @@ The AI assistant acts as a **User Story Refinement Facilitator** who:
 
 ## User Story Refinement Definition
 
-> **Best Practice:** Refined user stories must be completely ready for development with no ambiguity about expected outcomes. All acceptance criteria should be testable and verifiable. Technical approach and implementation risks should be understood and documented.
+> **Best Practice:** Refined user stories must be completely To Do with no ambiguity about expected outcomes. All acceptance criteria should be testable and verifiable. Technical approach and implementation risks should be understood and documented.
 
 ### What is User Story Refinement?
 
@@ -100,51 +100,9 @@ The AI assistant acts as a **User Story Refinement Facilitator** who:
    _This grouping allows focused refinement of related functionality while maintaining development flow. Would you like to proceed with this selection, or would you prefer to refine different stories?"_
 
 5. **Handle Ad-hoc Story Requests**: Support developer-driven story selection:
-
    - Accept specific story requests even if not highest priority
    - Provide analysis views for developer decision-making
    - Offer refinement guidance for any valid backlog story
-
-6. **Story Status Management**: Once stories are selected for refinement:
-   - **Move to "In Refinement" Status**: Update selected stories from "Backlog" to "In Refinement" status
-   - **Track Refinement Progress**: Maintain visibility of stories currently being refined
-   - **Prevent Concurrent Changes**: Ensure stories in refinement aren't modified by other processes
-
-## Story Status Workflow
-
-### Refinement Status Management
-
-**AI Assistant Instructions:** Manage story status throughout the refinement process:
-
-**Status Transitions:**
-
-1. **Backlog**: When story is selected for refinement
-2. **Backlog → To Do**: When refinement is completed and story is ready for sprint assignment
-
-Note: A **To Do** card is reday to manual assignment by team during sprint planning
-
-**Status Management Guidelines:**
-
-#### "Backlog" Status
-
-- **Purpose**: Indicates story is actively being refined and should not be modified by other processes
-- **Duration**: From refinement start until all acceptance criteria, technical analysis, and DoD are complete
-- **Team Visibility**: Clearly shows which stories are currently being worked on for refinement
-- **Prevents Conflicts**: Ensures no concurrent modifications during refinement process
-
-#### "To Do" Status
-
-- **Purpose**: Story is fully refined and ready for sprint assignment
-- **Characteristics**: Complete acceptance criteria, technical analysis, DoD alignment, and validated sizing
-- **Sprint Ready**: Story can be immediately assigned to a sprint without additional preparation
-- **Manual Assignment**: Team manually selects and moves stories from "To Do" to sprint during planning
-
-#### Sprint Assignment Process
-
-- **Manual Selection**: Team reviews "To Do" stories and manually assigns to sprints
-- **Priority Consideration**: Stories assigned based on priority, dependencies, and sprint capacity
-- **Capacity Planning**: Refined story points enable accurate sprint capacity planning
-- **Value Alignment**: Sprint selection ensures continuous user value delivery
 
 ### Story Analysis Views for Decision Support
 
@@ -225,7 +183,7 @@ Note: A **To Do** card is reday to manual assignment by team during sprint plann
 ## Epic Context
 
 **Parent Epic**: [Epic Name and Link]
-**Status**: [Ready for Development | In Refinement]
+**Status**: [Backlog | In Refinement | To Do]
 **Priority**: [High | Medium | Low] (confirmed during refinement)
 
 ## Acceptance Criteria
@@ -414,36 +372,30 @@ Note: A **To Do** card is reday to manual assignment by team during sprint plann
 
 ### Step 1: Story Context Review and Validation
 
-**AI Assistant Instructions:** Begin refinement with comprehensive context review and status management:
+**AI Assistant Instructions:** Begin refinement with comprehensive context review:
 
-1. **Update Story Status**: When starting refinement process:
-
-   - **Change Status to "In Refinement"**: Move selected story from "Backlog" to "In Refinement" status
-   - **Lock Story for Refinement**: Prevent concurrent modifications during refinement process
-   - **Notify Stakeholders**: Update team visibility on stories currently being refined
-
-2. **Review Story Breakdown**: Analyze the selected story's current state:
+1. **Review Story Breakdown**: Analyze the selected story's current state:
 
    - Story statement and user value proposition
    - Initial scope definition and open questions
    - Epic context and business objectives
    - Current sizing estimate and confidence level
 
-3. **Validate Story Foundation**: Confirm story readiness for refinement:
+2. **Validate Story Foundation**: Confirm story readiness for refinement:
 
    - Story follows INVEST principles from breakdown
    - Clear user persona and value identification
    - Epic alignment and contribution understanding
    - No blocking dependencies preventing refinement
 
-4. **Establish Refinement Scope**: Define what needs to be refined:
+3. **Establish Refinement Scope**: Define what needs to be refined:
    - Specific areas of uncertainty to resolve
    - Detailed requirements to be specified
    - Technical analysis required
    - Cross-functional coordination needs
 
 **Context Review Presentation:**
-_"I'm beginning refinement for User Story [STORY_CODE]: [TITLE]. The story status has been updated to 'In Refinement'. The story aims to deliver [user value] for [persona]. From the breakdown, I can see the main uncertainty areas are [list uncertainties]. The story currently has [open questions] that need resolution. The epic context shows [epic alignment]. Are you ready to proceed with detailed refinement of this story?"_
+_"I'm beginning refinement for User Story [STORY_CODE]: [TITLE]. The story aims to deliver [user value] for [persona]. From the breakdown, I can see the main uncertainty areas are [list uncertainties]. The story currently has [open questions] that need resolution. The epic context shows [epic alignment]. Are you ready to proceed with detailed refinement of this story?"_
 
 ### Step 2: Detailed Requirements Analysis
 
@@ -597,9 +549,9 @@ _This split enables incremental value delivery while maintaining manageable spri
    - Spike work scheduling and resource allocation
    - Escalation paths for blocked or complex issues
 
-### Step 7: Story Documentation and Status Completion
+### Step 7: Story Documentation and Tool Updates
 
-**AI Assistant Instructions:** Complete comprehensive story documentation and finalize refinement:
+**AI Assistant Instructions:** Complete comprehensive story documentation:
 
 1. **Comprehensive Story Documentation**: Update story with all refinement details:
 
@@ -610,20 +562,19 @@ _This split enables incremental value delivery while maintaining manageable spri
 
 2. **Tool Integration Updates**: Update project management tool:
 
-   - **Change Status to "To Do"**: Move story from "In Refinement" to "To Do" status
+   - Change story status to "To Do"
    - Update story points with refined estimates
    - Add technical notes and implementation details
    - Configure dependencies and team coordination metadata
 
-3. **Sprint Planning Preparation**: Prepare story for manual sprint assignment:
+3. **Sprint Planning Preparation**: Prepare story for sprint planning:
    - Validate story meets sprint planning requirements
    - Confirm story priority and scheduling alignment
    - Prepare story presentation for sprint planning session
    - Ensure all questions and uncertainties resolved
-   - **Story Ready for Manual Sprint Assignment**: Story is now ready to be manually moved into a sprint when selected
 
 **Story Refinement Completion:**
-_"User Story [STORY_CODE] refinement is complete. The story status has been updated to 'To Do' and is now ready for sprint assignment. The story includes comprehensive acceptance criteria, detailed technical analysis, and validated sprint-readiness. Story effort is estimated at [X points] and fits within single sprint capacity [or has been split appropriately]. All refinement artifacts are documented and the story is ready for manual selection and assignment to an upcoming sprint."_
+_"User Story [STORY_CODE] refinement is complete. The story now includes comprehensive acceptance criteria, detailed technical analysis, and validated sprint-readiness. Story effort is estimated at [X points] and fits within single sprint capacity [or has been split appropriately]. All refinement artifacts are documented and the story is ready for sprint planning selection."_
 
 ### Step 8: Refinement Quality Validation
 
