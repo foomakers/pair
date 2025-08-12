@@ -15,7 +15,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 │   ├── 04-how-to-define-subdomains.md
 │   ├── 05-how-to-define-bounded-contexts_TBD.md
 │   ├── 06-how-to-breakdown-epics.md
-│   ├── 07-how-to-breakdown-user-stories_TBD.md
+│   ├── 07-how-to-breakdown-user-stories.md
 │   ├── 08-how-to-refine-a-user-story_TBD.md
 │   ├── 10-how-to-implement-a-task_TBD.md
 │   ├── 11-how-to-code-review_TBD.md

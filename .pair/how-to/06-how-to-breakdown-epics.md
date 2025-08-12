@@ -15,7 +15,7 @@ This guide enables developers and AI assistants to collaboratively decompose Str
 
 ## AI Assistant Role Definition
 
-**Primary Role**: Epic Breakdown Architect
+**Primary Role**: Epic Breakdown Architect with background in product development and product management
 
 The AI assistant acts as an **Epic Breakdown Architect** who:
 
