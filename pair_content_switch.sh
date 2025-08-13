@@ -58,31 +58,30 @@ if [ ! -d "$DEST" ]; then
 fi
 
 function backup() {
-  echo "[Backup] Copying from $SRC to $DEST ..."
-  cp -rf "$SRC/product" "$DEST/" 2>/dev/null || true
-  cp -rf "$SRC/tech/adopted" "$DEST/tech/" 2>/dev/null || true
-  cp -rf "$SRC/tech/adr" "$DEST/tech/" 2>/dev/null || true
+  echo "[Backup] Syncing $SRC to $DEST ..."
+  rsync -a --delete "$SRC/product/" "$DEST/product/"
+  rsync -a --delete "$SRC/tech/adopted/" "$DEST/tech/adopted/"
+  rsync -a --delete "$SRC/tech/adr/" "$DEST/tech/adr/"
   manage_keep_files "$DEST"
   echo "Backup completed."
 }
 
 function restore() {
-  echo "[Restore] Copying from $DEST to $SRC ..."
-  # Check if source folders exist
-  if [ ! -d "$DEST/product" ]; then
+  echo "[Restore] Syncing $DEST to $SRC ..."
+  if [ -d "$DEST/product" ]; then
+    rsync -a --delete "$DEST/product/" "$SRC/product/"
+  else
     echo "[Restore][ERROR] Source folder $DEST/product not found."
-  else
-    cp -rf "$DEST/product" "$SRC/" 2>/dev/null || true
   fi
-  if [ ! -d "$DEST/tech/adopted" ]; then
+  if [ -d "$DEST/tech/adopted" ]; then
+    rsync -a --delete "$DEST/tech/adopted/" "$SRC/tech/adopted/"
+  else
     echo "[Restore][ERROR] Source folder $DEST/tech/adopted not found."
-  else
-    cp -rf "$DEST/tech/adopted" "$SRC/tech/" 2>/dev/null || true
   fi
-  if [ ! -d "$DEST/tech/adr" ]; then
-    echo "[Restore][ERROR] Source folder $DEST/tech/adr not found."
+  if [ -d "$DEST/tech/adr" ]; then
+    rsync -a --delete "$DEST/tech/adr/" "$SRC/tech/adr/"
   else
-    cp -rf "$DEST/tech/adr" "$SRC/tech/" 2>/dev/null || true
+    echo "[Restore][ERROR] Source folder $DEST/tech/adr not found."
   fi
   manage_keep_files "$SRC"
   echo "Restore completed."

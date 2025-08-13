@@ -236,6 +236,21 @@ This epic should cover all foundational technical activities required to initial
 
 If an Epic 0 already exists, proceed directly to functional epic breakdown as described below.
 
+## Mandatory Bootstrap Epic Verification
+
+**AI Assistant MUST:**
+
+1. **Assess whether the initiative requires a bootstrap/setup epic** (e.g., new solution, new repository, new technical context). If the initiative extends existing code and does not require setup, this verification is not needed.
+2. **If bootstrap/setup is required:**
+   - Check for the existence of Epic 0 (“application-bootstrap-setup”) in the epic list according to the project management tool in use (filesystem, Jira, Linear, etc.).
+   - Verify the status of Epic 0 (e.g., "done", "in-progress", "completed", "active") using the status conventions of the chosen tool (folder, field, tag, etc.).
+   - If Epic 0 is missing or not started, STOP and request the team to create and complete it before proposing breakdown of functional epics.
+   - Document this verification step in the breakdown process.
+3. **If bootstrap/setup is not required:**
+   - Proceed directly with the breakdown of functional epics.
+
+> **Note:** The Epic 0 verification is only required if the initiative needs technical setup. Otherwise, the breakdown can proceed without this epic. Interpret the status and existence of Epic 0 according to the conventions of the selected project management tool.
+
 ## Filesystem-Based Epic Management (If Issue Tracker = Filesystem)
 
 > **Note:** Only follow this section if your chosen issue tracker is the filesystem. If you are using a different tool (e.g., Jira, Linear, Trello), ignore this section and follow the tool-specific integration instructions.

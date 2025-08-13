@@ -1,807 +1,730 @@
-# How to Refine a User Story - AI-Assisted Guide
+# How to Breakdown User Stories - AI-Assisted Guide
 
 ## Overview
 
-This guide enables developers and AI assistants to collaboratively refine User Stories from their initial breakdown state into development-ready work items through structured, iterative analysis. User Story refinement transforms **rough plannable units** into **detailed, implementable specifications** with comprehensive acceptance criteria, technical clarity, and development readiness.
+This guide enables developers and AI assistants to collaboratively decompose Epics into User Story breakdowns through a structured, iterative process. User Stories at breakdown stage serve as **rough plannable units** that translate epic value into identifiable work items with **intentional uncertainty** that will be resolved during future refinement.
 
-**Key Benefits of User Story Refinement:**
+**Key Benefits of User Story Breakdowns:**
 
-- Transform rough story concepts into detailed, actionable development requirements
-- Establish comprehensive acceptance criteria and testable completion conditions
-- Identify technical implementation approaches, risks, and required spikes
-- Align cross-functional team understanding of story scope and expectations
-- Validate story readiness for sprint planning and development execution
-- Ensure proper story sizing and identify splitting needs for sprint capacity
+- Transform epic value into identifiable, roughly estimable work increments
+- Enable epic-level planning and high-level capacity forecasting
+- Provide story placeholders for backlog organization and prioritization
+- Facilitate epic progress visibility through story tracking
+- Create foundation for detailed refinement when stories are selected for development
+- Establish initial story boundaries that can evolve during refinement
 
-**Important: Stories enter refinement as intentionally incomplete breakdown artifacts** and exit as comprehensive, development-ready specifications with detailed acceptance criteria, technical analysis, and validated sprint-sized scope.
+**Important: Stories at breakdown stage are intentionally incomplete** - they capture the essential user value and rough scope but deliberately leave implementation details, precise acceptance criteria, and technical specifics for later refinement when the story is selected for development.
 
 ## AI Assistant Role Definition
 
-**Primary Role**: User Story Refinement Facilitator with expertise in requirements analysis and development planning
+**Primary Role**: User Story Breakdown Architect
 
-The AI assistant acts as a **User Story Refinement Facilitator** who:
+The AI assistant acts as a **User Story Breakdown Architect** who:
 
-- **Analyzes** backlog stories to identify refinement priorities and group candidates
-- **Facilitates** collaborative story analysis through structured refinement techniques
-- **Guides** detailed acceptance criteria definition and technical requirement specification
-- **Identifies** technical risks, dependencies, and spike requirements
-- **Validates** story completeness, testability, and sprint-readiness
-- **Proposes** story splitting when refined scope exceeds sprint capacity
+- **Analyzes** epic scope to identify atomic user value increments
+- **Proposes** user story structure using INVEST principles and vertical slicing
+- **Facilitates** collaborative story identification through pattern-based techniques
+- **Documents** user stories with essential planning information (statement, value, scope, sizing)
+- **Plans** story sequencing and epic coverage for optimal development flow
+- **Maintains** story documentation consistency within the chosen project management tool
 
-**Working Principles**: Follow the **🤖🤝👨‍💻** model (LLM proposes, Developer validates) throughout the entire refinement process.
+**Working Principles**: Follow the **🤖🤝👨‍💻** model (LLM proposes, Developer validates) throughout the entire process.
 
-## User Story Refinement Definition
+## User Story Definition
 
-> **Best Practice:** Refined user stories must be completely ready for development with no ambiguity about expected outcomes. All acceptance criteria should be testable and verifiable. Technical approach and implementation risks should be understood and documented.
+### What is a User Story (at Breakdown Stage)?
 
-### What is User Story Refinement?
+A **User Story at breakdown stage** is a **rough work increment** that:
 
-**User Story Refinement** is the collaborative process that transforms breakdown-stage stories into development-ready specifications by:
+- **Identifies User Value**: Captures the core functionality that benefits identified user personas
+- **Provides Planning Estimate**: Rough sizing for epic-level capacity planning (uncertainty expected)
+- **Follows Core INVEST Principles**: Focuses on user value, independence, and estimability at high level
+- **Maintains Intentional Ambiguity**: Leaves implementation details and precise requirements for refinement
+- **Enables Epic Tracking**: Contributes to epic progress visibility and completion tracking
+- **Establishes Initial Boundaries**: Provides starting scope that will be clarified during refinement
 
-- **Adding Detailed Requirements**: Comprehensive acceptance criteria, business rules, and edge case handling
-- **Technical Analysis**: Implementation approach, architectural considerations, and technical risks
-- **Validation and Testing**: Testable completion criteria and verification approaches
-- **Sprint Readiness**: Proper sizing validation and splitting identification when necessary
-- **Cross-functional Alignment**: Shared understanding across development team roles
+**Stories at breakdown stage are intentionally rough** - they capture enough information for backlog management and epic planning while deliberately leaving detailed requirements, acceptance criteria, and technical decisions for later refinement.
 
-### Refinement vs Breakdown
+### User Story vs Other Artifacts
 
-| Aspect                  | Breakdown Stage                    | Refined Stage                           |
-| ----------------------- | ---------------------------------- | --------------------------------------- |
-| **Purpose**             | Epic planning and backlog creation | Development execution preparation       |
-| **Detail Level**        | Rough scope and user value         | Comprehensive requirements and criteria |
-| **Acceptance Criteria** | Open questions and uncertainties   | Detailed, testable conditions           |
-| **Technical Analysis**  | High-level considerations          | Implementation approach and risks       |
-| **Sizing Confidence**   | Rough estimates with uncertainty   | Validated sizing with splitting needs   |
-| **Team Involvement**    | Product-focused analysis           | Cross-functional collaborative analysis |
+| Artifact       | Duration    | Scope                | Value Stream     | Purpose                                                |
+| -------------- | ----------- | -------------------- | ---------------- | ------------------------------------------------------ |
+| **Initiative** | 6-8 sprints | Business objective   | Business Value   | Strategic positioning and market advantage             |
+| **Epic**       | 2-4 sprints | Feature set          | User Experience  | Incremental value delivery and user journey            |
+| **User Story** | 1 sprint    | Single functionality | Working Software | Rough, estimable feature ready for detailed refinement |
 
-## Story Selection and Prioritization
+## User Story Breakdown Template
 
-### Step 0: Story Selection Analysis and Proposal
-
-**AI Assistant Instructions:** Begin with comprehensive story analysis and selection proposal:
-
-**Phase 0A: Backlog Story Analysis**
-
-1. **Analyze Available Stories**: Review all user stories in backlog status:
-
-   - Group stories by parent epic
-   - Assess story priority levels within epics
-   - Identify story dependencies and logical groupings
-   - Evaluate story readiness for refinement
-
-2. **Epic-Based Grouping**: Organize stories by epic context:
-
-   - Highest priority epics with ready stories
-   - Story dependencies within epic scope
-   - Logical refinement sequences for epic progress
-   - Cross-story considerations and shared components
-
-3. **Priority Assessment**: Evaluate refinement candidates based on:
-   - Business priority and user value urgency
-   - Epic progress and milestone requirements
-   - Technical dependency sequencing
-   - Team capacity and sprint planning needs
-
-**Phase 0B: Refinement Proposal**
-
-4. **Propose Priority Stories**: Based on analysis, recommend specific stories for refinement:
-
-   _"I've analyzed all backlog stories and identified refinement opportunities. Based on priority, dependencies, and logical grouping, I recommend refining these stories from Epic '[EPIC_NAME]':_
-
-   **Recommended for Refinement:**
-
-   | Story Code | Title               | Priority | Dependencies | Readiness | Reasoning                     |
-   | ---------- | ------------------- | -------- | ------------ | --------- | ----------------------------- |
-   | [Code]     | [Story Title]       | High     | None         | Ready     | Foundation story, no blockers |
-   | [Code]     | [Related Story]     | High     | Story above  | Ready     | Logical continuation          |
-   | [Code]     | [Independent Story] | Medium   | None         | Ready     | Parallel development possible |
-
-   _This grouping allows focused refinement of related functionality while maintaining development flow. Would you like to proceed with this selection, or would you prefer to refine different stories?"_
-
-5. **Handle Ad-hoc Story Requests**: Support developer-driven story selection:
-
-   - Accept specific story requests even if not highest priority
-   - Provide analysis views for developer decision-making
-   - Offer refinement guidance for any valid backlog story
-
-6. **Story Status Management**: Once stories are selected for refinement:
-   - **Move to "In Refinement" Status**: Update selected stories from "Backlog" to "In Refinement" status
-   - **Track Refinement Progress**: Maintain visibility of stories currently being refined
-   - **Prevent Concurrent Changes**: Ensure stories in refinement aren't modified by other processes
-
-## Story Status Workflow
-
-### Refinement Status Management
-
-**AI Assistant Instructions:** Manage story status throughout the refinement process:
-
-**Status Transitions:**
-
-1. **Backlog**: When story is selected for refinement
-2. **Backlog → To Do**: When refinement is completed and story is ready for sprint assignment
-
-Note: A **To Do** card is reday to manual assignment by team during sprint planning
-
-**Status Management Guidelines:**
-
-#### "Backlog" Status
-
-- **Purpose**: Indicates story is actively being refined and should not be modified by other processes
-- **Duration**: From refinement start until all acceptance criteria, technical analysis, and DoD are complete
-- **Team Visibility**: Clearly shows which stories are currently being worked on for refinement
-- **Prevents Conflicts**: Ensures no concurrent modifications during refinement process
-
-#### "To Do" Status
-
-- **Purpose**: Story is fully refined and ready for sprint assignment
-- **Characteristics**: Complete acceptance criteria, technical analysis, DoD alignment, and validated sizing
-- **Sprint Ready**: Story can be immediately assigned to a sprint without additional preparation
-- **Manual Assignment**: Team manually selects and moves stories from "To Do" to sprint during planning
-
-#### Sprint Assignment Process
-
-- **Manual Selection**: Team reviews "To Do" stories and manually assigns to sprints
-- **Priority Consideration**: Stories assigned based on priority, dependencies, and sprint capacity
-- **Capacity Planning**: Refined story points enable accurate sprint capacity planning
-- **Value Alignment**: Sprint selection ensures continuous user value delivery
-
-### Story Analysis Views for Decision Support
-
-**AI Assistant Instructions:** Provide analysis views to support story selection decisions:
-
-#### Epic Progress View
+Each user story breakdown must include these essential elements (detailed requirements will be added during refinement):
 
 ```markdown
-## Epic: [Epic Name] - Story Refinement Status
-
-**Epic Progress**: [X/Y] stories refined, [A/B] story points completed
-
-| Status      | Story Count | Story Points | Stories                      |
-| ----------- | ----------- | ------------ | ---------------------------- |
-| Refined     | X           | XX           | [List completed stories]     |
-| Backlog     | Y           | YY           | [List remaining stories]     |
-| In Progress | Z           | ZZ           | [List stories being refined] |
-
-**Next Logical Stories for Refinement**: [Recommendations based on dependencies and flow]
-```
-
-#### Priority and Dependency View
-
-```markdown
-## Backlog Stories - Priority and Dependency Analysis
-
-**High Priority Ready for Refinement:**
-
-- [Story Code]: [Title] - [Why high priority, no blockers]
-- [Story Code]: [Title] - [Dependencies and reasoning]
-
-**Medium Priority Available:**
-
-- [Story Code]: [Title] - [Why medium priority]
-
-**Blocked or Dependent Stories:**
-
-- [Story Code]: [Title] - [Blocking dependencies]
-
-**Recommended Refinement Sequence**: [Logical order based on dependencies and priority]
-```
-
-#### Sprint Planning View
-
-```markdown
-## Sprint Readiness - Story Refinement Pipeline
-
-**Sprint [N] Candidates** (Stories likely needed for upcoming sprint):
-
-- [Story Code]: [Title] - [Refinement status and urgency]
-
-**Sprint [N+1] Pipeline** (Stories for future sprints):
-
-- [Story Code]: [Title] - [Preparation timeline]
-
-**Refinement Recommendations**:
-
-- Immediate: [Stories needed for next sprint]
-- Next Week: [Stories for sprint pipeline]
-- Future: [Lower priority stories]
-```
-
-## User Story Refinement Template
-
-> **Note:** This template transforms the initial breakdown information into comprehensive, development-ready specifications. All sections must be completed with testable, implementable details.
-
-```markdown
-# User Story [Epic-Code]-[Story-Number]: [Story Title] - REFINED
+# User Story [Epic-Code]-[Story-Number]: [Story Title]
 
 ## Story Statement
 
-**As a** [specific user persona from PRD]
-**I want** [detailed functionality and user interaction]
-**So that** [specific business value and user benefit]
-
-**Where**: [Specific application/interface where user experiences the value]
+**As a** [user persona]
+**I want** [general functionality or capability]
+**So that** [business value or user benefit]
 
 ## Epic Context
 
 **Parent Epic**: [Epic Name and Link]
-**Status**: [Ready for Development | In Refinement]
-**Priority**: [High | Medium | Low] (confirmed during refinement)
+**Status**: [Backlog]
+**Priority**: [High | Medium | Low]
 
-## Acceptance Criteria
+## User Value
 
-### Functional Requirements
+**User Benefit**: [High-level benefit this story delivers to users]
+**Business Impact**: [How this story contributes to epic and business objectives]
+**Visible UI Value**: [Specific UI element, screen, interaction, or feedback that will be demonstrable in sprint review]
 
-**Given-When-Then Format:**
+## Rough Sizing
 
-1. **Given** [initial condition or context]
-   **When** [user action or trigger]
-   **Then** [expected system response and user outcome]
+**Story Points**: [Initial size estimate: XS(1), S(2), M(3), L(5), XL(8)]
+**Confidence**: [High | Medium | Low]
+**Reasoning**: [Brief justification for sizing - uncertainty is expected]
 
-2. **Given** [different context]
-   **When** [user action]
-   **Then** [expected outcome]
+## Initial Scope
 
-[Continue for all functional scenarios]
+### Likely In Scope
 
-### Business Rules
+- [General functionality expected to be included]
+- [High-level user interaction patterns]
+- [Core system capabilities]
+- [UI components and interactions that make value visible]
 
-- [Specific business rule with measurable criteria]
-- [Data validation requirements]
-- [User permission and access control rules]
-- [Integration with existing system rules]
+### Likely Out of Scope
 
-### Edge Cases and Error Handling
+- [Functionality probably excluded]
+- [Future story considerations]
+- [Related but separate capabilities]
 
-- **Invalid Input**: [How system handles and responds]
-- **System Errors**: [Error conditions and user feedback]
-- **Boundary Conditions**: [Limits and constraint handling]
-- **Exceptional Scenarios**: [Unusual but valid use cases]
+### Open Questions
 
-## Technical Analysis
+- [Uncertainties to be resolved during refinement]
+- [Implementation details to be decided]
+- [Requirements to be clarified]
 
-### Implementation Approach
+## Definition of Done Expectations
 
-**Technical Strategy**: [High-level implementation approach]
-**Key Components**: [Major technical components involved]
-**Data Flow**: [How data moves through the system]
-**Integration Points**: [External systems or APIs involved]
+**Standard DoD Requirements** (to be detailed during refinement):
 
-### Technical Requirements
+- [ ] Functionality implemented and working
+- [ ] **UI demonstrates the user value** (screen, interaction, feedback, data display)
+- [ ] Automated tests written and passing
+- [ ] Code reviewed and merged
+- [ ] Documentation updated
+- [ ] **Demo-ready for sprint review** (clear user story value visible in UI)
 
-- [Specific technical constraint or requirement]
-- [Performance criteria and benchmarks]
-- [Security considerations and requirements]
-- [Accessibility and usability standards]
+## Dependencies
 
-### Technical Risks and Mitigation
+**Story Dependencies**: [Other user stories this likely depends on]
+**Epic Dependencies**: [Epic-level dependencies affecting this story]
 
-| Risk               | Impact | Probability | Mitigation Strategy        |
-| ------------------ | ------ | ----------- | -------------------------- |
-| [Technical risk]   | High   | Medium      | [Specific mitigation plan] |
-| [Integration risk] | Medium | Low         | [Risk reduction approach]  |
+## Notes
 
-### Spike Requirements
+[Brief additional context, assumptions, or planning considerations - uncertainty is expected and normal]
+```
 
-**Required Spikes**: [Research or proof-of-concept work needed]
+**Note: This template captures planning essentials while intentionally leaving detailed acceptance criteria, technical specifications, and precise requirements for later refinement when the story is selected for development.**
 
-- [Spike 1]: [Research question and acceptance criteria]
-- [Spike 2]: [Technical investigation scope]
+## Prerequisites Verification
 
-**Estimated Spike Effort**: [Time needed for technical investigation]
+### Step 0: Documentation Analysis and Epic Selection
 
-## Definition of Done Checklist
+**AI Assistant Instructions:** Begin with comprehensive documentation analysis and epic selection:
 
-### Development Completion
+**Phase 0A: Complete Documentation Analysis**
 
-- [ ] All acceptance criteria implemented and verified
-- [ ] Code follows project coding standards and conventions
-- [ ] Code review completed and approved by team member
-- [ ] Unit tests written and passing (minimum coverage: [X]% - specify project standard)
-- [ ] Integration tests implemented for external interfaces and API endpoints
-- [ ] Documentation updated (API docs, user guides, technical documentation)
-- [ ] Security scan completed and vulnerabilities addressed
-- [ ] Performance benchmarks met and verified through testing
+1. **Study Foundation Documents**: Thoroughly analyze all referenced documentation:
 
-### Quality Assurance
+   - **PRD Analysis**: Review product vision, user personas, business requirements, and success metrics
+   - **Way of Working**: Understand development methodology, process definitions, and tool integration requirements
+   - **Technical Context**: Study architecture patterns, tech stack constraints, UX/UI guidelines, and domain boundaries
+   - **Initiative Context**: Review all initiatives, their objectives, priorities, and current status
 
-- [ ] All acceptance criteria tested and verified against specifications
-- [ ] Edge cases and error conditions tested comprehensively
-- [ ] Cross-browser/platform testing completed (specify supported browsers/devices)
-- [ ] Performance criteria met and verified (response times, throughput, resource usage)
-- [ ] Security requirements validated through testing and review
-- [ ] Accessibility standards compliance verified (specify WCAG level)
-- [ ] User experience validation completed (usability testing if applicable)
-- [ ] Regression testing completed for existing functionality
+2. **Analyze Epic Landscape**: Examine all available epics across initiatives:
 
-### Deployment and Release
+   - Review epic documentation completeness and readiness
+   - Understand epic priorities and business value alignment
+   - Identify epic dependencies and sequencing considerations
+   - Assess epic scope and complexity for breakdown readiness
 
-- [ ] Feature deployed to staging environment successfully
-- [ ] Staging validation completed by product owner
-- [ ] Production deployment checklist completed
-- [ ] Feature flags configured appropriately (if applicable)
-- [ ] Monitoring and alerting configured for new functionality
-- [ ] Database migrations tested and validated (if applicable)
-- [ ] User documentation and help content updated and reviewed
-- [ ] Rollback plan prepared and tested
-- [ ] Post-deployment verification completed
+3. **Validate Technical Integration**: Confirm tool setup and methodology:
+   - Review linking methodology for Epic → User Story relationships
+   - Verify project management tool configuration
+   - Understand hierarchy establishment requirements
 
-## Story Sizing and Sprint Readiness
+**Phase 0B: Epic Selection and Proposal**
 
-### Refined Story Points
+**Mandatory Bootstrap Story Rule**
 
-**Final Story Points**: [X points based on detailed analysis]
-**Confidence Level**: [High | Medium | Low]
-**Sizing Justification**: [Detailed reasoning based on technical analysis]
+At any point during the user story breakdown process, if a bootstrap/setup epic (Epic 0) is present, user story breakdown must start from this epic before proceeding to functional epics. If the bootstrap/setup epic is missing, it must be created and its user stories broken down first, before any other user stories are considered. This ensures all technical foundation activities are planned and executed prior to business functionality.
 
-### Sprint Capacity Validation
+4. **Propose Priority Epic**: Based on documentation analysis, identify and propose highest-priority epic for breakdown:
 
-**Sprint Fit Assessment**: [Does story fit in single sprint?]
-**Development Time Estimate**: [X days based on technical analysis]
-**Testing Time Estimate**: [Y days for comprehensive validation]
-**Total Effort Assessment**: [Fits within sprint capacity: Yes/No]
+   _"I've analyzed all available documentation and initiatives. Based on business priorities, user value, and readiness for breakdown, I recommend starting with Epic '[EPIC_NAME]' from Initiative '[INITIATIVE_NAME]'. This epic appears to be the highest priority because [reasoning: business value, user impact, readiness, dependencies, etc.]._
 
-### Story Splitting Recommendations
+   _Here are the top-priority epics I've identified across all initiatives:_
 
-**If story exceeds sprint capacity:**
+   | Epic     | Initiative     | Priority Reasoning                    | Readiness Status       |
+   | -------- | -------------- | ------------------------------------- | ---------------------- |
+   | [Epic 1] | [Initiative A] | [High user value, foundational]       | Ready for breakdown    |
+   | [Epic 2] | [Initiative A] | [Critical dependency for other epics] | Ready for breakdown    |
+   | [Epic 3] | [Initiative B] | [Strategic business objective]        | Needs minor completion |
 
-**Recommended Split:**
+   _This is a recommendation based on my analysis - we can proceed with breakdown of any epic from any initiative that you prefer. Which epic would you like to break down into user stories?"_
 
-1. **Story [Code]-A**: [Core functionality subset]
+**Phase 0C: Epic Readiness Verification**
 
-   - **Acceptance Criteria**: [Essential criteria subset]
-   - **Size Estimate**: [Reduced points]
+5. **Verify Selected Epic Completion**: Once epic is selected, check that it's fully documented with:
 
-2. **Story [Code]-B**: [Additional functionality]
-   - **Acceptance Criteria**: [Extended criteria]
-   - **Dependencies**: [Depends on Story A]
-   - **Size Estimate**: [Remaining points]
+   - Complete epic template filled out
+   - Clear epic objective and success criteria
+   - Defined scope (in-scope and out-of-scope)
+   - User story preview completed
+   - Epic properly linked to parent initiative
 
-**Split Rationale**: [Why this split maintains user value and enables incremental delivery]
+6. **Check Epic Status**: Confirm epic is ready for breakdown:
 
-## Dependencies and Coordination
+   - Epic approved and ready for planning
+   - Dependencies identified and documented
+   - Technical considerations outlined
+   - Epic scope clearly defined
 
-### Story Dependencies
+7. **Validate Tool Integration**: Verify epic is properly tracked in project management tool with:
+   - Correct linking to parent initiative
+   - Ready to accept child user story links
+   - Epic metadata properly configured
 
-**Prerequisite Stories**: [Stories that must be completed first]
-**Dependent Stories**: [Stories that depend on this story]
-**Shared Components**: [Common elements with other stories]
+**If Selected Epic Not Ready:**
+_"I notice the selected epic '[EPIC_NAME]' isn't fully documented or ready for breakdown yet. Before we can create user stories, the epic needs to be completed according to the Epic Breakdown Guide. We can either complete the epic documentation first, or select a different epic that's ready for breakdown. Would you prefer to complete this epic or choose another ready epic from the list?"_
 
-### Team Coordination
+## INVEST Criteria Framework
 
-**Development Roles Involved**:
+### INVEST Principles Application
 
-- **Frontend**: [Specific frontend work and coordination]
-- **Backend**: [API and data layer responsibilities]
-- **QA**: [Testing strategy and coordination needs]
-- **UX/UI**: [Design review and validation requirements]
+**AI Assistant Instructions:** Every user story must satisfy INVEST criteria:
 
-### External Dependencies
+#### Independent (I)
 
-**Third-party Integrations**: [External services or APIs]
-**Infrastructure Requirements**: [Deployment or environment needs]
-**Compliance Requirements**: [Legal, security, or regulatory coordination]
+- **Story can be planned without dependencies on other incomplete stories**
+- **Story represents standalone planning unit**
+- **Story scope is self-contained**
 
-## Validation and Testing Strategy
+#### Negotiable (N)
 
-### Acceptance Testing Approach
+- **Story describes what to build, not how to build it**
+- **Story scope can be adjusted during refinement**
+- **Story leaves implementation details for later refinement**
 
-**Testing Methods**: [How acceptance criteria will be validated]
-**Test Data Requirements**: [Specific data needed for testing]
-**Environment Requirements**: [Testing environment specifications]
+#### Valuable (V)
 
-### User Validation
+- **Story provides clear value to identified user persona**
+- **Story contributes meaningfully to epic objective**
+- **Story value can be articulated to stakeholders**
 
-**User Feedback Collection**: [How to gather user validation]
-**Success Metrics**: [Measurable outcomes for story success]
-**Rollback Plan**: [What to do if story doesn't meet expectations]
+#### Estimable (E)
 
-## Notes and Additional Context
+- **Story scope is clear enough for rough estimation**
+- **Story complexity is understandable at high level**
+- **Major unknowns are identified (to be resolved during refinement)**
 
-**Refinement Session Insights**: [Key decisions and considerations from refinement discussion]
-**Team Concerns**: [Any concerns raised during refinement]
-**Future Considerations**: [Items noted for future development]
-**Documentation Links**: [References to detailed technical specs or design documents]
+#### Small (S)
+
+- **Story scope fits within single sprint**
+- **Story represents manageable unit of work**
+- **Story doesn't require extensive coordination**
+
+#### Testable (T)
+
+- **Story outcome can be generally verified**
+- **Story scope suggests testable completion criteria**
+- **Story provides foundation for detailed acceptance criteria (to be defined during refinement)**
+
+## Vertical Slicing Methodology
+
+### Vertical Slice Principles
+
+**AI Assistant Instructions:** Apply vertical slicing to ensure stories represent complete user value:
+
+#### End-to-End User Value
+
+- **User Trigger**: Story starts with user action or need
+- **System Response**: Story includes necessary system behavior
+- **User Outcome**: Story ends with visible user benefit
+- **UI Manifestation**: Story includes the UI component that makes the value visible and demonstrable
+
+#### Planning Completeness
+
+- **Self-Contained**: Story scope is complete for planning purposes
+- **Value-Focused**: Story represents meaningful user value increment
+- **Estimable**: Story scope enables reasonable effort estimation
+- **Demo-Ready**: Story produces something tangible that can be shown in sprint review
+
+#### UI-First Story Cutting Approach
+
+**AI Assistant Instructions:** Every user story must produce visible, demonstrable value in the UI:
+
+**Core Principle**: No story is complete without a UI manifestation that makes its value visible and demonstrable during sprint review.
+
+**Implementation Guidelines**:
+
+- **Technical Work Integration**: Technical components (APIs, data processing, algorithms) must be "carried" into stories through their UI manifestations
+- **Visible Feedback**: Include UI elements like status indicators, progress bars, error messages, success notifications
+- **Data Visualization**: Technical data processing must result in visible data displays, lists, charts, or reports
+- **User Interactions**: Backend functionality must be accessible through buttons, forms, menus, or other UI controls
+- **System State Display**: Internal system states must be reflected in UI through status displays, configuration screens, or monitoring dashboards
+
+**Examples of UI-First Story Cutting**:
+
+- ❌ **Wrong**: "Implement data deduplication algorithm"
+- ✅ **Right**: "User sees duplicate detection results in data import screen with resolution options"
+
+- ❌ **Wrong**: "Create REST API for broker configuration"
+- ✅ **Right**: "User can configure broker settings through UI form and see confirmation of changes"
+
+- ❌ **Wrong**: "Implement error handling for data import"
+- ✅ **Right**: "User receives clear error messages and retry options when data import fails"
+
+### Story Splitting Patterns
+
+**AI Assistant Instructions:** Use these patterns to identify appropriate story boundaries:
+
+#### 1. Workflow Steps Pattern
+
+Identify distinct steps in user workflows:
+
+- Account creation → Email verification → Profile setup
+
+#### 2. CRUD Operations Pattern
+
+Identify different data operations:
+
+- Create project → View project → Edit project → Delete project
+
+#### 3. Business Rules Pattern
+
+Identify different business scenarios:
+
+- Standard shipping → Express shipping → International shipping
+
+#### 4. User Roles Pattern
+
+Identify different user types:
+
+- Admin actions → Member actions → Guest actions
+
+#### 5. Device/Platform Pattern
+
+Identify different platforms:
+
+- Desktop experience → Mobile experience
+
+#### 6. Data Variations Pattern
+
+Identify different data types:
+
+- Text data → Image data → File attachments
+
+## Filesystem-Based User Story Management (If Issue Tracker = Filesystem)
+
+> **Note:** Only follow this section if your chosen issue tracker is the filesystem. If you are using a different tool (e.g., Jira, Linear, Trello), ignore this section and follow the tool-specific integration instructions.
+
+### Folder Structure and Naming Conventions
+
+User stories are managed as Markdown files in the `backlog/` subfolder under `.pair/product/backlog/03-user-stories/` during the breakdown phase.
+
+#### User Story File Naming
+
+Each user story is a Markdown file in the `backlog/` folder. The filename must include:
+
+- The initiative code (from parent epic)
+- The epic code (from parent epic)
+- The story code (progressive number for the story within the epic)
+- A short, kebab-case name for the story
+
+**Format:**
+
+```
+[initiative-code]-[epic-code]-[story-code]-[story-name].md
+```
+
+**Example:**
+
+```
+.pair/product/backlog/03-user-stories/backlog/01-01-001-user-registration.md
+.pair/product/backlog/03-user-stories/backlog/01-01-002-email-verification.md
+.pair/product/backlog/03-user-stories/backlog/01-02-001-dashboard-overview.md
+```
+
+#### Linking and Traceability
+
+Each user story file must:
+
+- Use the breakdown template provided in this guide
+- Include a link to its parent epic (by filename or relative path)
+- All references to markdown documents must be markdown links
+
+This ensures clear navigation between epics and user stories in the filesystem.
 
 ---
 
-**Refinement Completed By**: [Team member names and roles]
-**Refinement Date**: [Date of refinement completion]
-**Review and Approval**: [Product owner approval confirmation]
-```
+## Step-by-Step Implementation Process
 
-## Structured Refinement Process
+### Step 1: Selected Epic Analysis and Context Review
 
-### Step 1: Story Context Review and Validation
+**AI Assistant Instructions:** With the selected epic confirmed, proceed with detailed analysis:
 
-**AI Assistant Instructions:** Begin refinement with comprehensive context review and status management:
+1. **Review Selected Epic Documentation**: Analyze the chosen epic to understand:
 
-1. **Update Story Status**: When starting refinement process:
+   - Epic objective and business value
+   - Epic scope (in-scope and out-of-scope items)
+   - Epic success criteria
+   - User story preview already identified
+   - Technical considerations and constraints
 
-   - **Change Status to "In Refinement"**: Move selected story from "Backlog" to "In Refinement" status
-   - **Lock Story for Refinement**: Prevent concurrent modifications during refinement process
-   - **Notify Stakeholders**: Update team visibility on stories currently being refined
+2. **Study Parent Initiative Context**: Review the parent initiative for:
 
-2. **Review Story Breakdown**: Analyze the selected story's current state:
+   - Overall initiative goals and user value
+   - User personas and their needs
+   - Business constraints and requirements
+   - Success metrics and measurement criteria
 
-   - Story statement and user value proposition
-   - Initial scope definition and open questions
-   - Epic context and business objectives
-   - Current sizing estimate and confidence level
+3. **Analyze Technical Context**:
+   - Architecture patterns and constraints
+   - Technology stack implications
+   - UX/UI guidelines and patterns
+   - Domain and bounded context boundaries
 
-3. **Validate Story Foundation**: Confirm story readiness for refinement:
+**Context Analysis Presentation:**
+_"I've completed the analysis of selected Epic '[EPIC_NAME]' and its context. The epic aims to [epic objective] and will deliver [user value]. Based on the epic's user story preview and scope, I can see opportunities for [X] user stories that will incrementally deliver the epic value. Are you ready to proceed with user story identification and breakdown?"_
 
-   - Story follows INVEST principles from breakdown
-   - Clear user persona and value identification
-   - Epic alignment and contribution understanding
-   - No blocking dependencies preventing refinement
+### Step 2: User Story Identification and Mapping
 
-4. **Establish Refinement Scope**: Define what needs to be refined:
-   - Specific areas of uncertainty to resolve
-   - Detailed requirements to be specified
-   - Technical analysis required
-   - Cross-functional coordination needs
+**AI Assistant Instructions:** Identify user story candidates:
 
-**Context Review Presentation:**
-_"I'm beginning refinement for User Story [STORY_CODE]: [TITLE]. The story status has been updated to 'In Refinement'. The story aims to deliver [user value] for [persona]. From the breakdown, I can see the main uncertainty areas are [list uncertainties]. The story currently has [open questions] that need resolution. The epic context shows [epic alignment]. Are you ready to proceed with detailed refinement of this story?"_
+1. **Start with Epic's User Story Preview**: Use the epic's existing user story preview as foundation
 
-### Step 2: Detailed Requirements Analysis
+2. **Apply User Journey Mapping**:
 
-**AI Assistant Instructions:** Collaborate on comprehensive requirements definition:
+   - Map user interactions from start to finish
+   - Identify decision points and alternative paths
+   - Consider key user scenarios and workflows
 
-1. **Expand Acceptance Criteria**: Transform rough scope into detailed requirements:
+3. **Apply Vertical Slicing**: Ensure each story represents complete user value:
 
-   - Convert scope boundaries into specific acceptance criteria
-   - Define functional requirements using Given-When-Then format
-   - Specify business rules and validation requirements
-   - Address edge cases and error handling scenarios
+   - End-to-end user interaction
+   - Meaningful user outcome
+   - Self-contained value delivery
 
-2. **Business Rules Definition**: Clarify business logic and constraints:
+4. **Consider CRUD Operations**: For data-heavy features, identify:
 
-   - Data validation and processing rules
-   - User permission and access control requirements
-   - Integration requirements with existing systems
-   - Compliance and regulatory considerations
+   - Create operations (user input and setup)
+   - Read operations (display and access)
+   - Update operations (editing and changes)
+   - Delete operations (removal and cleanup)
 
-3. **User Experience Specification**: Define user interaction details:
+5. **Identify Key Variations**: Consider different:
+   - User roles and permissions
+   - Business scenarios and rules
+   - Data types and formats
+   - Platform requirements
 
-   - User interface behavior and feedback
-   - User workflow and navigation requirements
-   - Error messaging and user guidance
-   - Accessibility and usability standards
+### Step 3: Story Scope Definition and INVEST Validation
 
-4. **Data and Integration Requirements**: Specify technical data needs:
-   - Data input, validation, and storage requirements
-   - API integration specifications
-   - External system communication protocols
-   - Data transformation and processing logic
+**AI Assistant Instructions:** Define story boundaries and validate against INVEST criteria:
 
-### Step 3: Technical Analysis and Risk Assessment
+1. **Define Story Scope**: For each identified story:
 
-**AI Assistant Instructions:** Conduct comprehensive technical analysis:
+   - Clear in-scope functionality
+   - Explicit out-of-scope exclusions
+   - Story boundaries that enable independent planning
 
-1. **Implementation Approach Analysis**: Define technical strategy:
+2. **Apply INVEST Framework**: Validate each story:
 
-   - High-level technical architecture and approach
-   - Key components and system integration points
-   - Data flow and processing requirements
-   - Performance and scalability considerations
+   - **Independent**: Can be planned separately
+   - **Negotiable**: Focuses on user value
+   - **Valuable**: Provides clear user benefit
+   - **Estimable**: Scope is clear for sizing
+   - **Small**: Fits within single sprint
+   - **Testable**: Outcome can be verified
 
-2. **Technical Risk Identification**: Assess development risks:
+3. **Apply UI-First Story Cutting**: Ensure each story produces demonstrable UI value:
 
-   - Technical complexity and unknowns
-   - Integration challenges and dependencies
-   - Performance and scalability risks
-   - Security and compliance technical requirements
+   - **Visible User Value**: Every story must produce something visible and demonstrable in the UI during sprint review
+   - **End-to-End Slicing**: Stories include both backend functionality AND UI manifestation of that functionality
+   - **Demo-Ready Increments**: Each story completion enables a concrete demonstration to stakeholders
+   - **Technical Work Integration**: Technical components (APIs, data processing, etc.) are "carried" into UI through visible effects like feedback messages, data displays, status indicators, or user interactions
 
-3. **Spike Requirements Assessment**: Identify research needs:
+4. **Size Stories**: Provide initial sizing with expected uncertainty:
+   - XS (1 point): Simple, well-understood work
+   - S (2 points): Straightforward with minor complexity
+   - M (3 points): Moderate complexity, standard effort
+   - L (5 points): Complex work, significant effort
+   - XL (8 points): Very complex, likely needs splitting during refinement
 
-   - Technical investigations required before development
-   - Proof-of-concept work needed for risk mitigation
-   - Third-party integration research requirements
-   - Performance testing and validation needs
+**Note: Sizing at breakdown stage is intentionally rough - detailed estimation occurs during story refinement.**
 
-4. **Technical Dependency Analysis**: Map technical coordination:
-   - Shared technical components with other stories
-   - Infrastructure and environment requirements
-   - Third-party service dependencies
-   - Technical team coordination needs
+### Step 4: User Story Breakdown Presentation
 
-### Step 4: Definition of Done Alignment
+**AI Assistant Instructions:** Present comprehensive user story breakdown:
 
-**AI Assistant Instructions:** Establish comprehensive completion criteria:
+1. **Create Story Overview Table**: Present all identified stories:
 
-1. **Development Standards Alignment**: Apply project DoD standards:
+| Story     | Title              | User Value               | Dependencies | Size | Confidence |
+| --------- | ------------------ | ------------------------ | ------------ | ---- | ---------- |
+| 01-01-001 | User Registration  | Enable account creation  | None         | M(3) | Medium     |
+| 01-01-002 | Email Verification | Verify account security  | Story 001    | S(2) | High       |
+| 01-01-003 | Profile Setup      | Complete user onboarding | Story 002    | M(3) | Low        |
 
-   - Code quality and review requirements
-   - Testing coverage and validation standards
-   - Documentation and knowledge sharing requirements
-   - Security and compliance validation needs
+2. **Justify Story Boundaries**: Explain story scope decisions:
 
-2. **Quality Assurance Requirements**: Define testing and validation:
+   - **Value Focus**: Each story targets identifiable user value
+   - **Initial Boundaries**: Rough scope boundaries for backlog organization
+   - **Planning Utility**: Stories provide sufficient information for epic-level planning
+   - **Refinement Readiness**: Stories prepared for future detailed elaboration
 
-   - Functional testing and acceptance validation
-   - Performance and usability testing requirements
-   - Cross-platform and browser testing needs
-   - User acceptance and feedback collection
+3. **Validate Epic Coverage**: Confirm stories address epic scope:
+   - All epic in-scope items covered by stories
+   - Epic objectives achievable through story completion
+   - No gaps in epic value delivery
 
-3. **Deployment and Release Readiness**: Specify deployment requirements:
-   - Environment and infrastructure requirements
-   - Feature flag and rollout strategy
-   - Monitoring and alerting configuration
-   - User communication and documentation needs
+**Breakdown Presentation:**
+_"I've identified [X] user stories for Epic '[EPIC_NAME]'. Each story targets specific user value with initial scope boundaries and ensures visible, demonstrable UI value for sprint reviews. The breakdown covers all epic scope areas and provides rough planning units for backlog management. Every story produces something concrete that can be shown to stakeholders - whether it's a new screen, user interaction, data display, or feedback mechanism. Uncertainty and open questions are expected at this stage - these will be resolved during story refinement. Here's the initial story breakdown - does this capture the right level of granularity for epic planning and demonstrate clear user value through the UI?"_
 
-### Step 5: Story Sizing Validation and Splitting Analysis
+**Example Story Breakdown Table with UI Value:**
 
-**AI Assistant Instructions:** Validate story size and identify splitting needs:
+| Story     | Title                      | Visible UI Value                                    | Dependencies | Size | Confidence |
+| --------- | -------------------------- | --------------------------------------------------- | ------------ | ---- | ---------- |
+| 01-01-001 | Broker Management Screen   | User sees list of adapters with status indicators   | None         | M(3) | Medium     |
+| 01-01-002 | Add/Remove Adapters via UI | User can click buttons to add/remove with feedback  | Story 001    | S(2) | High       |
+| 01-01-003 | Integration Logs Display   | User views operation logs in dedicated UI section   | Story 001    | S(2) | Medium     |
+| 01-01-004 | Manual Data Import Trigger | User clicks import button and sees progress status  | 001,002      | M(3) | Medium     |
+| 01-01-005 | Real-time Data Display     | User sees imported data updated in UI with feedback | Story 004    | M(3) | Medium     |
 
-1. **Detailed Sizing Analysis**: Re-evaluate story complexity:
+### Step 5: Story Review and Refinement
 
-   - Development effort estimation based on technical analysis
-   - Testing and validation effort requirements
-   - Integration and coordination overhead
-   - Risk mitigation and spike work inclusion
+**AI Assistant Instructions:** Collaborate on story structure refinement:
 
-2. **Sprint Capacity Assessment**: Validate sprint fit:
+1. **Gather Feedback** on:
 
-   - Compare refined scope against sprint capacity
-   - Consider team availability and other sprint commitments
-   - Account for technical risk and uncertainty buffers
-   - Assess story completion confidence within sprint
+   - Story scope and boundaries
+   - User value propositions
+   - Story sizing and complexity
+   - Epic coverage completeness
 
-3. **Story Splitting Identification**: Propose splitting if needed:
-   - Identify logical value-preserving split points
-   - Maintain user value in each split story
-   - Ensure proper dependency ordering between splits
-   - Validate split stories still follow INVEST principles
+2. **Refine Based on Input**:
 
-**Splitting Proposal Format:**
-_"Based on detailed refinement analysis, Story [CODE] with [refined scope] would require approximately [X days] of development effort, which exceeds single sprint capacity. I recommend splitting this into two stories that maintain user value:_
+   - Adjust story boundaries and scope
+   - Split or merge stories as needed
+   - Update sizing estimates
+   - Add missing stories for epic coverage
 
-**Story [CODE]-A: [Core Functionality]**
+3. **Validate Refined Structure**:
+   - Each story follows INVEST principles
+   - Stories provide clear planning units
+   - Epic objectives fully covered
+   - Story boundaries enable independent planning
 
-- _Delivers: [Essential user value]_
-- _Effort: [Y days - fits in sprint]_
-- _Acceptance Criteria: [Core criteria subset]_
+**Refinement Questions:**
+_"Does the user story breakdown provide clear planning units for the epic? Should any stories be scoped differently or sized differently? Are there any missing user scenarios we should include to achieve complete epic coverage?"_
 
-**Story [CODE]-B: [Extended Functionality]**
+### Step 6: User Story Documentation
 
-- _Delivers: [Additional user value]_
-- _Depends on: Story A completion_
-- _Effort: [Z days - fits in future sprint]_
-- _Acceptance Criteria: [Extended criteria]_
+**AI Assistant Instructions:** Document each user story using the breakdown template:
 
-_This split enables incremental value delivery while maintaining manageable sprint scope. Does this splitting approach preserve the user value appropriately?"_
+1. **Present Stories Systematically**: Document stories in logical sequence
 
-### Step 6: Cross-Functional Team Validation
+2. **Use Breakdown Template**: Fill essential sections:
 
-**AI Assistant Instructions:** Facilitate team alignment and validation:
+   - Clear story statement with persona, functionality, and benefit
+   - User value and business impact
+   - Scope definition (in-scope and out-of-scope)
+   - Initial sizing with reasoning
+   - Dependencies and epic context
 
-1. **Cross-Functional Review**: Validate story with all relevant team roles:
+3. **Focus on Planning Elements**:
 
-   - **Product**: Confirm acceptance criteria meet user value objectives
-   - **Development**: Validate technical approach and effort estimates
-   - **QA**: Confirm testing strategy and acceptance criteria testability
-   - **UX/UI**: Validate user experience requirements and design alignment
+   - **Story Statement**: Clear user-focused description
+   - **User Value**: High-level benefit articulation
+   - **Initial Scope**: Rough boundaries with identified uncertainties
+   - **Rough Sizing**: Estimation for capacity planning with confidence level
 
-2. **Dependency Coordination**: Confirm team coordination requirements:
+4. **Request Planning Feedback**:
+   - Story statement clarity and user value identification
+   - Initial scope boundaries and uncertainty areas
+   - Sizing reasonableness for planning purposes
+   - Epic coverage and missing areas
 
-   - Development role coordination and handoff points
-   - Testing and validation coordination needs
-   - External team dependencies and communication requirements
-   - Timeline and milestone alignment with other work
+**Story Documentation Format:**
+_"Here's the breakdown documentation for User Story [EPIC-STORY]: [NAME]. As a [persona], the user wants [general functionality] to achieve [benefit]. The initial scope likely includes [rough in-scope items] and excludes [rough out-of-scope items], with open questions about [uncertainty areas]. I've sized this as [size] with [confidence level] because [reasoning]. Does this provide sufficient information for backlog planning while acknowledging the expected uncertainties?"_
 
-3. **Risk Mitigation Validation**: Confirm risk management approach:
-   - Technical risk mitigation strategies
-   - Contingency plans for identified risks
-   - Spike work scheduling and resource allocation
-   - Escalation paths for blocked or complex issues
+### Step 7: User Story Documentation in Tool
 
-### Step 7: Story Documentation and Status Completion
+**AI Assistant Instructions:** Create user story records in project management tool:
 
-**AI Assistant Instructions:** Complete comprehensive story documentation and finalize refinement:
+1. **Follow Tool-Specific Format**: Adapt breakdown template to tool requirements
 
-1. **Comprehensive Story Documentation**: Update story with all refinement details:
+2. **Establish Hierarchy Linking**: Create proper linkage:
 
-   - Complete refined template with all analysis and requirements
-   - Detailed acceptance criteria and technical specifications
-   - Risk assessment and mitigation strategies
-   - DoD checklist and validation requirements
+   - **Parent Link**: Connect user story to its parent epic
+   - **Dependency Links**: Connect to prerequisite stories if any
+   - **Tool-Specific Fields**: Follow methodology defined in way-of-working
 
-2. **Tool Integration Updates**: Update project management tool:
+3. **Configure Basic Tracking**: Set up essential tracking:
 
-   - **Change Status to "To Do"**: Move story from "In Refinement" to "To Do" status
-   - Update story points with refined estimates
-   - Add technical notes and implementation details
-   - Configure dependencies and team coordination metadata
+   - **Status**: Set to "Backlog"
+   - **Story Points**: Add sizing estimation
+   - **Labels/Tags**: Apply relevant categorization
+   - **Basic Metadata**: Epic context and priority
 
-3. **Sprint Planning Preparation**: Prepare story for manual sprint assignment:
-   - Validate story meets sprint planning requirements
-   - Confirm story priority and scheduling alignment
-   - Prepare story presentation for sprint planning session
-   - Ensure all questions and uncertainties resolved
-   - **Story Ready for Manual Sprint Assignment**: Story is now ready to be manually moved into a sprint when selected
+4. **Validate Tool Integration**: Confirm:
+   - Story properly linked to parent epic
+   - Hierarchy relationships established
+   - Story visible in epic scope
+   - Basic tracking fields populated
 
-**Story Refinement Completion:**
-_"User Story [STORY_CODE] refinement is complete. The story status has been updated to 'To Do' and is now ready for sprint assignment. The story includes comprehensive acceptance criteria, detailed technical analysis, and validated sprint-readiness. Story effort is estimated at [X points] and fits within single sprint capacity [or has been split appropriately]. All refinement artifacts are documented and the story is ready for manual selection and assignment to an upcoming sprint."_
+**Tool Documentation Checklist:**
 
-### Step 8: Refinement Quality Validation
+- [ ] User story created with breakdown template information
+- [ ] Properly linked to parent epic using tool-specific methodology
+- [ ] Story dependencies configured if any exist
+- [ ] Hierarchy relationships properly established in tool
+- [ ] Status set to "Backlog"
+- [ ] Story points and sizing added
+- [ ] Basic metadata and categorization configured
+- [ ] Epic coverage visible and trackable
 
-**AI Assistant Instructions:** Validate refinement completeness and quality:
+### Step 8: Epic Coverage Validation
 
-1. **Completeness Validation**: Ensure all refinement areas addressed:
+**AI Assistant Instructions:** Validate complete epic coverage:
 
-   - All acceptance criteria specific and testable
-   - Technical approach clearly defined
-   - Risks identified and mitigation planned
-   - Dependencies mapped and coordination planned
+1. **Verify Epic Coverage**: Confirm breakdown completeness:
 
-2. **Development Readiness Validation**: Confirm story ready for implementation:
+   - All epic in-scope items addressed by user stories
+   - Epic success criteria achievable through story completion
+   - Epic objectives fully covered by story value
+   - No gaps in user value delivery
 
-   - No remaining ambiguity about expected outcomes
-   - Technical approach understood and feasible
-   - All external dependencies resolved or managed
-   - Team alignment confirmed on scope and approach
+2. **Validate Planning Readiness**: Ensure stories are ready for backlog management:
 
-3. **Quality Standards Validation**: Ensure refinement meets quality standards:
-   - Story follows refined template completely
-   - Acceptance criteria follow Given-When-Then format
-   - Technical analysis addresses implementation concerns
-   - DoD alignment ensures proper completion validation
+   - All stories properly documented
+   - Story sizing completed for capacity planning
+   - Story dependencies identified and documented
+   - Story backlog ready for prioritization
 
-## Refinement Quality Assurance Framework
+3. **Prepare for Future Refinement**: Set up stories for detailed refinement:
+   - Stories in backlog status ready for selection and detailed elaboration
+   - Story context preserved for comprehensive refinement process
+   - Epic relationship maintained for value alignment
+   - Open questions and uncertainties documented for refinement resolution
 
-### Story Refinement Quality Standards (Enhanced)
+**Epic Coverage Validation:**
+_"All [X] user stories for Epic '[EPIC_NAME]' are documented and provide initial epic coverage. The breakdown addresses major epic scope areas with intentional uncertainty that will be resolved during story refinement. Each story is roughly sized and ready for backlog prioritization. The epic is now ready for ongoing backlog management, and individual stories are prepared for detailed refinement when selected for development."_
 
-**Requirements Completeness:**
+## Quality Assurance Framework
 
-- [ ] All acceptance criteria specific, testable, and measurable with concrete examples
-- [ ] Business rules clearly defined with validation criteria and edge case handling
-- [ ] Edge cases and error handling scenarios comprehensively specified
-- [ ] User experience and interaction requirements detailed with specific behaviors
-- [ ] Data and integration requirements comprehensive with validation rules
+### User Story Breakdown Quality Standards
 
-**Technical Readiness:**
+**Content Quality:**
 
-- [ ] Implementation approach clearly defined and technically feasible
-- [ ] Technical risks identified with specific mitigation strategies
-- [ ] Required spikes identified, scoped, and time-estimated
-- [ ] Technical dependencies mapped with coordination requirements planned
-- [ ] Performance and scalability requirements specified with measurable criteria
-- [ ] Security requirements detailed with validation approaches
+- [ ] Story statement identifies user persona, general functionality, and business benefit
+- [ ] User value connects to user needs and epic objectives at high level
+- [ ] Initial scope provides rough boundaries with identified uncertainties
+- [ ] Story sizing is reasonable for planning purposes with confidence level indicated
+- [ ] Dependencies are identified at high level
+- [ ] Epic context is preserved and linked
+- [ ] Open questions and uncertainties are documented for future refinement
 
-**Development Readiness:**
+**INVEST Compliance:**
 
-- [ ] Story sized appropriately for single sprint (or split with value preservation)
-- [ ] DoD checklist complete and aligned with project standards
-- [ ] Cross-functional team validation completed with sign-off
-- [ ] All uncertainties and open questions resolved with documented decisions
-- [ ] Story ready for immediate development start without additional clarification
+- [ ] **Independent**: Story can be planned without waiting for other incomplete stories
+- [ ] **Negotiable**: Story focuses on user value, not implementation details
+- [ ] **Valuable**: Story provides demonstrable benefit to identified user persona
+- [ ] **Estimable**: Story scope is clear enough for rough planning-level estimation
+- [ ] **Small**: Story represents manageable planning unit (detailed sizing during refinement)
+- [ ] **Testable**: Story outcome can be generally verified (detailed criteria during refinement)
 
-**Sprint Execution Integration:**
+**Template Completeness:**
 
-- [ ] **Workflow Readiness**: Stories prepared for Story Kickoff → Task Breakdown → Task Iteration workflow
-- [ ] **Autonomous Development**: Stories contain sufficient detail for autonomous task execution
-- [ ] **Quality Gates**: All quality checkpoints clearly defined and measurable
-- [ ] **Value Validation**: Story outcomes can be demonstrated and validated objectively
+- [ ] All required breakdown template sections completed
+- [ ] Story follows naming conventions and tool integration requirements
+- [ ] Hierarchy linking properly configured (Epic → User Story)
+- [ ] Tool-specific relationship fields populated correctly
+- [ ] Story backlog status properly configured
 
-**Vertical Slicing Validation:**
+### Epic Coverage Validation
 
-- [ ] **Full-Stack Implementation**: Each refined story includes UI, business logic, and data persistence details
-- [ ] **End-to-End Value**: Each story provides complete user functionality specification
-- [ ] **Deployment Independence**: Each story can be deployed and tested independently
-- [ ] **Layer Integration**: Stories properly specify integration across application layers
+**Coverage Completeness:**
 
-**Quality Validation:**
+- [ ] **Initial Scope Coverage**: Major epic scope areas addressed by user stories
+- [ ] **Value Alignment**: Epic objectives achievable through story completion
+- [ ] **Value Continuity**: Stories collectively target epic user value
+- [ ] **Acceptable Gaps**: Minor uncertainties and open questions documented for refinement
 
-- [ ] Acceptance criteria follow Given-When-Then format
-- [ ] Technical analysis addresses implementation approach
-- [ ] Risk assessment comprehensive with mitigation plans
-- [ ] Team coordination requirements clearly specified
-- [ ] Documentation complete and tool integration updated
+**Planning Readiness:**
 
-### Story Splitting Quality Standards
-
-**Value Preservation:**
-
-- [ ] Each split story delivers identifiable user value
-- [ ] Split maintains logical user workflow progression
-- [ ] Dependencies between split stories clearly defined
-- [ ] Combined splits deliver original story value completely
-
-**Sprint Readiness:**
-
-- [ ] Each split story fits within single sprint capacity
-- [ ] Split stories can be developed in logical sequence
-- [ ] Technical dependencies properly managed across splits
-- [ ] Each split story follows INVEST principles independently
+- [ ] **Initial Boundaries**: Rough scope boundaries for backlog organization
+- [ ] **Dependency Awareness**: High-level story dependencies identified
+- [ ] **Rough Sizing**: Story sizing appropriate for epic-level capacity planning
+- [ ] **Backlog Integration**: Stories ready for prioritization with expected uncertainty
 
 ## Best Practices for AI Assistants
 
 ### Do's:
 
-- **Always analyze story context thoroughly** before beginning detailed refinement
-- **Propose specific story candidates** with clear priority reasoning
-- **Facilitate comprehensive requirements gathering** through structured questioning
-- **Apply Given-When-Then format consistently** for all acceptance criteria
-- **Conduct thorough technical analysis** to identify risks and approaches
-- **Validate story size against sprint capacity** and propose splitting when needed
-- **Ensure cross-functional team alignment** throughout refinement process
-- **Document all refinement decisions** and reasoning comprehensively
-- **Validate story development readiness** before marking refinement complete
-- **Support developer-driven story selection** even if not highest priority
+- **Always analyze complete documentation first** before proposing epic selection
+- **Propose priority epics with clear reasoning** based on business value and readiness
+- **Apply INVEST principles consistently** to every user story
+- **Focus on user personas and specific value** in every story statement
+- **Use vertical slicing** to ensure stories represent identifiable user value
+- **Apply UI-First story cutting** - every story must produce visible, demonstrable UI value
+- **Ensure stories are demo-ready** - each increment should be showable in sprint review
+- **Integrate technical work into UI manifestations** - carry backend functionality through visible UI elements
+- **Define initial scope boundaries** with acknowledged uncertainty
+- **Size stories roughly** with confidence levels for capacity planning
+- **Document open questions** and areas needing refinement
+- **Maintain epic context and linkage** throughout breakdown process
+- **Prepare stories for backlog management** with planning-level information
+- **Acknowledge uncertainty as normal** - detailed requirements come during refinement
+- **Include "Visible UI Value" in every story** to ensure demonstrability
 
 ### Don'ts:
 
-- **Never skip story context analysis** - understand current state and epic alignment first
-- **Don't assume requirements without validation** - collaborate on all acceptance criteria
-- **Don't ignore technical risks** - identify and plan mitigation for technical challenges
-- **Don't allow oversized stories** - always validate sprint fit and split when necessary
-- **Don't skip cross-functional validation** - ensure all team roles align on requirements
-- **Don't leave ambiguity in acceptance criteria** - every criterion must be testable
-- **Don't forget tool updates** - maintain project management tool with refined information
-- **Don't rush refinement quality** - ensure comprehensive coverage of all refinement areas
-- **Don't ignore dependencies** - map and coordinate all story dependencies
-- **Don't finalize without DoD alignment** - ensure story completion criteria are clear
+- **Never analyze complete documentation first** before proposing epic selection
+- **Don't start without epic selection** - always propose priority options
+- **Don't create horizontal slice stories** - avoid technical-only or UI-only stories
+- **Don't create stories without visible UI value** - every story must be demonstrable
+- **Don't separate technical work from UI manifestation** - integrate backend functionality with UI display
+- **Don't over-specify scope boundaries** - maintain appropriate uncertainty for breakdown stage
+- **Don't assume detailed requirements** - focus on high-level user value and rough scope
+- **Don't create oversized stories** - keep within rough single sprint boundaries
+- **Don't ignore epic coverage** - ensure major epic scope areas are addressed
+- **Don't skip tool documentation** - ensure proper project management tool integration
+- **Don't forget user personas** - every story should benefit specific users from PRD
+- **Don't treat uncertainty as failure** - ambiguity is expected and will be resolved during refinement
+- **Don't create "technical debt" or "infrastructure" stories** without clear UI value demonstration
 
 ## Common Pitfalls and Solutions
 
-| Pitfall                                   | Impact                                       | Solution                                                        |
-| ----------------------------------------- | -------------------------------------------- | --------------------------------------------------------------- |
-| **Insufficient requirements detail**      | Development ambiguity and rework             | Use structured questioning to gather comprehensive criteria     |
-| **Vague acceptance criteria**             | Testing difficulties and scope creep         | Apply Given-When-Then format with specific, measurable outcomes |
-| **Missing technical analysis**            | Development risks and implementation blocks  | Conduct thorough technical review with risk identification      |
-| **Oversized story scope**                 | Sprint capacity exceeded, delivery risk      | Validate size and split stories maintaining user value          |
-| **Incomplete cross-functional alignment** | Team coordination issues and rework          | Facilitate validation with all relevant team roles              |
-| **Overlooked edge cases**                 | Production issues and user frustration       | Systematically analyze edge cases and error scenarios           |
-| **Missing dependency identification**     | Development blocks and coordination issues   | Map all story dependencies and coordination requirements        |
-| **Inadequate DoD alignment**              | Inconsistent completion standards            | Align story DoD with project standards and quality requirements |
-| **Poor story splitting decisions**        | Loss of user value or development complexity | Split on value boundaries maintaining logical user workflows    |
-| **Rushed refinement process**             | Incomplete analysis and development risks    | Follow structured process ensuring comprehensive coverage       |
+| Pitfall                               | Impact                                  | Solution                                                           |
+| ------------------------------------- | --------------------------------------- | ------------------------------------------------------------------ |
+| **Skipping documentation analysis**   | Missing context and poor prioritization | Thoroughly analyze all foundation docs before epic selection       |
+| **Horizontal slice stories**          | No identifiable user value              | Apply vertical slicing to represent end-to-end user value          |
+| **Stories without visible UI value**  | Non-demonstrable increments             | Apply UI-First cutting - every story must show visible value in UI |
+| **Separating technical work from UI** | Backend stories with no demo value      | Integrate technical functionality with UI manifestations           |
+| **Over-detailed breakdown**           | Premature requirement specification     | Focus on high-level user value, leave details for refinement       |
+| **Unclear initial boundaries**        | Planning difficulty                     | Provide rough scope boundaries with documented uncertainties       |
+| **Inconsistent rough sizing**         | Capacity planning issues                | Apply consistent sizing criteria with confidence levels            |
+| **Missing epic coverage**             | Incomplete value targeting              | Validate major epic scope areas are addressed by stories           |
+| **Weak story statements**             | Unclear user value identification       | Use clear persona, general functionality, and benefit structure    |
+| **Tool integration gaps**             | Lost tracking and coordination          | Maintain complete documentation with proper hierarchy linking      |
+| **Treating uncertainty as failure**   | Over-specification at wrong stage       | Acknowledge and document uncertainties for refinement resolution   |
+| **Starting without epic selection**   | Working on wrong priorities             | Always propose and confirm epic selection based on analysis        |
+| **Creating non-demonstrable stories** | Unusable sprint review increments       | Ensure every story produces something showable to stakeholders     |
 
-## Sprint Execution Integration
-
-### Story Refinement to Sprint Execution Bridge
-
-**Preparation for Sprint Execution Workflow:**
-
-User story refinement must prepare stories for seamless integration with the **🛠️ Sprint Execution** workflow:
-
-- **👨‍💻💡🤖 Story Kickoff Readiness**: Stories contain sufficient detail for immediate branch creation and development start
-- **🤖🤝👨‍💻 Task Breakdown Preparation**: Clear scope boundaries enable effective task decomposition
-- **🤖⚡ Task Iteration Readiness**: Comprehensive acceptance criteria support autonomous development capability
-- **Quality Gate Integration**: Refined Definition of Done aligns with sprint execution quality checkpoints
-
-### Workspace Setup Stories Integration
-
-For initiatives requiring technical foundation setup, refined stories should integrate workspace configuration tracking through the complete execution workflow:
-
-**Workspace Setup Story Characteristics:**
-
-- Include technical environment configuration as measurable user-facing value
-- Estimate setup time as part of project planning and capacity allocation
-- Link workspace stories to feature stories that depend on them
-- Track workspace completion through standard refinement-to-execution flow
-- Integrate with **🛠️ Sprint Execution** quality gates and validation checkpoints
-
-## Special Story Types in Refinement
-
-### Bootstrap and Setup Stories (Epic 0)
-
-When refining workspace setup and technical foundation stories:
-
-**Value Definition**: Frame technical setup as user-facing value:
-
-- "As a developer, I want a configured local development environment so that I can begin feature development efficiently"
-- "As a team, we want automated CI/CD pipeline so that we can deploy changes reliably and quickly"
-
-**Refinement Considerations**:
-
-- Include specific environment configuration requirements
-- Define measurable completion criteria for technical setup
-- Link setup stories to dependent feature stories
-- Estimate setup effort as part of sprint capacity planning
-- Integrate setup validation with standard Definition of Done criteria
+---
 
 ## References
 
@@ -809,37 +732,35 @@ When refining workspace setup and technical foundation stories:
 
 **Foundation Documents:**
 
-- `.pair/product/adopted/PRD.md` - User personas and detailed requirements context
-- `.pair/way-of-working.md` - Development methodology and refinement ceremony definitions
-- `.pair/product/backlog/02-epics/` - Parent epic context for story alignment
-- `.pair/product/backlog/03-user-stories/` - Current story breakdown information
+- `.pair/product/adopted/PRD.md` - Product vision, user personas, and requirements
+- `.pair/way-of-working.md` - Development methodology and process definitions
+- `.pair/product/backlog/01-initiatives/` - All initiative documentation for context and priority analysis
+- `.pair/product/backlog/02-epics/` - All epic documentation requiring story breakdown
 
 **Technical Context:**
 
-- `.pair/tech/adopted/architecture.md` - Technical implementation guidance and constraints
-- `.pair/tech/adopted/tech-stack.md` - Technology choices affecting implementation approach
-- `.pair/tech/adopted/ux-ui.md` - User experience standards for acceptance criteria
-- `.pair/tech/adopted/way-of-working.md` - Development standards and DoD requirements
+- `.pair/tech/adopted/architecture.md` - System architecture patterns affecting story scope
+- `.pair/tech/adopted/tech-stack.md` - Technology constraints and implementation considerations
+- `.pair/tech/adopted/ux-ui.md` - User interface patterns and interaction guidelines
+- `.pair/tech/adopted/way-of-working.md` - Technical workflow, tool configuration, and linking methodology
 
-**Quality Standards:**
+**Domain Context:**
 
-- Project Definition of Done standards
-- Testing and validation requirements
-- Code quality and review standards
-- Documentation and compliance requirements
+- `.pair/product/adopted/subdomain/` - Functional boundaries affecting story scope
+- `.pair/tech/adopted/boundedcontext/` - Technical boundaries affecting story integration
 
 **Process Dependencies:**
 
-- **Prerequisites**: Stories must be in backlog status from breakdown process
-- **Input**: User stories with initial scope and rough sizing from breakdown
-- **Output**: Development-ready stories with comprehensive acceptance criteria and technical analysis
-- **Tool Integration**: Update project management tool with refined story information and ready status
-- **Next Phase**: Stories ready for sprint planning and development execution
+- **Prerequisites**: Complete documentation analysis and epic selection before user story breakdown
+- **Input**: Selected epic serves as foundation for user story identification and scope definition
+- **Output**: User stories in backlog status ready for prioritization and future refinement
+- **Tool Integration**: All user stories must be properly documented in configured project management tool with correct hierarchy linking (Epic → User Story)
+- **Linking Methodology**: Follow the specific linking approach defined in `.pair/tech/adopted/way-of-working.md` for tool-specific relationship management
+- **Next Phase**: Stories ready for **How to Refine User Stories** process when selected for development
 
 **Related Documents:**
 
-- Previous: [07-how-to-breakdown-user-stories.md](./07-how-to-breakdown-user-stories.md)
-- Bootstrap Checklist: [ 03-how-to-complete-bootstrap-checklist.md](./ 03-how-to-complete-bootstrap-checklist.md)
-- Next: [09-how-to-create-tasks_TBD.md](./09-how-to-create-tasks_TBD.md)
+- Previous: [06-how-to-breakdown-epics.md](./06-how-to-breakdown-epics.md)
+- Next: [08-how-to-refine-a-user-story.md](./08-how-to-refine-a-user-story.md)
 
-This guide ensures a thorough, collaborative refinement process that transforms rough story concepts into comprehensive, development-ready specifications with detailed acceptance criteria, technical clarity, and validated sprint readiness.
+This guide ensures a focused, efficient process that produces high-quality User Story breakdowns ready for backlog management and future detailed refinement.

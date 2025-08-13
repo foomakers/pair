@@ -1,6 +1,6 @@
 ## Related Documents
 
-- Previous: [09-how-to-create-tasks_TBD.md](./09-how-to-create-tasks_TBD.md)
+- Previous: [09-how-to-create-tasks.md](./09-how-to-create-tasks.md)
 - Bootstrap Checklist: [ 03-how-to-complete-bootstrap-checklist.md](./ 03-how-to-complete-bootstrap-checklist.md)
 - Next: [11-how-to-code-review_TBD.md](./11-how-to-code-review_TBD.md)
 

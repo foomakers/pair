@@ -791,6 +791,6 @@ When refining workspace setup and technical foundation stories:
 
 - Previous: [07-how-to-breakdown-user-stories.md](./07-how-to-breakdown-user-stories.md)
 - Bootstrap Checklist: [ 03-how-to-complete-bootstrap-checklist.md](./ 03-how-to-complete-bootstrap-checklist.md)
-- Next: [09-how-to-create-tasks_TBD.md](./09-how-to-create-tasks_TBD.md)
+- Next: [09-how-to-create-tasks.md](./09-how-to-create-tasks.md)
 
 This guide ensures a thorough, collaborative refinement process that transforms rough story concepts into comprehensive, development-ready specifications with detailed acceptance criteria, technical clarity, and validated sprint readiness.
