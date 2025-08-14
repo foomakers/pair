@@ -17,7 +17,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 │   ├── 06-how-to-breakdown-epics.md
 │   ├── 07-how-to-breakdown-user-stories.md
 │   ├── 08-how-to-refine-a-user-story.md
-│   ├── 10-how-to-implement-a-task_TBD.md
+│   ├── 10-how-to-implement-a-task.md
 │   ├── 11-how-to-code-review_TBD.md
 │   ├── 12-how-to-commit-and-push_TBD.md
 │   ├── 13-how-to-create-a-pr_TBD.md

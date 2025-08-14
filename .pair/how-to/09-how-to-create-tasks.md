@@ -653,24 +653,28 @@ _"All tasks for User Story '[STORY_ID]: [STORY_NAME]' are documented and ready f
 
 **Knowledge Base (Complete Technical Guidelines):**
 
-- `.pair/tech/knowledge-base/README.md` - Knowledge base structure and overview
-- `.pair/tech/knowledge-base/development-workflow.md` - Standard development processes
-- `.pair/tech/knowledge-base/code-standards.md` - Coding conventions and quality standards
-- `.pair/tech/knowledge-base/testing-guidelines.md` - Testing strategies and patterns
-- `.pair/tech/knowledge-base/api-design.md` - REST API standards and conventions
-- `.pair/tech/knowledge-base/database-patterns.md` - Data modeling and persistence
-- `.pair/tech/knowledge-base/security-standards.md` - Security implementation requirements
-- `.pair/tech/knowledge-base/performance-guidelines.md` - Optimization and performance standards
-- `.pair/tech/knowledge-base/deployment-procedures.md` - Release and deployment processes
-- `.pair/tech/knowledge-base/ui-component-library.md` - Reusable component standards
-- `.pair/tech/knowledge-base/state-management.md` - Application state handling patterns
-- `.pair/tech/knowledge-base/frontend-architecture.md` - Client-side organization patterns
-- `.pair/tech/knowledge-base/service-architecture.md` - Backend service design patterns
-- `.pair/tech/knowledge-base/data-access-patterns.md` - Database interaction standards
-- `.pair/tech/knowledge-base/integration-patterns.md` - External system integration approaches
-- `.pair/tech/knowledge-base/cicd-pipelines.md` - Continuous integration and deployment
-- `.pair/tech/knowledge-base/monitoring-standards.md` - Application and infrastructure monitoring
-- `.pair/tech/knowledge-base/infrastructure-as-code.md` - Infrastructure automation standards
+### 🏗️ Architecture & Design
+
+- **[01-architectural-guidelines.md](01-architectural-guidelines.md)** - System architecture patterns, bounded contexts, and ADR processes
+- **[02-code-design-guidelines.md](02-code-design-guidelines.md)** - Code organization, design patterns, and implementation standards
+
+### ⚙️ Technical Implementation
+
+- **[03-technical-guidelines.md](03-technical-guidelines.md)** - Tech stack, development tools, and feature flag management
+- **[04-infrastructure-guidelines.md](04-infrastructure-guidelines.md)** - Deployment strategies, environment management, and CI/CD
+
+### 🎨 User Experience & Quality
+
+- **[05-ux-guidelines.md](05-ux-guidelines.md)** - User experience standards and design principles
+- **[06-definition-of-done.md](06-definition-of-done.md)** - Quality criteria and completion standards
+- **[07-testing-strategy.md](07-testing-strategy.md)** - Testing frameworks, strategies, and quality gates
+
+### 🔒 Security & Performance
+
+- **[08-accessibility-guidelines.md](08-accessibility-guidelines.md)** - Accessibility standards and compliance requirements
+- **[09-performance-guidelines.md](09-performance-guidelines.md)** - Performance optimization and monitoring strategies
+- **[10-security-guidelines.md](10-security-guidelines.md)** - Security implementation and best practices
+- **[11-observability-guidelines.md](11-observability-guidelines.md)** - Monitoring, logging, and tracing strategies
 
 **Process Dependencies:**
 
@@ -685,6 +689,6 @@ _"All tasks for User Story '[STORY_ID]: [STORY_NAME]' are documented and ready f
 
 - Previous: [08-how-to-refine-a-user-story.md](./08-how-to-refine-a-user-story.md)
 - Bootstrap Checklist: [03-how-to-complete-bootstrap-checklist.md](./03-how-to-complete-bootstrap-checklist.md)
-- Next: [10-how-to-implement-a-task_TBD.md](./10-how-to-implement-a-task_TBD.md)
+- Next: [10-how-to-implement-a-task.md](./10-how-to-implement-a-task.md)
 
 This guide ensures a systematic, technically consistent process that produces high-quality task breakdowns ready for efficient implementation while maintaining alignment with established technical standards and architectural decisions.
