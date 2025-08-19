@@ -1078,6 +1078,6 @@ All tests passing - task implementation complete"
 
 - Previous: [09-how-to-create-tasks.md](./09-how-to-create-tasks.md)
 - Bootstrap Checklist: [03-how-to-complete-bootstrap-checklist.md](./03-how-to-complete-bootstrap-checklist.md)
-- Next: [11-how-to-code-review_TBD.md](./11-how-to-code-review_TBD.md)
+- Next: [11-how-to-code-review.md](./11-how-to-code-review.md)
 
 This guide ensures systematic, high-quality task implementation that follows established technical standards and strict Test-Driven Development methodology while maintaining development workflow consistency and preparing code for effective review processes.

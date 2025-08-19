@@ -16,5 +16,5 @@ TBD - This document will describe the process of creating meaningful commits and
 
 ## Related Documents
 
-- Previous: [11-how-to-code-review_TBD.md](./11-how-to-code-review_TBD.md)
+- Previous: [11-how-to-code-review.md](./11-how-to-code-review.md)
 - Next: [13-how-to-create-a-pr_TBD.md](./13-how-to-create-a-pr_TBD.md)
