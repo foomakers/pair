@@ -19,8 +19,8 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 │   ├── 08-how-to-refine-a-user-story.md
 │   ├── 10-how-to-implement-a-task.md
 │   ├── 11-how-to-code-review.md
-│   ├── 12-how-to-commit-and-push_TBD.md
-│   ├── 13-how-to-create-a-pr_TBD.md
+│   ├── 12-how-to-commit-and-push.md
+│   ├── 13-how-to-create-a-pr.md
 │   ├── PRD_example.md
 │   ├── PRD_template.md
 │   └── _assets_structure.md
