@@ -28,7 +28,7 @@ The process is designed to:
 ### Hierarchy & Value Streams
 
 ```
-📘 STRATEGIC PREPARATION
+📘 INDUCTION
 └── Product Foundation & Architecture
     │
     ├── 🚀 STRATEGIC INITIATIVES
@@ -45,7 +45,7 @@ The process is designed to:
 
 | Level                             | Duration (Sprints) | Value Stream       | Card Type              | Focus                                              |
 | --------------------------------- | ------------------ | ------------------ | ---------------------- | -------------------------------------------------- |
-| 📘 **Strategic Preparation**      | One-time           | Product Foundation | **PRD**                | Product Vision, Market Fit, Technical Architecture |
+| 📘 **Induction**                  | One-time           | Product Foundation | **PRD**                | Product Vision, Market Fit, Technical Architecture |
 | 🚀 **Strategic Initiatives**      | 6-8 sprints        | Business Value     | **Initiative**         | Business Objectives, Value Proposition, Roadmap    |
 | 🧩 **Customer-Facing Iterations** | 2-4 sprints        | User Experience    | **Epic**               | Feature Sets, User Journeys, Integration Points    |
 | 🛠️ **Continuous Value Delivery**  | 1 sprint           | Working Software   | **User Story (&Task)** | Deliverable Features, Code Quality, User Feedback  |
@@ -54,11 +54,11 @@ The process is designed to:
 
 ## Operational Flow
 
-### 📘 Strategic Preparation
+### 📘 Induction
 
 1. **🤖🤝👨‍💻 PRD Creation** → Generate Product Requirements Document from user needs & market insights
-2. **🤖🤝👨‍💻 Initiative Prioritization** → Identify and rank initiatives by impact
-3. **🤖🤝👨‍💻 Bootstrap Checklist Completion** → Define technical context and operational framework through comprehensive project assessment
+2. **🤖🤝👨‍💻 Bootstrap Checklist Completion** → Define technical context and operational framework through comprehensive project assessment
+3. **🤖🤝👨‍💻 Initiative Prioritization** → Identify and rank initiatives by impact
 4. **🤖🤝👨‍💻 Subdomain Analysis** → Map relevant functional subdomains
 5. **🤖🤝👨‍💻 Bounded Context Definition** → Define boundaries to prevent ambiguity
 6. **🤖🤝👨‍💻 AI Context File Generation** → Connect PRD, initiatives, bootstrap decisions, and technical specifications

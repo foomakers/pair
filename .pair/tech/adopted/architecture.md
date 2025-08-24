@@ -1,9 +1,16 @@
-# 🏗️ Architecture
+# Architecture
 
-## Purpose
+- The system is designed for a small team and rapid development.
+- Architecture supports desktop usage only.
+- All components are self-hosted unless external services are required for LLM or vector database functionality.
+- Data storage and retrieval for Retrieval-Augmented Generation (RAG) is provided by Supabase.
+- Local LLM models are supported via Ollama for RAG use cases.
+- Bash scripts are used to coordinate and simplify the execution of AI assistant processes.
+- All data is handled in lightweight fashion; no large-scale processing is required.
+- No compliance or integration requirements are adopted.
+- No formal scalability or performance constraints are adopted.
+- No external integrations are required for initial release.
 
-This document contains the **validated architectural decisions** for the project. It serves as the authoritative reference for all architectural patterns, system boundaries, and design principles that have been proposed by AI and validated by the development team during the **Strategic Preparation** phase outlined in the [way-of-working.md](../../way-of-working.md).
+---
 
-**Who modifies this:** Development team with AI assistance (🤖🤝👨‍💻) during Strategic Preparation  
-**When:** During PRD creation, bounded context definition, and architectural decision processes  
-**Authority:** All architectural implementations must follow these adopted standards
+All architectural implementations must follow these adopted standards. For process and rationale, see [way-of-working.md](../../way-of-working.md).

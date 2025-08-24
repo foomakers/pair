@@ -1,9 +1,14 @@
-# 🎨 UX/UI
+# UX/UI
 
-## Purpose
+- No user interface (UI) is adopted for the initial phase; all interactions are via code and configuration.
+- A user interface for RAG management is adopted, built with Next.js and shadcn/ui.
+- The application UI follows shadcn/ui patterns for consistency, usability, and modern design.
+- User experience is optimized for desktop usage only.
+- Design is simple and functional, with no brand guidelines or visual assets required.
+- No accessibility standards are adopted for the initial phase.
+- No mobile or browser-specific support is required.
+- Content is managed by the team and changes infrequently.
 
-This document defines the **validated user experience and interface design decisions** for the project. It serves as the authoritative specification for all UX/UI patterns, design systems, and user interaction principles that have been proposed by AI and validated by the development team during the **Customer-Facing Iterations** phase outlined in the [way-of-working.md](../../way-of-working.md).
+---
 
-**Who modifies this:** Development team with AI assistance (🤖🤝👨‍💻) during Epic breakdown and User Story refinement  
-**When:** During customer-facing iterations, user story creation, and UX validation sessions  
-**Authority:** All user interface implementations must follow these adopted standards
+All user interface implementations must follow these adopted standards. For process and rationale, see [way-of-working.md](../../way-of-working.md).

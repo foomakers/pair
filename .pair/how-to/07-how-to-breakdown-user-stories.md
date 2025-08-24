@@ -53,84 +53,39 @@ A **User Story at breakdown stage** is a **rough work increment** that:
 | **Epic**       | 2-4 sprints | Feature set          | User Experience  | Incremental value delivery and user journey            |
 | **User Story** | 1 sprint    | Single functionality | Working Software | Rough, estimable feature ready for detailed refinement |
 
+---
+
+**Project Management Tool Usage**
+
+Before documenting user stories, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for interfacing, linking items, and managing story records. Please refer to this documentation any time the guide asks for project management tool actions.
+
+---
+
 ## User Story Breakdown Template
 
-Each user story breakdown must include these essential elements (detailed requirements will be added during refinement):
+Each user story breakdown must include these essential elements (detailed requirements will be added during refinement).
+User story breakdown must follow this comprehensive template you find in the [Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md).
 
-```markdown
-# User Story [Epic-Code]-[Story-Number]: [Story Title]
-
-## Story Statement
-
-**As a** [user persona]
-**I want** [general functionality or capability]
-**So that** [business value or user benefit]
-
-## Epic Context
-
-**Parent Epic**: [Epic Name and Link]
-**Status**: [Backlog]
-**Priority**: [High | Medium | Low]
-
-## User Value
-
-**User Benefit**: [High-level benefit this story delivers to users]
-**Business Impact**: [How this story contributes to epic and business objectives]
-**Visible UI Value**: [Specific UI element, screen, interaction, or feedback that will be demonstrable in sprint review]
-
-## Rough Sizing
-
-**Story Points**: [Initial size estimate: XS(1), S(2), M(3), L(5), XL(8)]
-**Confidence**: [High | Medium | Low]
-**Reasoning**: [Brief justification for sizing - uncertainty is expected]
-
-## Initial Scope
-
-### Likely In Scope
-
-- [General functionality expected to be included]
-- [High-level user interaction patterns]
-- [Core system capabilities]
-- [UI components and interactions that make value visible]
-
-### Likely Out of Scope
-
-- [Functionality probably excluded]
-- [Future story considerations]
-- [Related but separate capabilities]
-
-### Open Questions
-
-- [Uncertainties to be resolved during refinement]
-- [Implementation details to be decided]
-- [Requirements to be clarified]
-
-## Definition of Done Expectations
-
-**Standard DoD Requirements** (to be detailed during refinement):
-
-- [ ] Functionality implemented and working
-- [ ] **UI demonstrates the user value** (screen, interaction, feedback, data display)
-- [ ] Automated tests written and passing
-- [ ] Code reviewed and merged
-- [ ] Documentation updated
-- [ ] **Demo-ready for sprint review** (clear user story value visible in UI)
-
-## Dependencies
-
-**Story Dependencies**: [Other user stories this likely depends on]
-**Epic Dependencies**: [Epic-level dependencies affecting this story]
-
-## Notes
-
-[Brief additional context, assumptions, or planning considerations - uncertainty is expected and normal]
-```
-
-**Note: This template captures planning essentials while intentionally leaving detailed acceptance criteria, technical specifications, and precise requirements for later refinement when the story is selected for development.**
+**Note: The template captures planning essentials while intentionally leaving detailed acceptance criteria, technical specifications, and precise requirements for later refinement when the story is selected for development.**
 
 ## Prerequisites Verification
 
 ### Step 0: Documentation Analysis and Epic Selection
+
+**Required Documentation Check:**
+
+1. **Verify Bootstrap Completion**: Check for existence of:
+
+   - `.pair/product/adopted/PRD.md`
+   - initiatives and epics are ready and documented in the chosen project management tool
+   - `.pair/product/adopted/subdomain/`
+   - `.pair/way-of-working.md`
+   - `.pair/tech/adopted/architecture.md`
+   - `.pair/tech/adopted/tech-stack.md`
+   - `.pair/tech/adopted/infrastructure.md`
+   - `.pair/tech/adopted/ux-ui.md`
+   - `.pair/tech/adopted/way-of-working.md`
+   - `.pair/tech/adopted/boundedcontext/`
 
 **AI Assistant Instructions:** Begin with comprehensive documentation analysis and epic selection:
 
@@ -327,36 +282,9 @@ Identify different data types:
 
 - Text data → Image data → File attachments
 
-## Filesystem-Based User Story Management (If Issue Tracker = Filesystem)
+## User Story Management
 
-> **Note:** Only follow this section if your chosen issue tracker is the filesystem. If you are using a different tool (e.g., Jira, Linear, Trello), ignore this section and follow the tool-specific integration instructions.
-
-### Folder Structure and Naming Conventions
-
-User stories are managed as Markdown files in the `backlog/` subfolder under `.pair/product/backlog/03-user-stories/` during the breakdown phase.
-
-#### User Story File Naming
-
-Each user story is a Markdown file in the `backlog/` folder. The filename must include:
-
-- The initiative code (from parent epic)
-- The epic code (from parent epic)
-- The story code (progressive number for the story within the epic)
-- A short, kebab-case name for the story
-
-**Format:**
-
-```
-[initiative-code]-[epic-code]-[story-code]-[story-name].md
-```
-
-**Example:**
-
-```
-.pair/product/backlog/03-user-stories/backlog/01-01-001-user-registration.md
-.pair/product/backlog/03-user-stories/backlog/01-01-002-email-verification.md
-.pair/product/backlog/03-user-stories/backlog/01-02-001-dashboard-overview.md
-```
+Follow the proper instructions. guidelines and conventions of the chosen issue tracker tool that you find in the adoptions
 
 #### Linking and Traceability
 
@@ -734,8 +662,9 @@ _"All [X] user stories for Epic '[EPIC_NAME]' are documented and provide initial
 
 - `.pair/product/adopted/PRD.md` - Product vision, user personas, and requirements
 - `.pair/way-of-working.md` - Development methodology and process definitions
-- `.pair/product/backlog/01-initiatives/` - All initiative documentation for context and priority analysis
+- `.pair/product/backlog/01-initiatives/` - All initiative documentation for context and priority analysis (if the project management tool is filesystem)
 - `.pair/product/backlog/02-epics/` - All epic documentation requiring story breakdown
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 

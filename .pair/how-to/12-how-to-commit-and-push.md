@@ -34,6 +34,14 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 **Working Principles**: Follow the **🤖🤝👨‍💻** model (AI generates commits, Developer approves) throughout the entire commit and push process.
 
+---
+
+**Project Management Tool Usage**
+
+Before committing and pushing code, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for interfacing, linking items, and managing commit records. Please refer to this documentation any time the guide asks for project management tool actions.
+
+---
+
 ## Commit and Push Definition
 
 ### What is Commit and Push in TDD Context?
@@ -663,18 +671,10 @@ _All atomic commits executed successfully. Complete change set now committed wit
 
 1. **Update Project Management System**: Reflect commit and push completion:
 
-   **File System Project Management:**
-
    - Update task status to "Implementation Committed" with commit references
-   - Add commit hash documentation to task completion records
+   - Add or link commit hash documentation to task completion records
    - Update story progress with implementation completion indicators
    - Maintain traceability from tasks through commits to remote repository
-
-   **Other Project Management Tools:**
-
-   - Update task status through appropriate API or interface
-   - Link commit hashes to corresponding task records
-   - Update story progress indicators with implementation completion
    - Ensure epic progress reflects committed implementation work
 
 2. **Prepare Code Review Handoff**: Set up transition to review process:
@@ -1208,8 +1208,9 @@ Quality Gates: All tests passing, configuration validated, documentation complet
 
 - [Product vision, user personas, and requirements](../../product/adopted/PRD.md)
 - [Development methodology and process definitions](../../way-of-working.md)
-- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/)
+- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/) (if the project management tool is filesystem)
 - [Task implementation completion status](../how-to/10-how-to-implement-a-task.md)
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 

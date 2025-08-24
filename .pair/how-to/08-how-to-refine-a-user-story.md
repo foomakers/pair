@@ -165,208 +165,19 @@ The AI assistant acts as a **User Story Refinement Facilitator** who:
 - Future: [Lower priority stories]
 ```
 
+---
+
+**Project Management Tool Usage**
+
+Before documenting refined user stories, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for interfacing, linking items, and managing story records. Please refer to this documentation any time the guide asks for project management tool actions.
+
+---
+
 ## User Story Refinement Template
 
 > **Note:** This template transforms the initial breakdown information into comprehensive, development-ready specifications. All sections must be completed with testable, implementable details.
 
-```markdown
-# User Story [Epic-Code]-[Story-Number]: [Story Title] - REFINED
-
-## Story Statement
-
-**As a** [specific user persona from PRD]
-**I want** [detailed functionality and user interaction]
-**So that** [specific business value and user benefit]
-
-**Where**: [Specific application/interface where user experiences the value]
-
-## Epic Context
-
-**Parent Epic**: [Epic Name and Link]
-**Status**: [Backlog | In Refinement | To Do]
-**Priority**: [High | Medium | Low] (confirmed during refinement)
-
-## Acceptance Criteria
-
-### Functional Requirements
-
-**Given-When-Then Format:**
-
-1. **Given** [initial condition or context]
-   **When** [user action or trigger]
-   **Then** [expected system response and user outcome]
-
-2. **Given** [different context]
-   **When** [user action]
-   **Then** [expected outcome]
-
-[Continue for all functional scenarios]
-
-### Business Rules
-
-- [Specific business rule with measurable criteria]
-- [Data validation requirements]
-- [User permission and access control rules]
-- [Integration with existing system rules]
-
-### Edge Cases and Error Handling
-
-- **Invalid Input**: [How system handles and responds]
-- **System Errors**: [Error conditions and user feedback]
-- **Boundary Conditions**: [Limits and constraint handling]
-- **Exceptional Scenarios**: [Unusual but valid use cases]
-
-## Technical Analysis
-
-### Implementation Approach
-
-**Technical Strategy**: [High-level implementation approach]
-**Key Components**: [Major technical components involved]
-**Data Flow**: [How data moves through the system]
-**Integration Points**: [External systems or APIs involved]
-
-### Technical Requirements
-
-- [Specific technical constraint or requirement]
-- [Performance criteria and benchmarks]
-- [Security considerations and requirements]
-- [Accessibility and usability standards]
-
-### Technical Risks and Mitigation
-
-| Risk               | Impact | Probability | Mitigation Strategy        |
-| ------------------ | ------ | ----------- | -------------------------- |
-| [Technical risk]   | High   | Medium      | [Specific mitigation plan] |
-| [Integration risk] | Medium | Low         | [Risk reduction approach]  |
-
-### Spike Requirements
-
-**Required Spikes**: [Research or proof-of-concept work needed]
-
-- [Spike 1]: [Research question and acceptance criteria]
-- [Spike 2]: [Technical investigation scope]
-
-**Estimated Spike Effort**: [Time needed for technical investigation]
-
-## Definition of Done Checklist
-
-### Development Completion
-
-- [ ] All acceptance criteria implemented and verified
-- [ ] Code follows project coding standards and conventions
-- [ ] Code review completed and approved by team member
-- [ ] Unit tests written and passing (minimum coverage: [X]% - specify project standard)
-- [ ] Integration tests implemented for external interfaces and API endpoints
-- [ ] Documentation updated (API docs, user guides, technical documentation)
-- [ ] Security scan completed and vulnerabilities addressed
-- [ ] Performance benchmarks met and verified through testing
-
-### Quality Assurance
-
-- [ ] All acceptance criteria tested and verified against specifications
-- [ ] Edge cases and error conditions tested comprehensively
-- [ ] Cross-browser/platform testing completed (specify supported browsers/devices)
-- [ ] Performance criteria met and verified (response times, throughput, resource usage)
-- [ ] Security requirements validated through testing and review
-- [ ] Accessibility standards compliance verified (specify WCAG level)
-- [ ] User experience validation completed (usability testing if applicable)
-- [ ] Regression testing completed for existing functionality
-
-### Deployment and Release
-
-- [ ] Feature deployed to staging environment successfully
-- [ ] Staging validation completed by product owner
-- [ ] Production deployment checklist completed
-- [ ] Feature flags configured appropriately (if applicable)
-- [ ] Monitoring and alerting configured for new functionality
-- [ ] Database migrations tested and validated (if applicable)
-- [ ] User documentation and help content updated and reviewed
-- [ ] Rollback plan prepared and tested
-- [ ] Post-deployment verification completed
-
-## Story Sizing and Sprint Readiness
-
-### Refined Story Points
-
-**Final Story Points**: [X points based on detailed analysis]
-**Confidence Level**: [High | Medium | Low]
-**Sizing Justification**: [Detailed reasoning based on technical analysis]
-
-### Sprint Capacity Validation
-
-**Sprint Fit Assessment**: [Does story fit in single sprint?]
-**Development Time Estimate**: [X days based on technical analysis]
-**Testing Time Estimate**: [Y days for comprehensive validation]
-**Total Effort Assessment**: [Fits within sprint capacity: Yes/No]
-
-### Story Splitting Recommendations
-
-**If story exceeds sprint capacity:**
-
-**Recommended Split:**
-
-1. **Story [Code]-A**: [Core functionality subset]
-
-   - **Acceptance Criteria**: [Essential criteria subset]
-   - **Size Estimate**: [Reduced points]
-
-2. **Story [Code]-B**: [Additional functionality]
-   - **Acceptance Criteria**: [Extended criteria]
-   - **Dependencies**: [Depends on Story A]
-   - **Size Estimate**: [Remaining points]
-
-**Split Rationale**: [Why this split maintains user value and enables incremental delivery]
-
-## Dependencies and Coordination
-
-### Story Dependencies
-
-**Prerequisite Stories**: [Stories that must be completed first]
-**Dependent Stories**: [Stories that depend on this story]
-**Shared Components**: [Common elements with other stories]
-
-### Team Coordination
-
-**Development Roles Involved**:
-
-- **Frontend**: [Specific frontend work and coordination]
-- **Backend**: [API and data layer responsibilities]
-- **QA**: [Testing strategy and coordination needs]
-- **UX/UI**: [Design review and validation requirements]
-
-### External Dependencies
-
-**Third-party Integrations**: [External services or APIs]
-**Infrastructure Requirements**: [Deployment or environment needs]
-**Compliance Requirements**: [Legal, security, or regulatory coordination]
-
-## Validation and Testing Strategy
-
-### Acceptance Testing Approach
-
-**Testing Methods**: [How acceptance criteria will be validated]
-**Test Data Requirements**: [Specific data needed for testing]
-**Environment Requirements**: [Testing environment specifications]
-
-### User Validation
-
-**User Feedback Collection**: [How to gather user validation]
-**Success Metrics**: [Measurable outcomes for story success]
-**Rollback Plan**: [What to do if story doesn't meet expectations]
-
-## Notes and Additional Context
-
-**Refinement Session Insights**: [Key decisions and considerations from refinement discussion]
-**Team Concerns**: [Any concerns raised during refinement]
-**Future Considerations**: [Items noted for future development]
-**Documentation Links**: [References to detailed technical specs or design documents]
-
----
-
-**Refinement Completed By**: [Team member names and roles]
-**Refinement Date**: [Date of refinement completion]
-**Review and Approval**: [Product owner approval confirmation]
-```
+User story refined must follow this comprehensive template you find in the [Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md).
 
 ## Structured Refinement Process
 
@@ -756,14 +567,13 @@ When refining workspace setup and technical foundation stories:
 
 ## References
 
-**Essential Files for AI Assistant:**
-
 **Foundation Documents:**
 
 - `.pair/product/adopted/PRD.md` - User personas and detailed requirements context
 - `.pair/way-of-working.md` - Development methodology and refinement ceremony definitions
-- `.pair/product/backlog/02-epics/` - Parent epic context for story alignment
-- `.pair/product/backlog/03-user-stories/` - Current story breakdown information
+- `.pair/product/backlog/02-epics/` - Parent epic context for story alignment (if the project management tool is filesystem)
+- `.pair/product/backlog/03-user-stories/` - Current story breakdown information (if the project management tool is filesystem)
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 
@@ -790,7 +600,7 @@ When refining workspace setup and technical foundation stories:
 **Related Documents:**
 
 - Previous: [07-how-to-breakdown-user-stories.md](./07-how-to-breakdown-user-stories.md)
-- Bootstrap Checklist: [ 03-how-to-complete-bootstrap-checklist.md](./ 03-how-to-complete-bootstrap-checklist.md)
+- Bootstrap Checklist: [ 02-how-to-complete-bootstrap-checklist.md](./ 02-how-to-complete-bootstrap-checklist.md)
 - Next: [09-how-to-create-tasks.md](./09-how-to-create-tasks.md)
 
 This guide ensures a thorough, collaborative refinement process that transforms rough story concepts into comprehensive, development-ready specifications with detailed acceptance criteria, technical clarity, and validated sprint readiness.

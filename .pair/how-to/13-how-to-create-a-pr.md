@@ -36,6 +36,14 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 **Working Principles**: Follow the **🤖🤝👨‍💻** model (AI generates pull request structure, Developer approves) throughout the entire pull request creation process.
 
+---
+
+**Project Management Tool Usage**
+
+Before creating pull requests, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for interfacing, linking items, and managing pull request records. Always ensure pull requests are properly linked to user stories, tasks, epics, and initiatives according to the tool's methodology.
+
+---
+
 ## Pull Request Definition
 
 ### What is a Pull Request in Development Context?
@@ -127,58 +135,9 @@ A **Pull Request** is the **code review preparation phase** where:
 
    _"Checking team's adopted way-of-working for project management configuration..."_
 
-   **If File System Based (configured in adoptions):**
+   - Detected Tool: [TOOL_NAME] (e.g., Jira, Azure DevOps, GitHub Projects, File System from .pair/tech/adopted/way-of-working.md)
 
-   ```bash
-   # Extract story code from branch name
-   STORY_CODE=$(echo $BRANCH_NAME | grep -oE '(US|STORY)-[0-9]+')
-   STORY_FILE=".pair/product/backlog/03-user-stories/current-sprint/${STORY_CODE}.md"
-
-   # Load story context from file system
-   if [ -f "$STORY_FILE" ]; then
-       echo "Loading story context from: $STORY_FILE"
-   fi
-   ```
-
-   **If External Tool Based (configured in adoptions):**
-
-   - **Jira Integration**: Use Jira API with configured credentials to load story details
-   - **Azure DevOps**: Use Azure DevOps API to fetch work item details
-   - **GitHub Issues**: Use GitHub API to load issue and project information
-   - **Linear**: Use Linear API to fetch story and task information
-   - **Asana**: Use Asana API to load project and task details
-
-   **Configuration Example in Way-of-Working:**
-
-   ```markdown
-   ### Project Management Tool Configuration
-
-   **Primary Tool**: [Jira/Azure DevOps/GitHub Projects/Linear/File System]
-   **API Endpoint**: [Tool-specific API URL]
-   **Authentication**: [Authentication method - tokens, API keys]
-   **Story ID Pattern**: [Regex pattern for story identification in branch names]
-   **Integration Level**: [Read-only/Full integration]
-   ```
-
-5. **Load User Story Context Using Configured Tool**: Extract story context based on tool configuration:
-
-   **File System Implementation:**
-
-   ```bash
-   # Load story from file system (if configured)
-   if [ -f "$STORY_FILE" ]; then
-       echo "Loading story from file system: $STORY_FILE"
-   fi
-   ```
-
-   **External Tool Implementation:**
-
-   ```bash
-   # Example for Jira integration (if configured)
-   # JIRA_API_CALL="curl -H 'Authorization: Bearer $JIRA_TOKEN' $JIRA_URL/rest/api/3/issue/$STORY_CODE"
-   # Example for Azure DevOps integration (if configured)
-   # AZ_DEVOPS_CALL="az boards work-item show --id $STORY_CODE"
-   ```
+5. **Load User Story Context Using Configured Tool**: Extract story context based on tool configuration.
 
    **Story Context Loading Result:**
    _"Loading User Story context for PR creation using [CONFIGURED_TOOL]:_
@@ -492,6 +451,8 @@ A **Pull Request** is the **code review preparation phase** where:
    # Or provide instructions for manual PR creation
    echo "Manual PR creation required with provided title, description, and reviewers"
    ```
+
+   Assign branch to the pull request this featureis supported it.
 
 2. **PR Creation Confirmation**: Validate successful creation:
 
@@ -1330,8 +1291,9 @@ Documentation updates for [Component/Feature/Process] to improve [user experienc
 
 - [Product vision, user personas, and requirements](../../product/adopted/PRD.md)
 - [Development methodology and process definitions](../../way-of-working.md)
-- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/)
+- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/) (if the project management tool is filesystem)
 - [Commit and push completion status](./12-how-to-commit-and-push.md)
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 

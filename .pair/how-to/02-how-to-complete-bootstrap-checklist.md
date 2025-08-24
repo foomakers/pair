@@ -34,7 +34,6 @@ The AI assistant acts as a **Senior Technical Architect** with the following res
 1. Read the [Bootstrap Checklist](../../assets/bootstrap-checklist.md) to understand all required technical decisions
 2. Analyze existing documentation:
    - [`.pair/product/adopted/PRD.md`](.pair/product/adopted/PRD.md) - Product Requirements and business objectives
-   - [`.pair/product/backlog/01-initiatives`](.pair/product/backlog/01-initiatives) - Strategic initiatives and business priorities
    - [`.pair/tech/adr/`](.pair/tech/adr/) - Existing Architecture Decision Records
 3. Extract key information:
    - Target user base and expected scale
@@ -198,6 +197,7 @@ _"Perfect! Here's the final validated checklist. All decisions are consistent an
    - Reference knowledge-base documents for detailed rationale
    - Ensure self-consistency across all documents
    - Address all relevant checklist points
+   - When adopting a project management tool, reference `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for usage. Example: "Github Projects is adopted. See `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for usage."
 
 ### Step 6: Document Review and Iteration
 
@@ -318,31 +318,31 @@ _Should I update [`[affected-file].md`](.pair/tech/adopted/[affected-file].md) t
 
 ### Do's for AI Assistants
 
-- **Always start with comprehensive analysis** of PRD, existing initiatives, and ADRs before proposing any technical decisions
-- **Present categorization with clear rationale** and specific evidence from project analysis
-- **Ask focused, contextual questions** when information is missing, referencing specific PRD sections or business requirements
-- **Use structured communication templates** to ensure consistent developer interaction patterns
-- **Validate assumptions explicitly** through targeted questions rather than making silent presumptions
-- **Present documents individually** with clear explanation of key decisions and rationale
-- **Maintain strict version consistency** across all adopted standards documents when making updates
-- **Reference existing project context** (ADRs, way-of-working phases) when proposing changes
-- **Provide specific examples** when explaining project categorizations or technical choices
-- **Follow the 🤖🤝👨‍💻 model** (LLM proposes, Developer validates) throughout all interactions
-- **Save all relevant documents** in the correct `.pair/tech/adopted/` locations following the structure asked in this document
+**Always start with comprehensive analysis** of PRD and ADRs before proposing any technical decisions
+**Present categorization with clear rationale** and specific evidence from project analysis
+**Ask focused, contextual questions** when information is missing, referencing specific PRD sections or business requirements
+**Use structured communication templates** to ensure consistent developer interaction patterns
+**Validate assumptions explicitly** through targeted questions rather than making silent presumptions
+**Present documents individually** with clear explanation of key decisions and rationale
+**Maintain strict version consistency** across all adopted standards documents when making updates
+**Reference existing project context** (ADRs, way-of-working phases) when proposing changes
+**Provide specific examples** when explaining project categorizations or technical choices
+**Follow the 🤖🤝👨‍💻 model** (LLM proposes, Developer validates) throughout all interactions
+**Save all relevant documents** in the correct `.pair/tech/adopted/` locations following the structure asked in this document
 
 ### Don'ts for AI Assistants
 
-- **Never skip foundational analysis** - always read PRD, initiatives, and ADRs before starting the process
-- **Don't assume project constraints** - always validate budget, timeline, team skills, and compliance requirements
-- **Don't present all documents simultaneously** - use iterative review cycles for quality and engagement
-- **Don't ignore project categorization** - let Type A/B/C guide all technology and process decisions
-- **Don't make technology choices without rationale** - always connect decisions to project constraints and requirements
-- **Don't create inconsistent standards** - verify compatibility of versions, approaches, and methodologies across all documents
-- **Don't update standards without developer approval** - follow collaborative validation for all changes
-- **Don't skip the iterative update process** - maintain standards alignment throughout project evolution
-- **Don't rush through checklist completion** - ensure each section is thoroughly addressed before proceeding
-- **Don't break the collaborative model** - maintain developer engagement and validation throughout the process
-- **Don't save a output file of the completed checklist** - always create the final adoption documents in the correct `.pair/tech/adopted/` locations
+**Never skip foundational analysis** - always read PRD and ADRs before starting the process
+**Don't assume project constraints** - always validate budget, timeline, team skills, and compliance requirements
+**Don't present all documents simultaneously** - use iterative review cycles for quality and engagement
+**Don't ignore project categorization** - let Type A/B/C guide all technology and process decisions
+**Don't make technology choices without rationale** - always connect decisions to project constraints and requirements
+**Don't create inconsistent standards** - verify compatibility of versions, approaches, and methodologies across all documents
+**Don't update standards without developer approval** - follow collaborative validation for all changes
+**Don't skip the iterative update process** - maintain standards alignment throughout project evolution
+**Don't rush through checklist completion** - ensure each section is thoroughly addressed before proceeding
+**Don't break the collaborative model** - maintain developer engagement and validation throughout the process
+**Don't save a output file of the completed checklist** - always create the final adoption documents in the correct `.pair/tech/adopted/` locations
 
 ## Quality Assurance Checklist
 
@@ -356,6 +356,7 @@ _Should I update [`[affected-file].md`](.pair/tech/adopted/[affected-file].md) t
 - [ ] Documents stored in correct [`.pair/tech/adopted/`](.pair/tech/adopted/) locations
 - [ ] Update process established for future iterations and ADR-driven changes
 - [ ] Knowledge-base references included where appropriate for detailed explanations
+- [ ] Project management tool selected and specified in the adopted standards
 
 ## Common Pitfalls and Solutions
 
@@ -372,8 +373,7 @@ _Should I update [`[affected-file].md`](.pair/tech/adopted/[affected-file].md) t
 
 ## References
 
-### Core Documentation
-
+- [Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines.md)
 - [Bootstrap Checklist](../../assets/bootstrap-checklist.md) - Complete project setup and categorization framework
 - [Adopted Standards README](../tech/adopted/README.md) - Requirements and format for all adopted documents
 - [Way of Working](../tech/adopted/way-of-working.md) - Development lifecycle and iteration processes

@@ -1,9 +1,13 @@
-# 🤝 Way of Working
+# Way of Working
 
-## Purpose
+- Rapid, iterative development cycles with releases as needed.
+- Lightweight code review and testing practices focused on speed and learning.
+- Minimal documentation: key decisions and usage documented in markdown files.
+- Collaboration and process guidelines follow the standards in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md`.
+- Github Projects is adopted for project management, using Kanban as the workflow methodology. See `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for usage.
+- High risk tolerance: quick rollbacks and fast recovery from errors.
+- Team communication is informal and direct, with decisions validated collaboratively.
 
-This document defines the **validated development practices and team workflows** for the project. It serves as the authoritative specification for all development methodologies, code review processes, and collaboration patterns that have been proposed by AI and validated by the development team throughout all phases outlined in the [way-of-working.md](../../way-of-working.md).
+---
 
-**Who modifies this:** Development team with AI assistance (🤖🤝👨‍💻) during process optimization and workflow refinement  
-**When:** During all phases - Strategic Preparation, Sprint Execution, and continuous process improvement  
-**Authority:** All development activities must follow these validated practices
+All development activities must follow these adopted practices. For process and rationale, see [way-of-working.md](../../way-of-working.md).

@@ -60,6 +60,14 @@ A **Code Review** is the **quality validation phase** where:
 | **Integration**         | System integration | Merge validated code into main system         | System consistency              |
 | **Deployment**          | Production release | Deploy validated changes to production        | System deployment and operation |
 
+---
+
+**Project Management Tool Usage**
+
+Before conducting code reviews, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for interfacing, linking items, and managing review records. Please refer to this documentation any time the guide asks for project management tool actions.
+
+---
+
 ## Review Quality Framework
 
 ### Core Review Principles for AI Assistants
@@ -1398,8 +1406,9 @@ Code Review Progress for [STORY_ID]
 
 - [Product vision, user personas, and requirements](../../product/adopted/PRD.md)
 - [Development methodology and process definitions](../../tech/adopted/way-of-working.md)
-- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/)
+- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/) (if the project management tool is filesystem)
 - [Integration and merge procedures](../how-to/12-how-to-commit-and-push.md)
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 
@@ -1452,7 +1461,7 @@ Code Review Progress for [STORY_ID]
 **Related Documents:**
 
 - Previous: [10-how-to-implement-a-task.md](./10-how-to-implement-a-task.md)
-- Bootstrap Checklist: [03-how-to-complete-bootstrap-checklist.md](./03-how-to-complete-bootstrap-checklist.md)
+- Bootstrap Checklist: [02-how-to-complete-bootstrap-checklist.md](./02-how-to-complete-bootstrap-checklist.md)
 - Next: [12-how-to-commit-and-push.md](./12-how-to-commit-and-push.md)
 
 This guide ensures systematic, comprehensive code review that validates implementation quality against established technical standards while providing constructive feedback and coordinating improvement processes for continuous development excellence.

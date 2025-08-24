@@ -49,110 +49,17 @@ An **Epic** is a substantial piece of work that:
 | **Epic**       | 2-4 sprints | Feature set        | User Experience  | Incremental value delivery and user journey completion |
 | **User Story** | 1 sprint    | Single feature     | Working Software | Specific functionality and immediate user benefit      |
 
+---
+
+**Project Management Tool Usage**
+
+Before documenting epics, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for interfacing, linking items, and managing epic records. Always ensure epics are properly linked to initiatives and user stories according to the tool's methodology. Please refer to this documentation any time the guide asks for project management tool actions.
+
+---
+
 ## Epic Template Structure
 
-Each epic must follow this comprehensive template:
-
-```markdown
-# Epic [Number]: [Epic Name]
-
-## Overview
-
-**Initiative**: [Parent Initiative Name]
-**Duration**: [X-Y sprints]
-**Business Value**: [User Experience | Feature Foundation | Integration | Performance]
-**Priority**: [P0 | P1 | P2]
-**Planned Start**: [YYYY-MM-DD]
-**Planned End**: [YYYY-MM-DD]
-**Status**: [Not Started | In Progress | Completed]
-
-## Epic Objective
-
-[Clear statement of what this epic aims to deliver for users]
-
-## Business Value Statement
-
-[Why this epic is important for users and how it contributes to the parent initiative]
-
-## User Impact
-
-**Primary Beneficiaries**: [User personas who directly benefit]
-**User Journey Stage**: [Discovery | Evaluation | Onboarding | Core Usage | Optimization]
-**Value Delivered**: [Specific user value and experience improvement]
-
-## Success Criteria
-
-- ✅ [Measurable outcome 1]
-- ✅ [Measurable outcome 2]
-- ✅ [Measurable outcome 3]
-
-## Acceptance Criteria (Epic Level)
-
-- **Given** [context/precondition]
-- **When** [user action or event]
-- **Then** [expected outcome]
-
-- **Given** [another context]
-- **When** [different action]
-- **Then** [different outcome]
-
-## Scope Definition
-
-### In Scope
-
-- [Specific functionality included in this epic]
-- [User interaction patterns covered]
-- [System capabilities delivered]
-
-### Out of Scope
-
-- [Functionality explicitly excluded]
-- [Future epic considerations]
-- [Related but separate capabilities]
-
-## User Story Preview
-
-1. **Story 1**: [Brief user story description]
-2. **Story 2**: [Brief user story description]
-3. **Story 3**: [Brief user story description]
-4. **Story 4**: [Brief user story description]
-
-## Technical Considerations
-
-### Architecture Impact
-
-[How this epic affects system architecture]
-
-### Integration Points
-
-[Systems, APIs, or services this epic integrates with]
-
-### Technical Risks
-
-- **Risk 1**: [Technical risk and mitigation]
-- **Risk 2**: [Another risk and mitigation]
-
-## Dependencies
-
-- **Epic Dependencies**: [Other epics this depends on]
-- **External Dependencies**: [Third-party or system dependencies]
-- **Team Dependencies**: [Other team coordination needed]
-
-## Definition of Done
-
-- [ ] All user stories completed and accepted
-- [ ] Code reviewed and merged
-- [ ] Automated tests passing (unit, integration, e2e)
-- [ ] Documentation updated
-- [ ] User acceptance testing completed
-- [ ] Performance requirements met
-- [ ] Security requirements verified
-- [ ] Deployment completed successfully
-
-## Notes
-
-[Additional context, assumptions, or special considerations]
-```
+Each epic must follow this comprehensive template you find in the [Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md).
 
 ## Prerequisites Verification
 
@@ -165,7 +72,7 @@ Each epic must follow this comprehensive template:
 1. **Verify Bootstrap Completion**: Check for existence of:
 
    - `.pair/product/adopted/PRD.md`
-   - `.pair/product/backlog/01-initiatives/` (with initiative files)
+   - initiatives are ready and documented in the chosen project management tool
    - `.pair/product/adopted/subdomain/`
    - `.pair/way-of-working.md`
    - `.pair/tech/adopted/architecture.md`
@@ -209,7 +116,7 @@ _"I can see we're using [TOOL_NAME] according to the way-of-working documentatio
 
 **AI Assistant Instructions:** Verify initiatives are properly tracked:
 
-1. **Check Initiative Tracking**: Confirm all initiatives from `.pair/product/backlog/01-initiatives/` are properly documented in the configured project management tool
+1. **Check Initiative Tracking**: Confirm all initiatives are properly documented in the configured project management tool ([see Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md))
 2. **Request Permission**: If initiatives aren't tracked in the tool, request permission to create them
 
 **Permission Request:**
@@ -251,59 +158,7 @@ If an Epic 0 already exists, proceed directly to functional epic breakdown as de
 
 > **Note:** The Epic 0 verification is only required if the initiative needs technical setup. Otherwise, the breakdown can proceed without this epic. Interpret the status and existence of Epic 0 according to the conventions of the selected project management tool.
 
-## Filesystem-Based Epic Management (If Issue Tracker = Filesystem)
-
-> **Note:** Only follow this section if your chosen issue tracker is the filesystem. If you are using a different tool (e.g., Jira, Linear, Trello), ignore this section and follow the tool-specific integration instructions.
-
-### Folder Structure and Naming Conventions
-
-Epics are managed as Markdown files in a flat structure under `.pair/product/backlog/02-epics/`, organized by state (backlog, in-progress, done). There are no subfolders for initiatives.
-
-#### 1. Epic State Folders
-
-Create three subfolders under `02-epics/` to manage epic states:
-
-- `backlog/` – For epics not yet started
-- `in-progress/` – For epics currently being worked on
-- `done/` – For completed epics
-
-**Example:**
-
-```
-.pair/product/backlog/02-epics/
-   ├── backlog/
-   ├── in-progress/
-   └── done/
-```
-
-#### 2. Epic File Naming
-
-Each epic is a Markdown file inside the appropriate state folder. The filename must include:
-
-- The initiative code (progressive number only, as in `01-initiatives`)
-- The epic code (progressive number for the epic within the initiative)
-- A short, kebab-case name for the epic
-
-**Format:**
-
-```
-[initiative-code]-[epic-code]-[epic-name].md
-```
-
-**Example:**
-
-```
-.pair/product/backlog/02-epics/backlog/01-01-data-ingestion-pipeline.md
-.pair/product/backlog/02-epics/backlog/01-02-data-validation-framework.md
-.pair/product/backlog/02-epics/in-progress/02-01-user-dashboard.md
-.pair/product/backlog/02-epics/done/03-03-broker-sync.md
-```
-
-#### 3. Moving Epics Between States
-
-To update the status of an epic, move its file between the `backlog/`, `in-progress/`, and `done/` folders as work progresses. The filename and codes remain unchanged to preserve sequencing and traceability.
-
-#### 4. Linking and Traceability
+### Linking and Traceability
 
 Each epic file must:
 
@@ -327,7 +182,7 @@ This ensures clear navigation between initiatives, epics, and user stories in th
    - Success metrics and constraints
    - Technical requirements
 
-2. **Study Initiatives** (`.pair/product/backlog/01-initiatives/`) to understand:
+2. **Study Initiatives** (`.pair/tech/knowledge-base/collaboration-and-process-guidelines.md`) to understand:
 
    - Current initiative status and priorities
    - Business value and objectives
@@ -549,6 +404,8 @@ _"All epics for '[INITIATIVE_NAME]' are now documented and ready for development
 ### Do's:
 
 - **Always verify bootstrap completion** before starting epic breakdown
+- **Always verify the project management tool** before starting epic breakdown
+- **Always read the project management tool guidelines** before interacting with the tool
 - **Analyze the complete initiative** before proposing epic structure
 - **Focus on user value delivery** in every epic definition
 - **Maintain end-to-end thinking** - avoid purely technical epics
@@ -591,7 +448,8 @@ _"All epics for '[INITIATIVE_NAME]' are now documented and ready for development
 
 - `.pair/product/adopted/PRD.md` - Product vision, goals, and user requirements
 - `.pair/way-of-working.md` - Development methodology and process definitions
-- `.pair/product/backlog/01-initiatives/` - Strategic initiatives requiring epic breakdown
+- `.pair/product/backlog/01-initiatives/` - Strategic initiatives requiring epic breakdown (if filesystem is the tool)
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 
