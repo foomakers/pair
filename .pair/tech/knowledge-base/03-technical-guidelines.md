@@ -897,3 +897,4 @@ Supporting documents:
 - **[UX Guidelines](05-ux-guidelines.md)** - _Tech choices must support UX design_
 - **[Testing Strategy](07-testing-strategy.md)** - _Testing frameworks validate implementations_
 - **[Definition of Done](06-definition-of-done.md)** - _Quality gates validate tech compliance_
+- **[Collaboration and Process Guidelines](12-collaboration-and-process-guidelines.md)** - _Standards for team collaboration and process management_

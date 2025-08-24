@@ -1,9 +1,15 @@
-# 🚀 Infrastructure
+# Infrastructure
 
-## Purpose
+- All components are self-hosted on local machines or team-managed servers.
+- Supabase is deployed as a managed cloud service or self-hosted instance for RAG database and vector storage.
+- Ollama is deployed locally for LLM model execution in RAG workflows.
+- Bash scripts are used for deployment, orchestration, and process automation.
+- No cloud provider lock-in; infrastructure is portable and can be migrated as needed.
+- No external integrations or compliance requirements for initial release.
+- Minimal DevOps practices: manual deployment, lightweight monitoring, and basic backup procedures.
+- CI/CD pipeline is adopted using Github Actions.
+- Infrastructure supports desktop usage only; no mobile or browser deployment required.
 
-This document defines the **validated infrastructure and deployment decisions** for the project. It serves as the authoritative specification for all DevOps practices, deployment strategies, and infrastructure patterns that have been proposed by AI and validated by the development team during the **Strategic Preparation** and **Continuous Value Delivery** phases outlined in the [way-of-working.md](../../way-of-working.md).
+---
 
-**Who modifies this:** Development team with AI assistance (🤖🤝👨‍💻) during infrastructure planning and deployment optimization  
-**When:** During Strategic Preparation, Sprint Execution, and infrastructure evolution  
-**Authority:** All deployment and infrastructure implementations must follow these adopted standards
+All deployment and infrastructure implementations must follow these adopted standards. For process and rationale, see [way-of-working.md](../../way-of-working.md).

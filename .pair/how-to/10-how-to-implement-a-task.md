@@ -32,6 +32,42 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 **Working Principles**: Follow the **🤖🤝👨‍💻** model (AI implements, Developer reviews) throughout the entire task implementation process.
 
+## **Issue Access and Tool Integration**
+
+**⚠️ MANDATORY COMPLIANCE: These instructions must ALWAYS be followed without exception when accessing initiatives, epics, user stories, or tasks. NEVER deviate from this process.**
+
+### **Access Protocol**
+
+**Step 1: Tool Configuration Check**
+
+1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
+
+_"I cannot proceed because no project management tool is configured in [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+
+**Step 2: Follow Tool-Specific Instructions**
+
+- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) for all access procedures
+- **Use configured tool** as primary and authoritative source for all issue data
+
+### **Filesystem Access Rules**
+
+**✅ PERMITTED ONLY when:**
+
+- Tool in [way-of-working.md](.pair/tech/adopted/way-of-working.md) = "filesystem"
+
+**🚫 PROHIBITED when:**
+
+- Any other tool is configured
+- **DO NOT** read [.pair/product/backlog/](.pair/product/backlog/) directories
+- **DO NOT** use filesystem as fallback
+
+### **Validation Checklist**
+
+- [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
+- [ ] Tool configured (if not: halt and request bootstrap)
+- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) consulted for access procedures
+
 ## Task Implementation Definition
 
 ### What is Task Implementation?
@@ -56,6 +92,14 @@ A **Task Implementation** is the **execution phase** where:
 | **Task Creation**       | Implementation planning | Break down features into executable steps     | Technical specification     |
 | **Task Implementation** | Code development        | Transform specifications into working code    | Code and tests              |
 | **Code Review**         | Quality assurance       | Validate implementation quality and standards | Code quality and compliance |
+
+---
+
+**Project Management Tool Usage**
+
+Before implementing tasks, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for interfacing, linking items, and managing task records. Please refer to this documentation any time the guide asks for project management tool actions.
+
+---
 
 ## TDD Implementation Methodology
 
@@ -360,19 +404,7 @@ _Once resolved, we can proceed with story selection and implementation."_
 
    _"Proceeding with User Story '[STORY_ID]: [STORY_NAME]'. This story includes [X] tasks addressing [functional area] with clear acceptance criteria. The implementation will follow [architectural patterns] established in our technical guidelines."_
 
-2. **Update Story Status**: Modify story status according to project management tool:
-
-   **File System Tool:**
-
-   - Move story file from TODO to In Progress status
-   - Update story metadata with assignment and start date
-   - Ensure parent epic status is also In Progress
-
-   **Other Tools (Jira, etc.):**
-
-   - Update story status through appropriate API or interface
-   - Assign story to development team member
-   - Verify epic status alignment
+2. **Update Story Status**: Modify story status according to project management tool.
 
 3. **Validate Epic Status**: Ensure parent epic is properly managed:
    - Check if epic is currently In Progress
@@ -406,6 +438,7 @@ _"Story '[STORY_ID]: [STORY_NAME]' is now assigned and In Progress. Parent Epic 
    - Maintain consistency with team standards
 
    **Example Convention:** `feature/[STORY_CODE]-[brief-description]`
+   Assign branch to the story if project management tool supports it.
 
 3. **Propose Branch Creation**: Present branch name for approval:
 
@@ -1023,8 +1056,9 @@ All tests passing - task implementation complete"
 
 - [Product vision, user personas, and requirements](../../product/adopted/PRD.md)
 - [Development methodology and process definitions](../../way-of-working.md)
-- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/)
+- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/) (if the project management tool is filesystem)
 - [Commit and push procedures](../how-to/12-how-to-commit-and-push.md)
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 
@@ -1077,7 +1111,7 @@ All tests passing - task implementation complete"
 **Related Documents:**
 
 - Previous: [09-how-to-create-tasks.md](./09-how-to-create-tasks.md)
-- Bootstrap Checklist: [03-how-to-complete-bootstrap-checklist.md](./03-how-to-complete-bootstrap-checklist.md)
+- Bootstrap Checklist: [02-how-to-complete-bootstrap-checklist.md](./02-how-to-complete-bootstrap-checklist.md)
 - Next: [11-how-to-code-review.md](./11-how-to-code-review.md)
 
 This guide ensures systematic, high-quality task implementation that follows established technical standards and strict Test-Driven Development methodology while maintaining development workflow consistency and preparing code for effective review processes.

@@ -25,6 +25,42 @@ The AI assistant acts as a **Strategic Context Architect** with the following re
 - Generate comprehensive bounded context documentation that serves as foundation for service design
 - Monitor subdomain evolution to maintain bounded context relevance and effectiveness
 
+## **Issue Access and Tool Integration**
+
+**⚠️ MANDATORY COMPLIANCE: These instructions must ALWAYS be followed without exception when accessing initiatives, epics, user stories, or tasks. NEVER deviate from this process.**
+
+### **Access Protocol**
+
+**Step 1: Tool Configuration Check**
+
+1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
+
+_"I cannot proceed because no project management tool is configured in [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+
+**Step 2: Follow Tool-Specific Instructions**
+
+- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) for all access procedures
+- **Use configured tool** as primary and authoritative source for all issue data
+
+### **Filesystem Access Rules**
+
+**✅ PERMITTED ONLY when:**
+
+- Tool in [way-of-working.md](.pair/tech/adopted/way-of-working.md) = "filesystem"
+
+**🚫 PROHIBITED when:**
+
+- Any other tool is configured
+- **DO NOT** read [.pair/product/backlog/](.pair/product/backlog/) directories
+- **DO NOT** use filesystem as fallback
+
+### **Validation Checklist**
+
+- [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
+- [ ] Tool configured (if not: halt and request bootstrap)
+- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) consulted for access procedures
+
 ## Step-by-Step Implementation Process
 
 ### Step 1: Technical and Business Context Analysis

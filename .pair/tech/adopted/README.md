@@ -63,6 +63,7 @@ Detailed technical guidelines and explanations:
 - [09-performance-guidelines.md](../knowledge-base/09-performance-guidelines.md)
 - [10-security-guidelines.md](../knowledge-base/10-security-guidelines.md)
 - [11-observability-guidelines.md](../knowledge-base/11-observability-guidelines.md)
+- [12-collaboration-and-process-guidelines.md](../knowledge-base/12-collaboration-and-process-guidelines.md)
 - [README.md](../knowledge-base/README.md) – Knowledge Base Overview
 
 ### Additional Resources

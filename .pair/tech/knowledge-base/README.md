@@ -26,7 +26,7 @@ This directory contains the complete technical knowledge base for the project, o
 - **[09-performance-guidelines.md](09-performance-guidelines.md)** - Performance optimization and monitoring strategies
 - **[10-security-guidelines.md](10-security-guidelines.md)** - Security implementation and best practices
 - **[11-observability-guidelines.md](11-observability-guidelines.md)** - Monitoring, logging, and tracing strategies
-
+- **[12-collaboration-and-process-guidelines.md](12-collaboration-and-process-guidelines.md)** - Collaboration, workflow, project management, and hierarchical artifact management guidelines
 
 ## 🔗 Cross-References
 
@@ -36,6 +36,8 @@ All documents are designed to work together and contain extensive cross-referenc
 - **Testing** ↔ **Performance/Security**: Quality gates integrate across all domains
 - **UX** ↔ **Accessibility**: User experience aligned with accessibility standards
 - **Definition of Done** ↔ **All Guidelines**: Quality criteria reference all technical standards
+- **Way of Working** ↔ **All Guidelines**: Collaboration, workflow, and artifact management practices integrate with all technical standards
+- **Collaboration & Process** ↔ **All Guidelines**: Collaboration, workflow, and artifact management practices integrate with all technical standards
 
 ## 📝 Usage Guidelines
 

@@ -35,6 +35,42 @@ The AI assistant acts as a **Product Software Engineer** serving as **Technical 
 
 **Working Principles**: Follow the **🤖🔍👨‍💻** model (AI reviews comprehensively, Developer validates and decides) throughout the entire code review process.
 
+## **Issue Access and Tool Integration**
+
+**⚠️ MANDATORY COMPLIANCE: These instructions must ALWAYS be followed without exception when accessing initiatives, epics, user stories, or tasks. NEVER deviate from this process.**
+
+### **Access Protocol**
+
+**Step 1: Tool Configuration Check**
+
+1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
+
+_"I cannot proceed because no project management tool is configured in [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+
+**Step 2: Follow Tool-Specific Instructions**
+
+- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) for all access procedures
+- **Use configured tool** as primary and authoritative source for all issue data
+
+### **Filesystem Access Rules**
+
+**✅ PERMITTED ONLY when:**
+
+- Tool in [way-of-working.md](.pair/tech/adopted/way-of-working.md) = "filesystem"
+
+**🚫 PROHIBITED when:**
+
+- Any other tool is configured
+- **DO NOT** read [.pair/product/backlog/](.pair/product/backlog/) directories
+- **DO NOT** use filesystem as fallback
+
+### **Validation Checklist**
+
+- [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
+- [ ] Tool configured (if not: halt and request bootstrap)
+- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) consulted for access procedures
+
 ## Code Review Definition
 
 ### What is Code Review?
@@ -59,6 +95,14 @@ A **Code Review** is the **quality validation phase** where:
 | **Code Review**         | Quality validation | Validate implementation quality and standards | Code quality and compliance     |
 | **Integration**         | System integration | Merge validated code into main system         | System consistency              |
 | **Deployment**          | Production release | Deploy validated changes to production        | System deployment and operation |
+
+---
+
+**Project Management Tool Usage**
+
+Before conducting code reviews, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for interfacing, linking items, and managing review records. Please refer to this documentation any time the guide asks for project management tool actions.
+
+---
 
 ## Review Quality Framework
 
@@ -1398,8 +1442,9 @@ Code Review Progress for [STORY_ID]
 
 - [Product vision, user personas, and requirements](../../product/adopted/PRD.md)
 - [Development methodology and process definitions](../../tech/adopted/way-of-working.md)
-- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/)
+- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/) (if the project management tool is filesystem)
 - [Integration and merge procedures](../how-to/12-how-to-commit-and-push.md)
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 
@@ -1452,7 +1497,7 @@ Code Review Progress for [STORY_ID]
 **Related Documents:**
 
 - Previous: [10-how-to-implement-a-task.md](./10-how-to-implement-a-task.md)
-- Bootstrap Checklist: [03-how-to-complete-bootstrap-checklist.md](./03-how-to-complete-bootstrap-checklist.md)
+- Bootstrap Checklist: [02-how-to-complete-bootstrap-checklist.md](./02-how-to-complete-bootstrap-checklist.md)
 - Next: [12-how-to-commit-and-push.md](./12-how-to-commit-and-push.md)
 
 This guide ensures systematic, comprehensive code review that validates implementation quality against established technical standards while providing constructive feedback and coordinating improvement processes for continuous development excellence.

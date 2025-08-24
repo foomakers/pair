@@ -36,6 +36,42 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 **Working Principles**: Follow the **🤖🤝👨‍💻** model (AI generates pull request structure, Developer approves) throughout the entire pull request creation process.
 
+## **Issue Access and Tool Integration**
+
+**⚠️ MANDATORY COMPLIANCE: These instructions must ALWAYS be followed without exception when accessing initiatives, epics, user stories, or tasks. NEVER deviate from this process.**
+
+### **Access Protocol**
+
+**Step 1: Tool Configuration Check**
+
+1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
+
+_"I cannot proceed because no project management tool is configured in [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+
+**Step 2: Follow Tool-Specific Instructions**
+
+- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) for all access procedures
+- **Use configured tool** as primary and authoritative source for all issue data
+
+### **Filesystem Access Rules**
+
+**✅ PERMITTED ONLY when:**
+
+- Tool in [way-of-working.md](.pair/tech/adopted/way-of-working.md) = "filesystem"
+
+**🚫 PROHIBITED when:**
+
+- Any other tool is configured
+- **DO NOT** read [.pair/product/backlog/](.pair/product/backlog/) directories
+- **DO NOT** use filesystem as fallback
+
+### **Validation Checklist**
+
+- [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
+- [ ] Tool configured (if not: halt and request bootstrap)
+- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) consulted for access procedures
+
 ## Pull Request Definition
 
 ### What is a Pull Request in Development Context?
@@ -127,58 +163,9 @@ A **Pull Request** is the **code review preparation phase** where:
 
    _"Checking team's adopted way-of-working for project management configuration..."_
 
-   **If File System Based (configured in adoptions):**
+   - Detected Tool: [TOOL_NAME] (e.g., Jira, Azure DevOps, GitHub Projects, File System from .pair/tech/adopted/way-of-working.md)
 
-   ```bash
-   # Extract story code from branch name
-   STORY_CODE=$(echo $BRANCH_NAME | grep -oE '(US|STORY)-[0-9]+')
-   STORY_FILE=".pair/product/backlog/03-user-stories/current-sprint/${STORY_CODE}.md"
-
-   # Load story context from file system
-   if [ -f "$STORY_FILE" ]; then
-       echo "Loading story context from: $STORY_FILE"
-   fi
-   ```
-
-   **If External Tool Based (configured in adoptions):**
-
-   - **Jira Integration**: Use Jira API with configured credentials to load story details
-   - **Azure DevOps**: Use Azure DevOps API to fetch work item details
-   - **GitHub Issues**: Use GitHub API to load issue and project information
-   - **Linear**: Use Linear API to fetch story and task information
-   - **Asana**: Use Asana API to load project and task details
-
-   **Configuration Example in Way-of-Working:**
-
-   ```markdown
-   ### Project Management Tool Configuration
-
-   **Primary Tool**: [Jira/Azure DevOps/GitHub Projects/Linear/File System]
-   **API Endpoint**: [Tool-specific API URL]
-   **Authentication**: [Authentication method - tokens, API keys]
-   **Story ID Pattern**: [Regex pattern for story identification in branch names]
-   **Integration Level**: [Read-only/Full integration]
-   ```
-
-5. **Load User Story Context Using Configured Tool**: Extract story context based on tool configuration:
-
-   **File System Implementation:**
-
-   ```bash
-   # Load story from file system (if configured)
-   if [ -f "$STORY_FILE" ]; then
-       echo "Loading story from file system: $STORY_FILE"
-   fi
-   ```
-
-   **External Tool Implementation:**
-
-   ```bash
-   # Example for Jira integration (if configured)
-   # JIRA_API_CALL="curl -H 'Authorization: Bearer $JIRA_TOKEN' $JIRA_URL/rest/api/3/issue/$STORY_CODE"
-   # Example for Azure DevOps integration (if configured)
-   # AZ_DEVOPS_CALL="az boards work-item show --id $STORY_CODE"
-   ```
+5. **Load User Story Context Using Configured Tool**: Extract story context based on tool configuration.
 
    **Story Context Loading Result:**
    _"Loading User Story context for PR creation using [CONFIGURED_TOOL]:_
@@ -492,6 +479,8 @@ A **Pull Request** is the **code review preparation phase** where:
    # Or provide instructions for manual PR creation
    echo "Manual PR creation required with provided title, description, and reviewers"
    ```
+
+   Assign branch to the pull request this featureis supported it.
 
 2. **PR Creation Confirmation**: Validate successful creation:
 
@@ -1330,8 +1319,9 @@ Documentation updates for [Component/Feature/Process] to improve [user experienc
 
 - [Product vision, user personas, and requirements](../../product/adopted/PRD.md)
 - [Development methodology and process definitions](../../way-of-working.md)
-- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/)
+- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/) (if the project management tool is filesystem)
 - [Commit and push completion status](./12-how-to-commit-and-push.md)
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 

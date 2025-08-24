@@ -34,6 +34,42 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 **Working Principles**: Follow the **🤖🤝👨‍💻** model (AI generates commits, Developer approves) throughout the entire commit and push process.
 
+## **Issue Access and Tool Integration**
+
+**⚠️ MANDATORY COMPLIANCE: These instructions must ALWAYS be followed without exception when accessing initiatives, epics, user stories, or tasks. NEVER deviate from this process.**
+
+### **Access Protocol**
+
+**Step 1: Tool Configuration Check**
+
+1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
+
+_"I cannot proceed because no project management tool is configured in [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+
+**Step 2: Follow Tool-Specific Instructions**
+
+- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) for all access procedures
+- **Use configured tool** as primary and authoritative source for all issue data
+
+### **Filesystem Access Rules**
+
+**✅ PERMITTED ONLY when:**
+
+- Tool in [way-of-working.md](.pair/tech/adopted/way-of-working.md) = "filesystem"
+
+**🚫 PROHIBITED when:**
+
+- Any other tool is configured
+- **DO NOT** read [.pair/product/backlog/](.pair/product/backlog/) directories
+- **DO NOT** use filesystem as fallback
+
+### **Validation Checklist**
+
+- [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
+- [ ] Tool configured (if not: halt and request bootstrap)
+- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) consulted for access procedures
+
 ## Commit and Push Definition
 
 ### What is Commit and Push in TDD Context?
@@ -663,18 +699,10 @@ _All atomic commits executed successfully. Complete change set now committed wit
 
 1. **Update Project Management System**: Reflect commit and push completion:
 
-   **File System Project Management:**
-
    - Update task status to "Implementation Committed" with commit references
-   - Add commit hash documentation to task completion records
+   - Add or link commit hash documentation to task completion records
    - Update story progress with implementation completion indicators
    - Maintain traceability from tasks through commits to remote repository
-
-   **Other Project Management Tools:**
-
-   - Update task status through appropriate API or interface
-   - Link commit hashes to corresponding task records
-   - Update story progress indicators with implementation completion
    - Ensure epic progress reflects committed implementation work
 
 2. **Prepare Code Review Handoff**: Set up transition to review process:
@@ -1208,8 +1236,9 @@ Quality Gates: All tests passing, configuration validated, documentation complet
 
 - [Product vision, user personas, and requirements](../../product/adopted/PRD.md)
 - [Development methodology and process definitions](../../way-of-working.md)
-- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/)
+- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/) (if the project management tool is filesystem)
 - [Task implementation completion status](../how-to/10-how-to-implement-a-task.md)
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 

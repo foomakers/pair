@@ -298,4 +298,8 @@ This Definition of Done serves as the **central quality framework** that ensures
 - **[UX Guidelines](05-ux-guidelines.md)** - _UX standards ensure user-facing quality_
 - **[Testing Strategy](07-testing-strategy.md)** - _Testing validates feature completeness_
 
+**Collaboration & Process:**
+
+- **[12-collaboration-and-process-guidelines.md](12-collaboration-and-process-guidelines.md)** - _Collaboration and process standards_
+
 This Definition of Done provides a clear, verifiable framework that ensures consistent quality while leveraging the detailed guidance in specialized technical documents.

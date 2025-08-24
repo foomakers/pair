@@ -267,6 +267,8 @@ Core references for implementing architectural decisions:
 - **[Code Design Guidelines](02-code-design-guidelines.md)** - _Translates architecture into code patterns_
 - **[Technical Guidelines](03-technical-guidelines.md)** - _Defines technology stack implementing this architecture_
 - **[Infrastructure Guidelines](04-infrastructure-guidelines.md)** - _Deployment strategies for these patterns_
+- **[06-definition-of-done.md](06-definition-of-done.md)**
+- **[12-collaboration-and-process-guidelines.md](12-collaboration-and-process-guidelines.md)**
 
 Supporting documents:
 

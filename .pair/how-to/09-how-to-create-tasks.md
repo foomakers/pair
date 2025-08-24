@@ -31,6 +31,42 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 **Working Principles**: Follow the **🤖🤝👨‍💻** model (AI proposes, Developer validates) throughout the entire task creation process.
 
+## **Issue Access and Tool Integration**
+
+**⚠️ MANDATORY COMPLIANCE: These instructions must ALWAYS be followed without exception when accessing initiatives, epics, user stories, or tasks. NEVER deviate from this process.**
+
+### **Access Protocol**
+
+**Step 1: Tool Configuration Check**
+
+1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
+
+_"I cannot proceed because no project management tool is configured in [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+
+**Step 2: Follow Tool-Specific Instructions**
+
+- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) for all access procedures
+- **Use configured tool** as primary and authoritative source for all issue data
+
+### **Filesystem Access Rules**
+
+**✅ PERMITTED ONLY when:**
+
+- Tool in [way-of-working.md](.pair/tech/adopted/way-of-working.md) = "filesystem"
+
+**🚫 PROHIBITED when:**
+
+- Any other tool is configured
+- **DO NOT** read [.pair/product/backlog/](.pair/product/backlog/) directories
+- **DO NOT** use filesystem as fallback
+
+### **Validation Checklist**
+
+- [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
+- [ ] Tool configured (if not: halt and request bootstrap)
+- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) consulted for access procedures
+
 ## Task Definition
 
 ### What is a Task (from User Story)?
@@ -55,6 +91,14 @@ A **Task from a User Story** is a **specific implementation step** that:
 | **User Story** | Single functionality | Deliverable feature with acceptance criteria | Functional requirements   |
 | **Task**       | Implementation step  | Executable development work                  | Technical implementation  |
 
+---
+
+**Project Management Tool Usage**
+
+Before documenting tasks, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for interfacing, linking items, and managing task records. Please refer to this documentation any time the guide asks for project management tool actions.
+
+---
+
 ## Task Creation Template
 
 Each user story must explicitly indicate which bounded context it refers to, ensuring traceability between functionality and technical domain.
@@ -65,78 +109,7 @@ If implementations modify, reduce the scope of, or create new bounded contexts, 
 - Document the decision with an ADR
 - Ensure the new structure is aligned with architectural and domain guidelines
 
-Each task must include these essential elements:
-
-```markdown
-# User Story [Epic-Code]-[Story-Number]: [Story Title]
-
-## Story Context
-
-[Brief story statement and acceptance criteria summary]
-
-## Bounded Context Reference
-
-Bounded Context: [Name of the bounded context this story belongs to]
-
-## Task Checklist
-
-### Frontend Tasks
-
-- [ ] [Task-001] [Brief task description]
-- [ ] [Task-002] [Brief task description]
-- [ ] [Task-003] [Brief task description]
-
-### Backend Tasks
-
-- [ ] [Task-004] [Brief task description]
-- [ ] [Task-005] [Brief task description]
-
-### Integration Tasks
-
-- [ ] [Task-006] [Brief task description]
-
-### Testing Tasks
-
-- [ ] [Task-007] [Brief task description]
-- [ ] [Task-008] [Brief task description]
-
-## Task Details
-
-### Task-001: [Task Title]
-
-**What to implement**: [Clear description of what needs to be built]
-**Technical approach**: Follow [specific pattern/guideline] as described in [link to documentation]
-**Acceptance criteria addressed**: [Which AC this task fulfills]
-**Dependencies**: [Other tasks this depends on]
-
-### Task-002: [Task Title]
-
-**What to implement**: [Clear description of what needs to be built]
-**Technical approach**: Follow [specific pattern/guideline] as described in [link to documentation]
-**Acceptance criteria addressed**: [Which AC this task fulfills]
-**Dependencies**: [Other tasks this depends on]
-
-[Continue for all tasks...]
-
-## Technical Standards Applied
-
-**Architecture**: Following patterns from [link to architecture.md sections]
-**Tech Stack**: Using technologies as specified in [link to tech-stack.md sections]
-**UX/UI**: Implementing design patterns from [link to ux-ui.md sections]
-**Infrastructure**: Deploying according to [link to infrastructure.md sections]
-**Domain**: Respecting boundaries defined in [link to subdomain/boundedcontext files]
-
-## Alternative Solutions Considered
-
-[If any non-standard approaches are proposed]
-**Standard Approach**: [Reference to standard solution]
-**Alternative Approach**: [Proposed alternative with strong justification]
-**Recommendation**: [Clear recommendation with reasoning]
-**ADR Required**: [Yes/No - if alternative is selected, ADR must be created]
-**Bounded Context scope changed**: [Yes/No - if alternative solution impact bounded context adoption, bounded context must be updated]
-
-If an ADR is required for a non-standard technical decision, you must also update the relevant adoption documentation. This includes not only technical adoption files (architecture, tech stack, infrastructure, UX/UI), but also the structure and documentation of bounded contexts if the implementation changes, reduces, or creates new bounded contexts. The adoption update must clearly describe the impact on both technical standards and domain boundaries, ensuring all changes are traceable and aligned with project guidelines.
-```
+Task must follow this comprehensive template you find in the [Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md).
 
 ## Prerequisites Verification
 
@@ -636,7 +609,8 @@ _"All tasks for User Story '[STORY_ID]: [STORY_NAME]' are documented and ready f
 
 - `.pair/product/adopted/PRD.md` - Product vision, user personas, and requirements
 - `.pair/way-of-working.md` - Development methodology and process definitions
-- `.pair/product/backlog/03-user-stories/current-sprint/` - TODO stories ready for task breakdown (if the project management tool specified in the [(]way of working document](.pair/tech/adopted/way-of-working.md) is the file system)
+- `.pair/product/backlog/03-user-stories/current-sprint/` - TODO stories ready for task breakdown (if the project management tool is filesystem)
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 
@@ -688,7 +662,7 @@ _"All tasks for User Story '[STORY_ID]: [STORY_NAME]' are documented and ready f
 **Related Documents:**
 
 - Previous: [08-how-to-refine-a-user-story.md](./08-how-to-refine-a-user-story.md)
-- Bootstrap Checklist: [03-how-to-complete-bootstrap-checklist.md](./03-how-to-complete-bootstrap-checklist.md)
+- Bootstrap Checklist: [02-how-to-complete-bootstrap-checklist.md](./02-how-to-complete-bootstrap-checklist.md)
 - Next: [10-how-to-implement-a-task.md](./10-how-to-implement-a-task.md)
 
 This guide ensures a systematic, technically consistent process that produces high-quality task breakdowns ready for efficient implementation while maintaining alignment with established technical standards and architectural decisions.
