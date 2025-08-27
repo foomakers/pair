@@ -1,10 +1,16 @@
 {
-  "name": "ai-assisted-dev-template",
-  "version": "1.0.0",
-  "description": "Template repository for AI-assisted development projects",
+  "name": "pair",
+  "version": "0.0.1-wip",
+  "description": "pair is a suite of resources and workflows designed to guide and enable collaboration between development teams and AI assistants throughout all phases of the product lifecycle. It provides tools for defining epics, stories, guidelines, and adoptions, integrating with major code assistants and project management tools to ensure structured processes, consistency, and quality in delivery.",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ]
+  "scripts": {
+    "test": "pnpm --filter @pair/monorepo-tests test",
+    "build": "echo \"No build step defined\"",
+    "lint": "echo \"No lint step defined\"",
+    "sync-deps": "pnpm --recursive update",
+    "deps:outdated": "pnpm --recursive outdated",
+    "catalog:update": "pnpm update",
+    "catalog:check": "pnpm list"
+  },
+  "packageManager": "pnpm@10.15.0"
 }

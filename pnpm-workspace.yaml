@@ -1,0 +1,11 @@
+packages:
+  - apps/*
+  - packages/*
+  - tools/*
+
+catalog:
+  '@types/node': 24.3.0
+  typescript: 5.4.5
+  vitest: 3.2.4
+
+cleanupUnusedCatalogs: true
