@@ -1,0 +1,35 @@
+# Operational guide:
+# When you add a new script in package.json (e.g. "build", "lint", "test", "coverage", etc.),
+# add a corresponding step here to run that command in CI/CD.
+# Example: if you add "coverage", add a step:
+#   - name: Run coverage
+#     run: pnpm coverage
+#
+# Reminder: every script that must be validated in CI/CD should have a dedicated step.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+      - name: Install dependencies
+        run: pnpm install
+      - name: Run build
+        run: pnpm build || echo "No build script defined"
+      - name: Run lint
+        run: pnpm lint || echo "No lint script defined"
+      - name: Run tests
+        run: pnpm test

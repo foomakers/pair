@@ -1,0 +1,14 @@
+{
+  "name": "@pair/monorepo-tests",
+  "private": true,
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "dependencies": {
+    "@types/node": "catalog:"
+  }
+}

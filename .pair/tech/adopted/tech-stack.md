@@ -18,6 +18,10 @@
 - External services may be used for LLM models or vector database if required for RAG.
 - Next.js v14.x is adopted for the user interface for RAG management.
 - shadcn/ui v1.x is adopted as the visual framework for the application UI.
+- pnpm is adopted as the package manager for all workspaces and monorepo management.
+- pnpm v10.15.0 is adopted for fast, efficient, and deterministic dependency management, ideal for monorepo setups and strict workspace isolation.
+- vitest is adopted as the testing framework for all TypeScript and JavaScript codebases.
+- vitest v3.2.4 is adopted for fast, Vite-native, TypeScript-friendly testing in modern monorepo and workspace setups.
 
 ---
 

@@ -1,2 +1,12 @@
-.DS_STORE
-.pair_test
+node_modules/
+dist/
+build/
+.vscode/
+.idea/
+.DS_Store
+*.log
+.env
+.env.local
+.env.*
+!.env.example
+coverage/
