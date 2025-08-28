@@ -22,6 +22,7 @@
 - pnpm v10.15.0 is adopted for fast, efficient, and deterministic dependency management, ideal for monorepo setups and strict workspace isolation.
 - vitest is adopted as the testing framework for all TypeScript and JavaScript codebases.
 - vitest v3.2.4 is adopted for fast, Vite-native, TypeScript-friendly testing in modern monorepo and workspace setups.
+- dotenv v17.2.x is adopted for environment variable management in Node.js workspaces and CI/CD workflows.
 
 ---
 

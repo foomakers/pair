@@ -10,6 +10,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -27,6 +28,16 @@ jobs:
         uses: pnpm/action-setup@v2
       - name: Install dependencies
         run: pnpm install
+      - name: Load environment variables from GitHub Secrets
+        run: |
+          echo "PAIR_ADOPTION_FOLDER=$PAIR_ADOPTION_FOLDER" >> $GITHUB_ENV
+        env:
+          PAIR_ADOPTION_FOLDER: ${{ secrets.PAIR_ADOPTION_FOLDER }}
+      - name: Load environment variables from root .env (if present)
+        run: |
+          if [ -f .env ]; then
+            export $(grep -v '^#' .env | xargs)
+          fi
       - name: Run build
         run: pnpm build || echo "No build script defined"
       - name: Run lint
