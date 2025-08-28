@@ -1,4 +1,4 @@
-# Pair - your AI-Assisted peer
+# Pair - your AI-Assisted peer [![CI](https://github.com/foomakers/pair/actions/workflows/ci.yml/badge.svg)](https://github.com/foomakers/pair/actions/workflows/ci.yml)
 
 ## 🌟 Product Context
 
@@ -134,6 +134,61 @@ See `.pair/way-of-working.md` for detailed process guidelines.
    - Use the guides in `.pair/how-to/` for breaking down work
    - Follow the technical standards in `.pair/tech/knowledge-base/`
    - Ensure all work meets the criteria in `.pair/tech/knowledge-base/06-definition-of-done.md`
+
+## 🔒 Repository Secrets & Environment Configuration
+
+This project uses environment variables to securely manage secrets and configuration for CI/CD and development workflows.
+
+### Global vs Workspace Environment Files
+
+- **Global `.env.example` (at repository root):**
+  - Contains variables shared across all workspaces/packages (e.g., `PAIR_ADOPTION_FOLDER`)
+  - Use this as a template to create your own `.env` at the root for global config
+- **Workspace `.env.example` (in workspace/package folders):**
+  - For secrets/config unique to a specific workspace/package
+  - Use as a template for workspace-specific `.env` files
+
+**Loading order:**
+
+1. Each workspace loads its own `.env` (if present)
+2. If a variable is not set, it falls back to the global `.env` at the root
+
+### Example Variable
+
+```
+PAIR_ADOPTION_FOLDER=.pair
+```
+
+### Secret Management Process
+
+- **Never commit actual `.env` files**—only `.env.example` templates
+- Add secrets for CI/CD using GitHub Secrets (see GitHub repository settings)
+- For local development, copy `.env.example` to `.env` and set your values
+- Document any workspace-specific variables in the corresponding `.env.example`
+
+### CI/CD Integration
+
+- CI/CD workflows load secrets from GitHub repository settings and/or the root `.env`
+- Local development loads secrets using standard libraries (e.g., `dotenv` for Node.js)
+- Ensure `.gitignore` excludes all `.env` files
+
+### Secret Rotation & Troubleshooting
+
+- **Secret Rotation:**
+
+  - For GitHub Secrets: Go to repository settings → Secrets → Actions, update the value, and save. All workflows will use the new value on next run.
+  - For local `.env` files: Update the value in your `.env` or workspace `.env` and restart your application. Never commit real secrets.
+  - For workspace overrides: Update the workspace `.env` and ensure it is not tracked by git.
+  - After rotation, verify workflows and local runs pick up the new value.
+
+- **Troubleshooting:**
+  - If a secret is missing, check both workspace and root `.env.example` for required variables.
+  - For CI/CD failures, verify secrets are set in GitHub repository settings and that `.env` files are present locally.
+  - Use `pnpm test` to validate local setup; check logs for missing env variables.
+  - Ensure `.env` files are excluded by `.gitignore` and only `.env.example` is tracked.
+  - For workspace-specific issues, check the workspace `.env` and override logic.
+
+For more details, see `.pair/how-to/` and `.pair/tech/knowledge-base/`.
 
 ## 📚 Documentation
 

@@ -9,6 +9,9 @@ catalogs:
     '@types/node':
       specifier: 24.3.0
       version: 24.3.0
+    dotenv:
+      specifier: 17.2.1
+      version: 17.2.1
     typescript:
       specifier: 5.4.5
       version: 5.4.5
@@ -25,6 +28,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.3.0
+      dotenv:
+        specifier: 'catalog:'
+        version: 17.2.1
     devDependencies:
       typescript:
         specifier: 'catalog:'
@@ -363,6 +369,10 @@ packages:
   deep-eql@5.0.2:
     resolution: {integrity: sha512-h5k/5U50IJJFpzfL6nO9jaaumfjO/f2NjK/oYB2Djzm4p9L+3T9qWpZqZ2hAbLPuuYq9wrU08WQyBTL5GbPk5Q==}
     engines: {node: '>=6'}
+
+  dotenv@17.2.1:
+    resolution: {integrity: sha512-kQhDYKZecqnM0fCnzI5eIv5L4cAe/iRI+HqMbO/hbRdTAeXDG+M9FjipUxNfbARuEg4iHIbhnhs78BCHNbSxEQ==}
+    engines: {node: '>=12'}
 
   es-module-lexer@1.7.0:
     resolution: {integrity: sha512-jEQoCwk8hyb2AZziIOLhDqpm5+2ww5uIE6lkO/6jcOCusfk6LhMHpXXfBLXTZ7Ydyt0j4VoUQv6uGNYbdW+kBA==}
@@ -772,6 +782,8 @@ snapshots:
       ms: 2.1.3
 
   deep-eql@5.0.2: {}
+
+  dotenv@17.2.1: {}
 
   es-module-lexer@1.7.0: {}
 

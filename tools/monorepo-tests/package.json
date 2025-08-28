@@ -9,6 +9,7 @@
     "vitest": "catalog:"
   },
   "dependencies": {
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "dotenv": "catalog:"
   }
 }
