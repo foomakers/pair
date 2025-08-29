@@ -4,9 +4,15 @@
   "description": "ESLint config for pair monorepo (see catalog for downloaded package versions)",
   "main": "index.js",
   "license": "MIT",
-  "peerDependencies": {
+  "bin": {
+    "lint": "./bin/lint.sh",
+    "eslint": "./bin/eslint.sh"
+  },
+  "devDependencies": {
     "eslint": "catalog:",
+    "@eslint/js": "catalog:",
     "@typescript-eslint/eslint-plugin": "catalog:",
-    "@typescript-eslint/parser": "catalog:"
+    "@typescript-eslint/parser": "catalog:",
+    "globals": "catalog:"
   }
 }

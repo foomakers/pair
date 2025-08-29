@@ -8,8 +8,11 @@
     "prettier-check": "./bin/prettier-check.sh",
     "prettier-fix": "./bin/prettier-fix.sh"
   },
-  "keywords": ["prettier", "prettier-config"],
-  "peerDependencies": {
+  "keywords": [
+    "prettier",
+    "prettier-config"
+  ],
+  "devDependencies": {
     "prettier": "catalog:"
   },
   "publishConfig": {

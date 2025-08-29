@@ -2,14 +2,20 @@
   "name": "@pair/monorepo-tests",
   "private": true,
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "lint": "lint",
+    "prettier:fix": "prettier-fix",
+    "prettier:check": "prettier-check"
   },
   "devDependencies": {
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@pair/eslint-config": "workspace:*",
+    "@pair/prettier-config": "workspace:*"
   },
   "dependencies": {
     "@types/node": "catalog:",
     "dotenv": "catalog:"
-  }
+  },
+  "prettier": "@pair/prettier-config"
 }
