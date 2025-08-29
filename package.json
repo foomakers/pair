@@ -12,10 +12,12 @@
     "sync-deps": "pnpm --recursive update",
     "deps:outdated": "pnpm --recursive outdated",
     "catalog:update": "pnpm update",
-    "catalog:check": "pnpm list"
+    "catalog:check": "pnpm list",
+    "prepare": "husky install"
   },
   "devDependencies": {
-    "@pair/prettier-config": "workspace:*"
+    "@pair/prettier-config": "workspace:*",
+    "husky": "^8.0.0"
   },
   "packageManager": "pnpm@10.15.0",
   "prettier": "@pair/prettier-config"
