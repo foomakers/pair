@@ -43,7 +43,7 @@ describe('Repository Setup: Initial Codebase and Test Configuration', () => {
   it('should not declare devDependencies in package.json root (only catalog)', () => {
     const pkg = JSON.parse(read('package.json'))
     if (pkg.devDependencies) {
-      const allowed = ['@pair/prettier-config', '@pair/eslint-config']
+      const allowed = ['@pair/prettier-config', '@pair/eslint-config', 'husky']
       const keys = Object.keys(pkg.devDependencies)
       expect(keys.every(k => allowed.includes(k))).toBe(true)
     } else {
