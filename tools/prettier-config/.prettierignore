@@ -1,0 +1,9 @@
+build/
+node_modules/
+coverage/
+dist/
+.next/
+out/
+
+**/node_modules/
+**/.cache/

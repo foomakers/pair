@@ -190,6 +190,40 @@ PAIR_ADOPTION_FOLDER=.pair
 
 For more details, see `.pair/how-to/` and `.pair/tech/knowledge-base/`.
 
+## 🐾 Husky Troubleshooting
+
+### Common Issues
+
+- **Hooks not running:**
+
+  - Ensure you have run `pnpm install` after cloning the repo.
+  - Make sure Husky is installed as a devDependency and `.husky/` directory exists in the repo root.
+  - If hooks are not triggered, run `pnpm husky install` or `npx husky install` to reinitialize.
+  - Check that your git client is not bypassing hooks (e.g., using `--no-verify`).
+
+- **Permission errors:**
+
+  - Make sure hook scripts in `.husky/` are executable (`chmod +x .husky/*`).
+
+- **Pre-commit/pre-push fails unexpectedly:**
+
+  - Run the hook commands manually to debug (e.g., `pnpm lint`, `pnpm test`).
+  - Check for missing dependencies or misconfigured scripts in `package.json`.
+
+- **Monorepo issues:**
+  - Ensure hooks reference workspace scripts correctly (e.g., use `pnpm lint` for recursive linting).
+
+### Resetting Husky
+
+If you need to reset Husky hooks:
+
+```bash
+rm -rf .husky/
+npx husky-init && pnpm install
+```
+
+For more details, see the [Husky documentation](https://typicode.github.io/husky/#/).
+
 ## 📚 Documentation
 
 - [Development Process Guides](.pair/how-to/) – Step-by-step guides for breaking down work

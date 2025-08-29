@@ -1,5 +1,6 @@
-import fs from "fs";
-import path from "path";
+import fs from 'fs'
+import path from 'path'
+import dotenv from 'dotenv'
 
 /**
  * Loads environment variables for a workspace:
@@ -10,21 +11,20 @@ import path from "path";
  *   loadEnv(__dirname)
  */
 export function loadEnv(workspaceDir: string) {
-  const rootEnvPath = path.resolve(workspaceDir, "../../.env");
-  const workspaceEnvPath = path.resolve(workspaceDir, ".env");
+  const rootEnvPath = path.resolve(workspaceDir, '../../.env')
+  const workspaceEnvPath = path.resolve(workspaceDir, '.env')
 
   // Load workspace .env first
   if (fs.existsSync(workspaceEnvPath)) {
-    require("dotenv").config({ path: workspaceEnvPath });
+    dotenv.config({ path: workspaceEnvPath })
   }
 
   // Load root .env, but only set variables not already defined
   if (fs.existsSync(rootEnvPath)) {
-    const dotenv = require("dotenv");
-    const rootVars = dotenv.parse(fs.readFileSync(rootEnvPath));
+    const rootVars = dotenv.parse(fs.readFileSync(rootEnvPath))
     for (const [key, value] of Object.entries(rootVars)) {
       if (!process.env[key]) {
-        process.env[key] = String(value);
+        process.env[key] = String(value)
       }
     }
   }

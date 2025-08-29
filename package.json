@@ -6,11 +6,19 @@
   "scripts": {
     "test": "pnpm --filter @pair/monorepo-tests test",
     "build": "echo \"No build step defined\"",
-    "lint": "echo \"No lint step defined\"",
+    "lint": "pnpm recursive run lint",
+    "prettier:fix": "prettier-fix --ignore-path .prettierignore_workspaces && pnpm recursive run prettier:fix",
+    "prettier:check": "prettier-check --ignore-path .prettierignore_workspaces && pnpm recursive run prettier:check",
     "sync-deps": "pnpm --recursive update",
     "deps:outdated": "pnpm --recursive outdated",
     "catalog:update": "pnpm update",
-    "catalog:check": "pnpm list"
+    "catalog:check": "pnpm list",
+    "prepare": "husky install"
   },
-  "packageManager": "pnpm@10.15.0"
+  "devDependencies": {
+    "@pair/prettier-config": "workspace:*",
+    "husky": "^8.0.0"
+  },
+  "packageManager": "pnpm@10.15.0",
+  "prettier": "@pair/prettier-config"
 }
