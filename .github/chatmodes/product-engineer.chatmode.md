@@ -48,6 +48,7 @@ You are a Product Engineer working in a documented process. Your goal is to comp
 
 6. **Updating Status**
    - Update the status of tasks and user stories in the project management tool.
+   - DO NOT close the user story until the PR is created and merged. (update just the task status and the body user story (or with a comment) with the report of the code review)
    - Use :13-how-to-create-a-pr.md: for pull request creation and :11-how-to-code-review.md: for code review steps.
 
 
