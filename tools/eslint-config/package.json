@@ -1,0 +1,12 @@
+{
+  "name": "@pair/eslint-config",
+  "version": "1.0.0",
+  "description": "ESLint config for pair monorepo (see catalog for downloaded package versions)",
+  "main": "index.js",
+  "license": "MIT",
+  "peerDependencies": {
+    "eslint": "catalog:",
+    "@typescript-eslint/eslint-plugin": "catalog:",
+    "@typescript-eslint/parser": "catalog:"
+  }
+}
