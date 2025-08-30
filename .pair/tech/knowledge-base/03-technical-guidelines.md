@@ -482,27 +482,27 @@ For comprehensive Model Context Protocol integration patterns and advanced AI-as
 // Feature flag configuration schema
 type FeatureFlagConfig = {
   // Flag identification
-  key: string;
-  name: string;
-  description: string;
+  key: string
+  name: string
+  description: string
 
   // Rollout configuration
-  enabled: boolean;
-  rolloutPercentage: number;
+  enabled: boolean
+  rolloutPercentage: number
 
   // Environment targeting
-  environments: Array<"local" | "development" | "staging" | "production">;
+  environments: Array<'local' | 'development' | 'staging' | 'production'>
 
   // User targeting
-  userSegments?: string[];
-  userIds?: string[];
+  userSegments?: string[]
+  userIds?: string[]
 
   // Metadata
-  createdAt: string;
-  createdBy: string;
-  lastModified: string;
-  deprecationDate?: string;
-};
+  createdAt: string
+  createdBy: string
+  lastModified: string
+  deprecationDate?: string
+}
 ```
 
 **Feature Flag Implementation Pattern**:
@@ -510,47 +510,37 @@ type FeatureFlagConfig = {
 ```typescript
 // Feature flag service interface
 interface FeatureFlagService {
-  isEnabled(flagKey: string, context?: FeatureFlagContext): Promise<boolean>;
-  getVariation<T>(
-    flagKey: string,
-    defaultValue: T,
-    context?: FeatureFlagContext
-  ): Promise<T>;
-  getAllFlags(context?: FeatureFlagContext): Promise<Record<string, boolean>>;
+  isEnabled(flagKey: string, context?: FeatureFlagContext): Promise<boolean>
+  getVariation<T>(flagKey: string, defaultValue: T, context?: FeatureFlagContext): Promise<T>
+  getAllFlags(context?: FeatureFlagContext): Promise<Record<string, boolean>>
 }
 
 // Feature flag context
 type FeatureFlagContext = {
-  userId?: string;
-  userSegments?: string[];
-  environment: string;
-  metadata?: Record<string, any>;
-};
+  userId?: string
+  userSegments?: string[]
+  environment: string
+  metadata?: Record<string, any>
+}
 
 // Usage in application code
-const paymentService = container.resolve<PaymentService>();
-const featureFlags = container.resolve<FeatureFlagService>();
+const paymentService = container.resolve<PaymentService>()
+const featureFlags = container.resolve<FeatureFlagService>()
 
-export const processPayment = async (
-  paymentData: PaymentData,
-  context: RequestContext
-) => {
+export const processPayment = async (paymentData: PaymentData, context: RequestContext) => {
   // Check feature flag before executing new functionality
-  const isNewPaymentFlowEnabled = await featureFlags.isEnabled(
-    "new-payment-flow-v2",
-    {
-      userId: context.user.id,
-      userSegments: context.user.segments,
-      environment: process.env.NODE_ENV,
-    }
-  );
+  const isNewPaymentFlowEnabled = await featureFlags.isEnabled('new-payment-flow-v2', {
+    userId: context.user.id,
+    userSegments: context.user.segments,
+    environment: process.env.NODE_ENV,
+  })
 
   if (isNewPaymentFlowEnabled) {
-    return await paymentService.processPaymentV2(paymentData);
+    return await paymentService.processPaymentV2(paymentData)
   } else {
-    return await paymentService.processPayment(paymentData);
+    return await paymentService.processPayment(paymentData)
   }
-};
+}
 ```
 
 **React Component Feature Flagging**:
@@ -558,45 +548,45 @@ export const processPayment = async (
 ```typescript
 // React hook for feature flags
 const useFeatureFlag = (flagKey: string, context?: FeatureFlagContext) => {
-  const [isEnabled, setIsEnabled] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [isEnabled, setIsEnabled] = useState(false)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const checkFlag = async () => {
       try {
-        const enabled = await featureFlagService.isEnabled(flagKey, context);
-        setIsEnabled(enabled);
+        const enabled = await featureFlagService.isEnabled(flagKey, context)
+        setIsEnabled(enabled)
       } catch (error) {
-        console.error(`Error checking feature flag ${flagKey}:`, error);
-        setIsEnabled(false); // Fail safely
+        console.error(`Error checking feature flag ${flagKey}:`, error)
+        setIsEnabled(false) // Fail safely
       } finally {
-        setLoading(false);
+        setLoading(false)
       }
-    };
+    }
 
-    checkFlag();
-  }, [flagKey, context]);
+    checkFlag()
+  }, [flagKey, context])
 
-  return { isEnabled, loading };
-};
+  return { isEnabled, loading }
+}
 
 // Feature flag component wrapper
 const FeatureFlag: React.FC<{
-  flag: string;
-  children: React.ReactNode;
-  fallback?: React.ReactNode;
-  context?: FeatureFlagContext;
+  flag: string
+  children: React.ReactNode
+  fallback?: React.ReactNode
+  context?: FeatureFlagContext
 }> = ({ flag, children, fallback = null, context }) => {
-  const { isEnabled, loading } = useFeatureFlag(flag, context);
+  const { isEnabled, loading } = useFeatureFlag(flag, context)
 
-  if (loading) return null; // Or loading spinner
+  if (loading) return null // Or loading spinner
 
-  return isEnabled ? <>{children}</> : <>{fallback}</>;
-};
+  return isEnabled ? <>{children}</> : <>{fallback}</>
+}
 
 // Usage in components
 export const DashboardPage = () => {
-  const user = useUser();
+  const user = useUser()
 
   return (
     <div>
@@ -607,19 +597,18 @@ export const DashboardPage = () => {
 
       {/* New feature behind flag */}
       <FeatureFlag
-        flag="enhanced-analytics-dashboard"
+        flag='enhanced-analytics-dashboard'
         context={{
           userId: user.id,
           userSegments: user.segments,
           environment: process.env.NODE_ENV,
         }}
-        fallback={<BasicAnalytics />}
-      >
+        fallback={<BasicAnalytics />}>
         <EnhancedAnalyticsDashboard />
       </FeatureFlag>
     </div>
-  );
-};
+  )
+}
 ```
 
 ### Flag Lifecycle Management
@@ -638,16 +627,16 @@ export const DashboardPage = () => {
 
 ```typescript
 // Good flag names
-"user-profile-v2";
-"payment-flow-optimization";
-"enhanced-search-algorithm";
-"mobile-app-redesign";
+'user-profile-v2'
+'payment-flow-optimization'
+'enhanced-search-algorithm'
+'mobile-app-redesign'
 
 // Bad flag names
-"flag1";
-"test-feature";
-"new-stuff";
-"temporary-fix";
+'flag1'
+'test-feature'
+'new-stuff'
+'temporary-fix'
 ```
 
 **Flag Deprecation Strategy**:
@@ -664,11 +653,11 @@ export const DashboardPage = () => {
 ```typescript
 // Local environment - all flags enabled for development
 const localFlags = {
-  "user-profile-v2": true,
-  "payment-flow-optimization": true,
-  "enhanced-search-algorithm": true,
-  "mobile-app-redesign": true,
-};
+  'user-profile-v2': true,
+  'payment-flow-optimization': true,
+  'enhanced-search-algorithm': true,
+  'mobile-app-redesign': true,
+}
 ```
 
 **Development Environment**:
@@ -676,11 +665,11 @@ const localFlags = {
 ```typescript
 // Development environment - selective enablement for testing
 const developmentFlags = {
-  "user-profile-v2": true, // Ready for testing
-  "payment-flow-optimization": false, // Not ready yet
-  "enhanced-search-algorithm": true, // QA testing
-  "mobile-app-redesign": false, // Still in development
-};
+  'user-profile-v2': true, // Ready for testing
+  'payment-flow-optimization': false, // Not ready yet
+  'enhanced-search-algorithm': true, // QA testing
+  'mobile-app-redesign': false, // Still in development
+}
 ```
 
 **Staging Environment**:
@@ -688,11 +677,11 @@ const developmentFlags = {
 ```typescript
 // Staging environment - production-like configuration
 const stagingFlags = {
-  "user-profile-v2": true, // Ready for production
-  "payment-flow-optimization": true, // Final testing
-  "enhanced-search-algorithm": false, // Needs more work
-  "mobile-app-redesign": false, // Major feature, more testing needed
-};
+  'user-profile-v2': true, // Ready for production
+  'payment-flow-optimization': true, // Final testing
+  'enhanced-search-algorithm': false, // Needs more work
+  'mobile-app-redesign': false, // Major feature, more testing needed
+}
 ```
 
 **Production Environment**:
@@ -700,11 +689,11 @@ const stagingFlags = {
 ```typescript
 // Production environment - conservative rollouts
 const productionFlags = {
-  "user-profile-v2": true, // Fully rolled out
-  "payment-flow-optimization": 0.1, // 10% rollout
-  "enhanced-search-algorithm": false, // Not ready for production
-  "mobile-app-redesign": false, // Still in development
-};
+  'user-profile-v2': true, // Fully rolled out
+  'payment-flow-optimization': 0.1, // 10% rollout
+  'enhanced-search-algorithm': false, // Not ready for production
+  'mobile-app-redesign': false, // Still in development
+}
 ```
 
 **Feature Flag Service Integration**:
@@ -720,9 +709,9 @@ const productionFlags = {
 ```typescript
 // Simple database-backed feature flag service
 interface FeatureFlagRepository {
-  getFlag(key: string): Promise<FeatureFlagConfig | null>;
-  getAllFlags(): Promise<FeatureFlagConfig[]>;
-  updateFlag(key: string, config: Partial<FeatureFlagConfig>): Promise<void>;
+  getFlag(key: string): Promise<FeatureFlagConfig | null>
+  getAllFlags(): Promise<FeatureFlagConfig[]>
+  updateFlag(key: string, config: Partial<FeatureFlagConfig>): Promise<void>
 }
 
 // Redis-cached implementation
@@ -730,68 +719,54 @@ class CachedFeatureFlagService implements FeatureFlagService {
   constructor(
     private repository: FeatureFlagRepository,
     private cache: RedisClient,
-    private cacheTimeout: number = 300 // 5 minutes
+    private cacheTimeout: number = 300, // 5 minutes
   ) {}
 
-  async isEnabled(
-    flagKey: string,
-    context?: FeatureFlagContext
-  ): Promise<boolean> {
-    const cacheKey = `flag:${flagKey}`;
-    let config = await this.cache.get(cacheKey);
+  async isEnabled(flagKey: string, context?: FeatureFlagContext): Promise<boolean> {
+    const cacheKey = `flag:${flagKey}`
+    let config = await this.cache.get(cacheKey)
 
     if (!config) {
-      config = await this.repository.getFlag(flagKey);
+      config = await this.repository.getFlag(flagKey)
       if (config) {
-        await this.cache.setex(
-          cacheKey,
-          this.cacheTimeout,
-          JSON.stringify(config)
-        );
+        await this.cache.setex(cacheKey, this.cacheTimeout, JSON.stringify(config))
       }
     } else {
-      config = JSON.parse(config);
+      config = JSON.parse(config)
     }
 
-    if (!config) return false;
+    if (!config) return false
 
-    return this.evaluateFlag(config, context);
+    return this.evaluateFlag(config, context)
   }
 
-  private evaluateFlag(
-    config: FeatureFlagConfig,
-    context?: FeatureFlagContext
-  ): boolean {
+  private evaluateFlag(config: FeatureFlagConfig, context?: FeatureFlagContext): boolean {
     // Environment check
-    if (!config.environments.includes(context?.environment || "production")) {
-      return false;
+    if (!config.environments.includes(context?.environment || 'production')) {
+      return false
     }
 
     // User targeting
-    if (
-      config.userIds &&
-      context?.userId &&
-      config.userIds.includes(context.userId)
-    ) {
-      return true;
+    if (config.userIds && context?.userId && config.userIds.includes(context.userId)) {
+      return true
     }
 
     // Segment targeting
     if (config.userSegments && context?.userSegments) {
-      const hasMatchingSegment = config.userSegments.some((segment) =>
-        context.userSegments?.includes(segment)
-      );
-      if (hasMatchingSegment) return config.enabled;
+      const hasMatchingSegment = config.userSegments.some(segment =>
+        context.userSegments?.includes(segment),
+      )
+      if (hasMatchingSegment) return config.enabled
     }
 
     // Percentage rollout
     if (config.rolloutPercentage > 0 && context?.userId) {
-      const hash = this.hashUserId(context.userId + config.key);
-      const userPercentage = hash % 100;
-      return userPercentage < config.rolloutPercentage;
+      const hash = this.hashUserId(context.userId + config.key)
+      const userPercentage = hash % 100
+      return userPercentage < config.rolloutPercentage
     }
 
-    return config.enabled;
+    return config.enabled
   }
 }
 ```
@@ -897,4 +872,4 @@ Supporting documents:
 - **[UX Guidelines](05-ux-guidelines.md)** - _Tech choices must support UX design_
 - **[Testing Strategy](07-testing-strategy.md)** - _Testing frameworks validate implementations_
 - **[Definition of Done](06-definition-of-done.md)** - _Quality gates validate tech compliance_
-- **[Collaboration and Process Guidelines](12-collaboration-and-process-guidelines.md)** - _Standards for team collaboration and process management_
+- **[Collaboration and Process Guidelines](12-collaboration-and-process-guidelines/README.md)** - _Standards for team collaboration and process management_

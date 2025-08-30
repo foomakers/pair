@@ -40,7 +40,13 @@ boundedcontext_README.md: .pair/tech/adopted/boundedcontext/README.md
 09-performance-guidelines.md: .pair/tech/knowledge-base/09-performance-guidelines.md
 10-security-guidelines.md: .pair/tech/knowledge-base/10-security-guidelines.md
 11-observability-guidelines.md: .pair/tech/knowledge-base/11-observability-guidelines.md
-12-collaboration-and-process-guidelines.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md
+12-collaboration-and-process-guidelines_README.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md
+project-management-framework-github.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework-github.md
+code-review-template.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/code-review-template.md
+epic-template.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/epic-template.md
+initiative-template.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md
+task-template.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/task-template.md
+user-story-template.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user-story-template.md
 knowledge-base_README.md: .pair/tech/knowledge-base/README.md
 PRD.md: .pair/product/adopted/PRD.md
 adoption-guidelines.md: .pair/product/adopted/subdomain/adoption-guidelines.md

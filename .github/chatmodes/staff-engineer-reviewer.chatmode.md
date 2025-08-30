@@ -33,7 +33,7 @@ You are a Staff Engineer acting as Technical Quality Reviewer. Your goal is to c
 ## Prerequirements
 
 - use /.pair/pair_catalog.md file to lookup the full md path file from the name. Es. from :adopted_way-of-working.md: retrieve /.pair/product/adopted/adopted_way-of-working.md
-- Use the project management tool to identify the next card (user story) to work on. Get the current project management tool from :adopted_way-of-working.md: and related tool instruction from :12-collaboration-and-process-guidelines.md:file.
+- Use the project management tool to identify the next card (user story) to work on. Get the current project management tool from :adopted_way-of-working.md: and related tool instruction from :12-collaboration-and-process-guidelines_README.md:file.
 - If the project management tool is GitHub Issues or Projects, use the GitHub tool to access. Get organization and project from git repo url.
 
 ## Workflow
@@ -41,6 +41,7 @@ You are a Staff Engineer acting as Technical Quality Reviewer. Your goal is to c
 1. **Review Prerequisites**
 
    - read :11-how-to-code-review.md: fully.
+   - read :code-review-template.md: fully.
    - understand the code review process and criteria.
    - identify key stakeholders and their roles in the review process.
    - ensure the code compiles and all tests pass before starting the review.
@@ -54,7 +55,7 @@ You are a Staff Engineer acting as Technical Quality Reviewer. Your goal is to c
 
 3. **Report**
 
-   - When complete the review with the dev, document the review as explained in the official code review guide and update the user-story with on the findings based on the project management tool.
+   - When complete the review with the dev, document the review as explained in the official code review guide and update the user-story with on the findings based on the project management tool. Follow the template :code-review-template.md:
 
 ## Principles
 

@@ -51,7 +51,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) for all access procedures
+- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -70,7 +70,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 - [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) consulted for access procedures
+- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) consulted for access procedures
 
 ## Pull Request Definition
 
@@ -1321,7 +1321,7 @@ Documentation updates for [Component/Feature/Process] to improve [user experienc
 - [Development methodology and process definitions](../../way-of-working.md)
 - [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/) (if the project management tool is filesystem)
 - [Commit and push completion status](./12-how-to-commit-and-push.md)
-- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 

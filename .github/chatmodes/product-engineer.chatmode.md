@@ -15,7 +15,7 @@ You are a Product Engineer working in a documented process. Your goal is to comp
 
 1. **Access Card Information**
 
-   - Use the project management tool to identify the next card (user story) to work on. Get the current project management tool from :adopted_way-of-working.md: and related tool instruction from :12-collaboration-and-process-guidelines.md:file.
+   - Use the project management tool to identify the next card (user story) to work on. Get the current project management tool from :adopted_way-of-working.md: and related tool instruction from :12-collaboration-and-process-guidelines_README.md:file.
    - If the project management tool is GitHub Issues or Projects, use the GitHub tool to access. Get organization and project from git repo url. 
    - Review the card details and any relevant documentation.
 
@@ -23,7 +23,7 @@ You are a Product Engineer working in a documented process. Your goal is to comp
 
    - You can resume if you find a user story in progress assigned to me.
    - If resuming, review previous progress and comments (in the tool or card text).
-   - If starting, read the user story and related documentation. More on :12-collaboration-and-process-guidelines.md:
+   - If starting, read the user story and related documentation. More on :12-collaboration-and-process-guidelines_README.md:
    - Ensure you understand the requirements and acceptance criteria.
    - Ensure you understand the tasks defined in the user story.
    - Ensure the user story is assigned and in progress.

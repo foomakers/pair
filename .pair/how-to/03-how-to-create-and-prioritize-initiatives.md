@@ -28,6 +28,10 @@ The AI assistant acts as a **Strategic Initiative Architect** who:
 
 **Working Principles**: Follow the **🤖🤝👨‍💻** model (LLM proposes, Developer validates) throughout the entire process.
 
+## Prerequisite
+
+Before starting, **read and consult the Initiative Template**: [Initiative Template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md). All required structure and fields are defined in the template.
+
 ## **Issue Access and Tool Integration**
 
 **⚠️ MANDATORY COMPLIANCE: These instructions must ALWAYS be followed without exception when accessing initiatives, epics, user stories, or tasks. NEVER deviate from this process.**
@@ -43,7 +47,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) for all access procedures
+- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -62,11 +66,11 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 - [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) consulted for access procedures
+- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) consulted for access procedures
 
 ## Initiative Template Structure
 
-Each initiative must follow the comprehensive template you find ([in the Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines.md))
+Each initiative must follow the comprehensive [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md)
 
 Step 0: Bootstrap Checklist Validation
 AI Assistant Instructions: Before beginning epic breakdown, verify that all foundational documents exist:
@@ -97,7 +101,7 @@ If Tool Not Configured: "I can see the foundational documents are ready, but I n
 **AI Assistant Instructions:** Before beginning initiative creation, verify the project management setup:
 
 1. **Check [`.pair/tech/adopted/way-of-working.md`](.pair/tech/adopted/way-of-working.md)** to identify the defined project management tool
-2. **Read ([Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines.md))** to understand how to operate with the project management tool
+2. **Read ([Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md))** to understand how to operate with the project management tool
 3. **Read adoption file**: [.pair/tech/adopted/README.md](.pair/tech/adopted/README.md)
    - [.pair/tech/adopted/architecture.md](.pair/tech/adopted/architecture.md)
    - [.pair/tech/adopted/tech-stack.md](.pair/tech/adopted/tech-stack.md)
@@ -120,7 +124,7 @@ _This choice will determine how we structure and manage your strategic initiativ
 **Tool-Specific Adaptations:**
 
 - **File System**: Follow the current documentation process as described in subsequent steps
-- **External Tools**: Adapt initiative creation to work within the chosen tool's structure while maintaining the comprehensive template content
+- **External Tools**: Adapt initiative creation to work within the chosen tool's structure while maintaining the comprehensive [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md) content
 
 ### Step 1: Reference Analysis and Context Building
 
@@ -129,8 +133,8 @@ _This choice will determine how we structure and manage your strategic initiativ
 1. **Review [`.pair/product/adopted/PRD.md`](.pair/product/adopted/PRD.md)** to understand product vision, goals, and requirements
 2. **Study [`.pair/way-of-working.md`](.pair/way-of-working.md)** to understand the development methodology and value streams
 3. **Check existing initiatives** according to the defined project management approach:
-   - **File System**: Review existing initiatives ([see Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines.md)) to understand current numbering and avoid conflicts
-   - **External Tools**: Query the project management tool to understand existing initiative structure and numbering conventions ([see Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines.md))
+   - **File System**: Review existing initiatives ([see Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md)) to understand current numbering and avoid conflicts
+   - **External Tools**: Query the project management tool to understand existing initiative structure and numbering conventions ([see Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md))
 4. **Create initiative analysis framework** based on PRD goals and way-of-working principles
 
 Your analysis should extract:
@@ -168,7 +172,7 @@ _"Based on the PRD analysis, I've identified [X] strategic initiatives that woul
 
 **AI Assistant Instructions:** For each initiative, following priority order and adapting to chosen tool:
 
-1. **Present initiative concept** with initial template draft formatted for the chosen approach
+1. **Present initiative concept** with initial [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md) draft formatted for the chosen approach
 2. **Request specific feedback** on:
    - Business rationale accuracy
    - Scope definition completeness
@@ -205,18 +209,18 @@ _"Here's the refined initiative ready for [Tool Name]. The comprehensive details
 
 **AI Assistant Instructions:** Upon developer approval, create documentation according to the defined project management approach:
 
-**For File System Approach ([see Collaboration and Process Guidelines for operational guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines.md))**:
+**For File System Approach ([see Collaboration and Process Guidelines for operational guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md))**:
 
 1. **Create initiative file** using naming convention: `[initiative-name].md`
 2. **Save in appropriate year folder**
-3. **Apply complete template** with all sections filled
+3. **Apply complete [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md)** with all sections filled
 4. **Confirm file creation** with developer
 5. **Move to next initiative** in priority order
 
-**For External Tool Approach ([see Collaboration and Process Guidelines for operational guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines.md))**:
+**For External Tool Approach ([see Collaboration and Process Guidelines for operational guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md))**:
 
 1. **Create initiative item** in the chosen project management tool
-2. **Include comprehensive template content** adapted to the tool's structure
+2. **Include comprehensive [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md) content** adapted to the tool's structure
 3. **Maintain cross-references** between tool items and any supporting documentation
 4. **Ensure tool-specific fields** (priority, labels, assignees) are properly set
 5. **Confirm creation** with developer and move to next initiative
@@ -257,7 +261,7 @@ _"I've created all initiatives in [Tool Name]. Here's the roadmap I've built usi
 5. **Create master initiative overview** appropriate for the chosen tool
 
 **Organization Conventions:**
-([see Collaboration and Process Guidelines for organization conventions](../tech/knowledge-base/12-collaboration-and-process-guidelines.md))
+([see Collaboration and Process Guidelines for organization conventions](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md))
 
 ### Step 7: Final Documentation and Handoff
 
@@ -271,7 +275,7 @@ _"I've created all initiatives in [Tool Name]. Here's the roadmap I've built usi
 **Handoff Checklist:**
 
 - [ ] Project management tool verified and configured
-- [ ] All initiatives documented using complete template (in chosen format/tool)
+- [ ] All initiatives documented using complete [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md)
 - [ ] Initiative organization follows tool-specific best practices
 - [ ] Timeline dependencies clearly mapped in appropriate system
 - [ ] Success metrics are measurable and time-bound
@@ -295,10 +299,10 @@ _"I've created all initiatives in [Tool Name]. Here's the roadmap I've built usi
 
 **Structure Quality:**
 
-- [ ] All template sections are completed comprehensively
+- [ ] All [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md) sections are completed comprehensively
 - [ ] Information flows logically between sections
 - [ ] Terminology is consistent with PRD and way-of-working
-- [ ] Document formatting matches template standard
+- [ ] Document formatting matches [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md) standard
 - [ ] File naming and organization follows conventions
 
 **Business Alignment:**
@@ -325,7 +329,7 @@ Before finalizing prioritization, verify:
 ### Do's:
 
 - **Always start with comprehensive PRD analysis** to understand full context
-- **Always follow tool management instructions provided by the (Collaboration and Process Guidelines for organization conventions](../tech/knowledge-base/12-collaboration-and-process-guidelines.md) based on the chosen project management tool from the adoption** to ensure a consistent approach
+- **Always follow tool management instructions provided by the (Collaboration and Process Guidelines for organization conventions](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) based on the chosen project management tool from the adoption** to ensure a consistent approach
 - **Focus on one initiative at a time** to ensure quality and developer engagement
 - **Be specific about business value** and connect to measurable outcomes
 - **Include concrete risk mitigation strategies** rather than generic statements
@@ -359,7 +363,7 @@ Before finalizing prioritization, verify:
 
 ## References
 
-- [Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines.md)
+- [Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md)
 - [`.pair/tech/adopted/way-of-working.md`](.pair/tech/adopted/way-of-working.md) - Contains project management tool definition and methodology
 - [`.pair/product/adopted/PRD.md`](.pair/product/adopted/PRD.md) - Product Requirements Document containing business objectives and requirements
 - [`./02-how-to-complete-bootstrap-checklist.md`](./02-how-to-complete-bootstrap-checklist.md) - Process for collaborative tool selection when not pre-defined
