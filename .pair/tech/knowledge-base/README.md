@@ -26,7 +26,7 @@ This directory contains the complete technical knowledge base for the project, o
 - **[09-performance-guidelines.md](09-performance-guidelines.md)** - Performance optimization and monitoring strategies
 - **[10-security-guidelines.md](10-security-guidelines.md)** - Security implementation and best practices
 - **[11-observability-guidelines.md](11-observability-guidelines.md)** - Monitoring, logging, and tracing strategies
-- **[12-collaboration-and-process-guidelines.md](12-collaboration-and-process-guidelines.md)** - Collaboration, workflow, project management, and hierarchical artifact management guidelines
+- **[12-collaboration-and-process-guidelines/README.md](12-collaboration-and-process-guidelines/README.md)** - Collaboration, workflow, project management, and hierarchical artifact management guidelines
 
 ## 🔗 Cross-References
 

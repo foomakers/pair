@@ -28,8 +28,8 @@ Thank you for your interest in contributing to Pair!
 - Key guides include:
   - **How to create tasks:** `.pair/how-to/09-how-to-create-tasks.md`
   - **How to implement a task:** `.pair/how-to/10-how-to-implement-a-task.md`
-  - **How to commit and push:** `.pair/how-to/12-how-to-commit-and-push.md`
-  - **How to create a PR:** `.pair/how-to/13-how-to-create-a-pr.md`
+  - **How to commit and push:** `.pair/how-to/11-how-to-commit-and-push.md`
+  - **How to create a PR:** `.pair/how-to/12-how-to-create-a-pr.md`
   - **Definition of Done:** `.pair/tech/knowledge-base/06-definition-of-done.md`
   - **Testing strategy:** `.pair/tech/knowledge-base/07-testing-strategy.md`
 - Always follow the documented process for operational activities to ensure consistency and quality.

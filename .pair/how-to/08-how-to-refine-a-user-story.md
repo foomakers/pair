@@ -30,6 +30,10 @@ The AI assistant acts as a **User Story Refinement Facilitator** who:
 
 **Working Principles**: Follow the **🤖🤝👨‍💻** model (LLM proposes, Developer validates) throughout the entire refinement process.
 
+## Prerequisite
+
+Before starting, **read and consult the Refined User Story Template**: [Refined User Story Template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user-story-template.md#refined-user-story-template). All required structure and fields are defined in the template.
+
 ## **Issue Access and Tool Integration**
 
 **⚠️ MANDATORY COMPLIANCE: These instructions must ALWAYS be followed without exception when accessing initiatives, epics, user stories, or tasks. NEVER deviate from this process.**
@@ -45,7 +49,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) for all access procedures
+- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -64,7 +68,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 - [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) consulted for access procedures
+- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) consulted for access procedures
 
 ## User Story Refinement Definition
 
@@ -205,15 +209,15 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Project Management Tool Usage**
 
-Before documenting refined user stories, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for interfacing, linking items, and managing story records. Please refer to this documentation any time the guide asks for project management tool actions.
+Before documenting refined user stories, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` for interfacing, linking items, and managing story records. Please refer to this documentation any time the guide asks for project management tool actions.
 
 ---
 
 ## User Story Refinement Template
 
-> **Note:** This template transforms the initial breakdown information into comprehensive, development-ready specifications. All sections must be completed with testable, implementable details.
+> **Note:** This [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user-story-template.md#refined-user-story-template) transforms the initial breakdown information into comprehensive, development-ready specifications. All sections must be completed with testable, implementable details.
 
-User story refined must follow this comprehensive template you find in the [Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md).
+User story refined must follow this comprehensive [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user-story-template.md#refined-user-story-template) you find in the [Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md).
 
 ## Structured Refinement Process
 
@@ -402,7 +406,7 @@ _This split enables incremental value delivery while maintaining manageable spri
 
 1. **Comprehensive Story Documentation**: Update story with all refinement details:
 
-   - Complete refined template with all analysis and requirements
+   - Complete refined [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user-story-template.md#refined-user-story-template) with all analysis and requirements
    - Detailed acceptance criteria and technical specifications
    - Risk assessment and mitigation strategies
    - DoD checklist and validation requirements
@@ -442,7 +446,7 @@ _"User Story [STORY_CODE] refinement is complete. The story now includes compreh
    - Team alignment confirmed on scope and approach
 
 3. **Quality Standards Validation**: Ensure refinement meets quality standards:
-   - Story follows refined template completely
+   - Story follows refined [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user-story-template.md#refined-user-story-template) completely
    - Acceptance criteria follow Given-When-Then format
    - Technical analysis addresses implementation concerns
    - DoD alignment ensures proper completion validation
@@ -607,7 +611,7 @@ When refining workspace setup and technical foundation stories:
 
 - `.pair/product/adopted/PRD.md` - User personas and detailed requirements context
 - `.pair/way-of-working.md` - Development methodology and refinement ceremony definitions
-- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 

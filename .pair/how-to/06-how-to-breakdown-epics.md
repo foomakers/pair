@@ -28,6 +28,10 @@ The AI assistant acts as an **Epic Breakdown Architect** who:
 
 **Working Principles**: Follow the **🤖🤝👨‍💻** model (LLM proposes, Developer validates) throughout the entire process.
 
+## Prerequisite
+
+Before starting, **read and consult the Epic Template**: [Epic Template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/epic-template.md). All required structure and fields are defined in the template.
+
 ## **Issue Access and Tool Integration**
 
 **⚠️ MANDATORY COMPLIANCE: These instructions must ALWAYS be followed without exception when accessing initiatives, epics, user stories, or tasks. NEVER deviate from this process.**
@@ -43,7 +47,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) for all access procedures
+- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -62,7 +66,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 - [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) consulted for access procedures
+- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) consulted for access procedures
 
 ## Epic Definition
 
@@ -89,7 +93,7 @@ An **Epic** is a substantial piece of work that:
 
 ## Epic Template Structure
 
-Each epic must follow this comprehensive template you find in the [Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md).
+Each epic must follow this comprehensive [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/epic-template.md).
 
 ## Prerequisites Verification
 
@@ -146,7 +150,7 @@ _"I can see we're using [TOOL_NAME] according to the way-of-working documentatio
 
 **AI Assistant Instructions:** Verify initiatives are properly tracked:
 
-1. **Check Initiative Tracking**: Confirm all initiatives are properly documented in the configured project management tool ([see Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md))
+1. **Check Initiative Tracking**: Confirm all initiatives are properly documented in the configured project management tool ([see Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md))
 2. **Request Permission**: If initiatives aren't tracked in the tool, request permission to create them
 
 **Permission Request:**
@@ -192,7 +196,7 @@ If an Epic 0 already exists, proceed directly to functional epic breakdown as de
 
 Each epic file must:
 
-- Use the full epic template provided in this guide
+- Use the full epic [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/epic-template.md) provided in [this guide](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md)
 - Include a link to its parent initiative (by filename or relative path)
 - Include links to all child user stories (by filename or relative path) as they are created
 - All references to a markdown document (e.g., architecture, tech stack) must be a markdown link
@@ -325,7 +329,7 @@ _"Does the epic breakdown feel right for your development approach? Should any e
 
 ### Step 6: Individual Epic Documentation
 
-**AI Assistant Instructions:** Document each epic following the template:
+**AI Assistant Instructions:** Document each epic following the [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/epic-template.md):
 
 1. **Present One Epic at a Time**: Start with the first epic in sequence
 2. **Use Complete Template**: Fill all sections thoroughly
@@ -347,7 +351,7 @@ _"Here's the detailed breakdown for Epic 1: [NAME]. I've focused on [key aspects
 
 **AI Assistant Instructions:** Create epic records in project management tool:
 
-1. **Follow Tool-Specific Format**: Adapt template to tool requirements
+1. **Follow Tool-Specific Format**: Adapt [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/epic-template.md) to tool requirements
 2. **Maintain Template Completeness**: Ensure all sections are captured
 3. **Establish Hierarchy Linking**: Create proper linkage according to tool capabilities:
    - **Parent Link**: Connect epic to its parent initiative
@@ -358,7 +362,7 @@ _"Here's the detailed breakdown for Epic 1: [NAME]. I've focused on [key aspects
 
 **Tool Documentation Checklist:**
 
-- [ ] Epic created with complete template information
+- [ ] Epic created with complete [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/epic-template.md) information
 - [ ] Properly linked to parent initiative using tool-specific methodology
 - [ ] Epic configured to receive user story links as child items
 - [ ] Hierarchy relationships properly established in tool
@@ -395,7 +399,7 @@ _"All epics for '[INITIATIVE_NAME]' are now documented and ready for development
 
 **Structure Quality:**
 
-- [ ] All template sections completed comprehensively
+- [ ] All [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/epic-template.md) sections completed comprehensively
 - [ ] Epic duration falls within 2-4 sprint range
 - [ ] Dependencies are clearly identified and manageable
 - [ ] Definition of Done includes all quality gates
@@ -479,7 +483,7 @@ _"All epics for '[INITIATIVE_NAME]' are now documented and ready for development
 - `.pair/product/adopted/PRD.md` - Product vision, goals, and user requirements
 - `.pair/way-of-working.md` - Development methodology and process definitions
 - `.pair/product/backlog/01-initiatives/` - Strategic initiatives requiring epic breakdown (if filesystem is the tool)
-- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 

@@ -300,6 +300,6 @@ This Definition of Done serves as the **central quality framework** that ensures
 
 **Collaboration & Process:**
 
-- **[12-collaboration-and-process-guidelines.md](12-collaboration-and-process-guidelines.md)** - _Collaboration and process standards_
+- **[12-collaboration-and-process-guidelines/README.md](12-collaboration-and-process-guidelines/README.md)** - _Collaboration and process standards_
 
 This Definition of Done provides a clear, verifiable framework that ensures consistent quality while leveraging the detailed guidance in specialized technical documents.
