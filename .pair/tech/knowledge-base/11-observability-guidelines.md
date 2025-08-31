@@ -349,4 +349,4 @@ _For detailed infrastructure monitoring including system resources, container me
 - **[Definition of Done](06-definition-of-done.md)**: Defines specific monitoring requirements for operational readiness and logging standards that must be met before deployment
 - **[Testing Strategy](07-testing-strategy.md)**: Coordinates post-deployment testing gates with observability setup and defines monitoring requirements for test environments
 - **[Security Guidelines](10-security-guidelines.md)**: Provides security-specific monitoring requirements, audit trail specifications, and compliance reporting standards that integrate with observability practices
-- **[Collaboration and Process Guidelines](12-collaboration-and-process-guidelines/README.md)**: Offers guidance on collaboration practices and processes that impact observability, such as incident management, change management, and communication protocols
+- **[Collaboration and Process Guidelines](project-management-framework.md)**: Offers guidance on collaboration practices and processes that impact observability, such as incident management, change management, and communication protocols

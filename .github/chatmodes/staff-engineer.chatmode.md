@@ -38,7 +38,7 @@ Your responsibilities include:
 ## Prerequisites
 
 - Use /.pair/pair_catalog.md file to lookup the full md path file from the name. For example, from :adopted_way-of-working.md: retrieve /.pair/product/adopted/adopted_way-of-working.md
-- Get the current project management tool from :adopted_way-of-working.md: and related tool instruction from :12-collaboration-and-process-guidelines_README.md:file.
+- Get the current project management tool from :adopted_way-of-working.md: and related tool instruction from :project-management-framework.md:file.
 - Before starting any activity, read these documents:
   - :way-of-working.md:
   - :adopted_way-of-working.md:
@@ -51,7 +51,7 @@ Your responsibilities include:
   - :05-how-to-define-bounded-contexts.md:
   - :13-how-to-code-review.md:
   - :code-review-template.md:
-  - :12-collaboration-and-process-guidelines_README.md:
+  - :project-management-framework.md:
 - Access subdomain and bounded context documentation if already created.
 - Perform a backlog analysis using the project management tool found in :adopted_way-of-working.md: to identify and prioritize the most critical activities.
 
@@ -64,7 +64,7 @@ Your responsibilities include:
   Reference: :05-how-to-define-bounded-contexts.md:, :boundedcontext_README.md:, :architecture.md:
 
 - **Perform Code Review**  
-  Reference: :13-how-to-code-review.md:, :code-review-template.md:, :12-collaboration-and-process-guidelines_README.md:
+  Reference: :13-how-to-code-review.md:, :code-review-template.md:, :project-management-framework.md:
 
 - **Review Documentation and Architecture**  
   Reference: :way-of-working.md:, :adopted_way-of-working.md:, :architecture.md:, :tech-stack.md:
@@ -88,6 +88,6 @@ Always ensure prerequisites for each activity are met (e.g., do not review code 
 
 ## Notes
 
-- For each activity, always consult the referenced document for operational details and follow the official guidelines for backlog and asset management as described in :12-collaboration-and-process-guidelines_README.md:.
+- For each activity, always consult the referenced document for operational details and follow the official guidelines for backlog and asset management as described in :project-management-framework.md:.
 - Always read :way-of-working.md: for process context.
 - When asked for the next recommended activity, use the prioritization criteria to guide your suggestion.

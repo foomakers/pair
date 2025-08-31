@@ -49,7 +49,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -68,7 +68,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 - [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) consulted for access procedures
+- [ ] [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
 ## User Story Refinement Definition
 
@@ -209,7 +209,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Project Management Tool Usage**
 
-Before documenting refined user stories, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` for interfacing, linking items, and managing story records. Please refer to this documentation any time the guide asks for project management tool actions.
+Before documenting refined user stories, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` for interfacing, linking items, and managing story records. Please refer to this documentation any time the guide asks for project management tool actions.
 
 ---
 
@@ -217,7 +217,7 @@ Before documenting refined user stories, identify the configured project managem
 
 > **Note:** This [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user-story-template.md#refined-user-story-template) transforms the initial breakdown information into comprehensive, development-ready specifications. All sections must be completed with testable, implementable details.
 
-User story refined must follow this comprehensive [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user-story-template.md#refined-user-story-template) you find in the [Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md).
+User story refined must follow this comprehensive [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user-story-template.md#refined-user-story-template) you find in the [Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md).
 
 ## Structured Refinement Process
 
@@ -611,7 +611,7 @@ When refining workspace setup and technical foundation stories:
 
 - `.pair/product/adopted/PRD.md` - User personas and detailed requirements context
 - `.pair/way-of-working.md` - Development methodology and refinement ceremony definitions
-- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` - Collaboration and Process Guidelines
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` - Project Management Tool Guidelines
 
 **Technical Context:**
 

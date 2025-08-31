@@ -47,7 +47,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -66,7 +66,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 - [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) consulted for access procedures
+- [ ] [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
 ## Epic Definition
 
@@ -150,7 +150,7 @@ _"I can see we're using [TOOL_NAME] according to the way-of-working documentatio
 
 **AI Assistant Instructions:** Verify initiatives are properly tracked:
 
-1. **Check Initiative Tracking**: Confirm all initiatives are properly documented in the configured project management tool ([see Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md))
+1. **Check Initiative Tracking**: Confirm all initiatives are properly documented in the configured project management tool ([see Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md))
 2. **Request Permission**: If initiatives aren't tracked in the tool, request permission to create them
 
 **Permission Request:**
@@ -196,7 +196,7 @@ If an Epic 0 already exists, proceed directly to functional epic breakdown as de
 
 Each epic file must:
 
-- Use the full epic [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/epic-template.md) provided in [this guide](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md)
+- Use the full epic [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/epic-template.md) provided in [this guide](../tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md)
 - Include a link to its parent initiative (by filename or relative path)
 - Include links to all child user stories (by filename or relative path) as they are created
 - All references to a markdown document (e.g., architecture, tech stack) must be a markdown link
@@ -483,7 +483,7 @@ _"All epics for '[INITIATIVE_NAME]' are now documented and ready for development
 - `.pair/product/adopted/PRD.md` - Product vision, goals, and user requirements
 - `.pair/way-of-working.md` - Development methodology and process definitions
 - `.pair/product/backlog/01-initiatives/` - Strategic initiatives requiring epic breakdown (if filesystem is the tool)
-- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` - Collaboration and Process Guidelines
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` - Project Management Tool Guidelines
 
 **Technical Context:**
 

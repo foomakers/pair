@@ -47,7 +47,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -66,7 +66,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 - [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) consulted for access procedures
+- [ ] [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
 ## Initiative Template Structure
 
@@ -101,7 +101,7 @@ If Tool Not Configured: "I can see the foundational documents are ready, but I n
 **AI Assistant Instructions:** Before beginning initiative creation, verify the project management setup:
 
 1. **Check [`.pair/tech/adopted/way-of-working.md`](.pair/tech/adopted/way-of-working.md)** to identify the defined project management tool
-2. **Read ([Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md))** to understand how to operate with the project management tool
+2. **Read ([Project Management Framework](../tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md))** to understand how to operate with the project management tool and the relative guidelines of the tool you adopt
 3. **Read adoption file**: [.pair/tech/adopted/README.md](.pair/tech/adopted/README.md)
    - [.pair/tech/adopted/architecture.md](.pair/tech/adopted/architecture.md)
    - [.pair/tech/adopted/tech-stack.md](.pair/tech/adopted/tech-stack.md)
@@ -116,15 +116,13 @@ If Tool Not Configured: "I can see the foundational documents are ready, but I n
 Present to developer:
 _"I need to understand your project management setup before creating initiatives. I don't see a defined project management tool in your way-of-working document. Would you prefer to use:_
 
-- _**File-based system** (initiatives stored as markdown files in `.pair/product/backlog/01-initiatives/`)_
-- _**External tool integration** (Jira, Linear, GitHub Projects, etc.)_
+- _**File-based system** (initiatives stored as markdown in your file system)_
+- _**GitHub Projects** (initiatives managed within GitHub's project management features)_
+- _**External tool integration** (Jira, Linear, etc.)_
 
 _This choice will determine how we structure and manage your strategic initiatives. What's your preference?"_
 
-**Tool-Specific Adaptations:**
-
-- **File System**: Follow the current documentation process as described in subsequent steps
-- **External Tools**: Adapt initiative creation to work within the chosen tool's structure while maintaining the comprehensive [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md) content
+Based on the selection, update `.pair/tech/adopted/way-of-working.md` accordingly and proceed.
 
 ### Step 1: Reference Analysis and Context Building
 
@@ -133,8 +131,8 @@ _This choice will determine how we structure and manage your strategic initiativ
 1. **Review [`.pair/product/adopted/PRD.md`](.pair/product/adopted/PRD.md)** to understand product vision, goals, and requirements
 2. **Study [`.pair/way-of-working.md`](.pair/way-of-working.md)** to understand the development methodology and value streams
 3. **Check existing initiatives** according to the defined project management approach:
-   - **File System**: Review existing initiatives ([see Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md)) to understand current numbering and avoid conflicts
-   - **External Tools**: Query the project management tool to understand existing initiative structure and numbering conventions ([see Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md))
+   - **File System**: ([see File System Guidelines](../tech/knowledge-base/project-management-framework-filesystem.md))
+   - **Github Tools**: ([see Github System Guidelines](../tech/knowledge-base/project-management-framework-github.md))
 4. **Create initiative analysis framework** based on PRD goals and way-of-working principles
 
 Your analysis should extract:
@@ -160,13 +158,9 @@ Your analysis should extract:
    - **External Tools**: Leverage tool's native priority/scoring system (e.g., Jira Priority, Linear Priority scales)
 4. **Propose initial initiative list** formatted for the chosen approach
 
-**Tool-Specific Presentations:**
+**Presentations:**
 
-**File System:**
 _"Based on the PRD analysis, I've identified [X] strategic initiatives that would deliver your product objectives. Here's the prioritization framework I used and the resulting P0/P1/P2 classification. Would you like to review this prioritization approach before we dive into individual initiatives?"_
-
-**External Tools:**
-_"Based on the PRD analysis, I've identified [X] strategic initiatives that would deliver your product objectives. I've structured the prioritization to work with [Tool Name]'s priority system. Here's how I've mapped business impact to [Tool's Priority Levels]. Should we proceed with this approach?"_
 
 ### Step 3: Individual Initiative Development
 
@@ -209,15 +203,9 @@ _"Here's the refined initiative ready for [Tool Name]. The comprehensive details
 
 **AI Assistant Instructions:** Upon developer approval, create documentation according to the defined project management approach:
 
-**For File System Approach ([see Collaboration and Process Guidelines for operational guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md))**:
+**For File System Approach ([see File System Guidelines](../tech/knowledge-base/project-management-framework-filesystem.md))**
 
-1. **Create initiative file** using naming convention: `[initiative-name].md`
-2. **Save in appropriate year folder**
-3. **Apply complete [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md)** with all sections filled
-4. **Confirm file creation** with developer
-5. **Move to next initiative** in priority order
-
-**For External Tool Approach ([see Collaboration and Process Guidelines for operational guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md))**:
+**For Github Tool Approach ([see Github System Guidelines](../tech/knowledge-base/project-management-framework-github.md))**:
 
 1. **Create initiative item** in the chosen project management tool
 2. **Include comprehensive [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md) content** adapted to the tool's structure
@@ -240,12 +228,8 @@ _"Here's the refined initiative ready for [Tool Name]. The comprehensive details
    - **External Tools**: Use tool's native roadmap/timeline features (Jira Roadmaps, Linear Roadmap, etc.)
 4. **Present planning rationale** formatted for chosen approach
 
-**Tool-Specific Planning Presentations:**
+**Presentations:**
 
-**File System:**
-_"I've created all initiatives with comprehensive documentation. Here's my recommended execution plan with detailed dependency analysis and resource allocation matrices. The timeline assumes [team size/capacity assumptions]. What adjustments would you make to this sequencing?"_
-
-**External Tools:**
 _"I've created all initiatives in [Tool Name]. Here's the roadmap I've built using [Tool's roadmap features]. I've set up dependencies using [Tool's dependency system] and timeline using [Tool's timeline features]. The plan assumes [capacity assumptions]. How should we adjust this roadmap?"_
 
 ### Step 6: Timeline Review and Finalization
@@ -253,15 +237,13 @@ _"I've created all initiatives in [Tool Name]. Here's the roadmap I've built usi
 **AI Assistant Instructions:** Based on developer feedback:
 
 1. **Adjust timeline** according to feedback
-2. **Update initiative documentation** with final planned dates according to chosen approach:
-   - **File System**: Update initiative files with planned dates
-   - **External Tools**: Update tool items with timeline information
+2. **Update initiative documentation** with final planned dates according to chosen tool
 3. **Apply numerical/organizational structure** based on execution sequence and tool capabilities
 4. **Update existing initiatives** if reorganization is needed
 5. **Create master initiative overview** appropriate for the chosen tool
 
 **Organization Conventions:**
-([see Collaboration and Process Guidelines for organization conventions](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md))
+([see Collaboration and Process Guidelines for organization conventions](../tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md))
 
 ### Step 7: Final Documentation and Handoff
 
@@ -329,7 +311,7 @@ Before finalizing prioritization, verify:
 ### Do's:
 
 - **Always start with comprehensive PRD analysis** to understand full context
-- **Always follow tool management instructions provided by the (Collaboration and Process Guidelines for organization conventions](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) based on the chosen project management tool from the adoption** to ensure a consistent approach
+- **Always follow tool management instructions provided by the (Collaboration and Process Guidelines for organization conventions](../tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) based on the chosen project management tool from the adoption** to ensure a consistent approach
 - **Focus on one initiative at a time** to ensure quality and developer engagement
 - **Be specific about business value** and connect to measurable outcomes
 - **Include concrete risk mitigation strategies** rather than generic statements
@@ -363,16 +345,11 @@ Before finalizing prioritization, verify:
 
 ## References
 
-- [Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md)
+- [Project Management Tool Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md)
 - [`.pair/tech/adopted/way-of-working.md`](.pair/tech/adopted/way-of-working.md) - Contains project management tool definition and methodology
 - [`.pair/product/adopted/PRD.md`](.pair/product/adopted/PRD.md) - Product Requirements Document containing business objectives and requirements
 - [`./02-how-to-complete-bootstrap-checklist.md`](./02-how-to-complete-bootstrap-checklist.md) - Process for collaborative tool selection when not pre-defined
 - [`.pair/product/backlog/01-initiatives/`](.pair/product/backlog/01-initiatives/) - Directory for storing initiative documentation (if using file system approach)
-
-**Tool-Specific Organization:**
-
-- **File System**: Initiative files stored in yearly subdirectories with numerical prefixes
-- **External Tools**: Follow tool's native organization structure while maintaining comprehensive documentation
 
 **Process Dependencies:**
 

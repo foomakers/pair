@@ -50,7 +50,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) for all access procedures
+- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -69,7 +69,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 - [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) consulted for access procedures
+- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
 ## Task Definition
 
@@ -99,7 +99,7 @@ A **Task from a User Story** is a **specific implementation step** that:
 
 **Project Management Tool Usage**
 
-Before documenting tasks, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` for interfacing, linking items, and managing task records. Please refer to this documentation any time the guide asks for project management tool actions.
+Before documenting tasks, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` for interfacing, linking items, and managing task records. Please refer to this documentation any time the guide asks for project management tool actions.
 
 ---
 
@@ -113,7 +113,7 @@ If implementations modify, reduce the scope of, or create new bounded contexts, 
 - Document the decision with an ADR
 - Ensure the new structure is aligned with architectural and domain guidelines
 
-Task must follow this comprehensive [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/task-template.md) you find in the [Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md).
+Task must follow this comprehensive [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/task-template.md) you find in the [Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md).
 
 ## Prerequisites Verification
 
@@ -613,8 +613,7 @@ _"All tasks for User Story '[STORY_ID]: [STORY_NAME]' are documented and ready f
 
 - `.pair/product/adopted/PRD.md` - Product vision, user personas, and requirements
 - `.pair/way-of-working.md` - Development methodology and process definitions
-- `.pair/product/backlog/03-user-stories/current-sprint/` - TODO stories ready for task breakdown (if the project management tool is filesystem)
-- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` - Collaboration and Process Guidelines
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` - Project Management Tool Guidelines
 
 **Technical Context:**
 

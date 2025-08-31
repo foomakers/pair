@@ -2295,4 +2295,4 @@ This document supports the **Definition of Done** requirements:
 - **[Definition of Done](06-definition-of-done.md)** - _Quality gates ensure testing completeness_
 - **[UX Guidelines](05-ux-guidelines.md)** - _UX testing validates user experience_
 - **[Observability Guidelines](11-observability-guidelines.md)** - _Monitoring and alerting for test and production environments_
-- **[12-collaboration-and-process-guidelines/README.md](12-collaboration-and-process-guidelines/README.md)**
+- **[project-management-framework.md](project-management-framework.md)**

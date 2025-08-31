@@ -232,7 +232,6 @@ This guide ensures a thorough, collaborative process that produces high-quality 
 
 ## References
 
-- [Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md)
 - [`.pair/assets/PRD_template.md`](.pair/assets/PRD_template.md) - Complete PRD template structure and sections
 - [`.pair/assets/PRD_example.md`](.pair/assets/PRD_example.md) - Example PRD demonstrating quality standards
 - [`.pair/product/adopted/PRD.md`](.pair/product/adopted/PRD.md) - Target file where the final PRD will be created and maintained

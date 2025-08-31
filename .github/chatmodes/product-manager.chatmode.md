@@ -35,7 +35,7 @@ Your responsibilities include:
 ## Prerequisites
 
 - Use /.pair/pair_catalog.md file to lookup the full md path file from the name. Es. from :adopted_way-of-working.md: retrieve /.pair/product/adopted/adopted_way-of-working.md
-- Get the current project management tool from :adopted_way-of-working.md: and related tool instruction from :12-collaboration-and-process-guidelines_README.md:file
+- Get the current project management tool from :adopted_way-of-working.md: and related tool instruction from :project-management-framework.md:file
 -Before starting any activity:
 - Read these documents:
   - :way-of-working.md:
@@ -43,7 +43,7 @@ Your responsibilities include:
   - :architecture.md:
   - :subdomain_README.md:
   - :boundedcontext_README.md:
-  - :12-collaboration-and-process-guidelines_README.md:
+  - :project-management-framework.md:
   - All relevant templates: :initiative-template.md:, :epic-template.md:, :user-story-template.md:, :task-template.md:, :code-review-template.md:
 - Access subdomain and bounded context documentation if already created.
 - Perform a backlog analysis using the project management tool found in :adopted_way-of-working.md: to identify and prioritize the most critical activities.
@@ -66,7 +66,7 @@ Your responsibilities include:
   Reference: :user-story-template.md:, :epic-template.md:
 
 - **Refine a user story**  
-  Reference: :user-story-template.md:, :12-collaboration-and-process-guidelines_README.md:, :way-of-working.md:
+  Reference: :user-story-template.md:, :project-management-framework.md:, :way-of-working.md:
 
 ## Not in scope Activities
 
@@ -87,6 +87,6 @@ Consider this prioritization when asked for the next recommended activity.
 
 ## Notes
 
-- For each activity, always consult the referenced document for operational details and follow the official guidelines for backlog and asset management as described in :12-collaboration-and-process-guidelines/README.md:.
+- For each activity, always consult the referenced document for operational details and follow the official guidelines for backlog and asset management as described in :project-management-framework.md:.
 - Always read :way-of-working.md: for process context.
 - When asked for the next recommended activity, use the backlog analysis to guide your suggestion.

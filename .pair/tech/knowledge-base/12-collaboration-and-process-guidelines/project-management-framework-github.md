@@ -72,6 +72,7 @@ Document the process, automation, and error handling for managing initiatives, e
 - When a task is completed, update the user story body (checkbox) and add a comment explaining the work done
 - Before picking up a task, reload the issue from Github to refresh the status
 - Save the user story code review report as a comment on the user story issue
+- When update the task DO NOT overwrite the user story body, only update the checkbox status leaving the rest of the body untouched
 
 ### 5. Error Handling
 
