@@ -324,42 +324,42 @@ For detailed tool selection and configuration, see [Technical Guidelines](03-tec
 
 ```typescript
 // Testing Next.js API routes as BFF layer
-import { createMocks } from "node-mocks-http";
-import handler from "../pages/api/users/[id]";
+import { createMocks } from 'node-mocks-http'
+import handler from '../pages/api/users/[id]'
 
-describe("/api/users/[id]", () => {
-  it("should return user data", async () => {
+describe('/api/users/[id]', () => {
+  it('should return user data', async () => {
     const { req, res } = createMocks({
-      method: "GET",
-      query: { id: "user-1" },
-    });
+      method: 'GET',
+      query: { id: 'user-1' },
+    })
 
-    await handler(req, res);
+    await handler(req, res)
 
-    expect(res._getStatusCode()).toBe(200);
-    const data = JSON.parse(res._getData());
-    expect(data.user.id).toBe("user-1");
-  });
-});
+    expect(res._getStatusCode()).toBe(200)
+    const data = JSON.parse(res._getData())
+    expect(data.user.id).toBe('user-1')
+  })
+})
 ```
 
 **Middleware Testing:**
 
 ```typescript
 // Testing Next.js middleware
-import { NextRequest } from "next/server";
-import { middleware } from "../middleware";
+import { NextRequest } from 'next/server'
+import { middleware } from '../middleware'
 
-describe("middleware", () => {
-  it("should authenticate valid requests", async () => {
-    const request = new NextRequest("http://localhost:3000/protected", {
-      headers: { authorization: "Bearer valid-token" },
-    });
+describe('middleware', () => {
+  it('should authenticate valid requests', async () => {
+    const request = new NextRequest('http://localhost:3000/protected', {
+      headers: { authorization: 'Bearer valid-token' },
+    })
 
-    const response = await middleware(request);
-    expect(response.status).toBe(200);
-  });
-});
+    const response = await middleware(request)
+    expect(response.status).toBe(200)
+  })
+})
 ```
 
 ### Fastify Bounded Context Testing
@@ -368,49 +368,49 @@ describe("middleware", () => {
 
 ```typescript
 // Testing domain services in bounded contexts
-import { createUserService } from "../services/user-service";
-import { createTestUserRepository } from "../test/fixtures";
+import { createUserService } from '../services/user-service'
+import { createTestUserRepository } from '../test/fixtures'
 
-describe("UserService (Bounded Context)", () => {
-  it("should create user following domain rules", async () => {
-    const repository = createTestUserRepository();
-    const userService = createUserService(repository);
+describe('UserService (Bounded Context)', () => {
+  it('should create user following domain rules', async () => {
+    const repository = createTestUserRepository()
+    const userService = createUserService(repository)
 
     const result = await userService.createUser({
-      email: "test@example.com",
-      name: "Test User",
-    });
+      email: 'test@example.com',
+      name: 'Test User',
+    })
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(true)
     // Verify domain invariants are maintained
-    expect(result.data.status).toBe("PENDING_VERIFICATION");
-  });
-});
+    expect(result.data.status).toBe('PENDING_VERIFICATION')
+  })
+})
 ```
 
 **Fastify Route Testing:**
 
 ```typescript
 // Testing Fastify API endpoints
-import { build } from "../app";
+import { build } from '../app'
 
-describe("User API (Bounded Context)", () => {
-  const app = build({ logger: false });
+describe('User API (Bounded Context)', () => {
+  const app = build({ logger: false })
 
-  afterAll(() => app.close());
+  afterAll(() => app.close())
 
-  it("should create user via Fastify API", async () => {
+  it('should create user via Fastify API', async () => {
     const response = await app.inject({
-      method: "POST",
-      url: "/users",
-      payload: { name: "John Doe", email: "john@example.com" },
-    });
+      method: 'POST',
+      url: '/users',
+      payload: { name: 'John Doe', email: 'john@example.com' },
+    })
 
-    expect(response.statusCode).toBe(201);
-    const user = JSON.parse(response.payload);
-    expect(user.name).toBe("John Doe");
-  });
-});
+    expect(response.statusCode).toBe(201)
+    const user = JSON.parse(response.payload)
+    expect(user.name).toBe('John Doe')
+  })
+})
 ```
 
 ### Cross-Service Integration Testing
@@ -419,23 +419,23 @@ describe("User API (Bounded Context)", () => {
 
 ```typescript
 // Testing integration between Next.js BFF and Fastify services
-describe("BFF Integration", () => {
-  it("should aggregate data from multiple bounded contexts", async () => {
+describe('BFF Integration', () => {
+  it('should aggregate data from multiple bounded contexts', async () => {
     // Setup test services
-    const userService = createTestUserService();
-    const orderService = createTestOrderService();
+    const userService = createTestUserService()
+    const orderService = createTestOrderService()
 
     // Test BFF aggregation logic
-    const userProfile = await getUserProfile("user-1", {
+    const userProfile = await getUserProfile('user-1', {
       userService,
       orderService,
-    });
+    })
 
-    expect(userProfile.user).toBeDefined();
-    expect(userProfile.recentOrders).toHaveLength(3);
-    expect(userProfile.preferences).toBeDefined();
-  });
-});
+    expect(userProfile.user).toBeDefined()
+    expect(userProfile.recentOrders).toHaveLength(3)
+    expect(userProfile.preferences).toBeDefined()
+  })
+})
 ```
 
 ### Database Layer Testing
@@ -444,49 +444,49 @@ describe("BFF Integration", () => {
 
 ```typescript
 // Testing Prisma-based repositories
-import { PrismaClient } from "@prisma/client";
-import { createUserRepository } from "../repositories/user-repository";
+import { PrismaClient } from '@prisma/client'
+import { createUserRepository } from '../repositories/user-repository'
 
-describe("UserRepository", () => {
-  const prisma = new PrismaClient();
-  const userRepository = createUserRepository(prisma);
+describe('UserRepository', () => {
+  const prisma = new PrismaClient()
+  const userRepository = createUserRepository(prisma)
 
   beforeEach(async () => {
-    await prisma.user.deleteMany();
-  });
+    await prisma.user.deleteMany()
+  })
 
-  it("should store and retrieve user data", async () => {
-    const userData = { name: "Test User", email: "test@example.com" };
+  it('should store and retrieve user data', async () => {
+    const userData = { name: 'Test User', email: 'test@example.com' }
 
-    const createdUser = await userRepository.create(userData);
-    const foundUser = await userRepository.findById(createdUser.id);
+    const createdUser = await userRepository.create(userData)
+    const foundUser = await userRepository.findById(createdUser.id)
 
-    expect(foundUser).toEqual(createdUser);
-  });
-});
+    expect(foundUser).toEqual(createdUser)
+  })
+})
 ```
 
 **Redis Cache Testing:**
 
 ```typescript
 // Testing Redis cache layer
-import { createCacheService } from "../services/cache-service";
-import { createTestRedisClient } from "../test/helpers";
+import { createCacheService } from '../services/cache-service'
+import { createTestRedisClient } from '../test/helpers'
 
-describe("CacheService", () => {
-  const redisClient = createTestRedisClient();
-  const cacheService = createCacheService(redisClient);
+describe('CacheService', () => {
+  const redisClient = createTestRedisClient()
+  const cacheService = createCacheService(redisClient)
 
-  it("should cache and retrieve data", async () => {
-    const key = "user:123";
-    const data = { name: "Test User" };
+  it('should cache and retrieve data', async () => {
+    const key = 'user:123'
+    const data = { name: 'Test User' }
 
-    await cacheService.set(key, data, 300);
-    const cached = await cacheService.get(key);
+    await cacheService.set(key, data, 300)
+    const cached = await cacheService.get(key)
 
-    expect(cached).toEqual(data);
-  });
-});
+    expect(cached).toEqual(data)
+  })
+})
 ```
 
 ---
@@ -654,32 +654,32 @@ Testing and observability are tightly integrated to ensure post-deployment quali
 
 ```typescript
 // vitest.config.ts
-import { defineConfig } from "vitest/config";
+import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
     globals: true,
-    environment: "jsdom", // For React components
-    setupFiles: ["./src/test/setup.ts"],
+    environment: 'jsdom', // For React components
+    setupFiles: ['./src/test/setup.ts'],
     coverage: {
-      provider: "v8",
-      reporter: ["text", "json", "html"],
-      exclude: ["node_modules/", "src/test/"],
+      provider: 'v8',
+      reporter: ['text', 'json', 'html'],
+      exclude: ['node_modules/', 'src/test/'],
     },
   },
-});
+})
 ```
 
 ```typescript
 // src/test/setup.ts
-import "@testing-library/jest-dom";
-import { afterEach } from "vitest";
-import { cleanup } from "@testing-library/react";
+import '@testing-library/jest-dom'
+import { afterEach } from 'vitest'
+import { cleanup } from '@testing-library/react'
 
 // Cleanup after each test
 afterEach(() => {
-  cleanup();
-});
+  cleanup()
+})
 ```
 
 ### Unit Testing Patterns
@@ -688,271 +688,265 @@ afterEach(() => {
 
 ```typescript
 // ✅ Test pure functions with clear input/output
-import { describe, it, expect } from "vitest";
-import { calculateTotalPrice, formatCurrency } from "../utils/pricing";
+import { describe, it, expect } from 'vitest'
+import { calculateTotalPrice, formatCurrency } from '../utils/pricing'
 
-describe("calculateTotalPrice", () => {
-  it("should calculate total with tax correctly", () => {
+describe('calculateTotalPrice', () => {
+  it('should calculate total with tax correctly', () => {
     // Arrange
     const items = [
       { price: 100, quantity: 2 },
       { price: 50, quantity: 1 },
-    ];
-    const taxRate = 0.1;
+    ]
+    const taxRate = 0.1
 
     // Act
-    const result = calculateTotalPrice(items, taxRate);
+    const result = calculateTotalPrice(items, taxRate)
 
     // Assert
-    expect(result).toBe(275); // (200 + 50) * 1.1
-  });
+    expect(result).toBe(275) // (200 + 50) * 1.1
+  })
 
-  it("should handle empty items array", () => {
-    expect(calculateTotalPrice([], 0.1)).toBe(0);
-  });
+  it('should handle empty items array', () => {
+    expect(calculateTotalPrice([], 0.1)).toBe(0)
+  })
 
-  it("should handle zero tax rate", () => {
-    const items = [{ price: 100, quantity: 1 }];
-    expect(calculateTotalPrice(items, 0)).toBe(100);
-  });
-});
+  it('should handle zero tax rate', () => {
+    const items = [{ price: 100, quantity: 1 }]
+    expect(calculateTotalPrice(items, 0)).toBe(100)
+  })
+})
 ```
 
 #### Service Layer Testing with Dependency Injection
 
 ```typescript
-import { describe, it, expect } from "vitest";
-import { createUserService } from "../services/user-service";
-import type { UserRepository } from "../types/user";
-import { createTestUser } from "../test/fixtures/user-fixtures";
+import { describe, it, expect } from 'vitest'
+import { createUserService } from '../services/user-service'
+import type { UserRepository } from '../types/user'
+import { createTestUser } from '../test/fixtures/user-fixtures'
 
 // ✅ Create test implementation instead of mocking
 const createTestUserRepository = (): UserRepository => ({
-  create: async (data) => {
-    const user = createTestUser({ ...data, id: "generated-id" });
-    return user;
+  create: async data => {
+    const user = createTestUser({ ...data, id: 'generated-id' })
+    return user
   },
 
-  findById: async (id) => {
-    if (id === "existing-user") {
-      return createTestUser({ id });
+  findById: async id => {
+    if (id === 'existing-user') {
+      return createTestUser({ id })
     }
-    return null;
+    return null
   },
 
   update: async (id, data) => {
-    return createTestUser({ id, ...data });
+    return createTestUser({ id, ...data })
   },
 
   delete: async () => {},
 
-  findByEmail: async (email) => {
-    if (email === "existing@example.com") {
-      return createTestUser({ email });
+  findByEmail: async email => {
+    if (email === 'existing@example.com') {
+      return createTestUser({ email })
     }
-    return null;
+    return null
   },
-});
+})
 
 // ✅ Test repository that throws errors for error scenarios
 const createFailingUserRepository = (): UserRepository => ({
   create: async () => {
-    throw new Error("Database connection failed");
+    throw new Error('Database connection failed')
   },
   findById: async () => {
-    throw new Error("Database connection failed");
+    throw new Error('Database connection failed')
   },
   update: async () => {
-    throw new Error("Database connection failed");
+    throw new Error('Database connection failed')
   },
   delete: async () => {
-    throw new Error("Database connection failed");
+    throw new Error('Database connection failed')
   },
   findByEmail: async () => {
-    throw new Error("Database connection failed");
+    throw new Error('Database connection failed')
   },
-});
+})
 
-describe("UserService", () => {
-  describe("createUser", () => {
-    it("should create user successfully", async () => {
+describe('UserService', () => {
+  describe('createUser', () => {
+    it('should create user successfully', async () => {
       // Arrange - Inject test dependencies
-      const testRepository = createTestUserRepository();
-      const userService = createUserService(testRepository);
-      const userData = { name: "John Doe", email: "john@example.com" };
+      const testRepository = createTestUserRepository()
+      const userService = createUserService(testRepository)
+      const userData = { name: 'John Doe', email: 'john@example.com' }
 
       // Act
-      const result = await userService.createUser(userData);
+      const result = await userService.createUser(userData)
 
       // Assert
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.name).toBe(userData.name);
-        expect(result.data.email).toBe(userData.email);
-        expect(result.data.id).toBe("generated-id");
+        expect(result.data.name).toBe(userData.name)
+        expect(result.data.email).toBe(userData.email)
+        expect(result.data.id).toBe('generated-id')
       }
-    });
+    })
 
-    it("should handle repository errors", async () => {
+    it('should handle repository errors', async () => {
       // Arrange - Inject failing repository
-      const failingRepository = createFailingUserRepository();
-      const userService = createUserService(failingRepository);
-      const userData = { name: "John Doe", email: "john@example.com" };
+      const failingRepository = createFailingUserRepository()
+      const userService = createUserService(failingRepository)
+      const userData = { name: 'John Doe', email: 'john@example.com' }
 
       // Act
-      const result = await userService.createUser(userData);
+      const result = await userService.createUser(userData)
 
       // Assert
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.message).toBe("Database connection failed");
+        expect(result.error.message).toBe('Database connection failed')
       }
-    });
-  });
+    })
+  })
 
-  describe("getUserById", () => {
-    it("should return user when found", async () => {
+  describe('getUserById', () => {
+    it('should return user when found', async () => {
       // Arrange
-      const testRepository = createTestUserRepository();
-      const userService = createUserService(testRepository);
+      const testRepository = createTestUserRepository()
+      const userService = createUserService(testRepository)
 
       // Act
-      const result = await userService.getUserById("existing-user" as UserId);
+      const result = await userService.getUserById('existing-user' as UserId)
 
       // Assert
-      expect(result.success).toBe(true);
+      expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.id).toBe("existing-user");
+        expect(result.data.id).toBe('existing-user')
       }
-    });
+    })
 
-    it("should return error when user not found", async () => {
+    it('should return error when user not found', async () => {
       // Arrange
-      const testRepository = createTestUserRepository();
-      const userService = createUserService(testRepository);
+      const testRepository = createTestUserRepository()
+      const userService = createUserService(testRepository)
 
       // Act
-      const result = await userService.getUserById("non-existent" as UserId);
+      const result = await userService.getUserById('non-existent' as UserId)
 
       // Assert
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.message).toBe("User not found");
+        expect(result.error.message).toBe('User not found')
       }
-    });
-  });
-});
+    })
+  })
+})
 ```
 
 #### Pure Function Testing with Currying
 
 ```typescript
 // ✅ Instead of mocking external services, use currying for dependency injection
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from 'vitest'
 
 // Service that depends on external API
 type EmailService = {
-  readonly sendEmail: (
-    to: string,
-    subject: string,
-    body: string
-  ) => Promise<boolean>;
-};
+  readonly sendEmail: (to: string, subject: string, body: string) => Promise<boolean>
+}
 
 type NotificationService = {
-  readonly sendWelcomeEmail: (user: User) => Promise<Result<void>>;
-};
+  readonly sendWelcomeEmail: (user: User) => Promise<Result<void>>
+}
 
 // ✅ Service factory with dependency injection
-const createNotificationService = (
-  emailService: EmailService
-): NotificationService => ({
-  sendWelcomeEmail: async (user) => {
+const createNotificationService = (emailService: EmailService): NotificationService => ({
+  sendWelcomeEmail: async user => {
     try {
       const success = await emailService.sendEmail(
         user.email,
-        "Welcome!",
-        `Hello ${user.name}, welcome to our platform!`
-      );
+        'Welcome!',
+        `Hello ${user.name}, welcome to our platform!`,
+      )
 
       return success
         ? { success: true, data: undefined }
-        : { success: false, error: new Error("Failed to send email") };
+        : { success: false, error: new Error('Failed to send email') }
     } catch (error) {
       return {
         success: false,
-        error: error instanceof Error ? error : new Error("Unknown error"),
-      };
+        error: error instanceof Error ? error : new Error('Unknown error'),
+      }
     }
   },
-});
+})
 
-describe("NotificationService", () => {
-  it("should send welcome email successfully", async () => {
+describe('NotificationService', () => {
+  it('should send welcome email successfully', async () => {
     // Arrange - Create test email service
     const testEmailService: EmailService = {
       sendEmail: async (to, subject, body) => {
         // Test implementation that always succeeds
-        expect(to).toBe("test@example.com");
-        expect(subject).toBe("Welcome!");
-        expect(body).toContain("Hello Test User");
-        return true;
+        expect(to).toBe('test@example.com')
+        expect(subject).toBe('Welcome!')
+        expect(body).toContain('Hello Test User')
+        return true
       },
-    };
+    }
 
-    const notificationService = createNotificationService(testEmailService);
+    const notificationService = createNotificationService(testEmailService)
     const user = createTestUser({
-      name: "Test User",
-      email: "test@example.com",
-    });
+      name: 'Test User',
+      email: 'test@example.com',
+    })
 
     // Act
-    const result = await notificationService.sendWelcomeEmail(user);
+    const result = await notificationService.sendWelcomeEmail(user)
 
     // Assert
-    expect(result.success).toBe(true);
-  });
+    expect(result.success).toBe(true)
+  })
 
-  it("should handle email service failures", async () => {
+  it('should handle email service failures', async () => {
     // Arrange - Create failing email service
     const failingEmailService: EmailService = {
       sendEmail: async () => false, // Simulates failure
-    };
+    }
 
-    const notificationService = createNotificationService(failingEmailService);
-    const user = createTestUser();
+    const notificationService = createNotificationService(failingEmailService)
+    const user = createTestUser()
 
     // Act
-    const result = await notificationService.sendWelcomeEmail(user);
+    const result = await notificationService.sendWelcomeEmail(user)
 
     // Assert
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.message).toBe("Failed to send email");
+      expect(result.error.message).toBe('Failed to send email')
     }
-  });
+  })
 
-  it("should handle email service exceptions", async () => {
+  it('should handle email service exceptions', async () => {
     // Arrange - Create throwing email service
     const throwingEmailService: EmailService = {
       sendEmail: async () => {
-        throw new Error("Network timeout");
+        throw new Error('Network timeout')
       },
-    };
+    }
 
-    const notificationService = createNotificationService(throwingEmailService);
-    const user = createTestUser();
+    const notificationService = createNotificationService(throwingEmailService)
+    const user = createTestUser()
 
     // Act
-    const result = await notificationService.sendWelcomeEmail(user);
+    const result = await notificationService.sendWelcomeEmail(user)
 
     // Assert
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.message).toBe("Network timeout");
+      expect(result.error.message).toBe('Network timeout')
     }
-  });
-});
+  })
+})
 ```
 
 #### Higher-Order Function Testing
@@ -1037,61 +1031,55 @@ describe('createCrudService', () => {
 ```typescript
 // ✅ Centralized test data creation
 // src/test/fixtures/user-fixtures.ts
-import type { User, CreateUserData } from "../../types/user";
+import type { User, CreateUserData } from '../../types/user'
 
 export const createTestUser = (overrides: Partial<User> = {}): User => ({
-  id: "test-user-1",
-  name: "Test User",
-  email: "test@example.com",
-  role: "user",
-  createdAt: new Date("2023-01-01"),
-  updatedAt: new Date("2023-01-01"),
+  id: 'test-user-1',
+  name: 'Test User',
+  email: 'test@example.com',
+  role: 'user',
+  createdAt: new Date('2023-01-01'),
+  updatedAt: new Date('2023-01-01'),
   ...overrides,
-});
+})
 
-export const createTestUserData = (
-  overrides: Partial<CreateUserData> = {}
-): CreateUserData => ({
-  name: "Test User",
-  email: "test@example.com",
+export const createTestUserData = (overrides: Partial<CreateUserData> = {}): CreateUserData => ({
+  name: 'Test User',
+  email: 'test@example.com',
   ...overrides,
-});
+})
 
 // Builder pattern for complex objects
 export class UserBuilder {
-  private user: Partial<User> = {};
+  private user: Partial<User> = {}
 
   withId(id: string): UserBuilder {
-    this.user.id = id;
-    return this;
+    this.user.id = id
+    return this
   }
 
   withName(name: string): UserBuilder {
-    this.user.name = name;
-    return this;
+    this.user.name = name
+    return this
   }
 
   withEmail(email: string): UserBuilder {
-    this.user.email = email;
-    return this;
+    this.user.email = email
+    return this
   }
 
   asAdmin(): UserBuilder {
-    this.user.role = "admin";
-    return this;
+    this.user.role = 'admin'
+    return this
   }
 
   build(): User {
-    return createTestUser(this.user);
+    return createTestUser(this.user)
   }
 }
 
 // Usage in tests
-const adminUser = new UserBuilder()
-  .withId("admin-1")
-  .withName("Admin User")
-  .asAdmin()
-  .build();
+const adminUser = new UserBuilder().withId('admin-1').withName('Admin User').asAdmin().build()
 ```
 
 ### React Component Testing
@@ -1099,117 +1087,115 @@ const adminUser = new UserBuilder()
 #### Component Testing with React Testing Library
 
 ```typescript
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { UserCard } from "../components/user-card";
-import { createTestUser } from "../test/fixtures/user-fixtures";
+import { describe, it, expect, vi } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { UserCard } from '../components/user-card'
+import { createTestUser } from '../test/fixtures/user-fixtures'
 
-describe("UserCard", () => {
+describe('UserCard', () => {
   const defaultProps = {
     user: createTestUser(),
     onEdit: vi.fn(),
-  };
+  }
 
-  it("should render user information", () => {
+  it('should render user information', () => {
     // Arrange & Act
-    render(<UserCard {...defaultProps} />);
+    render(<UserCard {...defaultProps} />)
 
     // Assert - Test what user sees
-    expect(screen.getByText("Test User")).toBeInTheDocument();
-    expect(screen.getByText("test@example.com")).toBeInTheDocument();
-  });
+    expect(screen.getByText('Test User')).toBeInTheDocument()
+    expect(screen.getByText('test@example.com')).toBeInTheDocument()
+  })
 
-  it("should call onEdit when edit button is clicked", async () => {
+  it('should call onEdit when edit button is clicked', async () => {
     // Arrange
-    const user = userEvent.setup();
-    const onEdit = vi.fn();
+    const user = userEvent.setup()
+    const onEdit = vi.fn()
 
-    render(<UserCard {...defaultProps} onEdit={onEdit} />);
+    render(<UserCard {...defaultProps} onEdit={onEdit} />)
 
     // Act - Simulate user interaction
-    const editButton = screen.getByRole("button", { name: /edit/i });
-    await user.click(editButton);
+    const editButton = screen.getByRole('button', { name: /edit/i })
+    await user.click(editButton)
 
     // Assert
-    expect(onEdit).toHaveBeenCalledWith(defaultProps.user);
-    expect(onEdit).toHaveBeenCalledTimes(1);
-  });
+    expect(onEdit).toHaveBeenCalledWith(defaultProps.user)
+    expect(onEdit).toHaveBeenCalledTimes(1)
+  })
 
-  it("should not render edit button when onEdit is not provided", () => {
+  it('should not render edit button when onEdit is not provided', () => {
     // Arrange & Act
-    render(<UserCard user={defaultProps.user} />);
+    render(<UserCard user={defaultProps.user} />)
 
     // Assert
-    expect(
-      screen.queryByRole("button", { name: /edit/i })
-    ).not.toBeInTheDocument();
-  });
-});
+    expect(screen.queryByRole('button', { name: /edit/i })).not.toBeInTheDocument()
+  })
+})
 ```
 
 #### Custom Hook Testing
 
 ```typescript
-import { describe, it, expect, vi } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
-import { useUserData } from "../hooks/use-user-data";
-import * as userService from "../services/user-service";
+import { describe, it, expect, vi } from 'vitest'
+import { renderHook, waitFor } from '@testing-library/react'
+import { useUserData } from '../hooks/use-user-data'
+import * as userService from '../services/user-service'
 
 // Mock external dependencies
-vi.mock("../services/user-service");
+vi.mock('../services/user-service')
 
-describe("useUserData", () => {
-  const mockGetUserById = vi.mocked(userService.getUserById);
+describe('useUserData', () => {
+  const mockGetUserById = vi.mocked(userService.getUserById)
 
   beforeEach(() => {
-    vi.clearAllMocks();
-  });
+    vi.clearAllMocks()
+  })
 
-  it("should fetch user data successfully", async () => {
+  it('should fetch user data successfully', async () => {
     // Arrange
-    const userId = "user-1";
-    const userData = createTestUser({ id: userId });
-    mockGetUserById.mockResolvedValue(userData);
+    const userId = 'user-1'
+    const userData = createTestUser({ id: userId })
+    mockGetUserById.mockResolvedValue(userData)
 
     // Act
-    const { result } = renderHook(() => useUserData(userId));
+    const { result } = renderHook(() => useUserData(userId))
 
     // Assert initial state
-    expect(result.current.loading).toBe(true);
-    expect(result.current.user).toBe(null);
-    expect(result.current.error).toBe(null);
+    expect(result.current.loading).toBe(true)
+    expect(result.current.user).toBe(null)
+    expect(result.current.error).toBe(null)
 
     // Wait for async operation
     await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
+      expect(result.current.loading).toBe(false)
+    })
 
     // Assert final state
-    expect(result.current.user).toEqual(userData);
-    expect(result.current.error).toBe(null);
-    expect(mockGetUserById).toHaveBeenCalledWith(userId);
-  });
+    expect(result.current.user).toEqual(userData)
+    expect(result.current.error).toBe(null)
+    expect(mockGetUserById).toHaveBeenCalledWith(userId)
+  })
 
-  it("should handle fetch errors", async () => {
+  it('should handle fetch errors', async () => {
     // Arrange
-    const userId = "user-1";
-    const errorMessage = "User not found";
-    mockGetUserById.mockRejectedValue(new Error(errorMessage));
+    const userId = 'user-1'
+    const errorMessage = 'User not found'
+    mockGetUserById.mockRejectedValue(new Error(errorMessage))
 
     // Act
-    const { result } = renderHook(() => useUserData(userId));
+    const { result } = renderHook(() => useUserData(userId))
 
     // Wait for async operation
     await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
+      expect(result.current.loading).toBe(false)
+    })
 
     // Assert
-    expect(result.current.user).toBe(null);
-    expect(result.current.error).toBe(errorMessage);
-  });
-});
+    expect(result.current.user).toBe(null)
+    expect(result.current.error).toBe(errorMessage)
+  })
+})
 ```
 
 ### Integration Testing for APIs
@@ -1217,189 +1203,189 @@ describe("useUserData", () => {
 #### Fastify Route Testing
 
 ```typescript
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { FastifyInstance } from "fastify";
-import { createTestApp } from "../test/helpers/test-app";
-import { createTestDatabase } from "../test/helpers/test-database";
-import { createTestUser } from "../test/fixtures/user-fixtures";
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { FastifyInstance } from 'fastify'
+import { createTestApp } from '../test/helpers/test-app'
+import { createTestDatabase } from '../test/helpers/test-database'
+import { createTestUser } from '../test/fixtures/user-fixtures'
 
-describe("/api/users", () => {
-  let app: FastifyInstance;
-  let db: TestDatabase;
+describe('/api/users', () => {
+  let app: FastifyInstance
+  let db: TestDatabase
 
   beforeAll(async () => {
     // Setup test database
-    db = await createTestDatabase();
-    app = await createTestApp({ database: db });
-  });
+    db = await createTestDatabase()
+    app = await createTestApp({ database: db })
+  })
 
   afterAll(async () => {
-    await app.close();
-    await db.cleanup();
-  });
+    await app.close()
+    await db.cleanup()
+  })
 
   beforeEach(async () => {
     // Clean database before each test
-    await db.reset();
-  });
+    await db.reset()
+  })
 
-  describe("POST /api/users", () => {
-    it("should create user successfully", async () => {
+  describe('POST /api/users', () => {
+    it('should create user successfully', async () => {
       // Arrange
       const userData = {
-        name: "John Doe",
-        email: "john@example.com",
-      };
+        name: 'John Doe',
+        email: 'john@example.com',
+      }
 
       // Act
       const response = await app.inject({
-        method: "POST",
-        url: "/api/users",
+        method: 'POST',
+        url: '/api/users',
         payload: userData,
-      });
+      })
 
       // Assert
-      expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(201)
 
-      const responseBody = JSON.parse(response.body);
+      const responseBody = JSON.parse(response.body)
       expect(responseBody.user).toMatchObject({
         name: userData.name,
         email: userData.email,
-      });
-      expect(responseBody.user.id).toBeDefined();
-      expect(responseBody.created).toBe(true);
-    });
+      })
+      expect(responseBody.user.id).toBeDefined()
+      expect(responseBody.created).toBe(true)
+    })
 
-    it("should return 400 for invalid email", async () => {
+    it('should return 400 for invalid email', async () => {
       // Arrange
       const invalidUserData = {
-        name: "John Doe",
-        email: "invalid-email",
-      };
+        name: 'John Doe',
+        email: 'invalid-email',
+      }
 
       // Act
       const response = await app.inject({
-        method: "POST",
-        url: "/api/users",
+        method: 'POST',
+        url: '/api/users',
         payload: invalidUserData,
-      });
+      })
 
       // Assert
-      expect(response.statusCode).toBe(400);
-    });
-  });
+      expect(response.statusCode).toBe(400)
+    })
+  })
 
-  describe("GET /api/users/:id", () => {
-    it("should return user by id", async () => {
+  describe('GET /api/users/:id', () => {
+    it('should return user by id', async () => {
       // Arrange
-      const user = await db.createUser(createTestUser());
+      const user = await db.createUser(createTestUser())
 
       // Act
       const response = await app.inject({
-        method: "GET",
+        method: 'GET',
         url: `/api/users/${user.id}`,
-      });
+      })
 
       // Assert
-      expect(response.statusCode).toBe(200);
+      expect(response.statusCode).toBe(200)
 
-      const responseBody = JSON.parse(response.body);
-      expect(responseBody.user).toEqual(user);
-    });
+      const responseBody = JSON.parse(response.body)
+      expect(responseBody.user).toEqual(user)
+    })
 
-    it("should return 404 for non-existent user", async () => {
+    it('should return 404 for non-existent user', async () => {
       // Act
       const response = await app.inject({
-        method: "GET",
-        url: "/api/users/non-existent-id",
-      });
+        method: 'GET',
+        url: '/api/users/non-existent-id',
+      })
 
       // Assert
-      expect(response.statusCode).toBe(404);
-    });
-  });
-});
+      expect(response.statusCode).toBe(404)
+    })
+  })
+})
 ```
 
 #### Database Testing Helpers
 
 ```typescript
 // src/test/helpers/test-database.ts
-import { Client } from "pg";
-import { randomUUID } from "crypto";
+import { Client } from 'pg'
+import { randomUUID } from 'crypto'
 
 export type TestDatabase = {
-  readonly client: Client;
-  readonly createUser: (userData: Partial<User>) => Promise<User>;
-  readonly reset: () => Promise<void>;
-  readonly cleanup: () => Promise<void>;
-};
+  readonly client: Client
+  readonly createUser: (userData: Partial<User>) => Promise<User>
+  readonly reset: () => Promise<void>
+  readonly cleanup: () => Promise<void>
+}
 
 export const createTestDatabase = async (): Promise<TestDatabase> => {
   // Create unique database for each test run
-  const dbName = `test_db_${randomUUID().replace(/-/g, "")}`;
+  const dbName = `test_db_${randomUUID().replace(/-/g, '')}`
 
   const client = new Client({
-    host: "localhost",
+    host: 'localhost',
     port: 5432,
     database: dbName,
-    user: "postgres",
-    password: "password",
-  });
+    user: 'postgres',
+    password: 'password',
+  })
 
-  await client.connect();
+  await client.connect()
 
   // Run migrations
-  await runMigrations(client);
+  await runMigrations(client)
 
   return {
     client,
 
-    createUser: async (userData) => {
-      const user = createTestUser(userData);
+    createUser: async userData => {
+      const user = createTestUser(userData)
       const result = await client.query(
-        "INSERT INTO users (id, name, email, role) VALUES ($1, $2, $3, $4) RETURNING *",
-        [user.id, user.name, user.email, user.role]
-      );
-      return UserSchema.parse(result.rows[0]);
+        'INSERT INTO users (id, name, email, role) VALUES ($1, $2, $3, $4) RETURNING *',
+        [user.id, user.name, user.email, user.role],
+      )
+      return UserSchema.parse(result.rows[0])
     },
 
     reset: async () => {
-      await client.query("TRUNCATE TABLE users CASCADE");
+      await client.query('TRUNCATE TABLE users CASCADE')
     },
 
     cleanup: async () => {
-      await client.end();
+      await client.end()
       // Drop test database
-      const adminClient = new Client({ database: "postgres" });
-      await adminClient.connect();
-      await adminClient.query(`DROP DATABASE IF EXISTS ${dbName}`);
-      await adminClient.end();
+      const adminClient = new Client({ database: 'postgres' })
+      await adminClient.connect()
+      await adminClient.query(`DROP DATABASE IF EXISTS ${dbName}`)
+      await adminClient.end()
     },
-  };
-};
+  }
+}
 ```
 
 ### Test Organization
 
 ```typescript
 // ✅ Clear test structure
-describe("UserService", () => {
+describe('UserService', () => {
   // Group related tests
-  describe("createUser", () => {
-    it("should create user with valid data", () => {});
-    it("should handle duplicate email error", () => {}); // Only test runtime errors
-  });
+  describe('createUser', () => {
+    it('should create user with valid data', () => {})
+    it('should handle duplicate email error', () => {}) // Only test runtime errors
+  })
 
-  describe("getUserById", () => {
-    it("should return user when found", () => {});
-    it("should return error when user not found", () => {}); // Business logic error
-  });
-});
+  describe('getUserById', () => {
+    it('should return user when found', () => {})
+    it('should return error when user not found', () => {}) // Business logic error
+  })
+})
 
 // ✅ Test naming convention: should [expected behavior] when [condition]
-it("should return user data when valid ID is provided", () => {});
-it("should handle database connection failure", () => {}); // Only runtime errors
+it('should return user data when valid ID is provided', () => {})
+it('should handle database connection failure', () => {}) // Only runtime errors
 ```
 
 ### Testing Philosophy
@@ -1408,66 +1394,66 @@ it("should handle database connection failure", () => {}); // Only runtime error
 
 ```typescript
 // ❌ Don't test what TypeScript already validates
-it("should reject invalid email format", () => {
-  const result = validateEmail("invalid-email");
-  expect(result.valid).toBe(false);
-});
+it('should reject invalid email format', () => {
+  const result = validateEmail('invalid-email')
+  expect(result.valid).toBe(false)
+})
 
 // ✅ Use branded types to make errors compile-time
-type Email = string & { readonly brand: unique symbol };
+type Email = string & { readonly brand: unique symbol }
 
 const createEmail = (value: string): Email => {
-  if (!value.includes("@")) {
-    throw new Error("Invalid email"); // Only for runtime validation
+  if (!value.includes('@')) {
+    throw new Error('Invalid email') // Only for runtime validation
   }
-  return value as Email;
-};
+  return value as Email
+}
 
 // ❌ This won't compile - no test needed
 // const userEmail: Email = "invalid-email";
 
 // ✅ Only test business logic and external boundaries
-it("should handle email service timeout", async () => {
-  const service = createEmailService(throwingEmailClient);
-  const result = await service.sendEmail(validEmail, "subject", "body");
-  expect(result.success).toBe(false);
-});
+it('should handle email service timeout', async () => {
+  const service = createEmailService(throwingEmailClient)
+  const result = await service.sendEmail(validEmail, 'subject', 'body')
+  expect(result.success).toBe(false)
+})
 ```
 
 #### ✅ Focus on Runtime Boundaries and Business Logic
 
 ```typescript
 // ✅ Test external system boundaries
-it("should handle database connection failure", async () => {
-  const repository = createUserRepository(failingDatabase);
-  const result = await repository.findById("user-1");
-  expect(result.success).toBe(false);
-});
+it('should handle database connection failure', async () => {
+  const repository = createUserRepository(failingDatabase)
+  const result = await repository.findById('user-1')
+  expect(result.success).toBe(false)
+})
 
 // ✅ Test complex business rules that can't be expressed in types
-it("should prevent user creation when account limit exceeded", async () => {
-  const repository = createRepositoryWithUserLimit(5);
+it('should prevent user creation when account limit exceeded', async () => {
+  const repository = createRepositoryWithUserLimit(5)
   // Create 5 users first
   for (let i = 0; i < 5; i++) {
-    await repository.create(createTestUser());
+    await repository.create(createTestUser())
   }
 
-  const result = await repository.create(createTestUser());
-  expect(result.success).toBe(false);
-  expect(result.error.code).toBe("ACCOUNT_LIMIT_EXCEEDED");
-});
+  const result = await repository.create(createTestUser())
+  expect(result.success).toBe(false)
+  expect(result.error.code).toBe('ACCOUNT_LIMIT_EXCEEDED')
+})
 
 // ✅ Test state transitions that involve external effects
-it("should send notification email when user is activated", async () => {
-  const emailsSent: string[] = [];
-  const testEmailService = createTestEmailService(emailsSent);
-  const userService = createUserService(repository, testEmailService);
+it('should send notification email when user is activated', async () => {
+  const emailsSent: string[] = []
+  const testEmailService = createTestEmailService(emailsSent)
+  const userService = createUserService(repository, testEmailService)
 
-  await userService.activateUser("user-1");
+  await userService.activateUser('user-1')
 
-  expect(emailsSent).toHaveLength(1);
-  expect(emailsSent[0]).toContain("Account activated");
-});
+  expect(emailsSent).toHaveLength(1)
+  expect(emailsSent[0]).toContain('Account activated')
+})
 ```
 
 ## 🌐 End-to-End Testing Implementation
@@ -1524,12 +1510,12 @@ workspace/
 
 ```yaml
 # docker-compose.e2e.yml
-version: "3.8"
+version: '3.8'
 services:
   web-app:
     build: ./apps/web
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       - NODE_ENV=test
       - DATABASE_URL=postgresql://test:test@postgres:5432/e2e_test
@@ -1540,7 +1526,7 @@ services:
   api-service:
     build: ./apps/api
     ports:
-      - "4000:4000"
+      - '4000:4000'
     environment:
       - NODE_ENV=test
       - DATABASE_URL=postgresql://test:test@postgres:5432/e2e_test
@@ -1554,12 +1540,12 @@ services:
       - POSTGRES_USER=test
       - POSTGRES_PASSWORD=test
     ports:
-      - "5432:5432"
+      - '5432:5432'
 
   redis:
     image: redis:7
     ports:
-      - "6379:6379"
+      - '6379:6379'
 ```
 
 **Environment Configuration:**
@@ -1584,25 +1570,25 @@ export class RegistrationPage {
   constructor(private page: Page) {}
 
   async goto() {
-    await this.page.goto("/register");
+    await this.page.goto('/register')
   }
 
   async fillForm(userData: UserData) {
-    await this.page.fill('[data-testid="name-input"]', userData.name);
-    await this.page.fill('[data-testid="email-input"]', userData.email);
-    await this.page.fill('[data-testid="password-input"]', userData.password);
+    await this.page.fill('[data-testid="name-input"]', userData.name)
+    await this.page.fill('[data-testid="email-input"]', userData.email)
+    await this.page.fill('[data-testid="password-input"]', userData.password)
   }
 
   async submit() {
-    await this.page.click('[data-testid="submit-button"]');
+    await this.page.click('[data-testid="submit-button"]')
   }
 
   async getSuccessMessage() {
-    return this.page.locator('[data-testid="success-message"]');
+    return this.page.locator('[data-testid="success-message"]')
   }
 
   async getErrorMessage() {
-    return this.page.locator('[data-testid="error-message"]');
+    return this.page.locator('[data-testid="error-message"]')
   }
 }
 ```
@@ -1611,61 +1597,55 @@ export class RegistrationPage {
 
 ```typescript
 // e2e/tests/user-flows/registration.spec.ts
-import { test, expect } from "@playwright/test";
-import { RegistrationPage } from "../pages/registration-page";
-import { TestUser } from "../fixtures/test-users";
-import { SystemVerification } from "../utils/system-verification";
+import { test, expect } from '@playwright/test'
+import { RegistrationPage } from '../pages/registration-page'
+import { TestUser } from '../fixtures/test-users'
+import { SystemVerification } from '../utils/system-verification'
 
-test.describe("User Registration Journey", () => {
-  let registrationPage: RegistrationPage;
-  let systemVerification: SystemVerification;
+test.describe('User Registration Journey', () => {
+  let registrationPage: RegistrationPage
+  let systemVerification: SystemVerification
 
   test.beforeEach(async ({ page }) => {
-    registrationPage = new RegistrationPage(page);
-    systemVerification = new SystemVerification();
-  });
+    registrationPage = new RegistrationPage(page)
+    systemVerification = new SystemVerification()
+  })
 
-  test("should complete full registration flow", async () => {
+  test('should complete full registration flow', async () => {
     // Arrange
-    const testUser = TestUser.create();
+    const testUser = TestUser.create()
 
     // Act
-    await registrationPage.goto();
-    await registrationPage.fillForm(testUser);
-    await registrationPage.submit();
+    await registrationPage.goto()
+    await registrationPage.fillForm(testUser)
+    await registrationPage.submit()
 
     // Assert - UI feedback
-    await expect(registrationPage.getSuccessMessage()).toBeVisible();
-    await expect(registrationPage.page).toHaveURL("/welcome");
+    await expect(registrationPage.getSuccessMessage()).toBeVisible()
+    await expect(registrationPage.page).toHaveURL('/welcome')
 
     // Assert - System state verification
-    const userExists = await systemVerification.verifyUserExists(
-      testUser.email
-    );
-    expect(userExists).toBe(true);
+    const userExists = await systemVerification.verifyUserExists(testUser.email)
+    expect(userExists).toBe(true)
 
-    const emailSent = await systemVerification.verifyWelcomeEmailSent(
-      testUser.email
-    );
-    expect(emailSent).toBe(true);
-  });
+    const emailSent = await systemVerification.verifyWelcomeEmailSent(testUser.email)
+    expect(emailSent).toBe(true)
+  })
 
-  test("should handle duplicate email registration", async () => {
+  test('should handle duplicate email registration', async () => {
     // Arrange
-    const existingUser = TestUser.existing();
+    const existingUser = TestUser.existing()
 
     // Act
-    await registrationPage.goto();
-    await registrationPage.fillForm(existingUser);
-    await registrationPage.submit();
+    await registrationPage.goto()
+    await registrationPage.fillForm(existingUser)
+    await registrationPage.submit()
 
     // Assert
-    await expect(registrationPage.getErrorMessage()).toContainText(
-      "Email already exists"
-    );
-    await expect(registrationPage.page).toHaveURL("/register");
-  });
-});
+    await expect(registrationPage.getErrorMessage()).toContainText('Email already exists')
+    await expect(registrationPage.page).toHaveURL('/register')
+  })
+})
 ```
 
 ### Cross-Service Integration Testing Patterns
@@ -1674,43 +1654,41 @@ test.describe("User Registration Journey", () => {
 
 ```typescript
 // e2e/tests/cross-service/user-order-flow.spec.ts
-import { test, expect } from "@playwright/test";
-import { UserPage } from "../pages/user-page";
-import { OrderPage } from "../pages/order-page";
-import { SystemVerification } from "../utils/system-verification";
+import { test, expect } from '@playwright/test'
+import { UserPage } from '../pages/user-page'
+import { OrderPage } from '../pages/order-page'
+import { SystemVerification } from '../utils/system-verification'
 
-test.describe("User-Order Integration Flow", () => {
-  test("should create order and update user history", async ({ page }) => {
-    const userPage = new UserPage(page);
-    const orderPage = new OrderPage(page);
-    const systemVerification = new SystemVerification();
+test.describe('User-Order Integration Flow', () => {
+  test('should create order and update user history', async ({ page }) => {
+    const userPage = new UserPage(page)
+    const orderPage = new OrderPage(page)
+    const systemVerification = new SystemVerification()
 
     // Step 1: Create user account
-    const testUser = await userPage.createAccount();
+    const testUser = await userPage.createAccount()
 
     // Step 2: Create order
-    await orderPage.goto();
+    await orderPage.goto()
     const order = await orderPage.createOrder({
-      items: [{ name: "Test Product", quantity: 1, price: 29.99 }],
+      items: [{ name: 'Test Product', quantity: 1, price: 29.99 }],
       userId: testUser.id,
-    });
+    })
 
     // Step 3: Verify cross-service data consistency
-    const userProfile = await systemVerification.getUserProfile(testUser.id);
+    const userProfile = await systemVerification.getUserProfile(testUser.id)
     expect(userProfile.orderHistory).toContainEqual(
       expect.objectContaining({
         orderId: order.id,
-        status: "completed",
-      })
-    );
+        status: 'completed',
+      }),
+    )
 
     // Step 4: Verify inventory service was updated
-    const inventory = await systemVerification.getInventoryLevel(
-      "Test Product"
-    );
-    expect(inventory.available).toBe(inventory.previous - 1);
-  });
-});
+    const inventory = await systemVerification.getInventoryLevel('Test Product')
+    expect(inventory.available).toBe(inventory.previous - 1)
+  })
+})
 ```
 
 **System Verification Utilities:**
@@ -1718,47 +1696,41 @@ test.describe("User-Order Integration Flow", () => {
 ```typescript
 // e2e/utils/system-verification.ts
 export class SystemVerification {
-  private baseApiUrl = process.env.E2E_API_URL;
-  private serviceToken = process.env.E2E_SERVICE_TOKEN;
+  private baseApiUrl = process.env.E2E_API_URL
+  private serviceToken = process.env.E2E_SERVICE_TOKEN
 
   async verifyUserExists(email: string): Promise<boolean> {
-    const response = await fetch(
-      `${this.baseApiUrl}/test/users/by-email/${email}`,
-      {
-        headers: { Authorization: `Bearer ${this.serviceToken}` },
-      }
-    );
-    return response.status === 200;
+    const response = await fetch(`${this.baseApiUrl}/test/users/by-email/${email}`, {
+      headers: { Authorization: `Bearer ${this.serviceToken}` },
+    })
+    return response.status === 200
   }
 
   async verifyWelcomeEmailSent(email: string): Promise<boolean> {
     const response = await fetch(`${this.baseApiUrl}/test/emails/sent`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${this.serviceToken}`,
       },
-      body: JSON.stringify({ to: email, subject: "Welcome" }),
-    });
-    const emails = await response.json();
-    return emails.length > 0;
+      body: JSON.stringify({ to: email, subject: 'Welcome' }),
+    })
+    const emails = await response.json()
+    return emails.length > 0
   }
 
   async getUserProfile(userId: string) {
     const response = await fetch(`${this.baseApiUrl}/users/${userId}/profile`, {
       headers: { Authorization: `Bearer ${this.serviceToken}` },
-    });
-    return response.json();
+    })
+    return response.json()
   }
 
   async getInventoryLevel(productName: string) {
-    const response = await fetch(
-      `${this.baseApiUrl}/inventory/products/${productName}`,
-      {
-        headers: { Authorization: `Bearer ${this.serviceToken}` },
-      }
-    );
-    return response.json();
+    const response = await fetch(`${this.baseApiUrl}/inventory/products/${productName}`, {
+      headers: { Authorization: `Bearer ${this.serviceToken}` },
+    })
+    return response.json()
   }
 }
 ```
@@ -1777,7 +1749,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: "0 2 * * *" # Daily at 2 AM
+    - cron: '0 2 * * *' # Daily at 2 AM
 
 jobs:
   e2e-tests:
@@ -1791,8 +1763,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "18"
-          cache: "npm"
+          node-version: '18'
+          cache: 'npm'
 
       - name: Start services
         run: |
@@ -1839,66 +1811,64 @@ jobs:
 ```typescript
 // e2e/scripts/wait-for-services.ts
 const waitForServices = async (services: string[], timeout = 60000) => {
-  const startTime = Date.now();
+  const startTime = Date.now()
 
   for (const serviceUrl of services) {
-    console.log(`Waiting for ${serviceUrl}...`);
+    console.log(`Waiting for ${serviceUrl}...`)
 
     while (Date.now() - startTime < timeout) {
       try {
-        const response = await fetch(`${serviceUrl}/health`);
+        const response = await fetch(`${serviceUrl}/health`)
         if (response.ok) {
-          console.log(`✅ ${serviceUrl} is ready`);
-          break;
+          console.log(`✅ ${serviceUrl} is ready`)
+          break
         }
       } catch (error) {
-        console.log(`⏳ ${serviceUrl} not ready yet...`);
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        console.log(`⏳ ${serviceUrl} not ready yet...`)
+        await new Promise(resolve => setTimeout(resolve, 2000))
       }
     }
   }
 
-  console.log("🚀 All services are ready!");
-};
+  console.log('🚀 All services are ready!')
+}
 
-waitForServices(["http://localhost:3000", "http://localhost:4000"]);
+waitForServices(['http://localhost:3000', 'http://localhost:4000'])
 ```
 
 **Performance Integration in E2E:**
 
 ```typescript
 // e2e/tests/performance/core-web-vitals.spec.ts
-import { test, expect } from "@playwright/test";
+import { test, expect } from '@playwright/test'
 
-test.describe("Core Web Vitals", () => {
-  test("should meet performance benchmarks on critical pages", async ({
-    page,
-  }) => {
+test.describe('Core Web Vitals', () => {
+  test('should meet performance benchmarks on critical pages', async ({ page }) => {
     // Navigate to page and measure Core Web Vitals
-    const response = await page.goto("/", { waitUntil: "networkidle" });
+    const response = await page.goto('/', { waitUntil: 'networkidle' })
 
     // Measure Largest Contentful Paint (LCP)
     const lcp = await page.evaluate(() => {
-      return new Promise((resolve) => {
-        new PerformanceObserver((list) => {
-          const entries = list.getEntries();
-          const lastEntry = entries[entries.length - 1];
-          resolve(lastEntry.startTime);
-        }).observe({ entryTypes: ["largest-contentful-paint"] });
-      });
-    });
+      return new Promise(resolve => {
+        new PerformanceObserver(list => {
+          const entries = list.getEntries()
+          const lastEntry = entries[entries.length - 1]
+          resolve(lastEntry.startTime)
+        }).observe({ entryTypes: ['largest-contentful-paint'] })
+      })
+    })
 
     // Assert performance thresholds
-    expect(lcp).toBeLessThan(2500); // LCP should be under 2.5s
-    expect(response?.status()).toBe(200);
+    expect(lcp).toBeLessThan(2500) // LCP should be under 2.5s
+    expect(response?.status()).toBe(200)
 
     // Measure page load time
     const loadTime = await page.evaluate(
-      () => performance.timing.loadEventEnd - performance.timing.navigationStart
-    );
-    expect(loadTime).toBeLessThan(3000); // Page load under 3s
-  });
-});
+      () => performance.timing.loadEventEnd - performance.timing.navigationStart,
+    )
+    expect(loadTime).toBeLessThan(3000) // Page load under 3s
+  })
+})
 ```
 
 This comprehensive E2E implementation strategy provides clear guidelines for setting up, organizing, and maintaining end-to-end tests while ensuring they integrate properly with the overall testing strategy and CI/CD pipeline.
@@ -2325,4 +2295,4 @@ This document supports the **Definition of Done** requirements:
 - **[Definition of Done](06-definition-of-done.md)** - _Quality gates ensure testing completeness_
 - **[UX Guidelines](05-ux-guidelines.md)** - _UX testing validates user experience_
 - **[Observability Guidelines](11-observability-guidelines.md)** - _Monitoring and alerting for test and production environments_
-- **[12-collaboration-and-process-guidelines.md](12-collaboration-and-process-guidelines.md)**
+- **[12-collaboration-and-process-guidelines/README.md](12-collaboration-and-process-guidelines/README.md)**

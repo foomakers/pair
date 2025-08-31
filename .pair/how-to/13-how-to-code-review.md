@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide enables Product Software Engineers and AI assistants to collaboratively conduct effective code reviews that ensure code quality, knowledge sharing, and maintainability standards across the development team. Code review validates **implemented code** from task implementation against established technical standards, architectural patterns, and story acceptance criteria.
+This guide enables Product Software Engineers and AI assistants to collaboratively conduct effective code reviews that ensure code quality, knowledge sharing, and maintainability standards across the development team. **Code review is the step that follows pull request creation** (see [How to Create a Pull Request](12-how-to-create-a-pr.md)), and validates **implemented code** from task implementation against established technical standards, architectural patterns, and story acceptance criteria.
 
 **Key Benefits of Code Review:**
 
@@ -50,7 +50,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) for all access procedures
+- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -69,13 +69,13 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 - [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) consulted for access procedures
+- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) consulted for access procedures
 
 ## Code Review Definition
 
 ### What is Code Review?
 
-A **Code Review** is the **quality validation phase** where:
+**Code Review** is the **quality validation phase** that takes place **after the creation of a pull request**. Once a pull request is opened (see [How to Create a Pull Request](12-how-to-create-a-pr.md)), the code review process begins to:
 
 - **Validates Implementation**: Confirms implemented code meets story acceptance criteria and task specifications
 - **Ensures Standards Compliance**: Verifies adherence to established technical adoption guidelines and architectural patterns
@@ -86,21 +86,23 @@ A **Code Review** is the **quality validation phase** where:
 - **Provides Quality Assurance**: Validates testing coverage, security standards, and performance requirements
 
 **Code review is comprehensive and systematic** - it follows established quality validation workflows while maintaining consistency with technical guidelines and providing constructive feedback for continuous improvement.
+**Code review is comprehensive and systematic** - it follows established quality validation workflows while maintaining consistency with technical guidelines and providing constructive feedback for continuous improvement. **It is always performed after the pull request is created, as the next step in the development workflow.**
 
 ### Review vs Other Development Phases
 
-| Phase                   | Scope              | Purpose                                       | Detail Level                    |
-| ----------------------- | ------------------ | --------------------------------------------- | ------------------------------- |
-| **Task Implementation** | Code development   | Transform specifications into working code    | Code and tests                  |
-| **Code Review**         | Quality validation | Validate implementation quality and standards | Code quality and compliance     |
-| **Integration**         | System integration | Merge validated code into main system         | System consistency              |
-| **Deployment**          | Production release | Deploy validated changes to production        | System deployment and operation |
+| Phase                     | Scope              | Purpose                                       | Detail Level                     |
+| ------------------------- | ------------------ | --------------------------------------------- | -------------------------------- |
+| **Task Implementation**   | Code development   | Transform specifications into working code    | Code and tests                   |
+| **Pull Request Creation** | Review preparation | Prepare code for team review and CI/CD checks | PR description, context, commits |
+| **Code Review**           | Quality validation | Validate implementation quality and standards | Code quality and compliance      |
+| **Integration**           | System integration | Merge validated code into main system         | System consistency               |
+| **Deployment**            | Production release | Deploy validated changes to production        | System deployment and operation  |
 
 ---
 
 **Project Management Tool Usage**
 
-Before conducting code reviews, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for interfacing, linking items, and managing review records. Please refer to this documentation any time the guide asks for project management tool actions.
+Before conducting code reviews, ensure that the pull request has been created following the process in [How to Create a Pull Request](12-how-to-create-a-pr.md). Then, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` for interfacing, linking items, and managing review records. Please refer to this documentation any time the guide asks for project management tool actions.
 
 ---
 
@@ -147,6 +149,8 @@ Before conducting code reviews, identify the configured project management tool 
    - Review observability requirements per [observability guidelines](../../tech/knowledge-base/11-observability-guidelines.md)
 
 ## Review Prerequisites
+
+Before starting a code review, **read and consult the updated template**: [Code Review Template](../../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/code-review-template.md). All phases, checklists, and the report structure are defined and detailed in the template.
 
 ### Step 0: Development Status Analysis and Review Setup
 
@@ -996,7 +1000,7 @@ JWT tokens are being logged in plain text during authentication process, exposin
 **Current Implementation:**
 
 ```typescript
-console.log("User authenticated with token:", token);
+console.log('User authenticated with token:', token)
 ```
 ````
 
@@ -1007,11 +1011,11 @@ Security guidelines prohibit logging sensitive authentication data (Reference: [
 
 ```typescript
 // Remove token logging and implement secure audit logging
-logger.audit("User authenticated", {
+logger.audit('User authenticated', {
   userId: user.id,
   timestamp: new Date().toISOString(),
   // Never log actual token
-});
+})
 ```
 
 **Rationale:**
@@ -1051,7 +1055,7 @@ Bounded context guidelines require inter-context communication through establish
 
 ```typescript
 // Use established Order API for cross-context communication
-const userOrders = await orderApiClient.getUserOrders(userId);
+const userOrders = await orderApiClient.getUserOrders(userId)
 ```
 
 **Rationale:**
@@ -1101,114 +1105,9 @@ Improved code quality and reduced risk of production issues through comprehensiv
 
 ### Review Report Template
 
+- [Review Report Template](../../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/code-review-template.md##code-review-report-template)
+
 **Comprehensive Review Report Structure:**
-
-```markdown
-# Code Review Report: [STORY_ID] - [STORY_NAME]
-
-## Review Summary
-
-**Branch:** [BRANCH_NAME]
-**Review Date:** [DATE]
-**Reviewer:** AI Assistant + [DEVELOPER_NAME]
-**Implementation Status:** [COMPLETE/PARTIAL/REQUIRES_FOLLOW_UP]
-
-### Metrics Overview
-
-| Metric            | Target | Actual | Status  |
-| ----------------- | ------ | ------ | ------- |
-| Story Completion  | 100%   | [X]%   | [✅/❌] |
-| Task Completion   | 100%   | [X]%   | [✅/❌] |
-| Test Coverage     | [X]%   | [Y]%   | [✅/❌] |
-| Quality Standards | 100%   | [X]%   | [✅/❌] |
-
-## Story Validation Results
-
-### Acceptance Criteria Assessment
-
-[AC-1]: [Description] - **Status:** [✅/❌/⚠️]
-
-- **Implementation:** [Location and description]
-- **Test Coverage:** [Test files and coverage]
-- **Quality Assessment:** [Quality evaluation]
-
-### Task Completion Analysis
-
-[TASK-1]: [Description] - **Status:** [✅/❌/⚠️]
-
-- **Specification Compliance:** [Assessment]
-- **Quality Assessment:** [Quality evaluation]
-- **Integration Status:** [Integration assessment]
-
-## Technical Standards Compliance
-
-### Architecture Review Results
-
-- **Pattern Compliance:** [Assessment against architectural patterns]
-- **Bounded Context Respect:** [Assessment of context boundary adherence]
-- **Design Decision Consistency:** [Assessment against established ADRs]
-
-### Technology Standards Assessment
-
-- **Framework Usage:** [Assessment of framework compliance]
-- **Library Dependencies:** [Assessment of approved library usage]
-- **Version Consistency:** [Assessment of version alignment across workspaces]
-
-### Infrastructure Compliance
-
-- **Deployment Patterns:** [Assessment against deployment requirements]
-- **Configuration Management:** [Assessment of configuration handling]
-- **Monitoring Integration:** [Assessment of observability implementation]
-
-## Quality Assurance Results
-
-### Definition of Done Compliance
-
-- **Code Quality:** [Assessment against quality standards]
-- **Testing Coverage:** [Assessment of test coverage and quality]
-- **Documentation:** [Assessment of documentation completeness]
-- **Security:** [Assessment against security guidelines]
-- **Performance:** [Assessment against performance requirements]
-- **Accessibility:** [Assessment of accessibility compliance]
-
-## Issues and Recommendations
-
-### Critical Issues
-
-[List critical issues with specific solutions]
-
-### Major Issues
-
-[List major issues with specific solutions]
-
-### Minor Issues
-
-[List minor issues with specific solutions]
-
-### Suggestions
-
-[List improvement suggestions and enhancement opportunities]
-
-## Follow-up Actions
-
-### Created Tasks
-
-[List of tasks created for addressing review findings]
-
-### Adoption Updates
-
-[List of adoption document updates made or recommended]
-
-### Implementation Plan
-
-[Specific plan for addressing confirmed issues and improvements]
-
-## Review Completion
-
-**Final Status:** [APPROVED/APPROVED_WITH_CONDITIONS/REQUIRES_REWORK]
-**Next Phase:** [Integration/Additional_Implementation/Re-review]
-**Developer Sign-off:** [Pending/Completed]
-```
 
 ### Review Progress Tracking
 
@@ -1304,6 +1203,10 @@ Code Review Progress for [STORY_ID]
 - **Task Status Management**: Update task completion status based on review validation
 - **Epic Progress Tracking**: Maintain epic progress status based on story review outcomes
 - **Review Documentation**: Store review reports in appropriate project documentation structure
+
+**GitHub:**
+
+Follow the [GitHub integration guidelines](../../tech/adopted/git-integration.md) for instructions.
 
 **External Tool Integration (Jira, etc.):**
 
@@ -1443,8 +1346,8 @@ Code Review Progress for [STORY_ID]
 - [Product vision, user personas, and requirements](../../product/adopted/PRD.md)
 - [Development methodology and process definitions](../../tech/adopted/way-of-working.md)
 - [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/) (if the project management tool is filesystem)
-- [Integration and merge procedures](../how-to/12-how-to-commit-and-push.md)
-- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
+- [Integration and merge procedures](../how-to/11-how-to-commit-and-push.md)
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 
@@ -1496,8 +1399,8 @@ Code Review Progress for [STORY_ID]
 
 **Related Documents:**
 
-- Previous: [10-how-to-implement-a-task.md](./10-how-to-implement-a-task.md)
+- Previous: [12-how-to-create-a-pr.md](./12-how-to-create-a-pr.md)
 - Bootstrap Checklist: [02-how-to-complete-bootstrap-checklist.md](./02-how-to-complete-bootstrap-checklist.md)
-- Next: [12-how-to-commit-and-push.md](./12-how-to-commit-and-push.md)
+- [Code Review Template](../../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/code-review-template.md) - Structure, phases, and operational checklists for code review
 
 This guide ensures systematic, comprehensive code review that validates implementation quality against established technical standards while providing constructive feedback and coordinating improvement processes for continuous development excellence.

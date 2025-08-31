@@ -197,7 +197,7 @@ _"Perfect! Here's the final validated checklist. All decisions are consistent an
    - Reference knowledge-base documents for detailed rationale
    - Ensure self-consistency across all documents
    - Address all relevant checklist points
-   - When adopting a project management tool, reference `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for usage. Example: "Github Projects is adopted. See `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for usage."
+   - When adopting a project management tool, reference `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` for usage. Example: "Github Projects is adopted. See `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` for usage."
 
 ### Step 6: Document Review and Iteration
 
@@ -373,7 +373,7 @@ _Should I update [`[affected-file].md`](.pair/tech/adopted/[affected-file].md) t
 
 ## References
 
-- [Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines.md)
+- [Collaboration and Process Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/README.md)
 - [Bootstrap Checklist](../../assets/bootstrap-checklist.md) - Complete project setup and categorization framework
 - [Adopted Standards README](../tech/adopted/README.md) - Requirements and format for all adopted documents
 - [Way of Working](../tech/adopted/way-of-working.md) - Development lifecycle and iteration processes

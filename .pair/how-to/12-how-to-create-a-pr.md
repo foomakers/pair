@@ -2,7 +2,12 @@
 
 ## Overview
 
-This guide enables Product Software Engineers and AI assistants to collaboratively create comprehensive pull requests that facilitate effective code review, maintain project history, and ensure seamless integration of changes following established team conventions and development methodology. Pull request creation transforms **committed implementation work** into reviewable units that support collaborative code validation, automated quality gates, and structured merge processes.
+This guide enables Product Software Engineers and AI assistants to collaboratively create comprehensive pull requests that facilitate effective code review, maintain project history, and ensure seamless integration of changes following established team conventions and development methodology. **Pull request creation is always performed before the code review step** (see [How to Code Review](13-how-to-code-review.md)). Pull request creation transforms **committed implementation work** into reviewable units that support collaborative code validation, automated quality gates, and structured merge processes.
+
+**Important:**
+
+- The pull request must be created **before** the code review process begins (see [How to Code Review](13-how-to-code-review.md)).
+- **If the team adoption in `.pair/tech/adopted/way-of-working.md` specifies that the branch must be merged with a single squashed commit**, you must squash all changes into one commit before creating the PR, following the conventions and templates in [How to Commit and Push](11-how-to-commit-and-push.md).
 
 **Key Benefits of Structured Pull Request Creation:**
 
@@ -51,7 +56,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) for all access procedures
+- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -70,7 +75,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 - [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) consulted for access procedures
+- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) consulted for access procedures
 
 ## Pull Request Definition
 
@@ -467,9 +472,12 @@ A **Pull Request** is the **code review preparation phase** where:
 
 1. **Create Pull Request with Generated Content**: Using approved description and reviewers:
 
+   > **Important:** For GitHub repositories, the pull request must be created using the MCP GitHub integration (not the GitHub CLI `gh`).
+   > Use the MCP GitHub workflow and API to ensure traceability, compliance, and automation with project management and review processes.
+
    ```bash
-   # Create PR using GitHub CLI (if available)
-   gh pr create \
+   # Create PR using MCP GitHub integration (replace with actual MCP commands)
+   mcp github pr create \
      --title "[APPROVED_PR_TITLE]" \
      --body "[APPROVED_PR_DESCRIPTION]" \
      --reviewer "[APPROVED_REVIEWERS]" \
@@ -786,6 +794,8 @@ A **Pull Request** is the **code review preparation phase** where:
 - [ ] **Project Status Update**: Project management status updated to "Merged"
 - [ ] **Deployment Triggering**: Automated deployment to staging/production
 - [ ] **Monitoring Setup**: Deployment monitoring and alerting activated
+- [ ] **User Story Closure**: User story closed in the project management tool (or marked as complete if using filesystem) after positive code review
+- [ ] **Branch Deletion**: Feature branch deleted after successful merge and code review
 
 ## Quality Assurance Framework
 
@@ -1320,8 +1330,8 @@ Documentation updates for [Component/Feature/Process] to improve [user experienc
 - [Product vision, user personas, and requirements](../../product/adopted/PRD.md)
 - [Development methodology and process definitions](../../way-of-working.md)
 - [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/) (if the project management tool is filesystem)
-- [Commit and push completion status](./12-how-to-commit-and-push.md)
-- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
+- [Commit and push completion status](./11-how-to-commit-and-push.md)
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 
@@ -1363,13 +1373,14 @@ Documentation updates for [Component/Feature/Process] to improve [user experienc
 
 **Process Dependencies:**
 
-- **Prerequisites**: Commit and push workflow completed following [How to Commit and Push](./12-how-to-commit-and-push.md)
+- **Prerequisites**: Commit and push workflow completed following [How to Commit and Push](./11-how-to-commit-and-push.md)
 - **Input**: Organized commit history with proper traceability pushed to remote repository
 - **Output**: Comprehensive pull request ready for team code review with all necessary context and documentation
 - **Next Phase**: Select Story ready for **How to Refine User Stories** process
 - **Quality Gates**: All automated CI/CD validation, quality checks, and documentation requirements satisfied
 - **Traceability**: Clear links maintained from pull request through commits to user stories, tasks, and acceptance criteria
 
-**Related Documents:**
+## Related Documents
 
-- Previous: [12-how-to-commit-and-push.md](./12-how-to-commit-and-push.md)
+- Previous: [How to Commit and Push](11-how-to-commit-and-push.md)
+- Next: [How to Create a Code Review](12-how-to-create-a-code-review.md)

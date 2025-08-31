@@ -92,7 +92,6 @@ See the "📁 Structure" section below for an overview of the main folders.
 │   ├── product/                   # Product requirements and PRD
 │   ├── tech/                      # Technical guidelines and standards
 │   └── way-of-working.md         # Process and collaboration guidelines
-├── examples/                      # Example implementations and templates
 ├── package.json                   # Project configuration (supports workspaces)
 └── README.md                     # This file
 ```

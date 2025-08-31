@@ -47,7 +47,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) for all access procedures
+- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -66,7 +66,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 - [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md) consulted for access procedures
+- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) consulted for access procedures
 
 ## Task Implementation Definition
 
@@ -97,7 +97,7 @@ A **Task Implementation** is the **execution phase** where:
 
 **Project Management Tool Usage**
 
-Before implementing tasks, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` for interfacing, linking items, and managing task records. Please refer to this documentation any time the guide asks for project management tool actions.
+Before implementing tasks, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` for interfacing, linking items, and managing task records. Please refer to this documentation any time the guide asks for project management tool actions.
 
 ---
 
@@ -432,12 +432,12 @@ _"Story '[STORY_ID]: [STORY_NAME]' is now assigned and In Progress. Parent Epic 
 
    **Standard Convention Requirements:**
 
-   - MUST include story code in branch name
-   - Follow established naming pattern from way-of-working
-   - Use descriptive but concise naming
+   - MUST include a reference to the user story as `#` + story code (e.g. `#231`) in the branch name
+   - Follow the naming pattern established in way-of-working
+   - Use a descriptive but concise name
    - Maintain consistency with team standards
 
-   **Example Convention:** `feature/[STORY_CODE]-[brief-description]`
+   **Example convention:** `feature/#231-modular-doc-structure`
    Assign branch to the story if project management tool supports it.
 
 3. **Propose Branch Creation**: Present branch name for approval:
@@ -458,25 +458,29 @@ _"Development branch '[BRANCH_NAME]' created and active. Environment ready for t
 
 **AI Assistant Instructions:** Determine task execution approach:
 
-1. **Present TDD Implementation Options**: Offer TDD-compliant approaches:
+1. **Confirm TDD Approach with Developer**: Before starting implementation, the AI assistant must ask the developer whether to follow the TDD approach for each task.
 
-   _"Story '[STORY_ID]' contains [X] tasks ready for implementation. I will implement all tasks using Test-Driven Development (TDD) methodology. I can proceed with either approach:_
+   - For documentation tasks, the default is that TDD is **not required**.
+   - For other task types, propose the TDD approach based on the nature of the task and follow the developer's indication.
+   - Example prompt:
+     _"Story '[STORY_ID]' contains [X] tasks ready for implementation. For each task, do you want to follow the Test-Driven Development (TDD) methodology? For documentation tasks, TDD is not required by default. Please confirm your preference for each task, and I will proceed accordingly."_
 
-   **Option A: Task-by-Task TDD Cycles**
+   - If TDD is required, offer the following options:
+     **Option A: Task-by-Task TDD Cycles**
 
-   - _Complete RED-GREEN-REFACTOR cycle for each task individually_
-   - _Review and approve each task's TDD cycle before proceeding_
-   - _Provides granular progress tracking with full TDD validation_
-   - _Each task gets individual commits for test/implementation phases_
+     - Complete RED-GREEN-REFACTOR cycle for each task individually
+     - Review and approve each task's TDD cycle before proceeding
+     - Provides granular progress tracking with full TDD validation
+     - Each task gets individual commits for test/implementation phases
 
-   **Option B: Feature-Complete TDD Implementation**
+     **Option B: Feature-Complete TDD Implementation**
 
-   - _Execute all TDD cycles for all tasks in sequence_
-   - _Show progress tracking throughout all TDD phases_
-   - _Single review after all tasks complete their TDD cycles_
-   - _Consolidated review of complete feature with full test coverage_
+     - Execute all TDD cycles for all tasks in sequence
+     - Show progress tracking throughout all TDD phases
+     - Single review after all tasks complete their TDD cycles
+     - Consolidated review of complete feature with full test coverage
 
-   _Both approaches strictly follow TDD methodology with separate sessions for tests and implementation. Which TDD implementation approach would you prefer?"_
+     Both approaches strictly follow TDD methodology with separate sessions for tests and implementation. Which TDD implementation approach would you prefer?
 
 2. **Configure TDD Progress Tracking**: Set up TDD phase monitoring:
 
@@ -908,25 +912,25 @@ _"User Story '[STORY_ID]: [STORY_NAME]' TDD implementation is complete and ready
 
 ```typescript
 // RED Session - tests/user-registration.test.ts
-describe("User Registration Validation", () => {
-  it("should accept valid email and password", () => {
-    const result = validateRegistration("user@example.com", "SecurePass123");
-    expect(result.isValid).toBe(true);
-    expect(result.errors).toHaveLength(0);
-  });
+describe('User Registration Validation', () => {
+  it('should accept valid email and password', () => {
+    const result = validateRegistration('user@example.com', 'SecurePass123')
+    expect(result.isValid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+  })
 
-  it("should reject invalid email format", () => {
-    const result = validateRegistration("invalid-email", "SecurePass123");
-    expect(result.isValid).toBe(false);
-    expect(result.errors).toContain("Invalid email format");
-  });
+  it('should reject invalid email format', () => {
+    const result = validateRegistration('invalid-email', 'SecurePass123')
+    expect(result.isValid).toBe(false)
+    expect(result.errors).toContain('Invalid email format')
+  })
 
-  it("should reject weak password", () => {
-    const result = validateRegistration("user@example.com", "123");
-    expect(result.isValid).toBe(false);
-    expect(result.errors).toContain("Password must be at least 8 characters");
-  });
-});
+  it('should reject weak password', () => {
+    const result = validateRegistration('user@example.com', '123')
+    expect(result.isValid).toBe(false)
+    expect(result.errors).toContain('Password must be at least 8 characters')
+  })
+})
 ```
 
 **RED Commit**:
@@ -949,30 +953,27 @@ All tests failing as expected - validateRegistration function not implemented"
 ```typescript
 // GREEN Session - src/user-registration.ts
 export interface ValidationResult {
-  isValid: boolean;
-  errors: string[];
+  isValid: boolean
+  errors: string[]
 }
 
-export function validateRegistration(
-  email: string,
-  password: string
-): ValidationResult {
-  const errors: string[] = [];
+export function validateRegistration(email: string, password: string): ValidationResult {
+  const errors: string[] = []
 
   // Minimal email validation to pass test
-  if (!email.includes("@") || !email.includes(".")) {
-    errors.push("Invalid email format");
+  if (!email.includes('@') || !email.includes('.')) {
+    errors.push('Invalid email format')
   }
 
   // Minimal password validation to pass test
   if (password.length < 8) {
-    errors.push("Password must be at least 8 characters");
+    errors.push('Password must be at least 8 characters')
   }
 
   return {
     isValid: errors.length === 0,
     errors,
-  };
+  }
 }
 ```
 
@@ -996,39 +997,36 @@ All tests now passing - ready for refactoring"
 ```typescript
 // REFACTOR Session - src/user-registration.ts
 export interface ValidationResult {
-  isValid: boolean;
-  errors: string[];
+  isValid: boolean
+  errors: string[]
 }
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MIN_PASSWORD_LENGTH = 8;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const MIN_PASSWORD_LENGTH = 8
 
 function validateEmail(email: string): string[] {
-  const errors: string[] = [];
+  const errors: string[] = []
   if (!EMAIL_REGEX.test(email)) {
-    errors.push("Invalid email format");
+    errors.push('Invalid email format')
   }
-  return errors;
+  return errors
 }
 
 function validatePassword(password: string): string[] {
-  const errors: string[] = [];
+  const errors: string[] = []
   if (password.length < MIN_PASSWORD_LENGTH) {
-    errors.push("Password must be at least 8 characters");
+    errors.push('Password must be at least 8 characters')
   }
-  return errors;
+  return errors
 }
 
-export function validateRegistration(
-  email: string,
-  password: string
-): ValidationResult {
-  const errors = [...validateEmail(email), ...validatePassword(password)];
+export function validateRegistration(email: string, password: string): ValidationResult {
+  const errors = [...validateEmail(email), ...validatePassword(password)]
 
   return {
     isValid: errors.length === 0,
     errors,
-  };
+  }
 }
 ```
 
@@ -1057,8 +1055,8 @@ All tests passing - task implementation complete"
 - [Product vision, user personas, and requirements](../../product/adopted/PRD.md)
 - [Development methodology and process definitions](../../way-of-working.md)
 - [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/) (if the project management tool is filesystem)
-- [Commit and push procedures](../how-to/12-how-to-commit-and-push.md)
-- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines.md` - Collaboration and Process Guidelines
+- [Commit and push procedures](../how-to/11-how-to-commit-and-push.md)
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` - Collaboration and Process Guidelines
 
 **Technical Context:**
 
@@ -1112,6 +1110,6 @@ All tests passing - task implementation complete"
 
 - Previous: [09-how-to-create-tasks.md](./09-how-to-create-tasks.md)
 - Bootstrap Checklist: [02-how-to-complete-bootstrap-checklist.md](./02-how-to-complete-bootstrap-checklist.md)
-- Next: [11-how-to-code-review.md](./11-how-to-code-review.md)
+- Next: [11-how-to-commit-and-push](./11-how-to-commit-and-push.md)
 
 This guide ensures systematic, high-quality task implementation that follows established technical standards and strict Test-Driven Development methodology while maintaining development workflow consistency and preparing code for effective review processes.
