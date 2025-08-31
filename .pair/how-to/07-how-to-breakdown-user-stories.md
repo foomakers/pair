@@ -49,7 +49,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -68,7 +68,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 - [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) consulted for access procedures
+- [ ] [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
 ## User Story Definition
 
@@ -98,7 +98,7 @@ A **User Story at breakdown stage** is a **rough work increment** that:
 ## User Story Breakdown Template
 
 Each user story breakdown must include these essential elements (detailed requirements will be added during refinement).
-User story breakdown must follow this comprehensive[template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user-story-template.md#initial-breakdown-template) you find in the [Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md).
+User story breakdown must follow this comprehensive[template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user-story-template.md#initial-breakdown-template) you find in the [Collaboration and Process Guidelines](/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md).
 
 **Note: The template captures planning essentials while intentionally leaving detailed acceptance criteria, technical specifications, and precise requirements for later refinement when the story is selected for development.**
 
@@ -696,7 +696,7 @@ _"All [X] user stories for Epic '[EPIC_NAME]' are documented and provide initial
 
 - `.pair/product/adopted/PRD.md` - Product vision, user personas, and requirements
 - `.pair/way-of-working.md` - Development methodology and process definitions
-- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` - Collaboration and Process Guidelines
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` - Project Management Tool Guidelines
 
 **Technical Context:**
 

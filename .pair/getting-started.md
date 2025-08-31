@@ -59,6 +59,8 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
   │   ├── 11-observability-guidelines.md
   │   ├── 12-collaboration-and-process-guidelines/
   │   │   ├── README.md
+  │   │   ├── project-management-framework.md
+  │   │   ├── project-management-framework-filesystem.md
   │   │   ├── project-management-framework-github.md
   │   │   └── assets/
   │   │       ├── code-review-template.md

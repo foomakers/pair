@@ -27,10 +27,12 @@ knowledge-standards.md: .pair/tech/adopted/boundedcontext/knowledge-standards.md
 09-performance-guidelines.md: .pair/tech/knowledge-base/09-performance-guidelines.md
 10-security-guidelines.md: .pair/tech/knowledge-base/10-security-guidelines.md
 11-observability-guidelines.md: .pair/tech/knowledge-base/11-observability-guidelines.md
-12-collaboration-and-process-guidelines_README.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md
+project-management-framework.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md
 PRD.md: .pair/product/adopted/PRD.md
 PRD_example.md: .pair/assets/PRD_example.md
 PRD_template.md: .pair/assets/PRD_template.md
+project-management-framework.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md
+project-management-framework-filesystem.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework-filesystem.md
 project-management-framework-github.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework-github.md
 subdomain_integration-process-standardization.md: .pair/product/adopted/subdomain/integration-process-standardization.md
 subdomain_README.md: .pair/product/adopted/subdomain/README.md

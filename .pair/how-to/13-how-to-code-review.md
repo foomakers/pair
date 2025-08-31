@@ -50,7 +50,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -69,7 +69,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 - [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) consulted for access procedures
+- [ ] [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
 ## Code Review Definition
 
@@ -102,7 +102,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Project Management Tool Usage**
 
-Before conducting code reviews, ensure that the pull request has been created following the process in [How to Create a Pull Request](12-how-to-create-a-pr.md). Then, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` for interfacing, linking items, and managing review records. Please refer to this documentation any time the guide asks for project management tool actions.
+Before conducting code reviews, ensure that the pull request has been created following the process in [How to Create a Pull Request](12-how-to-create-a-pr.md). Then, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` for interfacing, linking items, and managing review records. Please refer to this documentation any time the guide asks for project management tool actions.
 
 ---
 
@@ -1344,10 +1344,8 @@ Follow the [GitHub integration guidelines](../../tech/adopted/git-integration.md
 **Foundation Documents:**
 
 - [Product vision, user personas, and requirements](../../product/adopted/PRD.md)
-- [Development methodology and process definitions](../../tech/adopted/way-of-working.md)
-- [Current sprint stories and tasks](../../product/backlog/03-user-stories/current-sprint/) (if the project management tool is filesystem)
-- [Integration and merge procedures](../how-to/11-how-to-commit-and-push.md)
-- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md` - Collaboration and Process Guidelines
+- [Development methodology and process definitions](../../tech/adopted/way-of-working.md)  - [Integration and merge procedures](../how-to/11-how-to-commit-and-push.md)
+- `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` - Project Management Tool Guidelines
 
 **Technical Context:**
 

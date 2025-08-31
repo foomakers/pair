@@ -40,7 +40,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Collaboration and Process Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -59,7 +59,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 - [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/README.md) consulted for access procedures
+- [ ] [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
 ## Step-by-Step Implementation Process
 
@@ -78,7 +78,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 2. **Review Strategic Initiatives**:
 
-   - Examine all files in [`.pair/product/backlog/01-initiatives/`](.pair/product/backlog/01-initiatives/)
+   - Examine all initiatives following configured project management tool access rules
    - Map initiatives to business capabilities
    - Identify cross-cutting concerns and shared functionalities
    - Understand strategic priorities and business growth plans
