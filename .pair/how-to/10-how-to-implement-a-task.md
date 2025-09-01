@@ -123,20 +123,23 @@ The AI assistant acts as a **Product Software Engineer** who:
    git log --oneline -10
    ```
 
-2. **Review Sprint Progress**: Examine current sprint status:
+2. **Priority-Based Story Selection**: Identify user stories ready for implementation following this priority order:
 
-   - Identify stories in progress with active branches
-   - Review story and task completion status
-   - Analyze development workflow state
-   - Check for blocked or pending tasks
+   - **Primary Target**: User stories in "In Progress" state with highest priority (P0 > P1 > P2) assigned to me
+   - **Secondary Check**: If no "In Progress" stories assigned to me, check for "Refined" stories that need task breakdown first
+   - **Tertiary Check**: If stories are in "Todo" state, they need refinement before implementation
 
 3. **Identify Project Management Tool**: Reference `.pair/tech/adopted/way-of-working.md` to determine current project management system and access procedures.
 
 **Phase 0B: Work Continuation or New Task Selection**
 
-4. **Check for Active Work**: Determine current development status and either continue active work or select next story based on sprint priorities.
+4. **Check for Active Work**: Determine current development status and either continue active work or select next story based on state priority:
 
-5. **Sprint Story Analysis**: Review current sprint stories and propose next story for implementation based on priority, readiness, dependencies, and team capacity.
+   - **Active "In Progress" Stories**: Continue work on highest priority assigned story
+   - **Available "Refined" Stories**: Need task breakdown before implementation
+   - **"Todo" Stories**: Need refinement process before task breakdown
+
+5. **Sprint Story Analysis**: Review current sprint stories and propose next story for implementation based on state, priority, assignment, and readiness.
 
 ### Step 1: Story Selection and Workflow Setup
 
@@ -144,14 +147,23 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 1. **Finalize Story Selection**: Confirm story choice with developer and proceed with workflow setup.
 
+   **User Confirmation Required**: _"I've identified [Story/Task identification details]. Should I proceed with implementing this [story/task]?"_
+
 2. **MANDATORY PRE-IMPLEMENTATION VALIDATION**: Following collaboration guidelines from `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md`:
 
    **⚠️ CRITICAL: PROCESS BLOCKER - Implementation CANNOT proceed until ALL conditions are met:**
 
-   - **User story MUST be assigned to the developer**
-   - **User story MUST be in 'in progress' state**
+   - **User story MUST be in 'In Progress' state** (prerequisite for technical development)
+   - **User story MUST be assigned to me** (developer implementing the tasks)
+   - **Tasks MUST be defined** and documented within the user story
    - **Epic status updated** to In Progress if necessary
    - **Branch MUST be associated with the user story** if supported by the project management tool
+
+   **If story is in WRONG state:**
+
+   - **If story is in 'Todo' state**: **HALT** - Story needs refinement first using [08-how-to-refine-a-user-story.md](./08-how-to-refine-a-user-story.md)
+   - **If story is in 'Refined' state**: **HALT** - Story needs task breakdown first using [09-how-to-create-tasks.md](./09-how-to-create-tasks.md)
+   - **If story is in 'Done' state**: **HALT** - Story is completed, select different story
 
    **If ANY of these conditions are NOT met:**
 
@@ -165,7 +177,7 @@ The AI assistant acts as a **Product Software Engineer** who:
 **If the project management tool doesn't support story assignment or branch association operations, request the developer to perform them manually according to the collaboration guidelines.**
 
 **Status Update Confirmation:**
-"✅ VALIDATION COMPLETE: Story '[STORY_ID]: [STORY_NAME]' is now assigned and In Progress. Parent Epic '[EPIC_ID]' status updated accordingly. Branch will be associated with the story. All pre-implementation requirements met. Proceeding with development workflow setup."
+"✅ VALIDATION COMPLETE: Story '[STORY_ID]: [STORY_NAME]' is in 'In Progress' state, assigned to me, with tasks defined. Parent Epic '[EPIC_ID]' status updated accordingly. Branch will be associated with the story. All pre-implementation requirements met. Proceeding with development workflow setup."
 
 ### Step 2: Branch Creation and Development Setup
 
@@ -209,9 +221,9 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 Handle review process based on selected TDD approach:
 
-**Task-by-Task Review**: After each complete RED-GREEN-REFACTOR cycle, provide comprehensive TDD cycle completion notification and handle feedback.
+**Task-by-Task Review**: After each complete RED-GREEN-REFACTOR cycle, provide comprehensive TDD cycle completion notification, update task checklist in user story, and handle feedback.
 
-**Feature-Complete Review**: After all tasks complete TDD cycles, provide complete story TDD implementation summary and handle comprehensive review.
+**Feature-Complete Review**: After all tasks complete TDD cycles, provide complete story TDD implementation summary, update all task checklists in user story, and handle comprehensive review.
 
 ### Step 6: Implementation Documentation and Handoff
 
@@ -220,6 +232,24 @@ Handle review process based on selected TDD approach:
 2. **Update Project Management System**: Ensure accurate TDD status tracking with story completion status and epic progress updates.
 
 3. **Prepare for Code Review**: Set up next phase with TDD validation, ensuring branch contains complete TDD commit history and implementation completeness validation.
+
+### Step 7: Task Completion Tracking
+
+**AI Assistant Instructions:** Update task progress in user story upon task completion and approval:
+
+1. **Identify Completed Task**: Determine which specific task has been completed and approved
+2. **Read Current User Story**: Retrieve the current user story body including the task breakdown section
+3. **Update Task Checklist**: Mark the completed task as checked without modifying any other content
+4. **Update Progress Counter**: Update the task progress counter
+5. **Preserve All Other Content**: Ensure no refinement details, acceptance criteria, or other story content is overwritten
+
+**Reference**: Follow the [Task Template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/task-template.md) format for proper task completion tracking and documentation.
+
+**Task Completion Validation:**
+_"✅ TASK COMPLETED: Task '[TASK-ID]: [TASK_TITLE]' has been marked as completed in User Story '[STORY_ID]: [STORY_NAME]'. Task progress updated. User story remains in 'In Progress' state until all tasks are completed."_
+
+**When All Tasks Complete:**
+_"🎉 ALL TASKS COMPLETED: All tasks for User Story '[STORY_ID]: [STORY_NAME]' have been completed. The story is ready for final review and potential status update to 'Done' following the code review process."_
 
 ## Quality Assurance Framework
 
@@ -255,6 +285,7 @@ Handle review process based on selected TDD approach:
 - [ ] **Branch Management**: Development branch properly created with standard naming and story association
 - [ ] **Commit Standards**: All commits follow established message formatting with TDD phases
 - [ ] **Progress Tracking**: Task and story status accurately maintained with TDD indicators
+- [ ] **Task Checklist Updates**: Task completion tracked in user story without overwriting refined content
 - [ ] **Review Process**: Appropriate review checkpoints completed for TDD cycles
 - [ ] **Status Updates**: Project management system properly updated according to collaboration guidelines
 - [ ] **Documentation Updates**: Any new patterns or decisions properly documented
@@ -281,6 +312,7 @@ Handle review process based on selected TDD approach:
 - **Maintain version consistency** across all workspaces
 - **Request human approval** for any version changes or architectural decisions
 - **Provide clear progress tracking** with regular status updates
+- **Update task checklist in user story** upon task completion without overwriting other content
 
 ### TDD-Specific Don'ts:
 

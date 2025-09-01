@@ -5,11 +5,18 @@
 
 **Duration**: [X-Y sprints]
 **Business Value**: [Product Foundation | Business Value | User Experience | Working Software]
-**Priority**: [P0 | P1 | P2]
+**Priority**: [P0 (Must-Have) | P1 (Should-Have) | P2 (Could-Have)]
+**State**: [Todo | In Progress | Done]
 **Planned Start**: [YYYY-MM-DD or TBP]
 **Planned End**: [YYYY-MM-DD or TBP]
 
 _Note: Set Planned Start and End dates only after detailed planning is completed. Use TBP (To Be Planned) for initiatives not yet planned._
+
+### State Management
+
+- **Todo**: Initiative is defined but work has not started
+- **In Progress**: At least one epic is actively being worked on
+- **Done**: Initiative delivered and accepted
 
 ## Objective
 

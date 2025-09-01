@@ -229,3 +229,40 @@ For more details, see the [Husky documentation](https://typicode.github.io/husky
 - [Product Requirements](.pair/product/PRD.md) – Template for defining product requirements
 - [Technical Guidelines](.pair/tech/knowledge-base/) – Comprehensive technical standards and best practices
 - [Way of Working](.pair/way-of-working.md) – Process and collaboration guidelines
+
+## 🆘 Support & Help
+
+### Community Resources
+
+- **Discord Community**: [Join our Discord](https://discord.gg/pair-community) for real-time discussions
+- **GitHub Discussions**: [Ask questions](https://github.com/foomakers/pair/discussions) for community support
+- **GitHub Issues**: [Report bugs](https://github.com/foomakers/pair/issues) or request features
+
+### Documentation & Guides
+
+- **Quick Start**: Follow the [Getting Started Guide](.pair/how-to/01-how-to-get-started.md)
+- **Common Issues**: Check the [Troubleshooting Section](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md#emergency-procedures)
+- **Best Practices**: Review [Technical Guidelines](.pair/tech/knowledge-base/) for comprehensive standards
+
+### Direct Support
+
+- **Email**: support@foomakers.com for urgent issues
+- **Priority Support**: Available for enterprise customers
+
+### Response Times
+
+| Support Type     | Response Time     | Channels                    |
+| ---------------- | ----------------- | --------------------------- |
+| Community        | Best effort       | Discord, GitHub Discussions |
+| Bug Reports      | 1-2 business days | GitHub Issues               |
+| Feature Requests | 3-5 business days | GitHub Issues               |
+| Direct Support   | 4-24 hours        | Email                       |
+
+### Self-Help Resources
+
+Before reaching out, try these resources:
+
+1. Search existing [GitHub Issues](https://github.com/foomakers/pair/issues)
+2. Check the [FAQ section](.pair/how-to/README.md#frequently-asked-questions)
+3. Review [project management integration guides](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/)
+4. Consult the [troubleshooting documentation](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md#emergency-procedures)

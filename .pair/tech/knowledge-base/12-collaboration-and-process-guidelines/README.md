@@ -49,9 +49,11 @@ Define clear, actionable guidelines for collaboration, communication, and delive
 ```
 12-collaboration-and-process-guidelines/
 |-- README.md
-|-- project-management-framework-filesystem.md
-|-- project-management-framework-github.md
 |-- project-management-framework.md
+|-- project-management-framework-github.md
+|-- project-management-framework-filesystem.md
+|-- github-projects-integration-guide.md
+|-- filesystem-workflow-integration-guide.md
 |-- assets/
 |   |-- initiative-template.md
 |   |-- epic-template.md
@@ -181,7 +183,18 @@ Define clear, actionable guidelines for collaboration, communication, and delive
 
 ## 🗂️ Project Management Framework
 
-All specifications and guidelines related to project management are documented [here](project-management-framework.md).
+All specifications and guidelines related to project management are documented in these streamlined guides:
+
+### Core Framework
+- **[Project Management Framework](project-management-framework.md)** - Complete framework with tool selection, compatibility notes, and quality standards
+- **[Project Management Framework - GitHub](project-management-framework-github.md)** - GitHub Projects specific implementations
+- **[Project Management Framework - Filesystem](project-management-framework-filesystem.md)** - Filesystem workflow specific implementations
+
+### Setup and Implementation Guides
+- **[GitHub Projects Integration Guide](github-projects-integration-guide.md)** - Complete setup guide for GitHub Projects with troubleshooting
+- **[Filesystem Workflow Integration Guide](filesystem-workflow-integration-guide.md)** - Complete setup guide for filesystem workflows with troubleshooting
+
+**Quick Start:** Choose your approach in the appropriate Integration Guide, follow the setup steps, and refer to the Framework for templates and advanced concepts.
 
 ---
 

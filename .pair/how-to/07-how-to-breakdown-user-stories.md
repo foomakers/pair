@@ -150,19 +150,24 @@ User story breakdown must follow this comprehensive[template](../tech/knowledge-
 
 At any point during the user story breakdown process, if a bootstrap/setup epic (Epic 0) is present, user story breakdown must start from this epic before proceeding to functional epics. If the bootstrap/setup epic is missing, it must be created and its user stories broken down first, before any other user stories are considered. This ensures all technical foundation activities are planned and executed prior to business functionality.
 
-4. **Propose Priority Epic**: Based on documentation analysis, identify and propose highest-priority epic for breakdown:
+4. **Priority-Based Epic Selection**: Identify epics ready for user story breakdown following this priority order:
 
-   _"I've analyzed all available documentation and initiatives. Based on business priorities, user value, and readiness for breakdown, I recommend starting with Epic '[EPIC_NAME]' from Initiative '[INITIATIVE_NAME]'. This epic appears to be the highest priority because [reasoning: business value, user impact, readiness, dependencies, etc.]._
+   - **Primary Target**: Epics in "Todo" state with highest priority (P0 > P1 > P2) that have not been broken down into user stories yet
+   - **Avoid**: Epics already in "In Progress" or "Done" state (these should already have user story breakdowns)
 
-   _Here are the top-priority epics I've identified across all initiatives:_
+   _"I've analyzed all available documentation and initiatives. Based on epic state, priorities, and readiness for breakdown, I recommend starting with Epic '[EPIC_NAME]' (Priority: [P0/P1/P2], State: Todo) from Initiative '[INITIATIVE_NAME]'. This epic is the highest priority unbroken epic because [reasoning: priority level, not yet broken down, ready for user story breakdown]._
 
-   | Epic     | Initiative     | Priority Reasoning                    | Readiness Status       |
-   | -------- | -------------- | ------------------------------------- | ---------------------- |
-   | [Epic 1] | [Initiative A] | [High user value, foundational]       | Ready for breakdown    |
-   | [Epic 2] | [Initiative A] | [Critical dependency for other epics] | Ready for breakdown    |
-   | [Epic 3] | [Initiative B] | [Strategic business objective]        | Needs minor completion |
+   _Here are the Todo epics ready for user story breakdown:_
 
-   _This is a recommendation based on my analysis - we can proceed with breakdown of any epic from any initiative that you prefer. Which epic would you like to break down into user stories?"_
+   | Epic     | Initiative     | Priority | State | Breakdown Status    |
+   | -------- | -------------- | -------- | ----- | ------------------- |
+   | [Epic 1] | [Initiative A] | P0       | Todo  | Ready for breakdown |
+   | [Epic 2] | [Initiative A] | P1       | Todo  | Ready for breakdown |
+   | [Epic 3] | [Initiative B] | P0       | Todo  | Ready for breakdown |
+
+   _Priority recommendation: Select highest priority (P0 > P1 > P2) Todo epic that hasn't been broken down yet. Which epic would you like to break down into user stories?"_
+
+   **User Confirmation Required**: _"I recommend Epic '[EPIC_NAME]' (Priority [P0/P1/P2]) for user story breakdown. This epic will deliver [brief epic value] and contains [estimated scope]. Should I proceed with breaking down this epic into user stories?"_
 
 **Phase 0C: Epic Readiness Verification**
 
@@ -536,8 +541,9 @@ _"Here's the breakdown documentation for User Story [EPIC-STORY]: [NAME]. As a [
 
 3. **Configure Basic Tracking**: Set up essential tracking:
 
-   - **Status**: Set to "Backlog"
+   - **Status**: Set to "Todo"
    - **Story Points**: Add sizing estimation
+   - **Priority**: Set P0 (Must-Have), P1 (Should-Have), or P2 (Could-Have)
    - **Labels/Tags**: Apply relevant categorization
    - **Basic Metadata**: Epic context and priority
 
@@ -558,9 +564,9 @@ _"Here's the breakdown documentation for User Story [EPIC-STORY]: [NAME]. As a [
 - [ ] Basic metadata and categorization configured
 - [ ] Epic coverage visible and trackable
 
-### Step 8: Epic Coverage Validation
+### Step 8: Epic Coverage Validation and State Management
 
-**AI Assistant Instructions:** Validate complete epic coverage:
+**AI Assistant Instructions:** Validate complete epic coverage and update epic state:
 
 1. **Verify Epic Coverage**: Confirm breakdown completeness:
 
@@ -576,11 +582,23 @@ _"Here's the breakdown documentation for User Story [EPIC-STORY]: [NAME]. As a [
    - Story dependencies identified and documented
    - Story backlog ready for prioritization
 
-3. **Prepare for Future Refinement**: Set up stories for detailed refinement:
+3. **Update Epic Status**: Change epic status from "Todo" to "In Progress" since user stories are now ready for refinement and development
+
+4. **Prepare for Future Refinement**: Set up stories for detailed refinement:
    - Stories in backlog status ready for selection and detailed elaboration
    - Story context preserved for comprehensive refinement process
    - Epic relationship maintained for value alignment
    - Open questions and uncertainties documented for refinement resolution
+
+**State Update Validation:**
+_"✅ USER STORY BREAKDOWN COMPLETE: Epic '[EPIC_NAME]' has been broken down into [X] user stories. Epic status updated from 'Todo' to 'In Progress'. All stories are documented in 'Todo' state and ready for refinement following the **How to Refine a User Story** process."_
+
+**If Tool Cannot Update Status:**
+_"⚠️ ACTION REQUIRED: User story breakdown is complete, but I cannot update the epic status in [TOOL_NAME]. Please manually:_
+_1. Change Epic '[EPIC_NAME]' status from 'Todo' to 'In Progress'_
+_2. Verify all user story details are properly captured and linked in the project management tool_
+_3. Ensure story sequence and dependencies are clearly documented_
+_Once updated, the epic will be ready for user story refinement."_
 
 **Epic Coverage Validation:**
 _"All [X] user stories for Epic '[EPIC_NAME]' are documented and provide initial epic coverage. The breakdown addresses major epic scope areas with intentional uncertainty that will be resolved during story refinement. Each story is roughly sized and ready for backlog prioritization. The epic is now ready for ongoing backlog management, and individual stories are prepared for detailed refinement when selected for development."_

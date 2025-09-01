@@ -154,11 +154,18 @@ Before starting a code review, **read and consult the updated template**: [Code 
 
 ### Step 0: Development Status Analysis and Review Setup
 
-**AI Assistant Instructions:** Begin with comprehensive git status analysis and review environment setup:
+**AI Assistant Instructions:** Begin with comprehensive git status analysis and review environment setup following PR priority order:
 
-**Phase 0A: Git Environment Analysis**
+**Phase 0A: Git Environment Analysis and PR Selection**
 
-1. **Analyze Current Git Status**: Check implementation branch and changes:
+1. **Priority-Based PR Selection**: Identify pull requests ready for code review following this priority order:
+
+   - **Primary Target**: Open pull requests for user stories with highest priority (P0 > P1 > P2)
+   - **Assignment Check**: Focus on PRs for stories assigned to the current developer or team
+   - **Sprint Context**: Prioritize PRs for stories in current sprint ready for completion
+   - **Completion Readiness**: Select PRs that are complete and ready for quality validation
+
+2. **Analyze Current Git Status**: Check implementation branch and changes:
 
    Example (analyze project structure and tech stack from [tech-stack adoption](../../tech/adopted/tech-stack.md)):
 
@@ -173,7 +180,7 @@ Before starting a code review, **read and consult the updated template**: [Code 
 
    **Note**: Adapt git commands based on project branching strategy defined in [way-of-working](../../tech/adopted/way-of-working.md).
 
-2. **Identify Implementation Branch**: Extract story information from branch naming:
+3. **Identify Implementation Branch**: Extract story information from branch naming:
 
    - Extract story code from branch name following established naming conventions from [way-of-working](../../tech/adopted/way-of-working.md)
    - If unable to identify current story from branch, check [assigned and in-progress stories](../../product/backlog/03-user-stories/current-sprint/) and propose the appropriate one
@@ -183,7 +190,7 @@ Before starting a code review, **read and consult the updated template**: [Code 
    - Validate branch follows established naming patterns from [way-of-working](../../tech/adopted/way-of-working.md)
    - Confirm branch contains implementation changes ready for review
 
-3. **Validate Development Environment**: Ensure review environment readiness:
+4. **Validate Development Environment**: Ensure review environment readiness:
 
    Example (adapt based on project tech stack from [tech-stack adoption](../../tech/adopted/tech-stack.md)):
 
@@ -200,16 +207,17 @@ Before starting a code review, **read and consult the updated template**: [Code 
 
 **Phase 0B: Story and Task Context Loading**
 
-4. **Load Story Context**: Identify and analyze user story from branch information:
+5. **Load Story Context**: Identify and analyze user story from branch information:
 
    **Story Identification Process:**
 
    - Extract story ID from branch naming convention (e.g., `feature/US-123-user-authentication`)
    - Load story file from project management system (file system or external tool)
+   - **Request user confirmation**: _"I've identified User Story '[STORY_ID]: [STORY_NAME]' for code review. This story contains [X] acceptance criteria and [Y] associated tasks. Should I proceed with reviewing this story implementation?"_
    - Analyze story acceptance criteria, description, and associated tasks
    - Review story checklist and completion requirements
 
-5. **Load Task Context**: Analyze associated tasks for comprehensive validation:
+6. **Load Task Context**: Analyze associated tasks for comprehensive validation:
 
    **Task Analysis Process:**
 
@@ -218,7 +226,7 @@ Before starting a code review, **read and consult the updated template**: [Code 
    - Review task implementation scope and acceptance criteria
    - Analyze task dependencies and integration requirements
 
-6. **Load Technical Context**: Reference complete technical foundation:
+7. **Load Technical Context**: Reference complete technical foundation:
 
    **Foundation Documentation:**
 
@@ -639,35 +647,7 @@ _"Code review environment ready for User Story '[STORY_ID]: [STORY_NAME]'. Branc
    - **Technical Debt Stories**: For important but non-urgent improvements, create technical debt stories to be added to [product backlog](../../product/backlog/) for future planning
    - **Documentation Tasks**: Tasks for documentation updates and maintenance requirements
 
-   **Task Documentation Format:**
-
-   ```markdown
-   ## Task: [Task Title from Review Finding]
-
-   **Type:** Code Review Follow-up
-   **Priority:** [Critical/High/Medium/Low based on issue severity]
-   **Story:** [STORY_ID]: [STORY_NAME]
-   **Review Issue Reference:** [Link to specific review finding]
-
-   **Description:**
-   [Clear description of task derived from review finding]
-
-   **Acceptance Criteria:**
-
-   - [ ] [Specific criterion addressing review issue]
-   - [ ] [Quality validation requirement]
-   - [ ] [Testing requirement if applicable]
-
-   **Implementation Notes:**
-   [Technical notes and solution approach from review]
-
-   **Definition of Done:**
-
-   - [ ] Implementation addresses review finding completely
-   - [ ] Solution follows proposed approach from review
-   - [ ] Appropriate testing coverage included
-   - [ ] Code review validates issue resolution
-   ```
+   **Reference**: Follow the complete [Task Template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/task-template.md) for proper task documentation format and structure.
 
 2. **Update Project Management System**: Track review follow-up work:
 
@@ -1344,7 +1324,7 @@ Follow the [GitHub integration guidelines](../../tech/adopted/git-integration.md
 **Foundation Documents:**
 
 - [Product vision, user personas, and requirements](../../product/adopted/PRD.md)
-- [Development methodology and process definitions](../../tech/adopted/way-of-working.md)  - [Integration and merge procedures](../how-to/11-how-to-commit-and-push.md)
+- [Development methodology and process definitions](../../tech/adopted/way-of-working.md) - [Integration and merge procedures](../how-to/11-how-to-commit-and-push.md)
 - `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` - Project Management Tool Guidelines
 
 **Technical Context:**
