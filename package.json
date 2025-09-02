@@ -4,20 +4,26 @@
   "description": "pair is a suite of resources and workflows designed to guide and enable collaboration between development teams and AI assistants throughout all phases of the product lifecycle. It provides tools for defining epics, stories, guidelines, and adoptions, integrating with major code assistants and project management tools to ensure structured processes, consistency, and quality in delivery.",
   "private": true,
   "scripts": {
-    "test": "pnpm --filter @pair/monorepo-tests test",
-    "build": "echo \"No build step defined\"",
-    "lint": "pnpm recursive run lint",
-    "prettier:fix": "prettier-fix --ignore-path .prettierignore_workspaces && pnpm recursive run prettier:fix",
-    "prettier:check": "prettier-check --ignore-path .prettierignore_workspaces && pnpm recursive run prettier:check",
+    "test": "turbo test",
+    "test:coverage": "turbo test:coverage",
+    "ts:check": "turbo ts:check",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "lint:fix": "turbo lint:fix",
+    "prettier:fix": "turbo prettier:fix",
+    "prettier:check": "turbo prettier:check",
     "sync-deps": "pnpm --recursive update",
     "deps:outdated": "pnpm --recursive outdated",
     "catalog:update": "pnpm update",
     "catalog:check": "pnpm list",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "clean": "turbo clean && find . -type d \\( -name node_modules -o -name dist -o -name coverage \\) -exec rm -rf {} + 2>/dev/null || true; find . -type f -name \"*tsbuildinfo\" -exec rm -f {} + 2>/dev/null || true",
+    "quality-gate": "turbo ts:check test lint && turbo prettier:fix"
   },
   "devDependencies": {
     "@pair/prettier-config": "workspace:*",
-    "husky": "^8.0.0"
+    "husky": "catalog:",
+    "turbo": "catalog:"
   },
   "packageManager": "pnpm@10.15.0",
   "prettier": "@pair/prettier-config"

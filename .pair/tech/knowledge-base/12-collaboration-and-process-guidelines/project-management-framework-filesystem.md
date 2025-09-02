@@ -32,7 +32,7 @@ Document the process, structure, and quality requirements for managing initiativ
 
 ## Prerequisites
 
-- Access to the repository containing the `.pair/product/backlog/` directory
+- Access to the repository containing the `.pair/adoption/product/backlog/` directory
 - Knowledge of naming conventions and folder organization
 - Markdown editing tools
 - Familiarity with initiative → epic → user story → task hierarchy
@@ -67,7 +67,7 @@ Document the process, structure, and quality requirements for managing initiativ
 
 ### 3. Folder & File Management
 
-- Initiatives, epics, and stories live in structured folders under `.pair/product/backlog/`
+- Initiatives, epics, and stories live in structured folders under `.pair/adoption/product/backlog/`
 - Tasks are appended inside user story files, not stored separately
 - File moves must preserve filenames for traceability
 
@@ -97,7 +97,7 @@ Document the process, structure, and quality requirements for managing initiativ
 ## Example Backlog Structure
 
 ```
-.pair/product/backlog/
+.pair/adoption/product/backlog/
 ├── 01-initiatives/
 │   ├── 2025/
 │   │   ├── core-data-pipeline.md
@@ -126,7 +126,7 @@ Document the process, structure, and quality requirements for managing initiativ
 ### Initiative Management
 
 - Create from PRDs with template
-- List existing initiatives in [`.pair/product/backlog/01-initiatives/`](.pair/product/backlog/01-initiatives/) to avoid numbering conflicts
+- List existing initiatives in [`.pair/adoption/product/backlog/01-initiatives/`](.pair/adoption/product/backlog/01-initiatives/) to avoid numbering conflicts
 - Store in yearly folders under `01-initiatives/`
 - Move files across state folders to update status
 - Link to related epics
@@ -141,7 +141,7 @@ Document the process, structure, and quality requirements for managing initiativ
 #### File System Example
 
 ```
-.pair/product/backlog/01-initiatives/
+.pair/adoption/product/backlog/01-initiatives/
 ├── 2025/
 │   ├── core-data-pipeline.md
 │   ├── unified-portfolio-experience.md
@@ -158,7 +158,7 @@ Document the process, structure, and quality requirements for managing initiativ
 - Update epic status based on user story completion progress
 - Naming convention: `[initiative-code]-[epic-code]-[epic-name].md`
 - If not different decided by the team, the epic is always "Application Bootstrap & Setup" (Epic 0)
-- Store epics in [`.pair/product/backlog/02-epics/`](.pair/product/backlog/02-epics/) with state-based subfolders:
+- Store epics in [`.pair/adoption/product/backlog/02-epics/`](.pair/adoption/product/backlog/02-epics/) with state-based subfolders:
   - `not-started/` for epics not yet begun
   - `in-progress/` for epics currently being worked on
   - `under-review/` for epics awaiting final approval
@@ -167,10 +167,10 @@ Document the process, structure, and quality requirements for managing initiativ
 #### File System Example
 
 ```
-.pair/product/backlog/02-epics/backlog/01-01-data-ingestion-pipeline.md
-.pair/product/backlog/02-epics/backlog/01-02-data-validation-framework.md
-.pair/product/backlog/02-epics/in-progress/02-01-user-dashboard.md
-.pair/product/backlog/02-epics/done/03-03-broker-sync.md
+.pair/adoption/product/backlog/02-epics/backlog/01-01-data-ingestion-pipeline.md
+.pair/adoption/product/backlog/02-epics/backlog/01-02-data-validation-framework.md
+.pair/adoption/product/backlog/02-epics/in-progress/02-01-user-dashboard.md
+.pair/adoption/product/backlog/02-epics/done/03-03-broker-sync.md
 ```
 
 ### User Story Management
@@ -191,9 +191,9 @@ Document the process, structure, and quality requirements for managing initiativ
 #### File System Example
 
 ```
-.pair/product/backlog/03-user-stories/backlog/01-01-001-user-registration.md
-.pair/product/backlog/03-user-stories/backlog/01-01-002-email-verification.md
-.pair/product/backlog/03-user-stories/backlog/01-02-001-dashboard-overview.md
+.pair/adoption/product/backlog/03-user-stories/backlog/01-01-001-user-registration.md
+.pair/adoption/product/backlog/03-user-stories/backlog/01-01-002-email-verification.md
+.pair/adoption/product/backlog/03-user-stories/backlog/01-02-001-dashboard-overview.md
 ```
 
 ### Task Management Within User Story Files

@@ -39,7 +39,7 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 **Step 1: Tool Configuration Check**
 
-1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+1. **Read** [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md) to identify configured project management tool
 2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
    _"I cannot proceed because no project management tool is configured. Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
 
@@ -50,7 +50,7 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 ### Filesystem Access Rules
 
-**✅ PERMITTED ONLY when:** Tool in [way-of-working.md](.pair/tech/adopted/way-of-working.md) = "filesystem"
+**✅ PERMITTED ONLY when:** Tool in [way-of-working.md](.pair/adoption/tech/way-of-working.md) = "filesystem"
 **🚫 PROHIBITED when:** Any other tool is configured
 
 ## TDD Implementation Methodology
@@ -129,7 +129,7 @@ The AI assistant acts as a **Product Software Engineer** who:
    - **Secondary Check**: If no "In Progress" stories assigned to me, check for "Refined" stories that need task breakdown first
    - **Tertiary Check**: If stories are in "Todo" state, they need refinement before implementation
 
-3. **Identify Project Management Tool**: Reference `.pair/tech/adopted/way-of-working.md` to determine current project management system and access procedures.
+3. **Identify Project Management Tool**: Reference `.pair/adoption/tech/way-of-working.md` to determine current project management system and access procedures.
 
 **Phase 0B: Work Continuation or New Task Selection**
 
@@ -360,10 +360,10 @@ _"🎉 ALL TASKS COMPLETED: All tasks for User Story '[STORY_ID]: [STORY_NAME]' 
 
 **Knowledge Base (Complete Technical Guidelines):**
 
-- **[01-architectural-guidelines.md](01-architectural-guidelines.md)** - Architecture patterns and ADR processes
-- **[02-code-design-guidelines.md](02-code-design-guidelines.md)** - Code organization and design patterns
-- **[07-testing-strategy.md](07-testing-strategy.md)** - Testing frameworks and TDD strategies
-- **[06-definition-of-done.md](06-definition-of-done.md)** - Quality criteria and completion standards
+- **[01-architectural-guidelines.md](.pair/tech/knowledge-base/01-architectural-guidelines.md))** - Architecture patterns and ADR processes
+- **[02-code-design-guidelines.md](.pair/tech/knowledge-base/02-code-design-guidelines.md)** - Code organization and design patterns
+- **[07-testing-strategy.md](.pair/tech/knowledge-base/07-testing-strategy.md)** - Testing frameworks and TDD strategies
+- **[06-definition-of-done.md](.pair/tech/knowledge-base/06-definition-of-done.md)** - Quality criteria and completion standards
 
 **Process Dependencies:**
 

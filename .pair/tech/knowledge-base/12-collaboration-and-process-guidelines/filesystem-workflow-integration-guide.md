@@ -9,7 +9,7 @@ The filesystem uses a hierarchical structure that mirrors the project management
 **Quick Reference Structure:**
 
 ```
-.pair/product/backlog/
+.pair/adoption/product/backlog/
 ├── 01-initiatives/
 │   └── 2025/                    # Year-based organization
 ├── 02-epics/
@@ -102,7 +102,7 @@ Update your project's way-of-working configuration to specify filesystem:
 # Way of Working
 
 - Filesystem is adopted for project management, using markdown files and folder organization.
-- The backlog is managed in `.pair/product/backlog/` directory structure.
+- The backlog is managed in `.pair/adoption/product/backlog/` directory structure.
 - See `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework-filesystem.md` for usage.
 ```
 
@@ -123,12 +123,12 @@ pair "Verify and create filesystem project management directory structure"
 cd /path/to/your/project
 
 # Create directory structure if needed
-mkdir -p .pair/product/backlog/01-initiatives/2025
-mkdir -p .pair/product/backlog/02-epics/{not-started,in-progress,under-review,completed}
-mkdir -p .pair/product/backlog/03-user-stories/{not-started,in-progress,under-review,completed}
+mkdir -p .pair/adoption/product/backlog/01-initiatives/2025
+mkdir -p .pair/adoption/product/backlog/02-epics/{not-started,in-progress,under-review,completed}
+mkdir -p .pair/adoption/product/backlog/03-user-stories/{not-started,in-progress,under-review,completed}
 
 # Verify structure
-tree .pair/product/backlog/
+tree .pair/adoption/product/backlog/
 ```
 
 ### Step 3: Verify Templates
@@ -155,7 +155,7 @@ ls .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/
 The filesystem uses a hierarchical structure that mirrors the project management hierarchy:
 
 ```
-.pair/product/backlog/
+.pair/adoption/product/backlog/
 ├── 01-initiatives/
 │   └── 2025/                    # Year-based organization
 │       ├── core-data-pipeline.md
@@ -217,7 +217,7 @@ pair "Create filesystem initiative from PRD analysis"
 
 ```bash
 # Navigate to initiatives directory
-cd .pair/product/backlog/01-initiatives/2025
+cd .pair/adoption/product/backlog/01-initiatives/2025
 
 # Create initiative file
 cp ../../../../../../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md core-data-pipeline.md
@@ -266,7 +266,7 @@ pair "Break down epics from filesystem initiative"
 
 ```bash
 # Navigate to epics directory
-cd .pair/product/backlog/02-epics/not-started
+cd .pair/adoption/product/backlog/02-epics/not-started
 
 # Create epic file with proper naming
 cp ../../../../../../../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/epic-template.md 01-01-data-ingestion-pipeline.md
@@ -279,7 +279,7 @@ code 01-01-data-ingestion-pipeline.md
 In the epic file, establish clear linkage:
 
 ```markdown
-**Parent Initiative**: [Core Data Pipeline](../../01-initiatives/2025/core-data-pipeline.md)
+**Parent Initiative**: [Core Data Pipeline](01-initiatives/2025/core-data-pipeline.md)
 **Initiative Code**: 01
 **Epic Code**: 01
 ```
@@ -298,7 +298,7 @@ pair "Move epic to in-progress status and update parent initiative"
 
 ```bash
 # Move epic from not-started to in-progress
-cd .pair/product/backlog/02-epics
+cd .pair/adoption/product/backlog/02-epics
 mv not-started/01-01-data-ingestion-pipeline.md in-progress/
 
 # Status progression:
@@ -321,7 +321,7 @@ pair "Break down user stories from filesystem epic"
 
 ```bash
 # Navigate to user stories directory
-cd .pair/product/backlog/03-user-stories/not-started
+cd .pair/adoption/product/backlog/03-user-stories/not-started
 
 # Create story file with proper naming convention
 cp ../../../../../../../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user-story-template.md 01-01-001-user-registration.md
@@ -414,7 +414,7 @@ Move the user story file to in-progress:
 
 ```bash
 # Move story to in-progress
-cd .pair/product/backlog/03-user-stories
+cd .pair/adoption/product/backlog/03-user-stories
 mv not-started/01-01-001-user-registration.md in-progress/
 ```
 
@@ -470,11 +470,11 @@ pair "Move epic to completed status and update initiative progress"
 
 ```bash
 # Move user story to different status
-cd .pair/product/backlog/03-user-stories
+cd .pair/adoption/product/backlog/03-user-stories
 mv in-progress/01-01-001-user-registration.md completed/
 
 # Move epic to completed
-cd .pair/product/backlog/02-epics
+cd .pair/adoption/product/backlog/02-epics
 mv under-review/01-01-data-ingestion-pipeline.md completed/
 ```
 
@@ -565,16 +565,16 @@ Add review tasks to the story file:
 ```markdown
 <!-- In user story file -->
 
-**Parent Epic**: [Data Ingestion Pipeline](../../02-epics/in-progress/01-01-data-ingestion-pipeline.md)
-**Initiative**: [Core Data Pipeline](../../01-initiatives/2025/core-data-pipeline.md)
+**Parent Epic**: [Data Ingestion Pipeline](02-epics/in-progress/01-01-data-ingestion-pipeline.md)
+**Initiative**: [Core Data Pipeline](01-initiatives/2025/core-data-pipeline.md)
 
 <!-- In epic file -->
 
-**Parent Initiative**: [Core Data Pipeline](../../01-initiatives/2025/core-data-pipeline.md)
+**Parent Initiative**: [Core Data Pipeline](01-initiatives/2025/core-data-pipeline.md)
 **Child Stories**:
 
-- [User Registration](../03-user-stories/in-progress/01-01-001-user-registration.md)
-- [Email Verification](../03-user-stories/not-started/01-01-002-email-verification.md)
+- [User Registration](03-user-stories/in-progress/01-01-001-user-registration.md)
+- [Email Verification](03-user-stories/not-started/01-01-002-email-verification.md)
 ```
 
 ### Consistent File Operations
@@ -593,7 +593,7 @@ mv not-started/01-01-001-user-registration.md in-progress/
 
 ```bash
 # Move multiple related stories
-cd .pair/product/backlog/03-user-stories
+cd .pair/adoption/product/backlog/03-user-stories
 mv not-started/01-01-00*.md in-progress/
 ```
 
@@ -701,10 +701,3 @@ This guide provides step-by-step implementation instructions for filesystem-base
 - ✅ Organizational structure and rules
 - ✅ Quality standards and compliance
 - ✅ Process definitions and requirements
-
-**Troubleshooting Guide (project-management-troubleshooting-guide.md):**
-
-- ✅ Problem diagnosis and resolution
-- ✅ Recovery procedures and prevention
-- ✅ Performance optimization
-- ✅ Integration issue solutions

@@ -39,13 +39,30 @@ module.exports = [
       // Regole base di ESLint
       ...js.configs.recommended.rules,
 
-      // Regole TypeScript raccomandate
+      // Regole TypeScript raccomandate (solo quelle che non richiedono type info)
       ...typescript.configs.recommended.rules,
 
       // Configurazioni custom
       'no-console': 'off',
       'no-process-env': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+
+      // Code quality standards from guidelines
+      complexity: ['error', 10],
+      'max-depth': ['error', 4],
+      'max-lines-per-function': ['error', 50],
+      'max-params': ['error', 4],
+
+      // TypeScript-specific rules that enforce our guidelines
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': 'error',
+
+      // Functional programming preferences
+      'prefer-const': 'error',
+      'no-var': 'error',
+
+      // Prevent runtime errors that should be compile-time
+      'no-throw-literal': 'error',
     },
   },
   {

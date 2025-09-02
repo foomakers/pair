@@ -164,28 +164,27 @@ Follow [Code Design Guidelines](02-code-design-guidelines.md) React patterns wit
 ```typescript
 // ✅ Accessible component with proper TypeScript and ARIA
 type UserCardProps = {
-  readonly user: User;
-  readonly onEdit?: (user: User) => void;
-  readonly children?: React.ReactNode;
-  readonly "aria-labelledby"?: string; // Support external labeling
-  readonly "aria-describedby"?: string; // Support external descriptions
-};
+  readonly user: User
+  readonly onEdit?: (user: User) => void
+  readonly children?: React.ReactNode
+  readonly 'aria-labelledby'?: string // Support external labeling
+  readonly 'aria-describedby'?: string // Support external descriptions
+}
 
 const UserCard = ({
   user,
   onEdit,
   children,
-  "aria-labelledby": ariaLabelledby,
-  "aria-describedby": ariaDescribedby,
+  'aria-labelledby': ariaLabelledby,
+  'aria-describedby': ariaDescribedby,
 }: UserCardProps) => {
-  const headingId = `user-${user.id}-heading`;
+  const headingId = `user-${user.id}-heading`
 
   return (
     <article
-      role="group"
+      role='group'
       aria-labelledby={ariaLabelledby ?? headingId}
-      aria-describedby={ariaDescribedby}
-    >
+      aria-describedby={ariaDescribedby}>
       <h3 id={headingId}>{user.name}</h3>
       {onEdit && (
         <button onClick={() => onEdit(user)} aria-label={`Edit ${user.name}`}>
@@ -194,8 +193,8 @@ const UserCard = ({
       )}
       {children}
     </article>
-  );
-};
+  )
+}
 ```
 
 **Focus Management Pattern:**
@@ -203,26 +202,26 @@ const UserCard = ({
 ```typescript
 // ✅ Proper focus management for dynamic content
 const useAccessibleDialog = () => {
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
 
   const openDialog = useCallback(() => {
-    previousFocusRef.current = document.activeElement as HTMLElement;
-    dialogRef.current?.showModal();
+    previousFocusRef.current = document.activeElement as HTMLElement
+    dialogRef.current?.showModal()
     // Focus first focusable element in dialog
     const firstFocusable = dialogRef.current?.querySelector(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    ) as HTMLElement;
-    firstFocusable?.focus();
-  }, []);
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+    ) as HTMLElement
+    firstFocusable?.focus()
+  }, [])
 
   const closeDialog = useCallback(() => {
-    dialogRef.current?.close();
-    previousFocusRef.current?.focus();
-  }, []);
+    dialogRef.current?.close()
+    previousFocusRef.current?.focus()
+  }, [])
 
-  return { dialogRef, openDialog, closeDialog };
-};
+  return { dialogRef, openDialog, closeDialog }
+}
 ```
 
 ### shadcn/ui Accessibility Integration
@@ -233,61 +232,61 @@ Leverage [shadcn/ui's Radix UI foundation](05-ux-guidelines.md#shadcnui-integrat
 
 ```typescript
 // ✅ Accessible button variants using shadcn/ui
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button'
 
 const AccessibleActions = () => (
-  <div role="group" aria-label="User actions">
-    <Button variant="default">Primary Action</Button>
-    <Button variant="outline" aria-describedby="help-text">
+  <div role='group' aria-label='User actions'>
+    <Button variant='default'>Primary Action</Button>
+    <Button variant='outline' aria-describedby='help-text'>
       Secondary Action
     </Button>
-    <Button variant="destructive" aria-label="Delete user permanently">
+    <Button variant='destructive' aria-label='Delete user permanently'>
       Delete
     </Button>
-    <span id="help-text" className="sr-only">
+    <span id='help-text' className='sr-only'>
       This action can be undone within 30 days
     </span>
   </div>
-);
+)
 ```
 
 **Form Accessibility with shadcn/ui:**
 
 ```typescript
 // ✅ Accessible form components
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 
 const AccessibleForm = () => {
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   return (
-    <form role="form" aria-label="User registration">
-      <div className="space-y-4">
+    <form role='form' aria-label='User registration'>
+      <div className='space-y-4'>
         <div>
-          <Label htmlFor="email">Email Address</Label>
+          <Label htmlFor='email'>Email Address</Label>
           <Input
-            id="email"
-            type="email"
+            id='email'
+            type='email'
             required
             aria-invalid={!!errors.email}
-            aria-describedby={errors.email ? "email-error" : undefined}
+            aria-describedby={errors.email ? 'email-error' : undefined}
           />
           {errors.email && (
-            <div id="email-error" role="alert" className="text-red-600">
+            <div id='email-error' role='alert' className='text-red-600'>
               {errors.email}
             </div>
           )}
         </div>
 
-        <Button type="submit" className="w-full">
+        <Button type='submit' className='w-full'>
           Register Account
         </Button>
       </div>
     </form>
-  );
-};
+  )
+}
 ```
 
 ### ESLint Accessibility Configuration
@@ -297,37 +296,37 @@ Extend the [shared ESLint configuration](02-code-design-guidelines.md#eslint-con
 ```javascript
 // tools/eslint-config/react-a11y.js - Accessibility-specific extensions
 module.exports = {
-  extends: ["./react.js"],
-  plugins: ["jsx-a11y"],
+  extends: ['./react.js'],
+  plugins: ['jsx-a11y'],
   rules: {
     // Core accessibility rules
-    "jsx-a11y/alt-text": "error",
-    "jsx-a11y/anchor-has-content": "error",
-    "jsx-a11y/anchor-is-valid": "error",
-    "jsx-a11y/aria-props": "error",
-    "jsx-a11y/aria-proptypes": "error",
-    "jsx-a11y/aria-role": "error",
-    "jsx-a11y/aria-unsupported-elements": "error",
+    'jsx-a11y/alt-text': 'error',
+    'jsx-a11y/anchor-has-content': 'error',
+    'jsx-a11y/anchor-is-valid': 'error',
+    'jsx-a11y/aria-props': 'error',
+    'jsx-a11y/aria-proptypes': 'error',
+    'jsx-a11y/aria-role': 'error',
+    'jsx-a11y/aria-unsupported-elements': 'error',
 
     // Interactive elements
-    "jsx-a11y/click-events-have-key-events": "error",
-    "jsx-a11y/interactive-supports-focus": "error",
-    "jsx-a11y/no-interactive-element-to-noninteractive-role": "error",
+    'jsx-a11y/click-events-have-key-events': 'error',
+    'jsx-a11y/interactive-supports-focus': 'error',
+    'jsx-a11y/no-interactive-element-to-noninteractive-role': 'error',
 
     // Form accessibility
-    "jsx-a11y/label-has-associated-control": "error",
-    "jsx-a11y/no-redundant-roles": "error",
+    'jsx-a11y/label-has-associated-control': 'error',
+    'jsx-a11y/no-redundant-roles': 'error',
 
     // Focus management
-    "jsx-a11y/no-autofocus": "warn",
-    "jsx-a11y/tabindex-no-positive": "error",
+    'jsx-a11y/no-autofocus': 'warn',
+    'jsx-a11y/tabindex-no-positive': 'error',
 
     // Content structure
-    "jsx-a11y/heading-has-content": "error",
-    "jsx-a11y/html-has-lang": "error",
-    "jsx-a11y/lang": "error",
+    'jsx-a11y/heading-has-content': 'error',
+    'jsx-a11y/html-has-lang': 'error',
+    'jsx-a11y/lang': 'error',
   },
-};
+}
 ```
 
 ### Code Examples
@@ -337,45 +336,39 @@ module.exports = {
 ```typescript
 // ✅ Accessible table implementation
 const AccessibleUserTable = ({ users }: { users: User[] }) => {
-  const [sortColumn, setSortColumn] = useState<keyof User>("name");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [sortColumn, setSortColumn] = useState<keyof User>('name')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
   return (
-    <table role="table" aria-label="User directory">
-      <caption className="sr-only">
-        User directory with {users.length} users. Sortable by name, email, and
-        creation date.
+    <table role='table' aria-label='User directory'>
+      <caption className='sr-only'>
+        User directory with {users.length} users. Sortable by name, email, and creation date.
       </caption>
 
       <thead>
         <tr>
-          <th scope="col">
+          <th scope='col'>
             <button
-              onClick={() => handleSort("name")}
-              aria-sort={sortColumn === "name" ? sortDirection : "none"}
-            >
+              onClick={() => handleSort('name')}
+              aria-sort={sortColumn === 'name' ? sortDirection : 'none'}>
               Name
-              <span aria-hidden="true">
-                {sortColumn === "name" && (sortDirection === "asc" ? "↑" : "↓")}
+              <span aria-hidden='true'>
+                {sortColumn === 'name' && (sortDirection === 'asc' ? '↑' : '↓')}
               </span>
             </button>
           </th>
-          <th scope="col">Email</th>
-          <th scope="col">Actions</th>
+          <th scope='col'>Email</th>
+          <th scope='col'>Actions</th>
         </tr>
       </thead>
 
       <tbody>
-        {users.map((user) => (
+        {users.map(user => (
           <tr key={user.id}>
-            <th scope="row">{user.name}</th>
+            <th scope='row'>{user.name}</th>
             <td>{user.email}</td>
             <td>
-              <Button
-                size="sm"
-                variant="outline"
-                aria-label={`Edit ${user.name}`}
-              >
+              <Button size='sm' variant='outline' aria-label={`Edit ${user.name}`}>
                 Edit
               </Button>
             </td>
@@ -383,8 +376,8 @@ const AccessibleUserTable = ({ users }: { users: User[] }) => {
         ))}
       </tbody>
     </table>
-  );
-};
+  )
+}
 ```
 
 **Skip Links Implementation:**
@@ -392,15 +385,15 @@ const AccessibleUserTable = ({ users }: { users: User[] }) => {
 ```typescript
 // ✅ Skip links for keyboard navigation
 const SkipLinks = () => (
-  <div className="sr-only focus:not-sr-only focus:absolute focus:top-0 focus:left-0 z-50">
-    <a href="#main-content" className="bg-blue-600 text-white p-2 rounded">
+  <div className='sr-only focus:not-sr-only focus:absolute focus:top-0 focus:left-0 z-50'>
+    <a href='#main-content' className='bg-blue-600 text-white p-2 rounded'>
       Skip to main content
     </a>
-    <a href="#navigation" className="bg-blue-600 text-white p-2 rounded ml-2">
+    <a href='#navigation' className='bg-blue-600 text-white p-2 rounded ml-2'>
       Skip to navigation
     </a>
   </div>
-);
+)
 ```
 
 For comprehensive implementation patterns, see [Code Design Guidelines](02-code-design-guidelines.md) for React/TypeScript standards and [UX Guidelines](05-ux-guidelines.md) for shadcn/ui component usage.
@@ -575,7 +568,7 @@ ci:
       onlyCategories: [accessibility]
   assert:
     assertions:
-      "categories:accessibility": ["error", { minScore: 0.95 }]
+      'categories:accessibility': ['error', { minScore: 0.95 }]
 ```
 
 ### IDE and Development Environment
@@ -635,26 +628,26 @@ ci:
 
 ```typescript
 // Automated accessibility monitoring integration
-import { AxeResults } from "axe-core";
+import { AxeResults } from 'axe-core'
 
 const setupAccessibilityMonitoring = () => {
   // Production accessibility monitoring
-  if (process.env.NODE_ENV === "production") {
+  if (process.env.NODE_ENV === 'production') {
     window.axe?.run().then((results: AxeResults) => {
       if (results.violations.length > 0) {
         // Report accessibility violations to monitoring service
-        analytics.track("accessibility_violation", {
-          violations: results.violations.map((v) => ({
+        analytics.track('accessibility_violation', {
+          violations: results.violations.map(v => ({
             id: v.id,
             impact: v.impact,
             description: v.description,
             nodes: v.nodes.length,
           })),
-        });
+        })
       }
-    });
+    })
   }
-};
+}
 ```
 
 **Performance Impact Monitoring:**
@@ -861,20 +854,20 @@ This document supports the **Definition of Done** requirements:
 
 **Core Integration:**
 
-- **[02-code-design-guidelines.md](02-code-design-guidelines.md)** - React/TypeScript accessibility implementation patterns
-- **[03-technical-guidelines.md](03-technical-guidelines.md)** - Development tools and ESLint accessibility configuration
-- **[05-ux-guidelines.md](05-ux-guidelines.md)** - Visual design standards and shadcn/ui accessibility integration
-- **[06-definition-of-done.md](06-definition-of-done.md)** - Accessibility validation requirements and quality gates
+- **[02-code-design-guidelines.md](.pair/tech/knowledge-base/02-code-design-guidelines.md)** - React/TypeScript accessibility implementation patterns
+- **[03-technical-guidelines.md](.pair/tech/knowledge-base/03-technical-guidelines.md)** - Development tools and ESLint accessibility configuration
+- **[05-ux-guidelines.md](.pair/tech/knowledge-base/05-ux-guidelines.md)** - Visual design standards and shadcn/ui accessibility integration
+- **[06-definition-of-done.md](.pair/tech/knowledge-base/06-definition-of-done.md)** - Accessibility validation requirements and quality gates
 
 **Testing and Quality Assurance:**
 
-- **[07-testing-strategy.md](07-testing-strategy.md)** - Accessibility testing integration across test pyramid levels
-- **[09-performance-guidelines.md](09-performance-guidelines.md)** - Performance impact considerations for accessibility features
-- **[11-observability-guidelines.md](11-observability-guidelines.md)** - Accessibility monitoring and compliance reporting
+- **[07-testing-strategy.md](.pair/tech/knowledge-base/07-testing-strategy.md)** - Accessibility testing integration across test pyramid levels
+- **[09-performance-guidelines.md](.pair/tech/knowledge-base/09-performance-guidelines.md)** - Performance impact considerations for accessibility features
+- **[11-observability-guidelines.md](.pair/tech/knowledge-base/11-observability-guidelines.md)** - Accessibility monitoring and compliance reporting
 
 **Infrastructure and Deployment:**
 
-- **[01-architectural-guidelines.md](01-architectural-guidelines.md)** - Architectural decisions supporting accessibility implementation
-- **[04-infrastructure-guidelines.md](04-infrastructure-guidelines.md)** - CI/CD accessibility testing integration and deployment validation
+- **[01-architectural-guidelines.md](.pair/tech/knowledge-base/01-architectural-guidelines.md))** - Architectural decisions supporting accessibility implementation
+- **[04-infrastructure-guidelines.md](.pair/tech/knowledge-base/04-infrastructure-guidelines.md)** - CI/CD accessibility testing integration and deployment validation
 
 This accessibility guidelines document ensures that digital products are inclusive and compliant while leveraging modern development tools to enhance accessibility implementation and testing processes.

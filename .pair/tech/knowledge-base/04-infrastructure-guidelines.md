@@ -232,7 +232,7 @@ Comprehensive monitoring and observability are essential for reliable, scalable,
 
 - All monitoring, alerting, and cost management configurations must be documented and reviewed regularly.
 - Integrate observability requirements into ADRs for new infrastructure components.
-- Reference [Observability Guidelines](08-observability-guidelines.md) for detailed instrumentation and monitoring standards.
+- Reference [Observability Guidelines](11-observability-guidelines.md) for detailed instrumentation and monitoring standards.
 
 ---
 
@@ -381,23 +381,23 @@ EMAIL_API_KEY=${DEV_EMAIL_API_KEY}
 
 ```typescript
 // Environment validation example
-import { z } from "zod";
+import { z } from 'zod'
 
 const environmentSchema = z.object({
-  NODE_ENV: z.enum(["local", "development", "staging", "production"]),
+  NODE_ENV: z.enum(['local', 'development', 'staging', 'production']),
   DATABASE_URL: z.string().url(),
   REDIS_URL: z.string().url(),
   // Add validation for all required variables
-});
+})
 
 export const validateEnvironment = () => {
   try {
-    return environmentSchema.parse(process.env);
+    return environmentSchema.parse(process.env)
   } catch (error) {
-    console.error("Environment validation failed:", error);
-    process.exit(1);
+    console.error('Environment validation failed:', error)
+    process.exit(1)
   }
-};
+}
 ```
 
 ---
@@ -410,7 +410,7 @@ export const validateEnvironment = () => {
 
 ```yaml
 # docker-compose.local.yml
-version: "3.8"
+version: '3.8'
 
 services:
   # Primary Database
@@ -421,12 +421,12 @@ services:
       POSTGRES_USER: developer
       POSTGRES_PASSWORD: development
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U developer"]
+      test: ['CMD-SHELL', 'pg_isready -U developer']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -439,12 +439,12 @@ services:
       POSTGRES_USER: test_user
       POSTGRES_PASSWORD: test_password
     ports:
-      - "5433:5432"
+      - '5433:5432'
     volumes:
       - postgres_test_data:/var/lib/postgresql/data
       - ./scripts/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U test_user"]
+      test: ['CMD-SHELL', 'pg_isready -U test_user']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -453,11 +453,11 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -466,11 +466,11 @@ services:
   redis_test:
     image: redis:7-alpine
     ports:
-      - "6380:6379"
+      - '6380:6379'
     volumes:
       - redis_test_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -508,53 +508,53 @@ volumes:
 // src/config/services.ts
 type ServiceConfig = {
   database: {
-    host: string;
-    port: number;
-    database: string;
-    username: string;
-    password: string;
-  };
+    host: string
+    port: number
+    database: string
+    username: string
+    password: string
+  }
   redis: {
-    host: string;
-    port: number;
-  };
+    host: string
+    port: number
+  }
   external: {
     [serviceName: string]: {
-      baseUrl: string;
-      apiKey?: string;
-      mock: boolean;
-    };
-  };
-};
+      baseUrl: string
+      apiKey?: string
+      mock: boolean
+    }
+  }
+}
 
 const createServiceConfig = (environment: string): ServiceConfig => {
   switch (environment) {
-    case "local":
+    case 'local':
       return {
         database: {
-          host: "localhost",
+          host: 'localhost',
           port: 5432,
-          database: "app_development",
-          username: "developer",
-          password: "development",
+          database: 'app_development',
+          username: 'developer',
+          password: 'development',
         },
         redis: {
-          host: "localhost",
+          host: 'localhost',
           port: 6379,
         },
         external: {
           // All external services mocked in local environment
           paymentService: {
-            baseUrl: "http://localhost:3001/mock/payment",
+            baseUrl: 'http://localhost:3001/mock/payment',
             mock: true,
           },
           emailService: {
-            baseUrl: "http://localhost:3002/mock/email",
+            baseUrl: 'http://localhost:3002/mock/email',
             mock: true,
           },
         },
-      };
-    case "development":
+      }
+    case 'development':
       return {
         database: {
           host: process.env.DB_HOST!,
@@ -580,11 +580,11 @@ const createServiceConfig = (environment: string): ServiceConfig => {
             mock: false,
           },
         },
-      };
+      }
     default:
-      throw new Error(`Unknown environment: ${environment}`);
+      throw new Error(`Unknown environment: ${environment}`)
   }
-};
+}
 ```
 
 ---
@@ -743,7 +743,7 @@ functions:
 
 ```yaml
 # docker-compose.aws.yml
-version: "3.8"
+version: '3.8'
 services:
   app:
     image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/app:latest
@@ -796,18 +796,18 @@ spec:
 ```yaml
 # cloudbuild.yaml
 steps:
-  - name: "gcr.io/cloud-builders/docker"
-    args: ["build", "-t", "gcr.io/$PROJECT_ID/app:latest", "."]
-  - name: "gcr.io/cloud-builders/docker"
-    args: ["push", "gcr.io/$PROJECT_ID/app:latest"]
-  - name: "gcr.io/cloud-builders/gcloud"
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/app:latest', '.']
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/app:latest']
+  - name: 'gcr.io/cloud-builders/gcloud'
     args:
-      - "run"
-      - "deploy"
-      - "app"
-      - "--image=gcr.io/$PROJECT_ID/app:latest"
-      - "--platform=managed"
-      - "--region=us-central1"
+      - 'run'
+      - 'deploy'
+      - 'app'
+      - '--image=gcr.io/$PROJECT_ID/app:latest'
+      - '--platform=managed'
+      - '--region=us-central1'
 ```
 
 **2. Google Kubernetes Engine (GKE)**:
@@ -1046,87 +1046,80 @@ infrastructure/
 
 ```typescript
 // bin/app.ts
-import * as cdk from "aws-cdk-lib";
-import { NetworkingStack } from "../lib/stacks/networking-stack";
-import { DatabaseStack } from "../lib/stacks/database-stack";
-import { ComputeStack } from "../lib/stacks/compute-stack";
+import * as cdk from 'aws-cdk-lib'
+import { NetworkingStack } from '../lib/stacks/networking-stack'
+import { DatabaseStack } from '../lib/stacks/database-stack'
+import { ComputeStack } from '../lib/stacks/compute-stack'
 
-const app = new cdk.App();
+const app = new cdk.App()
 
-const environment = app.node.tryGetContext("environment") || "development";
-const config = require(`../environments/${environment}.ts`).default;
+const environment = app.node.tryGetContext('environment') || 'development'
+const config = require(`../environments/${environment}.ts`).default
 
-const networkingStack = new NetworkingStack(
-  app,
-  `${config.prefix}-networking`,
-  {
-    env: config.env,
-    config,
-  }
-);
+const networkingStack = new NetworkingStack(app, `${config.prefix}-networking`, {
+  env: config.env,
+  config,
+})
 
 const databaseStack = new DatabaseStack(app, `${config.prefix}-database`, {
   env: config.env,
   config,
   vpc: networkingStack.vpc,
-});
+})
 
 const computeStack = new ComputeStack(app, `${config.prefix}-compute`, {
   env: config.env,
   config,
   vpc: networkingStack.vpc,
   database: databaseStack.database,
-});
+})
 ```
 
 **Reusable Constructs**:
 
 ```typescript
 // lib/constructs/postgres-database.ts
-import * as cdk from "aws-cdk-lib";
-import * as rds from "aws-cdk-lib/aws-rds";
-import * as ec2 from "aws-cdk-lib/aws-ec2";
-import { Construct } from "constructs";
+import * as cdk from 'aws-cdk-lib'
+import * as rds from 'aws-cdk-lib/aws-rds'
+import * as ec2 from 'aws-cdk-lib/aws-ec2'
+import { Construct } from 'constructs'
 
 export interface PostgresDatabaseProps {
-  vpc: ec2.Vpc;
-  instanceType?: ec2.InstanceType;
-  allocatedStorage?: number;
-  environment: string;
+  vpc: ec2.Vpc
+  instanceType?: ec2.InstanceType
+  allocatedStorage?: number
+  environment: string
 }
 
 export class PostgresDatabase extends Construct {
-  public readonly instance: rds.DatabaseInstance;
-  public readonly secret: rds.DatabaseSecret;
+  public readonly instance: rds.DatabaseInstance
+  public readonly secret: rds.DatabaseSecret
 
   constructor(scope: Construct, id: string, props: PostgresDatabaseProps) {
-    super(scope, id);
+    super(scope, id)
 
-    this.secret = new rds.DatabaseSecret(this, "Secret", {
-      username: "dbadmin",
+    this.secret = new rds.DatabaseSecret(this, 'Secret', {
+      username: 'dbadmin',
       description: `Database credentials for ${props.environment}`,
-    });
+    })
 
-    this.instance = new rds.DatabaseInstance(this, "Instance", {
+    this.instance = new rds.DatabaseInstance(this, 'Instance', {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_15_4,
       }),
       instanceType:
-        props.instanceType ||
-        ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
+        props.instanceType || ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
       vpc: props.vpc,
       credentials: rds.Credentials.fromSecret(this.secret),
       allocatedStorage: props.allocatedStorage || 20,
       storageEncrypted: true,
       backupRetention: cdk.Duration.days(7),
-      deletionProtection: props.environment === "production",
+      deletionProtection: props.environment === 'production',
       removalPolicy:
-        props.environment === "production"
-          ? cdk.RemovalPolicy.RETAIN
-          : cdk.RemovalPolicy.DESTROY,
-    });
+        props.environment === 'production' ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+    })
 
-    cdk.Tags.of(this).add("Environment", props.environment);
+    cdk.Tags.of(this).add('Environment', props.environment)
   }
 }
 ```
@@ -1136,14 +1129,14 @@ export class PostgresDatabase extends Construct {
 ```typescript
 // environments/staging.ts
 export default {
-  prefix: "myapp-staging",
-  environment: "staging",
+  prefix: 'myapp-staging',
+  environment: 'staging',
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: "us-east-1",
+    region: 'us-east-1',
   },
   database: {
-    instanceType: "t3.micro",
+    instanceType: 't3.micro',
     allocatedStorage: 20,
   },
   compute: {
@@ -1151,7 +1144,7 @@ export default {
     cpu: 256,
     memory: 512,
   },
-};
+}
 ```
 
 ### IaC Best Practices
@@ -1176,10 +1169,10 @@ name: Infrastructure
 
 on:
   pull_request:
-    paths: ["infrastructure/**"]
+    paths: ['infrastructure/**']
   push:
     branches: [main]
-    paths: ["infrastructure/**"]
+    paths: ['infrastructure/**']
 
 jobs:
   plan:
@@ -1271,7 +1264,7 @@ name: Continuous Integration
 
 on:
   push:
-    branches: ["**"] # Trigger on all branches
+    branches: ['**'] # Trigger on all branches
   pull_request:
     branches: [main, develop]
 
@@ -1314,7 +1307,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: "pnpm"
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -1371,7 +1364,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "pnpm"
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -1394,7 +1387,7 @@ on:
   push:
     branches: [main]
   workflow_run:
-    workflows: ["Continuous Integration"]
+    workflows: ['Continuous Integration']
     types: [completed]
     branches: [main]
 
@@ -1439,7 +1432,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: "pnpm"
+          cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -1828,20 +1821,20 @@ jobs:
 # Example secrets organization
 secrets:
   # Database
-  STAGING_DATABASE_URL: "postgresql://..."
-  PROD_DATABASE_URL: "postgresql://..."
+  STAGING_DATABASE_URL: 'postgresql://...'
+  PROD_DATABASE_URL: 'postgresql://...'
 
   # Platform credentials
-  VERCEL_TOKEN: "..."
-  AWS_ACCESS_KEY_ID: "..."
-  AWS_SECRET_ACCESS_KEY: "..."
+  VERCEL_TOKEN: '...'
+  AWS_ACCESS_KEY_ID: '...'
+  AWS_SECRET_ACCESS_KEY: '...'
 
   # External services
-  PAYMENT_API_KEY_STAGING: "..."
-  PAYMENT_API_KEY_PROD: "..."
+  PAYMENT_API_KEY_STAGING: '...'
+  PAYMENT_API_KEY_PROD: '...'
 
   # Notifications
-  SLACK_WEBHOOK: "..."
+  SLACK_WEBHOOK: '...'
 ```
 
 **Alternative CI/CD Platforms**:
@@ -1885,7 +1878,7 @@ If ADR documents selection of alternative platforms, ensure similar capabilities
 
 ```yaml
 # docker-compose.test.yml
-version: "3.8"
+version: '3.8'
 
 services:
   app-test:
@@ -1902,7 +1895,7 @@ services:
       redis_test:
         condition: service_healthy
     ports:
-      - "3001:3000"
+      - '3001:3000'
 
   postgres_test:
     image: postgres:16-alpine
@@ -1913,7 +1906,7 @@ services:
     volumes:
       - ./scripts/test-db-init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U test_user"]
+      test: ['CMD-SHELL', 'pg_isready -U test_user']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -1921,7 +1914,7 @@ services:
   redis_test:
     image: redis:7-alpine
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -1970,10 +1963,10 @@ cleanup_test_db() {
 
 ```typescript
 // src/test/database.ts
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from '@prisma/client'
 
 export class TestDatabase {
-  private prisma: PrismaClient;
+  private prisma: PrismaClient
 
   constructor() {
     this.prisma = new PrismaClient({
@@ -1982,30 +1975,28 @@ export class TestDatabase {
           url: process.env.TEST_DATABASE_URL,
         },
       },
-    });
+    })
   }
 
   async setup(): Promise<void> {
-    await this.prisma.$connect();
-    await this.clearDatabase();
-    await this.seedTestData();
+    await this.prisma.$connect()
+    await this.clearDatabase()
+    await this.seedTestData()
   }
 
   async teardown(): Promise<void> {
-    await this.clearDatabase();
-    await this.prisma.$disconnect();
+    await this.clearDatabase()
+    await this.prisma.$disconnect()
   }
 
   private async clearDatabase(): Promise<void> {
     const tablenames = await this.prisma.$queryRaw<
       Array<{ tablename: string }>
-    >`SELECT tablename FROM pg_tables WHERE schemaname='public'`;
+    >`SELECT tablename FROM pg_tables WHERE schemaname='public'`
 
     for (const { tablename } of tablenames) {
-      if (tablename !== "_prisma_migrations") {
-        await this.prisma.$executeRawUnsafe(
-          `TRUNCATE TABLE "public"."${tablename}" CASCADE;`
-        );
+      if (tablename !== '_prisma_migrations') {
+        await this.prisma.$executeRawUnsafe(`TRUNCATE TABLE "public"."${tablename}" CASCADE;`)
       }
     }
   }
@@ -2014,10 +2005,10 @@ export class TestDatabase {
     // Seed consistent test data
     await this.prisma.user.createMany({
       data: [
-        { id: "test-user-1", email: "test1@example.com", name: "Test User 1" },
-        { id: "test-user-2", email: "test2@example.com", name: "Test User 2" },
+        { id: 'test-user-1', email: 'test1@example.com', name: 'Test User 1' },
+        { id: 'test-user-2', email: 'test2@example.com', name: 'Test User 2' },
       ],
-    });
+    })
   }
 }
 ```
@@ -2030,7 +2021,7 @@ export class TestDatabase {
 
 ```yaml
 # docker-compose.perf.yml - Performance Testing Infrastructure
-version: "3.8"
+version: '3.8'
 
 services:
   app-perf:
@@ -2045,7 +2036,7 @@ services:
       replicas: 3
       resources:
         limits:
-          cpus: "1.0"
+          cpus: '1.0'
           memory: 1G
     depends_on:
       postgres_perf:
@@ -2065,10 +2056,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "2.0"
+          cpus: '2.0'
           memory: 2G
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U perf_user"]
+      test: ['CMD-SHELL', 'pg_isready -U perf_user']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -2080,10 +2071,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
+          cpus: '0.5'
           memory: 512M
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -2111,7 +2102,7 @@ on:
   push:
     branches: [main]
   schedule:
-    - cron: "0 2 * * *" # Daily at 2 AM
+    - cron: '0 2 * * *' # Daily at 2 AM
 
 jobs:
   performance-test:
@@ -2149,7 +2140,7 @@ jobs:
 
 ```yaml
 # docker-compose.integration.yml
-version: "3.8"
+version: '3.8'
 
 services:
   # Main application services
@@ -2167,7 +2158,7 @@ services:
       api-service:
         condition: service_started
     ports:
-      - "3000:3000"
+      - '3000:3000'
 
   api-service:
     build:
@@ -2186,7 +2177,7 @@ services:
       payment-mock:
         condition: service_started
     ports:
-      - "3001:3001"
+      - '3001:3001'
 
   # Mock external services
   payment-mock:
@@ -2195,7 +2186,7 @@ services:
     environment:
       NODE_ENV: test
     ports:
-      - "3002:3002"
+      - '3002:3002'
 
   email-mock:
     build:
@@ -2203,7 +2194,7 @@ services:
     environment:
       NODE_ENV: test
     ports:
-      - "3003:3003"
+      - '3003:3003'
 
   # Shared test infrastructure
   postgres:
@@ -2215,7 +2206,7 @@ services:
     volumes:
       - ./scripts/test-db-setup.sql:/docker-entrypoint-initdb.d/setup.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U test_user"]
+      test: ['CMD-SHELL', 'pg_isready -U test_user']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -2223,7 +2214,7 @@ services:
   redis:
     image: redis:7-alpine
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5

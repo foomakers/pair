@@ -1,0 +1,42 @@
+{
+  "name": "@pair/pair-cli",
+  "version": "0.0.1-wip",
+  "description": "CLI for support the interaction with the developer",
+  "main": "dist/index.js",
+  "bin": {
+    "pair-cli": "dist/cli.js"
+  },
+  "private": true,
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "postbuild": "chmod +x dist/cli.js",
+    "dev": "ts-node src/cli.ts",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "ts:check": "tsc --noEmit",
+    "lint": "lint",
+    "lint:fix": "lint-fix",
+    "prettier:fix": "prettier-fix",
+    "prettier:check": "prettier-check"
+  },
+  "dependencies": {
+    "@pair/knowledge-hub": "workspace:*",
+    "chalk": "catalog:",
+    "commander": "catalog:",
+    "dotenv": "catalog:",
+    "fs-extra": "catalog:",
+    "markdown-it": "catalog:"
+  },
+  "devDependencies": {
+    "@pair/content-ops": "workspace:*",
+    "@pair/eslint-config": "workspace:*",
+    "@pair/prettier-config": "workspace:*",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "ts-node": "catalog:",
+    "typescript": "catalog:",
+    "vite-tsconfig-paths": "catalog:",
+    "vitest": "catalog:"
+  },
+  "prettier": "@pair/prettier-config"
+}

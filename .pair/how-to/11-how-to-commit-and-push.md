@@ -42,10 +42,10 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 **Step 1: Tool Configuration Check**
 
-1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+1. **Read** [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md) to identify configured project management tool
 2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
 
-_"I cannot proceed because no project management tool is configured in [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+_"I cannot proceed because no project management tool is configured in [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
 
 **Step 2: Follow Tool-Specific Instructions**
 
@@ -56,17 +56,17 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **✅ PERMITTED ONLY when:**
 
-- Tool in [way-of-working.md](.pair/tech/adopted/way-of-working.md) = "filesystem"
+- Tool in [way-of-working.md](.pair/adoption/tech/way-of-working.md) = "filesystem"
 
 **🚫 PROHIBITED when:**
 
 - Any other tool is configured
-- **DO NOT** read [.pair/product/backlog/](.pair/product/backlog/) directories
+- **DO NOT** read [.pair/adoption/product/backlog/](.pair/adoption/product/backlog/) directories
 - **DO NOT** use filesystem as fallback
 
 ### **Validation Checklist**
 
-- [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
+- [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
 - [ ] [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
@@ -1261,21 +1261,21 @@ Quality Gates: All tests passing, configuration validated, documentation complet
 
 ### ⚙️ Technical Implementation
 
-- **[03-technical-guidelines.md](../../tech/knowledge-base/03-technical-guidelines.md)** - Tech stack, development tools, and feature flag management
-- **[04-infrastructure-guidelines.md](../../tech/knowledge-base/04-infrastructure-guidelines.md)** - Deployment strategies, environment management, and CI/CD
+- **[03-technical-guidelines.md](.pair/tech/knowledge-base/../../tech/knowledge-base/03-technical-guidelines.md)** - Tech stack, development tools, and feature flag management
+- **[04-infrastructure-guidelines.md](.pair/tech/knowledge-base/../../tech/knowledge-base/04-infrastructure-guidelines.md)** - Deployment strategies, environment management, and CI/CD
 
 ### 🎨 User Experience & Quality
 
-- **[05-ux-guidelines.md](../../tech/knowledge-base/05-ux-guidelines.md)** - User experience standards and design principles
-- **[06-definition-of-done.md](../../tech/knowledge-base/06-definition-of-done.md)** - Quality criteria and completion standards
-- **[07-testing-strategy.md](../../tech/knowledge-base/07-testing-strategy.md)** - Testing frameworks, strategies, and quality gates
+- **[05-ux-guidelines.md](.pair/tech/knowledge-base/../../tech/knowledge-base/05-ux-guidelines.md)** - User experience standards and design principles
+- **[06-definition-of-done.md](.pair/tech/knowledge-base/../../tech/knowledge-base/06-definition-of-done.md)** - Quality criteria and completion standards
+- **[07-testing-strategy.md](.pair/tech/knowledge-base/../../tech/knowledge-base/07-testing-strategy.md)** - Testing frameworks, strategies, and quality gates
 
 ### 🔒 Security & Performance
 
-- **[08-accessibility-guidelines.md](../../tech/knowledge-base/08-accessibility-guidelines.md)** - Accessibility standards and compliance requirements
-- **[09-performance-guidelines.md](../../tech/knowledge-base/09-performance-guidelines.md)** - Performance optimization and monitoring strategies
-- **[10-security-guidelines.md](../../tech/knowledge-base/10-security-guidelines.md)** - Security implementation and best practices
-- **[11-observability-guidelines.md](../../tech/knowledge-base/11-observability-guidelines.md)** - Monitoring, logging, and tracing strategies
+- **[08-accessibility-guidelines.md](.pair/tech/knowledge-base/../../tech/knowledge-base/08-accessibility-guidelines.md)** - Accessibility standards and compliance requirements
+- **[09-performance-guidelines.md](.pair/tech/knowledge-base/../../tech/knowledge-base/09-performance-guidelines.md)** - Performance optimization and monitoring strategies
+- **[10-security-guidelines.md](.pair/tech/knowledge-base/../../tech/knowledge-base/10-security-guidelines.md)** - Security implementation and best practices
+- **[11-observability-guidelines.md](.pair/tech/knowledge-base/../../tech/knowledge-base/11-observability-guidelines.md)** - Monitoring, logging, and tracing strategies
 
 **Process Dependencies:**
 

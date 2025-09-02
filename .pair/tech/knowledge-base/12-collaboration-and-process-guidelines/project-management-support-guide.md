@@ -219,9 +219,6 @@ A: Follow the [Migration Guide](project-management-compatibility-guide.md#migrat
 **Q: What GitHub permissions are required?**
 A: See [Authentication Requirements](github-projects-integration-guide.md#authentication-setup) for complete scope information.
 
-**Q: How do I handle rate limiting issues?**
-A: Check [Rate Limiting Solutions](project-management-troubleshooting-guide.md#rate-limiting-problems) for optimization strategies.
-
 **Q: Can I use both GitHub Projects and filesystem workflows?**
 A: See [Hybrid Workflows](project-management-framework.md#hybrid-approaches) for guidance on mixed approaches.
 
@@ -362,9 +359,9 @@ gh auth status 2>/dev/null || echo "GitHub CLI not authenticated"
 echo ""
 
 echo "=== PROJECT CONFIGURATION ==="
-if [ -f ".pair/tech/adopted/way-of-working.md" ]; then
+if [ -f ".pair/adoption/tech/way-of-working.md" ]; then
   echo "Way of working configured:"
-  grep -i "project.*management\|github.*projects\|filesystem" .pair/tech/adopted/way-of-working.md
+  grep -i "project.*management\|github.*projects\|filesystem" .pair/adoption/tech/way-of-working.md
 else
   echo "Way of working not configured"
 fi

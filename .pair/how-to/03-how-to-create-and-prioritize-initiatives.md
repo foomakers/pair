@@ -40,10 +40,10 @@ Before starting, **read and consult the Initiative Template**: [Initiative Templ
 
 **Step 1: Tool Configuration Check**
 
-1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+1. **Read** [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md) to identify configured project management tool
 2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
 
-_"I cannot proceed because no project management tool is configured in [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+_"I cannot proceed because no project management tool is configured in [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
 
 **Step 2: Follow Tool-Specific Instructions**
 
@@ -54,17 +54,17 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **✅ PERMITTED ONLY when:**
 
-- Tool in [way-of-working.md](.pair/tech/adopted/way-of-working.md) = "filesystem"
+- Tool in [way-of-working.md](.pair/adoption/tech/way-of-working.md) = "filesystem"
 
 **🚫 PROHIBITED when:**
 
 - Any other tool is configured
-- **DO NOT** read [.pair/product/backlog/](.pair/product/backlog/) directories
+- **DO NOT** read [.pair/adoption/product/backlog/](.pair/adoption/product/backlog/) directories
 - **DO NOT** use filesystem as fallback
 
 ### **Validation Checklist**
 
-- [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
+- [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
 - [ ] [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
@@ -80,19 +80,19 @@ Required Documentation Check:
 Verify Bootstrap Completion: Check for existence of:
 
 .pair/product/adopted/PRD.md
-.pair/product/backlog/01-initiatives/ (with initiative files)
+.pair/adoption/product/backlog/01-initiatives/ (with initiative files)
 .pair/product/adopted/subdomain/
 .pair/way-of-working.md
-.pair/tech/adopted/architecture.md
-.pair/tech/adopted/tech-stack.md
-.pair/tech/adopted/infrastructure.md
-.pair/tech/adopted/ux-ui.md
-.pair/tech/adopted/way-of-working.md
-Check Tool Configuration: Verify project management tool is configured in .pair/tech/adopted/way-of-working.md
+.pair/adoption/tech/architecture.md
+.pair/adoption/tech/tech-stack.md
+.pair/adoption/tech/infrastructure.md
+.pair/adoption/tech/ux-ui.md
+.pair/adoption/tech/way-of-working.md
+Check Tool Configuration: Verify project management tool is configured in .pair/adoption/tech/way-of-working.md
 
 If Bootstrap Not Complete: "I notice the bootstrap checklist hasn't been completed yet. Before we can break down epics, we need to establish the foundational documentation and tool configuration. Please complete the 'How to Complete the Bootstrap Checklist' process first, then return here for create and prioritize initiatives."
 
-If Tool Not Configured: "I can see the foundational documents are ready, but I need to confirm the project management tool configuration. According to .pair/tech/adopted/way-of-working.md, we should be using [TOOL_NAME]. Should I proceed with documenting epics in this tool?"
+If Tool Not Configured: "I can see the foundational documents are ready, but I need to confirm the project management tool configuration. According to .pair/adoption/tech/way-of-working.md, we should be using [TOOL_NAME]. Should I proceed with documenting epics in this tool?"
 
 ## Step-by-Step Implementation Process
 
@@ -100,14 +100,14 @@ If Tool Not Configured: "I can see the foundational documents are ready, but I n
 
 **AI Assistant Instructions:** Before beginning initiative creation, verify the project management setup:
 
-1. **Check [`.pair/tech/adopted/way-of-working.md`](.pair/tech/adopted/way-of-working.md)** to identify the defined project management tool
+1. **Check [`.pair/adoption/tech/way-of-working.md`](.pair/adoption/tech/way-of-working.md)** to identify the defined project management tool
 2. **Read ([Project Management Framework](../tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md))** to understand how to operate with the project management tool and the relative guidelines of the tool you adopt
-3. **Read adoption file**: [.pair/tech/adopted/README.md](.pair/tech/adopted/README.md)
-   - [.pair/tech/adopted/architecture.md](.pair/tech/adopted/architecture.md)
-   - [.pair/tech/adopted/tech-stack.md](.pair/tech/adopted/tech-stack.md)
-   - [.pair/tech/adopted/infrastructure.md](.pair/tech/adopted/infrastructure.md)
-   - [.pair/tech/adopted/ux-ui.md](.pair/tech/adopted/ux-ui.md)
-   - [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md)
+3. **Read adoption file**: [.pair/adoption/tech/README.md](.pair/adoption/tech/README.md)
+   - [.pair/adoption/tech/architecture.md](.pair/adoption/tech/architecture.md)
+   - [.pair/adoption/tech/tech-stack.md](.pair/adoption/tech/tech-stack.md)
+   - [.pair/adoption/tech/infrastructure.md](.pair/adoption/tech/infrastructure.md)
+   - [.pair/adoption/tech/ux-ui.md](.pair/adoption/tech/ux-ui.md)
+   - [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md)
 4. **If tool is already defined**: Proceed with that tool's methodology for initiative management
 5. **If no tool is defined**: Follow the collaborative selection process from `./02-how-to-complete-bootstrap-checklist.md`
 
@@ -122,7 +122,7 @@ _"I need to understand your project management setup before creating initiatives
 
 _This choice will determine how we structure and manage your strategic initiatives. What's your preference?"_
 
-Based on the selection, update `.pair/tech/adopted/way-of-working.md` accordingly and proceed.
+Based on the selection, update `.pair/adoption/tech/way-of-working.md` accordingly and proceed.
 
 ### Step 1: Reference Analysis and Context Building
 
@@ -131,8 +131,8 @@ Based on the selection, update `.pair/tech/adopted/way-of-working.md` accordingl
 1. **Review [`.pair/product/adopted/PRD.md`](.pair/product/adopted/PRD.md)** to understand product vision, goals, and requirements
 2. **Study [`.pair/way-of-working.md`](.pair/way-of-working.md)** to understand the development methodology and value streams
 3. **Check existing initiatives** according to the defined project management approach:
-   - **File System**: ([see File System Guidelines](../tech/knowledge-base/project-management-framework-filesystem.md))
-   - **Github Tools**: ([see Github System Guidelines](../tech/knowledge-base/project-management-framework-github.md))
+   - **File System**: ([see File System Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework-filesystem.md))
+   - **Github Tools**: ([see Github System Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework-filesystem.md))
 4. **Create initiative analysis framework** based on PRD goals and way-of-working principles
 
 Your analysis should extract:
@@ -203,9 +203,9 @@ _"Here's the refined initiative ready for [Tool Name]. The comprehensive details
 
 **AI Assistant Instructions:** Upon developer approval, create documentation according to the defined project management approach:
 
-**For File System Approach ([see File System Guidelines](../tech/knowledge-base/project-management-framework-filesystem.md))**
+**For File System Approach ([see File System Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework-filesystem.md))**
 
-**For Github Tool Approach ([see Github System Guidelines](../tech/knowledge-base/project-management-framework-github.md))**:
+**For Github Tool Approach ([see Github System Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework-filesystem.md))**:
 
 1. **Create initiative item** in the chosen project management tool
 2. **Include comprehensive [template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md) content** adapted to the tool's structure
@@ -346,10 +346,10 @@ Before finalizing prioritization, verify:
 ## References
 
 - [Project Management Tool Guidelines](../tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md)
-- [`.pair/tech/adopted/way-of-working.md`](.pair/tech/adopted/way-of-working.md) - Contains project management tool definition and methodology
+- [`.pair/adoption/tech/way-of-working.md`](.pair/adoption/tech/way-of-working.md) - Contains project management tool definition and methodology
 - [`.pair/product/adopted/PRD.md`](.pair/product/adopted/PRD.md) - Product Requirements Document containing business objectives and requirements
 - [`./02-how-to-complete-bootstrap-checklist.md`](./02-how-to-complete-bootstrap-checklist.md) - Process for collaborative tool selection when not pre-defined
-- [`.pair/product/backlog/01-initiatives/`](.pair/product/backlog/01-initiatives/) - Directory for storing initiative documentation (if using file system approach)
+- [`.pair/adoption/product/backlog/01-initiatives/`](.pair/adoption/product/backlog/01-initiatives/) - Directory for storing initiative documentation (if using file system approach)
 
 **Process Dependencies:**
 

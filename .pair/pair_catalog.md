@@ -1,10 +1,10 @@
 # Index of Markdown Files in .pair
 
-adopted_README.md: .pair/tech/adopted/README.md
-adopted_integration-process-standardization.md: .pair/tech/adopted/boundedcontext/integration-process-standardization.md
-adopted_way-of-working.md: .pair/tech/adopted/way-of-working.md
-architecture.md: .pair/tech/adopted/architecture.md
-boundedcontext_README.md: .pair/tech/adopted/boundedcontext/README.md
+adopted_README.md: .pair/adoption/tech/README.md
+adopted_integration-process-standardization.md: .pair/adoption/tech/boundedcontext/integration-process-standardization.md
+adopted_way-of-working.md: .pair/adoption/tech/way-of-working.md
+architecture.md: .pair/adoption/tech/architecture.md
+boundedcontext_README.md: .pair/adoption/tech/boundedcontext/README.md
 bootstrap-checklist.md: .pair/assets/bootstrap-checklist.md
 code-documentation-generation.md: .pair/product/adopted/subdomain/code-documentation-generation.md
 code-review-template.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/code-review-template.md
@@ -13,10 +13,10 @@ getting-started.md: .pair/getting-started.md
 github-projects-integration-guide.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/github-projects-integration-guide.md
 how-to-knowledge.md: .pair/product/adopted/subdomain/how-to-knowledge.md
 initiative-template.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md
-infrastructure.md: .pair/tech/adopted/infrastructure.md
+infrastructure.md: .pair/adoption/tech/infrastructure.md
 knowledge-base_README.md: .pair/tech/knowledge-base/README.md
-knowledge-base-management.md: .pair/tech/adopted/boundedcontext/knowledge-base-management.md
-knowledge-standards.md: .pair/tech/adopted/boundedcontext/knowledge-standards.md
+knowledge-base-management.md: .pair/adoption/tech/boundedcontext/knowledge-base-management.md
+knowledge-standards.md: .pair/adoption/tech/boundedcontext/knowledge-standards.md
 01-architectural-guidelines.md: .pair/tech/knowledge-base/01-architectural-guidelines.md
 02-code-design-guidelines.md: .pair/tech/knowledge-base/02-code-design-guidelines.md
 03-technical-guidelines.md: .pair/tech/knowledge-base/03-technical-guidelines.md

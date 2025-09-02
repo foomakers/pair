@@ -6,6 +6,7 @@
   "license": "MIT",
   "bin": {
     "lint": "./bin/lint.sh",
+    "lint-fix": "./bin/lint-fix.sh",
     "eslint": "./bin/eslint.sh"
   },
   "devDependencies": {

@@ -55,4 +55,4 @@ module.exports = {
 }
 ```
 
-See [Code Design Guidelines](../../.pair/tech/knowledge-base/02-code-design-guidelines.md#eslint-configuration) for more details.
+See [Code Design Guidelines](../...pair/knowledge/02-code-design-guidelines.md#eslint-configuration) for more details.

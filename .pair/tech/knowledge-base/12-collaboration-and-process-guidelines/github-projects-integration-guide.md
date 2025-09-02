@@ -133,7 +133,7 @@ Ensure the project management framework is loaded:
 cd /path/to/your/project
 
 # Verify pair configuration
-ls .pair/tech/adopted/way-of-working.md
+ls .pair/adoption/tech/way-of-working.md
 ```
 
 ---

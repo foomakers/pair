@@ -1,0 +1,59 @@
+{
+  "name": "@pair/content-ops",
+  "version": "0.0.1-wip",
+  "description": "Shared utilities for document file operations: copy/move and markdown link updates",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.js"
+    },
+    "./file-system": {
+      "types": "./dist/file-system/index.d.ts",
+      "import": "./dist/file-system/index.js",
+      "require": "./dist/file-system/index.js"
+    },
+    "./ops/SyncOptions": {
+      "types": "./dist/ops/SyncOptions.d.ts",
+      "import": "./dist/ops/SyncOptions.js",
+      "require": "./dist/ops/SyncOptions.js"
+    },
+    "./test-utils/in-memory-fs": {
+      "types": "./dist/test-utils/in-memory-fs.d.ts",
+      "import": "./dist/test-utils/in-memory-fs.js",
+      "require": "./dist/test-utils/in-memory-fs.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "prettier:fix": "prettier-fix",
+    "prettier:check": "prettier-check",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "ts:check": "tsc --noEmit",
+    "lint": "lint",
+    "lint:fix": "lint-fix"
+  },
+  "devDependencies": {
+    "@pair/eslint-config": "workspace:*",
+    "@pair/prettier-config": "workspace:*",
+    "@types/markdown-it": "catalog:",
+    "@types/mdast": "catalog:",
+    "@types/node": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "ts-node": "catalog:",
+    "typescript": "catalog:",
+    "vite-tsconfig-paths": "catalog:",
+    "vitest": "catalog:"
+  },
+  "dependencies": {
+    "markdown-it": "catalog:",
+    "mdast": "catalog:",
+    "remark-parse": "catalog:",
+    "unified": "catalog:"
+  },
+  "prettier": "@pair/prettier-config"
+}

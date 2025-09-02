@@ -6,21 +6,19 @@ const root = path.resolve(__dirname, '../../../')
 
 const read = (file: string) => fs.readFileSync(path.join(root, file), 'utf8')
 
-// RED phase: failing tests for lint/format scripts
-
 describe('Root package.json scripts', () => {
-  it('should have a lint script that runs ESLint with the shared config', () => {
+  it('should have a lint script that runs ESLint with turbo', () => {
     const pkg = JSON.parse(read('package.json'))
-    expect(pkg.scripts.lint).toMatch(/pnpm recursive run lint/)
+    expect(pkg.scripts.lint).toMatch(/turbo lint/)
   })
 
   it('should have a prettier:check script that checks formatting', () => {
     const pkg = JSON.parse(read('package.json'))
-    expect(pkg.scripts['prettier:check']).toMatch(/pnpm recursive run prettier:check/)
+    expect(pkg.scripts['prettier:check']).toMatch(/turbo prettier:check/)
   })
 
   it('should have a prettier:fix script that fix formatting', () => {
     const pkg = JSON.parse(read('package.json'))
-    expect(pkg.scripts['prettier:fix']).toMatch(/pnpm recursive run prettier:fix/)
+    expect(pkg.scripts['prettier:fix']).toMatch(/turbo prettier:fix/)
   })
 })

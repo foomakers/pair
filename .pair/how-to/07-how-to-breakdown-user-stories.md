@@ -42,10 +42,10 @@ Before starting, **read and consult the User Story Template**: [User Story Templ
 
 **Step 1: Tool Configuration Check**
 
-1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+1. **Read** [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md) to identify configured project management tool
 2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
 
-_"I cannot proceed because no project management tool is configured in [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+_"I cannot proceed because no project management tool is configured in [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
 
 **Step 2: Follow Tool-Specific Instructions**
 
@@ -56,17 +56,17 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **✅ PERMITTED ONLY when:**
 
-- Tool in [way-of-working.md](.pair/tech/adopted/way-of-working.md) = "filesystem"
+- Tool in [way-of-working.md](.pair/adoption/tech/way-of-working.md) = "filesystem"
 
 **🚫 PROHIBITED when:**
 
 - Any other tool is configured
-- **DO NOT** read [.pair/product/backlog/](.pair/product/backlog/) directories
+- **DO NOT** read [.pair/adoption/product/backlog/](.pair/adoption/product/backlog/) directories
 - **DO NOT** use filesystem as fallback
 
 ### **Validation Checklist**
 
-- [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
+- [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
 - [ ] [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
@@ -114,12 +114,12 @@ User story breakdown must follow this comprehensive[template](../tech/knowledge-
    - initiatives and epics are ready and documented in the chosen project management tool
    - `.pair/product/adopted/subdomain/`
    - `.pair/way-of-working.md`
-   - `.pair/tech/adopted/architecture.md`
-   - `.pair/tech/adopted/tech-stack.md`
-   - `.pair/tech/adopted/infrastructure.md`
-   - `.pair/tech/adopted/ux-ui.md`
-   - `.pair/tech/adopted/way-of-working.md`
-   - `.pair/tech/adopted/boundedcontext/`
+   - `.pair/adoption/tech/architecture.md`
+   - `.pair/adoption/tech/tech-stack.md`
+   - `.pair/adoption/tech/infrastructure.md`
+   - `.pair/adoption/tech/ux-ui.md`
+   - `.pair/adoption/tech/way-of-working.md`
+   - `.pair/adoption/tech/boundedcontext/`
 
 **AI Assistant Instructions:** Begin with comprehensive documentation analysis and epic selection:
 
@@ -718,15 +718,15 @@ _"All [X] user stories for Epic '[EPIC_NAME]' are documented and provide initial
 
 **Technical Context:**
 
-- `.pair/tech/adopted/architecture.md` - System architecture patterns affecting story scope
-- `.pair/tech/adopted/tech-stack.md` - Technology constraints and implementation considerations
-- `.pair/tech/adopted/ux-ui.md` - User interface patterns and interaction guidelines
-- `.pair/tech/adopted/way-of-working.md` - Technical workflow, tool configuration, and linking methodology
+- `.pair/adoption/tech/architecture.md` - System architecture patterns affecting story scope
+- `.pair/adoption/tech/tech-stack.md` - Technology constraints and implementation considerations
+- `.pair/adoption/tech/ux-ui.md` - User interface patterns and interaction guidelines
+- `.pair/adoption/tech/way-of-working.md` - Technical workflow, tool configuration, and linking methodology
 
 **Domain Context:**
 
 - `.pair/product/adopted/subdomain/` - Functional boundaries affecting story scope
-- `.pair/tech/adopted/boundedcontext/` - Technical boundaries affecting story integration
+- `.pair/adoption/tech/boundedcontext/` - Technical boundaries affecting story integration
 
 **Process Dependencies:**
 
@@ -734,7 +734,7 @@ _"All [X] user stories for Epic '[EPIC_NAME]' are documented and provide initial
 - **Input**: Selected epic serves as foundation for user story identification and scope definition
 - **Output**: User stories in backlog status ready for prioritization and future refinement
 - **Tool Integration**: All user stories must be properly documented in configured project management tool with correct hierarchy linking (Epic → User Story)
-- **Linking Methodology**: Follow the specific linking approach defined in `.pair/tech/adopted/way-of-working.md` for tool-specific relationship management
+- **Linking Methodology**: Follow the specific linking approach defined in `.pair/adoption/tech/way-of-working.md` for tool-specific relationship management
 - **Next Phase**: Stories ready for **How to Refine User Stories** process when selected for development
 
 **Related Documents:**

@@ -1,0 +1,33 @@
+{
+  "name": "@pair/knowledge-hub",
+  "version": "0.0.1-wip",
+  "description": "Centralized package for documentation, guides, configs, and static assets for pair.",
+  "private": true,
+  "files": [
+    "dataset"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && mkdir -p dist && cp -R dataset dist/dataset",
+    "prettier:fix": "prettier-fix",
+    "prettier:check": "prettier-check",
+    "test": "vitest run || true",
+    "test:coverage": "vitest run --coverage || true",
+    "ts:check": "tsc --noEmit",
+    "lint": "lint",
+    "lint:fix": "lint-fix",
+    "check:links": "ts-node src/check-broken-links.ts",
+    "transfer:dataset": "ts-node src/transfer-dataset.ts"
+  },
+  "devDependencies": {
+    "@pair/eslint-config": "workspace:*",
+    "@pair/prettier-config": "workspace:*",
+    "@pair/content-ops": "workspace:*",
+    "@types/node": "catalog:",
+    "vitest": "catalog:",
+    "vite-tsconfig-paths": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "typescript": "catalog:",
+    "ts-node": "catalog:"
+  },
+  "prettier": "@pair/prettier-config"
+}
