@@ -6,12 +6,18 @@
 **Initiative**: [Parent Initiative Name and Link]
 **Duration**: [X-Y sprints]
 **Business Value**: [User Experience | Feature Foundation | Integration | Performance]
-**Priority**: [P0 | P1 | P2]
+**Priority**: [P0 (Must-Have) | P1 (Should-Have) | P2 (Could-Have)]
+**State**: [Todo | In Progress | Done]
 **Planned Start**: [YYYY-MM-DD or TBP]
 **Planned End**: [YYYY-MM-DD or TBP]
-**Status**: [Not Started | In Progress | Completed]
 
 _Note: Set Planned Start and End dates only after detailed planning is completed. Use TBP (To Be Planned) for epics not yet planned._
+
+### State Management
+
+- **Todo**: Epic is defined but work has not started
+- **In Progress**: At least one user story is actively being worked on
+- **Done**: Epic delivered and accepted
 
 ## Epic Objective
 

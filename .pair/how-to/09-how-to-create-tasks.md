@@ -123,17 +123,15 @@ Task must follow this comprehensive [template](../tech/knowledge-base/12-collabo
 
 **Phase 0A: Current Backlog Analysis**
 
-1. **Review Current Backlog**: Examine all current sprint user stories in TODO status:
+1. **Priority-Based Story Selection**: Identify user stories ready for task breakdown following this priority order:
 
-   - Identify stories ready for task breakdown (status: TODO, refined, with acceptance criteria)
-   - Analyze story completeness and implementation readiness
-   - Review story priorities and sprint planning context
-   - Assess story dependencies and sequencing
+   - **Primary Target**: User stories in "Refined" state with highest priority (P0 > P1 > P2) that are not yet assigned
+   - **Secondary Option**: If no refined stories available, identify stories in "Todo" state that need refinement first
+   - **Story State Validation**: Confirm selected story is in "Refined" state and ready for task breakdown
+   - **Assignment Check**: Story should be unassigned and ready to be assigned to a developer
 
 Identify the current sprint based on the project management tool adopted [here](.pair/tech/adopted/way-of-working.md).
-If there are no current sprint user stories in TODO status, inform the user, propose backlog TODO status cards, and ask if they want and which card to move into the current sprint.
-If the project management tool is the file system, the card must be moved (not copied or recreated) from the backlog folder to the current sprint folder, ensuring the file is physically relocated and status updated.
-If the card is specified, proceed moving the card into the current sprint (ensure proper status updates).
+If there are no refined user stories available, inform the user about available Todo stories that need refinement first and inform you cannot proceed.
 
 2. **Study Technical Context**: Analyze all technical documentation:
 
@@ -148,22 +146,26 @@ If the card is specified, proceed moving the card into the current sprint (ensur
 
 3. **Propose Priority Story**: Based on backlog analysis, identify and propose highest-priority story for task breakdown:
 
-   _"I've analyzed the current backlog and technical context. Based on story readiness, priorities, and dependencies, I recommend creating tasks for User Story '[STORY_ID]: [STORY_NAME]' because [reasoning: priority, readiness, dependencies, sprint context]._
+   _"I've analyzed the current backlog and technical context. Based on story state, priorities, and assignment status, I recommend creating tasks for User Story '[STORY_ID]: [STORY_NAME]' because [reasoning: Refined state, priority level, assignment readiness]._
 
-   _Here are the TODO stories ready for task breakdown:_
+   _Here are the Refined stories ready for task breakdown:_
 
-   | Story ID  | Title   | Epic Context | Readiness    | Priority Reasoning               |
-   | --------- | ------- | ------------ | ------------ | -------------------------------- |
-   | [Story 1] | [Title] | [Epic]       | Ready        | [High priority, foundational]    |
-   | [Story 2] | [Title] | [Epic]       | Ready        | [Critical path dependency]       |
-   | [Story 3] | [Title] | [Epic]       | Needs review | [Acceptance criteria incomplete] |
+   | Story ID  | Title   | Epic Context | State   | Priority | Assignment Status |
+   | --------- | ------- | ------------ | ------- | -------- | ----------------- |
+   | [Story 1] | [Title] | [Epic]       | Refined | P0       | Unassigned        |
+   | [Story 2] | [Title] | [Epic]       | Refined | P1       | Unassigned        |
+   | [Story 3] | [Title] | [Epic]       | Todo    | P0       | Needs refinement  |
 
-   _This is a recommendation based on my analysis - we can create tasks for any TODO story you prefer. Which story would you like to break down into implementation tasks?"_
+   _Priority recommendation: Select highest priority (P0 > P1 > P2) Refined story that is unassigned. Which story would you like to break down into implementation tasks?"_
+
+   **User Confirmation Required**: _"I recommend User Story '[STORY_ID]: [STORY_NAME]' (Priority [P0/P1/P2]) for task breakdown. This story will deliver [brief story value] and is ready for implementation. Should I proceed with breaking down this story into development tasks?"_
 
 **Phase 0C: Selected Story Validation**
 
 4. **Verify Selected Story Readiness**: Once story is selected, confirm it's ready for task breakdown:
 
+   - **State Check**: Story must be in "Refined" state (not "Todo" or "In Progress")
+   - **Assignment Check**: Story should be unassigned and ready for assignment
    - Story has clear acceptance criteria
    - Story has been refined and sized
    - Story context includes epic and initiative linkage
@@ -172,7 +174,13 @@ If the card is specified, proceed moving the card into the current sprint (ensur
    - Story fits within sprint capacity
 
 **If Selected Story Not Ready:**
-_"I notice the selected story '[STORY_ID]' isn't fully refined or ready for task breakdown. The story needs [specific missing elements] before we can create implementation tasks. We can either complete the story refinement first, or select a different story that's ready for task breakdown. Would you prefer to refine this story or choose another ready story from the list?"_
+_"I notice the selected story '[STORY_ID]' is not in 'Refined' state and isn't ready for task breakdown. The story is currently in '[CURRENT_STATE]' state and needs [specific missing elements] before we can create implementation tasks._
+
+_**Next Steps Required:**_
+_- If story is in 'Todo' state: Complete story refinement process first using [08-how-to-refine-a-user-story.md](./08-how-to-refine-a-user-story.md)_
+_- If story is in 'In Progress' state: Story is already being developed - check existing tasks_
+
+_We can either complete the required process first, or select a different 'Refined' story that's ready for task breakdown. Would you prefer to refine this story or choose another ready story from the list?"_
 
 ## Technical Knowledge Base Integration
 
@@ -334,33 +342,7 @@ _"I've completed analysis of selected User Story '[STORY_ID]: [STORY_NAME]'. The
 
 **AI Assistant Instructions:** Present comprehensive task breakdown:
 
-1. **Create Task Overview**: Present organized task list:
-
-```markdown
-## Task Breakdown Summary
-
-### Frontend Tasks (estimated: X hours)
-
-- [ ] Create [component] following [UI standard reference]
-- [ ] Implement [interaction] using [pattern reference]
-- [ ] Add [validation] according to [guideline reference]
-
-### Backend Tasks (estimated: X hours)
-
-- [ ] Develop [API endpoint] following [API design reference]
-- [ ] Implement [business logic] using [architecture reference]
-- [ ] Create [data access] following [database pattern reference]
-
-### Integration Tasks (estimated: X hours)
-
-- [ ] Connect [systems] using [integration pattern reference]
-- [ ] Implement [data sync] following [workflow reference]
-
-### Testing Tasks (estimated: X hours)
-
-- [ ] Write [unit tests] following [testing guideline reference]
-- [ ] Create [integration tests] using [testing pattern reference]
-```
+1. **Create Task Overview**: Present organized task list following the [Task Template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/task-template.md) structure and format
 
 2. **Justify Task Boundaries**: Explain task organization:
 
@@ -541,6 +523,53 @@ _"All tasks for User Story '[STORY_ID]: [STORY_NAME]' are documented and ready f
 - [ ] Detailed task descriptions provide implementation guidance
 - [ ] Technical standard references include specific section links
 - [ ] Alternative solutions documented with ADR requirements
+- [ ] Bounded context impacts properly assessed and documented
+
+**Process Compliance:**
+
+- [ ] User story in "Refined" state before task breakdown
+- [ ] Story assigned to developer upon task completion
+- [ ] Story status updated to "In Progress" after task breakdown
+- [ ] Epic status properly maintained according to collaboration guidelines
+- [ ] Project management tool properly updated with all task details
+
+## State Management and Assignment
+
+### Final State Validation and Assignment
+
+**AI Assistant Instructions:** Complete the task breakdown process with proper state management:
+
+1. **Verify Task Completion**: Confirm all tasks are documented and ready for implementation
+2. **Append Task Breakdown to User Story**: Add checkable task list to the user story body without overwriting existing content
+3. **Assign Story to Developer**: Update the project management tool to assign the story to the developer who will implement it
+4. **Update Story Status**: Change story status from "Refined" to "In Progress" to indicate active development
+5. **Update Epic Status**: If this is the first story in the epic to move to "In Progress", update the parent epic status accordingly
+
+### Task Breakdown Documentation
+
+**AI Assistant Instructions:** Append task breakdown checklist to user story:
+
+1. **Preserve Existing Content**: Read current user story body and append task breakdown without overwriting any existing content
+2. **Add Task Breakdown Section**: Append task breakdown section following the [Task Template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/task-template.md) format
+3. **Maintain Task Traceability**: Each task in the checklist should include:
+   - **Task ID**: Unique identifier for progress tracking
+   - **Task Title**: Clear, descriptive title
+   - **Brief Description**: One-line summary of what needs to be implemented
+   - **Status**: Unchecked (will be checked when task is completed)
+
+**Reference**: Follow the complete [Task Template](../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/task-template.md) for proper task documentation format and structure.
+
+**State Update Validation:**
+_"✅ TASK BREAKDOWN COMPLETE: User Story '[STORY_ID]: [STORY_NAME]' has been broken down into [X] implementation tasks. Task breakdown checklist appended to user story body. The story has been assigned to [DEVELOPER] and status updated to 'In Progress'. Parent Epic '[EPIC_ID]' status updated accordingly. All tasks are documented and ready for implementation following the **How to Implement a Task** process."_
+
+**If Tool Cannot Update Status:**
+_"⚠️ ACTION REQUIRED: Task breakdown is complete, but I cannot update the story status in [TOOL_NAME]. Please manually:_
+_1. Assign User Story '[STORY_ID]' to [DEVELOPER]_
+_2. Change story status from 'Refined' to 'In Progress'_
+_3. Update parent Epic '[EPIC_ID]' status if this is the first active story_
+_4. Verify all task details are properly captured in the project management tool_
+_Once updated, the story will be ready for implementation."_
+
 - [ ] Acceptance criteria mapping maintained for traceability
 
 ### Story Coverage Validation

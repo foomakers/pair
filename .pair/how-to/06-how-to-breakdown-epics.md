@@ -236,17 +236,26 @@ This ensures clear navigation between initiatives, epics, and user stories in th
 
 ### Step 2: Initiative Selection
 
-**AI Assistant Instructions:** Propose initiative for epic breakdown:
+**AI Assistant Instructions:** Propose initiative for epic breakdown following priority order:
 
-1. **Identify Unprocessed Initiatives**: Review initiatives that haven't been broken down into epics yet
+1. **Priority-Based Initiative Selection**: Identify initiatives ready for epic breakdown following this priority order:
+
+   - **Primary Target**: Initiatives in "Todo" state with highest priority (P0 > P1 > P2) that have not been broken down into epics yet
+   - **Avoid**: Initiatives already in "In Progress" or "Done" state (these should already have epic breakdowns)
+
 2. **Apply Selection Criteria**:
-   - **Priority**: Start with P0 initiatives
-   - **Dependencies**: Consider initiative dependencies
+
+   - **Priority**: Start with P0 initiatives, then P1, then P2
+   - **State**: Only select initiatives in "Todo" state
+   - **Dependencies**: Consider initiative dependencies and readiness
    - **Team Readiness**: Assess technical and business readiness
+
 3. **Make Recommendation**: Propose specific initiative with clear rationale
 
 **Initiative Proposal:**
-_"Based on my analysis, I recommend breaking down '[INITIATIVE_NAME]' next because: [specific reasons - priority, dependencies, readiness]. This initiative aims to [brief objective] and is currently [status]. Does this align with your development priorities, or would you prefer to focus on a different initiative?"_
+_"Based on my analysis, I recommend breaking down Initiative '[INITIATIVE_NAME]' (Priority: [P0/P1/P2], State: Todo) next because: [specific reasons - highest priority, not yet broken down, ready for epic breakdown]. This initiative aims to [brief objective]. Does this align with your development priorities, or would you prefer to focus on a different Todo initiative?"_
+
+**User Confirmation Required**: _"I've identified Initiative '[INITIATIVE_NAME]' (Priority [P0/P1/P2]) for epic breakdown. This initiative will deliver [brief initiative value] and scope includes [estimated scope]. Should I proceed with breaking down this initiative into epics?"_
 
 ### Step 3: Initiative Analysis and Epic Identification
 
@@ -370,15 +379,25 @@ _"Here's the detailed breakdown for Epic 1: [NAME]. I've focused on [key aspects
 - [ ] Status tracking configured
 - [ ] All stakeholders have access
 
-### Step 8: Epic Sequence Finalization
+### Step 8: Epic Sequence Finalization and State Management
 
-**AI Assistant Instructions:** Complete the epic breakdown process:
+**AI Assistant Instructions:** Complete the epic breakdown process with proper state management:
 
 1. **Verify Complete Breakdown**: Confirm all epics are documented
 2. **Validate Sequence Logic**: Ensure execution order makes sense
 3. **Check Initiative Coverage**: Verify epics fully deliver initiative objectives
-4. **Update Initiative Status**: Mark initiative as "ready for development"
+4. **Update Initiative Status**: Change initiative status from "Todo" to "In Progress" since epics are ready for user story breakdown
 5. **Prepare Handoff**: Ready for user story breakdown phase
+
+**State Update Validation:**
+_"✅ EPIC BREAKDOWN COMPLETE: Initiative '[INITIATIVE_NAME]' has been broken down into [X] epics. Initiative status updated from 'Todo' to 'In Progress'. All epics are documented and ready for user story breakdown following the **How to Breakdown User Stories** process."_
+
+**If Tool Cannot Update Status:**
+_"⚠️ ACTION REQUIRED: Epic breakdown is complete, but I cannot update the initiative status in [TOOL_NAME]. Please manually:_
+_1. Change Initiative '[INITIATIVE_NAME]' status from 'Todo' to 'In Progress'_
+_2. Verify all epic details are properly captured and linked in the project management tool_
+_3. Ensure epic sequence and dependencies are clearly documented_
+_Once updated, the initiative will be ready for user story breakdown."_
 
 **Completion Summary:**
 _"All epics for '[INITIATIVE_NAME]' are now documented and ready for development. The breakdown includes [X] epics spanning [duration] sprints. Each epic delivers specific user value and follows logical execution sequence. The initiative is now ready for user story breakdown when you're ready to start development."_
@@ -503,7 +522,8 @@ _"All epics for '[INITIATIVE_NAME]' are now documented and ready for development
 - **Prerequisites**: Bootstrap checklist must be completed before epic breakdown
 - **Input**: Strategic initiatives serve as the foundation for epic identification
 - **Output**: Epics serve as input for user story breakdown phase
+- **Next Phase**: User stories must be refined (status: "Refined") before technical development can begin
 - **Tool Integration**: All epics must be properly documented in configured project management tool with correct hierarchy linking (Initiative → Epic → User Story)
 - **Linking Methodology**: Follow the specific linking approach defined in `.pair/tech/adopted/way-of-working.md` for tool-specific relationship management
 
-This guide ensures a thorough, collaborative process that produces high-quality Epic breakdowns ready for user story development and successful incremental value delivery.
+This guide ensures a thorough, collaborative process that produces high-quality Epic breakdowns ready for user story development. **Important**: After user story breakdown, each story must go through the refinement process to reach "Refined" status before technical implementation can begin.

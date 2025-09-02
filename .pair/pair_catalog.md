@@ -10,6 +10,7 @@ code-documentation-generation.md: .pair/product/adopted/subdomain/code-documenta
 code-review-template.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/code-review-template.md
 collaborative-workflow.md: .pair/product/adopted/subdomain/collaborative-workflow.md
 getting-started.md: .pair/getting-started.md
+github-projects-integration-guide.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/github-projects-integration-guide.md
 how-to-knowledge.md: .pair/product/adopted/subdomain/how-to-knowledge.md
 initiative-template.md: .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md
 infrastructure.md: .pair/tech/adopted/infrastructure.md

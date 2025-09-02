@@ -103,12 +103,12 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **Phase 0A: Backlog Story Analysis**
 
-1. **Analyze Available Stories**: Review all user stories in backlog status:
+1. **Priority-Based Story Selection**: Identify user stories ready for refinement following this priority order:
 
-   - Group stories by parent epic
-   - Assess story priority levels within epics
-   - Identify story dependencies and logical groupings
-   - Evaluate story readiness for refinement
+   - **Primary Target**: User stories in "Todo" state with highest priority (P0 > P1 > P2)
+   - **Epic Context**: Focus on stories from epics ready for development
+   - **Dependencies**: Consider story dependencies and logical refinement sequences
+   - **Sprint Readiness**: Prioritize stories needed for upcoming sprint planning
 
 2. **Epic-Based Grouping**: Organize stories by epic context:
 
@@ -118,7 +118,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
    - Cross-story considerations and shared components
 
 3. **Priority Assessment**: Evaluate refinement candidates based on:
-   - Business priority and user value urgency
+   - Business priority (P0 > P1 > P2) and user value urgency
    - Epic progress and milestone requirements
    - Technical dependency sequencing
    - Team capacity and sprint planning needs
@@ -127,7 +127,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 4. **Propose Priority Stories**: Based on analysis, recommend specific stories for refinement:
 
-   _"I've analyzed all backlog stories and identified refinement opportunities. Based on priority, dependencies, and logical grouping, I recommend refining these stories from Epic '[EPIC_NAME]':_
+   _"I've analyzed all todo stories and identified refinement opportunities. Based on priority, dependencies, and logical grouping, I recommend refining these stories from Epic '[EPIC_NAME]':_
 
    **Recommended for Refinement:**
 
@@ -139,10 +139,12 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
    _This grouping allows focused refinement of related functionality while maintaining development flow. Would you like to proceed with this selection, or would you prefer to refine different stories?"_
 
+   **User Confirmation Required**: _"I recommend refining User Story '[STORY_CODE]: [STORY_NAME]' (Priority [P0/P1/P2]) next. This story will deliver [brief story value] and is ready for detailed refinement. Should I proceed with refining this story?"_
+
 5. **Handle Ad-hoc Story Requests**: Support developer-driven story selection:
    - Accept specific story requests even if not highest priority
    - Provide analysis views for developer decision-making
-   - Offer refinement guidance for any valid backlog story
+   - Offer refinement guidance for any valid todo story
 
 ### Story Analysis Views for Decision Support
 
@@ -158,7 +160,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 | Status      | Story Count | Story Points | Stories                      |
 | ----------- | ----------- | ------------ | ---------------------------- |
 | Refined     | X           | XX           | [List completed stories]     |
-| Backlog     | Y           | YY           | [List remaining stories]     |
+| Todo        | Y           | YY           | [List remaining stories]     |
 | In Progress | Z           | ZZ           | [List stories being refined] |
 
 **Next Logical Stories for Refinement**: [Recommendations based on dependencies and flow]
@@ -167,7 +169,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 #### Priority and Dependency View
 
 ```markdown
-## Backlog Stories - Priority and Dependency Analysis
+## Todo Stories - Priority and Dependency Analysis
 
 **High Priority Ready for Refinement:**
 
@@ -413,7 +415,7 @@ _This split enables incremental value delivery while maintaining manageable spri
 
 2. **Tool Integration Updates**: Update project management tool:
 
-   - Change story status to "To Do"
+   - **CRITICAL: Change story status to "Refined"** to indicate refinement completion and readiness for development
    - Update story points with refined estimates
    - Add technical notes and implementation details
    - Configure dependencies and team coordination metadata
@@ -425,7 +427,7 @@ _This split enables incremental value delivery while maintaining manageable spri
    - Ensure all questions and uncertainties resolved
 
 **Story Refinement Completion:**
-_"User Story [STORY_CODE] refinement is complete. The story now includes comprehensive acceptance criteria, detailed technical analysis, and validated sprint-readiness. Story effort is estimated at [X points] and fits within single sprint capacity [or has been split appropriately]. All refinement artifacts are documented and the story is ready for sprint planning selection."_
+_"User Story [STORY_CODE] refinement is complete and status updated to 'Refined'. The story now includes comprehensive acceptance criteria, detailed technical analysis, and validated sprint-readiness. Story effort is estimated at [X points] and fits within single sprint capacity [or has been split appropriately]. All refinement artifacts are documented and the story is ready for sprint planning selection and technical development."_
 
 ### Step 8: Refinement Quality Validation
 
@@ -633,7 +635,28 @@ When refining workspace setup and technical foundation stories:
 - **Input**: User stories with initial scope and rough sizing from breakdown
 - **Output**: Development-ready stories with comprehensive acceptance criteria and technical analysis
 - **Tool Integration**: Update project management tool with refined story information and ready status
+- **State Management**: Update story status from "Todo" to "Refined" upon completion
 - **Next Phase**: Stories ready for sprint planning and development execution
+
+## State Management and Completion
+
+### Final State Validation and Updates
+
+**AI Assistant Instructions:** Complete the refinement process with proper state management:
+
+1. **Verify Refinement Completion**: Confirm all refinement areas are thoroughly addressed
+2. **Update Story Status**: Change story status from "Todo" to "Refined" to indicate readiness for task breakdown and development
+3. **Update Epic Status**: Ensure parent epic status is properly maintained according to collaboration guidelines
+
+**State Update Validation:**
+_"✅ REFINEMENT COMPLETE: User Story '[STORY_ID]: [STORY_NAME]' has been fully refined with comprehensive acceptance criteria and technical analysis. Story status updated from 'Todo' to 'Refined'. The story is now ready for task breakdown following the **How to Create Tasks** process."_
+
+**If Tool Cannot Update Status:**
+_"⚠️ ACTION REQUIRED: Story refinement is complete, but I cannot update the story status in [TOOL_NAME]. Please manually:_
+_1. Change User Story '[STORY_ID]' status from 'Todo' to 'Refined'_
+_2. Verify all refinement details are properly captured in the project management tool_
+_3. Ensure acceptance criteria and technical analysis are documented_
+_Once updated, the story will be ready for task breakdown and development."_
 
 **Related Documents:**
 

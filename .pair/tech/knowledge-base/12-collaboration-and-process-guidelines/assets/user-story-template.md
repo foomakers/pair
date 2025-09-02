@@ -17,8 +17,15 @@
 ## Epic Context
 
 **Parent Epic**: [Epic Name and Link]
-**Status**: [Backlog]
-**Priority**: [High | Medium | Low]
+**Status**: [Todo | Refined | In Progress | Done]
+**Priority**: [P0 (Must-Have) | P1 (Should-Have) | P2 (Could-Have)]
+
+### Status Workflow
+
+- **Todo**: Story is created but not yet refined
+- **Refined**: Story is detailed, estimated, and ready for development
+- **In Progress**: Story is actively being developed
+- **Done**: Story delivered and accepted
 
 ## User Value
 
@@ -88,8 +95,14 @@
 ## Epic Context
 
 **Parent Epic**: [Epic Name and Link]
-**Status**: [Backlog | In Refinement | To Do]
-**Priority**: [High | Medium | Low] (confirmed during refinement)
+**Status**: [Refined | In Progress | Done]
+**Priority**: [P0 (Must-Have) | P1 (Should-Have) | P2 (Could-Have)] (confirmed during refinement)
+
+### Status Workflow
+
+- **Refined**: Story is detailed, estimated, and ready for development
+- **In Progress**: Story is actively being developed
+- **Done**: Story delivered and accepted
 
 ## Acceptance Criteria
 

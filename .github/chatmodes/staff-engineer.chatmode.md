@@ -22,7 +22,7 @@ tools: [
     'runTasks',
     'github',
   ]
-model: Claude Sonnet 4
+model: GPT-4.1
 
 ---
 
