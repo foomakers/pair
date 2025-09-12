@@ -17,7 +17,7 @@ tools: [
     'runCommands',
     'github'
   ]
-model: GPT-4.1
+model: GPT-5 mini
 ---
 
 # Product Manager Chatmode

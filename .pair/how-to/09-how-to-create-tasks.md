@@ -43,10 +43,10 @@ Before starting, **read and consult the Task Template**: [Task Template](../tech
 
 **Step 1: Tool Configuration Check**
 
-1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+1. **Read** [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md) to identify configured project management tool
 2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
 
-_"I cannot proceed because no project management tool is configured in [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+_"I cannot proceed because no project management tool is configured in [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
 
 **Step 2: Follow Tool-Specific Instructions**
 
@@ -57,17 +57,17 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **✅ PERMITTED ONLY when:**
 
-- Tool in [way-of-working.md](.pair/tech/adopted/way-of-working.md) = "filesystem"
+- Tool in [way-of-working.md](.pair/adoption/tech/way-of-working.md) = "filesystem"
 
 **🚫 PROHIBITED when:**
 
 - Any other tool is configured
-- **DO NOT** read [.pair/product/backlog/](.pair/product/backlog/) directories
+- **DO NOT** read [.pair/adoption/product/backlog/](.pair/adoption/product/backlog/) directories
 - **DO NOT** use filesystem as fallback
 
 ### **Validation Checklist**
 
-- [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
+- [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
 - [ ] [Collaboration Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
@@ -99,7 +99,7 @@ A **Task from a User Story** is a **specific implementation step** that:
 
 **Project Management Tool Usage**
 
-Before documenting tasks, identify the configured project management tool as specified in `.pair/tech/adopted/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` for interfacing, linking items, and managing task records. Please refer to this documentation any time the guide asks for project management tool actions.
+Before documenting tasks, identify the configured project management tool as specified in `.pair/adoption/tech/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` for interfacing, linking items, and managing task records. Please refer to this documentation any time the guide asks for project management tool actions.
 
 ---
 
@@ -130,16 +130,16 @@ Task must follow this comprehensive [template](../tech/knowledge-base/12-collabo
    - **Story State Validation**: Confirm selected story is in "Refined" state and ready for task breakdown
    - **Assignment Check**: Story should be unassigned and ready to be assigned to a developer
 
-Identify the current sprint based on the project management tool adopted [here](.pair/tech/adopted/way-of-working.md).
+Identify the current sprint based on the project management tool adopted [here](.pair/adoption/tech/way-of-working.md).
 If there are no refined user stories available, inform the user about available Todo stories that need refinement first and inform you cannot proceed.
 
 2. **Study Technical Context**: Analyze all technical documentation:
 
-   - **Architecture Patterns**: Review `.pair/tech/adopted/architecture.md` for system design patterns
-   - **Tech Stack Standards**: Study `.pair/tech/adopted/tech-stack.md` for technology choices
-   - **Infrastructure Guidelines**: Examine `.pair/tech/adopted/infrastructure.md` for deployment patterns
-   - **UX/UI Standards**: Review `.pair/tech/adopted/ux-ui.md` for interface guidelines
-   - **Domain Boundaries**: Understand `.pair/product/adopted/subdomain/` and `.pair/tech/adopted/boundedcontext/` definitions
+   - **Architecture Patterns**: Review `.pair/adoption/tech/architecture.md` for system design patterns
+   - **Tech Stack Standards**: Study `.pair/adoption/tech/tech-stack.md` for technology choices
+   - **Infrastructure Guidelines**: Examine `.pair/adoption/tech/infrastructure.md` for deployment patterns
+   - **UX/UI Standards**: Review `.pair/adoption/tech/ux-ui.md` for interface guidelines
+   - **Domain Boundaries**: Understand `.pair/product/adopted/subdomain/` and `.pair/adoption/tech/boundedcontext/` definitions
    - **Knowledge Base**: Review `.pair/tech/knowledge-base/README.md` and all referenced technical guidelines
 
 **Phase 0B: Story Selection and Proposal**
@@ -295,10 +295,10 @@ _"I've completed analysis of selected User Story '[STORY_ID]: [STORY_NAME]'. The
 
 3. **Reference Technical Standards**: For each task area, identify applicable guidelines:
 
-   - Architecture patterns from `.pair/tech/adopted/architecture.md`
-   - Technology choices from `.pair/tech/adopted/tech-stack.md`
-   - UI/UX standards from `.pair/tech/adopted/ux-ui.md`
-   - Infrastructure requirements from `.pair/tech/adopted/infrastructure.md`
+   - Architecture patterns from `.pair/adoption/tech/architecture.md`
+   - Technology choices from `.pair/adoption/tech/tech-stack.md`
+   - UI/UX standards from `.pair/adoption/tech/ux-ui.md`
+   - Infrastructure requirements from `.pair/adoption/tech/infrastructure.md`
    - Domain boundaries from subdomain and bounded context definitions
 
 4. **Apply Knowledge Base Guidelines**: Reference specific implementation approaches:
@@ -510,10 +510,10 @@ _"All tasks for User Story '[STORY_ID]: [STORY_NAME]' are documented and ready f
 
 **Technical Standards Compliance:**
 
-- [ ] **Architecture**: Tasks follow patterns from `.pair/tech/adopted/architecture.md`
-- [ ] **Tech Stack**: Tasks use technologies specified in `.pair/tech/adopted/tech-stack.md`
-- [ ] **UX/UI**: Tasks implement patterns from `.pair/tech/adopted/ux-ui.md`
-- [ ] **Infrastructure**: Tasks align with `.pair/tech/adopted/infrastructure.md` requirements
+- [ ] **Architecture**: Tasks follow patterns from `.pair/adoption/tech/architecture.md`
+- [ ] **Tech Stack**: Tasks use technologies specified in `.pair/adoption/tech/tech-stack.md`
+- [ ] **UX/UI**: Tasks implement patterns from `.pair/adoption/tech/ux-ui.md`
+- [ ] **Infrastructure**: Tasks align with `.pair/adoption/tech/infrastructure.md` requirements
 - [ ] **Domain**: Tasks respect boundaries from subdomain and bounded context definitions
 - [ ] **Knowledge Base**: Tasks reference specific guidelines from `.pair/tech/knowledge-base/`
 
@@ -646,41 +646,41 @@ _Once updated, the story will be ready for implementation."_
 
 **Technical Context:**
 
-- `.pair/tech/adopted/architecture.md` - System architecture patterns and design decisions
-- `.pair/tech/adopted/tech-stack.md` - Technology choices and implementation standards
-- `.pair/tech/adopted/infrastructure.md` - Infrastructure and deployment requirements
-- `.pair/tech/adopted/ux-ui.md` - User interface patterns and interaction guidelines
-- `.pair/tech/adopted/way-of-working.md` - Technical workflow and tool configuration
+- `.pair/adoption/tech/architecture.md` - System architecture patterns and design decisions
+- `.pair/adoption/tech/tech-stack.md` - Technology choices and implementation standards
+- `.pair/adoption/tech/infrastructure.md` - Infrastructure and deployment requirements
+- `.pair/adoption/tech/ux-ui.md` - User interface patterns and interaction guidelines
+- `.pair/adoption/tech/way-of-working.md` - Technical workflow and tool configuration
 
 **Domain Context:**
 
 - `.pair/product/adopted/subdomain/` - Functional boundaries affecting task scope
-- `.pair/tech/adopted/boundedcontext/` - Technical boundaries affecting implementation
+- `.pair/adoption/tech/boundedcontext/` - Technical boundaries affecting implementation
 
 **Knowledge Base (Complete Technical Guidelines):**
 
 ### 🏗️ Architecture & Design
 
-- **[01-architectural-guidelines.md](01-architectural-guidelines.md)** - System architecture patterns, bounded contexts, and ADR processes
-- **[02-code-design-guidelines.md](02-code-design-guidelines.md)** - Code organization, design patterns, and implementation standards
+- **[01-architectural-guidelines.md](.pair/tech/knowledge-base/01-architectural-guidelines.md))** - System architecture patterns, bounded contexts, and ADR processes
+- **[02-code-design-guidelines.md](.pair/tech/knowledge-base/02-code-design-guidelines.md)** - Code organization, design patterns, and implementation standards
 
 ### ⚙️ Technical Implementation
 
-- **[03-technical-guidelines.md](03-technical-guidelines.md)** - Tech stack, development tools, and feature flag management
-- **[04-infrastructure-guidelines.md](04-infrastructure-guidelines.md)** - Deployment strategies, environment management, and CI/CD
+- **[03-technical-guidelines.md](.pair/tech/knowledge-base/03-technical-guidelines.md)** - Tech stack, development tools, and feature flag management
+- **[04-infrastructure-guidelines.md](.pair/tech/knowledge-base/04-infrastructure-guidelines.md)** - Deployment strategies, environment management, and CI/CD
 
 ### 🎨 User Experience & Quality
 
-- **[05-ux-guidelines.md](05-ux-guidelines.md)** - User experience standards and design principles
-- **[06-definition-of-done.md](06-definition-of-done.md)** - Quality criteria and completion standards
-- **[07-testing-strategy.md](07-testing-strategy.md)** - Testing frameworks, strategies, and quality gates
+- **[05-ux-guidelines.md](.pair/tech/knowledge-base/05-ux-guidelines.md)** - User experience standards and design principles
+- **[06-definition-of-done.md](.pair/tech/knowledge-base/06-definition-of-done.md)** - Quality criteria and completion standards
+- **[07-testing-strategy.md](.pair/tech/knowledge-base/07-testing-strategy.md)** - Testing frameworks, strategies, and quality gates
 
 ### 🔒 Security & Performance
 
-- **[08-accessibility-guidelines.md](08-accessibility-guidelines.md)** - Accessibility standards and compliance requirements
-- **[09-performance-guidelines.md](09-performance-guidelines.md)** - Performance optimization and monitoring strategies
-- **[10-security-guidelines.md](10-security-guidelines.md)** - Security implementation and best practices
-- **[11-observability-guidelines.md](11-observability-guidelines.md)** - Monitoring, logging, and tracing strategies
+- **[08-accessibility-guidelines.md](.pair/tech/knowledge-base/08-accessibility-guidelines.md)** - Accessibility standards and compliance requirements
+- **[09-performance-guidelines.md](.pair/tech/knowledge-base/09-performance-guidelines.md)** - Performance optimization and monitoring strategies
+- **[10-security-guidelines.md](.pair/tech/knowledge-base/10-security-guidelines.md)** - Security implementation and best practices
+- **[11-observability-guidelines.md](.pair/tech/knowledge-base/11-observability-guidelines.md)** - Monitoring, logging, and tracing strategies
 
 **Process Dependencies:**
 

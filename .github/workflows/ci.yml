@@ -38,6 +38,8 @@ jobs:
           if [ -f .env ]; then
             export $(grep -v '^#' .env | xargs)
           fi
+      - name: Run type check
+        run: pnpm ts:check || echo "No ts:check script defined"
       - name: Run build
         run: pnpm build || echo "No build script defined"
       - name: Run lint

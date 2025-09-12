@@ -7,7 +7,7 @@ This guide enables Product Software Engineers and AI assistants to collaborative
 **Important:**
 
 - The pull request must be created **before** the code review process begins (see [How to Code Review](13-how-to-code-review.md)).
-- **If the team adoption in `.pair/tech/adopted/way-of-working.md` specifies that the branch must be merged with a single squashed commit**, you must squash all changes into one commit before creating the PR, following the conventions and templates in [How to Commit and Push](11-how-to-commit-and-push.md).
+- **If the team adoption in `.pair/adoption/tech/way-of-working.md` specifies that the branch must be merged with a single squashed commit**, you must squash all changes into one commit before creating the PR, following the conventions and templates in [How to Commit and Push](11-how-to-commit-and-push.md).
 
 **Key Benefits of Structured Pull Request Creation:**
 
@@ -49,10 +49,10 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 **Step 1: Tool Configuration Check**
 
-1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+1. **Read** [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md) to identify configured project management tool
 2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
 
-_"I cannot proceed because no project management tool is configured in [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+_"I cannot proceed because no project management tool is configured in [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
 
 **Step 2: Follow Tool-Specific Instructions**
 
@@ -63,17 +63,17 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **✅ PERMITTED ONLY when:**
 
-- Tool in [way-of-working.md](.pair/tech/adopted/way-of-working.md) = "filesystem"
+- Tool in [way-of-working.md](.pair/adoption/tech/way-of-working.md) = "filesystem"
 
 **🚫 PROHIBITED when:**
 
 - Any other tool is configured
-- **DO NOT** read [.pair/product/backlog/](.pair/product/backlog/) directories
+- **DO NOT** read [.pair/adoption/product/backlog/](.pair/adoption/product/backlog/) directories
 - **DO NOT** use filesystem as fallback
 
 ### **Validation Checklist**
 
-- [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
+- [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
 - [ ] [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
@@ -157,7 +157,7 @@ A **Pull Request** is the **code review preparation phase** where:
 
    ```bash
    # Check team's adopted way-of-working for project management tool
-   WAY_OF_WORKING_FILE=".pair/tech/adopted/way-of-working.md"
+   WAY_OF_WORKING_FILE=".pair/adoption/tech/way-of-working.md"
    if [ -f "$WAY_OF_WORKING_FILE" ]; then
        echo "Loading project management configuration from: $WAY_OF_WORKING_FILE"
        # Extract project management tool configuration
@@ -168,7 +168,7 @@ A **Pull Request** is the **code review preparation phase** where:
 
    _"Checking team's adopted way-of-working for project management configuration..."_
 
-   - Detected Tool: [TOOL_NAME] (e.g., Jira, Azure DevOps, GitHub Projects, File System from .pair/tech/adopted/way-of-working.md)
+   - Detected Tool: [TOOL_NAME] (e.g., Jira, Azure DevOps, GitHub Projects, File System from .pair/adoption/tech/way-of-working.md)
 
 5. **Load User Story Context Using Configured Tool**: Extract story context based on tool configuration.
 
@@ -214,7 +214,7 @@ A **Pull Request** is the **code review preparation phase** where:
    - Task references found: [TASK_REFERENCES]
    - Implementation scope from commits: [COMMIT_SCOPE]
 
-   **Recommendation**: Consider configuring project management tool integration in `.pair/tech/adopted/way-of-working.md` for better story context loading."\_
+   **Recommendation**: Consider configuring project management tool integration in `.pair/adoption/tech/way-of-working.md` for better story context loading."\_
 
 **Phase 0C: Previous Pull Request Pattern Analysis**
 
@@ -256,7 +256,7 @@ A **Pull Request** is the **code review preparation phase** where:
    # Check for GitHub PR template
    ls -la .github/pull_request_template.md .github/PULL_REQUEST_TEMPLATE.md
    # Check for team-adopted PR templates
-   ls -la .pair/tech/adopted/pr-template.md .pair/templates/pull-request.md
+   ls -la .pair/adoption/tech/pr-template.md .pair/templates/pull-request.md
    ```
 
 2. **Generate PR Description Using Template**: Follow established format or create comprehensive description:
@@ -521,7 +521,7 @@ A **Pull Request** is the **code review preparation phase** where:
 
    ```bash
    # Check configured project management tool
-   WAY_OF_WORKING_FILE=".pair/tech/adopted/way-of-working.md"
+   WAY_OF_WORKING_FILE=".pair/adoption/tech/way-of-working.md"
    # Extract tool configuration from adoptions
    ```
 
@@ -613,7 +613,7 @@ A **Pull Request** is the **code review preparation phase** where:
    - PR Reference: Add #[PR_NUMBER] to story/task description
    - Epic Progress: Manually update [EPIC_ID] progress
 
-   **Recommendation**: Check tool configuration in `.pair/tech/adopted/way-of-working.md` and verify API credentials or permissions."\_
+   **Recommendation**: Check tool configuration in `.pair/adoption/tech/way-of-working.md` and verify API credentials or permissions."\_
 
 ## Communication and Notification Protocols
 
@@ -1354,21 +1354,21 @@ Documentation updates for [Component/Feature/Process] to improve [user experienc
 
 ### ⚙️ Technical Implementation
 
-- **[03-technical-guidelines.md](../../tech/knowledge-base/03-technical-guidelines.md)** - Tech stack, development tools, and feature flag management
-- **[04-infrastructure-guidelines.md](../../tech/knowledge-base/04-infrastructure-guidelines.md)** - Deployment strategies, environment management, and CI/CD
+- **[03-technical-guidelines.md](.pair/tech/knowledge-base/../../tech/knowledge-base/03-technical-guidelines.md)** - Tech stack, development tools, and feature flag management
+- **[04-infrastructure-guidelines.md](.pair/tech/knowledge-base/../../tech/knowledge-base/04-infrastructure-guidelines.md)** - Deployment strategies, environment management, and CI/CD
 
 ### 🎨 User Experience & Quality
 
-- **[05-ux-guidelines.md](../../tech/knowledge-base/05-ux-guidelines.md)** - User experience standards and design principles
-- **[06-definition-of-done.md](../../tech/knowledge-base/06-definition-of-done.md)** - Quality criteria and completion standards
-- **[07-testing-strategy.md](../../tech/knowledge-base/07-testing-strategy.md)** - Testing frameworks, strategies, and quality gates
+- **[05-ux-guidelines.md](.pair/tech/knowledge-base/../../tech/knowledge-base/05-ux-guidelines.md)** - User experience standards and design principles
+- **[06-definition-of-done.md](.pair/tech/knowledge-base/../../tech/knowledge-base/06-definition-of-done.md)** - Quality criteria and completion standards
+- **[07-testing-strategy.md](.pair/tech/knowledge-base/../../tech/knowledge-base/07-testing-strategy.md)** - Testing frameworks, strategies, and quality gates
 
 ### 🔒 Security & Performance
 
-- **[08-accessibility-guidelines.md](../../tech/knowledge-base/08-accessibility-guidelines.md)** - Accessibility standards and compliance requirements
-- **[09-performance-guidelines.md](../../tech/knowledge-base/09-performance-guidelines.md)** - Performance optimization and monitoring strategies
-- **[10-security-guidelines.md](../../tech/knowledge-base/10-security-guidelines.md)** - Security implementation and best practices
-- **[11-observability-guidelines.md](../../tech/knowledge-base/11-observability-guidelines.md)** - Monitoring, logging, and tracing strategies
+- **[08-accessibility-guidelines.md](.pair/tech/knowledge-base/../../tech/knowledge-base/08-accessibility-guidelines.md)** - Accessibility standards and compliance requirements
+- **[09-performance-guidelines.md](.pair/tech/knowledge-base/../../tech/knowledge-base/09-performance-guidelines.md)** - Performance optimization and monitoring strategies
+- **[10-security-guidelines.md](.pair/tech/knowledge-base/../../tech/knowledge-base/10-security-guidelines.md)** - Security implementation and best practices
+- **[11-observability-guidelines.md](.pair/tech/knowledge-base/../../tech/knowledge-base/11-observability-guidelines.md)** - Monitoring, logging, and tracing strategies
 
 **Process Dependencies:**
 
@@ -1382,4 +1382,4 @@ Documentation updates for [Component/Feature/Process] to improve [user experienc
 ## Related Documents
 
 - Previous: [How to Commit and Push](11-how-to-commit-and-push.md)
-- Next: [How to Create a Code Review](12-how-to-create-a-code-review.md)
+- Next: [How to Create a Code Review](13-how-to-code-review.md)

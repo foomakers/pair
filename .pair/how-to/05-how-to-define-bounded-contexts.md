@@ -33,10 +33,10 @@ The AI assistant acts as a **Strategic Context Architect** with the following re
 
 **Step 1: Tool Configuration Check**
 
-1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+1. **Read** [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md) to identify configured project management tool
 2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
 
-_"I cannot proceed because no project management tool is configured in [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+_"I cannot proceed because no project management tool is configured in [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
 
 **Step 2: Follow Tool-Specific Instructions**
 
@@ -45,7 +45,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 ### **Validation Checklist**
 
-- [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
+- [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
 - [ ] [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
@@ -66,21 +66,21 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 2. **Review Technical Architecture**:
 
-   - Examine [`.pair/tech/adopted/architecture.md`](.pair/tech/adopted/architecture.md) for system structure
-   - Review [`.pair/tech/adopted/tech-stack.md`](.pair/tech/adopted/tech-stack.md) for technology constraints
-   - Analyze [`.pair/tech/adopted/infrastructure.md`](.pair/tech/adopted/infrastructure.md) for deployment patterns
-   - Consider [`.pair/tech/adopted/ux-ui.md`](.pair/tech/adopted/ux-ui.md) for user interface boundaries
+   - Examine [`.pair/adoption/tech/architecture.md`](.pair/adoption/tech/architecture.md) for system structure
+   - Review [`.pair/adoption/tech/tech-stack.md`](.pair/adoption/tech/tech-stack.md) for technology constraints
+   - Analyze [`.pair/adoption/tech/infrastructure.md`](.pair/adoption/tech/infrastructure.md) for deployment patterns
+   - Consider [`.pair/adoption/tech/ux-ui.md`](.pair/adoption/tech/ux-ui.md) for user interface boundaries
 
 3. **Understand Organizational Context**:
 
-   - Review [`.pair/tech/adopted/way-of-working.md`](.pair/tech/adopted/way-of-working.md)
+   - Review [`.pair/adoption/tech/way-of-working.md`](.pair/adoption/tech/way-of-working.md)
    - Understand team structure and communication patterns
    - Identify development phases and delivery expectations
    - Consider operational and maintenance requirements
 
 4. **Validate Business Requirements**:
    - Cross-reference [`.pair/product/adopted/PRD.md`](.pair/product/adopted/PRD.md)
-   - Review all initiatives in [`.pair/product/backlog/01-initiatives/`](.pair/product/backlog/01-initiatives/)
+   - Review all initiatives in [`.pair/adoption/product/backlog/01-initiatives/`](.pair/adoption/product/backlog/01-initiatives/)
    - Ensure context boundaries support business objectives
    - Identify compliance and integration requirements
 
@@ -431,13 +431,13 @@ _"I'll now create the complete bounded context document incorporating all valida
 
 _The document will follow our adopted standards format (concise, prescriptive, English) and serve as authoritative context for service design, team organization, and system architecture decisions._
 
-_For the output, I will generate a separate file for each bounded context under the folder [`.pair/tech/adopted/boundedcontext/`](.pair/tech/adopted/boundedcontext/), creating the folder if it does not exist, with all validated content. Each bounded context will be saved in its own file (e.g., `.pair/tech/adopted/boundedcontext/<context-name>.md`)._
+_For the output, I will generate a separate file for each bounded context under the folder [`.pair/adoption/tech/boundedcontext/`](.pair/adoption/tech/boundedcontext/), creating the folder if it does not exist, with all validated content. Each bounded context will be saved in its own file (e.g., `.pair/adoption/tech/boundedcontext/<context-name>.md`)._
 
 _Additionally, I will generate a `README.md` file in the same folder. This file will contain a list of all bounded contexts, each with a link to its file and a brief description. The README.md will serve as an index and quick reference for the bounded context documentation._
 
 _The README.md will also be submitted for developer review and must be revised according to any feedback, following the same validation process as the context catalog and definitions._
 
-_Should I proceed to generate the individual bounded context files and the README.md index in [`.pair/tech/adopted/boundedcontext/`](.pair/tech/adopted/boundedcontext/)?"_
+_Should I proceed to generate the individual bounded context files and the README.md index in [`.pair/adoption/tech/boundedcontext/`](.pair/adoption/tech/boundedcontext/)?"_
 
 ### Step 7: Implementation Strategy and Team Alignment
 
@@ -525,7 +525,7 @@ _- **Infrastructure Contexts**: [Provide technical foundation]_
 
 _The documentation and the README.md index will be presented for developer review. The README.md must be revised according to any feedback, and the process will iterate until the developer approves both the bounded context files and the README.md index._
 
-_Once approved, the files will be stored as individual files in [`.pair/tech/adopted/boundedcontext/`](.pair/tech/adopted/boundedcontext/), one file per bounded context, plus the README.md index._
+_Once approved, the files will be stored as individual files in [`.pair/adoption/tech/boundedcontext/`](.pair/adoption/tech/boundedcontext/), one file per bounded context, plus the README.md index._
 
 ### Step 9: Evolution and Maintenance Process
 
@@ -602,7 +602,7 @@ _Should I update the bounded context model to reflect these architecture changes
 - [ ] Document follows adopted standards format (concise, prescriptive, English)
 - [ ] Evolution process established for subdomain and architecture changes
 - [ ] Complete bounded context model provides foundation for service design and API definition
-- [ ] Each bounded context stored in a separate file under [`.pair/tech/adopted/boundedcontext/`](.pair/tech/adopted/boundedcontext/) (folder created if not present)
+- [ ] Each bounded context stored in a separate file under [`.pair/adoption/tech/boundedcontext/`](.pair/adoption/tech/boundedcontext/) (folder created if not present)
 
 ## Common Pitfalls and Solutions
 
@@ -625,19 +625,18 @@ _Should I update the bounded context model to reflect these architecture changes
 
 - [Subdomain Analysis](.pair/product/adopted/subdomain/) - Business capability foundation for context boundary identification (one file per subdomain)
 - [Product Requirements Document](.pair/product/adopted/PRD.md) - Business context and user requirements
-- [Strategic Initiatives](.pair/product/backlog/01-initiatives/) - Business priorities and capability evolution
-- [Technical Architecture](.pair/tech/adopted/architecture.md) - System structure and architectural constraints
-- [Technology Stack](.pair/tech/adopted/tech-stack.md) - Technology decisions and integration capabilities
-- [Infrastructure](.pair/tech/adopted/infrastructure.md) - Deployment and operational patterns
-- [UX/UI Guidelines](.pair/tech/adopted/ux-ui.md) - User interface boundaries and experience requirements
-- [Way of Working](.pair/tech/adopted/way-of-working.md) - Team structure and collaboration patterns
+- [Strategic Initiatives](.pair/adoption/product/backlog/01-initiatives/) - Business priorities and capability evolution
+- [Technical Architecture](.pair/adoption/tech/architecture.md) - System structure and architectural constraints
+- [Technology Stack](.pair/adoption/tech/tech-stack.md) - Technology decisions and integration capabilities
+- [Infrastructure](.pair/adoption/tech/infrastructure.md) - Deployment and operational patterns
+- [UX/UI Guidelines](.pair/adoption/tech/ux-ui.md) - User interface boundaries and experience requirements
+- [Way of Working](.pair/adoption/tech/way-of-working.md) - Team structure and collaboration patterns
 
 ### Related Process Guides
 
 - [How to Define Subdomains](./04-how-to-define-subdomains.md) - Foundation business capability analysis
 - [How to Breakdown Epics](./06-how-to-breakdown-epics.md) - Feature-level analysis for context validation
-- [How to Complete the Bootstrap Checklist](./08-how-to-complete-bootstrap-checklist.md) - Technical context establishment
-- [Service Design Guide](./11-how-to-design-services.md) - Next phase in context implementation
+- [How to Complete the Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md) - Technical context establishment
 
 ### Strategic DDD Resources
 
@@ -648,5 +647,3 @@ _Should I update the bounded context model to reflect these architecture changes
 ### Knowledge Base Guidelines
 
 - [Architecture Guidelines](../tech/knowledge-base/01-architectural-guidelines.md) - Architectural patterns and principles for bounded context implementation
-- [Integration Patterns](../tech/knowledge-base/02-integration-patterns.md) - Context integration strategies and anti-corruption layer design
-- [Team Organization](../tech/knowledge-base/03-team-organization.md) - Team-to-context alignment patterns and collaboration strategies

@@ -33,10 +33,10 @@ The AI assistant acts as a **Strategic Domain Architect** with the following res
 
 **Step 1: Tool Configuration Check**
 
-1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+1. **Read** [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md) to identify configured project management tool
 2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
 
-_"I cannot proceed because no project management tool is configured in [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+_"I cannot proceed because no project management tool is configured in [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
 
 **Step 2: Follow Tool-Specific Instructions**
 
@@ -47,17 +47,17 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **✅ PERMITTED ONLY when:**
 
-- Tool in [way-of-working.md](.pair/tech/adopted/way-of-working.md) = "filesystem"
+- Tool in [way-of-working.md](.pair/adoption/tech/way-of-working.md) = "filesystem"
 
 **🚫 PROHIBITED when:**
 
 - Any other tool is configured
-- **DO NOT** read [.pair/product/backlog/](.pair/product/backlog/) directories
+- **DO NOT** read [.pair/adoption/product/backlog/](.pair/adoption/product/backlog/) directories
 - **DO NOT** use filesystem as fallback
 
 ### **Validation Checklist**
 
-- [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
+- [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
 - [ ] [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
@@ -84,7 +84,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
    - Understand strategic priorities and business growth plans
 
 3. **Understand Way of Working**:
-   - Review [`.pair/tech/adopted/way-of-working.md`](.pair/tech/adopted/way-of-working.md)
+   - Review [`.pair/adoption/tech/way-of-working.md`](.pair/adoption/tech/way-of-working.md)
    - Understand team structure and organizational constraints
    - Identify development phases and delivery expectations
    - Consider operational and maintenance requirements
@@ -475,15 +475,15 @@ _Should I update the subdomain catalog to reflect these business model changes, 
 ### Core Documentation
 
 - [Product Requirements Document](.pair/product/adopted/PRD.md) - Business context, objectives, and value propositions
-- [Strategic Initiatives](.pair/product/backlog/01-initiatives/) - Business priorities and capability roadmap
-- [Way of Working](.pair/tech/adopted/way-of-working.md) - Team structure and organizational constraints
+- [Strategic Initiatives](.pair/adoption/product/backlog/01-initiatives/) - Business priorities and capability roadmap
+- [Way of Working](.pair/adoption/tech/way-of-working.md) - Team structure and organizational constraints
 - [Adopted Standards README](../tech/adopted/README.md) - Document format and content requirements
 
 ### Related Process Guides
 
 - [How to Breakdown Epics](./06-how-to-breakdown-epics.md) - Detailed feature analysis and epic decomposition process
-- [How to Complete the Bootstrap Checklist](./08-how-to-complete-bootstrap-checklist.md) - Project setup and technical context establishment
-- [Bounded Context Definition Guide](./10-how-to-define-bounded-contexts.md) - Next phase in strategic DDD implementation
+- [How to Complete the Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md) - Project setup and technical context establishment
+- [Bounded Context Definition Guide](./05-how-to-define-bounded-contexts.md) - Next phase in strategic DDD implementation
 
 ### Strategic DDD Resources
 

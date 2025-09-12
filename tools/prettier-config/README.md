@@ -57,4 +57,4 @@ Alternatively, you can reference the config directly in your `package.json`:
 "prettier": "@pair/prettier-config"
 ```
 
-See [Code Design Guidelines](../../.pair/tech/knowledge-base/02-code-design-guidelines.md#prettier-configuration) for more details.
+See [Code Design Guidelines](.pair/knowledge/02-code-design-guidelines.md#prettier-configuration) for more details.

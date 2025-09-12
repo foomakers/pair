@@ -42,25 +42,68 @@ pnpm install
 
 ### Available scripts
 
-- `pnpm run test` — runs the test suite (Vitest)
-- `pnpm run build` — builds the project (if defined)
-- `pnpm run lint` — lints the code (if defined)
-- `pnpm sync-deps` — updates all dependencies
+- `pnpm test` — runs all tests across the monorepo (Turbo)
+- `pnpm build` — builds all packages and apps (Turbo)
+- `pnpm lint` — lints all code (Turbo)
+- `pnpm lint:fix` — auto-fixes linting issues (Turbo)
+- `pnpm ts:check` — type-checks all TypeScript code (Turbo)
+- `pnpm quality-gate` — runs full quality checks (type-check, test, lint)
+- `pnpm clean` — cleans build artifacts and caches
+- `pnpm sync-deps` — updates all dependencies recursively
 - `pnpm deps:outdated` — shows outdated dependencies
-- `pnpm catalog:update` — updates the catalog
-- `pnpm catalog:check` — shows the catalog
+- `pnpm catalog:update` — updates the pnpm catalog
+- `pnpm catalog:check` — shows catalog contents
 
 ### Running tests
 
 ```bash
-pnpm run test
+# Run all tests across the monorepo
+pnpm test
+
+# Run tests with coverage
+pnpm test:coverage
+
+# Run tests for specific packages
+pnpm --filter @pair/pair-cli test
+pnpm --filter @pair/knowledge-hub test
 ```
 
-Tests are defined in `tools/monorepo-tests` and use Vitest. All tests must pass both locally and in CI/CD.
+Tests are orchestrated by **Turbo** and use **Vitest** as the test runner. Test files are located in each package's `src/` directory with `.test.ts` or `.spec.ts` extensions.
+
+### Quality Gates
+
+Before committing, always run:
+
+```bash
+pnpm quality-gate
+```
+
+This runs type checking, tests, and linting across all packages using Turbo for optimal performance.
 
 ### Workspace structure
 
-See the "📁 Structure" section below for an overview of the main folders.
+This is a **pnpm monorepo** using **Turbo** for task orchestration and build caching.
+
+```
+├── apps/                          # Applications
+│   └── pair-cli/                  # CLI tool for managing documentation
+├── packages/                      # Shared packages
+│   ├── knowledge-hub/             # Documentation and assets package
+│   └── content-ops/               # File operations and link processing
+├── libs/                          # Additional libraries (symlinked)
+├── tools/                         # Development tools and configs
+│   ├── eslint-config/             # Shared ESLint configuration
+│   ├── prettier-config/           # Shared Prettier configuration
+│   └── monorepo-tests/            # Monorepo-wide testing utilities
+├── .pair/                         # AI-specific files and configurations
+│   ├── how-to/                    # Development process documentation
+│   ├── product/                   # Product requirements and PRD
+│   ├── tech/                      # Technical guidelines and standards
+│   └── way-of-working.md         # Process and collaboration guidelines
+├── turbo.json                     # Turbo configuration
+├── pnpm-workspace.yaml           # pnpm workspace configuration
+└── package.json                  # Root package configuration
+```
 
 ### Documentation
 
@@ -84,17 +127,29 @@ See the "📁 Structure" section below for an overview of the main folders.
 3. **Define your project**
    - Start with the getting started guide in `.pair/getting-started.md`
 
-## 📁 Structure
+## 🏗️ Monorepo Architecture
 
-```
-├── .pair/                          # AI-specific files and configurations
-│   ├── how-to/                      # Development process documentation
-│   ├── product/                   # Product requirements and PRD
-│   ├── tech/                      # Technical guidelines and standards
-│   └── way-of-working.md         # Process and collaboration guidelines
-├── package.json                   # Project configuration (supports workspaces)
-└── README.md                     # This file
-```
+### Package Management
+
+- **pnpm** with workspace configuration (`pnpm-workspace.yaml`)
+- **Catalog** for centralized dependency management
+- **Turbo** for task orchestration and build caching
+
+### Development Tools
+
+- **TypeScript** for type safety across all packages
+- **Vitest** for testing with coverage reporting
+- **ESLint** with shared configuration (`@pair/eslint-config`)
+- **Prettier** with shared configuration (`@pair/prettier-config`)
+- **Husky** for git hooks
+
+### Key Packages
+
+- **@pair/pair-cli**: CLI tool for documentation management
+- **@pair/knowledge-hub**: Centralized documentation and assets
+- **@pair/content-ops**: File operations and markdown link processing
+- **@pair/eslint-config**: Shared linting rules
+- **@pair/prettier-config**: Shared code formatting rules
 
 ## 🤖 AI Integration
 
@@ -118,21 +173,112 @@ See `.pair/way-of-working.md` for detailed process guidelines.
 
 ## 🛠 Getting Started with Development
 
-1. **Setup your project foundation**
+### 1. Setup Development Environment
 
-   - Start with the PRD template in `.pair/product/PRD.md`
-   - Review all technical guidelines in `.pair/tech/`
+```bash
+# Install dependencies
+pnpm install
 
-2. **Create your workspace structure**
+# Run quality checks
+pnpm quality-gate
 
-   - Add an `apps/` folder for application code (monorepo structure)
-   - Add a `packages/` folder for shared libraries
-   - Use the examples in the `examples/` folder as reference
+# Run tests
+pnpm test
 
-3. **Follow the development process**
-   - Use the guides in `.pair/how-to/` for breaking down work
-   - Follow the technical standards in `.pair/tech/knowledge-base/`
-   - Ensure all work meets the criteria in `.pair/tech/knowledge-base/06-definition-of-done.md`
+# Build all packages
+pnpm build
+```
+
+### 2. Understand the Monorepo Structure
+
+- **apps/**: Executable applications (pair-cli)
+- **packages/**: Shared libraries and tools
+- **tools/**: Development configurations and utilities
+- **libs/**: Additional shared code (symlinked)
+
+### 3. Development Workflow
+
+```bash
+# Work on a specific package
+cd packages/knowledge-hub
+pnpm test                    # Run tests for this package
+pnpm --filter @pair/knowledge-hub build  # Build this package
+
+# Work on the CLI
+cd apps/pair-cli
+pnpm --filter @pair/pair-cli dev  # Run in development mode
+
+# Run monorepo-wide commands
+pnpm lint                    # Lint all packages
+pnpm ts:check               # Type-check all packages
+pnpm test:coverage          # Run tests with coverage
+```
+
+### 4. Adding New Packages
+
+1. Create the package directory under `packages/`, `apps/`, or `tools/`
+2. Add `package.json` with proper configuration
+3. Update `pnpm-workspace.yaml` if needed
+4. Add to `turbo.json` tasks if custom build steps are required
+
+### 5. Dependency Management
+
+- Use the **pnpm catalog** for shared dependencies
+- Add new dependencies to the catalog in `pnpm-workspace.yaml`
+- Update with `pnpm catalog:update`
+
+## 👨‍💻 For Developers
+
+### Monorepo Best Practices
+
+- **Use Turbo tasks** for all build/test operations
+- **Run quality-gate** before committing
+- **Keep packages focused** on single responsibilities
+- **Use workspace dependencies** for internal packages
+- **Follow conventional commits** for clear change history
+
+### Development Scripts Reference
+
+```bash
+# Quality assurance
+pnpm quality-gate          # Full quality check (types, tests, lint)
+pnpm ts:check             # TypeScript type checking only
+pnpm test                 # Run all tests
+pnpm test:coverage       # Tests with coverage report
+
+# Code quality
+pnpm lint                 # Lint all packages
+pnpm lint:fix            # Auto-fix linting issues
+pnpm prettier:check      # Check code formatting
+pnpm prettier:fix        # Auto-format code
+
+# Build & clean
+pnpm build                # Build all packages
+pnpm clean                # Clean build artifacts
+
+# Dependencies
+pnpm sync-deps           # Update all dependencies
+pnpm deps:outdated       # Check for outdated packages
+pnpm catalog:update      # Update pnpm catalog
+```
+
+### Working with Individual Packages
+
+```bash
+# Filter commands to specific packages
+pnpm --filter @pair/pair-cli test
+pnpm --filter @pair/knowledge-hub build
+pnpm --filter @pair/content-ops lint
+
+# Development mode for apps
+pnpm --filter @pair/pair-cli dev
+```
+
+### Turbo Caching
+
+- Builds and tests are cached automatically
+- Use `turbo clean` to clear cache if needed
+- Cache is stored in `node_modules/.cache/turbo`
 
 ## 🔒 Repository Secrets & Environment Configuration
 
@@ -141,16 +287,17 @@ This project uses environment variables to securely manage secrets and configura
 ### Global vs Workspace Environment Files
 
 - **Global `.env.example` (at repository root):**
-  - Contains variables shared across all workspaces/packages (e.g., `PAIR_ADOPTION_FOLDER`)
+  - Contains variables shared across all workspaces/packages
   - Use this as a template to create your own `.env` at the root for global config
 - **Workspace `.env.example` (in workspace/package folders):**
   - For secrets/config unique to a specific workspace/package
   - Use as a template for workspace-specific `.env` files
 
-**Loading order:**
+**Loading order (pnpm workspaces):**
 
 1. Each workspace loads its own `.env` (if present)
 2. If a variable is not set, it falls back to the global `.env` at the root
+3. Environment variables are loaded automatically by pnpm for each workspace
 
 ### Example Variable
 
@@ -167,9 +314,23 @@ PAIR_ADOPTION_FOLDER=.pair
 
 ### CI/CD Integration
 
-- CI/CD workflows load secrets from GitHub repository settings and/or the root `.env`
-- Local development loads secrets using standard libraries (e.g., `dotenv` for Node.js)
-- Ensure `.gitignore` excludes all `.env` files
+- **Turbo** orchestrates build and test tasks across all packages
+- CI/CD workflows use `pnpm quality-gate` for comprehensive validation
+- Build artifacts are cached between runs for faster CI/CD
+- Each package can have its own build/test configuration via `turbo.json`
+
+### Example CI Workflow
+
+```yaml
+- name: Quality Gate
+  run: pnpm quality-gate
+
+- name: Build
+  run: pnpm build
+
+- name: Test with Coverage
+  run: pnpm test:coverage
+```
 
 ### Secret Rotation & Troubleshooting
 
@@ -225,16 +386,33 @@ For more details, see the [Husky documentation](https://typicode.github.io/husky
 
 ## 📚 Documentation
 
+### Development & Process
+
 - [Development Process Guides](.pair/how-to/) – Step-by-step guides for breaking down work
-- [Product Requirements](.pair/product/PRD.md) – Template for defining product requirements
-- [Technical Guidelines](.pair/tech/knowledge-base/) – Comprehensive technical standards and best practices
 - [Way of Working](.pair/way-of-working.md) – Process and collaboration guidelines
+- [Definition of Done](.pair/tech/knowledge-base/06-definition-of-done.md) – Quality criteria
+
+### Technical Documentation
+
+- [Product Requirements](.pair/product/PRD.md) – Template for defining product requirements
+- [Technical Guidelines](.pair/tech/knowledge-base/) – Comprehensive technical standards
+- [Architecture Documentation](.pair/tech/) – System design and decisions
+
+### Package Documentation
+
+- [Pair CLI](apps/pair-cli/README.md) – CLI tool documentation
+- [Knowledge Hub](packages/knowledge-hub/README.md) – Documentation package guide
+- [Content Ops](packages/content-ops/README.md) – File operations library
+
+### Development Tools
+
+- [ESLint Config](tools/eslint-config/README.md) – Shared linting configuration
+- [Prettier Config](tools/prettier-config/README.md) – Shared formatting configuration
 
 ## 🆘 Support & Help
 
 ### Community Resources
 
-- **Discord Community**: [Join our Discord](https://discord.gg/pair-community) for real-time discussions
 - **GitHub Discussions**: [Ask questions](https://github.com/foomakers/pair/discussions) for community support
 - **GitHub Issues**: [Report bugs](https://github.com/foomakers/pair/issues) or request features
 

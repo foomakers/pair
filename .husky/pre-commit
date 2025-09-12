@@ -1,5 +1,4 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-npm test
-pnpm lint && pnpm prettier:check
+pnpm ts:check

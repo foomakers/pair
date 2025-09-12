@@ -34,7 +34,7 @@ The AI assistant acts as a **Senior Technical Architect** with the following res
 1. Read the [Bootstrap Checklist](../../assets/bootstrap-checklist.md) to understand all required technical decisions
 2. Analyze existing documentation:
    - [`.pair/product/adopted/PRD.md`](.pair/product/adopted/PRD.md) - Product Requirements and business objectives
-   - [`.pair/tech/adr/`](.pair/tech/adr/) - Existing Architecture Decision Records
+   - [`.pair/adoption/tech/adr/`](.pair/adoption/tech/adr/) - Existing Architecture Decision Records
 3. Extract key information:
    - Target user base and expected scale
    - Budget constraints and timeline requirements
@@ -242,15 +242,15 @@ _"Here's the final version of `[document-name].md`. The document is now:_
 - ✅ Fully compliant with [adopted/README.md](../tech/adopted/README.md)\*
 - ✅ Ready for implementation reference\*
 
-_Should I save this to `.pair/tech/adopted/[document-name].md` and move to the next document?"_
+_Should I save this to `.pair/adoption/tech/[document-name].md` and move to the next document?"_
 
 **Document Sequence:**
 
-1. Start with [`architecture.md`](.pair/tech/adopted/architecture.md) (foundation for others)
-2. Continue with [`tech-stack.md`](.pair/tech/adopted/tech-stack.md) (depends on architecture)
-3. Proceed to [`infrastructure.md`](.pair/tech/adopted/infrastructure.md) (depends on tech stack)
-4. Follow with [`ux-ui.md`](.pair/tech/adopted/ux-ui.md)
-5. Finish with [`way-of-working.md`](.pair/tech/adopted/way-of-working.md) (integrates all previous decisions)
+1. Start with [`architecture.md`](.pair/adoption/tech/architecture.md) (foundation for others)
+2. Continue with [`tech-stack.md`](.pair/adoption/tech/tech-stack.md) (depends on architecture)
+3. Proceed to [`infrastructure.md`](.pair/adoption/tech/infrastructure.md) (depends on tech stack)
+4. Follow with [`ux-ui.md`](.pair/adoption/tech/ux-ui.md)
+5. Finish with [`way-of-working.md`](.pair/adoption/tech/way-of-working.md) (integrates all previous decisions)
 
 ### Step 7: Document Finalization and Storage
 
@@ -258,12 +258,12 @@ _Should I save this to `.pair/tech/adopted/[document-name].md` and move to the n
 
 **Process**:
 
-1. Create or update each approved document in [`.pair/tech/adopted/`](.pair/tech/adopted/) folder:
-   - [`architecture.md`](.pair/tech/adopted/architecture.md)
-   - [`infrastructure.md`](.pair/tech/adopted/infrastructure.md)
-   - [`tech-stack.md`](.pair/tech/adopted/tech-stack.md)
-   - [`ux-ui.md`](.pair/tech/adopted/ux-ui.md)
-   - [`way-of-working.md`](.pair/tech/adopted/way-of-working.md)
+1. Create or update each approved document in [`.pair/adoption/tech/`](.pair/adoption/tech/) folder:
+   - [`architecture.md`](.pair/adoption/tech/architecture.md)
+   - [`infrastructure.md`](.pair/adoption/tech/infrastructure.md)
+   - [`tech-stack.md`](.pair/adoption/tech/tech-stack.md)
+   - [`ux-ui.md`](.pair/adoption/tech/ux-ui.md)
+   - [`way-of-working.md`](.pair/adoption/tech/way-of-working.md)
 2. Ensure all documents follow the established format and standards
 3. Verify internal consistency across all documents
 4. Create summary of completed work for project records
@@ -278,7 +278,7 @@ _- **Architecture Impact**: [specific change needed]_
 _- **Tech Stack Impact**: [version updates or new tools]_
 _- **Rationale**: [why this change is necessary]_
 
-_Should I update the [`architecture.md`](.pair/tech/adopted/architecture.md) and [`tech-stack.md`](.pair/tech/adopted/tech-stack.md) files to reflect these new decisions, or would you prefer to review the changes first?"_
+_Should I update the [`architecture.md`](.pair/adoption/tech/architecture.md) and [`tech-stack.md`](.pair/adoption/tech/tech-stack.md) files to reflect these new decisions, or would you prefer to review the changes first?"_
 
 **During Customer-Facing Iterations:**
 _"Based on the completed sprint and user feedback, I've identified potential updates to our standards:_
@@ -286,7 +286,7 @@ _- **UX/UI Changes**: [design system updates based on user testing]_
 _- **Infrastructure Changes**: [deployment improvements from production experience]_
 _- **Performance Insights**: [optimization learnings]_
 
-_These learnings suggest updates to [`ux-ui.md`](.pair/tech/adopted/ux-ui.md) and [`infrastructure.md`](.pair/tech/adopted/infrastructure.md). Would you like me to propose specific changes?"_
+_These learnings suggest updates to [`ux-ui.md`](.pair/adoption/tech/ux-ui.md) and [`infrastructure.md`](.pair/adoption/tech/infrastructure.md). Would you like me to propose specific changes?"_
 
 **During Continuous Value Delivery:**
 _"Our sprint retrospectives and task execution have revealed process improvements:_
@@ -294,7 +294,7 @@ _- **Code Review Process**: [efficiency improvements discovered]_
 _- **Testing Strategy**: [coverage and automation learnings]_  
 _- **Deployment Workflow**: [cycle time optimizations]_
 
-_I recommend updating [`way-of-working.md`](.pair/tech/adopted/way-of-working.md) to reflect these proven practices. Should I draft these updates?"_
+_I recommend updating [`way-of-working.md`](.pair/adoption/tech/way-of-working.md) to reflect these proven practices. Should I draft these updates?"_
 
 **ADR-Driven Update Process:**
 
@@ -309,7 +309,7 @@ _- **Current Standard**: [existing decision]_
 _- **Required Update**: [new decision from ADR]_
 _- **Consistency Check**: [impact on other documents]_
 
-_Should I update [`[affected-file].md`](.pair/tech/adopted/[affected-file].md) to align with this ADR decision?"_
+_Should I update [`[affected-file].md`](.pair/adoption/tech/[affected-file].md) to align with this ADR decision?"_
 
 4. **Maintain version consistency** across all related documents
 5. **Document change rationale** for future reference
@@ -328,7 +328,7 @@ _Should I update [`[affected-file].md`](.pair/tech/adopted/[affected-file].md) t
 **Reference existing project context** (ADRs, way-of-working phases) when proposing changes
 **Provide specific examples** when explaining project categorizations or technical choices
 **Follow the 🤖🤝👨‍💻 model** (LLM proposes, Developer validates) throughout all interactions
-**Save all relevant documents** in the correct `.pair/tech/adopted/` locations following the structure asked in this document
+**Save all relevant documents** in the correct `.pair/adoption/tech/` locations following the structure asked in this document
 
 ### Don'ts for AI Assistants
 
@@ -342,7 +342,7 @@ _Should I update [`[affected-file].md`](.pair/tech/adopted/[affected-file].md) t
 **Don't skip the iterative update process** - maintain standards alignment throughout project evolution
 **Don't rush through checklist completion** - ensure each section is thoroughly addressed before proceeding
 **Don't break the collaborative model** - maintain developer engagement and validation throughout the process
-**Don't save a output file of the completed checklist** - always create the final adoption documents in the correct `.pair/tech/adopted/` locations
+**Don't save a output file of the completed checklist** - always create the final adoption documents in the correct `.pair/adoption/tech/` locations
 
 ## Quality Assurance Checklist
 
@@ -353,7 +353,7 @@ _Should I update [`[affected-file].md`](.pair/tech/adopted/[affected-file].md) t
 - [ ] All documents follow adopted standards format requirements (concise, prescriptive, English)
 - [ ] Technology choices align with project categorization, budget, and team constraints
 - [ ] All missing information gathered through specific developer questions
-- [ ] Documents stored in correct [`.pair/tech/adopted/`](.pair/tech/adopted/) locations
+- [ ] Documents stored in correct [`.pair/adoption/tech/`](.pair/adoption/tech/) locations
 - [ ] Update process established for future iterations and ADR-driven changes
 - [ ] Knowledge-base references included where appropriate for detailed explanations
 - [ ] Project management tool selected and specified in the adopted standards
@@ -377,7 +377,7 @@ _Should I update [`[affected-file].md`](.pair/tech/adopted/[affected-file].md) t
 - [Bootstrap Checklist](../../assets/bootstrap-checklist.md) - Complete project setup and categorization framework
 - [Adopted Standards README](../tech/adopted/README.md) - Requirements and format for all adopted documents
 - [Way of Working](../tech/adopted/way-of-working.md) - Development lifecycle and iteration processes
-- [PRD Template](../../product/adopted/PRD.md) - Product requirements and business context
+- [PRD Template](../product/adopted/PRD.md) - Product requirements and business context
 - [Architecture Decision Records](../tech/adr/) - Existing technical decisions and rationale
 
 ### Knowledge Base Guidelines

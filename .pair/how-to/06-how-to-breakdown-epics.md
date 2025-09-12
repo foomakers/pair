@@ -40,10 +40,10 @@ Before starting, **read and consult the Epic Template**: [Epic Template](../tech
 
 **Step 1: Tool Configuration Check**
 
-1. **Read** [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md) to identify configured project management tool
+1. **Read** [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md) to identify configured project management tool
 2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
 
-_"I cannot proceed because no project management tool is configured in [.pair/tech/adopted/way-of-working.md](.pair/tech/adopted/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+_"I cannot proceed because no project management tool is configured in [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md). Complete bootstrap first: [How to Complete Bootstrap Checklist](./02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
 
 **Step 2: Follow Tool-Specific Instructions**
 
@@ -54,17 +54,17 @@ _"I cannot proceed because no project management tool is configured in [.pair/te
 
 **✅ PERMITTED ONLY when:**
 
-- Tool in [way-of-working.md](.pair/tech/adopted/way-of-working.md) = "filesystem"
+- Tool in [way-of-working.md](.pair/adoption/tech/way-of-working.md) = "filesystem"
 
 **🚫 PROHIBITED when:**
 
 - Any other tool is configured
-- **DO NOT** read [.pair/product/backlog/](.pair/product/backlog/) directories
+- **DO NOT** read [.pair/adoption/product/backlog/](.pair/adoption/product/backlog/) directories
 - **DO NOT** use filesystem as fallback
 
 ### **Validation Checklist**
 
-- [ ] [way-of-working.md](.pair/tech/adopted/way-of-working.md) read and tool identified
+- [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
 - [ ] [Project Management Tool Guidelines](.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
 
@@ -109,20 +109,20 @@ Each epic must follow this comprehensive [template](../tech/knowledge-base/12-co
    - initiatives are ready and documented in the chosen project management tool
    - `.pair/product/adopted/subdomain/`
    - `.pair/way-of-working.md`
-   - `.pair/tech/adopted/architecture.md`
-   - `.pair/tech/adopted/tech-stack.md`
-   - `.pair/tech/adopted/infrastructure.md`
-   - `.pair/tech/adopted/ux-ui.md`
-   - `.pair/tech/adopted/way-of-working.md`
-   - `.pair/tech/adopted/boundedcontext/`
+   - `.pair/adoption/tech/architecture.md`
+   - `.pair/adoption/tech/tech-stack.md`
+   - `.pair/adoption/tech/infrastructure.md`
+   - `.pair/adoption/tech/ux-ui.md`
+   - `.pair/adoption/tech/way-of-working.md`
+   - `.pair/adoption/tech/boundedcontext/`
 
-2. **Check Tool Configuration**: Verify project management tool is configured in `.pair/tech/adopted/way-of-working.md`
+2. **Check Tool Configuration**: Verify project management tool is configured in `.pair/adoption/tech/way-of-working.md`
 
 **If Bootstrap Not Complete:**
 _"I notice the bootstrap checklist hasn't been completed yet. Before we can break down epics, we need to establish the foundational documentation and tool configuration. Please complete the '**How to Complete the Bootstrap Checklist**' process first, then return here for epic breakdown."_
 
 **If Tool Not Configured:**
-_"I can see the foundational documents are ready, but I need to confirm the project management tool configuration. According to `.pair/tech/adopted/way-of-working.md`, we should be using [TOOL_NAME]. Should I proceed with documenting epics in this tool?"_
+_"I can see the foundational documents are ready, but I need to confirm the project management tool configuration. According to `.pair/adoption/tech/way-of-working.md`, we should be using [TOOL_NAME]. Should I proceed with documenting epics in this tool?"_
 
 **Tool Integration Requirements:**
 
@@ -130,7 +130,7 @@ Before starting epic breakdown, the AI assistant must verify:
 
 **Linking Methodology Verification:**
 
-1. **Check Tool Configuration**: Review `.pair/tech/adopted/way-of-working.md` for:
+1. **Check Tool Configuration**: Review `.pair/adoption/tech/way-of-working.md` for:
 
    - Project management tool specifications
    - Hierarchy linking methodology (parent-child relationships)
@@ -225,14 +225,14 @@ This ensures clear navigation between initiatives, epics, and user stories in th
 
 3. **Analyze Technical Context**:
 
-   - Architecture patterns (`.pair/tech/adopted/architecture.md`)
-   - Technology stack (`.pair/tech/adopted/tech-stack.md`)
-   - Infrastructure constraints (`.pair/tech/adopted/infrastructure.md`)
-   - UX/UI guidelines (`.pair/tech/adopted/ux-ui.md`)
+   - Architecture patterns (`.pair/adoption/tech/architecture.md`)
+   - Technology stack (`.pair/adoption/tech/tech-stack.md`)
+   - Infrastructure constraints (`.pair/adoption/tech/infrastructure.md`)
+   - UX/UI guidelines (`.pair/adoption/tech/ux-ui.md`)
 
 4. **Review Domain Context**:
    - Subdomain definitions (`.pair/product/adopted/subdomain/`)
-   - Bounded context boundaries (`.pair/tech/adopted/boundedcontext/`)
+   - Bounded context boundaries (`.pair/adoption/tech/boundedcontext/`)
 
 ### Step 2: Initiative Selection
 
@@ -365,7 +365,7 @@ _"Here's the detailed breakdown for Epic 1: [NAME]. I've focused on [key aspects
 3. **Establish Hierarchy Linking**: Create proper linkage according to tool capabilities:
    - **Parent Link**: Connect epic to its parent initiative
    - **Child Link Preparation**: Set up epic to receive future user story links
-   - **Tool-Specific Relationships**: Follow the linking methodology defined in `.pair/tech/adopted/way-of-working.md`
+   - **Tool-Specific Relationships**: Follow the linking methodology defined in `.pair/adoption/tech/way-of-working.md`
 4. **Set Up Tracking**: Configure status tracking and progress monitoring
 5. **Confirm Creation**: Verify epic is properly documented in tool
 
@@ -501,21 +501,21 @@ _"All epics for '[INITIATIVE_NAME]' are now documented and ready for development
 
 - `.pair/product/adopted/PRD.md` - Product vision, goals, and user requirements
 - `.pair/way-of-working.md` - Development methodology and process definitions
-- `.pair/product/backlog/01-initiatives/` - Strategic initiatives requiring epic breakdown (if filesystem is the tool)
+- `.pair/adoption/product/backlog/01-initiatives/` - Strategic initiatives requiring epic breakdown (if filesystem is the tool)
 - `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` - Project Management Tool Guidelines
 
 **Technical Context:**
 
-- `.pair/tech/adopted/architecture.md` - System architecture patterns and constraints
-- `.pair/tech/adopted/tech-stack.md` - Technology choices and implementation guidelines
-- `.pair/tech/adopted/infrastructure.md` - Infrastructure requirements and constraints
-- `.pair/tech/adopted/ux-ui.md` - User experience and interface guidelines
-- `.pair/tech/adopted/way-of-working.md` - Technical workflow and tool configuration
+- `.pair/adoption/tech/architecture.md` - System architecture patterns and constraints
+- `.pair/adoption/tech/tech-stack.md` - Technology choices and implementation guidelines
+- `.pair/adoption/tech/infrastructure.md` - Infrastructure requirements and constraints
+- `.pair/adoption/tech/ux-ui.md` - User experience and interface guidelines
+- `.pair/adoption/tech/way-of-working.md` - Technical workflow and tool configuration
 
 **Domain Context:**
 
 - `.pair/product/adopted/subdomain/` - Functional domain boundaries and definitions
-- `.pair/tech/adopted/boundedcontext/` - Technical context boundaries and integration points
+- `.pair/adoption/tech/boundedcontext/` - Technical context boundaries and integration points
 
 **Process Dependencies:**
 
@@ -524,6 +524,6 @@ _"All epics for '[INITIATIVE_NAME]' are now documented and ready for development
 - **Output**: Epics serve as input for user story breakdown phase
 - **Next Phase**: User stories must be refined (status: "Refined") before technical development can begin
 - **Tool Integration**: All epics must be properly documented in configured project management tool with correct hierarchy linking (Initiative → Epic → User Story)
-- **Linking Methodology**: Follow the specific linking approach defined in `.pair/tech/adopted/way-of-working.md` for tool-specific relationship management
+- **Linking Methodology**: Follow the specific linking approach defined in `.pair/adoption/tech/way-of-working.md` for tool-specific relationship management
 
 This guide ensures a thorough, collaborative process that produces high-quality Epic breakdowns ready for user story development. **Important**: After user story breakdown, each story must go through the refinement process to reach "Refined" status before technical implementation can begin.

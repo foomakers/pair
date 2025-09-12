@@ -22,7 +22,7 @@ tools: [
     'runTasks',
     'github',
   ]
-model: GPT-4.1
+model: GPT-5 mini
 
 ---
 

@@ -195,10 +195,10 @@ Tasks are managed as checkboxes within user story issues:
 
 ```bash
 # Create backlog directory structure
-mkdir -p .pair/product/backlog/{01-initiatives,02-epics,03-user-stories}
+mkdir -p .pair/adoption/product/backlog/{01-initiatives,02-epics,03-user-stories}
 
 # Create status subdirectories
-cd .pair/product/backlog
+cd .pair/adoption/product/backlog
 mkdir -p 01-initiatives/2025
 mkdir -p 02-epics/{not-started,in-progress,under-review,completed}
 mkdir -p 03-user-stories/{not-started,in-progress,under-review,completed}
@@ -213,7 +213,7 @@ echo "# User Stories" > 03-user-stories/README.md
 
 ```bash
 # Update way-of-working.md to specify filesystem
-echo "Filesystem workflows adopted for project management. See filesystem guide for usage." >> .pair/tech/adopted/way-of-working.md
+echo "Filesystem workflows adopted for project management. See filesystem guide for usage." >> .pair/adoption/tech/way-of-working.md
 ```
 
 ### Filesystem Workflows
@@ -241,7 +241,7 @@ echo "Filesystem workflows adopted for project management. See filesystem guide 
 ```bash
 # Copy template and customize
 cp .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md \
-   .pair/product/backlog/01-initiatives/2025/01-2025-my-initiative.md
+   .pair/adoption/product/backlog/01-initiatives/2025/01-2025-my-initiative.md
 ```
 
 **2. Create Epic:**
@@ -249,7 +249,7 @@ cp .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/init
 ```bash
 # Copy template and link to initiative
 cp .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/epic-template.md \
-   .pair/product/backlog/02-epics/not-started/01-01-my-epic.md
+   .pair/adoption/product/backlog/02-epics/not-started/01-01-my-epic.md
 ```
 
 **3. Create User Story:**
@@ -257,7 +257,7 @@ cp .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/epic
 ```bash
 # Copy template and link to epic
 cp .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user-story-template.md \
-   .pair/product/backlog/03-user-stories/not-started/01-01-001-my-story.md
+   .pair/adoption/product/backlog/03-user-stories/not-started/01-01-001-my-story.md
 ```
 
 #### Status Management
@@ -266,12 +266,12 @@ cp .pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user
 
 ```bash
 # Start work on user story
-mv .pair/product/backlog/03-user-stories/not-started/01-01-001-user-registration.md \
-   .pair/product/backlog/03-user-stories/in-progress/
+mv .pair/adoption/product/backlog/03-user-stories/not-started/01-01-001-user-registration.md \
+   .pair/adoption/product/backlog/03-user-stories/in-progress/
 
 # Complete user story
-mv .pair/product/backlog/03-user-stories/in-progress/01-01-001-user-registration.md \
-   .pair/product/backlog/03-user-stories/completed/
+mv .pair/adoption/product/backlog/03-user-stories/in-progress/01-01-001-user-registration.md \
+   .pair/adoption/product/backlog/03-user-stories/completed/
 ```
 
 #### Task Management
@@ -329,8 +329,8 @@ pair "Complete user story #[NUMBER] and update epic status"
 
 # For Filesystem
 # Move story file to completed directory
-mv .pair/product/backlog/03-user-stories/in-progress/story.md \
-   .pair/product/backlog/03-user-stories/completed/
+mv .pair/adoption/product/backlog/03-user-stories/in-progress/story.md \
+   .pair/adoption/product/backlog/03-user-stories/completed/
 ```
 
 ### Sprint Management
@@ -342,7 +342,7 @@ mv .pair/product/backlog/03-user-stories/in-progress/story.md \
 pair "List refined user stories with P0 priority for sprint planning"
 
 # Filesystem: Query files in directories
-find .pair/product/backlog/03-user-stories/not-started -name "*P0*" -type f
+find .pair/adoption/product/backlog/03-user-stories/not-started -name "*P0*" -type f
 ```
 
 **Daily Standups:**
@@ -352,7 +352,7 @@ find .pair/product/backlog/03-user-stories/not-started -name "*P0*" -type f
 pair "List in-progress user stories assigned to me"
 
 # Or for filesystem
-ls .pair/product/backlog/03-user-stories/in-progress/
+ls .pair/adoption/product/backlog/03-user-stories/in-progress/
 ```
 
 ---
@@ -421,7 +421,7 @@ ls .pair/product/backlog/03-user-stories/in-progress/
 
 #### Tool Configuration Problems
 
-**Check:** `.pair/tech/adopted/way-of-working.md` has correct tool specified
+**Check:** `.pair/adoption/tech/way-of-working.md` has correct tool specified
 
 #### Authentication Issues
 
@@ -454,7 +454,7 @@ ls .pair/product/backlog/03-user-stories/in-progress/
 pair "Test GitHub connectivity and permissions"
 
 # Validate directory structure
-tree .pair/product/backlog/
+tree .pair/adoption/product/backlog/
 ```
 
 ---
