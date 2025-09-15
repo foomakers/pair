@@ -1,9 +1,9 @@
-# Pair - your AI-Assisted peer [![CI](https://github.com/foomakers/pair/actions/workflows/ci.yml/badge.svg)](https://github.com/foomakers/pair/actions/workflows/ci.yml)
+# Pair - your AI-Assisted peer [![CI](https://github.com/foomakers/pair/actions/workflows/ci.yml/badge.svg)](https://github.com/foomakers/pair/actions/workflows/ci.yml) [![Release](https://github.com/foomakers/pair/actions/workflows/release.yml/badge.svg)](https://github.com/foomakers/pair/actions/workflows/release.yml)
 
 ## 🌟 Product Context
 
 **Product Name:** pair
-**Version:** 0.1.0
+**Version:** 0.0.1-wip
 **Owner:** Foomakers
 
 ### Vision
@@ -94,11 +94,13 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 ├── tools/                         # Development tools and configs
 │   ├── eslint-config/             # Shared ESLint configuration
 │   ├── prettier-config/           # Shared Prettier configuration
-│   └── monorepo-tests/            # Monorepo-wide testing utilities
+│   ├── monorepo-tests/            # Monorepo-wide testing utilities
+│   └── content-ops/               # File operations and link processing
 ├── .pair/                         # AI-specific files and configurations
 │   ├── how-to/                    # Development process documentation
 │   ├── product/                   # Product requirements and PRD
 │   ├── tech/                      # Technical guidelines and standards
+│   ├── assets/                    # Document templates and examples
 │   └── way-of-working.md         # Process and collaboration guidelines
 ├── turbo.json                     # Turbo configuration
 ├── pnpm-workspace.yaml           # pnpm workspace configuration
@@ -148,6 +150,7 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 - **@pair/pair-cli**: CLI tool for documentation management
 - **@pair/knowledge-hub**: Centralized documentation and assets
 - **@pair/content-ops**: File operations and markdown link processing
+- **@pair/monorepo-tests**: Shared testing utilities
 - **@pair/eslint-config**: Shared linting rules
 - **@pair/prettier-config**: Shared code formatting rules
 
@@ -403,6 +406,7 @@ For more details, see the [Husky documentation](https://typicode.github.io/husky
 - [Pair CLI](apps/pair-cli/README.md) – CLI tool documentation
 - [Knowledge Hub](packages/knowledge-hub/README.md) – Documentation package guide
 - [Content Ops](packages/content-ops/README.md) – File operations library
+- [Monorepo Tests](tools/monorepo-tests/README.md) – Testing utilities
 
 ### Development Tools
 

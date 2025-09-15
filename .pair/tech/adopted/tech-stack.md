@@ -48,6 +48,10 @@ eslint v9.34.0 is adopted for code linting and style enforcement.
 globals v15.0.0 is adopted for defining global variables in ESLint configurations.
 prettier v3.6.2 is adopted for code formatting and style consistency.
 husky v8.0.0 is adopted for Git hooks management and automation.
+ncc (`@vercel/ncc`) is adopted for Node.js bundling to create self-contained artifacts.
+dts-bundle-generator is adopted for generating TypeScript definition files from bundled code.
+zip is adopted as the archive creation utility for packaging release artifacts.
+sha256sum/shasum is adopted for checksum generation and verification of release artifacts.
 
 ---
 

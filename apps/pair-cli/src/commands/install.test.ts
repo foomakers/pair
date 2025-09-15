@@ -1,41 +1,19 @@
 import { describe, it, expect, vi } from 'vitest'
 import { installCommand } from './install'
 import { resolve } from 'path'
-import * as configUtils from '../config-utils'
-import InMemoryFileSystemService from '@pair/content-ops/test-utils/in-memory-fs'
 import * as commandUtils from './command-utils'
-
-// Mock getKnowledgeHubConfig
-vi.mock('../config-utils', () => ({
-  getKnowledgeHubConfig: vi.fn(() => ({
-    asset_registries: {
-      github: {
-        source: '.github',
-        behavior: 'mirror',
-        include: ['/chatmodes', '/workflows'],
-        target_path: '.github',
-        description: 'GitHub workflows and configuration files',
-      },
-      knowledge: {
-        source: '.pair/knowledge',
-        behavior: 'mirror',
-        target_path: '.pair-knowledge',
-        description: 'Knowledge base and documentation',
-      },
-      adoption: {
-        source: '.pair/adoption',
-        behavior: 'add',
-        target_path: '.pair-adoption',
-        description: 'Adoption guides and onboarding materials',
-      },
-    },
-  })),
-  getKnowledgeHubDatasetPath: vi.fn(() => '/dataset'),
-}))
+import {
+  DEFAULT_CONFIG,
+  GITHUB_ONLY_CONFIG,
+  GITHUB_KNOWLEDGE_CONFIG,
+  OVERLAPPING_CONFIG,
+  CLEAN_CONFIG,
+  createTestFs,
+} from '../test-utils/test-helpers'
 
 describe('installCommand new functionality tests', () => {
   it('install with defaults uses config registries', async () => {
-    const fs = new InMemoryFileSystemService({
+    const fs = createTestFs(DEFAULT_CONFIG, {
       '/dataset/.github/workflows/ci.yml': 'workflow content',
       '/dataset/.pair/knowledge.md': 'knowledge content',
     })
@@ -49,7 +27,7 @@ describe('installCommand new functionality tests', () => {
   })
 
   it('install with registry override', async () => {
-    const fs = new InMemoryFileSystemService({
+    const fs = createTestFs(GITHUB_ONLY_CONFIG, {
       '/dataset/.github/workflows/ci.yml': 'workflow content',
     })
 
@@ -68,7 +46,7 @@ describe('installCommand new functionality tests', () => {
 
 describe('installCommand - multiple registries', () => {
   it('install with multiple registry overrides', async () => {
-    const fs = new InMemoryFileSystemService({
+    const fs = createTestFs(GITHUB_KNOWLEDGE_CONFIG, {
       '/dataset/.github/workflows/ci.yml': 'workflow content',
       '/dataset/.pair/knowledge.md': 'knowledge content',
     })
@@ -88,7 +66,7 @@ describe('installCommand - multiple registries', () => {
 
 describe('installCommand - idempotency / existing target', () => {
   it('fails when installing twice to the same existing target', async () => {
-    const fs = new InMemoryFileSystemService({
+    const fs = createTestFs(GITHUB_ONLY_CONFIG, {
       '/dataset/.github/workflows/ci.yml': 'workflow content',
     })
 
@@ -117,24 +95,13 @@ describe('installCommand - idempotency / existing target', () => {
 
 describe('installCommand - overlapping targets', () => {
   it('fails when registries have overlapping targets under a base target', async () => {
-    // Use a filesystem with minimal dataset
-    const fs = new InMemoryFileSystemService({ '/dataset/.github/README.md': 'x' })
+    // Use a filesystem with minimal dataset and overlapping config
+    const fs = createTestFs(OVERLAPPING_CONFIG, {
+      '/dataset/.github/README.md': 'x',
+    })
 
     const spy = vi.spyOn(commandUtils, 'doCopyAndUpdateLinks')
     spy.mockResolvedValue({ logs: ['installed'] })
-
-    // Override the mocked config to create overlapping targets under the base
-    const cfgSpy = vi.spyOn(configUtils, 'getKnowledgeHubConfig').mockImplementation(() => ({
-      asset_registries: {
-        pairroot: { source: '.pair', behavior: 'mirror', target_path: '.pair', description: '' },
-        adoption: {
-          source: '.pair/adoption',
-          behavior: 'add',
-          target_path: '.pair/adoption',
-          description: '',
-        },
-      },
-    }))
 
     // Call installCommand as if user ran: install .smoke_test
     const result = await installCommand(fs, ['--target', '.smoke_test'], {
@@ -147,13 +114,12 @@ describe('installCommand - overlapping targets', () => {
     expect(result!.message).toMatch(/Overlapping registry targets|Conflicting registry targets/)
 
     spy.mockRestore()
-    cfgSpy.mockRestore()
   })
 })
 
 describe('installCommand - clean non-overlapping install', () => {
   it('succeeds when base target is empty and registry targets do not overlap', async () => {
-    const fs = new InMemoryFileSystemService({
+    const fs = createTestFs(CLEAN_CONFIG, {
       '/dataset/.github/README.md': 'gh',
       '/dataset/.pair/knowledge/doc.md': 'k',
       '/dataset/.pair/adoption/guide.md': 'a',

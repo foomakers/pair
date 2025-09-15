@@ -1,42 +1,19 @@
 import { describe, it, expect, vi } from 'vitest'
-import InMemoryFileSystemService from '@pair/content-ops/test-utils/in-memory-fs'
 import * as updateCmd from './update'
 import * as commandUtils from './command-utils'
 import type { LogEntry } from './command-utils'
-
-// Mock getKnowledgeHubConfig and getKnowledgeHubDatasetPath
-vi.mock('../config-utils', () => ({
-  getKnowledgeHubConfig: vi.fn(() => ({
-    asset_registries: {
-      github: {
-        source: '.github',
-        behavior: 'mirror',
-        include: ['/chatmodes', '/workflows'],
-        target_path: '.github',
-        description: 'GitHub workflows and configuration files',
-      },
-      knowledge: {
-        source: '.pair',
-        behavior: 'mirror',
-        target_path: '.pair',
-        description: 'Knowledge base and documentation',
-      },
-      adoption: {
-        source: '.pair/product/adopted',
-        behavior: 'add',
-        target_path: '.pair/product/adopted',
-        description: 'Adoption guides and onboarding materials',
-      },
-    },
-  })),
-  getKnowledgeHubDatasetPath: vi.fn(() => '/dataset'),
-}))
+import {
+  DEFAULT_CONFIG,
+  GITHUB_ONLY_CONFIG,
+  GITHUB_KNOWLEDGE_CONFIG,
+  createTestFs,
+} from '../test-utils/test-helpers'
 
 // Split verbose-related assertions into separate smaller tests to satisfy max-lines-per-function
 
 describe('updateCommand defaults tests', () => {
   it('update with defaults uses config registries', async () => {
-    const fs = new InMemoryFileSystemService({
+    const fs = createTestFs(DEFAULT_CONFIG, {
       '/dataset/.github/workflows/ci.yml': 'workflow content',
       '/dataset/.pair/knowledge.md': 'knowledge content',
     })
@@ -55,7 +32,7 @@ describe('updateCommand defaults tests', () => {
 
 describe('updateCommand overrides and flags tests', () => {
   it('update with registry override', async () => {
-    const fs = new InMemoryFileSystemService({
+    const fs = createTestFs(GITHUB_ONLY_CONFIG, {
       '/dataset/.github/workflows/ci.yml': 'workflow content',
     })
 
@@ -71,7 +48,7 @@ describe('updateCommand overrides and flags tests', () => {
   })
 
   it('update with multiple registry overrides', async () => {
-    const fs = new InMemoryFileSystemService({
+    const fs = createTestFs(GITHUB_KNOWLEDGE_CONFIG, {
       '/dataset/.github/workflows/ci.yml': 'workflow content',
       '/dataset/.pair/knowledge.md': 'knowledge content',
     })
@@ -90,7 +67,7 @@ describe('updateCommand overrides and flags tests', () => {
 
 describe('updateCommand - dry run', () => {
   it('dry-run with defaults does not write files', async () => {
-    const fs = new InMemoryFileSystemService({
+    const fs = createTestFs(GITHUB_ONLY_CONFIG, {
       '/dataset/.github/workflows/ci.yml': 'workflow content',
     })
     const spy = vi.spyOn(commandUtils, 'doCopyAndUpdateLinks')
@@ -108,7 +85,7 @@ describe('updateCommand - dry run', () => {
 
 describe('updateCommand - verbose logging', () => {
   it('verbose returns logs (presence)', async () => {
-    const fs = new InMemoryFileSystemService({
+    const fs = createTestFs(GITHUB_ONLY_CONFIG, {
       '/dataset/.github/workflows/ci.yml': 'workflow content',
     })
 
@@ -126,7 +103,7 @@ describe('updateCommand - verbose logging', () => {
   })
 
   it('verbose returns logs (content check)', async () => {
-    const fs = new InMemoryFileSystemService({
+    const fs = createTestFs(GITHUB_ONLY_CONFIG, {
       '/dataset/.github/workflows/ci.yml': 'workflow content',
     })
 
@@ -150,7 +127,7 @@ describe('updateCommand - verbose logging', () => {
 
 describe('updateCommand - error cases', () => {
   it('fails if target directory does not exist', async () => {
-    const fs = new InMemoryFileSystemService({
+    const fs = createTestFs(GITHUB_ONLY_CONFIG, {
       '/dataset/.github/workflows/ci.yml': 'workflow content',
     })
 

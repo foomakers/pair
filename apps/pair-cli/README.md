@@ -34,6 +34,30 @@ pnpm add -D @pair/pair-cli
 npx pair-cli install ./dataset
 ```
 
+### Manual Install (offline/air-gapped)
+
+For environments without internet access or when you need a self-contained version:
+
+1. **Download** the latest `pair-cli-manual-vX.Y.Z.zip` from [GitHub Releases](https://github.com/foomakers/pair/releases)
+2. **Extract** to your desired location
+3. **Execute** directly (no installation required):
+
+   ```bash
+   # Unix/Linux/macOS
+   ./pair-cli --help
+
+   # Windows
+   pair-cli.cmd --help
+   ```
+
+   The manual artifact is completely self-contained and includes:
+
+   - All dependencies bundled in a single JavaScript file
+   - Cross-platform executables
+   - TypeScript definitions
+   - Knowledge base dataset
+   - Configuration files
+
 ## Quick Start
 
 ### List available asset registries
@@ -63,7 +87,7 @@ This will populate the configured target folders (e.g., `.github`, `.pair`, etc.
 ### Install to custom location
 
 ```bash
-pair-cli install ./dataset
+pair-cli install ./.pair_custom
 ```
 
 ### Update existing installation
@@ -180,11 +204,13 @@ apps/pair-cli/           # Main CLI application
 │       ├── update.ts   # Update command logic
 │       └── command-utils.ts # Shared utilities
 ├── test-utils/         # Testing helpers
-└── config.json         # Default configuration
+├── config.json         # Default configuration
+└── package.json        # Package configuration
 
 packages/
 ├── knowledge-hub/      # Asset source package
-└── content-ops/        # File system operations library
+├── content-ops/        # File system operations library
+└── monorepo-tests/     # Testing utilities
 ```
 
 ### Development Setup

@@ -13,3 +13,4 @@ coverage/
 TODO.md
 tsconfig.*tsbuildinfo
 .turbo/
+release/
