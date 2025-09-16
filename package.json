@@ -21,6 +21,7 @@
     "quality-gate": "turbo ts:check test lint && turbo prettier:fix"
   },
   "devDependencies": {
+    "@changesets/cli": "catalog:",
     "@pair/prettier-config": "workspace:*",
     "husky": "catalog:",
     "turbo": "catalog:"

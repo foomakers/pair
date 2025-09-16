@@ -56,6 +56,25 @@ Before running the packaging script, ensure:
 - Node.js and npm/npx are available in CI environment
 - `ncc` bundler is accessible via npx (auto-installs if needed)
 - `dts-bundle-generator` is available for TypeScript definitions
+- `@changesets/cli` is available (we recommend using the workspace-installed CLI via `pnpm exec changeset`).
+  - Adopted version: `2.29.7`
+
+### Creating and applying a changeset (local E2E)
+
+1. Create a changeset describing the change (from the repo root):
+
+```bash
+# interactive: select package and change type (patch/minor/major)
+pnpm exec changeset add
+```
+
+2. Generate version bumps and changelogs locally (this will update package.json files and create version commits/tags when configured):
+
+```bash
+pnpm exec changeset version
+```
+
+Note: `changeset version` may create commits and tags locally depending on configuration. Run these commands on a clean working tree or in a temporary branch if you want to keep the workspace tidy.
 
 ### Build Dependencies
 
