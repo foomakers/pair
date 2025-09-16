@@ -172,3 +172,49 @@ The workflow uses:
 - `GITHUB_TOKEN` - Automatically provided for release creation
 
 This automated process ensures consistent, reproducible releases with bundled artifacts ready for manual installation in any environment.
+
+## Repository configuration
+
+This section documents the repository-level settings needed to fully automate releases. The repository currently uses the built-in `GITHUB_TOKEN` for Actions; the checklist below assumes that token will be used. If your organization requires a dedicated PAT, see the notes under "Alternative token (PAT)".
+
+Checklist (actions for repo admin)
+
+- [ ] Actions → Settings → Workflow permissions: set to "Read and write permissions" (required for workflows that push tags/commits).
+- [ ] If your org policy requires a PAT instead of `GITHUB_TOKEN`, add a repository secret named `GH_RELEASE_TOKEN` (or `RELEASE_TOKEN`) with scope `repo` and update your workflows to use it. See note below.
+- [ ] Branch protection for `main`:
+  - Require pull request reviews before merge (1+ approver).
+  - Require status checks to pass before merging. Recommended checks (use exact names as displayed in the Checks UI):
+    - `Version (Changesets) / version` (the changesets versioning job in `.github/workflows/version.yml`)
+    - `Release / release` (the release workflow job in `.github/workflows/release.yml`)
+    - Any other CI checks you consider mandatory (unit tests, lint, typecheck). Add them using the exact check names after a run.
+  - Require branches to be up-to-date before merging (prevents merges when the base has new commits).
+  - (Optional) Enforce signed commits or linear history if your org requires them.
+- [ ] Confirm repository Actions settings allow the workflows you rely on (no blocked third-party actions if release uses `softprops/action-gh-release` or others).
+
+Verification steps (how to confirm everything works end-to-end)
+
+1. Confirm `Workflow permissions` is set to Read & write.
+2. Create a test changeset locally:
+
+```bash
+pnpm exec changeset add --empty
+git add .changeset && git commit -m "test(changeset): test versioning"
+git push origin HEAD:refs/heads/test-changeset
+# Open a PR to merge to main and merge it (or merge directly in a test repo)
+```
+
+3. Observe GitHub Actions for the push/merge: ensure the `Version (Changesets)` workflow runs and creates a version commit/tag. Check the Checks UI for the `Version (Changesets) / version` job.
+4. Verify `release` workflow runs (on tag) and that artifacts are produced and uploaded. Confirm the Check named `Release / release` completes successfully.
+5. If any check is missing from branch protection, run a workflow to populate the check name and then add it to protection settings.
+
+Notes on tokens and scopes
+
+- `GITHUB_TOKEN` (recommended): automatically available to Actions and usually sufficient for creating commits/tags and creating releases. Preferred for simplicity and security.
+- Alternative (PAT): create a `GH_RELEASE_TOKEN` repository or organization secret with `repo` scope if your org policies prevent `GITHUB_TOKEN` from creating tags/releases. To use it, update workflows where `GITHUB_TOKEN` is referenced and set `env: GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}` (or similar).
+
+Rollback and emergency process (short)
+
+- To revert a bad release: revert the version commit (created by the `version` job) and push a new commit that contains a corrected changeset (or create a patch changeset). If a release tag was created and published, delete the release and tag from GitHub and re-run the corrected pipeline.
+- Document the exact rollback steps and responsible contacts in your internal ops notes if you need stricter SLAs.
+
+When this checklist is complete and a test changeset produces the expected version commit, tag and release artifacts, Task-006 can be marked as done.
