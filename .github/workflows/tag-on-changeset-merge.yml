@@ -1,0 +1,88 @@
+name: Tag on Changeset PR Merge
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  tag:
+    # Only run when the PR was merged and it is a changeset-release branch
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'changeset-release/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GH_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Install jq
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y jq
+
+      - name: Determine merge commit
+        id: merge
+        run: |
+          echo "merge_sha=${{ github.event.pull_request.merge_commit_sha }}" >> $GITHUB_OUTPUT
+
+      - name: Determine monorepo version (highest bumped package)
+        id: determine_version
+        run: |
+          set -euo pipefail
+          sha="${{ steps.merge.outputs.merge_sha }}"
+          # Collect changed package.json files from the merge commit
+          files=$(git show --name-only --pretty="" "$sha" | grep -E '(^|/)(package.json)$' || true)
+          if [ -z "$files" ]; then
+            echo "No package.json changed in merge commit; exiting."
+            exit 0
+          fi
+          echo "Changed package.json files:" >&2
+          echo "$files" >&2
+          versions=""
+          for f in $files; do
+            # Ensure file exists in repo (it should in merge commit)
+            if [ ! -f "$f" ]; then
+              # try extracting file from commit
+              tmpver=$(git show "$sha":"$f" 2>/dev/null | jq -r .version || echo)
+            else
+              tmpver=$(jq -r .version "$f" 2>/dev/null || echo)
+            fi
+            if [ -n "$tmpver" ] && [ "$tmpver" != "null" ]; then
+              echo "$tmpver"
+              versions="$versions
+$tmpver"
+            fi
+          done
+          # pick highest semver (sort -V works for semver on ubuntu)
+          # sanitize versions list and pick last
+          v=$(echo "$versions" | sed '/^$/d' | sort -V | tail -n1 || true)
+          if [ -z "$v" ]; then
+            echo "Could not determine a version from changed package.json files; exiting." >&2
+            exit 0
+          fi
+          echo "version=$v" >> $GITHUB_OUTPUT
+          echo "VERSION=$v" >> $GITHUB_ENV
+
+      - name: Create monorepo tag v$${{ steps.determine_version.outputs.version }}
+        env:
+          GIT_TAG_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sha="${{ steps.merge.outputs.merge_sha }}"
+          ver="${{ steps.determine_version.outputs.version }}"
+          tag="v${ver}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git rev-parse "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists, skipping"
+            exit 0
+          fi
+          git tag -a "$tag" -m "Release ${tag} (from changeset PR #${{ github.event.pull_request.number }})" "$sha"
+          echo "Pushing tag $tag"
+          git push "https://x-access-token:${GIT_TAG_TOKEN}@github.com/${{ github.repository }}" "refs/tags/$tag"
+          echo "Created tag $tag"
