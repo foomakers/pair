@@ -3,3 +3,5 @@
 ---
 
 test: smoke test for workflow permissions
+
+retrigger: Wed Sep 17 08:08:55 UTC 2025
