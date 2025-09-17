@@ -1,0 +1,42 @@
+name: Version (Changesets) - Smoke
+
+on:
+  push:
+    branches:
+      - 'test/workflow-perms-smoke'
+    paths:
+      - '.changeset/**'
+  workflow_dispatch:
+
+jobs:
+  version:
+    name: Create version commits and tags (smoke)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository (full)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.15.0'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create version commits and tags (Changesets)
+        uses: changesets/action@v1
+        with:
+          # Do not publish, only create version commits and tags
+          publish: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
