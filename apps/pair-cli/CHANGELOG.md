@@ -1,5 +1,11 @@
 # @pair/pair-cli
 
+## 0.1.0
+
+### Minor Changes
+
+- 289cf90: Test changeset for smoke test
+
 ## 0.0.1
 
 ### Patch Changes
