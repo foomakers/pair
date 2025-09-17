@@ -1,6 +1,6 @@
 {
   "name": "@pair/content-ops",
-  "version": "0.0.1-wip",
+  "version": "0.1.0",
   "description": "Shared utilities for document file operations: copy/move and markdown link updates",
   "private": true,
   "main": "dist/index.js",

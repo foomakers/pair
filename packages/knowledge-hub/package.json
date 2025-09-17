@@ -1,6 +1,6 @@
 {
   "name": "@pair/knowledge-hub",
-  "version": "0.0.1-wip",
+  "version": "0.1.0",
   "description": "Centralized package for documentation, guides, configs, and static assets for pair.",
   "private": true,
   "files": [
