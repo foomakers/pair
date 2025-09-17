@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout repository (full)
         uses: actions/checkout@v4
@@ -39,4 +40,6 @@ jobs:
           # Do not publish, only create version commits and tags
           publish: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Prefer a repo-scoped PAT provided via the GH_RELEASE_TOKEN secret if present
+          # This helps when the default GITHUB_TOKEN is restricted by org policies.
+          GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
