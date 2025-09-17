@@ -1,0 +1,9 @@
+{
+  "changelog": [
+    "@changesets/cli/changelog"
+  ],
+  "commit": false,
+  "access": "restricted",
+  "baseBranch": "main",
+  "linked": []
+}
