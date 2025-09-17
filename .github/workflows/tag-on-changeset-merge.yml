@@ -54,8 +54,7 @@ jobs:
             fi
             if [ -n "$tmpver" ] && [ "$tmpver" != "null" ]; then
               echo "$tmpver"
-              versions="$versions
-$tmpver"
+              versions="$versions $tmpver"
             fi
           done
           # pick highest semver (sort -V works for semver on ubuntu)
@@ -68,7 +67,7 @@ $tmpver"
           echo "version=$v" >> $GITHUB_OUTPUT
           echo "VERSION=$v" >> $GITHUB_ENV
 
-      - name: Create monorepo tag v$${{ steps.determine_version.outputs.version }}
+      - name: Create monorepo tag
         env:
           GIT_TAG_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
