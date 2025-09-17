@@ -74,6 +74,12 @@ jobs:
           set -euo pipefail
           sha="${{ steps.merge.outputs.merge_sha }}"
           ver="${{ steps.determine_version.outputs.version }}"
+          # safety: trim whitespace/newlines from ver
+          ver=$(echo "${ver}" | tr -d '\n' | tr -d '\r' | xargs || true)
+          if [ -z "${ver}" ]; then
+            echo "No version determined; skipping tag creation"
+            exit 0
+          fi
           tag="v${ver}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
