@@ -2,4 +2,4 @@
 "@pair/pair-cli": patch
 ---
 
-Test PR creation workflow
+Test PR creation workflow - final test
