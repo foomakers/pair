@@ -69,6 +69,8 @@ jobs:
           git push origin "$RELEASE_BRANCH"
 
       - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Extract version for PR creation
           CLI_VERSION=$(cat apps/pair-cli/package.json | jq -r '.version')
