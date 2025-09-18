@@ -9,7 +9,7 @@ on:
 
 jobs:
   version:
-    name: Create version commits and tags
+    name: Create version commits and PR
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -42,7 +42,7 @@ jobs:
           echo "version=$CLI_VERSION" >> $GITHUB_OUTPUT
           echo "CLI_VERSION=$CLI_VERSION" >> $GITHUB_ENV
 
-      - name: Update root package.json and create single commit
+      - name: Update root package.json and create release branch
         run: |
           # Configure git user for commit
           git config user.name "github-actions[bot]"
@@ -62,7 +62,11 @@ jobs:
           fi
 
           git commit -m "chore: release v$CLI_VERSION"
-          git push origin HEAD
+          
+          # Create and switch to release branch
+          RELEASE_BRANCH="changeset-release/v$CLI_VERSION-${GITHUB_RUN_NUMBER}"
+          git checkout -b "$RELEASE_BRANCH"
+          git push origin "$RELEASE_BRANCH"
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
