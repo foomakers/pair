@@ -1,5 +1,13 @@
 # @pair/pair-cli
 
+## 0.1.1
+
+### Patch Changes
+
+- 48bcead: Test changeset for smoke test pipeline - second attempt
+- 63a92b9: Test changeset for smoke test pipeline
+  - @pair/knowledge-hub@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes
