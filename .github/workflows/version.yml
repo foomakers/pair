@@ -62,7 +62,7 @@ jobs:
           fi
 
           git commit -m "chore: release v$CLI_VERSION"
-          
+
           # Create and switch to release branch
           RELEASE_BRANCH="changeset-release/v$CLI_VERSION-${GITHUB_RUN_NUMBER}"
           git checkout -b "$RELEASE_BRANCH"
