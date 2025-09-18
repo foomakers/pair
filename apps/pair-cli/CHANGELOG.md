@@ -1,5 +1,12 @@
 # @pair/pair-cli
 
+## 0.0.7
+
+### Patch Changes
+
+- 9255013: Smoke test release to verify the complete release pipeline.
+  - @pair/knowledge-hub@0.0.7
+
 ## 0.0.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@pair/prettier-config",
-  "version": "0.0.1-wip",
+  "version": "0.0.7",
   "private": true,
   "license": "MIT",
   "main": ".prettierrc.json",
