@@ -20,10 +20,14 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GH_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - name: Install jq
+      - name: Debug PR information
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y jq
+          echo "PR Number: ${{ github.event.pull_request.number }}"
+          echo "PR Head Ref: ${{ github.event.pull_request.head.ref }}"
+          echo "PR Base Ref: ${{ github.event.pull_request.base.ref }}"
+          echo "PR Merged: ${{ github.event.pull_request.merged }}"
+          echo "Merge Commit SHA: ${{ github.event.pull_request.merge_commit_sha }}"
+          echo "Head ref starts with changeset-release/: ${{ startsWith(github.event.pull_request.head.ref, 'changeset-release/') }}"
 
       - name: Determine merge commit
         id: merge
@@ -67,27 +71,42 @@ jobs:
           echo "version=$v" >> $GITHUB_OUTPUT
           echo "VERSION=$v" >> $GITHUB_ENV
 
-      - name: Create monorepo tag
+      - name: Create monorepo tag (simplified)
         env:
           GIT_TAG_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           sha="${{ steps.merge.outputs.merge_sha }}"
-          ver="${{ steps.determine_version.outputs.version }}"
+          echo "Merge commit SHA: $sha"
+
+          # Try to get version from apps/pair-cli/package.json first
+          if git show "$sha":apps/pair-cli/package.json >/dev/null 2>&1; then
+            ver=$(git show "$sha":apps/pair-cli/package.json | jq -r .version)
+            echo "Version from pair-cli package.json: $ver"
+          else
+            echo "Could not find pair-cli package.json in merge commit"
+            exit 1
+          fi
+
           # safety: trim whitespace/newlines from ver
           ver=$(echo "${ver}" | tr -d '\n' | tr -d '\r' | xargs || true)
           if [ -z "${ver}" ]; then
             echo "No version determined; skipping tag creation"
             exit 0
           fi
+
           tag="v${ver}"
+          echo "Creating tag: $tag"
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
           if git rev-parse "refs/tags/$tag" >/dev/null 2>&1; then
             echo "Tag $tag already exists, skipping"
             exit 0
           fi
+
           git tag -a "$tag" -m "Release ${tag} (from changeset PR #${{ github.event.pull_request.number }})" "$sha"
           echo "Pushing tag $tag"
           git push "https://x-access-token:${GIT_TAG_TOKEN}@github.com/${{ github.repository }}" "refs/tags/$tag"
-          echo "Created tag $tag"
+          echo "✅ Created and pushed tag $tag"
