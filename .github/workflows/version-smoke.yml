@@ -34,31 +34,39 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Create version commits and tags (Changesets)
-        uses: changesets/action@v1
-        with:
-          # Do not publish, only create version commits and tags
-          publish: false
-          commit: false
-        env:
-          # Prefer a repo-scoped PAT provided via the GH_RELEASE_TOKEN secret if present
-          # This helps when the default GITHUB_TOKEN is restricted by org policies.
-          GITHUB_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+      - name: Run Changesets version
+        run: pnpm changeset version
 
-      - name: Update root package.json version and commit
+      - name: Extract version for PR creation
+        id: version
         run: |
           CLI_VERSION=$(cat apps/pair-cli/package.json | jq -r '.version')
-          jq --arg version "$CLI_VERSION" '.version = $version' package.json > package.json.tmp && mv package.json.tmp package.json
+          echo "version=$CLI_VERSION" >> $GITHUB_OUTPUT
           echo "CLI_VERSION=$CLI_VERSION" >> $GITHUB_ENV
+
+      - name: Update root package.json and create single commit
+        run: |
+          # Update root package.json with CLI version
+          CLI_VERSION="${{ steps.version.outputs.version }}"
+          jq --arg version "$CLI_VERSION" '.version = $version' package.json > package.json.tmp && mv package.json.tmp package.json
+
+          # Add all changes (version bumps + root package.json update)
           git add .
-          git commit -m "chore: release v$CLI_VERSION (smoke)" || echo "No changes to commit"
+
+          # Create single commit with proper message
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          git commit -m "chore: release v$CLI_VERSION (smoke)"
           git push origin HEAD
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          branch: changeset-release-smoke/v${{ env.CLI_VERSION }}-${{ github.run_number }}
-          title: 'chore: release v${{ env.CLI_VERSION }} (smoke)'
-          body: 'Automated release PR for version ${{ env.CLI_VERSION }} (smoke test). This PR updates package versions based on changesets and was created by the version-smoke workflow.'
+          branch: changeset-release-smoke/v${{ steps.version.outputs.version }}-${{ github.run_number }}
+          title: 'chore: release v${{ steps.version.outputs.version }} (smoke)'
+          body: 'Automated release PR for version ${{ steps.version.outputs.version }} (smoke test). This PR updates package versions based on changesets and was created by the version-smoke workflow.'
           base: test/workflow-perms-smoke
