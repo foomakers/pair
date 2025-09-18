@@ -1,5 +1,13 @@
 # @pair/pair-cli
 
+## 0.1.2
+
+### Patch Changes
+
+- 888dc6f: Test PR creation workflow - final test
+- cfb5729: Test workflow trigger - checking if build starts after changeset creation
+  - @pair/knowledge-hub@0.1.2
+
 ## 0.1.1
 
 ### Patch Changes

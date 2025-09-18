@@ -1,6 +1,6 @@
 {
   "name": "pair",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "pair is a suite of resources and workflows designed to guide and enable collaboration between development teams and AI assistants throughout all phases of the product lifecycle. It provides tools for defining epics, stories, guidelines, and adoptions, integrating with major code assistants and project management tools to ensure structured processes, consistency, and quality in delivery.",
   "private": true,
   "scripts": {
