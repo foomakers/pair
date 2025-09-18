@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import path from 'path'
 import type { FileSystemService } from '@pair/content-ops'
-import { withTempConfig } from './test-utils/cli-test-helpers'
+import { withTempConfig } from './test-utils/test-helpers'
 import e2eFactory from './test-utils/e2e-factory'
 import {
   getExpectedCiPaths,
@@ -29,7 +29,7 @@ async function runMirrorBehavior(fs: FileSystemService) {
     },
   }
 
-  await withTempConfig(config, async () => {
+  await withTempConfig(fs, config, async () => {
     const registryName = 'github'
     const registryConfig = (config.asset_registries as Record<string, unknown>)[registryName]
     const context = {
@@ -125,7 +125,7 @@ async function runAddBehavior(fs: FileSystemService) {
     },
   }
 
-  await withTempConfig(config, async () => {
+  await withTempConfig(fs, config, async () => {
     const registryName = 'adoption'
     const registryConfig = (config.asset_registries as Record<string, unknown>)[registryName]
     const context = {
@@ -150,7 +150,7 @@ async function installExpectSuccess(
   config: unknown,
   targetArg?: string | undefined,
 ) {
-  return await withTempConfig(config, async () => {
+  return await withTempConfig(fs, config, async () => {
     const res = await handleInstallCommand(
       targetArg === undefined ? undefined : targetArg,
       { config: undefined },
@@ -168,7 +168,7 @@ async function installExpectFailureMessage(
   config: unknown,
   expected: string,
 ) {
-  return await withTempConfig(config, async () => {
+  return await withTempConfig(fs, config, async () => {
     const res = await handleInstallCommand(undefined, { config: undefined }, fs)
     expect(res && (res as { success?: boolean }).success).toBe(false)
     expect(String(res && (res as { message?: string }).message)).toContain(expected)
@@ -182,7 +182,7 @@ async function installCommandWithDefaultsExpect(
   baseTarget: string,
   shouldSucceed = true,
 ) {
-  return await withTempConfig(config, async () => {
+  return await withTempConfig(fs, config, async () => {
     const res = await installCommand(fs, [], { useDefaults: true, baseTarget })
     if (shouldSucceed) {
       if (!res || !(res as { success?: boolean }).success)
@@ -201,7 +201,7 @@ async function installSingleRegistry(
   registryName: string,
   customTarget: string,
 ) {
-  return await withTempConfig(config, async () => {
+  return await withTempConfig(fs, config, async () => {
     const registryConfig = (config.asset_registries as Record<string, unknown>)[registryName]
     const context = {
       registryName,
@@ -352,7 +352,7 @@ describe('e2e: smoke', () => {
     const fs = e2eFactory.makeMinimalSeededFs()
     const config = { asset_registries: {} }
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never)
-    await withTempConfig(config, async () => {
+    await withTempConfig(fs, config, async () => {
       try {
         const mod = (await import('./cli.js')) as unknown as CLIExports
         if (typeof mod.handleInstallCommand === 'function') {
@@ -404,7 +404,7 @@ describe('pair-cli e2e - update basic', () => {
     const fs = e2eFactory.makeCommonSeededFs()
     const config = e2eFactory.customSingleBaseConfig()
     // Keep update inline; it's already concise and unique enough.
-    await withTempConfig(config, async () => {
+    await withTempConfig(fs, config, async () => {
       const res = await handleUpdateCommand({}, fs)
       expect(res === undefined || (res && (res as { success?: boolean }).success === true)).toBe(
         true,
@@ -501,7 +501,7 @@ describe('pair-cli e2e - update mirror behavior', () => {
         },
       }
 
-      await withTempConfig(config, async () => {
+      await withTempConfig(fs, config, async () => {
         const res = await handleUpdateCommand({}, fs)
         expect(res === undefined || (res && (res as { success?: boolean }).success === true)).toBe(
           true,
@@ -580,7 +580,7 @@ describe('pair-cli e2e - behaviors (add|mirror|skip)', () => {
       },
     }
 
-    await withTempConfig(config, async () => {
+    await withTempConfig(fs, config, async () => {
       // use defaults into base target
       const res = await installCommand(fs, [], { useDefaults: true, baseTarget: '.skip_target' })
       if (!res || !(res as { success?: boolean }).success)

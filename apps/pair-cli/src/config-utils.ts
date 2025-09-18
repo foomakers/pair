@@ -1,6 +1,5 @@
-import { readFileSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
-import { Behavior } from '@pair/content-ops'
+import { Behavior, FileSystemService, fileSystemService } from '@pair/content-ops'
 
 // Define proper types for configuration
 export interface RegistryConfig {
@@ -18,32 +17,58 @@ export interface Config {
   [key: string]: unknown
 }
 
-export function getKnowledgeHubDatasetPath() {
-  try {
-    const pkgPath = require.resolve('@pair/knowledge-hub/package.json')
-    return join(dirname(pkgPath), 'dataset')
-  } catch (err) {
-    throw new Error(
-      `Unable to resolve @pair/knowledge-hub package. Ensure the package is available in the workspace and installed. ${String(
-        err,
-      )}`,
-    )
+function findPackageJsonPath(fsService: FileSystemService, currentDir: string = __dirname): string {
+  const targetPkgJson = 'node_modules/@pair/knowledge-hub/package.json'
+  const monorepoPkgJson = 'packages/knowledge-hub/package.json'
+  let dir = currentDir
+
+  // First try monorepo path
+  for (let i = 0; i < 10; i++) {
+    const candidatePath = join(dir, monorepoPkgJson)
+    if (fsService.existsSync(candidatePath)) {
+      return candidatePath
+    }
+    const parentDir = dirname(dir)
+    if (parentDir === dir) {
+      break
+    }
+    dir = parentDir
   }
+
+  // Then try node_modules
+  dir = currentDir
+  for (let i = 0; i < 10; i++) {
+    const candidatePath = join(dir, targetPkgJson)
+    if (fsService.existsSync(candidatePath)) {
+      return candidatePath
+    }
+    const parentDir = dirname(dir)
+    if (parentDir === dir) {
+      break
+    }
+    dir = parentDir
+  }
+
+  throw new Error(
+    `Unable to find @pair/knowledge-hub package. Ensure the package is available in the workspace and installed.`,
+  )
 }
 
-export function getKnowledgeHubConfig(): Config {
-  try {
-    const pkgPath = require.resolve('@pair/knowledge-hub/package.json')
-    const configPath = join(dirname(pkgPath), 'config.json')
-    const configContent = readFileSync(configPath, 'utf-8')
-    return JSON.parse(configContent) as Config
-  } catch {
-    // Return default config if file doesn't exist or can't be read
-    return {
-      asset_registries: {},
-      default_target_folders: { pair: '.pair', github: '.github' },
-      folders_to_include: { github: ['/chatmodes', '/prompts', 'instructions'] },
+export function getKnowledgeHubDatasetPath(
+  fsService: FileSystemService = fileSystemService,
+  currentDir: string = __dirname,
+): string {
+  if (isInRelease(currentDir)) {
+    // In release, dataset is at [release-root]/bundle-cli/dataset
+    const releaseDatasetPath = join(currentDir, '..', 'dataset')
+    if (!fsService.existsSync(releaseDatasetPath)) {
+      throw new Error(`Dataset not found in release bundle at: ${releaseDatasetPath}`)
     }
+    return releaseDatasetPath
+  } else {
+    // In monorepo/development, find via node_modules
+    const pkgPath = findPackageJsonPath(fsService, currentDir)
+    return join(dirname(pkgPath), 'dataset')
   }
 }
 
@@ -55,15 +80,15 @@ export function getKnowledgeHubConfig(): Config {
  * 4. knowledge-hub config.json (lowest priority)
  */
 export function loadConfigWithOverrides(
+  fsService: FileSystemService = fileSystemService,
   options: { customConfigPath?: string; projectRoot?: string } = {},
 ): { config: Config; source: string } {
   const { customConfigPath, projectRoot = process.cwd() } = options
 
   // Start with the base config (either local app config or knowledge-hub)
-  let { config, source } = loadBaseConfig()
-
+  let { config, source } = loadBaseConfig(fsService)
   // Apply pair.config if present in the project root
-  const pairApplied = applyPairConfigIfExists(config, projectRoot)
+  const pairApplied = applyPairConfigIfExists(fsService, config, projectRoot)
   if (pairApplied) {
     config = pairApplied.config
     source = 'pair.config.json'
@@ -71,7 +96,7 @@ export function loadConfigWithOverrides(
 
   // Merge custom config file when provided
   if (customConfigPath) {
-    config = mergeWithCustomConfig(config, customConfigPath)
+    config = mergeWithCustomConfig(fsService, config, customConfigPath)
     source = `custom config: ${customConfigPath}`
   }
 
@@ -80,29 +105,38 @@ export function loadConfigWithOverrides(
   return { config, source }
 }
 
-function loadBaseConfig(): { config: Config; source: string } {
-  try {
-    const appConfigPath = join(__dirname, '..', 'config.json')
-    if (existsSync(appConfigPath)) {
-      const appConfigContent = readFileSync(appConfigPath, 'utf-8')
-      return { config: JSON.parse(appConfigContent) as Config, source: 'pair-cli config.json' }
-    }
-  } catch {
-    // ignore and fallback
-  }
+export function isInRelease(currentDir: string = __dirname): boolean {
+  return currentDir.includes('/bundle-cli/')
+}
 
-  // Fallback to knowledge-hub
-  return { config: getKnowledgeHubConfig(), source: 'knowledge-hub config.json' }
+function baseConfigPath() {
+  return join(__dirname, '..', 'config.json')
+}
+
+function loadBaseConfig(fsService: FileSystemService): { config: Config; source: string } {
+  const appConfigPath = baseConfigPath()
+  try {
+    if (fsService.existsSync(appConfigPath)) {
+      const appConfigContent = fsService.readFileSync(appConfigPath)
+
+      return { config: JSON.parse(appConfigContent) as Config, source: 'pair-cli config.json' }
+    } else {
+      throw new Error(`Config file not found in pair-cli. expected path: ${appConfigPath}`)
+    }
+  } catch (err) {
+    throw new Error(`Failed to load base config: ${String(err)}`)
+  }
 }
 
 function applyPairConfigIfExists(
+  fsService: FileSystemService,
   baseConfig: Config,
   projectRoot: string,
 ): { config: Config } | null {
   const pairConfigPath = join(projectRoot, 'pair.config.json')
-  if (existsSync(pairConfigPath)) {
+  if (fsService.existsSync(pairConfigPath)) {
     try {
-      const pairConfigContent = readFileSync(pairConfigPath, 'utf-8')
+      const pairConfigContent = fsService.readFileSync(pairConfigPath)
       const pairConfig = JSON.parse(pairConfigContent)
       return { config: mergeConfigs(baseConfig, pairConfig) }
     } catch {
@@ -113,9 +147,13 @@ function applyPairConfigIfExists(
   return null
 }
 
-function mergeWithCustomConfig(baseConfig: Config, customConfigPath: string): Config {
+function mergeWithCustomConfig(
+  fsService: FileSystemService,
+  baseConfig: Config,
+  customConfigPath: string,
+): Config {
   try {
-    const customConfigContent = readFileSync(customConfigPath, 'utf-8')
+    const customConfigContent = fsService.readFileSync(customConfigPath)
     const customConfig = JSON.parse(customConfigContent)
     return mergeConfigs(baseConfig, customConfig)
   } catch (err) {

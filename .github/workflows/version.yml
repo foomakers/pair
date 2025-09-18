@@ -1,0 +1,79 @@
+name: Version (Changesets)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.changeset/**'
+
+jobs:
+  version:
+    name: Create version commits and tags
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository (full)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.15.0'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create version commits and tags (Changesets)
+        run: |
+          # Configure git user
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Get current CLI version before changesets
+          OLD_CLI_VERSION=$(cat apps/pair-cli/package.json | jq -r '.version')
+
+          # Run changesets version (this updates package.json files and creates commits)
+          pnpm changeset version
+
+          # Get new CLI version after changesets
+          CLI_VERSION=$(cat apps/pair-cli/package.json | jq -r '.version')
+
+          # Update root package.json version to match CLI version
+          jq --arg version "$CLI_VERSION" '.version = $version' package.json > package.json.tmp && mv package.json.tmp package.json
+
+          # Add root package.json to the last commit (amend)
+          git add package.json
+          git commit --amend --no-edit --allow-empty
+
+          # Set environment variable for PR creation
+          echo "CLI_VERSION=$CLI_VERSION" >> $GITHUB_ENV
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release branch and PR
+        run: |
+          # Create a new branch for the PR from current commit
+          BRANCH_NAME="changeset-release/v${{ env.CLI_VERSION }}-${{ github.run_number }}"
+          git checkout -b "$BRANCH_NAME"
+
+          # Push the new branch
+          git push origin "$BRANCH_NAME"
+
+          # Create PR with gh CLI
+          gh pr create \
+            --title "chore: release v${{ env.CLI_VERSION }}" \
+            --body "Automated release PR for version ${{ env.CLI_VERSION }}. This PR updates package versions based on changesets and was created by the version workflow." \
+            --base "main" \
+            --head "$BRANCH_NAME"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

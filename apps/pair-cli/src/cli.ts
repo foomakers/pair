@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
-import { readFileSync, existsSync, accessSync, constants } from 'fs'
+import { readFileSync } from 'fs'
 import { join, isAbsolute, resolve } from 'path'
 import chalk from 'chalk'
 
@@ -20,17 +20,17 @@ program.name(chalk.blue(pkg.name)).description(pkg.description).version(pkg.vers
 const MIN_LOG_LEVEL: LogLevel = 'INFO'
 setLogLevel(MIN_LOG_LEVEL)
 
-function checkKnowledgeHubDatasetAccessible(): void {
+function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService): void {
   try {
     const datasetPath = getKnowledgeHubDatasetPath()
-    if (!existsSync(datasetPath)) {
+    if (!fsService.existsSync(datasetPath)) {
       console.error(chalk.red(`[startup] dataset folder not found at: ${datasetPath}`))
       process.exitCode = 1
       process.exit(1)
     }
 
     try {
-      accessSync(datasetPath, constants.R_OK)
+      fsService.accessSync(datasetPath)
     } catch {
       console.error(chalk.red(`[startup] dataset folder is not readable: ${datasetPath}`))
       process.exitCode = 1
@@ -43,7 +43,7 @@ function checkKnowledgeHubDatasetAccessible(): void {
   }
 }
 
-checkKnowledgeHubDatasetAccessible()
+checkKnowledgeHubDatasetAccessible(fileSystemService)
 
 interface AssetRegistryConfig {
   source?: string
@@ -171,7 +171,7 @@ export async function handleUpdateCommand(
   }
 
   try {
-    const datasetRoot = validateUpdateConfigAndGetRoot(cmdOptions)
+    const datasetRoot = validateUpdateConfigAndGetRoot(fsService, cmdOptions)
 
     const { args, useDefaults } = buildUpdateArgs(cmdOptions)
 
@@ -208,11 +208,11 @@ export async function handleUpdateCommand(
  */
 function handleUpdateListTargets(cmdOptions: CommandOptions): void {
   const { config } = cmdOptions.config
-    ? loadConfigWithOverrides({
+    ? loadConfigWithOverrides(fileSystemService, {
         customConfigPath: cmdOptions.config,
         projectRoot: process.cwd(),
       })
-    : loadConfigWithOverrides({
+    : loadConfigWithOverrides(fileSystemService, {
         projectRoot: process.cwd(),
       })
   console.log(chalk.blue('\n📁 Available asset registries:\n'))
@@ -263,11 +263,14 @@ function handleUpdateListTargets(cmdOptions: CommandOptions): void {
 /**
  * Validate config and determine dataset root for update
  */
-function validateUpdateConfigAndGetRoot(cmdOptions: CommandOptions): string {
+function validateUpdateConfigAndGetRoot(
+  fsService: FileSystemService,
+  cmdOptions: CommandOptions,
+): string {
   if (cmdOptions.config) {
     const configPath = cmdOptions.config
     try {
-      JSON.parse(readFileSync(configPath, 'utf-8'))
+      JSON.parse(fsService.readFileSync(configPath))
       // TODO: validate config structure
     } catch (err) {
       console.error(chalk.red(`Failed to load config file ${configPath}: ${String(err)}`))
@@ -307,7 +310,7 @@ program
   .description('Validate the asset registry configuration')
   .action(async () => {
     try {
-      const { config } = loadConfigWithOverrides()
+      const { config } = loadConfigWithOverrides(fileSystemService)
       const validation = validateConfig(config)
 
       if (validation.valid) {

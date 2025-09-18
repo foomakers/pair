@@ -1,9 +1,13 @@
-import { Dirent, promises as fs, Stats } from 'fs'
+import { constants, Dirent, promises as fs, Stats } from 'fs'
+import { readFileSync, existsSync, accessSync } from 'fs'
 
 // File system service interface
 export interface FileSystemService {
+  accessSync: (path: string) => void
   readdir: (path: string) => Promise<Dirent[]>
   readFile: (file: string) => Promise<string>
+  readFileSync: (file: string) => string
+  existsSync: (file: string) => boolean
   writeFile: (file: string, content: string) => Promise<void>
   exists: (path: string) => Promise<boolean>
   unlink: (path: string) => Promise<void>
@@ -18,8 +22,11 @@ export interface FileSystemService {
  * Default file system service implementation using Node.js fs
  */
 export const fileSystemService: FileSystemService = {
+  accessSync: path => accessSync(path, constants.R_OK),
   readdir: path => fs.readdir(path, { withFileTypes: true }),
   readFile: file => fs.readFile(file, 'utf-8'),
+  existsSync: file => existsSync(file),
+  readFileSync: file => readFileSync(file, 'utf-8'),
   writeFile: (file, content) => fs.writeFile(file, content, 'utf-8'),
   exists: async path => {
     try {

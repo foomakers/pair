@@ -1,0 +1,19 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@3.1.1/schema.json",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "fixed": [
+    [
+      "@pair/pair-cli",
+      "@pair/content-ops",
+      "@pair/knowledge-hub",
+      "@pair/eslint-config",
+      "@pair/prettier-config"
+    ]
+  ],
+  "linked": [],
+  "access": "restricted",
+  "baseBranch": "test/workflow-perms-smoke",
+  "updateInternalDependencies": "patch",
+  "ignore": []
+}

@@ -3,14 +3,14 @@
   "version": "0.0.1-wip",
   "description": "CLI for support the interaction with the developer",
   "main": "dist/index.js",
-  "types": "dist/index..d.ts",
+  "types": "dist/index.d.ts",
   "bin": {
     "pair-cli": "dist/cli.js"
   },
   "files": [
     "dist",
     "README.md",
-    "LICENCE"
+    "LICENSE"
   ],
   "author": "Gianluca Carucci <gianluca@carucci.org>",
   "private": false,
