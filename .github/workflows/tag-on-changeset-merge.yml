@@ -11,7 +11,7 @@ permissions:
 jobs:
   tag:
     # Only run when the PR was merged and it is a changeset-release branch
-    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'changeset-release/')
+    if: github.event.pull_request.merged == true && (startsWith(github.event.pull_request.head.ref, 'changeset-release/') || startsWith(github.event.pull_request.head.ref, 'changeset-release-smoke/'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
