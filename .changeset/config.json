@@ -13,7 +13,7 @@
   ],
   "linked": [],
   "access": "restricted",
-  "baseBranch": "test/workflow-perms-smoke",
+  "baseBranch": "main",
   "updateInternalDependencies": "patch",
   "ignore": []
 }
