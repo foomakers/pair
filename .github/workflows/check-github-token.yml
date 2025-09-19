@@ -1,0 +1,89 @@
+name: Check GITHUB_TOKEN permissions
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  token-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Print context
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            core.info(`Running token check in ${context.repo.owner}/${context.repo.repo}`)
+
+      - name: Create temporary branch (test ref)
+        id: create_ref
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const refName = `refs/heads/token-check-${{ github.run_id }}`
+            const sha = context.sha
+            core.info(`Creating ref ${refName} -> ${sha}`)
+            try {
+              const res = await github.git.createRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: refName,
+                sha,
+              })
+              core.setOutput('ref', refName)
+              core.info('Branch created')
+            } catch (err) {
+              core.setFailed(`Failed to create ref: ${err.message}`)
+            }
+
+      - name: Create PR (test)
+        id: create_pr
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const head = `${{ steps.create_ref.outputs.ref.replace('refs/heads/','') }}`
+            core.info(`Creating PR from ${head} into main`)
+            try {
+              const pr = await github.rest.pulls.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `Token check PR - run ${{ github.run_id }}`,
+                head,
+                base: 'main',
+                body: 'This PR was created by a permissions-check workflow to validate GITHUB_TOKEN scopes. It will be closed automatically.'
+              })
+              core.setOutput('pr_number', pr.data.number)
+              core.info(`PR created: #${pr.data.number}`)
+            } catch (err) {
+              core.setFailed(`Failed to create PR: ${err.message}`)
+            }
+
+      - name: Close PR and cleanup
+        if: steps.create_pr.outputs.pr_number != ''
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const prNumber = parseInt('${{ steps.create_pr.outputs.pr_number }}')
+            try {
+              await github.rest.pulls.update({ owner: context.repo.owner, repo: context.repo.repo, pull_number: prNumber, state: 'closed' })
+              core.info(`Closed PR #${prNumber}`)
+            } catch (err) {
+              core.warning(`Could not close PR: ${err.message}`)
+            }
+            // delete the temporary branch
+            const ref = '${{ steps.create_ref.outputs.ref }}'
+            try {
+              await github.git.deleteRef({ owner: context.repo.owner, repo: context.repo.repo, ref: ref.replace('refs/', '') })
+              core.info(`Deleted ref ${ref}`)
+            } catch (err) {
+              core.warning(`Could not delete ref: ${err.message}`)
+            }

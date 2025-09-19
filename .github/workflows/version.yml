@@ -60,7 +60,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create release branch and PR
+      - name: Create and push release branch
+        id: create_branch
         run: |
           # Create a new branch for the PR from current commit
           BRANCH_NAME="changeset-release/v${{ env.CLI_VERSION }}-${{ github.run_number }}"
@@ -69,11 +70,22 @@ jobs:
           # Push the new branch
           git push origin "$BRANCH_NAME"
 
-          # Create PR with gh CLI
-          gh pr create \
-            --title "chore: release v${{ env.CLI_VERSION }}" \
-            --body "Automated release PR for version ${{ env.CLI_VERSION }}. This PR updates package versions based on changesets and was created by the version workflow." \
-            --base "main" \
-            --head "$BRANCH_NAME"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create release PR via REST API (no gh CLI)
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branch = '${{ steps.create_branch.outputs.branch_name }}'
+            const title = `chore: release v${{ env.CLI_VERSION }}`
+            const body = `Automated release PR for version ${{ env.CLI_VERSION }}. This PR updates package versions based on changesets and was created by the version workflow.`
+            const response = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              head: branch,
+              base: 'main',
+              body,
+            })
+            core.info(`Created PR #${response.data.number}`)
