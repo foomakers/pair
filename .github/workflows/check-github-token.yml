@@ -31,7 +31,8 @@ jobs:
             const sha = context.sha
             core.info(`Creating ref ${refName} -> ${sha}`)
             try {
-              const res = await github.git.createRef({
+              // Use the REST namespace for git operations
+              const res = await github.rest.git.createRef({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 ref: refName,
@@ -83,7 +84,7 @@ jobs:
             // delete the temporary branch
             const ref = '${{ steps.create_ref.outputs.ref }}'
             try {
-              await github.git.deleteRef({ owner: context.repo.owner, repo: context.repo.repo, ref: ref.replace('refs/', '') })
+              await github.rest.git.deleteRef({ owner: context.repo.owner, repo: context.repo.repo, ref: ref.replace('refs/', '') })
               core.info(`Deleted ref ${ref}`)
             } catch (err) {
               core.warning(`Could not delete ref: ${err.message}`)
