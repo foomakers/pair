@@ -63,6 +63,7 @@ jobs:
       - name: Create and push release branch
         id: create_branch
         run: |
+          set -euo pipefail
           # Create a new branch for the PR from current commit
           BRANCH_NAME="changeset-release/v${{ env.CLI_VERSION }}-${{ github.run_number }}"
           git checkout -b "$BRANCH_NAME"
@@ -72,7 +73,7 @@ jobs:
 
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
 
-      - name: Create release PR via REST API (no gh CLI)
+      - name: Create release PR via REST API (no gh CLI) with retries
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -80,12 +81,31 @@ jobs:
             const branch = '${{ steps.create_branch.outputs.branch_name }}'
             const title = `chore: release v${{ env.CLI_VERSION }}`
             const body = `Automated release PR for version ${{ env.CLI_VERSION }}. This PR updates package versions based on changesets and was created by the version workflow.`
-            const response = await github.rest.pulls.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title,
-              head: branch,
-              base: 'main',
-              body,
-            })
-            core.info(`Created PR #${response.data.number}`)
+            const maxAttempts = 3
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              try {
+                // Check for existing PR from branch
+                const existing = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' })
+                if (existing.data && existing.data.length > 0) {
+                  core.info(`Existing PR found: #${existing.data[0].number}`)
+                  break
+                }
+
+                const response = await github.rest.pulls.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title,
+                  head: branch,
+                  base: 'main',
+                  body,
+                })
+                core.info(`Created PR #${response.data.number}`)
+                break
+              } catch (err) {
+                core.warning(`Attempt ${attempt} failed to create PR: ${err.message}`)
+                if (attempt === maxAttempts) throw err
+                const delay = 5000 * attempt
+                core.info(`Retrying after ${delay}ms...`)
+                await new Promise(r => setTimeout(r, delay))
+              }
+            }

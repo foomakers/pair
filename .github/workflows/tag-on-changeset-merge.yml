@@ -4,15 +4,14 @@ on:
   pull_request_target:
     types: [closed]
 
-permissions:
-  contents: write
-  pull-requests: read
-
 jobs:
   tag:
     # Only run when the PR was merged and it is a changeset-release branch
     if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'changeset-release/')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -85,44 +84,58 @@ jobs:
           echo "version=$v" >> $GITHUB_OUTPUT
           echo "VERSION=$v" >> $GITHUB_ENV
 
-      - name: Create monorepo tag (simplified)
-        env:
-          # Use the workflow-provided token by default. Ensure repository Actions
-          # permissions allow `contents: write` (already declared at top of file).
-          GIT_TAG_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          sha="${{ steps.merge.outputs.merge_sha }}"
-          echo "Merge commit SHA: $sha"
+      - name: Create monorepo tag via REST API
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const core = require('@actions/core')
+            const { owner, repo } = context.repo
+            const sha = '${{ steps.merge.outputs.merge_sha }}'
 
-          # Try to get version from apps/pair-cli/package.json first
-          if git show "$sha":apps/pair-cli/package.json >/dev/null 2>&1; then
-            ver=$(git show "$sha":apps/pair-cli/package.json | jq -r .version)
-            echo "Version from pair-cli package.json: $ver"
-          else
-            echo "Could not find pair-cli package.json in merge commit"
-            exit 1
-          fi
+            // Try to read package.json from the merge commit
+            let ver = null
+            try {
+              const content = await github.repos.getContent({ owner, repo, path: 'apps/pair-cli/package.json', ref: sha })
+              const buf = Buffer.from(content.data.content, content.data.encoding)
+              const pkg = JSON.parse(buf.toString())
+              ver = pkg.version
+              core.info(`Version from pair-cli package.json: ${ver}`)
+            } catch (err) {
+              core.warning(`Could not read package.json from merge commit: ${err.message}`)
+            }
 
-          # safety: trim whitespace/newlines from ver
-          ver=$(echo "${ver}" | tr -d '\n' | tr -d '\r' | xargs || true)
-          if [ -z "${ver}" ]; then
-            echo "No version determined; skipping tag creation"
-            exit 0
-          fi
+            if (!ver) {
+              core.info('Could not determine version from merge commit; skipping tag creation')
+              return
+            }
 
-          tag="v${ver}"
-          echo "Creating tag: $tag"
+            const tag = `v${ver}`
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+            // Check if tag exists
+            try {
+              await github.git.getRef({ owner, repo, ref: `tags/${tag}` })
+              core.info(`Tag ${tag} already exists, skipping`)
+              return
+            } catch (err) {
+              if (err.status !== 404) throw err
+            }
 
-          if git rev-parse "refs/tags/$tag" >/dev/null 2>&1; then
-            echo "Tag $tag already exists, skipping"
-            exit 0
-          fi
+            // Create a tag object and reference
+            const tagObj = await github.git.createTag({
+              owner,
+              repo,
+              tag,
+              message: `Release ${tag} (from changeset PR #${{ github.event.pull_request.number }})`,
+              object: sha,
+              type: 'commit'
+            })
 
-          git tag -a "$tag" -m "Release ${tag} (from changeset PR #${{ github.event.pull_request.number }})" "$sha"
-          echo "Pushing tag $tag"
-          git push "https://x-access-token:${GIT_TAG_TOKEN}@github.com/${{ github.repository }}" "refs/tags/$tag"
-          echo "✅ Created and pushed tag $tag"
+            await github.git.createRef({
+              owner,
+              repo,
+              ref: `refs/tags/${tag}`,
+              sha: tagObj.data.sha
+            })
+
+            core.info(`✅ Created tag ${tag}`)

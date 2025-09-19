@@ -63,7 +63,7 @@ jobs:
           chmod +x scripts/package-manual.sh
           ./scripts/package-manual.sh ${{ steps.version.outputs.version }}
 
-      - name: Upload release artifacts
+      - name: Upload release artifacts as workflow artifacts
         uses: actions/upload-artifact@v4
         with:
           name: pair-cli-manual-${{ steps.version.outputs.version }}
@@ -72,12 +72,12 @@ jobs:
             release/pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256
           retention-days: 30
 
-      - name: Create or update GitHub release
+      - name: Create GitHub Release
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        uses: softprops/action-gh-release@v2
+        uses: actions/create-release@v1
         with:
           tag_name: ${{ steps.version.outputs.version }}
-          name: Release ${{ steps.version.outputs.version }}
+          release_name: Release ${{ steps.version.outputs.version }}
           body: |
             ## Manual Installation Artifacts
 
@@ -102,10 +102,27 @@ jobs:
             - Documentation and license
 
             For more details, see [RELEASE.md](docs/RELEASE.md) and [CLI README](apps/pair-cli/README.md).
-          files: |
-            release/pair-cli-manual-${{ steps.version.outputs.version }}.zip
-            release/pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256
-          draft: false
-          prerelease: ${{ (contains(steps.version.outputs.version, 'WIP') || contains(steps.version.outputs.version, 'rc') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'alpha')) }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release assets to the created release
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url || env.RELEASE_UPLOAD_URL }}
+          asset_path: release/pair-cli-manual-${{ steps.version.outputs.version }}.zip
+          asset_name: pair-cli-manual-${{ steps.version.outputs.version }}.zip
+          asset_content_type: application/zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload checksum to the release
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url || env.RELEASE_UPLOAD_URL }}
+          asset_path: release/pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256
+          asset_name: pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256
+          asset_content_type: text/plain
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
