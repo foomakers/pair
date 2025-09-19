@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - '.changeset/**'
+  workflow_dispatch:
 
 jobs:
   version:
@@ -34,7 +35,17 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Create version commits and tags (Changesets)
+        if: ${{ env.HAS_NEW_CHANGESET == 'true' }}
         run: |
+          set -euo pipefail
+
+          # Shell-level guard in case env interpolation isn't available yet
+          if [ "${HAS_NEW_CHANGESET:-}" != "true" ]; then
+            echo "No new .changeset files were added in this push. Skipping changeset versioning."
+            echo "HAS_CHANGES=false" >> $GITHUB_ENV
+            exit 0
+          fi
+
           # Configure git user
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
