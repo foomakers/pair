@@ -9,11 +9,7 @@ import {
   CommandOptions,
   LogEntry,
 } from './command-utils'
-import {
-  getKnowledgeHubConfig,
-  getKnowledgeHubDatasetPath,
-  loadConfigWithOverrides,
-} from '../config-utils'
+import { getKnowledgeHubDatasetPath, loadConfigWithOverrides } from '../config-utils'
 
 // Define types for asset registry configuration
 interface AssetRegistryConfig {
@@ -68,7 +64,7 @@ async function updateWithDefaults(
   pushLog('info', 'Starting updateWithDefaults')
 
   try {
-    const assetRegistries = loadAssetRegistriesForUpdate()
+    const assetRegistries = loadAssetRegistriesForUpdate(fsService)
 
     if (Object.keys(assetRegistries).length === 0) {
       return { success: false, message: 'no asset registries found in config' }
@@ -96,19 +92,12 @@ async function updateWithDefaults(
   }
 }
 
-function loadAssetRegistriesForUpdate(): Record<string, AssetRegistryConfig> {
-  try {
-    if (typeof loadConfigWithOverrides === 'function') {
-      const loader = loadConfigWithOverrides({ projectRoot: process.cwd() })
-      const cfg = loader && loader.config ? loader.config : undefined
-      return (cfg && cfg.asset_registries) || {}
-    }
-  } catch {
-    // fallthrough
-  }
-
-  const cfg = getKnowledgeHubConfig()
-  return cfg.asset_registries || {}
+function loadAssetRegistriesForUpdate(
+  fsService: FileSystemService,
+): Record<string, AssetRegistryConfig> {
+  const loader = loadConfigWithOverrides(fsService, { projectRoot: process.cwd() })
+  const cfg = loader && loader.config ? loader.config : undefined
+  return (cfg && cfg.asset_registries) || {}
 }
 
 type UpdateDefaultsCtx = {
@@ -242,8 +231,8 @@ async function processAssetRegistries(ctx: ProcessAssetRegistriesCtx) {
   // Prefer INIT_CWD if provided (e.g., when invoked via pnpm) so the
   // project root used to find pair.config.json matches the caller's cwd.
   const projectRoot = process.env['INIT_CWD'] || process.cwd()
-  const loader = loadConfigWithOverrides({ projectRoot })
-  const config = loader && loader.config ? loader.config : getKnowledgeHubConfig()
+  const loader = loadConfigWithOverrides(fsService, { projectRoot })
+  const config = loader.config
   const assetRegistries = config.asset_registries || {}
 
   for (const [registryName, registryConfig] of Object.entries(assetRegistries)) {

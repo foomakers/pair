@@ -36,7 +36,7 @@ Your responsibilities include:
 ## Prerequisites
 
 - Use .pair/pair_catalog.md file to lookup the full md path file from the name. Es. from .pair/adoption/tech/way-of-working.md retrieve .pair/product/adopted/adopted_way-of-working.md
-- Get the current project management tool from .pair/adoption/tech/way-of-working.md and related tool instruction from .pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management-framework.mdfile
+- Get the current project management tool from .pair/adoption/tech/way-of-working.md and related tool instruction from .pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md file
   -Before starting any activity:
 - Read these documents:
   - .pair/way-of-working.md
