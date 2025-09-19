@@ -1,0 +1,111 @@
+name: Version (Changesets)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.changeset/**'
+
+jobs:
+  version:
+    name: Create version commits and tags
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository (full)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.15.0'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create version commits and tags (Changesets)
+        run: |
+          # Configure git user
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Get current CLI version before changesets (use node to avoid jq dependency)
+          OLD_CLI_VERSION=$(node -e "console.log(require('./apps/pair-cli/package.json').version)")
+
+          # Run changesets version (this updates package.json files and creates commits)
+          pnpm changeset version
+
+          # Get new CLI version after changesets (use node to avoid jq dependency)
+          CLI_VERSION=$(node -e "console.log(require('./apps/pair-cli/package.json').version)")
+
+          # Update root package.json version to match CLI version (use node)
+          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.version=process.argv[1]; fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');" "$CLI_VERSION"
+
+          # Add root package.json to the last commit (amend)
+          git add package.json
+          git commit --amend --no-edit --allow-empty
+
+          # Set environment variable for PR creation
+          echo "CLI_VERSION=$CLI_VERSION" >> $GITHUB_ENV
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push release branch
+        id: create_branch
+        run: |
+          set -euo pipefail
+          # Create a new branch for the PR from current commit
+          BRANCH_NAME="changeset-release/v${{ env.CLI_VERSION }}-${{ github.run_number }}"
+          git checkout -b "$BRANCH_NAME"
+
+          # Push the new branch
+          git push origin "$BRANCH_NAME"
+
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create release PR via REST API (no gh CLI) with retries
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branch = '${{ steps.create_branch.outputs.branch_name }}'
+            const title = `chore: release v${{ env.CLI_VERSION }}`
+            const body = `Automated release PR for version ${{ env.CLI_VERSION }}. This PR updates package versions based on changesets and was created by the version workflow.`
+            const maxAttempts = 3
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              try {
+                // Check for existing PR from branch
+                const existing = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' })
+                if (existing.data && existing.data.length > 0) {
+                  core.info(`Existing PR found: #${existing.data[0].number}`)
+                  break
+                }
+
+                const response = await github.rest.pulls.create({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  title,
+                  head: branch,
+                  base: 'main',
+                  body,
+                })
+                core.info(`Created PR #${response.data.number}`)
+                break
+              } catch (err) {
+                core.warning(`Attempt ${attempt} failed to create PR: ${err.message}`)
+                if (attempt === maxAttempts) throw err
+                const delay = 5000 * attempt
+                core.info(`Retrying after ${delay}ms...`)
+                await new Promise(r => setTimeout(r, delay))
+              }
+            }

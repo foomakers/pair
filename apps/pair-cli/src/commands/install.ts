@@ -12,7 +12,6 @@ import * as commandUtils from './command-utils'
 import {
   getKnowledgeHubDatasetPath as getKnowledgeHubDatasetPath,
   loadConfigWithOverrides,
-  getKnowledgeHubConfig,
 } from '../config-utils'
 
 // Define types for asset registry configuration
@@ -140,7 +139,7 @@ async function installWithDefaults(
   pushLog('info', 'Starting installWithDefaults')
 
   try {
-    const { assetRegistries, datasetRoot } = loadConfigAndAssetRegistries(options)
+    const { assetRegistries, datasetRoot } = loadConfigAndAssetRegistries(fsService, options)
 
     // Validate all targets before performing any copies to avoid partial installs
     const entries = Object.entries(assetRegistries) as Array<[string, AssetRegistryConfig]>
@@ -174,10 +173,10 @@ async function installWithDefaults(
  * Load config (with overrides) and return asset registries plus dataset root.
  * Extracted to keep installWithDefaults / installWithOverrides small.
  */
-function loadConfigAndAssetRegistries(options?: InstallOptions) {
+function loadConfigAndAssetRegistries(fsService: FileSystemService, options?: InstallOptions) {
   const loaderOpts: { customConfigPath?: string } = {}
   if (options?.customConfigPath) loaderOpts.customConfigPath = options.customConfigPath
-  const loader = loadConfigSafe(loaderOpts)
+  const loader = loadConfigWithOverrides(fsService, loaderOpts)
   const config = loader.config
   const assetRegistries = config.asset_registries || {}
   if (!assetRegistries || Object.keys(assetRegistries).length === 0) {
@@ -263,30 +262,6 @@ async function anyNonEmptyTargetExists(
   }
 
   return false
-}
-
-/**
- * Safe loader for configuration that falls back to getKnowledgeHubConfig when
- * loadConfigWithOverrides is not available (useful for tests that partially
- * mock the module).
- */
-function loadConfigSafe(options?: { customConfigPath?: string }) {
-  try {
-    if (typeof loadConfigWithOverrides === 'function') {
-      return loadConfigWithOverrides(options || {})
-    }
-  } catch {
-    // fall through to fallback
-  }
-
-  // Fallback: use the basic knowledge-hub config
-  const baseConfig =
-    typeof getKnowledgeHubConfig === 'function' ? getKnowledgeHubConfig() : { asset_registries: {} }
-  const config = { ...baseConfig, asset_registries: { ...(baseConfig.asset_registries || {}) } }
-
-  // Return the base config from the knowledge-hub package
-
-  return { config, source: 'fallback-knowledge-hub' }
 }
 
 // No additional registry validation is required in the simplified CLI flow.
@@ -634,7 +609,7 @@ async function handleRegistryInstallation(context: RegistryHandlerContext): Prom
 
     const loaderOpts: { customConfigPath?: string } = {}
     if (options?.customConfigPath) loaderOpts.customConfigPath = options.customConfigPath
-    const loader = loadConfigSafe(loaderOpts)
+    const loader = loadConfigWithOverrides(fsService, loaderOpts)
     const config = loader.config
     const assetRegistries = config.asset_registries || {}
 

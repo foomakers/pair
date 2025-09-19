@@ -21,10 +21,20 @@ export class InMemoryFileSystemService implements FileSystemService {
     }
   }
 
+  accessSync() {}
+
   async readFile(path: string): Promise<string> {
+    return this.readFileSync(path)
+  }
+
+  readFileSync(path: string): string {
     const file = this.files.get(path)
     if (!file) throw new Error(`File not found: ${path}`)
     return file
+  }
+
+  existsSync(path: string): boolean {
+    return this.files.has(path) || this.dirs.has(path)
   }
 
   async writeFile(path: string, content: string): Promise<void> {
@@ -37,7 +47,7 @@ export class InMemoryFileSystemService implements FileSystemService {
   }
 
   async exists(path: string): Promise<boolean> {
-    return this.files.has(path) || this.dirs.has(path)
+    return this.existsSync(path)
   }
 
   async mkdir(path: string, options?: { recursive?: boolean }): Promise<void> {

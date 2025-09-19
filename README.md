@@ -1,9 +1,9 @@
-# Pair - your AI-Assisted peer [![CI](https://github.com/foomakers/pair/actions/workflows/ci.yml/badge.svg)](https://github.com/foomakers/pair/actions/workflows/ci.yml)
+# Pair - your AI-Assisted peer [![CI](https://github.com/foomakers/pair/actions/workflows/ci.yml/badge.svg)](https://github.com/foomakers/pair/actions/workflows/ci.yml) [![Release](https://github.com/foomakers/pair/actions/workflows/release.yml/badge.svg)](https://github.com/foomakers/pair/actions/workflows/release.yml)
 
 ## 🌟 Product Context
 
 **Product Name:** pair
-**Version:** 0.1.0
+**Version:** 0.0.1-wip
 **Owner:** Foomakers
 
 ### Vision
@@ -53,6 +53,7 @@ pnpm install
 - `pnpm deps:outdated` — shows outdated dependencies
 - `pnpm catalog:update` — updates the pnpm catalog
 - `pnpm catalog:check` — shows catalog contents
+- `pnpm exec changeset` — run the workspace Changesets CLI (adopted version: 2.29.7)
 
 ### Running tests
 
@@ -94,11 +95,12 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 ├── tools/                         # Development tools and configs
 │   ├── eslint-config/             # Shared ESLint configuration
 │   ├── prettier-config/           # Shared Prettier configuration
-│   └── monorepo-tests/            # Monorepo-wide testing utilities
+│   └── content-ops/               # File operations and link processing
 ├── .pair/                         # AI-specific files and configurations
 │   ├── how-to/                    # Development process documentation
 │   ├── product/                   # Product requirements and PRD
 │   ├── tech/                      # Technical guidelines and standards
+│   ├── assets/                    # Document templates and examples
 │   └── way-of-working.md         # Process and collaboration guidelines
 ├── turbo.json                     # Turbo configuration
 ├── pnpm-workspace.yaml           # pnpm workspace configuration
@@ -198,7 +200,7 @@ pnpm build
 
 ### 3. Development Workflow
 
-```bash
+````bash
 # Work on a specific package
 cd packages/knowledge-hub
 pnpm test                    # Run tests for this package
@@ -212,7 +214,22 @@ pnpm --filter @pair/pair-cli dev  # Run in development mode
 pnpm lint                    # Lint all packages
 pnpm ts:check               # Type-check all packages
 pnpm test:coverage          # Run tests with coverage
-```
+
+### Working with Changesets
+
+Changesets are used to manage version bumps and changelogs for releases. Recommended workflow:
+
+```bash
+# create an interactive changeset
+pnpm exec changeset add
+
+# generate version bumps/changelogs locally
+pnpm exec changeset version
+````
+
+We adopt `@changesets/cli` v2.29.7 in this workspace; use `pnpm exec changeset` to run the workspace-installed CLI.
+
+````
 
 ### 4. Adding New Packages
 
@@ -260,7 +277,7 @@ pnpm clean                # Clean build artifacts
 pnpm sync-deps           # Update all dependencies
 pnpm deps:outdated       # Check for outdated packages
 pnpm catalog:update      # Update pnpm catalog
-```
+````
 
 ### Working with Individual Packages
 

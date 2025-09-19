@@ -10,7 +10,7 @@
     "build": "rm -rf dist && mkdir -p dist && cp -R dataset dist/dataset",
     "prettier:fix": "prettier-fix",
     "prettier:check": "prettier-check",
-    "test": "vitest run || true",
+    "test": "vitest run || pnpm check:links",
     "test:coverage": "vitest run --coverage || true",
     "ts:check": "tsc --noEmit",
     "lint": "lint",
