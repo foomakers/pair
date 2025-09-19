@@ -121,21 +121,33 @@ jobs:
               if (err.status !== 404) throw err
             }
 
-            // Create a tag object and reference
-            const tagObj = await github.git.createTag({
-              owner,
-              repo,
-              tag,
-              message: `Release ${tag} (from changeset PR #${{ github.event.pull_request.number }})`,
-              object: sha,
-              type: 'commit'
-            })
+            // Create a tag object and reference with retries
+            const maxAttemptsTag = 3
+            for (let attempt = 1; attempt <= maxAttemptsTag; attempt++) {
+              try {
+                const tagObj = await github.git.createTag({
+                  owner,
+                  repo,
+                  tag,
+                  message: `Release ${tag} (from changeset PR #${{ github.event.pull_request.number }})`,
+                  object: sha,
+                  type: 'commit'
+                })
 
-            await github.git.createRef({
-              owner,
-              repo,
-              ref: `refs/tags/${tag}`,
-              sha: tagObj.data.sha
-            })
+                await github.git.createRef({
+                  owner,
+                  repo,
+                  ref: `refs/tags/${tag}`,
+                  sha: tagObj.data.sha
+                })
 
-            core.info(`✅ Created tag ${tag}`)
+                core.info(`✅ Created tag ${tag}`)
+                break
+              } catch (err) {
+                core.warning(`Attempt ${attempt} failed to create tag: ${err.message}`)
+                if (attempt === maxAttemptsTag) throw err
+                const delay = 3000 * attempt
+                core.info(`Retrying after ${delay}ms...`)
+                await new Promise(r => setTimeout(r, delay))
+              }
+            }
