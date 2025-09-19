@@ -3,21 +3,41 @@ name: Tag on Changeset PR Merge
 on:
   pull_request_target:
     types: [closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to simulate'
+        required: true
+        type: string
+      merge_commit_sha:
+        description: 'Merge commit SHA'
+        required: true
+        type: string
+      head_ref:
+        description: 'Head ref (should start with changeset-release/)'
+        required: true
+        type: string
 
 jobs:
   tag:
-    # Only run when the PR was merged and it is a changeset-release branch
-    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'changeset-release/')
+    # Only run when the PR was merged and it is a changeset-release branch, or when manually triggered
+    if: (github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'changeset-release/')) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: read
     steps:
+      - name: Set event data for manual trigger
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "PR_NUMBER=${{ github.event.inputs.pr_number }}" >> $GITHUB_ENV
+          echo "MERGE_COMMIT_SHA=${{ github.event.inputs.merge_commit_sha }}" >> $GITHUB_ENV
+          echo "HEAD_REF=${{ github.event.inputs.head_ref }}" >> $GITHUB_ENV
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # Use the workflow's token (GITHUB_TOKEN) which has minimal permissions
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Diagnostic - print GITHUB_TOKEN repo permissions
@@ -25,61 +45,95 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            core.info(`Repository: ${context.repo.owner}/${context.repo.repo}`)
+            console.log(`Repository: ${context.repo.owner}/${context.repo.repo}`)
             try {
-              const repo = await github.repos.get({ owner: context.repo.owner, repo: context.repo.repo })
-              core.info(`Effective permissions for token: ${JSON.stringify(repo.data.permissions)}`)
+              const { data: repo } = await github.rest.repos.get({ 
+                owner: context.repo.owner, 
+                repo: context.repo.repo 
+              })
+              console.log(`Effective permissions for token: ${JSON.stringify(repo.permissions)}`)
             } catch (err) {
-              core.warning(`Could not fetch repo permissions: ${err.message}`)
+              console.log(`Could not fetch repo permissions: ${err.message}`)
             }
 
       - name: Debug PR information
         run: |
-          echo "PR Number: ${{ github.event.pull_request.number }}"
-          echo "PR Head Ref: ${{ github.event.pull_request.head.ref }}"
-          echo "PR Base Ref: ${{ github.event.pull_request.base.ref }}"
+          echo "PR Number: ${{ env.PR_NUMBER || github.event.pull_request.number }}"
+          echo "PR Head Ref: ${{ env.HEAD_REF || github.event.pull_request.head.ref }}"
+          echo "PR Base Ref: ${{ github.event.pull_request.base_ref }}"
           echo "PR Merged: ${{ github.event.pull_request.merged }}"
-          echo "Merge Commit SHA: ${{ github.event.pull_request.merge_commit_sha }}"
-          echo "Head ref starts with changeset-release/: ${{ startsWith(github.event.pull_request.head.ref, 'changeset-release/') }}"
+          echo "Merge Commit SHA: ${{ env.MERGE_COMMIT_SHA || github.event.pull_request.merge_commit_sha }}"
+          echo "Head ref starts with changeset-release/: ${{ startsWith(env.HEAD_REF || github.event.pull_request.head.ref, 'changeset-release/') }}"
 
       - name: Determine merge commit
         id: merge
         run: |
-          echo "merge_sha=${{ github.event.pull_request.merge_commit_sha }}" >> $GITHUB_OUTPUT
+          echo "merge_sha=${{ env.MERGE_COMMIT_SHA || github.event.pull_request.merge_commit_sha }}" >> $GITHUB_OUTPUT
 
       - name: Determine monorepo version (highest bumped package)
         id: determine_version
         run: |
           set -euo pipefail
           sha="${{ steps.merge.outputs.merge_sha }}"
+          echo "Analyzing merge commit: $sha"
+
+          # Show what files changed in the merge commit
+          echo "Files changed in merge commit:"
+          git show --name-only --pretty="" "$sha" || true
+
           # Collect changed package.json files from the merge commit
           files=$(git show --name-only --pretty="" "$sha" | grep -E '(^|/)(package.json)$' || true)
           if [ -z "$files" ]; then
-            echo "No package.json changed in merge commit; exiting."
-            exit 0
+            echo "No package.json changed in merge commit."
+            echo "Checking if this is a merge commit with package.json changes..."
+            
+            # For merge commits, also check the diff between parents
+            parents=$(git log --pretty=%P -n 1 "$sha")
+            if [ $(echo "$parents" | wc -w) -gt 1 ]; then
+              echo "This is a merge commit, checking diff with first parent..."
+              first_parent=$(echo "$parents" | cut -d' ' -f1)
+              files=$(git diff --name-only "$first_parent" "$sha" | grep -E '(^|/)(package.json)$' || true)
+            fi
+            
+            if [ -z "$files" ]; then
+              echo "Still no package.json changes found; checking for any package.json in repo..."
+              # Fallback: look for main package.json files
+              if [ -f "package.json" ]; then
+                files="package.json"
+              elif [ -f "apps/pair-cli/package.json" ]; then
+                files="apps/pair-cli/package.json"
+              else
+                echo "No package.json files found; exiting."
+                exit 0
+              fi
+            fi
           fi
-          echo "Changed package.json files:" >&2
-          echo "$files" >&2
+
+          echo "Package.json files to check: $files"
           versions=""
           for f in $files; do
             # Ensure file exists in repo (it should in merge commit)
             if [ ! -f "$f" ]; then
               # try extracting file from commit
-              # Extract version using node to avoid jq dependency
-              tmpver=$(git show "$sha":"$f" 2>/dev/null | node -e "let s=''; process.stdin.on('data',c=>s+=c); process.stdin.on('end',()=>{try{const p=JSON.parse(s); console.log(p.version||'')}catch(e){}})")
+              echo "Extracting $f from commit $sha..."
+              tmpver=$(git show "$sha":"$f" 2>/dev/null | node -e "let s=''; process.stdin.on('data',c=>s+=c); process.stdin.on('end',()=>{try{const p=JSON.parse(s); console.log(p.version||'')}catch(e){console.error('Parse error:', e.message)}})" || echo)
             else
-              tmpver=$(node -e "try{const p=require('./$f'); console.log(p.version||'')}catch(e){}" 2>/dev/null || echo)
+              tmpver=$(node -e "try{const p=require('./$f'); console.log(p.version||'')}catch(e){console.error('Require error:', e.message)}" 2>/dev/null || echo)
             fi
-            if [ -n "$tmpver" ] && [ "$tmpver" != "null" ]; then
-              echo "$tmpver"
+            echo "Version from $f: $tmpver"
+            if [ -n "$tmpver" ] && [ "$tmpver" != "null" ] && [ "$tmpver" != "undefined" ]; then
               versions="$versions $tmpver"
             fi
           done
+
           # pick highest semver (sort -V works for semver on ubuntu)
           # sanitize versions list and pick last
-          v=$(echo "$versions" | sed '/^$/d' | sort -V | tail -n1 || true)
+          v=$(echo "$versions" | tr ' ' '\n' | sed '/^$/d' | sort -V | tail -n1 || true)
+          echo "All versions found: $versions"
+          echo "Selected version: $v"
+
           if [ -z "$v" ]; then
-            echo "Could not determine a version from changed package.json files; exiting." >&2
+            echo "Could not determine a version from package.json files; exiting." >&2
             exit 0
           fi
           echo "version=$v" >> $GITHUB_OUTPUT
@@ -88,26 +142,56 @@ jobs:
       - name: Create monorepo tag via REST API
         uses: actions/github-script@v7
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GH_RELEASE_TOKEN }}
           script: |
-            const core = require('@actions/core')
             const { owner, repo } = context.repo
             const sha = '${{ steps.merge.outputs.merge_sha }}'
 
             // Try to read package.json from the merge commit
             let ver = null
             try {
-              const content = await github.repos.getContent({ owner, repo, path: 'apps/pair-cli/package.json', ref: sha })
-              const buf = Buffer.from(content.data.content, content.data.encoding)
+              console.log(`Attempting to read apps/pair-cli/package.json from commit ${sha}`)
+              const { data: content } = await github.rest.repos.getContent({ 
+                owner, 
+                repo, 
+                path: 'apps/pair-cli/package.json', 
+                ref: sha 
+              })
+              const buf = Buffer.from(content.content, content.encoding)
               const pkg = JSON.parse(buf.toString())
               ver = pkg.version
-              core.info(`Version from pair-cli package.json: ${ver}`)
+              console.log(`Version from pair-cli package.json: ${ver}`)
             } catch (err) {
-              core.warning(`Could not read package.json from merge commit: ${err.message}`)
+              console.log(`Could not read apps/pair-cli/package.json: ${err.message}`)
+              
+              // Try root package.json as fallback
+              try {
+                console.log(`Attempting to read package.json from commit ${sha}`)
+                const { data: content } = await github.rest.repos.getContent({ 
+                  owner, 
+                  repo, 
+                  path: 'package.json', 
+                  ref: sha 
+                })
+                const buf = Buffer.from(content.content, content.encoding)
+                const pkg = JSON.parse(buf.toString())
+                ver = pkg.version
+                console.log(`Version from root package.json: ${ver}`)
+              } catch (err2) {
+                console.log(`Could not read root package.json: ${err2.message}`)
+              }
+            }
+
+            // If we couldn't get version from API, try using the determined version from previous step
+            if (!ver) {
+              ver = process.env.VERSION
+              if (ver) {
+                console.log(`Using version from previous step: ${ver}`)
+              }
             }
 
             if (!ver) {
-              core.info('Could not determine version from merge commit; skipping tag creation')
+              console.log('Could not determine version from merge commit; skipping tag creation')
               return
             }
 
@@ -115,8 +199,8 @@ jobs:
 
             // Check if tag exists
             try {
-              await github.git.getRef({ owner, repo, ref: `tags/${tag}` })
-              core.info(`Tag ${tag} already exists, skipping`)
+              await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` })
+              console.log(`Tag ${tag} already exists, skipping`)
               return
             } catch (err) {
               if (err.status !== 404) throw err
@@ -126,29 +210,29 @@ jobs:
             const maxAttemptsTag = 3
             for (let attempt = 1; attempt <= maxAttemptsTag; attempt++) {
               try {
-                const tagObj = await github.git.createTag({
+                const { data: tagObj } = await github.rest.git.createTag({
                   owner,
                   repo,
                   tag,
-                  message: `Release ${tag} (from changeset PR #${{ github.event.pull_request.number }})`,
+                  message: `Release ${tag} (from changeset PR #${{ env.PR_NUMBER || github.event.pull_request.number }})`,
                   object: sha,
                   type: 'commit'
                 })
 
-                await github.git.createRef({
+                await github.rest.git.createRef({
                   owner,
                   repo,
                   ref: `refs/tags/${tag}`,
-                  sha: tagObj.data.sha
+                  sha: tagObj.sha
                 })
 
-                core.info(`✅ Created tag ${tag}`)
+                console.log(`✅ Created tag ${tag}`)
                 break
               } catch (err) {
-                core.warning(`Attempt ${attempt} failed to create tag: ${err.message}`)
+                console.log(`Attempt ${attempt} failed to create tag: ${err.message}`)
                 if (attempt === maxAttemptsTag) throw err
                 const delay = 3000 * attempt
-                core.info(`Retrying after ${delay}ms...`)
+                console.log(`Retrying after ${delay}ms...`)
                 await new Promise(r => setTimeout(r, delay))
               }
             }

@@ -39,29 +39,43 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Get current CLI version before changesets (use node to avoid jq dependency)
+          # Get current CLI version before changesets
           OLD_CLI_VERSION=$(node -e "console.log(require('./apps/pair-cli/package.json').version)")
+          echo "Old CLI version: $OLD_CLI_VERSION"
 
-          # Run changesets version (this updates package.json files and creates commits)
+          # Run changesets version (this updates package.json files and removes changeset files)
           pnpm changeset version
 
-          # Get new CLI version after changesets (use node to avoid jq dependency)
+          # Get new CLI version after changesets
           CLI_VERSION=$(node -e "console.log(require('./apps/pair-cli/package.json').version)")
+          echo "New CLI version: $CLI_VERSION"
 
-          # Update root package.json version to match CLI version (use node)
-          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.version=process.argv[1]; fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');" "$CLI_VERSION"
+          # Check if there are any changes to commit
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Changes detected, creating commit..."
+            
+            # Update root package.json version to match CLI version
+            node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.version=process.argv[1]; fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');" "$CLI_VERSION"
 
-          # Add root package.json to the last commit (amend)
-          git add package.json
-          git commit --amend --no-edit --allow-empty
+            # Stage all changes (updated package.json files and removed changeset files)
+            git add .
 
-          # Set environment variable for PR creation
-          echo "CLI_VERSION=$CLI_VERSION" >> $GITHUB_ENV
+            # Create the version commit
+            git commit -m "chore: release v$CLI_VERSION" -m "Version packages and remove changesets"
+
+            # Set environment variable for PR creation
+            echo "CLI_VERSION=$CLI_VERSION" >> $GITHUB_ENV
+            echo "HAS_CHANGES=true" >> $GITHUB_ENV
+          else
+            echo "No changes detected, skipping commit creation"
+            echo "HAS_CHANGES=false" >> $GITHUB_ENV
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create and push release branch
         id: create_branch
+        if: ${{ env.HAS_CHANGES == 'true' }}
         run: |
           set -euo pipefail
           # Create a new branch for the PR from current commit
@@ -74,18 +88,33 @@ jobs:
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
 
       - name: Create release PR via REST API (no gh CLI) with retries
+        if: ${{ env.HAS_CHANGES == 'true' }}
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const branch = '${{ steps.create_branch.outputs.branch_name }}'
             const title = `chore: release v${{ env.CLI_VERSION }}`
-            const body = `Automated release PR for version ${{ env.CLI_VERSION }}. This PR updates package versions based on changesets and was created by the version workflow.`
+            const body = `Automated release PR for version ${{ env.CLI_VERSION }}.
+
+            This PR includes:
+            - Updated package versions based on changesets
+            - Removed processed changeset files
+            - Synchronized root package.json version
+
+            Created by the version workflow.`
+
             const maxAttempts = 3
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
               try {
                 // Check for existing PR from branch
-                const existing = await github.rest.pulls.list({ owner: context.repo.owner, repo: context.repo.repo, head: `${context.repo.owner}:${branch}`, state: 'open' })
+                const existing = await github.rest.pulls.list({ 
+                  owner: context.repo.owner, 
+                  repo: context.repo.repo, 
+                  head: `${context.repo.owner}:${branch}`, 
+                  state: 'open' 
+                })
+                
                 if (existing.data && existing.data.length > 0) {
                   core.info(`Existing PR found: #${existing.data[0].number}`)
                   break
@@ -109,3 +138,12 @@ jobs:
                 await new Promise(r => setTimeout(r, delay))
               }
             }
+
+      - name: No changes detected
+        if: ${{ env.HAS_CHANGES == 'false' }}
+        run: |
+          echo "No changesets were processed. This might happen if:"
+          echo "- Changeset files were already processed"
+          echo "- No valid changeset files exist"
+          echo "- Changeset files don't contain version bumps"
+          echo "Workflow completed without creating a PR."
