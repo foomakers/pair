@@ -221,8 +221,20 @@ else
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Get the actual directory of this script, resolving symlinks
-SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" || echo "${BASH_SOURCE[0]}")")" && pwd)"
+# Portable resolution of the script directory (works on macOS and Linux)
+resolve_script_dir() {
+  # http://mywiki.wooledge.org/BashFAQ/028
+  local SOURCE="$1"
+  while [ -L "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+    local DIR
+    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+  done
+  cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd
+}
+
+SCRIPT_DIR="$(resolve_script_dir "${BASH_SOURCE[0]}")"
 PKG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Run the bundled artifact directly
@@ -245,8 +257,19 @@ else
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Get the actual directory of this script, resolving symlinks
-SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" || echo "${BASH_SOURCE[0]}")")" && pwd)"
+# Portable resolution of the script directory (works on macOS and Linux)
+resolve_script_dir() {
+  local SOURCE="$1"
+  while [ -L "$SOURCE" ]; do
+    local DIR
+    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+  done
+  cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd
+}
+
+SCRIPT_DIR="$(resolve_script_dir "${BASH_SOURCE[0]}")"
 
 # Run the bundled artifact directly
 if [ -f "$SCRIPT_DIR/bundle-cli/index.js" ]; then

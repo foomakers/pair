@@ -65,9 +65,10 @@ jobs:
             # Ensure file exists in repo (it should in merge commit)
             if [ ! -f "$f" ]; then
               # try extracting file from commit
-              tmpver=$(git show "$sha":"$f" 2>/dev/null | jq -r .version || echo)
+              # Extract version using node to avoid jq dependency
+              tmpver=$(git show "$sha":"$f" 2>/dev/null | node -e "let s=''; process.stdin.on('data',c=>s+=c); process.stdin.on('end',()=>{try{const p=JSON.parse(s); console.log(p.version||'')}catch(e){}})")
             else
-              tmpver=$(jq -r .version "$f" 2>/dev/null || echo)
+              tmpver=$(node -e "try{const p=require('./$f'); console.log(p.version||'')}catch(e){}" 2>/dev/null || echo)
             fi
             if [ -n "$tmpver" ] && [ "$tmpver" != "null" ]; then
               echo "$tmpver"

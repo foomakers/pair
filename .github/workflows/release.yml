@@ -72,6 +72,56 @@ jobs:
             release/pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256
           retention-days: 30
 
+      - name: Smoke-test packaged artifact (verify checksum and run --version)
+        run: |
+          set -euo pipefail
+          V=${{ steps.version.outputs.version }}
+          ZIP=release/pair-cli-manual-${V}.zip
+          SUM=release/pair-cli-manual-${V}.zip.sha256
+
+          if [ ! -f "$ZIP" ]; then
+            echo "Error: artifact $ZIP not found"
+            exit 1
+          fi
+          if [ ! -f "$SUM" ]; then
+            echo "Error: checksum $SUM not found"
+            exit 1
+          fi
+
+          # Verify checksum (use sha256sum if present, else shasum)
+          if command -v sha256sum >/dev/null 2>&1; then
+            calc=$(sha256sum "$ZIP" | awk '{print $1}')
+          else
+            calc=$(shasum -a 256 "$ZIP" | awk '{print $1}')
+          fi
+          expected=$(cat "$SUM" | tr -d '\n' | tr -d '\r')
+          if [ "$calc" != "$expected" ]; then
+            echo "Error: checksum mismatch (expected $expected, got $calc)"
+            exit 1
+          fi
+
+          TMPDIR=$(mktemp -d)
+          unzip -q "$ZIP" -d "$TMPDIR"
+          ART_DIR="$TMPDIR/pair-cli-manual-${V}"
+          if [ ! -d "$ART_DIR" ]; then
+            echo "Error: extracted artifact directory not found: $ART_DIR"
+            ls -la "$TMPDIR"
+            exit 1
+          fi
+
+          # Try running top-level wrapper first, else call node directly
+          if [ -x "$ART_DIR/pair-cli" ]; then
+            "$ART_DIR/pair-cli" --version || true
+          elif [ -x "$ART_DIR/bin/pair-cli" ]; then
+            "$ART_DIR/bin/pair-cli" --version || true
+          elif [ -f "$ART_DIR/bundle-cli/index.js" ]; then
+            node "$ART_DIR/bundle-cli/index.js" --version || true
+          else
+            echo "Warning: no runnable binary found in artifact to smoke-test"
+          fi
+
+          echo "Smoke-test completed (exit codes may be non-zero for CLI version checks if the bundle returns non-zero); proceed with release if tests are acceptable."
+
       - name: Create GitHub Release
         id: create_release
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''

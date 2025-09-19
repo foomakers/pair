@@ -39,17 +39,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Get current CLI version before changesets
-          OLD_CLI_VERSION=$(cat apps/pair-cli/package.json | jq -r '.version')
+          # Get current CLI version before changesets (use node to avoid jq dependency)
+          OLD_CLI_VERSION=$(node -e "console.log(require('./apps/pair-cli/package.json').version)")
 
           # Run changesets version (this updates package.json files and creates commits)
           pnpm changeset version
 
-          # Get new CLI version after changesets
-          CLI_VERSION=$(cat apps/pair-cli/package.json | jq -r '.version')
+          # Get new CLI version after changesets (use node to avoid jq dependency)
+          CLI_VERSION=$(node -e "console.log(require('./apps/pair-cli/package.json').version)")
 
-          # Update root package.json version to match CLI version
-          jq --arg version "$CLI_VERSION" '.version = $version' package.json > package.json.tmp && mv package.json.tmp package.json
+          # Update root package.json version to match CLI version (use node)
+          node -e "const fs=require('fs'); const p=JSON.parse(fs.readFileSync('package.json','utf8')); p.version=process.argv[1]; fs.writeFileSync('package.json', JSON.stringify(p,null,2)+'\n');" "$CLI_VERSION"
 
           # Add root package.json to the last commit (amend)
           git add package.json
