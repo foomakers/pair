@@ -3,16 +3,36 @@ name: Tag on Changeset PR Merge
 on:
   pull_request_target:
     types: [closed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to simulate'
+        required: true
+        type: string
+      merge_commit_sha:
+        description: 'Merge commit SHA'
+        required: true
+        type: string
+      head_ref:
+        description: 'Head ref (should start with changeset-release/)'
+        required: true
+        type: string
 
 jobs:
   tag:
-    # Only run when the PR was merged and it is a changeset-release branch
-    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'changeset-release/')
+    # Only run when the PR was merged and it is a changeset-release branch, or when manually triggered
+    if: (github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'changeset-release/')) || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: read
     steps:
+      - name: Set event data for manual trigger
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "PR_NUMBER=${{ github.event.inputs.pr_number }}" >> $GITHUB_ENV
+          echo "MERGE_COMMIT_SHA=${{ github.event.inputs.merge_commit_sha }}" >> $GITHUB_ENV
+          echo "HEAD_REF=${{ github.event.inputs.head_ref }}" >> $GITHUB_ENV
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -35,17 +55,17 @@ jobs:
 
       - name: Debug PR information
         run: |
-          echo "PR Number: ${{ github.event.pull_request.number }}"
-          echo "PR Head Ref: ${{ github.event.pull_request.head.ref }}"
-          echo "PR Base Ref: ${{ github.event.pull_request.base.ref }}"
+          echo "PR Number: ${{ env.PR_NUMBER || github.event.pull_request.number }}"
+          echo "PR Head Ref: ${{ env.HEAD_REF || github.event.pull_request.head.ref }}"
+          echo "PR Base Ref: ${{ github.event.pull_request.base_ref }}"
           echo "PR Merged: ${{ github.event.pull_request.merged }}"
-          echo "Merge Commit SHA: ${{ github.event.pull_request.merge_commit_sha }}"
-          echo "Head ref starts with changeset-release/: ${{ startsWith(github.event.pull_request.head.ref, 'changeset-release/') }}"
+          echo "Merge Commit SHA: ${{ env.MERGE_COMMIT_SHA || github.event.pull_request.merge_commit_sha }}"
+          echo "Head ref starts with changeset-release/: ${{ startsWith(env.HEAD_REF || github.event.pull_request.head.ref, 'changeset-release/') }}"
 
       - name: Determine merge commit
         id: merge
         run: |
-          echo "merge_sha=${{ github.event.pull_request.merge_commit_sha }}" >> $GITHUB_OUTPUT
+          echo "merge_sha=${{ env.MERGE_COMMIT_SHA || github.event.pull_request.merge_commit_sha }}" >> $GITHUB_OUTPUT
 
       - name: Determine monorepo version (highest bumped package)
         id: determine_version
@@ -90,7 +110,6 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const core = require('@actions/core')
             const { owner, repo } = context.repo
             const sha = '${{ steps.merge.outputs.merge_sha }}'
 
@@ -130,7 +149,7 @@ jobs:
                   owner,
                   repo,
                   tag,
-                  message: `Release ${tag} (from changeset PR #${{ github.event.pull_request.number }})`,
+                  message: `Release ${tag} (from changeset PR #${{ env.PR_NUMBER || github.event.pull_request.number }})`,
                   object: sha,
                   type: 'commit'
                 })
