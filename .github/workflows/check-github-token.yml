@@ -49,7 +49,8 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const head = `${{ steps.create_ref.outputs.ref.replace('refs/heads/','') }}`
+            const rawRef = '${{ steps.create_ref.outputs.ref }}'
+            const head = rawRef.replace('refs/heads/','')
             core.info(`Creating PR from ${head} into main`)
             try {
               const pr = await github.rest.pulls.create({
