@@ -295,6 +295,43 @@ Rollback and emergency process (short)
 
 When this checklist is complete and a test changeset produces the expected version PR, tag and release artifacts, the automated release pipeline is fully operational.
 
+## Actions Allowlist and Org Policy
+
+This section documents the GitHub Actions used in the release workflows and provides guidance for org policy compliance and allowlisting.
+
+### Actions Used in Workflows
+
+| Workflow File | Action | Version | Type | Justification |
+|---------------|--------|---------|------|---------------|
+| `.github/workflows/version.yml` | `actions/checkout@v4` | v4 | Official | Standard checkout action for cloning repo |
+| `.github/workflows/version.yml` | `pnpm/action-setup@v4` | v4 | Third-party | Official pnpm action for monorepo setup |
+| `.github/workflows/version.yml` | `actions/setup-node@v4` | v4 | Official | Standard Node.js setup action |
+| `.github/workflows/version.yml` | `actions/github-script@v7` | v7 | Official | Official action for GitHub API calls |
+| `.github/workflows/tag-on-changeset-merge.yml` | `actions/checkout@v4` | v4 | Official | Standard checkout action for cloning repo |
+| `.github/workflows/tag-on-changeset-merge.yml` | `actions/github-script@v7` | v7 | Official | Official action for GitHub API calls |
+| `.github/workflows/release.yml` | `actions/checkout@v4` | v4 | Official | Standard checkout action for cloning repo |
+| `.github/workflows/release.yml` | `pnpm/action-setup@v4` | v4 | Third-party | Official pnpm action for monorepo setup |
+| `.github/workflows/release.yml` | `actions/setup-node@v4` | v4 | Official | Standard Node.js setup action |
+| `.github/workflows/release.yml` | `actions/create-release@v1` | v1 | Official | Official action for creating GitHub releases |
+| `.github/workflows/release.yml` | `actions/upload-release-asset@v1` | v1 | Official | Official action for uploading release assets |
+
+### Org Policy Checklist
+
+- [ ] **Allowlist Actions**: Ensure all third-party actions (`pnpm/action-setup@v4`) are approved in your org's allowlist settings
+- [ ] **Token Permissions**: Confirm `GITHUB_TOKEN` has sufficient permissions for repository operations (contents: write, pull-requests: write)
+- [ ] **Branch Protection**: Verify that workflow jobs are included in required status checks for `main` branch
+- [ ] **Secrets Management**: If using `GH_RELEASE_TOKEN` instead of `GITHUB_TOKEN`, ensure it's configured with `repo` scope
+- [ ] **Audit Logging**: Enable audit logs for workflow runs to track action usage and token access
+
+### Security Notes
+
+- All actions are pinned to specific versions to prevent supply chain attacks
+- Official GitHub actions are preferred over third-party alternatives where possible
+- Token usage is minimized and follows the principle of least privilege
+- Workflow permissions are declared at the job level to limit scope
+
+If your organization has additional security requirements or blocks certain actions, contact your org admin to update the allowlist or modify the workflows accordingly.
+
 Next steps
 
 - Release testing: Test manual installation process on different platforms
