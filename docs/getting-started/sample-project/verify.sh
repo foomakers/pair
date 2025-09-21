@@ -2,7 +2,24 @@
 
 # Verification script for pair quickstart
 # This script validates that the sample project works as expected
-# Exit codes: 0 = success, 1 = failure, 2 = environment error
+# Exit if [ "$OUTPUT_CHECK_PASSED" = true ]; then
+    echo "✅ Sample project verification passed!"
+    echo "📊 Summary:"
+    echo "  - Node.js: $(node --version | sed 's/v//')"
+    echo "  - pair-cli: available"
+    echo "  - npm test: PASSED"
+    echo "  - Script execution: PASSED"
+    echo "  - Output validation: PASSED"
+    exit 0
+else
+    echo "❌ Sample project verification failed!"
+    echo "📄 Expected output lines:"
+    echo "  '$EXPECTED_LINE1'"
+    echo "  '$EXPECTED_LINE2'"
+    echo "📄 Actual output:"
+    echo "$OUTPUT"
+    exit 1
+fis, 1 = failure, 2 = environment error
 
 set -e  # Exit on any error
 
@@ -41,20 +58,40 @@ if ! command -v node &> /dev/null; then
 fi
 
 # Check Node version
-NODE_VERSION=$(node --version | sed 's/v//')
-REQUIRED_VERSION="18.0.0"
-
-if ! [ "$(printf '%s\n' "$REQUIRED_VERSION" "$NODE_VERSION" | sort -V | head -n1)" = "$REQUIRED_VERSION" ]; then
-    echo "❌ Error: Node.js version $NODE_VERSION is too old. Need 18.0.0 or higher"
+NODE_MAJOR=$(node --version | sed 's/v//' | cut -d. -f1)
+if [ "$NODE_MAJOR" -lt 18 ]; then
+    echo "❌ Error: Node.js version $(node --version) is too old. Need 18.0.0 or higher"
     exit 2
 fi
 
-echo "✅ Node.js version: $NODE_VERSION"
+echo "✅ Node.js version: $(node --version | sed 's/v//')"
 
 # Check if npm is available
 if ! command -v npm &> /dev/null; then
     echo "❌ Error: npm not found. Please install npm"
     exit 2
+fi
+
+# Check if pair-cli is available
+if ! command -v pair-cli &> /dev/null; then
+    echo "❌ Error: pair-cli not found. Please install pair-cli first"
+    echo "💡 Run: npm install -g @pair/pair-cli"
+    exit 2
+fi
+
+echo "✅ pair-cli is installed"
+
+# Test pair-cli version
+echo "🔧 Testing pair-cli..."
+PAIR_OUTPUT=$(pair-cli --version 2>&1)
+PAIR_EXIT_CODE=$?
+if [ $PAIR_EXIT_CODE -eq 0 ] && echo "$PAIR_OUTPUT" | grep -q "^[0-9]\+\.[0-9]\+\.[0-9]\+$"; then
+    echo "✅ pair-cli is working correctly"
+    PAIR_VERSION="available"
+else
+    echo "❌ Error: pair-cli test failed"
+    echo "📄 Output: $PAIR_OUTPUT"
+    exit 1
 fi
 
 echo "📦 Running sample project test..."
