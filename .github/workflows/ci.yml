@@ -26,7 +26,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
       - name: Install pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.15.0'
+
+      - name: Ensure pnpm is available (fallback)
+        run: |
+          if ! command -v pnpm >/dev/null 2>&1; then
+            echo "pnpm not found in PATH; attempting to enable via corepack"
+            corepack enable || true
+            corepack prepare pnpm@10.15.0 --activate || true
+          fi
       - name: Install dependencies
         run: pnpm install
       - name: Load environment variables from GitHub Secrets

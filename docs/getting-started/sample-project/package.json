@@ -1,0 +1,17 @@
+{
+  "name": "pair-sample-project",
+  "version": "1.0.0",
+  "description": "Sample project for pair quickstart demonstration",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Sample test output from pair-sample-project\""
+  },
+  "keywords": [
+    "sample",
+    "pair",
+    "demo"
+  ],
+  "author": "pair",
+  "license": "MIT"
+}

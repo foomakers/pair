@@ -126,6 +126,26 @@ else
   fi
 fi
 
+# Copy getting-started documentation for end users
+if [ -d "$ROOT_DIR/docs/getting-started" ]; then
+  echo "Copying getting-started documentation for end users..."
+  if [ "$DRY_RUN" = true ]; then
+    echo "[dry-run] would copy docs/getting-started to $RELEASE_DIR/docs/"
+  else
+    mkdir -p "$RELEASE_DIR/docs"
+    cp -R "$ROOT_DIR/docs/getting-started" "$RELEASE_DIR/docs/"
+  fi
+fi
+
+# Modify README.md for manual release (fix quickstart link path since docs are now included)
+if [ -f "$RELEASE_DIR/README.md" ] && [ "$DRY_RUN" = false ]; then
+  echo "Fixing quickstart link path in README.md for manual release..."
+  # Use a small Node script for portable in-place replacement (works on macOS & Linux)
+  node -e "const fs=require('fs');const p='$RELEASE_DIR/README.md';let s=fs.readFileSync(p,'utf8');s=s.replace(/\.\.\/\.\.\/docs\/getting-started\/01-quickstart\.md/g,'docs/getting-started/01-quickstart.md');fs.writeFileSync(p,s);" || {
+    echo "Warning: README path rewrite failed; leaving original README.md in place"
+  }
+fi
+
 # Create a clean package.json for the bundled artifact
 if [ -f "$RELEASE_DIR/package.json" ]; then
   echo "Creating clean package.json for bundled artifact..."
@@ -145,7 +165,7 @@ const cleanPkg = {
   main: 'bundle-cli/index.js',
   types: 'bundle-cli/index.d.ts',
   bin: { 'pair-cli': './bin/pair-cli' },
-  files: ['bundle-cli', 'bin', 'README.md', 'LICENSE', 'config.json'],
+  files: ['bundle-cli', 'bin', 'README.md', 'LICENSE', 'config.json', 'docs'],
   author: original.author,
   license: original.license || 'MIT'
 };
@@ -188,7 +208,6 @@ if [ -f "$PKG_DIR/dist/cli.js" ]; then
     fi
   fi
   # Generate TypeScript definitions from source
-  echo "Generating TypeScript definitions..."
   echo "Generating TypeScript definitions..."
   if [ "$DRY_RUN" = true ]; then
     echo "[dry-run] would run: (cd $PKG_DIR && npx dts-bundle-generator --external-inlines @pair/content-ops @pair/knowledge-hub --external-types commander chalk dotenv fs-extra markdown-it --project tsconfig.json -o $RELEASE_DIR/bundle-cli/index.d.ts src/cli.ts)"

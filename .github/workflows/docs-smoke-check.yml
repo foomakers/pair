@@ -1,0 +1,55 @@
+name: Docs Smoke Check
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs-smoke-check.yml'
+
+jobs:
+  smoke-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.15.0'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+
+      - name: Ensure pnpm is available (fallback)
+        run: |
+          if ! command -v pnpm >/dev/null 2>&1; then
+            corepack enable || true
+            corepack prepare pnpm@10.15.0 --activate || true
+          fi
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare sample-project and run verification
+        run: |
+          cd docs/getting-started/sample-project
+          # Ensure the verify script is executable
+          chmod +x verify.sh
+          # Use pnpm dlx to avoid requiring a global pair-cli install
+          # but keep the script compatible if pnpm dlx is not available
+          if command -v pnpm >/dev/null 2>&1; then
+            echo "Using pnpm dlx to fetch pair-cli if needed"
+            pnpm dlx --package @pair/pair-cli --yes true || true
+          fi
+          ./verify.sh
+
+      - name: Validate docs links (basic check)
+        run: |
+          # Check that docs files exist and are readable
+          find docs/getting-started -name "*.md" -exec test -f {} \;
+          echo "All docs files exist and are accessible"

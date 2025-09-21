@@ -26,6 +26,13 @@ jobs:
         with:
           version: '10.15.0'
 
+      - name: Ensure pnpm is available (fallback)
+        run: |
+          if ! command -v pnpm >/dev/null 2>&1; then
+            corepack enable || true
+            corepack prepare pnpm@10.15.0 --activate || true
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:

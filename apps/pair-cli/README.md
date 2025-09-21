@@ -60,6 +60,8 @@ For environments without internet access or when you need a self-contained versi
 
 ## Quick Start
 
+Get started quickly: [Quick Start Guide](../../docs/getting-started/01-quickstart.md)
+
 ### List available asset registries
 
 ```bash
