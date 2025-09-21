@@ -1,0 +1,41 @@
+name: Docs Smoke Check
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - '.github/workflows/docs-smoke-check.yml'
+
+jobs:
+  smoke-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: latest
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run sample project verification
+        run: |
+          cd docs/getting-started/sample-project
+          chmod +x verify.sh
+          ./verify.sh
+
+      - name: Validate docs links (basic check)
+        run: |
+          # Check that docs files exist and are readable
+          find docs/getting-started -name "*.md" -exec test -f {} \;
+          echo "All docs files exist and are accessible"

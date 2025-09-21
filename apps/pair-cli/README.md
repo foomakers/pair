@@ -2,6 +2,10 @@
 
 CLI for installing, managing, and processing documentation, knowledge base assets, and configuration files for pair assistant.
 
+## Quick Start
+
+Get started quickly: [Quick Start Guide](../../docs/getting-started/01-quickstart.md)
+
 ## Features
 
 - Recursively process markdown files to update internal links after installation
