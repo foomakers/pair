@@ -16,16 +16,19 @@ Complete this checklist to verify your pair setup is working correctly. This sho
 Choose one installation method:
 
 **npm Global Install:**
+
 ```bash
 npm install -g @pair/pair-cli
 ```
 
 **pnpm Global Install:**
+
 ```bash
 pnpm add -g @pair/pair-cli
 ```
 
 **Manual Install:**
+
 - Download `pair-cli-manual-vX.Y.Z.zip` from [GitHub Releases](https://github.com/foomakers/pair/releases)
 - Extract to a folder
 - Use `./pair-cli` (Unix) or `pair-cli.cmd` (Windows)
@@ -39,6 +42,7 @@ pnpm add -g @pair/pair-cli
 - [ ] `pair-cli install --list-targets` shows available asset types
 
 Expected output includes:
+
 ```
 📁 Available asset registries:
   github     🔄🎯 .github         GitHub workflows and configuration files
@@ -129,37 +133,38 @@ rm -rf /tmp/pair-test
 
 ## Validation Summary
 
-**Date Completed:** $(date +%Y-%m-%d)
+**Date Completed:** ****\_\_****
 
-**Installation Method Used:** Local development (pnpm dev script)
+**Installation Method Used:** ****\_\_****
 
-**Issues Encountered:** 
-- `--list-targets` option not yet implemented (shows welcome message instead)
-- `pair-cli --help` shows welcome message instead of help text
+**Issues Encountered:** ****\_\_****
 
-**Success Rating:** [x] Full Success [ ] Minor Issues [ ] Major Issues
+**Success Rating:** [ ] Full Success [ ] Minor Issues [ ] Major Issues
 
 **Notes/Feedback:**
-- What worked well: Sample project verification script works perfectly
-- What was confusing: CLI help and list-targets commands don't work as documented
-- Suggestions for improvement: Implement --list-targets and --help options
 
-**Overall Assessment:** [x] Ready for production use [ ] Needs fixes [ ] Not usable
+- What worked well: ****\_\_****
+- What was confusing: ****\_\_****
+- Suggestions for improvement: ****\_\_****
+
+**Overall Assessment:** [ ] Ready for production use [ ] Needs fixes [ ] Not usable
 
 ## Next Steps
 
 If everything worked:
+
 - Start using pair-cli in your actual projects
 - Check [CLI Workflows](./02-cli-workflows.md) for advanced usage
 - Join the community at [GitHub Discussions](https://github.com/foomakers/pair/discussions)
 
 If issues occurred:
+
 - Review [Troubleshooting](./03-troubleshooting.md)
 - File an issue at [GitHub Issues](https://github.com/foomakers/pair/issues)
 
 ## Contact
 
 For help with this checklist:
-- Email: [maintainer contact]
-- Issues: [GitHub Issues](https://github.com/foomakers/pair/issues)
-- Discussions: [GitHub Discussions](https://github.com/foomakers/pair/discussions)
+
+- File an issue at [GitHub Issues](https://github.com/foomakers/pair/issues)
+- Join the discussion at [GitHub Discussions](https://github.com/foomakers/pair/discussions)

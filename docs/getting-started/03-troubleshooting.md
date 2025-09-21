@@ -29,6 +29,7 @@ sudo npm install -g @pair/pair-cli
 **Problem:** `pair-cli` command not found after installation.
 
 **Solutions:**
+
 ```bash
 # Check PATH
 echo $PATH
@@ -87,6 +88,7 @@ pair-cli install
 **Problem:** Installation fails due to network restrictions.
 
 **Solutions:**
+
 ```bash
 # Use manual install for offline environments
 # Download from: https://github.com/foomakers/pair/releases
@@ -139,6 +141,7 @@ sudo yum install python3-devel
 **Problem:** Line ending or path issues.
 
 **Solutions:**
+
 ```bash
 # Use Git Bash or WSL
 # Ensure Node is in PATH
@@ -156,6 +159,7 @@ where node
 **Problem:** `pair-cli install` runs but no files are created.
 
 **Solutions:**
+
 ```bash
 # Check current directory
 pwd
@@ -213,13 +217,13 @@ npm list -g @pair/pair-cli
 
 ## Quick Fixes
 
-| Issue | Quick Fix |
-|-------|-----------|
-| Permission denied | `chmod 755 .` or use `sudo` |
+| Issue             | Quick Fix                    |
+| ----------------- | ---------------------------- |
+| Permission denied | `chmod 755 .` or use `sudo`  |
 | Command not found | `npx pair-cli` or check PATH |
-| Node version | `nvm use 18` |
-| Network blocked | Use manual install |
-| Files not created | Check directory permissions |
+| Node version      | `nvm use 18`                 |
+| Network blocked   | Use manual install           |
+| Files not created | Check directory permissions  |
 
 ## Prevention
 

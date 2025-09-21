@@ -41,6 +41,7 @@ pair-cli --version
 ```
 
 Expected output:
+
 ```
 pair-cli vX.Y.Z
 ```
@@ -54,6 +55,7 @@ pair-cli install --list-targets
 ```
 
 Expected output:
+
 ```
 📁 Available asset registries:
 
@@ -80,5 +82,4 @@ This creates the standard `.pair` and `.github` folders with documentation, work
 
 ## Need Help?
 
-- Check the [Installation FAQ](../support/installation-faq.md)
 - File an issue on [GitHub](https://github.com/foomakers/pair/issues)

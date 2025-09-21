@@ -65,6 +65,7 @@ pair-cli install [target] [path]
 ```
 
 **Examples:**
+
 ```bash
 # Install all targets to default paths
 pair-cli install
@@ -86,6 +87,7 @@ pair-cli update [target]
 ```
 
 **Examples:**
+
 ```bash
 # Update all installed assets
 pair-cli update
@@ -165,4 +167,3 @@ See [Troubleshooting](./03-troubleshooting.md) for detailed solutions.
 
 - [Troubleshooting Guide](./03-troubleshooting.md)
 - [Adopter Checklist](./04-adopter-checklist.md)
-- [Installation FAQ](../support/installation-faq.md)
