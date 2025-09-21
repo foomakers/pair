@@ -140,8 +140,10 @@ fi
 # Modify README.md for manual release (fix quickstart link path since docs are now included)
 if [ -f "$RELEASE_DIR/README.md" ] && [ "$DRY_RUN" = false ]; then
   echo "Fixing quickstart link path in README.md for manual release..."
-  # Change the relative path from ../../docs/getting-started/01-quickstart.md to docs/getting-started/01-quickstart.md
-  sed -i.bak 's|../../docs/getting-started/01-quickstart.md|docs/getting-started/01-quickstart.md|g' "$RELEASE_DIR/README.md" && rm "$RELEASE_DIR/README.md.bak"
+  # Use a small Node script for portable in-place replacement (works on macOS & Linux)
+  node -e "const fs=require('fs');const p='$RELEASE_DIR/README.md';let s=fs.readFileSync(p,'utf8');s=s.replace(/\.\.\/\.\.\/docs\/getting-started\/01-quickstart\.md/g,'docs/getting-started/01-quickstart.md');fs.writeFileSync(p,s);" || {
+    echo "Warning: README path rewrite failed; leaving original README.md in place"
+  }
 fi
 
 # Create a clean package.json for the bundled artifact
