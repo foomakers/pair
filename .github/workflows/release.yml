@@ -203,93 +203,55 @@ jobs:
           echo "Smoke-test completed (exit codes may be non-zero for CLI version checks if the bundle returns non-zero); proceed with release if tests are acceptable."
 
       - name: Create GitHub Release
-        id: create_release
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        uses: actions/create-release@v1
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          release_name: Release ${{ steps.version.outputs.version }}
-          body: |
-            ## Manual Installation Artifacts
+        run: |
+          NOTES_FILE=$(mktemp)
+          cat > "$NOTES_FILE" << EOF
+          ## Manual Installation Artifacts
 
-            This release includes bundled artifacts for manual installation in air-gapped or restricted environments.
+          This release includes bundled artifacts for manual installation in air-gapped or restricted environments.
 
-            ### Downloads
-            - **ZIP Archive**: `pair-cli-manual-${{ steps.version.outputs.version }}.zip`
-            - **SHA256 Checksum**: `pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256`
+          ### Downloads
+          - **ZIP Archive**: \`pair-cli-manual-${{ steps.version.outputs.version }}.zip\`
+          - **SHA256 Checksum**: \`pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256\`
 
-            ### Installation Instructions
+          ### Installation Instructions
 
-            1. Download the ZIP archive
-            2. Verify the checksum: `sha256sum pair-cli-manual-${{ steps.version.outputs.version }}.zip`
-            3. Extract the archive
-            4. Run the executable: `./pair-cli --help`
+          1. Download the ZIP archive
+          2. Verify the checksum: \`sha256sum pair-cli-manual-${{ steps.version.outputs.version }}.zip\`
+          3. Extract the archive
+          4. Run the executable: \`./pair-cli --help\`
 
-            ### What's Included
-            - Self-contained Node.js bundle (no external dependencies required)
-            - Cross-platform executables (Linux/macOS/Windows)
-            - TypeScript definitions
-            - Configuration files
-            - Documentation and license
+          ### What's Included
+          - Self-contained Node.js bundle (no external dependencies required)
+          - Cross-platform executables (Linux/macOS/Windows)
+          - TypeScript definitions
+          - Configuration files
+          - Documentation and license
 
-            For more details, see [RELEASE.md](docs/RELEASE.md) and [CLI README](apps/pair-cli/README.md).
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          For more details, see [RELEASE.md](docs/RELEASE.md) and [CLI README](apps/pair-cli/README.md).
+          EOF
+          gh release create ${{ steps.version.outputs.version }} --title "Release ${{ steps.version.outputs.version }}" --notes-file "$NOTES_FILE"
 
       - name: Upload release assets to the created release
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url || env.RELEASE_UPLOAD_URL }}
-          asset_path: release/pair-cli-manual-${{ steps.version.outputs.version }}.zip
-          asset_name: pair-cli-manual-${{ steps.version.outputs.version }}.zip
-          asset_content_type: application/zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ steps.version.outputs.version }} release/pair-cli-manual-${{ steps.version.outputs.version }}.zip
 
       - name: Upload checksum to the release
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url || env.RELEASE_UPLOAD_URL }}
-          asset_path: release/pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256
-          asset_name: pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256
-          asset_content_type: text/plain
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ steps.version.outputs.version }} release/pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256
 
       - name: Upload TGZ to the release
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url || env.RELEASE_UPLOAD_URL }}
-          asset_path: release/pair-cli-${{ steps.version.outputs.version }}.tgz
-          asset_name: pair-cli-${{ steps.version.outputs.version }}.tgz
-          asset_content_type: application/gzip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ steps.version.outputs.version }} release/pair-cli-${{ steps.version.outputs.version }}.tgz
 
       - name: Upload TGZ checksum to the release
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url || env.RELEASE_UPLOAD_URL }}
-          asset_path: release/pair-cli-${{ steps.version.outputs.version }}.tgz.sha256
-          asset_name: pair-cli-${{ steps.version.outputs.version }}.tgz.sha256
-          asset_content_type: text/plain
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ steps.version.outputs.version }} release/pair-cli-${{ steps.version.outputs.version }}.tgz.sha256
 
       - name: Upload TGZ metadata to the release
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url || env.RELEASE_UPLOAD_URL }}
-          asset_path: release/pair-cli-${{ steps.version.outputs.version }}.meta.json
-          asset_name: pair-cli-${{ steps.version.outputs.version }}.meta.json
-          asset_content_type: application/json
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload ${{ steps.version.outputs.version }} release/pair-cli-${{ steps.version.outputs.version }}.meta.json
 
   publish-gh-packages:
     runs-on: ubuntu-latest
