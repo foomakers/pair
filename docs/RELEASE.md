@@ -5,15 +5,15 @@ If you publish to GitHub Packages, the release will include a `.tgz` artifact th
 1. Create an `.npmrc` in the consuming repo (or use user-level config) with a token that has package read access for the org:
 
 ```text
-@foomakers:registry=https://npm.pkg.github.com/
+@pair:registry=https://npm.pkg.github.com/
 //npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
 ```
 
 2. Install the package as a dev dependency:
 
 ```bash
-pnpm add -D @foomakers/pair-cli
-# or npm i @foomakers/pair-cli
+pnpm add -D @pair/pair-cli
+# or npm i @pair/pair-cli
 ```
 
 3. Run the CLI via pnpm dlx or npx:
