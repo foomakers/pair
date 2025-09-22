@@ -12,6 +12,9 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
   "author": "Gianluca Carucci <gianluca@carucci.org>",
   "private": false,
   "scripts": {

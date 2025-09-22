@@ -7,6 +7,10 @@ on:
         description: 'Release version (e.g., v1.0.0)'
         required: true
         type: string
+      publish:
+        description: 'Set to "true" to run the publish-gh-packages job (gated)'
+        required: false
+        type: boolean
   release:
     types: [published]
   push:
@@ -77,6 +81,71 @@ jobs:
           path: |
             release/pair-cli-manual-${{ steps.version.outputs.version }}.zip
             release/pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256
+          retention-days: 30
+
+      - name: Create registry TGZ from manual release folder
+        run: |
+          set -euo pipefail
+          V=${{ steps.version.outputs.version }}
+          ZIP=release/pair-cli-manual-${V}.zip
+          if [ ! -f "$ZIP" ]; then
+            echo "Error: artifact $ZIP not found"
+            exit 1
+          fi
+
+          TMPDIR=$(mktemp -d)
+          unzip -q "$ZIP" -d "$TMPDIR"
+          ART_DIR="$TMPDIR/pair-cli-manual-${V}"
+          if [ ! -d "$ART_DIR" ]; then
+            echo "Error: extracted artifact directory not found: $ART_DIR"
+            ls -la "$TMPDIR"
+            exit 1
+          fi
+
+          # Ensure no node_modules are present for npm pack
+          rm -rf "$ART_DIR/node_modules" || true
+
+          # Make sure package.json exists in the artifact and is suitable for packing
+          if [ ! -f "$ART_DIR/package.json" ]; then
+            echo "Warning: package.json not present in artifact; copying from apps/pair-cli/package.json"
+            cp apps/pair-cli/package.json "$ART_DIR/" || true
+          fi
+
+          cd "$ART_DIR"
+          # Ensure the package.json inside the extracted artifact is scoped for GitHub Packages
+          node -e "const fs=require('fs');const p='./package.json';if(fs.existsSync(p)){let o=JSON.parse(fs.readFileSync(p,'utf8'));o.name='@foomakers/pair-cli';o.publishConfig=o.publishConfig||{};o.publishConfig.registry='https://npm.pkg.github.com/';fs.writeFileSync(p,JSON.stringify(o,null,2));console.log('Patched package.json for registry publish:',o.name)} else {console.warn('No package.json found to patch in artifact') }"
+          # npm pack will produce a tarball; normalize its name to pair-cli-<version>.tgz
+          TAR_OUT=$(npm pack --pack-destination . | tail -n1 | tr -d '\r' ) || true
+          # If npm pack didn't print filename, fallback to matching pattern
+          if [ -z "$TAR_OUT" ]; then
+            TAR_OUT=$(ls *.tgz 2>/dev/null | head -n1 || true)
+          fi
+          if [ -z "$TAR_OUT" ]; then
+            echo "Error: npm pack did not produce a .tgz"
+            exit 1
+          fi
+          mv "$TAR_OUT" "pair-cli-${V}.tgz"
+          # compute sha256
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "pair-cli-${V}.tgz" | awk '{print $1}' > "pair-cli-${V}.tgz.sha256"
+          else
+            shasum -a 256 "pair-cli-${V}.tgz" | awk '{print $1}' > "pair-cli-${V}.tgz.sha256"
+          fi
+          # Move outputs to repo release/ folder
+          mv "pair-cli-${V}.tgz" "$PWD/../../release/"
+          mv "pair-cli-${V}.tgz.sha256" "$PWD/../../release/"
+          # export minimal package metadata for publish-time validation
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));fs.writeFileSync('pair-cli-${V}.meta.json', JSON.stringify({name:p.name,private:p.private,version:p.version,publishConfig:p.publishConfig||null}))"
+          mv "pair-cli-${V}.meta.json" "$PWD/../../release/" || true
+
+      - name: Upload TGZ artifact as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pair-cli-tgz-${{ steps.version.outputs.version }}
+          path: |
+            release/pair-cli-${{ steps.version.outputs.version }}.tgz
+            release/pair-cli-${{ steps.version.outputs.version }}.tgz.sha256
+            release/pair-cli-${{ steps.version.outputs.version }}.meta.json
           retention-days: 30
 
       - name: Smoke-test packaged artifact (verify checksum and run --version)
@@ -184,3 +253,116 @@ jobs:
           asset_content_type: text/plain
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload TGZ to the release
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url || env.RELEASE_UPLOAD_URL }}
+          asset_path: release/pair-cli-${{ steps.version.outputs.version }}.tgz
+          asset_name: pair-cli-${{ steps.version.outputs.version }}.tgz
+          asset_content_type: application/gzip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload TGZ checksum to the release
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url || env.RELEASE_UPLOAD_URL }}
+          asset_path: release/pair-cli-${{ steps.version.outputs.version }}.tgz.sha256
+          asset_name: pair-cli-${{ steps.version.outputs.version }}.tgz.sha256
+          asset_content_type: text/plain
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload TGZ metadata to the release
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url || env.RELEASE_UPLOAD_URL }}
+          asset_path: release/pair-cli-${{ steps.version.outputs.version }}.meta.json
+          asset_name: pair-cli-${{ steps.version.outputs.version }}.meta.json
+          asset_content_type: application/json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-gh-packages:
+    runs-on: ubuntu-latest
+    needs: release
+    permissions:
+      contents: read
+      packages: write
+    if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.publish == 'true' || env.FORCE_PUBLISH == 'true') }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.15.0'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download TGZ artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pair-cli-tgz-${{ needs.release.outputs.version || steps.version.outputs.version }}
+
+      - name: Validate package metadata and token
+        run: |
+          set -euo pipefail
+          V=${{ needs.release.outputs.version || steps.version.outputs.version || github.event.inputs.version }}
+          TGZ=pair-cli-${V}.tgz
+          if [ ! -f "$TGZ" ]; then
+            echo "Error: tarball $TGZ not found in artifacts"
+            ls -la
+            exit 1
+          fi
+          # Prefer reading package metadata produced at pack time (meta.json) inside the artifact
+          META_FILE=pair-cli-${V}.meta.json
+          if [ -f "$META_FILE" ]; then
+            PKG_NAME=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$META_FILE','utf8')).name)")
+            PKG_PRIVATE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$META_FILE','utf8')).private)")
+          else
+            # Fallback to workspace package.json for validation
+            PKG_NAME=$(node -e "console.log(require('./apps/pair-cli/package.json').name)")
+            PKG_PRIVATE=$(node -e "console.log(require('./apps/pair-cli/package.json').private)")
+          fi
+          echo "Found package: $PKG_NAME (private=$PKG_PRIVATE)"
+          if [ "$PKG_PRIVATE" = "true" ] || [ "$PKG_PRIVATE" = "1" ]; then
+            echo "Aborting publish: package.private is true"
+            exit 1
+          fi
+          if [[ "$PKG_NAME" != @foomakers/* ]]; then
+            echo "Aborting publish: package.name must be scoped to @foomakers for GitHub Packages publishing. Found: $PKG_NAME"
+            exit 1
+          fi
+          if [ -z "${GITHUB_TOKEN:-}" ]; then
+            echo "Aborting publish: GITHUB_TOKEN secret not configured"
+            exit 1
+          fi
+
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          V=${{ needs.release.outputs.version || steps.version.outputs.version || github.event.inputs.version }}
+          TGZ=pair-cli-${V}.tgz
+          echo "Publishing $TGZ to GitHub Packages"
+          npm publish "$TGZ" --registry https://npm.pkg.github.com/
+          echo "Published. Verifying via npm view..."
+          sleep 3
+          # Determine package name from meta file if present (artifact produced it at pack time)
+          if [ -f "pair-cli-${V}.meta.json" ]; then
+            PKG_PUB_NAME=$(node -e "console.log(JSON.parse(require('fs').readFileSync('pair-cli-${V}.meta.json','utf8')).name)")
+          else
+            PKG_PUB_NAME=$(node -e "console.log(require('./apps/pair-cli/package.json').name)")
+          fi
+          echo "Verifying published package: $PKG_PUB_NAME"
+          npm view "$PKG_PUB_NAME" version --registry https://npm.pkg.github.com/ || true

@@ -1,3 +1,33 @@
+## GitHub Packages notes
+
+If you publish to GitHub Packages, the release will include a `.tgz` artifact that can be uploaded to the GitHub Packages registry or published from the CI artifacts. Example steps to install from GitHub Packages as a consumer:
+
+1. Create an `.npmrc` in the consuming repo (or use user-level config) with a token that has package read access for the org:
+
+```text
+@foomakers:registry=https://npm.pkg.github.com/
+//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
+```
+
+2. Install the package as a dev dependency:
+
+```bash
+pnpm add -D @foomakers/pair-cli
+# or npm i @foomakers/pair-cli
+```
+
+3. Run the CLI via pnpm dlx or npx:
+
+```bash
+pnpm dlx pair-cli install
+# or npx pair-cli install
+```
+
+Additional artifacts produced by the release workflow (optional GitHub Packages publishing):
+
+- `pair-cli-{version}.tgz` - npm pack tarball produced from the manual release folder (no node_modules). This artifact is used to publish to GitHub Packages so that registry consumers can install the CLI via npm/pnpm.
+- `pair-cli-{version}.tgz.sha256` - SHA256 checksum for the tgz
+
 # Release & Manual Install Guide
 
 This document describes the bundled manual-install packaging used by the release pipeline (issue #19).
@@ -301,19 +331,19 @@ This section documents the GitHub Actions used in the release workflows and prov
 
 ### Actions Used in Workflows
 
-| Workflow File | Action | Version | Type | Justification |
-|---------------|--------|---------|------|---------------|
-| `.github/workflows/version.yml` | `actions/checkout@v4` | v4 | Official | Standard checkout action for cloning repo |
-| `.github/workflows/version.yml` | `pnpm/action-setup@v4` | v4 | Third-party | Official pnpm action for monorepo setup |
-| `.github/workflows/version.yml` | `actions/setup-node@v4` | v4 | Official | Standard Node.js setup action |
-| `.github/workflows/version.yml` | `actions/github-script@v7` | v7 | Official | Official action for GitHub API calls |
-| `.github/workflows/tag-on-changeset-merge.yml` | `actions/checkout@v4` | v4 | Official | Standard checkout action for cloning repo |
-| `.github/workflows/tag-on-changeset-merge.yml` | `actions/github-script@v7` | v7 | Official | Official action for GitHub API calls |
-| `.github/workflows/release.yml` | `actions/checkout@v4` | v4 | Official | Standard checkout action for cloning repo |
-| `.github/workflows/release.yml` | `pnpm/action-setup@v4` | v4 | Third-party | Official pnpm action for monorepo setup |
-| `.github/workflows/release.yml` | `actions/setup-node@v4` | v4 | Official | Standard Node.js setup action |
-| `.github/workflows/release.yml` | `actions/create-release@v1` | v1 | Official | Official action for creating GitHub releases |
-| `.github/workflows/release.yml` | `actions/upload-release-asset@v1` | v1 | Official | Official action for uploading release assets |
+| Workflow File                                  | Action                            | Version | Type        | Justification                                |
+| ---------------------------------------------- | --------------------------------- | ------- | ----------- | -------------------------------------------- |
+| `.github/workflows/version.yml`                | `actions/checkout@v4`             | v4      | Official    | Standard checkout action for cloning repo    |
+| `.github/workflows/version.yml`                | `pnpm/action-setup@v4`            | v4      | Third-party | Official pnpm action for monorepo setup      |
+| `.github/workflows/version.yml`                | `actions/setup-node@v4`           | v4      | Official    | Standard Node.js setup action                |
+| `.github/workflows/version.yml`                | `actions/github-script@v7`        | v7      | Official    | Official action for GitHub API calls         |
+| `.github/workflows/tag-on-changeset-merge.yml` | `actions/checkout@v4`             | v4      | Official    | Standard checkout action for cloning repo    |
+| `.github/workflows/tag-on-changeset-merge.yml` | `actions/github-script@v7`        | v7      | Official    | Official action for GitHub API calls         |
+| `.github/workflows/release.yml`                | `actions/checkout@v4`             | v4      | Official    | Standard checkout action for cloning repo    |
+| `.github/workflows/release.yml`                | `pnpm/action-setup@v4`            | v4      | Third-party | Official pnpm action for monorepo setup      |
+| `.github/workflows/release.yml`                | `actions/setup-node@v4`           | v4      | Official    | Standard Node.js setup action                |
+| `.github/workflows/release.yml`                | `actions/create-release@v1`       | v1      | Official    | Official action for creating GitHub releases |
+| `.github/workflows/release.yml`                | `actions/upload-release-asset@v1` | v1      | Official    | Official action for uploading release assets |
 
 ### Org Policy Checklist
 
@@ -343,6 +373,7 @@ The `pnpm-lock.yaml` file has been updated to reflect the current state of depen
 - **Dependency cleanup**: Removed unused dependencies related to the deleted monorepo-tests package
 
 This large diff is expected and necessary to:
+
 - Ensure dependency resolution consistency across the monorepo
 - Remove references to deleted packages and their dependencies
 - Update lockfile entries to match the new package versions
@@ -357,6 +388,7 @@ The lockfile changes are automatically generated by pnpm and should be committed
 The following changes were made to the `tools/` directory as part of the remediation process:
 
 #### Removed Package: tools/monorepo-tests
+
 - **Status**: Completely removed
 - **Reason**: Package contained outdated test utilities that were no longer maintained or used
 - **Impact**: Reduces workspace complexity and removes unused code
@@ -367,12 +399,14 @@ The following changes were made to the `tools/` directory as part of the remedia
   - `tools/monorepo-tests/src/` (entire directory with test files)
 
 #### Updated Packages
+
 - **@pair/eslint-config**: Version changed from `1.0.0` to `0.0.1-wip`
 - **@pair/prettier-config**: Version changed from `1.0.0` to `0.0.1-wip`
 - **Reason**: Version reset to work-in-progress state for ongoing maintenance
 - **Impact**: Allows for iterative updates without affecting stable releases
 
 #### Removed Files
+
 - `tools/prettier-config/.prettierignore_workspaces`: Removed as it was no longer needed
 
 These changes streamline the tools directory by removing unused components and updating versions appropriately. The workspace now has a cleaner structure with only actively maintained tool packages.
