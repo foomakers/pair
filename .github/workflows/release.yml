@@ -209,31 +209,31 @@ jobs:
             echo "Release ${{ steps.version.outputs.version }} already exists, skipping creation"
           else
             NOTES_FILE=$(mktemp)
-            cat > "$NOTES_FILE" << EOT
-## Manual Installation Artifacts
-
-This release includes bundled artifacts for manual installation in air-gapped or restricted environments.
-
-### Downloads
-- **ZIP Archive**: \`pair-cli-manual-${{ steps.version.outputs.version }}.zip\`
-- **SHA256 Checksum**: \`pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256\`
-
-### Installation Instructions
-
-1. Download the ZIP archive
-2. Verify the checksum: \`sha256sum pair-cli-manual-${{ steps.version.outputs.version }}.zip\`
-3. Extract the archive
-4. Run the executable: \`./pair-cli --help\`
-
-### What's Included
-- Self-contained Node.js bundle (no external dependencies required)
-- Cross-platform executables (Linux/macOS/Windows)
-- TypeScript definitions
-- Configuration files
-- Documentation and license
-
-For more details, see [RELEASE.md](docs/RELEASE.md) and [CLI README](apps/pair-cli/README.md).
-EOT
+            {
+              echo '## Manual Installation Artifacts'
+              echo ''
+              echo 'This release includes bundled artifacts for manual installation in air-gapped or restricted environments.'
+              echo ''
+              echo '### Downloads'
+              echo '- **ZIP Archive**: \`pair-cli-manual-${{ steps.version.outputs.version }}.zip\`'
+              echo '- **SHA256 Checksum**: \`pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256\`'
+              echo ''
+              echo '### Installation Instructions'
+              echo ''
+              echo '1. Download the ZIP archive'
+              echo '2. Verify the checksum: \`sha256sum pair-cli-manual-${{ steps.version.outputs.version }}.zip\`'
+              echo '3. Extract the archive'
+              echo '4. Run the executable: \`./pair-cli --help\`'
+              echo ''
+              echo '### What'\''s Included'
+              echo '- Self-contained Node.js bundle (no external dependencies required)'
+              echo '- Cross-platform executables (Linux/macOS/Windows)'
+              echo '- TypeScript definitions'
+              echo '- Configuration files'
+              echo '- Documentation and license'
+              echo ''
+              echo 'For more details, see [RELEASE.md](docs/RELEASE.md) and [CLI README](apps/pair-cli/README.md).'
+            } > "$NOTES_FILE"
             gh release create ${{ steps.version.outputs.version }} --title "Release ${{ steps.version.outputs.version }}" --notes-file "$NOTES_FILE"
           fi
 
