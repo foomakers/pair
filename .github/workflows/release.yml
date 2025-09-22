@@ -209,31 +209,31 @@ jobs:
             echo "Release ${{ steps.version.outputs.version }} already exists, skipping creation"
           else
             NOTES_FILE=$(mktemp)
-            cat > "$NOTES_FILE" << EOF
-            ## Manual Installation Artifacts
+            cat > "$NOTES_FILE" << EOT
+## Manual Installation Artifacts
 
-            This release includes bundled artifacts for manual installation in air-gapped or restricted environments.
+This release includes bundled artifacts for manual installation in air-gapped or restricted environments.
 
-            ### Downloads
-            - **ZIP Archive**: \`pair-cli-manual-${{ steps.version.outputs.version }}.zip\`
-            - **SHA256 Checksum**: \`pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256\`
+### Downloads
+- **ZIP Archive**: \`pair-cli-manual-${{ steps.version.outputs.version }}.zip\`
+- **SHA256 Checksum**: \`pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256\`
 
-            ### Installation Instructions
+### Installation Instructions
 
-            1. Download the ZIP archive
-            2. Verify the checksum: \`sha256sum pair-cli-manual-${{ steps.version.outputs.version }}.zip\`
-            3. Extract the archive
-            4. Run the executable: \`./pair-cli --help\`
+1. Download the ZIP archive
+2. Verify the checksum: \`sha256sum pair-cli-manual-${{ steps.version.outputs.version }}.zip\`
+3. Extract the archive
+4. Run the executable: \`./pair-cli --help\`
 
-            ### What's Included
-            - Self-contained Node.js bundle (no external dependencies required)
-            - Cross-platform executables (Linux/macOS/Windows)
-            - TypeScript definitions
-            - Configuration files
-            - Documentation and license
+### What's Included
+- Self-contained Node.js bundle (no external dependencies required)
+- Cross-platform executables (Linux/macOS/Windows)
+- TypeScript definitions
+- Configuration files
+- Documentation and license
 
-            For more details, see [RELEASE.md](docs/RELEASE.md) and [CLI README](apps/pair-cli/README.md).
-            EOF
+For more details, see [RELEASE.md](docs/RELEASE.md) and [CLI README](apps/pair-cli/README.md).
+EOT
             gh release create ${{ steps.version.outputs.version }} --title "Release ${{ steps.version.outputs.version }}" --notes-file "$NOTES_FILE"
           fi
 
