@@ -22,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -295,8 +297,8 @@ jobs:
     permissions:
       contents: read
       packages: write
-    # Run this job only for manual dispatches; the job will decide whether to continue
-    if: ${{ github.event_name == 'workflow_dispatch' }}
+    # Run this job only for manual dispatches when publish is requested
+    if: github.event_name == 'workflow_dispatch' && (github.event.inputs.publish == 'true' || vars.FORCE_PUBLISH == 'true')
     steps:
       - name: Publish gate check
         # Decide at runtime if we should actually publish. Exit early (success) if not requested.
