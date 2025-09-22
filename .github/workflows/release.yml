@@ -293,8 +293,22 @@ jobs:
     permissions:
       contents: read
       packages: write
-    if: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.publish == 'true' || env.FORCE_PUBLISH == 'true') }}
+    # Run this job only for manual dispatches; the job will decide whether to continue
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     steps:
+      - name: Publish gate check
+        # Decide at runtime if we should actually publish. Exit early (success) if not requested.
+        run: |
+          set -euo pipefail
+          INP_PUBLISH='${{ github.event.inputs.publish }}'
+          # FORCE_PUBLISH may be set as a repository/organization variable or provided in the job environment
+          if [ "$INP_PUBLISH" != "true" ] && [ "${FORCE_PUBLISH:-}" != "true" ]; then
+            echo "Publish not requested (inputs.publish != true and FORCE_PUBLISH != true). Exiting job without publishing."
+            exit 0
+          fi
+          echo "Publish requested; continuing with publish job."
+        env:
+          FORCE_PUBLISH: ${{ env.FORCE_PUBLISH }}
       - name: Checkout code
         uses: actions/checkout@v4
 
