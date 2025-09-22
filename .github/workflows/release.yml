@@ -111,6 +111,8 @@ jobs:
             cp apps/pair-cli/package.json "$ART_DIR/" || true
           fi
 
+          # Store repo root for later moves
+          REPO_ROOT="$(pwd)"
           cd "$ART_DIR"
           # Ensure the package.json inside the extracted artifact is scoped for GitHub Packages
           node -e "const fs=require('fs');const p='./package.json';if(fs.existsSync(p)){let o=JSON.parse(fs.readFileSync(p,'utf8'));o.name='@foomakers/pair-cli';o.publishConfig=o.publishConfig||{};o.publishConfig.registry='https://npm.pkg.github.com/';fs.writeFileSync(p,JSON.stringify(o,null,2));console.log('Patched package.json for registry publish:',o.name)} else {console.warn('No package.json found to patch in artifact') }"
@@ -132,11 +134,11 @@ jobs:
             shasum -a 256 "pair-cli-${V}.tgz" | awk '{print $1}' > "pair-cli-${V}.tgz.sha256"
           fi
           # Move outputs to repo release/ folder
-          mv "pair-cli-${V}.tgz" "$PWD/../../release/"
-          mv "pair-cli-${V}.tgz.sha256" "$PWD/../../release/"
+          mv "pair-cli-${V}.tgz" "$REPO_ROOT/release/"
+          mv "pair-cli-${V}.tgz.sha256" "$REPO_ROOT/release/"
           # export minimal package metadata for publish-time validation
           node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));fs.writeFileSync('pair-cli-${V}.meta.json', JSON.stringify({name:p.name,private:p.private,version:p.version,publishConfig:p.publishConfig||null}))"
-          mv "pair-cli-${V}.meta.json" "$PWD/../../release/" || true
+          mv "pair-cli-${V}.meta.json" "$REPO_ROOT/release/" || true
 
       - name: Upload TGZ artifact as workflow artifact
         uses: actions/upload-artifact@v4
