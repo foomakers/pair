@@ -189,18 +189,25 @@ jobs:
             exit 1
           fi
 
-          # Try running top-level wrapper first, else call node directly
+          # Try running top-level wrapper first, else call node directly. Fail if none succeed.
+          RAN=0
           if [ -x "$ART_DIR/pair-cli" ]; then
-            "$ART_DIR/pair-cli" --version || true
+            "$ART_DIR/pair-cli" --version
+            RAN=1
           elif [ -x "$ART_DIR/bin/pair-cli" ]; then
-            "$ART_DIR/bin/pair-cli" --version || true
+            "$ART_DIR/bin/pair-cli" --version
+            RAN=1
           elif [ -f "$ART_DIR/bundle-cli/index.js" ]; then
-            node "$ART_DIR/bundle-cli/index.js" --version || true
-          else
-            echo "Warning: no runnable binary found in artifact to smoke-test"
+            node "$ART_DIR/bundle-cli/index.js" --version
+            RAN=1
           fi
 
-          echo "Smoke-test completed (exit codes may be non-zero for CLI version checks if the bundle returns non-zero); proceed with release if tests are acceptable."
+          if [ "$RAN" -ne 1 ]; then
+            echo "Error: no runnable binary found in artifact to smoke-test"
+            exit 1
+          fi
+
+          echo "Smoke-test completed successfully. Proceeding with release creation."
 
       - name: Create GitHub Release
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
