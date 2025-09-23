@@ -21,8 +21,8 @@ const MIN_LOG_LEVEL: LogLevel = 'INFO'
 setLogLevel(MIN_LOG_LEVEL)
 
 function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService): void {
+  const datasetPath = getKnowledgeHubDatasetPath()
   try {
-    const datasetPath = getKnowledgeHubDatasetPath()
     if (!fsService.existsSync(datasetPath)) {
       console.error(chalk.red(`[startup] dataset folder not found at: ${datasetPath}`))
       process.exitCode = 1
@@ -36,8 +36,12 @@ function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService): void 
       process.exitCode = 1
       process.exit(1)
     }
-  } catch {
-    console.error(chalk.red(`[startup] failed to resolve knowledge-hub dataset`))
+  } catch (err) {
+    console.error(
+      chalk.red(
+        `[startup] failed to resolve knowledge-hub dataset. Expected folder is ${datasetPath}. Error is: ${err}`,
+      ),
+    )
     process.exitCode = 1
     process.exit(1)
   }
