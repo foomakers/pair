@@ -282,19 +282,25 @@ jobs:
     permissions:
       contents: read
       packages: write
-    # Run this job only for manual dispatches when publish is requested
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true'
+    # Run this job for manual dispatch with publish=true OR when a tag push starting with v* occurs
+    if: >
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true')
+      || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
     steps:
       - name: Publish gate check
-        # Decide at runtime if we should actually publish. Exit early (success) if not requested.
+        # Decide at runtime if we should actually publish. If this run was a manual workflow_dispatch
+        # require inputs.publish == 'true'; for push/tag events skip the gate and proceed.
         run: |
           set -euo pipefail
-          INP_PUBLISH='${{ github.event.inputs.publish }}'
-          if [ "$INP_PUBLISH" != "true" ]; then
-            echo "Publish not requested (inputs.publish != true). Exiting job without publishing."
-            exit 0
+          INP_EVENT='${{ github.event_name }}'
+          if [ "$INP_EVENT" = "workflow_dispatch" ]; then
+            INP_PUBLISH='${{ github.event.inputs.publish }}'
+            if [ "$INP_PUBLISH" != "true" ]; then
+              echo "Publish not requested (inputs.publish != true). Exiting job without publishing."
+              exit 0
+            fi
           fi
-          echo "Publish requested; continuing with publish job."
+          echo "Publish requested or triggered by tag push; continuing with publish job."
       - name: Checkout code
         uses: actions/checkout@v4
 
