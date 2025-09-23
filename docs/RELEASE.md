@@ -1,8 +1,21 @@
 ## GitHub Packages notes
 
-If you publish to GitHub Packages, the release will include a `.tgz` artifact that can be uploaded to the GitHub Packages registry or published from the CI artifacts. Example steps to install from GitHub Packages as a consumer:
+If you publish to GitHub Packages, the release will include a `.tgz` artifact that can be uploaded to the GitHub Packages registry or published from the CI artifacts. Below are two examples: 1) how CI should authenticate (prefer `GITHUB_TOKEN` wherever possible) and 2) how a consuming developer can configure their local environment using a personal token (PAT) when necessary.
 
-1. Create an `.npmrc` in the consuming repo (or use user-level config) with a token that has package read access for the org:
+1. CI / GitHub Actions (recommended): use the automatically provided `GITHUB_TOKEN` in Actions. Best practice is to set an environment variable that your CI steps use to populate a runtime `.npmrc` (avoid committing tokens to the repo). Example (in a workflow step):
+
+```yaml
+# In your workflow step that publishes or installs from the registry
+env:
+  NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+run: |
+  echo "@pair:registry=https://npm.pkg.github.com/" > ~/.npmrc
+  echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
+  # now npm/pnpm commands will authenticate using the GITHUB_TOKEN provided by Actions
+  pnpm add -D @pair/pair-cli --registry https://npm.pkg.github.com/
+```
+
+2. Consumer / local development (PAT): when a developer configures a local machine or CI outside of GitHub Actions, they must use a personal access token (PAT) with package read scope. Store it in the consuming repo's secrets or a user-level `.npmrc`. Example `.npmrc` (do not commit this file with the token in plaintext):
 
 ```text
 @pair:registry=https://npm.pkg.github.com/
@@ -252,10 +265,10 @@ gh workflow run "Release" --ref main -f version="v1.0.0"
 
 ### Environment Variables
 
-The workflows use:
+The workflows use the following variables. Prefer `GITHUB_TOKEN` in Actions when possible; only fall back to a PAT when org policies require it.
 
-- `GITHUB_TOKEN` - Automatically provided for repository operations
-- `GH_RELEASE_TOKEN` - Optional PAT for enhanced permissions (if org policies require it)
+- `GITHUB_TOKEN` - Automatically provided to GitHub Actions and recommended for repo-level operations (create releases, upload assets, and authenticate to GitHub Packages from within Actions). Use it by referencing `secrets.GITHUB_TOKEN` or `github.token` in workflow steps and exporting it to `NODE_AUTH_TOKEN` for npm operations.
+- `GH_RELEASE_TOKEN` / PAT (optional) - Use only if your organization policy prevents `GITHUB_TOKEN` from creating tags/releases or publishing packages. If required, add a repository or organization secret (e.g., `GH_RELEASE_TOKEN`) with the appropriate scopes and reference it in the workflow where needed.
 
 ### Changeset Integration
 
