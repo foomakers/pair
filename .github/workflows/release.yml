@@ -284,6 +284,10 @@ jobs:
     permissions:
       contents: read
       packages: write
+    env:
+      # Use the workflow-provided token if available; consumers can also set a repository secret
+      GITHUB_TOKEN: ${{ github.token }}
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     # Run this job for manual dispatch with publish=true OR when a tag push starting with v* occurs
     if: >
       (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true')
@@ -350,10 +354,14 @@ jobs:
             echo "Aborting publish: package.name must be scoped to @pair for GitHub Packages publishing. Found: $PKG_NAME"
             exit 1
           fi
-          if [ -z "${GITHUB_TOKEN:-}" ]; then
-            echo "Aborting publish: GITHUB_TOKEN secret not configured"
+          # Prefer job-provided GITHUB_TOKEN; if not present, check repository secrets.GITHUB_TOKEN
+          if [ -z "${GITHUB_TOKEN:-}" ] && [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "Warning: No GITHUB_TOKEN/NODE_AUTH_TOKEN available in this run."
+            echo "If you intended to publish, re-run with the 'publish' input (workflow_dispatch) and ensure the GITHUB_TOKEN secret is configured for the repository or use a personal token in secrets.GITHUB_TOKEN."
+            echo "Aborting publish to avoid accidental public package publication." 
             exit 1
           fi
+          echo "Token availability: GITHUB_TOKEN=${GITHUB_TOKEN:+present} NODE_AUTH_TOKEN=${NODE_AUTH_TOKEN:+present}"
 
       - name: Publish to GitHub Packages
         env:
