@@ -371,10 +371,18 @@ jobs:
           V=${{ needs.release.outputs.version || steps.version.outputs.version || github.event.inputs.version }}
           TGZ=pair-cli-${V}.tgz
           echo "Publishing $TGZ to GitHub Packages"
-          # Configure npm auth for GitHub Packages using NODE_AUTH_TOKEN if available
+          # If NODE_AUTH_TOKEN isn't set explicitly, fall back to job-provided GITHUB_TOKEN
+          if [ -z "${NODE_AUTH_TOKEN:-}" ] && [ -n "${GITHUB_TOKEN:-}" ]; then
+            NODE_AUTH_TOKEN="$GITHUB_TOKEN"
+          fi
+
+          # Configure npm auth for GitHub Packages; write to $HOME/.npmrc so npm always finds it
           if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
-            printf "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\nregistry=https://npm.pkg.github.com/\n" > .npmrc
-            chmod 600 .npmrc
+            printf "@pair:registry=https://npm.pkg.github.com/\n//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\nalways-auth=true\n" > "$HOME/.npmrc"
+            chmod 600 "$HOME/.npmrc"
+            echo "Wrote npm auth to $HOME/.npmrc"
+          else
+            echo "No NODE_AUTH_TOKEN available; npm publish may fail due to missing credentials"
           fi
 
           npm publish "$TGZ" --registry https://npm.pkg.github.com/
