@@ -153,6 +153,8 @@ jobs:
           retention-days: 30
 
       - name: Smoke-test packaged artifact (verify checksum and run --version)
+        env:
+          PAIR_DIAG: '1'
         run: |
           set -euo pipefail
           V=${{ steps.version.outputs.version }}

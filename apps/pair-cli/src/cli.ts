@@ -8,7 +8,12 @@ import { updateCommand } from './commands/update'
 import { installCommand } from './commands/install'
 import { parseInstallUpdateArgs } from './commands/command-utils'
 import { fileSystemService, FileSystemService, Behavior, setLogLevel } from '@pair/content-ops'
-import { validateConfig, getKnowledgeHubDatasetPath, loadConfigWithOverrides } from './config-utils'
+import {
+  validateConfig,
+  getKnowledgeHubDatasetPath,
+  loadConfigWithOverrides,
+  isInRelease,
+} from './config-utils'
 import { LogLevel } from '@pair/content-ops'
 
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
@@ -19,6 +24,30 @@ program.name(chalk.blue(pkg.name)).description(pkg.description).version(pkg.vers
 
 const MIN_LOG_LEVEL: LogLevel = 'INFO'
 setLogLevel(MIN_LOG_LEVEL)
+
+// Diagnostic logging: enable by setting PAIR_DIAG=1 in the environment. This
+// prints key runtime values so we can reproduce CI vs local differences when
+// resolving the knowledge-hub dataset.
+const diagEnv = process.env['PAIR_DIAG']
+const DIAG = diagEnv === '1' || diagEnv === 'true'
+if (DIAG) {
+  try {
+    console.error(`[diag] __dirname=${__dirname}`)
+    console.error(`[diag] process.cwd=${process.cwd()}`)
+    console.error(`[diag] argv=${process.argv.join(' ')}`)
+    console.error(`[diag] isInRelease(__dirname)=${isInRelease(__dirname)}`)
+    try {
+      const resolved = getKnowledgeHubDatasetPath(fileSystemService, __dirname)
+      console.error(`[diag] getKnowledgeHubDatasetPath resolved to: ${resolved}`)
+    } catch (err) {
+      console.error(`[diag] getKnowledgeHubDatasetPath threw: ${String(err)}`)
+      if (err && (err as Error).stack) console.error((err as Error).stack)
+    }
+  } catch (err) {
+    // Avoid crashing diagnostics
+    console.error('[diag] failed to emit diagnostics', String(err))
+  }
+}
 
 function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService): void {
   const datasetPath = getKnowledgeHubDatasetPath()

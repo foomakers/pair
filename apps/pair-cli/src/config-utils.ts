@@ -1,4 +1,4 @@
-import { join, dirname } from 'path'
+import { join, dirname, basename, sep } from 'path'
 import { Behavior, FileSystemService, fileSystemService } from '@pair/content-ops'
 
 // Define proper types for configuration
@@ -17,59 +17,109 @@ export interface Config {
   [key: string]: unknown
 }
 
+function findUpForCandidate(
+  fsService: FileSystemService,
+  startDir: string,
+  candidateRelPath: string,
+  maxDepth = 10,
+): string | null {
+  const diagEnv = process.env['PAIR_DIAG']
+  const DIAG = diagEnv === '1' || diagEnv === 'true'
+
+  let dir = startDir
+  for (let i = 0; i < maxDepth; i++) {
+    const candidatePath = join(dir, candidateRelPath)
+    if (DIAG) {
+      // Derive a small label for diagnostics from the candidateRelPath
+      const label = candidateRelPath.includes('node_modules') ? 'node_modules' : 'monorepo'
+      console.error(
+        `[diag] checking ${label} candidate: ${candidatePath} exists=${fsService.existsSync(
+          candidatePath,
+        )}`,
+      )
+    }
+    if (fsService.existsSync(candidatePath)) return candidatePath
+    const parentDir = dirname(dir)
+    if (parentDir === dir) break
+    dir = parentDir
+  }
+  return null
+}
+
 function findPackageJsonPath(fsService: FileSystemService, currentDir: string = __dirname): string {
-  const targetPkgJson = 'node_modules/@pair/knowledge-hub/package.json'
+  // Look for monorepo package first, then node_modules package, walking up
   const monorepoPkgJson = 'packages/knowledge-hub/package.json'
-  let dir = currentDir
+  const nodeModulesPkgJson = 'node_modules/@pair/knowledge-hub/package.json'
 
-  // First try monorepo path
-  for (let i = 0; i < 10; i++) {
-    const candidatePath = join(dir, monorepoPkgJson)
-    if (fsService.existsSync(candidatePath)) {
-      return candidatePath
-    }
-    const parentDir = dirname(dir)
-    if (parentDir === dir) {
-      break
-    }
-    dir = parentDir
-  }
+  const monorepoResult = findUpForCandidate(fsService, currentDir, monorepoPkgJson)
+  if (monorepoResult) return monorepoResult
 
-  // Then try node_modules
-  dir = currentDir
-  for (let i = 0; i < 10; i++) {
-    const candidatePath = join(dir, targetPkgJson)
-    if (fsService.existsSync(candidatePath)) {
-      return candidatePath
-    }
-    const parentDir = dirname(dir)
-    if (parentDir === dir) {
-      break
-    }
-    dir = parentDir
-  }
+  const nodeModulesResult = findUpForCandidate(fsService, currentDir, nodeModulesPkgJson)
+  if (nodeModulesResult) return nodeModulesResult
 
   throw new Error(
     `Unable to find @pair/knowledge-hub package. Ensure the package is available in the workspace and installed.`,
   )
 }
 
+function resolveReleaseDatasetPath(
+  fsService: FileSystemService,
+  currentDir: string,
+): string | null {
+  const diagEnv = process.env['PAIR_DIAG']
+  const DIAG = diagEnv === '1' || diagEnv === 'true'
+
+  const releaseDatasetPath = join(currentDir, '..', 'dataset')
+  const bundleDatasetPath = join(currentDir, 'dataset')
+
+  if (DIAG)
+    console.error(
+      `[diag] checking release dataset at: ${releaseDatasetPath} exists=${fsService.existsSync(
+        releaseDatasetPath,
+      )}`,
+    )
+  if (DIAG)
+    console.error(
+      `[diag] checking bundle dataset at: ${bundleDatasetPath} exists=${fsService.existsSync(
+        bundleDatasetPath,
+      )}`,
+    )
+
+  if (fsService.existsSync(releaseDatasetPath)) return releaseDatasetPath
+  if (fsService.existsSync(bundleDatasetPath)) return bundleDatasetPath
+  return null
+}
+
 export function getKnowledgeHubDatasetPath(
   fsService: FileSystemService = fileSystemService,
   currentDir: string = __dirname,
 ): string {
+  const diagEnv = process.env['PAIR_DIAG']
+  const DIAG = diagEnv === '1' || diagEnv === 'true'
+
+  if (DIAG) console.error(`[diag] getKnowledgeHubDatasetPath currentDir=${currentDir}`)
+  if (DIAG) console.error(`[diag] isInRelease=${isInRelease(currentDir)}`)
+
   if (isInRelease(currentDir)) {
-    // In release, dataset is at [release-root]/bundle-cli/dataset
+    const resolved = resolveReleaseDatasetPath(fsService, currentDir)
+    if (resolved) return resolved
+
+    // Keep the error message compatible with existing tests which expect
+    // the primary release dataset path in the message.
     const releaseDatasetPath = join(currentDir, '..', 'dataset')
-    if (!fsService.existsSync(releaseDatasetPath)) {
-      throw new Error(`Dataset not found in release bundle at: ${releaseDatasetPath}`)
-    }
-    return releaseDatasetPath
-  } else {
-    // In monorepo/development, find via node_modules
-    const pkgPath = findPackageJsonPath(fsService, currentDir)
-    return join(dirname(pkgPath), 'dataset')
+    throw new Error(`Dataset not found in release bundle at: ${releaseDatasetPath}`)
   }
+
+  // In monorepo/development, find via node_modules or monorepo packages
+  const pkgPath = findPackageJsonPath(fsService, currentDir)
+  const datasetPath = join(dirname(pkgPath), 'dataset')
+  if (DIAG)
+    console.error(
+      `[diag] resolved monorepo dataset path: ${datasetPath} exists=${fsService.existsSync(
+        datasetPath,
+      )}`,
+    )
+  return datasetPath
 }
 
 /**
@@ -106,7 +156,15 @@ export function loadConfigWithOverrides(
 }
 
 export function isInRelease(currentDir: string = __dirname): boolean {
-  return currentDir.includes('/bundle-cli/')
+  // Robust detection: true when currentDir is the bundle-cli folder itself
+  // or when it contains the bundle-cli segment (with separators).
+  try {
+    if (basename(currentDir) === 'bundle-cli') return true
+    const needle = `${sep}bundle-cli${sep}`
+    return currentDir.includes(needle)
+  } catch {
+    return false
+  }
 }
 
 function baseConfigPath() {
