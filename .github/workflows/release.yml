@@ -117,7 +117,7 @@ jobs:
           REPO_ROOT="$(pwd)"
           cd "$ART_DIR"
           # Ensure the package.json inside the extracted artifact is scoped for GitHub Packages
-          node -e "const fs=require('fs');const p='./package.json';if(fs.existsSync(p)){let o=JSON.parse(fs.readFileSync(p,'utf8'));o.name='@pair/pair-cli';o.publishConfig=o.publishConfig||{};o.publishConfig.registry='https://npm.pkg.github.com/';fs.writeFileSync(p,JSON.stringify(o,null,2));console.log('Patched package.json for registry publish:',o.name)} else {console.warn('No package.json found to patch in artifact') }"
+          node -e "const fs=require('fs');const p='./package.json';if(fs.existsSync(p)){let o=JSON.parse(fs.readFileSync(p,'utf8'));o.name='@foomakers/pair-cli';o.publishConfig=o.publishConfig||{};o.publishConfig.registry='https://npm.pkg.github.com/';fs.writeFileSync(p,JSON.stringify(o,null,2));console.log('Patched package.json for registry publish:',o.name)} else {console.warn('No package.json found to patch in artifact') }"
           # npm pack will produce a tarball; normalize its name to pair-cli-<version>.tgz
           TAR_OUT=$(npm pack --pack-destination . | tail -n1 | tr -d '\r' ) || true
           # If npm pack didn't print filename, fallback to matching pattern
@@ -350,8 +350,8 @@ jobs:
             echo "Aborting publish: package.private is true"
             exit 1
           fi
-          if [[ "$PKG_NAME" != @pair/* ]]; then
-            echo "Aborting publish: package.name must be scoped to @pair for GitHub Packages publishing. Found: $PKG_NAME"
+          if [[ "$PKG_NAME" != @foomakers/* ]]; then
+            echo "Aborting publish: package.name must be scoped to @foomakers for GitHub Packages publishing. Found: $PKG_NAME"
             exit 1
           fi
           # Prefer job-provided GITHUB_TOKEN; if not present, check repository secrets.GITHUB_TOKEN
@@ -378,7 +378,7 @@ jobs:
 
           # Configure npm auth for GitHub Packages; write to $HOME/.npmrc so npm always finds it
           if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
-            printf "@pair:registry=https://npm.pkg.github.com/\n//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\nalways-auth=true\n" > "$HOME/.npmrc"
+            printf "@foomakers:registry=https://npm.pkg.github.com/\n//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\nalways-auth=true\n" > "$HOME/.npmrc"
             chmod 600 "$HOME/.npmrc"
             echo "Wrote npm auth to $HOME/.npmrc"
           else
