@@ -371,6 +371,12 @@ jobs:
           V=${{ needs.release.outputs.version || steps.version.outputs.version || github.event.inputs.version }}
           TGZ=pair-cli-${V}.tgz
           echo "Publishing $TGZ to GitHub Packages"
+          # Configure npm auth for GitHub Packages using NODE_AUTH_TOKEN if available
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            printf "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\nregistry=https://npm.pkg.github.com/\n" > .npmrc
+            chmod 600 .npmrc
+          fi
+
           npm publish "$TGZ" --registry https://npm.pkg.github.com/
           echo "Published. Verifying via npm view..."
           sleep 3
