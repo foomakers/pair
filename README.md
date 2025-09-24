@@ -155,17 +155,19 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 
 ### GitHub Packages install example
 
-If `@pair/pair-cli` is published to GitHub Packages, consumers should configure their npm client for the org-scoped registry. Example `.npmrc` for repository-level config:
+If `@foomakers/pair-cli` is published to GitHub Packages, consumers should configure their npm client for the org-scoped registry. Example `.npmrc` for repository-level config:
 
 ```text
-@pair:registry=https://npm.pkg.github.com/
+@foomakers:registry=https://npm.pkg.github.com/
 //npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
 ```
 
 Then install the package:
 
 ```bash
-pnpm add -D @pair/pair-cli
+pnpm add -D @foomakers/pair-cli
+```bash
+pnpm add -D @foomakers/pair-cli
 ```
 
 See `docs/RELEASE.md` for details about TGZ artifacts and publishing.

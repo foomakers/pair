@@ -17,7 +17,7 @@ nvm install 18
 nvm use 18
 
 # Option 2: Install locally in project
-pnpm add -D @pair/pair-cli
+pnpm add -D @foomakers/pair-cli
 # Use with: pnpm dlx pair-cli
 
 # Option 3: Use sudo (not recommended)

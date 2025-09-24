@@ -9,24 +9,24 @@ If you publish to GitHub Packages, the release will include a `.tgz` artifact th
 env:
   NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 run: |
-  echo "@pair:registry=https://npm.pkg.github.com/" > ~/.npmrc
+  echo "@foomakers:registry=https://npm.pkg.github.com/" > ~/.npmrc
   echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
   # now npm/pnpm commands will authenticate using the GITHUB_TOKEN provided by Actions
-  pnpm add -D @pair/pair-cli --registry https://npm.pkg.github.com/
+  pnpm add -D @foomakers/pair-cli --registry https://npm.pkg.github.com/
 ```
 
 2. Consumer / local development (PAT): when a developer configures a local machine or CI outside of GitHub Actions, they must use a personal access token (PAT) with package read scope. Store it in the consuming repo's secrets or a user-level `.npmrc`. Example `.npmrc` (do not commit this file with the token in plaintext):
 
 ```text
-@pair:registry=https://npm.pkg.github.com/
+@foomakers:registry=https://npm.pkg.github.com/
 //npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
 ```
 
 2. Install the package as a dev dependency:
 
 ```bash
-pnpm add -D @pair/pair-cli
-# or npm i @pair/pair-cli
+pnpm add -D @foomakers/pair-cli
+# or npm i @foomakers/pair-cli
 ```
 
 3. Run the CLI via pnpm dlx or npx:
