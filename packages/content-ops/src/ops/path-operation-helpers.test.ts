@@ -48,7 +48,7 @@ import { processPathSubstitution } from './link-batch-processor'
 let fileService: InMemoryFileSystemService
 
 beforeEach(() => {
-  fileService = new InMemoryFileSystemService()
+  fileService = new InMemoryFileSystemService({}, '/', '/')
   vi.clearAllMocks()
 
   // Mock fileService methods
@@ -112,9 +112,13 @@ describe('setupPathOperation - custom options', () => {
 
 describe('determineFinalDestination - file operations', () => {
   it('should return destination path when target is a file', async () => {
-    fileService = new InMemoryFileSystemService({
-      '/dataset/target.md': 'content',
-    })
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/target.md': 'content',
+      },
+      '/',
+      '/',
+    )
 
     const result = await determineFinalDestination(
       fileService,
@@ -129,9 +133,13 @@ describe('determineFinalDestination - file operations', () => {
 
 describe('determineFinalDestination - directory operations', () => {
   it('should append filename when target is a directory', async () => {
-    fileService = new InMemoryFileSystemService({
-      '/dataset/target/': '',
-    })
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/target/': '',
+      },
+      '/',
+      '/',
+    )
 
     const result = await determineFinalDestination(
       fileService,
@@ -275,12 +283,16 @@ describe('updateMarkdownLinks - options', () => {
 
 describe('handleMirrorCleanup', () => {
   it('should remove extraneous files in destination', async () => {
-    fileService = new InMemoryFileSystemService({
-      '/dataset/src/file1.md': 'content1',
-      '/dataset/src/file2.md': 'content2',
-      '/dataset/dest/file1.md': 'old1',
-      '/dataset/dest/extra.md': 'to remove',
-    })
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/file1.md': 'content1',
+        '/dataset/src/file2.md': 'content2',
+        '/dataset/dest/file1.md': 'old1',
+        '/dataset/dest/extra.md': 'to remove',
+      },
+      '/',
+      '/',
+    )
 
     await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest')
 
@@ -291,9 +303,13 @@ describe('handleMirrorCleanup', () => {
   })
 
   it('should handle empty destination directory', async () => {
-    fileService = new InMemoryFileSystemService({
-      '/dataset/src/file1.md': 'content1',
-    })
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/file1.md': 'content1',
+      },
+      '/',
+      '/',
+    )
 
     await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest')
 
@@ -304,9 +320,13 @@ describe('handleMirrorCleanup', () => {
 
 describe('handleMirrorCleanup - error handling', () => {
   it('should handle source directory read errors gracefully', async () => {
-    fileService = new InMemoryFileSystemService({
-      '/dataset/dest/extra.md': 'to remove',
-    })
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/dest/extra.md': 'to remove',
+      },
+      '/',
+      '/',
+    )
 
     // Mock readdir to throw for source
     const originalReaddir = fileService.readdir.bind(fileService)
@@ -325,9 +345,13 @@ describe('handleMirrorCleanup - error handling', () => {
   })
 
   it('should handle destination directory read errors gracefully', async () => {
-    fileService = new InMemoryFileSystemService({
-      '/dataset/src/file1.md': 'content1',
-    })
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/src/file1.md': 'content1',
+      },
+      '/',
+      '/',
+    )
 
     // Mock readdir to throw for destination
     const originalReaddir = fileService.readdir.bind(fileService)

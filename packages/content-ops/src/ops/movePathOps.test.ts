@@ -89,7 +89,7 @@ describe('movePathOps - error cases', () => {
   })
 
   it('should respect behavior options', async () => {
-    fileService = new InMemoryFileSystemService(TEST_FILE_STRUCTURES.existingTarget)
+    fileService = new InMemoryFileSystemService(TEST_FILE_STRUCTURES.existingTarget, '/', '/')
 
     const result = await movePathOps({
       fileService,

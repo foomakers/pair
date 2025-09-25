@@ -5,10 +5,14 @@ import { InMemoryFileSystemService } from '../test-utils/in-memory-fs'
 let fileService: InMemoryFileSystemService
 
 beforeEach(() => {
-  fileService = new InMemoryFileSystemService({
-    '/source.txt': 'source content',
-    '/existing.txt': 'existing content',
-  })
+  fileService = new InMemoryFileSystemService(
+    {
+      '/source.txt': 'source content',
+      '/existing.txt': 'existing content',
+    },
+    '/',
+    '/',
+  )
 })
 
 describe('copyFileHelper', () => {
@@ -51,11 +55,15 @@ describe('copyFileHelper - errors', () => {
 
 describe('copyDirHelper - basic copy', () => {
   beforeEach(() => {
-    fileService = new InMemoryFileSystemService({
-      '/source/dir/file1.txt': 'file1 content',
-      '/source/dir/file2.txt': 'file2 content',
-      '/source/dir/nested/file3.txt': 'file3 content',
-    })
+    fileService = new InMemoryFileSystemService(
+      {
+        '/source/dir/file1.txt': 'file1 content',
+        '/source/dir/file2.txt': 'file2 content',
+        '/source/dir/nested/file3.txt': 'file3 content',
+      },
+      '/',
+      '/',
+    )
   })
 
   it('should copy directory recursively', async () => {
@@ -79,11 +87,15 @@ describe('copyDirHelper - basic copy', () => {
 
 describe('copyDirHelper - add behavior', () => {
   beforeEach(() => {
-    fileService = new InMemoryFileSystemService({
-      '/source/dir/file1.txt': 'file1 content',
-      '/source/dir/file2.txt': 'file2 content',
-      '/source/dir/nested/file3.txt': 'file3 content',
-    })
+    fileService = new InMemoryFileSystemService(
+      {
+        '/source/dir/file1.txt': 'file1 content',
+        '/source/dir/file2.txt': 'file2 content',
+        '/source/dir/nested/file3.txt': 'file3 content',
+      },
+      '/',
+      '/',
+    )
   })
 
   it('should handle add behavior for directories', async () => {

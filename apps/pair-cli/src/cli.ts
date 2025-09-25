@@ -29,15 +29,18 @@ setLogLevel(MIN_LOG_LEVEL)
 // prints key runtime values so we can reproduce CI vs local differences when
 // resolving the knowledge-hub dataset.
 const diagEnv = process.env['PAIR_DIAG']
+const fsService = fileSystemService
 const DIAG = diagEnv === '1' || diagEnv === 'true'
 if (DIAG) {
   try {
-    console.error(`[diag] __dirname=${__dirname}`)
-    console.error(`[diag] process.cwd=${process.cwd()}`)
+    console.error(`[diag] __dirname=${fsService.currentModuleDirectory()}`)
+    console.error(`[diag] process cwd=${fsService.currentWorkingDirectory()}`)
     console.error(`[diag] argv=${process.argv.join(' ')}`)
-    console.error(`[diag] isInRelease(__dirname)=${isInRelease(__dirname)}`)
+    console.error(
+      `[diag] isInRelease(__dirname)=${isInRelease(fsService.currentModuleDirectory())}`,
+    )
     try {
-      const resolved = getKnowledgeHubDatasetPath(fileSystemService, __dirname)
+      const resolved = getKnowledgeHubDatasetPath(fsService)
       console.error(`[diag] getKnowledgeHubDatasetPath resolved to: ${resolved}`)
     } catch (err) {
       console.error(`[diag] getKnowledgeHubDatasetPath threw: ${String(err)}`)
@@ -50,7 +53,7 @@ if (DIAG) {
 }
 
 function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService): void {
-  const datasetPath = getKnowledgeHubDatasetPath()
+  const datasetPath = getKnowledgeHubDatasetPath(fsService)
   try {
     if (!fsService.existsSync(datasetPath)) {
       console.error(chalk.red(`[startup] dataset folder not found at: ${datasetPath}`))
@@ -104,6 +107,7 @@ program
   })
 
 function buildInstallOptions(
+  fsService: FileSystemService,
   rawArgs: string[],
   cmdOptions: unknown,
 ): {
@@ -118,7 +122,7 @@ function buildInstallOptions(
   // Resolve relative baseTarget against the current working directory
   let resolvedBaseTarget = baseTarget
   if (baseTarget && !isAbsolute(baseTarget)) {
-    resolvedBaseTarget = resolve(process.cwd(), baseTarget)
+    resolvedBaseTarget = resolve(fsService.currentWorkingDirectory(), baseTarget)
   }
 
   const parsedRec = getParsedOpts(cmdOptions)
@@ -153,7 +157,7 @@ export async function handleInstallCommand(
 ): Promise<CmdResult | void> {
   const arr = Array.isArray(targetArg) ? targetArg : targetArg ? [String(targetArg)] : []
   try {
-    const { argsToPass, opts } = buildInstallOptions(arr, cmdOptions)
+    const { argsToPass, opts } = buildInstallOptions(fsService, arr, cmdOptions)
     const res = (await installCommand(fsService, argsToPass, opts)) as CmdResult
 
     if (res && res.success) {
@@ -172,7 +176,10 @@ export async function handleInstallCommand(
     return { success: false, message: String(err) }
   }
 }
-function buildUpdateArgs(cmdOptions: CommandOptions): { args: string[]; useDefaults: boolean } {
+function buildUpdateArgs(
+  fsService: FileSystemService,
+  cmdOptions: CommandOptions,
+): { args: string[]; useDefaults: boolean } {
   const args: string[] = []
   let useDefaults = true
   if (cmdOptions.positionalTarget) {
@@ -180,7 +187,7 @@ function buildUpdateArgs(cmdOptions: CommandOptions): { args: string[]; useDefau
     try {
       const isAbsolutePath = isAbsolute(targetStr)
       if (!isAbsolutePath) {
-        targetStr = resolve(process.cwd(), targetStr)
+        targetStr = resolve(fsService.currentWorkingDirectory(), targetStr)
       }
     } catch {
       // ignore resolution errors and fall back to provided string
@@ -199,14 +206,14 @@ export async function handleUpdateCommand(
   fsService: FileSystemService = fileSystemService,
 ): Promise<{ success?: boolean; message?: string } | void> {
   if (cmdOptions.listTargets) {
-    handleUpdateListTargets(cmdOptions)
+    handleUpdateListTargets(fsService, cmdOptions)
     return
   }
 
   try {
     const datasetRoot = validateUpdateConfigAndGetRoot(fsService, cmdOptions)
 
-    const { args, useDefaults } = buildUpdateArgs(cmdOptions)
+    const { args, useDefaults } = buildUpdateArgs(fsService, cmdOptions)
 
     // Execute update command
     const opts: Record<string, unknown> = { datasetRoot, useDefaults }
@@ -239,14 +246,14 @@ export async function handleUpdateCommand(
 /**
  * Handle the --list-targets flag for update command
  */
-function handleUpdateListTargets(cmdOptions: CommandOptions): void {
+function handleUpdateListTargets(fsService: FileSystemService, cmdOptions: CommandOptions): void {
   const { config } = cmdOptions.config
-    ? loadConfigWithOverrides(fileSystemService, {
+    ? loadConfigWithOverrides(fsService, {
         customConfigPath: cmdOptions.config,
-        projectRoot: process.cwd(),
+        projectRoot: fsService.currentWorkingDirectory(),
       })
-    : loadConfigWithOverrides(fileSystemService, {
-        projectRoot: process.cwd(),
+    : loadConfigWithOverrides(fsService, {
+        projectRoot: fsService.currentWorkingDirectory(),
       })
   console.log(chalk.blue('\n📁 Available asset registries:\n'))
 
@@ -313,7 +320,9 @@ function validateUpdateConfigAndGetRoot(
   }
 
   try {
-    return cmdOptions.config ? join(process.cwd(), 'dataset') : getKnowledgeHubDatasetPath()
+    return cmdOptions.config
+      ? join(fsService.currentWorkingDirectory(), 'dataset')
+      : getKnowledgeHubDatasetPath(fsService)
   } catch {
     console.error(chalk.red('Unable to determine dataset root path'))
     process.exitCode = 1

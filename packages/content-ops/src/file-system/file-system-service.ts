@@ -16,6 +16,9 @@ export interface FileSystemService {
   rm: (path: string, options?: { recursive?: boolean; force?: boolean }) => Promise<void>
   stat: (path: string) => Promise<Stats>
   copy: (oldPath: string, newPath: string) => Promise<void>
+  currentModuleDirectory: () => string
+  currentWorkingDirectory: () => string
+  chdir: (path: string) => void
 }
 
 /**
@@ -46,4 +49,7 @@ export const fileSystemService: FileSystemService = {
     await fs.rm(path, options)
   },
   stat: path => fs.stat(path),
+  currentModuleDirectory: () => __dirname,
+  currentWorkingDirectory: () => process.cwd(),
+  chdir: path => process.chdir(path),
 }

@@ -46,7 +46,7 @@ function findUpForCandidate(
   return null
 }
 
-function findPackageJsonPath(fsService: FileSystemService, currentDir: string = __dirname): string {
+function findPackageJsonPath(fsService: FileSystemService, currentDir: string): string {
   // Look for monorepo package first, then node_modules package, walking up
   const monorepoPkgJson = 'packages/knowledge-hub/package.json'
   const nodeModulesPkgJson = 'node_modules/@pair/knowledge-hub/package.json'
@@ -90,10 +90,8 @@ function resolveReleaseDatasetPath(
   return null
 }
 
-export function getKnowledgeHubDatasetPath(
-  fsService: FileSystemService = fileSystemService,
-  currentDir: string = __dirname,
-): string {
+export function getKnowledgeHubDatasetPath(fsService: FileSystemService): string {
+  const currentDir = fsService.currentModuleDirectory()
   const diagEnv = process.env['PAIR_DIAG']
   const DIAG = diagEnv === '1' || diagEnv === 'true'
 
@@ -133,7 +131,7 @@ export function loadConfigWithOverrides(
   fsService: FileSystemService = fileSystemService,
   options: { customConfigPath?: string; projectRoot?: string } = {},
 ): { config: Config; source: string } {
-  const { customConfigPath, projectRoot = process.cwd() } = options
+  const { customConfigPath, projectRoot = fsService.currentWorkingDirectory() } = options
 
   // Start with the base config (either local app config or knowledge-hub)
   let { config, source } = loadBaseConfig(fsService)
@@ -155,7 +153,7 @@ export function loadConfigWithOverrides(
   return { config, source }
 }
 
-export function isInRelease(currentDir: string = __dirname): boolean {
+export function isInRelease(currentDir: string): boolean {
   // Robust detection: true when currentDir is the bundle-cli folder itself
   // or when it contains the bundle-cli segment (with separators).
   try {
@@ -167,12 +165,12 @@ export function isInRelease(currentDir: string = __dirname): boolean {
   }
 }
 
-function baseConfigPath() {
-  return join(__dirname, '..', 'config.json')
+function baseConfigPath(currentDir: string) {
+  return join(currentDir, 'config.json')
 }
 
 function loadBaseConfig(fsService: FileSystemService): { config: Config; source: string } {
-  const appConfigPath = baseConfigPath()
+  const appConfigPath = baseConfigPath(fsService.currentModuleDirectory())
   try {
     if (fsService.existsSync(appConfigPath)) {
       const appConfigContent = fsService.readFileSync(appConfigPath)

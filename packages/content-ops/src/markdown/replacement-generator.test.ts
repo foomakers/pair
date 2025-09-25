@@ -11,10 +11,14 @@ import InMemoryFileSystemService from '../test-utils/in-memory-fs'
 
 describe('generateNormalizationReplacements - basics', () => {
   it('generates replacements for relative links that can be normalized', async () => {
-    const fs = new InMemoryFileSystemService({
-      '/dataset/guide/other.md': '# Other',
-      '/dataset/api/ref.md': '# API Ref',
-    })
+    const fs = new InMemoryFileSystemService(
+      {
+        '/dataset/guide/other.md': '# Other',
+        '/dataset/api/ref.md': '# API Ref',
+      },
+      '/',
+      '/',
+    )
 
     const links: ParsedLink[] = [
       {
@@ -95,7 +99,7 @@ describe('normalization idempotence', () => {
 
 describe('generateNormalizationReplacements - exclusions', () => {
   it('skips external links', async () => {
-    const fs = new InMemoryFileSystemService({})
+    const fs = new InMemoryFileSystemService({}, '/', '/')
 
     const links: ParsedLink[] = [
       {
@@ -126,7 +130,7 @@ describe('generateNormalizationReplacements - exclusions', () => {
 
 describe('generateNormalizationReplacements - exclusion list', () => {
   it('skips links in exclusion list', async () => {
-    const fs = new InMemoryFileSystemService({})
+    const fs = new InMemoryFileSystemService({}, '/', '/')
 
     const links: ParsedLink[] = [
       {
@@ -157,9 +161,13 @@ describe('generateNormalizationReplacements - exclusion list', () => {
 
 describe('generateExistenceCheckReplacements', () => {
   it('generates replacements for broken links that can be fixed', async () => {
-    const fs = new InMemoryFileSystemService({
-      '/dataset/api/v1/other.md': '# Other',
-    })
+    const fs = new InMemoryFileSystemService(
+      {
+        '/dataset/api/v1/other.md': '# Other',
+      },
+      '/',
+      '/',
+    )
 
     const lines = ['Line with broken link']
 
@@ -195,7 +203,7 @@ describe('generateExistenceCheckReplacements', () => {
 
 describe('generateExistenceCheckReplacements - error cases', () => {
   it('generates errors for broken links that cannot be fixed', async () => {
-    const fs = new InMemoryFileSystemService({})
+    const fs = new InMemoryFileSystemService({}, '/', '/')
 
     const lines = ['Line with broken link']
 

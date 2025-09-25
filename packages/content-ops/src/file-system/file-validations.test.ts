@@ -54,9 +54,13 @@ describe('validatePaths', () => {
 
 describe('validateSourceExists', () => {
   it('should return stats for existing file', async () => {
-    const fileService = new InMemoryFileSystemService({
-      '/dataset/file.md': '# Test',
-    })
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/file.md': '# Test',
+      },
+      '/',
+      '/',
+    )
 
     const stats = await validateSourceExists(fileService, '/dataset/file.md')
     expect(stats).toBeDefined()
@@ -64,7 +68,7 @@ describe('validateSourceExists', () => {
   })
 
   it('should throw error for non-existent file', async () => {
-    const fileService = new InMemoryFileSystemService({})
+    const fileService = new InMemoryFileSystemService({}, '/', '/')
 
     await expect(validateSourceExists(fileService, '/dataset/nonexistent.md')).rejects.toThrow(
       'Source does not exist',

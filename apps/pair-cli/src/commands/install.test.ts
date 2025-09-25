@@ -1,9 +1,6 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { installCommand } from './install'
-import { resolve } from 'path'
-import * as commandUtils from './command-utils'
 import {
-  DEFAULT_CONFIG,
   GITHUB_ONLY_CONFIG,
   GITHUB_KNOWLEDGE_CONFIG,
   OVERLAPPING_CONFIG,
@@ -11,135 +8,175 @@ import {
   createTestFs,
 } from '../test-utils/test-helpers'
 
+const realCwd = '/Users/gianluca.carucci/me/projects/pair/apps/pair-cli'
+
+const TEST_DEFAULT_CONFIG = {
+  asset_registries: {
+    github: {
+      source: '.github',
+      behavior: 'mirror' as const,
+      include: ['/chatmodes', '/workflows'],
+      target_path: '.github-copy',
+      description: 'GitHub workflows and configuration files',
+    },
+    knowledge: {
+      source: '.pair/knowledge',
+      behavior: 'mirror' as const,
+      target_path: '.pair-knowledge',
+      description: 'Knowledge base and documentation',
+    },
+    adoption: {
+      source: '.pair/adoption',
+      behavior: 'add' as const,
+      target_path: '.pair-adoption',
+      description: 'Adoption guides and onboarding materials',
+    },
+  },
+}
+
 describe('installCommand new functionality tests', () => {
   it('install with defaults uses config registries', async () => {
-    const fs = createTestFs(DEFAULT_CONFIG, {
-      '/dataset/.github/workflows/ci.yml': 'workflow content',
-      '/dataset/.pair/knowledge.md': 'knowledge content',
+    const fs = createTestFs(
+      TEST_DEFAULT_CONFIG,
+      {
+        [`${realCwd}/.github/workflows/ci.yml`]: 'workflow content',
+        [`${realCwd}/.pair/knowledge/knowledge.md`]: 'knowledge content',
+        [`${realCwd}/.pair/adoption/guide.md`]: 'adoption content',
+      },
+      realCwd,
+    )
+
+    const result = await installCommand(fs, [], {
+      datasetRoot: fs.currentWorkingDirectory(),
+      useDefaults: true,
     })
-
-    const spy = vi.spyOn(commandUtils, 'doCopyAndUpdateLinks')
-    spy.mockResolvedValue({ logs: ['installed github', 'installed knowledge'] })
-
-    const result = await installCommand(fs, [], { datasetRoot: '/dataset', useDefaults: true })
     expect(result!.success).toBe(true)
-    spy.mockRestore()
+
+    // Verify files were copied to correct locations
+    expect(await fs.readFile('.github-copy/workflows/ci.yml')).toBe('workflow content')
+    expect(await fs.readFile('.pair-knowledge/knowledge.md')).toBe('knowledge content')
+    expect(await fs.readFile('.pair-adoption/guide.md')).toBe('adoption content')
   })
 
   it('install with registry override', async () => {
-    const fs = createTestFs(GITHUB_ONLY_CONFIG, {
-      '/dataset/.github/workflows/ci.yml': 'workflow content',
-    })
-
-    const spy = vi.spyOn(commandUtils, 'doCopyAndUpdateLinks')
-    spy.mockResolvedValue({ logs: ['installed github'] })
+    const fs = createTestFs(
+      GITHUB_ONLY_CONFIG,
+      {
+        [`${realCwd}/.github/workflows/ci.yml`]: 'workflow content',
+      },
+      realCwd,
+    )
 
     const result = await installCommand(fs, [], {
-      datasetRoot: '/dataset',
+      datasetRoot: fs.currentWorkingDirectory(),
       useDefaults: true,
     })
     expect(result).toBeDefined()
     expect(result!.success).toBe(true)
-    spy.mockRestore()
+
+    // Verify only github registry was installed
+    expect(await fs.readFile('.github/workflows/ci.yml')).toBe('workflow content')
+    expect(await fs.exists('.pair-knowledge/knowledge.md')).toBe(false)
   })
 })
 
 describe('installCommand - multiple registries', () => {
   it('install with multiple registry overrides', async () => {
-    const fs = createTestFs(GITHUB_KNOWLEDGE_CONFIG, {
-      '/dataset/.github/workflows/ci.yml': 'workflow content',
-      '/dataset/.pair/knowledge.md': 'knowledge content',
-    })
-
-    const spy = vi.spyOn(commandUtils, 'doCopyAndUpdateLinks')
-    spy.mockResolvedValue({ logs: ['installed github', 'installed knowledge'] })
+    const fs = createTestFs(
+      GITHUB_KNOWLEDGE_CONFIG,
+      {
+        [`${realCwd}/.github/workflows/ci.yml`]: 'workflow content',
+        [`${realCwd}/.pair/knowledge/knowledge.md`]: 'knowledge content',
+      },
+      realCwd,
+    )
 
     const result = await installCommand(fs, [], {
-      datasetRoot: '/dataset',
+      datasetRoot: fs.currentWorkingDirectory(),
       useDefaults: true,
     })
     expect(result).toBeDefined()
     expect(result!.success).toBe(true)
-    spy.mockRestore()
+
+    // Verify both registries were installed
+    expect(await fs.readFile('.github/workflows/ci.yml')).toBe('workflow content')
+    expect(await fs.readFile('.pair-knowledge/knowledge.md')).toBe('knowledge content')
   })
 })
 
 describe('installCommand - idempotency / existing target', () => {
   it('fails when installing twice to the same existing target', async () => {
-    const fs = createTestFs(GITHUB_ONLY_CONFIG, {
-      '/dataset/.github/workflows/ci.yml': 'workflow content',
-    })
+    // Simulate a dataset located at /dataset so installs copy into the cwd target
+    const fs = createTestFs(
+      GITHUB_ONLY_CONFIG,
+      {
+        ['/dataset/.github/workflows/ci.yml']: 'workflow content',
+      },
+      realCwd,
+    )
 
-    const spy = vi.spyOn(commandUtils, 'doCopyAndUpdateLinks')
-    spy.mockResolvedValue({ logs: ['installed github'] })
-
-    // First install should succeed
+    // First install should succeed (copy from /dataset into project cwd)
     const first = await installCommand(fs, [], { datasetRoot: '/dataset', useDefaults: true })
     expect(first).toBeDefined()
     expect(first!.success).toBe(true)
 
-    // Simulate that the previous install created files in the target by creating the dir
-    const absGithub = resolve('.github')
-    await fs.mkdir(absGithub, { recursive: true })
-    await fs.writeFile(`${absGithub}/marker`, 'x')
+    // Verify file was copied
+    expect(await fs.readFile('.github/workflows/ci.yml')).toBe('workflow content')
 
     // Second install should return a failure result because destination exists
     const second = await installCommand(fs, [], { datasetRoot: '/dataset', useDefaults: true })
     expect(second).toBeDefined()
     expect(second!.success).toBe(false)
     expect(second!.message).toMatch(/Destination already exists/)
-
-    spy.mockRestore()
   })
 })
 
 describe('installCommand - overlapping targets', () => {
   it('fails when registries have overlapping targets under a base target', async () => {
     // Use a filesystem with minimal dataset and overlapping config
-    const fs = createTestFs(OVERLAPPING_CONFIG, {
-      '/dataset/.github/README.md': 'x',
-    })
-
-    const spy = vi.spyOn(commandUtils, 'doCopyAndUpdateLinks')
-    spy.mockResolvedValue({ logs: ['installed'] })
+    const fs = createTestFs(
+      OVERLAPPING_CONFIG,
+      {
+        [`${realCwd}/.github/README.md`]: 'x',
+      },
+      realCwd,
+    )
 
     // Call installCommand as if user ran: install .smoke_test
     const result = await installCommand(fs, ['--target', '.smoke_test'], {
-      datasetRoot: '/dataset',
+      datasetRoot: fs.currentWorkingDirectory(),
     })
 
     expect(result).toBeDefined()
     expect(result!.success).toBe(false)
     // The CLI should surface a precheck error about overlapping targets
     expect(result!.message).toMatch(/Overlapping registry targets|Conflicting registry targets/)
-
-    spy.mockRestore()
   })
 })
 
 describe('installCommand - clean non-overlapping install', () => {
   it('succeeds when base target is empty and registry targets do not overlap', async () => {
-    const fs = createTestFs(CLEAN_CONFIG, {
-      '/dataset/.github/README.md': 'gh',
-      '/dataset/.pair/knowledge/doc.md': 'k',
-      '/dataset/.pair/adoption/guide.md': 'a',
-    })
-
-    const spy = vi.spyOn(commandUtils, 'doCopyAndUpdateLinks')
-    spy.mockResolvedValue({
-      logs: ['installed github', 'installed knowledge', 'installed adoption'],
-    })
+    const fs = createTestFs(
+      CLEAN_CONFIG,
+      {
+        [`${realCwd}/.github/README.md`]: 'gh',
+        [`${realCwd}/.pair/knowledge/doc.md`]: 'k',
+        [`${realCwd}/.pair/adoption/guide.md`]: 'a',
+      },
+      realCwd,
+    )
 
     // Use a non-overlapping mocked config (the global mock already uses non-overlapping targets)
     const result = await installCommand(fs, ['--target', '.clean_test'], {
-      datasetRoot: '/dataset',
+      datasetRoot: fs.currentWorkingDirectory(),
     })
 
     expect(result).toBeDefined()
     expect(result!.success).toBe(true)
-    // Ensure copy was invoked at least once
-    expect(spy.mock.calls.length).toBeGreaterThan(0)
 
-    spy.mockRestore()
+    // Verify files were copied to correct locations
+    expect(await fs.readFile('.clean_test/.github/README.md')).toBe('gh')
+    expect(await fs.readFile('.clean_test/.pair-knowledge/doc.md')).toBe('k')
+    expect(await fs.readFile('.clean_test/.pair-adoption/guide.md')).toBe('a')
   })
 })

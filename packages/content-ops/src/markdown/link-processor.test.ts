@@ -44,10 +44,14 @@ Another line with an external [link](https://example.com).
 
 describe('generateNormalizationReplacements - core', () => {
   it('should generate normalization replacements', async () => {
-    const fileService = new InMemoryFileSystemService({
-      '/dataset/docs/page.md': '# Page',
-      '/dataset/page.md': '# Root Page',
-    })
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/docs/page.md': '# Page',
+        '/dataset/page.md': '# Root Page',
+      },
+      '/',
+      '/',
+    )
 
     const links = [
       {
@@ -80,10 +84,14 @@ describe('generateNormalizationReplacements - core', () => {
 
 describe('generateNormalizationReplacements - path substitution', () => {
   it('should generate normalization replacements for different folders', async () => {
-    const fileService = new InMemoryFileSystemService({
-      '/dataset/docs/page.md': '# Page',
-      '/dataset/page.md': '# Root Page',
-    })
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/docs/page.md': '# Page',
+        '/dataset/page.md': '# Root Page',
+      },
+      '/',
+      '/',
+    )
 
     const links = [
       {

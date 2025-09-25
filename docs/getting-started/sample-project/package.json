@@ -4,6 +4,7 @@
   "description": "Sample project for pair quickstart demonstration",
   "main": "index.js",
   "scripts": {
+    "pair:install": "pair-cli install",
     "start": "node index.js",
     "test": "echo \"Sample test output from pair-sample-project\""
   },
@@ -13,5 +14,8 @@
     "demo"
   ],
   "author": "pair",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@foomakers/pair-cli": "^0.1.1"
+  }
 }

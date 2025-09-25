@@ -28,19 +28,25 @@ function buildCiBaseCandidates(
   ]
 }
 
-function buildCiResolvedCandidates(resolvedAbs: string, registryTargetPath: string): string[] {
+function buildCiResolvedCandidates(
+  fs: FileSystemService,
+  resolvedAbs: string,
+  registryTargetPath: string,
+): string[] {
   const out: string[] = []
   out.push(path.join(resolvedAbs, registryTargetPath, 'workflows', 'ci.yml'))
   out.push(path.join(resolvedAbs, registryTargetPath, registryTargetPath, 'workflows', 'ci.yml'))
   out.push(path.join(resolvedAbs, 'workflows', 'ci.yml'))
-  out.push(path.join(process.cwd(), resolvedAbs, 'workflows', 'ci.yml'))
+  out.push(path.join(fs.currentWorkingDirectory(), resolvedAbs, 'workflows', 'ci.yml'))
   out.push(
     path.join(resolvedAbs, path.basename(resolvedAbs), registryTargetPath, 'workflows', 'ci.yml'),
   )
-  out.push(path.join(process.cwd(), resolvedAbs, registryTargetPath, 'workflows', 'ci.yml'))
+  out.push(
+    path.join(fs.currentWorkingDirectory(), resolvedAbs, registryTargetPath, 'workflows', 'ci.yml'),
+  )
   try {
-    const repoRoot = path.dirname(path.dirname(process.cwd()))
-    const relCwd = path.relative(repoRoot, process.cwd())
+    const repoRoot = path.dirname(path.dirname(fs.currentWorkingDirectory()))
+    const relCwd = path.relative(repoRoot, fs.currentWorkingDirectory())
     out.push(path.join(relCwd, resolvedAbs, registryTargetPath, 'workflows', 'ci.yml'))
   } catch (e) {
     void e
@@ -60,6 +66,7 @@ function buildIndexDirectAndBase(
 }
 
 function buildIndexResolvedAndKnownFiles(
+  fs: FileSystemService,
   resolvedAbs: string,
   registryTargetPath: string,
 ): string[] {
@@ -71,7 +78,7 @@ function buildIndexResolvedAndKnownFiles(
   paths.push(path.join(resolvedAbs, 'index.md'))
   paths.push(path.join(resolvedAbs, 'getting-started.md'))
   paths.push(path.join(resolvedAbs, 'way-of-working.md'))
-  paths.push(path.join(process.cwd(), resolvedAbs, 'index.md'))
+  paths.push(path.join(fs.currentWorkingDirectory(), resolvedAbs, 'index.md'))
   paths.push(path.join(resolvedAbs, path.basename(resolvedAbs), registryTargetPath, 'index.md'))
   paths.push(
     path.join(resolvedAbs, path.basename(resolvedAbs), registryTargetPath, 'getting-started.md'),
@@ -79,12 +86,16 @@ function buildIndexResolvedAndKnownFiles(
   paths.push(
     path.join(resolvedAbs, path.basename(resolvedAbs), registryTargetPath, 'way-of-working.md'),
   )
-  paths.push(path.join(process.cwd(), resolvedAbs, registryTargetPath, 'index.md'))
-  paths.push(path.join(process.cwd(), resolvedAbs, registryTargetPath, 'getting-started.md'))
-  paths.push(path.join(process.cwd(), resolvedAbs, registryTargetPath, 'way-of-working.md'))
+  paths.push(path.join(fs.currentWorkingDirectory(), resolvedAbs, registryTargetPath, 'index.md'))
+  paths.push(
+    path.join(fs.currentWorkingDirectory(), resolvedAbs, registryTargetPath, 'getting-started.md'),
+  )
+  paths.push(
+    path.join(fs.currentWorkingDirectory(), resolvedAbs, registryTargetPath, 'way-of-working.md'),
+  )
   try {
-    const repoRoot = path.dirname(path.dirname(process.cwd()))
-    const relCwd = path.relative(repoRoot, process.cwd())
+    const repoRoot = path.dirname(path.dirname(fs.currentWorkingDirectory()))
+    const relCwd = path.relative(repoRoot, fs.currentWorkingDirectory())
     paths.push(path.join(relCwd, resolvedAbs, registryTargetPath, 'index.md'))
   } catch (e) {
     void e
@@ -104,18 +115,69 @@ function buildAdoptionDirectAndBase(
 }
 
 function buildAdoptionResolvedAndProductFiles(
+  fs: FileSystemService,
   resolvedAbs: string,
   registryTargetPath: string,
 ): string[] {
   const paths: string[] = []
+
+  // Add paths relative to resolvedAbs with registryTargetPath
+  addRegistryPaths(paths, resolvedAbs, registryTargetPath)
+
+  // Add paths directly under resolvedAbs
+  addBasePaths(paths, resolvedAbs)
+
+  // Add paths with fs.currentWorkingDirectory()
+  addWorkingDirectoryPaths(paths, fs, resolvedAbs, registryTargetPath)
+
+  // Add paths with basename
+  addBasenamePaths(paths, resolvedAbs, registryTargetPath)
+
+  // Add relative paths
+  addRelativePaths(paths, fs, resolvedAbs, registryTargetPath)
+
+  return paths
+}
+
+function addRegistryPaths(paths: string[], resolvedAbs: string, registryTargetPath: string) {
   paths.push(path.join(resolvedAbs, registryTargetPath, 'onboarding.md'))
   paths.push(path.join(resolvedAbs, registryTargetPath, 'product', 'PRD.md'))
   paths.push(path.join(resolvedAbs, registryTargetPath, 'product', 'subdomain', 'README.md'))
   paths.push(path.join(resolvedAbs, registryTargetPath, registryTargetPath, 'onboarding.md'))
+}
+
+function addBasePaths(paths: string[], resolvedAbs: string) {
   paths.push(path.join(resolvedAbs, 'onboarding.md'))
   paths.push(path.join(resolvedAbs, 'product', 'PRD.md'))
   paths.push(path.join(resolvedAbs, 'product', 'subdomain', 'README.md'))
-  paths.push(path.join(process.cwd(), resolvedAbs, 'onboarding.md'))
+}
+
+function addWorkingDirectoryPaths(
+  paths: string[],
+  fs: FileSystemService,
+  resolvedAbs: string,
+  registryTargetPath: string,
+) {
+  paths.push(path.join(fs.currentWorkingDirectory(), resolvedAbs, 'onboarding.md'))
+  paths.push(
+    path.join(fs.currentWorkingDirectory(), resolvedAbs, registryTargetPath, 'onboarding.md'),
+  )
+  paths.push(
+    path.join(fs.currentWorkingDirectory(), resolvedAbs, registryTargetPath, 'product', 'PRD.md'),
+  )
+  paths.push(
+    path.join(
+      fs.currentWorkingDirectory(),
+      resolvedAbs,
+      registryTargetPath,
+      'product',
+      'subdomain',
+      'README.md',
+    ),
+  )
+}
+
+function addBasenamePaths(paths: string[], resolvedAbs: string, registryTargetPath: string) {
   paths.push(
     path.join(resolvedAbs, path.basename(resolvedAbs), registryTargetPath, 'onboarding.md'),
   )
@@ -132,19 +194,21 @@ function buildAdoptionResolvedAndProductFiles(
       'README.md',
     ),
   )
-  paths.push(path.join(process.cwd(), resolvedAbs, registryTargetPath, 'onboarding.md'))
-  paths.push(path.join(process.cwd(), resolvedAbs, registryTargetPath, 'product', 'PRD.md'))
-  paths.push(
-    path.join(process.cwd(), resolvedAbs, registryTargetPath, 'product', 'subdomain', 'README.md'),
-  )
+}
+
+function addRelativePaths(
+  paths: string[],
+  fs: FileSystemService,
+  resolvedAbs: string,
+  registryTargetPath: string,
+) {
   try {
-    const repoRoot = path.dirname(path.dirname(process.cwd()))
-    const relCwd = path.relative(repoRoot, process.cwd())
+    const repoRoot = path.dirname(path.dirname(fs.currentWorkingDirectory()))
+    const relCwd = path.relative(repoRoot, fs.currentWorkingDirectory())
     paths.push(path.join(relCwd, resolvedAbs, registryTargetPath, 'onboarding.md'))
   } catch (e) {
     void e
   }
-  return paths
 }
 
 // Check whether a file contains the seeded CI content
@@ -161,11 +225,14 @@ export async function fileHasCi(fs: FileSystemService, p: string): Promise<boole
 
 // Generate a set of likely paths where a registry's ci.yml may end up.
 // This mirrors how the installer resolves targets (baseTarget + customTarget)
-export function getExpectedCiPaths(opts: {
-  registryTargetPath: string
-  customTarget?: string
-  baseTarget?: string
-}): string[] {
+export function getExpectedCiPaths(
+  fs: FileSystemService,
+  opts: {
+    registryTargetPath: string
+    customTarget?: string
+    baseTarget?: string
+  },
+): string[] {
   const { registryTargetPath, customTarget, baseTarget } = opts
   const paths: string[] = []
   // compose small top-level helpers to stay under lint limits
@@ -176,7 +243,7 @@ export function getExpectedCiPaths(opts: {
   paths.push(...buildCiDirectCandidates(customTarget, registryTargetPath))
   paths.push(...buildCiBaseCandidates(baseTarget, registryTargetPath))
   try {
-    paths.push(...buildCiResolvedCandidates(resolvedAbs, registryTargetPath))
+    paths.push(...buildCiResolvedCandidates(fs, resolvedAbs, registryTargetPath))
   } catch (e) {
     void e
   }
@@ -222,11 +289,14 @@ export async function anyPathHasContent(
 }
 
 // Expected index.md paths for knowledge registry under a given base/custom target
-export function getExpectedIndexPaths(opts: {
-  registryTargetPath: string
-  customTarget?: string
-  baseTarget?: string
-}): string[] {
+export function getExpectedIndexPaths(
+  fs: FileSystemService,
+  opts: {
+    registryTargetPath: string
+    customTarget?: string
+    baseTarget?: string
+  },
+): string[] {
   const { registryTargetPath, customTarget, baseTarget } = opts
   const paths: string[] = []
   paths.push(...buildIndexDirectAndBase(customTarget, baseTarget, registryTargetPath))
@@ -234,7 +304,7 @@ export function getExpectedIndexPaths(opts: {
     const resolvedAbs = baseTarget
       ? path.resolve(baseTarget, customTarget || '')
       : path.resolve(customTarget || registryTargetPath || '.')
-    paths.push(...buildIndexResolvedAndKnownFiles(resolvedAbs, registryTargetPath))
+    paths.push(...buildIndexResolvedAndKnownFiles(fs, resolvedAbs, registryTargetPath))
   } catch (e) {
     void e
   }
@@ -243,11 +313,14 @@ export function getExpectedIndexPaths(opts: {
 }
 
 // Expected onboarding.md paths for adoption registry under a given base/custom target
-export function getExpectedAdoptionPaths(opts: {
-  registryTargetPath: string
-  customTarget?: string
-  baseTarget?: string
-}): string[] {
+export function getExpectedAdoptionPaths(
+  fs: FileSystemService,
+  opts: {
+    registryTargetPath: string
+    customTarget?: string
+    baseTarget?: string
+  },
+): string[] {
   const { registryTargetPath, customTarget, baseTarget } = opts
   const paths: string[] = []
   paths.push(...buildAdoptionDirectAndBase(customTarget, baseTarget, registryTargetPath))
@@ -255,7 +328,7 @@ export function getExpectedAdoptionPaths(opts: {
     const resolvedAbs = baseTarget
       ? path.resolve(baseTarget, customTarget || '')
       : path.resolve(customTarget || registryTargetPath || '.')
-    paths.push(...buildAdoptionResolvedAndProductFiles(resolvedAbs, registryTargetPath))
+    paths.push(...buildAdoptionResolvedAndProductFiles(fs, resolvedAbs, registryTargetPath))
   } catch (e) {
     void e
   }

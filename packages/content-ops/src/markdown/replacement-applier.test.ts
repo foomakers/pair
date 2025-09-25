@@ -149,9 +149,13 @@ describe('processFileReplacement', () => {
   let fileService: InMemoryFileSystemService
 
   beforeEach(() => {
-    fileService = new InMemoryFileSystemService({
-      '/dataset/test.md': '# Test File\n[link](old-path.md)\n[another](old-path.md)',
-    })
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/test.md': '# Test File\n[link](old-path.md)\n[another](old-path.md)',
+      },
+      '/',
+      '/',
+    )
     // Add empty file manually
     fileService.writeFile('empty.md', '')
   })
@@ -186,9 +190,13 @@ describe('processFileReplacement - no changes', () => {
   let fileService: InMemoryFileSystemService
 
   beforeEach(() => {
-    fileService = new InMemoryFileSystemService({
-      '/dataset/test.md': '# Test File\n[link](old-path.md)\n[another](old-path.md)',
-    })
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/test.md': '# Test File\n[link](old-path.md)\n[another](old-path.md)',
+      },
+      '/',
+      '/',
+    )
     // Add empty file manually
     fileService.writeFile('empty.md', '')
   })
@@ -221,9 +229,13 @@ describe('processFileReplacement - advanced cases', () => {
   let fileService: InMemoryFileSystemService
 
   beforeEach(() => {
-    fileService = new InMemoryFileSystemService({
-      '/dataset/test.md': '# Test File\n[link](old-path.md)\n[another](old-path.md)',
-    })
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/test.md': '# Test File\n[link](old-path.md)\n[another](old-path.md)',
+      },
+      '/',
+      '/',
+    )
     // Add empty file manually
     fileService.writeFile('empty.md', '')
   })
@@ -267,9 +279,13 @@ describe('processFileReplacement - content handling', () => {
   let fileService: InMemoryFileSystemService
 
   beforeEach(() => {
-    fileService = new InMemoryFileSystemService({
-      '/dataset/test.md': '# Test File\n[link](old-path.md)\n[another](old-path.md)',
-    })
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/test.md': '# Test File\n[link](old-path.md)\n[another](old-path.md)',
+      },
+      '/',
+      '/',
+    )
     // Add empty file manually
     fileService.writeFile('empty.md', '')
   })
@@ -299,9 +315,13 @@ describe('processFileReplacement - more cases', () => {
   let fileService: InMemoryFileSystemService
 
   beforeEach(() => {
-    fileService = new InMemoryFileSystemService({
-      '/dataset/test.md': '# Test File\n[link](old-path.md)\n[another](old-path.md)',
-    })
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/test.md': '# Test File\n[link](old-path.md)\n[another](old-path.md)',
+      },
+      '/',
+      '/',
+    )
     // Add empty file manually
     fileService.writeFile('empty.md', '')
   })
@@ -328,17 +348,7 @@ describe('processFileReplacement - more cases', () => {
   })
 })
 
-describe('processFileReplacement - file handling', () => {
-  let fileService: InMemoryFileSystemService
-
-  beforeEach(() => {
-    fileService = new InMemoryFileSystemService({
-      '/dataset/test.md': '# Test File\n[link](old-path.md)\n[another](old-path.md)',
-    })
-    // Add empty file manually
-    fileService.writeFile('empty.md', '')
-  })
-
+describe('processFileReplacement - empty file handling', () => {
   it('should handle empty file', async () => {
     // Create a simple mock file service for this test
     const mockFileService = {
@@ -359,12 +369,18 @@ describe('processFileReplacement - file handling', () => {
     expect(mockFileService.readFile).toHaveBeenCalledWith('empty.md')
     expect(mockFileService.writeFile).not.toHaveBeenCalled()
   })
+})
 
+describe('processFileReplacement - whitespace file handling', () => {
   it('should handle file with only whitespace', async () => {
     // Create a local file service for this test
-    const localFileService = new InMemoryFileSystemService({
-      '/dataset/whitespace.md': '   \n\t\n  ',
-    })
+    const localFileService = new InMemoryFileSystemService(
+      {
+        '/dataset/whitespace.md': '   \n\t\n  ',
+      },
+      '/',
+      '/',
+    )
 
     const generateReplacements = vi.fn().mockResolvedValue([])
 
