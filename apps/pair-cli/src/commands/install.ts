@@ -1,4 +1,4 @@
-import { resolve, relative, isAbsolute } from 'path'
+import { relative, isAbsolute } from 'path'
 import { FileSystemService } from '@pair/content-ops'
 import { Behavior } from '@pair/content-ops'
 import {
@@ -9,7 +9,11 @@ import {
   CommandOptions,
   LogEntry,
 } from './command-utils'
-import { getKnowledgeHubDatasetPath, loadConfigWithOverrides } from '../config-utils'
+import {
+  calculatePaths,
+  getKnowledgeHubDatasetPath,
+  loadConfigWithOverrides,
+} from '../config-utils'
 
 // Define types for asset registry configuration
 export interface AssetRegistryConfig {
@@ -38,8 +42,8 @@ function calculateAbsoluteTarget(
 ): string {
   const targetPath = registryConfig.target_path || registryConfig.source || '.'
   return options?.baseTarget
-    ? resolve(options.baseTarget, targetPath)
-    : resolve(fsService.currentWorkingDirectory(), targetPath)
+    ? fsService.resolve(options.baseTarget, targetPath)
+    : fsService.resolve(fsService.currentWorkingDirectory(), targetPath)
 }
 
 async function checkTargetEmptiness(
@@ -78,7 +82,10 @@ async function isBundleModeAllowed(
     // only skip conflicts when the installation target aligns with the
     // dataset source being copied from.
     if (context.datasetRoot && context.datasetRoot === cwd) {
-      const fullSourcePath = resolve(context.datasetRoot, registryConfig.source || '.')
+      const fullSourcePath = context.fsService.resolve(
+        context.datasetRoot,
+        registryConfig.source || '.',
+      )
       return absTarget === fullSourcePath || absTarget.startsWith(fullSourcePath + '/')
     }
   } catch {
@@ -96,6 +103,11 @@ async function installSingleRegistry(
   context: InstallContext,
 ): Promise<void> {
   const { fsService, datasetRoot, options, pushLog } = context
+
+  if (registryConfig.behavior === 'skip') {
+    pushLog('info', `Skipping registry ${registryName} due to skip behavior`)
+    return
+  }
 
   pushLog(
     'info',
@@ -129,44 +141,18 @@ async function copyRegistryFiles(params: {
 }) {
   const { fsService, datasetRoot, registryConfig, absTarget, pushLog, copyOptions } = params
 
-  const paths = calculatePaths(fsService, datasetRoot, registryConfig, absTarget)
+  const paths = calculatePaths(fsService, datasetRoot, absTarget, registryConfig.source)
   logDiagnosticsIfEnabled(paths)
 
   const optionsToPass = copyOptions || buildCopyOptionsForRegistry(registryConfig)
-
   await doCopyAndUpdateLinks(fsService, {
-    source: paths.relativeSourcePath,
-    target: paths.relativeTargetPath,
+    source: paths.relativeSourcePath ?? paths.fullSourcePath,
+    target: paths.relativeTargetPath ?? paths.fullTargetPath,
     datasetRoot: paths.monorepoRoot,
     options: optionsToPass,
   })
 
   pushLog('info', `Successfully installed ${String(registryConfig.target_path || '')}`)
-}
-
-function calculatePaths(
-  fsService: FileSystemService,
-  datasetRoot: string,
-  registryConfig: AssetRegistryConfig,
-  absTarget: string,
-) {
-  const fullSourcePath = resolve(datasetRoot, registryConfig.source || '.')
-  const cwd = fsService.currentWorkingDirectory()
-
-  const fullTargetPath = resolve(cwd, absTarget)
-
-  const effectiveMonorepoRoot = '/'
-  const relativeSourcePath = fullSourcePath
-  const relativeTargetPath = fullTargetPath
-
-  return {
-    fullSourcePath,
-    cwd,
-    monorepoRoot: effectiveMonorepoRoot,
-    relativeSourcePath,
-    fullTargetPath,
-    relativeTargetPath,
-  }
 }
 
 function logDiagnosticsIfEnabled(paths: ReturnType<typeof calculatePaths>) {
@@ -401,8 +387,8 @@ export async function installRegistryWithCustomTarget(
   )
 
   const absTarget = options?.baseTarget
-    ? resolve(options.baseTarget, customTarget)
-    : resolve(fsService.currentWorkingDirectory(), customTarget)
+    ? fsService.resolve(options.baseTarget, customTarget)
+    : fsService.resolve(fsService.currentWorkingDirectory(), customTarget)
   await ensureDir(fsService, absTarget)
 
   const copyOptions = buildCopyOptions(registryConfig)
@@ -421,14 +407,14 @@ export async function installRegistryWithCustomTarget(
  * Check if bundle mode allows skipping emptiness check for a target
  */
 function shouldSkipEmptinessCheckInBundleMode(
+  fsService: FileSystemService,
   absTarget: string,
   registryConfig: AssetRegistryConfig,
   datasetRoot: string,
-  cwd: string,
 ): boolean {
-  if (datasetRoot !== cwd) return false
+  if (datasetRoot !== fsService.currentWorkingDirectory()) return false
   try {
-    const fullSourcePath = resolve(datasetRoot, registryConfig.source || '.')
+    const fullSourcePath = fsService.resolve(datasetRoot, registryConfig.source || '.')
     return absTarget === fullSourcePath || absTarget.startsWith(fullSourcePath + '/')
   } catch {
     return false
@@ -447,8 +433,6 @@ async function checkTargetsEmptinessForMirrorRegistries(
   }>,
   datasetRoot?: string,
 ): Promise<{ ok: boolean; message?: string }> {
-  const cwd = fsService.currentWorkingDirectory()
-
   for (const { absTarget, registryConfig } of resolved) {
     // Only check emptiness for behaviors that require empty targets
     if (registryConfig.behavior !== 'mirror') continue
@@ -456,7 +440,7 @@ async function checkTargetsEmptinessForMirrorRegistries(
     // Skip emptiness check in bundle mode if target is within source
     if (
       datasetRoot &&
-      shouldSkipEmptinessCheckInBundleMode(absTarget, registryConfig, datasetRoot, cwd)
+      shouldSkipEmptinessCheckInBundleMode(fsService, absTarget, registryConfig, datasetRoot)
     ) {
       continue
     }
@@ -488,8 +472,8 @@ export async function ensureAllTargetsAreEmptyForEntries(
   }> = entries.map(([registryName, registryConfig]) => {
     const targetPath = registryConfig.target_path || registryName
     const absTarget = options?.baseTarget
-      ? resolve(options.baseTarget, targetPath)
-      : resolve(fsService.currentWorkingDirectory(), targetPath)
+      ? fsService.resolve(options.baseTarget, targetPath)
+      : fsService.resolve(fsService.currentWorkingDirectory(), targetPath)
     return { registryName, absTarget, registryConfig }
   })
 
@@ -664,8 +648,8 @@ async function validateAndPrepareTarget(
 
   const abs =
     target && !isAbsolute(target)
-      ? resolve(fsService.currentWorkingDirectory(), target)
-      : resolve(target || '')
+      ? fsService.resolve(fsService.currentWorkingDirectory(), target)
+      : fsService.resolve(target || '')
 
   // Validate target path
   if (!abs || abs === '/' || abs === '') {
@@ -787,6 +771,7 @@ async function processRegistryTarget(context: {
 
   if (target === '.' || target === './') {
     pushLog('info', 'Installing all registries to their default target paths')
+
     const result = await installWithDefaults(fsService, options)
     return result.message
       ? { success: result.success, target: abs, message: result.message }
@@ -834,7 +819,6 @@ async function handleSourceInstallation(context: {
 
   try {
     pushLog('info', `Installing from source: ${source} to ${target}`)
-
     await doCopyAndUpdateLinks(fsService, {
       source: source,
       target: target,

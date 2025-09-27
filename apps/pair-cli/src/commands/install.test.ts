@@ -8,7 +8,7 @@ import {
   createTestFs,
 } from '../test-utils/test-helpers'
 
-const realCwd = '/Users/gianluca.carucci/me/projects/pair/apps/pair-cli'
+const realCwd = '/development/path/pair/apps/pair-cli'
 
 const TEST_DEFAULT_CONFIG = {
   asset_registries: {
@@ -36,18 +36,19 @@ const TEST_DEFAULT_CONFIG = {
 
 describe('installCommand new functionality tests', () => {
   it('install with defaults uses config registries', async () => {
+    const datasetRoot = `${realCwd}/node_modules/knowledge-hub/dataset`
     const fs = createTestFs(
       TEST_DEFAULT_CONFIG,
       {
-        [`${realCwd}/.github/workflows/ci.yml`]: 'workflow content',
-        [`${realCwd}/.pair/knowledge/knowledge.md`]: 'knowledge content',
-        [`${realCwd}/.pair/adoption/guide.md`]: 'adoption content',
+        [`${datasetRoot}/.github/workflows/ci.yml`]: 'workflow content',
+        [`${datasetRoot}/.pair/knowledge/knowledge.md`]: 'knowledge content',
+        [`${datasetRoot}/.pair/adoption/guide.md`]: 'adoption content',
       },
       realCwd,
     )
 
     const result = await installCommand(fs, [], {
-      datasetRoot: fs.currentWorkingDirectory(),
+      datasetRoot,
       useDefaults: true,
     })
     expect(result!.success).toBe(true)
@@ -107,16 +108,20 @@ describe('installCommand - multiple registries', () => {
 describe('installCommand - idempotency / existing target', () => {
   it('fails when installing twice to the same existing target', async () => {
     // Simulate a dataset located at /dataset so installs copy into the cwd target
+    const datasetRoot = realCwd + '/dataset'
     const fs = createTestFs(
       GITHUB_ONLY_CONFIG,
       {
-        ['/dataset/.github/workflows/ci.yml']: 'workflow content',
+        [datasetRoot + '/.github/workflows/ci.yml']: 'workflow content',
       },
       realCwd,
     )
 
     // First install should succeed (copy from /dataset into project cwd)
-    const first = await installCommand(fs, [], { datasetRoot: '/dataset', useDefaults: true })
+    const first = await installCommand(fs, [], {
+      datasetRoot,
+      useDefaults: true,
+    })
     expect(first).toBeDefined()
     expect(first!.success).toBe(true)
 

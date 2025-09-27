@@ -329,7 +329,7 @@ describe('getKnowledgeHubDatasetPath - node_modules resolution', () => {
     const fs = new InMemoryFileSystemService({}, mockDir, '/')
 
     expect(() => configUtils.getKnowledgeHubDatasetPath(fs)).toThrow(
-      'Unable to find @pair/knowledge-hub package. Ensure the package is available in the workspace and installed.',
+      'Release bundle not found inside: /mock/project/apps/pair-cli/src',
     )
   })
 })
@@ -339,10 +339,14 @@ describe('getKnowledgeHubDatasetPath - release bundle resolution', () => {
     // Simulate release structure
     const mockDir = '/mock/release/bundle-cli/src'
 
-    // Create in-memory FS with bundle structure
+    // Create in-memory FS with bundle structure and package.json
     const fs = new InMemoryFileSystemService(
       {
-        '/mock/release/bundle-cli/dataset/.github/workflows/ci.yml': 'workflow content',
+        '/mock/release/bundle-cli/package.json': JSON.stringify({
+          name: '@pair/pair-cli',
+          version: '0.1.0',
+        }),
+        '/mock/release/bundle-cli/bundle-cli/dataset/.github/workflows/ci.yml': 'workflow content',
       },
       mockDir,
       '/',
@@ -350,7 +354,7 @@ describe('getKnowledgeHubDatasetPath - release bundle resolution', () => {
 
     const result = configUtils.getKnowledgeHubDatasetPath(fs)
 
-    expect(result).toBe('/mock/release/bundle-cli/dataset')
+    expect(result).toBe('/mock/release/bundle-cli/bundle-cli/dataset')
   })
 
   it('should throw error when dataset not found in release', () => {
@@ -361,7 +365,7 @@ describe('getKnowledgeHubDatasetPath - release bundle resolution', () => {
     const fs = new InMemoryFileSystemService({}, mockDir, '/')
 
     expect(() => configUtils.getKnowledgeHubDatasetPath(fs)).toThrow(
-      'Dataset not found in release bundle at: /mock/release/dataset',
+      'Release bundle not found inside: /mock/release/bundle-cli',
     )
   })
 })

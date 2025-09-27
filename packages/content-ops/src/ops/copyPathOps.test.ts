@@ -30,6 +30,17 @@ describe('copyPathOps', () => {
     )
   })
 
+  it('should throw INVALID_PATH error for absolute source and target paths', async () => {
+    await expect(
+      copyPathOps({
+        fileService,
+        source: '/dataset/kb/source.md',
+        target: '/project/kb/copied.md',
+        datasetRoot: '/dataset',
+      }),
+    ).rejects.toThrow('Source and target paths must be relative, not absolute')
+  })
+
   it('should update links in other files when copying', async () => {
     const result = await copyPathOps({
       fileService,

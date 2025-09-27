@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander'
 import { readFileSync } from 'fs'
-import { join, isAbsolute, resolve } from 'path'
+import { join, isAbsolute } from 'path'
 import chalk from 'chalk'
 
 import { updateCommand } from './commands/update'
@@ -33,11 +33,11 @@ const fsService = fileSystemService
 const DIAG = diagEnv === '1' || diagEnv === 'true'
 if (DIAG) {
   try {
-    console.error(`[diag] __dirname=${fsService.currentModuleDirectory()}`)
+    console.error(`[diag] __dirname=${fsService.rootModuleDirectory()}`)
     console.error(`[diag] process cwd=${fsService.currentWorkingDirectory()}`)
     console.error(`[diag] argv=${process.argv.join(' ')}`)
     console.error(
-      `[diag] isInRelease(__dirname)=${isInRelease(fsService.currentModuleDirectory())}`,
+      `[diag] isInRelease(__dirname)=${isInRelease(fsService, fsService.rootModuleDirectory())}`,
     )
     try {
       const resolved = getKnowledgeHubDatasetPath(fsService)
@@ -52,9 +52,9 @@ if (DIAG) {
   }
 }
 
-function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService): void {
-  const datasetPath = getKnowledgeHubDatasetPath(fsService)
+export function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService): void {
   try {
+    const datasetPath = getKnowledgeHubDatasetPath(fsService)
     if (!fsService.existsSync(datasetPath)) {
       console.error(chalk.red(`[startup] dataset folder not found at: ${datasetPath}`))
       process.exitCode = 1
@@ -69,11 +69,7 @@ function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService): void 
       process.exit(1)
     }
   } catch (err) {
-    console.error(
-      chalk.red(
-        `[startup] failed to resolve knowledge-hub dataset. Expected folder is ${datasetPath}. Error is: ${err}`,
-      ),
-    )
+    console.error(chalk.red(`[startup] failed to resolve knowledge-hub dataset. Error is: ${err}`))
     process.exitCode = 1
     process.exit(1)
   }
@@ -103,7 +99,7 @@ program
   .option('-c, --config <file>', 'Path to config file (if provided, uses this config)')
   .option('--list-targets', 'List available target folders and their descriptions')
   .action((targetArg: unknown, cmdOptions: unknown) => {
-    return handleInstallCommand(targetArg, cmdOptions).then(() => undefined)
+    return handleInstallCommand(targetArg, cmdOptions, fsService).then(() => undefined)
   })
 
 function buildInstallOptions(
@@ -122,7 +118,7 @@ function buildInstallOptions(
   // Resolve relative baseTarget against the current working directory
   let resolvedBaseTarget = baseTarget
   if (baseTarget && !isAbsolute(baseTarget)) {
-    resolvedBaseTarget = resolve(fsService.currentWorkingDirectory(), baseTarget)
+    resolvedBaseTarget = fsService.resolve(fsService.currentWorkingDirectory(), baseTarget)
   }
 
   const parsedRec = getParsedOpts(cmdOptions)
@@ -153,7 +149,7 @@ type CmdResult = { success?: boolean; message?: string; target?: string }
 export async function handleInstallCommand(
   targetArg: unknown,
   cmdOptions: unknown,
-  fsService: FileSystemService = fileSystemService,
+  fsService: FileSystemService,
 ): Promise<CmdResult | void> {
   const arr = Array.isArray(targetArg) ? targetArg : targetArg ? [String(targetArg)] : []
   try {
@@ -187,7 +183,7 @@ function buildUpdateArgs(
     try {
       const isAbsolutePath = isAbsolute(targetStr)
       if (!isAbsolutePath) {
-        targetStr = resolve(fsService.currentWorkingDirectory(), targetStr)
+        targetStr = fsService.resolve(fsService.currentWorkingDirectory(), targetStr)
       }
     } catch {
       // ignore resolution errors and fall back to provided string
@@ -203,7 +199,7 @@ function buildUpdateArgs(
  */
 export async function handleUpdateCommand(
   cmdOptions: CommandOptions,
-  fsService: FileSystemService = fileSystemService,
+  fsService: FileSystemService,
 ): Promise<{ success?: boolean; message?: string } | void> {
   if (cmdOptions.listTargets) {
     handleUpdateListTargets(fsService, cmdOptions)
@@ -344,7 +340,7 @@ program
   .action(async (targetArg, cmdOptions) => {
     // Preserve backward compatibility for tests that call handleUpdateCommand({}, fs)
     const merged = { ...(cmdOptions as Record<string, unknown>), positionalTarget: targetArg }
-    await handleUpdateCommand(merged)
+    await handleUpdateCommand(merged, fsService)
   })
 
 program

@@ -235,11 +235,22 @@ export class InMemoryFileSystemService implements FileSystemService {
     return entries
   }
 
-  currentModuleDirectory() {
+  rootModuleDirectory() {
     return this.moduleDirectory
   }
   currentWorkingDirectory() {
     return this.workingDirectory
+  }
+
+  // Resolve paths relative to the in-memory working directory. This mirrors
+  // path.resolve semantics but anchored to the service's workingDirectory so
+  // tests can control how relative paths are interpreted.
+  resolve(...paths: string[]): string {
+    const firstPath = paths[0]
+    if (firstPath && isAbsolute(firstPath)) {
+      return resolve(...paths)
+    }
+    return resolve(this.workingDirectory, ...paths)
   }
 
   // Change the working directory used by the in-memory service. Tests can

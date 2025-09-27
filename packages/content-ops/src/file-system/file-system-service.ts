@@ -1,5 +1,6 @@
 import { constants, Dirent, promises as fs, Stats } from 'fs'
 import { readFileSync, existsSync, accessSync } from 'fs'
+import { dirname, resolve as pathResolve } from 'path'
 
 // File system service interface
 export interface FileSystemService {
@@ -16,9 +17,10 @@ export interface FileSystemService {
   rm: (path: string, options?: { recursive?: boolean; force?: boolean }) => Promise<void>
   stat: (path: string) => Promise<Stats>
   copy: (oldPath: string, newPath: string) => Promise<void>
-  currentModuleDirectory: () => string
+  rootModuleDirectory: () => string
   currentWorkingDirectory: () => string
   chdir: (path: string) => void
+  resolve: (...paths: string[]) => string
 }
 
 /**
@@ -49,7 +51,10 @@ export const fileSystemService: FileSystemService = {
     await fs.rm(path, options)
   },
   stat: path => fs.stat(path),
-  currentModuleDirectory: () => __dirname,
+  rootModuleDirectory: () => {
+    return dirname(require.main?.path ?? '')
+  },
   currentWorkingDirectory: () => process.cwd(),
   chdir: path => process.chdir(path),
+  resolve: (...paths: string[]) => pathResolve(...paths),
 }

@@ -153,24 +153,48 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 - **@pair/eslint-config**: Shared linting rules
 - **@pair/prettier-config**: Shared code formatting rules
 
-### GitHub Packages install example
+## GitHub Packages (private) — installation and auth
 
-If `@foomakers/pair-cli` is published to GitHub Packages, consumers should configure their npm client for the org-scoped registry. Example `.npmrc` for repository-level config:
+The `@foomakers/pair-cli` package is published privately on GitHub Packages. To install it you must create a personal access token (PAT) with the minimal scopes required and configure your npm client to use GitHub Packages.
 
-```text
+Recommended scopes for a read-only install token:
+
+- read:packages
+- repo (only if you need access to private repo packages tied to repository permissions)
+
+User-level `~/.npmrc` example:
+
+```ini
+//npm.pkg.github.com/:_authToken=PERSONAL_TOKEN
 @foomakers:registry=https://npm.pkg.github.com/
-//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
 ```
 
-Then install the package:
+Project-level `.npmrc` (safer to use with environment variable and avoid committing tokens directly):
 
-```bash
-pnpm add -D @foomakers/pair-cli
-```bash
-pnpm add -D @foomakers/pair-cli
+```ini
+@foomakers:registry=https://npm.pkg.github.com/
+//npm.pkg.github.com/:_authToken=${NPM_TOKEN}
 ```
 
-See `docs/RELEASE.md` for details about TGZ artifacts and publishing.
+CI usage (GitHub Actions example):
+
+```yaml
+- name: Setup npm auth
+  run: |
+    echo "@foomakers:registry=https://npm.pkg.github.com/" >> ~/.npmrc
+    echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
+  env:
+    NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+- name: Install dev dependency
+  run: pnpm add -D @foomakers/pair-cli
+```
+
+Notes:
+
+- Do not commit plain tokens into source control. Use repository or organization secret stores.
+- If you encounter permission errors, check the token scopes and whether the package is scoped to an organization or repository.
+- See `docs/RELEASE.md` for details about TGZ artifacts and publishing.
 
 ## 🤖 AI Integration
 

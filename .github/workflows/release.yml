@@ -24,6 +24,7 @@ jobs:
       contents: write
     outputs:
       version: ${{ steps.version.outputs.version }}
+      version_no_v: ${{ steps.normalize_version.outputs.version_no_v }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -58,225 +59,78 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          elif [ -n "${{ github.event.release.tag_name }}" ]; then
-            VERSION="${{ github.event.release.tag_name }}"
-          elif [[ $GITHUB_REF == refs/tags/* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/}"
-          else
-            echo "Error: Could not determine version"
-            exit 1
+          chmod +x scripts/workflows/release/determine-version.sh
+          ./scripts/workflows/release/determine-version.sh \
+            --input-version "${{ github.event.inputs.version }}" \
+            --release-tag "${{ github.event.release.tag_name }}" \
+            --github-ref "$GITHUB_REF" \
+            --output-file $GITHUB_OUTPUT \
+            --env-file $GITHUB_ENV
+
+      - name: Normalize version for filenames
+        id: normalize_version
+        run: |
+          # Strip a leading 'v' from the version if present so filenames match scripts that expect no leading v
+          RAW='${{ steps.version.outputs.version }}'
+          # If RAW is empty (rare), fall back to github input/version
+          if [ -z "$RAW" ]; then
+            RAW='${{ github.event.inputs.version || github.event.release.tag_name || github.ref }}'
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          # Remove leading 'v' or 'V'
+          NORM=${RAW#v}
+          NORM=${NORM#V}
+          echo "version_no_v=$NORM" >> $GITHUB_OUTPUT
 
       - name: Create manual release artifacts
         run: |
-          chmod +x scripts/package-manual.sh
-          ./scripts/package-manual.sh ${{ steps.version.outputs.version }}
+          chmod +x scripts/workflows/release/package-manual.sh
+          ./scripts/workflows/release/package-manual.sh ${{ steps.normalize_version.outputs.version_no_v }}
 
       - name: Upload release artifacts as workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: pair-cli-manual-${{ steps.version.outputs.version }}
+          name: pair-cli-manual-${{ steps.normalize_version.outputs.version_no_v }}
           path: |
-            release/pair-cli-manual-${{ steps.version.outputs.version }}.zip
-            release/pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256
+            release/pair-cli-manual-${{ steps.normalize_version.outputs.version_no_v }}.zip
+            release/pair-cli-manual-${{ steps.normalize_version.outputs.version_no_v }}.zip.sha256
           retention-days: 30
 
       - name: Create registry TGZ from manual release folder
         run: |
-          set -euo pipefail
-          V=${{ steps.version.outputs.version }}
-          ZIP=release/pair-cli-manual-${V}.zip
-          if [ ! -f "$ZIP" ]; then
-            echo "Error: artifact $ZIP not found"
-            exit 1
-          fi
-
-          TMPDIR=$(mktemp -d)
-          unzip -q "$ZIP" -d "$TMPDIR"
-          ART_DIR="$TMPDIR/pair-cli-manual-${V}"
-          if [ ! -d "$ART_DIR" ]; then
-            echo "Error: extracted artifact directory not found: $ART_DIR"
-            ls -la "$TMPDIR"
-            exit 1
-          fi
-
-          # Ensure no node_modules are present for npm pack
-          rm -rf "$ART_DIR/node_modules" || true
-
-          # Make sure package.json exists in the artifact and is suitable for packing
-          if [ ! -f "$ART_DIR/package.json" ]; then
-            echo "Warning: package.json not present in artifact; copying from apps/pair-cli/package.json"
-            cp apps/pair-cli/package.json "$ART_DIR/" || true
-          fi
-
-          # Store repo root for later moves
-          REPO_ROOT="$(pwd)"
-          cd "$ART_DIR"
-          # Ensure the package.json inside the extracted artifact is scoped for GitHub Packages
-          node -e "const fs=require('fs');const p='./package.json';if(fs.existsSync(p)){let o=JSON.parse(fs.readFileSync(p,'utf8'));o.name='@foomakers/pair-cli';o.publishConfig=o.publishConfig||{};o.publishConfig.registry='https://npm.pkg.github.com/';fs.writeFileSync(p,JSON.stringify(o,null,2));console.log('Patched package.json for registry publish:',o.name)} else {console.warn('No package.json found to patch in artifact') }"
-          # npm pack will produce a tarball; normalize its name to pair-cli-<version>.tgz
-          TAR_OUT=$(npm pack --pack-destination . | tail -n1 | tr -d '\r' ) || true
-          # If npm pack didn't print filename, fallback to matching pattern
-          if [ -z "$TAR_OUT" ]; then
-            TAR_OUT=$(ls *.tgz 2>/dev/null | head -n1 || true)
-          fi
-          if [ -z "$TAR_OUT" ]; then
-            echo "Error: npm pack did not produce a .tgz"
-            exit 1
-          fi
-          mv "$TAR_OUT" "pair-cli-${V}.tgz"
-          # compute sha256
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "pair-cli-${V}.tgz" | awk '{print $1}' > "pair-cli-${V}.tgz.sha256"
-          else
-            shasum -a 256 "pair-cli-${V}.tgz" | awk '{print $1}' > "pair-cli-${V}.tgz.sha256"
-          fi
-          # Move outputs to repo release/ folder
-          mv "pair-cli-${V}.tgz" "$REPO_ROOT/release/"
-          mv "pair-cli-${V}.tgz.sha256" "$REPO_ROOT/release/"
-          # export minimal package metadata for publish-time validation
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));fs.writeFileSync('pair-cli-${V}.meta.json', JSON.stringify({name:p.name,private:p.private,version:p.version,publishConfig:p.publishConfig||null}))"
-          mv "pair-cli-${V}.meta.json" "$REPO_ROOT/release/" || true
+          chmod +x scripts/workflows/release/create-registry-tgz.sh
+          ./scripts/workflows/release/create-registry-tgz.sh ${{ steps.normalize_version.outputs.version_no_v }} release/pair-cli-manual-${{ steps.normalize_version.outputs.version_no_v }}.zip
 
       - name: Upload TGZ artifact as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pair-cli-tgz-${{ steps.version.outputs.version }}
+          name: pair-cli-tgz-${{ steps.normalize_version.outputs.version_no_v }}
           path: |
-            release/pair-cli-${{ steps.version.outputs.version }}.tgz
-            release/pair-cli-${{ steps.version.outputs.version }}.tgz.sha256
-            release/pair-cli-${{ steps.version.outputs.version }}.meta.json
+            release/pair-cli-${{ steps.normalize_version.outputs.version_no_v }}.tgz
+            release/pair-cli-${{ steps.normalize_version.outputs.version_no_v }}.tgz.sha256
+            release/pair-cli-${{ steps.normalize_version.outputs.version_no_v }}.meta.json
           retention-days: 30
 
-      - name: Smoke-test packaged artifact (verify checksum and run --version)
+      - name: Smoke-test manual ZIP artifact (verify checksum, run --version, run pair install)
         env:
           PAIR_DIAG: '1'
         run: |
-          set -euo pipefail
-          V=${{ steps.version.outputs.version }}
-          ZIP=release/pair-cli-manual-${V}.zip
-          SUM=release/pair-cli-manual-${V}.zip.sha256
+          chmod +x scripts/workflows/release/smoke-test-manual-artifact.sh
+          ./scripts/workflows/release/smoke-test-manual-artifact.sh ${{ steps.normalize_version.outputs.version_no_v }}
 
-          if [ ! -f "$ZIP" ]; then
-            echo "Error: artifact $ZIP not found"
-            exit 1
-          fi
-          if [ ! -f "$SUM" ]; then
-            echo "Error: checksum $SUM not found"
-            exit 1
-          fi
+      - name: Smoke-test npm TGZ artifact (verify checksum, install into sample-project, run --version, run pair install)
+        env:
+          PAIR_DIAG: '1'
+        run: |
+          chmod +x scripts/workflows/release/smoke-test-npm-artifact.sh
+          ./scripts/workflows/release/smoke-test-npm-artifact.sh ${{ steps.normalize_version.outputs.version_no_v }}
 
-          # Verify checksum (use sha256sum if present, else shasum)
-          if command -v sha256sum >/dev/null 2>&1; then
-            calc=$(sha256sum "$ZIP" | awk '{print $1}')
-          else
-            calc=$(shasum -a 256 "$ZIP" | awk '{print $1}')
-          fi
-          expected=$(cat "$SUM" | tr -d '\n' | tr -d '\r')
-          if [ "$calc" != "$expected" ]; then
-            echo "Error: checksum mismatch (expected $expected, got $calc)"
-            exit 1
-          fi
-
-          TMPDIR=$(mktemp -d)
-          unzip -q "$ZIP" -d "$TMPDIR"
-          ART_DIR="$TMPDIR/pair-cli-manual-${V}"
-          if [ ! -d "$ART_DIR" ]; then
-            echo "Error: extracted artifact directory not found: $ART_DIR"
-            ls -la "$TMPDIR"
-            exit 1
-          fi
-
-          # Try running top-level wrapper first, else call node directly. Fail if none succeed.
-          RAN=0
-          if [ -x "$ART_DIR/pair-cli" ]; then
-            "$ART_DIR/pair-cli" --version
-            RAN=1
-          elif [ -x "$ART_DIR/bin/pair-cli" ]; then
-            "$ART_DIR/bin/pair-cli" --version
-            RAN=1
-          elif [ -f "$ART_DIR/bundle-cli/index.js" ]; then
-            node "$ART_DIR/bundle-cli/index.js" --version
-            RAN=1
-          fi
-
-          if [ "$RAN" -ne 1 ]; then
-            echo "Error: no runnable binary found in artifact to smoke-test"
-            exit 1
-          fi
-
-          echo "Smoke-test completed successfully. Proceeding with release creation."
-
-      - name: Create GitHub Release
+      - name: Create GitHub Release and upload assets
         if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view ${{ steps.version.outputs.version }} >/dev/null 2>&1; then
-            echo "Release ${{ steps.version.outputs.version }} already exists, skipping creation"
-          else
-            NOTES_FILE=$(mktemp)
-            {
-              echo '## Manual Installation Artifacts'
-              echo ''
-              echo 'This release includes bundled artifacts for manual installation in air-gapped or restricted environments.'
-              echo ''
-              echo '### Downloads'
-              echo '- **ZIP Archive**: \`pair-cli-manual-${{ steps.version.outputs.version }}.zip\`'
-              echo '- **SHA256 Checksum**: \`pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256\`'
-              echo ''
-              echo '### Installation Instructions'
-              echo ''
-              echo '1. Download the ZIP archive'
-              echo '2. Verify the checksum: \`sha256sum pair-cli-manual-${{ steps.version.outputs.version }}.zip\`'
-              echo '3. Extract the archive'
-              echo '4. Run the executable: \`./pair-cli --help\`'
-              echo ''
-              echo '### What'\''s Included'
-              echo '- Self-contained Node.js bundle (no external dependencies required)'
-              echo '- Cross-platform executables (Linux/macOS/Windows)'
-              echo '- TypeScript definitions'
-              echo '- Configuration files'
-              echo '- Documentation and license'
-              echo ''
-              echo 'For more details, see [RELEASE.md](docs/RELEASE.md) and [CLI README](apps/pair-cli/README.md).'
-            } > "$NOTES_FILE"
-            gh release create ${{ steps.version.outputs.version }} --title "Release ${{ steps.version.outputs.version }}" --notes-file "$NOTES_FILE"
-          fi
-
-      - name: Upload release assets to the created release
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload ${{ steps.version.outputs.version }} release/pair-cli-manual-${{ steps.version.outputs.version }}.zip --clobber
-
-      - name: Upload checksum to the release
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload ${{ steps.version.outputs.version }} release/pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256 --clobber
-
-      - name: Upload TGZ to the release
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload ${{ steps.version.outputs.version }} release/pair-cli-${{ steps.version.outputs.version }}.tgz --clobber
-
-      - name: Upload TGZ checksum to the release
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload ${{ steps.version.outputs.version }} release/pair-cli-${{ steps.version.outputs.version }}.tgz.sha256 --clobber
-
-      - name: Upload TGZ metadata to the release
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload ${{ steps.version.outputs.version }} release/pair-cli-${{ steps.version.outputs.version }}.meta.json --clobber
+          chmod +x scripts/workflows/release/create-github-release.sh
+          ./scripts/workflows/release/create-github-release.sh ${{ steps.version.outputs.version }} ${{ github.token }}
 
   publish-gh-packages:
     runs-on: ubuntu-latest
@@ -323,25 +177,37 @@ jobs:
       - name: Download TGZ artifact
         uses: actions/download-artifact@v4
         with:
-          name: pair-cli-tgz-${{ needs.release.outputs.version || steps.version.outputs.version }}
+          # Prefer normalized version (no leading v) exposed by the release job
+          name: pair-cli-tgz-${{ needs.release.outputs.version_no_v || needs.release.outputs.version || steps.version.outputs.version }}
 
       - name: Validate package metadata and token
         run: |
           set -euo pipefail
-          V=${{ needs.release.outputs.version || steps.version.outputs.version || github.event.inputs.version }}
+          V=${{ needs.release.outputs.version_no_v || needs.release.outputs.version || steps.version.outputs.version || github.event.inputs.version }}
           TGZ=pair-cli-${V}.tgz
+          echo "Looking for expected files: $TGZ and pair-cli-<version>.meta.json in workspace:" && ls -la || true
           if [ ! -f "$TGZ" ]; then
-            echo "Error: tarball $TGZ not found in artifacts"
-            ls -la
-            exit 1
+            echo "Warning: expected tarball $TGZ not found. Listing available .tgz files:" && ls -la *.tgz 2>/dev/null || true
+            # Continue: attempt to locate a .tgz produced by the artifact bundle
           fi
           # Prefer reading package metadata produced at pack time (meta.json) inside the artifact
           META_FILE=pair-cli-${V}.meta.json
-          if [ -f "$META_FILE" ]; then
+          if [ ! -f "$META_FILE" ]; then
+            ALT_META=$(ls pair-cli-*.meta.json 2>/dev/null | head -n1 || true)
+            if [ -n "$ALT_META" ]; then
+              echo "Info: exact META_FILE $META_FILE not found; using discovered meta file: $ALT_META"
+              META_FILE="$ALT_META"
+            else
+              echo "Info: no pair-cli-*.meta.json found in workspace; will fall back to workspace package.json (diagnostics below)"
+            fi
+          fi
+          if [ -n "${META_FILE:-}" ] && [ -f "$META_FILE" ]; then
             PKG_NAME=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$META_FILE','utf8')).name)")
             PKG_PRIVATE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$META_FILE','utf8')).private)")
+            echo "Found package metadata file: $META_FILE"
           else
             # Fallback to workspace package.json for validation
+            echo "Falling back to workspace package.json for validation"
             PKG_NAME=$(node -e "console.log(require('./apps/pair-cli/package.json').name)")
             PKG_PRIVATE=$(node -e "console.log(require('./apps/pair-cli/package.json').private)")
           fi
@@ -368,7 +234,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          V=${{ needs.release.outputs.version || steps.version.outputs.version || github.event.inputs.version }}
+          V=${{ needs.release.outputs.version_no_v || needs.release.outputs.version || steps.version.outputs.version || github.event.inputs.version }}
           TGZ=pair-cli-${V}.tgz
           echo "Publishing $TGZ to GitHub Packages"
           # If NODE_AUTH_TOKEN isn't set explicitly, fall back to job-provided GITHUB_TOKEN

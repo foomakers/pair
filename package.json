@@ -17,7 +17,7 @@
     "catalog:update": "pnpm update",
     "catalog:check": "pnpm list",
     "prepare": "husky install",
-    "clean": "turbo clean && find . -type d \\( -name node_modules -o -name .turbo -o -name dist -o -name coverage -o -name release \\) -exec rm -rf {} + 2>/dev/null || true; find . -type f -name \"*tsbuildinfo\" -exec rm -f {} + 2>/dev/null || true",
+    "clean": "turbo clean && find . -type d \\( -name node_modules -o -name .turbo -o -name dist -o -name coverage \\) -exec rm -rf {} + 2>/dev/null || true; find . -type d -path './scripts/workflows/release' -prune -o -type d -name release -exec rm -rf {} + 2>/dev/null || true; find . -type f -name \"*tsbuildinfo\" -exec rm -f {} + 2>/dev/null || true",
     "quality-gate": "turbo ts:check test lint && turbo prettier:fix"
   },
   "devDependencies": {

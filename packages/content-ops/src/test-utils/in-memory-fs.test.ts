@@ -13,7 +13,7 @@ describe('InMemoryFileSystemService - Constructor', () => {
   describe('constructor', () => {
     it('should initialize with empty filesystem', () => {
       expect(fs.existsSync('/')).toBe(true)
-      expect(fs.currentModuleDirectory()).toBe(moduleDir)
+      expect(fs.rootModuleDirectory()).toBe(moduleDir)
       expect(fs.currentWorkingDirectory()).toBe(workingDir)
     })
 

@@ -14,6 +14,7 @@ import {
   handleMirrorCleanup,
   validateSubfolderOperation,
 } from './path-operation-helpers'
+import { isAbsolute } from 'path'
 
 type CopyPathOpsParams = {
   fileService: FileSystemService
@@ -158,13 +159,21 @@ async function handleFileCopyForType(params: {
 
 export async function copyPathOps(params: CopyPathOpsParams) {
   const { fileService, source, target, datasetRoot, options } = params
+  if (isAbsolute(source) || isAbsolute(target)) {
+    throw createError({
+      type: 'INVALID_PATH',
+      message: 'Source and target paths must be relative, not absolute',
+      sourcePath: source,
+      targetPath: target,
+    })
+  }
   return logger.time(async () => {
     // Setup and initial validation
     const setup = setupPathOperation(source, target, datasetRoot, options)
     if (setup.shouldSkip) return {}
 
     const { normSource, normTarget, srcPath, destPath, defaultBehavior, folderBehavior } = setup
-
+    console.log('#copyPathOps - datasetRoot:', datasetRoot)
     if (!srcPath || !destPath) {
       throw createError({
         type: 'IO_ERROR',

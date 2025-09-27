@@ -8,24 +8,25 @@ import {
   createTestFs,
 } from '../test-utils/test-helpers'
 
-const realCwd = '/Users/gianluca.carucci/me/projects/pair/apps/pair-cli'
+const realCwd = '/development/path/pair/apps/pair-cli'
 
 // Split verbose-related assertions into separate smaller tests to satisfy max-lines-per-function
 
 describe('updateCommand defaults tests', () => {
   it('update with defaults uses config registries', async () => {
+    const datasetRoot = realCwd + '/dataset'
     const fs = createTestFs(
       DEFAULT_CONFIG,
       {
-        [`${realCwd}/.github/workflows/ci.yml`]: 'workflow content',
-        [`${realCwd}/.pair/knowledge/knowledge.md`]: 'knowledge content',
-        [`${realCwd}/.pair/adoption/guide.md`]: 'adoption content',
+        [`${datasetRoot}/.github/workflows/ci.yml`]: 'workflow content',
+        [`${datasetRoot}/.pair/knowledge/knowledge.md`]: 'knowledge content',
+        [`${datasetRoot}/.pair/adoption/guide.md`]: 'adoption content',
       },
       realCwd,
     )
 
     const result = await updateCmd.updateCommand(fs, [], {
-      datasetRoot: fs.currentWorkingDirectory(),
+      datasetRoot,
       useDefaults: true,
     })
     expect(result!.success).toBe(true)

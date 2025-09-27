@@ -1,4 +1,4 @@
-import { resolve, relative, dirname, join } from 'path'
+import { relative, dirname, join } from 'path'
 import { FileSystemService } from '@pair/content-ops'
 import { Behavior } from '@pair/content-ops'
 import {
@@ -128,22 +128,19 @@ async function updateSingleRegistryFromDefaults(ctx: UpdateDefaultsCtx) {
 
   pushLog('info', `Updating registry ${registryName} to ${targetPath} with behavior: ${behavior}`)
 
-  const absTarget = resolve(targetPath)
+  const absTarget = fsService.resolve(targetPath)
   await ensureDir(fsService, absTarget)
 
-  // Perform update unconditionally (no dry-run support)
-
   // Build the full source path
-  const fullSourcePath = resolve(datasetRoot, sourcePath)
-  const cwd = fsService.currentWorkingDirectory()
-  const relativeSourcePath = fullSourcePath
-  const fullTargetPath = resolve(cwd, absTarget)
-  const relativeTargetPath = fullTargetPath
+  const fullSourcePath = fsService.resolve(datasetRoot, sourcePath)
+  const rmd = fsService.currentWorkingDirectory()
+  const relativeSourcePath = relative(rmd, fullSourcePath)
+  const relativeTargetPath = relative(rmd, absTarget)
 
   await doCopyAndUpdateLinks(fsService, {
     source: relativeSourcePath,
     target: relativeTargetPath,
-    datasetRoot: '/',
+    datasetRoot: rmd,
     options: {
       defaultBehavior: behavior as Behavior,
       folderBehavior:
@@ -171,15 +168,15 @@ async function updateFromSource(context: SourceUpdateContext): Promise<{
 
     const cwd = fsService.currentWorkingDirectory()
     pushLog('info', `Copying/updating from ${source} to ${target} (datasetRoot: ${cwd})`)
-    const fullSourcePath = resolve(datasetRoot, source)
-    const relativeSourcePath = fullSourcePath
-    const fullTargetPath = resolve(cwd, target)
-    const relativeTargetPath = fullTargetPath
+    const fullSourcePath = fsService.resolve(datasetRoot, source)
+    const relativeSourcePath = relative(cwd, fullSourcePath)
+    const fullTargetPath = fsService.resolve(cwd, target)
+    const relativeTargetPath = relative(cwd, fullTargetPath)
 
     await doCopyAndUpdateLinks(fsService, {
       source: relativeSourcePath,
       target: relativeTargetPath,
-      datasetRoot: '/',
+      datasetRoot: cwd,
       options: {
         defaultBehavior: 'mirror',
       },
@@ -317,7 +314,7 @@ async function updateSelectiveMirrorRegistry(context: {
     sourcePath,
   } = context
 
-  const effectiveTarget = calculateEffectiveTarget({
+  const effectiveTarget = calculateEffectiveTarget(fsService, {
     registryName,
     registryConfig,
     target,
@@ -335,11 +332,14 @@ async function updateSelectiveMirrorRegistry(context: {
   }
 }
 
-function calculateEffectiveTarget(context: {
-  registryName: string
-  registryConfig: AssetRegistryConfig
-  target: string
-}) {
+function calculateEffectiveTarget(
+  fsService: FileSystemService,
+  context: {
+    registryName: string
+    registryConfig: AssetRegistryConfig
+    target: string
+  },
+) {
   const { registryName, registryConfig, target } = context
 
   // For explicit target updates, if a base 'target' was provided by the
@@ -350,7 +350,7 @@ function calculateEffectiveTarget(context: {
   const effectiveTarget = regTargetPath
     ? regTargetPath.startsWith('/')
       ? regTargetPath
-      : resolve(target, regTargetPath)
+      : fsService.resolve(target, regTargetPath)
     : target
 
   return effectiveTarget
@@ -368,7 +368,7 @@ async function processIncludedFolder(context: {
 
   const cleanFolder = folder.replace(/^\/+/, '')
   const subSourcePath = join(sourcePath, cleanFolder)
-  const subFullSourcePath = resolve(datasetRoot, subSourcePath)
+  const subFullSourcePath = fsService.resolve(datasetRoot, subSourcePath)
 
   // Check if source exists
   if (!(await fsService.exists(subFullSourcePath))) {
@@ -377,10 +377,10 @@ async function processIncludedFolder(context: {
   }
 
   const cwd = fsService.currentWorkingDirectory()
-  const subRelativeSourcePath = subFullSourcePath
+  const subRelativeSourcePath = relative(cwd, subFullSourcePath)
   const subTargetPath = join(effectiveTarget, cleanFolder)
-  const subFullTargetPath = resolve(cwd, subTargetPath)
-  const subRelativeTargetPath = subFullTargetPath
+  const subFullTargetPath = fsService.resolve(cwd, subTargetPath)
+  const subRelativeTargetPath = relative(cwd, subFullTargetPath)
 
   // Ensure the destination directory exists
   await ensureDir(fsService, dirname(subFullTargetPath))
@@ -391,7 +391,7 @@ async function processIncludedFolder(context: {
   await doCopyAndUpdateLinks(fsService, {
     source: subRelativeSourcePath,
     target: subRelativeTargetPath,
-    datasetRoot: '/',
+    datasetRoot: cwd,
     options: subCopyOptions,
   })
 }
@@ -452,9 +452,13 @@ function calculateRegistryPaths(
   const { registryName, registryConfig, target, datasetRoot, sourcePath } = context
 
   const cwd = fsService.currentWorkingDirectory()
-  const fullSourcePath = resolve(datasetRoot, sourcePath)
-  const effectiveTarget = calculateEffectiveTarget({ registryName, registryConfig, target })
-  const fullTargetPath = resolve(cwd, effectiveTarget)
+  const fullSourcePath = fsService.resolve(datasetRoot, sourcePath)
+  const effectiveTarget = calculateEffectiveTarget(fsService, {
+    registryName,
+    registryConfig,
+    target,
+  })
+  const fullTargetPath = fsService.resolve(cwd, effectiveTarget)
 
   if (DIAG) {
     console.error('[diag] calculateRegistryPaths:', {
@@ -467,10 +471,10 @@ function calculateRegistryPaths(
   }
 
   return {
-    relativeSourcePath: fullSourcePath,
+    relativeSourcePath: relative(cwd, fullSourcePath),
     fullTargetPath,
-    relativeTargetPath: fullTargetPath,
-    monorepoRoot: '/',
+    relativeTargetPath: relative(cwd, fullTargetPath),
+    monorepoRoot: cwd,
   }
 }
 
@@ -557,7 +561,7 @@ function parseAndValidateInput(
     }
   }
 
-  const abs = resolve(fsService.currentWorkingDirectory(), target)
+  const abs = fsService.resolve(fsService.currentWorkingDirectory(), target)
 
   // Validate target path
   if (!abs || abs === '/' || abs === '') {

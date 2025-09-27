@@ -14,8 +14,5 @@
     "demo"
   ],
   "author": "pair",
-  "license": "MIT",
-  "devDependencies": {
-    "@foomakers/pair-cli": "^0.1.1"
-  }
+  "license": "MIT"
 }

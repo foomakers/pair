@@ -87,6 +87,16 @@ describe('movePathOps - error cases', () => {
       }),
     ).rejects.toThrow()
   })
+  it('should throw INVALID_PATH error for absolute source and target paths', async () => {
+    await expect(
+      movePathOps({
+        fileService,
+        source: '/dataset/kb/source.md',
+        target: '/project/kb/copied.md',
+        datasetRoot: '/dataset',
+      }),
+    ).rejects.toThrow('Source and target paths must be relative, not absolute')
+  })
 
   it('should respect behavior options', async () => {
     fileService = new InMemoryFileSystemService(TEST_FILE_STRUCTURES.existingTarget, '/', '/')

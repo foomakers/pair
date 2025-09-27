@@ -1,0 +1,24 @@
+{
+  "asset_registries": {
+    "github": {
+      "source": ".github",
+      "behavior": "mirror",
+      "include": ["/chatmodes"],
+      "target_path": ".github",
+      "description": "GitHub configuration files"
+    },
+    "knowledge": {
+      "source": ".pair/knowledge",
+      "behavior": "mirror",
+      "target_path": ".pair/knowledge",
+      "description": "Knowledge base and documentation"
+    },
+    "adoption": {
+      "source": ".pair/adoption",
+      "behavior": "add",
+      "target_path": ".pair/adoption",
+      "description": "Adoption guides and onboarding materials"
+    }
+  },
+  "default_target_folders": { "pair": ".pair", "github": ".github" }
+}
