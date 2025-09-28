@@ -1,5 +1,5 @@
 import { join, dirname } from 'path'
-import { Behavior, FileSystemService, fileSystemService } from '@pair/content-ops'
+import { Behavior, FileSystemService } from '@pair/content-ops'
 
 // Define proper types for configuration
 export interface RegistryConfig {
@@ -17,59 +17,276 @@ export interface Config {
   [key: string]: unknown
 }
 
-function findPackageJsonPath(fsService: FileSystemService, currentDir: string = __dirname): string {
-  const targetPkgJson = 'node_modules/@pair/knowledge-hub/package.json'
-  const monorepoPkgJson = 'packages/knowledge-hub/package.json'
-  let dir = currentDir
+const knowledgePkgJson = 'packages/knowledge-hub/package.json'
+const knowledgeNodeModulesPkgJson = 'node_modules/@pair/knowledge-hub/package.json'
 
-  // First try monorepo path
-  for (let i = 0; i < 10; i++) {
-    const candidatePath = join(dir, monorepoPkgJson)
-    if (fsService.existsSync(candidatePath)) {
-      return candidatePath
-    }
-    const parentDir = dirname(dir)
-    if (parentDir === dir) {
-      break
-    }
-    dir = parentDir
+function getPackageJsonPath(fsService: FileSystemService, currentDir: string): string | null {
+  const checkExists = (path: string) => fsService.existsSync(path)
+  const findCandidate = (path: string) =>
+    checkExists(join(currentDir, path)) ? join(currentDir, path) : null
+  const monorepoResult = findCandidate(knowledgePkgJson)
+  if (monorepoResult) return monorepoResult
+
+  const nodeModulesResult = findCandidate(knowledgeNodeModulesPkgJson)
+  return nodeModulesResult
+}
+
+function findPackageJsonPath(fsService: FileSystemService, currentDir: string): string {
+  const nodeModulesResult = getPackageJsonPath(fsService, currentDir)
+  if (nodeModulesResult) {
+    return nodeModulesResult
   }
-
-  // Then try node_modules
-  dir = currentDir
-  for (let i = 0; i < 10; i++) {
-    const candidatePath = join(dir, targetPkgJson)
-    if (fsService.existsSync(candidatePath)) {
-      return candidatePath
-    }
-    const parentDir = dirname(dir)
-    if (parentDir === dir) {
-      break
-    }
-    dir = parentDir
-  }
-
   throw new Error(
     `Unable to find @pair/knowledge-hub package. Ensure the package is available in the workspace and installed.`,
   )
 }
 
-export function getKnowledgeHubDatasetPath(
-  fsService: FileSystemService = fileSystemService,
-  currentDir: string = __dirname,
-): string {
-  if (isInRelease(currentDir)) {
-    // In release, dataset is at [release-root]/bundle-cli/dataset
-    const releaseDatasetPath = join(currentDir, '..', 'dataset')
-    if (!fsService.existsSync(releaseDatasetPath)) {
-      throw new Error(`Dataset not found in release bundle at: ${releaseDatasetPath}`)
-    }
-    return releaseDatasetPath
-  } else {
-    // In monorepo/development, find via node_modules
-    const pkgPath = findPackageJsonPath(fsService, currentDir)
-    return join(dirname(pkgPath), 'dataset')
+/**
+ * Check if a directory contains a valid @pair/pair-cli package with bundle-cli
+ */
+function isValidManualPairCliPackage(
+  fsService: FileSystemService,
+  dirPath: string,
+  diag: boolean,
+): boolean {
+  const candidatePath = join(dirPath, 'package.json')
+
+  if (!fsService.existsSync(candidatePath)) {
+    return false
   }
+
+  try {
+    const content = fsService.readFileSync(candidatePath)
+    const pkg = JSON.parse(content)
+
+    // Check if this is the @pair/pair-cli package
+    if (pkg.name === '@pair/pair-cli') {
+      // Also check if bundle-cli directory exists
+      const bundleCliPath = join(dirPath, 'bundle-cli')
+      if (fsService.existsSync(bundleCliPath)) {
+        if (diag) {
+          console.error(`[diag] Found @pair/pair-cli package with bundle-cli at: ${dirPath}`)
+        }
+        return true
+      }
+    }
+  } catch {
+    // Ignore parse errors, continue searching
+  }
+
+  return false
+}
+
+/**
+ * Perform breadth-first search to find a directory containing a valid manual pair-cli package
+ * Explores both parent directories and common subdirectories
+ */
+function breadthFirstSearchManualPackage(
+  fsService: FileSystemService,
+  startDir: string,
+  diag: boolean,
+): string | null {
+  const queue: string[] = [startDir]
+  const visited = new Set<string>()
+  let depth = 0
+  const maxDepth = 10
+
+  while (queue.length > 0 && depth < maxDepth) {
+    const levelSize = queue.length
+
+    if (diag) {
+      console.error(`[diag] BFS level ${depth}, checking ${levelSize} directories`)
+    }
+
+    // Process all directories at current level
+    for (let i = 0; i < levelSize; i++) {
+      const currentDir = queue.shift()!
+
+      if (visited.has(currentDir)) {
+        continue
+      }
+      visited.add(currentDir)
+
+      if (diag) {
+        console.error(`[diag] Checking directory: ${currentDir}`)
+      }
+
+      // Check if this directory contains the valid package
+      if (isValidManualPairCliPackage(fsService, currentDir, diag)) {
+        return currentDir
+      }
+
+      // Add parent and common subdirectories to queue
+      addNextLevelDirectories(fsService, queue, visited, currentDir)
+    }
+
+    depth++
+  }
+
+  return null
+}
+
+/**
+ * Add parent directory and common subdirectories to the BFS queue
+ */
+function addNextLevelDirectories(
+  fsService: FileSystemService,
+  queue: string[],
+  visited: Set<string>,
+  currentDir: string,
+): void {
+  // Common subdirectories where pair-cli might be installed
+  const commonSubDirs = ['libs', 'tools', 'bin', 'cli', 'pair-cli']
+
+  // Add parent directory to queue for next level
+  const parentDir = dirname(currentDir)
+  if (parentDir !== currentDir && !visited.has(parentDir)) {
+    queue.push(parentDir)
+  }
+
+  // Add common subdirectories to queue for next level
+  for (const subDir of commonSubDirs) {
+    const subDirPath = join(currentDir, subDir)
+    if (fsService.existsSync(subDirPath) && !visited.has(subDirPath)) {
+      queue.push(subDirPath)
+    }
+  }
+}
+
+/**
+ * Navigate up the directory tree to find a package.json with name "@pair/pair-cli"
+ * that also has a bundle-cli directory using breadth-first search
+ */
+export function findManualPairCliPackage(
+  fsService: FileSystemService,
+  startDir: string,
+): string | null {
+  const diagEnv = process.env['PAIR_DIAG']
+  const DIAG = diagEnv === '1' || diagEnv === 'true'
+
+  const foundDir = breadthFirstSearchManualPackage(fsService, startDir, DIAG)
+
+  if (foundDir) {
+    return foundDir
+  }
+
+  if (DIAG) console.error(`[diag] No @pair/pair-cli package found with bundle-cli directory`)
+  return null
+}
+
+/**
+ * Check if there's an NPM-installed @foomakers/pair-cli package with bundle-cli directory
+ * @param fsService - File system service
+ * @param repoRoot - Repository root directory
+ * @returns Path to the @foomakers/pair-cli package.json if found with bundle-cli, null otherwise
+ */
+export function findNpmReleasePackage(
+  fsService: FileSystemService,
+  repoRoot: string,
+): string | null {
+  const diagEnv = process.env['PAIR_DIAG']
+  const DIAG = diagEnv === '1' || diagEnv === 'true'
+
+  //const pairCliPath = join(repoRoot, 'node_modules', '@foomakers', 'pair-cli')
+  const pairCliPath = repoRoot
+  const packageJsonPath = join(pairCliPath, 'package.json')
+  const bundleCliPath = join(pairCliPath, 'bundle-cli')
+
+  if (DIAG) {
+    logNpmPackageCheck(fsService, packageJsonPath, bundleCliPath)
+  }
+
+  // Check if both package.json and bundle-cli directory exist
+  if (!fsService.existsSync(packageJsonPath) || !fsService.existsSync(bundleCliPath)) {
+    if (DIAG)
+      console.error(`[diag] NPM @foomakers/pair-cli package or bundle-cli directory not found`)
+    return null
+  }
+
+  return validateNpmPackage(fsService, packageJsonPath, pairCliPath, DIAG)
+}
+
+/**
+ * Log diagnostic information about NPM package check
+ */
+function logNpmPackageCheck(
+  fsService: FileSystemService,
+  packageJsonPath: string,
+  bundleCliPath: string,
+): void {
+  console.error(
+    `[diag] Checking NPM package at: ${packageJsonPath} exists=${fsService.existsSync(
+      packageJsonPath,
+    )}`,
+  )
+  console.error(
+    `[diag] Checking bundle-cli at: ${bundleCliPath} exists=${fsService.existsSync(bundleCliPath)}`,
+  )
+}
+
+/**
+ * Validate that the package.json contains the correct @foomakers/pair-cli package
+ */
+function validateNpmPackage(
+  fsService: FileSystemService,
+  packageJsonPath: string,
+  pairCliPath: string,
+  diag: boolean,
+): string | null {
+  try {
+    const content = fsService.readFileSync(packageJsonPath)
+    const pkg = JSON.parse(content)
+    const isValidPackage = pkg.name === '@foomakers/pair-cli'
+
+    if (diag) {
+      if (isValidPackage) {
+        console.error(`[diag] Found valid NPM @foomakers/pair-cli package at: ${pairCliPath}`)
+      } else {
+        console.error(
+          `[diag] Package at ${packageJsonPath} has name '${pkg.name}', expected '@foomakers/pair-cli'`,
+        )
+      }
+    }
+
+    return isValidPackage ? packageJsonPath.replace('/package.json', '') : null
+  } catch (error) {
+    if (diag)
+      console.error(`[diag] Error reading/parsing package.json at ${packageJsonPath}: ${error}`)
+    return null
+  }
+}
+
+export function getKnowledgeHubDatasetPath(fsService: FileSystemService): string {
+  const currentDir = fsService.rootModuleDirectory()
+  const diagEnv = process.env['PAIR_DIAG']
+  const DIAG = diagEnv === '1' || diagEnv === 'true'
+
+  if (DIAG) console.error(`[diag] getKnowledgeHubDatasetPath currentDir=${currentDir}`)
+  if (DIAG) console.error(`[diag] isInRelease=${isInRelease(fsService, currentDir)}`)
+
+  if (isInRelease(fsService, currentDir)) {
+    const npmPackage = findNpmReleasePackage(fsService, currentDir)
+
+    if (npmPackage) {
+      return join(npmPackage, 'bundle-cli', 'dataset')
+    }
+    const manualPackage = findManualPairCliPackage(fsService, currentDir)
+    if (manualPackage) {
+      return join(manualPackage, 'bundle-cli', 'dataset')
+    }
+    throw new Error(`Release bundle not found inside: ${currentDir}`)
+  }
+
+  // In monorepo/development, find via node_modules or monorepo packages
+  const pkgPath = findPackageJsonPath(fsService, currentDir)
+  const datasetPath = join(dirname(pkgPath), 'dataset')
+  if (DIAG)
+    console.error(
+      `[diag] resolved monorepo dataset path: ${datasetPath} exists=${fsService.existsSync(
+        datasetPath,
+      )}`,
+    )
+  return datasetPath
 }
 
 /**
@@ -77,15 +294,14 @@ export function getKnowledgeHubDatasetPath(
  * 1. Command line registry overrides (highest priority)
  * 2. Custom config file (--config option)
  * 3. pair.config in project root
- * 4. knowledge-hub config.json (lowest priority)
+ * 4. pair-cli config.json (lowest priority)
  */
 export function loadConfigWithOverrides(
-  fsService: FileSystemService = fileSystemService,
+  fsService: FileSystemService,
   options: { customConfigPath?: string; projectRoot?: string } = {},
 ): { config: Config; source: string } {
-  const { customConfigPath, projectRoot = process.cwd() } = options
-
-  // Start with the base config (either local app config or knowledge-hub)
+  const { customConfigPath, projectRoot = fsService.rootModuleDirectory() } = options
+  // Start with the base config (either local app config or pair-cli)
   let { config, source } = loadBaseConfig(fsService)
   // Apply pair.config if present in the project root
   const pairApplied = applyPairConfigIfExists(fsService, config, projectRoot)
@@ -105,16 +321,26 @@ export function loadConfigWithOverrides(
   return { config, source }
 }
 
-export function isInRelease(currentDir: string = __dirname): boolean {
-  return currentDir.includes('/bundle-cli/')
+export function isInRelease(fsService: FileSystemService, currentDir: string): boolean {
+  return getPackageJsonPath(fsService, currentDir) === null
+
+  // // Robust detection: true when currentDir is the bundle-cli folder itself
+  // // or when it contains the bundle-cli segment (with separators).
+  // try {
+  //   if (basename(currentDir) === 'bundle-cli') return true
+  //   const needle = `${sep}bundle-cli${sep}`
+  //   return currentDir.includes(needle)
+  // } catch {
+  //   return false
+  // }
 }
 
-function baseConfigPath() {
-  return join(__dirname, '..', 'config.json')
+function baseConfigPath(currentDir: string) {
+  return join(currentDir, 'config.json')
 }
 
 function loadBaseConfig(fsService: FileSystemService): { config: Config; source: string } {
-  const appConfigPath = baseConfigPath()
+  const appConfigPath = baseConfigPath(fsService.rootModuleDirectory())
   try {
     if (fsService.existsSync(appConfigPath)) {
       const appConfigContent = fsService.readFileSync(appConfigPath)
@@ -302,4 +528,36 @@ function validateRegistryInclude(registryName: string, include: unknown): string
   }
 
   return errors
+}
+
+export function calculatePaths(
+  fsService: FileSystemService,
+  datasetRoot: string,
+  absTarget: string,
+  source?: string,
+) {
+  const fullSourcePath = fsService.resolve(datasetRoot, source || '.')
+  const cwd = fsService.currentWorkingDirectory()
+
+  const fullTargetPath = fsService.resolve(cwd, absTarget)
+
+  const effectiveMonorepoRoot = fsService.currentWorkingDirectory()
+  const canUseRelativePaths =
+    fullSourcePath.startsWith(effectiveMonorepoRoot) &&
+    fullTargetPath.startsWith(effectiveMonorepoRoot)
+  const relativeSourcePath = canUseRelativePaths
+    ? fullSourcePath.replace(effectiveMonorepoRoot + '/', '')
+    : undefined
+  const relativeTargetPath = canUseRelativePaths
+    ? fullTargetPath.replace(effectiveMonorepoRoot + '/', '')
+    : undefined
+
+  return {
+    fullSourcePath,
+    cwd,
+    monorepoRoot: effectiveMonorepoRoot,
+    relativeSourcePath,
+    fullTargetPath,
+    relativeTargetPath,
+  }
 }

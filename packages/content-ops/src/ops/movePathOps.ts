@@ -1,4 +1,4 @@
-import { join } from 'path/posix'
+import { isAbsolute, join } from 'path/posix'
 import { Dirent } from 'fs'
 import { logger, createError } from '../observability'
 import { validateSourceExists } from '../file-system/file-validations'
@@ -74,6 +74,14 @@ type MoveDirectoryContentsParams = {
 
 export async function movePathOps(params: MovePathOpsParams) {
   const { fileService, source, target, datasetRoot, options } = params
+  if (isAbsolute(source) || isAbsolute(target)) {
+    throw createError({
+      type: 'INVALID_PATH',
+      message: 'Source and target paths must be relative, not absolute',
+      sourcePath: source,
+      targetPath: target,
+    })
+  }
   return logger.time(
     () => runMove({ fileService, source, target, datasetRoot, options } as MovePathOpsParams),
     'movePathAndUpdateLinks',

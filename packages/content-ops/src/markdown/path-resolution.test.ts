@@ -55,7 +55,7 @@ describe('tryResolvePathVariants', () => {
   const file = '/dataset/docs/sub/deep/file.md'
 
   it('should return null when linkPath does not start with ../', async () => {
-    const fileService = new InMemoryFileSystemService({})
+    const fileService = new InMemoryFileSystemService({}, '/', '/')
     const result = await tryResolvePathVariants({
       file,
       linkPath: 'page.md',
@@ -67,7 +67,7 @@ describe('tryResolvePathVariants', () => {
   })
 
   it('should return null when no variant exists', async () => {
-    const fileService = new InMemoryFileSystemService({})
+    const fileService = new InMemoryFileSystemService({}, '/', '/')
     const result = await tryResolvePathVariants({
       file,
       linkPath: '../../../nonexistent.md',
@@ -85,9 +85,13 @@ describe('tryResolvePathVariants - existing variants', () => {
   const file = '/dataset/docs/sub/deep/file.md'
 
   it('should return the first existing variant', async () => {
-    const fileService = new InMemoryFileSystemService({
-      '/dataset/existing.md': '',
-    })
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/existing.md': '',
+      },
+      '/',
+      '/',
+    )
     const result = await tryResolvePathVariants({
       file,
       linkPath: '../../../existing.md',
@@ -99,9 +103,13 @@ describe('tryResolvePathVariants - existing variants', () => {
   })
 
   it('should return variant with .. when appropriate', async () => {
-    const fileService = new InMemoryFileSystemService({
-      '/dataset/docs/existing.md': '',
-    })
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/docs/existing.md': '',
+      },
+      '/',
+      '/',
+    )
     const result = await tryResolvePathVariants({
       file,
       linkPath: '../../existing.md',
@@ -119,9 +127,13 @@ describe('tryResolvePathVariants - single level', () => {
   const file = '/dataset/docs/sub/deep/file.md'
 
   it('should handle single ..', async () => {
-    const fileService = new InMemoryFileSystemService({
-      '/dataset/docs/sub/existing.md': '',
-    })
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/docs/sub/existing.md': '',
+      },
+      '/',
+      '/',
+    )
     const result = await tryResolvePathVariants({
       file,
       linkPath: '../existing.md',
@@ -139,10 +151,14 @@ describe('tryResolvePathVariants - preference cases', () => {
   const file = '/dataset/docs/sub/deep/file.md'
 
   it('should prefer shorter path when multiple exist', async () => {
-    const fileService = new InMemoryFileSystemService({
-      '/dataset/existing.md': '',
-      '/dataset/docs/existing.md': '',
-    })
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/existing.md': '',
+        '/dataset/docs/existing.md': '',
+      },
+      '/',
+      '/',
+    )
     const result = await tryResolvePathVariants({
       file,
       linkPath: '../../../existing.md',

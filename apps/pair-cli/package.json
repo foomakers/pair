@@ -10,8 +10,12 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "config.json"
   ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
   "author": "Gianluca Carucci <gianluca@carucci.org>",
   "private": false,
   "scripts": {

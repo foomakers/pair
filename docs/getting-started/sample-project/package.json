@@ -4,6 +4,7 @@
   "description": "Sample project for pair quickstart demonstration",
   "main": "index.js",
   "scripts": {
+    "pair:install": "pair-cli install",
     "start": "node index.js",
     "test": "echo \"Sample test output from pair-sample-project\""
   },

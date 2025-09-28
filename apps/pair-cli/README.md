@@ -18,10 +18,10 @@ Makes `pair-cli` available on your PATH:
 
 ```bash
 # npm
-npm install -g @pair/pair-cli
+npm install -g @foomakers/pair-cli
 
 # pnpm
-pnpm add -g @pair/pair-cli
+pnpm add -g @foomakers/pair-cli
 ```
 
 ### Local Install (project scope)
@@ -29,7 +29,7 @@ pnpm add -g @pair/pair-cli
 Useful for CI or when you want the tool locked to a project:
 
 ```bash
-pnpm add -D @pair/pair-cli
+pnpm add -D @foomakers/pair-cli
 # run with npx or pnpm dlx
 npx pair-cli install ./dataset
 ```

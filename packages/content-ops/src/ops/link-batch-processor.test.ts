@@ -10,11 +10,15 @@ import { InMemoryFileSystemService } from '../test-utils/in-memory-fs'
 
 describe('processFilesWithLinkReplacements - concurrency', () => {
   it('should process multiple files concurrently', async () => {
-    const fileService = new InMemoryFileSystemService({
-      '/dataset/file1.md': 'This is a [link](page.md).',
-      '/dataset/file2.md': 'Another [link](page.md).',
-      '/dataset/page.md': '# Page',
-    })
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/file1.md': 'This is a [link](page.md).',
+        '/dataset/file2.md': 'Another [link](page.md).',
+        '/dataset/page.md': '# Page',
+      },
+      '/',
+      '/',
+    )
 
     const generateReplacements = vi.fn().mockResolvedValue([
       {
@@ -49,9 +53,13 @@ describe('processFilesWithLinkReplacements - concurrency', () => {
 
 describe('processFilesWithLinkReplacements - errors', () => {
   it('should handle file processing errors', async () => {
-    const fileService = new InMemoryFileSystemService({
-      '/dataset/file1.md': 'This is a [link](page.md).',
-    })
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/file1.md': 'This is a [link](page.md).',
+      },
+      '/',
+      '/',
+    )
 
     const generateReplacements = vi.fn().mockRejectedValue(new Error('Processing error'))
 
@@ -77,13 +85,17 @@ describe('processFilesWithLinkReplacements - errors', () => {
 
 describe('processDirectoryWithLinkReplacements', () => {
   it('should process all markdown files in directory', async () => {
-    const fileService = new InMemoryFileSystemService({
-      '/dataset/file1.md': 'This is a [link](page.md).',
-      '/dataset/file2.md': 'Another [link](other.md).',
-      '/dataset/page.md': '# Page',
-      '/dataset/other.md': '# Other Page',
-      '/dataset/readme.txt': 'Not a markdown file',
-    })
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/file1.md': 'This is a [link](page.md).',
+        '/dataset/file2.md': 'Another [link](other.md).',
+        '/dataset/page.md': '# Page',
+        '/dataset/other.md': '# Other Page',
+        '/dataset/readme.txt': 'Not a markdown file',
+      },
+      '/',
+      '/',
+    )
 
     const generateReplacements = vi.fn().mockResolvedValue([])
 
@@ -107,12 +119,16 @@ describe('processDirectoryWithLinkReplacements', () => {
 
 describe('processPathSubstitution', () => {
   it('should perform path substitution on all files', async () => {
-    const fileService = new InMemoryFileSystemService({
-      '/dataset/file1.md': 'This is a [link](old/path/page.md).',
-      '/dataset/file2.md': 'Another [link](old/path/other.md).',
-      '/dataset/old/path/page.md': '# Page',
-      '/dataset/old/path/other.md': '# Other Page',
-    })
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/file1.md': 'This is a [link](old/path/page.md).',
+        '/dataset/file2.md': 'Another [link](old/path/other.md).',
+        '/dataset/old/path/page.md': '# Page',
+        '/dataset/old/path/other.md': '# Other Page',
+      },
+      '/',
+      '/',
+    )
 
     const result = await processPathSubstitution({
       datasetRoot: '/dataset',
@@ -130,12 +146,16 @@ describe('processPathSubstitution', () => {
 
 describe('processNormalization', () => {
   it('should normalize links in all files', async () => {
-    const fileService = new InMemoryFileSystemService({
-      '/dataset/docs/file1.md': 'This is a [link](../page.md).',
-      '/dataset/docs/file2.md': 'Another [link](../other.md).',
-      '/dataset/page.md': '# Page',
-      '/dataset/other.md': '# Other Page',
-    })
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/docs/file1.md': 'This is a [link](../page.md).',
+        '/dataset/docs/file2.md': 'Another [link](../other.md).',
+        '/dataset/page.md': '# Page',
+        '/dataset/other.md': '# Other Page',
+      },
+      '/',
+      '/',
+    )
 
     const config = {
       docsFolders: ['docs'],
@@ -187,10 +207,14 @@ describe('createSemaphore', () => {
 
 describe('error handling', () => {
   it('should collect errors from failed file processing', async () => {
-    const fileService = new InMemoryFileSystemService({
-      '/dataset/file1.md': 'This is a [link](page.md).',
-      '/dataset/file2.md': 'Another [link](other.md).',
-    })
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/file1.md': 'This is a [link](page.md).',
+        '/dataset/file2.md': 'Another [link](other.md).',
+      },
+      '/',
+      '/',
+    )
 
     // Create a custom fileService that throws error for file2
     const originalReadFile = fileService.readFile.bind(fileService)

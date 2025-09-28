@@ -1,4 +1,4 @@
-import { resolve, relative, dirname, join } from 'path'
+import { relative, dirname, join } from 'path'
 import { FileSystemService } from '@pair/content-ops'
 import { Behavior } from '@pair/content-ops'
 import {
@@ -69,8 +69,14 @@ async function updateWithDefaults(
     if (Object.keys(assetRegistries).length === 0) {
       return { success: false, message: 'no asset registries found in config' }
     }
-    const datasetRoot =
-      (options && (options as { datasetRoot?: string }).datasetRoot) || getKnowledgeHubDatasetPath()
+    let datasetRoot =
+      (options && (options as { datasetRoot?: string }).datasetRoot) ||
+      getKnowledgeHubDatasetPath(fsService)
+
+    // If upstream helper returned empty string to signal a bundle layout,
+    // interpret that as the FileSystemService's current working directory
+    // so we don't accidentally resolve paths against the real process.cwd().
+    if (datasetRoot === '') datasetRoot = fsService.currentWorkingDirectory()
 
     // Update each registry to its default target
     for (const [registryName, registryConfig] of Object.entries(assetRegistries)) {
@@ -92,10 +98,14 @@ async function updateWithDefaults(
   }
 }
 
+const DIAG = process.env['PAIR_DIAG'] === '1' || process.env['PAIR_DIAG'] === 'true'
+
 function loadAssetRegistriesForUpdate(
   fsService: FileSystemService,
 ): Record<string, AssetRegistryConfig> {
-  const loader = loadConfigWithOverrides(fsService, { projectRoot: process.cwd() })
+  const loader = loadConfigWithOverrides(fsService, {
+    projectRoot: fsService.currentWorkingDirectory(),
+  })
   const cfg = loader && loader.config ? loader.config : undefined
   return (cfg && cfg.asset_registries) || {}
 }
@@ -118,22 +128,19 @@ async function updateSingleRegistryFromDefaults(ctx: UpdateDefaultsCtx) {
 
   pushLog('info', `Updating registry ${registryName} to ${targetPath} with behavior: ${behavior}`)
 
-  const absTarget = resolve(targetPath)
+  const absTarget = fsService.resolve(targetPath)
   await ensureDir(fsService, absTarget)
 
-  // Perform update unconditionally (no dry-run support)
-
   // Build the full source path
-  const fullSourcePath = resolve(datasetRoot, sourcePath)
-  const monorepoRoot = dirname(dirname(process.cwd()))
-  const relativeSourcePath = relative(monorepoRoot, fullSourcePath)
-  const fullTargetPath = resolve(process.cwd(), absTarget)
-  const relativeTargetPath = relative(monorepoRoot, fullTargetPath)
+  const fullSourcePath = fsService.resolve(datasetRoot, sourcePath)
+  const rmd = fsService.currentWorkingDirectory()
+  const relativeSourcePath = relative(rmd, fullSourcePath)
+  const relativeTargetPath = relative(rmd, absTarget)
 
   await doCopyAndUpdateLinks(fsService, {
     source: relativeSourcePath,
     target: relativeTargetPath,
-    datasetRoot: monorepoRoot,
+    datasetRoot: rmd,
     options: {
       defaultBehavior: behavior as Behavior,
       folderBehavior:
@@ -159,17 +166,17 @@ async function updateFromSource(context: SourceUpdateContext): Promise<{
   try {
     // Perform update unconditionally (no dry-run support)
 
-    pushLog('info', `Copying/updating from ${source} to ${target} (datasetRoot: ${process.cwd()})`)
-    const monorepoRoot = dirname(dirname(process.cwd()))
-    const fullSourcePath = resolve(datasetRoot, source)
-    const relativeSourcePath = relative(monorepoRoot, fullSourcePath)
-    const fullTargetPath = resolve(process.cwd(), target)
-    const relativeTargetPath = relative(monorepoRoot, fullTargetPath)
+    const cwd = fsService.currentWorkingDirectory()
+    pushLog('info', `Copying/updating from ${source} to ${target} (datasetRoot: ${cwd})`)
+    const fullSourcePath = fsService.resolve(datasetRoot, source)
+    const relativeSourcePath = relative(cwd, fullSourcePath)
+    const fullTargetPath = fsService.resolve(cwd, target)
+    const relativeTargetPath = relative(cwd, fullTargetPath)
 
     await doCopyAndUpdateLinks(fsService, {
       source: relativeSourcePath,
       target: relativeTargetPath,
-      datasetRoot: monorepoRoot,
+      datasetRoot: cwd,
       options: {
         defaultBehavior: 'mirror',
       },
@@ -228,9 +235,10 @@ type ProcessAssetRegistriesCtx = {
 async function processAssetRegistries(ctx: ProcessAssetRegistriesCtx) {
   const { target, datasetRoot, fsService, options, pushLog } = ctx
   // Load configuration honoring project-level overrides (pair.config.json)
-  // Prefer INIT_CWD if provided (e.g., when invoked via pnpm) so the
-  // project root used to find pair.config.json matches the caller's cwd.
-  const projectRoot = process.env['INIT_CWD'] || process.cwd()
+  // Determine project root from the injected fsService. Do not fall back to
+  // process environment variables here; tests should control cwd via the
+  // provided FileSystemService.
+  const projectRoot = fsService.currentWorkingDirectory()
   const loader = loadConfigWithOverrides(fsService, { projectRoot })
   const config = loader.config
   const assetRegistries = config.asset_registries || {}
@@ -306,7 +314,7 @@ async function updateSelectiveMirrorRegistry(context: {
     sourcePath,
   } = context
 
-  const effectiveTarget = calculateEffectiveTarget({
+  const effectiveTarget = calculateEffectiveTarget(fsService, {
     registryName,
     registryConfig,
     target,
@@ -324,11 +332,14 @@ async function updateSelectiveMirrorRegistry(context: {
   }
 }
 
-function calculateEffectiveTarget(context: {
-  registryName: string
-  registryConfig: AssetRegistryConfig
-  target: string
-}) {
+function calculateEffectiveTarget(
+  fsService: FileSystemService,
+  context: {
+    registryName: string
+    registryConfig: AssetRegistryConfig
+    target: string
+  },
+) {
   const { registryName, registryConfig, target } = context
 
   // For explicit target updates, if a base 'target' was provided by the
@@ -339,7 +350,7 @@ function calculateEffectiveTarget(context: {
   const effectiveTarget = regTargetPath
     ? regTargetPath.startsWith('/')
       ? regTargetPath
-      : resolve(target, regTargetPath)
+      : fsService.resolve(target, regTargetPath)
     : target
 
   return effectiveTarget
@@ -357,7 +368,7 @@ async function processIncludedFolder(context: {
 
   const cleanFolder = folder.replace(/^\/+/, '')
   const subSourcePath = join(sourcePath, cleanFolder)
-  const subFullSourcePath = resolve(datasetRoot, subSourcePath)
+  const subFullSourcePath = fsService.resolve(datasetRoot, subSourcePath)
 
   // Check if source exists
   if (!(await fsService.exists(subFullSourcePath))) {
@@ -365,11 +376,11 @@ async function processIncludedFolder(context: {
     return
   }
 
-  const monorepoRoot = dirname(dirname(process.cwd()))
-  const subRelativeSourcePath = relative(monorepoRoot, subFullSourcePath)
+  const cwd = fsService.currentWorkingDirectory()
+  const subRelativeSourcePath = relative(cwd, subFullSourcePath)
   const subTargetPath = join(effectiveTarget, cleanFolder)
-  const subFullTargetPath = resolve(process.cwd(), subTargetPath)
-  const subRelativeTargetPath = relative(monorepoRoot, subFullTargetPath)
+  const subFullTargetPath = fsService.resolve(cwd, subTargetPath)
+  const subRelativeTargetPath = relative(cwd, subFullTargetPath)
 
   // Ensure the destination directory exists
   await ensureDir(fsService, dirname(subFullTargetPath))
@@ -380,7 +391,7 @@ async function processIncludedFolder(context: {
   await doCopyAndUpdateLinks(fsService, {
     source: subRelativeSourcePath,
     target: subRelativeTargetPath,
-    datasetRoot: monorepoRoot,
+    datasetRoot: cwd,
     options: subCopyOptions,
   })
 }
@@ -410,7 +421,7 @@ async function updateNormalRegistry(context: {
     defaultBehavior: behavior,
   }
 
-  const paths = calculateRegistryPaths({
+  const paths = calculateRegistryPaths(fsService, {
     registryName,
     registryConfig,
     target,
@@ -428,38 +439,42 @@ async function updateNormalRegistry(context: {
   })
 }
 
-function calculateRegistryPaths(context: {
-  registryName: string
-  registryConfig: AssetRegistryConfig
-  target: string
-  datasetRoot: string
-  sourcePath: string
-}) {
+function calculateRegistryPaths(
+  fsService: FileSystemService,
+  context: {
+    registryName: string
+    registryConfig: AssetRegistryConfig
+    target: string
+    datasetRoot: string
+    sourcePath: string
+  },
+) {
   const { registryName, registryConfig, target, datasetRoot, sourcePath } = context
 
-  const monorepoRoot = dirname(dirname(process.cwd()))
-  const fullSourcePath = resolve(datasetRoot, sourcePath)
-  const relativeSourcePath = relative(monorepoRoot, fullSourcePath)
+  const cwd = fsService.currentWorkingDirectory()
+  const fullSourcePath = fsService.resolve(datasetRoot, sourcePath)
+  const effectiveTarget = calculateEffectiveTarget(fsService, {
+    registryName,
+    registryConfig,
+    target,
+  })
+  const fullTargetPath = fsService.resolve(cwd, effectiveTarget)
 
-  // For explicit target updates, if a base 'target' was provided by the
-  // caller, combine it with the registry's configured target_path so each
-  // registry ends up under the provided base unless the registry target is absolute.
-  const regTargetPath =
-    (registryConfig && (registryConfig as AssetRegistryConfig).target_path) || registryName
-  const effectiveTarget = regTargetPath
-    ? regTargetPath.startsWith('/')
-      ? regTargetPath
-      : resolve(target, regTargetPath)
-    : target
-
-  const fullTargetPath = resolve(process.cwd(), effectiveTarget)
-  const relativeTargetPath = relative(monorepoRoot, fullTargetPath)
+  if (DIAG) {
+    console.error('[diag] calculateRegistryPaths:', {
+      cwd,
+      datasetRoot,
+      fullSourcePath,
+      effectiveTarget,
+      fullTargetPath,
+    })
+  }
 
   return {
-    relativeSourcePath,
+    relativeSourcePath: relative(cwd, fullSourcePath),
     fullTargetPath,
-    relativeTargetPath,
-    monorepoRoot,
+    relativeTargetPath: relative(cwd, fullTargetPath),
+    monorepoRoot: cwd,
   }
 }
 
@@ -480,6 +495,14 @@ async function performRegistryUpdate(context: {
 
   // Ensure the destination directory exists before attempting copy.
   await ensureDir(fsService, paths.fullTargetPath)
+  if (DIAG) {
+    console.error('[diag] performRegistryUpdate: about to copy', {
+      source: paths.relativeSourcePath,
+      target: paths.relativeTargetPath,
+      datasetRoot: paths.monorepoRoot,
+      fullTargetPath: paths.fullTargetPath,
+    })
+  }
 
   await doCopyAndUpdateLinks(fsService, {
     source: paths.relativeSourcePath,
@@ -501,7 +524,7 @@ export async function updateCommand(
   }
 
   // Parse and validate input
-  const parseResult = parseAndValidateInput(args)
+  const parseResult = parseAndValidateInput(fsService, args)
   if (!parseResult.success) return parseResult.result
 
   const { target, source, abs } = parseResult
@@ -515,7 +538,10 @@ export async function updateCommand(
   return await executeUpdate({ target, source, abs: abs!, fsService, options })
 }
 
-function parseAndValidateInput(args: string[]): {
+function parseAndValidateInput(
+  fsService: FileSystemService,
+  args: string[],
+): {
   success: boolean
   result?: { success: boolean; message: string }
   target?: string
@@ -535,7 +561,7 @@ function parseAndValidateInput(args: string[]): {
     }
   }
 
-  const abs = resolve(target)
+  const abs = fsService.resolve(fsService.currentWorkingDirectory(), target)
 
   // Validate target path
   if (!abs || abs === '/' || abs === '') {
@@ -551,6 +577,35 @@ function parseAndValidateInput(args: string[]): {
   return { success: true, target, source: source ?? undefined, abs }
 }
 
+async function ensureTargetDirectoryExists(
+  fsService: FileSystemService,
+  abs: string,
+  pushLog: (level: LogEntry['level'], message: string) => void,
+): Promise<{ success: boolean; message?: string }> {
+  const targetExists = await fsService.exists(abs)
+  if (targetExists) return { success: true }
+
+  const cwd = fsService.currentWorkingDirectory()
+  const rel = relative(cwd, abs)
+  const isOutside = rel === '' ? false : rel.startsWith('..')
+  if (isOutside) {
+    pushLog('error', `Target directory '${abs}' does not exist`)
+    return { success: false, message: `Target directory '${abs}' does not exist` }
+  }
+
+  pushLog('info', `Target directory '${abs}' does not exist; creating`)
+  try {
+    await ensureDir(fsService, abs)
+    return { success: true }
+  } catch (err) {
+    pushLog('error', `Failed to create target directory '${abs}': ${String(err)}`)
+    return {
+      success: false,
+      message: `Target directory '${abs}' does not exist and could not be created`,
+    }
+  }
+}
+
 async function executeUpdate(params: {
   target: string
   source?: string | null | undefined
@@ -563,17 +618,14 @@ async function executeUpdate(params: {
   const { pushLog } = createLogger(params.options?.minLogLevel as LogEntry['level'] | undefined)
   pushLog('info', 'Starting updateCommand')
 
-  // Check if target directory exists
-  const targetExists = await fsService.exists(abs)
-  if (!targetExists) {
-    pushLog('error', `Target directory '${abs}' does not exist`)
-    return { success: false, message: `Target directory '${abs}' does not exist` }
-  }
+  const targetCheck = await ensureTargetDirectoryExists(fsService, abs, pushLog)
+  if (!targetCheck.success) return targetCheck
 
   try {
-    const datasetRoot =
+    let datasetRoot =
       (params.options && (params.options as { datasetRoot?: string }).datasetRoot) ||
-      getKnowledgeHubDatasetPath()
+      getKnowledgeHubDatasetPath(fsService)
+    if (datasetRoot === '') datasetRoot = fsService.currentWorkingDirectory()
 
     if (source) {
       return await updateFromSource({

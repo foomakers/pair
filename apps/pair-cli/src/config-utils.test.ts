@@ -42,10 +42,10 @@ const CUSTOM_CONFIG = {
 }
 
 function setupInMemoryFs() {
-  inMemoryFs = new InMemoryFileSystemService()
+  inMemoryFs = new InMemoryFileSystemService({}, '/mock/project', '/')
   const datasetPath = '/mock/node_modules/@pair/knowledge-hub/dataset'
 
-  const appConfigPath = path.join(__dirname, '..', 'config.json')
+  const appConfigPath = '/mock/project/config.json'
   inMemoryFs.writeFile(appConfigPath, JSON.stringify(BASE_CONFIG))
 
   // Keep a mock knowledge-hub dataset present in case it's referenced elsewhere
@@ -299,57 +299,24 @@ describe('validateConfig - include array validation - valid cases', () => {
   })
 })
 
-describe('getKnowledgeHubDatasetPath - basic functionality', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
-
-  afterEach(() => {
-    vi.restoreAllMocks()
-  })
-
-  it('should return the correct dataset path', () => {
-    const expectedPath = '/mock/node_modules/@pair/knowledge-hub/dataset'
-
-    const mockGetKnowledgeHubDatasetPath = vi
-      .spyOn(configUtils, 'getKnowledgeHubDatasetPath')
-      .mockReturnValue(expectedPath)
-
-    const result = configUtils.getKnowledgeHubDatasetPath()
-
-    expect(mockGetKnowledgeHubDatasetPath).toHaveBeenCalled()
-    expect(result).toBe(expectedPath)
-
-    mockGetKnowledgeHubDatasetPath.mockRestore()
-  })
-
-  it('should throw error when package cannot be resolved', () => {
-    const mockGetKnowledgeHubDatasetPath = vi
-      .spyOn(configUtils, 'getKnowledgeHubDatasetPath')
-      .mockImplementation(() => {
-        throw new Error('Package not found')
-      })
-
-    expect(() => configUtils.getKnowledgeHubDatasetPath()).toThrow('Package not found')
-
-    mockGetKnowledgeHubDatasetPath.mockRestore()
-  })
-})
-
 describe('getKnowledgeHubDatasetPath - node_modules resolution', () => {
   it('should return dataset path from node_modules when not in release', () => {
     // Simulate project structure
-    const mockDir = '/mock/project/apps/pair-cli/src'
+    const mockDir = '/mock/project'
 
     // Create in-memory FS with node_modules structure
-    const fs = new InMemoryFileSystemService({
-      '/mock/project/node_modules/@pair/knowledge-hub/package.json':
-        '{"name": "@pair/knowledge-hub"}',
-      '/mock/project/node_modules/@pair/knowledge-hub/dataset/.github/workflows/ci.yml':
-        'workflow content',
-    })
+    const fs = new InMemoryFileSystemService(
+      {
+        '/mock/project/node_modules/@pair/knowledge-hub/package.json':
+          '{"name": "@pair/knowledge-hub", "dataset": "dataset"}',
+        '/mock/project/node_modules/@pair/knowledge-hub/dataset/.github/workflows/ci.yml':
+          'workflow content',
+      },
+      mockDir,
+      '/',
+    )
 
-    const result = configUtils.getKnowledgeHubDatasetPath(fs, mockDir)
+    const result = configUtils.getKnowledgeHubDatasetPath(fs)
 
     expect(result).toBe('/mock/project/node_modules/@pair/knowledge-hub/dataset')
   })
@@ -359,10 +326,10 @@ describe('getKnowledgeHubDatasetPath - node_modules resolution', () => {
     const mockDir = '/mock/project/apps/pair-cli/src'
 
     // Create in-memory FS without node_modules
-    const fs = new InMemoryFileSystemService({})
+    const fs = new InMemoryFileSystemService({}, mockDir, '/')
 
-    expect(() => configUtils.getKnowledgeHubDatasetPath(fs, mockDir)).toThrow(
-      'Unable to find @pair/knowledge-hub package. Ensure the package is available in the workspace and installed.',
+    expect(() => configUtils.getKnowledgeHubDatasetPath(fs)).toThrow(
+      'Release bundle not found inside: /mock/project/apps/pair-cli/src',
     )
   })
 })
@@ -372,25 +339,33 @@ describe('getKnowledgeHubDatasetPath - release bundle resolution', () => {
     // Simulate release structure
     const mockDir = '/mock/release/bundle-cli/src'
 
-    // Create in-memory FS with bundle structure
-    const fs = new InMemoryFileSystemService({
-      '/mock/release/bundle-cli/dataset/.github/workflows/ci.yml': 'workflow content',
-    })
+    // Create in-memory FS with bundle structure and package.json
+    const fs = new InMemoryFileSystemService(
+      {
+        '/mock/release/bundle-cli/package.json': JSON.stringify({
+          name: '@pair/pair-cli',
+          version: '0.1.0',
+        }),
+        '/mock/release/bundle-cli/bundle-cli/dataset/.github/workflows/ci.yml': 'workflow content',
+      },
+      mockDir,
+      '/',
+    )
 
-    const result = configUtils.getKnowledgeHubDatasetPath(fs, mockDir)
+    const result = configUtils.getKnowledgeHubDatasetPath(fs)
 
-    expect(result).toBe('/mock/release/bundle-cli/dataset')
+    expect(result).toBe('/mock/release/bundle-cli/bundle-cli/dataset')
   })
 
   it('should throw error when dataset not found in release', () => {
     // Simulate release structure
-    const mockDir = '/mock/release/bundle-cli/src'
+    const mockDir = '/mock/release/bundle-cli'
 
     // Create in-memory FS without bundle-cli/dataset
-    const fs = new InMemoryFileSystemService({})
+    const fs = new InMemoryFileSystemService({}, mockDir, '/')
 
-    expect(() => configUtils.getKnowledgeHubDatasetPath(fs, mockDir)).toThrow(
-      'Dataset not found in release bundle at: /mock/release/bundle-cli/dataset',
+    expect(() => configUtils.getKnowledgeHubDatasetPath(fs)).toThrow(
+      'Release bundle not found inside: /mock/release/bundle-cli',
     )
   })
 })

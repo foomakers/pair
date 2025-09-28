@@ -3,9 +3,9 @@
     "github": {
       "source": ".github",
       "behavior": "mirror",
-      "include": ["/chatmodes", "/workflows"],
+      "include": ["/chatmodes"],
       "target_path": ".github",
-      "description": "GitHub workflows and configuration files"
+      "description": "GitHub configuration files"
     },
     "knowledge": {
       "source": ".pair/knowledge",

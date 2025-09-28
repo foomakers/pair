@@ -6,6 +6,7 @@ export type ErrorType = 'BAD LINK FORMAT' | 'LINK TARGET NOT FOUND'
 export type ContentSyncError =
   | { type: 'PATH_ESCAPE'; message: string; source: string; target: string }
   | { type: 'SOURCE_NOT_EXISTS'; message: string; sourcePath: string }
+  | { type: 'INVALID_PATH'; message: string; sourcePath: string; targetPath: string }
   | { type: 'INVALID_SUBFOLDER_MOVE'; message: string; source: string; target: string }
   | { type: 'INVALID_SUBFOLDER_COPY'; message: string; source: string; target: string }
   | { type: 'INVALID_SOURCE_TYPE'; message: string; sourcePath: string }

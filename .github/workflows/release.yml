@@ -7,6 +7,10 @@ on:
         description: 'Release version (e.g., v1.0.0)'
         required: true
         type: string
+      publish:
+        description: 'Set to "true" to run the publish-gh-packages job (gated)'
+        required: false
+        type: boolean
   release:
     types: [published]
   push:
@@ -18,6 +22,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      version_no_v: ${{ steps.normalize_version.outputs.version_no_v }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -52,135 +59,210 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          elif [ -n "${{ github.event.release.tag_name }}" ]; then
-            VERSION="${{ github.event.release.tag_name }}"
-          elif [[ $GITHUB_REF == refs/tags/* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/}"
-          else
-            echo "Error: Could not determine version"
-            exit 1
+          chmod +x scripts/workflows/release/determine-version.sh
+          ./scripts/workflows/release/determine-version.sh \
+            --input-version "${{ github.event.inputs.version }}" \
+            --release-tag "${{ github.event.release.tag_name }}" \
+            --github-ref "$GITHUB_REF" \
+            --output-file $GITHUB_OUTPUT \
+            --env-file $GITHUB_ENV
+
+      - name: Normalize version for filenames
+        id: normalize_version
+        run: |
+          # Strip a leading 'v' from the version if present so filenames match scripts that expect no leading v
+          RAW='${{ steps.version.outputs.version }}'
+          # If RAW is empty (rare), fall back to github input/version
+          if [ -z "$RAW" ]; then
+            RAW='${{ github.event.inputs.version || github.event.release.tag_name || github.ref }}'
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          # Remove leading 'v' or 'V'
+          NORM=${RAW#v}
+          NORM=${NORM#V}
+          echo "version_no_v=$NORM" >> $GITHUB_OUTPUT
 
       - name: Create manual release artifacts
         run: |
-          chmod +x scripts/package-manual.sh
-          ./scripts/package-manual.sh ${{ steps.version.outputs.version }}
+          chmod +x scripts/workflows/release/package-manual.sh
+          ./scripts/workflows/release/package-manual.sh ${{ steps.normalize_version.outputs.version_no_v }}
 
       - name: Upload release artifacts as workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: pair-cli-manual-${{ steps.version.outputs.version }}
+          name: pair-cli-manual-${{ steps.normalize_version.outputs.version_no_v }}
           path: |
-            release/pair-cli-manual-${{ steps.version.outputs.version }}.zip
-            release/pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256
+            release/pair-cli-manual-${{ steps.normalize_version.outputs.version_no_v }}.zip
+            release/pair-cli-manual-${{ steps.normalize_version.outputs.version_no_v }}.zip.sha256
           retention-days: 30
 
-      - name: Smoke-test packaged artifact (verify checksum and run --version)
+      - name: Create registry TGZ from manual release folder
+        run: |
+          chmod +x scripts/workflows/release/create-registry-tgz.sh
+          ./scripts/workflows/release/create-registry-tgz.sh ${{ steps.normalize_version.outputs.version_no_v }} release/pair-cli-manual-${{ steps.normalize_version.outputs.version_no_v }}.zip
+
+      - name: Upload TGZ artifact as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pair-cli-tgz-${{ steps.normalize_version.outputs.version_no_v }}
+          path: |
+            release/pair-cli-${{ steps.normalize_version.outputs.version_no_v }}.tgz
+            release/pair-cli-${{ steps.normalize_version.outputs.version_no_v }}.tgz.sha256
+            release/pair-cli-${{ steps.normalize_version.outputs.version_no_v }}.meta.json
+          retention-days: 30
+
+      - name: Smoke-test manual ZIP artifact (verify checksum, run --version, run pair install)
+        env:
+          PAIR_DIAG: '1'
+        run: |
+          chmod +x scripts/workflows/release/smoke-test-manual-artifact.sh
+          ./scripts/workflows/release/smoke-test-manual-artifact.sh ${{ steps.normalize_version.outputs.version_no_v }}
+
+      - name: Smoke-test npm TGZ artifact (verify checksum, install into sample-project, run --version, run pair install)
+        env:
+          PAIR_DIAG: '1'
+        run: |
+          chmod +x scripts/workflows/release/smoke-test-npm-artifact.sh
+          ./scripts/workflows/release/smoke-test-npm-artifact.sh ${{ steps.normalize_version.outputs.version_no_v }}
+
+      - name: Create GitHub Release and upload assets
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x scripts/workflows/release/create-github-release.sh
+          ./scripts/workflows/release/create-github-release.sh ${{ steps.version.outputs.version }} ${{ github.token }}
+
+  publish-gh-packages:
+    runs-on: ubuntu-latest
+    needs: release
+    permissions:
+      contents: read
+      packages: write
+    env:
+      # Use the workflow-provided token if available; consumers can also set a repository secret
+      # Note: GITHUB_TOKEN may not have sufficient permissions in some org configurations.
+      # If publishing fails, consider using a PAT with 'write:packages' scope in repository secrets.
+      GITHUB_TOKEN: ${{ github.token }}
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    # Run this job for manual dispatch with publish=true OR when a tag push starting with v* occurs
+    if: >
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.publish == 'true')
+      || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    steps:
+      - name: Publish gate check
+        # Decide at runtime if we should actually publish. If this run was a manual workflow_dispatch
+        # require inputs.publish == 'true'; for push/tag events skip the gate and proceed.
         run: |
           set -euo pipefail
-          V=${{ steps.version.outputs.version }}
-          ZIP=release/pair-cli-manual-${V}.zip
-          SUM=release/pair-cli-manual-${V}.zip.sha256
-
-          if [ ! -f "$ZIP" ]; then
-            echo "Error: artifact $ZIP not found"
-            exit 1
+          INP_EVENT='${{ github.event_name }}'
+          if [ "$INP_EVENT" = "workflow_dispatch" ]; then
+            INP_PUBLISH='${{ github.event.inputs.publish }}'
+            if [ "$INP_PUBLISH" != "true" ]; then
+              echo "Publish not requested (inputs.publish != true). Exiting job without publishing."
+              exit 0
+            fi
           fi
-          if [ ! -f "$SUM" ]; then
-            echo "Error: checksum $SUM not found"
-            exit 1
-          fi
+          echo "Publish requested or triggered by tag push; continuing with publish job."
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-          # Verify checksum (use sha256sum if present, else shasum)
-          if command -v sha256sum >/dev/null 2>&1; then
-            calc=$(sha256sum "$ZIP" | awk '{print $1}')
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.15.0'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download TGZ artifact
+        uses: actions/download-artifact@v4
+        with:
+          # Prefer normalized version (no leading v) exposed by the release job
+          name: pair-cli-tgz-${{ needs.release.outputs.version_no_v || needs.release.outputs.version || steps.version.outputs.version }}
+
+      - name: Validate package metadata and token
+        run: |
+          set -euo pipefail
+          V=${{ needs.release.outputs.version_no_v || needs.release.outputs.version || steps.version.outputs.version || github.event.inputs.version }}
+          TGZ=pair-cli-${V}.tgz
+          echo "Looking for expected files: $TGZ and pair-cli-<version>.meta.json in workspace:" && ls -la || true
+          if [ ! -f "$TGZ" ]; then
+            echo "Warning: expected tarball $TGZ not found. Listing available .tgz files:" && ls -la *.tgz 2>/dev/null || true
+            # Continue: attempt to locate a .tgz produced by the artifact bundle
+          fi
+          # Prefer reading package metadata produced at pack time (meta.json) inside the artifact
+          META_FILE=pair-cli-${V}.meta.json
+          if [ ! -f "$META_FILE" ]; then
+            ALT_META=$(ls pair-cli-*.meta.json 2>/dev/null | head -n1 || true)
+            if [ -n "$ALT_META" ]; then
+              echo "Info: exact META_FILE $META_FILE not found; using discovered meta file: $ALT_META"
+              META_FILE="$ALT_META"
+            else
+              echo "Info: no pair-cli-*.meta.json found in workspace; will fall back to workspace package.json (diagnostics below)"
+            fi
+          fi
+          if [ -n "${META_FILE:-}" ] && [ -f "$META_FILE" ]; then
+            PKG_NAME=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$META_FILE','utf8')).name)")
+            PKG_PRIVATE=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$META_FILE','utf8')).private)")
+            echo "Found package metadata file: $META_FILE"
           else
-            calc=$(shasum -a 256 "$ZIP" | awk '{print $1}')
+            # Fallback to workspace package.json for validation
+            echo "Falling back to workspace package.json for validation"
+            PKG_NAME=$(node -e "console.log(require('./apps/pair-cli/package.json').name)")
+            PKG_PRIVATE=$(node -e "console.log(require('./apps/pair-cli/package.json').private)")
           fi
-          expected=$(cat "$SUM" | tr -d '\n' | tr -d '\r')
-          if [ "$calc" != "$expected" ]; then
-            echo "Error: checksum mismatch (expected $expected, got $calc)"
+          echo "Found package: $PKG_NAME (private=$PKG_PRIVATE)"
+          if [ "$PKG_PRIVATE" = "true" ] || [ "$PKG_PRIVATE" = "1" ]; then
+            echo "Aborting publish: package.private is true"
             exit 1
           fi
-
-          TMPDIR=$(mktemp -d)
-          unzip -q "$ZIP" -d "$TMPDIR"
-          ART_DIR="$TMPDIR/pair-cli-manual-${V}"
-          if [ ! -d "$ART_DIR" ]; then
-            echo "Error: extracted artifact directory not found: $ART_DIR"
-            ls -la "$TMPDIR"
+          if [[ "$PKG_NAME" != @foomakers/* ]]; then
+            echo "Aborting publish: package.name must be scoped to @foomakers for GitHub Packages publishing. Found: $PKG_NAME"
             exit 1
           fi
+          # Prefer job-provided GITHUB_TOKEN; if not present, check repository secrets.GITHUB_TOKEN
+          # Note: In private orgs or restricted repos, GITHUB_TOKEN may lack 'packages:write' permission.
+          # If needed, configure a repository secret 'GITHUB_TOKEN' with a PAT that has 'write:packages' scope.
+          if [ -z "${GITHUB_TOKEN:-}" ] && [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "Warning: No GITHUB_TOKEN/NODE_AUTH_TOKEN available in this run."
+            echo "If you intended to publish, re-run with the 'publish' input (workflow_dispatch) and ensure the GITHUB_TOKEN secret is configured for the repository or use a personal token in secrets.GITHUB_TOKEN."
+            echo "Aborting publish to avoid accidental public package publication." 
+            exit 1
+          fi
+          echo "Token availability: GITHUB_TOKEN=${GITHUB_TOKEN:+present} NODE_AUTH_TOKEN=${NODE_AUTH_TOKEN:+present}"
 
-          # Try running top-level wrapper first, else call node directly
-          if [ -x "$ART_DIR/pair-cli" ]; then
-            "$ART_DIR/pair-cli" --version || true
-          elif [ -x "$ART_DIR/bin/pair-cli" ]; then
-            "$ART_DIR/bin/pair-cli" --version || true
-          elif [ -f "$ART_DIR/bundle-cli/index.js" ]; then
-            node "$ART_DIR/bundle-cli/index.js" --version || true
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          V=${{ needs.release.outputs.version_no_v || needs.release.outputs.version || steps.version.outputs.version || github.event.inputs.version }}
+          TGZ=pair-cli-${V}.tgz
+          echo "Publishing $TGZ to GitHub Packages"
+          # If NODE_AUTH_TOKEN isn't set explicitly, fall back to job-provided GITHUB_TOKEN
+          if [ -z "${NODE_AUTH_TOKEN:-}" ] && [ -n "${GITHUB_TOKEN:-}" ]; then
+            NODE_AUTH_TOKEN="$GITHUB_TOKEN"
+          fi
+
+          # Configure npm auth for GitHub Packages; write to $HOME/.npmrc so npm always finds it
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            printf "@foomakers:registry=https://npm.pkg.github.com/\n//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}\nalways-auth=true\n" > "$HOME/.npmrc"
+            chmod 600 "$HOME/.npmrc"
+            echo "Wrote npm auth to $HOME/.npmrc"
           else
-            echo "Warning: no runnable binary found in artifact to smoke-test"
+            echo "No NODE_AUTH_TOKEN available; npm publish may fail due to missing credentials"
           fi
 
-          echo "Smoke-test completed (exit codes may be non-zero for CLI version checks if the bundle returns non-zero); proceed with release if tests are acceptable."
-
-      - name: Create GitHub Release
-        id: create_release
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        uses: actions/create-release@v1
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          release_name: Release ${{ steps.version.outputs.version }}
-          body: |
-            ## Manual Installation Artifacts
-
-            This release includes bundled artifacts for manual installation in air-gapped or restricted environments.
-
-            ### Downloads
-            - **ZIP Archive**: `pair-cli-manual-${{ steps.version.outputs.version }}.zip`
-            - **SHA256 Checksum**: `pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256`
-
-            ### Installation Instructions
-
-            1. Download the ZIP archive
-            2. Verify the checksum: `sha256sum pair-cli-manual-${{ steps.version.outputs.version }}.zip`
-            3. Extract the archive
-            4. Run the executable: `./pair-cli --help`
-
-            ### What's Included
-            - Self-contained Node.js bundle (no external dependencies required)
-            - Cross-platform executables (Linux/macOS/Windows)
-            - TypeScript definitions
-            - Configuration files
-            - Documentation and license
-
-            For more details, see [RELEASE.md](docs/RELEASE.md) and [CLI README](apps/pair-cli/README.md).
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload release assets to the created release
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url || env.RELEASE_UPLOAD_URL }}
-          asset_path: release/pair-cli-manual-${{ steps.version.outputs.version }}.zip
-          asset_name: pair-cli-manual-${{ steps.version.outputs.version }}.zip
-          asset_content_type: application/zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload checksum to the release
-        if: github.event_name != 'workflow_dispatch' || github.event.inputs.version != ''
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url || env.RELEASE_UPLOAD_URL }}
-          asset_path: release/pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256
-          asset_name: pair-cli-manual-${{ steps.version.outputs.version }}.zip.sha256
-          asset_content_type: text/plain
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm publish "$TGZ" --registry https://npm.pkg.github.com/
+          echo "Published. Verifying via npm view..."
+          sleep 3
+          # Determine package name from meta file if present (artifact produced it at pack time)
+          if [ -f "pair-cli-${V}.meta.json" ]; then
+            PKG_PUB_NAME=$(node -e "console.log(JSON.parse(require('fs').readFileSync('pair-cli-${V}.meta.json','utf8')).name)")
+          else
+            PKG_PUB_NAME=$(node -e "console.log(require('./apps/pair-cli/package.json').name)")
+          fi
+          echo "Verifying published package: $PKG_PUB_NAME"
+          npm view "$PKG_PUB_NAME" version --registry https://npm.pkg.github.com/ || true

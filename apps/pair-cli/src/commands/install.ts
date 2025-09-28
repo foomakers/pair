@@ -1,21 +1,22 @@
-import { resolve, relative, dirname } from 'path'
+import { relative, isAbsolute } from 'path'
 import { FileSystemService } from '@pair/content-ops'
 import { Behavior } from '@pair/content-ops'
 import {
   parseTargetAndSource,
   createLogger,
   ensureDir,
+  doCopyAndUpdateLinks,
   CommandOptions,
   LogEntry,
 } from './command-utils'
-import * as commandUtils from './command-utils'
 import {
-  getKnowledgeHubDatasetPath as getKnowledgeHubDatasetPath,
+  calculatePaths,
+  getKnowledgeHubDatasetPath,
   loadConfigWithOverrides,
 } from '../config-utils'
 
 // Define types for asset registry configuration
-interface AssetRegistryConfig {
+export interface AssetRegistryConfig {
   source?: string
   behavior: Behavior
   include?: string[]
@@ -23,40 +24,78 @@ interface AssetRegistryConfig {
   description: string
 }
 
-export type InstallOptions = CommandOptions
+export type InstallOptions = CommandOptions & {
+  baseTarget?: string
+}
 
-// Context object to reduce function parameters
-interface InstallContext {
+export interface InstallContext {
   fsService: FileSystemService
   datasetRoot: string
-  options?: InstallOptions | undefined
+  options?: InstallOptions
   pushLog: (level: LogEntry['level'], message: string) => void
 }
 
-// Context for registry target processing
-interface RegistryTargetContext {
-  target: string
-  abs: string
-  assetRegistries: Record<string, AssetRegistryConfig>
-  datasetRoot: string
-  fsService: FileSystemService
-  options?: InstallOptions | undefined
-  pushLog: (level: LogEntry['level'], message: string) => void
+function calculateAbsoluteTarget(
+  registryConfig: AssetRegistryConfig,
+  options: InstallOptions | undefined,
+  fsService: FileSystemService,
+): string {
+  const targetPath = registryConfig.target_path || registryConfig.source || '.'
+  return options?.baseTarget
+    ? fsService.resolve(options.baseTarget, targetPath)
+    : fsService.resolve(fsService.currentWorkingDirectory(), targetPath)
 }
 
-// Context for installation execution
-interface InstallationContext {
-  source?: string | undefined
-  target?: string | undefined
-  abs: string
-  datasetRoot: string
-  fsService: FileSystemService
-  options?: InstallOptions | undefined
-  pushLog: (level: LogEntry['level'], message: string) => void
+async function checkTargetEmptiness(
+  absTarget: string,
+  registryConfig: AssetRegistryConfig,
+  context: InstallContext,
+  pushLog: (level: LogEntry['level'], message: string) => void,
+): Promise<boolean> {
+  const check = await ensureTargetIsEmpty(context.fsService, absTarget)
+  if (!check.ok) {
+    // For 'add' behavior, allow installing into existing directories
+    if (registryConfig.behavior === 'add') {
+      return true
+    }
+
+    // Check if we're in bundle mode and can allow in-place installation
+    if (await isBundleModeAllowed(absTarget, registryConfig, context)) {
+      return true
+    }
+
+    pushLog('error', check.message!)
+    return false
+  }
+  return true
+}
+
+async function isBundleModeAllowed(
+  absTarget: string,
+  registryConfig: AssetRegistryConfig,
+  context: InstallContext,
+): Promise<boolean> {
+  try {
+    const cwd = context.fsService.currentWorkingDirectory()
+    // Only allow in-place acceptance when datasetRoot equals the fs cwd
+    // (bundle-mode). Compare against the registry's source path so we
+    // only skip conflicts when the installation target aligns with the
+    // dataset source being copied from.
+    if (context.datasetRoot && context.datasetRoot === cwd) {
+      const fullSourcePath = context.fsService.resolve(
+        context.datasetRoot,
+        registryConfig.source || '.',
+      )
+      return absTarget === fullSourcePath || absTarget.startsWith(fullSourcePath + '/')
+    }
+  } catch {
+    // Fall through to error handling
+  }
+  return false
 }
 
 /**
- * Install a single registry to its target location
+ * Install a single registry to the target location
  */
 async function installSingleRegistry(
   registryName: string,
@@ -65,24 +104,24 @@ async function installSingleRegistry(
 ): Promise<void> {
   const { fsService, datasetRoot, options, pushLog } = context
 
+  if (registryConfig.behavior === 'skip') {
+    pushLog('info', `Skipping registry ${registryName} due to skip behavior`)
+    return
+  }
+
   pushLog(
     'info',
     `Installing registry ${registryName} to ${registryConfig.target_path} with behavior: ${registryConfig.behavior}`,
   )
 
-  const targetPath = registryConfig.target_path || registryName
-  const absTarget = options?.baseTarget
-    ? resolve(options.baseTarget, targetPath)
-    : resolve(targetPath)
-
+  const absTarget = calculateAbsoluteTarget(registryConfig, options, fsService)
   await ensureDir(fsService, absTarget)
-  const check = await ensureTargetIsEmpty(fsService, absTarget)
-  if (!check.ok) {
-    pushLog('error', check.message!)
-    return Promise.resolve().then(() => {
-      return Promise.reject(new Error(check.message))
-    })
+
+  const shouldProceed = await checkTargetEmptiness(absTarget, registryConfig, context, pushLog)
+  if (!shouldProceed) {
+    return
   }
+
   await copyRegistryFiles({
     fsService,
     datasetRoot,
@@ -101,13 +140,41 @@ async function copyRegistryFiles(params: {
   copyOptions?: Record<string, unknown>
 }) {
   const { fsService, datasetRoot, registryConfig, absTarget, pushLog, copyOptions } = params
-  const fullSourcePath = resolve(datasetRoot, registryConfig.source || '.')
-  const monorepoRoot = dirname(dirname(process.cwd()))
-  const relativeSourcePath = relative(monorepoRoot, fullSourcePath)
-  const fullTargetPath = resolve(process.cwd(), absTarget)
-  const relativeTargetPath = relative(monorepoRoot, fullTargetPath)
 
-  const optionsToPass = copyOptions || {
+  const paths = calculatePaths(fsService, datasetRoot, absTarget, registryConfig.source)
+  logDiagnosticsIfEnabled(paths)
+
+  const optionsToPass = copyOptions || buildCopyOptionsForRegistry(registryConfig)
+  await doCopyAndUpdateLinks(fsService, {
+    source: paths.relativeSourcePath ?? paths.fullSourcePath,
+    target: paths.relativeTargetPath ?? paths.fullTargetPath,
+    datasetRoot: paths.monorepoRoot,
+    options: optionsToPass,
+  })
+
+  pushLog('info', `Successfully installed ${String(registryConfig.target_path || '')}`)
+}
+
+function logDiagnosticsIfEnabled(paths: ReturnType<typeof calculatePaths>) {
+  const diagEnv = process.env['PAIR_DIAG']
+  const DIAG = diagEnv === '1' || diagEnv === 'true'
+  if (!DIAG) return
+
+  try {
+    console.error('[diag] copyRegistryFiles values:')
+    console.error('[diag] fullSourcePath=', paths.fullSourcePath)
+    console.error('[diag] cwd=', paths.cwd)
+    console.error('[diag] monorepoRoot=', paths.monorepoRoot)
+    console.error('[diag] relativeSourcePath=', paths.relativeSourcePath)
+    console.error('[diag] fullTargetPath=', paths.fullTargetPath)
+    console.error('[diag] relativeTargetPath=', paths.relativeTargetPath)
+  } catch (e) {
+    console.error('[diag] error emitting diagnostics', String(e))
+  }
+}
+
+function buildCopyOptionsForRegistry(registryConfig: AssetRegistryConfig): Record<string, unknown> {
+  return {
     defaultBehavior: registryConfig.behavior as Behavior,
     folderBehavior:
       registryConfig.include && registryConfig.include.length > 0
@@ -116,15 +183,6 @@ async function copyRegistryFiles(params: {
           )
         : undefined,
   }
-
-  await commandUtils.doCopyAndUpdateLinks(fsService, {
-    source: relativeSourcePath,
-    target: relativeTargetPath,
-    datasetRoot: monorepoRoot,
-    options: optionsToPass,
-  })
-
-  pushLog('info', `Successfully installed ${String(registryConfig.target_path || '')}`)
 }
 
 /**
@@ -143,7 +201,12 @@ async function installWithDefaults(
 
     // Validate all targets before performing any copies to avoid partial installs
     const entries = Object.entries(assetRegistries) as Array<[string, AssetRegistryConfig]>
-    const precheck = await ensureAllTargetsAreEmptyForEntries(fsService, entries, options)
+    const precheck = await ensureAllTargetsAreEmptyForEntries(
+      fsService,
+      entries,
+      options,
+      datasetRoot,
+    )
     if (!precheck.ok) {
       const msg = precheck.message || 'destination exists'
       pushLog('error', msg)
@@ -155,8 +218,8 @@ async function installWithDefaults(
       const context: InstallContext = {
         fsService,
         datasetRoot,
-        options,
         pushLog,
+        ...(options && { options }),
       }
       await installSingleRegistry(registryName, registryConfig as AssetRegistryConfig, context)
     }
@@ -182,7 +245,12 @@ function loadConfigAndAssetRegistries(fsService: FileSystemService, options?: In
   if (!assetRegistries || Object.keys(assetRegistries).length === 0) {
     throw new Error('no asset registries found in config')
   }
-  const datasetRoot = getKnowledgeHubDatasetPath()
+  let datasetRoot = options?.datasetRoot || getKnowledgeHubDatasetPath(fsService)
+  // Some tests/mock setups may return an empty string to signal a "bundle"
+  // layout where dataset files are present directly under the FileSystemService
+  // working directory. Normalize that to the service cwd to avoid touching
+  // the real process.cwd during tests.
+  if (datasetRoot === '') datasetRoot = fsService.currentWorkingDirectory()
   return { assetRegistries, datasetRoot }
 }
 
@@ -264,8 +332,6 @@ async function anyNonEmptyTargetExists(
   return false
 }
 
-// No additional registry validation is required in the simplified CLI flow.
-
 /**
  * Build copy options for registry installation
  */
@@ -291,45 +357,9 @@ function buildCopyOptions(registryConfig: AssetRegistryConfig): Record<string, u
   return copyOptions
 }
 
-// Context object for registry installation
-interface RegistryInstallContext {
-  registryName: string
-  registryConfig: AssetRegistryConfig
-  customTarget: string
-  datasetRoot: string
+export interface InstallRegistryContext {
   fsService: FileSystemService
   options: InstallOptions | undefined
-  pushLog: (level: LogEntry['level'], message: string) => void
-}
-
-// Context object for source installation
-interface SourceInstallContext {
-  source?: string
-  target?: string
-  abs: string
-  datasetRoot: string
-  fsService: FileSystemService
-  options: InstallOptions | undefined
-  pushLog: (level: LogEntry['level'], message: string) => void
-}
-
-// Context object for registry installation handling
-interface RegistryHandlerContext {
-  target?: string
-  abs: string
-  datasetRoot: string
-  fsService: FileSystemService
-  options: InstallOptions | undefined
-  pushLog: (level: LogEntry['level'], message: string) => void
-}
-
-// Context object for multiple registries installation
-interface MultiRegistryContext {
-  registries: Array<[string, AssetRegistryConfig]>
-  target: string
-  datasetRoot: string
-  fsService: FileSystemService
-  options?: InstallOptions | undefined
   pushLog: (level: LogEntry['level'], message: string) => void
 }
 
@@ -337,11 +367,19 @@ interface MultiRegistryContext {
  * Install a single registry with custom target
  */
 export async function installRegistryWithCustomTarget(
-  context: RegistryInstallContext,
+  registryEntry: [string, AssetRegistryConfig],
+  customTarget: string,
+  datasetRoot: string,
+  context: InstallRegistryContext,
 ): Promise<void> {
-  const { registryName, registryConfig, customTarget, datasetRoot, fsService, options, pushLog } =
-    context
+  const [registryName, registryConfig] = registryEntry
+  const { fsService, options, pushLog } = context
   const behavior = registryConfig.behavior || 'mirror'
+
+  if (behavior === 'skip') {
+    pushLog('info', `Skipping registry ${registryName} due to skip behavior`)
+    return
+  }
 
   pushLog(
     'info',
@@ -349,8 +387,8 @@ export async function installRegistryWithCustomTarget(
   )
 
   const absTarget = options?.baseTarget
-    ? resolve(options.baseTarget, customTarget)
-    : resolve(customTarget)
+    ? fsService.resolve(options.baseTarget, customTarget)
+    : fsService.resolve(fsService.currentWorkingDirectory(), customTarget)
   await ensureDir(fsService, absTarget)
 
   const copyOptions = buildCopyOptions(registryConfig)
@@ -366,66 +404,54 @@ export async function installRegistryWithCustomTarget(
 }
 
 /**
- * dry-run behavior removed from CLI
+ * Check if bundle mode allows skipping emptiness check for a target
  */
-
-async function handleSourceInstallation(context: SourceInstallContext): Promise<{
-  success: boolean
-  target: string
-  message?: string
-  logs?: LogEntry[]
-}> {
-  const { source, target, abs, datasetRoot, fsService, pushLog } = context
-
+function shouldSkipEmptinessCheckInBundleMode(
+  fsService: FileSystemService,
+  absTarget: string,
+  registryConfig: AssetRegistryConfig,
+  datasetRoot: string,
+): boolean {
+  if (datasetRoot !== fsService.currentWorkingDirectory()) return false
   try {
-    pushLog('info', `Installing from source: ${source} to ${target}`)
-
-    // proceed with copy/update
-
-    await commandUtils.doCopyAndUpdateLinks(fsService, {
-      source: source!,
-      target: target!,
-      datasetRoot: datasetRoot,
-      options: {
-        defaultBehavior: 'mirror',
-      },
-    })
-    pushLog('info', 'copyPathAndUpdateLinks finished')
-    return { success: true, target: abs }
-  } catch (err) {
-    pushLog('error', `Failed to install from source: ${String(err)}`)
-    return { success: false, target: abs, message: `install-failed: ${String(err)}` }
+    const fullSourcePath = fsService.resolve(datasetRoot, registryConfig.source || '.')
+    return absTarget === fullSourcePath || absTarget.startsWith(fullSourcePath + '/')
+  } catch {
+    return false
   }
 }
 
 /**
- * Determine the actual target path for a registry
+ * Check emptiness for mirror behavior registries
  */
-function determineTargetPath(target: string, registryName: string, targetPath: string): string {
-  if (target === '.' || target === './') {
-    return targetPath.startsWith('/') ? targetPath.slice(1) : targetPath
-  }
-  if (target === registryName || target === targetPath) {
-    return targetPath.startsWith('/') ? targetPath.slice(1) : targetPath
-  }
-  return target
-}
+async function checkTargetsEmptinessForMirrorRegistries(
+  fsService: FileSystemService,
+  resolved: Array<{
+    registryName: string
+    absTarget: string
+    registryConfig: AssetRegistryConfig
+  }>,
+  datasetRoot?: string,
+): Promise<{ ok: boolean; message?: string }> {
+  for (const { absTarget, registryConfig } of resolved) {
+    // Only check emptiness for behaviors that require empty targets
+    if (registryConfig.behavior !== 'mirror') continue
 
-/**
- * Install multiple registries
- */
-async function installRegistries(context: MultiRegistryContext): Promise<void> {
-  const { registries, target, datasetRoot, fsService, pushLog, options } = context
-  // Pre-validate all targets for the registries to avoid partial copies
-  const precheck = await ensureAllTargetsAreEmptyForEntries(fsService, registries, options)
-  if (!precheck.ok) {
-    pushLog('error', precheck.message!)
-    throw new Error(precheck.message)
+    // Skip emptiness check in bundle mode if target is within source
+    if (
+      datasetRoot &&
+      shouldSkipEmptinessCheckInBundleMode(fsService, absTarget, registryConfig, datasetRoot)
+    ) {
+      continue
+    }
+
+    const exists = await fsService.exists(absTarget)
+    if (!exists) continue
+    const check = await ensureTargetIsEmpty(fsService, absTarget)
+    if (!check.ok) return { ok: false, message: check.message || 'destination exists' }
   }
 
-  for (const entry of registries) {
-    await processRegistryEntry({ entry, target, datasetRoot, fsService, options, pushLog })
-  }
+  return { ok: true }
 }
 
 /**
@@ -436,17 +462,20 @@ export async function ensureAllTargetsAreEmptyForEntries(
   fsService: FileSystemService,
   entries: Array<[string, AssetRegistryConfig]>,
   options?: InstallOptions,
+  datasetRoot?: string,
 ): Promise<{ ok: boolean; message?: string }> {
   // Resolve all absolute targets first so we can detect overlaps (ancestor/descendant)
-  const resolved: Array<{ registryName: string; absTarget: string }> = entries.map(
-    ([registryName, registryConfig]) => {
-      const targetPath = registryConfig.target_path || registryName
-      const absTarget = options?.baseTarget
-        ? resolve(options.baseTarget, targetPath)
-        : resolve(targetPath)
-      return { registryName, absTarget }
-    },
-  )
+  const resolved: Array<{
+    registryName: string
+    absTarget: string
+    registryConfig: AssetRegistryConfig
+  }> = entries.map(([registryName, registryConfig]) => {
+    const targetPath = registryConfig.target_path || registryName
+    const absTarget = options?.baseTarget
+      ? fsService.resolve(options.baseTarget, targetPath)
+      : fsService.resolve(fsService.currentWorkingDirectory(), targetPath)
+    return { registryName, absTarget, registryConfig }
+  })
 
   // Precheck overlaps and baseTarget existence using a small helper to keep
   // this function's complexity under the lint threshold.
@@ -454,12 +483,12 @@ export async function ensureAllTargetsAreEmptyForEntries(
   if (precheck) return precheck
 
   // No overlaps detected; ensure existing targets are empty
-  for (const { absTarget } of resolved) {
-    const exists = await fsService.exists(absTarget)
-    if (!exists) continue
-    const check = await ensureTargetIsEmpty(fsService, absTarget)
-    if (!check.ok) return { ok: false, message: check.message || 'destination exists' }
-  }
+  const emptinessCheck = await checkTargetsEmptinessForMirrorRegistries(
+    fsService,
+    resolved,
+    datasetRoot,
+  )
+  if (!emptinessCheck.ok) return emptinessCheck
 
   return { ok: true }
 }
@@ -481,158 +510,108 @@ function friendlyInstallMessage(m?: string): string {
   return msg
 }
 
-interface ProcessRegistryEntryContext {
-  entry: [string, AssetRegistryConfig]
-  target: string
-  datasetRoot: string
-  fsService: FileSystemService
-  options?: InstallOptions | undefined
-  pushLog: (level: LogEntry['level'], message: string) => void
-}
+export async function installCommand(
+  fsService: FileSystemService,
+  args: string[],
+  options?: InstallOptions,
+) {
+  const { target, source } = parseTargetAndSource(args)
 
-async function processRegistryEntry(context: ProcessRegistryEntryContext) {
-  const { entry, target, datasetRoot, fsService, options, pushLog } = context
-  const [registryName, registryConfig] = entry
-  const reg = registryConfig
-  const behavior = reg.behavior || 'mirror'
-  const targetPath = reg.target_path || registryName
-
-  pushLog('info', `Installing asset registry: ${registryName} with behavior: ${behavior}`)
-
-  const actualTargetPath = determineTargetPath(target, registryName, targetPath)
-  const destPath = actualTargetPath
-  const copyOptions = buildCopyOptions(reg)
-
-  try {
-    // determine absolute target path
-    const absTarget = options?.baseTarget
-      ? resolve(options.baseTarget, destPath)
-      : resolve(destPath)
-    await copyRegistryFiles({
-      fsService,
-      datasetRoot,
-      registryConfig: reg,
-      absTarget,
-      pushLog,
-      copyOptions,
-    })
-    pushLog('info', `Successfully installed ${registryName} to ${destPath}`)
-  } catch (err) {
-    pushLog('error', `Failed to install ${registryName}: ${String(err)}`)
+  // Handle special modes first
+  const specialMode = await handleSpecialModes(fsService, options)
+  if (specialMode.handled) {
+    return specialMode.result
   }
+
+  const resolvedTarget = options?.baseTarget || target || undefined
+
+  return await executeInstall(fsService, resolvedTarget, source || undefined, options)
 }
 
-/**
- * Find matching registry based on target
- */
-function findMatchingRegistry(
-  target: string,
-  assetRegistries: Record<string, AssetRegistryConfig>,
-): [string, AssetRegistryConfig] | null {
-  return Object.entries(assetRegistries).find(([name, reg]) => {
-    const registry = reg as AssetRegistryConfig
-    return name === target || registry.target_path === target
-  }) as [string, AssetRegistryConfig] | null
-}
-
-/**
- * Validate dataset root
- */
-function validateDatasetRoot(
-  datasetRoot: string,
-  abs: string,
-): { success: boolean; target: string; message?: string } | null {
-  if (!datasetRoot) {
+async function executeInstall(
+  fsService: FileSystemService,
+  resolvedTarget: string | undefined,
+  source: string | undefined,
+  options?: InstallOptions,
+) {
+  // Validate and prepare target
+  const targetValidation = await validateAndPrepareTarget(resolvedTarget, fsService, () => {})
+  if (!targetValidation.success) {
     return {
       success: false,
-      target: abs,
-      message: 'datasetRoot not provided and no source specified',
+      message: targetValidation.message || 'Target validation failed',
+      target: resolvedTarget || '',
     }
   }
-  return null
+
+  const abs = targetValidation.abs!
+  let datasetRoot = options?.datasetRoot || getKnowledgeHubDatasetPath(fsService)
+  if (datasetRoot === '') datasetRoot = fsService.currentWorkingDirectory()
+
+  return await performInstallation({
+    source: source || undefined,
+    target: resolvedTarget,
+    abs,
+    datasetRoot,
+    fsService,
+    options: { ...(options || {}), baseTarget: abs },
+  })
 }
 
 /**
- * Process registry target and return appropriate result
+ * Extracted helper to perform the installation and format results. This keeps
+ * `installCommand` small so lint rules on max-lines and complexity are met.
  */
-async function processRegistryTarget(
-  context: RegistryTargetContext,
-): Promise<{ success: boolean; target: string; message?: string }> {
-  const { target, abs, assetRegistries, datasetRoot, fsService, options, pushLog } = context
+async function performInstallation(context: {
+  source: string | undefined
+  target: string | undefined
+  abs: string
+  datasetRoot: string
+  fsService: FileSystemService
+  options?: InstallOptions
+}): Promise<{ success: boolean; target: string; message?: string; logs?: LogEntry[] }> {
+  const { source, target, abs, datasetRoot, fsService, options } = context
 
-  if (target === '.' || target === './') {
-    pushLog('info', 'Installing all registries to their default target paths')
-    const result = await installWithDefaults(fsService, options)
-    return result.message
-      ? { success: result.success, target: abs, message: result.message }
-      : { success: result.success, target: abs }
-  }
-
-  const matchingRegistry = findMatchingRegistry(target, assetRegistries)
-
-  if (matchingRegistry) {
-    const multiContext: MultiRegistryContext = {
-      registries: [matchingRegistry],
-      target,
-      datasetRoot,
-      fsService,
-      options,
-      pushLog,
-    }
-    await installRegistries(multiContext)
-    return { success: true, target: abs }
-  } else {
-    pushLog('info', `Target '${target}' doesn't match any registry, using default targets`)
-    const result = await installWithDefaults(fsService, options)
-    return result.message
-      ? { success: result.success, target: abs, message: result.message }
-      : { success: result.success, target: abs }
-  }
-}
-
-/**
- * Handle installation from knowledge-hub dataset using asset registries
- */
-async function handleRegistryInstallation(context: RegistryHandlerContext): Promise<{
-  success: boolean
-  target: string
-  message?: string
-  logs?: LogEntry[]
-}> {
-  const { target, abs, datasetRoot, fsService, options, pushLog } = context
+  const { logs, pushLog } = createLogger(options?.minLogLevel as LogEntry['level'] | undefined)
+  pushLog('info', 'Starting installCommand')
 
   try {
-    const validation = validateDatasetRoot(datasetRoot, abs)
-    if (validation) return validation
-
-    pushLog('info', `Installing from knowledge-hub dataset: ${datasetRoot} to ${target}`)
-
-    const loaderOpts: { customConfigPath?: string } = {}
-    if (options?.customConfigPath) loaderOpts.customConfigPath = options.customConfigPath
-    const loader = loadConfigWithOverrides(fsService, loaderOpts)
-    const config = loader.config
-    const assetRegistries = config.asset_registries || {}
-
-    const result = await processRegistryTarget({
-      target: target!,
+    const result = await executeInstallation({
+      source,
+      target,
       abs,
-      assetRegistries,
       datasetRoot,
       fsService,
-      options,
       pushLog,
+      ...(options && { options }),
     })
 
-    pushLog('info', 'All asset registries processed')
-    return result
+    return processInstallationResult(result, logs, options)
   } catch (err) {
-    pushLog('error', `Failed to install from knowledge-hub: ${String(err)}`)
-    return { success: false, target: abs, message: `install-failed: ${String(err)}` }
+    return { success: false, message: (err as Error)?.message ?? String(err), target: context.abs }
   }
 }
 
-// The CLI does not accept programmatic registry overrides; it uses the configured
-// asset registries and an optional custom config file when provided.
+/**
+ * Process installation result and format for return
+ */
+function processInstallationResult(
+  result: { success: boolean; target: string; message?: string },
+  logs: LogEntry[],
+  options?: InstallOptions,
+): { success: boolean; target: string; message?: string; logs?: LogEntry[] } {
+  // Convert technical precheck errors into user-friendly guidance
+  if (!result.success && result.message) {
+    result.message = friendlyInstallMessage(String(result.message))
+    // Print debug dump only when minLogLevel is debug/trace
+    const minLevel = options?.minLogLevel as LogEntry['level'] | undefined
+    if (minLevel === 'debug' || minLevel === 'trace') {
+      console.error('DEBUG: installCommand result failing:', JSON.stringify(result))
+    }
+  }
+
+  return formatResult(result, logs)
+}
 
 /**
  * Handle special installation modes (useDefaults)
@@ -667,7 +646,10 @@ async function validateAndPrepareTarget(
     }
   }
 
-  const abs = resolve(target)
+  const abs =
+    target && !isAbsolute(target)
+      ? fsService.resolve(fsService.currentWorkingDirectory(), target)
+      : fsService.resolve(target || '')
 
   // Validate target path
   if (!abs || abs === '/' || abs === '') {
@@ -683,7 +665,15 @@ async function validateAndPrepareTarget(
 /**
  * Execute the installation based on source or registry mode
  */
-async function executeInstallation(context: InstallationContext): Promise<{
+async function executeInstallation(context: {
+  source: string | undefined
+  target: string | undefined
+  abs: string
+  datasetRoot: string
+  fsService: FileSystemService
+  options?: InstallOptions
+  pushLog: (level: LogEntry['level'], message: string) => void
+}): Promise<{
   success: boolean
   target: string
   message?: string
@@ -692,26 +682,156 @@ async function executeInstallation(context: InstallationContext): Promise<{
   const { source, target, abs, datasetRoot, fsService, options, pushLog } = context
 
   if (source) {
-    const sourceContext: SourceInstallContext = {
+    return await handleSourceInstallation({
       source,
       target: target!,
       abs,
       datasetRoot,
       fsService,
-      options,
       pushLog,
-    }
-    return await handleSourceInstallation(sourceContext)
+    })
   } else {
-    const registryContext: RegistryHandlerContext = {
+    return await handleRegistryInstallation({
       target: target!,
       abs,
       datasetRoot,
       fsService,
+      pushLog,
+      ...(options && { options }),
+    })
+  }
+}
+
+/**
+ * Handle installation from knowledge-hub dataset using asset registries
+ */
+async function handleRegistryInstallation(context: {
+  target: string
+  abs: string
+  datasetRoot: string
+  fsService: FileSystemService
+  options?: InstallOptions
+  pushLog: (level: LogEntry['level'], message: string) => void
+}): Promise<{
+  success: boolean
+  target: string
+  message?: string
+  logs?: LogEntry[]
+}> {
+  const { target, abs, datasetRoot, fsService, options, pushLog } = context
+
+  try {
+    if (!datasetRoot) {
+      return {
+        success: false,
+        target: abs,
+        message: 'datasetRoot not provided and no source specified',
+      }
+    }
+
+    pushLog('info', `Installing from knowledge-hub dataset: ${datasetRoot} to ${target}`)
+
+    const loaderOpts: { customConfigPath?: string } = {}
+    if (options?.customConfigPath) loaderOpts.customConfigPath = options.customConfigPath
+    const loader = loadConfigWithOverrides(fsService, loaderOpts)
+    const config = loader.config
+    const assetRegistries = config.asset_registries || {}
+
+    const result = await processRegistryTarget({
+      target,
+      abs,
+      assetRegistries,
+      datasetRoot,
+      fsService,
+      pushLog,
+      ...(options && { options }),
+    })
+
+    pushLog('info', 'All asset registries processed')
+    return result
+  } catch (err) {
+    pushLog('error', `Failed to install from knowledge-hub: ${String(err)}`)
+    return { success: false, target: abs, message: `install-failed: ${String(err)}` }
+  }
+}
+
+/**
+ * Process registry target and return appropriate result
+ */
+async function processRegistryTarget(context: {
+  target: string
+  abs: string
+  assetRegistries: Record<string, AssetRegistryConfig>
+  datasetRoot: string
+  fsService: FileSystemService
+  options?: InstallOptions
+  pushLog: (level: LogEntry['level'], message: string) => void
+}): Promise<{ success: boolean; target: string; message?: string }> {
+  const { target, abs, assetRegistries, datasetRoot, fsService, options, pushLog } = context
+
+  if (target === '.' || target === './') {
+    pushLog('info', 'Installing all registries to their default target paths')
+
+    const result = await installWithDefaults(fsService, options)
+    return result.message
+      ? { success: result.success, target: abs, message: result.message }
+      : { success: result.success, target: abs }
+  }
+
+  const matchingRegistry = Object.entries(assetRegistries).find(([name, reg]) => {
+    const registry = reg as AssetRegistryConfig
+    return name === target || registry.target_path === target
+  }) as [string, AssetRegistryConfig] | undefined
+
+  if (matchingRegistry) {
+    const [registryName, registryConfig] = matchingRegistry
+    await installRegistryWithCustomTarget([registryName, registryConfig], target, datasetRoot, {
+      fsService,
       options,
       pushLog,
-    }
-    return await handleRegistryInstallation(registryContext)
+    })
+    return { success: true, target: abs }
+  } else {
+    pushLog('info', `Target '${target}' doesn't match any registry, using default targets`)
+    const result = await installWithDefaults(fsService, options)
+    return result.message
+      ? { success: result.success, target: abs, message: result.message }
+      : { success: result.success, target: abs }
+  }
+}
+
+/**
+ * Handle installation from source
+ */
+async function handleSourceInstallation(context: {
+  source: string
+  target: string
+  abs: string
+  datasetRoot: string
+  fsService: FileSystemService
+  pushLog: (level: LogEntry['level'], message: string) => void
+}): Promise<{
+  success: boolean
+  target: string
+  message?: string
+}> {
+  const { source, target, abs, datasetRoot, fsService, pushLog } = context
+
+  try {
+    pushLog('info', `Installing from source: ${source} to ${target}`)
+    await doCopyAndUpdateLinks(fsService, {
+      source: source,
+      target: target,
+      datasetRoot: datasetRoot,
+      options: {
+        defaultBehavior: 'mirror',
+      },
+    })
+    pushLog('info', 'copyPathAndUpdateLinks finished')
+    return { success: true, target: abs }
+  } catch (err) {
+    pushLog('error', `Failed to install from source: ${String(err)}`)
+    return { success: false, target: abs, message: `install-failed: ${String(err)}` }
   }
 }
 
@@ -728,92 +848,4 @@ function formatResult(
   logs: LogEntry[],
 ): { success: boolean; target: string; message?: string; logs?: LogEntry[] } {
   return { ...result, logs }
-}
-
-export async function installCommand(
-  fsService: FileSystemService,
-  args: string[],
-  options?: InstallOptions,
-) {
-  const { target, source } = parseTargetAndSource(args)
-
-  // Handle special modes first
-  const specialMode = await handleSpecialModes(fsService, options)
-  if (specialMode.handled) {
-    return specialMode.result
-  }
-
-  // If baseTarget is provided in options (e.g., resolved against INIT_CWD), use it
-  const resolvedTarget = options?.baseTarget || target
-
-  // Validate and prepare target
-  const targetValidation = await validateAndPrepareTarget(
-    resolvedTarget || undefined,
-    fsService,
-    () => {},
-  )
-  if (!targetValidation.success) {
-    return targetValidation
-  }
-
-  const abs = targetValidation.abs!
-  const datasetRoot = getKnowledgeHubDatasetPath()
-  // Ensure downstream install flows know the resolved base target so all
-  // registry target checks happen relative to this folder before any copies
-  // are executed. Don't mutate the original options object; create a shallow
-  // copy and set baseTarget to the resolved absolute path.
-  const execOptions: InstallOptions = { ...(options || {}), baseTarget: abs }
-
-  return await performInstallation({
-    source: source || undefined,
-    target: resolvedTarget || undefined,
-    abs,
-    datasetRoot,
-    fsService,
-    options: execOptions,
-  })
-}
-
-/**
- * Extracted helper to perform the installation and format results. This keeps
- * `installCommand` small so lint rules on max-lines and complexity are met.
- */
-async function performInstallation(context: {
-  source: string | undefined
-  target: string | undefined
-  abs: string
-  datasetRoot: string
-  fsService: FileSystemService
-  options?: InstallOptions
-}): Promise<{ success: boolean; target: string; message?: string; logs?: LogEntry[] }> {
-  const { source, target, abs, datasetRoot, fsService, options } = context
-  try {
-    const { logs, pushLog } = createLogger(options?.minLogLevel as LogEntry['level'] | undefined)
-    pushLog('info', 'Starting installCommand')
-
-    // Execute installation
-    const result = await executeInstallation({
-      source,
-      target,
-      abs,
-      datasetRoot,
-      fsService,
-      options,
-      pushLog,
-    })
-
-    // Convert technical precheck errors into user-friendly guidance
-    if (!result.success && result.message) {
-      result.message = friendlyInstallMessage(String(result.message))
-      // Print debug dump only when minLogLevel is debug/trace
-      const minLevel = options?.minLogLevel as LogEntry['level'] | undefined
-      if (minLevel === 'debug' || minLevel === 'trace') {
-        console.error('DEBUG: installCommand result failing:', JSON.stringify(result))
-      }
-    }
-
-    return formatResult(result, logs)
-  } catch (err) {
-    return { success: false, message: (err as Error)?.message ?? String(err), target: context.abs }
-  }
 }

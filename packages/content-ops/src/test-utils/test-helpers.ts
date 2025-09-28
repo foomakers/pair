@@ -33,7 +33,7 @@ export const TEST_FILE_STRUCTURES = {
 export function createTestFileService(
   structure: Record<string, string> = TEST_FILE_STRUCTURES.basic,
 ): InMemoryFileSystemService {
-  return new InMemoryFileSystemService(structure)
+  return new InMemoryFileSystemService(structure, '/', '/')
 }
 
 /**

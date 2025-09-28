@@ -38,7 +38,14 @@ for a in "$@"; do
   esac
 done
 
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+# Normalize version input: accept leading 'v' or 'V' but use a normalized form for filenames
+VERSION_RAW="$VERSION"
+if [ -n "$VERSION" ]; then
+  VERSION="${VERSION#v}"
+  VERSION="${VERSION#V}"
+fi
+
+ROOT_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 
 if [ "$CLEAN" = true ] && [ -z "$VERSION" ]; then
   echo "Cleaning release/ (no version provided)..."
@@ -59,7 +66,7 @@ fi
 PKG_DIR="$ROOT_DIR/apps/pair-cli"
 RELEASE_DIR="$ROOT_DIR/release/pair-cli-manual-$VERSION"
 
-echo "Packaging pair-cli manual artifact for version=$VERSION"
+echo "Packaging pair-cli manual artifact for version_raw=${VERSION_RAW:-unset} version_normalized=$VERSION"
 
 # Preflight checks: ensure required commands exist
 missing_tools=()
@@ -112,11 +119,11 @@ else
   if [ -f "$PKG_DIR/package.json" ]; then
     cp "$PKG_DIR/package.json" "$RELEASE_DIR/"
   fi
+    if [ -f "$PKG_DIR/config.json" ]; then
+    cp "$PKG_DIR/config.json" "$RELEASE_DIR/"
+  fi
   if [ -f "$PKG_DIR/README.md" ]; then
     cp "$PKG_DIR/README.md" "$RELEASE_DIR/"
-  fi
-  if [ -f "$PKG_DIR/config.json" ]; then
-    cp "$PKG_DIR/config.json" "$RELEASE_DIR/"
   fi
   # Prefer package-level LICENSE if present, else fall back to repo root LICENSE
   if [ -f "$PKG_DIR/LICENSE" ]; then
@@ -165,7 +172,7 @@ const cleanPkg = {
   main: 'bundle-cli/index.js',
   types: 'bundle-cli/index.d.ts',
   bin: { 'pair-cli': './bin/pair-cli' },
-  files: ['bundle-cli', 'bin', 'README.md', 'LICENSE', 'config.json', 'docs'],
+  files: ['bundle-cli', 'bin', 'README.md', 'config.json', 'LICENSE', 'docs'],
   author: original.author,
   license: original.license || 'MIT'
 };
@@ -176,7 +183,7 @@ NODE
   fi
 fi
 
-# Note: package.json and config.json are needed in root for the bundled artifact
+# Note: package.json is needed in root for the bundled artifact
 
 # Determine executable name (default: pair-cli)
 EXE_NAME="pair-cli"
@@ -199,6 +206,7 @@ if [ -f "$PKG_DIR/dist/cli.js" ]; then
       cp -R "$ROOT_DIR/packages/knowledge-hub/dataset" "$RELEASE_DIR/bundle-cli/" || { echo "Failed to copy dataset"; exit 1; }
     fi
   fi
+  
   # Remove unnecessary package.json from bundle-cli (created by ncc)
   if [ "$DRY_RUN" = true ]; then
     echo "[dry-run] would remove $RELEASE_DIR/bundle-cli/package.json if present"
