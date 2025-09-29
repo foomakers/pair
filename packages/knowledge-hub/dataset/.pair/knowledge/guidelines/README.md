@@ -35,16 +35,16 @@ This knowledge base follows a **3-level hierarchical structure**:
 
 - **[Quality](quality/README.md)** - Quality criteria, accessibility, performance, and security
   - **[Standards](quality/standards/README.md)** - Definition of Done, quality criteria, completion standards
-  - **[Accessibility](quality/accessibility/README.md)** - WCAG compliance, inclusive design, testing tools
-  - **[Performance](quality/performance/README.md)** - Optimization strategies, monitoring, benchmarking
-  - **[Security](quality/security/README.md)** - Secure development, vulnerability assessment, practices
+  - **[Accessibility](quality/accessibility.md)** - WCAG compliance, inclusive design, testing tools
+  - **[Performance](quality/performance.md)** - Optimization strategies, monitoring, benchmarking
+  - **[Security](quality/security.md)** - Secure development, vulnerability assessment, practices
 
 ### 🚀 Operations Guidelines (Level 1)
 
 - **[Operations](operations/README.md)** - Infrastructure, UX standards, and observability
-  - **[Infrastructure](operations/infrastructure/README.md)** - Deployment strategies, environment management, CI/CD
-  - **[UX Design](operations/ux-design/README.md)** - User experience standards, design principles, systems
-  - **[Observability](operations/observability/README.md)** - Monitoring, logging, tracing, alerting
+  - **[Infrastructure](operations/infrastructure.md)** - Deployment strategies, environment management, CI/CD
+  - **[UX Design](operations/ux-design.md)** - User experience standards, design principles, systems
+  - **[Observability](operations/observability.md)** - Monitoring, logging, tracing, alerting
 
 ## 🔗 Cross-References
 

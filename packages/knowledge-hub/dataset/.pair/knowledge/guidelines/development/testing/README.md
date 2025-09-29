@@ -19,9 +19,9 @@ Define testing strategies, implementation patterns, and automation frameworks th
 **Out of Scope:**
 
 - Code design patterns (see [Code Design](../code-design/README.md))
-- Performance optimization strategies (see [Performance](../../quality/performance/README.md))
-- Security testing implementation (see [Security](../../quality/security/README.md))
-- Infrastructure testing (see [Infrastructure](../../operations/infrastructure/README.md))
+- Performance optimization strategies (see [Performance](../../quality/performance.md))
+- Security testing implementation (see [Security](../../quality/security.md))
+- Infrastructure testing (see [Infrastructure](../../operations/infrastructure.md))
 
 ## Level 2 Implementation Areas
 
@@ -62,7 +62,7 @@ Define testing strategies, implementation patterns, and automation frameworks th
 - **[Code Design Guidelines](../code-design/README.md)** - Implementation patterns supporting testable code
 - **[Technical Standards](../technical-standards/README.md)** - Technology stack and tools for testing
 - **[Quality Standards](../../quality/standards/README.md)** - Quality metrics and standards
-- **[Performance Guidelines](../../quality/performance/README.md)** - Performance testing strategies
+- **[Performance Guidelines](../../quality/performance.md)** - Performance testing strategies
 
 ---
 

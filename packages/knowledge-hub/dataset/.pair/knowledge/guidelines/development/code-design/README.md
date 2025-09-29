@@ -18,9 +18,9 @@ Define code structure, design patterns, and implementation standards that ensure
 
 **Out of Scope:**
 
-- Infrastructure and deployment configurations (see [Infrastructure](../../../operations/infrastructure/README.md))
-- Performance optimization strategies (see [Performance](../../../quality/performance/README.md))
-- Security implementation details (see [Security](../../../quality/security/README.md))
+- Infrastructure and deployment configurations (see [Infrastructure](../../../operations/infrastructure.md))
+- Performance optimization strategies (see [Performance](../../../quality/performance.md))
+- Security implementation details (see [Security](../../../quality/security.md))
 - Testing frameworks and strategies (see [Testing](../testing/README.md))
 - Third-party library integration patterns (see [Technical Standards](../technical-standards/README.md))
 
@@ -65,7 +65,7 @@ Define code structure, design patterns, and implementation standards that ensure
 - **[Architecture Guidelines](../../architecture/README.md)** - Architectural patterns guiding code organization
 - **[Technical Standards](../technical-standards/README.md)** - Technology stack supporting code design
 - **[Testing Guidelines](../testing/README.md)** - Testing strategies validating code design
-- **[UX Guidelines](../../operations/ux-design/README.md)** - UI standards complementing React patterns
+- **[UX Guidelines](../../operations/ux-design.md)** - UI standards complementing React patterns
 
 ---
 
