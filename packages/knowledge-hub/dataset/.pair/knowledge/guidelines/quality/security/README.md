@@ -6,9 +6,9 @@ This practice area covers comprehensive security guidelines for building secure,
 
 Security guidelines ensure applications and infrastructure are protected against threats through defense-in-depth strategies, secure coding practices, data protection, and continuous security monitoring. This encompasses application security, data security, infrastructure security, and security testing methodologies.
 
-## Structure
+## Topics Covered
 
-### [application-security/](./application-security/)
+### Application Security
 Application-level security implementation
 - Secure coding practices and OWASP guidelines
 - Authentication and authorization patterns
@@ -17,7 +17,7 @@ Application-level security implementation
 - Session management and CSRF protection
 - Dependency and supply chain security
 
-### [data-security/](./data-security/)
+### Data Security
 Data protection and privacy compliance
 - Data encryption at rest and in transit
 - Personal data protection (GDPR, CCPA compliance)
@@ -26,7 +26,7 @@ Data protection and privacy compliance
 - Database security configuration
 - Data anonymization and pseudonymization
 
-### [infrastructure-security/](./infrastructure-security/)
+### Infrastructure Security
 Infrastructure and deployment security
 - Container security and image scanning
 - Cloud security configuration (AWS, Azure, GCP)
@@ -35,7 +35,7 @@ Infrastructure and deployment security
 - CI/CD pipeline security
 - Infrastructure as Code security scanning
 
-### [security-testing/](./security-testing/)
+### Security Testing
 Security testing and vulnerability assessment
 - Static Application Security Testing (SAST)
 - Dynamic Application Security Testing (DAST)

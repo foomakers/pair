@@ -1,6 +1,32 @@
-# 🎨 UX Design Practice (Level 2)
+# 🎨 UX Design Practice## Topics Covered
 
-User experience design, interface design patterns, design systems, and content strategy for effective user-centered design.
+### Design Systems and Components
+Design system architecture, component libraries, and design tokens
+- Component library development and maintenance
+- Design token systems and theming
+- Design system documentation and guidelines
+- Cross-platform design consistency
+
+### User Experience Principles
+UX principles, user research methods, and usability guidelines
+- User-centered design methodology
+- User research and testing strategies
+- Information architecture and user flows
+- Usability principles and heuristics
+
+### Interface Design Standards
+UI design patterns, layout principles, and visual standards
+- Interface design patterns and conventions
+- Layout systems and responsive design
+- Typography and visual hierarchy
+- Interaction design and micro-interactions
+
+### Content Strategy
+Content guidelines, information architecture, and communication design
+- Content strategy and planning
+- Information architecture and navigation
+- Writing guidelines and tone of voice
+- Content accessibility and internationalizationexperience design, interface design patterns, design systems, and content strategy for effective user-centered design.
 
 ## Purpose
 

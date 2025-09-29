@@ -6,34 +6,30 @@ This practice area covers comprehensive accessibility guidelines for creating in
 
 Accessibility ensures that digital products are usable by people with diverse abilities and disabilities. This includes visual, auditory, motor, and cognitive accessibility considerations across all aspects of product development.
 
-## Structure
+## Topics Covered
 
-### [web-accessibility/](./web-accessibility/)
-Web-specific accessibility standards and WCAG compliance
+### Web Accessibility Standards
 - WCAG 2.1/2.2 implementation guidelines
 - HTML semantic markup for accessibility
 - Screen reader compatibility standards
 - Keyboard navigation requirements
 - Focus management and tab order
 
-### [user-interface-accessibility/](./user-interface-accessibility/)
-UI design patterns and component accessibility
+### User Interface Accessibility
 - Accessible component design patterns
 - Color contrast and visual accessibility
 - Touch target sizing and spacing
 - Interactive element accessibility
 - Form accessibility standards
 
-### [content-accessibility/](./content-accessibility/)
-Content creation and information accessibility
+### Content Accessibility
 - Alternative text for images and media
 - Document structure and readability
 - Plain language guidelines
 - Multimedia accessibility (captions, transcripts)
 - Content organization for screen readers
 
-### [testing-accessibility/](./testing-accessibility/)
-Accessibility testing methodologies and tools
+### Testing Accessibility
 - Automated accessibility testing tools
 - Manual testing procedures
 - Screen reader testing protocols

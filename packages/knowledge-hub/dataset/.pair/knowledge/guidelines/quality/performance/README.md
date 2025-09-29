@@ -6,9 +6,9 @@ This practice area covers comprehensive performance optimization guidelines for 
 
 Performance optimization ensures applications deliver optimal user experience through efficient resource utilization, fast response times, and scalable architecture. This includes frontend optimization, backend efficiency, database performance, and comprehensive monitoring.
 
-## Structure
+## Topics Covered
 
-### [frontend-performance/](./frontend-performance/)
+### Frontend Performance
 Client-side performance optimization strategies
 - Bundle optimization and code splitting
 - Image and asset optimization
@@ -17,7 +17,7 @@ Client-side performance optimization strategies
 - Progressive web app performance
 - Core Web Vitals optimization
 
-### [backend-performance/](./backend-performance/)
+### Backend Performance
 Server-side performance and optimization
 - API response time optimization
 - Memory management and garbage collection
@@ -26,7 +26,7 @@ Server-side performance and optimization
 - Load balancing and scaling strategies
 - Resource pooling and connection management
 
-### [database-performance/](./database-performance/)
+### Database Performance
 Database optimization and query performance
 - Query optimization and indexing strategies
 - Database connection pooling
@@ -35,7 +35,7 @@ Database optimization and query performance
 - Database monitoring and profiling
 - Transaction optimization
 
-### [monitoring-performance/](./monitoring-performance/)
+### Performance Monitoring
 Performance monitoring and observability
 - Application Performance Monitoring (APM) setup
 - Key performance indicators (KPIs) tracking
