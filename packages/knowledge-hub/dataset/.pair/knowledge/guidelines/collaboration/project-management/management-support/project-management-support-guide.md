@@ -150,7 +150,7 @@ gh api graphql -f query='
 
 **Comprehensive Guides:**
 
-1. **[Project Management Framework](project-management-framework.md)**
+1. **[Project Management Framework](README.md)**
 
    - Tool selection and concepts
    - Workflow methodology overview
@@ -211,7 +211,7 @@ pair "Check GitHub API status and rate limits"
 **Frequently Asked Questions:**
 
 **Q: Which project management tool should I choose?**
-A: See [Tool Selection Guide](project-management-framework.md) for comparison and decision matrix.
+A: See [Tool Selection Guide](README.md) for comparison and decision matrix.
 
 **Q: How do I migrate from filesystem to GitHub Projects?**
 A: Follow the [Migration Guide](project-management-compatibility-guide.md) with step-by-step instructions.
@@ -220,7 +220,7 @@ A: Follow the [Migration Guide](project-management-compatibility-guide.md) with 
 A: See [Authentication Requirements](github-projects-integration-guide.md) for complete scope information.
 
 **Q: Can I use both GitHub Projects and filesystem workflows?**
-A: See [Hybrid Workflows](project-management-framework.md) for guidance on mixed approaches.
+A: See [Hybrid Workflows](README.md) for guidance on mixed approaches.
 
 ---
 

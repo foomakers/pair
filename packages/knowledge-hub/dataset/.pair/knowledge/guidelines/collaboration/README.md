@@ -1,30 +1,45 @@
-# 🤝 Collaboration Guidelines
+# 🤝## 📚 Collaboration Practices (Level 2)
 
-Process workflows, project management, and team collaboration practices for effective software development.
+### Project Management Practice
 
-## 📚 Collaboration Practices
+- **[Project Management](project-management/README.md)** - Comprehensive project management standards and tool-specific implementationslaboration Guidelines (Level 1)
 
-### Project Management
+Project management frameworks, communication protocols, and process guidelines for effective team collaboration.
 
-- **[Project Management](project-management)** - Comprehensive collaboration and process guidelines
-  - Project management framework and tool integration
-  - Workflow and process standards
-  - Team collaboration patterns
+## 📚 Collaboration Practices (Level 2)
+
+### Project Management Practice
+
+- **[Project Management](project-management)** - Comprehensive project management standards and tool-specific implementations
+  - Framework-agnostic project management principles
+  - Sprint planning and iteration management methodologies
+  - Issue tracking and workflow management patterns
   - Artifact management and hierarchical organization
   - Templates for epics, user stories, and tasks
 
+## 🛠️ Level 3: Tool-Specific Implementations
+
+_The project-management practice folder contains tool-specific guides:_
+
+- **GitHub Projects**: Native GitHub project management workflows
+- **Jira**: Enterprise project management configurations
+- **Linear**: Modern development team project tracking
+- **Trello**: Lightweight project management approaches
+- **Other Tools**: Framework adaptation for various PM tools
+
 ## 🔗 Related Guidelines
 
-- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture)** - Architectural decisions informing collaboration processes
-- **[Development Guidelines](.pair/knowledge/guidelines/development)** - Development practices integrated with collaboration workflows
-- **[Quality Guidelines](.pair/knowledge/guidelines/quality)** - Quality standards ensuring effective collaboration outcomes
+- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md)** - Architectural decisions informing collaboration processes
+- **[Development Guidelines](.pair/knowledge/guidelines/development/README.md)** - Development practices integrated with collaboration workflows
+- **[Quality Guidelines](.pair/knowledge/guidelines/quality/README.md)** - Quality standards ensuring effective collaboration outcomes
 
-## �� Quick Start
+## 🎯 Quick Start
 
-1. **Framework**: Understand [Project Management Framework](project-management/project-management-framework.md)
-2. **Tools**: Configure project management tool integration
-3. **Workflows**: Implement team collaboration processes
-4. **Templates**: Use standardized templates for consistent artifact creation
+1. **Framework**: Start with [Project Management](project-management) for core principles and methodologies
+2. **Tool Selection**: Choose appropriate tool implementation from Level 3 guides
+3. **Workflow Integration**: Establish team workflows aligned with [Quality Standards](.pair/knowledge/guidelines/quality/standards)
+4. **Process Alignment**: Ensure compliance with [Definition of Done](.pair/knowledge/guidelines/quality/standards/definition-of-done.md)
 
 ---
-*Assistant Context: Focus on project management frameworks, collaboration workflows, and team process standards.*
+
+_Assistant Context: Focus on project management frameworks, team communication, and collaborative development processes with tool-specific implementations._

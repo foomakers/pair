@@ -456,4 +456,4 @@ This compatibility guide ensures smooth operation across GitHub API changes and 
 
 - [GitHub Projects Integration Guide](github-projects-integration-guide.md) - Main integration setup and workflows
 - [Filesystem Workflow Integration Guide](filesystem-workflow-integration-guide.md) - Alternative workflow approach
-- [Project Management Framework](project-management-framework.md) - General framework concepts
+- [Project Management Framework](README.md) - General framework concepts

@@ -463,6 +463,6 @@ This unified guide provides complete setup and workflow instructions for both ap
 
 **Related Documentation:**
 
-- [Project Management Framework](project-management-framework.md) - Core concepts and templates
+- [Project Management Framework](README.md) - Core concepts and templates
 - [Project Management Framework - GitHub](project-management-framework-github.md) - GitHub-specific implementation details
 - [Project Management Framework - Filesystem](project-management-framework-filesystem.md) - Filesystem-specific implementation details

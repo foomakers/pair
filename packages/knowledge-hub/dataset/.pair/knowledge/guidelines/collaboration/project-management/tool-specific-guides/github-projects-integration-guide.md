@@ -93,7 +93,7 @@ Update your project's way-of-working configuration to specify GitHub Projects:
 
 - GitHub Projects is adopted for project management, using Kanban as the workflow methodology.
 - The project is [PROJECT_NAME] under the github organization [ORG_NAME].
-- See `.pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md` for usage.
+- See `.pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management/README.md` for usage.
 ```
 
 ### Step 2: Verify MCP GitHub Server Connection
@@ -1023,4 +1023,4 @@ gh api rate_limit
 
 This guide provides comprehensive instructions for integrating pair with GitHub Projects. For technical automation details, see [project-management-framework-github.md](project-management-framework-github.md).
 
-For additional support, refer to the [troubleshooting section](#troubleshooting) or consult the [project management framework documentation](project-management-framework.md).
+For additional support, refer to the [troubleshooting section](#troubleshooting) or consult the [project management framework documentation](README.md).
