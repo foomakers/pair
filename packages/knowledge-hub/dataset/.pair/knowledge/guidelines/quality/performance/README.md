@@ -9,7 +9,9 @@ Performance optimization ensures applications deliver optimal user experience th
 ## Topics Covered
 
 ### Frontend Performance
+
 Client-side performance optimization strategies
+
 - Bundle optimization and code splitting
 - Image and asset optimization
 - Critical rendering path optimization
@@ -18,7 +20,9 @@ Client-side performance optimization strategies
 - Core Web Vitals optimization
 
 ### Backend Performance
+
 Server-side performance and optimization
+
 - API response time optimization
 - Memory management and garbage collection
 - Caching strategies (Redis, CDN)
@@ -27,7 +31,9 @@ Server-side performance and optimization
 - Resource pooling and connection management
 
 ### Database Performance
+
 Database optimization and query performance
+
 - Query optimization and indexing strategies
 - Database connection pooling
 - Read replica and sharding strategies
@@ -36,7 +42,9 @@ Database optimization and query performance
 - Transaction optimization
 
 ### Performance Monitoring
+
 Performance monitoring and observability
+
 - Application Performance Monitoring (APM) setup
 - Key performance indicators (KPIs) tracking
 - Performance regression detection

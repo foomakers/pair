@@ -9,7 +9,9 @@ Security guidelines ensure applications and infrastructure are protected against
 ## Topics Covered
 
 ### Application Security
+
 Application-level security implementation
+
 - Secure coding practices and OWASP guidelines
 - Authentication and authorization patterns
 - Input validation and sanitization
@@ -18,7 +20,9 @@ Application-level security implementation
 - Dependency and supply chain security
 
 ### Data Security
+
 Data protection and privacy compliance
+
 - Data encryption at rest and in transit
 - Personal data protection (GDPR, CCPA compliance)
 - Data classification and handling procedures
@@ -27,7 +31,9 @@ Data protection and privacy compliance
 - Data anonymization and pseudonymization
 
 ### Infrastructure Security
+
 Infrastructure and deployment security
+
 - Container security and image scanning
 - Cloud security configuration (AWS, Azure, GCP)
 - Network security and firewall configuration
@@ -36,7 +42,9 @@ Infrastructure and deployment security
 - Infrastructure as Code security scanning
 
 ### Security Testing
+
 Security testing and vulnerability assessment
+
 - Static Application Security Testing (SAST)
 - Dynamic Application Security Testing (DAST)
 - Interactive Application Security Testing (IAST)
