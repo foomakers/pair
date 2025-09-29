@@ -68,4 +68,5 @@ Define code structure, design patterns, and implementation standards that ensure
 - **[UX Guidelines](../../operations/ux-design/README.md)** - UI standards complementing React patterns
 
 ---
-*Focus on code organization, design patterns, and implementation best practices.*
+
+_Focus on code organization, design patterns, and implementation best practices._

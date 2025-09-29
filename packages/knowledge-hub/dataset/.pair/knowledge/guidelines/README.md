@@ -2,39 +2,49 @@
 
 This directory contains the complete technical guidelines knowledge base for the project, organized into themed categories with Level 2 navigation READMEs for easy discovery and cross-linking.
 
-## 📋 Themed Categories
+## 📋 3-Level Organization Structure
 
-### 🏗️ Architecture Guidelines
+This knowledge base follows a **3-level hierarchical structure**:
 
-- **[Architecture](architecture)** - System architecture patterns, bounded contexts, and ADR processes
-  - [Architectural Guidelines](architecture/architectural-guidelines.md) - Core architectural principles and patterns
+- **Level 1**: Theme folders (main categories)
+- **Level 2**: Practice folders (specific practices within each theme)
+- **Level 3**: Tool/solution-specific implementations (how to use specific tools)
 
-### 💻 Development Guidelines
+### 🏗️ Architecture Guidelines (Level 1)
 
-- **[Development](development)** - Code design, technical standards, and testing strategies
-  - [Code Design Guidelines](development/code-design-guidelines.md) - Code organization and design patterns
-  - [Technical Guidelines](development/technical-guidelines.md) - Tech stack and development tools
-  - [Testing Strategy](development/testing-strategy.md) - Testing frameworks and quality gates
+- **[Architecture](architecture/README.md)** - System architecture, patterns, and design decisions
+  - **[Architectural Patterns](architecture/architectural-patterns/README.md)** - Core architecture patterns (CRUD, Layered, Hexagonal, Clean, CQRS, Event Sourcing)
+  - **[Scaling Patterns](architecture/scaling-patterns/README.md)** - Horizontal and vertical scaling strategies
+  - **[Deployment Architectures](architecture/deployment-architectures/README.md)** - Deployment patterns and strategies
+  - **[Performance Patterns](architecture/performance-patterns/README.md)** - Performance optimization techniques
+  - **[Decision Records](architecture/decision-records/README.md)** - ADR process, templates, decision frameworks
 
-### 🤝 Collaboration Guidelines
+### 💻 Development Guidelines (Level 1)
 
-- **[Collaboration](collaboration)** - Process workflows and project management
-  - [Project Management](collaboration/project-management) - Comprehensive collaboration and process guidelines
+- **[Development](development/README.md)** - Code design, technical standards, and testing strategies
+  - **[Code Design](development/code-design/README.md)** - Organization patterns, design principles, code structure
+  - **[Technical Standards](development/technical-standards/README.md)** - Tech stack decisions, tool configuration
+  - **[Testing](development/testing/README.md)** - Testing strategies, frameworks, quality gates
 
-### ✨ Quality Guidelines
+### 🤝 Collaboration Guidelines (Level 1)
 
-- **[Quality](quality)** - Quality criteria, accessibility, performance, and security
-  - [Definition of Done](quality/definition-of-done.md) - Quality criteria and completion standards
-  - [Accessibility Guidelines](quality/accessibility-guidelines.md) - Accessibility standards and compliance
-  - [Performance Guidelines](quality/performance-guidelines.md) - Performance optimization strategies
-  - [Security Guidelines](quality/security-guidelines.md) - Security implementation and best practices
+- **[Collaboration](collaboration/README.md)** - Process workflows and project management
+  - **[Project Management](collaboration/project-management/README.md)** - PM frameworks with tool-specific guides (Jira, GitHub, etc.)
 
-### 🚀 Operations Guidelines
+### ✨ Quality Guidelines (Level 1)
 
-- **[Operations](operations)** - Infrastructure, UX standards, and observability
-  - [Infrastructure Guidelines](operations/infrastructure-guidelines.md) - Deployment and environment management
-  - [UX Guidelines](operations/ux-guidelines.md) - User experience standards and design principles
-  - [Observability Guidelines](operations/observability-guidelines.md) - Monitoring, logging, and tracing
+- **[Quality](quality/README.md)** - Quality criteria, accessibility, performance, and security
+  - **[Standards](quality/standards/README.md)** - Definition of Done, quality criteria, completion standards
+  - **[Accessibility](quality/accessibility/README.md)** - WCAG compliance, inclusive design, testing tools
+  - **[Performance](quality/performance/README.md)** - Optimization strategies, monitoring, benchmarking
+  - **[Security](quality/security/README.md)** - Secure development, vulnerability assessment, practices
+
+### 🚀 Operations Guidelines (Level 1)
+
+- **[Operations](operations/README.md)** - Infrastructure, UX standards, and observability
+  - **[Infrastructure](operations/infrastructure/README.md)** - Deployment strategies, environment management, CI/CD
+  - **[UX Design](operations/ux-design/README.md)** - User experience standards, design principles, systems
+  - **[Observability](operations/observability/README.md)** - Monitoring, logging, tracing, alerting
 
 ## 🔗 Cross-References
 

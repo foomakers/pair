@@ -47,7 +47,7 @@ Performance monitoring and observability
 ## Cross-References
 
 - **Architecture**: [architecture/performance-patterns/](../../architecture/performance-patterns/) - System-level performance patterns
-- **Observability**: [operations/observability/performance-observability/](../../operations/observability/performance-observability/) - Performance monitoring tools
+- **Observability**: [operations/observability/](../../operations/observability/) - Performance monitoring tools
 - **Testing**: [development/testing/test-automation/](../../development/testing/test-automation/) - Performance testing automation
 
 ## Scope Boundaries

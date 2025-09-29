@@ -9,6 +9,7 @@ Define testing strategies, implementation patterns, and automation frameworks th
 ## Scope
 
 **In Scope:**
+
 - Testing strategies and methodologies
 - Test implementation patterns and best practices
 - Test automation frameworks and CI/CD integration
@@ -16,6 +17,7 @@ Define testing strategies, implementation patterns, and automation frameworks th
 - Quality metrics and coverage standards
 
 **Out of Scope:**
+
 - Code design patterns (see [Code Design](../code-design/README.md))
 - Performance optimization strategies (see [Performance](../../quality/performance/README.md))
 - Security testing implementation (see [Security](../../quality/security/README.md))
@@ -63,7 +65,9 @@ Define testing strategies, implementation patterns, and automation frameworks th
 - **[Performance Guidelines](../../quality/performance/README.md)** - Performance testing strategies
 
 ---
-*Focus on testing strategies, implementation patterns, and quality assurance automation.*
+
+_Focus on testing strategies, implementation patterns, and quality assurance automation._
 
 ---
-*Assistant Context: Focus on testing strategies, test automation, and quality validation approaches.*
+
+_Assistant Context: Focus on testing strategies, test automation, and quality validation approaches._

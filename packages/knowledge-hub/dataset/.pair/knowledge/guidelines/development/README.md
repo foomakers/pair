@@ -1,45 +1,51 @@
-# 💻 Development Guidelines
+# 💻 Development Guidelines (Level 1)
 
 Code design, technical standards, and testing strategies for high-quality software development.
 
-## 📚 Development Practices
+## 📚 Development Practices (Level 2)
 
-### Code & Design
+### Code Design Practice
 
-- **[Code Design Guidelines](code-design-guidelines.md)** - Code organization, design patterns, and implementation standards
-  - Code organization and structure
-  - Design patterns and architectural principles
-  - Component design and reusability
+- **[Code Design](code-design/README.md)** - Code organization patterns, design principles, and implementation standards
+  - Core code design guidelines and patterns
+  - Component design and reusability strategies
   - Error handling and resilience patterns
 
-### Technical Standards
+### Technical Standards Practice
 
-- **[Technical Guidelines](technical-guidelines.md)** - Tech stack, development tools, and feature flag management
-  - Technology stack decisions
-  - Development tool configuration
-  - Feature flag management
-  - Development environment setup
+- **[Technical Standards](technical-standards/README.md)** - Technology stack decisions and development tool configuration
+  - Technical guidelines and stack decisions
+  - Development environment standardization
+  - Feature flag management and deployment strategies
 
-### Testing & Quality
+### Testing Practice
 
-- **[Testing Strategy](testing-strategy.md)** - Testing frameworks, strategies, and quality gates
-  - Test-driven development approach
-  - Testing frameworks and tools
+- **[Testing](testing/README.md)** - Testing strategies, frameworks, and quality gates
+  - Comprehensive testing strategy and approaches
+  - Testing frameworks and automation
   - Quality gates and coverage standards
-  - Integration and end-to-end testing
+
+## 🛠️ Level 3: Tool-Specific Implementations
+
+_Each practice folder contains tool-specific guides and implementations:_
+
+- Framework-specific development patterns
+- Testing tool configurations and guides
+- Development environment setup guides
 
 ## 🔗 Related Guidelines
 
-- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture)** - Architectural patterns guiding development practices
-- **[Quality Guidelines](.pair/knowledge/guidelines/quality)** - Quality criteria and standards for code validation
-- **[Operations Guidelines](.pair/knowledge/guidelines/operations)** - Infrastructure considerations for development
+- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md)** - Architectural patterns guiding development practices
+- **[Quality Guidelines](.pair/knowledge/guidelines/quality/README.md)** - Quality criteria and standards for code validation
+- **[Operations Guidelines](.pair/knowledge/guidelines/operations/README.md)** - Infrastructure considerations for development
 
 ## 🎯 Quick Start
 
-1. **Code Standards**: Review [Code Design Guidelines](code-design-guidelines.md) for organization patterns
-2. **Tech Stack**: Configure development environment per [Technical Guidelines](technical-guidelines.md)
-3. **Testing**: Implement testing strategy from [Testing Strategy](testing-strategy.md)
-4. **Quality Gates**: Ensure compliance with [Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md)
+1. **Code Design**: Start with [Code Design](code-design) for organization patterns and design principles
+2. **Technical Setup**: Configure development environment using [Technical Standards](technical-standards)
+3. **Testing Strategy**: Implement comprehensive testing with [Testing](testing) practices
+4. **Quality Validation**: Ensure compliance with [Quality Standards](.pair/knowledge/guidelines/quality/standards)
 
 ---
-*Assistant Context: Focus on code design patterns, technical standards, and testing strategies for development practices.*
+
+_Assistant Context: Focus on code design patterns, technical standards, and testing strategies for development practices._

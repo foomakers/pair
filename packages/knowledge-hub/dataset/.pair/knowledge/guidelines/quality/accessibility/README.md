@@ -44,7 +44,7 @@ Accessibility testing methodologies and tools
 
 - **Development**: [code-design/quality-standards/](../../development/code-design/quality-standards/) - Accessibility in code quality
 - **Testing**: [testing/testing-strategy/](../../development/testing/testing-strategy/) - Accessibility testing integration
-- **UX Design**: [operations/ux-design/user-experience/](../../operations/ux-design/user-experience/) - Inclusive design principles
+- **UX Design**: [operations/ux-design/](../../operations/ux-design/) - Inclusive design principles
 
 ## Scope Boundaries
 

@@ -9,6 +9,7 @@ Define technical standards, framework selection criteria, and integration requir
 ## Scope
 
 **In Scope:**
+
 - Tech stack standards and framework selection
 - Development tools and environment setup
 - Integration requirements with external systems
@@ -16,6 +17,7 @@ Define technical standards, framework selection criteria, and integration requir
 - Tool versioning and compatibility guidelines
 
 **Out of Scope:**
+
 - Business logic implementation details (see [Code Design](../code-design/README.md))
 - Specific coding patterns and design principles (see [Code Design](../code-design/README.md))
 - Infrastructure provisioning and deployment (see [Infrastructure](../../operations/infrastructure/README.md))
@@ -64,4 +66,5 @@ Define technical standards, framework selection criteria, and integration requir
 - **[Infrastructure Guidelines](../../operations/infrastructure/README.md)** - Deployment and infrastructure standards
 
 ---
-*Focus on technical standards, tool selection, and integration requirements.*
+
+_Focus on technical standards, tool selection, and integration requirements._
