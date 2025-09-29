@@ -1,0 +1,9 @@
+{
+  "defaultBehavior": "move",
+  "folderBehavior": {
+    "getting-started": "mirror"
+  },
+  "concurrencyLimit": 5,
+  "retryAttempts": 2,
+  "retryDelay": 100
+}

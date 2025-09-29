@@ -1,0 +1,6 @@
+{
+  "defaultBehavior": "overwrite",
+  "concurrencyLimit": 3,
+  "retryAttempts": 2,
+  "retryDelay": 500
+}

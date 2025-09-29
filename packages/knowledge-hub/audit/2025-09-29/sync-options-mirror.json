@@ -1,0 +1,10 @@
+{
+  "defaultBehavior": "mirror",
+  "folderBehavior": {
+    "assets": "mirror",
+    "collaboration": "mirror"
+  },
+  "concurrencyLimit": 3,
+  "retryAttempts": 2,
+  "retryDelay": 500
+}
