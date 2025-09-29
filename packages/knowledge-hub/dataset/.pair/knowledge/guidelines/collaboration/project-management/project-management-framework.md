@@ -237,9 +237,9 @@ cspell "**/*.md"
 ### Framework Documentation
 
 - [General Collaboration & Process Guidelines](README.md)
-- [Definition of Done](.pair/knowledge/guidelines/06-definition-of-done.md)
-- [Testing Strategy](.pair/knowledge/guidelines/07-testing-strategy.md)
-- [Security Guidelines](.pair/knowledge/guidelines/10-security-guidelines.md)
+- [Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md)
+- [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)
+- [Security Guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md)
 - [Project Management Framework - GitHub](project-management-framework-github.md)
 - [Project Management Framework - Filesystem](project-management-framework-filesystem.md)
 

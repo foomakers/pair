@@ -29,20 +29,25 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 │   │   ├── bootstrap-checklist.md
 │   │   ├── PRD_example.md
 │   │   └── PRD_template.md
-│   ├── guidelines/           # Technical guidelines and standards
-│   │   ├── 01-architectural-guidelines.md
-│   │   ├── 02-code-design-guidelines.md
-│   │   ├── 03-technical-guidelines.md
-│   │   ├── 04-infrastructure-guidelines.md
-│   │   ├── 05-ux-guidelines.md
-│   │   ├── 06-definition-of-done.md
-│   │   ├── 07-testing-strategy.md
-│   │   ├── 08-accessibility-guidelines.md
-│   │   ├── 09-performance-guidelines.md
-│   │   ├── 10-security-guidelines.md
-│   │   ├── 11-observability-guidelines.md
-│   │   ├── README.md
-│   │   └── 12-collaboration-and-process-guidelines/ # Modular process & templates
+│   ├── guidelines/           # Technical guidelines organized by theme
+│   │   ├── README.md         # Guidelines overview and navigation
+│   │   ├── architecture/     # System architecture patterns and ADR processes
+│   │   │   └── architectural-guidelines.md
+│   │   ├── development/      # Code design, technical standards, and testing
+│   │   │   ├── code-design-guidelines.md
+│   │   │   ├── technical-guidelines.md
+│   │   │   └── testing-strategy.md
+│   │   ├── collaboration/    # Process workflows and project management
+│   │   │   └── project-management/ # Comprehensive collaboration guidelines
+│   │   ├── quality/          # Quality criteria, accessibility, performance, security
+│   │   │   ├── definition-of-done.md
+│   │   │   ├── accessibility-guidelines.md
+│   │   │   ├── performance-guidelines.md
+│   │   │   └── security-guidelines.md
+│   │   └── operations/       # Infrastructure, UX, and observability
+│   │       ├── infrastructure-guidelines.md
+│   │       ├── ux-guidelines.md
+│   │       └── observability-guidelines.md
 │   │       ├── filesystem-workflow-integration-guide.md
 │   │       ├── github-projects-integration-guide.md
 │   │       ├── project-management-compatibility-guide.md
@@ -86,7 +91,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
   - `backlog/`: Backlog organized into initiatives, epics, and user stories (with sprint and done subdivisions). Only for file-system project management tool
 - **`tech/`**: Technical guidelines, architectural standards, and quality criteria
   - `adr/`: Architecture Decision Records
-  - `knowledge-base/`: Comprehensive technical guidelines (01-11) and modular processes in `12-collaboration-and-process-guidelines/` with templates and specific frameworks
+  - `knowledge-base/`: Comprehensive technical guidelines organized by theme (architecture, development, collaboration, quality, operations) with navigation READMEs
   - `adopted/`: Currently adopted standards and practices. Specific for project
 
 ## 🎯 Quick Start

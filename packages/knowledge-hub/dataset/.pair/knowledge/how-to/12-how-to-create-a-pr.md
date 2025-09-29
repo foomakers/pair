@@ -56,7 +56,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/project-management-framework.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -75,7 +75,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 - [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
+- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) consulted for access procedures
 
 ## Pull Request Definition
 
@@ -1349,26 +1349,26 @@ Documentation updates for [Component/Feature/Process] to improve [user experienc
 
 ### 🏗️ Architecture & Design
 
-- **[01-architectural-guidelines.md](.pair/knowledge/guidelines/01-architectural-guidelines.md)** - System architecture patterns, bounded contexts, and ADR processes
-- **[02-code-design-guidelines.md](.pair/knowledge/guidelines/02-code-design-guidelines.md)** - Code organization, design patterns, and implementation standards
+- **[01-architectural-guidelines.md](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)** - System architecture patterns, bounded contexts, and ADR processes
+- **[02-code-design-guidelines.md](.pair/knowledge/guidelines/development/code-design-guidelines.md)** - Code organization, design patterns, and implementation standards
 
 ### ⚙️ Technical Implementation
 
-- **[03-technical-guidelines.md](.pair/knowledge/guidelines/03-technical-guidelines.md)** - Tech stack, development tools, and feature flag management
-- **[04-infrastructure-guidelines.md](.pair/knowledge/guidelines/04-infrastructure-guidelines.md)** - Deployment strategies, environment management, and CI/CD
+- **[03-technical-guidelines.md](.pair/knowledge/guidelines/development/technical-guidelines.md)** - Tech stack, development tools, and feature flag management
+- **[04-infrastructure-guidelines.md](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)** - Deployment strategies, environment management, and CI/CD
 
 ### 🎨 User Experience & Quality
 
-- **[05-ux-guidelines.md](.pair/knowledge/guidelines/05-ux-guidelines.md)** - User experience standards and design principles
-- **[06-definition-of-done.md](.pair/knowledge/guidelines/06-definition-of-done.md)** - Quality criteria and completion standards
-- **[07-testing-strategy.md](.pair/knowledge/guidelines/07-testing-strategy.md)** - Testing frameworks, strategies, and quality gates
+- **[05-ux-guidelines.md](.pair/knowledge/guidelines/operations/ux-guidelines.md)** - User experience standards and design principles
+- **[06-definition-of-done.md](.pair/knowledge/guidelines/quality/definition-of-done.md)** - Quality criteria and completion standards
+- **[07-testing-strategy.md](.pair/knowledge/guidelines/development/testing-strategy.md)** - Testing frameworks, strategies, and quality gates
 
 ### 🔒 Security & Performance
 
-- **[08-accessibility-guidelines.md](.pair/knowledge/guidelines/08-accessibility-guidelines.md)** - Accessibility standards and compliance requirements
-- **[09-performance-guidelines.md](.pair/knowledge/guidelines/09-performance-guidelines.md)** - Performance optimization and monitoring strategies
-- **[10-security-guidelines.md](.pair/knowledge/guidelines/10-security-guidelines.md)** - Security implementation and best practices
-- **[11-observability-guidelines.md](.pair/knowledge/guidelines/11-observability-guidelines.md)** - Monitoring, logging, and tracing strategies
+- **[08-accessibility-guidelines.md](.pair/knowledge/guidelines/quality/accessibility-guidelines.md)** - Accessibility standards and compliance requirements
+- **[09-performance-guidelines.md](.pair/knowledge/guidelines/quality/performance-guidelines.md)** - Performance optimization and monitoring strategies
+- **[10-security-guidelines.md](.pair/knowledge/guidelines/quality/security-guidelines.md)** - Security implementation and best practices
+- **[11-observability-guidelines.md](.pair/knowledge/guidelines/operations/observability-guidelines.md)** - Monitoring, logging, and tracing strategies
 
 **Process Dependencies:**
 

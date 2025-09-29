@@ -40,14 +40,14 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/project-management-framework.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Validation Checklist**
 
 - [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
+- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) consulted for access procedures
 
 ## Step-by-Step Implementation Process
 
@@ -646,4 +646,4 @@ _Should I update the bounded context model to reflect these architecture changes
 
 ### Knowledge Base Guidelines
 
-- [Architecture Guidelines](.pair/knowledge/guidelines/01-architectural-guidelines.md) - Architectural patterns and principles for bounded context implementation
+- [Architecture Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md) - Architectural patterns and principles for bounded context implementation

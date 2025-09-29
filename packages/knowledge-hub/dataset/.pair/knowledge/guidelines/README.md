@@ -1,32 +1,40 @@
-# 📚 Technical Knowledge Base
+# 📚 Technical Guidelines Knowledge Base
 
-This directory contains the complete technical knowledge base for the project, organized as numbered documents for easy reference and cross-linking.
+This directory contains the complete technical guidelines knowledge base for the project, organized into themed categories with Level 2 navigation READMEs for easy discovery and cross-linking.
 
-## 📋 Document Overview
+## 📋 Themed Categories
 
-### 🏗️ Architecture & Design
+### 🏗️ Architecture Guidelines
 
-- **[01-architectural-guidelines.md](01-architectural-guidelines.md))** - System architecture patterns, bounded contexts, and ADR processes
-- **[02-code-design-guidelines.md](02-code-design-guidelines.md)** - Code organization, design patterns, and implementation standards
+- **[Architecture](architecture)** - System architecture patterns, bounded contexts, and ADR processes
+  - [Architectural Guidelines](architecture/architectural-guidelines.md) - Core architectural principles and patterns
 
-### ⚙️ Technical Implementation
+### 💻 Development Guidelines
 
-- **[03-technical-guidelines.md](03-technical-guidelines.md)** - Tech stack, development tools, and feature flag management
-- **[04-infrastructure-guidelines.md](04-infrastructure-guidelines.md)** - Deployment strategies, environment management, and CI/CD
+- **[Development](development)** - Code design, technical standards, and testing strategies
+  - [Code Design Guidelines](development/code-design-guidelines.md) - Code organization and design patterns
+  - [Technical Guidelines](development/technical-guidelines.md) - Tech stack and development tools
+  - [Testing Strategy](development/testing-strategy.md) - Testing frameworks and quality gates
 
-### 🎨 User Experience & Quality
+### 🤝 Collaboration Guidelines
 
-- **[05-ux-guidelines.md](05-ux-guidelines.md)** - User experience standards and design principles
-- **[06-definition-of-done.md](06-definition-of-done.md)** - Quality criteria and completion standards
-- **[07-testing-strategy.md](07-testing-strategy.md)** - Testing frameworks, strategies, and quality gates
+- **[Collaboration](collaboration)** - Process workflows and project management
+  - [Project Management](collaboration/project-management) - Comprehensive collaboration and process guidelines
 
-### 🔒 Security & Performance
+### ✨ Quality Guidelines
 
-- **[08-accessibility-guidelines.md](08-accessibility-guidelines.md)** - Accessibility standards and compliance requirements
-- **[09-performance-guidelines.md](09-performance-guidelines.md)** - Performance optimization and monitoring strategies
-- **[10-security-guidelines.md](10-security-guidelines.md)** - Security implementation and best practices
-- **[11-observability-guidelines.md](11-observability-guidelines.md)** - Monitoring, logging, and tracing strategies
-- **[project-management-framework.md](12-collaboration-and-process-guidelines/project-management-framework.md)** - Collaboration, workflow, project management, and hierarchical artifact management guidelines
+- **[Quality](quality)** - Quality criteria, accessibility, performance, and security
+  - [Definition of Done](quality/definition-of-done.md) - Quality criteria and completion standards
+  - [Accessibility Guidelines](quality/accessibility-guidelines.md) - Accessibility standards and compliance
+  - [Performance Guidelines](quality/performance-guidelines.md) - Performance optimization strategies
+  - [Security Guidelines](quality/security-guidelines.md) - Security implementation and best practices
+
+### 🚀 Operations Guidelines
+
+- **[Operations](operations)** - Infrastructure, UX standards, and observability
+  - [Infrastructure Guidelines](operations/infrastructure-guidelines.md) - Deployment and environment management
+  - [UX Guidelines](operations/ux-guidelines.md) - User experience standards and design principles
+  - [Observability Guidelines](operations/observability-guidelines.md) - Monitoring, logging, and tracing
 
 ## 🔗 Cross-References
 

@@ -23,8 +23,8 @@ Define clear, actionable guidelines for collaboration, communication, and delive
 
 - HR policies and employment contracts
 - Legal compliance and regulatory requirements
-- Infrastructure and hardware guidelines ([see Infrastructure Guidelines](.pair/knowledge/guidelines/04-infrastructure-guidelines.md))
-- Security and privacy policies ([see Security Guidelines](.pair/knowledge/guidelines/10-security-guidelines.md))
+- Infrastructure and hardware guidelines ([see Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md))
+- Security and privacy policies ([see Security Guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md))
 
 ---
 
@@ -112,7 +112,7 @@ Define clear, actionable guidelines for collaboration, communication, and delive
 - Branching Strategy: Follow agreed branching and merging practices (e.g., GitFlow).
 - Testing: Integrate automated and manual testing into the workflow.
 - Continuous Integration/Delivery: Use CI/CD pipelines for automated builds, tests, and deployments.
-- Definition of Done: Ensure all work meets agreed standards before completion ([see Definition of Done](.pair/knowledge/guidelines/06-definition-of-done.md)).
+- Definition of Done: Ensure all work meets agreed standards before completion ([see Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md)).
 - Hierarchical Development: Follow the initiative → epic → user story → task sequence for all development work.
 
 ### Workflow Scenarios
@@ -239,12 +239,12 @@ All specifications and guidelines related to project management are documented i
 
 ## 🔗 Related Documents
 
-- **[Definition of Done](.pair/knowledge/guidelines/06-definition-of-done.md)**: Standards for completion and quality of work
-- **[Testing Strategy](.pair/knowledge/guidelines/07-testing-strategy.md)**: Guidelines for testing and validation
-- **[Security Guidelines](.pair/knowledge/guidelines/10-security-guidelines.md)**: Security practices and compliance
-- **[Observability Guidelines](.pair/knowledge/guidelines/11-observability-guidelines.md)**: Monitoring and visibility practices
-- **[Architecture Guidelines](.pair/knowledge/guidelines/01-architectural-guidelines.md)**: Technical architecture standards
-- **[Tech Stack Guidelines](.pair/knowledge/guidelines/03-technical-guidelines.md)**: Technology selection and usage standards
-- **[Infrastructure Guidelines](.pair/knowledge/guidelines/04-infrastructure-guidelines.md)**: Infrastructure and deployment standards
-- **[UX/UI Guidelines](.pair/knowledge/guidelines/05-ux-guidelines.md)**: User experience and interface design standards
+- **[Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md)**: Standards for completion and quality of work
+- **[Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)**: Guidelines for testing and validation
+- **[Security Guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md)**: Security practices and compliance
+- **[Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md)**: Monitoring and visibility practices
+- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)**: Technical architecture standards
+- **[Tech Stack Guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md)**: Technology selection and usage standards
+- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)**: Infrastructure and deployment standards
+- **[UX/UI Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md)**: User experience and interface design standards
 - **[GitHub Projects & MCP Server Guidelines](project-management-framework-github.md)**: Process, automation, and error handling for GitHub Projects

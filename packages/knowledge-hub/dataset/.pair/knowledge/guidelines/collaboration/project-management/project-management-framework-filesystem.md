@@ -224,11 +224,11 @@ Document the process, structure, and quality requirements for managing initiativ
 
 ## Related Documents
 
-- [Definition of Done](.pair/knowledge/guidelines/06-definition-of-done.md)
-- [Testing Strategy](.pair/knowledge/guidelines/07-testing-strategy.md)
-- [Security Guidelines](.pair/knowledge/guidelines/10-security-guidelines.md)
-- [Observability Guidelines](.pair/knowledge/guidelines/11-observability-guidelines.md)
-- [Architecture Guidelines](.pair/knowledge/guidelines/01-architectural-guidelines.md)
-- [Tech Stack Guidelines](.pair/knowledge/guidelines/03-technical-guidelines.md)
-- [Infrastructure Guidelines](.pair/knowledge/guidelines/04-infrastructure-guidelines.md)
-- [UX/UI Guidelines](.pair/knowledge/guidelines/05-ux-guidelines.md)
+- [Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md)
+- [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)
+- [Security Guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md)
+- [Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md)
+- [Architecture Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)
+- [Tech Stack Guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md)
+- [Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)
+- [UX/UI Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md)

@@ -50,7 +50,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/project-management-framework.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -69,7 +69,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 - [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/project-management-framework.md) consulted for access procedures
+- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) consulted for access procedures
 
 ## Code Review Definition
 
@@ -114,11 +114,11 @@ Before conducting code reviews, ensure that the pull request has been created fo
 
 - **Standards Compliance**: All code must comply with technical standards as defined in [knowledge base guidelines](.pair/knowledge)
 - **Story Validation**: Implementation must satisfy acceptance criteria as specified in current sprint stories
-- **Quality Assurance**: Code must meet [Definition of Done](.pair/knowledge/guidelines/06-definition-of-done.md) requirements comprehensively
-- **Architecture Consistency**: Implementation must follow patterns defined in [architectural guidelines](.pair/knowledge/guidelines/01-architectural-guidelines.md)
-- **Testing Coverage**: Testing must meet standards defined in [testing strategy](.pair/knowledge/guidelines/07-testing-strategy.md)
-- **Security Standards**: Security requirements as specified in [security guidelines](.pair/knowledge/guidelines/10-security-guidelines.md) must be validated
-- **Performance Requirements**: Performance standards from [performance guidelines](.pair/knowledge/guidelines/09-performance-guidelines.md) must be assessed
+- **Quality Assurance**: Code must meet [Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md) requirements comprehensively
+- **Architecture Consistency**: Implementation must follow patterns defined in [architectural guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)
+- **Testing Coverage**: Testing must meet standards defined in [testing strategy](.pair/knowledge/guidelines/development/testing-strategy.md)
+- **Security Standards**: Security requirements as specified in [security guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md) must be validated
+- **Performance Requirements**: Performance standards from [performance guidelines](.pair/knowledge/guidelines/quality/performance-guidelines.md) must be assessed
 - **Documentation Standards**: Documentation requirements as defined in [adoption documentation](.pair/adoption/tech) must be met
 
 ### Review Session Management
@@ -127,10 +127,10 @@ Before conducting code reviews, ensure that the pull request has been created fo
 
 1. **Technical Standards Review**:
 
-   - Validate code against technical standards as defined in [tech stack adoption](.pair/adoption/tech/tech-stack.md) and [technical guidelines](.pair/knowledge/guidelines/03-technical-guidelines.md)
-   - Assess architectural compliance per [architectural guidelines](.pair/knowledge/guidelines/01-architectural-guidelines.md) and [architecture adoption](.pair/adoption/tech/architecture.md)
-   - Verify implementation standards adherence as specified in [code design guidelines](.pair/knowledge/guidelines/02-code-design-guidelines.md)
-   - Evaluate infrastructure compliance per [infrastructure guidelines](.pair/knowledge/guidelines/04-infrastructure-guidelines.md) and [infrastructure adoption](.pair/adoption/tech/infrastructure.md)
+   - Validate code against technical standards as defined in [tech stack adoption](.pair/adoption/tech/tech-stack.md) and [technical guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md)
+   - Assess architectural compliance per [architectural guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md) and [architecture adoption](.pair/adoption/tech/architecture.md)
+   - Verify implementation standards adherence as specified in [code design guidelines](.pair/knowledge/guidelines/development/code-design-guidelines.md)
+   - Evaluate infrastructure compliance per [infrastructure guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md) and [infrastructure adoption](.pair/adoption/tech/infrastructure.md)
 
 2. **Story and Task Validation Review**:
 
@@ -140,17 +140,17 @@ Before conducting code reviews, ensure that the pull request has been created fo
    - Verify implementation completeness against defined specifications
 
 3. **Quality Assurance Review**:
-   - Evaluate [Definition of Done](.pair/knowledge/guidelines/06-definition-of-done.md) compliance with comprehensive quality metrics
-   - Assess testing coverage per [testing strategy](.pair/knowledge/guidelines/07-testing-strategy.md) requirements
-   - Validate security standards from [security guidelines](.pair/knowledge/guidelines/10-security-guidelines.md)
-   - Review performance requirements per [performance guidelines](.pair/knowledge/guidelines/09-performance-guidelines.md)
+   - Evaluate [Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md) compliance with comprehensive quality metrics
+   - Assess testing coverage per [testing strategy](.pair/knowledge/guidelines/development/testing-strategy.md) requirements
+   - Validate security standards from [security guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md)
+   - Review performance requirements per [performance guidelines](.pair/knowledge/guidelines/quality/performance-guidelines.md)
    - Validate documentation requirements per adoption standards
-   - Assess accessibility compliance per [accessibility guidelines](.pair/knowledge/guidelines/08-accessibility-guidelines.md)
-   - Review observability requirements per [observability guidelines](.pair/knowledge/guidelines/11-observability-guidelines.md)
+   - Assess accessibility compliance per [accessibility guidelines](.pair/knowledge/guidelines/quality/accessibility-guidelines.md)
+   - Review observability requirements per [observability guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md)
 
 ## Review Prerequisites
 
-Before starting a code review, **read and consult the updated template**: [Code Review Template](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/assets/code-review-template.md). All phases, checklists, and the report structure are defined and detailed in the template.
+Before starting a code review, **read and consult the updated template**: [Code Review Template](.pair/knowledge/guidelines/collaboration/project-management/assets/code-review-template.md). All phases, checklists, and the report structure are defined and detailed in the template.
 
 ### Step 0: Development Status Analysis and Review Setup
 
@@ -239,17 +239,17 @@ Before starting a code review, **read and consult the updated template**: [Code 
 
    **Knowledge Base Guidelines:**
 
-   - [Architectural guidelines and patterns](.pair/knowledge/guidelines/01-architectural-guidelines.md)
-   - [Code design and quality standards](.pair/knowledge/guidelines/02-code-design-guidelines.md)
-   - [Technical implementation standards](.pair/knowledge/guidelines/03-technical-guidelines.md)
-   - [Infrastructure and deployment guidelines](.pair/knowledge/guidelines/04-infrastructure-guidelines.md)
-   - [UX and design principles](.pair/knowledge/guidelines/05-ux-guidelines.md)
-   - [Definition of Done criteria](.pair/knowledge/guidelines/06-definition-of-done.md)
-   - [Testing strategy and coverage requirements](.pair/knowledge/guidelines/07-testing-strategy.md)
-   - [Accessibility compliance standards](.pair/knowledge/guidelines/08-accessibility-guidelines.md)
-   - [Performance optimization guidelines](.pair/knowledge/guidelines/09-performance-guidelines.md)
-   - [Security implementation standards](.pair/knowledge/guidelines/10-security-guidelines.md)
-   - [Observability and monitoring requirements](.pair/knowledge/guidelines/11-observability-guidelines.md)
+   - [Architectural guidelines and patterns](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)
+   - [Code design and quality standards](.pair/knowledge/guidelines/development/code-design-guidelines.md)
+   - [Technical implementation standards](.pair/knowledge/guidelines/development/technical-guidelines.md)
+   - [Infrastructure and deployment guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)
+   - [UX and design principles](.pair/knowledge/guidelines/operations/ux-guidelines.md)
+   - [Definition of Done criteria](.pair/knowledge/guidelines/quality/definition-of-done.md)
+   - [Testing strategy and coverage requirements](.pair/knowledge/guidelines/development/testing-strategy.md)
+   - [Accessibility compliance standards](.pair/knowledge/guidelines/quality/accessibility-guidelines.md)
+   - [Performance optimization guidelines](.pair/knowledge/guidelines/quality/performance-guidelines.md)
+   - [Security implementation standards](.pair/knowledge/guidelines/quality/security-guidelines.md)
+   - [Observability and monitoring requirements](.pair/knowledge/guidelines/operations/observability-guidelines.md)
 
 **Phase 0C: Review Environment Validation**
 
@@ -346,7 +346,7 @@ _"Code review environment ready for User Story '[STORY_ID]: [STORY_NAME]'. Branc
 
    **Documentation Review Checklist:**
 
-   - [ ] **(Optional) Code Comments**: Inline comments explaining complex logic and decisions - only required if specified in [tech stack adoption](.pair/adoption/tech/tech-stack.md) or [code design guidelines](.pair/knowledge/guidelines/02-code-design-guidelines.md)
+   - [ ] **(Optional) Code Comments**: Inline comments explaining complex logic and decisions - only required if specified in [tech stack adoption](.pair/adoption/tech/tech-stack.md) or [code design guidelines](.pair/knowledge/guidelines/development/code-design-guidelines.md)
    - [ ] **API Documentation**: Public APIs documented with clear usage examples
    - [ ] **README Updates**: Project documentation updated to reflect changes
    - [ ] **Configuration Documentation**: Configuration changes properly documented
@@ -433,7 +433,7 @@ _"Code review environment ready for User Story '[STORY_ID]: [STORY_NAME]'. Branc
 
    **Definition of Done Validation Process:**
 
-   - **Load DoD Criteria**: Extract all criteria from [Definition of Done](.pair/knowledge/guidelines/06-definition-of-done.md)
+   - **Load DoD Criteria**: Extract all criteria from [Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md)
    - **Systematic Assessment**: Evaluate implementation against each DoD requirement
    - **Quality Metrics Validation**: Verify quantitative quality thresholds met
    - **Documentation Compliance**: Confirm documentation requirements satisfied
@@ -647,7 +647,7 @@ _"Code review environment ready for User Story '[STORY_ID]: [STORY_NAME]'. Branc
    - **Technical Debt Stories**: For important but non-urgent improvements, create technical debt stories to be added to product backlog
    - **Documentation Tasks**: Tasks for documentation updates and maintenance requirements
 
-   **Reference**: Follow the complete [Task Template](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/assets/task-template.md) for proper task documentation format and structure.
+   **Reference**: Follow the complete [Task Template](.pair/knowledge/guidelines/collaboration/project-management/assets/task-template.md) for proper task documentation format and structure.
 
 2. **Update Project Management System**: Track review follow-up work:
 
@@ -985,7 +985,7 @@ console.log('User authenticated with token:', token)
 ````
 
 **Standard/Requirement:**
-Security guidelines prohibit logging sensitive authentication data (Reference: [security guidelines](.pair/knowledge/guidelines/10-security-guidelines.md), Section 4.2)
+Security guidelines prohibit logging sensitive authentication data (Reference: [security guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md), Section 4.2)
 
 **Proposed Solution:**
 
@@ -1085,7 +1085,7 @@ Improved code quality and reduced risk of production issues through comprehensiv
 
 ### Review Report Template
 
-- [Review Report Template](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/assets/code-review-template.md)
+- [Review Report Template](.pair/knowledge/guidelines/collaboration/project-management/assets/code-review-template.md)
 
 **Comprehensive Review Report Structure:**
 
@@ -1186,7 +1186,7 @@ Code Review Progress for [STORY_ID]
 
 **GitHub:**
 
-Follow the [GitHub integration guidelines](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/github-projects-integration-guide.md) for instructions.
+Follow the [GitHub integration guidelines](.pair/knowledge/guidelines/collaboration/project-management/github-projects-integration-guide.md) for instructions.
 
 **External Tool Integration (Jira, etc.):**
 
@@ -1344,26 +1344,26 @@ Follow the [GitHub integration guidelines](.pair/knowledge/guidelines/12-collabo
 
 ### 🏗️ Architecture & Design
 
-- **[01-architectural-guidelines.md](.pair/knowledge/guidelines/01-architectural-guidelines.md)** - System architecture patterns, bounded contexts, and ADR processes
-- **[02-code-design-guidelines.md](.pair/knowledge/guidelines/02-code-design-guidelines.md)** - Code organization, design patterns, and implementation standards
+- **[01-architectural-guidelines.md](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)** - System architecture patterns, bounded contexts, and ADR processes
+- **[02-code-design-guidelines.md](.pair/knowledge/guidelines/development/code-design-guidelines.md)** - Code organization, design patterns, and implementation standards
 
 ### ⚙️ Technical Implementation
 
-- **[03-technical-guidelines.md](.pair/knowledge/guidelines/03-technical-guidelines.md)** - Tech stack, development tools, and feature flag management
-- **[04-infrastructure-guidelines.md](.pair/knowledge/guidelines/04-infrastructure-guidelines.md)** - Deployment strategies, environment management, and CI/CD
+- **[03-technical-guidelines.md](.pair/knowledge/guidelines/development/technical-guidelines.md)** - Tech stack, development tools, and feature flag management
+- **[04-infrastructure-guidelines.md](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)** - Deployment strategies, environment management, and CI/CD
 
 ### 🎨 User Experience & Quality
 
-- **[05-ux-guidelines.md](.pair/knowledge/guidelines/05-ux-guidelines.md)** - User experience standards and design principles
-- **[06-definition-of-done.md](.pair/knowledge/guidelines/06-definition-of-done.md)** - Quality criteria and completion standards
-- **[07-testing-strategy.md](.pair/knowledge/guidelines/07-testing-strategy.md)** - Testing frameworks, strategies, and quality gates
+- **[05-ux-guidelines.md](.pair/knowledge/guidelines/operations/ux-guidelines.md)** - User experience standards and design principles
+- **[06-definition-of-done.md](.pair/knowledge/guidelines/quality/definition-of-done.md)** - Quality criteria and completion standards
+- **[07-testing-strategy.md](.pair/knowledge/guidelines/development/testing-strategy.md)** - Testing frameworks, strategies, and quality gates
 
 ### 🔒 Security & Performance
 
-- **[08-accessibility-guidelines.md](.pair/knowledge/guidelines/08-accessibility-guidelines.md)** - Accessibility standards and compliance requirements
-- **[09-performance-guidelines.md](.pair/knowledge/guidelines/09-performance-guidelines.md)** - Performance optimization and monitoring strategies
-- **[10-security-guidelines.md](.pair/knowledge/guidelines/10-security-guidelines.md)** - Security implementation and best practices
-- **[11-observability-guidelines.md](.pair/knowledge/guidelines/11-observability-guidelines.md)** - Monitoring, logging, and tracing strategies
+- **[08-accessibility-guidelines.md](.pair/knowledge/guidelines/quality/accessibility-guidelines.md)** - Accessibility standards and compliance requirements
+- **[09-performance-guidelines.md](.pair/knowledge/guidelines/quality/performance-guidelines.md)** - Performance optimization and monitoring strategies
+- **[10-security-guidelines.md](.pair/knowledge/guidelines/quality/security-guidelines.md)** - Security implementation and best practices
+- **[11-observability-guidelines.md](.pair/knowledge/guidelines/operations/observability-guidelines.md)** - Monitoring, logging, and tracing strategies
 
 **Process Dependencies:**
 
@@ -1379,6 +1379,6 @@ Follow the [GitHub integration guidelines](.pair/knowledge/guidelines/12-collabo
 
 - Previous: [12-how-to-create-a-pr.md](12-how-to-create-a-pr.md)
 - Bootstrap Checklist: [02-how-to-complete-bootstrap-checklist.md](02-how-to-complete-bootstrap-checklist.md)
-- [Code Review Template](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/assets/code-review-template.md) - Structure, phases, and operational checklists for code review
+- [Code Review Template](.pair/knowledge/guidelines/collaboration/project-management/assets/code-review-template.md) - Structure, phases, and operational checklists for code review
 
 This guide ensures systematic, comprehensive code review that validates implementation quality against established technical standards while providing constructive feedback and coordinating improvement processes for continuous development excellence.

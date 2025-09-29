@@ -45,7 +45,7 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/project-management-framework.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### Filesystem Access Rules
@@ -243,7 +243,7 @@ Handle review process based on selected TDD approach:
 4. **Update Progress Counter**: Update the task progress counter
 5. **Preserve All Other Content**: Ensure no refinement details, acceptance criteria, or other story content is overwritten
 
-**Reference**: Follow the [Task Template](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/assets/task-template.md) format for proper task completion tracking and documentation.
+**Reference**: Follow the [Task Template](.pair/knowledge/guidelines/collaboration/project-management/assets/task-template.md) format for proper task completion tracking and documentation.
 
 **Task Completion Validation:**
 _"✅ TASK COMPLETED: Task '[TASK-ID]: [TASK_TITLE]' has been marked as completed in User Story '[STORY_ID]: [STORY_NAME]'. Task progress updated. User story remains in 'In Progress' state until all tasks are completed."_
@@ -356,14 +356,14 @@ _"🎉 ALL TASKS COMPLETED: All tasks for User Story '[STORY_ID]: [STORY_NAME]' 
 - [System architecture patterns](.pair/adoption/tech/architecture.md)
 - [Technology standards](.pair/adoption/tech/tech-stack.md)
 - [User interface guidelines](.pair/adoption/tech/ux-ui.md)
-- [Project Management Tool Guidelines](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/project-management-framework.md)
+- [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md)
 
 **Knowledge Base (Complete Technical Guidelines):**
 
-- **[01-architectural-guidelines.md](.pair/knowledge/guidelines/01-architectural-guidelines.md))** - Architecture patterns and ADR processes
-- **[02-code-design-guidelines.md](.pair/knowledge/guidelines/02-code-design-guidelines.md)** - Code organization and design patterns
-- **[07-testing-strategy.md](.pair/knowledge/guidelines/07-testing-strategy.md)** - Testing frameworks and TDD strategies
-- **[06-definition-of-done.md](.pair/knowledge/guidelines/06-definition-of-done.md)** - Quality criteria and completion standards
+- **[01-architectural-guidelines.md](.pair/knowledge/guidelines/architecture/architectural-guidelines.md))** - Architecture patterns and ADR processes
+- **[02-code-design-guidelines.md](.pair/knowledge/guidelines/development/code-design-guidelines.md)** - Code organization and design patterns
+- **[07-testing-strategy.md](.pair/knowledge/guidelines/development/testing-strategy.md)** - Testing frameworks and TDD strategies
+- **[06-definition-of-done.md](.pair/knowledge/guidelines/quality/definition-of-done.md)** - Quality criteria and completion standards
 
 **Process Dependencies:**
 

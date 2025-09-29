@@ -373,7 +373,7 @@ _Should I update [`[affected-file].md`](.pair/adoption/tech/[affected-file].md) 
 
 ## References
 
-- [Project Management Tool Guidelines](.pair/knowledge/guidelines/12-collaboration-and-process-guidelines/project-management-framework.md)
+- [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md)
 - [Bootstrap Checklist](.pair/knowledge/assets/bootstrap-checklist.md) - Complete project setup and categorization framework
 - [Adopted Standards README](.pair/adoption/tech/README.md) - Requirements and format for all adopted documents
 - [Way of Working](.pair/adoption/tech/way-of-working.md) - Development lifecycle and iteration processes
@@ -382,13 +382,13 @@ _Should I update [`[affected-file].md`](.pair/adoption/tech/[affected-file].md) 
 
 ### Knowledge Base Guidelines
 
-- [Architectural Guidelines](.pair/knowledge/guidelines/01-architectural-guidelines.md) - Detailed architectural patterns and principles
-- [Technical Guidelines](.pair/knowledge/guidelines/03-technical-guidelines.md) - Technology selection criteria and best practices
-- [Infrastructure Guidelines](.pair/knowledge/guidelines/04-infrastructure-guidelines.md) - Deployment and operational guidance
-- [UX Guidelines](.pair/knowledge/guidelines/05-ux-guidelines.md) - User experience and design system principles
+- [Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md) - Detailed architectural patterns and principles
+- [Technical Guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md) - Technology selection criteria and best practices
+- [Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md) - Deployment and operational guidance
+- [UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md) - User experience and design system principles
 
 ### Process References
 
 - [Task Creation Guide](09-how-to-create-tasks.md) - Connection to development execution phase
-- [Definition of Done](.pair/knowledge/guidelines/06-definition-of-done.md) - Quality standards for implementation
-- [Testing Strategy](.pair/knowledge/guidelines/07-testing-strategy.md) - Testing approaches and automation requirements
+- [Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md) - Quality standards for implementation
+- [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md) - Testing approaches and automation requirements

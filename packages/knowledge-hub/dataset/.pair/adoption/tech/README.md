@@ -52,17 +52,17 @@ Standards are updated during specific development phases:
 
 Detailed technical guidelines and explanations:
 
-- [01-architectural-guidelines.md](.pair/knowledge/guidelines/01-architectural-guidelines.md)
-- [02-code-design-guidelines.md](.pair/knowledge/guidelines/02-code-design-guidelines.md)
-- [03-technical-guidelines.md](.pair/knowledge/guidelines/03-technical-guidelines.md)
-- [04-infrastructure-guidelines.md](.pair/knowledge/guidelines/04-infrastructure-guidelines.md)
-- [05-ux-guidelines.md](.pair/knowledge/guidelines/05-ux-guidelines.md)
-- [06-definition-of-done.md](.pair/knowledge/guidelines/06-definition-of-done.md)
-- [07-testing-strategy.md](.pair/knowledge/guidelines/07-testing-strategy.md)
-- [08-accessibility-guidelines.md](.pair/knowledge/guidelines/08-accessibility-guidelines.md)
-- [09-performance-guidelines.md](.pair/knowledge/guidelines/09-performance-guidelines.md)
-- [10-security-guidelines.md](.pair/knowledge/guidelines/10-security-guidelines.md)
-- [11-observability-guidelines.md](.pair/knowledge/guidelines/11-observability-guidelines.md)
+- [01-architectural-guidelines.md](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)
+- [02-code-design-guidelines.md](.pair/knowledge/guidelines/development/code-design-guidelines.md)
+- [03-technical-guidelines.md](.pair/knowledge/guidelines/development/technical-guidelines.md)
+- [04-infrastructure-guidelines.md](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)
+- [05-ux-guidelines.md](.pair/knowledge/guidelines/operations/ux-guidelines.md)
+- [06-definition-of-done.md](.pair/knowledge/guidelines/quality/definition-of-done.md)
+- [07-testing-strategy.md](.pair/knowledge/guidelines/development/testing-strategy.md)
+- [08-accessibility-guidelines.md](.pair/knowledge/guidelines/quality/accessibility-guidelines.md)
+- [09-performance-guidelines.md](.pair/knowledge/guidelines/quality/performance-guidelines.md)
+- [10-security-guidelines.md](.pair/knowledge/guidelines/quality/security-guidelines.md)
+- [11-observability-guidelines.md](.pair/knowledge/guidelines/operations/observability-guidelines.md)
 - [README.md](.pair/knowledge/guidelines/README.md) – Knowledge Base Overview
 
 ### Additional Resources

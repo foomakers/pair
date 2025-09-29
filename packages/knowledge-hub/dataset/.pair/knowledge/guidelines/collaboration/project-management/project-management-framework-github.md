@@ -204,7 +204,7 @@ git remote -v
 ## Related Documents
 
 - [General Collaboration & Process Guidelines](README.md)
-- [Definition of Done](.pair/knowledge/guidelines/06-definition-of-done.md)
-- [Testing Strategy](.pair/knowledge/guidelines/07-testing-strategy.md)
-- [Security Guidelines](.pair/knowledge/guidelines/10-security-guidelines.md)
+- [Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md)
+- [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)
+- [Security Guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md)
 - [MCP Server Documentation](https://github.com/github/github-mcp-server)
