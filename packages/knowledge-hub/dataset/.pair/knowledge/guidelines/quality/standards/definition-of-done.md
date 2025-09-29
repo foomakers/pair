@@ -55,21 +55,21 @@ Ensure consistent quality across all deliverables in the development process, pr
 Complete checklist ordered by priority for each work item:
 
 - [ ] Requirements implemented and acceptance criteria met
-- [ ] Code follows [Code Design Guidelines](.pair/knowledge/guidelines/development/code-design-guidelines.md)
-- [ ] Tech guidance followed per [Technical Guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md)
-- [ ] Technical approach aligns with [Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)
-- [ ] ADRs (Architectural Decision Records) followed per [Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)
-- [ ] Tests written per [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)
-- [ ] All automated tests passing per [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)
+- [ ] Code follows [Code Design Guidelines](.pair/knowledge/guidelines/development/code-design/code-design-guidelines.md)
+- [ ] Tech guidance followed per [Technical Guidelines](.pair/knowledge/guidelines/development/technical-standards/technical-guidelines.md)
+- [ ] Technical approach aligns with [Architectural Guidelines](.pair/knowledge/guidelines/architecture/system-design/README.md)
+- [ ] ADRs (Architectural Decision Records) followed per [Architectural Guidelines](.pair/knowledge/guidelines/architecture/system-design/README.md)
+- [ ] Tests written per [Testing Strategy](.pair/knowledge/guidelines/development/testing/testing-strategy.md)
+- [ ] All automated tests passing per [Testing Strategy](.pair/knowledge/guidelines/development/testing/testing-strategy.md)
 - [ ] Code review completed and approved
-- [ ] Security considerations identified, practices followed, and scanning passed per [Security Guidelines](security-guidelines.md)
-- [ ] Performance benchmarks met per [Performance Guidelines](performance-guidelines.md)
-- [ ] Quality gates passed per [Technical Guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md)
-- [ ] Accessibility criteria met per [Accessibility Guidelines](accessibility-guidelines.md)
-- [ ] UX criteria met per [UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md)
+- [ ] Security considerations identified, practices followed, and scanning passed per [Security Guidelines]../security/security-guidelines.md
+- [ ] Performance benchmarks met per [Performance Guidelines]../performance/performance-guidelines.md
+- [ ] Quality gates passed per [Technical Guidelines](.pair/knowledge/guidelines/development/technical-standards/technical-guidelines.md)
+- [ ] Accessibility criteria met per [Accessibility Guidelines]../accessibility/accessibility-guidelines.md
+- [ ] UX criteria met per [UX Guidelines](.pair/knowledge/guidelines/operations/ux-design/ux-guidelines.md)
 - [ ] Feature under feature flag (if applicable)
-- [ ] IaaS implemented per [Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)
-- [ ] Monitoring configured per [Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md)
+- [ ] IaaS implemented per [Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure/infrastructure-guidelines.md)
+- [ ] Monitoring configured per [Observability Guidelines](.pair/knowledge/guidelines/operations/observability/observability-guidelines.md)
 - [ ] Deployment successful
 - [ ] Documentation updated and published
 
@@ -79,17 +79,17 @@ Complete checklist ordered by priority for each work item:
 
 | Criteria                  | Primary Responsibility | Tool Assistance | Guidelines Reference                                         |
 | ------------------------- | ---------------------- | --------------- | ------------------------------------------------------------ |
-| Requirements & Acceptance | Team Review            | High            | [Code Design Guidelines](.pair/knowledge/guidelines/development/code-design-guidelines.md)       |
-| Technical Standards       | Team Review            | High            | [Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)   |
-| ADRs Compliance           | Team Review            | Medium          | [Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)   |
-| Tech Guidance             | Team Review            | High            | [Technical Guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md)           |
-| Infrastructure            | DevOps Team            | Medium          | [Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md) |
-| UX Criteria               | UX/Dev Team            | Medium          | [UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md)                         |
-| Accessibility             | UX/Dev Team            | Medium          | [Accessibility Guidelines](accessibility-guidelines.md)   |
-| Security Assessment       | Security Lead          | Medium          | [Security Guidelines](security-guidelines.md)             |
-| Performance               | Dev Team               | High            | [Performance Guidelines](performance-guidelines.md)       |
-| Testing Strategy          | Dev Team               | High            | [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)                   |
-| Observability             | Dev Team               | High            | [Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md)   |
+| Requirements & Acceptance | Team Review            | High            | [Code Design Guidelines](.pair/knowledge/guidelines/development/code-design/code-design-guidelines.md)       |
+| Technical Standards       | Team Review            | High            | [Architectural Guidelines](.pair/knowledge/guidelines/architecture/system-design/README.md)   |
+| ADRs Compliance           | Team Review            | Medium          | [Architectural Guidelines](.pair/knowledge/guidelines/architecture/system-design/README.md)   |
+| Tech Guidance             | Team Review            | High            | [Technical Guidelines](.pair/knowledge/guidelines/development/technical-standards/technical-guidelines.md)           |
+| Infrastructure            | DevOps Team            | Medium          | [Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure/infrastructure-guidelines.md) |
+| UX Criteria               | UX/Dev Team            | Medium          | [UX Guidelines](.pair/knowledge/guidelines/operations/ux-design/ux-guidelines.md)                         |
+| Accessibility             | UX/Dev Team            | Medium          | [Accessibility Guidelines]../accessibility/accessibility-guidelines.md   |
+| Security Assessment       | Security Lead          | Medium          | [Security Guidelines]../security/security-guidelines.md             |
+| Performance               | Dev Team               | High            | [Performance Guidelines]../performance/performance-guidelines.md       |
+| Testing Strategy          | Dev Team               | High            | [Testing Strategy](.pair/knowledge/guidelines/development/testing/testing-strategy.md)                   |
+| Observability             | Dev Team               | High            | [Observability Guidelines](.pair/knowledge/guidelines/operations/observability/observability-guidelines.md)   |
 
 ---
 
@@ -163,37 +163,37 @@ All work items must satisfy these criteria before being considered complete. Ref
 ### 📋 Requirements & Technical Standards
 
 - **Acceptance Criteria Met** → All story/task requirements satisfied
-- **Architecture Compliance** → Solution aligns with [Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)
-- **Code Standards** → Code follows [Code Design Guidelines](.pair/knowledge/guidelines/development/code-design-guidelines.md) and [Technical Guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md)
+- **Architecture Compliance** → Solution aligns with [Architectural Guidelines](.pair/knowledge/guidelines/architecture/system-design/README.md)
+- **Code Standards** → Code follows [Code Design Guidelines](.pair/knowledge/guidelines/development/code-design/code-design-guidelines.md) and [Technical Guidelines](.pair/knowledge/guidelines/development/technical-standards/technical-guidelines.md)
 - **Code Review Completed** → Human review conducted with AI assistance
 
 ### 🔒 Security Assessment
 
-- **Vulnerability Scanning** → No high/critical vulnerabilities (see [Security Guidelines](security-guidelines.md))
+- **Vulnerability Scanning** → No high/critical vulnerabilities (see [Security Guidelines]../security/security-guidelines.md)
 - **Security Review** → Manual security assessment completed
 - **Data Protection** → Proper handling of sensitive data and user information
 
 ### ♿ Accessibility Assessment
 
-- **WCAG 2.1 AA Compliance** → Standards met per [Accessibility Guidelines](accessibility-guidelines.md)
+- **WCAG 2.1 AA Compliance** → Standards met per [Accessibility Guidelines]../accessibility/accessibility-guidelines.md
 - **Assistive Technology** → Tested with screen readers and keyboard navigation
 - **Accessibility Testing** → Automated and manual accessibility validation
 
 ### ⚡ Performance Assessment
 
-- **Performance Benchmarks** → Thresholds met per [Performance Guidelines](performance-guidelines.md)
+- **Performance Benchmarks** → Thresholds met per [Performance Guidelines]../performance/performance-guidelines.md
 - **Load Testing** → Performance tested under expected conditions
-- **Optimization** → Standards met per [Performance Guidelines](performance-guidelines.md)
+- **Optimization** → Standards met per [Performance Guidelines]../performance/performance-guidelines.md
 
 ### 🧪 Testing Requirements
 
-- **Test Coverage** → Standards met per [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)
+- **Test Coverage** → Standards met per [Testing Strategy](.pair/knowledge/guidelines/development/testing/testing-strategy.md)
 - **Test Quality** → Meaningful tests verifying behavior, not implementation
 - **Automated Tests** → All CI/CD pipeline tests passing
 
 ### � Operational Readiness
 
-- **Monitoring** → Health checks and observability per [Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md)
+- **Monitoring** → Health checks and observability per [Observability Guidelines](.pair/knowledge/guidelines/operations/observability/observability-guidelines.md)
 - **Documentation** → Technical and deployment documentation updated
 - **Deployment** → Environment compatibility and rollback strategy tested
 
@@ -206,20 +206,20 @@ Automated quality gates integrated in CI/CD pipeline:
 ### 📊 Code Quality
 
 - **Static Analysis** → SonarQube/ESLint A rating or higher
-- **Technical Debt** → Standards met per [Technical Guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md)
+- **Technical Debt** → Standards met per [Technical Guidelines](.pair/knowledge/guidelines/development/technical-standards/technical-guidelines.md)
 - **Security** → SAST passed, no secrets detected
 
 ### ⚡ Performance
 
-- **Bundle Size** → Within limits defined in [Performance Guidelines](performance-guidelines.md)
-- **Response Time** → Standards met per [Performance Guidelines](performance-guidelines.md)
-- **Lighthouse** → Standards met per [Performance Guidelines](performance-guidelines.md) and [Accessibility Guidelines](accessibility-guidelines.md)
+- **Bundle Size** → Within limits defined in [Performance Guidelines]../performance/performance-guidelines.md
+- **Response Time** → Standards met per [Performance Guidelines]../performance/performance-guidelines.md
+- **Lighthouse** → Standards met per [Performance Guidelines]../performance/performance-guidelines.md and [Accessibility Guidelines]../accessibility/accessibility-guidelines.md
 
 ---
 
 ## 📈 Observability & Monitoring
 
-Operational readiness requires robust observability practices to ensure system health, reliability, and rapid incident response. All deliverables must comply with the following observability requirements, aligned with [Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md):
+Operational readiness requires robust observability practices to ensure system health, reliability, and rapid incident response. All deliverables must comply with the following observability requirements, aligned with [Observability Guidelines](.pair/knowledge/guidelines/operations/observability/observability-guidelines.md):
 
 ### Monitoring Requirements
 
@@ -250,7 +250,7 @@ Operational readiness requires robust observability practices to ensure system h
 - **Readiness & Liveness Probes:** Implement readiness and liveness probes for containerized workloads.
 - **Monitoring Integration:** Health check endpoints must be integrated with monitoring systems for automated status tracking.
 
-Refer to [Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md) for detailed implementation instructions.
+Refer to [Observability Guidelines](.pair/knowledge/guidelines/operations/observability/observability-guidelines.md) for detailed implementation instructions.
 
 ## 🔍 Verification Process
 
@@ -263,8 +263,8 @@ Refer to [Observability Guidelines](.pair/knowledge/guidelines/operations/observ
 ### Manual Reviews
 
 1. **Code Review** → Peer review focusing on maintainability
-2. **Security Review** → Manual assessment per [Security Guidelines](security-guidelines.md)
-3. **Accessibility Testing** → Manual validation per [Accessibility Guidelines](accessibility-guidelines.md)
+2. **Security Review** → Manual assessment per [Security Guidelines]../security/security-guidelines.md
+3. **Accessibility Testing** → Manual validation per [Accessibility Guidelines]../accessibility/accessibility-guidelines.md
 4. **UX Review** → Design team approval for user-facing changes
 
 ---
@@ -288,18 +288,18 @@ This Definition of Done serves as the **central quality framework** that ensures
 
 **Core Technical Standards:**
 
-- **[Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)** - _Architecture standards define quality baseline_
-- **[Code Design Guidelines](.pair/knowledge/guidelines/development/code-design-guidelines.md)** - _Code standards verified in checklist_
-- **[Technical Guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md)** - _Tech compliance must be validated_
-- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)** - _Deployment readiness ensures production quality_
+- **[Architectural Guidelines](.pair/knowledge/guidelines/architecture/system-design/README.md)** - _Architecture standards define quality baseline_
+- **[Code Design Guidelines](.pair/knowledge/guidelines/development/code-design/code-design-guidelines.md)** - _Code standards verified in checklist_
+- **[Technical Guidelines](.pair/knowledge/guidelines/development/technical-standards/technical-guidelines.md)** - _Tech compliance must be validated_
+- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure/infrastructure-guidelines.md)** - _Deployment readiness ensures production quality_
 
 **Quality & User Experience:**
 
-- **[UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md)** - _UX standards ensure user-facing quality_
-- **[Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)** - _Testing validates feature completeness_
+- **[UX Guidelines](.pair/knowledge/guidelines/operations/ux-design/ux-guidelines.md)** - _UX standards ensure user-facing quality_
+- **[Testing Strategy](.pair/knowledge/guidelines/development/testing/testing-strategy.md)** - _Testing validates feature completeness_
 
 **Collaboration & Process:**
 
-- **[project-management-framework.md](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md)** - _Collaboration and process standards_
+- **[project-management/README.md](.pair/knowledge/guidelines/collaboration/project-management/README.md)** - _Collaboration and process standards_
 
 This Definition of Done provides a clear, verifiable framework that ensures consistent quality while leveraging the detailed guidance in specialized technical documents.
