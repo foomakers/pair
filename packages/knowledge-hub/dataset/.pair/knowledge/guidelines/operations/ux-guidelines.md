@@ -21,8 +21,8 @@ Define user experience standards and design principles that ensure consistent, a
 - Performance optimization strategies
 - Security requirements and compliance
 - Content strategy and copywriting guidelines
-- Usability testing methodologies and tools (see [Testing Strategy](07-testing-strategy.md))
-- Detailed accessibility standards and compliance (see [Accessibility Guidelines](08-accessibility-guidelines.md))
+- Usability testing methodologies and tools (see [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md))
+- Detailed accessibility standards and compliance (see [Accessibility Guidelines](.pair/knowledge/guidelines/quality/accessibility-guidelines.md))
 - Legal accessibility compliance and certification
 
 ---
@@ -135,9 +135,9 @@ Use the default design system guidelines defined above, which can be easily upda
 - **Responsive Typography**: Scalable text across different devices using relative units
 
 **Accessibility Integration:**
-Typography design must meet accessibility standards from [Accessibility Guidelines](08-accessibility-guidelines.md):
+Typography design must meet accessibility standards from [Accessibility Guidelines](.pair/knowledge/guidelines/quality/accessibility-guidelines.md):
 
-- Font size and readability compliance with [visual accessibility requirements](08-accessibility-guidelines.md)
+- Font size and readability compliance with [visual accessibility requirements](.pair/knowledge/guidelines/quality/accessibility-guidelines.md)
 - Text sizing support for 200% zoom without horizontal scrolling
 - Typography patterns support screen reader and assistive technology navigation
 
@@ -151,11 +151,11 @@ Typography design must meet accessibility standards from [Accessibility Guidelin
 - **Visual Hierarchy**: Color usage to establish clear content hierarchy
 
 **Accessibility Integration:**
-All color choices must meet accessibility standards defined in [Accessibility Guidelines](08-accessibility-guidelines.md):
+All color choices must meet accessibility standards defined in [Accessibility Guidelines](.pair/knowledge/guidelines/quality/accessibility-guidelines.md):
 
 - Color contrast validation per WCAG 2.1 AA requirements
 - Color independence verification for accessible information design
-- Integration with [accessibility testing](08-accessibility-guidelines.md) validation processes
+- Integration with [accessibility testing](.pair/knowledge/guidelines/quality/accessibility-guidelines.md) validation processes
 
 ---
 
@@ -166,19 +166,19 @@ All color choices must meet accessibility standards defined in [Accessibility Gu
 **Design System Foundation:**
 
 - **Component Library**: Built on Radix UI primitives with Tailwind CSS for consistent design implementation
-- **TypeScript Support**: Full type safety with React 18+ patterns per [Code Design Guidelines](02-code-design-guidelines.md)
+- **TypeScript Support**: Full type safety with React 18+ patterns per [Code Design Guidelines](.pair/knowledge/guidelines/development/code-design-guidelines.md)
 - **Customization**: Design tokens and variant management through Tailwind CSS configuration
 
 **Accessibility Integration:**
-shadcn/ui accessibility features coordinate with [Accessibility Guidelines](08-accessibility-guidelines.md):
+shadcn/ui accessibility features coordinate with [Accessibility Guidelines](.pair/knowledge/guidelines/quality/accessibility-guidelines.md):
 
-- Radix UI provides WCAG-compliant components validated per [implementation standards](08-accessibility-guidelines.md)
-- Component accessibility patterns aligned with [testing strategy requirements](08-accessibility-guidelines.md)
+- Radix UI provides WCAG-compliant components validated per [implementation standards](.pair/knowledge/guidelines/quality/accessibility-guidelines.md)
+- Component accessibility patterns aligned with [testing strategy requirements](.pair/knowledge/guidelines/quality/accessibility-guidelines.md)
 - Built-in keyboard navigation and ARIA support per accessibility compliance standards
 
 ### Component Usage Standards
 
-- Follow [Code Design Guidelines](02-code-design-guidelines.md) for React component patterns
+- Follow [Code Design Guidelines](.pair/knowledge/guidelines/development/code-design-guidelines.md) for React component patterns
 - Implement TypeScript strict mode for all component props
 - Use ESLint/Prettier shared configurations for consistency
 
@@ -565,9 +565,9 @@ We follow a mobile-first approach with these standard breakpoints:
 - **Media Queries**: Use standard Tailwind breakpoints for consistency
 
 **Accessibility Integration:**
-Responsive design must coordinate with [Accessibility Guidelines](08-accessibility-guidelines.md) for motor accessibility:
+Responsive design must coordinate with [Accessibility Guidelines](.pair/knowledge/guidelines/quality/accessibility-guidelines.md) for motor accessibility:
 
-- Touch target specifications (minimum 44×44px) validated per [motor accessibility requirements](08-accessibility-guidelines.md)
+- Touch target specifications (minimum 44×44px) validated per [motor accessibility requirements](.pair/knowledge/guidelines/quality/accessibility-guidelines.md)
 - Interactive element spacing ensures keyboard and touch accessibility
 - Responsive patterns support assistive technology navigation
 
@@ -716,7 +716,7 @@ Responsive design must coordinate with [Accessibility Guidelines](08-accessibili
 
 ### UX and Accessibility Integration
 
-UX Guidelines focus on design principles that support accessibility. For detailed accessibility standards, technical implementation, testing frameworks, and compliance requirements, see [Accessibility Guidelines](08-accessibility-guidelines.md).
+UX Guidelines focus on design principles that support accessibility. For detailed accessibility standards, technical implementation, testing frameworks, and compliance requirements, see [Accessibility Guidelines](.pair/knowledge/guidelines/quality/accessibility-guidelines.md).
 
 **UX Design Considerations:**
 
@@ -776,7 +776,7 @@ UX Guidelines focus on design principles that support accessibility. For detaile
 - **Connection Scenarios**: Test under various network conditions (3G, 4G, Wi-Fi)
 - **Usability Impact**: Measure how performance affects task completion and satisfaction
 
-For detailed technical performance optimization strategies, monitoring, and implementation guidelines, see [Performance Guidelines](09-performance-guidelines.md).
+For detailed technical performance optimization strategies, monitoring, and implementation guidelines, see [Performance Guidelines](.pair/knowledge/guidelines/quality/performance-guidelines.md).
 
 ---
 
@@ -791,10 +791,10 @@ For detailed technical performance optimization strategies, monitoring, and impl
 
 ### Testing Integration
 
-- **Component Testing**: Visual and behavioral testing as defined in [Testing Strategy](07-testing-strategy.md)
+- **Component Testing**: Visual and behavioral testing as defined in [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)
 - **Accessibility Testing**: Automated a11y validation integrated into development workflow
 - **Cross-Browser Testing**: Consistent experience validation across supported browsers
-- **Performance Testing**: UX performance metrics monitoring (see [Performance Guidelines](09-performance-guidelines.md))
+- **Performance Testing**: UX performance metrics monitoring (see [Performance Guidelines](.pair/knowledge/guidelines/quality/performance-guidelines.md))
 
 ### Usability Testing Framework
 
@@ -813,7 +813,7 @@ For detailed technical performance optimization strategies, monitoring, and impl
 - **Satisfaction Score:** Target System Usability Scale (SUS) score above 70
 - **Accessibility Validation:** All user flows tested with assistive technologies
 
-**Detailed usability testing methodologies, tools, budget considerations, and implementation guidelines are covered in [Testing Strategy](07-testing-strategy.md).**
+**Detailed usability testing methodologies, tools, budget considerations, and implementation guidelines are covered in [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md).**
 
 ### UX Metrics and KPIs
 
@@ -868,10 +868,10 @@ This document supports the **Definition of Done** requirements:
 
 Core references for UX implementation:
 
-- **[Code Design Guidelines](02-code-design-guidelines.md)** - _Component patterns implement UX design_
-- **[Testing Strategy](07-testing-strategy.md)** - _Testing validates UX quality_
+- **[Code Design Guidelines](.pair/knowledge/guidelines/development/code-design-guidelines.md)** - _Component patterns implement UX design_
+- **[Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)** - _Testing validates UX quality_
 
 Supporting documents:
 
-- **[Architectural Guidelines](01-architectural-guidelines.md)** - _Architecture supports scalable UI_
-- **[Definition of Done](06-definition-of-done.md)** - _Quality criteria validate UX compliance_
+- **[Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)** - _Architecture supports scalable UI_
+- **[Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md)** - _Quality criteria validate UX compliance_

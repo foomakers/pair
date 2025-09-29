@@ -137,9 +137,9 @@ Define comprehensive technical standards including tech stack, tools, frameworks
 1. **Development Support**: Good tooling and development experience
 2. **Community Ecosystem**: Active community and extensive documentation
 3. **Type Safety**: Strong typing support for better code reliability
-4. **Testing Support**: Robust testing ecosystem (see [Testing Strategy](07-testing-strategy.md))
-5. **Performance**: Meets performance requirements defined in [Performance Guidelines](09-performance-guidelines.md)
-6. **Security**: Alignment with [Security Guidelines](10-security-guidelines.md) standards
+4. **Testing Support**: Robust testing ecosystem (see [Testing Strategy](testing-strategy.md))
+5. **Performance**: Meets performance requirements defined in [Performance Guidelines](.pair/knowledge/guidelines/quality/performance-guidelines.md)
+6. **Security**: Alignment with [Security Guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md) standards
 
 ---
 
@@ -174,7 +174,7 @@ Define comprehensive technical standards including tech stack, tools, frameworks
 
 For detailed coding standards, design patterns, and implementation guidelines, refer to:
 
-- **[Code Design Guidelines](02-code-design-guidelines.md)**: Comprehensive code structure, patterns, and quality standards
+- **[Code Design Guidelines](code-design-guidelines.md)**: Comprehensive code structure, patterns, and quality standards
 
 **Key Standards:**
 
@@ -200,8 +200,8 @@ For detailed coding standards, design patterns, and implementation guidelines, r
 - **Logging**: Comprehensive error logging with context and stack traces
 - **User Experience**: User-friendly error messages without exposing system details
 - **Recovery**: Clear recovery paths and retry mechanisms where appropriate
-- **Security**: Error handling follows [Security Guidelines](10-security-guidelines.md) to prevent information leakage
-- **Monitoring**: Error tracking and alerting via [Observability Guidelines](11-observability-guidelines.md)
+- **Security**: Error handling follows [Security Guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md) to prevent information leakage
+- **Monitoring**: Error tracking and alerting via [Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md)
 
 ### Versioning Strategy
 
@@ -301,8 +301,8 @@ For detailed coding standards, design patterns, and implementation guidelines, r
 - **Data Validation**: Input validation at system boundaries
 - **Rate Limiting**: Protection against abuse and overuse
 - **Circuit Breakers**: Resilience patterns for external dependencies
-- **Security Integration**: See [Security Guidelines](10-security-guidelines.md) for detailed security requirements
-- **Infrastructure Integration**: See [Infrastructure Guidelines](04-infrastructure-guidelines.md) for environment and deployment details
+- **Security Integration**: See [Security Guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md) for detailed security requirements
+- **Infrastructure Integration**: See [Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md) for environment and deployment details
 
 ---
 
@@ -418,8 +418,8 @@ For detailed coding standards, design patterns, and implementation guidelines, r
 - **Type Safety**: TypeScript interfaces for all external API responses
 - **Error Handling**: Consistent error handling and fallback strategies
 - **Rate Limiting**: Respect external API rate limits and implement backoff strategies
-- **Security**: All external integrations follow [Security Guidelines](10-security-guidelines.md)
-- **Monitoring**: Integration health monitoring via [Observability Guidelines](11-observability-guidelines.md)
+- **Security**: All external integrations follow [Security Guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md)
+- **Monitoring**: Integration health monitoring via [Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md)
 - **Cost Monitoring**: Track and monitor costs for all external service integrations
 
 ---
@@ -800,16 +800,16 @@ class CachedFeatureFlagService implements FeatureFlagService {
 
 ### Quality Assurance
 
-- **Automated Testing**: Unit, integration, and end-to-end tests (see [Testing Strategy](07-testing-strategy.md))
+- **Automated Testing**: Unit, integration, and end-to-end tests (see [Testing Strategy](testing-strategy.md))
 - **Static Analysis**: Code quality and security scanning
-- **Performance Testing**: Load testing and performance monitoring (see [Performance Guidelines](09-performance-guidelines.md))
+- **Performance Testing**: Load testing and performance monitoring (see [Performance Guidelines](.pair/knowledge/guidelines/quality/performance-guidelines.md))
 - **Documentation Updates**: Keep technical documentation current
 
 ### Testing Integration
 
 For comprehensive testing standards, strategies, and implementation details, refer to:
 
-- **[Testing Strategy](07-testing-strategy.md)**: Complete testing framework and quality assurance standards
+- **[Testing Strategy](testing-strategy.md)**: Complete testing framework and quality assurance standards
 
 ---
 
@@ -819,7 +819,7 @@ For comprehensive testing standards, strategies, and implementation details, ref
 
 For detailed deployment strategies, containerization standards, and infrastructure requirements, refer to the comprehensive documentation in:
 
-- **[Infrastructure Guidelines](04-infrastructure-guidelines.md)**: Complete deployment strategies and environment management
+- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)**: Complete deployment strategies and environment management
 
 ### Technical Integration Points
 
@@ -834,11 +834,11 @@ For detailed deployment strategies, containerization standards, and infrastructu
 ### Build and Release Standards
 
 - **Type Safety**: Ensure TypeScript compilation passes before deployment
-- **Testing Requirements**: All tests pass as defined in [Testing Strategy](07-testing-strategy.md)
+- **Testing Requirements**: All tests pass as defined in [Testing Strategy](testing-strategy.md)
 - **Documentation**: llms.txt files generated and accessible post-deployment
-- **Security Compliance**: Deployment follows [Security Guidelines](10-security-guidelines.md)
-- **Performance Validation**: Performance criteria met per [Performance Guidelines](09-performance-guidelines.md)
-- **Observability**: Monitoring and logging configured per [Observability Guidelines](11-observability-guidelines.md)
+- **Security Compliance**: Deployment follows [Security Guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md)
+- **Performance Validation**: Performance criteria met per [Performance Guidelines](.pair/knowledge/guidelines/quality/performance-guidelines.md)
+- **Observability**: Monitoring and logging configured per [Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md)
 
 ---
 
@@ -861,13 +861,13 @@ This document supports the **Definition of Done** requirements:
 
 Core references for technical implementation:
 
-- **[Architectural Guidelines](01-architectural-guidelines.md)** - _Architectural context guides tech choices_
-- **[Code Design Guidelines](02-code-design-guidelines.md)** - _Implementation details for tech stack_
-- **[Infrastructure Guidelines](04-infrastructure-guidelines.md)** - _Infrastructure hosts technical implementations_
+- **[Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)** - _Architectural context guides tech choices_
+- **[Code Design Guidelines](code-design-guidelines.md)** - _Implementation details for tech stack_
+- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)** - _Infrastructure hosts technical implementations_
 
 Supporting documents:
 
-- **[UX Guidelines](05-ux-guidelines.md)** - _Tech choices must support UX design_
-- **[Testing Strategy](07-testing-strategy.md)** - _Testing frameworks validate implementations_
-- **[Definition of Done](06-definition-of-done.md)** - _Quality gates validate tech compliance_
-- **[Collaboration and Process Guidelines](12-collaboration-and-process-guidelines/project-management-framework.md)** - _Standards for team collaboration and process management_
+- **[UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md)** - _Tech choices must support UX design_
+- **[Testing Strategy](testing-strategy.md)** - _Testing frameworks validate implementations_
+- **[Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md)** - _Quality gates validate tech compliance_
+- **[Collaboration and Process Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md)** - _Standards for team collaboration and process management_

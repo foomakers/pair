@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define comprehensive testing approach that ensures code quality, reliability, and maintainability throughout the development lifecycle, aligned with project architecture and [Definition of Done](06-definition-of-done.md).
+Define comprehensive testing approach that ensures code quality, reliability, and maintainability throughout the development lifecycle, aligned with project architecture and [Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md).
 
 ## Scope
 
@@ -20,12 +20,12 @@ Define comprehensive testing approach that ensures code quality, reliability, an
 
 **Out of Scope:**
 
-- Production monitoring and alerting (see [Observability Guidelines](11-observability-guidelines.md))
-- UX design principles and component guidelines (see [UX Guidelines](05-ux-guidelines.md))
-- Detailed performance optimization strategies (see [Performance Guidelines](09-performance-guidelines.md))
-- Comprehensive security testing methodologies (see [Security Guidelines](10-security-guidelines.md))
+- Production monitoring and alerting (see [Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md))
+- UX design principles and component guidelines (see [UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md))
+- Detailed performance optimization strategies (see [Performance Guidelines](.pair/knowledge/guidelines/quality/performance-guidelines.md))
+- Comprehensive security testing methodologies (see [Security Guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md))
 - Manual testing workflows and documentation
-- Detailed tool configurations (see [Technical Guidelines](03-technical-guidelines.md))
+- Detailed tool configurations (see [Technical Guidelines](technical-guidelines.md))
 
 ---
 
@@ -233,13 +233,13 @@ Define comprehensive testing approach that ensures code quality, reliability, an
 
 ### Non-Functional Testing
 
-- **Performance Testing**: Response time validation and load testing integration (detailed optimization in [Performance Guidelines](09-performance-guidelines.md))
-- **Security Testing**: Basic vulnerability checks (comprehensive testing in [Security Guidelines](10-security-guidelines.md))
-- **Accessibility Testing**: WCAG compliance validation (detailed standards in [Accessibility Guidelines](08-accessibility-guidelines.md))
+- **Performance Testing**: Response time validation and load testing integration (detailed optimization in [Performance Guidelines](.pair/knowledge/guidelines/quality/performance-guidelines.md))
+- **Security Testing**: Basic vulnerability checks (comprehensive testing in [Security Guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md))
+- **Accessibility Testing**: WCAG compliance validation (detailed standards in [Accessibility Guidelines](.pair/knowledge/guidelines/quality/accessibility-guidelines.md))
 
 **Accessibility Testing Implementation:**
 
-For comprehensive accessibility testing patterns and examples, see [Accessibility Guidelines](08-accessibility-guidelines.md) which provides:
+For comprehensive accessibility testing patterns and examples, see [Accessibility Guidelines](.pair/knowledge/guidelines/quality/accessibility-guidelines.md) which provides:
 
 - **React Testing Library Integration**: Complete axe-core integration examples for component testing
 - **Playwright Automation**: End-to-end accessibility testing patterns with axe-core
@@ -284,7 +284,7 @@ For comprehensive accessibility testing patterns and examples, see [Accessibilit
 
 **Frontend & BFF Testing (Next.js):**
 
-- **Vitest**: Unit and integration testing (configured per [Technical Guidelines](03-technical-guidelines.md))
+- **Vitest**: Unit and integration testing (configured per [Technical Guidelines](technical-guidelines.md))
 - **React Testing Library**: Component testing for React components
 - **Next.js Test Utils**: API route and middleware testing
 
@@ -301,12 +301,12 @@ For comprehensive accessibility testing patterns and examples, see [Accessibilit
 
 **E2E Testing:**
 
-- **Playwright**: Cross-browser testing (configured per [Technical Guidelines](03-technical-guidelines.md))
+- **Playwright**: Cross-browser testing (configured per [Technical Guidelines](technical-guidelines.md))
 - **Separate E2E Project**: Isolated test environment
 
 ### Test Framework Selection Criteria
 
-For detailed tool selection and configuration, see [Technical Guidelines](03-technical-guidelines.md).
+For detailed tool selection and configuration, see [Technical Guidelines](technical-guidelines.md).
 
 1. **Project Architecture Compatibility**: Supports Next.js + Fastify stack
 2. **TypeScript Integration**: Full type safety across test suite
@@ -493,7 +493,7 @@ describe('CacheService', () => {
 
 ## 📊 Coverage Requirements
 
-### Minimum Coverage Targets (Aligned with [Definition of Done](06-definition-of-done.md))
+### Minimum Coverage Targets (Aligned with [Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md))
 
 - **Unit Test Coverage**: 80% line coverage minimum for business logic
 - **Branch Coverage**: 70% branch coverage for critical paths
@@ -561,14 +561,14 @@ describe('CacheService', () => {
 
 ## 📋 Test Quality Gates
 
-These gates are integrated with [Definition of Done](06-definition-of-done.md) checklist:
+These gates are integrated with [Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md) checklist:
 
 ### Pre-Development
 
 - [ ] Test plan defined based on requirements and architecture
 - [ ] Test environment setup for Next.js + Fastify stack
 - [ ] Test data preparation for bounded contexts
-- [ ] Development tools configured per [Technical Guidelines](03-technical-guidelines.md)
+- [ ] Development tools configured per [Technical Guidelines](technical-guidelines.md)
 
 ### During Development
 
@@ -580,14 +580,14 @@ These gates are integrated with [Definition of Done](06-definition-of-done.md) c
 ### Pre-Merge (DoD Compliance)
 
 - [ ] Full test suite passes without failures
-- [ ] Coverage requirements met per [Definition of Done](06-definition-of-done.md)
+- [ ] Coverage requirements met per [Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md)
 - [ ] Test code reviewed and approved
 - [ ] Security and performance tests indicate acceptable results (basic validation only)
 
 ### Post-Deployment
 
 - [ ] Smoke tests pass in production environment
-- [ ] Monitoring configured per [Observability Guidelines](11-observability-guidelines.md)
+- [ ] Monitoring configured per [Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md)
 - [ ] Test results documented and analyzed
 - [ ] Feedback incorporated for continuous improvement
 
@@ -597,7 +597,7 @@ These gates are integrated with [Definition of Done](06-definition-of-done.md) c
 
 ### Alignment with Observability Guidelines
 
-Testing and observability are tightly integrated to ensure post-deployment quality and rapid issue detection. For full observability setup details, see [Observability Guidelines](11-observability-guidelines.md).
+Testing and observability are tightly integrated to ensure post-deployment quality and rapid issue detection. For full observability setup details, see [Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md).
 
 #### Integration Points:
 
@@ -2285,14 +2285,14 @@ This document supports the **Definition of Done** requirements:
 
 **Core Integration:**
 
-- **[Architectural Guidelines](01-architectural-guidelines.md)** - _Architecture patterns determine testing strategies_
-- **[Code Design Guidelines](02-code-design-guidelines.md)** - _Testable code design enables effective testing_
-- **[Technical Guidelines](03-technical-guidelines.md)** - _Tech stack determines testing tools_
-- **[Infrastructure Guidelines](04-infrastructure-guidelines.md)** - _Infrastructure supports automated testing_
+- **[Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)** - _Architecture patterns determine testing strategies_
+- **[Code Design Guidelines](code-design-guidelines.md)** - _Testable code design enables effective testing_
+- **[Technical Guidelines](technical-guidelines.md)** - _Tech stack determines testing tools_
+- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)** - _Infrastructure supports automated testing_
 
 **Supporting Documents:**
 
-- **[Definition of Done](06-definition-of-done.md)** - _Quality gates ensure testing completeness_
-- **[UX Guidelines](05-ux-guidelines.md)** - _UX testing validates user experience_
-- **[Observability Guidelines](11-observability-guidelines.md)** - _Monitoring and alerting for test and production environments_
-- **[project-management-framework.md](12-collaboration-and-process-guidelines/project-management-framework.md)**
+- **[Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md)** - _Quality gates ensure testing completeness_
+- **[UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md)** - _UX testing validates user experience_
+- **[Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md)** - _Monitoring and alerting for test and production environments_
+- **[project-management-framework.md](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md)**

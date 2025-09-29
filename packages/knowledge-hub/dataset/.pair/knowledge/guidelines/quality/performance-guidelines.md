@@ -67,7 +67,7 @@ Define performance standards, optimization strategies, and monitoring practices 
 
 ## Testing Strategy Coordination
 
-- Performance testing is integrated at all levels of the [Testing Strategy](07-testing-strategy.md) test pyramid:
+- Performance testing is integrated at all levels of the [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md) test pyramid:
   - **Unit Level:** Micro-benchmarks for critical functions/components
   - **Integration Level:** API and system integration performance tests
   - **End-to-End Level:** Full user journey and load testing
@@ -160,7 +160,7 @@ Define performance standards, optimization strategies, and monitoring practices 
 - **Data Filtering**: Server-side filtering to reduce payload size
 - **Compression**: Implement response compression (gzip/brotli)
 
-_Note: For database optimization, connection pooling, and infrastructure-level caching solutions, refer to [Infrastructure Guidelines](04-infrastructure-guidelines.md)_
+_Note: For database optimization, connection pooling, and infrastructure-level caching solutions, refer to [Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)_
 
 ### Resource Optimization
 
@@ -410,15 +410,15 @@ This document supports the **Definition of Done** requirements:
 
 Core references for implementing and validating performance:
 
-- **[Definition of Done](06-definition-of-done.md)** – _Quality gates and acceptance criteria reference these benchmarks_
-- **[Testing Strategy](07-testing-strategy.md)** – _Testing pyramid and CI/CD integration for performance validation_
-- **[Technical Guidelines](03-technical-guidelines.md)** – _Tooling and automation for performance monitoring_
-- **[UX Guidelines](05-ux-guidelines.md)** – _User experience standards impact perceived performance_
-- **[Infrastructure Guidelines](04-infrastructure-guidelines.md)** – _Database optimization, caching layers, and load balancing strategies_
+- **[Definition of Done](definition-of-done.md)** – _Quality gates and acceptance criteria reference these benchmarks_
+- **[Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)** – _Testing pyramid and CI/CD integration for performance validation_
+- **[Technical Guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md)** – _Tooling and automation for performance monitoring_
+- **[UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md)** – _User experience standards impact perceived performance_
+- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)** – _Database optimization, caching layers, and load balancing strategies_
 
 Supporting documents:
 
-- **[Accessibility Guidelines](08-accessibility-guidelines.md)** – _Accessibility scores as part of performance benchmarks_
-- **[Observability Guidelines](11-observability-guidelines.md)** – _Monitoring and alerting for performance metrics_
+- **[Accessibility Guidelines](accessibility-guidelines.md)** – _Accessibility scores as part of performance benchmarks_
+- **[Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md)** – _Monitoring and alerting for performance metrics_
 
 This document provides a comprehensive framework for performance optimization, monitoring, and validation, ensuring all deliverables meet the required standards for speed, reliability, and user experience.

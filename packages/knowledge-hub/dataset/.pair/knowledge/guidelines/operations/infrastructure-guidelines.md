@@ -29,8 +29,8 @@ This document defines infrastructure standards, deployment strategies, and opera
 - Performance monitoring and observability
 - Database design and data modeling
 - Third-party service integrations
-- Testing methodologies and test implementation (see [Testing Strategy](07-testing-strategy.md))
-- Performance testing strategies and tools (see [Performance Guidelines](09-performance-guidelines.md))
+- Testing methodologies and test implementation (see [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md))
+- Performance testing strategies and tools (see [Performance Guidelines](.pair/knowledge/guidelines/quality/performance-guidelines.md))
 
 ---
 
@@ -183,7 +183,7 @@ This document defines infrastructure standards, deployment strategies, and opera
 - **Compliance Monitoring**: Continuous monitoring of infrastructure compliance with security standards
 - **Threat Intelligence Integration**: Integrate threat intelligence feeds for proactive security monitoring
 
-_For application-level security practices, refer to [Security Guidelines](10-security-guidelines.md)_
+_For application-level security practices, refer to [Security Guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md)_
 
 ---
 
@@ -232,7 +232,7 @@ Comprehensive monitoring and observability are essential for reliable, scalable,
 
 - All monitoring, alerting, and cost management configurations must be documented and reviewed regularly.
 - Integrate observability requirements into ADRs for new infrastructure components.
-- Reference [Observability Guidelines](11-observability-guidelines.md) for detailed instrumentation and monitoring standards.
+- Reference [Observability Guidelines](observability-guidelines.md) for detailed instrumentation and monitoring standards.
 
 ---
 
@@ -271,7 +271,7 @@ Comprehensive monitoring and observability are essential for reliable, scalable,
 
 - **Environment Files**: `.env.development` for development-specific configuration
 - **Service Endpoints**: Real external service URLs and credentials
-- **Feature Flags**: Environment-specific feature toggle configuration (see [Technical Guidelines](03-technical-guidelines.md))
+- **Feature Flags**: Environment-specific feature toggle configuration (see [Technical Guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md))
 - **Monitoring Integration**: Basic observability for development debugging
 
 ### Staging Environment
@@ -593,14 +593,14 @@ const createServiceConfig = (environment: string): ServiceConfig => {
 
 ### Infrastructure Extension Workflow
 
-**Architectural Decision Requirement**: New infrastructure components and external services must follow the ADR process defined in [Architectural Guidelines](01-architectural-guidelines.md).
+**Architectural Decision Requirement**: New infrastructure components and external services must follow the ADR process defined in [Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md).
 
-**Bounded Context Infrastructure**: When adding infrastructure for new bounded contexts (apps/services), also follow the [Bounded Context Decision Checklist](01-architectural-guidelines.md) for architectural consistency.
+**Bounded Context Infrastructure**: When adding infrastructure for new bounded contexts (apps/services), also follow the [Bounded Context Decision Checklist](.pair/knowledge/guidelines/architecture/architectural-guidelines.md) for architectural consistency.
 
 **Process**:
 
 1. **Technology Evaluation**: When a new infrastructure component or external service is needed
-2. **ADR Creation**: Follow the ADR process and template defined in [Architectural Guidelines](01-architectural-guidelines.md)
+2. **ADR Creation**: Follow the ADR process and template defined in [Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)
 3. **Implementation Planning**: Add infrastructure extension tasks to product backlog
 4. **Prioritization**: Schedule implementation based on business priority and technical dependencies
 
@@ -655,7 +655,7 @@ const createServiceConfig = (environment: string): ServiceConfig => {
 
 **Bounded Context Flexibility**: Each bounded context (app/service) can select the most appropriate platform based on requirements and constraints.
 
-**Platform Decision Requirements**: All platform selections must be documented through ADR process following [Architectural Guidelines](01-architectural-guidelines.md).
+**Platform Decision Requirements**: All platform selections must be documented through ADR process following [Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md).
 
 **Supported Platforms**:
 
@@ -856,7 +856,7 @@ spec:
 
 ### IaC Tool Selection
 
-**ADR Requirement**: Infrastructure as Code tool selection must be documented through ADR process following [Architectural Guidelines](01-architectural-guidelines.md).
+**ADR Requirement**: Infrastructure as Code tool selection must be documented through ADR process following [Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md).
 
 **Platform-Specific Recommendations**:
 
@@ -1225,7 +1225,7 @@ jobs:
 
 ### CI/CD Platform Selection
 
-**ADR Requirement**: CI/CD platform selection must be documented through ADR process following [Architectural Guidelines](01-architectural-guidelines.md).
+**ADR Requirement**: CI/CD platform selection must be documented through ADR process following [Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md).
 
 **Recommended Platform**: **GitHub Actions** for seamless integration with GitHub repositories.
 
@@ -2284,8 +2284,8 @@ This document supports the **Definition of Done** requirements:
 
 Core references for infrastructure implementation:
 
-- **[Architectural Guidelines](01-architectural-guidelines.md)** - _Architecture determines deployment patterns and ADR requirements_
-- **[Technical Guidelines](03-technical-guidelines.md)** - _Tech stack requirements influence infrastructure choices_
-- **[Testing Strategy](07-testing-strategy.md)** - _Testing infrastructure setup and environment requirements_
-- **[Security Guidelines](10-security-guidelines.md)** - _Application-level security practices that complement infrastructure security_
-- **[Code Design Guidelines](02-code-design-guidelines.md)** - _Code organization influences containerization and deployment strategies_
+- **[Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)** - _Architecture determines deployment patterns and ADR requirements_
+- **[Technical Guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md)** - _Tech stack requirements influence infrastructure choices_
+- **[Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)** - _Testing infrastructure setup and environment requirements_
+- **[Security Guidelines](.pair/knowledge/guidelines/quality/security-guidelines.md)** - _Application-level security practices that complement infrastructure security_
+- **[Code Design Guidelines](.pair/knowledge/guidelines/development/code-design-guidelines.md)** - _Code organization influences containerization and deployment strategies_

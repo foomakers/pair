@@ -255,14 +255,14 @@ Define comprehensive security standards, practices, and protocols that protect a
 
 **Development Workflow Integration:**
 
-- Security checklist integrated into [Definition of Done](06-definition-of-done.md) compliance
+- Security checklist integrated into [Definition of Done](definition-of-done.md) compliance
 - Vulnerability scanning tools and thresholds enforced in CI/CD pipeline
 - Security review process aligned with automated code review in development workflow
 - SAST/DAST requirements integrated as automated security gates
 
 **Testing Strategy Coordination:**
 
-- Security testing types coordinated with [Testing Strategy](07-testing-strategy.md) framework
+- Security testing types coordinated with [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md) framework
 - SAST integrated at unit level, DAST at integration level, penetration testing at e2e level
 - Security testing tools configured with Vitest/Playwright for seamless integration
 - Security testing phases aligned with CI/CD pipeline testing workflow
@@ -301,9 +301,9 @@ _Premium Options (Enterprise):_
 
 ### Monitoring Integration
 
-- **Observability Alignment**: Security monitoring integrated with [Observability Guidelines](11-observability-guidelines.md)
+- **Observability Alignment**: Security monitoring integrated with [Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md)
 - **Performance Impact**: Monitor security measures impact on application performance
-- **Infrastructure Coordination**: Security monitoring aligned with [Infrastructure Guidelines](04-infrastructure-guidelines.md)
+- **Infrastructure Coordination**: Security monitoring aligned with [Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)
 
 ---
 
@@ -395,16 +395,16 @@ This Security Guidelines document ensures comprehensive application security sta
 
 **Core Integration:**
 
-- **[Definition of Done](06-definition-of-done.md)** - _Security checklist and vulnerability thresholds enforce quality gates and deployment criteria_
-- **[Testing Strategy](07-testing-strategy.md)** - _Security testing (SAST/DAST) integrated across unit/integration/e2e testing levels_
-- **[Technical Guidelines](03-technical-guidelines.md)** - _Security tools configuration, CI/CD integration, and automated pipeline setup_
+- **[Definition of Done](definition-of-done.md)** - _Security checklist and vulnerability thresholds enforce quality gates and deployment criteria_
+- **[Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)** - _Security testing (SAST/DAST) integrated across unit/integration/e2e testing levels_
+- **[Technical Guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md)** - _Security tools configuration, CI/CD integration, and automated pipeline setup_
 
 **Supporting Documentation:**
 
-- **[Infrastructure Guidelines](04-infrastructure-guidelines.md)** - _Infrastructure security hardening, network protection, container security, and cloud security practices_
-- **[Observability Guidelines](11-observability-guidelines.md)** - _Security monitoring, alerting integration, and incident detection capabilities_
-- **[Code Design Guidelines](02-code-design-guidelines.md)** - _Secure coding patterns, implementation standards, and development best practices_
+- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)** - _Infrastructure security hardening, network protection, container security, and cloud security practices_
+- **[Observability Guidelines](.pair/knowledge/guidelines/operations/observability-guidelines.md)** - _Security monitoring, alerting integration, and incident detection capabilities_
+- **[Code Design Guidelines](.pair/knowledge/guidelines/development/code-design-guidelines.md)** - _Secure coding patterns, implementation standards, and development best practices_
 
 **Architecture Alignment:**
 
-- **[Architectural Guidelines](01-architectural-guidelines.md)** - _Security by design principles, architectural patterns, and system security considerations_
+- **[Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)** - _Security by design principles, architectural patterns, and system security considerations_

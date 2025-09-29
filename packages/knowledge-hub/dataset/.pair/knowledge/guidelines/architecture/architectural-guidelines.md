@@ -230,7 +230,7 @@ When creating a new bounded context (app or service), the following decisions mu
 
 **Infrastructure-Specific ADRs:**
 
-For infrastructure and technology decisions, use the specialized process and checklist defined in [Infrastructure Guidelines](04-infrastructure-guidelines.md), which includes:
+For infrastructure and technology decisions, use the specialized process and checklist defined in [Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md), which includes:
 
 - Infrastructure-specific ADR considerations
 - Service addition workflow
@@ -264,13 +264,13 @@ This document supports the **Definition of Done** requirements:
 
 Core references for implementing architectural decisions:
 
-- **[Code Design Guidelines](02-code-design-guidelines.md)** - _Translates architecture into code patterns_
-- **[Technical Guidelines](03-technical-guidelines.md)** - _Defines technology stack implementing this architecture_
-- **[Infrastructure Guidelines](04-infrastructure-guidelines.md)** - _Deployment strategies for these patterns_
-- **[06-definition-of-done.md](06-definition-of-done.md)**
-- **[project-management-framework.md](12-collaboration-and-process-guidelines/project-management-framework.md)**
+- **[Code Design Guidelines](.pair/knowledge/guidelines/development/code-design-guidelines.md)** - _Translates architecture into code patterns_
+- **[Technical Guidelines](.pair/knowledge/guidelines/development/technical-guidelines.md)** - _Defines technology stack implementing this architecture_
+- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)** - _Deployment strategies for these patterns_
+- **[06-definition-of-done.md](.pair/knowledge/guidelines/quality/definition-of-done.md)**
+- **[project-management-framework.md](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md)**
 
 Supporting documents:
 
-- **[Testing Strategy](07-testing-strategy.md)** - _Testing approaches for architectural validation_
-- **[Performance Guidelines](09-performance-guidelines.md)** - _Optimization strategies for scalability_
+- **[Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md)** - _Testing approaches for architectural validation_
+- **[Performance Guidelines](.pair/knowledge/guidelines/quality/performance-guidelines.md)** - _Optimization strategies for scalability_

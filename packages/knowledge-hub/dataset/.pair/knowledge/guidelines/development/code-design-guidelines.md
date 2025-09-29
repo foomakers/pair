@@ -621,11 +621,11 @@ module.exports = {
 
 **Accessibility ESLint Configuration:**
 
-For comprehensive accessibility standards and ESLint integration, see [Accessibility Guidelines](08-accessibility-guidelines.md) which provides:
+For comprehensive accessibility standards and ESLint integration, see [Accessibility Guidelines](.pair/knowledge/guidelines/quality/accessibility-guidelines.md) which provides:
 
 - Complete `react-a11y.js` extension with jsx-a11y plugin rules
 - WCAG compliance rules integration
-- Accessibility-specific linting standards aligned with [UX Guidelines](05-ux-guidelines.md)
+- Accessibility-specific linting standards aligned with [UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md)
 - Development workflow integration for accessibility validation
 
 #### Project-Specific Configuration
@@ -2398,11 +2398,11 @@ This document supports the **Definition of Done** requirements:
 
 Core references for code implementation:
 
-- **[Architectural Guidelines](01-architectural-guidelines.md)** - _Architectural patterns guide code organization_
-- **[Technical Guidelines](03-technical-guidelines.md)** - _Technology stack enables implementation_
-- **[UX Guidelines](05-ux-guidelines.md)** - _UI standards complement React patterns_
+- **[Architectural Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)** - _Architectural patterns guide code organization_
+- **[Technical Guidelines](technical-guidelines.md)** - _Technology stack enables implementation_
+- **[UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md)** - _UI standards complement React patterns_
 
 Supporting documents:
 
-- **[Testing Strategy](07-testing-strategy.md)** - _Testing approaches verify code quality_
-- **[Definition of Done](06-definition-of-done.md)** - _Quality criteria validate code standards_
+- **[Testing Strategy](testing-strategy.md)** - _Testing approaches verify code quality_
+- **[Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md)** - _Quality criteria validate code standards_

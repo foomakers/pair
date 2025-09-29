@@ -17,8 +17,8 @@ Ensure digital products are accessible to all users, including those with disabi
 **Out of Scope:**
 
 - Content strategy and copywriting guidelines
-- Visual design aesthetics and branding (see [UX Guidelines](05-ux-guidelines.md) for design patterns)
-- Performance optimization techniques (see [Performance Guidelines](09-performance-guidelines.md) for performance impact)
+- Visual design aesthetics and branding (see [UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md) for design patterns)
+- Performance optimization techniques (see [Performance Guidelines](performance-guidelines.md) for performance impact)
 - Backend system accessibility considerations (covered in infrastructure documents)
 - Legal compliance and regulatory requirements (business/legal domain)
 
@@ -116,11 +116,11 @@ Ensure digital products are accessible to all users, including those with disabi
 - **Focus Indicators**: Clear visual focus indicators for keyboard navigation
 
 **Design Integration:**
-Visual accessibility must align with [UX Guidelines](05-ux-guidelines.md) design standards:
+Visual accessibility must align with [UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md) design standards:
 
-- Color contrast validation integrated with [color palette](05-ux-guidelines.md) selection
-- Typography accessibility coordinated with [font hierarchy](05-ux-guidelines.md) requirements
-- Focus indicators consistent with [design system](05-ux-guidelines.md) visual patterns
+- Color contrast validation integrated with [color palette](.pair/knowledge/guidelines/operations/ux-guidelines.md) selection
+- Typography accessibility coordinated with [font hierarchy](.pair/knowledge/guidelines/operations/ux-guidelines.md) requirements
+- Focus indicators consistent with [design system](.pair/knowledge/guidelines/operations/ux-guidelines.md) visual patterns
 
 ### Motor Accessibility
 
@@ -131,11 +131,11 @@ Visual accessibility must align with [UX Guidelines](05-ux-guidelines.md) design
 - **Gesture Alternatives**: Alternative input methods for complex gestures
 
 **Design Integration:**
-Motor accessibility coordinates with [UX Guidelines](05-ux-guidelines.md) interaction patterns:
+Motor accessibility coordinates with [UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md) interaction patterns:
 
-- Touch target specifications align with [responsive design](05-ux-guidelines.md) requirements (minimum 44×44px)
-- Interactive element spacing consistent with [layout guidelines](05-ux-guidelines.md)
-- Button states integration with [component patterns](05-ux-guidelines.md)
+- Touch target specifications align with [responsive design](.pair/knowledge/guidelines/operations/ux-guidelines.md) requirements (minimum 44×44px)
+- Interactive element spacing consistent with [layout guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md)
+- Button states integration with [component patterns](.pair/knowledge/guidelines/operations/ux-guidelines.md)
 
 ### Cognitive Accessibility
 
@@ -157,7 +157,7 @@ Motor accessibility coordinates with [UX Guidelines](05-ux-guidelines.md) intera
 
 ### React/TypeScript Patterns
 
-Follow [Code Design Guidelines](02-code-design-guidelines.md) React patterns with accessibility-first approach:
+Follow [Code Design Guidelines](.pair/knowledge/guidelines/development/code-design-guidelines.md) React patterns with accessibility-first approach:
 
 **Accessible Component Definition:**
 
@@ -226,7 +226,7 @@ const useAccessibleDialog = () => {
 
 ### shadcn/ui Accessibility Integration
 
-Leverage [shadcn/ui's Radix UI foundation](05-ux-guidelines.md) which provides WCAG-compliant components by default:
+Leverage [shadcn/ui's Radix UI foundation](.pair/knowledge/guidelines/operations/ux-guidelines.md) which provides WCAG-compliant components by default:
 
 **Button Accessibility Pattern:**
 
@@ -291,7 +291,7 @@ const AccessibleForm = () => {
 
 ### ESLint Accessibility Configuration
 
-Extend the [shared ESLint configuration](02-code-design-guidelines.md) with accessibility rules:
+Extend the [shared ESLint configuration](.pair/knowledge/guidelines/development/code-design-guidelines.md) with accessibility rules:
 
 ```javascript
 // tools/eslint-config/react-a11y.js - Accessibility-specific extensions
@@ -396,7 +396,7 @@ const SkipLinks = () => (
 )
 ```
 
-For comprehensive implementation patterns, see [Code Design Guidelines](02-code-design-guidelines.md) for React/TypeScript standards and [UX Guidelines](05-ux-guidelines.md) for shadcn/ui component usage.
+For comprehensive implementation patterns, see [Code Design Guidelines](.pair/knowledge/guidelines/development/code-design-guidelines.md) for React/TypeScript standards and [UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md) for shadcn/ui component usage.
 
 ---
 
@@ -456,21 +456,21 @@ For comprehensive implementation patterns, see [Code Design Guidelines](02-code-
 
 **Pre-Development Validation:**
 
-- Accessibility requirements defined in user stories per [Definition of Done](06-definition-of-done.md) criteria
-- Design accessibility review using [UX Guidelines](05-ux-guidelines.md) standards
+- Accessibility requirements defined in user stories per [Definition of Done](definition-of-done.md) criteria
+- Design accessibility review using [UX Guidelines](.pair/knowledge/guidelines/operations/ux-guidelines.md) standards
 - Color schemes validated for contrast requirements (4.5:1 ratio minimum)
-- Component accessibility patterns verified with [shadcn/ui integration](05-ux-guidelines.md)
+- Component accessibility patterns verified with [shadcn/ui integration](.pair/knowledge/guidelines/operations/ux-guidelines.md)
 
 **Development Validation:**
 
-- Automated accessibility testing integrated per [Testing Strategy](07-testing-strategy.md) test pyramid
+- Automated accessibility testing integrated per [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md) test pyramid
 - ESLint accessibility rules validation using [jsx-a11y configuration](#eslint-accessibility-configuration)
 - Component-level accessibility testing with React Testing Library and axe-core
 - Semantic HTML and ARIA implementation verified per implementation standards
 
 **Pre-Deployment Validation:**
 
-- Lighthouse accessibility score validation (≥95 per [Definition of Done](06-definition-of-done.md))
+- Lighthouse accessibility score validation (≥95 per [Definition of Done](definition-of-done.md))
 - Manual keyboard navigation testing across all user flows
 - Screen reader compatibility testing (NVDA, JAWS, VoiceOver)
 - WCAG 2.1 AA compliance verification using automated tools
@@ -493,7 +493,7 @@ For comprehensive implementation patterns, see [Code Design Guidelines](02-code-
 
 **Documentation Requirements:**
 
-- Accessibility test results documented per [Definition of Done](06-definition-of-done.md) requirements
+- Accessibility test results documented per [Definition of Done](definition-of-done.md) requirements
 - WCAG compliance evidence maintained for audit purposes
 - Accessibility issue tracking and resolution documentation
 - Assistive technology compatibility verification records
@@ -516,7 +516,7 @@ For comprehensive implementation patterns, see [Code Design Guidelines](02-code-
 
 **Release Readiness Criteria:**
 
-- All accessibility requirements from [Definition of Done](06-definition-of-done.md) satisfied
+- All accessibility requirements from [Definition of Done](definition-of-done.md) satisfied
 - Accessibility testing documentation complete and reviewed
 - Manual accessibility validation sign-off obtained
 - Accessibility compliance statement prepared for deployment
@@ -688,7 +688,7 @@ const setupAccessibilityMonitoring = () => {
 
 ### Definition of Done Integration
 
-All accessibility requirements must align with the mandatory criteria defined in [Definition of Done](06-definition-of-done.md):
+All accessibility requirements must align with the mandatory criteria defined in [Definition of Done](definition-of-done.md):
 
 - **WCAG 2.1 AA Compliance**: All features must meet WCAG 2.1 Level AA standards
 - **Lighthouse Accessibility Score**: Minimum score of 95/100 required for production deployment
@@ -696,11 +696,11 @@ All accessibility requirements must align with the mandatory criteria defined in
 - **Manual Validation**: Screen reader testing and keyboard navigation verification required
 - **Assistive Technology**: Compatibility with NVDA, JAWS, and VoiceOver screen readers
 
-See [♿ Accessibility Assessment](06-definition-of-done.md) section in Definition of Done for complete validation requirements.
+See [♿ Accessibility Assessment](definition-of-done.md) section in Definition of Done for complete validation requirements.
 
 ### Testing Strategy Integration
 
-Accessibility testing must be integrated across all levels of the test pyramid as defined in [Testing Strategy](07-testing-strategy.md):
+Accessibility testing must be integrated across all levels of the test pyramid as defined in [Testing Strategy](.pair/knowledge/guidelines/development/testing-strategy.md):
 
 **Unit Tests (70% - Component Level):**
 
@@ -721,7 +721,7 @@ Accessibility testing must be integrated across all levels of the test pyramid a
 - **Keyboard Navigation**: Automated keyboard-only navigation testing
 - **Screen Reader Simulation**: Basic assistive technology testing patterns
 
-See [Non-Functional Testing](07-testing-strategy.md) section for detailed accessibility testing implementation patterns.
+See [Non-Functional Testing](.pair/knowledge/guidelines/development/testing-strategy.md) section for detailed accessibility testing implementation patterns.
 
 ---
 
@@ -854,20 +854,20 @@ This document supports the **Definition of Done** requirements:
 
 **Core Integration:**
 
-- **[02-code-design-guidelines.md](02-code-design-guidelines.md)** - React/TypeScript accessibility implementation patterns
-- **[03-technical-guidelines.md](03-technical-guidelines.md)** - Development tools and ESLint accessibility configuration
-- **[05-ux-guidelines.md](05-ux-guidelines.md)** - Visual design standards and shadcn/ui accessibility integration
-- **[06-definition-of-done.md](06-definition-of-done.md)** - Accessibility validation requirements and quality gates
+- **[02-code-design-guidelines.md](.pair/knowledge/guidelines/development/code-design-guidelines.md)** - React/TypeScript accessibility implementation patterns
+- **[03-technical-guidelines.md](.pair/knowledge/guidelines/development/technical-guidelines.md)** - Development tools and ESLint accessibility configuration
+- **[05-ux-guidelines.md](.pair/knowledge/guidelines/operations/ux-guidelines.md)** - Visual design standards and shadcn/ui accessibility integration
+- **[06-definition-of-done.md](definition-of-done.md)** - Accessibility validation requirements and quality gates
 
 **Testing and Quality Assurance:**
 
-- **[07-testing-strategy.md](07-testing-strategy.md)** - Accessibility testing integration across test pyramid levels
-- **[09-performance-guidelines.md](09-performance-guidelines.md)** - Performance impact considerations for accessibility features
-- **[11-observability-guidelines.md](11-observability-guidelines.md)** - Accessibility monitoring and compliance reporting
+- **[07-testing-strategy.md](.pair/knowledge/guidelines/development/testing-strategy.md)** - Accessibility testing integration across test pyramid levels
+- **[09-performance-guidelines.md](performance-guidelines.md)** - Performance impact considerations for accessibility features
+- **[11-observability-guidelines.md](.pair/knowledge/guidelines/operations/observability-guidelines.md)** - Accessibility monitoring and compliance reporting
 
 **Infrastructure and Deployment:**
 
-- **[01-architectural-guidelines.md](01-architectural-guidelines.md))** - Architectural decisions supporting accessibility implementation
-- **[04-infrastructure-guidelines.md](04-infrastructure-guidelines.md)** - CI/CD accessibility testing integration and deployment validation
+- **[01-architectural-guidelines.md](.pair/knowledge/guidelines/architecture/architectural-guidelines.md))** - Architectural decisions supporting accessibility implementation
+- **[04-infrastructure-guidelines.md](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)** - CI/CD accessibility testing integration and deployment validation
 
 This accessibility guidelines document ensures that digital products are inclusive and compliant while leveraging modern development tools to enhance accessibility implementation and testing processes.
