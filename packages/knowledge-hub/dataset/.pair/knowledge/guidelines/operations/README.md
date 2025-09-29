@@ -1,45 +1,55 @@
-# 🚀 Operations Guidelines
+# ⚙️ Operations Guidelines (Level 1)
 
-Infrastructure management, UX standards, and observability practices for reliable and user-friendly software operations.
+Infrastructure standards, UX design guidelines, and observability practices for reliable software operations.
 
-## 📚 Operations Practices
+## 📚 Operations Practices (Level 2)
 
-### Infrastructure & Deployment
+### Infrastructure Practice
 
-- **[Infrastructure Guidelines](infrastructure-guidelines.md)** - Deployment strategies, environment management, and CI/CD
-  - Deployment pipeline and automation
-  - Environment configuration and management  
-  - Infrastructure as Code practices
-  - CI/CD best practices and tooling
+- **[Infrastructure](infrastructure/README.md)** - Infrastructure standards and deployment guidelines
+  - Infrastructure architecture and provisioning
+  - Deployment strategies and automation
+  - Environment management and configuration
+  - Scalability and reliability patterns
 
-### User Experience
+### UX Design Practice
 
-- **[UX Guidelines](ux-guidelines.md)** - User experience standards and design principles
-  - User interface design standards
-  - User experience principles and patterns
-  - Design system and component libraries
-  - Accessibility integration with UX design
+- **[UX Design](ux-design/README.md)** - User experience design standards and interface guidelines
+  - User experience design principles
+  - Interface design patterns and components
+  - User research and testing methodologies
+  - Design system standards and consistency
 
-### Monitoring & Observability
+### Observability Practice
 
-- **[Observability Guidelines](observability-guidelines.md)** - Monitoring, logging, and tracing strategies
-  - Application performance monitoring
+- **[Observability](observability/README.md)** - Monitoring, logging, and observability standards
+  - Monitoring and alerting strategies
   - Logging standards and centralization
-  - Distributed tracing and debugging
-  - Alerting and incident response
+  - Performance tracking and metrics
+  - Incident response and troubleshooting
+
+## 🛠️ Level 3: Tool-Specific Implementations
+
+_Each practice folder contains tool-specific guides and implementations:_
+
+- Infrastructure tools (AWS, Azure, GCP, Kubernetes)
+- UX design tools (Figma, Sketch, Adobe XD)
+- Observability tools (Prometheus, Grafana, ELK Stack)
+- Deployment and automation tools
 
 ## 🔗 Related Guidelines
 
-- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture)** - Architectural patterns informing operational strategies
-- **[Development Guidelines](.pair/knowledge/guidelines/development)** - Development practices supporting operational excellence
-- **[Quality Guidelines](.pair/knowledge/guidelines/quality)** - Quality standards ensuring operational reliability
+- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md)** - Architectural patterns supporting operational requirements
+- **[Quality Guidelines](.pair/knowledge/guidelines/quality/README.md)** - Quality standards for operational excellence
+- **[Development Guidelines](.pair/knowledge/guidelines/development/README.md)** - Development practices supporting operations
 
 ## 🎯 Quick Start
 
-1. **Infrastructure**: Set up deployment strategies per [Infrastructure Guidelines](infrastructure-guidelines.md)
-2. **UX Standards**: Apply user experience principles from [UX Guidelines](ux-guidelines.md)
-3. **Monitoring**: Implement observability practices from [Observability Guidelines](observability-guidelines.md)
-4. **Integration**: Ensure operational practices align with [Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md)
+1. **Infrastructure**: Configure [Infrastructure](infrastructure) for reliable deployment and scaling
+2. **UX Standards**: Implement [UX Design](ux-design) guidelines for consistent user experience
+3. **Monitoring**: Establish [Observability](observability) for system health and performance tracking
+4. **Integration**: Align operational practices with [Quality Standards](.pair/knowledge/guidelines/quality/standards)
 
 ---
-*Assistant Context: Focus on infrastructure deployment, user experience standards, and observability practices for operations.*
+
+_Assistant Context: Focus on infrastructure management, user experience design, and system observability for operational excellence._
