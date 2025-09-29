@@ -1,37 +1,42 @@
 # 📚 Technical Guidelines Knowledge Base
 
-This directory contains the complete technical guidelines knowledge base for the project, organized into themed categories with Level 2 navigation READMEs for easy discovery and cross-linking.
+This directory contains the complete technical guidelines knowledge base for the project, organized for optimal discoverability and RAG performance.
 
-## 📋 3-Level Organization Structure
+## 📋 Optimized Organization Structure
 
-This knowledge base follows a **3-level hierarchical structure**:
+This knowledge base follows an **optimized hybrid structure**:
 
-- **Level 1**: Theme folders (main categories)
-- **Level 2**: Practice folders (specific practices within each theme)
-- **Level 3**: Tool/solution-specific implementations (how to use specific tools)
+- **Folders**: For multi-file topics with complex sub-components
+- **Standalone Files**: For consolidated topics that work well as single documents
+- **Clear Navigation**: Direct paths with minimal folder nesting
 
-### 🏗️ Architecture Guidelines (Level 1)
+This approach reduces folder pollution while maintaining logical organization and cross-referencing.
+
+### 🏗️ Architecture Guidelines
 
 - **[Architecture](architecture/README.md)** - System architecture, patterns, and design decisions
   - **[Architectural Patterns](architecture/architectural-patterns/README.md)** - Core architecture patterns (CRUD, Layered, Hexagonal, Clean, CQRS, Event Sourcing)
   - **[Scaling Patterns](architecture/scaling-patterns/README.md)** - Horizontal and vertical scaling strategies
   - **[Deployment Architectures](architecture/deployment-architectures/README.md)** - Deployment patterns and strategies
   - **[Performance Patterns](architecture/performance-patterns/README.md)** - Performance optimization techniques
-  - **[Decision Records](architecture/decision-records/README.md)** - ADR process, templates, decision frameworks
+  - **[Decision Records](architecture/decision-records.md)** - ADR process, templates, decision frameworks
 
-### 💻 Development Guidelines (Level 1)
+### 💻 Development Guidelines
 
 - **[Development](development/README.md)** - Code design, technical standards, and testing strategies
   - **[Code Design](development/code-design/README.md)** - Organization patterns, design principles, code structure
+    - [Framework Patterns](development/code-design/framework-patterns.md), [Quality Standards](development/code-design/quality-standards.md), [Implementation Standards](development/code-design/implementation-standards.md), [Organization Patterns](development/code-design/organization-patterns.md)
   - **[Technical Standards](development/technical-standards/README.md)** - Tech stack decisions, tool configuration
+    - [Tech Stack](development/technical-standards/tech-stack.md), [Development Tools](development/technical-standards/development-tools.md), [Integration Standards](development/technical-standards/integration-standards.md), [Deployment Workflow](development/technical-standards/deployment-workflow.md)
   - **[Testing](development/testing/README.md)** - Testing strategies, frameworks, quality gates
+    - [Testing Strategy](development/testing/testing-strategy.md), [Test Automation](development/testing/test-automation.md), [Testing Implementation](development/testing/testing-implementation.md), [Testing Tools](development/testing/testing-tools.md)
 
-### 🤝 Collaboration Guidelines (Level 1)
+### 🤝 Collaboration Guidelines
 
 - **[Collaboration](collaboration/README.md)** - Process workflows and project management
   - **[Project Management](collaboration/project-management/README.md)** - PM frameworks with tool-specific guides (Jira, GitHub, etc.)
 
-### ✨ Quality Guidelines (Level 1)
+### ✨ Quality Guidelines
 
 - **[Quality](quality/README.md)** - Quality criteria, accessibility, performance, and security
   - **[Standards](quality/standards/README.md)** - Definition of Done, quality criteria, completion standards
@@ -39,7 +44,7 @@ This knowledge base follows a **3-level hierarchical structure**:
   - **[Performance](quality/performance.md)** - Optimization strategies, monitoring, benchmarking
   - **[Security](quality/security.md)** - Secure development, vulnerability assessment, practices
 
-### 🚀 Operations Guidelines (Level 1)
+### 🚀 Operations Guidelines
 
 - **[Operations](operations/README.md)** - Infrastructure, UX standards, and observability
   - **[Infrastructure](operations/infrastructure.md)** - Deployment strategies, environment management, CI/CD
