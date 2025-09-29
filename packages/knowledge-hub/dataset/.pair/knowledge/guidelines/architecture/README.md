@@ -1,30 +1,53 @@
-# 🏗️ Architecture Guidelines
+# 🏗️ Architecture Guidelines (Level 1)
 
 System architecture patterns, bounded contexts, and architectural decision processes for scalable software design.
 
-## 📚 Architecture Practices
+## 📚 Architecture Practices (Level 2)
 
-### Core Architecture
+### Core Architecture Patterns
 
-- **[Architectural Guidelines](architectural-guidelines.md)** - System architecture patterns, bounded contexts, and ADR processes
-  - Domain-driven design principles
-  - Bounded context definitions
-  - Architecture Decision Records (ADR) process
-  - System integration patterns
-  - Scalability and maintainability guidelines
+- **[Architectural Patterns](architectural-patterns/README.md)** - Core architecture patterns (CRUD, Layered, Hexagonal, Clean, CQRS, Event Sourcing)
+- **[Scaling Patterns](scaling-patterns/README.md)** - Horizontal and vertical scaling strategies
+- **[Deployment Architectures](deployment-architectures/README.md)** - Deployment patterns and strategies
+- **[Performance Patterns](performance-patterns/README.md)** - Performance optimization techniques
+
+### Domain-Driven Design
+
+- **[Domain-Driven Design](domain-driven-design.md)** - DDD principles and implementation
+- **[Bounded Context Patterns](bounded-context-patterns.md)** - Context boundary definitions
+- **[Event Sourcing](architectural-patterns/event-sourcing.md)** - Event-based persistence patterns
+- **[CQRS Pattern](architectural-patterns/cqrs.md)** - Command Query Responsibility Segregation
+
+### System Integration
+
+- **[Integration Patterns](integration-patterns.md)** - Service communication and integration strategies
+- **[Bounded Context Patterns](bounded-context-patterns.md)** - Context boundary definitions
+
+### Decision Records Practice
+
+- **[Decision Records](decision-records/README.md)** - ADR process, templates, and decision-making frameworks
+
+## 🛠️ Level 3: Pattern-Specific Implementations
+
+_Each pattern folder contains specific implementations and detailed guides:_
+
+- **Architectural Patterns**: CRUD, Layered, Hexagonal, Clean, CQRS, Event Sourcing implementations
+- **Scaling Patterns**: Database sharding, load balancing, circuit breakers, auto-scaling
+- **Deployment Patterns**: Monolith, microservices, serverless, hybrid architectures
+- **Performance Patterns**: Caching, database optimization, concurrency, memory management
 
 ## 🔗 Related Guidelines
 
-- **[Development Guidelines](.pair/knowledge/guidelines/development)** - Code patterns implementing these architectural decisions
-- **[Operations Guidelines](.pair/knowledge/guidelines/operations)** - Infrastructure deployment strategies for these patterns
-- **[Quality Guidelines](.pair/knowledge/guidelines/quality)** - Quality criteria ensuring architectural integrity
+- **[Development Guidelines](../development/README.md)** - Code patterns implementing these architectural decisions
+- **[Operations Guidelines](../operations/README.md)** - Infrastructure deployment strategies for these patterns
+- **[Quality Guidelines](../quality/README.md)** - Quality criteria ensuring architectural integrity
 
 ## 🎯 Quick Start
 
-1. **Start Here**: Read [Architectural Guidelines](architectural-guidelines.md) for system design principles
-2. **Define Contexts**: Use bounded context patterns for domain modeling
-3. **Document Decisions**: Follow ADR process for architectural choices
-4. **Validate Design**: Ensure alignment with [Definition of Done](.pair/knowledge/guidelines/quality/definition-of-done.md)
+1. **Architectural Patterns**: Start with [Architectural Patterns](architectural-patterns/README.md) for core patterns and DDD
+2. **Document Decisions**: Use [Decision Records](decision-records/README.md) for ADR process and templates
+3. **Validate Architecture**: Ensure alignment with Quality Standards
 
 ---
-*Assistant Context: Focus on system architecture, bounded contexts, and ADR processes when discussing architectural decisions.*
+
+_Assistant Context: Focus on system architecture, bounded contexts, and ADR processes when discussing architectural decisions._
