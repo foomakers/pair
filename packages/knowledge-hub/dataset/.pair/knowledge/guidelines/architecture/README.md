@@ -13,8 +13,8 @@ System architecture patterns, bounded contexts, and architectural decision proce
 
 ### Project-Specific Architecture
 
-- **[Project Constraints](project-constraints.md)** - Team size, desktop-only, self-hosting constraints
-- **[LLM Integration](llm-integration.md)** - RAG, Ollama, Supabase, and AI assistant patterns
+- **[Project Constraints](project-constraints/README.md)** - Team size, desktop-only, self-hosting constraints
+- **[LLM Integration](llm-integration/README.md)** - RAG, Ollama, Supabase, and AI assistant patterns
 
 ### Domain-Driven Design
 
