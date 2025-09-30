@@ -25,31 +25,31 @@ spec:
   minReplicas: 2
   maxReplicas: 10
   metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
   behavior:
     scaleUp:
       stabilizationWindowSeconds: 60
       policies:
-      - type: Percent
-        value: 100
-        periodSeconds: 15
+        - type: Percent
+          value: 100
+          periodSeconds: 15
     scaleDown:
       stabilizationWindowSeconds: 300
       policies:
-      - type: Percent
-        value: 10
-        periodSeconds: 60
+        - type: Percent
+          value: 10
+          periodSeconds: 60
 ```
 
 ## Application-Level Auto-scaling
@@ -59,27 +59,27 @@ export class ApplicationAutoScaler {
   private currentInstances = 1
   private readonly minInstances = 2
   private readonly maxInstances = 10
-  
+
   constructor(
     private metricsCollector: MetricsCollector,
-    private instanceManager: InstanceManager
+    private instanceManager: InstanceManager,
   ) {
     this.startMonitoring()
   }
-  
+
   private startMonitoring(): void {
     setInterval(async () => {
       const metrics = await this.metricsCollector.getCurrentMetrics()
       await this.evaluateScaling(metrics)
     }, 30000) // Check every 30 seconds
   }
-  
+
   private async evaluateScaling(metrics: ApplicationMetrics): Promise<void> {
     const cpuUsage = metrics.averageCpuUsage
     const memoryUsage = metrics.averageMemoryUsage
     const responseTime = metrics.averageResponseTime
     const queueLength = metrics.messageQueueLength
-    
+
     // Scale up conditions
     if (
       (cpuUsage > 75 || memoryUsage > 80 || responseTime > 1000 || queueLength > 100) &&
@@ -87,22 +87,25 @@ export class ApplicationAutoScaler {
     ) {
       await this.scaleUp()
     }
-    
+
     // Scale down conditions
     else if (
-      cpuUsage < 25 && memoryUsage < 30 && responseTime < 200 && queueLength < 10 &&
+      cpuUsage < 25 &&
+      memoryUsage < 30 &&
+      responseTime < 200 &&
+      queueLength < 10 &&
       this.currentInstances > this.minInstances
     ) {
       await this.scaleDown()
     }
   }
-  
+
   private async scaleUp(): Promise<void> {
     const newInstanceCount = Math.min(this.currentInstances + 1, this.maxInstances)
     await this.instanceManager.setInstanceCount(newInstanceCount)
     this.currentInstances = newInstanceCount
   }
-  
+
   private async scaleDown(): Promise<void> {
     const newInstanceCount = Math.max(this.currentInstances - 1, this.minInstances)
     await this.instanceManager.setInstanceCount(newInstanceCount)
@@ -127,12 +130,14 @@ export class ApplicationAutoScaler {
 ## Pros and Cons
 
 **Pros:**
+
 - **Cost efficiency** - Pay only for needed resources
 - **Performance** - Automatic response to load
 - **Availability** - Scale up during peaks
 - **Hands-off operation** - Reduced manual intervention
 
 **Cons:**
+
 - **Cold start delays** - Time to provision new instances
 - **Oscillation** - Rapid scaling up/down
 - **Complexity** - Requires careful configuration
@@ -147,6 +152,6 @@ export class ApplicationAutoScaler {
 
 ## Related Patterns
 
-- [Load Balancing](scaling-patterns-load-balancing.md) - Traffic distribution
-- [Circuit Breaker](scaling-patterns-circuit-breaker.md) - Failure resilience
-- [Performance Monitoring](performance-patterns-monitoring.md) - Metrics collection
+- [Load Balancing](load-balancing.md) - Traffic distribution
+- [Circuit Breaker](circuit-breaker.md) - Failure resilience
+- [Performance Monitoring](.pair/knowledge/guidelines/architecture/performance-patterns/README.md) - Metrics collection

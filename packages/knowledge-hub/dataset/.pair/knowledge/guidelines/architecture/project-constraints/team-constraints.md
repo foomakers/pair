@@ -114,7 +114,7 @@ Architectural constraints specific to small team development and rapid deploymen
 
 - **[Platform Constraints](platform-constraints.md)** - Platform and deployment constraints
 - **[Implementation Guidelines](implementation-guidelines.md)** - Decision making frameworks
-- **[Way of Working](../../adoption/tech/way-of-working.md)** - Process and workflow decisions
+- **[Way of Working](.pair/adoption/tech/way-of-working.md)** - Process and workflow decisions
 
 ## Scope Boundaries
 

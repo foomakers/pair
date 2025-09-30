@@ -347,6 +347,6 @@ Date,Completed Points,Team Size,Velocity per Person
 
 ## Related Documents
 
-- **[../issue-management/filesystem-issues.md](../issue-management/filesystem-issues.md)** - Issue tracking implementation
-- **[../automation/filesystem-automation.md](../automation/filesystem-automation.md)** - Automation workflows
+- **[.pair/knowledge/guidelines/collaboration/issue-management/filesystem-issues.md](.pair/knowledge/guidelines/collaboration/issue-management/filesystem-issues.md)** - Issue tracking implementation
+- **[.pair/knowledge/guidelines/collaboration/automation/filesystem-automation.md](.pair/knowledge/guidelines/collaboration/automation/filesystem-automation.md)** - Automation workflows
 - **[github-tracking.md](github-tracking.md)** - Comparison with GitHub-based tracking

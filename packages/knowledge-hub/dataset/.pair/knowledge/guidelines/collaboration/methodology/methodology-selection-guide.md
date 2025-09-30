@@ -253,5 +253,5 @@ AI Analysis Prompt:
 
 - **[kanban.md](kanban.md)** - Detailed Kanban implementation guide
 - **[scrum.md](scrum.md)** - Comprehensive Scrum framework guide
-- **[../project-management-tool/](../project-management-tool/README.md)** - Tool selection for chosen methodology
-- **[../estimation/](../estimation/README.md)** - Estimation approaches by methodology
+- **[../project-management-tool/](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Tool selection for chosen methodology
+- **[../estimation/](.pair/knowledge/guidelines/collaboration/estimation/README.md)** - Estimation approaches by methodology

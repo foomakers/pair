@@ -485,6 +485,6 @@ jobs:
 
 ## Related Topics
 
-- **[../issue-management/github-issues.md](../issue-management/github-issues.md)** - Issue workflows and automation
-- **[../project-tracking/github-tracking.md](../project-tracking/github-tracking.md)** - Project board automation
-- **[../project-management-tool/github-tool.md](../project-management-tool/github-tool.md)** - Overall GitHub setup and configuration
+- **[.pair/knowledge/guidelines/collaboration/issue-management/github-issues.md](.pair/knowledge/guidelines/collaboration/issue-management/github-issues.md)** - Issue workflows and automation
+- **[.pair/knowledge/guidelines/collaboration/project-tracking/github-tracking.md](.pair/knowledge/guidelines/collaboration/project-tracking/github-tracking.md)** - Project board automation
+- **[.pair/knowledge/guidelines/collaboration/project-management-tool/github-tool.md](.pair/knowledge/guidelines/collaboration/project-management-tool/github-tool.md)** - Overall GitHub setup and configuration

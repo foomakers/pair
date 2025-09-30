@@ -15,7 +15,8 @@ Quality criteria, completion standards, and validation processes for excellent s
 
 ## 🛠️ Level 3: Tool-Specific Implementations
 
-*Ready for expansion with specific quality tools and processes:*
+_Ready for expansion with specific quality tools and processes:_
+
 - Quality gates (SonarQube, CodeClimate configurations)
 - Code review tools (GitHub, GitLab, Azure DevOps)
 - Quality metrics dashboards (Grafana, DataDog)
@@ -24,9 +25,10 @@ Quality criteria, completion standards, and validation processes for excellent s
 
 ## 🔗 Related Practices
 
-- **[Testing](.pair/knowledge/guidelines/development/testing)** - Testing requirements within quality standards
+- **[Testing](.pair/knowledge/guidelines/testing)** - Testing requirements within quality standards
 - **[Accessibility](.pair/knowledge/guidelines/quality/accessibility)** - Accessibility compliance as quality requirement
 - **[Security](.pair/knowledge/guidelines/quality/security)** - Security standards integrated with quality criteria
 
 ---
-*Assistant Context: Focus on quality criteria, completion standards, and validation processes.*
+
+_Assistant Context: Focus on quality criteria, completion standards, and validation processes._

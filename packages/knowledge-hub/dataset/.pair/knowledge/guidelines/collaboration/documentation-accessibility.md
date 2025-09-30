@@ -582,6 +582,6 @@ This accessibility and quality validation guide ensures that all pair project ma
 
 **Related Documentation:**
 
-- [Project Management Support Guide](project-management-support-guide.md) - User assistance and feedback channels
-- [Project Management Framework](project-management-framework.md) - General framework documentation standards
-- [GitHub Projects Integration Guide](github-projects-integration-guide.md) - Example of accessible technical documentation
+- Project Management Support Guide - User assistance and feedback channels
+- Project Management Framework - General framework documentation standards
+- GitHub Projects Integration Guide - Example of accessible technical documentation

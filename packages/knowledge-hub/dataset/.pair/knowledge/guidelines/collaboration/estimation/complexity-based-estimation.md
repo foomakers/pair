@@ -253,4 +253,4 @@ gh project field-create --name "Story Points" --type select \
 
 - See [ai-assisted-estimation.md](ai-assisted-estimation.md) for AI-enhanced complexity assessment
 - Refer to [time-based-estimation.md](time-based-estimation.md) for time-focused approaches
-- Check [../methodology/](../methodology/README.md) for methodology-specific estimation guidance
+- Check [../methodology/](.pair/knowledge/guidelines/collaboration/methodology/README.md) for methodology-specific estimation guidance

@@ -10,19 +10,19 @@ This section provides comprehensive guidance on implementing effective decision-
 
 ### Decision Frameworks
 
-- **[decision-framework.md](decision-framework.md)**: Comprehensive decision-making framework with structured processes, criteria evaluation, and outcome tracking
-- **[consensus-building.md](consensus-building.md)**: Techniques and processes for building consensus in team decisions
+- **Decision Framework**: Comprehensive decision-making framework with structured processes, criteria evaluation, and outcome tracking
+- **Consensus Building**: Techniques and processes for building consensus in team decisions
 
 ### Decision Types
 
-- **[technical-decisions.md](technical-decisions.md)**: Framework for technical architecture and implementation decisions
-- **[product-decisions.md](product-decisions.md)**: Product feature and strategy decision processes
-- **[resource-allocation.md](resource-allocation.md)**: Guidelines for resource and priority allocation decisions
+- **Technical Decisions**: Framework for technical architecture and implementation decisions
+- **Product Decisions**: Product feature and strategy decision processes
+- **Resource Allocation**: Guidelines for resource and priority allocation decisions
 
 ### Documentation & Tracking
 
-- **[decision-recording.md](decision-recording.md)**: ADR (Architecture Decision Records) and decision documentation standards
-- **[decision-review.md](decision-review.md)**: Processes for reviewing and updating previous decisions
+- **Decision Recording**: ADR (Architecture Decision Records) and decision documentation standards
+- **Decision Review**: Processes for reviewing and updating previous decisions
 
 ## Quick Reference
 
@@ -173,9 +173,9 @@ pair "Document process decision and implementation timeline"
 ## Related Topics
 
 - **Role Responsibilities**: [role-responsibilities.md](role-responsibilities.md)
-- **Communication**: [communication-protocols/README.md](../communication-protocols/README.md)
-- **Board Management**: [board-management/README.md](../board-management/README.md)
-- **Project Tracking**: [project-tracking/README.md](../project-tracking/README.md)
+- **Communication**: [communication-protocols/README.md](./communication-protocols/README.md)
+- **Board Management**: [board-management.md](board-management.md)
+- **Project Tracking**: [project-tracking/README.md](./project-tracking/README.md)
 
 ---
 

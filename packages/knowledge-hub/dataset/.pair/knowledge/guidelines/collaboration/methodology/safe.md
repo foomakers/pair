@@ -392,7 +392,7 @@ pair "Create SAFe-compliant reporting and dashboard views"
 - **[Scrum](scrum.md)**: Team-level agile framework used within SAFe
 - **[Kanban](kanban.md)**: Flow-based practices integrated in SAFe
 - **[Methodology Selection](methodology-selection-guide.md)**: When to choose SAFe
-- **[Project Management Tools](../project-management-tool/README.md)**: Tool support for SAFe implementation
+- **[Project Management Tools](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)**: Tool support for SAFe implementation
 
 ---
 

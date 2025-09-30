@@ -16,9 +16,9 @@ Traffic distribution strategies for service scaling and high availability.
 ```typescript
 export class RoundRobinLoadBalancer {
   private currentIndex = 0
-  
+
   constructor(private servers: Server[]) {}
-  
+
   getNextServer(): Server {
     const server = this.servers[this.currentIndex]
     this.currentIndex = (this.currentIndex + 1) % this.servers.length
@@ -32,15 +32,15 @@ export class RoundRobinLoadBalancer {
 ```typescript
 export class WeightedLoadBalancer {
   private weightedServers: WeightedServer[]
-  
-  constructor(servers: Array<{server: Server, weight: number}>) {
+
+  constructor(servers: Array<{ server: Server; weight: number }>) {
     this.weightedServers = this.buildWeightedList(servers)
   }
-  
+
   getNextServer(): Server {
     const totalWeight = this.weightedServers.reduce((sum, ws) => sum + ws.weight, 0)
     const random = Math.random() * totalWeight
-    
+
     let weightSum = 0
     for (const weightedServer of this.weightedServers) {
       weightSum += weightedServer.weight
@@ -48,7 +48,7 @@ export class WeightedLoadBalancer {
         return weightedServer.server
       }
     }
-    
+
     return this.weightedServers[0].server
   }
 }
@@ -58,25 +58,20 @@ export class WeightedLoadBalancer {
 
 ```typescript
 export class HealthAwareLoadBalancer {
-  constructor(
-    private servers: Server[],
-    private healthChecker: HealthChecker
-  ) {
+  constructor(private servers: Server[], private healthChecker: HealthChecker) {
     this.startHealthMonitoring()
   }
-  
+
   getHealthyServer(): Server {
-    const healthyServers = this.servers.filter(server => 
-      this.healthChecker.isHealthy(server)
-    )
-    
+    const healthyServers = this.servers.filter(server => this.healthChecker.isHealthy(server))
+
     if (healthyServers.length === 0) {
       throw new NoHealthyServersError()
     }
-    
+
     return this.selectFromHealthy(healthyServers)
   }
-  
+
   private startHealthMonitoring(): void {
     setInterval(async () => {
       for (const server of this.servers) {
@@ -93,22 +88,24 @@ export class HealthAwareLoadBalancer {
 
 ## Algorithm Comparison
 
-| Algorithm | Use Case | Pros | Cons |
-|-----------|----------|------|------|
-| Round Robin | Equal capacity servers | Simple, fair distribution | No server capacity awareness |
-| Weighted | Different capacity servers | Capacity-aware distribution | Requires capacity tuning |
-| Least Connections | Variable request duration | Balances active load | Higher overhead |
-| Random | Stateless applications | Simple, good distribution | Not predictable |
+| Algorithm         | Use Case                   | Pros                        | Cons                         |
+| ----------------- | -------------------------- | --------------------------- | ---------------------------- |
+| Round Robin       | Equal capacity servers     | Simple, fair distribution   | No server capacity awareness |
+| Weighted          | Different capacity servers | Capacity-aware distribution | Requires capacity tuning     |
+| Least Connections | Variable request duration  | Balances active load        | Higher overhead              |
+| Random            | Stateless applications     | Simple, good distribution   | Not predictable              |
 
 ## Pros and Cons
 
 **Pros:**
+
 - **High availability** - Automatic failover
 - **Scalability** - Easy to add instances
 - **Performance** - Distributes load efficiently
 - **Flexibility** - Multiple algorithms available
 
 **Cons:**
+
 - **Single point of failure** - Load balancer itself
 - **Session affinity** - Sticky sessions can be complex
 - **Health monitoring** - Requires robust health checks
@@ -122,6 +119,6 @@ export class HealthAwareLoadBalancer {
 
 ## Related Patterns
 
-- [Circuit Breaker](scaling-patterns-circuit-breaker.md) - Failure resilience
-- [Auto-Scaling](scaling-patterns-auto-scaling.md) - Dynamic scaling
-- [Service Mesh](integration-patterns.md) - Advanced traffic management
+- [Circuit Breaker](circuit-breaker.md) - Failure resilience
+- [Auto-Scaling](auto-scaling.md) - Dynamic scaling
+- [Service Mesh](.pair/knowledge/guidelines/architecture/integration-patterns.md) - Advanced traffic management

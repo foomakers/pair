@@ -292,7 +292,7 @@ Kanban is a lean method for managing knowledge work with emphasis on just-in-tim
 
 ## Related Documents
 
-- **[../estimation/](../estimation/README.md)** - Flow-based estimation techniques
-- **[../project-tracking/](../project-tracking/README.md)** - Metrics collection and analysis
+- **[../estimation/](.pair/knowledge/guidelines/collaboration/estimation/README.md)** - Flow-based estimation techniques
+- **[../project-tracking/](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)** - Metrics collection and analysis
 - **[lean.md](lean.md)** - Lean principles underlying Kanban method
 - **[methodology-selection-guide.md](methodology-selection-guide.md)** - When to choose Kanban vs other frameworks

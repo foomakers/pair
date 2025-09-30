@@ -646,4 +646,4 @@ _Should I update the bounded context model to reflect these architecture changes
 
 ### Knowledge Base Guidelines
 
-- [Architecture Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md) - Architectural patterns and principles for bounded context implementation
+- [Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md) - Architectural patterns and principles for bounded context implementation

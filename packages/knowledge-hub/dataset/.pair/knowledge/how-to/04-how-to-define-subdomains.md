@@ -493,4 +493,4 @@ _Should I update the subdomain catalog to reflect these business model changes, 
 
 ### Knowledge Base Guidelines
 
-- [Architecture Guidelines](.pair/knowledge/guidelines/architecture/architectural-guidelines.md) - Architectural patterns and principles for subdomain implementation
+- [Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md) - Architectural patterns and principles for subdomain implementation

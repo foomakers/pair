@@ -253,4 +253,4 @@ final_estimate = weighted_average(estimates, confidence_weights)
 
 - See [complexity-based-estimation.md](complexity-based-estimation.md) for traditional complexity approaches
 - Refer to [hybrid-estimation.md](hybrid-estimation.md) for combining AI with other methods
-- Check [../project-tracking/](../project-tracking/README.md) for tracking AI estimation accuracy
+- Check [../project-tracking/](.pair/knowledge/guidelines/collaboration/project-tracking/README.md) for tracking AI estimation accuracy

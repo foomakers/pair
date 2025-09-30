@@ -160,6 +160,6 @@ Scrum is an agile framework that organizes development work into fixed-length it
 
 ## Related Documents
 
-- **[../estimation/](../estimation/README.md)** - Story point estimation techniques
-- **[../project-tracking/github-tracking.md](../project-tracking/github-tracking.md)** - Sprint tracking implementation
+- **[../estimation/](.pair/knowledge/guidelines/collaboration/estimation/README.md)** - Story point estimation techniques
+- **[.pair/knowledge/guidelines/collaboration/project-tracking/github-tracking.md](.pair/knowledge/guidelines/collaboration/project-tracking/github-tracking.md)** - Sprint tracking implementation
 - **[methodology-selection-guide.md](methodology-selection-guide.md)** - When to choose Scrum vs other frameworks

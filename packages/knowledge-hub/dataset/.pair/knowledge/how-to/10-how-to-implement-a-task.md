@@ -360,10 +360,10 @@ _"🎉 ALL TASKS COMPLETED: All tasks for User Story '[STORY_ID]: [STORY_NAME]' 
 
 **Knowledge Base (Complete Technical Guidelines):**
 
-- **[01-architectural-guidelines.md](.pair/knowledge/guidelines/architecture/architectural-guidelines.md))** - Architecture patterns and ADR processes
-- **[02-code-design-guidelines.md](.pair/knowledge/guidelines/development/code-design-guidelines.md)** - Code organization and design patterns
-- **[07-testing-strategy.md](.pair/knowledge/guidelines/development/testing-strategy.md)** - Testing frameworks and TDD strategies
-- **[06-definition-of-done.md](.pair/knowledge/guidelines/quality/definition-of-done.md)** - Quality criteria and completion standards
+- **[01-architectural-guidelines.md](.pair/knowledge/guidelines/architecture/README.md))** - Architecture patterns and ADR processes
+- **[02-code-design-guidelines.md](.pair/knowledge/guidelines/code-design/README.md)** - Code organization and design patterns
+- **[07-testing-strategy.md](.pair/knowledge/guidelines/testing/testing-strategy/README.md)** - Testing frameworks and TDD strategies
+- **[06-definition-of-done.md](.pair/knowledge/guidelines/quality/standards/definition-of-done.md)** - Quality criteria and completion standards
 
 **Process Dependencies:**
 

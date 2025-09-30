@@ -71,7 +71,7 @@ This section provides comprehensive guidance for managing issues, bugs, feature 
 
 ### With Project Tracking
 
-**→ See [../project-tracking/](../project-tracking/README.md)**
+**→ See [../project-tracking/](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)**
 
 - Issue hierarchy and relationships
 - Progress tracking and reporting
@@ -79,7 +79,7 @@ This section provides comprehensive guidance for managing issues, bugs, feature 
 
 ### With Automation
 
-**→ See [../automation/](../automation/README.md)**
+**→ See [../automation/](.pair/knowledge/guidelines/collaboration/automation/README.md)**
 
 - Automated issue creation and updates
 - Status synchronization rules
@@ -87,7 +87,7 @@ This section provides comprehensive guidance for managing issues, bugs, feature 
 
 ### With Estimation
 
-**→ See [../estimation/](../estimation/README.md)**
+**→ See [../estimation/](.pair/knowledge/guidelines/collaboration/estimation/README.md)**
 
 - Issue sizing and effort estimation
 - Complexity assessment workflows
@@ -95,6 +95,6 @@ This section provides comprehensive guidance for managing issues, bugs, feature 
 
 ## Related Topics
 
-- **[../project-management-tool/](../project-management-tool/README.md)** - Tool setup and configuration
-- **[../assets/](../assets/README.md)** - Issue templates and resources
-- **[../communication-protocols/](../communication-protocols/README.md)** - Communication around issues
+- **[../project-management-tool/](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Tool setup and configuration
+- **[../assets/](.pair/knowledge/guidelines/collaboration/assets/README.md)** - Issue templates and resources
+- **[../communication-protocols/](.pair/knowledge/guidelines/collaboration/communication-protocols/README.md)** - Communication around issues

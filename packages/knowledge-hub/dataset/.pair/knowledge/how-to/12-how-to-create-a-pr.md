@@ -1349,26 +1349,26 @@ Documentation updates for [Component/Feature/Process] to improve [user experienc
 
 ### 🏗️ Architecture & Design
 
-- **[01-architectural-guidelines.md](.pair/knowledge/guidelines/architecture/architectural-guidelines.md)** - System architecture patterns, bounded contexts, and ADR processes
-- **[02-code-design-guidelines.md](.pair/knowledge/guidelines/development/code-design-guidelines.md)** - Code organization, design patterns, and implementation standards
+- **[01-architectural-guidelines.md](.pair/knowledge/guidelines/architecture/README.md)** - System architecture patterns, bounded contexts, and ADR processes
+- **[02-code-design-guidelines.md](.pair/knowledge/guidelines/code-design/README.md)** - Code organization, design patterns, and implementation standards
 
 ### ⚙️ Technical Implementation
 
-- **[03-technical-guidelines.md](.pair/knowledge/guidelines/development/technical-guidelines.md)** - Tech stack, development tools, and feature flag management
-- **[04-infrastructure-guidelines.md](.pair/knowledge/guidelines/operations/infrastructure-guidelines.md)** - Deployment strategies, environment management, and CI/CD
+- **[03-technical-guidelines.md](.pair/knowledge/guidelines/technical-standards/README.md)** - Tech stack, development tools, and feature flag management
+- **[04-infrastructure-guidelines.md](.pair/knowledge/guidelines/operations/infrastructure.md)** - Deployment strategies, environment management, and CI/CD
 
 ### 🎨 User Experience & Quality
 
-- **[05-ux-guidelines.md](.pair/knowledge/guidelines/operations/ux-guidelines.md)** - User experience standards and design principles
-- **[06-definition-of-done.md](.pair/knowledge/guidelines/quality/definition-of-done.md)** - Quality criteria and completion standards
-- **[07-testing-strategy.md](.pair/knowledge/guidelines/development/testing-strategy.md)** - Testing frameworks, strategies, and quality gates
+- **[05-ux-guidelines.md](.pair/knowledge/guidelines/operations/ux-design.md)** - User experience standards and design principles
+- **[06-definition-of-done.md](.pair/knowledge/guidelines/quality/standards/definition-of-done.md)** - Quality criteria and completion standards
+- **[07-testing-strategy.md](.pair/knowledge/guidelines/testing/testing-strategy/README.md)** - Testing frameworks, strategies, and quality gates
 
 ### 🔒 Security & Performance
 
-- **[08-accessibility-guidelines.md](.pair/knowledge/guidelines/quality/accessibility-guidelines.md)** - Accessibility standards and compliance requirements
-- **[09-performance-guidelines.md](.pair/knowledge/guidelines/quality/performance-guidelines.md)** - Performance optimization and monitoring strategies
-- **[10-security-guidelines.md](.pair/knowledge/guidelines/quality/security-guidelines.md)** - Security implementation and best practices
-- **[11-observability-guidelines.md](.pair/knowledge/guidelines/operations/observability-guidelines.md)** - Monitoring, logging, and tracing strategies
+- **[08-accessibility-guidelines.md](.pair/knowledge/guidelines/quality/accessibility.md)** - Accessibility standards and compliance requirements
+- **[09-performance-guidelines.md](.pair/knowledge/guidelines/quality/performance.md)** - Performance optimization and monitoring strategies
+- **[10-security-guidelines.md](.pair/knowledge/guidelines/quality/security.md)** - Security implementation and best practices
+- **[11-observability-guidelines.md](.pair/knowledge/guidelines/operations/observability.md)** - Monitoring, logging, and tracing strategies
 
 **Process Dependencies:**
 

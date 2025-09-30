@@ -42,9 +42,9 @@ Accessibility ensures that digital products are usable by people with diverse ab
 
 ## Cross-References
 
-- **Development**: [code-design/quality-standards/](../../development/code-design/quality-standards/) - Accessibility in code quality
-- **Testing**: [testing/testing-strategy/](../../development/testing/testing-strategy/) - Accessibility testing integration
-- **UX Design**: [operations/ux-design/](../../operations/ux-design/) - Inclusive design principles
+- **Development**: [code-design/quality-standards/](.pair/knowledge/guidelines/code-design/quality-standards) - Accessibility in code quality
+- **Testing**: [testing/testing-strategy/](.pair/knowledge/guidelines/testing/testing-strategy) - Accessibility testing integration
+- **UX Design**: [operations/ux-design/](.pair/knowledge/guidelines/operations/ux-design) - Inclusive design principles
 
 ## Scope Boundaries
 

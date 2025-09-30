@@ -193,7 +193,7 @@ interface PerformanceTest {
 
 ## Related Patterns
 
-- [Scaling Patterns](scaling-patterns.md) - Horizontal and vertical scaling strategies
-- [Deployment Architectures](deployment-architectures.md) - Architecture patterns for performance
-- [Architectural Patterns](architectural-patterns.md) - Core patterns that affect performance
-- [Integration Patterns](integration-patterns.md) - Efficient service communication
+- [Scaling Patterns](.pair/knowledge/guidelines/architecture/system-design/scaling-patterns.md) - Horizontal and vertical scaling strategies
+- [Deployment Architectures](.pair/knowledge/guidelines/architecture/deployment-architectures/README.md) - Architecture patterns for performance
+- [Architectural Patterns](.pair/knowledge/guidelines/architecture/architectural-patterns/README.md) - Core patterns that affect performance
+- [Integration Patterns](.pair/knowledge/guidelines/architecture/integration-patterns.md) - Efficient service communication

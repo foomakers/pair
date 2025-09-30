@@ -59,9 +59,9 @@ Define standardized patterns for LLM integration, RAG implementation, and AI ass
 ## Cross-References
 
 - **[Project Constraints](project-constraints.md)** - Team and platform constraints
-- **[Integration Patterns](integration-patterns/README.md)** - General integration strategies
+- **[Integration Patterns](integration-patterns.md)** - General integration strategies
 - **[Performance Patterns](performance-patterns/README.md)** - Optimization techniques
-- **[Tech Stack](.pair/knowledge/guidelines/development/technical-standards/tech-stack.md)** - Technology choices
+- **[Tech Stack](.pair/adoption/tech/tech-stack.md)** - Technology choices
 
 ## Scope Boundaries
 

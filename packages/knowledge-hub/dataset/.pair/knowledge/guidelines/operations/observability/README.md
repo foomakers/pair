@@ -18,10 +18,10 @@ Define observability strategies, monitoring patterns, and incident management pr
 
 **Out of Scope:**
 
-- Infrastructure monitoring details (see [Infrastructure](../infrastructure/README.md))
-- Security monitoring implementation (see [Security](../../quality/security/README.md))
-- Performance optimization strategies (see [Performance](../../quality/performance/README.md))
-- Development environment monitoring (see [Technical Standards](../../development/technical-standards/README.md))
+- Infrastructure monitoring details (see [Infrastructure](.pair/knowledge/guidelines/operations/infrastructure.md))
+- Security monitoring implementation (see [Security](.pair/knowledge/guidelines/quality/security/README.md))
+- Performance optimization strategies (see [Performance](.pair/knowledge/guidelines/quality/performance/README.md))
+- Development environment monitoring (see [Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md))
 
 ## Topics Covered
 
@@ -63,10 +63,10 @@ Distributed tracing, request flow monitoring, and service dependency tracking
 
 ## 🔗 Related Practices
 
-- **[Infrastructure Guidelines](../infrastructure/README.md)** - Infrastructure monitoring and observability
-- **[Performance Guidelines](../../quality/performance/README.md)** - Performance optimization strategies
-- **[Security Guidelines](../../quality/security/README.md)** - Security monitoring and compliance
-- **[Technical Standards](../../development/technical-standards/README.md)** - Technology stack supporting observability
+- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure.md)** - Infrastructure monitoring and observability
+- **[Performance Guidelines](.pair/knowledge/guidelines/quality/performance/README.md)** - Performance optimization strategies
+- **[Security Guidelines](.pair/knowledge/guidelines/quality/security/README.md)** - Security monitoring and compliance
+- **[Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md)** - Technology stack supporting observability
 
 ---
 

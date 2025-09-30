@@ -240,6 +240,6 @@ jobs:
 
 ## Related Documents
 
-- **[../project-tracking/filesystem-tracking.md](../project-tracking/filesystem-tracking.md)** - Project progress tracking
-- **[../automation/filesystem-automation.md](../automation/filesystem-automation.md)** - Automation workflows
+- **[.pair/knowledge/guidelines/collaboration/project-tracking/filesystem-tracking.md](.pair/knowledge/guidelines/collaboration/project-tracking/filesystem-tracking.md)** - Project progress tracking
+- **[.pair/knowledge/guidelines/collaboration/automation/filesystem-automation.md](.pair/knowledge/guidelines/collaboration/automation/filesystem-automation.md)** - Automation workflows
 - **[github-issues.md](github-issues.md)** - Comparison with GitHub Issues workflow

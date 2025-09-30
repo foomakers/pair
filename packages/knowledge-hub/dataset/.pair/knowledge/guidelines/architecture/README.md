@@ -26,11 +26,17 @@ System architecture patterns, bounded contexts, and architectural decision proce
 ### System Integration
 
 - **[Integration Patterns](integration-patterns.md)** - Service communication and integration strategies
-- **[Bounded Context Patterns](bounded-context-patterns.md)** - Context boundary definitions
+- **[System Design](system-design/README.md)** - System design patterns and performance optimization
 
 ### Decision Records Practice
 
 - **[Decision Records](decision-records/README.md)** - ADR process, templates, and decision-making frameworks
+- **[Decision Records](decision-records.md)** - ADR implementation guidance and examples
+
+### Standalone Guides
+
+- **[LLM Integration](llm-integration.md)** - AI/LLM integration patterns overview
+- **[Project Constraints](project-constraints.md)** - Constraint-driven architecture decisions
 
 ## 🛠️ Level 3: Pattern-Specific Implementations
 
@@ -43,7 +49,7 @@ _Each pattern folder contains specific implementations and detailed guides:_
 
 ## 🔗 Related Guidelines
 
-- **[Development Guidelines](.pair/knowledge/guidelines/development/README.md)** - Code patterns implementing these architectural decisions
+- **[Code Design Guidelines](.pair/knowledge/guidelines/code-design/README.md)** - Code patterns implementing these architectural decisions
 - **[Operations Guidelines](.pair/knowledge/guidelines/operations/README.md)** - Infrastructure deployment strategies for these patterns
 - **[Quality Guidelines](.pair/knowledge/guidelines/quality/README.md)** - Quality criteria ensuring architectural integrity
 

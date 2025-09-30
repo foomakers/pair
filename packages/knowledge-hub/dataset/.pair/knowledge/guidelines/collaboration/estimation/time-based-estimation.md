@@ -268,4 +268,4 @@ Time-based estimation provides concrete duration estimates for development work,
 
 - See [complexity-based-estimation.md](complexity-based-estimation.md) for relative sizing approaches
 - Refer to [forecast-based-estimation.md](forecast-based-estimation.md) for data-driven time prediction
-- Check [../project-tracking/](../project-tracking/README.md) for time tracking implementation
+- Check [../project-tracking/](.pair/knowledge/guidelines/collaboration/project-tracking/README.md) for time tracking implementation

@@ -52,31 +52,31 @@ architecture/
 // Hybrid Order Processing
 export class HybridOrderSystem {
   constructor(
-    private coreOrderService: OrderService,        // Monolith
-    private analyticsService: AnalyticsService,    // Microservice
-    private notificationFunction: Function,        // Serverless
-    private eventBus: EventBus
+    private coreOrderService: OrderService, // Monolith
+    private analyticsService: AnalyticsService, // Microservice
+    private notificationFunction: Function, // Serverless
+    private eventBus: EventBus,
   ) {}
-  
+
   async processOrder(orderData: CreateOrderRequest): Promise<Order> {
     // Core processing in monolith
     const order = await this.coreOrderService.createOrder(orderData)
-    
+
     // Async analytics in microservice
     await this.analyticsService.recordOrderCreation({
       orderId: order.id,
       customerId: order.customerId,
       total: order.total,
-      timestamp: new Date()
+      timestamp: new Date(),
     })
-    
+
     // Event-driven notifications via serverless
     await this.eventBus.publish('order.created', {
       orderId: order.id,
       customerEmail: order.customerEmail,
-      items: order.items
+      items: order.items,
     })
-    
+
     return order
   }
 }
@@ -86,34 +86,34 @@ export class HybridEventRouter {
   constructor(
     private monolithEvents: InternalEventBus,
     private serviceEvents: MessageQueue,
-    private serverlessEvents: EventBridge
+    private serverlessEvents: EventBridge,
   ) {}
-  
+
   async routeEvent(event: DomainEvent): Promise<void> {
     const { type, data, routing } = event
-    
+
     // Route to appropriate destination based on event type
     switch (routing.destination) {
       case 'monolith':
         await this.monolithEvents.publish(type, data)
         break
-        
+
       case 'microservice':
         await this.serviceEvents.sendMessage({
           type,
           data,
-          routing: routing.service
+          routing: routing.service,
         })
         break
-        
+
       case 'serverless':
         await this.serverlessEvents.putEvent({
           Source: routing.source,
           DetailType: type,
-          Detail: JSON.stringify(data)
+          Detail: JSON.stringify(data),
         })
         break
-        
+
       case 'broadcast':
         // Send to all destinations
         await Promise.all([
@@ -122,8 +122,8 @@ export class HybridEventRouter {
           this.serverlessEvents.putEvent({
             Source: 'hybrid-system',
             DetailType: type,
-            Detail: JSON.stringify(data)
-          })
+            Detail: JSON.stringify(data),
+          }),
         ])
         break
     }
@@ -141,12 +141,12 @@ export class StranglerFigProxy {
   constructor(
     private legacySystem: LegacyMonolith,
     private newServices: Map<string, MicroService>,
-    private routingRules: RoutingRules
+    private routingRules: RoutingRules,
   ) {}
-  
+
   async handleRequest(request: Request): Promise<Response> {
     const route = this.routingRules.getRoute(request.path)
-    
+
     if (route.target === 'new-service') {
       const service = this.newServices.get(route.serviceName)
       return await service.handleRequest(request)
@@ -154,12 +154,12 @@ export class StranglerFigProxy {
       return await this.legacySystem.handleRequest(request)
     }
   }
-  
+
   // Gradually migrate routes
   async migrateRoute(path: string, targetService: string): Promise<void> {
     this.routingRules.updateRoute(path, {
       target: 'new-service',
-      serviceName: targetService
+      serviceName: targetService,
     })
   }
 }
@@ -173,24 +173,24 @@ export class BFFOrchestrator {
   constructor(
     private coreServices: CoreServices,
     private mobileOptimizedFunctions: ServerlessFunctions,
-    private webOptimizedServices: MicroServices
+    private webOptimizedServices: MicroServices,
   ) {}
-  
+
   // Mobile BFF - Optimized for mobile constraints
   async getMobileUserDashboard(userId: string): Promise<MobileDashboard> {
     // Use serverless for quick, lightweight responses
     const [profile, notifications] = await Promise.all([
       this.mobileOptimizedFunctions.getUserProfile(userId),
-      this.mobileOptimizedFunctions.getNotifications(userId)
+      this.mobileOptimizedFunctions.getNotifications(userId),
     ])
-    
+
     return {
       profile: this.minimizeMobileProfile(profile),
       notifications: notifications.slice(0, 5), // Limit for mobile
-      quickActions: this.getMobileQuickActions(profile)
+      quickActions: this.getMobileQuickActions(profile),
     }
   }
-  
+
   // Web BFF - Rich data for web application
   async getWebUserDashboard(userId: string): Promise<WebDashboard> {
     // Use microservices for rich data
@@ -198,15 +198,15 @@ export class BFFOrchestrator {
       this.webOptimizedServices.userService.getDetailedProfile(userId),
       this.webOptimizedServices.orderService.getOrderHistory(userId),
       this.webOptimizedServices.analyticsService.getUserAnalytics(userId),
-      this.webOptimizedServices.recommendationService.getRecommendations(userId)
+      this.webOptimizedServices.recommendationService.getRecommendations(userId),
     ])
-    
+
     return {
       profile,
       orders,
       analytics,
       recommendations,
-      fullFeatureSet: true
+      fullFeatureSet: true,
     }
   }
 }
@@ -215,12 +215,14 @@ export class BFFOrchestrator {
 ## Benefits and Trade-offs
 
 **Benefits:**
+
 - **Best of both worlds** - Use optimal pattern per use case
 - **Gradual migration** - Evolve architecture incrementally
 - **Risk mitigation** - Reduce big-bang migration risks
 - **Performance optimization** - Optimize each component individually
 
 **Trade-offs:**
+
 - **Increased complexity** - Multiple patterns to understand and maintain
 - **Operational overhead** - Different deployment and monitoring strategies
 - **Team coordination** - Requires coordination across different architectural styles
@@ -238,19 +240,21 @@ export class BFFOrchestrator {
 ## Migration Strategies
 
 **Monolith → Hybrid:**
+
 1. **Identify extraction candidates** - High-scale or specialized components
 2. **Extract gradually** - One service at a time
 3. **Maintain compatibility** - Keep existing interfaces working
 4. **Add event backbone** - Enable async communication
 
 **Microservices → Hybrid:**
+
 1. **Identify consolidation candidates** - Chatty or related services
 2. **Add serverless for events** - Event processing and scheduled tasks
 3. **Optimize for use case** - Use best pattern per requirement
 
 ## Related Patterns
 
-- [Structured Monolith](deployment-architectures-structured-monolith.md) - Starting point
-- [Microservices](deployment-architectures-microservices.md) - Target for some components
-- [Serverless](deployment-architectures-serverless.md) - Event-driven components
-- [Integration Patterns](integration-patterns.md) - Communication strategies
+- [Structured Monolith](structured-monolith.md) - Starting point
+- [Microservices](microservices.md) - Target for some components
+- [Serverless](serverless.md) - Event-driven components
+- [Integration Patterns](.pair/knowledge/guidelines/architecture/integration-patterns.md) - Communication strategies

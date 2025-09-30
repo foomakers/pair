@@ -17,17 +17,14 @@ Strategies for optimizing database performance and scalability.
 // Query performance monitoring
 export class QueryPerformanceMonitor {
   private slowQueryThreshold = 100 // milliseconds
-  
-  async executeQuery<T>(
-    query: string,
-    params: any[] = []
-  ): Promise<T[]> {
+
+  async executeQuery<T>(query: string, params: any[] = []): Promise<T[]> {
     const startTime = Date.now()
-    
+
     try {
       const result = await this.database.query<T>(query, params)
       const executionTime = Date.now() - startTime
-      
+
       // Log slow queries
       if (executionTime > this.slowQueryThreshold) {
         await this.logSlowQuery({
@@ -35,17 +32,17 @@ export class QueryPerformanceMonitor {
           params,
           executionTime,
           timestamp: new Date(),
-          explain: await this.getQueryPlan(query, params)
+          explain: await this.getQueryPlan(query, params),
         })
       }
-      
+
       return result
     } catch (error) {
       await this.logQueryError(query, params, error)
       throw error
     }
   }
-  
+
   private async getQueryPlan(query: string, params: any[]): Promise<any> {
     const explainQuery = `EXPLAIN ANALYZE ${query}`
     return await this.database.query(explainQuery, params)
@@ -59,11 +56,11 @@ export class QueryPerformanceMonitor {
 // Intelligent index management
 export class IndexManager {
   private indexUsageStats = new Map<string, IndexUsage>()
-  
+
   async analyzeQueryForIndexes(query: string): Promise<IndexRecommendation[]> {
     const ast = this.parseQuery(query)
     const recommendations: IndexRecommendation[] = []
-    
+
     // Analyze WHERE clauses
     for (const condition of ast.whereConditions) {
       if (condition.type === 'equality' || condition.type === 'range') {
@@ -71,56 +68,56 @@ export class IndexManager {
           table: condition.table,
           columns: [condition.column],
           type: 'btree',
-          reason: `${condition.type} condition on ${condition.column}`
+          reason: `${condition.type} condition on ${condition.column}`,
         })
       }
     }
-    
+
     // Analyze JOIN conditions
     for (const join of ast.joins) {
       recommendations.push({
         table: join.table,
         columns: [join.onColumn],
         type: 'btree',
-        reason: `JOIN condition on ${join.onColumn}`
+        reason: `JOIN condition on ${join.onColumn}`,
       })
     }
-    
+
     // Analyze ORDER BY clauses
     if (ast.orderBy.length > 0) {
       recommendations.push({
         table: ast.from,
         columns: ast.orderBy,
         type: 'btree',
-        reason: 'ORDER BY optimization'
+        reason: 'ORDER BY optimization',
       })
     }
-    
+
     return recommendations
   }
-  
+
   async createCompositeIndex(
     table: string,
     columns: string[],
-    options: IndexOptions = {}
+    options: IndexOptions = {},
   ): Promise<void> {
     const indexName = `idx_${table}_${columns.join('_')}`
-    
+
     const createIndexSQL = `
       CREATE INDEX CONCURRENTLY ${indexName}
       ON ${table} (${columns.join(', ')})
       ${options.partial ? `WHERE ${options.partial}` : ''}
     `
-    
+
     await this.database.execute(createIndexSQL)
-    
+
     // Track index creation
     this.indexUsageStats.set(indexName, {
       table,
       columns,
       createdAt: new Date(),
       usageCount: 0,
-      lastUsed: null
+      lastUsed: null,
     })
   }
 }
@@ -135,19 +132,16 @@ export class QueryBatcher {
   private batchTimeout = 50 // milliseconds
   private pendingQueries: BatchedQuery[] = []
   private batchTimer: NodeJS.Timeout | null = null
-  
-  async batchQuery<T>(
-    query: string,
-    params: any[]
-  ): Promise<T[]> {
+
+  async batchQuery<T>(query: string, params: any[]): Promise<T[]> {
     return new Promise((resolve, reject) => {
       this.pendingQueries.push({
         query,
         params,
         resolve,
-        reject
+        reject,
       })
-      
+
       if (this.pendingQueries.length >= this.batchSize) {
         this.executeBatch()
       } else if (!this.batchTimer) {
@@ -155,20 +149,20 @@ export class QueryBatcher {
       }
     })
   }
-  
+
   private async executeBatch(): Promise<void> {
     if (this.batchTimer) {
       clearTimeout(this.batchTimer)
       this.batchTimer = null
     }
-    
+
     const queries = this.pendingQueries.splice(0)
     if (queries.length === 0) return
-    
+
     try {
       // Group similar queries
       const groupedQueries = this.groupSimilarQueries(queries)
-      
+
       // Execute each group
       for (const [queryTemplate, queryGroup] of groupedQueries) {
         await this.executeSimilarQueries(queryTemplate, queryGroup)
@@ -178,11 +172,8 @@ export class QueryBatcher {
       queries.forEach(q => q.reject(error))
     }
   }
-  
-  private async executeSimilarQueries(
-    template: string,
-    queries: BatchedQuery[]
-  ): Promise<void> {
+
+  private async executeSimilarQueries(template: string, queries: BatchedQuery[]): Promise<void> {
     if (template.includes('SELECT') && template.includes('WHERE id = ?')) {
       // Batch SELECT by ID queries
       await this.executeBatchSelect(queries)
@@ -194,21 +185,21 @@ export class QueryBatcher {
       await this.executeIndividually(queries)
     }
   }
-  
+
   private async executeBatchSelect(queries: BatchedQuery[]): Promise<void> {
     const ids = queries.map(q => q.params[0])
     const tableName = this.extractTableName(queries[0].query)
-    
+
     const batchQuery = `
       SELECT * FROM ${tableName} 
       WHERE id IN (${ids.map(() => '?').join(', ')})
     `
-    
+
     const results = await this.database.query(batchQuery, ids)
-    
+
     // Map results back to individual queries
     const resultMap = new Map(results.map(r => [r.id, r]))
-    
+
     queries.forEach((query, index) => {
       const id = ids[index]
       const result = resultMap.get(id)
@@ -234,32 +225,32 @@ export class AdaptiveConnectionPool {
     reject: (error: Error) => void
     timestamp: number
   }> = []
-  
+
   constructor(private connectionFactory: ConnectionFactory) {
     this.initializePool()
     this.startMonitoring()
   }
-  
+
   async getConnection(): Promise<Connection> {
     // Try to get available connection
     const connection = this.connectionQueue.pop()
     if (connection && connection.isValid()) {
       return connection
     }
-    
+
     // No available connections - can we create more?
     if (this.currentConnections < this.maxConnections) {
       return await this.createConnection()
     }
-    
+
     // Wait for connection to become available
     return new Promise((resolve, reject) => {
       this.waitingQueries.push({
         resolve,
         reject,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       })
-      
+
       // Timeout after 30 seconds
       setTimeout(() => {
         const index = this.waitingQueries.findIndex(w => w.resolve === resolve)
@@ -270,7 +261,7 @@ export class AdaptiveConnectionPool {
       }, 30000)
     })
   }
-  
+
   async releaseConnection(connection: Connection): Promise<void> {
     // Serve waiting query if any
     const waiting = this.waitingQueries.shift()
@@ -278,20 +269,20 @@ export class AdaptiveConnectionPool {
       waiting.resolve(connection)
       return
     }
-    
+
     // Return to pool
     this.connectionQueue.push(connection)
   }
-  
+
   private startMonitoring(): void {
     setInterval(() => {
       this.adjustPoolSize()
     }, 10000) // Check every 10 seconds
   }
-  
+
   private adjustPoolSize(): void {
     const utilization = this.calculateUtilization()
-    
+
     if (utilization > 0.8 && this.currentConnections < this.maxConnections) {
       // High utilization - add connections
       this.scaleUp()
@@ -310,17 +301,13 @@ export class AdaptiveConnectionPool {
 ```typescript
 // Optimized repository with multiple strategies
 export class OptimizedRepository<T extends Entity> {
-  constructor(
-    private database: Database,
-    private cache: Cache,
-    private searchIndex: SearchIndex
-  ) {}
-  
+  constructor(private database: Database, private cache: Cache, private searchIndex: SearchIndex) {}
+
   async findById(id: string): Promise<T | null> {
     // Try cache first
     const cacheKey = `${this.entityName}:${id}`
     let entity = await this.cache.get<T>(cacheKey)
-    
+
     if (!entity) {
       // Database lookup with optimized query
       const query = `
@@ -329,29 +316,29 @@ export class OptimizedRepository<T extends Entity> {
       `
       const results = await this.database.query<T>(query, [id])
       entity = results[0] || null
-      
+
       if (entity) {
         await this.cache.set(cacheKey, entity, { ttl: 3600 })
       }
     }
-    
+
     return entity
   }
-  
+
   async findByIds(ids: string[]): Promise<T[]> {
     if (ids.length === 0) return []
-    
+
     // Check cache for each ID
     const cacheKeys = ids.map(id => `${this.entityName}:${id}`)
     const cachedResults = await this.cache.getMultiple<T>(cacheKeys)
-    
+
     // Find which IDs are missing from cache
     const missingIds = ids.filter((id, index) => !cachedResults[index])
-    
+
     if (missingIds.length === 0) {
       return cachedResults.filter(Boolean)
     }
-    
+
     // Fetch missing entities in batch
     const query = `
       SELECT * FROM ${this.tableName} 
@@ -359,70 +346,70 @@ export class OptimizedRepository<T extends Entity> {
       AND deleted_at IS NULL
     `
     const dbResults = await this.database.query<T>(query, missingIds)
-    
+
     // Cache the results
     await Promise.all(
-      dbResults.map(entity => 
-        this.cache.set(`${this.entityName}:${entity.id}`, entity, { ttl: 3600 })
-      )
+      dbResults.map(entity =>
+        this.cache.set(`${this.entityName}:${entity.id}`, entity, { ttl: 3600 }),
+      ),
     )
-    
+
     // Combine cached and DB results
     return [...cachedResults.filter(Boolean), ...dbResults]
   }
-  
+
   async search(criteria: SearchCriteria): Promise<SearchResult<T>> {
     // Use search index for complex queries
     if (this.isComplexSearch(criteria)) {
       return await this.searchIndex.search<T>(this.entityName, criteria)
     }
-    
+
     // Use database for simple queries with proper indexing
     const { query, params } = this.buildOptimizedQuery(criteria)
     const results = await this.database.query<T>(query, params)
-    
+
     return {
       items: results,
       total: results.length,
-      hasMore: false
+      hasMore: false,
     }
   }
-  
-  private buildOptimizedQuery(criteria: SearchCriteria): { query: string, params: any[] } {
+
+  private buildOptimizedQuery(criteria: SearchCriteria): { query: string; params: any[] } {
     let query = `SELECT * FROM ${this.tableName} WHERE deleted_at IS NULL`
     const params: any[] = []
-    
+
     // Add indexed conditions first (most selective)
     if (criteria.status) {
       query += ` AND status = ?`
       params.push(criteria.status)
     }
-    
+
     if (criteria.categoryId) {
       query += ` AND category_id = ?`
       params.push(criteria.categoryId)
     }
-    
+
     // Add range conditions
     if (criteria.createdAfter) {
       query += ` AND created_at > ?`
       params.push(criteria.createdAfter)
     }
-    
+
     // Add ordering (use indexed columns)
     query += ` ORDER BY created_at DESC`
-    
+
     // Add pagination
     if (criteria.limit) {
       query += ` LIMIT ?`
       params.push(criteria.limit)
-      
+
       if (criteria.offset) {
         query += ` OFFSET ?`
         params.push(criteria.offset)
       }
     }
-    
+
     return { query, params }
   }
 }
@@ -449,7 +436,7 @@ export class OptimizedRepository<T extends Entity> {
 
 ## Related Patterns
 
-- [Caching Patterns](performance-patterns-caching.md) - Cache database results
-- [Database Read Replicas](scaling-patterns-database-read-replicas.md) - Scale reads
-- [Database Sharding](scaling-patterns-sharding.md) - Scale writes
-- [CQRS](scaling-patterns-cqrs.md) - Separate read/write models
+- [Caching Patterns](caching.md) - Cache database results
+- [Database Read Replicas](.pair/knowledge/guidelines/architecture/system-design/scaling-patterns.md#database-read-replicas) - Scale reads
+- [Database Sharding](.pair/knowledge/guidelines/architecture/system-design/scaling-patterns.md#sharding) - Scale writes
+- [CQRS](.pair/knowledge/guidelines/architecture/system-design/scaling-patterns.md#cqrs) - Separate read/write models

@@ -16,13 +16,13 @@ export class CircuitBreaker {
   private state: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED'
   private failureCount = 0
   private lastFailureTime = 0
-  
+
   constructor(
     private readonly failureThreshold: number = 5,
     private readonly timeout: number = 60000, // 1 minute
-    private readonly retryTimeout: number = 30000 // 30 seconds
+    private readonly retryTimeout: number = 30000, // 30 seconds
   ) {}
-  
+
   async call<T>(operation: () => Promise<T>): Promise<T> {
     if (this.state === 'OPEN') {
       if (Date.now() - this.lastFailureTime > this.retryTimeout) {
@@ -31,7 +31,7 @@ export class CircuitBreaker {
         throw new CircuitBreakerOpenError()
       }
     }
-    
+
     try {
       const result = await operation()
       this.onSuccess()
@@ -41,16 +41,16 @@ export class CircuitBreaker {
       throw error
     }
   }
-  
+
   private onSuccess(): void {
     this.failureCount = 0
     this.state = 'CLOSED'
   }
-  
+
   private onFailure(): void {
     this.failureCount++
     this.lastFailureTime = Date.now()
-    
+
     if (this.failureCount >= this.failureThreshold) {
       this.state = 'OPEN'
     }
@@ -63,15 +63,15 @@ export class CircuitBreaker {
 ```typescript
 export class PaymentService {
   private circuitBreaker = new CircuitBreaker(3, 60000, 30000)
-  
+
   constructor(private paymentGateway: PaymentGateway) {}
-  
+
   async processPayment(payment: Payment): Promise<PaymentResult> {
     return await this.circuitBreaker.call(async () => {
       return await this.paymentGateway.charge(payment)
     })
   }
-  
+
   // Fallback when circuit is open
   async processPaymentWithFallback(payment: Payment): Promise<PaymentResult> {
     try {
@@ -102,12 +102,14 @@ export class PaymentService {
 ## Pros and Cons
 
 **Pros:**
+
 - **Fast failure** - Immediate failure instead of hanging
 - **Resource protection** - Prevents resource exhaustion
 - **Recovery detection** - Automatic service recovery testing
 - **Stability** - Prevents cascade failures
 
 **Cons:**
+
 - **False positives** - May trip on temporary issues
 - **Configuration complexity** - Requires proper tuning
 - **Monitoring needs** - Need good metrics and alerting
@@ -121,6 +123,6 @@ export class PaymentService {
 
 ## Related Patterns
 
-- [Load Balancing](scaling-patterns-load-balancing.md) - Traffic distribution
-- [Auto-Scaling](scaling-patterns-auto-scaling.md) - Dynamic scaling
-- [Timeout Pattern](performance-patterns-timeout.md) - Request timeouts
+- [Load Balancing](load-balancing.md) - Traffic distribution
+- [Auto-Scaling](auto-scaling.md) - Dynamic scaling
+- [Timeout Pattern](.pair/knowledge/guidelines/architecture/performance-patterns/README.md) - Request timeouts

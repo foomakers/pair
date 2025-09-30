@@ -304,8 +304,8 @@ pair "Monitor system performance during go-live"
 ## Related Topics
 
 - **[Methodology Selection](methodology-selection-guide.md)**: Guidance on when to choose Waterfall
-- **[Project Management Tools](../project-management-tool/README.md)**: Tool support for Waterfall projects
-- **[Documentation Standards](../assets/README.md)**: Templates and standards for Waterfall documentation
+- **[Project Management Tools](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)**: Tool support for Waterfall projects
+- **[Documentation Standards](.pair/knowledge/guidelines/collaboration/assets/README.md)**: Templates and standards for Waterfall documentation
 
 ---
 

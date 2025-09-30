@@ -342,8 +342,8 @@ pair "Track improvement impact and recommend next steps"
 
 - **[Kanban](kanban.md)**: Visual management system aligned with Lean principles
 - **[Methodology Selection](methodology-selection-guide.md)**: When to choose Lean approach
-- **[Estimation](../estimation/README.md)**: Lean estimation and planning techniques
-- **[Automation](../automation/README.md)**: Automation to eliminate waste and improve flow
+- **[Estimation](.pair/knowledge/guidelines/collaboration/estimation/README.md)**: Lean estimation and planning techniques
+- **[Automation](.pair/knowledge/guidelines/collaboration/automation/README.md)**: Automation to eliminate waste and improve flow
 
 ---
 

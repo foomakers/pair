@@ -76,7 +76,7 @@ This section covers approaches for tracking project progress, monitoring team ve
 
 ### With Issue Management
 
-**→ See [../issue-management/](../issue-management/README.md)**
+**→ See [../issue-management/](.pair/knowledge/guidelines/collaboration/issue-management/README.md)**
 
 - Issue status integration
 - Priority and type tracking
@@ -84,7 +84,7 @@ This section covers approaches for tracking project progress, monitoring team ve
 
 ### With Estimation
 
-**→ See [../estimation/](../estimation/README.md)**
+**→ See [../estimation/](.pair/knowledge/guidelines/collaboration/estimation/README.md)**
 
 - Effort tracking and comparison
 - Velocity calculation inputs
@@ -92,7 +92,7 @@ This section covers approaches for tracking project progress, monitoring team ve
 
 ### With Board Management
 
-**→ See [../board-management/](../board-management/README.md)**
+**→ See [board-management.md](.pair/knowledge/guidelines/collaboration/board-management.md)**
 
 - Board configuration for tracking
 - Workflow optimization
@@ -100,7 +100,7 @@ This section covers approaches for tracking project progress, monitoring team ve
 
 ### With Automation
 
-**→ See [../automation/](../automation/README.md)**
+**→ See [../automation/](.pair/knowledge/guidelines/collaboration/automation/README.md)**
 
 - Automated progress updates
 - Status synchronization
@@ -131,6 +131,6 @@ This section covers approaches for tracking project progress, monitoring team ve
 
 ## Related Topics
 
-- **[../methodology/](../methodology/README.md)** - Methodology-specific tracking approaches
-- **[../project-management-tool/](../project-management-tool/README.md)** - Tool setup and configuration
-- **[../board-management.md](../board-management.md)** - Board and backlog management practices
+- **[../methodology/](.pair/knowledge/guidelines/collaboration/methodology/README.md)** - Methodology-specific tracking approaches
+- **[../project-management-tool/](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Tool setup and configuration
+- **[.pair/knowledge/guidelines/collaboration/board-management.md](.pair/knowledge/guidelines/collaboration/board-management.md)** - Board and backlog management practices

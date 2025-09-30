@@ -130,7 +130,7 @@ Mixed          | Mixed           | Hybrid Architecture
 
 ## Related Patterns
 
-- [Architectural Patterns](architectural-patterns.md) - Core architecture patterns
-- [Scaling Patterns](scaling-patterns.md) - Horizontal and vertical scaling strategies
-- [Performance Patterns](performance-patterns.md) - Optimization techniques
-- [Integration Patterns](integration-patterns.md) - Service communication strategies
+- [Architectural Patterns](.pair/knowledge/guidelines/architecture/architectural-patterns/README.md) - Core architecture patterns
+- [Scaling Patterns](.pair/knowledge/guidelines/architecture/scaling-patterns/README.md) - Horizontal and vertical scaling strategies
+- [Performance Patterns](.pair/knowledge/guidelines/architecture/performance-patterns/README.md) - Optimization techniques
+- [Integration Patterns](.pair/knowledge/guidelines/architecture/integration-patterns.md) - Service communication strategies

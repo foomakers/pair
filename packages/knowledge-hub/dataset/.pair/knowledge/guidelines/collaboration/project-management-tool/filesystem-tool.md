@@ -37,7 +37,7 @@ mkdir -p .pair/adoption/product/backlog/03-user-stories/{not-started,in-progress
 
 ### Issue Management
 
-**→ See [../issue-management/filesystem-issues.md](../issue-management/filesystem-issues.md)**
+**→ See [.pair/knowledge/guidelines/collaboration/issue-management/filesystem-issues.md](.pair/knowledge/guidelines/collaboration/issue-management/filesystem-issues.md)**
 
 - Local issue tracking with markdown files
 - Directory-based status management
@@ -46,7 +46,7 @@ mkdir -p .pair/adoption/product/backlog/03-user-stories/{not-started,in-progress
 
 ### Project Tracking
 
-**→ See [../project-tracking/filesystem-tracking.md](../project-tracking/filesystem-tracking.md)**
+**→ See [.pair/knowledge/guidelines/collaboration/project-tracking/filesystem-tracking.md](.pair/knowledge/guidelines/collaboration/project-tracking/filesystem-tracking.md)**
 
 - Hierarchical directory structure
 - Status tracking via file location
@@ -55,7 +55,7 @@ mkdir -p .pair/adoption/product/backlog/03-user-stories/{not-started,in-progress
 
 ### Automation
 
-**→ See [../automation/filesystem-automation.md](../automation/filesystem-automation.md)**
+**→ See [.pair/knowledge/guidelines/collaboration/automation/filesystem-automation.md](.pair/knowledge/guidelines/collaboration/automation/filesystem-automation.md)**
 
 - Shell script automation
 - File operation automation
@@ -64,7 +64,7 @@ mkdir -p .pair/adoption/product/backlog/03-user-stories/{not-started,in-progress
 
 ### Board Management
 
-**→ See [../board-management/filesystem-boards.md](../board-management/filesystem-boards.md)**
+**→ See [board-management.md](.pair/knowledge/guidelines/collaboration/board-management.md)**
 
 - Directory-based board visualization
 - Local backlog management
@@ -73,7 +73,7 @@ mkdir -p .pair/adoption/product/backlog/03-user-stories/{not-started,in-progress
 
 ### Communication
 
-**→ See [../communication-protocols/](../communication-protocols/README.md)**
+**→ See [../communication-protocols/](.pair/knowledge/guidelines/collaboration/communication-protocols/README.md)**
 
 - Documentation-based communication
 - Local changelog management
@@ -82,7 +82,7 @@ mkdir -p .pair/adoption/product/backlog/03-user-stories/{not-started,in-progress
 
 ### Estimation Integration
 
-**→ See [../estimation/](../estimation/README.md)**
+**→ See [../estimation/](.pair/knowledge/guidelines/collaboration/estimation/README.md)**
 
 - File-based estimation tracking
 - Simple effort recording in metadata
@@ -127,7 +127,7 @@ Status changes are reflected by moving files between directories:
 
 ## Integration with Methodologies
 
-**→ See [../methodology/](../methodology/README.md)**
+**→ See [../methodology/](.pair/knowledge/guidelines/collaboration/methodology/README.md)**
 
 ### Scrum Integration
 

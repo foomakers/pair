@@ -23,13 +23,28 @@ This approach reduces folder pollution while maintaining logical organization an
 
 ### 💻 Development Guidelines
 
-- **[Development](development/README.md)** - Code design, technical standards, and testing strategies
-  - **[Code Design](development/code-design/README.md)** - Organization patterns, design principles, code structure
-    - [Framework Patterns](development/code-design/framework-patterns.md), [Quality Standards](development/code-design/quality-standards.md), [Implementation Standards](development/code-design/implementation-standards.md), [Organization Patterns](development/code-design/organization-patterns.md)
-  - **[Technical Standards](development/technical-standards/README.md)** - Tech stack decisions, tool configuration
-    - [Tech Stack](development/technical-standards/tech-stack.md), [Development Tools](development/technical-standards/development-tools.md), [Integration Standards](development/technical-standards/integration-standards.md), [Deployment Workflow](development/technical-standards/deployment-workflow.md)
-  - **[Testing](development/testing/README.md)** - Testing strategies, frameworks, quality gates
-    - [Testing Strategy](development/testing/testing-strategy.md), [Test Automation](development/testing/test-automation.md), [Testing Implementation](development/testing/testing-implementation.md), [Testing Tools](development/testing/testing-tools.md)
+Development guidelines are organized into three specialized practice areas:
+
+- **[Code Design](code-design/README.md)** - How to write high-quality, maintainable code
+
+  - **[Design Principles](code-design/design-principles/README.md)** - Core design principles and code quality fundamentals
+  - **[Framework Patterns](code-design/framework-patterns/README.md)** - Framework-specific implementation patterns and standards
+  - **[Implementation Standards](code-design/implementation-standards/README.md)** - Development environment and service implementation standards
+  - **[Organization Patterns](code-design/organization-patterns/README.md)** - Code and workspace organization strategies
+  - **[Quality Standards](code-design/quality-standards/README.md)** - Code quality metrics, linting, and technical debt management
+
+- **[Technical Standards](technical-standards/README.md)** - What technologies to use and how to configure them
+
+  - **[Tech Stack](technical-standards/tech-stack/README.md)** - Core technology decisions and framework selection standards
+  - **[Development Tools](technical-standards/development-tools/README.md)** - Development environment and tooling standards
+  - **[Integration Standards](technical-standards/integration-standards/README.md)** - API design, data management, and external service integration
+  - **[Deployment Workflow](technical-standards/deployment-workflow/README.md)** - Release management, workflow, and deployment standards
+
+- **[Testing](testing/README.md)** - How to verify that software works correctly
+  - **[Testing Strategy](testing/testing-strategy/README.md)** - Testing philosophy, pyramid strategy, and comprehensive approaches
+  - **[Test Automation](testing/test-automation/README.md)** - Automation frameworks, CI/CD integration, and execution strategies
+  - **[Testing Implementation](testing/testing-implementation/README.md)** - Practical testing implementation across different test types
+  - **[Testing Tools](testing/testing-tools/README.md)** - Testing frameworks, utilities, and tool configuration
 
 ### 🤝 Collaboration Guidelines
 
@@ -56,11 +71,13 @@ This approach reduces folder pollution while maintaining logical organization an
 All documents are designed to work together and contain extensive cross-references. Key integration points:
 
 - **Architecture** ↔ **Infrastructure**: Architectural decisions inform deployment strategies
-- **Testing** ↔ **Performance/Security**: Quality gates integrate across all domains
+- **Code Design** ↔ **Technical Standards**: Implementation patterns align with technology choices
+- **Testing** ↔ **Code Design**: Quality validation supports design principles
+- **Technical Standards** ↔ **Operations**: Technology choices inform infrastructure requirements
+- **Quality Standards** ↔ **All Development**: Quality criteria integrate across all development practices
 - **UX** ↔ **Accessibility**: User experience aligned with accessibility standards
 - **Definition of Done** ↔ **All Guidelines**: Quality criteria reference all technical standards
-- **Way of Working** ↔ **All Guidelines**: Collaboration, workflow, and artifact management practices integrate with all technical standards
-- **Collaboration & Process** ↔ **All Guidelines**: Collaboration, workflow, and artifact management practices integrate with all technical standards
+- **Collaboration & Process** ↔ **All Guidelines**: Workflow and artifact management practices integrate with all technical standards
 
 ## 📝 Usage Guidelines
 

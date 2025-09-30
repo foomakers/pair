@@ -52,34 +52,34 @@ Define user experience design principles, interface patterns, and content strate
 
 **Out of Scope:**
 
-- Implementation details (see [Code Design](.pair/knowledge/guidelines/development/code-design/README.md))
-- Accessibility implementation (see [Accessibility](../../quality/accessibility/README.md))
-- Performance optimization (see [Performance](../../quality/performance/README.md))
-- Technical implementation standards (see [Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md))
+- Implementation details (see [Code Design](.pair/knowledge/guidelines/code-design/README.md))
+- Accessibility implementation (see [Accessibility](.pair/knowledge/guidelines/quality/accessibility/README.md))
+- Performance optimization (see [Performance](.pair/knowledge/guidelines/quality/performance/README.md))
+- Technical implementation standards (see [Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md))
 
 ## Level 2 Implementation Areas
 
 ### Design Systems and Components
 
-- **[Design Systems](design-systems/)** - Design system architecture, component libraries, and design tokens
+- **Design Systems** - Design system architecture, component libraries, and design tokens
 
 ### User Experience Principles
 
-- **[User Experience](user-experience/)** - UX principles, user research methods, and usability guidelines
+- **User Experience** - UX principles, user research methods, and usability guidelines
 
 ### Interface Design Standards
 
-- **[Interface Design](interface-design/)** - UI design patterns, layout principles, and visual design standards
+- **Interface Design** - UI design patterns, layout principles, and visual design standards
 
 ### Content Strategy and Information Architecture
 
-- **[Content Strategy](content-strategy/)** - Content guidelines, information architecture, and content management
+- **Content Strategy** - Content guidelines, information architecture, and content management
 
 ## 🔗 Related Practices
 
-- **[Accessibility Guidelines](../../quality/accessibility/README.md)** - Accessibility standards for inclusive design
-- **[Code Design Guidelines](.pair/knowledge/guidelines/development/code-design/README.md)** - Implementation patterns for design systems
-- **[Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md)** - Technology stack supporting design implementation
+- **[Accessibility Guidelines](.pair/knowledge/guidelines/quality/accessibility/README.md)** - Accessibility standards for inclusive design
+- **[Code Design Guidelines](.pair/knowledge/guidelines/code-design/README.md)** - Implementation patterns for design systems
+- **[Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md)** - Technology stack supporting design implementation
 
 ---
 

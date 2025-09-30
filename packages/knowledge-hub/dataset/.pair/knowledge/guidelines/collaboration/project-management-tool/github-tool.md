@@ -34,7 +34,7 @@ npm install -g @github/github-mcp-server
 
 ### Issue Management
 
-**→ See [../issue-management/github-issues.md](../issue-management/github-issues.md)**
+**→ See [.pair/knowledge/guidelines/collaboration/issue-management/github-issues.md](.pair/knowledge/guidelines/collaboration/issue-management/github-issues.md)**
 
 - GitHub Issues setup and configuration
 - Label management and templates
@@ -43,7 +43,7 @@ npm install -g @github/github-mcp-server
 
 ### Project Tracking
 
-**→ See [../project-tracking/github-tracking.md](../project-tracking/github-tracking.md)**
+**→ See [.pair/knowledge/guidelines/collaboration/project-tracking/github-tracking.md](.pair/knowledge/guidelines/collaboration/project-tracking/github-tracking.md)**
 
 - GitHub Projects board configuration
 - Custom fields setup (Priority, Type, Status)
@@ -52,7 +52,7 @@ npm install -g @github/github-mcp-server
 
 ### Automation
 
-**→ See [../automation/github-automation.md](../automation/github-automation.md)**
+**→ See [.pair/knowledge/guidelines/collaboration/automation/github-automation.md](.pair/knowledge/guidelines/collaboration/automation/github-automation.md)**
 
 - GitHub Actions workflows
 - MCP integration for AI-assisted management
@@ -61,7 +61,7 @@ npm install -g @github/github-mcp-server
 
 ### Board Management
 
-**→ See [../board-management/github-boards.md](../board-management/github-boards.md)**
+**→ See [board-management.md](.pair/knowledge/guidelines/collaboration/board-management.md)**
 
 - Board layout and column configuration
 - Workflow optimization
@@ -70,7 +70,7 @@ npm install -g @github/github-mcp-server
 
 ### Communication
 
-**→ See [../communication-protocols/](../communication-protocols/README.md)**
+**→ See [../communication-protocols/](.pair/knowledge/guidelines/collaboration/communication-protocols/README.md)**
 
 - Pull request workflows and reviews
 - GitHub Discussions integration
@@ -79,7 +79,7 @@ npm install -g @github/github-mcp-server
 
 ### Estimation Integration
 
-**→ See [../estimation/](../estimation/README.md)**
+**→ See [../estimation/](.pair/knowledge/guidelines/collaboration/estimation/README.md)**
 
 - GitHub-compatible estimation approaches
 - Story point tracking in custom fields
@@ -114,7 +114,7 @@ npm install -g @github/github-mcp-server
 
 ## Integration with Methodologies
 
-**→ See [../methodology/](../methodology/README.md)**
+**→ See [../methodology/](.pair/knowledge/guidelines/collaboration/methodology/README.md)**
 
 ### Scrum Integration
 

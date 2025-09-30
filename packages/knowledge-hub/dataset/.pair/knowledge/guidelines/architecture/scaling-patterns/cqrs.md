@@ -14,19 +14,16 @@ Command Query Responsibility Segregation for independent read/write scaling.
 ```typescript
 // Command Side (Write Model)
 export class OrderCommandHandler {
-  constructor(
-    private eventStore: EventStore,
-    private eventBus: EventBus
-  ) {}
-  
+  constructor(private eventStore: EventStore, private eventBus: EventBus) {}
+
   async createOrder(command: CreateOrderCommand): Promise<void> {
     const events = [
       new OrderCreatedEvent(command.orderId, command.customerId, command.items),
-      new OrderTotalCalculatedEvent(command.orderId, command.total)
+      new OrderTotalCalculatedEvent(command.orderId, command.total),
     ]
-    
+
     await this.eventStore.saveEvents(command.orderId, events)
-    
+
     // Publish events for read model updates
     for (const event of events) {
       await this.eventBus.publish(event)
@@ -37,7 +34,7 @@ export class OrderCommandHandler {
 // Query Side (Read Model)
 export class OrderQueryHandler {
   constructor(private readDatabase: ReadDatabase) {}
-  
+
   async getOrderSummary(customerId: string): Promise<OrderSummary[]> {
     // Optimized read model for fast queries
     return await this.readDatabase.orderSummaries
@@ -45,7 +42,7 @@ export class OrderQueryHandler {
       .orderBy('createdAt', 'desc')
       .limit(50)
   }
-  
+
   async getOrderAnalytics(dateRange: DateRange): Promise<OrderAnalytics> {
     // Pre-aggregated data for fast analytics
     return await this.readDatabase.orderAnalytics
@@ -58,23 +55,23 @@ export class OrderQueryHandler {
 // Read Model Projections
 export class OrderProjectionHandler {
   constructor(private readDatabase: ReadDatabase) {}
-  
+
   @EventHandler(OrderCreatedEvent)
   async onOrderCreated(event: OrderCreatedEvent): Promise<void> {
     // Update multiple read models optimized for different queries
     await Promise.all([
       this.updateOrderSummary(event),
       this.updateCustomerOrderHistory(event),
-      this.updateOrderAnalytics(event)
+      this.updateOrderAnalytics(event),
     ])
   }
-  
+
   private async updateOrderSummary(event: OrderCreatedEvent): Promise<void> {
     await this.readDatabase.orderSummaries.insert({
       orderId: event.orderId,
       customerId: event.customerId,
       status: 'Created',
-      createdAt: event.timestamp
+      createdAt: event.timestamp,
     })
   }
 }
@@ -83,12 +80,14 @@ export class OrderProjectionHandler {
 ## Pros and Cons
 
 **Pros:**
+
 - **Independent scaling** - Scale reads and writes separately
 - **Optimized models** - Different models for different use cases
 - **Performance** - Fast reads from denormalized models
 - **Flexibility** - Multiple read models for same data
 
 **Cons:**
+
 - **Complexity** - Dual models to maintain
 - **Eventual consistency** - Read lag behind writes
 - **Development overhead** - More code to write and test
@@ -101,6 +100,6 @@ export class OrderProjectionHandler {
 
 ## Related Patterns
 
-- [Event Sourcing](architectural-patterns-event-sourcing.md) - Event-based persistence
-- [Database Sharding](scaling-patterns-database-sharding.md) - Horizontal partitioning
-- [Read Replicas](scaling-patterns-database-read-replicas.md) - Read scaling
+- [Event Sourcing](.pair/knowledge/guidelines/architecture/architectural-patterns/event-sourcing.md) - Event-based persistence
+- [Database Sharding](database-sharding.md) - Horizontal partitioning
+- [Read Replicas](database-read-replicas.md) - Read scaling

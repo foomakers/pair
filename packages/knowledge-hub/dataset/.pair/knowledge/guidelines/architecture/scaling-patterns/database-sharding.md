@@ -20,22 +20,22 @@ export interface ShardingStrategy {
 
 export class HashShardingStrategy implements ShardingStrategy {
   constructor(private shardCount: number) {}
-  
+
   getShardKey(user: User): string {
     return user.id
   }
-  
+
   getShardForKey(key: string): string {
     const hash = this.hashFunction(key)
     const shardIndex = hash % this.shardCount
     return `shard_${shardIndex}`
   }
-  
+
   private hashFunction(key: string): number {
     let hash = 0
     for (let i = 0; i < key.length; i++) {
       const char = key.charCodeAt(i)
-      hash = ((hash << 5) - hash) + char
+      hash = (hash << 5) - hash + char
       hash = hash & hash // Convert to 32-bit integer
     }
     return Math.abs(hash)
@@ -46,32 +46,32 @@ export class HashShardingStrategy implements ShardingStrategy {
 export class ShardedUserRepository {
   constructor(
     private shardingStrategy: ShardingStrategy,
-    private shardConnections: Map<string, Connection>
+    private shardConnections: Map<string, Connection>,
   ) {}
-  
+
   async createUser(user: User): Promise<User> {
     const shardKey = this.shardingStrategy.getShardKey(user)
     const shard = this.shardingStrategy.getShardForKey(shardKey)
     const connection = this.shardConnections.get(shard)
-    
+
     return await connection.query('INSERT INTO users ...', user)
   }
-  
+
   async findUserById(id: string): Promise<User | null> {
     const shard = this.shardingStrategy.getShardForKey(id)
     const connection = this.shardConnections.get(shard)
-    
+
     return await connection.query('SELECT * FROM users WHERE id = ?', [id])
   }
-  
+
   // Cross-shard queries require scatter-gather
   async findUsersByEmail(email: string): Promise<User[]> {
     const queries = Array.from(this.shardConnections.entries()).map(
       async ([shardName, connection]) => {
         return await connection.query('SELECT * FROM users WHERE email = ?', [email])
-      }
+      },
     )
-    
+
     const results = await Promise.all(queries)
     return results.flat()
   }
@@ -87,11 +87,13 @@ export class ShardedUserRepository {
 ## Pros and Cons
 
 **Pros:**
+
 - **Massive scale** - Handle TB+ datasets
 - **Write performance** - Distributes write load
 - **Independent scaling** - Scale shards independently
 
 **Cons:**
+
 - **High complexity** - Complex implementation
 - **Cross-shard queries** - Expensive scatter-gather operations
 - **Rebalancing difficulty** - Hard to redistribute data
@@ -104,5 +106,5 @@ export class ShardedUserRepository {
 
 ## Related Patterns
 
-- [Read Replicas](scaling-patterns-database-read-replicas.md) - For read-heavy workloads
-- [CQRS Scaling](scaling-patterns-cqrs.md) - Command-query separation
+- [Read Replicas](database-read-replicas.md) - For read-heavy workloads
+- [CQRS Scaling](cqrs.md) - Command-query separation

@@ -105,4 +105,4 @@ export class OrderReadModelUpdater {
 ## Related Patterns
 
 - **[Event Sourcing](event-sourcing.md)** - Often combined with CQRS
-- **[Architectural Patterns](architectural-patterns.md)** - Pattern selection framework
+- **[Architectural Patterns](README.md)** - Pattern selection framework

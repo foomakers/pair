@@ -437,4 +437,4 @@ forecasts/
 
 - Reference [time-based-estimation.md](time-based-estimation.md) for calendar planning integration
 - See [complexity-based-estimation.md](complexity-based-estimation.md) for relative sizing inputs
-- Check [../project-tracking/](../project-tracking/README.md) for tracking forecast accuracy and project progress
+- Check [../project-tracking/](.pair/knowledge/guidelines/collaboration/project-tracking/README.md) for tracking forecast accuracy and project progress

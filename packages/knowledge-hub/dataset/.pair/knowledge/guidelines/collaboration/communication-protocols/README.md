@@ -10,21 +10,21 @@ This section establishes clear communication standards, protocols, and guideline
 
 ### Tool-Specific Approaches
 
-- **[github-collaboration.md](github-collaboration.md)** - GitHub-based communication
+- **GitHub-based communication** - GitHub-based communication
 
   - Pull request reviews and discussions
   - Issue comments and collaboration
   - GitHub Discussions for team communication
   - Notification management and settings
 
-- **[async-communication.md](async-communication.md)** - Asynchronous communication patterns
+- **Asynchronous communication patterns** - Asynchronous communication patterns
 
   - Documentation-first communication
   - Async decision-making processes
   - Time-zone considerations for distributed teams
   - Async meeting alternatives
 
-- **[meeting-protocols.md](meeting-protocols.md)** - Meeting standards and guidelines
+- **Meeting standards and guidelines** - Meeting standards and guidelines
   - Meeting types and purposes
   - Preparation and facilitation guidelines
   - Documentation and follow-up standards
@@ -204,7 +204,7 @@ This section establishes clear communication standards, protocols, and guideline
 
 ### With Project Management
 
-**→ See [../project-tracking/](../project-tracking/README.md)**
+**→ See [../project-tracking/](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)**
 
 - Project status communication
 - Milestone and deadline communication
@@ -212,7 +212,7 @@ This section establishes clear communication standards, protocols, and guideline
 
 ### With Quality Assurance
 
-**→ See [../assets/](../assets/README.md)**
+**→ See [../assets/](.pair/knowledge/guidelines/collaboration/assets/README.md)**
 
 - Review templates and checklists
 - Quality feedback protocols
@@ -220,7 +220,7 @@ This section establishes clear communication standards, protocols, and guideline
 
 ### With Automation
 
-**→ See [../automation/](../automation/README.md)**
+**→ See [../automation/](.pair/knowledge/guidelines/collaboration/automation/README.md)**
 
 - Automated notification protocols
 - Status update automation
@@ -228,6 +228,6 @@ This section establishes clear communication standards, protocols, and guideline
 
 ## Related Topics
 
-- **[../decision-making.md](../decision-making.md)** - Decision-making processes and communication
-- **[../role-responsibilities.md](../role-responsibilities.md)** - Role-specific communication responsibilities
-- **[../project-management-tool/](../project-management-tool/README.md)** - Tool-specific communication features
+- **[.pair/knowledge/guidelines/collaboration/decision-making.md](.pair/knowledge/guidelines/collaboration/decision-making.md)** - Decision-making processes and communication
+- **[.pair/knowledge/guidelines/collaboration/role-responsibilities.md](.pair/knowledge/guidelines/collaboration/role-responsibilities.md)** - Role-specific communication responsibilities
+- **[../project-management-tool/](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Tool-specific communication features

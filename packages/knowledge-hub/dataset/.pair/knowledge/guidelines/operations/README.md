@@ -6,7 +6,7 @@ Infrastructure standards, UX design guidelines, and observability practices for 
 
 ### Infrastructure Practice
 
-- **[Infrastructure](infrastructure/README.md)** - Infrastructure standards and deployment guidelines
+- **[Infrastructure](infrastructure.md)** - Infrastructure standards and deployment guidelines
   - Infrastructure architecture and provisioning
   - Deployment strategies and automation
   - Environment management and configuration
@@ -45,7 +45,7 @@ _Each practice folder contains tool-specific guides and implementations:_
 
 ## 🎯 Quick Start
 
-1. **Infrastructure**: Configure [Infrastructure](infrastructure) for reliable deployment and scaling
+1. **Infrastructure**: Configure [Infrastructure](infrastructure.md) for reliable deployment and scaling
 2. **UX Standards**: Implement [UX Design](ux-design) guidelines for consistent user experience
 3. **Monitoring**: Establish [Observability](observability) for system health and performance tracking
 4. **Integration**: Align operational practices with [Quality Standards](.pair/knowledge/guidelines/quality/standards)

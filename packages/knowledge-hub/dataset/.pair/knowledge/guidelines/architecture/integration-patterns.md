@@ -11,12 +11,14 @@ Define standardized patterns for system integration, service communication, and 
 ### Synchronous Integration
 
 **REST APIs**
+
 - Request-response communication
 - Immediate consistency
 - Direct coupling between services
 - Best for real-time requirements
 
 **GraphQL APIs**
+
 - Flexible query language
 - Single endpoint for multiple data sources
 - Client-driven data fetching
@@ -25,12 +27,14 @@ Define standardized patterns for system integration, service communication, and 
 ### Asynchronous Integration
 
 **Event-Driven Architecture**
+
 - Loose coupling between services
 - Eventual consistency
 - Scalable and resilient
 - Best for high-volume, distributed systems
 
 **Message Queues**
+
 - Reliable message delivery
 - Load balancing and scaling
 - Error handling and retry mechanisms
@@ -42,11 +46,11 @@ Define standardized patterns for system integration, service communication, and 
 
 ```typescript
 // RESTful Resource Design
-GET    /api/users          // List users
-GET    /api/users/{id}     // Get specific user
-POST   /api/users          // Create user
-PUT    /api/users/{id}     // Update user
-DELETE /api/users/{id}     // Delete user
+GET / api / users // List users
+GET / api / users / { id } // Get specific user
+POST / api / users // Create user
+PUT / api / users / { id } // Update user
+DELETE / api / users / { id } // Delete user
 ```
 
 ### Event Patterns
@@ -111,4 +115,4 @@ interface UserRegisteredEvent extends DomainEvent {
 
 - **[System Design README](README.md)** - Overall system design principles
 - **[Bounded Context Patterns](bounded-context-patterns.md)** - Context boundary implementation
-- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure/README.md)** - Infrastructure integration patterns
+- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure.md)** - Infrastructure integration patterns

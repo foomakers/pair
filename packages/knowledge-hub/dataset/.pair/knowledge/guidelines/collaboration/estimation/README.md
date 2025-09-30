@@ -231,6 +231,6 @@ Data-driven prediction using historical metrics, trends, and statistical models.
 
 ## Related Documents
 
-- **[../methodology/](../methodology/README.md)** - Integration with Agile, Waterfall, and hybrid methodologies
-- **[../project-tracking/](../project-tracking/README.md)** - Tracking estimation accuracy and project progress
-- **[../project-management-tool/](../project-management-tool/README.md)** - Tool-specific estimation implementations
+- **[../methodology/](.pair/knowledge/guidelines/collaboration/methodology/README.md)** - Integration with Agile, Waterfall, and hybrid methodologies
+- **[../project-tracking/](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)** - Tracking estimation accuracy and project progress
+- **[../project-management-tool/](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Tool-specific estimation implementations

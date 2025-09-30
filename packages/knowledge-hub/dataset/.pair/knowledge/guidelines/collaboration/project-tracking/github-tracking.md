@@ -293,7 +293,7 @@ gh project item-list [project_number] --format json > project_data.json
 
 ### With Issue Management
 
-**→ See [../issue-management/github-issues.md](../issue-management/github-issues.md)**
+**→ See [.pair/knowledge/guidelines/collaboration/issue-management/github-issues.md](.pair/knowledge/guidelines/collaboration/issue-management/github-issues.md)**
 
 - Automatic issue addition to boards
 - Label synchronization with custom fields
@@ -301,7 +301,7 @@ gh project item-list [project_number] --format json > project_data.json
 
 ### With Automation
 
-**→ See [../automation/github-automation.md](../automation/github-automation.md)**
+**→ See [.pair/knowledge/guidelines/collaboration/automation/github-automation.md](.pair/knowledge/guidelines/collaboration/automation/github-automation.md)**
 
 - Automated board updates
 - Status synchronization rules
@@ -325,6 +325,6 @@ gh project item-list [project_number] --format json > project_data.json
 
 ## Related Topics
 
-- **[../issue-management/github-issues.md](../issue-management/github-issues.md)** - Issue creation and management
-- **[../automation/github-automation.md](../automation/github-automation.md)** - Automation setup
-- **[../project-management-tool/github-tool.md](../project-management-tool/github-tool.md)** - Overall GitHub configuration
+- **[.pair/knowledge/guidelines/collaboration/issue-management/github-issues.md](.pair/knowledge/guidelines/collaboration/issue-management/github-issues.md)** - Issue creation and management
+- **[.pair/knowledge/guidelines/collaboration/automation/github-automation.md](.pair/knowledge/guidelines/collaboration/automation/github-automation.md)** - Automation setup
+- **[.pair/knowledge/guidelines/collaboration/project-management-tool/github-tool.md](.pair/knowledge/guidelines/collaboration/project-management-tool/github-tool.md)** - Overall GitHub configuration

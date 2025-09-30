@@ -172,7 +172,7 @@ Technology selection and complexity constraints for lightweight processing and r
 
 - **[Team Constraints](team-constraints.md)** - Team capability and learning constraints
 - **[Platform Constraints](platform-constraints.md)** - Platform-specific technology requirements
-- **[Tech Stack](.pair/knowledge/guidelines/development/technical-standards/tech-stack.md)** - Specific technology choices
+- **[Tech Stack](.pair/adoption/tech/tech-stack.md)** - Specific technology choices
 - **[Implementation Guidelines](implementation-guidelines.md)** - Decision making process
 
 ## Scope Boundaries

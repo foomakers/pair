@@ -30,7 +30,7 @@ services/
 
 // Service Independence
 - Separate codebases
-- Independent databases  
+- Independent databases
 - Individual deployment pipelines
 - Service-specific technologies
 ```
@@ -43,26 +43,26 @@ export class APIGateway {
   constructor(
     private userService: ServiceProxy,
     private orderService: ServiceProxy,
-    private inventoryService: ServiceProxy
+    private inventoryService: ServiceProxy,
   ) {}
-  
+
   async createOrder(orderData: CreateOrderRequest): Promise<OrderResponse> {
     // Orchestrate multiple services
     const user = await this.userService.getUser(orderData.userId)
     const inventory = await this.inventoryService.checkAvailability(orderData.items)
-    
+
     if (!inventory.available) {
       throw new InsufficientInventoryError()
     }
-    
+
     const order = await this.orderService.createOrder({
       ...orderData,
-      userEmail: user.email
+      userEmail: user.email,
     })
-    
+
     // Trigger async notifications
     await this.notificationService.sendOrderConfirmation(order.id)
-    
+
     return order
   }
 }
@@ -72,12 +72,12 @@ export class ServiceProxy {
   constructor(
     private httpClient: HttpClient,
     private circuitBreaker: CircuitBreaker,
-    private serviceDiscovery: ServiceDiscovery
+    private serviceDiscovery: ServiceDiscovery,
   ) {}
-  
+
   async getUser(userId: string): Promise<User> {
     const serviceUrl = await this.serviceDiscovery.getServiceUrl('user-service')
-    
+
     return await this.circuitBreaker.execute(async () => {
       const response = await this.httpClient.get(`${serviceUrl}/users/${userId}`)
       return response.data
@@ -87,22 +87,19 @@ export class ServiceProxy {
 
 // Service Implementation
 export class OrderService {
-  constructor(
-    private orderRepository: OrderRepository,
-    private eventPublisher: EventPublisher
-  ) {}
-  
+  constructor(private orderRepository: OrderRepository, private eventPublisher: EventPublisher) {}
+
   async createOrder(orderData: CreateOrderCommand): Promise<Order> {
     const order = await this.orderRepository.save(orderData)
-    
+
     // Publish event for other services
     await this.eventPublisher.publish('order.created', {
       orderId: order.id,
       customerId: order.customerId,
       items: order.items,
-      total: order.total
+      total: order.total,
     })
-    
+
     return order
   }
 }
@@ -111,11 +108,13 @@ export class OrderService {
 ## Service Communication Patterns
 
 **Synchronous:**
+
 - **HTTP/REST** - Simple request-response
 - **gRPC** - High-performance RPC
 - **GraphQL** - Flexible query interface
 
 **Asynchronous:**
+
 - **Message Queues** - Reliable async communication
 - **Event Streaming** - Real-time event processing
 - **Pub/Sub** - Event-driven architecture
@@ -123,6 +122,7 @@ export class OrderService {
 ## Benefits and Trade-offs
 
 **Benefits:**
+
 - **Independent scaling** - Scale services based on demand
 - **Technology diversity** - Choose best tech per service
 - **Team autonomy** - Independent development and deployment
@@ -130,6 +130,7 @@ export class OrderService {
 - **Independent deployment** - Deploy services separately
 
 **Trade-offs:**
+
 - **Distributed complexity** - Network latency, failures
 - **Data consistency** - Eventual consistency challenges
 - **Operational overhead** - Multiple services to monitor
@@ -157,6 +158,7 @@ export class OrderService {
 ## Migration Strategy
 
 **From Modular Monolith:**
+
 1. **Identify service boundaries** - Start with least coupled modules
 2. **Extract database** - Create separate database per service
 3. **Add service interface** - HTTP API instead of direct calls
@@ -166,7 +168,7 @@ export class OrderService {
 
 ## Related Patterns
 
-- [Modular Monolith](deployment-architectures-modular-monolith.md) - Previous evolution step
-- [Serverless](deployment-architectures-serverless.md) - Function-based alternative
-- [API Gateway](integration-patterns.md) - Service composition pattern
-- [Circuit Breaker](scaling-patterns-circuit-breaker.md) - Resilience pattern
+- [Modular Monolith](modular-monolith.md) - Previous evolution step
+- [Serverless](serverless.md) - Function-based alternative
+- [API Gateway](.pair/knowledge/guidelines/architecture/integration-patterns.md) - Service composition pattern
+- [Circuit Breaker](.pair/knowledge/guidelines/architecture/scaling-patterns/circuit-breaker.md) - Resilience pattern

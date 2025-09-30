@@ -40,13 +40,13 @@ export class UserModule {
   constructor(
     private userService: UserService,
     private userController: UserController,
-    private userRepository: UserRepository
+    private userRepository: UserRepository,
   ) {}
-  
+
   registerRoutes(app: FastifyInstance): void {
     app.register(this.userController.routes, { prefix: '/api/users' })
   }
-  
+
   // Clear module boundaries
   async initialize(): Promise<void> {
     await this.userRepository.initialize()
@@ -56,22 +56,22 @@ export class UserModule {
 // Main Application
 export class Application {
   private modules: Module[] = []
-  
+
   constructor() {
     this.modules = [
       new UserModule(userService, userController, userRepository),
       new OrderModule(orderService, orderController, orderRepository),
-      new InventoryModule(inventoryService, inventoryController, inventoryRepository)
+      new InventoryModule(inventoryService, inventoryController, inventoryRepository),
     ]
   }
-  
+
   async start(): Promise<void> {
     // Initialize all modules
     for (const module of this.modules) {
       await module.initialize()
       module.registerRoutes(this.app)
     }
-    
+
     await this.app.listen({ port: 3000 })
   }
 }
@@ -80,6 +80,7 @@ export class Application {
 ## Benefits and Trade-offs
 
 **Benefits:**
+
 - **Simple deployment** - Single artifact to deploy
 - **Fast development** - No network overhead between modules
 - **Easy debugging** - Single codebase, unified logging
@@ -87,6 +88,7 @@ export class Application {
 - **Low operational overhead** - Single database, simple monitoring
 
 **Trade-offs:**
+
 - **Scaling limitations** - Scale entire application, not individual parts
 - **Technology lock-in** - Single technology stack
 - **Team coordination** - Shared codebase requires coordination
@@ -103,12 +105,14 @@ export class Application {
 ## Migration Path
 
 **To Modular Monolith:**
+
 1. Strengthen module boundaries
 2. Extract shared data models
 3. Add module-to-module interfaces
 4. Implement domain events
 
 **To Microservices:**
+
 1. Start with least coupled module
 2. Extract database tables
 3. Add API layer
@@ -116,6 +120,6 @@ export class Application {
 
 ## Related Patterns
 
-- [Modular Monolith](deployment-architectures-modular-monolith.md) - Next evolution step
-- [Microservices](deployment-architectures-microservices.md) - Distributed alternative
-- [Layered Architecture](architectural-patterns-layered.md) - Internal organization pattern
+- [Modular Monolith](modular-monolith.md) - Next evolution step
+- [Microservices](microservices.md) - Distributed alternative
+- [Layered Architecture](.pair/knowledge/guidelines/architecture/architectural-patterns/layered.md) - Internal organization pattern

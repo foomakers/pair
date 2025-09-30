@@ -65,19 +65,19 @@ Is your service stateless?
 
 ### Database Scaling Patterns
 
-- **[Read Replicas](scaling-patterns-database-read-replicas.md)** - Read-heavy workload optimization
-- **[Database Sharding](scaling-patterns-database-sharding.md)** - Large dataset horizontal partitioning
-- **[CQRS Scaling](scaling-patterns-cqrs.md)** - Command-query separation for scale
+- **[Read Replicas](.pair/knowledge/guidelines/architecture/scaling-patterns/database-read-replicas.md)** - Read-heavy workload optimization
+- **[Database Sharding](.pair/knowledge/guidelines/architecture/scaling-patterns/database-sharding.md)** - Large dataset horizontal partitioning
+- **[CQRS Scaling](.pair/knowledge/guidelines/architecture/scaling-patterns/cqrs.md)** - Command-query separation for scale
 
 ### Service Scaling Patterns
 
-- **[Load Balancing](scaling-patterns-load-balancing.md)** - Traffic distribution strategies
-- **[Circuit Breaker](scaling-patterns-circuit-breaker.md)** - Failure resilience patterns
-- **[Auto-Scaling](scaling-patterns-auto-scaling.md)** - Dynamic resource adjustment
+- **[Load Balancing](.pair/knowledge/guidelines/architecture/scaling-patterns/load-balancing.md)** - Traffic distribution strategies
+- **[Circuit Breaker](.pair/knowledge/guidelines/architecture/scaling-patterns/circuit-breaker.md)** - Failure resilience patterns
+- **[Auto-Scaling](.pair/knowledge/guidelines/architecture/scaling-patterns/auto-scaling.md)** - Dynamic resource adjustment
 
 ### Caching Patterns
 
-- **[Multi-Level Caching](scaling-patterns-caching.md)** - Hierarchical caching strategies
+- **[Multi-Level Caching](.pair/knowledge/guidelines/architecture/scaling-patterns/caching.md)** - Hierarchical caching strategies
 
 ## Pattern Complexity Matrix
 
@@ -93,5 +93,5 @@ Is your service stateless?
 ## Related Documents
 
 - **[System Design README](README.md)** - Overall system design principles
-- **[Architectural Patterns](architectural-patterns.md)** - Architecture pattern implementations
+- **[Architectural Patterns](.pair/knowledge/guidelines/architecture/architectural-patterns/README.md)** - Architecture pattern implementations
 - **[Performance Patterns](performance-patterns.md)** - Performance optimization strategies

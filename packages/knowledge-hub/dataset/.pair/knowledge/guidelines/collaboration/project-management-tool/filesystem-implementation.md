@@ -513,10 +513,10 @@ Add review tasks to the story file:
 
 ## Related Tools
 
-- **Methodology Selection**: [methodology-selection-guide.md](../methodology/methodology-selection-guide.md)
-- **Project Tracking**: [project-tracking-overview.md](../project-tracking/project-tracking-overview.md)
+- **Methodology Selection**: [methodology-selection-guide.md](.pair/knowledge/guidelines/collaboration/methodology/methodology-selection-guide.md)
+- **Project Tracking**: [project-tracking/README.md](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)
 - **GitHub Integration**: [github-implementation.md](github-implementation.md)
-- **Templates**: [templates/](../assets/templates/)
+- **Templates**: [assets/README.md](.pair/knowledge/guidelines/collaboration/assets/README.md)
 
 ---
 

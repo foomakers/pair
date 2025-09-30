@@ -10,18 +10,18 @@ This section provides comprehensive guidance on defining, implementing, and mana
 
 ### Role Definition
 
-- **[role-definition-framework.md](role-definition-framework.md)**: Comprehensive framework for defining team roles with clear boundaries, responsibilities, and accountability measures
-- **[responsibility-matrix.md](responsibility-matrix.md)**: RACI matrix and responsibility assignment tools for collaborative workflows
+- **Role Definition Framework**: Comprehensive framework for defining team roles with clear boundaries, responsibilities, and accountability measures
+- **Responsibility Matrix**: RACI matrix and responsibility assignment tools for collaborative workflows
 
 ### Team Structure
 
-- **[team-structure-guide.md](team-structure-guide.md)**: Organizational patterns and team structures for different project types and scales
-- **[cross-functional-teams.md](cross-functional-teams.md)**: Guidelines for forming and managing cross-functional development teams
+- **Team Structure Guide**: Organizational patterns and team structures for different project types and scales
+- **Cross-functional Teams**: Guidelines for forming and managing cross-functional development teams
 
 ### Role Integration
 
-- **[role-integration-patterns.md](role-integration-patterns.md)**: Patterns for integrating different roles in agile development workflows
-- **[handoff-procedures.md](handoff-procedures.md)**: Procedures for smooth work handoffs between different roles and team members
+- **Role Integration Patterns**: Patterns for integrating different roles in agile development workflows
+- **Handoff Procedures**: Procedures for smooth work handoffs between different roles and team members
 
 ## Quick Reference
 
@@ -129,9 +129,9 @@ pair "Define onboarding process for new role assignments"
 ## Related Topics
 
 - **Decision Making**: [decision-making.md](decision-making.md)
-- **Communication**: [communication-protocols/README.md](../communication-protocols/README.md)
-- **Project Management**: [project-management-tool/README.md](../project-management-tool/README.md)
-- **Board Management**: [board-management/README.md](../board-management/README.md)
+- **Communication**: [communication-protocols/README.md](./communication-protocols/README.md)
+- **Project Management**: [project-management-tool/README.md](./project-management-tool/README.md)
+- **Board Management**: [board-management.md](board-management.md)
 
 ---
 

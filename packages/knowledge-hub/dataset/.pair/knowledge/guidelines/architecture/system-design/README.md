@@ -18,42 +18,42 @@ Define system design patterns, structural choices, and architectural decisions t
 
 **Out of Scope:**
 
-- Infrastructure deployment strategies (see [Infrastructure](.pair/knowledge/guidelines/operations/infrastructure/README.md))
-- Specific technology implementations (see [Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md))
-- Performance optimization techniques (see [Performance](.pair/knowledge/guidelines/quality/performance/README.md))
-- Security implementation details (see [Security](.pair/knowledge/guidelines/quality/security/README.md))
-- Testing strategies and methodologies (see [Testing](.pair/knowledge/guidelines/development/testing/README.md))
+- Infrastructure deployment strategies (see [Infrastructure](.pair/knowledge/guidelines/operations/infrastructure.md))
+- Specific technology implementations (see [Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md))
+- Performance optimization techniques (see [Performance](.pair/knowledge/guidelines/quality/performance.md))
+- Security implementation details (see [Security](.pair/knowledge/guidelines/quality/security.md))
+- Testing strategies and methodologies (see [Testing](.pair/knowledge/guidelines/testing/README.md))
 
 ## Level 3 Implementation Guides
 
 ### Core Domain Design
 
-- **[Domain-Driven Design](domain-driven-design.md)** - DDD implementation patterns and bounded contexts
-- **[Bounded Context Patterns](bounded-context-patterns.md)** - Context mapping and integration strategies
-- **[Integration Patterns](integration-patterns.md)** - Service integration and communication patterns
+- **[Domain-Driven Design](.pair/knowledge/guidelines/architecture/domain-driven-design.md)** - DDD implementation patterns and bounded contexts
+- **[Bounded Context Patterns](.pair/knowledge/guidelines/architecture/bounded-context-patterns.md)** - Context mapping and integration strategies
+- **[Integration Patterns](.pair/knowledge/guidelines/architecture/integration-patterns.md)** - Service integration and communication patterns
 
 ### Architectural Pattern Implementations
 
-- **[Architectural Patterns](architectural-patterns.md)** - Pattern selection framework and decision tree
-- **[CRUD Architecture](architectural-patterns-crud.md)** - Simple data operations pattern
-- **[Layered Architecture](architectural-patterns-layered.md)** - Traditional enterprise pattern
-- **[Hexagonal Architecture](architectural-patterns-hexagonal.md)** - Ports and adapters pattern
-- **[Clean Architecture](architectural-patterns-clean.md)** - Dependency inversion pattern
-- **[CQRS](architectural-patterns-cqrs.md)** - Command Query Responsibility Segregation
-- **[Event Sourcing](architectural-patterns-event-sourcing.md)** - Event-based persistence pattern
+- **[Architectural Patterns](.pair/knowledge/guidelines/architecture/architectural-patterns/README.md)** - Pattern selection framework and decision tree
+- **[CRUD Architecture](.pair/knowledge/guidelines/architecture/architectural-patterns/crud.md)** - Simple data operations pattern
+- **[Layered Architecture](.pair/knowledge/guidelines/architecture/architectural-patterns/layered.md)** - Traditional enterprise pattern
+- **[Hexagonal Architecture](.pair/knowledge/guidelines/architecture/architectural-patterns/hexagonal.md)** - Ports and adapters pattern
+- **[Clean Architecture](.pair/knowledge/guidelines/architecture/architectural-patterns/clean.md)** - Dependency inversion pattern
+- **[CQRS](.pair/knowledge/guidelines/architecture/architectural-patterns/cqrs.md)** - Command Query Responsibility Segregation
+- **[Event Sourcing](.pair/knowledge/guidelines/architecture/architectural-patterns/event-sourcing.md)** - Event-based persistence pattern
 
 ### System Scaling and Performance
 
-- **[Scaling Patterns](scaling-patterns.md)** - Scaling strategy framework and decision tree
-- **[Database Read Replicas](scaling-patterns-database-read-replicas.md)** - Read-heavy workload optimization
-- **[Database Sharding](scaling-patterns-database-sharding.md)** - Large dataset horizontal partitioning
-- **[CQRS Scaling](scaling-patterns-cqrs.md)** - Command-query separation for scale
-- **[Load Balancing](scaling-patterns-load-balancing.md)** - Traffic distribution strategies
-- **[Circuit Breaker](scaling-patterns-circuit-breaker.md)** - Failure resilience patterns
-- **[Auto-Scaling](scaling-patterns-auto-scaling.md)** - Dynamic resource adjustment
-- **[Multi-Level Caching](scaling-patterns-caching.md)** - Hierarchical caching strategies
-- **[Deployment Architectures](deployment-architectures.md)** - Deployment patterns from monolith to microservices
-- **[Performance Patterns](performance-patterns.md)** - Performance optimization and monitoring patterns
+- **[Scaling Patterns](.pair/knowledge/guidelines/architecture/scaling-patterns/README.md)** - Scaling strategy framework and decision tree
+- **[Database Read Replicas](.pair/knowledge/guidelines/architecture/scaling-patterns/database-read-replicas.md)** - Read-heavy workload optimization
+- **[Database Sharding](.pair/knowledge/guidelines/architecture/scaling-patterns/database-sharding.md)** - Large dataset horizontal partitioning
+- **[CQRS Scaling](.pair/knowledge/guidelines/architecture/scaling-patterns/cqrs.md)** - Command-query separation for scale
+- **[Load Balancing](.pair/knowledge/guidelines/architecture/scaling-patterns/load-balancing.md)** - Traffic distribution strategies
+- **[Circuit Breaker](.pair/knowledge/guidelines/architecture/scaling-patterns/circuit-breaker.md)** - Failure resilience patterns
+- **[Auto-Scaling](.pair/knowledge/guidelines/architecture/scaling-patterns/auto-scaling.md)** - Dynamic resource adjustment
+- **[Multi-Level Caching](.pair/knowledge/guidelines/architecture/scaling-patterns/caching.md)** - Hierarchical caching strategies
+- **[Deployment Architectures](.pair/knowledge/guidelines/architecture/deployment-architectures/README.md)** - Deployment patterns from monolith to microservices
+- **[Performance Patterns](.pair/knowledge/guidelines/architecture/performance-patterns/README.md)** - Performance optimization and monitoring patterns
 
 ---
 
@@ -255,13 +255,13 @@ This document supports the **Definition of Done** requirements:
 
 Core references for implementing architectural decisions:
 
-- **[Code Design Guidelines](.pair/knowledge/guidelines/development/code-design/code-design-guidelines.md)** - _Translates architecture into code patterns_
-- **[Technical Guidelines](.pair/knowledge/guidelines/development/technical-standards/technical-guidelines.md)** - _Defines technology stack implementing this architecture_
-- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure/infrastructure-guidelines.md)** - _Deployment strategies for these patterns_
+- **[Code Design Guidelines](.pair/knowledge/guidelines/code-design/README.md)** - _Translates architecture into code patterns_
+- **[Technical Guidelines](.pair/knowledge/guidelines/technical-standards/README.md)** - _Defines technology stack implementing this architecture_
+- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure.md)** - _Deployment strategies for these patterns_
 - **[06-definition-of-done.md](.pair/knowledge/guidelines/quality/standards/definition-of-done.md)**
-- **[project-management/README.md](.pair/knowledge/guidelines/collaboration/project-management/README.md)**
+- **[project-management/README.md](.pair/knowledge/guidelines/collaboration/README.md)**
 
 Supporting documents:
 
-- **[Testing Strategy](.pair/knowledge/guidelines/development/testing/testing-strategy.md)** - _Testing approaches for architectural validation_
-- **[Performance Guidelines](.pair/knowledge/guidelines/quality/performance/performance-guidelines.md)** - _Optimization strategies for scalability_
+- **[Testing Strategy](.pair/knowledge/guidelines/testing/testing-strategy/README.md)** - _Testing approaches for architectural validation_
+- **[Performance Guidelines](.pair/knowledge/guidelines/quality/performance.md)** - _Optimization strategies for scalability_

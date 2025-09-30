@@ -18,9 +18,9 @@ Define standardized processes for documenting, tracking, and reviewing architect
 
 **Out of Scope:**
 
-- Specific architectural implementations (see [System Design](.pair/knowledge/guidelines/architecture/system-design/README.md))
-- Technical implementation details (see [Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md))
-- Infrastructure-specific decisions (see [Infrastructure](.pair/knowledge/guidelines/operations/infrastructure/README.md))
+- Specific architectural implementations (see [System Design](system-design/README.md))
+- Technical implementation details (see [Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md))
+- Infrastructure-specific decisions (see [Infrastructure](.pair/knowledge/guidelines/operations/infrastructure.md))
 
 ---
 
@@ -117,7 +117,7 @@ Document decisions that affect:
 
 ### Infrastructure-Specific ADR Template
 
-For infrastructure and technology decisions, use the specialized process defined in [Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure/README.md), which includes:
+For infrastructure and technology decisions, use the specialized process defined in [Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure.md), which includes:
 
 - Infrastructure-specific ADR considerations
 - Service addition workflow and validation
@@ -251,15 +251,15 @@ This practice supports the **Definition of Done** requirements:
 
 **Core Architecture References:**
 
-- **[System Design Practice](.pair/knowledge/guidelines/architecture/system-design/README.md)** - Architectural patterns and design principles
-- **[Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md)** - Technology stack decisions and standards
-- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure/README.md)** - Infrastructure-specific decision processes
+- **[System Design Practice](system-design/README.md)** - Architectural patterns and design principles
+- **[Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md)** - Technology stack decisions and standards
+- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure.md)** - Infrastructure-specific decision processes
 
 **Quality and Process References:**
 
 - **[Standards](.pair/knowledge/guidelines/quality/standards/README.md)** - Quality criteria for architectural decisions
-- **[Project Management](.pair/knowledge/guidelines/collaboration/project-management/README.md)** - Decision tracking within project workflows
-- **[Testing Strategy](.pair/knowledge/guidelines/development/testing/README.md)** - Testing approaches for architectural validation
+- **[Project Management](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Decision tracking within project workflows
+- **[Testing Strategy](.pair/knowledge/guidelines/testing/README.md)** - Testing approaches for architectural validation
 
 ---
 

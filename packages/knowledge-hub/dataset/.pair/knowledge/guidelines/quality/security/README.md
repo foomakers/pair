@@ -54,9 +54,9 @@ Security testing and vulnerability assessment
 
 ## Cross-References
 
-- **Development**: [development/code-design/quality-standards/](../../development/code-design/quality-standards/) - Secure coding standards
-- **Operations**: [operations/infrastructure/](../../operations/infrastructure/) - Infrastructure security implementation
-- **Testing**: [development/testing/testing-strategy/](../../development/testing/testing-strategy/) - Security testing integration
+- **Development**: [code-design/quality-standards/](.pair/knowledge/guidelines/code-design/quality-standards) - Secure coding standards
+- **Operations**: [operations/infrastructure.md](.pair/knowledge/guidelines/operations/infrastructure.md) - Infrastructure security implementation
+- **Testing**: [testing/testing-strategy/](.pair/knowledge/guidelines/testing/testing-strategy) - Security testing integration
 
 ## Scope Boundaries
 

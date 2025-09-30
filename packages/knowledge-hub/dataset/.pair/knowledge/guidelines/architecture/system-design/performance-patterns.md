@@ -6,10 +6,10 @@ Comprehensive guide for optimizing application performance through caching, data
 
 This overview provides guidance for different performance optimization strategies. For detailed implementations:
 
-- **[Caching Patterns](performance-patterns-caching.md)** - Multi-level caching, cache invalidation strategies
-- **[Database Optimization](performance-patterns-database.md)** - Query optimization, indexing, connection pooling
-- **[Concurrency Patterns](performance-patterns-concurrency.md)** - Thread pools, actor model, parallel processing
-- **[Memory Management](performance-patterns-memory.md)** - Object pooling, garbage collection optimization
+- **[Caching Patterns](.pair/knowledge/guidelines/architecture/performance-patterns/caching.md)** - Multi-level caching, cache invalidation strategies
+- **[Database Optimization](.pair/knowledge/guidelines/architecture/performance-patterns/database.md)** - Query optimization, indexing, connection pooling
+- **[Concurrency Patterns](.pair/knowledge/guidelines/architecture/performance-patterns/concurrency.md)** - Thread pools, actor model, parallel processing
+- **[Memory Management](.pair/knowledge/guidelines/architecture/performance-patterns/memory.md)** - Object pooling, garbage collection optimization
 
 ## Performance Optimization Strategy
 
@@ -39,21 +39,21 @@ Low    | High   | P3       | Avoid unless critical
 
 ### Web Application Performance
 
-1. **[Caching Patterns](performance-patterns-caching.md)** - Response caching, CDN integration
-2. **[Database Optimization](performance-patterns-database.md)** - Query optimization, read replicas
-3. **[Memory Management](performance-patterns-memory.md)** - Session management, object pooling
+1. **[Caching Patterns](.pair/knowledge/guidelines/architecture/performance-patterns/caching.md)** - Response caching, CDN integration
+2. **[Database Optimization](.pair/knowledge/guidelines/architecture/performance-patterns/database.md)** - Query optimization, read replicas
+3. **[Memory Management](.pair/knowledge/guidelines/architecture/performance-patterns/memory.md)** - Session management, object pooling
 
 ### Data Processing Performance
 
-1. **[Concurrency Patterns](performance-patterns-concurrency.md)** - Parallel processing, pipeline patterns
-2. **[Memory Management](performance-patterns-memory.md)** - Streaming processing, buffer management
-3. **[Database Optimization](performance-patterns-database.md)** - Batch operations, bulk loading
+1. **[Concurrency Patterns](.pair/knowledge/guidelines/architecture/performance-patterns/concurrency.md)** - Parallel processing, pipeline patterns
+2. **[Memory Management](.pair/knowledge/guidelines/architecture/performance-patterns/memory.md)** - Streaming processing, buffer management
+3. **[Database Optimization](.pair/knowledge/guidelines/architecture/performance-patterns/database.md)** - Batch operations, bulk loading
 
 ### Real-time Systems Performance
 
-1. **[Memory Management](performance-patterns-memory.md)** - Lock-free data structures, object pooling
-2. **[Concurrency Patterns](performance-patterns-concurrency.md)** - Actor model, non-blocking operations
-3. **[Caching Patterns](performance-patterns-caching.md)** - In-memory caching, precomputation
+1. **[Memory Management](.pair/knowledge/guidelines/architecture/performance-patterns/memory.md)** - Lock-free data structures, object pooling
+2. **[Concurrency Patterns](.pair/knowledge/guidelines/architecture/performance-patterns/concurrency.md)** - Actor model, non-blocking operations
+3. **[Caching Patterns](.pair/knowledge/guidelines/architecture/performance-patterns/caching.md)** - In-memory caching, precomputation
 
 ## Performance Metrics and Monitoring
 
@@ -178,6 +178,6 @@ interface PerformanceTest {
 ## Related Patterns
 
 - [Scaling Patterns](scaling-patterns.md) - Horizontal and vertical scaling strategies
-- [Deployment Architectures](deployment-architectures.md) - Architecture patterns for performance
-- [Architectural Patterns](architectural-patterns.md) - Core patterns that affect performance
-- [Integration Patterns](integration-patterns.md) - Efficient service communication
+- [Deployment Architectures](.pair/knowledge/guidelines/architecture/deployment-architectures/README.md) - Architecture patterns for performance
+- [Architectural Patterns](.pair/knowledge/guidelines/architecture/architectural-patterns/README.md) - Core patterns that affect performance
+- [Integration Patterns](.pair/knowledge/guidelines/architecture/integration-patterns.md) - Efficient service communication

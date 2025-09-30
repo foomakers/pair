@@ -148,19 +148,19 @@ Low Complexity/Benefits  →  High Complexity/Benefits
 
 ## Related Patterns
 
-- **[Domain-Driven Design](domain-driven-design.md)** - Domain modeling approach
-- **[Bounded Context Patterns](bounded-context-patterns.md)** - Context boundaries
-- **[Integration Patterns](integration-patterns.md)** - Service integration
-- **[Scaling Patterns](scaling-patterns.md)** - Performance and scaling
-- **[Deployment Architectures](deployment-architectures.md)** - Deployment strategies
+- **[Domain-Driven Design](.pair/knowledge/guidelines/architecture/domain-driven-design.md)** - Domain modeling approach
+- **[Bounded Context Patterns](.pair/knowledge/guidelines/architecture/bounded-context-patterns.md)** - Context boundaries
+- **[Integration Patterns](.pair/knowledge/guidelines/architecture/integration-patterns.md)** - Service integration
+- **[Scaling Patterns](.pair/knowledge/guidelines/architecture/scaling-patterns/README.md)** - Performance and scaling
+- **[Deployment Architectures](.pair/knowledge/guidelines/architecture/deployment-architectures/README.md)** - Deployment strategies
 
 ## Implementation Guides
 
 Each pattern has detailed implementation guidance with code examples:
 
-- **[CRUD Architecture](architectural-patterns-crud.md)** - Simple data operations pattern
-- **[Layered Architecture](architectural-patterns-layered.md)** - Traditional enterprise pattern
-- **[Hexagonal Architecture](architectural-patterns-hexagonal.md)** - Ports and adapters pattern
-- **[Clean Architecture](architectural-patterns-clean.md)** - Dependency inversion pattern
-- **[CQRS](architectural-patterns-cqrs.md)** - Command Query Responsibility Segregation
-- **[Event Sourcing](architectural-patterns-event-sourcing.md)** - Event-based persistence pattern
+- **[CRUD Architecture](crud.md)** - Simple data operations pattern
+- **[Layered Architecture](layered.md)** - Traditional enterprise pattern
+- **[Hexagonal Architecture](hexagonal.md)** - Ports and adapters pattern
+- **[Clean Architecture](clean.md)** - Dependency inversion pattern
+- **[CQRS](cqrs.md)** - Command Query Responsibility Segregation
+- **[Event Sourcing](event-sourcing.md)** - Event-based persistence pattern
