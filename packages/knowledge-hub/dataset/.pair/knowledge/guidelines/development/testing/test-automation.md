@@ -36,15 +36,15 @@ esac)
 esac)
 
 **Out of Scope:**
-- Code implementation patterns (see [Code Design](../../code-design/README.md))
+- Code implementation patterns (see [Code Design](.pair/knowledge/guidelines/development/code-design/README.md))
 - Infrastructure setup (see [Infrastructure](../../../operations/infrastructure/README.md))
 - Performance optimization (see [Performance](../../../quality/performance/README.md))
 
 ## 🔗 Related Documents
 
-- **[Code Design Guidelines](../../code-design/README.md)** - _Implementation patterns supporting testable code_
-- **[Technical Standards](../../technical-standards/README.md)** - _Technology stack and tools for testing_
-- **[Quality Standards](../../../quality/standards/README.md)** - _Quality metrics and standards_
+- **[Code Design Guidelines](.pair/knowledge/guidelines/development/code-design/README.md)** - _Implementation patterns supporting testable code_
+- **[Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md)** - _Technology stack and tools for testing_
+- **[Quality Standards](.pair/knowledge/guidelines/quality/standards/README.md)** - _Quality metrics and standards_
 
 ---
 *Focus on  echo "testing strategies, methodologies, and quality assurance approaches";;

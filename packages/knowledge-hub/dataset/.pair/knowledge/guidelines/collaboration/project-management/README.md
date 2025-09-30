@@ -8,7 +8,7 @@ Project management guidelines ensure seamless integration between development wo
 
 ## Structure
 
-### [framework-integration/](./framework-integration/)
+### [framework-integration/](framework-integration)
 Core project management framework and integration patterns
 - Project management framework for filesystem-based workflows
 - GitHub Projects integration framework
@@ -16,7 +16,7 @@ Core project management framework and integration patterns
 - Workflow integration patterns
 - Status synchronization mechanisms
 
-### [tool-specific-guides/](./tool-specific-guides/)
+### [tool-specific-guides/](tool-specific-guides)
 Implementation guides for specific project management tools
 - GitHub Projects comprehensive integration guide
 - Filesystem-based workflow integration
@@ -24,7 +24,7 @@ Implementation guides for specific project management tools
 - API integration and automation
 - Custom workflow adaptations
 
-### [workflow-templates/](./workflow-templates/)
+### [workflow-templates/](workflow-templates)
 Standard templates and assets for project management
 - User story templates and acceptance criteria
 - Epic breakdown and planning templates
@@ -32,7 +32,7 @@ Standard templates and assets for project management
 - Code review and quality templates
 - Initiative planning and roadmap templates
 
-### [management-support/](./management-support/)
+### [management-support/](management-support)
 Support and compatibility documentation
 - Project management tool compatibility matrix
 - Migration and setup support guides
@@ -43,7 +43,7 @@ Support and compatibility documentation
 ## Cross-References
 
 - **Development Process**: [development/technical-standards/deployment-workflow/](../../development/technical-standards/deployment-workflow/) - Development workflow integration
-- **Quality Standards**: [quality/standards/](../../quality/standards/) - Definition of done and quality gates
+- **Quality Standards**: [quality/standards/](.pair/knowledge/guidelines/quality/standards) - Definition of done and quality gates
 - **Team Collaboration**: Process integration with development practices
 
 ## Scope Boundaries

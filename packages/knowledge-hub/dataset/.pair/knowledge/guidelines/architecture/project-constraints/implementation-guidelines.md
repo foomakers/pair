@@ -7,6 +7,7 @@ Decision-making frameworks and implementation priorities for project architectur
 ### Priority Hierarchy
 
 1. **Simplicity over Sophistication**
+
    - Choose simpler solutions even if less elegant
    - Avoid complex patterns unless clearly necessary
    - Prefer explicit over implicit behavior
@@ -14,6 +15,7 @@ Decision-making frameworks and implementation priorities for project architectur
    - Document when complexity is unavoidable
 
 2. **Speed over Optimization**
+
    - Prioritize development speed over performance optimization
    - Choose solutions that allow rapid iteration
    - Optimize only when performance problems are evident
@@ -21,6 +23,7 @@ Decision-making frameworks and implementation priorities for project architectur
    - Profile before optimizing
 
 3. **Flexibility over Performance**
+
    - Choose solutions that are easy to change and evolve
    - Avoid premature optimization that reduces flexibility
    - Prefer composition over inheritance for flexibility
@@ -28,6 +31,7 @@ Decision-making frameworks and implementation priorities for project architectur
    - Accept performance trade-offs for maintainability
 
 4. **Maintainability over Features**
+
    - Prioritize code that is easy to understand and modify
    - Choose fewer, well-implemented features over many mediocre ones
    - Invest in code quality over feature quantity
@@ -46,6 +50,7 @@ Decision-making frameworks and implementation priorities for project architectur
 ### Evaluation Process
 
 #### Step 1: Requirements Analysis
+
 - **Functional Requirements**: What must the technology do?
 - **Non-functional Requirements**: Performance, security, scalability needs
 - **Team Constraints**: Team skill set and learning capacity
@@ -53,6 +58,7 @@ Decision-making frameworks and implementation priorities for project architectur
 - **Integration Requirements**: How it fits with existing technologies
 
 #### Step 2: Option Identification
+
 - **Market Research**: Survey available technologies
 - **Community Input**: Gather recommendations from community
 - **Proof of Concept**: Build small prototypes with top candidates
@@ -60,6 +66,7 @@ Decision-making frameworks and implementation priorities for project architectur
 - **Decision Timeline**: Set deadline for technology decision
 
 #### Step 3: Evaluation Criteria Application
+
 - **Primary Criteria**: Learning curve, documentation, community, ecosystem
 - **Secondary Criteria**: Migration path, stability, performance
 - **Exclusion Criteria**: Check against complexity and vendor lock-in criteria
@@ -67,6 +74,7 @@ Decision-making frameworks and implementation priorities for project architectur
 - **Trade-off Analysis**: Identify and evaluate key trade-offs
 
 #### Step 4: Decision Making
+
 - **Team Consensus**: Involve team in final decision
 - **Decision Documentation**: Document decision rationale
 - **Pilot Implementation**: Start with pilot implementation
@@ -79,30 +87,36 @@ Decision-making frameworks and implementation priorities for project architectur
 # Technology Decision: [Technology Name]
 
 ## Context
+
 - Problem being solved
 - Requirements and constraints
 - Timeline for decision
 
 ## Options Considered
+
 1. Option A: [brief description, pros/cons]
 2. Option B: [brief description, pros/cons]
 3. Option C: [brief description, pros/cons]
 
 ## Decision
+
 **Chosen**: [Selected option]
 **Rationale**: [Why this option was selected]
 
 ## Trade-offs
+
 - What we gain: [benefits]
 - What we lose: [costs/limitations]
 - Risks: [potential problems]
 
 ## Implementation Plan
+
 - Pilot phase: [scope and timeline]
 - Full adoption: [rollout plan]
 - Success metrics: [how to measure success]
 
 ## Review
+
 - Review date: [when to reassess]
 - Exit criteria: [conditions that would trigger migration]
 ```
@@ -112,6 +126,7 @@ Decision-making frameworks and implementation priorities for project architectur
 ### Code Organization Principles
 
 #### Simplicity in Structure
+
 - **Flat Hierarchies**: Avoid deep nesting in code and file structure
 - **Clear Naming**: Use descriptive, unambiguous names
 - **Small Functions**: Keep functions small and focused
@@ -119,6 +134,7 @@ Decision-making frameworks and implementation priorities for project architectur
 - **Minimal Dependencies**: Reduce coupling between components
 
 #### Consistency Patterns
+
 - **Coding Standards**: Establish and follow consistent coding standards
 - **File Organization**: Use consistent file and directory organization
 - **Naming Conventions**: Apply consistent naming across the codebase
@@ -128,6 +144,7 @@ Decision-making frameworks and implementation priorities for project architectur
 ### Quality Assurance Approach
 
 #### Testing Strategy
+
 - **Test What Matters**: Focus testing on critical business logic
 - **Integration Tests**: Emphasize integration tests over unit tests
 - **Manual Testing**: Supplement automated tests with manual testing
@@ -135,6 +152,7 @@ Decision-making frameworks and implementation priorities for project architectur
 - **Performance Testing**: Basic performance testing for critical paths
 
 #### Code Quality
+
 - **Code Reviews**: All changes reviewed by at least one other person
 - **Linting**: Use automated linting for code consistency
 - **Documentation**: Document complex logic and architectural decisions
@@ -144,6 +162,7 @@ Decision-making frameworks and implementation priorities for project architectur
 ### Performance Implementation Guidelines
 
 #### Optimization Strategy
+
 - **Measure First**: Always measure before optimizing
 - **User-Perceived Performance**: Focus on what users actually experience
 - **Quick Wins**: Implement low-effort, high-impact optimizations first
@@ -151,6 +170,7 @@ Decision-making frameworks and implementation priorities for project architectur
 - **Trade-off Awareness**: Understand performance vs. maintainability trade-offs
 
 #### Resource Management
+
 - **Memory Awareness**: Be conscious of memory usage without micro-optimizing
 - **I/O Efficiency**: Optimize file and network I/O operations
 - **Caching Strategy**: Implement simple, effective caching where beneficial
@@ -160,6 +180,7 @@ Decision-making frameworks and implementation priorities for project architectur
 ## Decision Review Process
 
 ### Regular Review Schedule
+
 - **Monthly**: Review recent technology decisions and their outcomes
 - **Quarterly**: Assess overall technology stack health
 - **Annually**: Comprehensive review of all major technology choices
@@ -167,6 +188,7 @@ Decision-making frameworks and implementation priorities for project architectur
 - **Project Retrospectives**: Include technology decisions in retrospectives
 
 ### Review Criteria
+
 - **Performance**: Is the technology meeting performance expectations?
 - **Maintainability**: Is it easy to maintain and develop with?
 - **Team Satisfaction**: Is the team productive and happy with the technology?
@@ -174,6 +196,7 @@ Decision-making frameworks and implementation priorities for project architectur
 - **Future Viability**: Does it still align with future plans?
 
 ### Adaptation Process
+
 - **Incremental Changes**: Make changes incrementally rather than wholesale
 - **Migration Planning**: Plan migration paths for major technology changes
 - **Risk Assessment**: Assess risks of changing vs. staying with current technology
@@ -184,8 +207,8 @@ Decision-making frameworks and implementation priorities for project architectur
 
 - **[Team Constraints](team-constraints.md)** - Team-based decision factors
 - **[Technology Constraints](technology-constraints.md)** - Technology selection criteria
-- **[Tech Stack](../../development/technical-standards/tech-stack.md)** - Current technology choices
-- **[Architecture Patterns](../architectural-patterns/README.md)** - Pattern selection guidance
+- **[Tech Stack](.pair/knowledge/guidelines/development/technical-standards/tech-stack.md)** - Current technology choices
+- **[Architecture Patterns](.pair/knowledge/guidelines/architecture/architectural-patterns/README.md)** - Pattern selection guidance
 
 ## Scope Boundaries
 

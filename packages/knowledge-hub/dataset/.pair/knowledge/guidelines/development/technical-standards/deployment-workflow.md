@@ -17,7 +17,7 @@ Define development workflow processes, versioning strategies, and deployment sta
 
 **Out of Scope:**
 - Infrastructure provisioning (see [Infrastructure](../../../operations/infrastructure/))
-- Testing implementation details (see [Testing](../../testing/))
+- Testing implementation details (see [Testing](.pair/knowledge/guidelines/development/testing))
 - Code quality enforcement (see [Development Tools](../development-tools/))
 
 ## Implementation Guides
@@ -30,7 +30,7 @@ Define development workflow processes, versioning strategies, and deployment sta
 ## 🔗 Related Documents
 
 - **[Development Tools](../development-tools/)** - _Tools supporting the development workflow_
-- **[Testing Guidelines](../../testing/)** - _Testing integration in the workflow_
+- **[Testing Guidelines](.pair/knowledge/guidelines/development/testing)** - _Testing integration in the workflow_
 - **[Infrastructure Guidelines](../../../operations/infrastructure/)** - _Deployment infrastructure and processes_
 
 ---

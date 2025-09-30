@@ -367,5 +367,5 @@ export class APIResponseCache {
 
 - [Database Optimization](database.md) - Query optimization
 - [Memory Management](memory.md) - Memory usage patterns
-- [Load Balancing](../scaling-patterns/load-balancing.md) - Distributing cache load
-- [Circuit Breaker](../scaling-patterns/circuit-breaker.md) - Handling cache failures
+- [Load Balancing](.pair/knowledge/guidelines/architecture/scaling-patterns/load-balancing.md) - Distributing cache load
+- [Circuit Breaker](.pair/knowledge/guidelines/architecture/scaling-patterns/circuit-breaker.md) - Handling cache failures

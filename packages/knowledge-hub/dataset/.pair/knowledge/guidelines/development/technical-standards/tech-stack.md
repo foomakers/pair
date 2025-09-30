@@ -27,8 +27,8 @@ Define the core technology stack, framework selection criteria, and technical st
 ## �� Related Documents
 
 - **[Development Tools](../development-tools/)** - _Tools supporting the tech stack_
-- **[Code Design Guidelines](../../code-design/)** - _Implementation patterns for the tech stack_
-- **[Architecture Guidelines](../../../architecture/)** - _Architectural patterns guiding technology choices_
+- **[Code Design Guidelines](.pair/knowledge/guidelines/development/code-design)** - _Implementation patterns for the tech stack_
+- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture)** - _Architectural patterns guiding technology choices_
 
 ---
 *Focus on technology stack definition and framework selection standards.*

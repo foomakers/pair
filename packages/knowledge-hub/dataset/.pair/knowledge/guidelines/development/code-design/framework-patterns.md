@@ -15,7 +15,7 @@ Define consistent implementation patterns for specific frameworks to ensure main
 - Framework-specific best practices
 
 **Out of Scope:**
-- Technology selection criteria (see [Technical Standards](../../technical-standards/))
+- Technology selection criteria (see [Technical Standards](.pair/knowledge/guidelines/development/technical-standards))
 - General design principles (see [Design Principles](../design-principles.md))
 - Quality enforcement tools (see [Quality Standards](../quality-standards/))
 
@@ -27,8 +27,8 @@ Define consistent implementation patterns for specific frameworks to ensure main
 ## 🔗 Related Documents
 
 - **[Design Principles](../design-principles.md)** - _Fundamental principles applied to frameworks_
-- **[Technical Standards](../../technical-standards/)** - _Technology choices supporting these patterns_
-- **[Architecture Guidelines](../../architecture/)** - _System-level patterns guiding framework usage_
+- **[Technical Standards](.pair/knowledge/guidelines/development/technical-standards)** - _Technology choices supporting these patterns_
+- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture)** - _System-level patterns guiding framework usage_
 
 ---
 *Focus on framework-specific implementation patterns and best practices.*

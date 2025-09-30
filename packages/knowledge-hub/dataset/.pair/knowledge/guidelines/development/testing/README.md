@@ -18,10 +18,10 @@ Define testing strategies, implementation patterns, and automation frameworks th
 
 **Out of Scope:**
 
-- Code design patterns (see [Code Design](../code-design/README.md))
-- Performance optimization strategies (see [Performance](../../quality/performance.md))
-- Security testing implementation (see [Security](../../quality/security.md))
-- Infrastructure testing (see [Infrastructure](../../operations/infrastructure.md))
+- Code design patterns (see [Code Design](.pair/knowledge/guidelines/development/code-design/README.md))
+- Performance optimization strategies (see [Performance](.pair/knowledge/guidelines/quality/performance.md))
+- Security testing implementation (see [Security](.pair/knowledge/guidelines/quality/security.md))
+- Infrastructure testing (see [Infrastructure](.pair/knowledge/guidelines/operations/infrastructure.md))
 
 ## Level 2 Implementation Areas
 
@@ -59,10 +59,10 @@ Define testing strategies, implementation patterns, and automation frameworks th
 
 ## 🔗 Related Practices
 
-- **[Code Design Guidelines](../code-design/README.md)** - Implementation patterns supporting testable code
-- **[Technical Standards](../technical-standards/README.md)** - Technology stack and tools for testing
-- **[Quality Standards](../../quality/standards/README.md)** - Quality metrics and standards
-- **[Performance Guidelines](../../quality/performance.md)** - Performance testing strategies
+- **[Code Design Guidelines](.pair/knowledge/guidelines/development/code-design/README.md)** - Implementation patterns supporting testable code
+- **[Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md)** - Technology stack and tools for testing
+- **[Quality Standards](.pair/knowledge/guidelines/quality/standards/README.md)** - Quality metrics and standards
+- **[Performance Guidelines](.pair/knowledge/guidelines/quality/performance.md)** - Performance testing strategies
 
 ---
 

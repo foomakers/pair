@@ -188,10 +188,10 @@ services:
 
 ## Cross-References
 
-- **[Project Constraints](../project-constraints.md)** - Desktop-only and self-hosting constraints
-- **[LLM Integration](../llm-integration.md)** - External service integration patterns
+- **[Project Constraints](.pair/knowledge/guidelines/architecture/project-constraints.md)** - Desktop-only and self-hosting constraints
+- **[LLM Integration](.pair/knowledge/guidelines/architecture/llm-integration.md)** - External service integration patterns
 - **[Structured Monolith](structured-monolith.md)** - Simple deployment architecture
-- **[Tech Stack](../../development/technical-standards/tech-stack.md)** - Technology choices
+- **[Tech Stack](.pair/knowledge/guidelines/development/technical-standards/tech-stack.md)** - Technology choices
 
 ## Scope Boundaries
 

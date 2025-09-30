@@ -52,10 +52,10 @@ Define user experience design principles, interface patterns, and content strate
 
 **Out of Scope:**
 
-- Implementation details (see [Code Design](../../development/code-design/README.md))
+- Implementation details (see [Code Design](.pair/knowledge/guidelines/development/code-design/README.md))
 - Accessibility implementation (see [Accessibility](../../quality/accessibility/README.md))
 - Performance optimization (see [Performance](../../quality/performance/README.md))
-- Technical implementation standards (see [Technical Standards](../../development/technical-standards/README.md))
+- Technical implementation standards (see [Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md))
 
 ## Level 2 Implementation Areas
 
@@ -78,8 +78,8 @@ Define user experience design principles, interface patterns, and content strate
 ## 🔗 Related Practices
 
 - **[Accessibility Guidelines](../../quality/accessibility/README.md)** - Accessibility standards for inclusive design
-- **[Code Design Guidelines](../../development/code-design/README.md)** - Implementation patterns for design systems
-- **[Technical Standards](../../development/technical-standards/README.md)** - Technology stack supporting design implementation
+- **[Code Design Guidelines](.pair/knowledge/guidelines/development/code-design/README.md)** - Implementation patterns for design systems
+- **[Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md)** - Technology stack supporting design implementation
 
 ---
 

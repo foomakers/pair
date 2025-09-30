@@ -5,6 +5,7 @@ Architectural constraints specific to small team development and rapid deploymen
 ## Small Team Architecture
 
 ### Team Size Constraints
+
 - **Maximum Size**: Designed for 2-4 developers maximum
 - **Skill Profile**: Full-stack generalists over specialists
 - **Maintenance**: Single-person maintainability requirement
@@ -12,6 +13,7 @@ Architectural constraints specific to small team development and rapid deploymen
 - **Decision Speed**: Rapid architectural decisions over extensive analysis
 
 ### Team Capability Assumptions
+
 - **Full Stack**: Each developer can work across the entire stack
 - **Generalist Skills**: Broad knowledge preferred over deep specialization
 - **Self-Sufficient**: Team can handle most tasks without external expertise
@@ -21,6 +23,7 @@ Architectural constraints specific to small team development and rapid deploymen
 ## Rapid Development Priorities
 
 ### Development Speed Requirements
+
 - **Time to Market**: Favor simple, proven solutions
 - **Technical Debt**: Acceptable for early iterations
 - **Flexibility**: Easy to change and refactor
@@ -28,6 +31,7 @@ Architectural constraints specific to small team development and rapid deploymen
 - **Scope Creep**: Minimal initial feature set
 
 ### Development Process Constraints
+
 - **Minimal Process**: Lightweight development processes
 - **Quick Decisions**: Fast architectural decision making
 - **Prototype First**: Build prototypes before final implementations
@@ -37,6 +41,7 @@ Architectural constraints specific to small team development and rapid deploymen
 ## Knowledge Management
 
 ### Documentation Philosophy
+
 - **Just Enough**: Document only what's essential
 - **Code as Documentation**: Self-documenting code preferred
 - **Decision Records**: Light ADRs for major decisions only
@@ -44,6 +49,7 @@ Architectural constraints specific to small team development and rapid deploymen
 - **Searchable Knowledge**: Easy to find and update information
 
 ### Knowledge Sharing Strategies
+
 - **Pair Programming**: Occasional pairing for knowledge transfer
 - **Code Reviews**: All changes reviewed by at least one other person
 - **Shared Ownership**: No single points of failure in knowledge
@@ -53,6 +59,7 @@ Architectural constraints specific to small team development and rapid deploymen
 ## Maintenance Constraints
 
 ### Single-Person Maintainability
+
 - **Code Clarity**: Code must be understandable by any team member
 - **Simple Architecture**: Avoid complex architectural patterns
 - **Minimal Dependencies**: Reduce external dependencies to minimum
@@ -60,6 +67,7 @@ Architectural constraints specific to small team development and rapid deploymen
 - **Emergency Fixes**: Any team member can make emergency fixes
 
 ### Long-term Sustainability
+
 - **Technology Longevity**: Choose technologies with long-term support
 - **Standard Tools**: Use widely adopted, standard tools
 - **Migration Path**: Always have a clear migration path
@@ -69,6 +77,7 @@ Architectural constraints specific to small team development and rapid deploymen
 ## Decision Making Process
 
 ### Architecture Decision Speed
+
 - **Quick Evaluation**: Rapid evaluation of architectural options
 - **Good Enough**: Choose "good enough" solutions over perfect ones
 - **Reversible Decisions**: Prefer reversible architectural decisions
@@ -76,6 +85,7 @@ Architectural constraints specific to small team development and rapid deploymen
 - **Learn and Adapt**: Adapt architecture based on learnings
 
 ### Consensus Building
+
 - **Small Team Consensus**: Easy to reach consensus with 2-4 people
 - **Technical Leadership**: Clear technical decision maker when needed
 - **Democratic Input**: Everyone's input valued in decisions
@@ -85,6 +95,7 @@ Architectural constraints specific to small team development and rapid deploymen
 ## Risk Management
 
 ### Small Team Risks
+
 - **Knowledge Concentration**: Avoid concentrating knowledge in one person
 - **Skill Gaps**: Identify and address critical skill gaps
 - **Burnout Prevention**: Prevent overloading team members
@@ -92,6 +103,7 @@ Architectural constraints specific to small team development and rapid deploymen
 - **External Dependencies**: Minimize dependencies on external expertise
 
 ### Mitigation Strategies
+
 - **Cross Training**: Regular cross-training across all system areas
 - **Documentation**: Critical knowledge must be documented
 - **External Learning**: Budget for training and conferences
@@ -102,7 +114,7 @@ Architectural constraints specific to small team development and rapid deploymen
 
 - **[Platform Constraints](platform-constraints.md)** - Platform and deployment constraints
 - **[Implementation Guidelines](implementation-guidelines.md)** - Decision making frameworks
-- **[Way of Working](../../adoption/tech/README.md)** - Process and workflow decisions
+- **[Way of Working](../../adoption/tech/way-of-working.md)** - Process and workflow decisions
 
 ## Scope Boundaries
 

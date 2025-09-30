@@ -6,73 +6,18 @@ Architecture patterns for integrating Large Language Models, Retrieval-Augmented
 
 Define standardized patterns for LLM integration, RAG implementation, and AI assistant architecture that align with project constraints and technology choices.
 
-## LLM Service Integration
+## Available Integration Patterns
 
-### External LLM Services
-- **Primary Providers**: OpenAI, Anthropic, Google
-- **API Integration**: REST-based API clients
-- **Authentication**: Secure API key management
-- **Rate Limiting**: Respect provider rate limits
-- **Fallback Strategy**: Multiple provider support
-- **Cost Control**: Usage monitoring and limits
+- **[LLM Services](llm-integration/llm-services.md)** - External and local LLM service integration
+- **[RAG Architecture](llm-integration/rag-architecture.md)** - Retrieval-Augmented Generation implementation
+- **[Script Coordination](llm-integration/script-coordination.md)** - Bash script orchestration for AI workflows
+- **[Data Architecture](llm-integration/data-architecture.md)** - Vector storage, schemas, and data management
+- **[Performance & Security](llm-integration/performance-security.md)** - Optimization strategies and security considerations
 
-### Local LLM Integration (Ollama)
-- **Local Models**: Ollama for privacy-sensitive operations
-- **Model Management**: Automated model downloading/updating
-- **Resource Management**: CPU/RAM allocation for local inference
-- **Hybrid Approach**: External for complex, local for simple tasks
-- **Offline Capability**: Critical functions work offline
-
-## RAG Architecture Patterns
-
-### Vector Database Integration
-- **Primary Storage**: Supabase Vector (pgvector)
-- **Document Processing**: Chunking and embedding pipeline
-- **Retrieval Strategy**: Semantic search with similarity thresholds
-- **Metadata Storage**: Document metadata and relationships
-- **Sync Strategy**: Incremental updates and versioning
-
-### Data Pipeline Architecture
-```
-Document Sources → Chunking → Embedding → Vector Storage
-                     ↓
-Search Query → Embedding → Similarity Search → Context Retrieval
-                     ↓
-Context + Query → LLM → Response Generation
-```
-
-### Content Processing Pipeline
-- **Document Ingestion**: File parsing and content extraction
-- **Chunking Strategy**: Overlapping chunks for context preservation
-- **Embedding Generation**: Consistent embedding model usage
-- **Metadata Extraction**: Title, tags, relationships, timestamps
-- **Quality Control**: Content validation and filtering
-
-## Bash Script Coordination
-
-### AI Process Orchestration
-- **Script Architecture**: Modular bash scripts for AI workflows
-- **Pipeline Management**: Step-by-step AI assistant processes
-- **Error Handling**: Robust error handling and recovery
-- **Logging**: Comprehensive operation logging
-- **Configuration**: Environment-based configuration management
-
-### Common Script Patterns
-```bash
-# Document processing pipeline
-./scripts/ingest-documents.sh
-./scripts/generate-embeddings.sh
-./scripts/update-vector-db.sh
-
-# AI assistant workflows
-./scripts/query-processor.sh
-./scripts/context-retriever.sh
-./scripts/response-generator.sh
-```
-
-## Architecture Components
+## LLM Integration Overview
 
 ### Core Components
+
 1. **LLM Client**: Unified interface for external/local LLMs
 2. **Vector Store**: Supabase integration for RAG
 3. **Document Processor**: Content ingestion and chunking
@@ -80,63 +25,43 @@ Context + Query → LLM → Response Generation
 5. **Query Engine**: Search and retrieval orchestration
 6. **Response Generator**: Context-aware response generation
 
-### Integration Patterns
+### Integration Strategy
+
+- **Hybrid Approach**: External LLMs for complex tasks, local for simple/private
 - **API Gateway**: Unified API for all AI operations
 - **Event-Driven**: Async processing for heavy operations
-- **Caching**: Intelligent caching for embeddings and responses
-- **Monitoring**: Usage tracking and performance metrics
 - **Graceful Degradation**: Fallback when services unavailable
+- **Cost Control**: Usage monitoring and limits
 
-## Data Architecture
+## Architecture Principles
 
-### Vector Storage Schema
-```sql
--- Documents table
-documents (id, content, metadata, created_at, updated_at)
+### External Service Integration
 
--- Embeddings table
-embeddings (id, document_id, chunk_index, vector, metadata)
+- **Primary Providers**: OpenAI, Anthropic, Google
+- **Local Alternative**: Ollama for privacy-sensitive operations
+- **Fallback Strategy**: Multiple provider support
+- **Cost Management**: Usage monitoring and limits
 
--- Search index
-CREATE INDEX ON embeddings USING ivfflat (vector vector_cosine_ops);
-```
+### RAG Implementation
 
-### Local Data Management
-- **File System**: Structured local storage for documents
-- **Cache Management**: LRU cache for frequent operations
-- **Backup Strategy**: Regular backup of critical data
-- **Sync Mechanism**: Two-way sync with vector database
+- **Vector Database**: Supabase Vector (pgvector)
+- **Document Pipeline**: Chunking and embedding workflow
+- **Retrieval Strategy**: Semantic search with similarity thresholds
+- **Context Management**: Intelligent context assembly
 
-## Performance Considerations
+### Data Processing
 
-### Optimization Strategies
-- **Batch Processing**: Bulk operations for efficiency
-- **Connection Pooling**: Efficient database connections
-- **Parallel Processing**: Concurrent embedding generation
-- **Memory Management**: Efficient vector operations
-- **Response Caching**: Cache frequent queries
-
-### Resource Management
-- **Memory Usage**: Monitor embedding memory consumption
-- **API Rate Limits**: Intelligent request throttling
-- **Local Model Resources**: CPU/RAM allocation for Ollama
-- **Network Optimization**: Minimize external API calls
-
-## Security & Privacy
-
-### Data Protection
-- **API Key Security**: Secure credential management
-- **Data Encryption**: Encrypt sensitive data at rest
-- **Privacy Controls**: Configurable data retention
-- **Access Control**: Role-based access to AI features
-- **Audit Logging**: Track all AI operations
+- **Batch Operations**: Efficient bulk processing
+- **Incremental Updates**: Update only changed content
+- **Quality Control**: Content validation and filtering
+- **Metadata Management**: Rich metadata for improved search
 
 ## Cross-References
 
 - **[Project Constraints](project-constraints.md)** - Team and platform constraints
-- **[Integration Patterns](integration-patterns.md)** - General integration strategies
+- **[Integration Patterns](integration-patterns/README.md)** - General integration strategies
 - **[Performance Patterns](performance-patterns/README.md)** - Optimization techniques
-- **[Tech Stack](../development/technical-standards/tech-stack.md)** - Technology choices
+- **[Tech Stack](.pair/knowledge/guidelines/development/technical-standards/tech-stack.md)** - Technology choices
 
 ## Scope Boundaries
 

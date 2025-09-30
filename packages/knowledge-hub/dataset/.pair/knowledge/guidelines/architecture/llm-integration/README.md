@@ -17,6 +17,7 @@ Define standardized patterns for LLM integration, RAG implementation, and AI ass
 ## LLM Integration Overview
 
 ### Core Components
+
 1. **LLM Client**: Unified interface for external/local LLMs
 2. **Vector Store**: Supabase integration for RAG
 3. **Document Processor**: Content ingestion and chunking
@@ -25,6 +26,7 @@ Define standardized patterns for LLM integration, RAG implementation, and AI ass
 6. **Response Generator**: Context-aware response generation
 
 ### Integration Strategy
+
 - **Hybrid Approach**: External LLMs for complex tasks, local for simple/private
 - **API Gateway**: Unified API for all AI operations
 - **Event-Driven**: Async processing for heavy operations
@@ -34,18 +36,21 @@ Define standardized patterns for LLM integration, RAG implementation, and AI ass
 ## Architecture Principles
 
 ### External Service Integration
+
 - **Primary Providers**: OpenAI, Anthropic, Google
 - **Local Alternative**: Ollama for privacy-sensitive operations
 - **Fallback Strategy**: Multiple provider support
 - **Cost Management**: Usage monitoring and limits
 
 ### RAG Implementation
+
 - **Vector Database**: Supabase Vector (pgvector)
 - **Document Pipeline**: Chunking and embedding workflow
 - **Retrieval Strategy**: Semantic search with similarity thresholds
 - **Context Management**: Intelligent context assembly
 
 ### Data Processing
+
 - **Batch Operations**: Efficient bulk processing
 - **Incremental Updates**: Update only changed content
 - **Quality Control**: Content validation and filtering
@@ -53,10 +58,10 @@ Define standardized patterns for LLM integration, RAG implementation, and AI ass
 
 ## Cross-References
 
-- **[Project Constraints](../project-constraints/README.md)** - Team and platform constraints
+- **[Project Constraints](.pair/knowledge/guidelines/architecture/project-constraints/README.md)** - Team and platform constraints
 - **[Integration Patterns](../integration-patterns/README.md)** - General integration strategies
-- **[Performance Patterns](../performance-patterns/README.md)** - Optimization techniques
-- **[Tech Stack](../../development/technical-standards/tech-stack.md)** - Technology choices
+- **[Performance Patterns](.pair/knowledge/guidelines/architecture/performance-patterns/README.md)** - Optimization techniques
+- **[Tech Stack](.pair/knowledge/guidelines/development/technical-standards/tech-stack.md)** - Technology choices
 
 ## Scope Boundaries
 

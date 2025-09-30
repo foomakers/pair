@@ -21,7 +21,7 @@ Define observability strategies, monitoring patterns, and incident management pr
 - Infrastructure monitoring details (see [Infrastructure](../infrastructure/README.md))
 - Security monitoring implementation (see [Security](../../quality/security/README.md))
 - Performance optimization strategies (see [Performance](../../quality/performance/README.md))
-- Development environment monitoring (see [Technical Standards](../../development/technical-standards/README.md))
+- Development environment monitoring (see [Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md))
 
 ## Topics Covered
 
@@ -66,7 +66,7 @@ Distributed tracing, request flow monitoring, and service dependency tracking
 - **[Infrastructure Guidelines](../infrastructure/README.md)** - Infrastructure monitoring and observability
 - **[Performance Guidelines](../../quality/performance/README.md)** - Performance optimization strategies
 - **[Security Guidelines](../../quality/security/README.md)** - Security monitoring and compliance
-- **[Technical Standards](../../development/technical-standards/README.md)** - Technology stack supporting observability
+- **[Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md)** - Technology stack supporting observability
 
 ---
 

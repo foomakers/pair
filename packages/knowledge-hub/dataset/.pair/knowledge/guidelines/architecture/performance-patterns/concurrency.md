@@ -617,6 +617,6 @@ export class LockFreeQueue<T> {
 ## Related Patterns
 
 - [Caching Patterns](caching.md) - Cache concurrent access
-- [Load Balancing](../scaling-patterns/load-balancing.md) - Distribute concurrent load
-- [Circuit Breaker](../scaling-patterns/circuit-breaker.md) - Handle concurrent failures
-- [Auto-Scaling](../scaling-patterns/auto-scaling.md) - Scale concurrency dynamically
+- [Load Balancing](.pair/knowledge/guidelines/architecture/scaling-patterns/load-balancing.md) - Distribute concurrent load
+- [Circuit Breaker](.pair/knowledge/guidelines/architecture/scaling-patterns/circuit-breaker.md) - Handle concurrent failures
+- [Auto-Scaling](.pair/knowledge/guidelines/architecture/scaling-patterns/auto-scaling.md) - Scale concurrency dynamically

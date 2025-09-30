@@ -17,7 +17,7 @@ Define development tools, environment requirements, and integration standards th
 
 **Out of Scope:**
 - Technology stack selection (see [Tech Stack](../tech-stack/))
-- Code design patterns (see [Code Design](../../code-design/))
+- Code design patterns (see [Code Design](.pair/knowledge/guidelines/development/code-design))
 - Deployment tools (see [Deployment Workflow](../deployment-workflow/))
 
 ## Implementation Guides
@@ -30,7 +30,7 @@ Define development tools, environment requirements, and integration standards th
 
 - **[Tech Stack](../tech-stack/)** - _Technologies supported by these tools_
 - **[Quality Standards](../../code-design/quality-standards/)** - _Quality enforcement through tools_
-- **[Testing Guidelines](../../testing/)** - _Testing tools and frameworks_
+- **[Testing Guidelines](.pair/knowledge/guidelines/development/testing)** - _Testing tools and frameworks_
 
 ---
 *Focus on development tools, environment setup, and quality automation.*

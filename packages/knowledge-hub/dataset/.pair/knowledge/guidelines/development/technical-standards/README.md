@@ -18,11 +18,11 @@ Define technical standards, framework selection criteria, and integration requir
 
 **Out of Scope:**
 
-- Business logic implementation details (see [Code Design](../code-design/README.md))
-- Specific coding patterns and design principles (see [Code Design](../code-design/README.md))
-- Infrastructure provisioning and deployment (see [Infrastructure](../../operations/infrastructure.md))
-- Security policies and compliance procedures (see [Security](../../quality/security.md))
-- Performance optimization strategies (see [Performance](../../quality/performance.md))
+- Business logic implementation details (see [Code Design](.pair/knowledge/guidelines/development/code-design/README.md))
+- Specific coding patterns and design principles (see [Code Design](.pair/knowledge/guidelines/development/code-design/README.md))
+- Infrastructure provisioning and deployment (see [Infrastructure](.pair/knowledge/guidelines/operations/infrastructure.md))
+- Security policies and compliance procedures (see [Security](.pair/knowledge/guidelines/quality/security.md))
+- Performance optimization strategies (see [Performance](.pair/knowledge/guidelines/quality/performance.md))
 
 ## Level 2 Implementation Areas
 
@@ -60,10 +60,10 @@ Define technical standards, framework selection criteria, and integration requir
 
 ## 🔗 Related Practices
 
-- **[Code Design Guidelines](../code-design/README.md)** - Implementation patterns and code quality standards
-- **[Testing Guidelines](../testing/README.md)** - Testing strategies and frameworks
-- **[Architecture Guidelines](../../architecture/README.md)** - System-level architectural decisions
-- **[Infrastructure Guidelines](../../operations/infrastructure.md)** - Deployment and infrastructure standards
+- **[Code Design Guidelines](.pair/knowledge/guidelines/development/code-design/README.md)** - Implementation patterns and code quality standards
+- **[Testing Guidelines](.pair/knowledge/guidelines/development/testing/README.md)** - Testing strategies and frameworks
+- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md)** - System-level architectural decisions
+- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure.md)** - Deployment and infrastructure standards
 
 ---
 

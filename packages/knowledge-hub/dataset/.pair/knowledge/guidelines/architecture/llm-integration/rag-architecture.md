@@ -5,6 +5,7 @@ Retrieval-Augmented Generation implementation patterns for enhanced LLM capabili
 ## RAG Overview
 
 ### Core RAG Pipeline
+
 ```
 Document Sources → Chunking → Embedding → Vector Storage
                      ↓
@@ -14,6 +15,7 @@ Context + Query → LLM → Response Generation
 ```
 
 ### RAG Benefits
+
 - **Enhanced Accuracy**: Provide LLMs with relevant context
 - **Domain Knowledge**: Incorporate domain-specific information
 - **Up-to-date Information**: Access current information beyond training data
@@ -25,6 +27,7 @@ Context + Query → LLM → Response Generation
 ### Supabase Vector Setup
 
 #### Database Schema
+
 ```sql
 -- Documents table for source material
 CREATE TABLE documents (
@@ -55,6 +58,7 @@ WITH (lists = 100);
 ```
 
 #### Vector Operations
+
 - **Similarity Search**: Find similar content using cosine similarity
 - **Hybrid Search**: Combine vector search with full-text search
 - **Filtered Search**: Apply metadata filters to search results
@@ -64,6 +68,7 @@ WITH (lists = 100);
 ### Embedding Strategy
 
 #### Embedding Generation
+
 - **Model Selection**: Use consistent embedding model (e.g., OpenAI text-embedding-ada-002)
 - **Batch Processing**: Generate embeddings in batches for efficiency
 - **Normalization**: Normalize embeddings for consistent similarity calculation
@@ -71,6 +76,7 @@ WITH (lists = 100);
 - **Quality Control**: Validate embedding quality and consistency
 
 #### Embedding Storage
+
 - **Efficient Storage**: Use appropriate vector storage format
 - **Compression**: Compress embeddings when storage is a concern
 - **Indexing**: Create appropriate indexes for fast retrieval
@@ -82,6 +88,7 @@ WITH (lists = 100);
 ### Content Ingestion
 
 #### Supported Formats
+
 - **Text Files**: Plain text, Markdown, TXT
 - **Documents**: PDF, Word, HTML
 - **Code Files**: Source code with syntax awareness
@@ -89,6 +96,7 @@ WITH (lists = 100);
 - **Web Content**: Scraped web pages and APIs
 
 #### Content Extraction
+
 ```typescript
 interface DocumentProcessor {
   extractContent(file: File): Promise<DocumentContent>
@@ -116,6 +124,7 @@ interface DocumentMetadata {
 ### Content Chunking Strategy
 
 #### Chunking Methods
+
 - **Fixed Size**: Split content into fixed-size chunks
 - **Semantic Chunking**: Split at natural boundaries (paragraphs, sections)
 - **Overlapping Chunks**: Include overlap between chunks for context
@@ -123,6 +132,7 @@ interface DocumentMetadata {
 - **Content-Aware**: Chunk based on content type and structure
 
 #### Chunking Configuration
+
 ```typescript
 interface ChunkingConfig {
   maxChunkSize: number // Maximum tokens per chunk
@@ -137,13 +147,14 @@ const defaultConfig: ChunkingConfig = {
   overlapSize: 50,
   minChunkSize: 100,
   preserveBoundaries: true,
-  contentType: 'text'
+  contentType: 'text',
 }
 ```
 
 ### Quality Control
 
 #### Content Validation
+
 - **Format Validation**: Ensure content is in expected format
 - **Language Detection**: Detect and handle multiple languages
 - **Content Quality**: Filter out low-quality or duplicate content
@@ -151,6 +162,7 @@ const defaultConfig: ChunkingConfig = {
 - **Relevance Scoring**: Score content relevance for domain
 
 #### Metadata Enrichment
+
 - **Automatic Tagging**: Generate tags from content
 - **Entity Extraction**: Extract named entities and concepts
 - **Topic Classification**: Classify content by topic
@@ -162,6 +174,7 @@ const defaultConfig: ChunkingConfig = {
 ### Search Implementation
 
 #### Query Processing
+
 ```typescript
 interface QueryProcessor {
   processQuery(query: string): ProcessedQuery
@@ -180,6 +193,7 @@ interface ProcessedQuery {
 ```
 
 #### Search Types
+
 - **Semantic Search**: Vector similarity search using embeddings
 - **Keyword Search**: Traditional full-text search
 - **Hybrid Search**: Combine semantic and keyword search
@@ -189,6 +203,7 @@ interface ProcessedQuery {
 ### Context Assembly
 
 #### Context Selection
+
 - **Relevance Scoring**: Score chunks by relevance to query
 - **Diversity**: Include diverse perspectives in context
 - **Recency**: Weight recent content higher
@@ -196,6 +211,7 @@ interface ProcessedQuery {
 - **Context Size**: Manage total context size for LLM limits
 
 #### Context Optimization
+
 ```typescript
 interface ContextAssembler {
   assembleContext(chunks: RetrievedChunk[], query: string): AssembledContext
@@ -217,6 +233,7 @@ interface AssembledContext {
 ### Update Strategy
 
 #### Change Detection
+
 - **File Monitoring**: Monitor source files for changes
 - **Content Hashing**: Use content hashes to detect changes
 - **Timestamp Tracking**: Track modification timestamps
@@ -224,6 +241,7 @@ interface AssembledContext {
 - **Batch Updates**: Group updates for efficiency
 
 #### Update Processing
+
 - **Incremental Embedding**: Generate embeddings only for new/changed content
 - **Vector Upsert**: Update vector database with new embeddings
 - **Metadata Sync**: Keep metadata in sync with content changes
@@ -233,6 +251,7 @@ interface AssembledContext {
 ### Versioning and History
 
 #### Version Management
+
 - **Document Versioning**: Track document versions over time
 - **Embedding Versioning**: Version embeddings when models change
 - **Schema Migration**: Handle database schema changes
@@ -240,6 +259,7 @@ interface AssembledContext {
 - **Audit Trail**: Maintain audit trail of all changes
 
 #### Historical Context
+
 - **Time-based Retrieval**: Retrieve content from specific time periods
 - **Change Tracking**: Track how content evolves over time
 - **Historical Comparison**: Compare different versions of content
@@ -251,6 +271,7 @@ interface AssembledContext {
 ### Retrieval Performance
 
 #### Indexing Strategy
+
 - **Vector Indexes**: Optimize vector indexes for query performance
 - **Composite Indexes**: Create indexes for common query patterns
 - **Partitioning**: Partition large datasets for better performance
@@ -258,6 +279,7 @@ interface AssembledContext {
 - **Precomputation**: Precompute common similarity scores
 
 #### Query Optimization
+
 - **Query Planning**: Optimize query execution plans
 - **Parallel Search**: Execute searches in parallel when possible
 - **Result Caching**: Cache search results for repeated queries
@@ -267,6 +289,7 @@ interface AssembledContext {
 ### Scalability Considerations
 
 #### Horizontal Scaling
+
 - **Sharding**: Shard vector database across multiple instances
 - **Read Replicas**: Use read replicas for query load distribution
 - **Load Balancing**: Balance load across multiple search instances

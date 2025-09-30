@@ -29,7 +29,7 @@ Define integration patterns, API design standards, and data management strategie
 
 ## 🔗 Related Documents
 
-- **[Architecture Guidelines](../../../architecture/)** - _System-level integration patterns_
+- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture)** - _System-level integration patterns_
 - **[Tech Stack](../tech-stack/)** - _Technologies enabling integrations_
 - **[Security Guidelines](../../../quality/security/)** - _Security considerations for integrations_
 

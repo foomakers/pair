@@ -19,7 +19,7 @@ Define infrastructure deployment strategies, container orchestration patterns, a
 - Application-level observability (see [Observability](../observability/README.md))
 - Security implementation details (see [Security](../../quality/security/README.md))
 - Performance optimization strategies (see [Performance](../../quality/performance/README.md))
-- Development environment setup (see [Technical Standards](../../development/technical-standards/README.md))
+- Development environment setup (see [Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md))
 
 ## Level 2 Implementation Areas
 
@@ -41,7 +41,7 @@ Define infrastructure deployment strategies, container orchestration patterns, a
 
 ## 🔗 Related Practices
 
-- **[Technical Standards](../../development/technical-standards/README.md)** - Technology stack supported by infrastructure
+- **[Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md)** - Technology stack supported by infrastructure
 - **[Observability Guidelines](../observability/README.md)** - Application-level observability and monitoring
 - **[Security Guidelines](../../quality/security/README.md)** - Security considerations for infrastructure
 

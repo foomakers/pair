@@ -43,9 +43,9 @@ _Each pattern folder contains specific implementations and detailed guides:_
 
 ## 🔗 Related Guidelines
 
-- **[Development Guidelines](../development/README.md)** - Code patterns implementing these architectural decisions
-- **[Operations Guidelines](../operations/README.md)** - Infrastructure deployment strategies for these patterns
-- **[Quality Guidelines](../quality/README.md)** - Quality criteria ensuring architectural integrity
+- **[Development Guidelines](.pair/knowledge/guidelines/development/README.md)** - Code patterns implementing these architectural decisions
+- **[Operations Guidelines](.pair/knowledge/guidelines/operations/README.md)** - Infrastructure deployment strategies for these patterns
+- **[Quality Guidelines](.pair/knowledge/guidelines/quality/README.md)** - Quality criteria ensuring architectural integrity
 
 ## 🎯 Quick Start
 

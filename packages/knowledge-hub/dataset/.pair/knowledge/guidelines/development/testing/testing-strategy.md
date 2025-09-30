@@ -22,8 +22,8 @@ Define testing methodologies, quality metrics, and strategic approaches to ensur
 ## 🔗 Related Documents
 
 - **[Testing Implementation](../testing-implementation/)** - _Implementation of these strategies_
-- **[Quality Standards](../../../quality/standards/)** - _Quality metrics and standards_
-- **[Code Design Guidelines](../../code-design/)** - _Code patterns supporting testability_
+- **[Quality Standards](.pair/knowledge/guidelines/quality/standards)** - _Quality metrics and standards_
+- **[Code Design Guidelines](.pair/knowledge/guidelines/development/code-design)** - _Code patterns supporting testability_
 
 ---
 *Focus on testing strategies, methodologies, and quality assurance approaches.*

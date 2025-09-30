@@ -2,11 +2,12 @@
 
 Comprehensive guide for implementing horizontal and vertical scaling strategies to handle increasing load and data volume.
 
-> **⚠️ Project Context Notice**: These patterns are provided for completeness and future reference. Per [project constraints](../project-constraints.md), this project has **no formal scalability requirements** and is designed for small team usage. Apply these patterns only when actual scaling needs arise, not preemptively.
+> **⚠️ Project Context Notice**: These patterns are provided for completeness and future reference. Per [project constraints](.pair/knowledge/guidelines/architecture/project-constraints.md), this project has **no formal scalability requirements** and is designed for small team usage. Apply these patterns only when actual scaling needs arise, not preemptively.
 
 ## Scaling Strategy for Small Teams
 
 ### When NOT to Scale (Current Project Context)
+
 - **Small User Base**: Fewer than 100 concurrent users
 - **Limited Data**: Under 1TB of data
 - **Single Team**: One development team maintaining the system
@@ -14,6 +15,7 @@ Comprehensive guide for implementing horizontal and vertical scaling strategies 
 - **Local Processing**: Most operations are local/offline
 
 ### When to Consider Scaling
+
 - **Proven Demand**: Clear evidence of scaling bottlenecks
 - **Resource Constraints**: Current hardware cannot handle load
 - **Team Growth**: Development team expands significantly

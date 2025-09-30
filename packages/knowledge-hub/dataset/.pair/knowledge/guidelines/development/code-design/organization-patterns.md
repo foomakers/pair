@@ -29,8 +29,8 @@ Define organizational patterns for file structure, workspace architecture, and d
 
 ## 🔗 Related Documents
 
-- **[Architecture Guidelines](../../architecture/)** - _System-level patterns guiding code organization_
-- **[Technical Standards](../../technical-standards/)** - _Technology choices supporting organization patterns_
+- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture)** - _System-level patterns guiding code organization_
+- **[Technical Standards](.pair/knowledge/guidelines/development/technical-standards)** - _Technology choices supporting organization patterns_
 - **[Design Principles](../design-principles.md)** - _Principles reflected in organizational structure_
 
 ---

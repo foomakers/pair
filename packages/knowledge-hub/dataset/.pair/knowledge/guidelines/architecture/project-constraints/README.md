@@ -16,6 +16,7 @@ Define and document the specific architectural constraints that guide all system
 ## Project Constraint Overview
 
 ### Core Principles
+
 - **Small Team Focus**: Designed for 2-4 developers maximum
 - **Desktop-Only**: No mobile or web responsive requirements
 - **Self-Hosted Preference**: Local/controlled data over SaaS
@@ -23,6 +24,7 @@ Define and document the specific architectural constraints that guide all system
 - **Rapid Development**: Simple solutions over sophisticated ones
 
 ### Exception Areas
+
 - **LLM Services**: External APIs accepted for AI functionality
 - **Vector Databases**: Supabase for RAG capabilities
 - **CI/CD**: GitHub Actions for development workflow
@@ -38,9 +40,9 @@ Define and document the specific architectural constraints that guide all system
 
 ## Cross-References
 
-- **[Deployment Architectures](../deployment-architectures/README.md)** - Self-hosted deployment patterns
-- **[Tech Stack](../../development/technical-standards/tech-stack.md)** - Specific technology choices
-- **[Way of Working](../../adoption/tech/README.md)** - Process constraints and decisions
+- **[Deployment Architectures](.pair/knowledge/guidelines/architecture/deployment-architectures/README.md)** - Self-hosted deployment patterns
+- **[Tech Stack](.pair/knowledge/guidelines/development/technical-standards/tech-stack.md)** - Specific technology choices
+- **[Way of Working](../../adoption/tech/way-of-working.md)** - Process constraints and decisions
 
 ## Scope Boundaries
 

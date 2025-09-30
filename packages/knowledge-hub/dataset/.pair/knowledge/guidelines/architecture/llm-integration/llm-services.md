@@ -7,6 +7,7 @@ Patterns for integrating external and local Large Language Model services.
 ### Primary Providers
 
 #### OpenAI Integration
+
 - **Models**: GPT-4, GPT-3.5-turbo for text generation and analysis
 - **API Access**: REST API with HTTP client integration
 - **Authentication**: API key authentication with secure storage
@@ -14,6 +15,7 @@ Patterns for integrating external and local Large Language Model services.
 - **Cost Management**: Track tokens and usage for cost control
 
 #### Anthropic Integration
+
 - **Models**: Claude 3 series for specialized reasoning tasks
 - **API Access**: REST API with HTTP client integration
 - **Authentication**: API key authentication with secure storage
@@ -21,6 +23,7 @@ Patterns for integrating external and local Large Language Model services.
 - **Use Cases**: Complex reasoning, analysis, and safety-critical tasks
 
 #### Google AI Integration
+
 - **Models**: Gemini models for multimodal capabilities
 - **API Access**: REST API with HTTP client integration
 - **Authentication**: API key or OAuth authentication
@@ -30,6 +33,7 @@ Patterns for integrating external and local Large Language Model services.
 ### API Integration Patterns
 
 #### Unified LLM Client
+
 ```typescript
 interface LLMClient {
   generateText(prompt: string, options?: GenerationOptions): Promise<string>
@@ -47,6 +51,7 @@ interface GenerationOptions {
 ```
 
 #### Provider Abstraction
+
 - **Common Interface**: Unified interface across all providers
 - **Provider Selection**: Dynamic provider selection based on task
 - **Fallback Chain**: Automatic fallback to alternative providers
@@ -56,6 +61,7 @@ interface GenerationOptions {
 ### Authentication & Security
 
 #### API Key Management
+
 - **Secure Storage**: Store API keys in secure configuration
 - **Environment Variables**: Use environment variables for API keys
 - **Key Rotation**: Support for API key rotation
@@ -63,6 +69,7 @@ interface GenerationOptions {
 - **Audit Logging**: Log API key usage and access
 
 #### Request Security
+
 - **HTTPS Only**: All API communication over HTTPS
 - **Request Signing**: Use request signing where available
 - **Input Validation**: Validate all inputs before sending to LLM
@@ -74,6 +81,7 @@ interface GenerationOptions {
 ### Ollama Setup and Management
 
 #### Model Management
+
 - **Automatic Installation**: Automatically download required models
 - **Model Updates**: Check for and update models periodically
 - **Model Selection**: Choose appropriate model based on task
@@ -81,6 +89,7 @@ interface GenerationOptions {
 - **Model Catalog**: Maintain catalog of available models
 
 #### Resource Management
+
 - **CPU Allocation**: Manage CPU resources for local inference
 - **Memory Management**: Monitor and limit memory usage
 - **GPU Support**: Utilize GPU when available for faster inference
@@ -90,6 +99,7 @@ interface GenerationOptions {
 ### Hybrid LLM Strategy
 
 #### Task-Based Selection
+
 ```typescript
 interface TaskRouter {
   routeTask(task: LLMTask): Promise<LLMProvider>
@@ -99,18 +109,19 @@ enum TaskType {
   SIMPLE_GENERATION = 'simple',
   COMPLEX_REASONING = 'complex',
   SENSITIVE_DATA = 'sensitive',
-  CREATIVE_WRITING = 'creative'
+  CREATIVE_WRITING = 'creative',
 }
 
 const routingRules = {
   [TaskType.SIMPLE_GENERATION]: 'local',
   [TaskType.COMPLEX_REASONING]: 'external',
   [TaskType.SENSITIVE_DATA]: 'local',
-  [TaskType.CREATIVE_WRITING]: 'external'
+  [TaskType.CREATIVE_WRITING]: 'external',
 }
 ```
 
 #### Decision Criteria
+
 - **Privacy Requirements**: Use local for sensitive/private data
 - **Complexity**: Use external for complex reasoning tasks
 - **Speed Requirements**: Consider latency differences
@@ -120,6 +131,7 @@ const routingRules = {
 ### Offline Capability
 
 #### Local Processing
+
 - **Core Functions**: Ensure core AI features work offline
 - **Model Availability**: Maintain essential models locally
 - **Fallback Logic**: Graceful degradation when external services unavailable
@@ -127,6 +139,7 @@ const routingRules = {
 - **User Feedback**: Clear indication of offline/online mode
 
 #### Caching Strategy
+
 - **Response Caching**: Cache LLM responses for repeated queries
 - **Model Caching**: Cache model outputs for similar inputs
 - **Embedding Caching**: Cache embeddings for documents
@@ -138,6 +151,7 @@ const routingRules = {
 ### Rate Limiting Implementation
 
 #### Request Throttling
+
 - **Provider Limits**: Respect each provider's rate limits
 - **Adaptive Throttling**: Adjust request rate based on responses
 - **Queue Management**: Queue requests when approaching limits
@@ -145,6 +159,7 @@ const routingRules = {
 - **Backoff Strategy**: Exponential backoff for rate limit hits
 
 #### Usage Monitoring
+
 ```typescript
 interface UsageTracker {
   trackRequest(provider: string, tokens: number, cost: number): void
@@ -165,6 +180,7 @@ interface UsageStats {
 ### Cost Management
 
 #### Budget Controls
+
 - **Usage Limits**: Set spending limits per provider
 - **Budget Alerts**: Alert when approaching budget limits
 - **Cost Tracking**: Track costs per feature/user
@@ -172,6 +188,7 @@ interface UsageStats {
 - **Reporting**: Regular cost reporting and analysis
 
 #### Cost Optimization
+
 - **Model Selection**: Choose cost-effective models for tasks
 - **Prompt Optimization**: Optimize prompts to reduce token usage
 - **Caching**: Aggressive caching to reduce API calls
@@ -183,6 +200,7 @@ interface UsageStats {
 ### Error Handling Patterns
 
 #### Provider-Specific Errors
+
 - **Rate Limit Errors**: Automatic retry with backoff
 - **Authentication Errors**: Clear error messages and recovery
 - **Model Errors**: Fallback to alternative models
@@ -190,6 +208,7 @@ interface UsageStats {
 - **Service Errors**: Graceful degradation to local models
 
 #### Recovery Strategies
+
 - **Circuit Breaker**: Prevent cascading failures
 - **Fallback Chain**: Multiple fallback options
 - **Health Checks**: Monitor provider health
@@ -199,6 +218,7 @@ interface UsageStats {
 ### Monitoring and Observability
 
 #### Performance Metrics
+
 - **Response Time**: Track response times per provider
 - **Success Rate**: Monitor success/failure rates
 - **Token Usage**: Track token consumption patterns
@@ -206,6 +226,7 @@ interface UsageStats {
 - **Error Rates**: Track error patterns and types
 
 #### Logging and Debugging
+
 - **Request Logging**: Log all LLM requests and responses
 - **Error Logging**: Detailed error logging with context
 - **Performance Logging**: Track performance metrics
@@ -217,7 +238,7 @@ interface UsageStats {
 - **[RAG Architecture](rag-architecture.md)** - Integration with RAG systems
 - **[Script Coordination](script-coordination.md)** - Bash script orchestration
 - **[Performance & Security](performance-security.md)** - Optimization and security
-- **[Project Constraints](../project-constraints.md)** - External service policies
+- **[Project Constraints](.pair/knowledge/guidelines/architecture/project-constraints.md)** - External service policies
 
 ## Scope Boundaries
 

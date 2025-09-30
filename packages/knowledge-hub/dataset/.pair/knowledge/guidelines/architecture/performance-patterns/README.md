@@ -12,6 +12,7 @@ Comprehensive guide for optimizing application performance through caching, data
 ## Lightweight Processing Principles
 
 ### Small-Scale Performance Focus
+
 - **Desktop Constraints**: Optimize for typical desktop resource limits
 - **Small Data Sets**: Assume reasonable data volumes, not big data scenarios
 - **Simple Algorithms**: Prefer simple, maintainable solutions over complex optimizations
@@ -19,6 +20,7 @@ Comprehensive guide for optimizing application performance through caching, data
 - **User Experience**: Prioritize perceived performance over theoretical metrics
 
 ### Lightweight Processing Strategies
+
 - **Avoid Over-Engineering**: Don't optimize prematurely for scale you won't reach
 - **Memory Efficiency**: Use memory efficiently but don't micro-optimize
 - **I/O Optimization**: Focus on file system and network I/O efficiency

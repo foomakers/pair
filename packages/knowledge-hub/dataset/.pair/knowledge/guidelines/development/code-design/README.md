@@ -18,11 +18,11 @@ Define code structure, design patterns, and implementation standards that ensure
 
 **Out of Scope:**
 
-- Infrastructure and deployment configurations (see [Infrastructure](../../../operations/infrastructure.md))
-- Performance optimization strategies (see [Performance](../../../quality/performance.md))
-- Security implementation details (see [Security](../../../quality/security.md))
-- Testing frameworks and strategies (see [Testing](../testing/README.md))
-- Third-party library integration patterns (see [Technical Standards](../technical-standards/README.md))
+- Infrastructure and deployment configurations (see [Infrastructure](.pair/knowledge/guidelines/operations/infrastructure.md))
+- Performance optimization strategies (see [Performance](.pair/knowledge/guidelines/quality/performance.md))
+- Security implementation details (see [Security](.pair/knowledge/guidelines/quality/security.md))
+- Testing frameworks and strategies (see [Testing](.pair/knowledge/guidelines/development/testing/README.md))
+- Third-party library integration patterns (see [Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md))
 
 ## Level 2 Implementation Areas
 
@@ -62,10 +62,10 @@ Define code structure, design patterns, and implementation standards that ensure
 
 ## 🔗 Related Practices
 
-- **[Architecture Guidelines](../../architecture/README.md)** - Architectural patterns guiding code organization
-- **[Technical Standards](../technical-standards/README.md)** - Technology stack supporting code design
-- **[Testing Guidelines](../testing/README.md)** - Testing strategies validating code design
-- **[UX Guidelines](../../operations/ux-design.md)** - UI standards complementing React patterns
+- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md)** - Architectural patterns guiding code organization
+- **[Technical Standards](.pair/knowledge/guidelines/development/technical-standards/README.md)** - Technology stack supporting code design
+- **[Testing Guidelines](.pair/knowledge/guidelines/development/testing/README.md)** - Testing strategies validating code design
+- **[UX Guidelines](.pair/knowledge/guidelines/operations/ux-design.md)** - UI standards complementing React patterns
 
 ---
 
