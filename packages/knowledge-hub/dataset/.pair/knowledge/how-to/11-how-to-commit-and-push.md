@@ -49,7 +49,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -68,7 +68,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 - [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) consulted for access procedures
+- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) consulted for access procedures
 
 ## Commit and Push Definition
 
@@ -1237,7 +1237,7 @@ Quality Gates: All tests passing, configuration validated, documentation complet
 - [Product vision, user personas, and requirements](.pair/adoption/product/PRD.md)
 - [Development methodology and process definitions](.pair)
 - [Task implementation completion status](10-how-to-implement-a-task.md)
-- `.pair/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md` - Project Management Tool Guidelines
+- `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` - Project Management Tool Guidelines
 
 **Technical Context:**
 

@@ -45,7 +45,7 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### Filesystem Access Rules
@@ -149,7 +149,7 @@ The AI assistant acts as a **Product Software Engineer** who:
 
    **User Confirmation Required**: _"I've identified [Story/Task identification details]. Should I proceed with implementing this [story/task]?"_
 
-2. **MANDATORY PRE-IMPLEMENTATION VALIDATION**: Following collaboration guidelines from `.pair/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md`:
+2. **MANDATORY PRE-IMPLEMENTATION VALIDATION**: Following collaboration guidelines from `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md`:
 
    **⚠️ CRITICAL: PROCESS BLOCKER - Implementation CANNOT proceed until ALL conditions are met:**
 
@@ -243,7 +243,7 @@ Handle review process based on selected TDD approach:
 4. **Update Progress Counter**: Update the task progress counter
 5. **Preserve All Other Content**: Ensure no refinement details, acceptance criteria, or other story content is overwritten
 
-**Reference**: Follow the [Task Template](.pair/knowledge/guidelines/collaboration/project-management/assets/task-template.md) format for proper task completion tracking and documentation.
+**Reference**: Follow the [Task Template](.pair/knowledge/guidelines/collaboration/assets/task-template.md) format for proper task completion tracking and documentation.
 
 **Task Completion Validation:**
 _"✅ TASK COMPLETED: Task '[TASK-ID]: [TASK_TITLE]' has been marked as completed in User Story '[STORY_ID]: [STORY_NAME]'. Task progress updated. User story remains in 'In Progress' state until all tasks are completed."_
@@ -356,7 +356,7 @@ _"🎉 ALL TASKS COMPLETED: All tasks for User Story '[STORY_ID]: [STORY_NAME]' 
 - [System architecture patterns](.pair/adoption/tech/architecture.md)
 - [Technology standards](.pair/adoption/tech/tech-stack.md)
 - [User interface guidelines](.pair/adoption/tech/ux-ui.md)
-- [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md)
+- [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
 
 **Knowledge Base (Complete Technical Guidelines):**
 

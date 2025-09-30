@@ -5,22 +5,26 @@ Templates and reusable resources for project management, development workflows, 
 ## Templates
 
 ### Project Management Artifacts
+
 - **[initiative-template.md](initiative-template.md)** - Strategic initiative template
-- **[epic-template.md](epic-template.md)** - Epic breakdown template  
+- **[epic-template.md](epic-template.md)** - Epic breakdown template
 - **[user-story-template.md](user-story-template.md)** - User story template
 - **[task-template.md](task-template.md)** - Development task template
 
 ### Quality Assurance
+
 - **[code-review-template.md](code-review-template.md)** - Code review checklist and template
 
 ## Usage Guidelines
 
 ### Template Customization
+
 - Templates are starting points - adapt to your context
 - Maintain consistency across team and project
 - Update templates based on retrospective learnings
 
 ### Tool Integration
+
 - **GitHub**: Templates can be configured as issue templates
 - **Filesystem**: Use as markdown templates for local files
 - **Other Tools**: Adapt format to tool-specific requirements
@@ -28,6 +32,7 @@ Templates and reusable resources for project management, development workflows, 
 ## Template Structure
 
 All templates follow consistent structure:
+
 - **Purpose**: Clear description of template use
 - **Required Fields**: Mandatory information to capture
 - **Optional Fields**: Additional context that may be helpful

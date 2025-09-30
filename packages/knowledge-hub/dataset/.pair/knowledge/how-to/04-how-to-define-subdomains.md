@@ -40,7 +40,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -59,7 +59,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 - [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) consulted for access procedures
+- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) consulted for access procedures
 
 ## Step-by-Step Implementation Process
 

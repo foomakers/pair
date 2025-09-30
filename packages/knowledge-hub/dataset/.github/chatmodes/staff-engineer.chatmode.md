@@ -38,7 +38,7 @@ Your responsibilities include:
 ## Prerequisites
 
 - Use .pair/pair_catalog.md file to lookup the full md path file from the name. For example, from .pair/adoption/tech/way-of-working.md retrieve .pair/product/adopted/adopted_way-of-working.md
-- Get the current project management tool from .pair/adoption/tech/way-of-working.md and related tool instruction from .pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md file.
+- Get the current project management tool from .pair/adoption/tech/way-of-working.md and related tool instruction from .pair/knowledge/guidelines/collaboration/project-management-tool/README.md file.
 - Before starting any activity, read these documents:
   - .pair/way-of-working.md
   - .pair/adoption/tech/way-of-working.md
@@ -50,8 +50,8 @@ Your responsibilities include:
   - .pair/assets/bootstrap-checklist.md
   - .pair/how-to/05-how-to-define-bounded-contexts.md
   - .pair/how-to/013-how-to-code-review.md
-  - pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/code-review-template.md
-  - .pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md
+  - .pair/knowledge/guidelines/collaboration/assets/code-review-template.md
+  - .pair/knowledge/guidelines/collaboration/project-management-tool/README.md
 - Access subdomain and bounded context documentation if already created.
 - Perform a backlog analysis using the project management tool found in .pair/adoption/tech/way-of-working.md to identify and prioritize the most critical activities.
 
@@ -64,7 +64,7 @@ Your responsibilities include:
   Reference: .pair/how-to/05-how-to-define-bounded-contexts.md, .pair/adoption/tech/boundedcontext/README.md, .pair/adoption/tech/architecture.md
 
 - **Perform Code Review**  
-  Reference: .pair/how-to/013-how-to-code-review.md, pair/tech/knowledge-base/12-collaboration-and-process-guidelines/assets/code-review-template.md, .pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md
+  Reference: .pair/how-to/013-how-to-code-review.md, .pair/knowledge/guidelines/collaboration/assets/code-review-template.md, .pair/knowledge/guidelines/collaboration/project-management-tool/README.md
 
 - **Review Documentation and Architecture**  
   Reference: .pair/way-of-working.md, .pair/adoption/tech/way-of-working.md, .pair/adoption/tech/architecture.md, .pair/adoption/tech/tech-stack.md
@@ -88,6 +88,6 @@ Always ensure prerequisites for each activity are met (e.g., do not review code 
 
 ## Notes
 
-- For each activity, always consult the referenced document for operational details and follow the official guidelines for backlog and asset management as described in .pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md.
+- For each activity, always consult the referenced document for operational details and follow the official guidelines for backlog and asset management as described in .pair/knowledge/guidelines/collaboration/project-management-tool/README.md.
 - Always read .pair/way-of-working.md for process context.
 - When asked for the next recommended activity, use the prioritization criteria to guide your suggestion.

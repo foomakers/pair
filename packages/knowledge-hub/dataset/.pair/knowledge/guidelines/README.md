@@ -34,7 +34,7 @@ This approach reduces folder pollution while maintaining logical organization an
 ### 🤝 Collaboration Guidelines
 
 - **[Collaboration](collaboration/README.md)** - Process workflows and project management
-  - **[Project Management](collaboration/project-management/README.md)** - PM frameworks with tool-specific guides (Jira, GitHub, etc.)
+  - **[Project Management](collaboration/project-management-tool/README.md)** - PM frameworks with tool-specific guides (GitHub, Filesystem, etc.)
 
 ### ✨ Quality Guidelines
 

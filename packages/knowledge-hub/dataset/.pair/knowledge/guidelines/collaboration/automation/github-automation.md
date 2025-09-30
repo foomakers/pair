@@ -11,17 +11,20 @@ This guide covers comprehensive automation for GitHub-based project management, 
 ### Installation and Setup
 
 **Install GitHub MCP Server:**
+
 ```bash
 # Install via npm
 npm install -g @github/github-mcp-server
 ```
 
 **Configure Authentication:**
+
 - MCP server handles authentication automatically when configured properly
 - Ensure MCP client is configured to use GitHub server
 - Verify connection through pair assistant
 
 **Test MCP Connection:**
+
 ```bash
 pair "Check GitHub repository access and verify MCP connection"
 ```
@@ -29,6 +32,7 @@ pair "Check GitHub repository access and verify MCP connection"
 ### MCP-Powered Automation
 
 **Automated Issue Management:**
+
 ```bash
 # AI-assisted issue creation
 pair "Create a user story for [feature] with acceptance criteria and add to project board"
@@ -41,6 +45,7 @@ pair "Update all issues in 'Review' status that have merged PRs to 'Done'"
 ```
 
 **Project Board Automation:**
+
 ```bash
 # Bulk board operations
 pair "Move all completed user stories from Sprint 1 to Done column"
@@ -54,6 +59,7 @@ pair "Analyze current sprint and recommend priority adjustments for overloaded t
 ### Project Management Workflows
 
 **Issue to Project Board Sync:**
+
 ```yaml
 name: Sync Issue to Project Board
 on:
@@ -72,6 +78,7 @@ jobs:
 ```
 
 **PR Status Automation:**
+
 ```yaml
 name: PR Status Automation
 on:
@@ -93,16 +100,17 @@ jobs:
               repo: context.repo.repo,
               state: 'open'
             });
-            
+
             // Update project board status for linked issues
 ```
 
 **Sprint Automation:**
+
 ```yaml
 name: Sprint Management
 on:
   schedule:
-    - cron: '0 9 * * MON'  # Monday at 9 AM
+    - cron: '0 9 * * MON' # Monday at 9 AM
 
 jobs:
   sprint-planning:
@@ -125,6 +133,7 @@ jobs:
 ### Branch and Development Automation
 
 **Automated Branch Creation:**
+
 ```yaml
 name: Create Feature Branch
 on:
@@ -142,7 +151,7 @@ jobs:
           script: |
             const issueNumber = context.issue.number;
             const branchName = `feature/issue-${issueNumber}`;
-            
+
             await github.rest.git.createRef({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -152,6 +161,7 @@ jobs:
 ```
 
 **PR Template Automation:**
+
 ```yaml
 name: Auto PR Template
 on:
@@ -169,21 +179,21 @@ jobs:
             const template = `
             ## Description
             Brief description of changes
-            
+
             ## Related Issues
             Closes #${context.issue.number}
-            
+
             ## Testing
             - [ ] Unit tests added/updated
             - [ ] Integration tests passed
             - [ ] Manual testing completed
-            
+
             ## Checklist
             - [ ] Code follows style guidelines
             - [ ] Self-review completed
             - [ ] Documentation updated
             `;
-            
+
             await github.rest.pulls.update({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -197,12 +207,14 @@ jobs:
 ### Status Synchronization
 
 **Built-in GitHub Project Automation:**
+
 1. **Move to In Progress** when issue is assigned
 2. **Move to Review** when pull request is opened
 3. **Move to Done** when pull request is merged
 4. **Set priority** based on labels
 
 **Custom Automation Rules:**
+
 ```yaml
 # .github/workflows/project-automation.yml
 name: Project Board Automation
@@ -228,6 +240,7 @@ jobs:
 ### Parent-Child Status Updates
 
 **Epic Progress Tracking:**
+
 ```yaml
 name: Epic Progress Update
 on:
@@ -252,6 +265,7 @@ jobs:
 ### Automated Reviewer Assignment
 
 **Smart Reviewer Assignment:**
+
 ```yaml
 name: Auto Assign Reviewers
 on:
@@ -271,7 +285,7 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.issue.number
             });
-            
+
             // Logic to assign reviewers based on file paths
             // Frontend files → frontend team
             // Backend files → backend team
@@ -279,11 +293,12 @@ jobs:
 ```
 
 **Review Reminder Automation:**
+
 ```yaml
 name: Review Reminders
 on:
   schedule:
-    - cron: '0 10,15 * * MON-FRI'  # 10 AM and 3 PM weekdays
+    - cron: '0 10,15 * * MON-FRI' # 10 AM and 3 PM weekdays
 
 jobs:
   remind-reviewers:
@@ -300,6 +315,7 @@ jobs:
 ### Code Quality Automation
 
 **Automated Quality Checks:**
+
 ```yaml
 name: Code Quality Gate
 on:
@@ -311,16 +327,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Run linting
         run: npm run lint
-        
+
       - name: Run tests
         run: npm test
-        
+
       - name: Check coverage
         run: npm run coverage
-        
+
       - name: Update PR status
         uses: actions/github-script@v7
         with:
@@ -335,6 +351,7 @@ jobs:
 ### Smart Notifications
 
 **Stakeholder Updates:**
+
 ```yaml
 name: Stakeholder Notifications
 on:
@@ -358,11 +375,12 @@ jobs:
 ```
 
 **Team Communication:**
+
 ```yaml
 name: Team Communication
 on:
   schedule:
-    - cron: '0 9 * * MON'  # Monday morning standup prep
+    - cron: '0 9 * * MON' # Monday morning standup prep
 
 jobs:
   standup-prep:
@@ -383,11 +401,12 @@ jobs:
 ### Automated Dashboards
 
 **Velocity Tracking:**
+
 ```yaml
 name: Velocity Metrics
 on:
   schedule:
-    - cron: '0 0 * * SUN'  # Weekly on Sunday
+    - cron: '0 0 * * SUN' # Weekly on Sunday
 
 jobs:
   update-metrics:
@@ -404,11 +423,12 @@ jobs:
 ```
 
 **Health Monitoring:**
+
 ```yaml
 name: Project Health Check
 on:
   schedule:
-    - cron: '0 8 * * MON-FRI'  # Daily weekday mornings
+    - cron: '0 8 * * MON-FRI' # Daily weekday mornings
 
 jobs:
   health-check:
@@ -427,18 +447,21 @@ jobs:
 ## Best Practices
 
 ### Automation Strategy
+
 - **Start Simple** - Begin with basic status synchronization
 - **Iterative Enhancement** - Gradually add more sophisticated automation
 - **Team Feedback** - Regular review and adjustment based on team needs
 - **Performance Monitoring** - Track automation effectiveness and performance
 
 ### Error Handling
+
 - **Graceful Degradation** - Ensure automation failures don't break workflows
 - **Logging and Monitoring** - Comprehensive logging for troubleshooting
 - **Manual Override** - Always provide manual alternatives
 - **Regular Health Checks** - Automated monitoring of automation systems
 
 ### Security Considerations
+
 - **Token Management** - Secure storage and rotation of GitHub tokens
 - **Permission Scoping** - Minimal necessary permissions for automation
 - **Audit Logging** - Track all automated actions for compliance
@@ -447,12 +470,14 @@ jobs:
 ## Troubleshooting
 
 ### Common Issues
+
 - **Rate Limiting** - GitHub API rate limits affecting automation
 - **Permission Errors** - Insufficient permissions for automation actions
 - **Webhook Failures** - Missed or failed webhook deliveries
 - **Token Expiration** - Expired or invalid authentication tokens
 
 ### Debugging Automation
+
 - **Action Logs** - GitHub Actions logs for workflow debugging
 - **Webhook Deliveries** - GitHub webhook delivery logs
 - **MCP Diagnostics** - MCP server connection and operation logs

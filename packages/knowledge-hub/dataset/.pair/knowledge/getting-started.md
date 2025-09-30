@@ -48,16 +48,16 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 │   │       ├── infrastructure-guidelines.md
 │   │       ├── ux-guidelines.md
 │   │       └── observability-guidelines.md
-│   │       ├── filesystem-workflow-integration-guide.md
-│   │       ├── github-projects-integration-guide.md
-│   │       ├── project-management-compatibility-guide.md
-│   │       ├── project-management-framework-filesystem.md
-│   │       ├── project-management-framework-github.md
-│   │       ├── project-management-framework.md
-│   │       ├── project-management-integration-guide.md
-│   │       ├── project-management-support-guide.md
-│   │       ├── README.md
-│   │       └── assets/       # Templates for process docs
+│   │   └── guidelines/
+│   │       ├── collaboration/           # Collaboration and process guidelines
+│   │       │   ├── project-management-tool/   # Tool-specific implementations
+│   │       │   │   ├── README.md
+│   │       │   │   ├── github-implementation.md
+│   │       │   │   └── filesystem-implementation.md
+│   │       │   ├── methodology/        # Agile methodologies (Kanban, Scrum, etc.)
+│   │       │   ├── board-management/   # Board optimization and workflow management
+│   │       │   ├── issue-management/   # Issue tracking and lifecycle management
+│   │       │   └── assets/            # Templates for process docs
 │   │           ├── code-review-template.md
 │   │           ├── epic-template.md
 │   │           ├── initiative-template.md

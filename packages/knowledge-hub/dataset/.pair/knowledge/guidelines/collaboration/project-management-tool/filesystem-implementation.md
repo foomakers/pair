@@ -1,69 +1,10 @@
-# Filesystem Workflow Integration Guide
+# Project Management Tool - Filesystem Implementation
 
-\*\*Step-by-Step Setup and Usage Guide for pair with Filesystem Project Manag## Filesystem Structure Setup
-
-### Directory Organization
-
-The filesystem uses a hierarchical structure that mirrors the project management hierarchy. For detailed organizational principles and rules, see [project-management-framework-filesystem.md](project-management-framework-filesystem.md).
-
-**Quick Reference Structure:**
-
-```
-.pair/adoption/product/backlog/
-├── 01-initiatives/
-│   └── 2025/                    # Year-based organization
-├── 02-epics/
-│   ├── not-started/             # Todo epics
-│   ├── in-progress/             # Active epics
-│   ├── under-review/            # Review/validation phase
-│   └── completed/               # Finished epics
-└── 03-user-stories/
-    ├── not-started/             # Todo user stories
-    ├── in-progress/             # Active development
-    ├── under-review/            # Code review/testing
-    └── completed/               # Finished stories
-```
-
-### Naming Conventions
-
-**Quick Reference** (see [framework documentation](project-management-framework-filesystem.md) for complete rules):
-
-- **Initiatives**: `[initiative-name].md` in `01-initiatives/[YEAR]/`
-- **Epics**: `[initiative-code]-[epic-code]-[epic-name].md` in `02-epics/[status]/`
-- **User Stories**: `[initiative-code]-[epic-code]-[story-code]-[story-name].md` in `03-user-stories/[status]/`
-
-### Status Management via File Location
-
-Status changes are reflected by moving files between directories. For complete status management rules, see [framework documentation](project-management-framework-filesystem.md).
-
-**Status Directories:**
-
-- **not-started/**: Items defined but not yet started
-- **in-progress/**: Active work in progress
-- **under-review/**: Completed work awaiting review/validation
-- **completed/**: Finished and accepted items
-
-## 📋 Table of Contents
-
-1. [Overview](#overview)
-2. [Prerequisites](#prerequisites)
-3. [Initial Setup](#initial-setup)
-4. [Filesystem Structure Setup](#filesystem-structure-setup)
-5. [Working with Initiatives](#working-with-initiatives)
-6. [Working with Epics](#working-with-epics)
-7. [Working with User Stories](#working-with-user-stories)
-8. [Working with Tasks](#working-with-tasks)
-9. [Status Management](#status-management)
-10. [Development Workflow](#development-workflow)
-11. [File Organization and Naming](#file-organization-and-naming)
-12. [Troubleshooting](#troubleshooting)
-13. [Best Practices](#best-practices)
-
----
+_Step-by-Step Setup and Usage Guide for pair with Filesystem Project Management_
 
 ## Overview
 
-This guide provides step-by-step instructions for integrating pair with filesystem-based project management. Unlike external tools like GitHub Projects, the filesystem approach uses local markdown files organized in structured directories to manage initiatives, epics, user stories, and tasks.
+This guide provides comprehensive instructions for integrating pair with filesystem-based project management. Unlike external tools like GitHub Projects, the filesystem approach uses local markdown files organized in structured directories to manage initiatives, epics, user stories, and tasks.
 
 ### Key Benefits
 
@@ -72,8 +13,6 @@ This guide provides step-by-step instructions for integrating pair with filesyst
 - **Markdown Native**: Human-readable files that integrate naturally with documentation
 - **No External Dependencies**: Works without internet connectivity or external tool configuration
 - **Full Customization**: Complete control over templates and organization structure
-
----
 
 ## Prerequisites
 
@@ -90,8 +29,6 @@ This guide provides step-by-step instructions for integrating pair with filesyst
 - Understanding of Agile/Scrum concepts (initiatives, epics, user stories, tasks)
 - Familiarity with file organization and naming conventions
 
----
-
 ## Initial Setup
 
 ### Step 1: Configure way-of-working.md
@@ -103,7 +40,7 @@ Update your project's way-of-working configuration to specify filesystem:
 
 - Filesystem is adopted for project management, using markdown files and folder organization.
 - The backlog is managed in `.pair/adoption/product/backlog/` directory structure.
-- See `.pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management-framework-filesystem.md` for usage.
+- See `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` for usage.
 ```
 
 ### Step 2: Verify Directory Structure
@@ -137,7 +74,7 @@ Ensure project management templates are available:
 
 ```bash
 # Check for templates
-ls .pair/tech/knowledge/12-collaboration-and-process-guidelines/assets/
+ls .pair/knowledge/guidelines/collaboration/assets/
 
 # Required templates:
 # - initiative-template.md
@@ -145,8 +82,6 @@ ls .pair/tech/knowledge/12-collaboration-and-process-guidelines/assets/
 # - user-story-template.md
 # - task-template.md
 ```
-
----
 
 ## Filesystem Structure Setup
 
@@ -201,8 +136,6 @@ Status changes are reflected by moving files between directories:
 - **under-review/**: Completed work awaiting review/validation
 - **completed/**: Finished and accepted items
 
----
-
 ## Working with Initiatives
 
 ### Creating Initiatives
@@ -220,7 +153,7 @@ pair "Create filesystem initiative from PRD analysis"
 cd .pair/adoption/product/backlog/01-initiatives/2025
 
 # Create initiative file
-cp ../../../../../../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/initiative-template.md core-data-pipeline.md
+cp ../../../../../../knowledge/guidelines/collaboration/assets/initiative-template.md core-data-pipeline.md
 
 # Edit with your preferred editor
 code core-data-pipeline.md
@@ -250,8 +183,6 @@ pair "Update initiative status and track epic completion progress"
 - Status is tracked by completion of child epics
 - Update the initiative file to reflect current progress
 
----
-
 ## Working with Epics
 
 ### Creating Epics from Initiatives
@@ -269,7 +200,7 @@ pair "Break down epics from filesystem initiative"
 cd .pair/adoption/product/backlog/02-epics/not-started
 
 # Create epic file with proper naming
-cp ../../../../../../../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/epic-template.md 01-01-data-ingestion-pipeline.md
+cp ../../../../../../../knowledge/guidelines/collaboration/assets/epic-template.md 01-01-data-ingestion-pipeline.md
 
 # Edit epic details
 code 01-01-data-ingestion-pipeline.md
@@ -305,8 +236,6 @@ mv not-started/01-01-data-ingestion-pipeline.md in-progress/
 # not-started/ → in-progress/ → under-review/ → completed/
 ```
 
----
-
 ## Working with User Stories
 
 ### Creating User Stories from Epics
@@ -324,7 +253,7 @@ pair "Break down user stories from filesystem epic"
 cd .pair/adoption/product/backlog/03-user-stories/not-started
 
 # Create story file with proper naming convention
-cp ../../../../../../../tech/knowledge-base/12-collaboration-and-process-guidelines/assets/user-story-template.md 01-01-001-user-registration.md
+cp ../../../../../../../knowledge/guidelines/collaboration/assets/user-story-template.md 01-01-001-user-registration.md
 
 # Edit story details
 code 01-01-001-user-registration.md
@@ -357,8 +286,6 @@ Add refinement details to the user story:
 **Status**: Refined - Ready for Development
 **Story Points**: [Estimate]
 ```
-
----
 
 ## Working with Tasks
 
@@ -435,8 +362,6 @@ When all tasks are done:
 pair "Complete user story development and move to review status"
 ```
 
----
-
 ## Status Management
 
 ### Status Transitions
@@ -477,8 +402,6 @@ mv in-progress/01-01-001-user-registration.md completed/
 cd .pair/adoption/product/backlog/02-epics
 mv under-review/01-01-data-ingestion-pipeline.md completed/
 ```
-
----
 
 ## Development Workflow
 
@@ -554,86 +477,6 @@ Add review tasks to the story file:
 - [ ] **Review-003:** Update API documentation with new endpoint
 ```
 
----
-
-## File Organization and Naming
-
-### Hierarchical Linking
-
-**Maintain Traceability:**
-
-```markdown
-<!-- In user story file -->
-
-**Parent Epic**: [Data Ingestion Pipeline](02-epics/in-progress/01-01-data-ingestion-pipeline.md)
-**Initiative**: [Core Data Pipeline](01-initiatives/2025/core-data-pipeline.md)
-
-<!-- In epic file -->
-
-**Parent Initiative**: [Core Data Pipeline](01-initiatives/2025/core-data-pipeline.md)
-**Child Stories**:
-
-- [User Registration](03-user-stories/in-progress/01-01-001-user-registration.md)
-- [Email Verification](03-user-stories/not-started/01-01-002-email-verification.md)
-```
-
-### Consistent File Operations
-
-**Always Preserve Filenames:**
-
-```bash
-# ✅ Correct: Move files between directories, preserve names
-mv not-started/01-01-001-user-registration.md in-progress/
-
-# ❌ Incorrect: Never rename files when changing status
-# This breaks traceability and links
-```
-
-**Bulk Status Updates:**
-
-```bash
-# Move multiple related stories
-cd .pair/adoption/product/backlog/03-user-stories
-mv not-started/01-01-00*.md in-progress/
-```
-
----
-
-## Troubleshooting
-
-### Quick Common Issues
-
-**Issue: Broken Links Between Files**
-
-```bash
-pair "Check and repair filesystem backlog links and references"
-```
-
-**Issue: Inconsistent File Naming**
-
-```bash
-pair "Standardize filesystem backlog file naming to follow conventions"
-```
-
-**Issue: Status Synchronization Problems**
-
-```bash
-pair "Synchronize filesystem backlog status and fix inconsistencies"
-```
-
-### Complete Troubleshooting
-
-For comprehensive problem-solving procedures, including:
-
-- **Directory structure issues** and recovery
-- **File organization problems** and solutions
-- **Status synchronization errors** and fixes
-- **Performance optimization** techniques
-- **Recovery procedures** for data corruption
-- **Prevention strategies** and monitoring
-
----
-
 ## Best Practices
 
 ### File Management
@@ -668,40 +511,13 @@ For comprehensive problem-solving procedures, including:
 4. **Communication**: Use story files for implementation discussions and decisions
 5. **Knowledge Sharing**: Document implementation approaches and lessons learned
 
+## Related Tools
+
+- **Methodology Selection**: [methodology-selection-guide.md](../methodology/methodology-selection-guide.md)
+- **Project Tracking**: [project-tracking-overview.md](../project-tracking/project-tracking-overview.md)
+- **GitHub Integration**: [github-implementation.md](github-implementation.md)
+- **Templates**: [templates/](../assets/templates/)
+
 ---
 
-## Related Documentation
-
-This guide provides step-by-step implementation instructions for filesystem-based project management. For comprehensive information, consult these related documents:
-
-### Core Documentation
-
-- **[Project Management Framework - Filesystem](project-management-framework-filesystem.md)**: Core concepts, processes, and organizational principles
-
-### Integration Guides
-
-- **[GitHub Projects Integration Guide](github-projects-integration-guide.md)**: Alternative project management approach using GitHub Projects
-- **[How-to Guides](.pair/knowledge/how-to)**: Step-by-step guides for specific development processes
-
-### Specialization by Document
-
-**This Guide (filesystem-workflow-integration-guide.md):**
-
-- ✅ Step-by-step setup and implementation
-- ✅ Practical commands and workflows
-- ✅ Development integration procedures
-- ✅ Real-world usage examples
-
-**Framework Document (project-management-framework-filesystem.md):**
-
-- ✅ Conceptual foundation and principles
-- ✅ Organizational structure and rules
-- ✅ Quality standards and compliance
-- ✅ Process definitions and requirements
-
-**Troubleshooting Guide:**
-
-- ✅ Problem diagnosis and resolution
-- ✅ Recovery procedures and prevention
-- ✅ Performance optimization
-- ✅ Integration issue solutions
+_This provides comprehensive step-by-step implementation instructions for filesystem-based project management with pair integration._

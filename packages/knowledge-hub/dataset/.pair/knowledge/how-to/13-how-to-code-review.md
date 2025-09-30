@@ -50,7 +50,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -69,7 +69,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 - [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) consulted for access procedures
+- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) consulted for access procedures
 
 ## Code Review Definition
 
@@ -102,7 +102,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 **Project Management Tool Usage**
 
-Before conducting code reviews, ensure that the pull request has been created following the process in [How to Create a Pull Request](12-how-to-create-a-pr.md). Then, identify the configured project management tool as specified in `.pair/adoption/tech/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `.pair/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md` for interfacing, linking items, and managing review records. Please refer to this documentation any time the guide asks for project management tool actions.
+Before conducting code reviews, ensure that the pull request has been created following the process in [How to Create a Pull Request](12-how-to-create-a-pr.md). Then, identify the configured project management tool as specified in `.pair/adoption/tech/way-of-working.md`. Access the tool using the provided credentials or links. Follow the usage and collaboration instructions in `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` for interfacing, linking items, and managing review records. Please refer to this documentation any time the guide asks for project management tool actions.
 
 ---
 
@@ -150,7 +150,7 @@ Before conducting code reviews, ensure that the pull request has been created fo
 
 ## Review Prerequisites
 
-Before starting a code review, **read and consult the updated template**: [Code Review Template](.pair/knowledge/guidelines/collaboration/project-management/assets/code-review-template.md). All phases, checklists, and the report structure are defined and detailed in the template.
+Before starting a code review, **read and consult the updated template**: [Code Review Template](.pair/knowledge/guidelines/collaboration/assets/code-review-template.md). All phases, checklists, and the report structure are defined and detailed in the template.
 
 ### Step 0: Development Status Analysis and Review Setup
 
@@ -647,7 +647,7 @@ _"Code review environment ready for User Story '[STORY_ID]: [STORY_NAME]'. Branc
    - **Technical Debt Stories**: For important but non-urgent improvements, create technical debt stories to be added to product backlog
    - **Documentation Tasks**: Tasks for documentation updates and maintenance requirements
 
-   **Reference**: Follow the complete [Task Template](.pair/knowledge/guidelines/collaboration/project-management/assets/task-template.md) for proper task documentation format and structure.
+   **Reference**: Follow the complete [Task Template](.pair/knowledge/guidelines/collaboration/assets/task-template.md) for proper task documentation format and structure.
 
 2. **Update Project Management System**: Track review follow-up work:
 
@@ -1085,7 +1085,7 @@ Improved code quality and reduced risk of production issues through comprehensiv
 
 ### Review Report Template
 
-- [Review Report Template](.pair/knowledge/guidelines/collaboration/project-management/assets/code-review-template.md)
+- [Review Report Template](.pair/knowledge/guidelines/collaboration/assets/code-review-template.md)
 
 **Comprehensive Review Report Structure:**
 
@@ -1325,7 +1325,7 @@ Follow the [GitHub integration guidelines](.pair/knowledge/guidelines/collaborat
 
 - [Product vision, user personas, and requirements](.pair/adoption/product/PRD.md)
 - [Development methodology and process definitions](.pair/adoption/tech/way-of-working.md) - [Integration and merge procedures](11-how-to-commit-and-push.md)
-- `.pair/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md` - Project Management Tool Guidelines
+- `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` - Project Management Tool Guidelines
 
 **Technical Context:**
 
@@ -1379,6 +1379,6 @@ Follow the [GitHub integration guidelines](.pair/knowledge/guidelines/collaborat
 
 - Previous: [12-how-to-create-a-pr.md](12-how-to-create-a-pr.md)
 - Bootstrap Checklist: [02-how-to-complete-bootstrap-checklist.md](02-how-to-complete-bootstrap-checklist.md)
-- [Code Review Template](.pair/knowledge/guidelines/collaboration/project-management/assets/code-review-template.md) - Structure, phases, and operational checklists for code review
+- [Code Review Template](.pair/knowledge/guidelines/collaboration/assets/code-review-template.md) - Structure, phases, and operational checklists for code review
 
 This guide ensures systematic, comprehensive code review that validates implementation quality against established technical standards while providing constructive feedback and coordinating improvement processes for continuous development excellence.

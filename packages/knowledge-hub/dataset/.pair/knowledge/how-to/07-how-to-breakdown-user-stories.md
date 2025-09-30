@@ -32,7 +32,7 @@ The AI assistant acts as a **User Story Breakdown Architect** who:
 
 ## Prerequisite
 
-Before starting, **read and consult the User Story Template**: [User Story Template](.pair/knowledge/guidelines/collaboration/project-management/assets/user-story-template.md). All required structure and fields are defined in the template.
+Before starting, **read and consult the User Story Template**: [User Story Template](.pair/knowledge/guidelines/collaboration/assets/user-story-template.md). All required structure and fields are defined in the template.
 
 ## **Issue Access and Tool Integration**
 
@@ -49,7 +49,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -68,7 +68,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 - [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) consulted for access procedures
+- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) consulted for access procedures
 
 ## User Story Definition
 
@@ -98,7 +98,7 @@ A **User Story at breakdown stage** is a **rough work increment** that:
 ## User Story Breakdown Template
 
 Each user story breakdown must include these essential elements (detailed requirements will be added during refinement).
-User story breakdown must follow this comprehensive[template](.pair/knowledge/guidelines/collaboration/project-management/assets/user-story-template.md) you find in the [Collaboration and Process Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md).
+User story breakdown must follow this comprehensive[template](.pair/knowledge/guidelines/collaboration/assets/user-story-template.md) you find in the [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md).
 
 **Note: The template captures planning essentials while intentionally leaving detailed acceptance criteria, technical specifications, and precise requirements for later refinement when the story is selected for development.**
 
@@ -173,7 +173,7 @@ At any point during the user story breakdown process, if a bootstrap/setup epic 
 
 5. **Verify Selected Epic Completion**: Once epic is selected, check that it's fully documented with:
 
-   - Complete epic [template](.pair/knowledge/guidelines/collaboration/project-management/assets/user-story-template.md) filled out
+   - Complete epic [template](.pair/knowledge/guidelines/collaboration/assets/user-story-template.md) filled out
    - Clear epic objective and success criteria
    - Defined scope (in-scope and out-of-scope)
    - User story preview completed
@@ -329,7 +329,7 @@ Follow the proper instructions. guidelines and conventions of the chosen issue t
 
 Each user story file must:
 
-- Use the breakdown [template](.pair/knowledge/guidelines/collaboration/project-management/assets/user-story-template.md) provided in this guide
+- Use the breakdown [template](.pair/knowledge/guidelines/collaboration/assets/user-story-template.md) provided in this guide
 - Include a link to its parent epic (by filename or relative path)
 - All references to markdown documents must be markdown links
 
@@ -531,7 +531,7 @@ _"Here's the breakdown documentation for User Story [EPIC-STORY]: [NAME]. As a [
 
 **AI Assistant Instructions:** Create user story records in project management tool:
 
-1. **Follow Tool-Specific Format**: Adapt breakdown [template](.pair/knowledge/guidelines/collaboration/project-management/assets/user-story-template.md) to tool requirements
+1. **Follow Tool-Specific Format**: Adapt breakdown [template](.pair/knowledge/guidelines/collaboration/assets/user-story-template.md) to tool requirements
 
 2. **Establish Hierarchy Linking**: Create proper linkage:
 
@@ -555,7 +555,7 @@ _"Here's the breakdown documentation for User Story [EPIC-STORY]: [NAME]. As a [
 
 **Tool Documentation Checklist:**
 
-- [ ] User story created with breakdown [template](.pair/knowledge/guidelines/collaboration/project-management/assets/user-story-template.md) information
+- [ ] User story created with breakdown [template](.pair/knowledge/guidelines/collaboration/assets/user-story-template.md) information
 - [ ] Properly linked to parent epic using tool-specific methodology
 - [ ] Story dependencies configured if any exist
 - [ ] Hierarchy relationships properly established in tool
@@ -628,7 +628,7 @@ _"All [X] user stories for Epic '[EPIC_NAME]' are documented and provide initial
 
 **Template Completeness:**
 
-- [ ] All required breakdown [template](.pair/knowledge/guidelines/collaboration/project-management/assets/user-story-template.md) sections completed
+- [ ] All required breakdown [template](.pair/knowledge/guidelines/collaboration/assets/user-story-template.md) sections completed
 - [ ] Story follows naming conventions and tool integration requirements
 - [ ] Hierarchy linking properly configured (Epic → User Story)
 - [ ] Tool-specific relationship fields populated correctly
@@ -714,7 +714,7 @@ _"All [X] user stories for Epic '[EPIC_NAME]' are documented and provide initial
 
 - `.pair/product/adopted/PRD.md` - Product vision, user personas, and requirements
 - `.pair/way-of-working.md` - Development methodology and process definitions
-- `.pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md` - Project Management Tool Guidelines
+- `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` - Project Management Tool Guidelines
 
 **Technical Context:**
 

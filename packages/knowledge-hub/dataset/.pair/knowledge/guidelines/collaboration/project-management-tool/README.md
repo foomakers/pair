@@ -10,13 +10,13 @@ This section provides comprehensive tool setup guides and serves as a navigation
 
 ### Decision Matrix
 
-| Criteria | GitHub | Filesystem | Future Tools |
-|----------|--------|------------|-------------|
-| **Team Size** | 1-50+ | 1-10 | TBD |
-| **Complexity** | Medium-High | Low-Medium | TBD |
-| **Integration** | Excellent | Basic | TBD |
-| **Cost** | Free-Paid | Free | TBD |
-| **Learning Curve** | Medium | Low | TBD |
+| Criteria           | GitHub      | Filesystem | Future Tools |
+| ------------------ | ----------- | ---------- | ------------ |
+| **Team Size**      | 1-50+       | 1-10       | TBD          |
+| **Complexity**     | Medium-High | Low-Medium | TBD          |
+| **Integration**    | Excellent   | Basic      | TBD          |
+| **Cost**           | Free-Paid   | Free       | TBD          |
+| **Learning Curve** | Medium      | Low        | TBD          |
 
 ### Context-Based Recommendations
 
@@ -26,15 +26,22 @@ This section provides comprehensive tool setup guides and serves as a navigation
 - **Remote teams**: GitHub Projects for better collaboration
 - **Local teams**: Filesystem acceptable for simple workflows
 
-## Tool Guides
+## Tool Implementation Guides
+
+### Available Tools
+
+- **[GitHub Implementation](github-implementation.md)**: Complete GitHub Projects setup and workflow integration
+- **[Filesystem Implementation](filesystem-implementation.md)**: Local filesystem-based project management setup
 
 ### GitHub Tool
+
 - **[github-tool.md](github-tool.md)** - Complete GitHub setup and cross-topic navigation
   - MCP server setup and authentication
   - GitHub Projects configuration
   - Cross-references to all GitHub-related topics
 
-### Filesystem Tool  
+### Filesystem Tool
+
 - **[filesystem-tool.md](filesystem-tool.md)** - Complete filesystem setup and cross-topic navigation
   - Directory structure setup
   - Local automation scripts
@@ -54,8 +61,9 @@ Each tool guide provides navigation to:
 ## Future Tool Extensions
 
 Planned additions:
+
 - **Azure DevOps**: Enterprise Microsoft integration
-- **Linear**: Modern development team tracking  
+- **Linear**: Modern development team tracking
 - **Jira**: Enterprise Atlassian workflows
 - **Other tools**: Based on team requirements
 

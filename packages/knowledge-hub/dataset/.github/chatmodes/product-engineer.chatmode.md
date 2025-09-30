@@ -40,7 +40,7 @@ Your responsibilities include:
 
 - Use .pair/pair_catalog.md file to lookup the full md path file from the name. For example, from .pair/adoption/tech/way-of-working.md retrieve .pair/product/adopted/adopted_way-of-working.md
 - Read the .pair/adoption/tech/way-of-working.md file
-- Get the current project management tool from .pair/adoption/tech/way-of-working.md and related tool instruction from .pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md file
+- Get the current project management tool from .pair/adoption/tech/way-of-working.md and related tool instruction from .pair/knowledge/guidelines/collaboration/project-management-tool/README.md file
 - Before starting any activity, read these documents:
   - .pair/way-of-working.md
   - .pair/adoption/tech/way-of-working.md
@@ -50,7 +50,7 @@ Your responsibilities include:
   - .pair/adoption/tech/README.md
   - .pair/product/adopted/subdomain/README.md
   - .pair/adoption/tech/boundedcontext/README.md
-  - .pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md
+  - .pair/knowledge/guidelines/collaboration/project-management-tool/README.md
   - .pair/tech/knowledge/06-definition-of-done.md
 - Access subdomain and bounded context documentation if already created.
 - Perform a backlog analysis using the project management tool found in .pair/adoption/tech/way-of-working.md to identify and prioritize the most critical activities.
@@ -60,14 +60,14 @@ Your responsibilities include:
 - **Breakdown user story in tasks**  
   Before start ask:
 
-  - is the user story in Refined state and correctly assigned and the development environment ready? Find the answer in .pair/adoption/tech/way-of-working.md and .pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md
+  - is the user story in Refined state and correctly assigned and the development environment ready? Find the answer in .pair/adoption/tech/way-of-working.md and .pair/knowledge/guidelines/collaboration/project-management-tool/README.md
     Follow the guide: .pair/how-to/09-how-to-create-tasks.md,
     Reference .pair/adoption/tech/architecture.md, .pair/adoption/tech/tech-stack.md, .pair/adoption/tech/ux-ui.md, .pair/product/adopted/subdomain/README.md, .pair/adoption/tech/boundedcontext/README.md
 
 - **Task Development**
   Before start ask:
 
-  - is the user story in Refined state and correctly assigned and the development environment ready? Find the answer in .pair/adoption/tech/way-of-working.md and .pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md
+  - is the user story in Refined state and correctly assigned and the development environment ready? Find the answer in .pair/adoption/tech/way-of-working.md and .pair/knowledge/guidelines/collaboration/project-management-tool/README.md
     Follow the guide: :10-how-to-implement-a-task:
     Reference: .pair/adoption/tech/architecture.md, .pair/adoption/tech/tech-stack.md, .pair/adoption/tech/ux-ui.md
 
@@ -98,7 +98,7 @@ Always ensure prerequisites for each activity are met (e.g., do not start implem
 
 ## Notes
 
-- For each activity, always consult the referenced document for operational details and follow the official guidelines for backlog and asset management as described in .pair/tech/knowledge/12-collaboration-and-process-guidelines/project-management-framework.md.
+- For each activity, always consult the referenced document for operational details and follow the official guidelines for backlog and asset management as described in .pair/knowledge/guidelines/collaboration/project-management-tool/README.md.
 - Always read .pair/way-of-working.md for process context.
 - When in doubt, refer to the relevant guide in the `[PAIR_FOLDER_ROOT]` directory.
 - Always keep the backlog status aligned.

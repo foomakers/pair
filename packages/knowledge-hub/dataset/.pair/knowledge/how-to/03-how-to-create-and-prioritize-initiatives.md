@@ -30,7 +30,7 @@ The AI assistant acts as a **Strategic Initiative Architect** who:
 
 ## Prerequisite
 
-Before starting, **read and consult the Initiative Template**: [Initiative Template](.pair/knowledge/guidelines/collaboration/project-management/assets/initiative-template.md). All required structure and fields are defined in the template.
+Before starting, **read and consult the Initiative Template**: [Initiative Template](.pair/knowledge/guidelines/collaboration/assets/initiative-template.md). All required structure and fields are defined in the template.
 
 ## **Issue Access and Tool Integration**
 
@@ -47,7 +47,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 **Step 2: Follow Tool-Specific Instructions**
 
-- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) for all access procedures
+- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) for all access procedures
 - **Use configured tool** as primary and authoritative source for all issue data
 
 ### **Filesystem Access Rules**
@@ -66,11 +66,11 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 - [ ] [way-of-working.md](.pair/adoption/tech/way-of-working.md) read and tool identified
 - [ ] Tool configured (if not: halt and request bootstrap)
-- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md) consulted for access procedures
+- [ ] [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) consulted for access procedures
 
 ## Initiative Template Structure
 
-Each initiative must follow the comprehensive [template](.pair/knowledge/guidelines/collaboration/project-management/assets/initiative-template.md)
+Each initiative must follow the comprehensive [template](.pair/knowledge/guidelines/collaboration/assets/initiative-template.md)
 
 Step 0: Bootstrap Checklist Validation
 AI Assistant Instructions: Before beginning epic breakdown, verify that all foundational documents exist:
@@ -101,7 +101,7 @@ If Tool Not Configured: "I can see the foundational documents are ready, but I n
 **AI Assistant Instructions:** Before beginning initiative creation, verify the project management setup:
 
 1. **Check [`.pair/adoption/tech/way-of-working.md`](.pair/adoption/tech/way-of-working.md)** to identify the defined project management tool
-2. **Read ([Project Management Framework](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md))** to understand how to operate with the project management tool and the relative guidelines of the tool you adopt
+2. **Read ([Project Management Framework](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md))** to understand how to operate with the project management tool and the relative guidelines of the tool you adopt
 3. **Read adoption file**: [.pair/adoption/tech/README.md](.pair/adoption/tech/README.md)
    - [.pair/adoption/tech/architecture.md](.pair/adoption/tech/architecture.md)
    - [.pair/adoption/tech/tech-stack.md](.pair/adoption/tech/tech-stack.md)
@@ -131,8 +131,8 @@ Based on the selection, update `.pair/adoption/tech/way-of-working.md` according
 1. **Review [`.pair/product/adopted/PRD.md`](.pair/adoption/product/PRD.md)** to understand product vision, goals, and requirements
 2. **Study [`.pair/way-of-working.md`](.pair/knowledge/way-of-working.md)** to understand the development methodology and value streams
 3. **Check existing initiatives** according to the defined project management approach:
-   - **File System**: ([see File System Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework-filesystem.md))
-   - **Github Tools**: ([see Github System Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework-filesystem.md))
+   - **File System**: ([see Filesystem Implementation](.pair/knowledge/guidelines/collaboration/project-management-tool/filesystem-implementation.md))
+   - **Github Tools**: ([see GitHub Implementation](.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md))
 4. **Create initiative analysis framework** based on PRD goals and way-of-working principles
 
 Your analysis should extract:
@@ -166,7 +166,7 @@ _"Based on the PRD analysis, I've identified [X] strategic initiatives that woul
 
 **AI Assistant Instructions:** For each initiative, following priority order and adapting to chosen tool:
 
-1. **Present initiative concept** with initial [template](.pair/knowledge/guidelines/collaboration/project-management/assets/initiative-template.md) draft formatted for the chosen approach
+1. **Present initiative concept** with initial [template](.pair/knowledge/guidelines/collaboration/assets/initiative-template.md) draft formatted for the chosen approach
 2. **Request specific feedback** on:
    - Business rationale accuracy
    - Scope definition completeness
@@ -203,12 +203,12 @@ _"Here's the refined initiative ready for [Tool Name]. The comprehensive details
 
 **AI Assistant Instructions:** Upon developer approval, create documentation according to the defined project management approach:
 
-**For File System Approach ([see File System Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework-filesystem.md))**
+**For File System Approach ([see Filesystem Implementation](.pair/knowledge/guidelines/collaboration/project-management-tool/filesystem-implementation.md))**
 
-**For Github Tool Approach ([see Github System Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework-filesystem.md))**:
+**For Github Tool Approach ([see GitHub Implementation](.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md))**:
 
 1. **Create initiative item** in the chosen project management tool
-2. **Include comprehensive [template](.pair/knowledge/guidelines/collaboration/project-management/assets/initiative-template.md) content** adapted to the tool's structure
+2. **Include comprehensive [template](.pair/knowledge/guidelines/collaboration/assets/initiative-template.md) content** adapted to the tool's structure
 3. **Maintain cross-references** between tool items and any supporting documentation
 4. **Ensure tool-specific fields** (priority, labels, assignees) are properly set
 5. **Confirm creation** with developer and move to next initiative
@@ -243,7 +243,7 @@ _"I've created all initiatives in [Tool Name]. Here's the roadmap I've built usi
 5. **Create master initiative overview** appropriate for the chosen tool
 
 **Organization Conventions:**
-([see Collaboration and Process Guidelines for organization conventions](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md))
+([see Project Management Tool Guidelines for organization conventions](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md))
 
 ### Step 7: Final Documentation and Handoff
 
@@ -257,7 +257,7 @@ _"I've created all initiatives in [Tool Name]. Here's the roadmap I've built usi
 **Handoff Checklist:**
 
 - [ ] Project management tool verified and configured
-- [ ] All initiatives documented using complete [template](.pair/knowledge/guidelines/collaboration/project-management/assets/initiative-template.md)
+- [ ] All initiatives documented using complete [template](.pair/knowledge/guidelines/collaboration/assets/initiative-template.md)
 - [ ] Initiative organization follows tool-specific best practices
 - [ ] Timeline dependencies clearly mapped in appropriate system
 - [ ] Success metrics are measurable and time-bound
@@ -281,10 +281,10 @@ _"I've created all initiatives in [Tool Name]. Here's the roadmap I've built usi
 
 **Structure Quality:**
 
-- [ ] All [template](.pair/knowledge/guidelines/collaboration/project-management/assets/initiative-template.md) sections are completed comprehensively
+- [ ] All [template](.pair/knowledge/guidelines/collaboration/assets/initiative-template.md) sections are completed comprehensively
 - [ ] Information flows logically between sections
 - [ ] Terminology is consistent with PRD and way-of-working
-- [ ] Document formatting matches [template](.pair/knowledge/guidelines/collaboration/project-management/assets/initiative-template.md) standard
+- [ ] Document formatting matches [template](.pair/knowledge/guidelines/collaboration/assets/initiative-template.md) standard
 - [ ] File naming and organization follows conventions
 
 **Business Alignment:**
@@ -311,7 +311,7 @@ Before finalizing prioritization, verify:
 ### Do's:
 
 - **Always start with comprehensive PRD analysis** to understand full context
-- **Always follow tool management instructions provided by the (Collaboration and Process Guidelines for organization conventions](../tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md) based on the chosen project management tool from the adoption** to ensure a consistent approach
+- **Always follow tool management instructions provided by the [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) based on the chosen project management tool from the adoption** to ensure a consistent approach
 - **Focus on one initiative at a time** to ensure quality and developer engagement
 - **Be specific about business value** and connect to measurable outcomes
 - **Include concrete risk mitigation strategies** rather than generic statements
@@ -345,7 +345,7 @@ Before finalizing prioritization, verify:
 
 ## References
 
-- [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management/project-management-framework.md)
+- [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
 - [`.pair/adoption/tech/way-of-working.md`](.pair/adoption/tech/way-of-working.md) - Contains project management tool definition and methodology
 - [`.pair/product/adopted/PRD.md`](.pair/adoption/product/PRD.md) - Product Requirements Document containing business objectives and requirements
 - [`./02-how-to-complete-bootstrap-checklist.md`](02-how-to-complete-bootstrap-checklist.md) - Process for collaborative tool selection when not pre-defined

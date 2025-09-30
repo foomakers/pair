@@ -8,15 +8,16 @@ This folder contains comprehensive guidelines for team collaboration, project ma
 
 - **[methodology/](methodology/README.md)** - Project management methodologies (Kanban, Scrum, Waterfall, Lean, SAFe)
 - **[project-management-tool/](project-management-tool/README.md)** - Tool setup and navigation hub with cross-topic links
-- **[estimation/](estimation/README.md)** - Estimation frameworks and AI-assisted estimation approaches
+- **[estimation/](estimation/README.md)** - Comprehensive estimation framework with AI-assisted, complexity-based, time-based, and forecast-based approaches
 - **[issue-management/](issue-management/README.md)** - Issue tracking workflows across different tools
 - **[project-tracking/](project-tracking/README.md)** - Project tracking and progress monitoring
 - **[automation/](automation/README.md)** - Workflow automation and tool integration
-- **[board-management/](board-management/README.md)** - Board and backlog management practices
-- **[board-optimization/](board-optimization/README.md)** - Board optimization patterns and performance
+- **[board-management.md](board-management.md)** - Board and backlog management practices
 - **[communication-protocols/](communication-protocols/README.md)** - Team communication standards and protocols
-- **[role-responsibilities/](role-responsibilities/README.md)** - Team roles and responsibilities definition
-- **[decision-making/](decision-making/README.md)** - Decision-making processes and frameworks
+- **[role-responsibilities.md](role-responsibilities.md)** - Team roles and responsibilities definition
+- **[decision-making.md](decision-making.md)** - Decision-making processes and frameworks
+- **[remote-work-guidelines.md](remote-work-guidelines.md)** - Distributed team collaboration and remote work management
+- **[documentation-accessibility.md](documentation-accessibility.md)** - WCAG compliance and documentation quality standards
 - **[assets/](assets/README.md)** - Templates and reusable resources
 
 ## Navigation Guide
@@ -24,25 +25,28 @@ This folder contains comprehensive guidelines for team collaboration, project ma
 ### By Use Case
 
 **Setting up a new project:**
+
 1. Start with [methodology/](methodology/README.md) to choose methodology
 2. Use [project-management-tool/](project-management-tool/README.md) to select and setup tool
 3. Configure workflows using topic-specific guides
 
 **Daily operations:**
+
 - [issue-management/](issue-management/README.md) for issue workflows
 - [project-tracking/](project-tracking/README.md) for progress monitoring
-- [board-management/](board-management/README.md) for backlog management
+- [board-management.md](board-management.md) for board setup and optimization
 
 **Team coordination:**
-- [communication-protocols/](communication-protocols/README.md) for communication standards
-- [role-responsibilities/](role-responsibilities/README.md) for role clarity
-- [decision-making/](decision-making/README.md) for decision processes
+
+- [communication-protocols.md](communication-protocols.md) for communication standards
+- [role-responsibilities.md](role-responsibilities.md) for role clarity
+- [decision-making.md](decision-making.md) for decision processes
 
 ### By Tool
 
-**GitHub users:** Start with [project-management-tool/github-tool.md](project-management-tool/github-tool.md) for complete tool-specific navigation
+**GitHub users:** Start with [project-management-tool/github-implementation.md](project-management-tool/github-implementation.md) for complete tool-specific navigation
 
-**Filesystem users:** Start with [project-management-tool/filesystem-tool.md](project-management-tool/filesystem-tool.md) for complete tool-specific navigation
+**Filesystem users:** Start with [project-management-tool/filesystem-implementation.md](project-management-tool/filesystem-implementation.md) for complete tool-specific navigation
 
 ## Quick References
 
