@@ -11,6 +11,11 @@ System architecture patterns, bounded contexts, and architectural decision proce
 - **[Deployment Architectures](deployment-architectures/README.md)** - Deployment patterns and strategies
 - **[Performance Patterns](performance-patterns/README.md)** - Performance optimization techniques
 
+### Project-Specific Architecture
+
+- **[Project Constraints](project-constraints.md)** - Team size, desktop-only, self-hosting constraints
+- **[LLM Integration](llm-integration.md)** - RAG, Ollama, Supabase, and AI assistant patterns
+
 ### Domain-Driven Design
 
 - **[Domain-Driven Design](domain-driven-design.md)** - DDD principles and implementation

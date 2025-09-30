@@ -4,6 +4,7 @@ Guide for choosing and implementing different deployment architecture patterns b
 
 ## Available Deployment Patterns
 
+- **[Desktop Self-Hosted](desktop-self-hosted.md)** - Desktop-focused, self-hosted deployment patterns ⭐ **Recommended for this project**
 - **[Structured Monolith](structured-monolith.md)** - Organized monolithic deployment
 - **[Modular Monolith](modular-monolith.md)** - Loosely coupled modules
 - **[Microservices](microservices.md)** - Distributed services

@@ -1,6 +1,6 @@
 # Performance Optimization Patterns
 
-Comprehensive guide for optimizing application performance through caching, database optimization, concurrency, and memory management.
+Comprehensive guide for optimizing application performance through caching, database optimization, concurrency, and memory management, with special focus on lightweight processing for small team environments.
 
 ## Available Performance Patterns
 
@@ -8,6 +8,22 @@ Comprehensive guide for optimizing application performance through caching, data
 - **[Database Optimization](database.md)** - Query optimization, indexing, connection pooling
 - **[Concurrency Patterns](concurrency.md)** - Thread pools, actor model, parallel processing
 - **[Memory Management](memory.md)** - Object pooling, garbage collection optimization
+
+## Lightweight Processing Principles
+
+### Small-Scale Performance Focus
+- **Desktop Constraints**: Optimize for typical desktop resource limits
+- **Small Data Sets**: Assume reasonable data volumes, not big data scenarios
+- **Simple Algorithms**: Prefer simple, maintainable solutions over complex optimizations
+- **Quick Wins**: Focus on high-impact, low-effort optimizations
+- **User Experience**: Prioritize perceived performance over theoretical metrics
+
+### Lightweight Processing Strategies
+- **Avoid Over-Engineering**: Don't optimize prematurely for scale you won't reach
+- **Memory Efficiency**: Use memory efficiently but don't micro-optimize
+- **I/O Optimization**: Focus on file system and network I/O efficiency
+- **Lazy Loading**: Load only what's needed, when it's needed
+- **Progressive Enhancement**: Start simple, add complexity only when needed
 
 ## Performance Optimization Strategy
 
