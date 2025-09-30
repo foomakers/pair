@@ -37,5 +37,5 @@ All templates follow consistent structure:
 ## Related Topics
 
 - **[../methodology/](../methodology/README.md)** - Methodology-specific template usage
-- **[../project-management-tools/](../project-management-tools/README.md)** - Tool-specific template configuration
+- **[../project-management-tool/](../project-management-tool/README.md)** - Tool-specific template configuration
 - **[../issue-management/](../issue-management/README.md)** - Template usage in issue workflows

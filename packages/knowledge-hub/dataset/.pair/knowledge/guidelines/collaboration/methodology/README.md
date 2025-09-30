@@ -52,6 +52,6 @@ Each methodology file includes:
 
 ## Related Topics
 
-- **[../project-management-tools/](../project-management-tools/README.md)** - Tool implementations for each methodology
+- **[../project-management-tool/](../project-management-tool/README.md)** - Tool implementations for each methodology
 - **[../estimation/](../estimation/README.md)** - Estimation approaches by methodology
 - **[../role-responsibilities/](../role-responsibilities/README.md)** - Role definitions within methodologies

@@ -1,4 +1,4 @@
-# Filesystem Tools Setup and Navigation
+# Filesystem Tool Setup and Navigation
 
 Complete setup guide for filesystem-based project management and cross-topic navigation hub.
 

@@ -72,4 +72,4 @@ Each estimation approach includes:
 
 - **[../methodology/](../methodology/README.md)** - Methodology-specific estimation practices
 - **[../project-tracking/](../project-tracking/README.md)** - Tracking estimation accuracy
-- **[../project-management-tools/](../project-management-tools/README.md)** - Tool-specific estimation features
+- **[../project-management-tool/](../project-management-tool/README.md)** - Tool-specific estimation features

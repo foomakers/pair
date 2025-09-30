@@ -7,7 +7,7 @@ This folder contains comprehensive guidelines for team collaboration, project ma
 ### Core Topics
 
 - **[methodology/](methodology/README.md)** - Project management methodologies (Kanban, Scrum, Waterfall, Lean, SAFe)
-- **[project-management-tools/](project-management-tools/README.md)** - Tool setup and navigation hub with cross-topic links
+- **[project-management-tool/](project-management-tool/README.md)** - Tool setup and navigation hub with cross-topic links
 - **[estimation/](estimation/README.md)** - Estimation frameworks and AI-assisted estimation approaches
 - **[issue-management/](issue-management/README.md)** - Issue tracking workflows across different tools
 - **[project-tracking/](project-tracking/README.md)** - Project tracking and progress monitoring
@@ -25,7 +25,7 @@ This folder contains comprehensive guidelines for team collaboration, project ma
 
 **Setting up a new project:**
 1. Start with [methodology/](methodology/README.md) to choose methodology
-2. Use [project-management-tools/](project-management-tools/README.md) to select and setup tools
+2. Use [project-management-tool/](project-management-tool/README.md) to select and setup tool
 3. Configure workflows using topic-specific guides
 
 **Daily operations:**
@@ -40,14 +40,14 @@ This folder contains comprehensive guidelines for team collaboration, project ma
 
 ### By Tool
 
-**GitHub users:** Start with [project-management-tools/github-tools.md](project-management-tools/github-tools.md) for complete tool-specific navigation
+**GitHub users:** Start with [project-management-tool/github-tool.md](project-management-tool/github-tool.md) for complete tool-specific navigation
 
-**Filesystem users:** Start with [project-management-tools/filesystem-tools.md](project-management-tools/filesystem-tools.md) for complete tool-specific navigation
+**Filesystem users:** Start with [project-management-tool/filesystem-tool.md](project-management-tool/filesystem-tool.md) for complete tool-specific navigation
 
 ## Quick References
 
 - **Templates**: All templates available in [assets/](assets/README.md)
-- **Tool Setup**: Central hub at [project-management-tools/](project-management-tools/README.md)
+- **Tool Setup**: Central hub at [project-management-tool/](project-management-tool/README.md)
 - **Methodology Selection**: Guide at [methodology/methodology-selection-guide.md](methodology/methodology-selection-guide.md)
 - **Estimation Selection**: Guide at [estimation/README.md](estimation/README.md)
 

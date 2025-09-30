@@ -1,6 +1,6 @@
-# GitHub Tools Setup and Navigation
+# GitHub Tool Setup and Navigation
 
-Complete setup guide for GitHub-based project management tools and cross-topic navigation hub.
+Complete setup guide for GitHub-based project management tool and cross-topic navigation hub.
 
 ## Quick Setup
 

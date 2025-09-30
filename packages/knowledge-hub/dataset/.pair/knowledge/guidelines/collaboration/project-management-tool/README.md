@@ -28,14 +28,14 @@ This section provides comprehensive tool setup guides and serves as a navigation
 
 ## Tool Guides
 
-### GitHub Tools
-- **[github-tools.md](github-tools.md)** - Complete GitHub setup and cross-topic navigation
+### GitHub Tool
+- **[github-tool.md](github-tool.md)** - Complete GitHub setup and cross-topic navigation
   - MCP server setup and authentication
   - GitHub Projects configuration
   - Cross-references to all GitHub-related topics
 
-### Filesystem Tools  
-- **[filesystem-tools.md](filesystem-tools.md)** - Complete filesystem setup and cross-topic navigation
+### Filesystem Tool  
+- **[filesystem-tool.md](filesystem-tool.md)** - Complete filesystem setup and cross-topic navigation
   - Directory structure setup
   - Local automation scripts
   - Cross-references to all filesystem-related topics
