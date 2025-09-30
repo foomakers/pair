@@ -21,6 +21,15 @@ This approach reduces folder pollution while maintaining logical organization an
   - **[Performance Patterns](architecture/performance-patterns/README.md)** - Performance optimization techniques
   - **[Decision Records](architecture/decision-records.md)** - ADR process, templates, decision frameworks
 
+### ☁️ Cloud Infrastructure Guidelines
+
+- **[Cloud Infrastructure](cloud-infrastructure/README.md)** - Cloud strategy, tools, and infrastructure automation
+  - **[Cloud Providers](cloud-infrastructure/cloud-providers.md)** - Provider selection, service comparison, and multi-cloud strategies
+  - **[Infrastructure as Code](cloud-infrastructure/infrastructure-as-code.md)** - IaC tools, state management, and automation practices
+  - **[Container Orchestration](cloud-infrastructure/container-orchestration.md)** - Docker, Kubernetes, and cloud-native deployment
+  - **[Cloud Databases](cloud-infrastructure/cloud-databases.md)** - Managed databases, storage services, and data migration
+  - **[Cloud DevOps](cloud-infrastructure/cloud-devops.md)** - CI/CD pipelines, monitoring, and cost optimization
+
 ### 💻 Development Guidelines
 
 Development guidelines are organized into three specialized practice areas:

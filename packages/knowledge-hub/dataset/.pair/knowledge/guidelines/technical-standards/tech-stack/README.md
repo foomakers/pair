@@ -50,9 +50,19 @@ Define the fundamental technology choices and framework standards that form the 
 
 ## 🔗 Related Practices
 
-- **[Development Tools](.pair/knowledge/guidelines/technical-standards/development-tools/README.md)** - Tools that support these technology choices
-- **[Integration Standards](.pair/knowledge/guidelines/technical-standards/integration-standards/README.md)** - How these technologies integrate together
-- **[Code Design Framework Patterns](.pair/knowledge/guidelines/code-design/framework-patterns/README.md)** - Implementation patterns for these technologies
+- **[Cloud Infrastructure](../../cloud-infrastructure/README.md)** - Cloud services and deployment platforms for these technologies
+- **[Development Tools](../development-tools/README.md)** - Tools that support these technology choices
+- **[Integration Standards](../integration-standards/README.md)** - How these technologies integrate together
+- **[Code Design Framework Patterns](../../code-design/framework-patterns/README.md)** - Implementation patterns for these technologies
+
+## ☁️ Cloud Integration
+
+For cloud deployment and infrastructure automation:
+
+- **[Cloud Providers](../../cloud-infrastructure/cloud-providers.md)** - Provider selection for tech stack deployment
+- **[Container Orchestration](../../cloud-infrastructure/container-orchestration.md)** - Containerizing and deploying tech stack components
+- **[Cloud Databases](../../cloud-infrastructure/cloud-databases.md)** - Managed database services aligned with backend stack
+- **[Cloud DevOps](../../cloud-infrastructure/cloud-devops.md)** - CI/CD pipelines for tech stack deployment
 
 ## 🎯 Quick Start
 

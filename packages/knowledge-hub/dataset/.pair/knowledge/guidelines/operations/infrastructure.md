@@ -18,10 +18,11 @@ Define infrastructure deployment strategies, container orchestration patterns, a
 
 **Out of Scope:**
 
+- Cloud infrastructure strategy and automation (see [Cloud Infrastructure](../cloud-infrastructure/README.md))
 - Application-level observability (see [Observability](./observability/README.md))
-- Security implementation details (see [Security](.pair/knowledge/guidelines/quality/security/README.md))
-- Performance optimization strategies (see [Performance](.pair/knowledge/guidelines/quality/performance/README.md))
-- Development environment setup (see [Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md))
+- Security implementation details (see [Security](../quality/security.md))
+- Performance optimization strategies (see [Performance](../quality/performance.md))
+- Development environment setup (see [Technical Standards](../technical-standards/README.md))
 
 ## Level 2 Implementation Areas
 
@@ -43,9 +44,19 @@ Define infrastructure deployment strategies, container orchestration patterns, a
 
 ## 🔗 Related Practices
 
-- **[Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md)** - Technology stack supported by infrastructure
+- **[Cloud Infrastructure](../cloud-infrastructure/README.md)** - Cloud strategy, IaC, and container orchestration
+- **[Technical Standards](../technical-standards/README.md)** - Technology stack supported by infrastructure
 - **[Observability Guidelines](observability/README.md)** - Application-level observability and monitoring
-- **[Security Guidelines](.pair/knowledge/guidelines/quality/security/README.md)** - Security considerations for infrastructure
+- **[Security Guidelines](../quality/security.md)** - Security considerations for infrastructure
+
+## 🚀 Implementation Guidance
+
+For detailed implementation patterns:
+
+- **Cloud Strategy**: See [Cloud Providers](../cloud-infrastructure/cloud-providers.md) for provider selection
+- **Infrastructure Automation**: See [Infrastructure as Code](../cloud-infrastructure/infrastructure-as-code.md) for IaC practices
+- **Container Deployment**: See [Container Orchestration](../cloud-infrastructure/container-orchestration.md) for container strategies
+- **DevOps Pipelines**: See [Cloud DevOps](../cloud-infrastructure/cloud-devops.md) for CI/CD automation
 
 ---
 
