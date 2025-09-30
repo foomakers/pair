@@ -1,45 +1,57 @@
-# 🤝## 📚 Collaboration Practices (Level 2)
+# Collaboration Guidelines
 
-### Project Management Practice
+This folder contains comprehensive guidelines for team collaboration, project management methodologies, tool implementations, and development workflows organized by actionable topics.
 
-- **[Project Management](project-management/README.md)** - Comprehensive project management standards and tool-specific implementationslaboration Guidelines (Level 1)
+## Structure Overview
 
-Project management frameworks, communication protocols, and process guidelines for effective team collaboration.
+### Core Topics
 
-## 📚 Collaboration Practices (Level 2)
+- **[methodology/](methodology/README.md)** - Project management methodologies (Kanban, Scrum, Waterfall, Lean, SAFe)
+- **[project-management-tools/](project-management-tools/README.md)** - Tool setup and navigation hub with cross-topic links
+- **[estimation/](estimation/README.md)** - Estimation frameworks and AI-assisted estimation approaches
+- **[issue-management/](issue-management/README.md)** - Issue tracking workflows across different tools
+- **[project-tracking/](project-tracking/README.md)** - Project tracking and progress monitoring
+- **[automation/](automation/README.md)** - Workflow automation and tool integration
+- **[board-management/](board-management/README.md)** - Board and backlog management practices
+- **[board-optimization/](board-optimization/README.md)** - Board optimization patterns and performance
+- **[communication-protocols/](communication-protocols/README.md)** - Team communication standards and protocols
+- **[role-responsibilities/](role-responsibilities/README.md)** - Team roles and responsibilities definition
+- **[decision-making/](decision-making/README.md)** - Decision-making processes and frameworks
+- **[assets/](assets/README.md)** - Templates and reusable resources
 
-### Project Management Practice
+## Navigation Guide
 
-- **[Project Management](project-management)** - Comprehensive project management standards and tool-specific implementations
-  - Framework-agnostic project management principles
-  - Sprint planning and iteration management methodologies
-  - Issue tracking and workflow management patterns
-  - Artifact management and hierarchical organization
-  - Templates for epics, user stories, and tasks
+### By Use Case
 
-## 🛠️ Level 3: Tool-Specific Implementations
+**Setting up a new project:**
+1. Start with [methodology/](methodology/README.md) to choose methodology
+2. Use [project-management-tools/](project-management-tools/README.md) to select and setup tools
+3. Configure workflows using topic-specific guides
 
-_The project-management practice folder contains tool-specific guides:_
+**Daily operations:**
+- [issue-management/](issue-management/README.md) for issue workflows
+- [project-tracking/](project-tracking/README.md) for progress monitoring
+- [board-management/](board-management/README.md) for backlog management
 
-- **GitHub Projects**: Native GitHub project management workflows
-- **Jira**: Enterprise project management configurations
-- **Linear**: Modern development team project tracking
-- **Trello**: Lightweight project management approaches
-- **Other Tools**: Framework adaptation for various PM tools
+**Team coordination:**
+- [communication-protocols/](communication-protocols/README.md) for communication standards
+- [role-responsibilities/](role-responsibilities/README.md) for role clarity
+- [decision-making/](decision-making/README.md) for decision processes
 
-## 🔗 Related Guidelines
+### By Tool
 
-- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md)** - Architectural decisions informing collaboration processes
-- **[Development Guidelines](.pair/knowledge/guidelines/development/README.md)** - Development practices integrated with collaboration workflows
-- **[Quality Guidelines](.pair/knowledge/guidelines/quality/README.md)** - Quality standards ensuring effective collaboration outcomes
+**GitHub users:** Start with [project-management-tools/github-tools.md](project-management-tools/github-tools.md) for complete tool-specific navigation
 
-## 🎯 Quick Start
+**Filesystem users:** Start with [project-management-tools/filesystem-tools.md](project-management-tools/filesystem-tools.md) for complete tool-specific navigation
 
-1. **Framework**: Start with [Project Management](project-management) for core principles and methodologies
-2. **Tool Selection**: Choose appropriate tool implementation from Level 3 guides
-3. **Workflow Integration**: Establish team workflows aligned with [Quality Standards](.pair/knowledge/guidelines/quality/standards)
-4. **Process Alignment**: Ensure compliance with [Definition of Done](.pair/knowledge/guidelines/quality/standards/definition-of-done.md)
+## Quick References
 
----
+- **Templates**: All templates available in [assets/](assets/README.md)
+- **Tool Setup**: Central hub at [project-management-tools/](project-management-tools/README.md)
+- **Methodology Selection**: Guide at [methodology/methodology-selection-guide.md](methodology/methodology-selection-guide.md)
+- **Estimation Selection**: Guide at [estimation/README.md](estimation/README.md)
 
-_Assistant Context: Focus on project management frameworks, team communication, and collaborative development processes with tool-specific implementations._
+## Related Documents
+
+- See `.pair/tech/adopted/way-of-working.md` for current adopted approaches
+- Refer to specific topic README files for detailed implementation guidance
