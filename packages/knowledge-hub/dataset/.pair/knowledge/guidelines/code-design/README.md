@@ -1,58 +1,133 @@
-# 🎨 Code Design Guidelines
+# Code Design
 
-**Focus**: How to write high-quality, maintainable code
+## 🎯 Scope
 
-Define code structure, design patterns, and implementation standards that ensure high code quality, readability, and maintainability.
+This section covers code-level design patterns, principles, and organization strategies:
 
-## 📚 Code Design Practices (Level 2)
+**In Scope:**
 
-### Design Principles Practice
+- Framework-specific patterns and implementations
+- Design principles and coding standards
+- Code organization and structure strategies
+- Quality standards and automation tools
+- Package management and dependency strategies
 
-- **[Design Principles](design-principles/README.md)** - Core design principles and code quality fundamentals
-  - Clear and readable code principles
-  - SOLID principles application
-  - Functional programming concepts
-  - Domain-driven design principles
+**Out of Scope:**
 
-### Framework Patterns Practice
+- System architecture patterns (covered in Architecture)
+- Infrastructure code organization (covered in Infrastructure)
+- Test code organization (covered in Testing)
 
-- **[Framework Patterns](framework-patterns/README.md)** - Framework-specific implementation patterns and standards
-  - React/Next.js component and state management patterns
-  - Fastify service architecture and API patterns
-  - Performance optimization strategies
-  - Component design and reusability patterns
+## 📋 Content Description
 
-### Implementation Standards Practice
+This folder provides comprehensive guidance for writing maintainable, scalable, and high-quality code. Each section includes theoretical background, practical implementation patterns, and tool configurations.
 
-- **[Implementation Standards](implementation-standards/README.md)** - Development environment and service implementation standards
-  - Local development independence strategies
-  - Service abstraction and mocking patterns
-  - Environment switching and configuration management
-  - Function design and error handling standards
+### Available Sections:
 
-### Organization Patterns Practice
+1. **Framework Patterns** (`framework-patterns/`)
 
-- **[Organization Patterns](organization-patterns/README.md)** - Code and workspace organization strategies
-  - File structure and naming conventions
-  - Feature-based architecture patterns
-  - Monorepo organization and dependency management
-  - Workspace structure and module guidelines
+   - React and Next.js patterns
+   - Fastify server patterns
+   - TypeScript implementation strategies
+   - Component design and hooks patterns
+   - State management approaches
 
-### Quality Standards Practice
+2. **Design Principles** (`design-principles/`)
 
-- **[Quality Standards](quality-standards/README.md)** - Code quality metrics, linting, and technical debt management
-  - ESLint and Prettier configuration standards
-  - Quality metrics and automated gates
-  - Technical debt identification and management
-  - Coverage requirements and complexity analysis
+   - SOLID principles implementation
+   - Functional programming patterns
+   - Error handling strategies
+   - Service abstraction patterns
+   - Mocking strategies for testing
 
-## 🔗 Related Guidelines
+3. **Code Organization** (`code-organization/`)
 
-- **[Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md)** - Technology choices that support code design decisions
-- **[Testing](.pair/knowledge/guidelines/testing/README.md)** - Testing strategies that validate code design quality
-- **[Quality Guidelines](.pair/knowledge/guidelines/quality/README.md)** - Quality criteria for code design validation
+   - Workspace structure guidelines
+   - File organization strategies
+   - Naming conventions
+   - Feature-based architecture
+   - Module organization patterns
 
-## 🎯 Quick Start
+4. **Quality Standards** (`quality-standards/`)
+
+   - Linting tools and configurations
+   - ESLint rules and customization
+   - Prettier formatting standards
+   - Code metrics and coverage
+   - Technical debt management
+
+5. **Package Management** (`package-management/`)
+   - PNPM workspace configuration
+   - Dependency management strategies
+   - Version catalog approaches
+   - Shared dependency patterns
+
+## � Decision Support
+
+### Framework Selection Decision Tree
+
+```mermaid
+flowchart TD
+    A[Project Type] --> B{Frontend Requirements}
+    B -->|Static Site| C[Next.js Static]
+    B -->|Interactive App| D[Next.js + React]
+    B -->|API Only| E{Performance Requirements}
+
+    E -->|High Performance| F[Fastify]
+    E -->|Standard| G[Express/Fastify]
+
+    D --> H{State Complexity}
+    H -->|Simple| I[React Hooks]
+    H -->|Complex| J[Zustand/Redux]
+```
+
+### Code Organization Matrix
+
+| Project Size              | Team Size | Recommended Structure | Complexity |
+| ------------------------- | --------- | --------------------- | ---------- |
+| Small (<10 components)    | 1-2       | Feature folders       | Low        |
+| Medium (10-50 components) | 3-5       | Domain-based modules  | Medium     |
+| Large (50+ components)    | 5+        | Bounded contexts      | High       |
+| Enterprise                | 10+       | Micro-frontends       | Very High  |
+
+### Quality Standards Selection
+
+**Choose ESLint + Prettier when:**
+
+- TypeScript/JavaScript projects
+- Team collaboration requirements
+- Consistent code formatting needs
+- CI/CD integration requirements
+
+**Choose Advanced Tooling when:**
+
+- Large team coordination
+- Complex quality gates
+- Performance optimization critical
+- Enterprise compliance needs
+
+## 🛠️ Implementation Tools
+
+### Development Tools:
+
+- **ESLint**: Code quality and consistency
+- **Prettier**: Code formatting automation
+- **TypeScript**: Type safety and documentation
+- **Husky**: Git hooks for quality gates
+
+### Framework Tools:
+
+- **React DevTools**: Component debugging
+- **Next.js DevTools**: Performance analysis
+- **Fastify CLI**: Server development tools
+- **Testing Libraries**: Component and API testing
+
+### Quality Tools:
+
+- **SonarQube**: Code quality analysis
+- **CodeClimate**: Technical debt tracking
+- **Lighthouse**: Performance auditing
+- **Bundle Analyzer**: Bundle optimization
 
 1. **Design Foundation**: Start with [Design Principles](design-principles/README.md) for fundamental code quality concepts
 2. **Framework Implementation**: Apply [Framework Patterns](framework-patterns/README.md) for your tech stack

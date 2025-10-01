@@ -1,51 +1,160 @@
-# 🏗️ Architecture Guidelines (Level 1)
+# Architecture
 
-System architecture patterns, bounded contexts, and architectural decision processes for scalable software design.
+## 🎯 Scope
 
-## 📚 Architecture Practices (Level 2)
+This section covers high-level architectural patterns, decisions, and design strategies:
 
-### Core Architecture Patterns
+**In Scope:**
 
-- **[Architectural Patterns](architectural-patterns/README.md)** - Core architecture patterns (CRUD, Layered, Hexagonal, Clean, CQRS, Event Sourcing)
-- **[Scaling Patterns](scaling-patterns/README.md)** - Horizontal and vertical scaling strategies
-- **[Deployment Architectures](deployment-architectures/README.md)** - Deployment patterns and strategies
-- **[Performance Patterns](performance-patterns/README.md)** - Performance optimization techniques
+- System architecture patterns and design principles
+- Architectural decision frameworks and documentation
+- Domain modeling and bounded context definition
+- Integration patterns and system communication
+- Technology constraints and project limitations
+- LLM integration and AI-driven architecture
+- Deployment architecture strategies
 
-### Project-Specific Architecture
+**Out of Scope:**
 
-- **[Project Constraints](project-constraints/README.md)** - Team size, desktop-only, self-hosting constraints
-- **[LLM Integration](llm-integration/README.md)** - RAG, Ollama, Supabase, and AI assistant patterns
+- Code-level implementation patterns (covered in Code Design)
+- Infrastructure deployment specifics (covered in Infrastructure)
+- Testing architecture (covered in Testing)
 
-### Domain-Driven Design
+## 📋 Content Description
 
-- **[Domain-Driven Design](domain-driven-design.md)** - DDD principles and implementation
-- **[Bounded Context Patterns](bounded-context-patterns.md)** - Context boundary definitions
-- **[Event Sourcing](architectural-patterns/event-sourcing.md)** - Event-based persistence patterns
-- **[CQRS Pattern](architectural-patterns/cqrs.md)** - Command Query Responsibility Segregation
+This folder provides comprehensive guidance for making architectural decisions at the system level. Each section includes theoretical background, practical frameworks, and decision support tools.
 
-### System Integration
+### Available Sections:
 
-- **[Integration Patterns](integration-patterns.md)** - Service communication and integration strategies
-- **[System Design](system-design/README.md)** - System design patterns and performance optimization
+1. **Design Patterns** (`design-patterns/`)
 
-### Decision Records Practice
+   - Domain-driven design principles
+   - Bounded context strategies
+   - Integration patterns
+   - System design methodologies
+   - Repository and workspace organization
+   - Monorepo management approaches
 
-- **[Decision Records](decision-records/README.md)** - ADR process, templates, and decision-making frameworks
-- **[Decision Records](decision-records.md)** - ADR implementation guidance and examples
+2. **Architectural Patterns** (`architectural-patterns/`)
 
-### Standalone Guides
+   - CRUD and Transaction Script patterns
+   - Hexagonal and Clean Architecture
+   - Event Sourcing and CQRS
+   - Layered and Continuous Architecture
+   - Pattern selection and evolution
 
-- **[LLM Integration](llm-integration.md)** - AI/LLM integration patterns overview
-- **[Project Constraints](project-constraints.md)** - Constraint-driven architecture decisions
+3. **Decision Frameworks** (`decision-frameworks/`)
 
-## 🛠️ Level 3: Pattern-Specific Implementations
+   - Architecture Decision Record (ADR) processes
+   - Decision tracking and governance
+   - Technology selection frameworks
+   - Evolution strategy planning
 
-_Each pattern folder contains specific implementations and detailed guides:_
+4. **Project Constraints** (`project-constraints/`)
 
-- **Architectural Patterns**: CRUD, Layered, Hexagonal, Clean, CQRS, Event Sourcing implementations
-- **Scaling Patterns**: Database sharding, load balancing, circuit breakers, auto-scaling
-- **Deployment Patterns**: Monolith, microservices, serverless, hybrid architectures
-- **Performance Patterns**: Caching, database optimization, concurrency, memory management
+   - Team size and skill constraints
+   - Platform and technology limitations
+   - Deployment and operational constraints
+   - Budget and timeline considerations
+
+5. **LLM Integration** (`llm-integration/`)
+
+   - AI-driven architecture patterns
+   - RAG (Retrieval Augmented Generation) systems
+   - Vector database integration
+   - MCP (Model Context Protocol) development
+   - AI workflow optimization
+
+6. **Deployment Architectures** (`deployment-architectures/`)
+   - Monolith vs microservices decisions
+   - Serverless and hybrid approaches
+   - Desktop and self-hosted solutions
+   - Scalability and distribution patterns
+
+## 🔄 Decision Support
+
+### Architecture Selection Decision Tree
+
+```mermaid
+flowchart TD
+    A[Project Requirements] --> B{System Complexity}
+    B -->|Simple| C{Team Size}
+    B -->|Moderate| D{Domain Complexity}
+    B -->|Complex| E{Scale Requirements}
+
+    C -->|Small <5| F[Modular Monolith]
+    C -->|Medium 5-15| G[Layered Architecture]
+
+    D -->|Well-defined| H[Domain-Driven Design]
+    D -->|Evolving| I[Hexagonal Architecture]
+
+    E -->|High Scale| J[Microservices + Events]
+    E -->|High Performance| K[CQRS + Event Sourcing]
+```
+
+### Architecture Complexity Matrix
+
+| Pattern                | Implementation Complexity | Team Skill Required | Maintenance Overhead | Scalability | Best For                 |
+| ---------------------- | ------------------------- | ------------------- | -------------------- | ----------- | ------------------------ |
+| Modular Monolith       | Low                       | Junior-Mid          | Low                  | Medium      | Small-Medium teams       |
+| Layered Architecture   | Medium                    | Mid                 | Medium               | Medium      | Traditional enterprises  |
+| Hexagonal Architecture | Medium-High               | Mid-Senior          | Medium               | High        | Testing-critical apps    |
+| Domain-Driven Design   | High                      | Senior              | High                 | High        | Complex business domains |
+| Microservices          | Very High                 | Senior+             | Very High            | Very High   | Large-scale systems      |
+| Event Sourcing         | Very High                 | Expert              | High                 | Very High   | Audit-heavy systems      |
+
+### Selection Criteria Framework
+
+**Choose Simple Patterns when:**
+
+- Team has limited architectural experience
+- Time-to-market is critical
+- Domain is well-understood and stable
+- Scale requirements are predictable
+
+**Choose Complex Patterns when:**
+
+- System scale requires distributed architecture
+- Domain complexity justifies the overhead
+- Team has strong architectural capabilities
+- Long-term evolution is prioritized over speed
+
+**Choose Event-Driven Patterns when:**
+
+- System has many integration points
+- Audit trails and temporal data are required
+- Different parts scale independently
+- Eventual consistency is acceptable
+
+## 🛠️ Implementation Tools
+
+### Design & Modeling:
+
+- **C4 Model**: System architecture documentation
+- **PlantUML**: Diagram as code for architecture
+- **Mermaid**: Lightweight diagramming
+- **EventStorming**: Domain modeling workshops
+
+### Decision Support:
+
+- **ADR Tools**: Architecture decision record automation
+- **SWOT Analysis**: Architectural trade-off evaluation
+- **Technology Radar**: Technology lifecycle tracking
+- **Decision Trees**: Structured decision frameworks
+
+### Validation Tools:
+
+- **Architecture Tests**: Fitness function implementation
+- **Dependency Analyzers**: Structure validation
+- **Performance Benchmarks**: Architecture performance validation
+- **Compliance Checkers**: Constraint validation
+
+### Documentation Tools:
+
+- **Arc42**: Architecture documentation template
+- **Structurizr**: Software architecture model tools
+- **Confluence/Notion**: Collaborative documentation
+- **GitBook**: Version-controlled architecture docs
 
 ## 🔗 Related Guidelines
 

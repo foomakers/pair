@@ -1,52 +1,177 @@
 # Architectural Patterns
 
-Comprehensive guide for selecting and implementing various architectural patterns based on domain complexity and business requirements.
+## 🎯 Scope
 
-## Available Architectural Patterns
+This section covers architectural patterns for application design and structure:
 
-- **[CRUD Architecture](crud.md)** - Simple data operations and basic business logic
-- **[Layered Architecture](layered.md)** - Traditional separation of concerns through layers
-- **[Hexagonal Architecture](hexagonal.md)** - Ports and adapters for clean boundaries
-- **[Clean Architecture](clean.md)** - Complete dependency inversion approach (autocontained)
-- **[CQRS Pattern](cqrs.md)** - Command Query Responsibility Segregation
-- **[Event Sourcing Pattern](event-sourcing.md)** - Event-based persistence and state management
+**In Scope:**
 
-## Pattern Selection Framework
+- Application architecture patterns and their implementation
+- Pattern selection criteria based on domain complexity
+- Integration approaches between different patterns
+- Performance and maintainability trade-offs
+- Pattern evolution and migration strategies
 
-### Pattern Complexity Matrix
+**Out of Scope:**
 
+- Deployment architectures (covered in Deployment Architectures)
+- Infrastructure patterns (covered in Infrastructure)
+- Design patterns at code level (covered in Code Design)
+
+## 📋 Content Description
+
+This folder provides comprehensive guidance for selecting and implementing architectural patterns. Each pattern includes theoretical background, practical implementation guidance, decision criteria, and real-world examples with trade-off analysis.
+
+### Available Patterns:
+
+1. **CRUD Architecture** (`crud.md`)
+
+   - Simple data operations and basic business logic
+   - Direct database access patterns
+   - Rapid development approaches
+
+2. **Transaction Script** (`transaction-script.md`)
+
+   - Procedural business logic organization
+   - Simple transaction management
+   - Legacy system integration
+
+3. **Hexagonal Architecture** (`hexagonal.md`)
+
+   - Ports and adapters for clean boundaries
+   - Dependency inversion implementation
+   - Testing and isolation strategies
+
+4. **Clean Architecture** (`clean-architecture.md`)
+
+   - Complete dependency inversion approach
+   - Domain-centric design principles
+   - Enterprise application patterns
+
+5. **Event Sourcing** (`event-sourcing.md`)
+
+   - Event-based persistence and state management
+   - Audit trail and temporal data
+   - Event stream processing
+
+6. **CQRS Pattern** (`cqrs.md`)
+
+   - Command Query Responsibility Segregation
+   - Read/write model separation
+   - Performance optimization strategies
+
+7. **Layer Architecture** (`layer-architecture.md`)
+
+   - Traditional layered approach
+   - Separation of concerns through layers
+   - Enterprise integration patterns
+
+8. **Continuous Architecture** (`continuous-architecture.md`)
+   - Evolutionary architecture principles
+   - Fitness functions and architecture testing
+   - Continuous integration with architecture
+
+## 🔄 Decision Support
+
+### Pattern Selection Decision Tree
+
+```mermaid
+flowchart TD
+    A[Domain Complexity Assessment] --> B{Business Logic Complexity}
+    B -->|Simple CRUD| C[CRUD Architecture]
+    B -->|Procedural Logic| D[Transaction Script]
+    B -->|Moderate Rules| E{Testing Requirements}
+    B -->|Complex Rules| F{Event Requirements}
+
+    E -->|High| G[Hexagonal Architecture]
+    E -->|Standard| H[Layer Architecture]
+
+    F -->|Event-Heavy| I{Read/Write Patterns}
+    F -->|Domain-Heavy| J[Clean Architecture]
+
+    I -->|Different Models| K[CQRS + Event Sourcing]
+    I -->|Audit Required| L[Event Sourcing]
+    I -->|Performance Critical| M[CQRS]
 ```
-Simple Domain     → CRUD/Transaction Script
-Moderate Domain   → Layered/Hexagonal Architecture
-Complex Domain    → Clean Architecture + DDD
-Event-Heavy       → Event Sourcing + CQRS
-High-Scale        → Microservices + Event-Driven
-```
 
-### Decision Tree
+### Complexity Matrix
 
-```
-Start: What's your domain complexity?
-│
-├── Simple (CRUD operations, minimal business logic)
-│   └── → [CRUD Architecture](crud.md)
-│
-├── Moderate (Some business rules, clear boundaries)
-│   ├── Traditional approach → [Layered Architecture](layered.md)
-│   └── Dependency inversion → [Hexagonal Architecture](hexagonal.md)
-│
-├── Complex (Rich domain model, complex business rules)
-│   └── → [Clean Architecture](clean.md)
-│
-├── Event-Heavy (Event-driven workflows, audit trails)
-│   ├── Read/Write separation → [CQRS](cqrs.md)
-│   └── Event history required → [Event Sourcing](event-sourcing.md)
-│
-└── High-Scale (Multiple contexts, distributed)
-    └── → Combine patterns (see deployment architectures)
-```
+| Pattern            | Implementation Complexity | Team Skill Required | Domain Complexity | Performance | Testability |
+| ------------------ | ------------------------- | ------------------- | ----------------- | ----------- | ----------- |
+| CRUD               | Low                       | Junior              | Simple            | Medium      | Low         |
+| Transaction Script | Low                       | Junior              | Simple-Medium     | Medium      | Medium      |
+| Layered            | Medium                    | Mid                 | Medium            | Medium      | Medium      |
+| Hexagonal          | Medium                    | Mid-Senior          | Medium-High       | High        | High        |
+| Clean Architecture | High                      | Senior              | High              | High        | High        |
+| CQRS               | High                      | Senior              | Medium-High       | Very High   | High        |
+| Event Sourcing     | Very High                 | Senior              | High              | Very High   | Medium      |
 
-## Pattern Comparison
+### Selection Criteria
+
+**Choose CRUD when:**
+
+- Simple data management requirements
+- Rapid prototyping or MVP development
+- Small team with limited architectural experience
+- Direct database operations are sufficient
+
+**Choose Transaction Script when:**
+
+- Procedural business logic
+- Legacy system integration requirements
+- Simple workflow management
+- Straightforward transaction management
+
+**Choose Hexagonal when:**
+
+- External system integration is critical
+- High testability requirements
+- Clear business logic boundaries
+- Port and adapter pattern benefits
+
+**Choose Clean Architecture when:**
+
+- Complex business rules and policies
+- Long-term maintainability is critical
+- Enterprise-level applications
+- Multiple user interfaces or delivery mechanisms
+
+**Choose CQRS when:**
+
+- Different read/write performance requirements
+- Complex query patterns
+- Separate scaling needs for reads and writes
+- Multiple data projection needs
+
+**Choose Event Sourcing when:**
+
+- Audit trail requirements
+- Temporal data analysis needs
+- Event-driven business processes
+- Complex state reconstruction scenarios
+
+## 🛠️ Implementation Tools
+
+### Pattern Analysis Tools:
+
+- **Domain complexity assessment templates**
+- **Architecture decision worksheets**
+- **Pattern migration guides**
+- **Performance benchmark frameworks**
+
+### Development Tools:
+
+- **Pattern-specific starter templates**
+- **Code generation tools**
+- **Testing framework configurations**
+- **Migration automation scripts**
+
+### Validation Tools:
+
+- **Architecture fitness functions**
+- **Pattern compliance checking**
+- **Performance monitoring setups**
+- **Quality gate definitions**
 
 | Pattern            | Complexity | Learning Curve | Scalability | Flexibility | Use Case                |
 | ------------------ | ---------- | -------------- | ----------- | ----------- | ----------------------- |

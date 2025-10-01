@@ -1,46 +1,159 @@
-# 🔧 Technical Standards Guidelines
+# Technical Standards
 
-**Focus**: What technologies to use and how to configure them
+## 🎯 Scope
 
-Define comprehensive technical standards including tech stack, tools, frameworks, and integration requirements that support the development process.
+This section covers technical standards and technology decisions:
 
-## 📚 Technical Standards Practices (Level 2)
+**In Scope:**
 
-### Tech Stack Practice
+- Technology stack selection and standardization
+- Development tools and environment setup
+- Coding standards and conventions
+- Integration standards and API design
+- AI development tools and workflows
+- Git workflows and version control standards
+- Deployment workflows and release management
+- Feature flag management strategies
 
-- **[Tech Stack](tech-stack/README.md)** - Core technology decisions and framework selection standards
-  - Frontend and full-stack framework standards (React, Next.js)
-  - Backend framework standards (Fastify)
-  - Database and data layer technologies (PostgreSQL, Redis)
-  - TypeScript standards and configuration
-  - Framework selection criteria and evaluation
+**Out of Scope:**
 
-### Development Tools Practice
+- Implementation patterns (covered in Code Design)
+- Infrastructure technologies (covered in Infrastructure)
+- Testing tools selection (covered in Testing)
 
-- **[Development Tools](development-tools/README.md)** - Development environment and tooling standards
-  - Required and recommended development tools
-  - IDE configuration and setup standards
-  - AI-assisted development integration
-  - Development environment standardization
-  - Tool version management and consistency
+## 📋 Content Description
 
-### Integration Standards Practice
+This folder provides comprehensive guidance for establishing technical standards across development teams. Each section includes selection criteria, configuration standards, and implementation guidelines.
 
-- **[Integration Standards](integration-standards/README.md)** - API design, data management, and external service integration
-  - API design principles and implementation standards
-  - Database integration and data management patterns
-  - External service integration strategies
-  - Error handling and resilience patterns
-  - Internationalization and localization standards
+### Available Standards:
 
-### Deployment Workflow Practice
+1. **Technology Stack** (`technology-stack/`)
 
-- **[Deployment Workflow](deployment-workflow/README.md)** - Release management, workflow, and deployment standards
-  - Versioning strategy and semantic versioning
-  - Feature flag management and lifecycle
-  - Git workflow and branching strategies
-  - Build, release, and deployment standards
-  - Quality assurance and validation processes
+   - Framework selection and evaluation criteria
+   - Technology decision documentation
+   - Stack standardization approaches
+   - Convention establishment
+
+2. **Development Tools** (`development-tools/`)
+
+   - Required and recommended tooling
+   - Environment setup and configuration
+   - Tool integration and workflow
+   - Version management strategies
+
+3. **Coding Standards** (`coding-standards/`)
+
+   - Coding conventions and style guides
+   - Error handling standards
+   - Versioning strategies
+   - Technical debt management
+   - Internationalization approaches
+
+4. **Integration Standards** (`integration-standards/`)
+
+   - API design principles
+   - Data management standards
+   - External service integration
+   - Integration pattern guidelines
+
+5. **AI Development** (`ai-development/`)
+
+   - Documentation standards for AI
+   - AI-assisted development tools
+   - MCP integration guidelines
+   - AI workflow optimization
+
+6. **Git Workflow** (`git-workflow/`)
+
+   - Development process standards
+   - Version control strategies
+   - Quality assurance integration
+   - Branch management approaches
+
+7. **Deployment Workflow** (`deployment-workflow/`)
+
+   - Release management processes
+   - Deployment automation standards
+   - Deployment strategy guidelines
+   - Build standardization
+
+8. **Feature Flags** (`feature-flags.md`)
+   - Feature flag management
+   - Deployment strategies
+   - A/B testing integration
+   - Progressive rollout approaches
+
+## 🔄 Decision Support
+
+### Technology Selection Decision Tree
+
+```mermaid
+flowchart TD
+    A[Technology Need] --> B{Project Type}
+    B -->|Frontend| C{Complexity Level}
+    B -->|Backend| D{Performance Requirements}
+    B -->|Database| E{Data Pattern}
+
+    C -->|Simple| F[React + Vite]
+    C -->|Complex| G[Next.js + React]
+
+    D -->|High| H[Fastify]
+    D -->|Standard| I[Express/Fastify]
+
+    E -->|Relational| J[PostgreSQL]
+    E -->|Document| K[MongoDB]
+    E -->|Cache| L[Redis]
+```
+
+### Tool Selection Matrix
+
+| Category | Complexity | Team Size | Recommended Tools | Alternative |
+| -------- | ---------- | --------- | ----------------- | ----------- |
+| Frontend | Low        | 1-3       | React + Vite      | Plain JS    |
+| Frontend | High       | 4+        | Next.js + React   | Remix       |
+| Backend  | Low        | 1-3       | Express           | Fastify     |
+| Backend  | High       | 4+        | Fastify           | Nest.js     |
+| Database | Any        | Any       | PostgreSQL        | MySQL       |
+| Cache    | Any        | Any       | Redis             | In-memory   |
+
+### Standards Selection Criteria
+
+**Choose Strict Standards when:**
+
+- Large team coordination required
+- Enterprise compliance needs
+- Long-term maintenance critical
+- Multi-team collaboration
+
+**Choose Flexible Standards when:**
+
+- Small team or startup environment
+- Rapid prototyping requirements
+- Innovation and experimentation priority
+- Limited governance overhead
+
+## 🛠️ Implementation Tools
+
+### Selection Tools:
+
+- **Technology Radar**: Emerging technology tracking
+- **ADR Templates**: Architecture decision records
+- **Evaluation Matrices**: Multi-criteria decision support
+- **PoC Frameworks**: Proof of concept evaluation
+
+### Configuration Tools:
+
+- **Dotfiles Management**: Development environment setup
+- **Configuration Templates**: Standardized tool configs
+- **Setup Scripts**: Automated environment provisioning
+- **Validation Tools**: Standards compliance checking
+
+### Governance Tools:
+
+- **Policy Engines**: Automated standards enforcement
+- **Audit Tools**: Standards compliance monitoring
+- **Migration Tools**: Technology upgrade automation
+- **Documentation Generators**: Standards documentation
 
 ## 🔗 Related Guidelines
 
