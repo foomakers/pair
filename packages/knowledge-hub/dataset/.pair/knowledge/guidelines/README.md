@@ -68,23 +68,35 @@ Development guidelines are organized into three specialized practice areas:
   - **[Performance](quality/performance.md)** - Optimization strategies, monitoring, benchmarking
   - **[Security](quality/security.md)** - Secure development, vulnerability assessment, practices
 
-### 🚀 Operations Guidelines
+### 🏗️ Platform Operations Guidelines
 
-- **[Operations](operations/README.md)** - Infrastructure, UX standards, and observability
-  - **[Infrastructure](operations/infrastructure.md)** - Deployment strategies, environment management, CI/CD
-  - **[UX Design](operations/ux-design.md)** - User experience standards, design principles, systems
-  - **[Observability](operations/observability.md)** - Monitoring, logging, tracing, alerting
+- **[Platform Operations](platform-operations/README.md)** - Infrastructure management, deployment, and observability
+  - **[Infrastructure](platform-operations/infrastructure.md)** - Infrastructure architecture, IaC, and container orchestration
+  - **[Deployment](platform-operations/deployment.md)** - Deployment strategies, CI/CD pipelines, and release management
+  - **[Environment Management](platform-operations/environment-management.md)** - Environment configuration, secrets, and consistency
+  - **[Observability](platform-operations/observability.md)** - Monitoring, logging, alerting, and system visibility
+
+### 🎨 User Experience Guidelines
+
+- **[User Experience](user-experience/README.md)** - UX design, interface patterns, and content strategy
+  - **[Design Systems](user-experience/design-systems.md)** - Design system architecture, component libraries, and design tokens
+  - **[Interface Design](user-experience/interface-design.md)** - UI patterns, layout principles, and visual standards
+  - **[User Research](user-experience/user-research.md)** - User research methods, testing, and validation strategies
+  - **[Content Strategy](user-experience/content-strategy.md)** - Content guidelines, information architecture, and communication design
 
 ## 🔗 Cross-References
 
 All documents are designed to work together and contain extensive cross-references. Key integration points:
 
-- **Architecture** ↔ **Infrastructure**: Architectural decisions inform deployment strategies
+- **Architecture** ↔ **Platform Operations**: Architectural decisions inform infrastructure and deployment strategies
 - **Code Design** ↔ **Technical Standards**: Implementation patterns align with technology choices
 - **Testing** ↔ **Code Design**: Quality validation supports design principles
-- **Technical Standards** ↔ **Operations**: Technology choices inform infrastructure requirements
+- **Technical Standards** ↔ **Platform Operations**: Technology choices inform infrastructure requirements
 - **Quality Standards** ↔ **All Development**: Quality criteria integrate across all development practices
-- **UX** ↔ **Accessibility**: User experience aligned with accessibility standards
+- **User Experience** ↔ **Quality/Accessibility**: UX design aligned with accessibility standards
+- **Platform Operations** ↔ **User Experience**: Operations supporting UX infrastructure and performance
+- **Design Systems** ↔ **Code Design**: Component implementation patterns and design token integration
+- **Content Strategy** ↔ **User Research**: Content optimization based on user research insights
 - **Definition of Done** ↔ **All Guidelines**: Quality criteria reference all technical standards
 - **Collaboration & Process** ↔ **All Guidelines**: Workflow and artifact management practices integrate with all technical standards
 
