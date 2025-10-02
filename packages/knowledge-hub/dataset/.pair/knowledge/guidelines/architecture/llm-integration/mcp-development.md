@@ -24,1050 +24,469 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 1. Core Components
 
-```typescript
-interface MCPArchitecture {
-  server: MCPServer
-  transport: TransportLayer
-  client: MCPClient
-  tools: MCPTool[]
-  resources: MCPResource[]
-  prompts: MCPPrompt[]
-}
+**MCP Server:**
+- Implements MCP protocol specification
+- Exposes tools, resources, and prompts
+- Handles client connections and requests
+- Manages authentication and authorization
 
-interface MCPServer {
-  name: string
-  version: string
-  capabilities: ServerCapabilities
-  configuration: ServerConfiguration
-  lifecycle: ServerLifecycle
-}
+**Transport Layer:**
+- Stdio transport for local development
+- WebSocket transport for remote connections
+- HTTP transport for web-based integrations
+- Message serialization and routing
 
-interface ServerCapabilities {
-  tools: ToolCapability[]
-  resources: ResourceCapability[]
-  prompts: PromptCapability[]
-  logging: LoggingCapability
-  notifications: NotificationCapability
-}
+**MCP Client:**
+- Claude Desktop or other AI assistants
+- Manages server connections and lifecycle
+- Routes user requests to appropriate servers
+- Handles responses and error conditions
 
-interface ToolCapability {
-  name: string
-  description: string
-  inputSchema: JSONSchema
-  outputSchema: JSONSchema
-  security: SecurityRequirements
-}
+**Tools, Resources, and Prompts:**
+- Tools: Executable functions for AI assistants
+- Resources: Read-only data sources and files
+- Prompts: Reusable prompt templates
 
-// Example MCP Server Configuration
-const exampleMCPServer: MCPServer = {
-  name: 'filesystem-tools',
-  version: '1.0.0',
-  capabilities: {
-    tools: [
-      {
-        name: 'read_file',
-        description: 'Read contents of a file',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            path: { type: 'string', description: 'File path to read' },
-          },
-          required: ['path'],
-        },
-        outputSchema: {
-          type: 'object',
-          properties: {
-            content: { type: 'string' },
-            encoding: { type: 'string' },
-            size: { type: 'number' },
-          },
-        },
-        security: {
-          permissions: ['file:read'],
-          pathRestrictions: ['/allowed/paths/**'],
-          rateLimiting: { maxCalls: 100, windowMs: 60000 },
-        },
-      },
-    ],
-    resources: [
-      {
-        name: 'workspace_files',
-        description: 'List of files in workspace',
-        uri: 'filesystem://workspace',
-        mimeType: 'application/json',
-      },
-    ],
-    prompts: [
-      {
-        name: 'code_review',
-        description: 'Generate code review prompts',
-        parameters: ['file_path', 'review_type'],
-      },
-    ],
-    logging: {
-      level: 'info',
-      structured: true,
-      destinations: ['console', 'file'],
-    },
-    notifications: {
-      progress: true,
-      errors: true,
-      lifecycle: true,
-    },
-  },
-  configuration: {
-    transport: 'stdio',
-    timeout: 30000,
-    retryPolicy: {
-      maxRetries: 3,
-      backoffMs: 1000,
-    },
-  },
-  lifecycle: {
-    initialization: 'lazy',
-    cleanup: 'graceful',
-    healthCheck: 'enabled',
-  },
-}
-```
+### 2. Protocol Components
 
-### 2. Transport Layer Implementation
+**Server Capabilities:**
+- Advertise available tools and resources
+- Define supported operations and limits
+- Specify authentication requirements
+- Declare protocol version compatibility
 
-```typescript
-interface TransportLayer {
-  type: 'stdio' | 'http' | 'websocket' | 'tcp'
-  configuration: TransportConfig
-  messageHandler: MessageHandler
-  errorHandler: ErrorHandler
-}
-
-interface TransportConfig {
-  stdio?: {
-    input: NodeJS.ReadableStream
-    output: NodeJS.WritableStream
-    encoding: 'utf8' | 'json'
-  }
-  http?: {
-    port: number
-    host: string
-    ssl: boolean
-    cors: CORSConfig
-  }
-  websocket?: {
-    port: number
-    path: string
-    heartbeat: number
-  }
-}
-
-// STDIO Transport Implementation
-class STDIOTransport implements TransportLayer {
-  type = 'stdio' as const
-
-  constructor(
-    private input: NodeJS.ReadableStream = process.stdin,
-    private output: NodeJS.WritableStream = process.stdout,
-  ) {
-    this.setupMessageHandling()
-  }
-
-  private setupMessageHandling(): void {
-    let buffer = ''
-
-    this.input.on('data', (chunk: Buffer) => {
-      buffer += chunk.toString()
-
-      // Process complete JSON-RPC messages
-      let newlineIndex
-      while ((newlineIndex = buffer.indexOf('\n')) !== -1) {
-        const line = buffer.slice(0, newlineIndex)
-        buffer = buffer.slice(newlineIndex + 1)
-
-        if (line.trim()) {
-          try {
-            const message = JSON.parse(line)
-            this.handleMessage(message)
-          } catch (error) {
-            this.handleError(new Error(`Invalid JSON: ${line}`))
-          }
-        }
-      }
-    })
-  }
-
-  sendMessage(message: JSONRPCMessage): void {
-    const serialized = JSON.stringify(message) + '\n'
-    this.output.write(serialized)
-  }
-
-  private handleMessage(message: JSONRPCMessage): void {
-    // Implement JSON-RPC message routing
-    if (message.method) {
-      this.routeRequest(message as JSONRPCRequest)
-    } else {
-      this.routeResponse(message as JSONRPCResponse)
-    }
-  }
-}
-```
-
-### 3. Tool Implementation Patterns
-
-```typescript
-interface MCPTool {
-  name: string
-  description: string
-  schema: ToolSchema
-  handler: ToolHandler
-  security: SecurityPolicy
-  validation: ValidationPolicy
-}
-
-interface ToolSchema {
-  input: JSONSchema
-  output: JSONSchema
-  examples: ToolExample[]
-}
-
-interface ToolHandler {
-  execute(input: unknown): Promise<ToolResult>
-  validate(input: unknown): ValidationResult
-  authorize(context: SecurityContext): AuthorizationResult
-}
-
-// Example: File System Tool Implementation
-class FileSystemTool implements MCPTool {
-  name = 'read_file'
-  description = 'Read and return the contents of a file'
-
-  schema: ToolSchema = {
-    input: {
-      type: 'object',
-      properties: {
-        path: {
-          type: 'string',
-          description: 'Path to the file to read',
-          pattern: '^[^\\0]+$', // No null bytes
-        },
-        encoding: {
-          type: 'string',
-          enum: ['utf8', 'base64', 'binary'],
-          default: 'utf8',
-        },
-        maxSize: {
-          type: 'number',
-          description: 'Maximum file size in bytes',
-          default: 1048576, // 1MB
-        },
-      },
-      required: ['path'],
-      additionalProperties: false,
-    },
-    output: {
-      type: 'object',
-      properties: {
-        content: { type: 'string' },
-        encoding: { type: 'string' },
-        size: { type: 'number' },
-        mimeType: { type: 'string' },
-        lastModified: { type: 'string', format: 'date-time' },
-      },
-      required: ['content', 'size'],
-    },
-    examples: [
-      {
-        input: { path: '/workspace/src/main.ts' },
-        output: {
-          content: 'console.log("Hello, world!");',
-          encoding: 'utf8',
-          size: 26,
-          mimeType: 'text/typescript',
-          lastModified: '2024-10-01T10:00:00Z',
-        },
-      },
-    ],
-  }
-
-  async execute(input: unknown): Promise<ToolResult> {
-    const validated = this.validate(input)
-    if (!validated.valid) {
-      throw new ToolError('INVALID_INPUT', validated.errors)
-    }
-
-    const {
-      path,
-      encoding = 'utf8',
-      maxSize = 1048576,
-    } = input as {
-      path: string
-      encoding?: string
-      maxSize?: number
-    }
-
-    try {
-      // Security check: validate path
-      const resolvedPath = path.resolve(path)
-      if (!this.isPathAllowed(resolvedPath)) {
-        throw new ToolError('ACCESS_DENIED', `Path not allowed: ${path}`)
-      }
-
-      // Check file size
-      const stats = await fs.stat(resolvedPath)
-      if (stats.size > maxSize) {
-        throw new ToolError('FILE_TOO_LARGE', `File size ${stats.size} exceeds limit ${maxSize}`)
-      }
-
-      // Read file
-      const content = await fs.readFile(resolvedPath, encoding as BufferEncoding)
-      const mimeType = mime.lookup(resolvedPath) || 'application/octet-stream'
-
-      return {
-        success: true,
-        data: {
-          content,
-          encoding,
-          size: stats.size,
-          mimeType,
-          lastModified: stats.mtime.toISOString(),
-        },
-      }
-    } catch (error) {
-      if (error instanceof ToolError) {
-        throw error
-      }
-      throw new ToolError('FILE_READ_ERROR', `Failed to read file: ${error.message}`)
-    }
-  }
-
-  validate(input: unknown): ValidationResult {
-    const ajv = new Ajv()
-    const validate = ajv.compile(this.schema.input)
-    const valid = validate(input)
-
-    return {
-      valid,
-      errors: valid ? [] : validate.errors?.map(err => err.message) || [],
-    }
-  }
-
-  private isPathAllowed(path: string): boolean {
-    const allowedPaths = [process.cwd(), '/tmp', '/workspace']
-
-    return allowedPaths.some(allowed => path.startsWith(path.resolve(allowed)))
-  }
-}
-```
-
-### 4. Resource Management
-
-```typescript
-interface MCPResource {
-  uri: string
-  name: string
-  description: string
-  mimeType: string
-  metadata: ResourceMetadata
-  provider: ResourceProvider
-}
-
-interface ResourceProvider {
-  list(): Promise<ResourceList>
-  read(uri: string): Promise<ResourceContent>
-  subscribe?(uri: string): AsyncIterator<ResourceUpdate>
-  unsubscribe?(uri: string): Promise<void>
-}
-
-interface ResourceMetadata {
-  size?: number
-  lastModified?: Date
-  etag?: string
-  version?: string
-  permissions?: string[]
-}
-
-// Example: Git Repository Resource Provider
-class GitRepositoryProvider implements ResourceProvider {
-  constructor(private repoPath: string) {}
-
-  async list(): Promise<ResourceList> {
-    const files = await this.getTrackedFiles()
-
-    return {
-      resources: files.map(file => ({
-        uri: `git://${this.repoPath}/${file}`,
-        name: path.basename(file),
-        description: `Git-tracked file: ${file}`,
-        mimeType: mime.lookup(file) || 'text/plain',
-        metadata: {
-          version: await this.getFileHash(file),
-          permissions: ['read'],
-        },
-      })),
-    }
-  }
-
-  async read(uri: string): Promise<ResourceContent> {
-    const filePath = this.extractFilePathFromURI(uri)
-    const content = await fs.readFile(path.join(this.repoPath, filePath), 'utf8')
-    const hash = await this.getFileHash(filePath)
-
-    return {
-      content,
-      mimeType: mime.lookup(filePath) || 'text/plain',
-      metadata: {
-        version: hash,
-        lastModified: await this.getLastCommitDate(filePath),
-      },
-    }
-  }
-
-  async subscribe(uri: string): AsyncIterator<ResourceUpdate> {
-    // Implement file watching for git changes
-    const filePath = this.extractFilePathFromURI(uri)
-    const watcher = chokidar.watch(path.join(this.repoPath, filePath))
-
-    return {
-      async *[Symbol.asyncIterator]() {
-        for await (const event of watcher) {
-          yield {
-            uri,
-            type: event.type as 'created' | 'modified' | 'deleted',
-            timestamp: new Date(),
-            metadata: {
-              version: await this.getFileHash(filePath),
-            },
-          }
-        }
-      },
-    }
-  }
-
-  private async getTrackedFiles(): Promise<string[]> {
-    const { stdout } = await execAsync('git ls-files', { cwd: this.repoPath })
-    return stdout.trim().split('\n').filter(Boolean)
-  }
-
-  private async getFileHash(filePath: string): Promise<string> {
-    const { stdout } = await execAsync(`git hash-object "${filePath}"`, { cwd: this.repoPath })
-    return stdout.trim()
-  }
-}
-```
-
-### 5. Security Implementation
-
-```typescript
-interface MCPSecurity {
-  authentication: AuthenticationConfig
-  authorization: AuthorizationConfig
-  rateLimit: RateLimitConfig
-  validation: ValidationConfig
-  audit: AuditConfig
-}
-
-interface AuthenticationConfig {
-  type: 'none' | 'token' | 'certificate' | 'oauth'
-  configuration: Record<string, unknown>
-}
-
-interface AuthorizationConfig {
-  model: 'rbac' | 'abac' | 'custom'
-  policies: AuthorizationPolicy[]
-  defaultDeny: boolean
-}
-
-interface AuthorizationPolicy {
-  name: string
-  resources: string[]
-  actions: string[]
-  conditions: PolicyCondition[]
-  effect: 'allow' | 'deny'
-}
-
-// Security Implementation
-class MCPSecurityManager {
-  constructor(private config: MCPSecurity) {}
-
-  async authenticate(context: RequestContext): Promise<AuthenticationResult> {
-    switch (this.config.authentication.type) {
-      case 'token':
-        return this.authenticateToken(context)
-      case 'certificate':
-        return this.authenticateCertificate(context)
-      case 'oauth':
-        return this.authenticateOAuth(context)
-      default:
-        return { authenticated: true, principal: 'anonymous' }
-    }
-  }
-
-  async authorize(
-    principal: string,
-    resource: string,
-    action: string,
-    context: RequestContext,
-  ): Promise<AuthorizationResult> {
-    for (const policy of this.config.authorization.policies) {
-      if (this.matchesPolicy(policy, resource, action)) {
-        const conditionsMet = await this.evaluateConditions(policy.conditions, context)
-
-        if (conditionsMet) {
-          return {
-            authorized: policy.effect === 'allow',
-            policy: policy.name,
-            reason: `Policy ${policy.name} ${policy.effect}s access`,
-          }
-        }
-      }
-    }
-
-    return {
-      authorized: !this.config.authorization.defaultDeny,
-      reason: this.config.authorization.defaultDeny
-        ? 'No matching policy, default deny'
-        : 'No matching policy, default allow',
-    }
-  }
-
-  async checkRateLimit(
-    principal: string,
-    resource: string,
-    action: string,
-  ): Promise<RateLimitResult> {
-    const key = `${principal}:${resource}:${action}`
-    const limit = this.config.rateLimit
-
-    // Implement sliding window rate limiting
-    const windowStart = Date.now() - limit.windowMs
-    const requestCount = await this.getRequestCount(key, windowStart)
-
-    if (requestCount >= limit.maxRequests) {
-      return {
-        allowed: false,
-        resetTime: windowStart + limit.windowMs,
-        remaining: 0,
-      }
-    }
-
-    await this.recordRequest(key)
-    return {
-      allowed: true,
-      remaining: limit.maxRequests - requestCount - 1,
-    }
-  }
-
-  private async authenticateToken(context: RequestContext): Promise<AuthenticationResult> {
-    const token = context.headers['authorization']?.replace('Bearer ', '')
-
-    if (!token) {
-      return { authenticated: false, error: 'Missing token' }
-    }
-
-    try {
-      const payload = jwt.verify(token, this.config.authentication.secret)
-      return {
-        authenticated: true,
-        principal: payload.sub,
-        claims: payload,
-      }
-    } catch (error) {
-      return { authenticated: false, error: 'Invalid token' }
-    }
-  }
-}
-```
+**Message Types:**
+- Tool calls and responses
+- Resource access requests
+- Prompt template requests
+- Logging and notification messages
 
 ## Development Patterns
 
-### 1. Server Development Lifecycle
+### 1. Simple Tool Server
 
-```typescript
-interface MCPServerLifecycle {
-  phases: DevelopmentPhase[]
-  testing: TestingStrategy
-  deployment: DeploymentStrategy
-  monitoring: MonitoringStrategy
-}
+**Basic Structure:**
+- Single-purpose server with focused tools
+- Minimal configuration and setup
+- Local stdio transport
+- Direct function implementations
 
-interface DevelopmentPhase {
-  name: string
-  duration: string
-  activities: string[]
-  deliverables: string[]
-  quality_gates: string[]
-}
+**Use Cases:**
+- File system operations
+- Calculator and utility functions
+- Simple API wrappers
+- Development and testing tools
 
-// Development Lifecycle
-const mcpDevelopmentLifecycle: MCPServerLifecycle = {
-  phases: [
-    {
-      name: 'Planning and Design',
-      duration: '1-2 weeks',
-      activities: [
-        'Requirements analysis and tool specification',
-        'API design and schema definition',
-        'Security and authorization planning',
-        'Architecture design and documentation',
-      ],
-      deliverables: [
-        'Tool specification document',
-        'API schema definitions',
-        'Security requirements',
-        'Architecture diagrams',
-      ],
-      quality_gates: [
-        'Schema validation passes',
-        'Security review approved',
-        'Architecture review approved',
-      ],
-    },
-    {
-      name: 'Implementation',
-      duration: '2-4 weeks',
-      activities: [
-        'Core tool implementation',
-        'Transport layer integration',
-        'Security implementation',
-        'Error handling and validation',
-      ],
-      deliverables: ['Working MCP server', 'Unit tests', 'Integration tests', 'Documentation'],
-      quality_gates: ['All tests passing', 'Code coverage >80%', 'Security scan clean'],
-    },
-    {
-      name: 'Testing and Validation',
-      duration: '1-2 weeks',
-      activities: [
-        'Integration testing with Claude Desktop',
-        'Performance testing',
-        'Security testing',
-        'User acceptance testing',
-      ],
-      deliverables: [
-        'Test results',
-        'Performance benchmarks',
-        'Security assessment',
-        'User feedback',
-      ],
-      quality_gates: [
-        'All integration tests pass',
-        'Performance targets met',
-        'Security assessment passed',
-      ],
-    },
-  ],
-  testing: {
-    unit: 'Jest/Mocha with mocking',
-    integration: 'MCP client simulation',
-    e2e: 'Claude Desktop integration tests',
-    performance: 'Load testing with realistic scenarios',
-    security: 'OWASP testing + static analysis',
-  },
-  deployment: {
-    packaging: 'npm package or Docker container',
-    distribution: 'npm registry or container registry',
-    installation: 'Claude Desktop configuration',
-    rollback: 'Version pinning and fallback procedures',
-  },
-  monitoring: {
-    metrics: 'Performance, error rates, usage patterns',
-    logging: 'Structured logging with correlation IDs',
-    alerting: 'Error rate thresholds and latency alerts',
-    dashboards: 'Grafana dashboards for operational visibility',
-  },
-}
-```
+### 2. Resource Server
 
-### 2. Testing Strategies
+**Basic Structure:**
+- Read-only access to data sources
+- File system or database integration
+- Structured data exposure
+- Search and filtering capabilities
 
-```typescript
-interface MCPTestingFramework {
-  unitTesting: UnitTestConfig
-  integrationTesting: IntegrationTestConfig
-  e2eTestingConfig: E2ETestConfig
-  performanceTesting: PerformanceTestConfig
-}
+**Use Cases:**
+- Documentation access
+- Knowledge base integration
+- File and document repositories
+- Configuration and settings access
 
-// Unit Testing Example
-class MCPToolTester {
-  async testToolExecution(
-    tool: MCPTool,
-    input: unknown,
-    expectedOutput: unknown,
-  ): Promise<TestResult> {
-    const result = await tool.execute(input)
+### 3. Enterprise Integration Server
 
-    return {
-      passed: this.deepEqual(result.data, expectedOutput),
-      executionTime: result.executionTime,
-      errors: result.errors || [],
-    }
-  }
+**Basic Structure:**
+- Multi-tool server with business logic
+- Authentication and authorization
+- Rate limiting and monitoring
+- Error handling and logging
 
-  async testInputValidation(
-    tool: MCPTool,
-    invalidInputs: unknown[],
-  ): Promise<ValidationTestResult[]> {
-    const results: ValidationTestResult[] = []
+**Use Cases:**
+- CRM and business system integration
+- Database operations and reporting
+- Workflow automation
+- Enterprise data access
 
-    for (const input of invalidInputs) {
-      try {
-        await tool.execute(input)
-        results.push({
-          input,
-          shouldFail: true,
-          actuallyFailed: false,
-          error: 'Expected validation error but tool succeeded',
-        })
-      } catch (error) {
-        results.push({
-          input,
-          shouldFail: true,
-          actuallyFailed: true,
-          error: error.message,
-        })
-      }
-    }
+### 4. Multi-Modal Server
 
-    return results
-  }
+**Basic Structure:**
+- Image, audio, and video processing
+- File upload and conversion
+- Media analysis and generation
+- Cross-modal operations
 
-  async testSecurityPolicies(
-    tool: MCPTool,
-    unauthorizedInputs: unknown[],
-  ): Promise<SecurityTestResult[]> {
-    const results: SecurityTestResult[] = []
+**Use Cases:**
+- Image analysis and processing
+- Document conversion and parsing
+- Audio transcription and analysis
+- Video processing and extraction
 
-    for (const input of unauthorizedInputs) {
-      try {
-        await tool.execute(input)
-        results.push({
-          input,
-          shouldBeBlocked: true,
-          wasBlocked: false,
-          securityIssue: 'Unauthorized access allowed',
-        })
-      } catch (error) {
-        if (error instanceof SecurityError) {
-          results.push({
-            input,
-            shouldBeBlocked: true,
-            wasBlocked: true,
-            securityIssue: null,
-          })
-        } else {
-          results.push({
-            input,
-            shouldBeBlocked: true,
-            wasBlocked: false,
-            securityIssue: 'Wrong error type, security not enforced',
-          })
-        }
-      }
-    }
+## Implementation Guidelines
 
-    return results
-  }
-}
+### 1. Server Development
 
-// Integration Testing with Mock Client
-class MCPIntegrationTester {
-  private mockClient: MockMCPClient
+**Project Setup:**
+- Choose appropriate language and framework
+- Install MCP SDK or implement protocol directly
+- Set up development and testing environment
+- Configure transport and communication
 
-  constructor(private server: MCPServer) {
-    this.mockClient = new MockMCPClient()
-  }
+**Tool Implementation:**
+- Define clear tool schemas and parameters
+- Implement robust error handling
+- Add input validation and sanitization
+- Provide helpful error messages
 
-  async testFullWorkflow(scenario: TestScenario): Promise<WorkflowTestResult> {
-    const session = await this.mockClient.connect(this.server)
-    const results: StepResult[] = []
+**Resource Implementation:**
+- Design efficient data access patterns
+- Implement caching where appropriate
+- Handle large data sets gracefully
+- Support filtering and pagination
 
-    try {
-      for (const step of scenario.steps) {
-        const stepResult = await this.executeStep(session, step)
-        results.push(stepResult)
+### 2. Configuration Management
 
-        if (!stepResult.success) {
-          break
-        }
-      }
+**Server Configuration:**
+- Environment-specific settings
+- Authentication credentials
+- Rate limiting and timeouts
+- Logging and monitoring configuration
 
-      return {
-        scenario: scenario.name,
-        success: results.every(r => r.success),
-        steps: results,
-        duration: results.reduce((sum, r) => sum + r.duration, 0),
-      }
-    } finally {
-      await session.disconnect()
-    }
-  }
+**Client Configuration:**
+- Server connection details
+- Authentication setup
+- Tool and resource discovery
+- Error handling preferences
 
-  private async executeStep(session: MCPSession, step: TestStep): Promise<StepResult> {
-    const startTime = Date.now()
+### 3. Security Considerations
 
-    try {
-      let result: unknown
+**Authentication:**
+- API key management
+- OAuth integration
+- Certificate-based authentication
+- Session management
 
-      switch (step.type) {
-        case 'tool_call':
-          result = await session.callTool(step.toolName, step.parameters)
-          break
-        case 'resource_read':
-          result = await session.readResource(step.resourceUri)
-          break
-        case 'prompt_get':
-          result = await session.getPrompt(step.promptName, step.parameters)
-          break
-        default:
-          throw new Error(`Unknown step type: ${step.type}`)
-      }
+**Authorization:**
+- Role-based access control
+- Resource-level permissions
+- Tool-specific restrictions
+- Audit logging
 
-      const success = this.validateStepResult(result, step.expectedResult)
+**Data Protection:**
+- Input sanitization
+- Output filtering
+- Secure communication
+- Credential management
 
-      return {
-        step: step.name,
-        success,
-        duration: Date.now() - startTime,
-        result,
-        error: success ? null : 'Result validation failed',
-      }
-    } catch (error) {
-      return {
-        step: step.name,
-        success: false,
-        duration: Date.now() - startTime,
-        result: null,
-        error: error.message,
-      }
-    }
-  }
-}
-```
+## Transport Patterns
 
-### 3. Deployment and Distribution
+### 1. Stdio Transport
 
-```typescript
-interface MCPDeploymentStrategy {
-  packaging: PackagingConfig
-  distribution: DistributionConfig
-  installation: InstallationConfig
-  configuration: ConfigurationManagement
-}
+**Characteristics:**
+- Local process communication
+- Simple setup and configuration
+- Low latency for local operations
+- No network security concerns
 
-// Deployment Configuration
-const mcpDeploymentStrategy: MCPDeploymentStrategy = {
-  packaging: {
-    format: 'npm' | 'docker' | 'binary',
-    bundling: {
-      dependencies: 'include',
-      optimization: 'production',
-      target: 'node18',
-    },
-    metadata: {
-      name: 'mcp-filesystem-tools',
-      version: 'semantic versioning',
-      description: 'MCP server for filesystem operations',
-      keywords: ['mcp', 'filesystem', 'tools'],
-      repository: 'GitHub repository URL',
-      license: 'MIT',
-    },
-  },
-  distribution: {
-    registry: 'npm registry' | 'private registry' | 'GitHub releases',
-    channels: ['stable', 'beta', 'alpha'],
-    signing: 'GPG signing for package integrity',
-    security: 'Vulnerability scanning before release',
-  },
-  installation: {
-    methods: [
-      'npm install -g mcp-filesystem-tools',
-      'Docker: docker run mcp-filesystem-tools',
-      'Claude Desktop: Add to mcp_servers config',
-    ],
-    requirements: {
-      node: '>=18.0.0',
-      permissions: 'File system access',
-      dependencies: ['git (optional)', 'docker (optional)'],
-    },
-    configuration: {
-      location: '~/.claude/mcp_servers.json',
-      format: 'JSON configuration',
-      validation: 'Schema validation on startup',
-    },
-  },
-  configuration: {
-    management: 'Environment variables + config files',
-    secrets: 'Environment variables or secure storage',
-    validation: 'Startup configuration validation',
-    documentation: 'Configuration examples and troubleshooting',
-  },
-}
+**Use Cases:**
+- Development and testing
+- Local utility tools
+- File system operations
+- Single-user applications
 
-// Claude Desktop Configuration Example
-const claudeDesktopConfig = {
-  mcp_servers: {
-    filesystem: {
-      command: 'node',
-      args: ['/path/to/mcp-filesystem-server/dist/index.js'],
-      env: {
-        WORKSPACE_PATH: '/Users/username/workspace',
-        MAX_FILE_SIZE: '1048576',
-        LOG_LEVEL: 'info',
-      },
-    },
-    'git-tools': {
-      command: 'mcp-git-tools',
-      args: ['--repo-path', '/Users/username/repo'],
-      env: {
-        GIT_CONFIG_GLOBAL: 'false',
-      },
-    },
-  },
-}
-```
+### 2. WebSocket Transport
+
+**Characteristics:**
+- Real-time bidirectional communication
+- Persistent connection for efficiency
+- Support for remote servers
+- More complex setup and management
+
+**Use Cases:**
+- Remote server integration
+- Real-time data streaming
+- Multi-user applications
+- Cloud-based services
+
+### 3. HTTP Transport
+
+**Characteristics:**
+- Request-response communication
+- RESTful API integration
+- Standard web protocols
+- Stateless operation model
+
+**Use Cases:**
+- Web service integration
+- API gateway patterns
+- Load-balanced deployments
+- Microservice architectures
+
+## Tool Design Patterns
+
+### 1. Simple Function Tools
+
+**Characteristics:**
+- Single-purpose functionality
+- Clear input and output schemas
+- Stateless operation
+- Fast execution time
+
+**Examples:**
+- Mathematical calculations
+- Text formatting and manipulation
+- Simple API calls
+- Utility functions
+
+### 2. Data Access Tools
+
+**Characteristics:**
+- Database or file system access
+- Search and query capabilities
+- Pagination and filtering
+- Structured data response
+
+**Examples:**
+- Database queries
+- File searches
+- Configuration retrieval
+- Log analysis
+
+### 3. External Integration Tools
+
+**Characteristics:**
+- Third-party service integration
+- Authentication and API management
+- Rate limiting and retries
+- Complex data transformation
+
+**Examples:**
+- CRM system integration
+- Social media APIs
+- Payment processing
+- Email and messaging
+
+### 4. Workflow Tools
+
+**Characteristics:**
+- Multi-step operations
+- State management
+- Progress tracking
+- Error recovery
+
+**Examples:**
+- Document processing pipelines
+- Data import/export workflows
+- Approval processes
+- Batch operations
+
+## Error Handling and Resilience
+
+### 1. Error Types
+
+**Tool Errors:**
+- Invalid parameters
+- Missing permissions
+- Resource not found
+- External service failures
+
+**Transport Errors:**
+- Connection failures
+- Timeout errors
+- Protocol violations
+- Authentication failures
+
+**Server Errors:**
+- Internal server errors
+- Resource exhaustion
+- Configuration problems
+- Dependency failures
+
+### 2. Error Handling Strategies
+
+**Graceful Degradation:**
+- Partial functionality when possible
+- Fallback mechanisms
+- User-friendly error messages
+- Alternative approaches
+
+**Retry Mechanisms:**
+- Exponential backoff
+- Circuit breaker patterns
+- Idempotent operations
+- State recovery
+
+**Monitoring and Alerting:**
+- Error rate tracking
+- Performance monitoring
+- Health checks
+- Proactive alerting
+
+## Performance Optimization
+
+### 1. Response Time Optimization
+
+**Strategies:**
+- Caching frequently accessed data
+- Parallel processing where possible
+- Connection pooling
+- Lazy loading and pagination
+
+**Monitoring:**
+- Response time percentiles
+- Throughput measurements
+- Resource utilization
+- Bottleneck identification
+
+### 2. Scalability Patterns
+
+**Horizontal Scaling:**
+- Stateless server design
+- Load balancing
+- Shared data stores
+- Message queues
+
+**Vertical Scaling:**
+- Resource optimization
+- Memory management
+- CPU utilization
+- I/O optimization
+
+## Testing and Validation
+
+### 1. Unit Testing
+
+**Test Coverage:**
+- Tool function testing
+- Input validation
+- Error condition handling
+- Mock external dependencies
+
+**Test Strategies:**
+- Automated test suites
+- Property-based testing
+- Boundary condition testing
+- Performance testing
+
+### 2. Integration Testing
+
+**Test Scenarios:**
+- End-to-end tool execution
+- Multiple client connections
+- Error propagation
+- Authentication flows
+
+**Test Environment:**
+- Isolated test servers
+- Mock external services
+- Test data management
+- Automated CI/CD integration
+
+## Deployment and Operations
+
+### 1. Deployment Patterns
+
+**Local Deployment:**
+- Single-user desktop integration
+- Development environment
+- Portable server packages
+- Configuration management
+
+**Remote Deployment:**
+- Cloud-based servers
+- Container orchestration
+- Service discovery
+- Health monitoring
+
+### 2. Monitoring and Observability
+
+**Key Metrics:**
+- Request/response rates
+- Error rates and types
+- Response time distribution
+- Resource utilization
+
+**Logging:**
+- Structured logging
+- Request/response logging
+- Error and exception logging
+- Audit trail maintenance
+
+**Alerting:**
+- Performance thresholds
+- Error rate limits
+- Resource exhaustion
+- Security incidents
 
 ## Best Practices
 
-### 1. Tool Design Principles
+### 1. Design Principles
 
-- **Single Responsibility**: Each tool should have one clear purpose
-- **Idempotency**: Tools should be safe to call multiple times with same inputs
-- **Error Handling**: Comprehensive error messages with actionable guidance
-- **Input Validation**: Strict validation of all inputs with clear error messages
-- **Output Consistency**: Consistent output schema across similar tools
+**Simplicity:**
+- Focus on specific use cases
+- Minimize complexity
+- Clear and consistent APIs
+- Self-documenting interfaces
 
-### 2. Security Best Practices
+**Reliability:**
+- Robust error handling
+- Graceful failure modes
+- Consistent behavior
+- Thorough testing
 
-- **Principle of Least Privilege**: Grant minimum necessary permissions
-- **Input Sanitization**: Validate and sanitize all user inputs
-- **Path Traversal Protection**: Prevent access outside allowed directories
-- **Rate Limiting**: Implement appropriate rate limiting for resource-intensive operations
-- **Audit Logging**: Log all security-relevant events and access attempts
+**Security:**
+- Principle of least privilege
+- Input validation
+- Secure communication
+- Audit capabilities
 
-### 3. Performance Optimization
+### 2. Development Guidelines
 
-- **Lazy Loading**: Load resources only when needed
-- **Caching**: Cache frequently accessed data with appropriate TTL
-- **Streaming**: Use streaming for large data transfers
-- **Connection Pooling**: Reuse connections for external services
-- **Async Operations**: Use non-blocking operations for I/O
+**Code Quality:**
+- Clear naming conventions
+- Comprehensive documentation
+- Code reviews and testing
+- Performance profiling
 
-### 4. Error Handling and Resilience
+**Protocol Compliance:**
+- Follow MCP specification
+- Handle all message types
+- Implement required capabilities
+- Version compatibility
 
-- **Graceful Degradation**: Provide fallback behavior when possible
-- **Circuit Breaker**: Implement circuit breakers for external dependencies
-- **Retry Logic**: Exponential backoff for transient failures
-- **Health Checks**: Implement health check endpoints
-- **Resource Cleanup**: Proper cleanup of resources and connections
+## Common Pitfalls
 
-## Common Patterns
+### Over-Complex Tools
 
-### 1. File System Operations
+- **Problem**: Tools trying to do too much
+- **Solution**: Break into smaller, focused tools
+- **Prevention**: Define clear tool boundaries
 
-```typescript
-// Safe file operations with path validation
-class SafeFileOperations {
-  private allowedPaths: string[]
+### Poor Error Handling
 
-  async readFile(path: string): Promise<FileContent> {
-    this.validatePath(path)
-    // Implementation
-  }
+- **Problem**: Unclear or unhelpful error messages
+- **Solution**: Implement comprehensive error handling
+- **Prevention**: Test error conditions thoroughly
 
-  private validatePath(path: string): void {
-    const resolved = path.resolve(path)
-    if (!this.allowedPaths.some(allowed => resolved.startsWith(allowed))) {
-      throw new SecurityError('Path not allowed')
-    }
-  }
-}
-```
+### Security Vulnerabilities
 
-### 2. API Integration
+- **Problem**: Inadequate input validation and authorization
+- **Solution**: Implement security best practices
+- **Prevention**: Security reviews and testing
 
-```typescript
-// External API integration with retry and caching
-class APIIntegration {
-  private cache = new Map()
-  private circuitBreaker = new CircuitBreaker()
+### Performance Issues
 
-  async callAPI(endpoint: string, params: object): Promise<APIResponse> {
-    const cacheKey = `${endpoint}:${JSON.stringify(params)}`
+- **Problem**: Slow response times affecting user experience
+- **Solution**: Optimize critical paths and add caching
+- **Prevention**: Performance testing and monitoring
 
-    if (this.cache.has(cacheKey)) {
-      return this.cache.get(cacheKey)
-    }
+## Related Technologies
 
-    const result = await this.circuitBreaker.execute(() => this.makeAPICall(endpoint, params))
-
-    this.cache.set(cacheKey, result)
-    return result
-  }
-}
-```
-
-### 3. Database Operations
-
-```typescript
-// Database operations with connection pooling
-class DatabaseOperations {
-  private pool: ConnectionPool
-
-  async query(sql: string, params: unknown[]): Promise<QueryResult> {
-    const connection = await this.pool.getConnection()
-
-    try {
-      return await connection.query(sql, params)
-    } finally {
-      this.pool.releaseConnection(connection)
-    }
-  }
-}
-```
-
-## Implementation Checklist
-
-### Development Phase
-
-- [ ] Define tool specifications and schemas
-- [ ] Implement core tool functionality
-- [ ] Add input validation and error handling
-- [ ] Implement security policies and authorization
-- [ ] Add comprehensive logging and monitoring
-- [ ] Write unit and integration tests
-
-### Testing Phase
-
-- [ ] Test with Claude Desktop integration
-- [ ] Perform security testing and validation
-- [ ] Load testing for performance verification
-- [ ] User acceptance testing with real scenarios
-- [ ] Error handling and edge case testing
-
-### Deployment Phase
-
-- [ ] Package for distribution (npm/Docker)
-- [ ] Configure Claude Desktop integration
-- [ ] Set up monitoring and alerting
-- [ ] Document installation and configuration
-- [ ] Prepare troubleshooting guides
-
-### Production Phase
-
-- [ ] Monitor performance and error rates
-- [ ] Regular security updates and patches
-- [ ] User feedback collection and analysis
-- [ ] Continuous improvement and optimization
-
-## Related Patterns
-
-- **[LLM Integration](README.md)**: Overall LLM integration architecture
-- **[AI Workflows](ai-workflows.md)**: Workflow patterns using MCP tools
-- **[Performance Security](performance-security.md)**: Security and optimization patterns
+- **MCP SDK**: Official development kits
+- **Claude Desktop**: Primary MCP client
+- **WebSocket Libraries**: For remote transport
+- **Validation Libraries**: For schema validation
 
 ## References
 
 - Model Context Protocol Specification
-- Claude Desktop MCP Integration Guide
-- JSON-RPC 2.0 Specification
-- OpenAPI/JSON Schema Standards
+- MCP SDK Documentation
+- Claude Desktop Integration Guide
+- AI Tool Development Best Practices
