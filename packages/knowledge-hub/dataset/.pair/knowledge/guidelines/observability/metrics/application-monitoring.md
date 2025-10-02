@@ -30,12 +30,14 @@ What monitoring do you need?
 **Core Performance Metrics**:
 
 1. **Response Time Metrics**
+
    - **Average Response Time**: Mean request processing time
    - **Response Time Percentiles**: p50, p90, p95, p99 distribution
    - **Endpoint-specific Timing**: Per-route performance analysis
    - **Database Query Time**: Individual query performance
 
 2. **Throughput Metrics**
+
    - **Requests per Second (RPS)**: Application load measurement
    - **Concurrent Users**: Active user session count
    - **Transaction Volume**: Business transaction rates
@@ -53,26 +55,19 @@ What monitoring do you need?
 // Application metrics instrumentation
 class ApplicationMonitor {
   private metrics: MetricsCollector
-  
+
   // Track request performance
-  async trackRequest<T>(
-    operation: string,
-    handler: () => Promise<T>
-  ): Promise<T> {
+  async trackRequest<T>(operation: string, handler: () => Promise<T>): Promise<T> {
     const startTime = Date.now()
     const labels = { operation, environment: process.env.NODE_ENV }
-    
+
     try {
       const result = await handler()
-      
+
       // Record successful request
-      this.metrics.recordHistogram(
-        'request_duration_ms',
-        labels,
-        Date.now() - startTime
-      )
+      this.metrics.recordHistogram('request_duration_ms', labels, Date.now() - startTime)
       this.metrics.recordCounter('requests_total', { ...labels, status: 'success' })
-      
+
       return result
     } catch (error) {
       // Record failed request
@@ -81,24 +76,17 @@ class ApplicationMonitor {
       throw error
     }
   }
-  
+
   // Track database operations
-  async trackDatabaseQuery<T>(
-    query: string,
-    operation: () => Promise<T>
-  ): Promise<T> {
+  async trackDatabaseQuery<T>(query: string, operation: () => Promise<T>): Promise<T> {
     const startTime = Date.now()
     const labels = { query_type: this.getQueryType(query) }
-    
+
     try {
       const result = await operation()
-      
-      this.metrics.recordHistogram(
-        'db_query_duration_ms',
-        labels,
-        Date.now() - startTime
-      )
-      
+
+      this.metrics.recordHistogram('db_query_duration_ms', labels, Date.now() - startTime)
+
       return result
     } catch (error) {
       this.metrics.recordCounter('db_errors_total', { ...labels, error: error.message })
@@ -117,12 +105,14 @@ class ApplicationMonitor {
 **Error Categories**:
 
 1. **Application Errors**
+
    - **Unhandled Exceptions**: Runtime errors and crashes
    - **Business Logic Errors**: Validation and processing failures
    - **Integration Errors**: External service communication failures
    - **Authentication/Authorization Errors**: Security-related failures
 
 2. **Performance Errors**
+
    - **Timeout Errors**: Request processing timeouts
    - **Resource Exhaustion**: Out of memory or connection limits
    - **Slow Query Errors**: Database performance issues
@@ -140,7 +130,7 @@ class ApplicationMonitor {
 // Centralized error tracking
 class ErrorTracker {
   private errorCollector: ErrorCollector
-  
+
   trackError(error: Error, context: ErrorContext) {
     const errorData = {
       message: error.message,
@@ -151,26 +141,26 @@ class ErrorTracker {
         userId: context.userId,
         sessionId: context.sessionId,
         operation: context.operation,
-        environment: process.env.NODE_ENV
-      }
+        environment: process.env.NODE_ENV,
+      },
     }
-    
+
     // Record error metrics
     this.metrics.recordCounter('errors_total', {
       error_type: error.name,
       severity: errorData.severity,
-      operation: context.operation
+      operation: context.operation,
     })
-    
+
     // Send to error tracking service
     this.errorCollector.captureError(errorData)
-    
+
     // Alert on critical errors
     if (errorData.severity === 'critical') {
       this.sendAlert(errorData)
     }
   }
-  
+
   private determineSeverity(error: Error): ErrorSeverity {
     if (error instanceof CriticalSystemError) return 'critical'
     if (error instanceof ValidationError) return 'warning'
@@ -183,12 +173,14 @@ class ErrorTracker {
 ### Error Analysis and Resolution
 
 **Error Pattern Analysis**:
+
 - **Frequency Analysis**: Error occurrence rates and trends
 - **Impact Assessment**: User and business impact of errors
 - **Root Cause Analysis**: Identifying underlying causes
 - **Resolution Tracking**: Time to detection and resolution
 
 **Error Response Strategies**:
+
 - **Immediate Alerting**: Critical error notifications
 - **Automatic Recovery**: Self-healing mechanisms
 - **Graceful Degradation**: Fallback functionality
@@ -203,11 +195,13 @@ class ErrorTracker {
 **User Experience Metrics**:
 
 1. **Core Web Vitals**
+
    - **Largest Contentful Paint (LCP)**: Loading performance
    - **First Input Delay (FID)**: Interactivity measurement
    - **Cumulative Layout Shift (CLS)**: Visual stability
 
 2. **User Journey Metrics**
+
    - **Page Load Time**: Complete page loading duration
    - **Time to Interactive**: When page becomes interactive
    - **Navigation Timing**: Between-page transition time
@@ -225,40 +219,40 @@ class ErrorTracker {
 // Browser performance monitoring
 class UserExperienceMonitor {
   private perfObserver: PerformanceObserver
-  
+
   constructor() {
     this.setupPerformanceObserver()
     this.trackCoreWebVitals()
   }
-  
+
   private setupPerformanceObserver() {
-    this.perfObserver = new PerformanceObserver((list) => {
+    this.perfObserver = new PerformanceObserver(list => {
       for (const entry of list.getEntries()) {
         this.processPerformanceEntry(entry)
       }
     })
-    
+
     this.perfObserver.observe({ entryTypes: ['navigation', 'paint', 'largest-contentful-paint'] })
   }
-  
+
   private trackCoreWebVitals() {
     // Track LCP
-    new PerformanceObserver((list) => {
+    new PerformanceObserver(list => {
       const lcpEntry = list.getEntries().at(-1)
       if (lcpEntry) {
         this.recordMetric('core_web_vitals_lcp', lcpEntry.startTime)
       }
     }).observe({ entryTypes: ['largest-contentful-paint'] })
-    
+
     // Track FID
-    new PerformanceObserver((list) => {
+    new PerformanceObserver(list => {
       const fidEntry = list.getEntries()[0]
       this.recordMetric('core_web_vitals_fid', fidEntry.processingStart - fidEntry.startTime)
     }).observe({ entryTypes: ['first-input'] })
-    
+
     // Track CLS
     let clsValue = 0
-    new PerformanceObserver((list) => {
+    new PerformanceObserver(list => {
       for (const entry of list.getEntries()) {
         if (!entry.hadRecentInput) {
           clsValue += entry.value
@@ -267,13 +261,13 @@ class UserExperienceMonitor {
       this.recordMetric('core_web_vitals_cls', clsValue)
     }).observe({ entryTypes: ['layout-shift'] })
   }
-  
+
   trackUserAction(action: string, metadata?: Record<string, any>) {
     this.recordEvent('user_action', {
       action,
       timestamp: Date.now(),
       page: window.location.pathname,
-      ...metadata
+      ...metadata,
     })
   }
 }
@@ -288,12 +282,14 @@ class UserExperienceMonitor {
 **Key Business Indicators**:
 
 1. **Revenue Metrics**
+
    - **Revenue per User**: Average user monetary value
    - **Transaction Volume**: Payment processing rates
    - **Conversion Rate**: Goal completion percentage
    - **Customer Lifetime Value**: Long-term user value
 
 2. **User Engagement Metrics**
+
    - **Daily/Monthly Active Users**: User activity levels
    - **Feature Adoption Rate**: New feature usage
    - **User Retention Rate**: User return frequency
@@ -313,33 +309,33 @@ class BusinessMetricsTracker {
   trackUserRegistration(userId: string, source: string) {
     this.metrics.recordCounter('user_registrations_total', {
       source,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     })
-    
+
     this.analytics.trackEvent('user_registered', {
       userId,
       source,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     })
   }
-  
+
   trackPurchase(orderId: string, amount: number, userId: string) {
     this.metrics.recordCounter('purchases_total')
     this.metrics.recordHistogram('purchase_amount', {}, amount)
     this.metrics.recordGauge('revenue_total', {}, amount)
-    
+
     this.analytics.trackEvent('purchase_completed', {
       orderId,
       amount,
       userId,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     })
   }
-  
+
   trackFeatureUsage(feature: string, userId: string) {
     this.metrics.recordCounter('feature_usage_total', {
       feature,
-      user_type: this.getUserType(userId)
+      user_type: this.getUserType(userId),
     })
   }
 }
@@ -354,12 +350,14 @@ class BusinessMetricsTracker {
 **Dashboard Categories**:
 
 1. **Executive Dashboard**
+
    - High-level business metrics
    - Key performance indicators
    - Trend analysis and insights
    - Business impact visualization
 
 2. **Operational Dashboard**
+
    - Real-time system health
    - Performance metrics
    - Error rates and alerts
@@ -398,20 +396,20 @@ const operationalDashboard: DashboardConfig = {
       type: 'metric',
       title: 'Response Time (P95)',
       query: 'histogram_quantile(0.95, request_duration_ms)',
-      visualization: { format: 'ms', target: 200 }
+      visualization: { format: 'ms', target: 200 },
     },
     {
       type: 'chart',
       title: 'Error Rate',
       query: 'rate(errors_total[5m])',
       visualization: { type: 'line', timeRange: '1h' },
-      thresholds: [{ level: 'warning', value: 0.01 }]
-    }
+      thresholds: [{ level: 'warning', value: 0.01 }],
+    },
   ],
   filters: [
     { name: 'environment', values: ['production', 'staging'] },
-    { name: 'service', values: ['api', 'web', 'worker'] }
-  ]
+    { name: 'service', values: ['api', 'web', 'worker'] },
+  ],
 }
 ```
 
@@ -422,18 +420,21 @@ const operationalDashboard: DashboardConfig = {
 ### Monitoring Setup Checklist
 
 **Phase 1: Foundation**
+
 - [ ] **Metrics Collection**: Set up basic metrics instrumentation
 - [ ] **Error Tracking**: Implement error monitoring and alerting
 - [ ] **Performance Baseline**: Establish current performance metrics
 - [ ] **Basic Dashboards**: Create essential monitoring dashboards
 
 **Phase 2: Enhancement**
+
 - [ ] **User Experience**: Add RUM and UX monitoring
 - [ ] **Business Metrics**: Implement business-specific tracking
 - [ ] **Advanced Alerting**: Create intelligent alerting rules
 - [ ] **Trend Analysis**: Set up trend detection and analysis
 
 **Phase 3: Optimization**
+
 - [ ] **Predictive Monitoring**: Implement proactive issue detection
 - [ ] **Automated Response**: Set up automated remediation
 - [ ] **Custom Analytics**: Create domain-specific insights

@@ -26,12 +26,12 @@ Do you need GCP deployment?
 
 ## 📋 Service Selection Matrix
 
-| Use Case | Compute Service | Database | Storage | Deployment Method |
-|----------|----------------|----------|---------|-------------------|
-| **Web App** | Cloud Run/App Engine | Cloud SQL | Cloud Storage | Cloud Build |
-| **API Service** | Cloud Functions/Run | Firestore | Cloud Storage | Cloud Build |
-| **Enterprise** | GKE | Cloud SQL HA | Cloud Storage/Filestore | Terraform |
-| **Microservices** | GKE/Cloud Run | Multiple Cloud SQL | Cloud Storage | Service Mesh |
+| Use Case          | Compute Service      | Database           | Storage                 | Deployment Method |
+| ----------------- | -------------------- | ------------------ | ----------------------- | ----------------- |
+| **Web App**       | Cloud Run/App Engine | Cloud SQL          | Cloud Storage           | Cloud Build       |
+| **API Service**   | Cloud Functions/Run  | Firestore          | Cloud Storage           | Cloud Build       |
+| **Enterprise**    | GKE                  | Cloud SQL HA       | Cloud Storage/Filestore | Terraform         |
+| **Microservices** | GKE/Cloud Run        | Multiple Cloud SQL | Cloud Storage           | Service Mesh      |
 
 ---
 
@@ -49,11 +49,11 @@ steps:
   # Build container image
   - name: 'gcr.io/cloud-builders/docker'
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/app:$COMMIT_SHA', '.']
-  
+
   # Push to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
     args: ['push', 'gcr.io/$PROJECT_ID/app:$COMMIT_SHA']
-  
+
   # Deploy to Cloud Run
   - name: 'gcr.io/cloud-builders/gcloud'
     args:
@@ -87,27 +87,27 @@ spec:
   template:
     metadata:
       annotations:
-        autoscaling.knative.dev/maxScale: "100"
-        run.googleapis.com/cpu-throttling: "false"
+        autoscaling.knative.dev/maxScale: '100'
+        run.googleapis.com/cpu-throttling: 'false'
         run.googleapis.com/execution-environment: gen2
     spec:
       containerConcurrency: 80
       containers:
-      - image: gcr.io/PROJECT_ID/app:latest
-        ports:
-        - containerPort: 3000
-        env:
-        - name: NODE_ENV
-          value: "production"
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: app-secrets
-              key: database-url
-        resources:
-          limits:
-            memory: "512Mi"
-            cpu: "1000m"
+        - image: gcr.io/PROJECT_ID/app:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: 'production'
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: database-url
+          resources:
+            limits:
+              memory: '512Mi'
+              cpu: '1000m'
 ```
 
 ### App Engine Deployment
@@ -133,16 +133,16 @@ resources:
   disk_size_gb: 10
 
 handlers:
-- url: /_ah/health
-  script: auto
-  
-- url: /static
-  static_dir: public
-  
-- url: /.*
-  script: auto
-  secure: always
-  redirect_http_response_code: 301
+  - url: /_ah/health
+    script: auto
+
+  - url: /static
+    static_dir: public
+
+  - url: /.*
+    script: auto
+    secure: always
+    redirect_http_response_code: 301
 ```
 
 ### Kubernetes Deployment
@@ -200,31 +200,31 @@ spec:
     spec:
       serviceAccountName: app-ksa
       containers:
-      - name: app
-        image: gcr.io/PROJECT_ID/app:latest
-        ports:
-        - containerPort: 3000
-        env:
-        - name: NODE_ENV
-          value: "production"
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: app-secrets
-              key: database-url
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "250m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 30
-          periodSeconds: 10
+        - name: app
+          image: gcr.io/PROJECT_ID/app:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: 'production'
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: database-url
+          resources:
+            requests:
+              memory: '256Mi'
+              cpu: '250m'
+            limits:
+              memory: '512Mi'
+              cpu: '500m'
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
 ```
 
 ---
@@ -371,19 +371,22 @@ steps:
   - name: 'node:18'
     entrypoint: 'npm'
     args: ['ci']
-  
+
   - name: 'node:18'
     entrypoint: 'npm'
     args: ['test']
 
   # Build Docker image
   - name: 'gcr.io/cloud-builders/docker'
-    args: [
-      'build',
-      '-t', 'gcr.io/$PROJECT_ID/app:$COMMIT_SHA',
-      '-t', 'gcr.io/$PROJECT_ID/app:latest',
-      '.'
-    ]
+    args:
+      [
+        'build',
+        '-t',
+        'gcr.io/$PROJECT_ID/app:$COMMIT_SHA',
+        '-t',
+        'gcr.io/$PROJECT_ID/app:latest',
+        '.',
+      ]
 
   # Push to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
@@ -461,16 +464,19 @@ jobs:
 ### Cost Management Strategies
 
 **Right-sizing and Auto-scaling**:
+
 - Use sustained use discounts for long-running workloads
 - Implement auto-scaling for variable workloads
 - Monitor usage with Cloud Monitoring
 
 **Preemptible and Spot Instances**:
+
 - Use preemptible VMs for fault-tolerant workloads
 - Implement proper handling for instance preemption
 - Leverage Spot VMs for batch processing
 
 **Resource Management**:
+
 - Use committed use contracts for predictable workloads
 - Implement resource quotas and budgets
 - Optimize storage with lifecycle policies
@@ -519,7 +525,7 @@ resource "google_monitoring_alert_policy" "high_error_rate" {
 
   conditions {
     display_name = "Cloud Run 5xx errors"
-    
+
     condition_threshold {
       filter          = "resource.type=\"cloud_run_revision\""
       duration        = "60s"

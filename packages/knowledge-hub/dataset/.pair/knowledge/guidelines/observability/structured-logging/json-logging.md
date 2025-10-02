@@ -104,7 +104,7 @@ What JSON logging setup do you need?
   "business": {
     "order": {
       "orderId": "order_98765",
-      "amount": 125.50,
+      "amount": 125.5,
       "currency": "USD",
       "items": 3
     },
@@ -166,16 +166,16 @@ interface LogContext {
 
 class JSONLogger {
   private config: LoggerConfig
-  
+
   constructor(config: LoggerConfig) {
     this.config = {
       service: config.service,
       version: config.version || '1.0.0',
       environment: config.environment || 'development',
-      ...config
+      ...config,
     }
   }
-  
+
   log(level: LogLevel, message: string, context?: LogContext, metadata?: Record<string, any>) {
     const logEntry: JSONLogEntry = {
       timestamp: new Date().toISOString(),
@@ -183,27 +183,27 @@ class JSONLogger {
       message,
       service: this.config.service,
       version: this.config.version,
-      environment: this.config.environment
+      environment: this.config.environment,
     }
-    
+
     if (context) {
       logEntry.context = this.sanitizeContext(context)
     }
-    
+
     if (metadata) {
       logEntry.metadata = this.sanitizeMetadata(metadata)
     }
-    
+
     // Ensure valid JSON
     const jsonString = this.safeStringify(logEntry)
     console.log(jsonString)
-    
+
     // Send to external log aggregator if configured
     if (this.config.externalLogger) {
       this.config.externalLogger.send(logEntry)
     }
   }
-  
+
   private safeStringify(obj: any): string {
     try {
       return JSON.stringify(obj, this.jsonReplacer)
@@ -214,11 +214,11 @@ class JSONLogger {
         level: 'error',
         message: 'Failed to serialize log entry',
         service: this.config.service,
-        error: error.message
+        error: error.message,
       })
     }
   }
-  
+
   private jsonReplacer(key: string, value: any): any {
     // Handle circular references
     if (typeof value === 'object' && value !== null) {
@@ -227,21 +227,21 @@ class JSONLogger {
       }
       this.seen.add(value)
     }
-    
+
     // Convert functions to string representation
     if (typeof value === 'function') {
       return '[Function]'
     }
-    
+
     // Handle Error objects
     if (value instanceof Error) {
       return {
         name: value.name,
         message: value.message,
-        stack: value.stack
+        stack: value.stack,
       }
     }
-    
+
     return value
   }
 }
@@ -255,47 +255,47 @@ class HighPerformanceJSONLogger {
   private bufferSize = 100
   private flushInterval = 5000 // 5 seconds
   private timer: NodeJS.Timeout
-  
+
   constructor(config: LoggerConfig) {
     this.setupBuffering()
   }
-  
+
   private setupBuffering() {
     this.timer = setInterval(() => {
       this.flush()
     }, this.flushInterval)
-    
+
     // Flush on process exit
     process.on('beforeExit', () => this.flush())
     process.on('SIGINT', () => this.flush())
     process.on('SIGTERM', () => this.flush())
   }
-  
+
   log(level: LogLevel, message: string, context?: LogContext) {
     const logEntry = this.createLogEntry(level, message, context)
-    
+
     // Use object pooling for frequently created objects
     this.buffer.push(logEntry)
-    
+
     if (this.buffer.length >= this.bufferSize) {
       this.flush()
     }
   }
-  
+
   private flush() {
     if (this.buffer.length === 0) return
-    
+
     const logs = this.buffer.splice(0, this.buffer.length)
     const batchLog = {
       timestamp: new Date().toISOString(),
       batch: true,
       count: logs.length,
-      logs
+      logs,
     }
-    
+
     console.log(JSON.stringify(batchLog))
   }
-  
+
   private createLogEntry(level: LogLevel, message: string, context?: LogContext): JSONLogEntry {
     // Pre-allocate common properties for performance
     return {
@@ -303,7 +303,7 @@ class HighPerformanceJSONLogger {
       l: level,
       m: message,
       s: this.config.service,
-      c: context
+      c: context,
     }
   }
 }
@@ -330,26 +330,26 @@ filter {
     json {
       source => "message"
     }
-    
+
     # Parse timestamp
     date {
       match => [ "timestamp", "ISO8601" ]
     }
-    
+
     # Extract trace information
     if [context][trace][traceId] {
       mutate {
         add_field => { "traceId" => "%{[context][trace][traceId]}" }
       }
     }
-    
+
     # Extract user information
     if [context][user][userId] {
       mutate {
         add_field => { "userId" => "%{[context][user][userId]}" }
       }
     }
-    
+
     # Parse performance metrics
     if [business][metrics] {
       ruby {
@@ -535,11 +535,11 @@ output {
 ```typescript
 class LogMigrationAdapter {
   private legacyParser: LegacyLogParser
-  
+
   migrateLegacyLog(legacyLogLine: string): JSONLogEntry | null {
     try {
       const parsed = this.legacyParser.parse(legacyLogLine)
-      
+
       return {
         timestamp: this.convertTimestamp(parsed.timestamp),
         level: this.mapLogLevel(parsed.level),
@@ -548,21 +548,21 @@ class LogMigrationAdapter {
         context: this.buildContext(parsed),
         metadata: {
           original_format: 'legacy',
-          migration_timestamp: new Date().toISOString()
-        }
+          migration_timestamp: new Date().toISOString(),
+        },
       }
     } catch (error) {
       console.error('Failed to migrate legacy log:', error)
       return null
     }
   }
-  
+
   private mapLogLevel(legacyLevel: string): LogLevel {
     const levelMap: Record<string, LogLevel> = {
-      'ERROR': 'error',
-      'WARNING': 'warn',
-      'INFO': 'info',
-      'DEBUG': 'debug'
+      ERROR: 'error',
+      WARNING: 'warn',
+      INFO: 'info',
+      DEBUG: 'debug',
     }
     return levelMap[legacyLevel.toUpperCase()] || 'info'
   }
@@ -577,24 +577,24 @@ import Ajv from 'ajv'
 class JSONLogValidator {
   private ajv: Ajv
   private schema: object
-  
+
   constructor() {
     this.ajv = new Ajv()
     this.schema = this.loadSchema()
   }
-  
+
   validateLogEntry(logEntry: any): boolean {
     const validate = this.ajv.compile(this.schema)
     const valid = validate(logEntry)
-    
+
     if (!valid) {
       console.error('Log validation failed:', validate.errors)
       return false
     }
-    
+
     return true
   }
-  
+
   private loadSchema(): object {
     return {
       type: 'object',
@@ -603,8 +603,8 @@ class JSONLogValidator {
         timestamp: { type: 'string', format: 'date-time' },
         level: { type: 'string', enum: ['error', 'warn', 'info', 'debug'] },
         message: { type: 'string' },
-        service: { type: 'string' }
-      }
+        service: { type: 'string' },
+      },
     }
   }
 }

@@ -27,12 +27,12 @@ Do you need Vercel deployment?
 
 ## 📋 Service Selection Matrix
 
-| Use Case | Framework | Database | Storage | Deployment Method |
-|----------|-----------|----------|---------|-------------------|
-| **Static Site** | Next.js/Vite | External | Vercel Blob | Git Integration |
-| **Web App** | Next.js | Vercel Postgres | Vercel Blob | Git Integration |
-| **API Service** | Next.js API | External DB | External | Git Integration |
-| **Edge Computing** | Edge Functions | Edge Config | Vercel KV | Git Integration |
+| Use Case           | Framework      | Database        | Storage     | Deployment Method |
+| ------------------ | -------------- | --------------- | ----------- | ----------------- |
+| **Static Site**    | Next.js/Vite   | External        | Vercel Blob | Git Integration   |
+| **Web App**        | Next.js        | Vercel Postgres | Vercel Blob | Git Integration   |
+| **API Service**    | Next.js API    | External DB     | External    | Git Integration   |
+| **Edge Computing** | Edge Functions | Edge Config     | Vercel KV   | Git Integration   |
 
 ---
 
@@ -94,20 +94,20 @@ const nextConfig = {
   // Optimize for Vercel Edge Runtime
   experimental: {
     runtime: 'edge',
-    serverComponentsExternalPackages: ['@prisma/client']
+    serverComponentsExternalPackages: ['@prisma/client'],
   },
-  
+
   // Image optimization
   images: {
     domains: ['example.com'],
-    formats: ['image/webp', 'image/avif']
+    formats: ['image/webp', 'image/avif'],
   },
-  
+
   // Environment variables
   env: {
     CUSTOM_KEY: process.env.CUSTOM_KEY,
   },
-  
+
   // Redirects and rewrites
   async redirects() {
     return [
@@ -118,7 +118,7 @@ const nextConfig = {
       },
     ]
   },
-  
+
   // Headers for security
   async headers() {
     return [
@@ -136,7 +136,7 @@ const nextConfig = {
         ],
       },
     ]
-  }
+  },
 }
 
 module.exports = nextConfig
@@ -235,17 +235,14 @@ export async function GET(request: NextRequest) {
         id: true,
         name: true,
         email: true,
-        createdAt: true
-      }
+        createdAt: true,
+      },
     })
 
     return NextResponse.json(users)
   } catch (error) {
     console.error('Database error:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch users' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
   }
 }
 
@@ -255,16 +252,13 @@ export async function POST(request: NextRequest) {
     const { name, email } = body
 
     const user = await prisma.user.create({
-      data: { name, email }
+      data: { name, email },
     })
 
     return NextResponse.json(user, { status: 201 })
   } catch (error) {
     console.error('Database error:', error)
-    return NextResponse.json(
-      { error: 'Failed to create user' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to create user' }, { status: 500 })
   }
 }
 ```
@@ -282,11 +276,11 @@ export const runtime = 'edge'
 export async function GET(request: NextRequest) {
   const country = request.geo?.country || 'Unknown'
   const city = request.geo?.city || 'Unknown'
-  
+
   return NextResponse.json({
     message: `Hello from ${city}, ${country}!`,
     timestamp: new Date().toISOString(),
-    edge: true
+    edge: true,
   })
 }
 ```
@@ -403,7 +397,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
@@ -442,12 +436,14 @@ jobs:
 ### Vercel Pricing Strategy
 
 **Usage Optimization**:
+
 - Monitor function execution time and frequency
 - Optimize images with Next.js Image component
 - Use static generation where possible
 - Implement proper caching strategies
 
 **Resource Management**:
+
 - Use Edge Functions for global performance
 - Implement incremental static regeneration (ISR)
 - Optimize bundle size with proper tree shaking
@@ -462,12 +458,12 @@ export async function GET() {
   const metrics = {
     timestamp: new Date().toISOString(),
     endpoint: '/api/analytics',
-    execution_time: Date.now()
+    execution_time: Date.now(),
   }
-  
+
   // Log to external analytics service
   await logMetrics(metrics)
-  
+
   return NextResponse.json({ status: 'logged' })
 }
 ```
@@ -483,13 +479,9 @@ export async function GET() {
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang='en'>
       <body>
         {children}
         <Analytics />
@@ -512,13 +504,13 @@ export function trackEvent(name: string, properties?: Record<string, any>) {
 
 export function trackError(error: Error, context?: string) {
   console.error(`Error in ${context}:`, error)
-  
+
   // Send to external monitoring service
   if (process.env.NODE_ENV === 'production') {
     trackEvent('error', {
       message: error.message,
       stack: error.stack,
-      context
+      context,
     })
   }
 }
@@ -549,7 +541,7 @@ export async function middleware(request: NextRequest) {
   // Authentication check for protected routes
   if (request.nextUrl.pathname.startsWith('/dashboard')) {
     const token = await getToken({ req: request })
-    
+
     if (!token) {
       return NextResponse.redirect(new URL('/login', request.url))
     }
@@ -557,16 +549,16 @@ export async function middleware(request: NextRequest) {
 
   // Security headers
   const response = NextResponse.next()
-  
+
   response.headers.set('X-Frame-Options', 'DENY')
   response.headers.set('X-Content-Type-Options', 'nosniff')
   response.headers.set('Referrer-Policy', 'origin-when-cross-origin')
-  
+
   return response
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/api/:path*']
+  matcher: ['/dashboard/:path*', '/api/:path*'],
 }
 ```
 

@@ -51,122 +51,23 @@ Transaction Scripts
 - **Structure**: Simple data containers
 - **Usage**: Input/output for transaction scripts
 
-## Implementation Example
+## Implementation Approach
 
-### TypeScript Implementation
+### Basic Structure
 
-```typescript
-// User Registration Transaction Script
-export class UserRegistrationScript {
-  constructor(
-    private userGateway: UserGateway,
-    private emailService: EmailService,
-    private validator: UserValidator,
-  ) {}
+Each transaction script follows this pattern:
 
-  async registerUser(userData: RegisterUserRequest): Promise<RegisterUserResponse> {
-    // 1. Validate input
-    const validationResult = this.validator.validate(userData)
-    if (!validationResult.isValid) {
-      throw new ValidationError(validationResult.errors)
-    }
+1. **Input Validation**: Validate incoming data
+2. **Business Rules**: Apply business logic and constraints
+3. **Data Operations**: Perform database operations
+4. **Side Effects**: Handle notifications, emails, etc.
+5. **Response**: Return structured result
 
-    // 2. Check business rules
-    const existingUser = await this.userGateway.findByEmail(userData.email)
-    if (existingUser) {
-      throw new BusinessError('User already exists')
-    }
+### Example Flow
 
-    // 3. Create user
-    const hashedPassword = await this.hashPassword(userData.password)
-    const newUser = await this.userGateway.create({
-      ...userData,
-      password: hashedPassword,
-      createdAt: new Date(),
-      isVerified: false,
-    })
-
-    // 4. Send verification email
-    await this.emailService.sendVerificationEmail(newUser.email, newUser.verificationToken)
-
-    // 5. Return result
-    return {
-      userId: newUser.id,
-      email: newUser.email,
-      status: 'pending_verification',
-    }
-  }
-
-  private async hashPassword(password: string): Promise<string> {
-    // Password hashing logic
-    return bcrypt.hash(password, 10)
-  }
-}
 ```
-
-### Order Processing Example
-
-```typescript
-export class OrderProcessingScript {
-  constructor(
-    private orderGateway: OrderGateway,
-    private inventoryGateway: InventoryGateway,
-    private paymentGateway: PaymentGateway,
-    private notificationService: NotificationService,
-  ) {}
-
-  async processOrder(orderData: ProcessOrderRequest): Promise<ProcessOrderResponse> {
-    // Start transaction
-    const transaction = await this.orderGateway.beginTransaction()
-
-    try {
-      // 1. Validate order
-      this.validateOrder(orderData)
-
-      // 2. Check inventory
-      const inventoryCheck = await this.inventoryGateway.checkAvailability(orderData.items)
-      if (!inventoryCheck.available) {
-        throw new BusinessError('Insufficient inventory')
-      }
-
-      // 3. Calculate total
-      const total = this.calculateOrderTotal(orderData.items)
-
-      // 4. Process payment
-      const payment = await this.paymentGateway.processPayment({
-        amount: total,
-        paymentMethod: orderData.paymentMethod,
-      })
-
-      // 5. Reserve inventory
-      await this.inventoryGateway.reserveItems(orderData.items)
-
-      // 6. Create order
-      const order = await this.orderGateway.create({
-        ...orderData,
-        total,
-        paymentId: payment.id,
-        status: 'confirmed',
-        createdAt: new Date(),
-      })
-
-      // 7. Send confirmation
-      await this.notificationService.sendOrderConfirmation(order)
-
-      await transaction.commit()
-
-      return {
-        orderId: order.id,
-        total,
-        status: 'confirmed',
-        estimatedDelivery: this.calculateDeliveryDate(),
-      }
-    } catch (error) {
-      await transaction.rollback()
-      throw error
-    }
-  }
-}
+User Registration:
+Input → Validate → Check Existing → Hash Password → Store User → Send Email → Response
 ```
 
 ## Pattern Benefits
@@ -226,44 +127,20 @@ export class OrderProcessingScript {
 
 ## Testing Strategy
 
-### Unit Testing
+### Key Testing Approaches
 
-```typescript
-describe('UserRegistrationScript', () => {
-  let script: UserRegistrationScript
-  let mockUserGateway: jest.Mocked<UserGateway>
-  let mockEmailService: jest.Mocked<EmailService>
+- **Unit Testing**: Test each script in isolation
+- **Mock Dependencies**: Use mocks for gateways and services
+- **Happy Path**: Test successful transaction flows
+- **Error Cases**: Test validation and business rule failures
+- **Integration Testing**: Test with real data access
 
-  beforeEach(() => {
-    mockUserGateway = {
-      findByEmail: jest.fn(),
-      create: jest.fn(),
-    }
-    mockEmailService = {
-      sendVerificationEmail: jest.fn(),
-    }
+### Testing Focus
 
-    script = new UserRegistrationScript(mockUserGateway, mockEmailService, new UserValidator())
-  })
-
-  it('should register new user successfully', async () => {
-    mockUserGateway.findByEmail.mockResolvedValue(null)
-    mockUserGateway.create.mockResolvedValue({
-      id: '123',
-      email: 'test@example.com',
-      verificationToken: 'token123',
-    })
-
-    const result = await script.registerUser({
-      email: 'test@example.com',
-      password: 'password123',
-    })
-
-    expect(result.userId).toBe('123')
-    expect(mockEmailService.sendVerificationEmail).toHaveBeenCalled()
-  })
-})
-```
+- Input validation logic
+- Business rule enforcement
+- Error handling and rollback
+- Side effect verification (emails, notifications)
 
 ## Related Patterns
 

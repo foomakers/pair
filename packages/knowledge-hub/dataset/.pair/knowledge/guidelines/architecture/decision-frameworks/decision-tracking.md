@@ -42,483 +42,237 @@ Systematic capture and application of lessons learned.
 
 ### Phase 1: Decision Identification
 
-```typescript
-interface DecisionContext {
-  id: string
-  title: string
-  problem: string
-  stakeholders: string[]
-  constraints: string[]
-  assumptions: string[]
-  deadline?: Date
-  priority: 'Critical' | 'High' | 'Medium' | 'Low'
-  category: 'Architecture' | 'Technology' | 'Process' | 'Infrastructure'
-}
+**Key Elements:**
 
-// Example Decision Context
-const exampleContext: DecisionContext = {
-  id: 'ARCH-2024-001',
-  title: 'API Gateway Selection',
-  problem: 'Need unified entry point for microservices with rate limiting',
-  stakeholders: ['architecture-team', 'security-team', 'ops-team'],
-  constraints: ['Budget <$10k/month', 'Must support OAuth2', 'Cloud-native'],
-  assumptions: ['Traffic will grow 10x in next year'],
-  deadline: new Date('2024-03-15'),
-  priority: 'High',
-  category: 'Architecture',
-}
-```
+- **Decision ID**: Unique identifier (e.g., DEC-2024-001)
+- **Title**: Clear, descriptive decision name
+- **Problem**: Context requiring the decision
+- **Stakeholders**: People affected by or involved in decision
+- **Urgency**: Timeline constraints
+- **Impact**: Scope and significance assessment
 
 ### Phase 2: Decision Analysis
 
-```typescript
-interface DecisionOption {
-  name: string
-  description: string
-  pros: string[]
-  cons: string[]
-  risks: Risk[]
-  costs: CostEstimate
-  effort: EffortEstimate
-  dependencies: string[]
-}
+**Analysis Framework:**
 
-interface Risk {
-  description: string
-  probability: 'Low' | 'Medium' | 'High'
-  impact: 'Low' | 'Medium' | 'High'
-  mitigation: string
-}
-
-// Example Decision Analysis
-const kongOption: DecisionOption = {
-  name: 'Kong API Gateway',
-  description: 'Open-source API gateway with enterprise features',
-  pros: [
-    'Mature ecosystem with extensive plugins',
-    'Strong rate limiting capabilities',
-    'Active community and commercial support',
-  ],
-  cons: [
-    'Learning curve for configuration',
-    'Additional infrastructure complexity',
-    'Potential vendor lock-in with enterprise features',
-  ],
-  risks: [
-    {
-      description: 'Performance bottleneck under high load',
-      probability: 'Medium',
-      impact: 'High',
-      mitigation: 'Load testing and horizontal scaling strategy',
-    },
-  ],
-  costs: {
-    implementation: 40000, // $40k
-    operational: 5000, // $5k/month
-    maintenance: 20000, // $20k/year
-  },
-  effort: {
-    setup: '2-3 sprints',
-    migration: '1 sprint',
-    team_training: '1 week',
-  },
-  dependencies: ['container-orchestration', 'monitoring-setup'],
-}
-```
+- **Options**: Alternative approaches considered
+- **Criteria**: Evaluation factors and weights
+- **Trade-offs**: Benefits and drawbacks of each option
+- **Risks**: Potential negative outcomes
+- **Dependencies**: Related decisions and constraints
 
 ### Phase 3: Decision Making
 
-```typescript
-interface DecisionRecord {
-  context: DecisionContext
-  options: DecisionOption[]
-  decision: string
-  rationale: string
-  decisionMakers: string[]
-  decisionDate: Date
-  reviewDate: Date
-  status: DecisionStatus
-  consequences: Consequence[]
-}
+**Decision Process:**
 
-type DecisionStatus =
-  | 'Proposed'
-  | 'Under Review'
-  | 'Approved'
-  | 'Rejected'
-  | 'Implemented'
-  | 'Superseded'
-  | 'Retired'
-
-interface Consequence {
-  type: 'Positive' | 'Negative' | 'Neutral'
-  description: string
-  impact: 'Low' | 'Medium' | 'High'
-  timeframe: 'Immediate' | 'Short-term' | 'Long-term'
-}
-```
+- **Method**: How decision will be made (consensus, delegation, etc.)
+- **Timeline**: Decision deadline and milestones
+- **Documentation**: Required artifacts and justification
+- **Approval**: Who must approve the decision
+- **Communication**: How decision will be announced
 
 ### Phase 4: Implementation Tracking
 
-```typescript
-interface ImplementationPlan {
-  decisionId: string
-  phases: ImplementationPhase[]
-  milestones: Milestone[]
-  resources: Resource[]
-  risks: Risk[]
-  dependencies: string[]
-}
+**Implementation Elements:**
 
-interface ImplementationPhase {
-  name: string
-  description: string
-  startDate: Date
-  endDate: Date
-  deliverables: string[]
-  successCriteria: string[]
-  status: 'Not Started' | 'In Progress' | 'Completed' | 'Blocked'
-}
+- **Action Items**: Specific tasks to implement decision
+- **Responsibilities**: Who is accountable for each action
+- **Timeline**: Implementation schedule and milestones
+- **Success Criteria**: How to measure successful implementation
+- **Monitoring**: Regular check-ins and progress reviews
 
-interface Milestone {
-  name: string
-  date: Date
-  criteria: string[]
-  status: 'Pending' | 'Achieved' | 'Missed'
-}
+### Phase 5: Impact Evaluation
+
+**Evaluation Activities:**
+
+- **Outcome Assessment**: Did we achieve intended results?
+- **Unintended Consequences**: What unexpected effects occurred?
+- **Performance Metrics**: Quantitative measures of success
+- **Stakeholder Feedback**: Input from affected parties
+- **Lessons Learned**: Key insights for future decisions
+
+## Decision Types and Templates
+
+### Architecture Decisions
+
+**Focus Areas:**
+
+- Technology stack choices
+- Pattern and framework selections
+- Integration approaches
+- Quality attribute trade-offs
+
+### Infrastructure Decisions
+
+**Focus Areas:**
+
+- Platform selections
+- Deployment strategies
+- Security configurations
+- Scalability approaches
+
+### Process Decisions
+
+**Focus Areas:**
+
+- Development workflows
+- Quality gates
+- Collaboration methods
+- Tool selections
+
+### Business Decisions
+
+**Focus Areas:**
+
+- Feature prioritization
+- User experience choices
+- Performance targets
+- Compliance requirements
+
+## Decision Status Lifecycle
+
+### Status Types
+
+- **Proposed**: Decision identified and under consideration
+- **Analyzing**: Currently evaluating options and trade-offs
+- **Deciding**: In decision-making process
+- **Approved**: Decision made and approved
+- **Implementing**: Decision being put into practice
+- **Active**: Decision fully implemented and operational
+- **Superseded**: Replaced by newer decision
+- **Retired**: No longer applicable or relevant
+
+### Status Transitions
+
+```
+Proposed → Analyzing → Deciding → Approved → Implementing → Active
+    ↓         ↓          ↓         ↓           ↓           ↓
+  Retired ← Retired ← Retired ← Retired ← Retired ← Superseded
 ```
 
-### Phase 5: Impact Monitoring
+## Tracking Tools and Methods
 
-```typescript
-interface DecisionMetrics {
-  decisionId: string
-  measurementPeriod: DateRange
-  technicalMetrics: TechnicalMetric[]
-  businessMetrics: BusinessMetric[]
-  qualitativeAssessment: QualitativeAssessment
-}
+### Simple Approaches
 
-interface TechnicalMetric {
-  name: string
-  value: number
-  unit: string
-  target: number
-  trend: 'Improving' | 'Stable' | 'Degrading'
-  lastMeasured: Date
-}
+- **Spreadsheets**: For small teams and simple tracking
+- **Wiki Pages**: For collaborative documentation
+- **Issue Trackers**: Using existing project management tools
+- **Document Templates**: Standardized decision formats
 
-interface BusinessMetric {
-  name: string
-  value: number
-  unit: string
-  impact: 'Cost Savings' | 'Revenue Impact' | 'Efficiency Gain'
-  baseline: number
-}
+### Advanced Approaches
 
-// Example Metrics Tracking
-const apiGatewayMetrics: DecisionMetrics = {
-  decisionId: 'ARCH-2024-001',
-  measurementPeriod: {
-    start: new Date('2024-04-01'),
-    end: new Date('2024-06-30'),
-  },
-  technicalMetrics: [
-    {
-      name: 'API Response Time',
-      value: 95,
-      unit: 'ms',
-      target: 100,
-      trend: 'Improving',
-      lastMeasured: new Date('2024-06-30'),
-    },
-    {
-      name: 'System Uptime',
-      value: 99.95,
-      unit: '%',
-      target: 99.9,
-      trend: 'Stable',
-      lastMeasured: new Date('2024-06-30'),
-    },
-  ],
-  businessMetrics: [
-    {
-      name: 'Operational Cost',
-      value: 4500,
-      unit: '$/month',
-      impact: 'Cost Savings',
-      baseline: 6000,
-    },
-  ],
-  qualitativeAssessment: {
-    teamSatisfaction: 4.2,
-    maintainability: 'Good',
-    documentation: 'Excellent',
-    learningCurve: 'Moderate',
-  },
-}
-```
-
-## Decision Review Framework
-
-### Regular Review Process
-
-```typescript
-interface DecisionReview {
-  decisionId: string
-  reviewDate: Date
-  reviewer: string
-  reviewType: 'Quarterly' | 'Annual' | 'Triggered' | 'Post-Implementation'
-  findings: ReviewFinding[]
-  recommendations: string[]
-  nextReviewDate: Date
-  status: 'Satisfactory' | 'Needs Attention' | 'Requires Change'
-}
-
-interface ReviewFinding {
-  category: 'Performance' | 'Cost' | 'Quality' | 'Risk' | 'Adoption'
-  observation: string
-  evidence: string[]
-  severity: 'Low' | 'Medium' | 'High'
-  action: string
-}
-```
-
-### Review Triggers
-
-```typescript
-const reviewTriggers = {
-  timeBasedReviews: {
-    quarterly: 'Review all High and Critical decisions',
-    annual: 'Comprehensive review of all decisions',
-    postImplementation: '3 months after implementation',
-  },
-
-  eventBasedReviews: {
-    performanceIssues: 'Metrics below target for 2 consecutive periods',
-    securityIncidents: 'Any security incident related to the decision',
-    costOverruns: 'Costs exceed budget by >20%',
-    stakeholderRequests: 'Formal review request from stakeholders',
-  },
-
-  automaticTriggers: {
-    metricThresholds: 'Automated alerts when KPIs cross thresholds',
-    dependencyChanges: 'When dependencies are modified or retired',
-    technologyEOL: 'When selected technologies reach end-of-life',
-  },
-}
-```
-
-## Tools and Automation
-
-### Decision Tracking Dashboard
-
-```typescript
-// Decision Dashboard Component
-export interface DecisionDashboard {
-  summary: {
-    totalDecisions: number
-    pendingDecisions: number
-    overduReviews: number
-    healthScore: number
-  }
-
-  charts: {
-    decisionsOverTime: TimeSeriesChart
-    decisionsByCategory: PieChart
-    implementationStatus: BarChart
-    metricsTrends: LineChart
-  }
-
-  alerts: {
-    overdueReviews: Decision[]
-    underperformingDecisions: Decision[]
-    upcomingDeadlines: Decision[]
-  }
-}
-```
-
-### Automated Reporting
-
-```yaml
-# Decision Tracking Automation
-name: Decision Tracking Report
-
-on:
-  schedule:
-    - cron: '0 9 * * MON' # Every Monday at 9 AM
-
-jobs:
-  generate-decision-report:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Fetch Decision Data
-        run: |
-          # Query decision database
-          npm run fetch-decisions
-
-      - name: Generate Metrics Report
-        run: |
-          # Collect metrics from monitoring systems
-          npm run collect-metrics
-
-      - name: Identify Overdue Reviews
-        run: |
-          # Find decisions requiring review
-          npm run check-review-status
-
-      - name: Send Report
-        run: |
-          # Generate and send weekly report
-          npm run generate-weekly-report
-```
-
-### Integration with ADR Tools
-
-```typescript
-// ADR Integration
-export class ADRDecisionTracker {
-  async syncWithADR(adrPath: string): Promise<DecisionRecord> {
-    const adr = await this.parseADR(adrPath)
-
-    return {
-      context: this.extractContext(adr),
-      options: this.extractOptions(adr),
-      decision: adr.decision,
-      rationale: adr.rationale,
-      consequences: this.extractConsequences(adr),
-      decisionDate: adr.date,
-      status: this.mapADRStatus(adr.status),
-    }
-  }
-
-  async generateADRFromDecision(decision: DecisionRecord): Promise<string> {
-    return this.adrTemplate.render({
-      title: decision.context.title,
-      status: decision.status,
-      context: decision.context.problem,
-      decision: decision.decision,
-      consequences: decision.consequences,
-    })
-  }
-}
-```
-
-## Implementation Roadmap
-
-### Phase 1: Foundation (Weeks 1-2)
-
-- [ ] Set up decision registry database/system
-- [ ] Create decision tracking templates
-- [ ] Establish basic workflow and roles
-- [ ] Train initial team on process
-
-### Phase 2: Core Process (Weeks 3-4)
-
-- [ ] Implement decision analysis framework
-- [ ] Set up impact monitoring system
-- [ ] Create review and evaluation process
-- [ ] Establish reporting mechanisms
-
-### Phase 3: Automation (Weeks 5-6)
-
-- [ ] Build decision tracking dashboard
-- [ ] Implement automated alerts and triggers
-- [ ] Set up metrics collection
-- [ ] Create integration with existing tools
-
-### Phase 4: Advanced Features (Weeks 7-8)
-
-- [ ] Add predictive analytics
-- [ ] Implement decision pattern recognition
-- [ ] Create recommendation engine
-- [ ] Establish continuous improvement loop
+- **Decision Management Systems**: Specialized tracking tools
+- **Integration Platforms**: Connected to development workflows
+- **Analytics Dashboards**: Visualization and reporting
+- **Automated Monitoring**: System-driven impact assessment
 
 ## Metrics and KPIs
 
+### Decision Quality Metrics
+
+- **Decision Velocity**: Time from identification to implementation
+- **Implementation Success Rate**: Percentage of decisions successfully implemented
+- **Outcome Achievement**: How often decisions achieve intended results
+- **Stakeholder Satisfaction**: Feedback on decision process and outcomes
+
 ### Process Metrics
 
-- **Decision Velocity**: Average time from identification to implementation
-- **Review Compliance**: Percentage of decisions reviewed on schedule
-- **Decision Quality Score**: Composite score based on outcomes
-- **Learning Rate**: Frequency of lessons learned application
+- **Decision Cycle Time**: Average time for each phase
+- **Documentation Completeness**: Quality of decision records
+- **Stakeholder Participation**: Engagement in decision process
+- **Learning Application**: Use of lessons learned in new decisions
 
-### Outcome Metrics
+### Impact Metrics
 
-- **Implementation Success Rate**: Percentage of decisions meeting objectives
-- **Cost Accuracy**: Variance between estimated and actual costs
-- **Timeline Accuracy**: Variance between planned and actual timelines
-- **Stakeholder Satisfaction**: Feedback scores from decision stakeholders
-
-### Learning Metrics
-
-- **Pattern Recognition**: Number of decision patterns identified
-- **Knowledge Reuse**: Frequency of referencing past decisions
-- **Improvement Rate**: Rate of process improvements implemented
-- **Expertise Development**: Growth in decision-making capabilities
+- **Cost of Decision Reversals**: Resources spent on changing decisions
+- **Technical Debt Created**: Long-term consequences of decisions
+- **Business Value Delivered**: Contribution to organizational goals
+- **Risk Mitigation Effectiveness**: Success in avoiding predicted problems
 
 ## Best Practices
 
-### Decision Documentation
+### Documentation Standards
 
-- Use structured templates for consistency
-- Include context, options, and rationale
-- Document assumptions and constraints
-- Maintain decision genealogy (parent/child relationships)
+- **Clear Titles**: Descriptive and unambiguous
+- **Context First**: Always explain the problem before the solution
+- **Options Considered**: Document alternatives and why they were rejected
+- **Trade-offs Explicit**: Be honest about costs and benefits
+- **Future Reviewable**: Include enough detail for later evaluation
 
 ### Stakeholder Engagement
 
-- Involve all affected parties in decision process
-- Maintain clear communication channels
-- Provide regular updates on decision status
-- Collect feedback throughout lifecycle
+- **Early Involvement**: Include stakeholders in problem identification
+- **Clear Roles**: Define who decides, who inputs, who implements
+- **Regular Updates**: Keep stakeholders informed of progress
+- **Feedback Loops**: Create opportunities for input and course correction
+- **Post-Decision Communication**: Ensure understanding of outcomes
 
-### Metrics and Monitoring
+### Learning and Improvement
 
-- Define success criteria upfront
-- Establish baseline measurements
-- Monitor both leading and lagging indicators
-- Regular review and adjustment of metrics
-
-### Continuous Improvement
-
-- Conduct post-decision retrospectives
-- Share lessons learned across teams
-- Update processes based on experience
-- Build decision-making capabilities
+- **Regular Reviews**: Schedule periodic evaluation of decisions
+- **Pattern Recognition**: Identify recurring decision types and solutions
+- **Process Refinement**: Continuously improve decision-making process
+- **Knowledge Sharing**: Distribute lessons learned across teams
+- **Decision Retrospectives**: Reflect on both good and bad decisions
 
 ## Anti-Patterns to Avoid
 
-### Decision Overload
+### Over-Documentation
 
-- **Problem**: Tracking every minor decision
-- **Solution**: Focus on significant decisions with lasting impact
+- **Problem**: Excessive paperwork slowing down decisions
+- **Solution**: Focus on critical decisions and proportional documentation
 
 ### Analysis Paralysis
 
-- **Problem**: Over-analyzing decisions without making progress
-- **Solution**: Set decision deadlines and accept good enough solutions
+- **Problem**: Endless analysis without making decisions
+- **Solution**: Set clear decision deadlines and "good enough" criteria
 
-### Review Theater
+### Decision Isolation
 
-- **Problem**: Reviews that don't lead to actionable insights
-- **Solution**: Focus reviews on learning and improvement
+- **Problem**: Making decisions without considering broader context
+- **Solution**: Always assess impact on related systems and decisions
 
-### Metrics Gaming
+### Failure to Follow Through
 
-- **Problem**: Optimizing for metrics rather than outcomes
-- **Solution**: Use balanced scorecards and qualitative assessments
+- **Problem**: Making decisions but not tracking implementation
+- **Solution**: Assign clear ownership and regular check-ins
+
+### Learning Avoidance
+
+- **Problem**: Not evaluating decision outcomes
+- **Solution**: Schedule mandatory review periods and honest assessments
+
+## Integration with Development Process
+
+### Version Control Integration
+
+- Link decision documents to code changes
+- Tag commits with decision references
+- Track implementation progress through commits
+
+### CI/CD Pipeline Integration
+
+- Validate decision compliance in automated builds
+- Generate decision impact reports
+- Alert on decisions requiring review
+
+### Project Management Integration
+
+- Connect decisions to project milestones
+- Track decision-related tasks and blockers
+- Report on decision implementation progress
 
 ## Related Frameworks
 
-- **Architecture Decision Records (ADRs)**: Documentation standard
-- **RACI Matrix**: Responsibility assignment
-- **Risk Management**: Risk assessment and mitigation
-- **Value Stream Mapping**: Process optimization
+- **Architecture Decision Records (ADRs)**: Lightweight decision documentation
+- **RACI Matrix**: Responsibility assignment for decisions
+- **Design Thinking**: Problem framing and solution exploration
+- **Lean Startup**: Hypothesis-driven decision making
+- **Risk Management**: Decision risk assessment and mitigation
 
 ## References
 
-- Architecture Decision Records (ADRs) by Michael Nygard
-- Thinking, Fast and Slow by Daniel Kahneman
-- Made to Stick by Chip Heath and Dan Heath
+- Architecture Decision Records in Action by Michael Nygard
 - Decisive by Chip Heath and Dan Heath
+- Thinking, Fast and Slow by Daniel Kahneman
+- The Art of Problem Solving by Russell Ackoff
