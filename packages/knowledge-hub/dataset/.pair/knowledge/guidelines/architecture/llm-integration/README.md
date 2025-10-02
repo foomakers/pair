@@ -1,70 +1,128 @@
 # LLM Integration Architecture
 
-Architecture patterns for integrating Large Language Models, Retrieval-Augmented Generation (RAG), and AI assistant functionality.
+Strategic architecture patterns for integrating Large Language Models, agent coordination, and AI-driven workflows in enterprise applications.
 
 ## Purpose
 
-Define standardized patterns for LLM integration, RAG implementation, and AI assistant architecture that align with project constraints and technology choices.
+Define standardized patterns for LLM integration, agent coordination, and AI workflow architecture that align with project constraints and enable effective AI-driven development processes.
 
 ## Available Integration Patterns
 
-- **[LLM Services](llm-services.md)** - External and local LLM service integration
-- **[RAG Architecture](rag-architecture.md)** - Retrieval-Augmented Generation implementation
-- **[Script Coordination](script-coordination.md)** - Bash script orchestration for AI workflows
-- **[Data Architecture](data-architecture.md)** - Vector storage, schemas, and data management
-- **[Performance & Security](performance-security.md)** - Optimization strategies and security considerations
+- **[Agent Coordination](agent-coordination.md)** - Multi-agent systems and coordination patterns
+- **[RAG Architecture](rag-architecture.md)** - Retrieval-Augmented Generation implementation strategies
+- **[Vector Databases](vector-databases.md)** - Vector storage and similarity search patterns
+- **[MCP Development](mcp-development.md)** - Model Context Protocol integration patterns
+- **[AI Workflows](ai-workflows.md)** - AI-assisted development workflow patterns
+- **[Performance & Security](performance-security.md)** - Optimization and security considerations
 
-## LLM Integration Overview
+## Integration Strategy Framework
 
-### Core Components
+### Core Architecture Components
 
-1. **LLM Client**: Unified interface for external/local LLMs
-2. **Vector Store**: Supabase integration for RAG
-3. **Document Processor**: Content ingestion and chunking
-4. **Embedding Service**: Text-to-vector conversion
-5. **Query Engine**: Search and retrieval orchestration
-6. **Response Generator**: Context-aware response generation
+**Agent Coordination Layer**
+- Multi-agent orchestration and communication patterns
+- Task distribution and result aggregation strategies
+- Agent lifecycle management and scaling patterns
+- Error handling and recovery in agent networks
 
-### Integration Strategy
+**Data and Knowledge Layer**
+- Vector database integration for semantic search
+- RAG implementation patterns and optimization
+- Knowledge base organization and maintenance
+- Context management and retrieval strategies
 
-- **Hybrid Approach**: External LLMs for complex tasks, local for simple/private
-- **API Gateway**: Unified API for all AI operations
-- **Event-Driven**: Async processing for heavy operations
-- **Graceful Degradation**: Fallback when services unavailable
-- **Cost Control**: Usage monitoring and limits
+**Integration and Workflow Layer**
+- MCP server development and integration patterns
+- AI-assisted development workflow implementation
+- Tool integration and automation patterns
+- Human-AI collaboration frameworks
 
-## Architecture Principles
+### Strategic Design Principles
 
-### External Service Integration
+**Modular and Extensible Architecture**
+- Clear separation between AI services and business logic
+- Plugin-based architecture for different AI providers
+- Standardized interfaces for model integration
+- Graceful degradation when AI services are unavailable
 
-- **Primary Providers**: OpenAI, Anthropic, Google
-- **Local Alternative**: Ollama for privacy-sensitive operations
-- **Fallback Strategy**: Multiple provider support
-- **Cost Management**: Usage monitoring and limits
+**Performance and Cost Optimization**
+- Intelligent caching and context reuse strategies
+- Cost-aware model selection and usage patterns
+- Efficient data retrieval and processing pipelines
+- Resource monitoring and optimization frameworks
 
-### RAG Implementation
+**Security and Privacy**
+- Data privacy and protection in AI workflows
+- Secure API integration and credential management
+- Access control and audit trails for AI operations
+- Compliance considerations for AI-driven processes
 
-- **Vector Database**: Supabase Vector (pgvector)
-- **Document Pipeline**: Chunking and embedding workflow
-- **Retrieval Strategy**: Semantic search with similarity thresholds
-- **Context Management**: Intelligent context assembly
+## Implementation Patterns
 
-### Data Processing
+### Agent Coordination Strategies
+- **Hierarchical**: Master-worker patterns for complex tasks
+- **Peer-to-Peer**: Collaborative agents for distributed processing
+- **Pipeline**: Sequential processing with specialized agents
+- **Event-Driven**: Reactive agents responding to system events
 
-- **Batch Operations**: Efficient bulk processing
-- **Incremental Updates**: Update only changed content
-- **Quality Control**: Content validation and filtering
-- **Metadata Management**: Rich metadata for improved search
+### RAG and Knowledge Management
+- **Centralized**: Single knowledge base with multiple access patterns
+- **Federated**: Distributed knowledge sources with unified query interface
+- **Hybrid**: Combination of structured and unstructured knowledge
+- **Real-time**: Dynamic knowledge updates and synchronization
 
-## Cross-References
+### MCP Integration Approaches
+- **Server-Side**: Backend MCP servers for heavyweight operations
+- **Client-Side**: Browser-based MCP for interactive development
+- **Hybrid**: Combined server and client MCP for optimal performance
+- **Distributed**: MCP servers across multiple services and components
 
-- **[Project Constraints](.pair/knowledge/guidelines/architecture/project-constraints/README.md)** - Team and platform constraints
-- **[Integration Patterns](.pair/knowledge/guidelines/architecture/integration-patterns.md)** - General integration strategies
-- **[Performance Patterns](.pair/knowledge/guidelines/architecture/performance-patterns/README.md)** - Optimization techniques
-- **[Tech Stack](.pair/adoption/tech/tech-stack.md)** - Technology choices
+## Decision Framework
 
-## Scope Boundaries
+### When to Use LLM Integration
+**High Value Scenarios:**
+- Complex reasoning and analysis tasks
+- Natural language processing and generation
+- Code analysis and generation workflows
+- Knowledge extraction and synthesis
 
-**Includes**: LLM integration, RAG architecture, AI assistant patterns, data pipelines
-**Excludes**: Specific LLM provider configurations, UI/UX for AI features, Business logic implementation
-**Overlaps**: Integration patterns (shared API design), Performance patterns (shared optimization strategies)
+**Consider Alternatives:**
+- Simple rule-based logic sufficient
+- Real-time performance requirements critical
+- Privacy constraints prevent external API usage
+- Cost constraints limit AI service usage
+
+### Architecture Selection Criteria
+**Complexity and Scale:**
+- Single vs. multiple AI models and services
+- Synchronous vs. asynchronous processing requirements
+- Local vs. cloud-based deployment preferences
+- Integration with existing systems and workflows
+
+**Performance and Cost:**
+- Latency requirements and user experience expectations
+- Cost constraints and budget considerations
+- Scalability and throughput requirements
+- Resource utilization and optimization priorities
+
+## Best Practices
+
+### Development and Integration
+- Start with simple, focused AI integrations
+- Implement comprehensive error handling and fallbacks
+- Use standardized interfaces and abstraction layers
+- Plan for model versioning and migration scenarios
+
+### Operations and Monitoring
+- Implement comprehensive logging and monitoring
+- Track AI service usage and costs
+- Monitor performance and quality metrics
+- Plan for capacity and scaling requirements
+
+### Security and Compliance
+- Implement secure credential and API key management
+- Design for data privacy and protection requirements
+- Plan for compliance and audit requirements
+- Consider data residency and sovereignty constraints
+
+This architecture framework provides strategic guidance for implementing effective, scalable, and secure LLM integration patterns while maintaining flexibility for different use cases and requirements.
