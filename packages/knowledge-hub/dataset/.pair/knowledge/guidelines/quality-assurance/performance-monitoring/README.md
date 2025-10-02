@@ -9,122 +9,123 @@ This framework establishes comprehensive performance monitoring through automate
 ### Performance Orchestration System
 
 #### **Performance Monitoring Orchestrator**
+
 ```typescript
 // lib/performance/performance-monitoring-orchestrator.ts
 export interface PerformanceFramework {
-  id: string;
-  name: string;
-  metrics: PerformanceMetric[];
-  monitors: PerformanceMonitor[];
-  analyzers: PerformanceAnalyzer[];
-  optimizers: PerformanceOptimizer[];
-  alerting: AlertingSystem;
-  reporting: ReportingSystem;
-  benchmarking: BenchmarkingSystem;
-  automation: AutomationSystem;
+  id: string
+  name: string
+  metrics: PerformanceMetric[]
+  monitors: PerformanceMonitor[]
+  analyzers: PerformanceAnalyzer[]
+  optimizers: PerformanceOptimizer[]
+  alerting: AlertingSystem
+  reporting: ReportingSystem
+  benchmarking: BenchmarkingSystem
+  automation: AutomationSystem
 }
 
 export interface PerformanceMetric {
-  id: string;
-  name: string;
-  category: 'frontend' | 'backend' | 'network' | 'database' | 'infrastructure';
-  type: 'timer' | 'counter' | 'gauge' | 'histogram' | 'summary';
-  description: string;
-  unit: string;
-  thresholds: PerformanceThreshold[];
-  collection: MetricCollection;
-  analysis: MetricAnalysis;
-  visualization: MetricVisualization;
-  alerting: MetricAlerting;
+  id: string
+  name: string
+  category: 'frontend' | 'backend' | 'network' | 'database' | 'infrastructure'
+  type: 'timer' | 'counter' | 'gauge' | 'histogram' | 'summary'
+  description: string
+  unit: string
+  thresholds: PerformanceThreshold[]
+  collection: MetricCollection
+  analysis: MetricAnalysis
+  visualization: MetricVisualization
+  alerting: MetricAlerting
 }
 
 export interface PerformanceMonitor {
-  id: string;
-  name: string;
-  target: MonitoringTarget;
-  frequency: number;
-  metrics: string[];
-  collectors: DataCollector[];
-  processors: DataProcessor[];
-  storage: StorageConfiguration;
-  alerting: AlertConfiguration;
-  automation: AutomationConfiguration;
+  id: string
+  name: string
+  target: MonitoringTarget
+  frequency: number
+  metrics: string[]
+  collectors: DataCollector[]
+  processors: DataProcessor[]
+  storage: StorageConfiguration
+  alerting: AlertConfiguration
+  automation: AutomationConfiguration
 }
 
 export interface PerformanceAnalyzer {
-  id: string;
-  name: string;
-  type: 'real-time' | 'batch' | 'streaming' | 'ml-based';
-  metrics: string[];
-  algorithms: AnalysisAlgorithm[];
-  patterns: PerformancePattern[];
-  anomalies: AnomalyDetection;
-  predictions: PredictiveAnalysis;
-  recommendations: RecommendationEngine;
+  id: string
+  name: string
+  type: 'real-time' | 'batch' | 'streaming' | 'ml-based'
+  metrics: string[]
+  algorithms: AnalysisAlgorithm[]
+  patterns: PerformancePattern[]
+  anomalies: AnomalyDetection
+  predictions: PredictiveAnalysis
+  recommendations: RecommendationEngine
 }
 
 export interface PerformanceOptimizer {
-  id: string;
-  name: string;
-  target: OptimizationTarget;
-  strategies: OptimizationStrategy[];
-  automations: OptimizationAutomation[];
-  validation: OptimizationValidation;
-  rollback: RollbackConfiguration;
-  monitoring: OptimizationMonitoring;
+  id: string
+  name: string
+  target: OptimizationTarget
+  strategies: OptimizationStrategy[]
+  automations: OptimizationAutomation[]
+  validation: OptimizationValidation
+  rollback: RollbackConfiguration
+  monitoring: OptimizationMonitoring
 }
 
 export class PerformanceMonitoringOrchestrator {
-  private frameworks: Map<string, PerformanceFramework> = new Map();
-  private metricsCollector: MetricsCollectionService;
-  private realTimeAnalyzer: RealTimeAnalysisService;
-  private alertingService: AlertingService;
-  private optimizationService: OptimizationService;
-  private reportingService: ReportingService;
+  private frameworks: Map<string, PerformanceFramework> = new Map()
+  private metricsCollector: MetricsCollectionService
+  private realTimeAnalyzer: RealTimeAnalysisService
+  private alertingService: AlertingService
+  private optimizationService: OptimizationService
+  private reportingService: ReportingService
 
   constructor(
     private logger: Logger,
     private configManager: ConfigurationManager,
-    private storageService: StorageService
+    private storageService: StorageService,
   ) {
-    this.metricsCollector = new MetricsCollectionService();
-    this.realTimeAnalyzer = new RealTimeAnalysisService();
-    this.alertingService = new AlertingService();
-    this.optimizationService = new OptimizationService();
-    this.reportingService = new ReportingService();
-    this.initializePerformanceFrameworks();
+    this.metricsCollector = new MetricsCollectionService()
+    this.realTimeAnalyzer = new RealTimeAnalysisService()
+    this.alertingService = new AlertingService()
+    this.optimizationService = new OptimizationService()
+    this.reportingService = new ReportingService()
+    this.initializePerformanceFrameworks()
   }
 
   public async startPerformanceMonitoring(
-    config: PerformanceMonitoringConfig
+    config: PerformanceMonitoringConfig,
   ): Promise<PerformanceMonitoringSession> {
-    const sessionId = this.generateSessionId();
-    const startTime = Date.now();
+    const sessionId = this.generateSessionId()
+    const startTime = Date.now()
 
     try {
       this.logger.info('Starting performance monitoring session', {
         sessionId,
         targets: config.targets.map(t => t.name),
-        duration: config.duration
-      });
+        duration: config.duration,
+      })
 
       // Initialize monitoring session
-      const session = await this.initializeMonitoringSession(config, sessionId);
-      
+      const session = await this.initializeMonitoringSession(config, sessionId)
+
       // Start metric collection
-      await this.startMetricCollection(session);
-      
+      await this.startMetricCollection(session)
+
       // Initialize real-time analysis
-      await this.startRealTimeAnalysis(session);
-      
+      await this.startRealTimeAnalysis(session)
+
       // Setup alerting
-      await this.configureAlerting(session);
-      
+      await this.configureAlerting(session)
+
       // Start optimization automation
-      await this.startOptimizationAutomation(session);
-      
+      await this.startOptimizationAutomation(session)
+
       // Configure reporting
-      await this.configureReporting(session);
+      await this.configureReporting(session)
 
       const monitoringSession: PerformanceMonitoringSession = {
         id: sessionId,
@@ -138,71 +139,74 @@ export class PerformanceMonitoringOrchestrator {
         realTimeData: new Map(),
         collectors: session.collectors,
         analyzers: session.analyzers,
-        optimizers: session.optimizers
-      };
+        optimizers: session.optimizers,
+      }
 
       // Store session
-      await this.storeMonitoringSession(monitoringSession);
-      
+      await this.storeMonitoringSession(monitoringSession)
+
       // Start continuous monitoring
-      this.startContinuousMonitoring(monitoringSession);
+      this.startContinuousMonitoring(monitoringSession)
 
       this.logger.info('Performance monitoring session started', {
         sessionId,
         collectors: session.collectors.length,
         analyzers: session.analyzers.length,
-        optimizers: session.optimizers.length
-      });
+        optimizers: session.optimizers.length,
+      })
 
-      return monitoringSession;
+      return monitoringSession
     } catch (error) {
       this.logger.error('Failed to start performance monitoring', {
         sessionId,
-        error: error.message
-      });
-      
-      throw new Error(`Performance monitoring failed to start: ${error.message}`);
+        error: error.message,
+      })
+
+      throw new Error(`Performance monitoring failed to start: ${error.message}`)
     }
   }
 
   public async analyzePerformanceData(
     sessionId: string,
-    timeRange: TimeRange
+    timeRange: TimeRange,
   ): Promise<PerformanceAnalysisResult> {
-    const analysisId = this.generateAnalysisId();
-    const startTime = Date.now();
+    const analysisId = this.generateAnalysisId()
+    const startTime = Date.now()
 
     try {
       this.logger.info('Starting performance data analysis', {
         analysisId,
         sessionId,
-        timeRange
-      });
+        timeRange,
+      })
 
       // Retrieve monitoring session
-      const session = await this.getMonitoringSession(sessionId);
-      
+      const session = await this.getMonitoringSession(sessionId)
+
       // Collect metrics data
-      const metricsData = await this.collectMetricsData(session, timeRange);
-      
+      const metricsData = await this.collectMetricsData(session, timeRange)
+
       // Perform frontend performance analysis
-      const frontendAnalysis = await this.analyzeFrontendPerformance(metricsData, session);
-      
+      const frontendAnalysis = await this.analyzeFrontendPerformance(metricsData, session)
+
       // Perform backend performance analysis
-      const backendAnalysis = await this.analyzeBackendPerformance(metricsData, session);
-      
+      const backendAnalysis = await this.analyzeBackendPerformance(metricsData, session)
+
       // Perform network performance analysis
-      const networkAnalysis = await this.analyzeNetworkPerformance(metricsData, session);
-      
+      const networkAnalysis = await this.analyzeNetworkPerformance(metricsData, session)
+
       // Perform database performance analysis
-      const databaseAnalysis = await this.analyzeDatabasePerformance(metricsData, session);
-      
+      const databaseAnalysis = await this.analyzeDatabasePerformance(metricsData, session)
+
       // Perform infrastructure analysis
-      const infrastructureAnalysis = await this.analyzeInfrastructurePerformance(metricsData, session);
-      
+      const infrastructureAnalysis = await this.analyzeInfrastructurePerformance(
+        metricsData,
+        session,
+      )
+
       // Detect performance anomalies
-      const anomalies = await this.detectPerformanceAnomalies(metricsData, session);
-      
+      const anomalies = await this.detectPerformanceAnomalies(metricsData, session)
+
       // Generate performance insights
       const insights = await this.generatePerformanceInsights(
         frontendAnalysis,
@@ -210,11 +214,11 @@ export class PerformanceMonitoringOrchestrator {
         networkAnalysis,
         databaseAnalysis,
         infrastructureAnalysis,
-        anomalies
-      );
-      
+        anomalies,
+      )
+
       // Create optimization recommendations
-      const recommendations = await this.generateOptimizationRecommendations(insights);
+      const recommendations = await this.generateOptimizationRecommendations(insights)
 
       const analysisResult: PerformanceAnalysisResult = {
         id: analysisId,
@@ -227,7 +231,7 @@ export class PerformanceMonitoringOrchestrator {
           backend: backendAnalysis,
           network: networkAnalysis,
           database: databaseAnalysis,
-          infrastructure: infrastructureAnalysis
+          infrastructure: infrastructureAnalysis,
         },
         anomalies,
         insights,
@@ -235,50 +239,50 @@ export class PerformanceMonitoringOrchestrator {
         overallScore: this.calculateOverallPerformanceScore(insights),
         performanceGrade: this.calculatePerformanceGrade(insights),
         trends: await this.analyzeTrends(metricsData, session),
-        duration: Date.now() - startTime
-      };
+        duration: Date.now() - startTime,
+      }
 
       // Store analysis result
-      await this.storeAnalysisResult(analysisResult);
-      
+      await this.storeAnalysisResult(analysisResult)
+
       // Update performance baselines
-      await this.updatePerformanceBaselines(analysisResult);
-      
+      await this.updatePerformanceBaselines(analysisResult)
+
       // Trigger alerts if needed
-      await this.processPerformanceAlerts(analysisResult);
+      await this.processPerformanceAlerts(analysisResult)
 
       this.logger.info('Performance data analysis completed', {
         analysisId,
         overallScore: analysisResult.overallScore,
         performanceGrade: analysisResult.performanceGrade,
         anomaliesCount: anomalies.length,
-        duration: analysisResult.duration
-      });
+        duration: analysisResult.duration,
+      })
 
-      return analysisResult;
+      return analysisResult
     } catch (error) {
       this.logger.error('Performance data analysis failed', {
         analysisId,
         sessionId,
-        error: error.message
-      });
-      
-      throw new Error(`Performance analysis failed: ${error.message}`);
+        error: error.message,
+      })
+
+      throw new Error(`Performance analysis failed: ${error.message}`)
     }
   }
 
   private initializePerformanceFrameworks(): void {
     // Frontend Performance Framework
-    const frontendFramework = this.createFrontendPerformanceFramework();
-    this.frameworks.set('frontend', frontendFramework);
+    const frontendFramework = this.createFrontendPerformanceFramework()
+    this.frameworks.set('frontend', frontendFramework)
 
     // Backend Performance Framework
-    const backendFramework = this.createBackendPerformanceFramework();
-    this.frameworks.set('backend', backendFramework);
+    const backendFramework = this.createBackendPerformanceFramework()
+    this.frameworks.set('backend', backendFramework)
 
     // Full-Stack Performance Framework
-    const fullStackFramework = this.createFullStackPerformanceFramework();
-    this.frameworks.set('full-stack', fullStackFramework);
+    const fullStackFramework = this.createFullStackPerformanceFramework()
+    this.frameworks.set('full-stack', fullStackFramework)
   }
 
   private createFrontendPerformanceFramework(): PerformanceFramework {
@@ -292,8 +296,8 @@ export class PerformanceMonitoringOrchestrator {
       alerting: this.initializeAlertingSystem(),
       reporting: this.initializeReportingSystem(),
       benchmarking: this.initializeBenchmarkingSystem(),
-      automation: this.initializeAutomationSystem()
-    };
+      automation: this.initializeAutomationSystem(),
+    }
   }
 
   private initializeFrontendMetrics(): PerformanceMetric[] {
@@ -308,32 +312,32 @@ export class PerformanceMonitoringOrchestrator {
         thresholds: [
           { level: 'good', max: 1800, color: 'green' },
           { level: 'needs-improvement', max: 3000, color: 'orange' },
-          { level: 'poor', max: Infinity, color: 'red' }
+          { level: 'poor', max: Infinity, color: 'red' },
         ],
         collection: {
           source: 'performance-observer',
           method: 'paint-timing',
           frequency: 'page-load',
           aggregation: 'p75',
-          retention: '30d'
+          retention: '30d',
         },
         analysis: {
           trending: true,
           baseline: true,
           anomaly: true,
-          correlation: ['largest-contentful-paint', 'cumulative-layout-shift']
+          correlation: ['largest-contentful-paint', 'cumulative-layout-shift'],
         },
         visualization: {
           type: 'line-chart',
           dashboard: 'core-web-vitals',
-          realTime: true
+          realTime: true,
         },
         alerting: {
           enabled: true,
           threshold: 3000,
           severity: 'warning',
-          escalation: 'on-trend'
-        }
+          escalation: 'on-trend',
+        },
       },
       {
         id: 'largest-contentful-paint',
@@ -345,32 +349,32 @@ export class PerformanceMonitoringOrchestrator {
         thresholds: [
           { level: 'good', max: 2500, color: 'green' },
           { level: 'needs-improvement', max: 4000, color: 'orange' },
-          { level: 'poor', max: Infinity, color: 'red' }
+          { level: 'poor', max: Infinity, color: 'red' },
         ],
         collection: {
           source: 'performance-observer',
           method: 'largest-contentful-paint',
           frequency: 'page-load',
           aggregation: 'p75',
-          retention: '30d'
+          retention: '30d',
         },
         analysis: {
           trending: true,
           baseline: true,
           anomaly: true,
-          correlation: ['first-contentful-paint', 'time-to-interactive']
+          correlation: ['first-contentful-paint', 'time-to-interactive'],
         },
         visualization: {
           type: 'histogram',
           dashboard: 'core-web-vitals',
-          realTime: true
+          realTime: true,
         },
         alerting: {
           enabled: true,
           threshold: 4000,
           severity: 'critical',
-          escalation: 'immediate'
-        }
+          escalation: 'immediate',
+        },
       },
       {
         id: 'cumulative-layout-shift',
@@ -382,32 +386,32 @@ export class PerformanceMonitoringOrchestrator {
         thresholds: [
           { level: 'good', max: 0.1, color: 'green' },
           { level: 'needs-improvement', max: 0.25, color: 'orange' },
-          { level: 'poor', max: Infinity, color: 'red' }
+          { level: 'poor', max: Infinity, color: 'red' },
         ],
         collection: {
           source: 'performance-observer',
           method: 'layout-shift',
           frequency: 'session',
           aggregation: 'max-session-gap',
-          retention: '30d'
+          retention: '30d',
         },
         analysis: {
           trending: true,
           baseline: true,
           anomaly: true,
-          correlation: ['first-input-delay', 'interaction-to-next-paint']
+          correlation: ['first-input-delay', 'interaction-to-next-paint'],
         },
         visualization: {
           type: 'gauge',
           dashboard: 'core-web-vitals',
-          realTime: true
+          realTime: true,
         },
         alerting: {
           enabled: true,
           threshold: 0.25,
           severity: 'warning',
-          escalation: 'on-pattern'
-        }
+          escalation: 'on-pattern',
+        },
       },
       {
         id: 'first-input-delay',
@@ -419,32 +423,32 @@ export class PerformanceMonitoringOrchestrator {
         thresholds: [
           { level: 'good', max: 100, color: 'green' },
           { level: 'needs-improvement', max: 300, color: 'orange' },
-          { level: 'poor', max: Infinity, color: 'red' }
+          { level: 'poor', max: Infinity, color: 'red' },
         ],
         collection: {
           source: 'performance-observer',
           method: 'first-input',
           frequency: 'interaction',
           aggregation: 'p75',
-          retention: '30d'
+          retention: '30d',
         },
         analysis: {
           trending: true,
           baseline: true,
           anomaly: true,
-          correlation: ['total-blocking-time', 'time-to-interactive']
+          correlation: ['total-blocking-time', 'time-to-interactive'],
         },
         visualization: {
           type: 'distribution',
           dashboard: 'core-web-vitals',
-          realTime: true
+          realTime: true,
         },
         alerting: {
           enabled: true,
           threshold: 300,
           severity: 'critical',
-          escalation: 'immediate'
-        }
+          escalation: 'immediate',
+        },
       },
       {
         id: 'interaction-to-next-paint',
@@ -456,34 +460,34 @@ export class PerformanceMonitoringOrchestrator {
         thresholds: [
           { level: 'good', max: 200, color: 'green' },
           { level: 'needs-improvement', max: 500, color: 'orange' },
-          { level: 'poor', max: Infinity, color: 'red' }
+          { level: 'poor', max: Infinity, color: 'red' },
         ],
         collection: {
           source: 'performance-observer',
           method: 'event-timing',
           frequency: 'interaction',
           aggregation: 'p75',
-          retention: '30d'
+          retention: '30d',
         },
         analysis: {
           trending: true,
           baseline: true,
           anomaly: true,
-          correlation: ['first-input-delay', 'total-blocking-time']
+          correlation: ['first-input-delay', 'total-blocking-time'],
         },
         visualization: {
           type: 'time-series',
           dashboard: 'responsiveness',
-          realTime: true
+          realTime: true,
         },
         alerting: {
           enabled: true,
           threshold: 500,
           severity: 'warning',
-          escalation: 'on-degradation'
-        }
-      }
-    ];
+          escalation: 'on-degradation',
+        },
+      },
+    ]
   }
 
   private initializeFrontendMonitors(): PerformanceMonitor[] {
@@ -494,7 +498,7 @@ export class PerformanceMonitoringOrchestrator {
         target: {
           type: 'browser',
           scope: 'all-pages',
-          sampling: 1.0
+          sampling: 1.0,
         },
         frequency: 0, // Continuous
         metrics: [
@@ -502,45 +506,51 @@ export class PerformanceMonitoringOrchestrator {
           'largest-contentful-paint',
           'cumulative-layout-shift',
           'first-input-delay',
-          'interaction-to-next-paint'
+          'interaction-to-next-paint',
         ],
         collectors: [
           {
             type: 'performance-observer',
             config: {
-              entryTypes: ['paint', 'largest-contentful-paint', 'layout-shift', 'first-input', 'event'],
-              buffered: true
-            }
+              entryTypes: [
+                'paint',
+                'largest-contentful-paint',
+                'layout-shift',
+                'first-input',
+                'event',
+              ],
+              buffered: true,
+            },
           },
           {
             type: 'navigation-timing',
             config: {
               includeTimings: true,
               includeNavigation: true,
-              includeResource: true
-            }
-          }
+              includeResource: true,
+            },
+          },
         ],
         processors: [
           {
             type: 'aggregator',
             config: {
               window: '1m',
-              functions: ['p50', 'p75', 'p95', 'p99']
-            }
+              functions: ['p50', 'p75', 'p95', 'p99'],
+            },
           },
           {
             type: 'anomaly-detector',
             config: {
               algorithm: 'isolation-forest',
-              sensitivity: 0.1
-            }
-          }
+              sensitivity: 0.1,
+            },
+          },
         ],
         storage: {
           type: 'time-series',
           retention: '90d',
-          compression: true
+          compression: true,
         },
         alerting: {
           enabled: true,
@@ -548,14 +558,14 @@ export class PerformanceMonitoringOrchestrator {
             {
               metric: 'largest-contentful-paint',
               condition: 'p75 > 4000',
-              severity: 'critical'
+              severity: 'critical',
             },
             {
               metric: 'cumulative-layout-shift',
               condition: 'p75 > 0.25',
-              severity: 'warning'
-            }
-          ]
+              severity: 'warning',
+            },
+          ],
         },
         automation: {
           enabled: true,
@@ -563,42 +573,48 @@ export class PerformanceMonitoringOrchestrator {
             {
               trigger: 'threshold-breach',
               action: 'auto-scale',
-              params: { resource: 'cdn' }
-            }
-          ]
-        }
-      }
-    ];
+              params: { resource: 'cdn' },
+            },
+          ],
+        },
+      },
+    ]
   }
 
   public async optimizePerformance(
     targetId: string,
-    optimizationConfig: PerformanceOptimizationConfig
+    optimizationConfig: PerformanceOptimizationConfig,
   ): Promise<PerformanceOptimizationResult> {
-    const optimizationId = this.generateOptimizationId();
-    const startTime = Date.now();
+    const optimizationId = this.generateOptimizationId()
+    const startTime = Date.now()
 
     try {
       this.logger.info('Starting performance optimization', {
         optimizationId,
         targetId,
-        strategies: optimizationConfig.strategies.map(s => s.name)
-      });
+        strategies: optimizationConfig.strategies.map(s => s.name),
+      })
 
       // Collect baseline performance data
-      const baseline = await this.collectBaselineMetrics(targetId);
-      
+      const baseline = await this.collectBaselineMetrics(targetId)
+
       // Analyze optimization opportunities
-      const opportunities = await this.identifyOptimizationOpportunities(baseline, optimizationConfig);
-      
+      const opportunities = await this.identifyOptimizationOpportunities(
+        baseline,
+        optimizationConfig,
+      )
+
       // Execute optimization strategies
-      const optimizations = await this.executeOptimizationStrategies(opportunities, optimizationConfig);
-      
+      const optimizations = await this.executeOptimizationStrategies(
+        opportunities,
+        optimizationConfig,
+      )
+
       // Validate optimization results
-      const validation = await this.validateOptimizationResults(targetId, baseline, optimizations);
-      
+      const validation = await this.validateOptimizationResults(targetId, baseline, optimizations)
+
       // Generate optimization report
-      const report = await this.generateOptimizationReport(baseline, optimizations, validation);
+      const report = await this.generateOptimizationReport(baseline, optimizations, validation)
 
       const result: PerformanceOptimizationResult = {
         id: optimizationId,
@@ -612,44 +628,44 @@ export class PerformanceMonitoringOrchestrator {
         improvement: this.calculatePerformanceImprovement(baseline, validation),
         success: validation.overall.success,
         duration: Date.now() - startTime,
-        timestamp: new Date()
-      };
+        timestamp: new Date(),
+      }
 
       // Store optimization result
-      await this.storeOptimizationResult(result);
-      
+      await this.storeOptimizationResult(result)
+
       // Update optimization recommendations
-      await this.updateOptimizationRecommendations(result);
+      await this.updateOptimizationRecommendations(result)
 
       this.logger.info('Performance optimization completed', {
         optimizationId,
         success: result.success,
         improvement: result.improvement,
-        duration: result.duration
-      });
+        duration: result.duration,
+      })
 
-      return result;
+      return result
     } catch (error) {
       this.logger.error('Performance optimization failed', {
         optimizationId,
         targetId,
-        error: error.message
-      });
-      
-      throw new Error(`Performance optimization failed: ${error.message}`);
+        error: error.message,
+      })
+
+      throw new Error(`Performance optimization failed: ${error.message}`)
     }
   }
 
   public async generatePerformanceReport(
     sessionId: string,
-    reportConfig: PerformanceReportConfig
+    reportConfig: PerformanceReportConfig,
   ): Promise<PerformanceReport> {
-    const reportId = this.generateReportId();
+    const reportId = this.generateReportId()
 
     try {
-      const session = await this.getMonitoringSession(sessionId);
-      const analysis = await this.analyzePerformanceData(sessionId, reportConfig.timeRange);
-      
+      const session = await this.getMonitoringSession(sessionId)
+      const analysis = await this.analyzePerformanceData(sessionId, reportConfig.timeRange)
+
       const report: PerformanceReport = {
         id: reportId,
         session,
@@ -665,20 +681,20 @@ export class PerformanceMonitoringOrchestrator {
         appendices: {
           rawData: reportConfig.includeRawData ? analysis.metricsData : undefined,
           methodology: this.generateMethodologyDocument(),
-          glossary: this.generateGlossary()
+          glossary: this.generateGlossary(),
         },
-        generatedAt: new Date()
-      };
+        generatedAt: new Date(),
+      }
 
-      return report;
+      return report
     } catch (error) {
       this.logger.error('Performance report generation failed', {
         reportId,
         sessionId,
-        error: error.message
-      });
-      
-      throw error;
+        error: error.message,
+      })
+
+      throw error
     }
   }
 }

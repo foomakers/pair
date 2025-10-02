@@ -9,50 +9,51 @@ This framework establishes clear quality ownership and accountability through st
 ### Dynamic Responsibility Matrix System
 
 #### **Quality Responsibility Orchestrator**
+
 ```typescript
 // lib/quality/responsibility-orchestrator.ts
 export interface QualityResponsibility {
-  id: string;
-  activity: string;
-  phase: 'planning' | 'development' | 'testing' | 'deployment' | 'maintenance';
-  criticality: 'critical' | 'high' | 'medium' | 'low';
-  primaryOwner: RoleType;
-  secondaryOwners: RoleType[];
-  reviewers: RoleType[];
-  approvers: RoleType[];
-  escalationPath: RoleType[];
-  slaHours: number;
-  dependencies: string[];
-  qualityStandards: QualityStandard[];
-  deliverables: string[];
-  tools: string[];
+  id: string
+  activity: string
+  phase: 'planning' | 'development' | 'testing' | 'deployment' | 'maintenance'
+  criticality: 'critical' | 'high' | 'medium' | 'low'
+  primaryOwner: RoleType
+  secondaryOwners: RoleType[]
+  reviewers: RoleType[]
+  approvers: RoleType[]
+  escalationPath: RoleType[]
+  slaHours: number
+  dependencies: string[]
+  qualityStandards: QualityStandard[]
+  deliverables: string[]
+  tools: string[]
 }
 
 export interface RoleDefinition {
-  role: RoleType;
-  title: string;
-  description: string;
-  qualityResponsibilities: string[];
-  requiredSkills: string[];
-  certifications: string[];
-  experienceLevel: 'junior' | 'mid' | 'senior' | 'lead' | 'principal';
-  qualityAuthority: QualityAuthority;
-  escalationLevel: number;
+  role: RoleType
+  title: string
+  description: string
+  qualityResponsibilities: string[]
+  requiredSkills: string[]
+  certifications: string[]
+  experienceLevel: 'junior' | 'mid' | 'senior' | 'lead' | 'principal'
+  qualityAuthority: QualityAuthority
+  escalationLevel: number
 }
 
 export interface QualityStandard {
-  id: string;
-  standard: string;
-  description: string;
-  measurable: boolean;
-  threshold: number;
-  metric: string;
-  validationMethod: string;
+  id: string
+  standard: string
+  description: string
+  measurable: boolean
+  threshold: number
+  metric: string
+  validationMethod: string
 }
 
-export type RoleType = 
+export type RoleType =
   | 'product_engineer'
-  | 'lead_engineer' 
+  | 'lead_engineer'
   | 'architect'
   | 'qa_engineer'
   | 'security_engineer'
@@ -60,51 +61,51 @@ export type RoleType =
   | 'product_manager'
   | 'tech_lead'
   | 'code_reviewer'
-  | 'release_manager';
+  | 'release_manager'
 
 export interface QualityAuthority {
-  canApprove: string[];
-  canReject: string[];
-  canEscalate: string[];
-  canOverride: string[];
-  maxDecisionValue: number;
-  requiresApproval: string[];
+  canApprove: string[]
+  canReject: string[]
+  canEscalate: string[]
+  canOverride: string[]
+  maxDecisionValue: number
+  requiresApproval: string[]
 }
 
 export class QualityResponsibilityOrchestrator {
-  private responsibilityMatrix: Map<string, QualityResponsibility> = new Map();
-  private roleDefinitions: Map<RoleType, RoleDefinition> = new Map();
-  private escalationService: EscalationService;
-  private notificationService: NotificationService;
+  private responsibilityMatrix: Map<string, QualityResponsibility> = new Map()
+  private roleDefinitions: Map<RoleType, RoleDefinition> = new Map()
+  private escalationService: EscalationService
+  private notificationService: NotificationService
 
   constructor(
     private logger: Logger,
     private contextAnalyzer: ContextAnalyzer,
-    private workflowService: WorkflowService
+    private workflowService: WorkflowService,
   ) {
-    this.escalationService = new EscalationService();
-    this.notificationService = new NotificationService();
-    this.initializeRoleDefinitions();
-    this.initializeResponsibilityMatrix();
+    this.escalationService = new EscalationService()
+    this.notificationService = new NotificationService()
+    this.initializeRoleDefinitions()
+    this.initializeResponsibilityMatrix()
   }
 
   public async assignQualityResponsibilities(
-    context: QualityContext
+    context: QualityContext,
   ): Promise<ResponsibilityAssignment> {
-    const startTime = Date.now();
+    const startTime = Date.now()
 
     try {
       // Analyze context to determine applicable responsibilities
-      const applicableResponsibilities = await this.identifyApplicableResponsibilities(context);
-      
+      const applicableResponsibilities = await this.identifyApplicableResponsibilities(context)
+
       // Assign specific owners based on availability and expertise
-      const assignments = await this.assignOwners(applicableResponsibilities, context);
-      
+      const assignments = await this.assignOwners(applicableResponsibilities, context)
+
       // Create quality workflows with proper handoffs
-      const workflows = await this.createQualityWorkflows(assignments);
-      
+      const workflows = await this.createQualityWorkflows(assignments)
+
       // Set up monitoring and escalation
-      await this.setupResponsibilityMonitoring(assignments);
+      await this.setupResponsibilityMonitoring(assignments)
 
       const assignment: ResponsibilityAssignment = {
         id: this.generateAssignmentId(context),
@@ -113,19 +114,19 @@ export class QualityResponsibilityOrchestrator {
         workflows,
         createdAt: new Date(),
         status: 'active',
-        escalationPaths: this.buildEscalationPaths(assignments)
-      };
+        escalationPaths: this.buildEscalationPaths(assignments),
+      }
 
       this.logger.info('Quality responsibilities assigned', {
         assignmentId: assignment.id,
         responsibilityCount: assignments.length,
-        duration: Date.now() - startTime
-      });
+        duration: Date.now() - startTime,
+      })
 
-      return assignment;
+      return assignment
     } catch (error) {
-      this.logger.error('Responsibility assignment failed', error);
-      throw new Error(`Failed to assign quality responsibilities: ${error.message}`);
+      this.logger.error('Responsibility assignment failed', error)
+      throw new Error(`Failed to assign quality responsibilities: ${error.message}`)
     }
   }
 
@@ -134,7 +135,8 @@ export class QualityResponsibilityOrchestrator {
     this.roleDefinitions.set('product_engineer', {
       role: 'product_engineer',
       title: 'Product Engineer',
-      description: 'Primary developer responsible for feature implementation and initial quality validation',
+      description:
+        'Primary developer responsible for feature implementation and initial quality validation',
       qualityResponsibilities: [
         'Code quality compliance',
         'Unit test implementation',
@@ -142,14 +144,14 @@ export class QualityResponsibilityOrchestrator {
         'Documentation updates',
         'Basic security validation',
         'Initial accessibility checks',
-        'Performance baseline testing'
+        'Performance baseline testing',
       ],
       requiredSkills: [
         'Programming languages proficiency',
         'Testing frameworks',
         'Code review practices',
         'Basic security awareness',
-        'Accessibility fundamentals'
+        'Accessibility fundamentals',
       ],
       certifications: [],
       experienceLevel: 'mid',
@@ -159,16 +161,17 @@ export class QualityResponsibilityOrchestrator {
         canEscalate: ['security-issues', 'performance-issues', 'architecture-concerns'],
         canOverride: [],
         maxDecisionValue: 1000,
-        requiresApproval: ['breaking-changes', 'security-changes', 'performance-changes']
+        requiresApproval: ['breaking-changes', 'security-changes', 'performance-changes'],
       },
-      escalationLevel: 1
-    });
+      escalationLevel: 1,
+    })
 
     // Lead Engineer Role
     this.roleDefinitions.set('lead_engineer', {
       role: 'lead_engineer',
       title: 'Lead Engineer',
-      description: 'Senior technical leader responsible for architecture quality and team standards',
+      description:
+        'Senior technical leader responsible for architecture quality and team standards',
       qualityResponsibilities: [
         'Architecture review',
         'Code review oversight',
@@ -176,7 +179,7 @@ export class QualityResponsibilityOrchestrator {
         'Technical debt management',
         'Team quality coaching',
         'Integration testing oversight',
-        'Performance optimization'
+        'Performance optimization',
       ],
       requiredSkills: [
         'Advanced programming',
@@ -184,7 +187,7 @@ export class QualityResponsibilityOrchestrator {
         'Team leadership',
         'Quality management',
         'Performance optimization',
-        'Security best practices'
+        'Security best practices',
       ],
       certifications: ['Technical Leadership', 'Architecture'],
       experienceLevel: 'lead',
@@ -194,16 +197,17 @@ export class QualityResponsibilityOrchestrator {
         canEscalate: ['major-architecture-changes', 'security-incidents'],
         canOverride: ['code-standards-exceptions'],
         maxDecisionValue: 10000,
-        requiresApproval: ['major-refactoring', 'framework-changes']
+        requiresApproval: ['major-refactoring', 'framework-changes'],
       },
-      escalationLevel: 3
-    });
+      escalationLevel: 3,
+    })
 
     // QA Engineer Role
     this.roleDefinitions.set('qa_engineer', {
       role: 'qa_engineer',
       title: 'QA Engineer',
-      description: 'Quality assurance specialist responsible for comprehensive testing and quality validation',
+      description:
+        'Quality assurance specialist responsible for comprehensive testing and quality validation',
       qualityResponsibilities: [
         'Test strategy development',
         'Test plan creation',
@@ -211,7 +215,7 @@ export class QualityResponsibilityOrchestrator {
         'End-to-end testing',
         'Quality metrics analysis',
         'Bug validation',
-        'Release quality assessment'
+        'Release quality assessment',
       ],
       requiredSkills: [
         'Test automation',
@@ -219,7 +223,7 @@ export class QualityResponsibilityOrchestrator {
         'Quality metrics',
         'Bug tracking',
         'Test management tools',
-        'Continuous integration'
+        'Continuous integration',
       ],
       certifications: ['ISTQB', 'Test Automation'],
       experienceLevel: 'senior',
@@ -229,16 +233,17 @@ export class QualityResponsibilityOrchestrator {
         canEscalate: ['critical-bugs', 'quality-risks'],
         canOverride: ['test-exceptions'],
         maxDecisionValue: 5000,
-        requiresApproval: ['test-strategy-changes']
+        requiresApproval: ['test-strategy-changes'],
       },
-      escalationLevel: 2
-    });
+      escalationLevel: 2,
+    })
 
     // Security Engineer Role
     this.roleDefinitions.set('security_engineer', {
       role: 'security_engineer',
       title: 'Security Engineer',
-      description: 'Security specialist responsible for security quality and vulnerability management',
+      description:
+        'Security specialist responsible for security quality and vulnerability management',
       qualityResponsibilities: [
         'Security code review',
         'Vulnerability assessment',
@@ -246,7 +251,7 @@ export class QualityResponsibilityOrchestrator {
         'Compliance validation',
         'Security standards enforcement',
         'Threat modeling',
-        'Security incident response'
+        'Security incident response',
       ],
       requiredSkills: [
         'Security testing',
@@ -254,7 +259,7 @@ export class QualityResponsibilityOrchestrator {
         'Secure coding',
         'Compliance frameworks',
         'Threat modeling',
-        'Security tools'
+        'Security tools',
       ],
       certifications: ['CISSP', 'Security+', 'CEH'],
       experienceLevel: 'senior',
@@ -264,13 +269,13 @@ export class QualityResponsibilityOrchestrator {
         canEscalate: ['critical-vulnerabilities', 'compliance-risks'],
         canOverride: ['security-exceptions'],
         maxDecisionValue: 15000,
-        requiresApproval: ['security-policy-changes']
+        requiresApproval: ['security-policy-changes'],
       },
-      escalationLevel: 4
-    });
+      escalationLevel: 4,
+    })
 
     // Additional role definitions...
-    this.initializeAdditionalRoles();
+    this.initializeAdditionalRoles()
   }
 
   private initializeAdditionalRoles(): void {
@@ -278,7 +283,8 @@ export class QualityResponsibilityOrchestrator {
     this.roleDefinitions.set('architect', {
       role: 'architect',
       title: 'Software Architect',
-      description: 'System architect responsible for overall architecture quality and technical direction',
+      description:
+        'System architect responsible for overall architecture quality and technical direction',
       qualityResponsibilities: [
         'Architecture quality oversight',
         'System design validation',
@@ -286,7 +292,7 @@ export class QualityResponsibilityOrchestrator {
         'Integration architecture',
         'Scalability assessment',
         'Technical roadmap quality',
-        'Cross-system quality'
+        'Cross-system quality',
       ],
       requiredSkills: [
         'System architecture',
@@ -294,7 +300,7 @@ export class QualityResponsibilityOrchestrator {
         'Integration patterns',
         'Scalability design',
         'Quality architecture',
-        'Technical leadership'
+        'Technical leadership',
       ],
       certifications: ['Architecture Certification', 'Cloud Architecture'],
       experienceLevel: 'principal',
@@ -304,16 +310,17 @@ export class QualityResponsibilityOrchestrator {
         canEscalate: ['strategic-architecture-issues'],
         canOverride: ['architecture-exceptions', 'technology-exceptions'],
         maxDecisionValue: 50000,
-        requiresApproval: ['major-architecture-changes']
+        requiresApproval: ['major-architecture-changes'],
       },
-      escalationLevel: 5
-    });
+      escalationLevel: 5,
+    })
 
     // DevOps Engineer Role
     this.roleDefinitions.set('devops_engineer', {
       role: 'devops_engineer',
       title: 'DevOps Engineer',
-      description: 'DevOps specialist responsible for deployment quality and operational excellence',
+      description:
+        'DevOps specialist responsible for deployment quality and operational excellence',
       qualityResponsibilities: [
         'Deployment quality validation',
         'Infrastructure as code quality',
@@ -321,7 +328,7 @@ export class QualityResponsibilityOrchestrator {
         'Monitoring and observability',
         'Performance monitoring',
         'Operational readiness',
-        'Disaster recovery validation'
+        'Disaster recovery validation',
       ],
       requiredSkills: [
         'Infrastructure automation',
@@ -329,7 +336,7 @@ export class QualityResponsibilityOrchestrator {
         'Monitoring tools',
         'Cloud platforms',
         'Container orchestration',
-        'Performance monitoring'
+        'Performance monitoring',
       ],
       certifications: ['AWS/Azure/GCP', 'Kubernetes', 'DevOps'],
       experienceLevel: 'senior',
@@ -339,10 +346,10 @@ export class QualityResponsibilityOrchestrator {
         canEscalate: ['production-issues', 'infrastructure-failures'],
         canOverride: ['deployment-exceptions'],
         maxDecisionValue: 10000,
-        requiresApproval: ['production-changes']
+        requiresApproval: ['production-changes'],
       },
-      escalationLevel: 3
-    });
+      escalationLevel: 3,
+    })
   }
 
   private initializeResponsibilityMatrix(): void {
@@ -367,12 +374,12 @@ export class QualityResponsibilityOrchestrator {
           measurable: true,
           threshold: 95,
           metric: 'percentage',
-          validationMethod: 'automated-linting'
-        }
+          validationMethod: 'automated-linting',
+        },
       ],
       deliverables: ['code-review-report', 'standards-compliance-report'],
-      tools: ['ESLint', 'Prettier', 'SonarQube']
-    });
+      tools: ['ESLint', 'Prettier', 'SonarQube'],
+    })
 
     this.responsibilityMatrix.set('security-validation', {
       id: 'security-validation',
@@ -394,12 +401,12 @@ export class QualityResponsibilityOrchestrator {
           measurable: true,
           threshold: 100,
           metric: 'percentage',
-          validationMethod: 'security-scanning'
-        }
+          validationMethod: 'security-scanning',
+        },
       ],
       deliverables: ['security-assessment-report', 'vulnerability-scan-report'],
-      tools: ['Snyk', 'OWASP ZAP', 'SonarQube Security']
-    });
+      tools: ['Snyk', 'OWASP ZAP', 'SonarQube Security'],
+    })
 
     this.responsibilityMatrix.set('test-coverage-validation', {
       id: 'test-coverage-validation',
@@ -421,12 +428,12 @@ export class QualityResponsibilityOrchestrator {
           measurable: true,
           threshold: 80,
           metric: 'percentage',
-          validationMethod: 'coverage-analysis'
-        }
+          validationMethod: 'coverage-analysis',
+        },
       ],
       deliverables: ['test-coverage-report', 'test-execution-report'],
-      tools: ['Jest', 'Istanbul', 'Coverage Tools']
-    });
+      tools: ['Jest', 'Istanbul', 'Coverage Tools'],
+    })
 
     this.responsibilityMatrix.set('performance-validation', {
       id: 'performance-validation',
@@ -448,12 +455,12 @@ export class QualityResponsibilityOrchestrator {
           measurable: true,
           threshold: 85,
           metric: 'percentage',
-          validationMethod: 'performance-testing'
-        }
+          validationMethod: 'performance-testing',
+        },
       ],
       deliverables: ['performance-test-report', 'benchmark-analysis'],
-      tools: ['Lighthouse', 'Performance Monitoring', 'Load Testing Tools']
-    });
+      tools: ['Lighthouse', 'Performance Monitoring', 'Load Testing Tools'],
+    })
 
     this.responsibilityMatrix.set('deployment-readiness', {
       id: 'deployment-readiness',
@@ -475,65 +482,56 @@ export class QualityResponsibilityOrchestrator {
           measurable: true,
           threshold: 100,
           metric: 'percentage',
-          validationMethod: 'readiness-checklist'
-        }
+          validationMethod: 'readiness-checklist',
+        },
       ],
       deliverables: ['deployment-readiness-report', 'go-live-checklist'],
-      tools: ['CI/CD Pipeline', 'Deployment Tools', 'Monitoring']
-    });
+      tools: ['CI/CD Pipeline', 'Deployment Tools', 'Monitoring'],
+    })
   }
 
   private async identifyApplicableResponsibilities(
-    context: QualityContext
+    context: QualityContext,
   ): Promise<QualityResponsibility[]> {
-    const applicableResponsibilities: QualityResponsibility[] = [];
+    const applicableResponsibilities: QualityResponsibility[] = []
 
     // Always include basic quality responsibilities
     applicableResponsibilities.push(
       this.responsibilityMatrix.get('code-standards-validation')!,
-      this.responsibilityMatrix.get('test-coverage-validation')!
-    );
+      this.responsibilityMatrix.get('test-coverage-validation')!,
+    )
 
     // Context-specific responsibilities
     if (context.includesSecurityChanges || context.includesNewFeatures) {
-      applicableResponsibilities.push(
-        this.responsibilityMatrix.get('security-validation')!
-      );
+      applicableResponsibilities.push(this.responsibilityMatrix.get('security-validation')!)
     }
 
     if (context.includesPerformanceChanges || context.includesNewFeatures) {
-      applicableResponsibilities.push(
-        this.responsibilityMatrix.get('performance-validation')!
-      );
+      applicableResponsibilities.push(this.responsibilityMatrix.get('performance-validation')!)
     }
 
     if (context.requiresDeployment) {
-      applicableResponsibilities.push(
-        this.responsibilityMatrix.get('deployment-readiness')!
-      );
+      applicableResponsibilities.push(this.responsibilityMatrix.get('deployment-readiness')!)
     }
 
-    return applicableResponsibilities;
+    return applicableResponsibilities
   }
 
   private async assignOwners(
     responsibilities: QualityResponsibility[],
-    context: QualityContext
+    context: QualityContext,
   ): Promise<ResponsibilityInstance[]> {
-    const assignments: ResponsibilityInstance[] = [];
+    const assignments: ResponsibilityInstance[] = []
 
     for (const responsibility of responsibilities) {
       // Find available owners
-      const availableOwners = await this.findAvailableOwners(
-        responsibility.primaryOwner,
-        context
-      );
+      const availableOwners = await this.findAvailableOwners(responsibility.primaryOwner, context)
 
       if (availableOwners.length === 0) {
-        throw new Error(`No available owners for responsibility: ${responsibility.id}`);
+        throw new Error(`No available owners for responsibility: ${responsibility.id}`)
       }
 
-      const assignedOwner = availableOwners[0]; // Select best available owner
+      const assignedOwner = availableOwners[0] // Select best available owner
 
       const assignment: ResponsibilityInstance = {
         id: this.generateInstanceId(responsibility, assignedOwner),
@@ -543,22 +541,22 @@ export class QualityResponsibilityOrchestrator {
         dueDate: new Date(Date.now() + responsibility.slaHours * 60 * 60 * 1000),
         status: 'assigned',
         progress: 0,
-        qualityMetrics: this.initializeQualityMetrics(responsibility)
-      };
+        qualityMetrics: this.initializeQualityMetrics(responsibility),
+      }
 
-      assignments.push(assignment);
+      assignments.push(assignment)
 
       // Send assignment notification
-      await this.notificationService.sendAssignmentNotification(assignment);
+      await this.notificationService.sendAssignmentNotification(assignment)
     }
 
-    return assignments;
+    return assignments
   }
 
   private async createQualityWorkflows(
-    assignments: ResponsibilityInstance[]
+    assignments: ResponsibilityInstance[],
   ): Promise<QualityWorkflow[]> {
-    const workflows: QualityWorkflow[] = [];
+    const workflows: QualityWorkflow[] = []
 
     for (const assignment of assignments) {
       const workflow: QualityWorkflow = {
@@ -568,14 +566,14 @@ export class QualityResponsibilityOrchestrator {
         currentStep: 0,
         status: 'active',
         createdAt: new Date(),
-        handoffs: this.generateHandoffs(assignment.responsibility)
-      };
+        handoffs: this.generateHandoffs(assignment.responsibility),
+      }
 
-      workflows.push(workflow);
-      await this.workflowService.startWorkflow(workflow);
+      workflows.push(workflow)
+      await this.workflowService.startWorkflow(workflow)
     }
 
-    return workflows;
+    return workflows
   }
 
   private generateWorkflowSteps(responsibility: QualityResponsibility): WorkflowStep[] {
@@ -587,7 +585,7 @@ export class QualityResponsibilityOrchestrator {
         estimatedDuration: 30,
         owner: responsibility.primaryOwner,
         deliverables: ['preparation-checklist'],
-        dependencies: []
+        dependencies: [],
       },
       {
         id: 'execution',
@@ -596,7 +594,7 @@ export class QualityResponsibilityOrchestrator {
         estimatedDuration: responsibility.slaHours * 60 - 60,
         owner: responsibility.primaryOwner,
         deliverables: responsibility.deliverables,
-        dependencies: ['preparation']
+        dependencies: ['preparation'],
       },
       {
         id: 'review',
@@ -605,7 +603,7 @@ export class QualityResponsibilityOrchestrator {
         estimatedDuration: 20,
         owner: responsibility.reviewers[0],
         deliverables: ['review-report'],
-        dependencies: ['execution']
+        dependencies: ['execution'],
       },
       {
         id: 'approval',
@@ -614,33 +612,33 @@ export class QualityResponsibilityOrchestrator {
         estimatedDuration: 10,
         owner: responsibility.approvers[0],
         deliverables: ['approval-decision'],
-        dependencies: ['review']
-      }
-    ];
+        dependencies: ['review'],
+      },
+    ]
 
-    return steps;
+    return steps
   }
 
   public async escalateResponsibility(
     assignmentId: string,
     reason: string,
-    urgency: 'low' | 'medium' | 'high' | 'critical'
+    urgency: 'low' | 'medium' | 'high' | 'critical',
   ): Promise<EscalationResult> {
-    const assignment = await this.getResponsibilityAssignment(assignmentId);
-    
+    const assignment = await this.getResponsibilityAssignment(assignmentId)
+
     if (!assignment) {
-      throw new Error(`Assignment not found: ${assignmentId}`);
+      throw new Error(`Assignment not found: ${assignmentId}`)
     }
 
-    const escalationPath = assignment.responsibility.escalationPath;
-    const currentLevel = this.getCurrentEscalationLevel(assignment);
-    
+    const escalationPath = assignment.responsibility.escalationPath
+    const currentLevel = this.getCurrentEscalationLevel(assignment)
+
     if (currentLevel >= escalationPath.length) {
-      throw new Error('Maximum escalation level reached');
+      throw new Error('Maximum escalation level reached')
     }
 
-    const escalatedTo = escalationPath[currentLevel];
-    
+    const escalatedTo = escalationPath[currentLevel]
+
     const escalation: EscalationResult = {
       id: this.generateEscalationId(assignment),
       assignmentId,
@@ -650,20 +648,20 @@ export class QualityResponsibilityOrchestrator {
       urgency,
       escalatedAt: new Date(),
       status: 'pending',
-      escalationLevel: currentLevel + 1
-    };
+      escalationLevel: currentLevel + 1,
+    }
 
-    await this.escalationService.processEscalation(escalation);
-    await this.notificationService.sendEscalationNotification(escalation);
+    await this.escalationService.processEscalation(escalation)
+    await this.notificationService.sendEscalationNotification(escalation)
 
     this.logger.info('Responsibility escalated', {
       assignmentId,
       escalatedTo,
       reason,
-      urgency
-    });
+      urgency,
+    })
 
-    return escalation;
+    return escalation
   }
 }
 ```

@@ -9,86 +9,87 @@ This framework establishes comprehensive security implementation patterns that e
 ### Authentication and Authorization Framework
 
 #### **JWT Authentication System**
+
 ```typescript
 // lib/auth/jwt-service.ts
-import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
-import { promisify } from 'util';
-import { Logger } from '@/lib/logger';
-import { CacheService } from '@/lib/cache';
-import { AuditLogger } from '@/lib/audit';
+import jwt from 'jsonwebtoken'
+import crypto from 'crypto'
+import { promisify } from 'util'
+import { Logger } from '@/lib/logger'
+import { CacheService } from '@/lib/cache'
+import { AuditLogger } from '@/lib/audit'
 
 export interface TokenPayload {
-  userId: string;
-  email: string;
-  role: string;
-  permissions: string[];
-  sessionId: string;
-  iat: number;
-  exp: number;
-  iss: string;
-  aud: string;
+  userId: string
+  email: string
+  role: string
+  permissions: string[]
+  sessionId: string
+  iat: number
+  exp: number
+  iss: string
+  aud: string
 }
 
 export interface RefreshTokenData {
-  userId: string;
-  tokenFamily: string;
-  version: number;
-  createdAt: Date;
-  expiresAt: Date;
-  ipAddress: string;
-  userAgent: string;
+  userId: string
+  tokenFamily: string
+  version: number
+  createdAt: Date
+  expiresAt: Date
+  ipAddress: string
+  userAgent: string
 }
 
 export class JWTService {
-  private readonly accessTokenSecret: string;
-  private readonly refreshTokenSecret: string;
-  private readonly issuer: string;
-  private readonly audience: string;
+  private readonly accessTokenSecret: string
+  private readonly refreshTokenSecret: string
+  private readonly issuer: string
+  private readonly audience: string
 
   constructor(
     private logger: Logger,
     private cache: CacheService,
     private auditLogger: AuditLogger,
     private config: {
-      accessTokenExpiry: string;
-      refreshTokenExpiry: string;
-      accessTokenSecret: string;
-      refreshTokenSecret: string;
-      issuer: string;
-      audience: string;
-      algorithm: jwt.Algorithm;
-    }
+      accessTokenExpiry: string
+      refreshTokenExpiry: string
+      accessTokenSecret: string
+      refreshTokenSecret: string
+      issuer: string
+      audience: string
+      algorithm: jwt.Algorithm
+    },
   ) {
-    this.accessTokenSecret = config.accessTokenSecret;
-    this.refreshTokenSecret = config.refreshTokenSecret;
-    this.issuer = config.issuer;
-    this.audience = config.audience;
+    this.accessTokenSecret = config.accessTokenSecret
+    this.refreshTokenSecret = config.refreshTokenSecret
+    this.issuer = config.issuer
+    this.audience = config.audience
 
     if (!this.accessTokenSecret || !this.refreshTokenSecret) {
-      throw new Error('JWT secrets must be provided');
+      throw new Error('JWT secrets must be provided')
     }
   }
 
   public async generateTokenPair(
     user: {
-      id: string;
-      email: string;
-      role: string;
-      permissions: string[];
+      id: string
+      email: string
+      role: string
+      permissions: string[]
     },
     metadata: {
-      ipAddress: string;
-      userAgent: string;
-    }
+      ipAddress: string
+      userAgent: string
+    },
   ): Promise<{
-    accessToken: string;
-    refreshToken: string;
-    expiresIn: number;
+    accessToken: string
+    refreshToken: string
+    expiresIn: number
   }> {
     try {
-      const sessionId = crypto.randomUUID();
-      const tokenFamily = crypto.randomUUID();
+      const sessionId = crypto.randomUUID()
+      const tokenFamily = crypto.randomUUID()
 
       // Create access token
       const accessTokenPayload: Omit<TokenPayload, 'iat' | 'exp'> = {
@@ -98,26 +99,26 @@ export class JWTService {
         permissions: user.permissions,
         sessionId,
         iss: this.issuer,
-        aud: this.audience
-      };
+        aud: this.audience,
+      }
 
       const accessToken = jwt.sign(accessTokenPayload, this.accessTokenSecret, {
         expiresIn: this.config.accessTokenExpiry,
-        algorithm: this.config.algorithm
-      });
+        algorithm: this.config.algorithm,
+      })
 
       // Create refresh token
       const refreshTokenPayload = {
         userId: user.id,
         sessionId,
         tokenFamily,
-        version: 1
-      };
+        version: 1,
+      }
 
       const refreshToken = jwt.sign(refreshTokenPayload, this.refreshTokenSecret, {
         expiresIn: this.config.refreshTokenExpiry,
-        algorithm: this.config.algorithm
-      });
+        algorithm: this.config.algorithm,
+      })
 
       // Store refresh token data
       const refreshTokenData: RefreshTokenData = {
@@ -127,14 +128,14 @@ export class JWTService {
         createdAt: new Date(),
         expiresAt: new Date(Date.now() + this.parseExpiry(this.config.refreshTokenExpiry)),
         ipAddress: metadata.ipAddress,
-        userAgent: metadata.userAgent
-      };
+        userAgent: metadata.userAgent,
+      }
 
       await this.cache.set(
         `refresh_token:${tokenFamily}`,
         refreshTokenData,
-        this.parseExpiry(this.config.refreshTokenExpiry) / 1000
-      );
+        this.parseExpiry(this.config.refreshTokenExpiry) / 1000,
+      )
 
       // Store active session
       await this.cache.set(
@@ -144,10 +145,10 @@ export class JWTService {
           tokenFamily,
           createdAt: new Date(),
           ipAddress: metadata.ipAddress,
-          userAgent: metadata.userAgent
+          userAgent: metadata.userAgent,
         },
-        this.parseExpiry(this.config.accessTokenExpiry) / 1000
-      );
+        this.parseExpiry(this.config.accessTokenExpiry) / 1000,
+      )
 
       // Log successful token generation
       await this.auditLogger.log({
@@ -156,18 +157,18 @@ export class JWTService {
         metadata: {
           sessionId,
           ipAddress: metadata.ipAddress,
-          userAgent: metadata.userAgent
-        }
-      });
+          userAgent: metadata.userAgent,
+        },
+      })
 
       return {
         accessToken,
         refreshToken,
-        expiresIn: this.parseExpiry(this.config.accessTokenExpiry) / 1000
-      };
+        expiresIn: this.parseExpiry(this.config.accessTokenExpiry) / 1000,
+      }
     } catch (error) {
-      this.logger.error('Failed to generate token pair', error);
-      throw new Error('Token generation failed');
+      this.logger.error('Failed to generate token pair', error)
+      throw new Error('Token generation failed')
     }
   }
 
@@ -176,69 +177,69 @@ export class JWTService {
       const payload = jwt.verify(token, this.accessTokenSecret, {
         algorithms: [this.config.algorithm],
         issuer: this.issuer,
-        audience: this.audience
-      }) as TokenPayload;
+        audience: this.audience,
+      }) as TokenPayload
 
       // Check if session is still active
-      const session = await this.cache.get(`session:${payload.sessionId}`);
+      const session = await this.cache.get(`session:${payload.sessionId}`)
       if (!session) {
-        throw new Error('Session expired or invalid');
+        throw new Error('Session expired or invalid')
       }
 
-      return payload;
+      return payload
     } catch (error) {
       if (error instanceof jwt.JsonWebTokenError) {
-        throw new Error('Invalid token');
+        throw new Error('Invalid token')
       }
       if (error instanceof jwt.TokenExpiredError) {
-        throw new Error('Token expired');
+        throw new Error('Token expired')
       }
-      throw error;
+      throw error
     }
   }
 
   public async refreshTokens(
     refreshToken: string,
     metadata: {
-      ipAddress: string;
-      userAgent: string;
-    }
+      ipAddress: string
+      userAgent: string
+    },
   ): Promise<{
-    accessToken: string;
-    refreshToken: string;
-    expiresIn: number;
+    accessToken: string
+    refreshToken: string
+    expiresIn: number
   }> {
     try {
       // Verify refresh token
       const payload = jwt.verify(refreshToken, this.refreshTokenSecret, {
-        algorithms: [this.config.algorithm]
-      }) as any;
+        algorithms: [this.config.algorithm],
+      }) as any
 
       // Get stored refresh token data
-      const storedTokenData = await this.cache.get(`refresh_token:${payload.tokenFamily}`);
+      const storedTokenData = await this.cache.get(`refresh_token:${payload.tokenFamily}`)
       if (!storedTokenData || storedTokenData.version !== payload.version) {
         // Potential token reuse attack - invalidate all tokens for this family
-        await this.invalidateTokenFamily(payload.tokenFamily);
-        throw new Error('Invalid refresh token - potential security breach');
+        await this.invalidateTokenFamily(payload.tokenFamily)
+        throw new Error('Invalid refresh token - potential security breach')
       }
 
       // Check if refresh token has expired
       if (new Date() > storedTokenData.expiresAt) {
-        await this.cache.delete(`refresh_token:${payload.tokenFamily}`);
-        throw new Error('Refresh token expired');
+        await this.cache.delete(`refresh_token:${payload.tokenFamily}`)
+        throw new Error('Refresh token expired')
       }
 
       // Get user data (you'll need to implement this based on your user service)
-      const user = await this.getUserById(payload.userId);
+      const user = await this.getUserById(payload.userId)
       if (!user) {
-        throw new Error('User not found');
+        throw new Error('User not found')
       }
 
       // Generate new token pair
-      const newTokens = await this.generateTokenPair(user, metadata);
+      const newTokens = await this.generateTokenPair(user, metadata)
 
       // Invalidate old refresh token
-      await this.cache.delete(`refresh_token:${payload.tokenFamily}`);
+      await this.cache.delete(`refresh_token:${payload.tokenFamily}`)
 
       // Log successful token refresh
       await this.auditLogger.log({
@@ -247,37 +248,37 @@ export class JWTService {
         metadata: {
           oldTokenFamily: payload.tokenFamily,
           ipAddress: metadata.ipAddress,
-          userAgent: metadata.userAgent
-        }
-      });
+          userAgent: metadata.userAgent,
+        },
+      })
 
-      return newTokens;
+      return newTokens
     } catch (error) {
-      this.logger.error('Token refresh failed', error);
-      throw error;
+      this.logger.error('Token refresh failed', error)
+      throw error
     }
   }
 
   public async revokeSession(sessionId: string): Promise<void> {
     try {
-      const session = await this.cache.get(`session:${sessionId}`);
+      const session = await this.cache.get(`session:${sessionId}`)
       if (session) {
         // Remove session
-        await this.cache.delete(`session:${sessionId}`);
-        
+        await this.cache.delete(`session:${sessionId}`)
+
         // Remove associated refresh token
-        await this.cache.delete(`refresh_token:${session.tokenFamily}`);
+        await this.cache.delete(`refresh_token:${session.tokenFamily}`)
 
         // Log session revocation
         await this.auditLogger.log({
           action: 'session_revoked',
           userId: session.userId,
-          metadata: { sessionId }
-        });
+          metadata: { sessionId },
+        })
       }
     } catch (error) {
-      this.logger.error('Failed to revoke session', error);
-      throw error;
+      this.logger.error('Failed to revoke session', error)
+      throw error
     }
   }
 
@@ -285,13 +286,13 @@ export class JWTService {
     try {
       // This would require a pattern match in your cache implementation
       // For Redis: SCAN for "session:*" and filter by userId
-      const userSessions = await this.cache.getKeysByPattern(`session:*`);
-      
+      const userSessions = await this.cache.getKeysByPattern(`session:*`)
+
       for (const sessionKey of userSessions) {
-        const session = await this.cache.get(sessionKey);
+        const session = await this.cache.get(sessionKey)
         if (session && session.userId === userId) {
-          const sessionId = sessionKey.replace('session:', '');
-          await this.revokeSession(sessionId);
+          const sessionId = sessionKey.replace('session:', '')
+          await this.revokeSession(sessionId)
         }
       }
 
@@ -299,128 +300,126 @@ export class JWTService {
       await this.auditLogger.log({
         action: 'all_sessions_revoked',
         userId,
-        metadata: { reason: 'security_action' }
-      });
+        metadata: { reason: 'security_action' },
+      })
     } catch (error) {
-      this.logger.error('Failed to revoke all user sessions', error);
-      throw error;
+      this.logger.error('Failed to revoke all user sessions', error)
+      throw error
     }
   }
 
   private async invalidateTokenFamily(tokenFamily: string): Promise<void> {
     try {
-      await this.cache.delete(`refresh_token:${tokenFamily}`);
-      
+      await this.cache.delete(`refresh_token:${tokenFamily}`)
+
       // Log security incident
       await this.auditLogger.log({
         action: 'token_family_invalidated',
-        metadata: { 
+        metadata: {
           tokenFamily,
-          reason: 'potential_token_reuse_attack'
-        }
-      });
+          reason: 'potential_token_reuse_attack',
+        },
+      })
     } catch (error) {
-      this.logger.error('Failed to invalidate token family', error);
+      this.logger.error('Failed to invalidate token family', error)
     }
   }
 
   private parseExpiry(expiry: string): number {
     // Parse expressions like "15m", "1h", "7d"
-    const match = expiry.match(/^(\d+)([smhd])$/);
+    const match = expiry.match(/^(\d+)([smhd])$/)
     if (!match) {
-      throw new Error('Invalid expiry format');
+      throw new Error('Invalid expiry format')
     }
 
-    const value = parseInt(match[1]);
-    const unit = match[2];
+    const value = parseInt(match[1])
+    const unit = match[2]
 
     const multipliers = {
       s: 1000,
       m: 60 * 1000,
       h: 60 * 60 * 1000,
-      d: 24 * 60 * 60 * 1000
-    };
+      d: 24 * 60 * 60 * 1000,
+    }
 
-    return value * multipliers[unit as keyof typeof multipliers];
+    return value * multipliers[unit as keyof typeof multipliers]
   }
 
   private async getUserById(userId: string): Promise<any> {
     // Implement this based on your user service
     // This should return user data with permissions
-    throw new Error('getUserById not implemented');
+    throw new Error('getUserById not implemented')
   }
 }
 ```
 
 #### **Role-Based Access Control (RBAC)**
+
 ```typescript
 // lib/auth/rbac-service.ts
 export interface Permission {
-  id: string;
-  resource: string;
-  action: string;
-  conditions?: Record<string, any>;
+  id: string
+  resource: string
+  action: string
+  conditions?: Record<string, any>
 }
 
 export interface Role {
-  id: string;
-  name: string;
-  permissions: Permission[];
-  inherits?: string[]; // Role inheritance
+  id: string
+  name: string
+  permissions: Permission[]
+  inherits?: string[] // Role inheritance
 }
 
 export interface User {
-  id: string;
-  email: string;
-  roles: string[];
-  customPermissions?: Permission[];
+  id: string
+  email: string
+  roles: string[]
+  customPermissions?: Permission[]
 }
 
 export class RBACService {
-  private roles: Map<string, Role> = new Map();
-  private userRoles: Map<string, string[]> = new Map();
+  private roles: Map<string, Role> = new Map()
+  private userRoles: Map<string, string[]> = new Map()
 
-  constructor(
-    private logger: Logger,
-    private auditLogger: AuditLogger
-  ) {}
+  constructor(private logger: Logger, private auditLogger: AuditLogger) {}
 
   public defineRole(role: Role): void {
-    this.roles.set(role.id, role);
-    this.logger.info(`Role defined: ${role.name}`, { roleId: role.id });
+    this.roles.set(role.id, role)
+    this.logger.info(`Role defined: ${role.name}`, { roleId: role.id })
   }
 
   public assignRoleToUser(userId: string, roleId: string): void {
     if (!this.roles.has(roleId)) {
-      throw new Error(`Role ${roleId} does not exist`);
+      throw new Error(`Role ${roleId} does not exist`)
     }
 
-    const userRoles = this.userRoles.get(userId) || [];
+    const userRoles = this.userRoles.get(userId) || []
     if (!userRoles.includes(roleId)) {
-      userRoles.push(roleId);
-      this.userRoles.set(userId, userRoles);
+      userRoles.push(roleId)
+      this.userRoles.set(userId, userRoles)
 
       this.auditLogger.log({
         action: 'role_assigned',
         userId,
-        metadata: { roleId }
-      });
+        metadata: { roleId },
+      })
     }
   }
 
   public removeRoleFromUser(userId: string, roleId: string): void {
-    const userRoles = this.userRoles.get(userId) || [];
-    const index = userRoles.indexOf(roleId);
-    
+    const userRoles = this.userRoles.get(userId) || []
+    const index = userRoles.indexOf(roleId)
+
     if (index > -1) {
-      userRoles.splice(index, 1);
-      this.userRoles.set(userId, userRoles);
+      userRoles.splice(index, 1)
+      this.userRoles.set(userId, userRoles)
 
       this.auditLogger.log({
         action: 'role_removed',
         userId,
-        metadata: { roleId }
-      });
+        metadata: { roleId },
+      })
     }
   }
 
@@ -428,11 +427,11 @@ export class RBACService {
     userId: string,
     resource: string,
     action: string,
-    context?: Record<string, any>
+    context?: Record<string, any>,
   ): Promise<boolean> {
     try {
-      const userRoles = this.userRoles.get(userId) || [];
-      const userPermissions = this.getUserPermissions(userRoles);
+      const userRoles = this.userRoles.get(userId) || []
+      const userPermissions = this.getUserPermissions(userRoles)
 
       // Check if user has the specific permission
       for (const permission of userPermissions) {
@@ -440,325 +439,316 @@ export class RBACService {
           await this.auditLogger.log({
             action: 'permission_granted',
             userId,
-            metadata: { 
-              resource, 
-              action, 
-              permissionId: permission.id 
-            }
-          });
-          return true;
+            metadata: {
+              resource,
+              action,
+              permissionId: permission.id,
+            },
+          })
+          return true
         }
       }
 
       await this.auditLogger.log({
         action: 'permission_denied',
         userId,
-        metadata: { resource, action }
-      });
+        metadata: { resource, action },
+      })
 
-      return false;
+      return false
     } catch (error) {
-      this.logger.error('Permission check failed', error);
-      return false;
+      this.logger.error('Permission check failed', error)
+      return false
     }
   }
 
   private getUserPermissions(roleIds: string[]): Permission[] {
-    const permissions: Permission[] = [];
-    const processedRoles = new Set<string>();
+    const permissions: Permission[] = []
+    const processedRoles = new Set<string>()
 
     const processRole = (roleId: string) => {
-      if (processedRoles.has(roleId)) return;
-      processedRoles.add(roleId);
+      if (processedRoles.has(roleId)) return
+      processedRoles.add(roleId)
 
-      const role = this.roles.get(roleId);
-      if (!role) return;
+      const role = this.roles.get(roleId)
+      if (!role) return
 
       // Add role permissions
-      permissions.push(...role.permissions);
+      permissions.push(...role.permissions)
 
       // Process inherited roles
       if (role.inherits) {
-        role.inherits.forEach(processRole);
+        role.inherits.forEach(processRole)
       }
-    };
+    }
 
-    roleIds.forEach(processRole);
-    return permissions;
+    roleIds.forEach(processRole)
+    return permissions
   }
 
   private matchesPermission(
     permission: Permission,
     resource: string,
     action: string,
-    context?: Record<string, any>
+    context?: Record<string, any>,
   ): boolean {
     // Basic resource and action matching
     if (permission.resource !== '*' && permission.resource !== resource) {
-      return false;
+      return false
     }
 
     if (permission.action !== '*' && permission.action !== action) {
-      return false;
+      return false
     }
 
     // Check conditions if present
     if (permission.conditions && context) {
-      return this.evaluateConditions(permission.conditions, context);
+      return this.evaluateConditions(permission.conditions, context)
     }
 
-    return true;
+    return true
   }
 
   private evaluateConditions(
     conditions: Record<string, any>,
-    context: Record<string, any>
+    context: Record<string, any>,
   ): boolean {
     // Simple condition evaluation - extend as needed
     for (const [key, expectedValue] of Object.entries(conditions)) {
       if (context[key] !== expectedValue) {
-        return false;
+        return false
       }
     }
-    return true;
+    return true
   }
 }
 
 // Permission decorator for methods
 export function RequirePermission(resource: string, action: string) {
   return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
-    const originalMethod = descriptor.value;
+    const originalMethod = descriptor.value
 
     descriptor.value = async function (...args: any[]) {
-      const userId = this.getCurrentUserId(); // Implement based on your context
-      const rbacService = this.getRBACService(); // Implement based on your DI
+      const userId = this.getCurrentUserId() // Implement based on your context
+      const rbacService = this.getRBACService() // Implement based on your DI
 
-      const hasPermission = await rbacService.checkPermission(userId, resource, action);
-      
+      const hasPermission = await rbacService.checkPermission(userId, resource, action)
+
       if (!hasPermission) {
-        throw new Error('Insufficient permissions');
+        throw new Error('Insufficient permissions')
       }
 
-      return originalMethod.apply(this, args);
-    };
+      return originalMethod.apply(this, args)
+    }
 
-    return descriptor;
-  };
+    return descriptor
+  }
 }
 ```
 
 ### Data Protection and Encryption
 
 #### **Encryption Service**
+
 ```typescript
 // lib/security/encryption-service.ts
-import crypto from 'crypto';
-import bcrypt from 'bcrypt';
-import { Logger } from '@/lib/logger';
+import crypto from 'crypto'
+import bcrypt from 'bcrypt'
+import { Logger } from '@/lib/logger'
 
 export interface EncryptedData {
-  data: string;
-  iv: string;
-  tag: string;
-  algorithm: string;
+  data: string
+  iv: string
+  tag: string
+  algorithm: string
 }
 
 export interface EncryptionKey {
-  id: string;
-  key: Buffer;
-  algorithm: string;
-  createdAt: Date;
-  isActive: boolean;
+  id: string
+  key: Buffer
+  algorithm: string
+  createdAt: Date
+  isActive: boolean
 }
 
 export class EncryptionService {
-  private keys: Map<string, EncryptionKey> = new Map();
-  private activeKeyId: string | null = null;
+  private keys: Map<string, EncryptionKey> = new Map()
+  private activeKeyId: string | null = null
 
   constructor(
     private logger: Logger,
     private config: {
-      defaultAlgorithm: string;
-      keyRotationInterval: number;
-      saltRounds: number;
-    }
+      defaultAlgorithm: string
+      keyRotationInterval: number
+      saltRounds: number
+    },
   ) {}
 
   public generateKey(algorithm: string = this.config.defaultAlgorithm): EncryptionKey {
-    const keyId = crypto.randomUUID();
-    const key = crypto.randomBytes(32); // 256-bit key
+    const keyId = crypto.randomUUID()
+    const key = crypto.randomBytes(32) // 256-bit key
 
     const encryptionKey: EncryptionKey = {
       id: keyId,
       key,
       algorithm,
       createdAt: new Date(),
-      isActive: true
-    };
-
-    this.keys.set(keyId, encryptionKey);
-    
-    if (!this.activeKeyId) {
-      this.activeKeyId = keyId;
+      isActive: true,
     }
 
-    this.logger.info('Encryption key generated', { keyId, algorithm });
-    return encryptionKey;
+    this.keys.set(keyId, encryptionKey)
+
+    if (!this.activeKeyId) {
+      this.activeKeyId = keyId
+    }
+
+    this.logger.info('Encryption key generated', { keyId, algorithm })
+    return encryptionKey
   }
 
   public rotateKey(): EncryptionKey {
     // Deactivate current active key
     if (this.activeKeyId) {
-      const currentKey = this.keys.get(this.activeKeyId);
+      const currentKey = this.keys.get(this.activeKeyId)
       if (currentKey) {
-        currentKey.isActive = false;
+        currentKey.isActive = false
       }
     }
 
     // Generate new active key
-    const newKey = this.generateKey();
-    this.activeKeyId = newKey.id;
+    const newKey = this.generateKey()
+    this.activeKeyId = newKey.id
 
-    this.logger.info('Encryption key rotated', { 
-      oldKeyId: this.activeKeyId, 
-      newKeyId: newKey.id 
-    });
+    this.logger.info('Encryption key rotated', {
+      oldKeyId: this.activeKeyId,
+      newKeyId: newKey.id,
+    })
 
-    return newKey;
+    return newKey
   }
 
   public encrypt(data: string, keyId?: string): EncryptedData {
     try {
-      const encryptionKeyId = keyId || this.activeKeyId;
+      const encryptionKeyId = keyId || this.activeKeyId
       if (!encryptionKeyId) {
-        throw new Error('No encryption key available');
+        throw new Error('No encryption key available')
       }
 
-      const encryptionKey = this.keys.get(encryptionKeyId);
+      const encryptionKey = this.keys.get(encryptionKeyId)
       if (!encryptionKey) {
-        throw new Error(`Encryption key ${encryptionKeyId} not found`);
+        throw new Error(`Encryption key ${encryptionKeyId} not found`)
       }
 
-      const iv = crypto.randomBytes(16);
-      const cipher = crypto.createCipher(encryptionKey.algorithm, encryptionKey.key, { iv });
+      const iv = crypto.randomBytes(16)
+      const cipher = crypto.createCipher(encryptionKey.algorithm, encryptionKey.key, { iv })
 
-      let encrypted = cipher.update(data, 'utf8', 'hex');
-      encrypted += cipher.final('hex');
+      let encrypted = cipher.update(data, 'utf8', 'hex')
+      encrypted += cipher.final('hex')
 
-      const tag = cipher.getAuthTag().toString('hex');
+      const tag = cipher.getAuthTag().toString('hex')
 
       return {
         data: encrypted,
         iv: iv.toString('hex'),
         tag,
-        algorithm: encryptionKey.algorithm
-      };
+        algorithm: encryptionKey.algorithm,
+      }
     } catch (error) {
-      this.logger.error('Encryption failed', error);
-      throw new Error('Encryption failed');
+      this.logger.error('Encryption failed', error)
+      throw new Error('Encryption failed')
     }
   }
 
   public decrypt(encryptedData: EncryptedData, keyId?: string): string {
     try {
-      const encryptionKeyId = keyId || this.activeKeyId;
+      const encryptionKeyId = keyId || this.activeKeyId
       if (!encryptionKeyId) {
-        throw new Error('No encryption key available');
+        throw new Error('No encryption key available')
       }
 
-      const encryptionKey = this.keys.get(encryptionKeyId);
+      const encryptionKey = this.keys.get(encryptionKeyId)
       if (!encryptionKey) {
-        throw new Error(`Encryption key ${encryptionKeyId} not found`);
+        throw new Error(`Encryption key ${encryptionKeyId} not found`)
       }
 
-      const decipher = crypto.createDecipher(
-        encryptedData.algorithm,
-        encryptionKey.key,
-        { iv: Buffer.from(encryptedData.iv, 'hex') }
-      );
+      const decipher = crypto.createDecipher(encryptedData.algorithm, encryptionKey.key, {
+        iv: Buffer.from(encryptedData.iv, 'hex'),
+      })
 
-      decipher.setAuthTag(Buffer.from(encryptedData.tag, 'hex'));
+      decipher.setAuthTag(Buffer.from(encryptedData.tag, 'hex'))
 
-      let decrypted = decipher.update(encryptedData.data, 'hex', 'utf8');
-      decrypted += decipher.final('utf8');
+      let decrypted = decipher.update(encryptedData.data, 'hex', 'utf8')
+      decrypted += decipher.final('utf8')
 
-      return decrypted;
+      return decrypted
     } catch (error) {
-      this.logger.error('Decryption failed', error);
-      throw new Error('Decryption failed');
+      this.logger.error('Decryption failed', error)
+      throw new Error('Decryption failed')
     }
   }
 
   public async hashPassword(password: string): Promise<string> {
     try {
-      return await bcrypt.hash(password, this.config.saltRounds);
+      return await bcrypt.hash(password, this.config.saltRounds)
     } catch (error) {
-      this.logger.error('Password hashing failed', error);
-      throw new Error('Password hashing failed');
+      this.logger.error('Password hashing failed', error)
+      throw new Error('Password hashing failed')
     }
   }
 
   public async verifyPassword(password: string, hash: string): Promise<boolean> {
     try {
-      return await bcrypt.compare(password, hash);
+      return await bcrypt.compare(password, hash)
     } catch (error) {
-      this.logger.error('Password verification failed', error);
-      return false;
+      this.logger.error('Password verification failed', error)
+      return false
     }
   }
 
   public generateSecureToken(length: number = 32): string {
-    return crypto.randomBytes(length).toString('hex');
+    return crypto.randomBytes(length).toString('hex')
   }
 
   public generateHMAC(data: string, secret: string): string {
-    return crypto.createHmac('sha256', secret).update(data).digest('hex');
+    return crypto.createHmac('sha256', secret).update(data).digest('hex')
   }
 
   public verifyHMAC(data: string, signature: string, secret: string): boolean {
-    const expectedSignature = this.generateHMAC(data, secret);
+    const expectedSignature = this.generateHMAC(data, secret)
     return crypto.timingSafeEqual(
       Buffer.from(signature, 'hex'),
-      Buffer.from(expectedSignature, 'hex')
-    );
+      Buffer.from(expectedSignature, 'hex'),
+    )
   }
 
   // PII Encryption for GDPR compliance
   public encryptPII(data: any): any {
     if (typeof data === 'string') {
-      return this.encrypt(data);
+      return this.encrypt(data)
     }
 
     if (Array.isArray(data)) {
-      return data.map(item => this.encryptPII(item));
+      return data.map(item => this.encryptPII(item))
     }
 
     if (typeof data === 'object' && data !== null) {
-      const encrypted: any = {};
+      const encrypted: any = {}
       for (const [key, value] of Object.entries(data)) {
         if (this.isPIIField(key)) {
-          encrypted[key] = this.encrypt(value as string);
+          encrypted[key] = this.encrypt(value as string)
         } else {
-          encrypted[key] = this.encryptPII(value);
+          encrypted[key] = this.encryptPII(value)
         }
       }
-      return encrypted;
+      return encrypted
     }
 
-    return data;
+    return data
   }
 
   private isPIIField(fieldName: string): boolean {
-    const piiFields = [
-      'email',
-      'phone',
-      'ssn',
-      'address',
-      'firstName',
-      'lastName',
-      'dateOfBirth'
-    ];
-    return piiFields.includes(fieldName.toLowerCase());
+    const piiFields = ['email', 'phone', 'ssn', 'address', 'firstName', 'lastName', 'dateOfBirth']
+    return piiFields.includes(fieldName.toLowerCase())
   }
 }
 ```
@@ -766,41 +756,42 @@ export class EncryptionService {
 ### Security Middleware and Validation
 
 #### **Security Headers Middleware**
+
 ```typescript
 // middleware/security-headers.ts
-import { Request, Response, NextFunction } from 'express';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import slowDown from 'express-slow-down';
+import { Request, Response, NextFunction } from 'express'
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
+import slowDown from 'express-slow-down'
 
 export interface SecurityConfig {
   rateLimiting: {
-    windowMs: number;
-    max: number;
-    message: string;
-    standardHeaders: boolean;
-    legacyHeaders: boolean;
-  };
+    windowMs: number
+    max: number
+    message: string
+    standardHeaders: boolean
+    legacyHeaders: boolean
+  }
   slowDown: {
-    windowMs: number;
-    delayAfter: number;
-    delayMs: number;
-    maxDelayMs: number;
-  };
+    windowMs: number
+    delayAfter: number
+    delayMs: number
+    maxDelayMs: number
+  }
   helmet: {
     contentSecurityPolicy: {
-      directives: Record<string, string[]>;
-    };
+      directives: Record<string, string[]>
+    }
     hsts: {
-      maxAge: number;
-      includeSubDomains: boolean;
-      preload: boolean;
-    };
-  };
+      maxAge: number
+      includeSubDomains: boolean
+      preload: boolean
+    }
+  }
 }
 
 export function createSecurityMiddleware(config: SecurityConfig) {
-  const middlewares = [];
+  const middlewares = []
 
   // Helmet for security headers
   middlewares.push(
@@ -810,22 +801,22 @@ export function createSecurityMiddleware(config: SecurityConfig) {
           defaultSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'"],
           scriptSrc: ["'self'"],
-          imgSrc: ["'self'", "data:", "https:"],
+          imgSrc: ["'self'", 'data:', 'https:'],
           connectSrc: ["'self'"],
           fontSrc: ["'self'"],
           objectSrc: ["'none'"],
           mediaSrc: ["'self'"],
           frameSrc: ["'none'"],
-          ...config.helmet.contentSecurityPolicy.directives
+          ...config.helmet.contentSecurityPolicy.directives,
         },
       },
       hsts: config.helmet.hsts,
       noSniff: true,
       xssFilter: true,
       frameguard: { action: 'deny' },
-      hidePoweredBy: true
-    })
-  );
+      hidePoweredBy: true,
+    }),
+  )
 
   // Rate limiting
   middlewares.push(
@@ -838,11 +829,11 @@ export function createSecurityMiddleware(config: SecurityConfig) {
       handler: (req: Request, res: Response) => {
         res.status(429).json({
           error: 'Too many requests',
-          retryAfter: Math.round(config.rateLimiting.windowMs / 1000)
-        });
-      }
-    })
-  );
+          retryAfter: Math.round(config.rateLimiting.windowMs / 1000),
+        })
+      },
+    }),
+  )
 
   // Slow down repeated requests
   middlewares.push(
@@ -850,27 +841,27 @@ export function createSecurityMiddleware(config: SecurityConfig) {
       windowMs: config.slowDown.windowMs,
       delayAfter: config.slowDown.delayAfter,
       delayMs: config.slowDown.delayMs,
-      maxDelayMs: config.slowDown.maxDelayMs
-    })
-  );
+      maxDelayMs: config.slowDown.maxDelayMs,
+    }),
+  )
 
   // Custom security headers
   middlewares.push((req: Request, res: Response, next: NextFunction) => {
     // Remove server information
-    res.removeHeader('X-Powered-By');
-    res.removeHeader('Server');
+    res.removeHeader('X-Powered-By')
+    res.removeHeader('Server')
 
     // Add custom security headers
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('X-Frame-Options', 'DENY')
+    res.setHeader('X-XSS-Protection', '1; mode=block')
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
+    res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()')
 
-    next();
-  });
+    next()
+  })
 
-  return middlewares;
+  return middlewares
 }
 
 // Input validation middleware
@@ -878,39 +869,39 @@ export function createValidationMiddleware() {
   return (req: Request, res: Response, next: NextFunction) => {
     // Sanitize and validate inputs
     if (req.body) {
-      req.body = sanitizeObject(req.body);
+      req.body = sanitizeObject(req.body)
     }
 
     if (req.query) {
-      req.query = sanitizeObject(req.query);
+      req.query = sanitizeObject(req.query)
     }
 
     if (req.params) {
-      req.params = sanitizeObject(req.params);
+      req.params = sanitizeObject(req.params)
     }
 
-    next();
-  };
+    next()
+  }
 }
 
 function sanitizeObject(obj: any): any {
   if (typeof obj === 'string') {
-    return sanitizeString(obj);
+    return sanitizeString(obj)
   }
 
   if (Array.isArray(obj)) {
-    return obj.map(sanitizeObject);
+    return obj.map(sanitizeObject)
   }
 
   if (typeof obj === 'object' && obj !== null) {
-    const sanitized: any = {};
+    const sanitized: any = {}
     for (const [key, value] of Object.entries(obj)) {
-      sanitized[sanitizeString(key)] = sanitizeObject(value);
+      sanitized[sanitizeString(key)] = sanitizeObject(value)
     }
-    return sanitized;
+    return sanitized
   }
 
-  return obj;
+  return obj
 }
 
 function sanitizeString(str: string): string {
@@ -919,7 +910,7 @@ function sanitizeString(str: string): string {
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
     .replace(/javascript:/gi, '')
     .replace(/on\w+\s*=/gi, '')
-    .trim();
+    .trim()
 }
 ```
 

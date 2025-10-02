@@ -9,21 +9,25 @@ This framework establishes enterprise-grade implementation patterns for React/Ne
 ## Framework Pattern Maturity Model
 
 ### Level 1: Basic Framework Usage
+
 - **Standard Patterns**: Basic framework features and conventional usage
 - **Simple Integration**: Straightforward framework integration patterns
 - **Manual Optimization**: Basic performance and quality practices
 
 ### Level 2: Advanced Framework Mastery
+
 - **Best Practice Implementation**: Industry-standard patterns and practices
 - **Performance Optimization**: Advanced optimization techniques and monitoring
 - **Quality Integration**: Comprehensive testing and quality assurance
 
 ### Level 3: Strategic Framework Architecture
+
 - **Custom Patterns**: Domain-specific patterns and abstractions
 - **Advanced Integration**: Complex multi-framework integration patterns
 - **Scalable Architecture**: Enterprise-scale patterns and practices
 
 ### Level 4: Framework Innovation Leadership
+
 - **Pattern Innovation**: Creating new patterns for emerging requirements
 - **Performance Leadership**: Industry-leading performance optimizations
 - **Ecosystem Contribution**: Contributing back to framework ecosystems
@@ -31,6 +35,7 @@ This framework establishes enterprise-grade implementation patterns for React/Ne
 ## Core Framework Principles
 
 ### 1. Performance-First Development
+
 ```
 Bundle Optimization: Minimize bundle size and maximize loading performance
 Runtime Efficiency: Optimize component rendering and server response times
@@ -38,11 +43,13 @@ Resource Management: Efficient memory and network resource utilization
 ```
 
 ### 2. Type-Safe Development
+
 - **End-to-End Type Safety**: Types from database to UI components
 - **Runtime Validation**: Type validation at system boundaries
 - **Development Tools**: IDE integration and development-time validation
 
 ### 3. Maintainable Architecture
+
 - **Clear Separation**: Well-defined boundaries between layers and concerns
 - **Reusable Patterns**: Consistent patterns across different features
 - **Testable Design**: Architecture that supports comprehensive testing
@@ -52,6 +59,7 @@ Resource Management: Efficient memory and network resource utilization
 ### React/Next.js Frontend Patterns
 
 #### **Component Architecture Strategy**
+
 ```yaml
 Component Hierarchy:
   - Atomic Design: Atoms → Molecules → Organisms → Templates → Pages
@@ -67,6 +75,7 @@ State Management:
 ```
 
 #### **Next.js Architecture Patterns**
+
 ```yaml
 App Router Architecture:
   - File-based routing with app directory structure
@@ -82,6 +91,7 @@ Performance Optimization:
 ```
 
 #### **TypeScript Integration Patterns**
+
 ```yaml
 Type Strategy:
   - Strict TypeScript configuration with no implicit any
@@ -99,6 +109,7 @@ Development Experience:
 ### Fastify Backend Patterns
 
 #### **Service Architecture Strategy**
+
 ```yaml
 Plugin Architecture:
   - Feature-based plugin organization
@@ -114,6 +125,7 @@ Request/Response Patterns:
 ```
 
 #### **Data Layer Patterns**
+
 ```yaml
 Repository Pattern:
   - Database abstraction with repository interfaces
@@ -133,6 +145,7 @@ Service Layer:
 ### Cross-Stack Type Safety
 
 #### **End-to-End Type Generation**
+
 ```yaml
 Schema Definition:
   - OpenAPI/JSON Schema for API contracts
@@ -150,6 +163,7 @@ Implementation:
 ### Component Design Patterns
 
 #### **React Component Patterns**
+
 ```yaml
 Composition Patterns:
   - Compound Components for complex UI widgets
@@ -165,6 +179,7 @@ Performance Patterns:
 ```
 
 #### **Server Component Patterns**
+
 ```yaml
 Server-Side Optimization:
   - Server Components for static content rendering
@@ -176,6 +191,7 @@ Server-Side Optimization:
 ### State Management Architecture
 
 #### **Frontend State Strategy**
+
 ```yaml
 State Categories:
   - UI State: Component visibility, form inputs, loading states
@@ -191,6 +207,7 @@ Management Approach:
 ```
 
 #### **Backend State Management**
+
 ```yaml
 Stateless Design:
   - Stateless service architecture for scalability
@@ -210,6 +227,7 @@ Implementation:
 ### Testing Strategy Framework
 
 #### **Frontend Testing Patterns**
+
 ```yaml
 Testing Pyramid:
   - Unit Tests: Custom hooks, utility functions, isolated components
@@ -224,6 +242,7 @@ Implementation:
 ```
 
 #### **Backend Testing Patterns**
+
 ```yaml
 Service Testing:
   - Unit Tests: Business logic, utility functions, data transformations
@@ -242,6 +261,7 @@ Implementation:
 ### Frontend Performance Strategy
 
 #### **Bundle Optimization**
+
 ```yaml
 Code Splitting:
   - Route-based splitting with Next.js dynamic imports
@@ -257,6 +277,7 @@ Loading Optimization:
 ```
 
 #### **Runtime Performance**
+
 ```yaml
 Rendering Optimization:
   - Server-side rendering for initial page load
@@ -274,6 +295,7 @@ State Optimization:
 ### Backend Performance Patterns
 
 #### **API Performance**
+
 ```yaml
 Response Optimization:
   - JSON serialization optimization
@@ -293,6 +315,7 @@ Database Optimization:
 ### Security Implementation
 
 #### **Frontend Security**
+
 ```yaml
 Client-Side Security:
   - Content Security Policy (CSP) implementation
@@ -308,6 +331,7 @@ Data Protection:
 ```
 
 #### **Backend Security**
+
 ```yaml
 API Security:
   - Authentication and authorization patterns
@@ -327,12 +351,14 @@ Infrastructure Security:
 ### Framework Performance Metrics
 
 #### **Development Productivity**
+
 - **Development Velocity**: Feature development time with framework patterns
 - **Code Reusability**: Percentage of reusable components and services
 - **Bug Density**: Issues related to framework usage and patterns
 - **Developer Satisfaction**: Team satisfaction with framework patterns
 
 #### **Application Performance**
+
 - **Frontend Metrics**: Core Web Vitals, bundle size, loading performance
 - **Backend Metrics**: API response times, throughput, resource utilization
 - **User Experience**: User satisfaction and engagement metrics
@@ -343,7 +369,9 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 ## Available Framework Patterns
 
 ### Frontend Patterns (`react-nextjs.md`)
+
 **React and Next.js implementation patterns**
+
 - Component design and composition strategies
 - State management patterns and data flow
 - Performance optimization techniques
@@ -351,7 +379,9 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 - Integration with TypeScript for type safety
 
 ### Backend Patterns (`fastify.md`)
+
 **Fastify service architecture and API patterns**
+
 - Route organization and handler patterns
 - Service layer design and business logic separation
 - Repository patterns for data access
@@ -361,12 +391,14 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 ### Cross-Framework Patterns
 
 **TypeScript Integration (`typescript.md`)**
+
 - Type-safe patterns across frontend and backend
 - Shared type definitions and validation
 - Generic patterns and utility types
 - Integration with framework-specific features
 
 **Component and Service Design**
+
 - Reusable component architecture patterns
 - Service abstraction and dependency injection
 - API design and integration patterns
@@ -375,7 +407,9 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 ## Framework Selection Rationale
 
 ### React/Next.js (Frontend)
+
 **Strategic Benefits:**
+
 - Industry-standard React ecosystem with extensive community support
 - Next.js provides production-ready features (SSR, SSG, API routes)
 - Strong TypeScript integration and tooling support
@@ -383,13 +417,16 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 - Rich ecosystem of libraries and components
 
 **Implementation Focus:**
+
 - Modern React patterns with hooks and functional components
 - Next.js App Router for improved developer experience
 - TypeScript-first development approach
 - Integration with modern tooling and build systems
 
 ### Fastify (Backend)
+
 **Strategic Benefits:**
+
 - High performance with low overhead compared to Express
 - Built-in TypeScript support and type safety
 - Plugin architecture for modular development
@@ -397,6 +434,7 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 - Excellent validation and serialization capabilities
 
 **Implementation Focus:**
+
 - Plugin-based architecture for feature organization
 - Type-safe request/response handling
 - Efficient error handling and logging integration
@@ -405,7 +443,9 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 ## Development Patterns
 
 ### Component Architecture
+
 **React Component Patterns:**
+
 - Functional components with hooks for state and lifecycle
 - Component composition over inheritance
 - Custom hooks for reusable logic and state management
@@ -413,6 +453,7 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 - Performance optimization with React.memo and useMemo
 
 **Service Architecture:**
+
 - Clean separation between business logic and framework code
 - Repository pattern for data access abstraction
 - Service layer for business rule implementation
@@ -420,7 +461,9 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 - Error boundary patterns for graceful error handling
 
 ### State Management Strategy
+
 **Frontend State Management:**
+
 - Local state with useState and useReducer for component-specific data
 - Context API for shared state across component trees
 - External state management for complex application state
@@ -428,6 +471,7 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 - State synchronization and optimistic updates
 
 **Backend State Management:**
+
 - Stateless service design for scalability
 - Database transaction management for data consistency
 - Caching strategies for performance optimization
@@ -435,7 +479,9 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 - Background task and job queue integration
 
 ### API Design and Integration
+
 **API Development Patterns:**
+
 - RESTful API design with consistent resource patterns
 - Request validation and response serialization
 - Error handling and status code standardization
@@ -443,6 +489,7 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 - Documentation and testing automation
 
 **Integration Patterns:**
+
 - Type-safe API client generation
 - Error handling and retry strategies
 - Loading states and user feedback patterns
@@ -452,7 +499,9 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 ## Quality and Testing
 
 ### Framework-Specific Testing
+
 **Frontend Testing:**
+
 - Component testing with React Testing Library
 - Integration testing for user workflows
 - Visual regression testing for UI consistency
@@ -460,6 +509,7 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 - Accessibility testing and compliance
 
 **Backend Testing:**
+
 - Unit testing for business logic and services
 - Integration testing for API endpoints
 - Load testing for performance validation
@@ -467,7 +517,9 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 - Database integration and transaction testing
 
 ### Code Quality Standards
+
 **Development Standards:**
+
 - Consistent code formatting with Prettier
 - Static analysis with ESLint and TypeScript
 - Code review processes and quality gates
@@ -477,7 +529,9 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 ## Best Practices
 
 ### Development Workflow
+
 **Framework Integration:**
+
 - Consistent project structure and organization
 - Shared configuration across development and production
 - Hot reloading and development server optimization
@@ -485,6 +539,7 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 - Environment-specific configuration management
 
 **Team Collaboration:**
+
 - Shared component libraries and design systems
 - API contract definition and documentation
 - Version control strategies for framework updates
@@ -492,7 +547,9 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 - Cross-team communication and coordination
 
 ### Performance and Optimization
+
 **Frontend Optimization:**
+
 - Bundle splitting and lazy loading strategies
 - Image optimization and responsive design
 - Caching strategies for static and dynamic content
@@ -500,6 +557,7 @@ Framework-specific implementation patterns and best practices for React/Next.js 
 - Core Web Vitals monitoring and improvement
 
 **Backend Optimization:**
+
 - Database query optimization and indexing
 - Caching strategies with Redis or similar solutions
 - Connection pooling and resource management

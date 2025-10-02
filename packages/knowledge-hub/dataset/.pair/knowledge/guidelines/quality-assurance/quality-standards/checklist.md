@@ -9,60 +9,61 @@ This framework provides comprehensive quality assurance checklists that ensure s
 ### Dynamic Checklist System
 
 #### **Adaptive Checklist Generator**
+
 ```typescript
 // lib/quality/checklist-generator.ts
 export interface QualityChecklistItem {
-  id: string;
-  category: string;
-  title: string;
-  description: string;
-  priority: 'critical' | 'high' | 'medium' | 'low';
-  phase: 'pre-development' | 'development' | 'post-development' | 'deployment';
-  automatable: boolean;
-  estimatedTime: number; // in minutes
-  dependencies: string[];
-  criteria: ValidationCriteria[];
-  tools: string[];
-  documentation: string[];
+  id: string
+  category: string
+  title: string
+  description: string
+  priority: 'critical' | 'high' | 'medium' | 'low'
+  phase: 'pre-development' | 'development' | 'post-development' | 'deployment'
+  automatable: boolean
+  estimatedTime: number // in minutes
+  dependencies: string[]
+  criteria: ValidationCriteria[]
+  tools: string[]
+  documentation: string[]
 }
 
 export interface ValidationCriteria {
-  id: string;
-  description: string;
-  validationType: 'manual' | 'automated' | 'semi-automated';
-  validationMethod: string;
-  passingThreshold: number;
-  weight: number;
+  id: string
+  description: string
+  validationType: 'manual' | 'automated' | 'semi-automated'
+  validationMethod: string
+  passingThreshold: number
+  weight: number
 }
 
 export class QualityChecklistGenerator {
-  private checklistTemplates: Map<string, ChecklistTemplate> = new Map();
-  private ruleEngine: ChecklistRuleEngine;
+  private checklistTemplates: Map<string, ChecklistTemplate> = new Map()
+  private ruleEngine: ChecklistRuleEngine
 
   constructor(
     private logger: Logger,
     private contextAnalyzer: ContextAnalyzer,
-    private automationService: AutomationService
+    private automationService: AutomationService,
   ) {
-    this.ruleEngine = new ChecklistRuleEngine();
-    this.initializeTemplates();
+    this.ruleEngine = new ChecklistRuleEngine()
+    this.initializeTemplates()
   }
 
   public async generateChecklist(context: QualityContext): Promise<QualityChecklist> {
-    const startTime = Date.now();
+    const startTime = Date.now()
 
     try {
       // Analyze context to determine applicable items
-      const applicableItems = await this.determineApplicableItems(context);
-      
+      const applicableItems = await this.determineApplicableItems(context)
+
       // Customize items based on project specifics
-      const customizedItems = await this.customizeItems(applicableItems, context);
-      
+      const customizedItems = await this.customizeItems(applicableItems, context)
+
       // Optimize checklist order based on dependencies
-      const optimizedItems = this.optimizeChecklistOrder(customizedItems);
-      
+      const optimizedItems = this.optimizeChecklistOrder(customizedItems)
+
       // Generate automation scripts where possible
-      const automationScripts = await this.generateAutomationScripts(optimizedItems);
+      const automationScripts = await this.generateAutomationScripts(optimizedItems)
 
       const checklist: QualityChecklist = {
         id: this.generateChecklistId(context),
@@ -72,72 +73,72 @@ export class QualityChecklistGenerator {
         automationCoverage: this.calculateAutomationCoverage(optimizedItems),
         automationScripts,
         createdAt: new Date(),
-        status: 'pending'
-      };
+        status: 'pending',
+      }
 
       this.logger.info('Quality checklist generated', {
         checklistId: checklist.id,
         itemCount: checklist.items.length,
         estimatedDuration: checklist.estimatedDuration,
-        automationCoverage: checklist.automationCoverage
-      });
+        automationCoverage: checklist.automationCoverage,
+      })
 
-      return checklist;
+      return checklist
     } catch (error) {
-      this.logger.error('Checklist generation failed', error);
-      throw new Error(`Failed to generate quality checklist: ${error.message}`);
+      this.logger.error('Checklist generation failed', error)
+      throw new Error(`Failed to generate quality checklist: ${error.message}`)
     }
   }
 
   private async determineApplicableItems(context: QualityContext): Promise<QualityChecklistItem[]> {
-    const applicableItems: QualityChecklistItem[] = [];
+    const applicableItems: QualityChecklistItem[] = []
 
     // Base quality items (always applicable)
-    applicableItems.push(...this.getBaseQualityItems());
+    applicableItems.push(...this.getBaseQualityItems())
 
     // Context-specific items
     if (context.includesNewFeatures) {
-      applicableItems.push(...this.getFeatureDevelopmentItems());
+      applicableItems.push(...this.getFeatureDevelopmentItems())
     }
 
     if (context.includesBugFixes) {
-      applicableItems.push(...this.getBugFixItems());
+      applicableItems.push(...this.getBugFixItems())
     }
 
     if (context.includesPerformanceChanges) {
-      applicableItems.push(...this.getPerformanceItems());
+      applicableItems.push(...this.getPerformanceItems())
     }
 
     if (context.includesSecurityChanges) {
-      applicableItems.push(...this.getSecurityItems());
+      applicableItems.push(...this.getSecurityItems())
     }
 
     if (context.includesUIChanges) {
-      applicableItems.push(...this.getUIAccessibilityItems());
+      applicableItems.push(...this.getUIAccessibilityItems())
     }
 
     if (context.includesAPIChanges) {
-      applicableItems.push(...this.getAPIItems());
+      applicableItems.push(...this.getAPIItems())
     }
 
     if (context.includesDatabaseChanges) {
-      applicableItems.push(...this.getDatabaseItems());
+      applicableItems.push(...this.getDatabaseItems())
     }
 
     // Technology-specific items
     if (context.technologies.includes('react')) {
-      applicableItems.push(...this.getReactSpecificItems());
+      applicableItems.push(...this.getReactSpecificItems())
     }
 
     if (context.technologies.includes('nextjs')) {
-      applicableItems.push(...this.getNextJSSpecificItems());
+      applicableItems.push(...this.getNextJSSpecificItems())
     }
 
     if (context.technologies.includes('typescript')) {
-      applicableItems.push(...this.getTypeScriptSpecificItems());
+      applicableItems.push(...this.getTypeScriptSpecificItems())
     }
 
-    return applicableItems;
+    return applicableItems
   }
 
   private getBaseQualityItems(): QualityChecklistItem[] {
@@ -159,7 +160,7 @@ export class QualityChecklistGenerator {
             validationType: 'automated',
             validationMethod: 'npm run lint',
             passingThreshold: 100,
-            weight: 40
+            weight: 40,
           },
           {
             id: 'prettier-formatting',
@@ -167,7 +168,7 @@ export class QualityChecklistGenerator {
             validationType: 'automated',
             validationMethod: 'npm run format:check',
             passingThreshold: 100,
-            weight: 30
+            weight: 30,
           },
           {
             id: 'naming-conventions',
@@ -175,11 +176,11 @@ export class QualityChecklistGenerator {
             validationType: 'manual',
             validationMethod: 'Code review inspection',
             passingThreshold: 95,
-            weight: 30
-          }
+            weight: 30,
+          },
         ],
         tools: ['ESLint', 'Prettier', 'VS Code'],
-        documentation: ['coding-standards.md', 'eslint-config.md']
+        documentation: ['coding-standards.md', 'eslint-config.md'],
       },
       {
         id: 'test-coverage-validation',
@@ -198,7 +199,7 @@ export class QualityChecklistGenerator {
             validationType: 'automated',
             validationMethod: 'npm run test:coverage',
             passingThreshold: 80,
-            weight: 50
+            weight: 50,
           },
           {
             id: 'integration-test-coverage',
@@ -206,7 +207,7 @@ export class QualityChecklistGenerator {
             validationType: 'semi-automated',
             validationMethod: 'Integration test suite analysis',
             passingThreshold: 70,
-            weight: 30
+            weight: 30,
           },
           {
             id: 'edge-case-testing',
@@ -214,11 +215,11 @@ export class QualityChecklistGenerator {
             validationType: 'manual',
             validationMethod: 'Test case review',
             passingThreshold: 90,
-            weight: 20
-          }
+            weight: 20,
+          },
         ],
         tools: ['Jest', 'Testing Library', 'Istanbul'],
-        documentation: ['testing-strategy.md', 'test-coverage.md']
+        documentation: ['testing-strategy.md', 'test-coverage.md'],
       },
       {
         id: 'security-validation',
@@ -237,7 +238,7 @@ export class QualityChecklistGenerator {
             validationType: 'automated',
             validationMethod: 'npm audit && snyk test',
             passingThreshold: 100,
-            weight: 60
+            weight: 60,
           },
           {
             id: 'auth-validation',
@@ -245,7 +246,7 @@ export class QualityChecklistGenerator {
             validationType: 'manual',
             validationMethod: 'Security code review',
             passingThreshold: 100,
-            weight: 25
+            weight: 25,
           },
           {
             id: 'input-validation',
@@ -253,11 +254,11 @@ export class QualityChecklistGenerator {
             validationType: 'semi-automated',
             validationMethod: 'Security testing suite',
             passingThreshold: 95,
-            weight: 15
-          }
+            weight: 15,
+          },
         ],
         tools: ['npm audit', 'Snyk', 'OWASP ZAP'],
-        documentation: ['security-guidelines.md', 'vulnerability-assessment.md']
+        documentation: ['security-guidelines.md', 'vulnerability-assessment.md'],
       },
       {
         id: 'performance-validation',
@@ -276,7 +277,7 @@ export class QualityChecklistGenerator {
             validationType: 'automated',
             validationMethod: 'Build time measurement',
             passingThreshold: 90,
-            weight: 30
+            weight: 30,
           },
           {
             id: 'runtime-performance',
@@ -284,7 +285,7 @@ export class QualityChecklistGenerator {
             validationType: 'automated',
             validationMethod: 'Performance test suite',
             passingThreshold: 85,
-            weight: 50
+            weight: 50,
           },
           {
             id: 'memory-usage',
@@ -292,13 +293,13 @@ export class QualityChecklistGenerator {
             validationType: 'automated',
             validationMethod: 'Memory profiling',
             passingThreshold: 90,
-            weight: 20
-          }
+            weight: 20,
+          },
         ],
         tools: ['Lighthouse', 'Web Vitals', 'Performance Monitor'],
-        documentation: ['performance-standards.md', 'optimization-guide.md']
-      }
-    ];
+        documentation: ['performance-standards.md', 'optimization-guide.md'],
+      },
+    ]
   }
 
   private getFeatureDevelopmentItems(): QualityChecklistItem[] {
@@ -320,7 +321,7 @@ export class QualityChecklistGenerator {
             validationType: 'manual',
             validationMethod: 'Requirements review',
             passingThreshold: 100,
-            weight: 60
+            weight: 60,
           },
           {
             id: 'user-story-completion',
@@ -328,11 +329,11 @@ export class QualityChecklistGenerator {
             validationType: 'manual',
             validationMethod: 'Story validation',
             passingThreshold: 100,
-            weight: 40
-          }
+            weight: 40,
+          },
         ],
         tools: ['Project Management Tool', 'Requirements Tracker'],
-        documentation: ['user-stories.md', 'acceptance-criteria.md']
+        documentation: ['user-stories.md', 'acceptance-criteria.md'],
       },
       {
         id: 'feature-testing-validation',
@@ -351,7 +352,7 @@ export class QualityChecklistGenerator {
             validationType: 'automated',
             validationMethod: 'Test execution and coverage',
             passingThreshold: 90,
-            weight: 40
+            weight: 40,
           },
           {
             id: 'feature-integration-tests',
@@ -359,7 +360,7 @@ export class QualityChecklistGenerator {
             validationType: 'automated',
             validationMethod: 'Integration test suite',
             passingThreshold: 85,
-            weight: 35
+            weight: 35,
           },
           {
             id: 'feature-e2e-tests',
@@ -367,13 +368,13 @@ export class QualityChecklistGenerator {
             validationType: 'automated',
             validationMethod: 'E2E test suite',
             passingThreshold: 100,
-            weight: 25
-          }
+            weight: 25,
+          },
         ],
         tools: ['Jest', 'Testing Library', 'Playwright'],
-        documentation: ['testing-strategy.md', 'e2e-testing.md']
-      }
-    ];
+        documentation: ['testing-strategy.md', 'e2e-testing.md'],
+      },
+    ]
   }
 
   private getUIAccessibilityItems(): QualityChecklistItem[] {
@@ -395,7 +396,7 @@ export class QualityChecklistGenerator {
             validationType: 'automated',
             validationMethod: 'Accessibility testing tools',
             passingThreshold: 95,
-            weight: 50
+            weight: 50,
           },
           {
             id: 'keyboard-navigation',
@@ -403,7 +404,7 @@ export class QualityChecklistGenerator {
             validationType: 'manual',
             validationMethod: 'Keyboard testing',
             passingThreshold: 100,
-            weight: 25
+            weight: 25,
           },
           {
             id: 'screen-reader-compatibility',
@@ -411,11 +412,11 @@ export class QualityChecklistGenerator {
             validationType: 'manual',
             validationMethod: 'Screen reader testing',
             passingThreshold: 95,
-            weight: 25
-          }
+            weight: 25,
+          },
         ],
         tools: ['axe-core', 'WAVE', 'Lighthouse', 'Screen Reader'],
-        documentation: ['accessibility-guidelines.md', 'wcag-compliance.md']
+        documentation: ['accessibility-guidelines.md', 'wcag-compliance.md'],
       },
       {
         id: 'responsive-design-validation',
@@ -434,7 +435,7 @@ export class QualityChecklistGenerator {
             validationType: 'automated',
             validationMethod: 'Visual regression testing',
             passingThreshold: 95,
-            weight: 60
+            weight: 60,
           },
           {
             id: 'touch-interaction',
@@ -442,124 +443,126 @@ export class QualityChecklistGenerator {
             validationType: 'manual',
             validationMethod: 'Mobile device testing',
             passingThreshold: 100,
-            weight: 40
-          }
+            weight: 40,
+          },
         ],
         tools: ['Browser DevTools', 'Visual Testing Tools', 'Device Testing'],
-        documentation: ['responsive-design.md', 'ui-standards.md']
-      }
-    ];
+        documentation: ['responsive-design.md', 'ui-standards.md'],
+      },
+    ]
   }
 }
 ```
 
 #### **Automated Checklist Execution**
+
 ```typescript
 // lib/quality/checklist-executor.ts
 export class ChecklistExecutor {
-  private automationService: AutomationService;
-  private validationService: ValidationService;
-  private reportingService: ReportingService;
+  private automationService: AutomationService
+  private validationService: ValidationService
+  private reportingService: ReportingService
 
-  constructor(
-    private logger: Logger,
-    private metricsCollector: MetricsCollector
-  ) {
-    this.automationService = new AutomationService();
-    this.validationService = new ValidationService();
-    this.reportingService = new ReportingService();
+  constructor(private logger: Logger, private metricsCollector: MetricsCollector) {
+    this.automationService = new AutomationService()
+    this.validationService = new ValidationService()
+    this.reportingService = new ReportingService()
   }
 
   public async executeChecklist(checklist: QualityChecklist): Promise<ChecklistExecutionResult> {
-    const startTime = Date.now();
-    const executionId = this.generateExecutionId(checklist);
+    const startTime = Date.now()
+    const executionId = this.generateExecutionId(checklist)
 
     try {
       this.logger.info('Starting checklist execution', {
         executionId,
         checklistId: checklist.id,
-        itemCount: checklist.items.length
-      });
+        itemCount: checklist.items.length,
+      })
 
-      const itemResults: ChecklistItemResult[] = [];
+      const itemResults: ChecklistItemResult[] = []
       const execution: ChecklistExecution = {
         id: executionId,
         checklistId: checklist.id,
         status: 'running',
         startTime: new Date(),
         progress: 0,
-        currentItem: null
-      };
+        currentItem: null,
+      }
 
       // Execute items in dependency order
       for (let i = 0; i < checklist.items.length; i++) {
-        const item = checklist.items[i];
-        execution.currentItem = item.id;
-        execution.progress = (i / checklist.items.length) * 100;
+        const item = checklist.items[i]
+        execution.currentItem = item.id
+        execution.progress = (i / checklist.items.length) * 100
 
         this.logger.info('Executing checklist item', {
           executionId,
           itemId: item.id,
           itemTitle: item.title,
-          progress: execution.progress
-        });
+          progress: execution.progress,
+        })
 
-        const itemResult = await this.executeChecklistItem(item, checklist.context);
-        itemResults.push(itemResult);
+        const itemResult = await this.executeChecklistItem(item, checklist.context)
+        itemResults.push(itemResult)
 
         // Stop execution if critical item fails
         if (item.priority === 'critical' && !itemResult.passed) {
           this.logger.error('Critical checklist item failed, stopping execution', {
             executionId,
             itemId: item.id,
-            itemTitle: item.title
-          });
-          break;
+            itemTitle: item.title,
+          })
+          break
         }
       }
 
-      execution.status = 'completed';
-      execution.endTime = new Date();
-      execution.progress = 100;
+      execution.status = 'completed'
+      execution.endTime = new Date()
+      execution.progress = 100
 
-      const result = this.calculateExecutionResult(checklist, itemResults, execution);
-      
+      const result = this.calculateExecutionResult(checklist, itemResults, execution)
+
       // Generate execution report
-      await this.generateExecutionReport(result);
-      
-      // Collect metrics
-      await this.collectExecutionMetrics(result);
+      await this.generateExecutionReport(result)
 
-      return result;
+      // Collect metrics
+      await this.collectExecutionMetrics(result)
+
+      return result
     } catch (error) {
       this.logger.error('Checklist execution failed', {
         executionId,
-        error: error.message
-      });
-      
-      throw new Error(`Checklist execution failed: ${error.message}`);
+        error: error.message,
+      })
+
+      throw new Error(`Checklist execution failed: ${error.message}`)
     }
   }
 
-  private async executeChecklistItem(item: QualityChecklistItem, context: QualityContext): Promise<ChecklistItemResult> {
-    const startTime = Date.now();
-    const criteriaResults: CriteriaResult[] = [];
+  private async executeChecklistItem(
+    item: QualityChecklistItem,
+    context: QualityContext,
+  ): Promise<ChecklistItemResult> {
+    const startTime = Date.now()
+    const criteriaResults: CriteriaResult[] = []
 
     try {
       // Execute validation criteria
       for (const criterion of item.criteria) {
-        const criteriaResult = await this.executeCriterion(criterion, context);
-        criteriaResults.push(criteriaResult);
+        const criteriaResult = await this.executeCriterion(criterion, context)
+        criteriaResults.push(criteriaResult)
       }
 
       // Calculate item score and status
-      const totalWeight = item.criteria.reduce((sum, c) => sum + c.weight, 0);
-      const weightedScore = criteriaResults.reduce((sum, r) => 
-        sum + (r.score * (r.criterion.weight / totalWeight)), 0
-      );
+      const totalWeight = item.criteria.reduce((sum, c) => sum + c.weight, 0)
+      const weightedScore = criteriaResults.reduce(
+        (sum, r) => sum + r.score * (r.criterion.weight / totalWeight),
+        0,
+      )
 
-      const passed = criteriaResults.every(r => r.passed);
-      const criticalFailed = item.priority === 'critical' && !passed;
+      const passed = criteriaResults.every(r => r.passed)
+      const criticalFailed = item.priority === 'critical' && !passed
 
       return {
         item,
@@ -569,8 +572,8 @@ export class ChecklistExecutor {
         criteriaResults,
         recommendations: this.generateItemRecommendations(item, criteriaResults),
         blockers: criticalFailed ? ['Critical quality item failed'] : [],
-        status: passed ? 'passed' : 'failed'
-      };
+        status: passed ? 'passed' : 'failed',
+      }
     } catch (error) {
       return {
         item,
@@ -581,45 +584,48 @@ export class ChecklistExecutor {
         recommendations: ['Fix execution error and retry'],
         blockers: ['Execution error occurred'],
         status: 'error',
-        error: error.message
-      };
+        error: error.message,
+      }
     }
   }
 
-  private async executeCriterion(criterion: ValidationCriteria, context: QualityContext): Promise<CriteriaResult> {
-    const startTime = Date.now();
+  private async executeCriterion(
+    criterion: ValidationCriteria,
+    context: QualityContext,
+  ): Promise<CriteriaResult> {
+    const startTime = Date.now()
 
     try {
-      let validationResult: any;
+      let validationResult: any
 
       switch (criterion.validationType) {
         case 'automated':
           validationResult = await this.automationService.executeValidation(
             criterion.validationMethod,
-            context
-          );
-          break;
-        
+            context,
+          )
+          break
+
         case 'semi-automated':
           validationResult = await this.validationService.executeSemiAutomatedValidation(
             criterion.validationMethod,
-            context
-          );
-          break;
-        
+            context,
+          )
+          break
+
         case 'manual':
           validationResult = await this.validationService.executeManualValidation(
             criterion.validationMethod,
-            context
-          );
-          break;
-        
+            context,
+          )
+          break
+
         default:
-          throw new Error(`Unknown validation type: ${criterion.validationType}`);
+          throw new Error(`Unknown validation type: ${criterion.validationType}`)
       }
 
-      const score = this.calculateCriterionScore(validationResult, criterion);
-      const passed = score >= criterion.passingThreshold;
+      const score = this.calculateCriterionScore(validationResult, criterion)
+      const passed = score >= criterion.passingThreshold
 
       return {
         criterion,
@@ -628,8 +634,8 @@ export class ChecklistExecutor {
         duration: Date.now() - startTime,
         details: validationResult.details || 'Validation completed',
         evidence: validationResult.evidence || [],
-        recommendations: validationResult.recommendations || []
-      };
+        recommendations: validationResult.recommendations || [],
+      }
     } catch (error) {
       return {
         criterion,
@@ -638,50 +644,51 @@ export class ChecklistExecutor {
         duration: Date.now() - startTime,
         details: 'Validation failed',
         error: error.message,
-        recommendations: ['Fix validation error and retry']
-      };
+        recommendations: ['Fix validation error and retry'],
+      }
     }
   }
 
   private calculateCriterionScore(validationResult: any, criterion: ValidationCriteria): number {
     if (typeof validationResult.score === 'number') {
-      return Math.max(0, Math.min(100, validationResult.score));
+      return Math.max(0, Math.min(100, validationResult.score))
     }
 
     // For boolean results
     if (typeof validationResult.passed === 'boolean') {
-      return validationResult.passed ? 100 : 0;
+      return validationResult.passed ? 100 : 0
     }
 
     // For percentage results
     if (typeof validationResult.percentage === 'number') {
-      return Math.max(0, Math.min(100, validationResult.percentage));
+      return Math.max(0, Math.min(100, validationResult.percentage))
     }
 
     // Default scoring
-    return validationResult.success ? 100 : 0;
+    return validationResult.success ? 100 : 0
   }
 
   private calculateExecutionResult(
     checklist: QualityChecklist,
     itemResults: ChecklistItemResult[],
-    execution: ChecklistExecution
+    execution: ChecklistExecution,
   ): ChecklistExecutionResult {
-    const totalItems = checklist.items.length;
-    const passedItems = itemResults.filter(r => r.passed).length;
-    const criticalItems = checklist.items.filter(i => i.priority === 'critical').length;
-    const passedCriticalItems = itemResults.filter(r => 
-      r.item.priority === 'critical' && r.passed
-    ).length;
+    const totalItems = checklist.items.length
+    const passedItems = itemResults.filter(r => r.passed).length
+    const criticalItems = checklist.items.filter(i => i.priority === 'critical').length
+    const passedCriticalItems = itemResults.filter(
+      r => r.item.priority === 'critical' && r.passed,
+    ).length
 
-    const overallScore = itemResults.length > 0 
-      ? itemResults.reduce((sum, r) => sum + r.score, 0) / itemResults.length 
-      : 0;
+    const overallScore =
+      itemResults.length > 0
+        ? itemResults.reduce((sum, r) => sum + r.score, 0) / itemResults.length
+        : 0
 
-    const passed = passedCriticalItems === criticalItems && overallScore >= 80;
+    const passed = passedCriticalItems === criticalItems && overallScore >= 80
 
-    const blockers = itemResults.flatMap(r => r.blockers || []);
-    const recommendations = itemResults.flatMap(r => r.recommendations || []);
+    const blockers = itemResults.flatMap(r => r.blockers || [])
+    const recommendations = itemResults.flatMap(r => r.recommendations || [])
 
     return {
       execution,
@@ -694,48 +701,48 @@ export class ChecklistExecutor {
       summary: this.generateExecutionSummary(checklist, itemResults, passed),
       recommendations: [...new Set(recommendations)],
       blockers: [...new Set(blockers)],
-      qualityLevel: this.determineQualityLevel(overallScore, passedCriticalItems === criticalItems)
-    };
+      qualityLevel: this.determineQualityLevel(overallScore, passedCriticalItems === criticalItems),
+    }
   }
 
   private generateExecutionSummary(
     checklist: QualityChecklist,
     itemResults: ChecklistItemResult[],
-    passed: boolean
+    passed: boolean,
   ): string {
-    const totalItems = checklist.items.length;
-    const passedItems = itemResults.filter(r => r.passed).length;
-    const status = passed ? 'PASSED' : 'FAILED';
-    
-    return `Quality Checklist ${status}: ${passedItems}/${totalItems} items completed successfully`;
+    const totalItems = checklist.items.length
+    const passedItems = itemResults.filter(r => r.passed).length
+    const status = passed ? 'PASSED' : 'FAILED'
+
+    return `Quality Checklist ${status}: ${passedItems}/${totalItems} items completed successfully`
   }
 
   private determineQualityLevel(overallScore: number, criticalsPassed: boolean): string {
-    if (!criticalsPassed) return 'Poor';
-    if (overallScore >= 95) return 'Excellent';
-    if (overallScore >= 85) return 'Good';
-    if (overallScore >= 70) return 'Fair';
-    return 'Poor';
+    if (!criticalsPassed) return 'Poor'
+    if (overallScore >= 95) return 'Excellent'
+    if (overallScore >= 85) return 'Good'
+    if (overallScore >= 70) return 'Fair'
+    return 'Poor'
   }
 
   private generateItemRecommendations(
     item: QualityChecklistItem,
-    criteriaResults: CriteriaResult[]
+    criteriaResults: CriteriaResult[],
   ): string[] {
-    const recommendations: string[] = [];
-    
+    const recommendations: string[] = []
+
     criteriaResults.forEach(result => {
       if (!result.passed && result.recommendations) {
-        recommendations.push(...result.recommendations);
+        recommendations.push(...result.recommendations)
       }
-    });
+    })
 
     // Add item-specific recommendations
     if (recommendations.length === 0 && criteriaResults.some(r => !r.passed)) {
-      recommendations.push(`Review and address ${item.title} requirements`);
+      recommendations.push(`Review and address ${item.title} requirements`)
     }
 
-    return recommendations;
+    return recommendations
   }
 }
 ```

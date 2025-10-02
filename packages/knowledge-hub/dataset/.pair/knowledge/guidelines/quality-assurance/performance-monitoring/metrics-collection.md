@@ -9,124 +9,125 @@ This framework establishes comprehensive metrics collection through automated in
 ### Comprehensive Metrics System
 
 #### **Metrics Collection Orchestrator**
+
 ```typescript
 // lib/performance/metrics-collection-orchestrator.ts
 export interface MetricsCollectionFramework {
-  id: string;
-  name: string;
-  collectors: MetricsCollector[];
-  aggregators: MetricsAggregator[];
-  processors: MetricsProcessor[];
-  storage: MetricsStorage;
-  streaming: StreamingConfiguration;
-  batch: BatchConfiguration;
-  realTime: RealTimeConfiguration;
-  quality: DataQualityFramework;
+  id: string
+  name: string
+  collectors: MetricsCollector[]
+  aggregators: MetricsAggregator[]
+  processors: MetricsProcessor[]
+  storage: MetricsStorage
+  streaming: StreamingConfiguration
+  batch: BatchConfiguration
+  realTime: RealTimeConfiguration
+  quality: DataQualityFramework
 }
 
 export interface MetricsCollector {
-  id: string;
-  name: string;
-  type: 'frontend' | 'backend' | 'infrastructure' | 'network' | 'database' | 'custom';
-  source: CollectionSource;
-  metrics: CollectibleMetric[];
-  instrumentation: InstrumentationConfig;
-  sampling: SamplingStrategy;
-  buffering: BufferingStrategy;
-  transmission: TransmissionConfig;
-  reliability: ReliabilityConfig;
+  id: string
+  name: string
+  type: 'frontend' | 'backend' | 'infrastructure' | 'network' | 'database' | 'custom'
+  source: CollectionSource
+  metrics: CollectibleMetric[]
+  instrumentation: InstrumentationConfig
+  sampling: SamplingStrategy
+  buffering: BufferingStrategy
+  transmission: TransmissionConfig
+  reliability: ReliabilityConfig
 }
 
 export interface CollectibleMetric {
-  id: string;
-  name: string;
-  type: MetricType;
-  category: MetricCategory;
-  unit: string;
-  description: string;
-  labels: MetricLabel[];
-  collection: CollectionMethod;
-  aggregation: AggregationMethod;
-  retention: RetentionPolicy;
-  quality: QualityChecks;
+  id: string
+  name: string
+  type: MetricType
+  category: MetricCategory
+  unit: string
+  description: string
+  labels: MetricLabel[]
+  collection: CollectionMethod
+  aggregation: AggregationMethod
+  retention: RetentionPolicy
+  quality: QualityChecks
 }
 
 export interface MetricsAggregator {
-  id: string;
-  name: string;
-  inputMetrics: string[];
-  outputMetric: string;
-  aggregationFunction: AggregationFunction;
-  windowSize: TimeWindow;
-  triggers: AggregationTrigger[];
-  validation: AggregationValidation;
-  storage: AggregationStorage;
+  id: string
+  name: string
+  inputMetrics: string[]
+  outputMetric: string
+  aggregationFunction: AggregationFunction
+  windowSize: TimeWindow
+  triggers: AggregationTrigger[]
+  validation: AggregationValidation
+  storage: AggregationStorage
 }
 
 export interface MetricsProcessor {
-  id: string;
-  name: string;
-  type: 'filter' | 'transform' | 'enrich' | 'validate' | 'normalize';
-  inputMetrics: string[];
-  processing: ProcessingLogic;
-  configuration: ProcessorConfiguration;
-  performance: ProcessorPerformance;
-  monitoring: ProcessorMonitoring;
+  id: string
+  name: string
+  type: 'filter' | 'transform' | 'enrich' | 'validate' | 'normalize'
+  inputMetrics: string[]
+  processing: ProcessingLogic
+  configuration: ProcessorConfiguration
+  performance: ProcessorPerformance
+  monitoring: ProcessorMonitoring
 }
 
 export class MetricsCollectionOrchestrator {
-  private frameworks: Map<string, MetricsCollectionFramework> = new Map();
-  private collectors: Map<string, MetricsCollector> = new Map();
-  private aggregators: Map<string, MetricsAggregator> = new Map();
-  private processors: Map<string, MetricsProcessor> = new Map();
-  private storageService: MetricsStorageService;
-  private streamingService: MetricsStreamingService;
-  private qualityService: DataQualityService;
+  private frameworks: Map<string, MetricsCollectionFramework> = new Map()
+  private collectors: Map<string, MetricsCollector> = new Map()
+  private aggregators: Map<string, MetricsAggregator> = new Map()
+  private processors: Map<string, MetricsProcessor> = new Map()
+  private storageService: MetricsStorageService
+  private streamingService: MetricsStreamingService
+  private qualityService: DataQualityService
 
   constructor(
     private logger: Logger,
     private configManager: ConfigurationManager,
-    private instrumentationService: InstrumentationService
+    private instrumentationService: InstrumentationService,
   ) {
-    this.storageService = new MetricsStorageService();
-    this.streamingService = new MetricsStreamingService();
-    this.qualityService = new DataQualityService();
-    this.initializeMetricsFrameworks();
+    this.storageService = new MetricsStorageService()
+    this.streamingService = new MetricsStreamingService()
+    this.qualityService = new DataQualityService()
+    this.initializeMetricsFrameworks()
   }
 
   public async startMetricsCollection(
-    config: MetricsCollectionConfig
+    config: MetricsCollectionConfig,
   ): Promise<MetricsCollectionSession> {
-    const sessionId = this.generateSessionId();
-    const startTime = Date.now();
+    const sessionId = this.generateSessionId()
+    const startTime = Date.now()
 
     try {
       this.logger.info('Starting metrics collection session', {
         sessionId,
         collectors: config.collectors.length,
-        duration: config.duration
-      });
+        duration: config.duration,
+      })
 
       // Initialize collection session
-      const session = await this.initializeCollectionSession(config, sessionId);
-      
+      const session = await this.initializeCollectionSession(config, sessionId)
+
       // Setup instrumentation
-      await this.setupInstrumentation(session);
-      
+      await this.setupInstrumentation(session)
+
       // Initialize collectors
-      await this.initializeCollectors(session);
-      
+      await this.initializeCollectors(session)
+
       // Setup aggregators
-      await this.setupAggregators(session);
-      
+      await this.setupAggregators(session)
+
       // Configure processors
-      await this.configureProcessors(session);
-      
+      await this.configureProcessors(session)
+
       // Start data streaming
-      await this.startDataStreaming(session);
-      
+      await this.startDataStreaming(session)
+
       // Initialize quality monitoring
-      await this.initializeQualityMonitoring(session);
+      await this.initializeQualityMonitoring(session)
 
       const collectionSession: MetricsCollectionSession = {
         id: sessionId,
@@ -142,83 +143,83 @@ export class MetricsCollectionOrchestrator {
           processed: 0,
           aggregated: 0,
           stored: 0,
-          errors: 0
+          errors: 0,
         },
         quality: {
           completeness: 1.0,
           accuracy: 1.0,
           consistency: 1.0,
-          timeliness: 1.0
-        }
-      };
+          timeliness: 1.0,
+        },
+      }
 
       // Store session
-      await this.storeCollectionSession(collectionSession);
-      
+      await this.storeCollectionSession(collectionSession)
+
       // Start continuous collection
-      this.startContinuousCollection(collectionSession);
+      this.startContinuousCollection(collectionSession)
 
       this.logger.info('Metrics collection session started', {
         sessionId,
         activeCollectors: session.collectors.length,
         activeAggregators: session.aggregators.length,
-        activeProcessors: session.processors.length
-      });
+        activeProcessors: session.processors.length,
+      })
 
-      return collectionSession;
+      return collectionSession
     } catch (error) {
       this.logger.error('Failed to start metrics collection', {
         sessionId,
-        error: error.message
-      });
-      
-      throw new Error(`Metrics collection failed to start: ${error.message}`);
+        error: error.message,
+      })
+
+      throw new Error(`Metrics collection failed to start: ${error.message}`)
     }
   }
 
   public async collectMetrics(
     collectorId: string,
     targetId: string,
-    timeRange?: TimeRange
+    timeRange?: TimeRange,
   ): Promise<MetricsCollectionResult> {
-    const collectionId = this.generateCollectionId();
-    const startTime = Date.now();
+    const collectionId = this.generateCollectionId()
+    const startTime = Date.now()
 
     try {
       this.logger.info('Starting metrics collection', {
         collectionId,
         collectorId,
         targetId,
-        timeRange
-      });
+        timeRange,
+      })
 
       // Get collector configuration
-      const collector = this.collectors.get(collectorId);
+      const collector = this.collectors.get(collectorId)
       if (!collector) {
-        throw new Error(`Collector not found: ${collectorId}`);
+        throw new Error(`Collector not found: ${collectorId}`)
       }
 
       // Prepare collection context
-      const context = await this.prepareCollectionContext(collector, targetId, timeRange);
-      
+      const context = await this.prepareCollectionContext(collector, targetId, timeRange)
+
       // Collect frontend metrics
-      const frontendMetrics = await this.collectFrontendMetrics(collector, context);
-      
+      const frontendMetrics = await this.collectFrontendMetrics(collector, context)
+
       // Collect backend metrics
-      const backendMetrics = await this.collectBackendMetrics(collector, context);
-      
+      const backendMetrics = await this.collectBackendMetrics(collector, context)
+
       // Collect infrastructure metrics
-      const infrastructureMetrics = await this.collectInfrastructureMetrics(collector, context);
-      
+      const infrastructureMetrics = await this.collectInfrastructureMetrics(collector, context)
+
       // Collect network metrics
-      const networkMetrics = await this.collectNetworkMetrics(collector, context);
-      
+      const networkMetrics = await this.collectNetworkMetrics(collector, context)
+
       // Collect database metrics
-      const databaseMetrics = await this.collectDatabaseMetrics(collector, context);
-      
+      const databaseMetrics = await this.collectDatabaseMetrics(collector, context)
+
       // Collect custom metrics
-      const customMetrics = await this.collectCustomMetrics(collector, context);
-      
+      const customMetrics = await this.collectCustomMetrics(collector, context)
+
       // Process collected metrics
       const processedMetrics = await this.processCollectedMetrics([
         ...frontendMetrics,
@@ -226,14 +227,14 @@ export class MetricsCollectionOrchestrator {
         ...infrastructureMetrics,
         ...networkMetrics,
         ...databaseMetrics,
-        ...customMetrics
-      ]);
-      
+        ...customMetrics,
+      ])
+
       // Validate metrics quality
-      const qualityReport = await this.validateMetricsQuality(processedMetrics);
-      
+      const qualityReport = await this.validateMetricsQuality(processedMetrics)
+
       // Store metrics
-      await this.storeMetrics(processedMetrics, context);
+      await this.storeMetrics(processedMetrics, context)
 
       const collectionResult: MetricsCollectionResult = {
         id: collectionId,
@@ -241,7 +242,7 @@ export class MetricsCollectionOrchestrator {
         targetId,
         timeRange: timeRange || {
           start: new Date(startTime),
-          end: new Date()
+          end: new Date(),
         },
         metrics: {
           frontend: frontendMetrics,
@@ -250,54 +251,54 @@ export class MetricsCollectionOrchestrator {
           network: networkMetrics,
           database: databaseMetrics,
           custom: customMetrics,
-          processed: processedMetrics
+          processed: processedMetrics,
         },
         statistics: {
           totalCollected: processedMetrics.length,
           collectionRate: processedMetrics.length / ((Date.now() - startTime) / 1000),
           errorRate: qualityReport.errorRate,
-          completeness: qualityReport.completeness
+          completeness: qualityReport.completeness,
         },
         qualityReport,
         duration: Date.now() - startTime,
-        timestamp: new Date()
-      };
+        timestamp: new Date(),
+      }
 
       // Update collection statistics
-      await this.updateCollectionStatistics(collectionResult);
+      await this.updateCollectionStatistics(collectionResult)
 
       this.logger.info('Metrics collection completed', {
         collectionId,
         totalMetrics: processedMetrics.length,
         errorRate: qualityReport.errorRate,
-        duration: collectionResult.duration
-      });
+        duration: collectionResult.duration,
+      })
 
-      return collectionResult;
+      return collectionResult
     } catch (error) {
       this.logger.error('Metrics collection failed', {
         collectionId,
         collectorId,
         targetId,
-        error: error.message
-      });
-      
-      throw new Error(`Metrics collection failed: ${error.message}`);
+        error: error.message,
+      })
+
+      throw new Error(`Metrics collection failed: ${error.message}`)
     }
   }
 
   private initializeMetricsFrameworks(): void {
     // Real-Time Metrics Framework
-    const realTimeFramework = this.createRealTimeMetricsFramework();
-    this.frameworks.set('real-time', realTimeFramework);
+    const realTimeFramework = this.createRealTimeMetricsFramework()
+    this.frameworks.set('real-time', realTimeFramework)
 
     // Batch Metrics Framework
-    const batchFramework = this.createBatchMetricsFramework();
-    this.frameworks.set('batch', batchFramework);
+    const batchFramework = this.createBatchMetricsFramework()
+    this.frameworks.set('batch', batchFramework)
 
     // Streaming Metrics Framework
-    const streamingFramework = this.createStreamingMetricsFramework();
-    this.frameworks.set('streaming', streamingFramework);
+    const streamingFramework = this.createStreamingMetricsFramework()
+    this.frameworks.set('streaming', streamingFramework)
   }
 
   private createRealTimeMetricsFramework(): MetricsCollectionFramework {
@@ -311,8 +312,8 @@ export class MetricsCollectionOrchestrator {
       streaming: this.initializeStreamingConfig(),
       batch: this.initializeBatchConfig(),
       realTime: this.initializeRealTimeConfig(),
-      quality: this.initializeDataQualityFramework()
-    };
+      quality: this.initializeDataQualityFramework(),
+    }
   }
 
   private initializeRealTimeCollectors(): MetricsCollector[] {
@@ -324,7 +325,7 @@ export class MetricsCollectionOrchestrator {
         source: {
           type: 'browser',
           apis: ['PerformanceObserver', 'NavigationTiming', 'ResourceTiming'],
-          instrumentation: 'automatic'
+          instrumentation: 'automatic',
         },
         metrics: [
           {
@@ -337,29 +338,29 @@ export class MetricsCollectionOrchestrator {
             labels: [
               { name: 'page', description: 'Page identifier' },
               { name: 'browser', description: 'Browser type' },
-              { name: 'device', description: 'Device type' }
+              { name: 'device', description: 'Device type' },
             ],
             collection: {
               source: 'navigation-timing',
               calculation: 'loadEventEnd - navigationStart',
               frequency: 'page-load',
-              sampling: 1.0
+              sampling: 1.0,
             },
             aggregation: {
               functions: ['mean', 'p50', 'p75', 'p95', 'p99'],
               window: '1m',
-              groupBy: ['page', 'browser']
+              groupBy: ['page', 'browser'],
             },
             retention: {
               raw: '7d',
               aggregated: '90d',
-              summary: '1y'
+              summary: '1y',
             },
             quality: {
               ranges: { min: 0, max: 60000 },
               outlierDetection: true,
-              missingValueHandling: 'interpolate'
-            }
+              missingValueHandling: 'interpolate',
+            },
           },
           {
             id: 'first-contentful-paint',
@@ -370,30 +371,30 @@ export class MetricsCollectionOrchestrator {
             description: 'Time to first contentful paint',
             labels: [
               { name: 'page', description: 'Page identifier' },
-              { name: 'viewport', description: 'Viewport size' }
+              { name: 'viewport', description: 'Viewport size' },
             ],
             collection: {
               source: 'performance-observer',
               entryType: 'paint',
               name: 'first-contentful-paint',
               frequency: 'page-load',
-              sampling: 1.0
+              sampling: 1.0,
             },
             aggregation: {
               functions: ['p75', 'p95'],
               window: '5m',
-              groupBy: ['page']
+              groupBy: ['page'],
             },
             retention: {
               raw: '7d',
               aggregated: '90d',
-              summary: '1y'
+              summary: '1y',
             },
             quality: {
               ranges: { min: 0, max: 10000 },
               outlierDetection: true,
-              missingValueHandling: 'discard'
-            }
+              missingValueHandling: 'discard',
+            },
           },
           {
             id: 'cumulative-layout-shift',
@@ -404,49 +405,49 @@ export class MetricsCollectionOrchestrator {
             description: 'Visual stability metric',
             labels: [
               { name: 'page', description: 'Page identifier' },
-              { name: 'session', description: 'Session identifier' }
+              { name: 'session', description: 'Session identifier' },
             ],
             collection: {
               source: 'performance-observer',
               entryType: 'layout-shift',
               calculation: 'sum-with-session-gaps',
               frequency: 'session',
-              sampling: 1.0
+              sampling: 1.0,
             },
             aggregation: {
               functions: ['p75', 'max'],
               window: '5m',
-              groupBy: ['page']
+              groupBy: ['page'],
             },
             retention: {
               raw: '7d',
               aggregated: '90d',
-              summary: '1y'
+              summary: '1y',
             },
             quality: {
               ranges: { min: 0, max: 5 },
               outlierDetection: true,
-              missingValueHandling: 'zero-fill'
-            }
-          }
+              missingValueHandling: 'zero-fill',
+            },
+          },
         ],
         instrumentation: {
           type: 'automatic',
           injection: 'script-tag',
           initialization: 'dom-ready',
-          errorHandling: 'graceful-degradation'
+          errorHandling: 'graceful-degradation',
         },
         sampling: {
           type: 'percentage',
           rate: 1.0,
           strategy: 'uniform',
-          adaptive: false
+          adaptive: false,
         },
         buffering: {
           enabled: true,
           maxSize: 1000,
           flushInterval: 5000,
-          flushOnUnload: true
+          flushOnUnload: true,
         },
         transmission: {
           protocol: 'https',
@@ -457,15 +458,15 @@ export class MetricsCollectionOrchestrator {
           retry: {
             enabled: true,
             attempts: 3,
-            backoff: 'exponential'
-          }
+            backoff: 'exponential',
+          },
         },
         reliability: {
           heartbeat: true,
           healthCheck: true,
           fallback: 'local-storage',
-          errorReporting: true
-        }
+          errorReporting: true,
+        },
       },
       {
         id: 'backend-performance-collector',
@@ -474,7 +475,7 @@ export class MetricsCollectionOrchestrator {
         source: {
           type: 'application',
           apis: ['Express Middleware', 'OpenTelemetry', 'Custom Instrumentation'],
-          instrumentation: 'middleware'
+          instrumentation: 'middleware',
         },
         metrics: [
           {
@@ -487,29 +488,29 @@ export class MetricsCollectionOrchestrator {
             labels: [
               { name: 'method', description: 'HTTP method' },
               { name: 'route', description: 'Request route' },
-              { name: 'status', description: 'Response status' }
+              { name: 'status', description: 'Response status' },
             ],
             collection: {
               source: 'middleware',
               measurement: 'request-lifecycle',
               frequency: 'per-request',
-              sampling: 1.0
+              sampling: 1.0,
             },
             aggregation: {
               functions: ['count', 'sum', 'p50', 'p95', 'p99'],
               window: '1m',
-              groupBy: ['method', 'route', 'status']
+              groupBy: ['method', 'route', 'status'],
             },
             retention: {
               raw: '24h',
               aggregated: '90d',
-              summary: '1y'
+              summary: '1y',
             },
             quality: {
               ranges: { min: 0, max: 300000 },
               outlierDetection: true,
-              missingValueHandling: 'discard'
-            }
+              missingValueHandling: 'discard',
+            },
           },
           {
             id: 'database-query-duration',
@@ -521,48 +522,48 @@ export class MetricsCollectionOrchestrator {
             labels: [
               { name: 'operation', description: 'Query operation type' },
               { name: 'table', description: 'Target table' },
-              { name: 'database', description: 'Database name' }
+              { name: 'database', description: 'Database name' },
             ],
             collection: {
               source: 'database-middleware',
               measurement: 'query-execution',
               frequency: 'per-query',
-              sampling: 0.1
+              sampling: 0.1,
             },
             aggregation: {
               functions: ['count', 'sum', 'p50', 'p95'],
               window: '1m',
-              groupBy: ['operation', 'table']
+              groupBy: ['operation', 'table'],
             },
             retention: {
               raw: '24h',
               aggregated: '90d',
-              summary: '1y'
+              summary: '1y',
             },
             quality: {
               ranges: { min: 0, max: 60000 },
               outlierDetection: true,
-              missingValueHandling: 'discard'
-            }
-          }
+              missingValueHandling: 'discard',
+            },
+          },
         ],
         instrumentation: {
           type: 'middleware',
           injection: 'automatic',
           initialization: 'startup',
-          errorHandling: 'circuit-breaker'
+          errorHandling: 'circuit-breaker',
         },
         sampling: {
           type: 'adaptive',
           rate: 1.0,
           strategy: 'reservoir',
-          adaptive: true
+          adaptive: true,
         },
         buffering: {
           enabled: true,
           maxSize: 10000,
           flushInterval: 1000,
-          flushOnShutdown: true
+          flushOnShutdown: true,
         },
         transmission: {
           protocol: 'grpc',
@@ -573,15 +574,15 @@ export class MetricsCollectionOrchestrator {
           retry: {
             enabled: true,
             attempts: 5,
-            backoff: 'linear'
-          }
+            backoff: 'linear',
+          },
         },
         reliability: {
           heartbeat: true,
           healthCheck: true,
           fallback: 'file-system',
-          errorReporting: true
-        }
+          errorReporting: true,
+        },
       },
       {
         id: 'infrastructure-metrics-collector',
@@ -590,7 +591,7 @@ export class MetricsCollectionOrchestrator {
         source: {
           type: 'system',
           apis: ['Prometheus', 'Node Exporter', 'Custom Exporters'],
-          instrumentation: 'agent-based'
+          instrumentation: 'agent-based',
         },
         metrics: [
           {
@@ -602,29 +603,29 @@ export class MetricsCollectionOrchestrator {
             description: 'CPU usage percentage',
             labels: [
               { name: 'instance', description: 'Instance identifier' },
-              { name: 'core', description: 'CPU core number' }
+              { name: 'core', description: 'CPU core number' },
             ],
             collection: {
               source: 'system-metrics',
               measurement: '/proc/stat',
               frequency: '15s',
-              sampling: 1.0
+              sampling: 1.0,
             },
             aggregation: {
               functions: ['mean', 'max'],
               window: '1m',
-              groupBy: ['instance']
+              groupBy: ['instance'],
             },
             retention: {
               raw: '24h',
               aggregated: '30d',
-              summary: '1y'
+              summary: '1y',
             },
             quality: {
               ranges: { min: 0, max: 100 },
               outlierDetection: false,
-              missingValueHandling: 'interpolate'
-            }
+              missingValueHandling: 'interpolate',
+            },
           },
           {
             id: 'memory-utilization',
@@ -635,48 +636,48 @@ export class MetricsCollectionOrchestrator {
             description: 'Memory usage in bytes',
             labels: [
               { name: 'instance', description: 'Instance identifier' },
-              { name: 'type', description: 'Memory type (used/free/cached)' }
+              { name: 'type', description: 'Memory type (used/free/cached)' },
             ],
             collection: {
               source: 'system-metrics',
               measurement: '/proc/meminfo',
               frequency: '15s',
-              sampling: 1.0
+              sampling: 1.0,
             },
             aggregation: {
               functions: ['mean', 'max'],
               window: '1m',
-              groupBy: ['instance', 'type']
+              groupBy: ['instance', 'type'],
             },
             retention: {
               raw: '24h',
               aggregated: '30d',
-              summary: '1y'
+              summary: '1y',
             },
             quality: {
               ranges: { min: 0, max: null },
               outlierDetection: false,
-              missingValueHandling: 'interpolate'
-            }
-          }
+              missingValueHandling: 'interpolate',
+            },
+          },
         ],
         instrumentation: {
           type: 'agent-based',
           injection: 'system-service',
           initialization: 'boot',
-          errorHandling: 'restart-on-failure'
+          errorHandling: 'restart-on-failure',
         },
         sampling: {
           type: 'time-based',
           rate: 1.0,
           strategy: 'fixed-interval',
-          adaptive: false
+          adaptive: false,
         },
         buffering: {
           enabled: true,
           maxSize: 50000,
           flushInterval: 10000,
-          flushOnSignal: 'SIGTERM'
+          flushOnSignal: 'SIGTERM',
         },
         transmission: {
           protocol: 'http',
@@ -687,59 +688,59 @@ export class MetricsCollectionOrchestrator {
           retry: {
             enabled: true,
             attempts: 3,
-            backoff: 'exponential'
-          }
+            backoff: 'exponential',
+          },
         },
         reliability: {
           heartbeat: true,
           healthCheck: true,
           fallback: 'local-disk',
-          errorReporting: true
-        }
-      }
-    ];
+          errorReporting: true,
+        },
+      },
+    ]
   }
 
   public async aggregateMetrics(
     aggregatorId: string,
     timeRange: TimeRange,
-    groupBy?: string[]
+    groupBy?: string[],
   ): Promise<MetricsAggregationResult> {
-    const aggregationId = this.generateAggregationId();
-    const startTime = Date.now();
+    const aggregationId = this.generateAggregationId()
+    const startTime = Date.now()
 
     try {
       this.logger.info('Starting metrics aggregation', {
         aggregationId,
         aggregatorId,
         timeRange,
-        groupBy
-      });
+        groupBy,
+      })
 
       // Get aggregator configuration
-      const aggregator = this.aggregators.get(aggregatorId);
+      const aggregator = this.aggregators.get(aggregatorId)
       if (!aggregator) {
-        throw new Error(`Aggregator not found: ${aggregatorId}`);
+        throw new Error(`Aggregator not found: ${aggregatorId}`)
       }
 
       // Retrieve raw metrics
-      const rawMetrics = await this.retrieveRawMetrics(aggregator.inputMetrics, timeRange);
-      
+      const rawMetrics = await this.retrieveRawMetrics(aggregator.inputMetrics, timeRange)
+
       // Process aggregation windows
-      const windowedData = await this.processAggregationWindows(rawMetrics, aggregator.windowSize);
-      
+      const windowedData = await this.processAggregationWindows(rawMetrics, aggregator.windowSize)
+
       // Apply aggregation functions
       const aggregatedData = await this.applyAggregationFunctions(
         windowedData,
         aggregator.aggregationFunction,
-        groupBy
-      );
-      
+        groupBy,
+      )
+
       // Validate aggregation results
-      const validation = await this.validateAggregationResults(aggregatedData, aggregator);
-      
+      const validation = await this.validateAggregationResults(aggregatedData, aggregator)
+
       // Store aggregated metrics
-      await this.storeAggregatedMetrics(aggregatedData, aggregator);
+      await this.storeAggregatedMetrics(aggregatedData, aggregator)
 
       const aggregationResult: MetricsAggregationResult = {
         id: aggregationId,
@@ -753,44 +754,44 @@ export class MetricsCollectionOrchestrator {
           inputCount: rawMetrics.length,
           outputCount: aggregatedData.length,
           compressionRatio: rawMetrics.length / aggregatedData.length,
-          processingTime: Date.now() - startTime
+          processingTime: Date.now() - startTime,
         },
-        timestamp: new Date()
-      };
+        timestamp: new Date(),
+      }
 
       this.logger.info('Metrics aggregation completed', {
         aggregationId,
         inputCount: rawMetrics.length,
         outputCount: aggregatedData.length,
-        compressionRatio: aggregationResult.statistics.compressionRatio
-      });
+        compressionRatio: aggregationResult.statistics.compressionRatio,
+      })
 
-      return aggregationResult;
+      return aggregationResult
     } catch (error) {
       this.logger.error('Metrics aggregation failed', {
         aggregationId,
         aggregatorId,
-        error: error.message
-      });
-      
-      throw new Error(`Metrics aggregation failed: ${error.message}`);
+        error: error.message,
+      })
+
+      throw new Error(`Metrics aggregation failed: ${error.message}`)
     }
   }
 
   public async generateMetricsReport(
     sessionId: string,
-    reportConfig: MetricsReportConfig
+    reportConfig: MetricsReportConfig,
   ): Promise<MetricsReport> {
-    const reportId = this.generateReportId();
+    const reportId = this.generateReportId()
 
     try {
-      const session = await this.getCollectionSession(sessionId);
+      const session = await this.getCollectionSession(sessionId)
       const collectionResult = await this.collectMetrics(
         reportConfig.collectorId,
         reportConfig.targetId,
-        reportConfig.timeRange
-      );
-      
+        reportConfig.timeRange,
+      )
+
       const report: MetricsReport = {
         id: reportId,
         session,
@@ -802,20 +803,20 @@ export class MetricsCollectionOrchestrator {
         appendices: {
           configuration: session.config,
           statistics: collectionResult.statistics,
-          qualityDetails: collectionResult.qualityReport
+          qualityDetails: collectionResult.qualityReport,
         },
-        generatedAt: new Date()
-      };
+        generatedAt: new Date(),
+      }
 
-      return report;
+      return report
     } catch (error) {
       this.logger.error('Metrics report generation failed', {
         reportId,
         sessionId,
-        error: error.message
-      });
-      
-      throw error;
+        error: error.message,
+      })
+
+      throw error
     }
   }
 }
