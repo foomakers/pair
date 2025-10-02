@@ -58,11 +58,17 @@ Document architectural decisions using structured format:
 
 ```markdown
 # ADR-001: Decision Title
+
 ## Status: [Proposed/Accepted/Deprecated]
+
 ## Context: [Situation requiring decision]
+
 ## Decision: [Chosen solution]
+
 ## Consequences: [Positive and negative outcomes]
+
 ## Measures: [Success metrics]
+
 ## Review Date: [When to revisit]
 ```
 
