@@ -1,70 +1,166 @@
-# 📁 Organization Patterns (Level 2)
+# Code Organization
 
-**Focus**: Code and workspace organization strategies
+Strategic patterns for organizing code, files, and workspace structure to maximize maintainability, scalability, and team collaboration.
 
-Define patterns for organizing code, files, and workspace structure to ensure maintainability, scalability, and team collaboration across monorepo and feature-based architectures.
+## Purpose
 
-## 📚 Organization Patterns (Level 3)
+Define clear organizational patterns that support efficient development, reduce cognitive load, and enable effective team collaboration across projects of varying sizes and complexity.
 
-### File Structure
+## Available Organization Patterns
 
-- **[File Structure](file-structure.md)** - File and directory organization standards
-  - Standard directory structure for applications and packages
-  - Feature-based organization vs technical layer organization
-  - Component, service, and utility file organization patterns
-  - Test file co-location and organization strategies
-  - Configuration file placement and naming conventions
+### Project Structure and Layout
 
-### Naming Conventions
+**[Workspace Structure](workspace-structure.md)**
+- Monorepo organization with clear separation of concerns
+- Application and package boundaries and responsibilities
+- Shared code and utility organization strategies
+- Cross-project dependency management and versioning
 
-- **[Naming Conventions](naming-conventions.md)** - Consistent naming patterns for files, functions, and components
-  - File naming conventions (kebab-case for files)
-  - Function and variable naming (camelCase standards)
-  - Class and interface naming (PascalCase patterns)
-  - Constant naming (UPPER_SNAKE_CASE standards)
-  - Component and module naming conventions
+**[File Structure](file-structure.md)**
+- Feature-based vs. technical layer organization approaches
+- Directory naming and hierarchy conventions
+- Component, service, and utility file organization
+- Test file co-location and organization strategies
 
-### Workspace Structure
+### Naming and Conventions
 
-- **[Workspace Structure](workspace-structure.md)** - Feature-based architecture and workspace organization
-  - Feature-based architecture principles and benefits
-  - Feature module structure and organization patterns
-  - Cross-feature communication and dependency management
-  - Public API design for feature modules
-  - Feature isolation and boundary definition
+**[Naming Conventions](naming-conventions.md)**
+- Consistent naming patterns across files, functions, and components
+- File and directory naming standards (kebab-case, camelCase, PascalCase)
+- Variable, function, and class naming conventions
+- Interface and type naming patterns for TypeScript
+
+**[Feature Architecture](feature-architecture.md)**
+- Feature-based architecture principles and implementation
+- Feature module boundaries and public API design
+- Cross-feature communication and dependency patterns
+- Feature isolation and testing strategies
+
+### Advanced Organization Patterns
+
+**[Code Organization](code-organization.md)**
+- Advanced code organization strategies for complex applications
+- Layer-based architecture with clear boundaries
+- Service and repository pattern organization
+- Configuration and environment management
+
+## Organizational Philosophy
+
+### Cognitive Load Reduction
+**Predictable Structure**
+- Consistent patterns that reduce decision-making overhead
+- Clear conventions that guide file and directory placement
+- Intuitive organization that matches mental models
+- Standardized patterns across different project types
+
+**Discoverability and Navigation**
+- Logical grouping of related functionality
+- Clear naming that indicates purpose and scope
+- Minimal nesting depth for frequently accessed code
+- Consistent patterns that enable quick orientation
+
+### Scalability and Maintainability
+**Growth-Friendly Architecture**
+- Organization patterns that scale with team and project size
+- Clear boundaries that prevent unintended coupling
+- Refactoring-friendly structure that supports reorganization
+- Feature-based organization that supports parallel development
+
+**Team Collaboration**
+- Clear ownership boundaries and responsibilities
+- Minimal conflicts in version control through good organization
+- Consistent patterns that reduce onboarding time
+- Shared understanding through standardized organization
+
+### Quality and Consistency
+**Enforcement Through Structure**
+- Organization patterns that encourage good practices
+- Structure that makes testing and quality assurance easier
+- Clear separation of concerns through file organization
+- Consistent patterns that support automated tooling
+
+## Implementation Strategies
 
 ### Monorepo Organization
+**Workspace Structure**
+- Clear separation between applications, packages, and tools
+- Shared configuration and tooling at workspace root
+- Package organization based on functionality and reusability
+- Dependency management and version coordination strategies
 
-- **[Monorepo Organization](monorepo-organization.md)** - Monorepo structure and package organization
-  - Top-level workspace structure (apps, packages, tools)
-  - Application entry points and shared package organization
-  - Package boundaries and dependency management
-  - Development tools and configuration sharing
-  - Build orchestration and workspace coordination
+**Package Design**
+- Single responsibility packages with clear public APIs
+- Appropriate granularity for package boundaries
+- Versioning strategy that supports independent development
+- Documentation and example usage for shared packages
 
-### Dependency Management
+### Feature-Based Architecture
+**Feature Module Design**
+- Self-contained features with minimal external dependencies
+- Clear public API boundaries and internal implementation hiding
+- Feature-specific testing and quality assurance strategies
+- Cross-feature communication through well-defined interfaces
 
-- **[Dependency Management](dependency-management.md)** - Package and dependency organization patterns
-  - PNPM workspace configuration and management
-  - Version catalog strategy for consistent library versions
-  - Shared dependencies and package boundaries
-  - Library version consistency across workspaces
-  - Dependency resolution and conflict management
+**Domain Organization**
+- Business domain alignment with code organization
+- Clear mapping between business concepts and code structure
+- Domain-specific language reflected in naming and organization
+- Bounded context principles applied to code organization
 
-## 🔗 Related Practices
+### Technical Organization Patterns
+**Layer-Based Organization**
+- Clear separation between presentation, business, and data layers
+- Consistent patterns for dependency direction and communication
+- Interface design that supports testing and modularity
+- Configuration and cross-cutting concern organization
 
-- **[Implementation Standards](.pair/knowledge/guidelines/code-design/implementation-standards/README.md)** - Development patterns that support organization
-- **[Tech Stack](.pair/knowledge/guidelines/technical-standards/tech-stack/README.md)** - Technologies that enable organization patterns
-- **[Quality Standards](.pair/knowledge/guidelines/code-design/quality-standards/README.md)** - Quality validation for organization standards
+**Service and Repository Patterns**
+- Service layer organization for business logic encapsulation
+- Repository pattern implementation for data access abstraction
+- Dependency injection patterns for service composition
+- Error handling and logging service organization
 
-## 🎯 Quick Start
+## Best Practices
 
-1. **Structure Foundation**: Establish [File Structure](file-structure.md) standards for your projects
-2. **Naming Consistency**: Implement [Naming Conventions](naming-conventions.md) across the codebase
-3. **Feature Organization**: Apply [Workspace Structure](workspace-structure.md) for feature-based development
-4. **Package Management**: Configure [Monorepo Organization](monorepo-organization.md) for multi-package projects
-5. **Dependency Control**: Set up [Dependency Management](dependency-management.md) for version consistency
+### Establishment and Evolution
+**Initial Setup**
+- Start with simple, consistent patterns that can grow with project needs
+- Establish clear conventions early in project development
+- Document organizational decisions and rationales
+- Create templates and examples for common organizational patterns
 
----
+**Continuous Improvement**
+- Regular assessment of organizational effectiveness and developer experience
+- Refactoring of organizational patterns based on project evolution
+- Team feedback incorporation and convention refinement
+- Adaptation to new technologies and framework patterns
 
-_Organization Patterns ensure that code is structured in a way that scales with team size and project complexity._
+### Team Adoption and Consistency
+**Knowledge Transfer**
+- Clear documentation of organizational patterns and conventions
+- Onboarding materials and examples for new team members
+- Code review focus on organizational consistency and quality
+- Regular team discussions on organizational effectiveness
+
+**Automation and Tooling**
+- Automated enforcement of naming and organizational conventions
+- IDE and editor configuration for consistent development experience
+- Code generation and scaffolding tools for common patterns
+- Linting and validation tools for organizational compliance
+
+## Quality Assurance
+
+### Organizational Quality Metrics
+**Structure Assessment**
+- Consistency of organizational patterns across the codebase
+- Discoverability and navigation efficiency measurements
+- Team productivity and onboarding time tracking
+- Refactoring and maintenance effort analysis
+
+**Continuous Monitoring**
+- Regular organizational pattern effectiveness reviews
+- Team satisfaction with organizational patterns and conventions
+- Code review feedback focused on organizational quality
+- Metrics tracking for organizational pattern adherence
+
+These organizational patterns provide strategic guidance for creating maintainable, scalable code structures that support effective team collaboration and long-term project success.
