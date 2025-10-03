@@ -20,7 +20,7 @@ Guidance and comparisons for framework-specific patterns used in frontend and ba
 ## Files (this directory)
 
 - `react-nextjs.md` - React and Next.js patterns and best practices
-- `fastify.md` - Fastify server patterns and configurations  
+- `fastify.md` - Fastify server patterns and configurations
 - `typescript.md` - TypeScript usage patterns and type safety
 - `components.md` - Component design and architecture patterns
 - `hooks.md` - Custom hooks and state management patterns

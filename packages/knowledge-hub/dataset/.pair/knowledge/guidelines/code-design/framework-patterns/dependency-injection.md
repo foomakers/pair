@@ -85,18 +85,14 @@ const ServiceContext = createContext<ServiceContainer | null>(null)
 export function ServiceProvider({ children }: { children: ReactNode }) {
   const services = useMemo(() => {
     const httpClient = new HttpClient(process.env.NEXT_PUBLIC_API_URL!)
-    
+
     return {
       userService: new ApiUserService(httpClient),
-      notificationService: new ToastNotificationService()
+      notificationService: new ToastNotificationService(),
     }
   }, [])
 
-  return (
-    <ServiceContext.Provider value={services}>
-      {children}
-    </ServiceContext.Provider>
-  )
+  return <ServiceContext.Provider value={services}>{children}</ServiceContext.Provider>
 }
 
 // Service consumption hook
@@ -149,13 +145,7 @@ function UserProfile() {
 
   if (loading) return <div>Loading...</div>
 
-  return (
-    <div>
-      {user && (
-        <UserForm user={user} onSubmit={handleUpdateUser} />
-      )}
-    </div>
-  )
+  return <div>{user && <UserForm user={user} onSubmit={handleUpdateUser} />}</div>
 }
 ```
 
@@ -229,7 +219,7 @@ function setupServices(container: DIContainer, db: Database) {
     return new EmailService({
       host: process.env.SMTP_HOST!,
       port: parseInt(process.env.SMTP_PORT!),
-      secure: process.env.SMTP_SECURE === 'true'
+      secure: process.env.SMTP_SECURE === 'true',
     })
   })
 }
@@ -241,12 +231,12 @@ Integrate DI container with Fastify:
 
 ```typescript
 // DI plugin for Fastify
-const diPlugin: FastifyPluginAsync = async (fastify) => {
+const diPlugin: FastifyPluginAsync = async fastify => {
   const container = new DIContainer()
-  
+
   // Setup services
   setupServices(container, fastify.db)
-  
+
   // Add container to Fastify instance
   fastify.decorate('services', container)
 }
@@ -262,7 +252,7 @@ declare module 'fastify' {
 fastify.get('/api/users/:id', async (request, reply) => {
   const userService = request.server.services.resolve<UserService>('userService')
   const { id } = request.params as { id: string }
-  
+
   try {
     const user = await userService.getUserById(id)
     if (!user) {
@@ -296,7 +286,7 @@ class MockUserService implements UserService {
     if (!existing) {
       throw new Error('User not found')
     }
-    
+
     const updated = { ...existing, ...updates }
     this.users.set(id, updated)
     return updated
@@ -310,7 +300,7 @@ class MockUserService implements UserService {
 }
 
 class MockNotificationService implements NotificationService {
-  messages: Array<{ type: 'success' | 'error', message: string }> = []
+  messages: Array<{ type: 'success' | 'error'; message: string }> = []
 
   showSuccess(message: string): void {
     this.messages.push({ type: 'success', message })
@@ -321,7 +311,7 @@ class MockNotificationService implements NotificationService {
   }
 
   // Test helper methods
-  getLastMessage(): { type: 'success' | 'error', message: string } | undefined {
+  getLastMessage(): { type: 'success' | 'error'; message: string } | undefined {
     return this.messages[this.messages.length - 1]
   }
 
@@ -340,22 +330,18 @@ Create test utilities for dependency injection:
 function createTestServices(): ServiceContainer {
   return {
     userService: new MockUserService(),
-    notificationService: new MockNotificationService()
+    notificationService: new MockNotificationService(),
   }
 }
 
-function TestServiceProvider({ 
-  children, 
-  services = createTestServices() 
-}: { 
+function TestServiceProvider({
+  children,
+  services = createTestServices(),
+}: {
   children: ReactNode
-  services?: ServiceContainer 
+  services?: ServiceContainer
 }) {
-  return (
-    <ServiceContext.Provider value={services}>
-      {children}
-    </ServiceContext.Provider>
-  )
+  return <ServiceContext.Provider value={services}>{children}</ServiceContext.Provider>
 }
 
 // Component test with DI
@@ -363,13 +349,13 @@ describe('UserProfile', () => {
   it('should display user information', async () => {
     const mockServices = createTestServices()
     const mockUser = { id: '1', name: 'John Doe', email: 'john@example.com' }
-    
+
     ;(mockServices.userService as MockUserService).setCurrentUser(mockUser)
 
     render(
       <TestServiceProvider services={mockServices}>
         <UserProfile />
-      </TestServiceProvider>
+      </TestServiceProvider>,
     )
 
     await waitFor(() => {
@@ -381,17 +367,16 @@ describe('UserProfile', () => {
   it('should show error notification on update failure', async () => {
     const mockServices = createTestServices()
     const mockUser = { id: '1', name: 'John Doe', email: 'john@example.com' }
-    
+
     ;(mockServices.userService as MockUserService).setCurrentUser(mockUser)
-    
+
     // Mock update to fail
-    jest.spyOn(mockServices.userService, 'updateUser')
-       .mockRejectedValue(new Error('Network error'))
+    jest.spyOn(mockServices.userService, 'updateUser').mockRejectedValue(new Error('Network error'))
 
     render(
       <TestServiceProvider services={mockServices}>
         <UserProfile />
-      </TestServiceProvider>
+      </TestServiceProvider>,
     )
 
     // Trigger update and verify error handling
@@ -411,24 +396,28 @@ describe('UserProfile', () => {
 ## Best Practices Summary
 
 ### Container Design
+
 - **Minimal Dependencies**: Keep DI container simple and focused on essential services
 - **Interface-First**: Design service interfaces before implementations
 - **Lifecycle Management**: Choose appropriate singleton vs transient lifecycles
 - **Configuration Separation**: Keep service configuration separate from business logic
 
 ### Service Architecture
+
 - **Single Responsibility**: Each service should have a clear, focused purpose
 - **Dependency Hierarchy**: Avoid circular dependencies between services
 - **Error Handling**: Implement consistent error handling across all services
 - **Resource Management**: Properly manage database connections and external resources
 
 ### Testing Strategy
+
 - **Mock Services**: Create comprehensive mock implementations for testing
 - **Test Utilities**: Build reusable test helpers for service injection
 - **Integration Testing**: Test service interactions and dependency resolution
 - **Boundary Testing**: Verify service contracts and error conditions
 
 ### Performance Considerations
+
 - **Lazy Loading**: Initialize expensive services only when needed
 - **Connection Pooling**: Share database connections and HTTP clients
 - **Caching Strategy**: Implement appropriate caching at service boundaries
