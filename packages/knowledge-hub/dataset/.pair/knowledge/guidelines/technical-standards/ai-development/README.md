@@ -1,77 +1,89 @@
 # AI Development Standards
 
-## Strategic Overview
+Comprehensive framework for AI-enhanced development, focusing on strategic tool integration, quality assurance, and sustainable AI adoption patterns.
 
-This framework establishes enterprise-grade standards for AI-enhanced development, focusing on strategic tool integration, quality assurance, and sustainable AI adoption patterns that maximize development velocity while maintaining code quality and security.
+## Purpose
+
+Establish enterprise-grade standards for AI development that maximize development velocity while maintaining code quality, security, and team collaboration effectiveness.
+
+## Available Resources
+
+### Standards and Guidelines
+
+- **[AI Tools](./ai-tools.md)** - AI development tool selection, configuration, and best practices
+- **[Documentation Standards](./documentation-standards.md)** - AI-specific documentation requirements and patterns
+- **[MCP Integration](./mcp-integration.md)** - Model Context Protocol implementation and integration standards
+
+### Key Focus Areas
+
+#### Strategic AI Integration
+
+- Tool selection and configuration frameworks
+- Human-AI collaboration patterns
+- Quality assurance for AI-generated code
+- Security considerations for AI development
+
+#### Development Workflow Enhancement
+
+- AI-powered code generation and review
+- Context-aware development practices
+- Automated documentation and testing
+- Continuous learning and improvement
+
+#### Enterprise AI Adoption
+
+- Team training and onboarding
+- Tool standardization and governance
+- ROI measurement and optimization
+- Scalable AI development practices
 
 ## AI Development Maturity Model
 
 ### Level 1: Basic AI Assistance
 
-- **Code Completion**: IDE-integrated suggestions (Cursor, GitHub Copilot)
-- **Documentation**: AI-assisted comment and README generation
-- **Basic Review**: Simple code explanation and refactoring suggestions
+- Code completion and simple suggestions
+- Basic documentation generation
+- Simple refactoring assistance
 
 ### Level 2: Integrated AI Workflows
 
-- **Context-Aware Development**: Full project context in AI interactions
-- **Quality Integration**: AI-powered testing and code review
-- **Documentation Automation**: Automated API docs and technical writing
+- Context-aware development
+- AI-powered testing and review
+- Automated documentation
 
 ### Level 3: Strategic AI Architecture
 
-- **MCP Integration**: Standardized AI tool communication protocols
-- **Custom AI Agents**: Domain-specific AI assistants and workflows
-- **AI-First Development**: Architecture designed around AI capabilities
+- MCP protocol integration
+- Custom AI agents and workflows
+- AI-first development patterns
 
 ### Level 4: AI-Native Development
 
-- **Autonomous Code Generation**: AI-driven feature implementation
-- **Predictive Quality**: AI-powered quality prediction and prevention
-- **Continuous AI Learning**: Self-improving development processes
+- Autonomous code generation
+- Predictive quality assurance
+- Self-improving development processes
 
-## Core AI Development Principles
+## Implementation Guidelines
 
-### 1. Human-AI Collaboration Framework
+### Quality Standards
 
-```
-AI Role: Acceleration and Enhancement
-Human Role: Strategy, Review, and Decision-Making
-Collaboration: Iterative refinement and validation
-```
+- Human review required for all AI-generated code
+- Comprehensive testing of AI suggestions
+- Enhanced security review processes
 
-### 2. Quality-First AI Integration
+### Tool Integration
 
-- **Always Review**: Human validation for all AI-generated code
-- **Test Everything**: Comprehensive testing of AI suggestions
-- **Security Focus**: Enhanced security review for AI-generated code
+- Standardized AI development environments
+- Team-wide configuration management
+- Performance monitoring and optimization
 
-### 3. Context-Aware Development
+### Team Adoption
 
-- **Project Context**: Full codebase awareness in AI interactions
-- **Domain Knowledge**: Business logic and requirements integration
-- **Historical Learning**: Learn from past development patterns
+- Progressive skill development
+- Knowledge sharing and best practices
+- Continuous improvement cycles
 
-## Strategic Tool Selection Framework
-
-### Primary AI Development Tools
-
-#### **Cursor IDE** - Strategic AI-Native Development
-
-```yaml
-Use Cases:
-  - Primary development environment
-  - Context-aware code generation
-  - Codebase-wide refactoring
-  - AI-assisted debugging
-
-Integration Strategy:
-  - Default IDE for AI-enhanced development
-  - Custom prompts for project-specific patterns
-  - Team-wide configuration standards
-```
-
-#### **GitHub Copilot** - Code Completion & Review
+For detailed implementation guidance, refer to the specific standards documents in this directory.
 
 ```yaml
 Use Cases:

@@ -10,8 +10,7 @@ Define and document the specific architectural constraints that guide all system
 
 - **[Team Constraints](team-constraints.md)** - Small team architecture and development priorities
 - **[Platform Constraints](platform-constraints.md)** - Desktop-only and self-hosted requirements
-- **[Technology Constraints](technology-constraints.md)** - Lightweight processing and technology selection
-- **[Implementation Guidelines](implementation-guidelines.md)** - Decision priorities and selection criteria
+- **[Deployment Constraints](deployment-constraints.md)** - Deployment and operational requirements
 
 ## Project Constraint Overview
 

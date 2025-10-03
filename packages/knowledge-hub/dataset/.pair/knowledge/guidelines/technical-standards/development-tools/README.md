@@ -1,66 +1,83 @@
 # Development Tools Standards
 
-## Strategic Overview
+## 🎯 Scope
 
-This framework establishes enterprise-grade development tooling standards that optimize developer productivity, ensure consistent development environments, and enable scalable team collaboration through strategic tool selection and configuration management.
+This section covers comprehensive development tooling standards and environment management:
 
-## Development Tools Maturity Model
+**In Scope:**
 
-### Level 1: Basic Development Setup
+- Essential development tools and IDE configurations
+- Workflow automation and productivity optimization tools
+- Code quality tools and enforcement mechanisms
+- Development environment standardization and reproducibility
+- Tool integration and configuration management
+- Performance monitoring and optimization tools
 
-- **Essential Tools**: Core IDE, package manager, version control
-- **Manual Configuration**: Individual developer tool setup
-- **Basic Standards**: Minimal tooling consistency across team
+**Out of Scope:**
 
-### Level 2: Standardized Development Environment
+- Application runtime environments (covered in Infrastructure)
+- Production monitoring tools (covered in Monitoring)
+- Framework-specific tooling (covered in Framework Selection)
 
-- **Tool Standardization**: Consistent tooling across all developers
-- **Automated Setup**: Scripts and configuration management
-- **Team Synchronization**: Shared configurations and extensions
+## 📋 Content Description
 
-### Level 3: Optimized Development Workflow
+This folder provides enterprise-grade development tooling standards with comprehensive configuration templates, automation frameworks, and integration guidelines to optimize developer productivity and ensure consistent development environments.
 
-- **AI Integration**: AI-powered development assistance and automation
-- **Performance Optimization**: Advanced tooling for build and runtime optimization
-- **Quality Integration**: Automated quality gates and development feedback loops
+### Available Standards:
 
-### Level 4: Intelligent Development Ecosystem
+1. **Environment Setup** (`environment-setup.md`)
 
-- **Adaptive Tooling**: Context-aware tool recommendations and optimization
-- **Predictive Development**: AI-powered development environment optimization
-- **Continuous Evolution**: Self-improving development tool ecosystem
+   - Complete development environment setup and automation
+   - System requirements validation and hardware optimization
+   - Core tool installation with version management (Node.js, Git, Docker)
+   - IDE configuration and extension management
+   - Security setup with SSH/GPG key management and secrets handling
+   - Project-specific environment configuration and service orchestration
+   - Environment maintenance, monitoring, and troubleshooting automation
 
-## Core Development Tool Principles
+2. **Required Tools** (`required-tools.md`)
 
-### 1. Developer Experience Optimization
+   - Essential development tools with installation and validation frameworks
+   - Node.js, Git, Docker, and IDE setup with version management
+   - Package manager configuration and dependency management
+   - Database tools and CLI utilities with automated setup
+   - Performance profiling and debugging tool configurations
+   - Environment validation and troubleshooting guides
 
-```
-Primary Focus: Reduce friction and accelerate development velocity
-Tool Selection: Balance functionality with simplicity and reliability
-Configuration: Consistent, reproducible development environments
-```
+3. **Recommended Tools** (`recommended-tools.md`)
 
-### 2. Quality-First Tooling
+   - Productivity enhancement tools and IDE extensions
+   - Advanced development utilities and workflow optimizers
+   - Code intelligence and AI-powered development assistance
+   - Visual design tools and API development platforms
+   - Database management and cloud development tools
+   - Tool evaluation criteria and adoption processes
 
-- **Built-in Quality**: Tools that enforce quality standards by default
-- **Automated Feedback**: Real-time quality feedback during development
-- **Prevention Over Correction**: Catch issues before they reach code review
+4. **Tool Configuration** (`tool-configuration.md`)
 
-### 3. Team Collaboration Excellence
+   - Comprehensive IDE and editor configuration standards
+   - Code quality tool integration (ESLint, Prettier, SonarQube)
+   - Git workflow configuration and automation templates
+   - Package manager optimization and security configurations
+   - Build tool setup and performance optimization
+   - Environment-specific configuration management
 
-- **Shared Standards**: Consistent tool configuration across team members
-- **Knowledge Sharing**: Documentation and training for tool mastery
-- **Continuous Improvement**: Regular tool evaluation and optimization
+5. **Workflow Tools** (`workflow-tools.md`)
+   - Development workflow automation and integration patterns
+   - CI/CD pipeline integration with development tools
+   - Code review automation and quality gate implementations
+   - Testing workflow tools and automation frameworks
+   - Deployment workflow integration and monitoring tools
+   - Collaboration tools and communication integrations
 
-## Essential Development Tool Stack
+## 🚀 Implementation Highlights
 
-### Core Development Environment
-
-#### **Primary IDE: Cursor** - AI-Native Development
-
-```yaml
-Strategic Role: Primary development environment with AI integration
-Key Capabilities:
+- **Automated setup scripts** for consistent environment provisioning across all platforms
+- **Environment validation frameworks** ensuring consistent development experience
+- **Security-first configuration** with automated secrets management and key generation
+- **Performance optimization guides** for enhanced development velocity and productivity
+- **Cross-platform compatibility** ensuring consistent experience across operating systems
+- **Real-time monitoring** and troubleshooting automation for environment health
   - AI-powered code generation and completion
   - Codebase-wide context awareness
   - Integrated terminal and debugging
@@ -68,11 +85,13 @@ Key Capabilities:
   - Team configuration sharing
 
 Configuration Requirements:
-  - Team-wide settings synchronization
-  - Required extensions installation
-  - AI model configuration and policies
-  - Code formatting and linting integration
-```
+
+- Team-wide settings synchronization
+- Required extensions installation
+- AI model configuration and policies
+- Code formatting and linting integration
+
+````
 
 #### **Alternative IDE: VS Code** - Traditional Development
 
@@ -88,7 +107,7 @@ When to Use:
   - Team members requiring traditional IDE experience
   - Specific extension requirements not available in Cursor
   - Performance-critical debugging scenarios
-```
+````
 
 ### Package Management & Build Tools
 

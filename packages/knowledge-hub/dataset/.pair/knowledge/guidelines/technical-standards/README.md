@@ -17,6 +17,7 @@ Provide comprehensive guidance for defining technical standards that support dev
 - AI development workflows and tool integration
 - Version control and collaboration standards
 - Deployment and release management processes
+- Feature flag implementation and management
 
 **Out of Scope:**
 
@@ -26,69 +27,31 @@ Provide comprehensive guidance for defining technical standards that support dev
 
 ## Available Standards Areas
 
-### Technology Stack (`technology-stack/`)
+### Core Technology Standards
 
-**Strategic technology selection and standardization**
+- **[Technology Stack](./technology-stack.md)** - Technology selection framework and standardization approach
+- **[Development Tools](./development-tools.md)** - IDE configuration, debugging tools, and development environment setup
+- **[Coding Standards](./coding-standards.md)** - Language conventions, formatting rules, and code organization
+- **[Integration Standards](./integration-standards.md)** - API design, service communication, and system integration patterns
 
-- Framework evaluation and selection criteria
-- Technology decision documentation and governance
-- Stack standardization approaches and evolution planning
-- Convention establishment and enforcement strategies
+### Feature and Deployment Standards
 
-### Development Tools (`development-tools/`)
+- **[Feature Flags](./feature-flags.md)** - Feature flag implementation, management strategies, and rollout controls
+- **[Internationalization & Localization](./i18n-localization.md)** - Multi-language support, localization workflows, and content management
+- **[Documentation Standards](./documentation-standards.md)** - Documentation structure, writing guidelines, and maintenance processes
+- **[Build Standards](./build-standards.md)** - Build configuration, optimization strategies, and deployment pipelines
 
-**Development environment and tooling standards**
+### AI Development Framework
 
-- Required and recommended development tools
-- Environment setup and configuration management
-- Tool integration and workflow optimization
-- Version management and upgrade strategies
+- **[AI Tools](./ai-development/ai-tools.md)** - AI development tool selection, configuration, and best practices
+- **[Documentation Standards](./ai-development/documentation-standards.md)** - AI-specific documentation requirements and patterns
+- **[MCP Integration](./ai-development/mcp-integration.md)** - Model Context Protocol implementation and integration standards
 
-### Coding Standards (`coding-standards/`)
+### Development Process Standards
 
-**Code quality and consistency frameworks**
-
-- **[Coding Conventions](coding-standards/coding-conventions.md)** - Style guides and formatting standards
-- **[Error Handling](coding-standards/error-handling.md)** - Error handling patterns and strategies
-- **[Versioning](coding-standards/versioning.md)** - Version management and release strategies
-- **[Technical Debt](coding-standards/technical-debt.md)** - Technical debt management and reduction
-- Internationalization and localization standards
-
-### Integration Standards (`integration-standards/`)
-
-**System integration and API design standards**
-
-- API design principles and patterns
-- Data management and exchange standards
-- External service integration approaches
-- Integration testing and validation strategies
-
-### AI Development (`ai-development/`)
-
-**AI-assisted development standards and workflows**
-
-- Documentation standards for AI-driven development
-- AI tool integration and workflow optimization
-- Model Context Protocol (MCP) development standards
-- AI workflow automation and optimization
-
-### Git Workflow (`git-workflow/`)
-
-**Version control and collaboration standards**
-
-- Development process and branching strategies
-- Version control best practices and conventions
-- Quality assurance integration and automation
-- Collaboration workflows and review processes
-
-### Deployment Workflow (`deployment-workflow/`)
-
-**Release management and deployment standards**
-
-- Release management processes and automation
-- Deployment strategy guidelines and patterns
-- Build standardization and optimization
-- Continuous delivery and deployment practices
+- **[Development Process](./git-workflow/development-process.md)** - Development lifecycle, branching strategy, and collaboration workflow
+- **[Version Control](./git-workflow/version-control.md)** - Git practices, commit standards, and repository management
+- **[Quality Assurance](./git-workflow/quality-assurance.md)** - Code review process, testing gates, and quality controls
 
 ## Strategic Decision Framework
 

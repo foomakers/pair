@@ -1,52 +1,73 @@
 # Technology Stack Standards
 
-## Strategic Overview
+## 🎯 Scope
 
-This framework establishes enterprise-grade technology stack selection, standardization, and governance practices that ensure consistent, scalable, and maintainable technology choices across all development initiatives.
+This section covers comprehensive technology stack selection, standardization, and management:
 
-## Technology Stack Maturity Model
+**In Scope:**
 
-### Level 1: Basic Technology Adoption
+- Technology stack conventions and standardization frameworks
+- Framework selection criteria and evaluation processes
+- Technology adoption lifecycle and governance
+- Stack migration strategies and implementation planning
+- Technical decision-making processes and documentation
+- Technology performance evaluation and optimization
 
-- **Ad-hoc Selection**: Project-specific technology choices
-- **Basic Standards**: Minimal standardization across teams
-- **Manual Governance**: Technology decisions made case-by-case
+**Out of Scope:**
 
-### Level 2: Standardized Technology Stack
+- Application-specific implementation details (covered in Code Design)
+- Infrastructure deployment patterns (covered in Infrastructure)
+- Security implementation specifics (covered in Security)
 
-- **Core Stack**: Defined primary technologies for common use cases
-- **Selection Criteria**: Documented evaluation frameworks
-- **Team Alignment**: Consistent technology choices across teams
+## 📋 Content Description
 
-### Level 3: Strategic Technology Management
+This folder provides enterprise-grade technology stack standards with comprehensive evaluation frameworks, selection criteria, and governance processes to ensure optimal technology choices and consistent implementation practices.
 
-- **Architecture Alignment**: Technology choices support overall architecture
-- **Lifecycle Management**: Technology upgrade and migration strategies
-- **Performance Optimization**: Stack optimization for specific requirements
+### Available Standards:
 
-### Level 4: Technology-Native Organization
+1. **Technology Stack Conventions** (`conventions.md`)
 
-- **Continuous Evolution**: Automated technology evaluation and adoption
-- **Predictive Selection**: Data-driven technology choice optimization
-- **Innovation Integration**: Seamless integration of emerging technologies
+   - Full-stack architecture standardization and layer organization
+   - Technology selection criteria and evaluation frameworks
+   - Frontend technology conventions (React, TypeScript, state management)
+   - Backend technology standards (Node.js, Express, database patterns)
+   - Technology adoption process and lifecycle management
+   - Stack validation and compatibility verification
 
-## Core Technology Strategy Principles
+2. **Framework Selection Guidelines** (`framework-selection.md`)
 
-### 1. Strategic Technology Selection
+   - Comprehensive framework evaluation matrix and scoring systems
+   - Frontend framework comparison (React vs Vue vs Angular)
+   - Backend framework selection (Express vs NestJS vs Fastify)
+   - Database framework evaluation (TypeORM vs Prisma vs Knex)
+   - Decision tree frameworks and automated recommendation systems
+   - Performance benchmarking and comparison methodologies
 
-```
-Primary Criteria: Performance, Maintainability, Team Expertise
-Secondary Criteria: Community, Ecosystem, Long-term Viability
-Decision Process: Evaluation → Pilot → Adoption → Standardization
-```
+3. **Technology Stack Standards** (`stack-standards.md`)
 
-### 2. Consistency-First Standardization
+   - Complete technology stack definitions and configurations
+   - Modern web application stack templates
+   - Microservices architecture stack specifications
+   - Technology adoption and lifecycle management processes
+   - Stack migration strategies and execution frameworks
+   - Performance optimization and monitoring integration
 
-- **Minimize Complexity**: Fewer technologies, deeper expertise
-- **Maximize Reuse**: Common patterns across projects
-- **Optimize Learning**: Consistent skill development paths
+4. **Technical Decisions Framework** (`tech-decisions.md`)
+   - Architecture Decision Records (ADR) templates and management
+   - Technical decision-making process and stakeholder involvement
+   - Decision tracking, analytics, and effectiveness measurement
+   - Decision documentation and knowledge preservation
+   - Review processes and continuous improvement frameworks
+   - Impact analysis and outcome measurement systems
 
-### 3. Evolution-Ready Architecture
+## 🚀 Implementation Highlights
+
+- **Systematic evaluation frameworks** with objective scoring and comparison
+- **Technology lifecycle management** with adoption and deprecation processes
+- **Decision documentation systems** with comprehensive ADR frameworks
+- **Migration planning tools** with risk assessment and execution strategies
+- **Performance benchmarking** with automated evaluation and reporting
+- **Governance integration** ensuring alignment with enterprise architecture
 
 - **Future-Proof Choices**: Technologies with clear upgrade paths
 - **Modular Integration**: Loosely coupled technology integration

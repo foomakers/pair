@@ -1,53 +1,92 @@
 # Git Workflow Standards
 
-## Strategic Overview
+Comprehensive framework for Git version control and development process standards that optimize team collaboration, code quality, and project maintainability.
 
-This framework establishes enterprise-grade Git workflow standards that optimize development velocity, ensure code quality, and maintain project stability through systematic version control practices and team collaboration protocols.
+## Purpose
+
+Establish enterprise-grade Git workflow standards that maximize development velocity while ensuring code quality, project stability, and effective team collaboration through systematic version control practices.
+
+## Available Resources
+
+### Standards and Guidelines
+
+- **[Development Process](./development-process.md)** - Development lifecycle, branching strategy, and collaboration workflow
+- **[Version Control](./version-control.md)** - Git practices, commit standards, and repository management
+- **[Quality Assurance](./quality-assurance.md)** - Code review process, testing gates, and quality controls
+
+### Key Focus Areas
+
+#### Version Control Excellence
+
+- Strategic branching and merging strategies
+- Commit message standards and conventions
+- Repository organization and management
+- Git best practices and automation
+
+#### Development Process Optimization
+
+- Feature development lifecycle
+- Code review and approval workflows
+- Integration and deployment processes
+- Collaboration and communication patterns
+
+#### Quality Assurance Integration
+
+- Automated testing and validation
+- Code quality gates and standards
+- Security scanning and compliance
+- Performance and maintainability checks
 
 ## Git Workflow Maturity Model
 
 ### Level 1: Basic Version Control
 
-- **Linear Development**: Simple branch-per-feature workflow
-- **Manual Integration**: Basic merge and conflict resolution
-- **Basic Protection**: Main branch protection with simple rules
+- Linear development with simple branching
+- Manual integration and conflict resolution
+- Basic branch protection rules
 
 ### Level 2: Structured Branching
 
-- **Feature Branching**: Standardized branch naming and lifecycle
-- **Code Review**: Mandatory pull request review process
-- **Automated Testing**: CI/CD integration with quality gates
+- Standardized branch naming and lifecycle
+- Mandatory pull request review process
+- CI/CD integration with quality gates
 
 ### Level 3: Strategic Git Operations
 
-- **Advanced Branching**: GitFlow or GitHub Flow with release management
-- **Automated Quality**: Comprehensive CI/CD with security scanning
-- **Release Automation**: Automated versioning and deployment
+- Advanced branching strategies (GitFlow/GitHub Flow)
+- Comprehensive automated quality checks
+- Release automation and management
 
 ### Level 4: Git-Native Development
 
-- **Semantic Versioning**: Automated version management and changelog
-- **Predictive Quality**: AI-powered code analysis and review
-- **Continuous Deployment**: Full automation with monitoring and rollback
+- Semantic versioning and automated changelog
+- AI-powered code analysis and review
+- Full deployment automation with monitoring
 
-## Core Git Workflow Principles
+## Implementation Guidelines
 
-### 1. Strategic Branching Strategy
+### Core Principles
 
-```
-Main Branch: Production-ready code only
-Development Branch: Integration and testing (optional)
-Feature Branches: Isolated feature development
-Release Branches: Release preparation and hotfixes
-```
+- All changes via pull requests (no direct commits)
+- Mandatory code review for quality assurance
+- Automated testing on every change
+- Clear commit messages and branch naming
 
-### 2. Quality-First Integration
+### Workflow Standards
 
-- **No Direct Commits**: All changes via pull requests
-- **Automated Testing**: Comprehensive test suite on every PR
-- **Code Review**: Mandatory human review for quality assurance
+- Strategic branching strategy selection
+- Quality-first integration processes
+- Semantic development practices
+- Comprehensive documentation
 
-### 3. Semantic Development
+### Team Collaboration
+
+- Clear review and approval processes
+- Effective communication patterns
+- Knowledge sharing and mentoring
+- Continuous process improvement
+
+For detailed implementation guidance, refer to the specific standards documents in this directory.
 
 - **Conventional Commits**: Standardized commit message format
 - **Semantic Versioning**: Automated version management

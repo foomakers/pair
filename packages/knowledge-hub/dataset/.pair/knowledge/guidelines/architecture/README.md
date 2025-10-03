@@ -165,7 +165,7 @@ flowchart TD
 ## 🎯 Quick Start
 
 1. **Architectural Patterns**: Start with [Architectural Patterns](architectural-patterns/README.md) for core patterns and DDD
-2. **Document Decisions**: Use [Decision Records](decision-records/README.md) for ADR process and templates
+2. **Document Decisions**: Use [Decision Frameworks](decision-frameworks/README.md) for ADR process and templates
 3. **Validate Architecture**: Ensure alignment with Quality Standards
 
 ---

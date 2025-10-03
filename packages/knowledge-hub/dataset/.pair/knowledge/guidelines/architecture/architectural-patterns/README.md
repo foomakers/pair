@@ -284,8 +284,10 @@ Low Complexity/Benefits  →  High Complexity/Benefits
 Each pattern has detailed implementation guidance with code examples:
 
 - **[CRUD Architecture](crud.md)** - Simple data operations pattern
-- **[Layered Architecture](layered.md)** - Traditional enterprise pattern
+- **[Transaction Script](transaction-script.md)** - Procedural business logic pattern
+- **[Layer Architecture](layer-architecture.md)** - Traditional enterprise pattern
 - **[Hexagonal Architecture](hexagonal.md)** - Ports and adapters pattern
-- **[Clean Architecture](clean.md)** - Dependency inversion pattern
+- **[Clean Architecture](clean-architecture.md)** - Dependency inversion pattern
 - **[CQRS](cqrs.md)** - Command Query Responsibility Segregation
 - **[Event Sourcing](event-sourcing.md)** - Event-based persistence pattern
+- **[Continuous Architecture](continuous-architecture.md)** - Evolutionary architecture principles

@@ -2,58 +2,79 @@
 
 ## 🎯 Scope
 
-This section covers coding conventions, style guides, and development standards:
+This section covers comprehensive coding conventions, quality standards, and development practices:
 
 **In Scope:**
 
-- Code formatting and style conventions
-- Error handling patterns and standards
-- Versioning strategies and semantic versioning
-- Technical debt identification and management
-- Internationalization and localization approaches
-- Code quality metrics and enforcement
+- Code formatting and style conventions across multiple languages
+- Comprehensive error handling patterns and strategies
+- Versioning strategies and semantic versioning implementation
+- Technical debt identification, measurement, and management
+- Internationalization and localization frameworks
+- Code quality metrics, enforcement, and automation
 
 **Out of Scope:**
 
 - Framework-specific patterns (covered in Code Design)
-- Testing standards (covered in Testing)
+- Testing strategies (covered in Testing)
 - Architecture patterns (covered in Architecture)
 
 ## 📋 Content Description
 
-This folder provides comprehensive coding standards to ensure consistency, maintainability, and quality across development teams.
+This folder provides enterprise-grade coding standards with practical TypeScript examples, automation frameworks, and implementation guidelines to ensure consistency, maintainability, and quality across development teams.
 
 ### Available Standards:
 
 1. **Coding Conventions** (`coding-conventions.md`)
 
-   - Language-specific style guides
-   - Naming conventions and patterns
-   - Code organization principles
-   - Comment and documentation standards
+   - Multi-language style guides (TypeScript, JavaScript, Python, Java)
+   - Comprehensive naming conventions and patterns
+   - File and project organization principles
+   - Documentation standards with automated generation
+   - Code review guidelines and automation
 
 2. **Error Handling** (`error-handling.md`)
 
-   - Error handling patterns and strategies
-   - Exception management approaches
-   - Logging and monitoring integration
-   - User-facing error messages
+   - Enterprise error handling architecture and patterns
+   - Custom error classes and hierarchies
+   - Async/await error management strategies
+   - Comprehensive logging and monitoring integration
+   - User-facing error message frameworks
+   - Error recovery and fallback mechanisms
 
 3. **Versioning** (`versioning.md`)
 
-   - Semantic versioning implementation
-   - Release branching strategies
-   - Changelog management
-   - API versioning approaches
+   - Complete semantic versioning implementation
+   - Advanced release branching strategies
+   - Automated changelog generation
+   - Multi-service versioning coordination
+   - API versioning approaches with backward compatibility
+   - Version conflict resolution strategies
 
 4. **Technical Debt** (`technical-debt.md`)
+
+   - Technical debt identification and classification framework
+   - Automated debt measurement and tracking systems
+   - Prioritization algorithms and decision matrices
+   - Refactoring strategies and execution plans
+   - ROI analysis for debt reduction initiatives
+   - Integration with development workflows
+
+5. **Internationalization & Localization** (`i18n-localization.md`)
+
+   - Comprehensive i18n architecture and implementation
+   - Multi-language content management systems
+   - RTL (Right-to-Left) language support
+   - Dynamic locale switching and state management
+   - Translation workflow automation
+   - Cultural adaptation and local compliance
 
    - Technical debt identification methods
    - Prioritization and management strategies
    - Refactoring guidelines
    - Measurement and tracking
 
-5. **Internationalization** (`i18n-localization.md`)
+6. **Internationalization** (`i18n-localization.md`)
    - Multi-language support patterns
    - Localization best practices
    - Cultural considerations
