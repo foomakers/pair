@@ -1,103 +1,169 @@
 # Estimation Framework
 
-## Strategic Overview
+## Overview
 
-This framework establishes systematic estimation excellence through intelligent sizing methodologies, predictive analytics, and continuous calibration that enables accurate project planning, realistic timeline management, and reliable delivery prediction across diverse project contexts.
+Systematic estimation excellence through intelligent sizing methodologies, predictive analytics, and continuous calibration that enables accurate project planning, realistic timeline management, and reliable delivery prediction across diverse project contexts.
 
-## Core Estimation Architecture
+## Scope
+
+This framework covers:
+
+- AI-assisted estimation using machine learning and pattern recognition
+- Complexity-based estimation with story points and relative sizing
+- Time-based estimation with hours, days, and calendar planning
+- Forecast-based estimation using historical data and statistical models
+- Hybrid estimation approaches combining multiple methodologies
+- Estimation accuracy measurement and continuous improvement
+
+## Out of Scope
+
+This framework does not cover:
+
+- Budget estimation and cost management (covered in project management)
+- Resource allocation and capacity planning (covered in project management)
+- Risk estimation and mitigation planning (covered in project management)
+- Technical architecture estimation (covered in architecture guidelines)
+
+## Directory Contents
+
+**[ai-assisted-estimation.md](ai-assisted-estimation.md)** - AI-assisted estimation techniques using artificial intelligence and machine learning
+
+**[complexity-based-estimation.md](complexity-based-estimation.md)** - Complexity-based estimation using story points and relative sizing
+
+**[time-based-estimation.md](time-based-estimation.md)** - Time-based estimation techniques for project planning
+
+**[forecast-based-estimation.md](forecast-based-estimation.md)** - Forecast-based estimation using historical metrics and statistical models
+
+**[hybrid-estimation.md](hybrid-estimation.md)** - Hybrid estimation techniques combining multiple approaches
+
+## Introduction to Estimation Excellence
 
 This framework provides four complementary estimation approaches that can be used independently or in combination:
 
-### [AI-Assisted Estimation](ai-assisted-estimation.md)
+### Estimation Method Decision Matrix
 
-Modern estimation using artificial intelligence and machine learning to enhance accuracy and consistency.
+| Project Context       | Team Maturity | Data Available | Time Pressure | Recommended Primary | Recommended Secondary |
+| --------------------- | ------------- | -------------- | ------------- | ------------------- | --------------------- |
+| New product           | Novice        | None           | High          | AI-Assisted         | Complexity-Based      |
+| Feature enhancement   | Experienced   | Limited        | Medium        | Complexity-Based    | Time-Based            |
+| Maintenance work      | Experienced   | Extensive      | Low           | Forecast-Based      | Time-Based            |
+| R&D/Exploration       | Expert        | Historical     | Variable      | AI-Assisted         | Forecast-Based        |
+| Fixed contracts       | Any           | Any            | Critical      | Time-Based          | Forecast-Based        |
+| Large-scale migration | Expert        | Extensive      | Medium        | Hybrid              | Forecast-Based        |
 
-**Best for:**
+### Estimation Method Decision Tree
 
-- Complex or novel features with limited historical data
-- Teams looking to reduce estimation bias
-- Projects requiring rapid estimation of large backlogs
-- Organizations wanting to leverage data science approaches
+```
+Start: What type of project are you estimating?
 
-**Key Features:**
+├── New product/feature with little historical data?
+│   ├── Team inexperienced with estimation?
+│   │   └── → Use AI-Assisted Estimation
+│   └── Team experienced?
+│       └── → Use Complexity-Based Estimation
+│
+├── Enhancement to existing system?
+│   ├── Similar work done before?
+│   │   └── → Use Forecast-Based Estimation
+│   └── Different type of work?
+│       └── → Use Complexity-Based Estimation
+│
+├── Fixed deadline/budget project?
+│   └── → Use Time-Based Estimation (primary) + Forecast-Based (validation)
+│
+└── Large complex project spanning multiple teams?
+    └── → Use Hybrid Estimation approach
+```
 
-- GPT-powered estimation assistance
-- Pattern recognition from historical data
-- Automated complexity analysis
-- Bias reduction through AI objectivity
+### Cost-Benefit Analysis
 
-### [Complexity-Based Estimation](complexity-based-estimation.md)
+#### AI-Assisted Estimation
 
-Relative sizing using story points, t-shirt sizes, and complexity indicators rather than time estimates.
+**Benefits:**
 
-**Best for:**
+- Reduces estimation bias and human error
+- Handles complex scenarios with limited data
+- Consistent across different team members
+- Learns from patterns in historical data
 
-- Agile teams using story points
-- Situations where time estimates are unreliable
-- Long-term planning and velocity tracking
-- Cross-team comparison and capacity planning
+**Costs:**
 
-**Key Features:**
+- Requires setup and training of AI tools
+- May need historical data for training
+- Potential over-reliance on automation
+- Initial learning curve for team adoption
 
-- Story point scales (Fibonacci, powers of 2)
-- T-shirt sizing for quick estimates
-- Planning poker and team estimation techniques
-- Velocity-based forecasting
+**Best ROI:** Complex products with inconsistent estimation accuracy
 
-### [Time-Based Estimation](time-based-estimation.md)
+#### Complexity-Based Estimation
 
-Traditional time-focused estimation using hours, days, and calendar-based planning.
+**Benefits:**
 
-**Best for:**
+- Focus on relative sizing rather than absolute time
+- Good for agile teams and iterative development
+- Velocity tracking enables predictable planning
+- Less affected by individual developer differences
 
-- Fixed deadline projects and contracts
-- Resource allocation and budgeting
-- Short-term sprint planning
-- Integration with calendar and scheduling tools
+**Costs:**
 
-**Key Features:**
+- Requires team calibration and consensus building
+- May not align with budget/timeline requirements
+- Needs historical velocity data for forecasting
+- Can be abstract for stakeholders
 
-- Hour/day/week-level granularity
-- Bottom-up and top-down approaches
-- Three-point estimation (PERT)
-- Buffer and risk adjustment techniques
+**Best ROI:** Agile teams with consistent sprint cycles
 
-### [Forecast-Based Estimation](forecast-based-estimation.md)
+#### Time-Based Estimation
 
-Data-driven prediction using historical metrics, trends, and statistical models.
+**Benefits:**
 
-**Best for:**
+- Direct alignment with schedules and budgets
+- Easy for stakeholders to understand
+- Works well for similar, repetitive work
+- Enables detailed resource planning
 
-- Mature teams with historical performance data
-- Long-term release and roadmap planning
-- Risk assessment and scenario planning
-- Continuous improvement of estimation accuracy
+**Costs:**
 
-**Key Features:**
+- Higher susceptibility to estimation errors
+- Pressure to commit to specific timeframes
+- May not account for complexity variations
+- Can create false precision in estimates
 
-- Velocity trend analysis and projection
-- Monte Carlo simulation for probabilistic forecasting
-- Statistical modeling and confidence intervals
-- Automated metrics collection and analysis
+**Best ROI:** Short-term projects with similar work patterns
 
-## Choosing the Right Approach
+#### Forecast-Based Estimation
 
-### Decision Matrix
+**Benefits:**
 
-| Project Context     | Team Maturity | Data Available | Recommended Primary | Recommended Secondary |
-| ------------------- | ------------- | -------------- | ------------------- | --------------------- |
-| New product         | Novice        | None           | AI-Assisted         | Complexity-Based      |
-| Feature enhancement | Experienced   | Limited        | Complexity-Based    | Time-Based            |
-| Maintenance         | Experienced   | Extensive      | Forecast-Based      | Time-Based            |
-| R&D/Exploration     | Expert        | Historical     | AI-Assisted         | Forecast-Based        |
-| Fixed contracts     | Any           | Any            | Time-Based          | Forecast-Based        |
+- Data-driven predictions with confidence intervals
+- Improves accuracy over time with more data
+- Identifies trends and patterns in team performance
+- Enables scenario planning and risk assessment
 
-### Context Factors
+**Costs:**
 
-**Team Experience**
+- Requires significant historical data
+- Complex statistical modeling and analysis
+- May not handle novel or innovative work well
+- Needs consistent metrics collection
 
-- **New teams**: Start with AI-assisted and simple complexity-based methods
-- **Experienced teams**: Can leverage all approaches effectively
+**Best ROI:** Mature teams with extensive performance history
+
+### Implementation Guidance
+
+**Starting Recommendations:**
+
+1. **New teams:** Begin with AI-Assisted estimation for immediate value
+2. **Agile teams:** Implement Complexity-Based estimation with story points
+3. **Contract work:** Use Time-Based estimation with buffer management
+4. **Mature teams:** Leverage Forecast-Based estimation for precision
+
+**Combination Strategies:**
+
+- Use multiple methods for validation and confidence building
+- Primary method for planning, secondary for validation
+- Different methods for different types of work within same project
+- Evolve approach based on team maturity and project context
 - **Expert teams**: Focus on forecast-based for continuous improvement
 
 **Project Uncertainty**
@@ -233,6 +299,6 @@ Data-driven prediction using historical metrics, trends, and statistical models.
 
 ## Related Documents
 
-- **[../methodology/](.pair/knowledge/guidelines/collaboration/methodology/README.md)** - Integration with Agile, Waterfall, and hybrid methodologies
-- **[../project-tracking/](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)** - Tracking estimation accuracy and project progress
-- **[../project-management-tool/](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Tool-specific estimation implementations
+- **[methodology/](.pair/knowledge/guidelines/collaboration/methodology/README.md)** - Integration with Agile, Waterfall, and hybrid methodologies
+- **[project-tracking/](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)** - Tracking estimation accuracy and project progress
+- **[project-management-tool/](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Tool-specific estimation implementations

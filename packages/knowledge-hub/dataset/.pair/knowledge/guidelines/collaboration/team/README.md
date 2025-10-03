@@ -1,8 +1,44 @@
 # Team Collaboration Framework
 
-## Strategic Overview
+## Overview
 
-This framework establishes systematic team collaboration excellence through communication orchestration, decision-making optimization, and workflow coordination that enables distributed teams to operate with alignment, efficiency, and shared purpose across all collaboration contexts.
+Systematic team collaboration excellence through communication orchestration, decision-making optimization, and workflow coordination that enables distributed teams to operate with alignment, efficiency, and shared purpose across all collaboration contexts.
+
+## Scope
+
+This framework covers:
+
+- Communication protocols and standards
+- Decision-making processes and frameworks
+- Remote work guidelines and distributed team coordination
+- Team roles, responsibilities, and accountability frameworks
+- Team culture development and value alignment
+- Workflow coordination and process optimization
+
+## Out of Scope
+
+This framework does not cover:
+
+- Individual performance management and evaluation
+- Hiring and recruitment processes
+- Compensation and benefits administration
+- Technical skill development and training programs
+
+## Directory Contents
+
+**[communication-protocols.md](communication-protocols.md)** - Communication protocols and standards for effective team collaboration
+
+**[decision-making.md](decision-making.md)** - Decision-making processes and frameworks for team collaboration
+
+**[remote-work.md](remote-work.md)** - Guidelines and best practices for remote work collaboration
+
+**[standards.md](standards.md)** - Team standards and conventions for collaboration
+
+**[role-responsibilities.md](role-responsibilities.md)** - Role responsibilities and accountability frameworks for team collaboration
+
+**[scenarios.md](scenarios.md)** - Collaboration scenarios and their handling procedures
+
+## Introduction to Team Collaboration
 
 ## Core Collaboration Architecture
 

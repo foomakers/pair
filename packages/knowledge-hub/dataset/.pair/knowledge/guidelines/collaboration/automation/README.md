@@ -1,8 +1,36 @@
 # Collaboration Automation Framework
 
-## Strategic Overview
+## Overview
 
-This framework establishes systematic workflow automation through intelligent process orchestration, task automation, and efficiency optimization that eliminates manual overhead, reduces human error, and enables teams to focus on high-value creative and strategic activities.
+Systematic workflow automation through intelligent process orchestration, task automation, and efficiency optimization that eliminates manual overhead, reduces human error, and enables teams to focus on high-value creative and strategic activities.
+
+## Scope
+
+This framework covers:
+
+- GitHub automation workflows and Actions
+- Filesystem-based automation scripts and utilities
+- Status synchronization between tools and platforms
+- Development workflow automation (branch, PR, deployment)
+- Project management automation (sprint planning, progress reporting)
+- Notification and communication automation
+
+## Out of Scope
+
+This framework does not cover:
+
+- CI/CD pipeline automation (covered in technical standards)
+- Infrastructure automation (covered in technical standards)
+- Code generation and build automation (covered in technical standards)
+- Security automation and compliance checks (covered in technical standards)
+
+## Directory Contents
+
+**[github-automation.md](github-automation.md)** - GitHub Actions and workflow automation strategies
+
+**[filesystem-automation.md](filesystem-automation.md)** - Local script automation and filesystem-based workflows
+
+## Introduction to Collaboration Automation
 
 This section covers automation approaches for project management workflows, development processes, and tool integrations to improve team efficiency and consistency.
 

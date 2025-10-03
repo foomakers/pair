@@ -1,8 +1,36 @@
 # Issue Management Framework
 
-## Strategic Overview
+## Overview
 
-This framework establishes systematic issue management excellence through intelligent problem resolution, collaborative troubleshooting, and proactive prevention that enables rapid response, comprehensive resolution, and continuous improvement across all technical and business domains.
+Systematic issue management excellence through intelligent problem resolution, collaborative troubleshooting, and proactive prevention that enables rapid response, comprehensive resolution, and continuous improvement across all technical and business domains.
+
+## Scope
+
+This framework covers:
+
+- Issue tracking workflows for different tools and organizational contexts
+- Issue lifecycle management from creation through resolution
+- Priority and severity classification systems and escalation procedures
+- Issue resolution coordination and communication strategies
+- Quality assurance and issue prevention approaches
+- Tool-specific implementations for GitHub and filesystem-based workflows
+
+## Out of Scope
+
+This framework does not cover:
+
+- Technical troubleshooting procedures (covered in technical standards)
+- Infrastructure monitoring and alerting (covered in observability)
+- Security incident response (covered in technical standards)
+- Customer support processes and ticket management
+
+## Directory Contents
+
+**[filesystem-issues.md](filesystem-issues.md)** - Issue management strategies for filesystem-based workflows
+
+**[github-issues.md](github-issues.md)** - Issue management strategies for GitHub-based workflows
+
+## Introduction to Issue Management Excellence
 
 ## Core Issue Architecture
 

@@ -1,8 +1,36 @@
 # Project Tracking Framework
 
-## Strategic Overview
+## Overview
 
-This framework establishes systematic project tracking excellence through intelligent progress monitoring, predictive analytics, and stakeholder communication that provides real-time visibility, proactive risk management, and data-driven decision support across all project phases and organizational contexts.
+Systematic project tracking excellence through intelligent progress monitoring, predictive analytics, and stakeholder communication that provides real-time visibility, proactive risk management, and data-driven decision support across all project phases and organizational contexts.
+
+## Scope
+
+This framework covers:
+
+- Project progress monitoring and reporting strategies
+- Metrics collection and dashboard development for project visibility
+- Milestone tracking and delivery coordination approaches
+- Risk tracking and mitigation strategy implementation
+- Stakeholder reporting and communication for project status
+- Tool-specific implementations for different project management platforms
+
+## Out of Scope
+
+This framework does not cover:
+
+- Financial tracking and budget management (covered in project management)
+- Resource management and allocation (covered in project management)
+- Quality metrics and code quality tracking (covered in quality assurance)
+- Performance monitoring and system metrics (covered in observability)
+
+## Directory Contents
+
+**[filesystem-tracking.md](filesystem-tracking.md)** - Filesystem-based project tracking strategies
+
+**[github-tracking.md](github-tracking.md)** - GitHub-based project tracking strategies
+
+## Introduction to Project Tracking Excellence
 
 ## Core Tracking Architecture
 
