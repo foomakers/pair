@@ -4,6 +4,12 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 
 ## 📁 Essential Folders
 
+`# Getting Started - AI-Human Pairing Repository
+
+Welcome to the AI-Human pairing repository template! This guide provides essential information to start using this framework for collaborative software development.
+
+## 📁 Essential Folders
+
 ```
 .pair/
 ├── adoption/                  # 💼 Product requirements and technical standards
@@ -22,7 +28,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 │       │   └── .keep
 │       └── boundedcontext/   # Bounded context guidelines
 │           └── README.md
-├── knowledge/                       # 📚 Knowledge base and process documentation
+├── knowledge/                # 📚 Knowledge base and process documentation
 │   ├── getting-started.md    # This guide
 │   ├── way-of-working.md     # Main process documentation
 │   ├── assets/               # Templates and checklists
@@ -32,37 +38,35 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 │   ├── guidelines/           # Technical guidelines organized by theme
 │   │   ├── README.md         # Guidelines overview and navigation
 │   │   ├── architecture/     # System architecture patterns and ADR processes
-│   │   │   └── architectural-guidelines.md
-│   │   ├── development/      # Code design, technical standards, and testing
-│   │   │   ├── code-design-guidelines.md
-│   │   │   ├── technical-guidelines.md
-│   │   │   └── testing-strategy.md
+│   │   ├── code-design/      # Code design and development standards
 │   │   ├── collaboration/    # Process workflows and project management
-│   │   │   └── project-management/ # Comprehensive collaboration guidelines
-│   │   ├── quality/          # Quality criteria, accessibility, performance, security
-│   │   │   ├── definition-of-done.md
-│   │   │   ├── accessibility-guidelines.md
-│   │   │   ├── performance-guidelines.md
-│   │   │   └── security-guidelines.md
-│   │   └── operations/       # Infrastructure, UX, and observability
-│   │       ├── infrastructure-guidelines.md
-│   │       ├── ux-guidelines.md
-│   │       └── observability-guidelines.md
-│   │   └── guidelines/
-│   │       ├── collaboration/           # Collaboration and process guidelines
-│   │       │   ├── project-management-tool/   # Tool-specific implementations
-│   │       │   │   ├── README.md
-│   │       │   │   ├── github-implementation.md
-│   │       │   │   └── filesystem-implementation.md
-│   │       │   ├── methodology/        # Agile methodologies (Kanban, Scrum, etc.)
-│   │       │   ├── board-management/   # Board optimization and workflow management
-│   │       │   ├── issue-management/   # Issue tracking and lifecycle management
-│   │       │   └── assets/            # Templates for process docs
-│   │           ├── code-review-template.md
-│   │           ├── epic-template.md
-│   │           ├── initiative-template.md
-│   │           ├── task-template.md
-│   │           └── user-story-template.md
+│   │   │   ├── README.md
+│   │   │   ├── automation/   # Automation and CI/CD guidelines
+│   │   │   ├── estimation/   # Project estimation methodologies
+│   │   │   ├── issue-management/  # Issue tracking and lifecycle
+│   │   │   ├── methodology/  # Agile methodologies (Kanban, Scrum, etc.)
+│   │   │   ├── project-management-tool/  # Tool-specific implementations
+│   │   │   │   ├── README.md
+│   │   │   │   ├── github-implementation.md
+│   │   │   │   └── filesystem-implementation.md
+│   │   │   ├── project-tracking/  # Project tracking and reporting
+│   │   │   ├── team/         # Team collaboration guidelines
+│   │   │   └── templates/    # Templates for process docs
+│   │   │       ├── README.md
+│   │   │       ├── branch-template.md
+│   │   │       ├── code-review-template.md
+│   │   │       ├── commit-template.md
+│   │   │       ├── epic-template.md
+│   │   │       ├── initiative-template.md
+│   │   │       ├── pr-template.md
+│   │   │       ├── task-template.md
+│   │   │       └── user-story-template.md
+│   │   ├── infrastructure/   # Infrastructure and deployment guidelines
+│   │   ├── observability/    # Monitoring and observability practices
+│   │   ├── quality-assurance/  # Quality criteria, accessibility, performance, security
+│   │   ├── technical-standards/  # Technical standards and coding practices
+│   │   ├── testing/          # Testing strategies and automation
+│   │   └── user-experience/  # UX/UI design guidelines and principles
 │   └── how-to/               # Step-by-step process guides
 │       ├── 01-how-to-create-PRD.md
 │       ├── 02-how-to-complete-bootstrap-checklist.md
@@ -77,7 +81,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 │       ├── 11-how-to-commit-and-push.md
 │       ├── 12-how-to-create-a-pr.md
 │       └── 13-how-to-code-review.md
-```
+```markdown
 
 ### 📂 Folder Overview:
 
@@ -86,25 +90,31 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 - **`how-to/`**: Step-by-step guides for each development phase and LLM collaboration
   - Process guides (01-13): Operational documentation for each phase
 - **`assets/`**: Templates, checklists, and document examples (e.g., PRD, bootstrap checklist)
-- **`product/`**: Product requirements and adoption documents
-  - `adopted/`: Adoption documents and subdomain guidelines
-  - `backlog/`: Backlog organized into initiatives, epics, and user stories (with sprint and done subdivisions). Only for file-system project management tool
-- **`tech/`**: Technical guidelines, architectural standards, and quality criteria
-  - `adr/`: Architecture Decision Records
-  - `knowledge-base/`: Comprehensive technical guidelines organized by theme (architecture, development, collaboration, quality, operations) with navigation READMEs
-  - `adopted/`: Currently adopted standards and practices. Specific for project
+- **`adoption/`**: Product requirements and technical adoption documents
+  - `product/`: Product requirements and subdomain guidelines
+  - `tech/`: Currently adopted technical standards and practices
+- **`guidelines/`**: Technical guidelines organized by theme
+  - `architecture/`: System architecture patterns and ADR processes
+  - `code-design/`: Code design and development standards
+  - `collaboration/`: Process workflows, project management, and team collaboration
+  - `infrastructure/`: Infrastructure and deployment guidelines
+  - `observability/`: Monitoring and observability practices
+  - `quality-assurance/`: Quality criteria, accessibility, performance, security
+  - `technical-standards/`: Technical standards and coding practices
+  - `testing/`: Testing strategies and automation
+  - `user-experience/`: UX/UI design guidelines and principles
 
-## 🎯 Quick Start
+### 🎯 Quick Start
 
 1. **Read** `way-of-working.md` to understand the development process
-2. **Adapt** technical guidelines in `tech/` folder to your technology stack
+2. **Adapt** technical guidelines in `guidelines/` folder to your technology stack
 3. **Follow** the process guides in `how-to/` folder for each development phase
 
-## 🚨 Critical: Technical Guidelines Setup
+### 🚨 Critical: Technical Guidelines Setup
 
-Before development, **review and adapt** all documents in the `tech/` folder to match your specific technology stack and requirements. These are templates with opinionated choices that need customization.
+Before development, **review and adapt** all documents in the `guidelines/` and `adoption/tech/` folders to match your specific technology stack and requirements. These are templates with opinionated choices that need customization.
 
-## 💡 How It Works
+### 💡 How It Works
 
 - 🤖🤝👨‍💻 **LLM + Human Review**: AI proposes, developer validates
 - 👨‍💻💡🤖 **Human + AI Support**: Developer leads, AI assists
@@ -112,3 +122,4 @@ Before development, **review and adapt** all documents in the `tech/` folder to 
 - 👨‍💻 **Human Only**: Developer-exclusive activities
 
 Happy AI-Human pairing! 🚀🤖👨‍💻
+```
