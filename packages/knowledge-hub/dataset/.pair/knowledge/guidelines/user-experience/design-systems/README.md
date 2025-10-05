@@ -225,11 +225,11 @@ Community → Core Team → Spike → Validation → Release → Knowledge Base
 
 | System Maturity        | Architecture Focus                                                                                | Required Docs                                   | Implementation Path                                        |
 | ---------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------- |
-| **Greenfield Project** | [System Architecture](./system-architecture.md) + [Design Tokens](./design-tokens.md)             | [Component Libraries](./component-libraries.md) | Foundation → Tokens → Components (12-16 weeks)             |
-| **Existing Product**   | [Component Libraries](./component-libraries.md) + [Design Tokens](./design-tokens.md)             | [System Architecture](./system-architecture.md) | Audit → Tokens → Migration (8-12 weeks)                    |
-| **Multi-Platform**     | [System Architecture](./system-architecture.md) + [Component Libraries](./component-libraries.md) | [Design Tokens](./design-tokens.md)             | Cross-platform strategy → Implementation (16-24 weeks)     |
-| **Legacy Migration**   | [Design Tokens](./design-tokens.md) + [System Architecture](./system-architecture.md)             | [Component Libraries](./component-libraries.md) | Token extraction → Architecture → Components (20-30 weeks) |
-| **Maintenance Mode**   | [Component Libraries](./component-libraries.md)                                                   | [Design Tokens](./design-tokens.md)             | Component updates → Token refinement (4-8 weeks)           |
+| **Greenfield Project** | [System Architecture](system-architecture.md) + [Design Tokens](design-tokens.md)             | [Component Libraries](component-libraries.md) | Foundation → Tokens → Components (12-16 weeks)             |
+| **Existing Product**   | [Component Libraries](component-libraries.md) + [Design Tokens](design-tokens.md)             | [System Architecture](system-architecture.md) | Audit → Tokens → Migration (8-12 weeks)                    |
+| **Multi-Platform**     | [System Architecture](system-architecture.md) + [Component Libraries](component-libraries.md) | [Design Tokens](design-tokens.md)             | Cross-platform strategy → Implementation (16-24 weeks)     |
+| **Legacy Migration**   | [Design Tokens](design-tokens.md) + [System Architecture](system-architecture.md)             | [Component Libraries](component-libraries.md) | Token extraction → Architecture → Components (20-30 weeks) |
+| **Maintenance Mode**   | [Component Libraries](component-libraries.md)                                                   | [Design Tokens](design-tokens.md)             | Component updates → Token refinement (4-8 weeks)           |
 
 ## Design System Tool Selection Matrix
 
@@ -243,21 +243,21 @@ Community → Core Team → Spike → Validation → Release → Knowledge Base
 
 **Implementation Resources**:
 
-- **Starter System**: [Design Tokens](./design-tokens.md) for basic token setup
-- **Established System**: [Component Libraries](./component-libraries.md) for advanced component patterns
-- **Enterprise System**: [System Architecture](./system-architecture.md) for governance and scaling
+- **Starter System**: [Design Tokens](design-tokens.md) for basic token setup
+- **Established System**: [Component Libraries](component-libraries.md) for advanced component patterns
+- **Enterprise System**: [System Architecture](system-architecture.md) for governance and scaling
 
 ## Integration with Other UX Components
 
-- **Design Principles**: System architecture embodies and enforces design principles, detailed in [../design-principles/README.md](../design-principles/README.md)
-- **User Research**: Research insights inform component design and system evolution, see [../user-research/README.md](../user-research/README.md)
-- **Interface Design**: System provides the building blocks for interface design execution, documented in [../interface-design/README.md](../interface-design/README.md)
-- **Content Strategy**: System includes content patterns and messaging guidelines, outlined in [../content-strategy/README.md](../content-strategy/README.md)
+- **Design Principles**: System architecture embodies and enforces design principles, detailed in [.pair/knowledge/guidelines/user-experience/design-principles/README.md](../design-principles/README.md)
+- **User Research**: Research insights inform component design and system evolution, see [.pair/knowledge/guidelines/user-experience/user-research/README.md](../user-research/README.md)
+- **Interface Design**: System provides the building blocks for interface design execution, documented in [.pair/knowledge/guidelines/user-experience/interface-design/README.md](../interface-design/README.md)
+- **Content Strategy**: System includes content patterns and messaging guidelines, outlined in [.pair/knowledge/guidelines/user-experience/content-strategy/README.md](../content-strategy/README.md)
 
 ### Related Resources
 
-- **[Figma Workflows](../figma-workflows.md)**: Design system implementation in Figma
-- **[Brand Alignment](../brand-alignment.md)**: Ensuring design system reflects brand identity
-- **[Asset Collection](../asset-collection.md)**: Managing design system assets and resources
+- **[Figma Workflows](.pair/knowledge/guidelines/user-experience/figma-workflows.md)**: Design system implementation in Figma
+- **[Brand Alignment](.pair/knowledge/guidelines/user-experience/brand-alignment.md)**: Ensuring design system reflects brand identity
+- **[Asset Collection](.pair/knowledge/guidelines/user-experience/asset-collection.md)**: Managing design system assets and resources
 
 This framework ensures that design systems serve as the scalable foundation for consistent, accessible, and high-quality user experiences across all digital touchpoints.

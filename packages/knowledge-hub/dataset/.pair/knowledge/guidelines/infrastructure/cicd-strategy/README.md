@@ -271,10 +271,10 @@ Implementing CI/CD strategy?
 
 ## 🔗 Related Practices
 
-- **[Infrastructure as Code](../infrastructure-as-code/README.md)** - Infrastructure automation and version control
-- **[Deployment Patterns](../deployment-patterns/README.md)** - Application deployment strategies and automation
-- **[Environments](../environments/README.md)** - Environment management and consistency strategies
-- **[Testing Infrastructure](../testing-infrastructure/README.md)** - Testing environment and automation infrastructure
+- **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure automation and version control
+- **[Deployment Patterns](.pair/knowledge/guidelines/infrastructure/deployment-patterns/README.md)** - Application deployment strategies and automation
+- **[Environments](.pair/knowledge/guidelines/infrastructure/environments/README.md)** - Environment management and consistency strategies
+- **[Testing Infrastructure](.pair/knowledge/guidelines/infrastructure/testing-infrastructure/README.md)** - Testing environment and automation infrastructure
 
 ## 📈 CI/CD Strategy Maturity Progression
 

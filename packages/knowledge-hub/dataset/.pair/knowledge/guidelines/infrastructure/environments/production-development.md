@@ -210,7 +210,7 @@ Production monitoring richiede end-to-end visibility across all system component
 
 - **[Staging Development](staging-development.md)** - Pre-production validation environment
 - **[Environment Configuration](environment-config.md)** - Environment configuration management
-- **[Infrastructure as Code](../infrastructure-as-code/README.md)** - Infrastructure automation and management
+- **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure automation and management
 - **[Operations Monitoring](../../operations/monitoring/README.md)** - Production monitoring and observability
 
 ---

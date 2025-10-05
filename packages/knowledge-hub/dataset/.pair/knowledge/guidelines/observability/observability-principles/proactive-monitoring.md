@@ -111,6 +111,6 @@ Define proactive monitoring strategies that enable early problem detection and p
 ## Related Documents
 
 - [Three Pillars](three-pillars.md) - Foundational observability concepts
-- [Proactive Detection](../proactive-detection.md) - Detailed proactive detection strategies
-- [AI-Enhanced Observability](../ai-enhanced-observability.md) - AI-powered proactive monitoring
-- [Performance Analysis](../performance-analysis.md) - Performance trend analysis
+- [Proactive Detection](.pair/knowledge/guidelines/observability/proactive-detection.md) - Detailed proactive detection strategies
+- [AI-Enhanced Observability](.pair/knowledge/guidelines/observability/ai-enhanced-observability.md) - AI-powered proactive monitoring
+- [Performance Analysis](.pair/knowledge/guidelines/observability/performance-analysis.md) - Performance trend analysis

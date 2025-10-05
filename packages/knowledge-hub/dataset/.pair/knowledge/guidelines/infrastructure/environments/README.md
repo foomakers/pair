@@ -231,10 +231,10 @@ Setting up environment management?
 
 ## 🔗 Related Practices
 
-- **[Infrastructure as Code](../infrastructure-as-code/README.md)** - Infrastructure automation and version control
-- **[Deployment Patterns](../deployment-patterns/README.md)** - Application deployment strategies and automation
-- **[CI/CD Strategy](../cicd-strategy/README.md)** - Continuous integration and deployment practices
-- **[Cloud Services](../cloud-services/README.md)** - Cloud service selection and integration
+- **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure automation and version control
+- **[Deployment Patterns](.pair/knowledge/guidelines/infrastructure/deployment-patterns/README.md)** - Application deployment strategies and automation
+- **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Continuous integration and deployment practices
+- **[Cloud Services](.pair/knowledge/guidelines/infrastructure/cloud-services/README.md)** - Cloud service selection and integration
 
 ## 📈 Environment Management Maturity Progression
 

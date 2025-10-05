@@ -316,10 +316,10 @@ Establish user-centered design as the foundation for all product decisions, ensu
 
 ## 🔗 Related Practices
 
-- **[Design Systems](../design-systems/README.md)** - Component and pattern design with user-centered principles
+- **[Design Systems](.pair/knowledge/guidelines/user-experience/design-systems/README.md)** - Component and pattern design with user-centered principles
 - **[Accessibility Guidelines](../../quality-assurance/accessibility/accessibility-guidelines.md)** - Inclusive design implementation and compliance
-- **[User Research Methods](../user-research/README.md)** - Specific research methodologies and execution
-- **[Content Strategy](../content-strategy/README.md)** - User-centered content design and information architecture
+- **[User Research Methods](.pair/knowledge/guidelines/user-experience/user-research/README.md)** - Specific research methodologies and execution
+- **[Content Strategy](.pair/knowledge/guidelines/user-experience/content-strategy/README.md)** - User-centered content design and information architecture
 
 ---
 

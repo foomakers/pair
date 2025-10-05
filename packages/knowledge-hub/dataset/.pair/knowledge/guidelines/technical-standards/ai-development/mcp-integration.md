@@ -945,6 +945,6 @@ export class MonitoredMCPServer extends DynamicMCPServer {
 
 - [AI Development Tools](./ai-tools.md)
 - [Documentation Standards](./documentation-standards.md)
-- [Security Guidelines](../../quality-assurance/security/README.md)
-- [Performance Guidelines](../../observability/README.md)
-- [Testing Strategy](../../testing/README.md)
+- [Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)
+- [Performance Guidelines](.pair/knowledge/guidelines/observability/README.md)
+- [Testing Strategy](.pair/knowledge/guidelines/testing/README.md)

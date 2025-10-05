@@ -325,7 +325,7 @@ Establish robust authentication and authorization standards that ensure secure u
 - **[Security Guidelines](security-guidelines.md)** - Comprehensive security standards and frameworks
 - **[Security by Design](security-by-design.md)** - Proactive security integration in development
 - **[API Security](api-security.md)** - API-specific security patterns and controls
-- **[Infrastructure Security](../../infrastructure/README.md)** - Infrastructure-level security controls
+- **[Infrastructure Security](.pair/knowledge/guidelines/infrastructure/README.md)** - Infrastructure-level security controls
 
 ---
 

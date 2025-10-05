@@ -284,10 +284,10 @@ Establish a robust toolkit of research methods that enable teams to understand u
 
 ## 🔗 Related Practices
 
-- **[User-Centered Design](../design-principles/user-centered-design.md)** - Design process integration with research findings
+- **[User-Centered Design](.pair/knowledge/guidelines/user-experience/design-principles/user-centered-design.md)** - Design process integration with research findings
 - **[Testing and Validation](testing-validation.md)** - Usability testing and design validation methods
 - **[User Feedback Systems](user-feedback.md)** - Continuous feedback collection and analysis
-- **[Analytics and Metrics](../../observability/metrics/README.md)** - Quantitative analysis and measurement integration
+- **[Analytics and Metrics](.pair/knowledge/guidelines/observability/metrics/README.md)** - Quantitative analysis and measurement integration
 
 ---
 

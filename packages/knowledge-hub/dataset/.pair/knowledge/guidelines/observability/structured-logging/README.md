@@ -123,7 +123,7 @@ Start: What's your primary use case?
 
 ## Related Documents
 
-- [Observability Principles](../observability-principles/README.md) - Core observability concepts
-- [Performance Analysis](../performance-analysis.md) - Log analysis for performance
-- [AI-Enhanced Observability](../ai-enhanced-observability.md) - AI-powered log analysis
-- [Workflow Integration](../workflow-integration.md) - Logging in development workflows
+- [Observability Principles](.pair/knowledge/guidelines/observability/observability-principles/README.md) - Core observability concepts
+- [Performance Analysis](.pair/knowledge/guidelines/observability/performance-analysis.md) - Log analysis for performance
+- [AI-Enhanced Observability](.pair/knowledge/guidelines/observability/ai-enhanced-observability.md) - AI-powered log analysis
+- [Workflow Integration](.pair/knowledge/guidelines/observability/workflow-integration.md) - Logging in development workflows

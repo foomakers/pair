@@ -310,10 +310,10 @@ Testing Pipeline:
 
 ## 🔗 Related Guidelines
 
-- **[Quality Assurance](../quality-assurance/README.md)** - Comprehensive quality standards and processes
-- **[Code Design](../code-design/README.md)** - Design patterns supporting testability
-- **[Technical Standards](../technical-standards/README.md)** - Technology standards and testing integration
-- **[Infrastructure](../infrastructure/README.md)** - Testing infrastructure and CI/CD integration
+- **[Quality Assurance](.pair/knowledge/guidelines/quality-assurance/README.md)** - Comprehensive quality standards and processes
+- **[Code Design](.pair/knowledge/guidelines/code-design/README.md)** - Design patterns supporting testability
+- **[Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md)** - Technology standards and testing integration
+- **[Infrastructure](.pair/knowledge/guidelines/infrastructure/README.md)** - Testing infrastructure and CI/CD integration
 
 ---
 

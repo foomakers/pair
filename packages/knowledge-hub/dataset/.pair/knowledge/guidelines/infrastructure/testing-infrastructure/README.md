@@ -281,10 +281,10 @@ Testing Environment Tiers:
 
 ## 🔗 Related Practices
 
-- **[CI/CD Strategy](../cicd-strategy/README.md)** - Continuous integration and deployment practices
-- **[Environments](../environments/README.md)** - Environment management and consistency strategies
-- **[Infrastructure as Code](../infrastructure-as-code/README.md)** - Infrastructure automation and version control
-- **[Cloud Services](../cloud-services/README.md)** - Cloud service selection and integration
+- **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Continuous integration and deployment practices
+- **[Environments](.pair/knowledge/guidelines/infrastructure/environments/README.md)** - Environment management and consistency strategies
+- **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure automation and version control
+- **[Cloud Services](.pair/knowledge/guidelines/infrastructure/cloud-services/README.md)** - Cloud service selection and integration
 
 ## 📈 Testing Infrastructure Maturity Progression
 

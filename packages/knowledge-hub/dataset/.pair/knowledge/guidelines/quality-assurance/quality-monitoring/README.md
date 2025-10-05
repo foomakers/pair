@@ -30,21 +30,21 @@ Comprehensive quality monitoring framework ensuring continuous quality assessmen
 
 ### **Related Quality Standards**
 
-- **[Quality Gates Framework](../quality-standards/quality-gates.md)** ✅ - Strategic quality checkpoints and validation processes
-- **[Quality Improvement Process](../quality-standards/improvement-process.md)** ✅ - Systematic continuous improvement framework
-- **[Verification Methods](../quality-standards/verification-methods.md)** ✅ - Comprehensive quality verification approaches
+- **[Quality Gates Framework](.pair/knowledge/guidelines/quality-assurance/quality-standards/quality-gates.md)** ✅ - Strategic quality checkpoints and validation processes
+- **[Quality Improvement Process](.pair/knowledge/guidelines/quality-assurance/quality-standards/improvement-process.md)** ✅ - Systematic continuous improvement framework
+- **[Verification Methods](.pair/knowledge/guidelines/quality-assurance/quality-standards/verification-methods.md)** ✅ - Comprehensive quality verification approaches
 
 ### **Related Security Monitoring**
 
-- **[Security Testing Framework](../security/security-testing.md)** ✅ - Comprehensive security testing methodology
-- **[SAST Static Testing](../security/sast-static-testing.md)** ✅ - Static application security testing framework
-- **[Security Quality Gates](../security/security-quality-gates.md)** ✅ - Security checkpoints and validation processes
+- **[Security Testing Framework](.pair/knowledge/guidelines/quality-assurance/security/security-testing.md)** ✅ - Comprehensive security testing methodology
+- **[SAST Static Testing](.pair/knowledge/guidelines/quality-assurance/security/sast-static-testing.md)** ✅ - Static application security testing framework
+- **[Security Quality Gates](.pair/knowledge/guidelines/quality-assurance/security/security-quality-gates.md)** ✅ - Security checkpoints and validation processes
 
 ### **Related Performance Standards**
 
-- **[Core Web Vitals](../performance/core-web-vitals.md)** ✅ - Essential web performance metrics
-- **[Performance Monitoring](../performance/monitoring.md)** ✅ - Comprehensive performance monitoring framework
-- **[Performance Testing Strategies](../performance/testing-strategies.md)** ✅ - Performance testing methodologies
+- **[Core Web Vitals](.pair/knowledge/guidelines/quality-assurance/performance/core-web-vitals.md)** ✅ - Essential web performance metrics
+- **[Performance Monitoring](.pair/knowledge/guidelines/quality-assurance/performance/monitoring.md)** ✅ - Comprehensive performance monitoring framework
+- **[Performance Testing Strategies](.pair/knowledge/guidelines/quality-assurance/performance/testing-strategies.md)** ✅ - Performance testing methodologies
 
 ## 🔧 **QUALITY MONITORING TOOLS COMPARISON**
 

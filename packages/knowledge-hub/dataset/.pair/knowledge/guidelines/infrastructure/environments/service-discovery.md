@@ -210,9 +210,9 @@ Il service mesh fornisce sophisticated discovery con security e observability:
 
 ## 🔗 Related Practices
 
-- **[Container Orchestration](../container-orchestration/README.md)** - Container-based service discovery
+- **[Container Orchestration](.pair/knowledge/guidelines/infrastructure/container-orchestration/README.md)** - Container-based service discovery
 - **[Environment Management](README.md)** - Environment-specific discovery strategies
-- **[Cloud Services](../cloud-services/README.md)** - Cloud-native discovery services
+- **[Cloud Services](.pair/knowledge/guidelines/infrastructure/cloud-services/README.md)** - Cloud-native discovery services
 - **[API Management](../../api/api-management/README.md)** - API discovery and routing patterns
 
 ---

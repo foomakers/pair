@@ -170,7 +170,7 @@ Starting infrastructure implementation?
 ## 🔗 Related Knowledge Areas
 
 - **[Development Guidelines](../development/README.md)** - Application architecture and development practices
-- **[Quality Assurance](../quality-assurance/README.md)** - Testing strategies and quality frameworks
+- **[Quality Assurance](.pair/knowledge/guidelines/quality-assurance/README.md)** - Testing strategies and quality frameworks
 - **[Operations](../operations/README.md)** - Operational practices and monitoring strategies
 - **[Security Guidelines](../security/README.md)** - Security practices and compliance frameworks
 

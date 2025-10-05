@@ -273,7 +273,7 @@ Establish comprehensive component library practices that enable scalable design 
 
 - **[Design Systems](README.md)** - Overall design system strategy and implementation
 - **[Design Tokens](design-tokens.md)** - Token integration and component styling consistency
-- **[User-Centered Design](../design-principles/user-centered-design.md)** - User research integration for component development
+- **[User-Centered Design](.pair/knowledge/guidelines/user-experience/design-principles/user-centered-design.md)** - User research integration for component development
 - **[Accessibility Guidelines](../../quality-assurance/accessibility/accessibility-guidelines.md)** - Accessibility implementation and compliance
 
 ---

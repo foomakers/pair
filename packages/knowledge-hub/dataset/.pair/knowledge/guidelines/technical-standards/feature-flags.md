@@ -304,5 +304,5 @@ export class FlagCleanupService {
 
 - [Technical Debt Management](./coding-standards/technical-debt.md)
 - [Deployment Workflow](./deployment-workflow/README.md)
-- [Quality Assurance Standards](../quality-assurance/README.md)
-- [Observability Guidelines](../observability/README.md)
+- [Quality Assurance Standards](.pair/knowledge/guidelines/quality-assurance/README.md)
+- [Observability Guidelines](.pair/knowledge/guidelines/observability/README.md)

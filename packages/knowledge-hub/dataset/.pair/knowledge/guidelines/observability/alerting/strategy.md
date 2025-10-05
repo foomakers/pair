@@ -408,6 +408,6 @@ A well-designed alerting strategy balances sensitivity with specificity, ensurin
 ## Related Documents
 
 - [Notifications](notifications.md) - Notification channel and delivery strategies
-- [Proactive Detection](../proactive-detection.md) - Predictive monitoring approaches
-- [AI-Enhanced Observability](../ai-enhanced-observability.md) - Machine learning integration
-- [Performance Analysis](../performance-analysis.md) - Performance-based alerting
+- [Proactive Detection](.pair/knowledge/guidelines/observability/proactive-detection.md) - Predictive monitoring approaches
+- [AI-Enhanced Observability](.pair/knowledge/guidelines/observability/ai-enhanced-observability.md) - Machine learning integration
+- [Performance Analysis](.pair/knowledge/guidelines/observability/performance-analysis.md) - Performance-based alerting

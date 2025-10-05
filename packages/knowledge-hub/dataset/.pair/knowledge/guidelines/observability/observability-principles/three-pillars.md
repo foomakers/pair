@@ -97,6 +97,6 @@ Define the foundational three pillars of observability (metrics, logs, traces) a
 ## Related Documents
 
 - [Proactive Monitoring](proactive-monitoring.md) - Proactive monitoring strategies
-- [Metrics Strategy](../metrics/README.md) - Detailed metrics guidance
-- [Structured Logging](../structured-logging/README.md) - Logging implementation
-- [Distributed Tracing](../distributed-tracing.md) - Tracing strategies
+- [Metrics Strategy](.pair/knowledge/guidelines/observability/metrics/README.md) - Detailed metrics guidance
+- [Structured Logging](.pair/knowledge/guidelines/observability/structured-logging/README.md) - Logging implementation
+- [Distributed Tracing](.pair/knowledge/guidelines/observability/distributed-tracing.md) - Tracing strategies

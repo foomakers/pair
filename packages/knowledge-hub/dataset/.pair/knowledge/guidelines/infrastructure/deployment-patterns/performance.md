@@ -662,8 +662,8 @@ interface DeploymentPerformanceSLIs {
 
 ## 🔗 Related Practices
 
-- **[CI/CD Strategy](../cicd-strategy/README.md)** - Continuous integration and deployment practices
-- **[Infrastructure as Code](../infrastructure-as-code/README.md)** - Infrastructure automation and management
+- **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Continuous integration and deployment practices
+- **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure automation and management
 - **[Deployment Strategies](./deployment-strategies.md)** - Deployment patterns and methodologies
 - **[Monitoring](./monitoring.md)** - Deployment monitoring and observability
 

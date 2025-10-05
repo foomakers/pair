@@ -89,7 +89,7 @@ ls .pair/knowledge/guidelines/collaboration/assets/
 
 ### Issue Management
 
-**→ See [../issue-management/](../issue-management/README.md)**
+**→ See [../issue-management/](.pair/knowledge/guidelines/collaboration/issue-management/README.md)**
 
 - Local issue tracking with markdown files
 - Directory-based status management
@@ -98,7 +98,7 @@ ls .pair/knowledge/guidelines/collaboration/assets/
 
 ### Project Tracking
 
-**→ See [../project-tracking/](../project-tracking/README.md)**
+**→ See [../project-tracking/](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)**
 
 - Hierarchical directory structure
 - Status tracking via file location
@@ -107,7 +107,7 @@ ls .pair/knowledge/guidelines/collaboration/assets/
 
 ### Automation
 
-**→ See [../automation/](../automation/README.md)**
+**→ See [../automation/](.pair/knowledge/guidelines/collaboration/automation/README.md)**
 
 - Shell script automation
 - File operation automation
@@ -134,7 +134,7 @@ ls .pair/knowledge/guidelines/collaboration/assets/
 
 ### Estimation Integration
 
-**→ See [../estimation/](../estimation/README.md)**
+**→ See [../estimation/](.pair/knowledge/guidelines/collaboration/estimation/README.md)**
 
 - File-based estimation tracking
 - Simple effort recording in metadata
@@ -143,7 +143,7 @@ ls .pair/knowledge/guidelines/collaboration/assets/
 
 ### Methodology Integration
 
-**→ See [../methodology/](../methodology/README.md)**
+**→ See [../methodology/](.pair/knowledge/guidelines/collaboration/methodology/README.md)**
 
 - Scrum integration with filesystem structure
 - Kanban workflow with directory states

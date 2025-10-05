@@ -260,7 +260,7 @@ test('Database has encryption enabled', () => {
 
 - **[IaC Best Practices](iac-best-practices.md)** - Infrastructure as Code best practices
 - **[Terraform Implementation](terraform.md)** - Terraform-specific patterns
-- **[AWS Deployment](../cloud-providers/aws-deployment.md)** - AWS-specific deployment strategies
+- **[AWS Deployment](.pair/knowledge/guidelines/infrastructure/cloud-providers/aws-deployment.md)** - AWS-specific deployment strategies
 - **[Automation](automation.md)** - Infrastructure automation frameworks
 
 ---

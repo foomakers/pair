@@ -194,10 +194,10 @@ Selecting deployment strategy?
 
 ## 🔗 Related Practices
 
-- **[CI/CD Strategy](../cicd-strategy/README.md)** - Continuous integration and deployment practices
-- **[Infrastructure as Code](../infrastructure-as-code/README.md)** - Infrastructure automation and version control
-- **[Container Orchestration](../container-orchestration/README.md)** - Container platform strategies and implementation
-- **[Environments](../environments/README.md)** - Environment management and consistency strategies
+- **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Continuous integration and deployment practices
+- **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure automation and version control
+- **[Container Orchestration](.pair/knowledge/guidelines/infrastructure/container-orchestration/README.md)** - Container platform strategies and implementation
+- **[Environments](.pair/knowledge/guidelines/infrastructure/environments/README.md)** - Environment management and consistency strategies
 
 ## 📈 Deployment Pattern Maturity Progression
 

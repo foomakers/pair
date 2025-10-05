@@ -259,7 +259,7 @@ Start: What's your team size and complexity?
 
 ## Related Documents
 
-- [Observability Tools](../observability-tools.md) - Alert tool selection and implementation
-- [Proactive Detection](../proactive-detection.md) - Early warning system design
-- [Performance Analysis](../performance-analysis.md) - Performance-based alerting
-- [Metrics Strategy](../metrics/README.md) - Metrics for alerting
+- [Observability Tools](.pair/knowledge/guidelines/observability/observability-tools.md) - Alert tool selection and implementation
+- [Proactive Detection](.pair/knowledge/guidelines/observability/proactive-detection.md) - Early warning system design
+- [Performance Analysis](.pair/knowledge/guidelines/observability/performance-analysis.md) - Performance-based alerting
+- [Metrics Strategy](.pair/knowledge/guidelines/observability/metrics/README.md) - Metrics for alerting
