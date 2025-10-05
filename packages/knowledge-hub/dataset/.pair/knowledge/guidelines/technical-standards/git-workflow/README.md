@@ -10,9 +10,9 @@ Establish enterprise-grade Git workflow standards that maximize development velo
 
 ### Standards and Guidelines
 
-- **[Development Process](./development-process.md)** - Development lifecycle, branching strategy, and collaboration workflow
-- **[Version Control](./version-control.md)** - Git practices, commit standards, and repository management
-- **[Quality Assurance](./quality-assurance.md)** - Code review process, testing gates, and quality controls
+- **[Development Process](development-process.md)** - Development lifecycle, branching strategy, and collaboration workflow
+- **[Version Control](version-control.md)** - Git practices, commit standards, and repository management
+- **[Quality Assurance](quality-assurance.md)** - Code review process, testing gates, and quality controls
 
 ### Key Focus Areas
 

@@ -8,17 +8,17 @@ Our template collection covers the complete software development lifecycle, from
 
 ### Planning Templates
 
-- **[Initiative Template](./initiative-template.md)** - Strategic business initiatives and high-level planning
-- **[Epic Template](./epic-template.md)** - Large features spanning multiple sprints
-- **[User Story Template](./user-story-template.md)** - Individual user-focused requirements
-- **[Task Template](./task-template.md)** - Developer implementation tasks
+- **[Initiative Template](initiative-template.md)** - Strategic business initiatives and high-level planning
+- **[Epic Template](epic-template.md)** - Large features spanning multiple sprints
+- **[User Story Template](user-story-template.md)** - Individual user-focused requirements
+- **[Task Template](task-template.md)** - Developer implementation tasks
 
 ### Development Templates
 
-- **[Branch Template](./branch-template.md)** - Git branch naming and workflow standards
-- **[Commit Template](./commit-template.md)** - Commit message formats and best practices
-- **[Pull Request Template](./pr-template.md)** - Comprehensive PR description and review guide
-- **[Code Review Template](./code-review-template.md)** - Structured code review checklists
+- **[Branch Template](branch-template.md)** - Git branch naming and workflow standards
+- **[Commit Template](commit-template.md)** - Commit message formats and best practices
+- **[Pull Request Template](pr-template.md)** - Comprehensive PR description and review guide
+- **[Code Review Template](code-review-template.md)** - Structured code review checklists
 - **[Team Template](user-story-template.md)** - Team formation and collaboration guidelines
 
 ## Template Categories

@@ -1055,8 +1055,8 @@ export class QualityTrainingProgram {
 
 ## Related Documentation
 
-- [Development Process](./development-process.md)
-- [Version Control Standards](./version-control.md)
+- [Development Process](development-process.md)
+- [Version Control Standards](version-control.md)
 - [Testing Strategy](.pair/knowledge/guidelines/testing/README.md)
 - [Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)
 - [Code Review Guidelines](.pair/knowledge/guidelines/collaboration/README.md)

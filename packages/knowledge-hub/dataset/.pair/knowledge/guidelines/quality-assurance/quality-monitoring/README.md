@@ -24,9 +24,9 @@ Comprehensive quality monitoring framework ensuring continuous quality assessmen
 
 ### **Core Monitoring**
 
-- **[code-quality.md](./code-quality.md)** ✅ - Code quality metrics, monitoring, and automated reporting
-- **[performance-gates.md](./performance-gates.md)** ✅ - Performance quality checkpoints and threshold enforcement
-- **[observability-requirements.md](./observability-requirements.md)** ✅ - Quality observability standards and monitoring integration
+- **[code-quality.md](code-quality.md)** ✅ - Code quality metrics, monitoring, and automated reporting
+- **[performance-gates.md](performance-gates.md)** ✅ - Performance quality checkpoints and threshold enforcement
+- **[observability-requirements.md](observability-requirements.md)** ✅ - Quality observability standards and monitoring integration
 
 ### **Related Quality Standards**
 

@@ -480,7 +480,7 @@ resource "datadog_monitor" "deployment_success_rate" {
 
 - **[Operations Monitoring](.pair/knowledge/guidelines/observability/README.md)** - General application and infrastructure monitoring
 - **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Continuous integration and deployment practices
-- **[Deployment Strategies](./deployment-strategies.md)** - Deployment patterns and methodologies
+- **[Deployment Strategies](deployment-strategies.md)** - Deployment patterns and methodologies
 - **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure automation and management
 
 ---

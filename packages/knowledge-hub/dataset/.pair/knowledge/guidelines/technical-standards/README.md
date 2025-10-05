@@ -29,29 +29,29 @@ Provide comprehensive guidance for defining technical standards that support dev
 
 ### Core Technology Standards
 
-- **[Technology Stack](./technology-stack/README.md)** - Technology selection framework and standardization approach
-- **[Development Tools](./development-tools/README.md)** - IDE configuration, debugging tools, and development environment setup
-- **[Coding Standards](./coding-standards/README.md)** - Language conventions, formatting rules, and code organization
-- **[Integration Standards](./integration-standards/README.md)** - API design, service communication, and system integration patterns
+- **[Technology Stack](technology-stack/README.md)** - Technology selection framework and standardization approach
+- **[Development Tools](development-tools/README.md)** - IDE configuration, debugging tools, and development environment setup
+- **[Coding Standards](coding-standards/README.md)** - Language conventions, formatting rules, and code organization
+- **[Integration Standards](integration-standards/README.md)** - API design, service communication, and system integration patterns
 
 ### Feature and Deployment Standards
 
-- **[Feature Flags](./feature-flags.md)** - Feature flag implementation, management strategies, and rollout controls
-- **[Git Workflow](./git-workflow/README.md)** - Git workflow and versioning strategies
-- **[Deployment Workflow](./deployment-workflow/README.md)** - Deployment pipelines and release management
-- **[AI Development](./ai-development/README.md)** - AI development standards and practices
+- **[Feature Flags](feature-flags.md)** - Feature flag implementation, management strategies, and rollout controls
+- **[Git Workflow](git-workflow/README.md)** - Git workflow and versioning strategies
+- **[Deployment Workflow](deployment-workflow/README.md)** - Deployment pipelines and release management
+- **[AI Development](ai-development/README.md)** - AI development standards and practices
 
 ### AI Development Framework
 
-- **[AI Tools](./ai-development/ai-tools.md)** - AI development tool selection, configuration, and best practices
-- **[Documentation Standards](./ai-development/documentation-standards.md)** - AI-specific documentation requirements and patterns
-- **[MCP Integration](./ai-development/mcp-integration.md)** - Model Context Protocol implementation and integration standards
+- **[AI Tools](ai-development/ai-tools.md)** - AI development tool selection, configuration, and best practices
+- **[Documentation Standards](ai-development/documentation-standards.md)** - AI-specific documentation requirements and patterns
+- **[MCP Integration](ai-development/mcp-integration.md)** - Model Context Protocol implementation and integration standards
 
 ### Development Process Standards
 
-- **[Development Process](./git-workflow/development-process.md)** - Development lifecycle, branching strategy, and collaboration workflow
-- **[Version Control](./git-workflow/version-control.md)** - Git practices, commit standards, and repository management
-- **[Quality Assurance](./git-workflow/quality-assurance.md)** - Code review process, testing gates, and quality controls
+- **[Development Process](git-workflow/development-process.md)** - Development lifecycle, branching strategy, and collaboration workflow
+- **[Version Control](git-workflow/version-control.md)** - Git practices, commit standards, and repository management
+- **[Quality Assurance](git-workflow/quality-assurance.md)** - Code review process, testing gates, and quality controls
 
 ## Strategic Decision Framework
 

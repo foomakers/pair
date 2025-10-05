@@ -545,8 +545,8 @@ jobs:
 
 ## Related Documentation
 
-- [Version Control Standards](./version-control.md)
-- [Quality Assurance Process](./quality-assurance.md)
+- [Version Control Standards](version-control.md)
+- [Quality Assurance Process](quality-assurance.md)
 - [Code Review Guidelines](.pair/knowledge/guidelines/collaboration/README.md)
 - [Testing Strategy](.pair/knowledge/guidelines/testing/README.md)
 - [Deployment Workflow](.pair/knowledge/guidelines/technical-standards/deployment-workflow/README.md)

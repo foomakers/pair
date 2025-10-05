@@ -225,12 +225,12 @@ User Research → Problem Definition → Solution Design → Validation → Iter
 
 ### Core Principle Documentation
 
-- **[User-Centered Design](./user-centered-design.md)**: Comprehensive guide to empathy-driven design processes
-- **[Consistency Standards](./consistency-standards.md)**: Visual and functional consistency implementation
-- **[Accessibility Integration](./accessibility-integration.md)**: Inclusive design practices and WCAG compliance
-- **[Typography](./typography.md)**: Typography systems and readability optimization
-- **[Color Contrast](./color-contrast.md)**: Color accessibility and contrast ratio guidelines
-- **[Layout Spacing](./layout-spacing.md)**: Spatial hierarchy and layout consistency principles
+- **[User-Centered Design](user-centered-design.md)**: Comprehensive guide to empathy-driven design processes
+- **[Consistency Standards](consistency-standards.md)**: Visual and functional consistency implementation
+- **[Accessibility Integration](accessibility-integration.md)**: Inclusive design practices and WCAG compliance
+- **[Typography](typography.md)**: Typography systems and readability optimization
+- **[Color Contrast](color-contrast.md)**: Color accessibility and contrast ratio guidelines
+- **[Layout Spacing](layout-spacing.md)**: Spatial hierarchy and layout consistency principles
 
 ### Decision Matrix for Principle Application
 

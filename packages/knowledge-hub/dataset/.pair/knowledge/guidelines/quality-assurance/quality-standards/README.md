@@ -24,19 +24,19 @@ Establishes comprehensive quality standards ensuring consistent, measurable, and
 
 ### **Core Standards**
 
-- **[definition-of-done.md](./definition-of-done.md)** - Clear, measurable completion criteria for all deliverables
-- **[quality-gates.md](./quality-gates.md)** - Strategic checkpoints ensuring quality compliance at key phases
-- **[checklist.md](./checklist.md)** - Comprehensive verification lists for systematic quality validation
+- **[definition-of-done.md](definition-of-done.md)** - Clear, measurable completion criteria for all deliverables
+- **[quality-gates.md](quality-gates.md)** - Strategic checkpoints ensuring quality compliance at key phases
+- **[checklist.md](checklist.md)** - Comprehensive verification lists for systematic quality validation
 
 ### **Process Standards**
 
-- **[code-review.md](./code-review.md)** - Systematic peer review processes and standards
-- **[verification-methods.md](./verification-methods.md)** - Standardized approaches for quality validation
-- **[improvement-process.md](./improvement-process.md)** - Continuous quality enhancement methodologies
+- **[code-review.md](code-review.md)** - Systematic peer review processes and standards
+- **[verification-methods.md](verification-methods.md)** - Standardized approaches for quality validation
+- **[improvement-process.md](improvement-process.md)** - Continuous quality enhancement methodologies
 
 ### **Organizational Standards**
 
-- **[responsibility-matrix.md](./responsibility-matrix.md)** - Clear ownership and accountability for quality tasks and deliverables
+- **[responsibility-matrix.md](responsibility-matrix.md)** - Clear ownership and accountability for quality tasks and deliverables
 
 ## 🔧 **IMPLEMENTATION APPROACH**
 

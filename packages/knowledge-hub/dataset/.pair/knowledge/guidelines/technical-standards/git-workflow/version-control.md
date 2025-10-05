@@ -781,8 +781,8 @@ git reset --hard
 
 ## Related Documentation
 
-- [Development Process](./development-process.md)
-- [Quality Assurance](./quality-assurance.md)
+- [Development Process](development-process.md)
+- [Quality Assurance](quality-assurance.md)
 - [Code Review Guidelines](.pair/knowledge/guidelines/collaboration/README.md)
 - [Deployment Workflow](.pair/knowledge/guidelines/technical-standards/deployment-workflow/README.md)
 - [Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)

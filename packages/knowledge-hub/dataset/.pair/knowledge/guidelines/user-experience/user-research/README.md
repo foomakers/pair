@@ -214,7 +214,7 @@ Strategic Goals → User Insights → Methodology → Evidence
 
 ### Core Research Documentation
 
-- **[Research Methods](./research-methods.md)**: Comprehensive methodology selection and execution frameworks
+- **[Research Methods](research-methods.md)**: Comprehensive methodology selection and execution frameworks
 
 ### Research Implementation Decision Matrix
 

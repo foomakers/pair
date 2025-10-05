@@ -29,7 +29,7 @@ Content strategy encompasses the systematic planning, creation, governance, and 
 
 ## 📂 Content Strategy Components
 
-### [Communication Design](./communication-design.md)
+### [Communication Design](communication-design.md)
 
 Strategic approach to interface communication and messaging design.
 
@@ -43,7 +43,7 @@ Strategic approach to interface communication and messaging design.
 - Error communication and recovery design
 - Multi-modal communication strategies
 
-### [Content Guidelines](./content-guidelines.md)
+### [Content Guidelines](content-guidelines.md)
 
 Comprehensive standards for content creation, style, and quality assurance.
 
@@ -57,7 +57,7 @@ Comprehensive standards for content creation, style, and quality assurance.
 - Content versioning and maintenance
 - Multi-platform content adaptation
 
-### [Information Architecture](./information-architecture.md)
+### [Information Architecture](information-architecture.md)
 
 Systematic organization and structure of content for optimal findability and usability.
 
@@ -71,7 +71,7 @@ Systematic organization and structure of content for optimal findability and usa
 - User mental model alignment
 - Cross-reference systems and linking strategies
 
-### [Translation Management](./translation-management.md)
+### [Translation Management](translation-management.md)
 
 Framework for managing multilingual content and localization processes.
 

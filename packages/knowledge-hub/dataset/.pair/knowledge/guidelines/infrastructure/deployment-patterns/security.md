@@ -436,7 +436,7 @@ class ComplianceValidator {
 
 - **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Secure infrastructure automation
 - **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Secure pipeline implementation
-- **[Deployment Strategies](./deployment-strategies.md)** - Secure deployment patterns
+- **[Deployment Strategies](deployment-strategies.md)** - Secure deployment patterns
 - **[Security Operations](.pair/knowledge/guidelines/quality-assurance/security/README.md)** - General security operations and monitoring
 
 ---

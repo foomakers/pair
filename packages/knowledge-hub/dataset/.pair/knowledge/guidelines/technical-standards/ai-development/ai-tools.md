@@ -829,8 +829,8 @@ export class MonitoredAIService implements AIService {
 
 ## Related Documentation
 
-- [Documentation Standards](./documentation-standards.md)
-- [MCP Integration](./mcp-integration.md)
+- [Documentation Standards](documentation-standards.md)
+- [MCP Integration](mcp-integration.md)
 - [Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)
 - [Performance Guidelines](.pair/knowledge/guidelines/observability/README.md)
 - [Testing Strategy](.pair/knowledge/guidelines/testing/README.md)

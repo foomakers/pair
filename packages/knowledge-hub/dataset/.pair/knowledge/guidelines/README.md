@@ -48,7 +48,7 @@ Development guidelines are organized into three specialized practice areas:
 
 - **[Technical Standards](technical-standards/README.md)** - What technologies to use and how to configure them
 
-  - **[Technology Stack](./technical-standards/technology-stack/README.md)** - Core technology decisions and framework selection standards
+  - **[Technology Stack](technical-standards/technology-stack/README.md)** - Core technology decisions and framework selection standards
   - **[Development Tools](technical-standards/development-tools/README.md)** - Development environment and tooling standards
   - **[Integration Standards](technical-standards/integration-standards/README.md)** - API design, data management, and external service integration
   - **[Deployment Workflow](technical-standards/deployment-workflow/README.md)** - Release management, workflow, and deployment standards
@@ -75,7 +75,7 @@ Development guidelines are organized into three specialized practice areas:
 ### ✨ Quality Assurance Guidelines
 
 - **[Quality Assurance](quality-assurance/README.md)** - Quality criteria, accessibility, performance, and security
-  - **[Quality Standards](./quality-assurance/quality-standards/README.md)** - Definition of Done, quality criteria, completion standards
+  - **[Quality Standards](quality-assurance/quality-standards/README.md)** - Definition of Done, quality criteria, completion standards
   - **[Manual Verification](quality-assurance/manual-verification.md)** - Manual testing and quality validation
   - **[Automated Verification](quality-assurance/automated-verification.md)** - Automated testing and quality validation
   - **[Security](quality-assurance/security/README.md)** - Secure development, vulnerability assessment, practices

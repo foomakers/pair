@@ -1106,9 +1106,9 @@ export class BuildArtifactSecurityValidator {
 
 ## Related Documentation
 
-- [Deployment Automation](./deployment-automation.md)
-- [Release Management](./release-management.md)
-- [Strategy Guidelines](./strategy.md)
+- [Deployment Automation](deployment-automation.md)
+- [Release Management](release-management.md)
+- [Strategy Guidelines](strategy.md)
 - [Quality Assurance](.pair/knowledge/guidelines/quality-assurance/README.md)
 - [Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)
 - [Performance Guidelines](.pair/knowledge/guidelines/observability/README.md)

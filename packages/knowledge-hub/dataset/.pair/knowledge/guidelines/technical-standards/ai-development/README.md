@@ -10,9 +10,9 @@ Establish enterprise-grade standards for AI development that maximize developmen
 
 ### Standards and Guidelines
 
-- **[AI Tools](./ai-tools.md)** - AI development tool selection, configuration, and best practices
-- **[Documentation Standards](./documentation-standards.md)** - AI-specific documentation requirements and patterns
-- **[MCP Integration](./mcp-integration.md)** - Model Context Protocol implementation and integration standards
+- **[AI Tools](ai-tools.md)** - AI development tool selection, configuration, and best practices
+- **[Documentation Standards](documentation-standards.md)** - AI-specific documentation requirements and patterns
+- **[MCP Integration](mcp-integration.md)** - Model Context Protocol implementation and integration standards
 
 ### Key Focus Areas
 

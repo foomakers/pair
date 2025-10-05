@@ -496,8 +496,8 @@ export class PrivacyAwareAIService {
 
 ## Related Documentation
 
-- [AI Tools Integration](./ai-tools.md)
-- [MCP Integration Standards](./mcp-integration.md)
+- [AI Tools Integration](ai-tools.md)
+- [MCP Integration Standards](mcp-integration.md)
 - [Technical Guidelines](.pair/knowledge/guidelines/technical-standards/README.md)
 - [Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)
 - [Testing Strategy](.pair/knowledge/guidelines/testing/README.md)

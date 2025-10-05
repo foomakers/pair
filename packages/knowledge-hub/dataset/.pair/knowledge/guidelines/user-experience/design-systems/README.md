@@ -217,9 +217,9 @@ Community → Core Team → Spike → Validation → Release → Knowledge Base
 
 ### Core System Documentation
 
-- **[System Architecture](./system-architecture.md)**: Foundational architecture patterns and organizational principles
-- **[Design Tokens](./design-tokens.md)**: Token definition, naming conventions, and implementation strategies
-- **[Component Libraries](./component-libraries.md)**: Component development, API design, and maintenance frameworks
+- **[System Architecture](system-architecture.md)**: Foundational architecture patterns and organizational principles
+- **[Design Tokens](design-tokens.md)**: Token definition, naming conventions, and implementation strategies
+- **[Component Libraries](component-libraries.md)**: Component development, API design, and maintenance frameworks
 
 ### Implementation Decision Matrix
 
