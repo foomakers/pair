@@ -7,6 +7,7 @@ Define strategies for enriching logs with contextual information that enables ef
 ## Scope
 
 **In Scope:**
+
 - Context enrichment strategies and techniques
 - Correlation ID implementation and usage
 - User and session context handling
@@ -15,6 +16,7 @@ Define strategies for enriching logs with contextual information that enables ef
 - Performance impact optimization
 
 **Out of Scope:**
+
 - Sensitive data handling (covered in separate document)
 - Specific logging tool configurations
 - Storage and indexing optimization
@@ -29,6 +31,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 ### Technical Context
 
 **Request Context:**
+
 ```json
 {
   "timestamp": "2024-01-15T10:30:00.000Z",
@@ -46,6 +49,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 ```
 
 **Service Context:**
+
 ```json
 {
   "service": "user-service",
@@ -59,6 +63,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 ```
 
 **Performance Context:**
+
 ```json
 {
   "execution": {
@@ -74,6 +79,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 ### Business Context
 
 **User Context:**
+
 ```json
 {
   "user": {
@@ -87,6 +93,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 ```
 
 **Transaction Context:**
+
 ```json
 {
   "transaction": {
@@ -100,6 +107,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 ```
 
 **Session Context:**
+
 ```json
 {
   "session": {
@@ -117,6 +125,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 ### Distributed Tracing Integration
 
 **OpenTelemetry Context:**
+
 ```json
 {
   "tracing": {
@@ -130,6 +139,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 ```
 
 **Cross-Service Correlation:**
+
 ```json
 {
   "correlation": {
@@ -144,6 +154,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 ### Request Flow Tracking
 
 **API Gateway Context:**
+
 ```json
 {
   "gateway": {
@@ -157,6 +168,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 ```
 
 **Service-to-Service Calls:**
+
 ```json
 {
   "serviceCall": {
@@ -174,6 +186,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 ### HTTP Header Propagation
 
 **Standard Headers:**
+
 ```http
 X-Request-ID: req-abc123def456
 X-Trace-ID: trace-xyz789uvw012
@@ -183,6 +196,7 @@ X-Session-ID: sess-xyz789
 ```
 
 **Custom Business Headers:**
+
 ```http
 X-Tenant-ID: tenant-enterprise-001
 X-Feature-Flags: feature-a=on,feature-b=off
@@ -193,6 +207,7 @@ X-Client-Version: mobile-app-2.1.0
 ### Message Queue Context
 
 **Message Metadata:**
+
 ```json
 {
   "messageContext": {
@@ -208,6 +223,7 @@ X-Client-Version: mobile-app-2.1.0
 ```
 
 **Event Context:**
+
 ```json
 {
   "event": {
@@ -226,6 +242,7 @@ X-Client-Version: mobile-app-2.1.0
 ### Context Injection
 
 **Middleware Pattern:**
+
 ```javascript
 // Example middleware for context injection
 const contextMiddleware = (req, res, next) => {
@@ -234,62 +251,61 @@ const contextMiddleware = (req, res, next) => {
     traceId: req.headers['x-trace-id'] || generateTraceId(),
     userId: extractUserId(req),
     sessionId: extractSessionId(req),
-    timestamp: new Date().toISOString()
-  };
-  next();
-};
+    timestamp: new Date().toISOString(),
+  }
+  next()
+}
 ```
 
 **Logger Enhancement:**
+
 ```javascript
 // Context-aware logger
-const logger = require('./logger');
+const logger = require('./logger')
 const contextualLogger = {
   info: (message, data = {}) => {
     logger.info(message, {
       ...getRequestContext(),
-      ...data
-    });
-  }
-};
+      ...data,
+    })
+  },
+}
 ```
 
 ### Context Storage
 
 **Thread-Local Storage:**
+
 ```javascript
 // Node.js AsyncLocalStorage example
-const { AsyncLocalStorage } = require('async_hooks');
-const contextStorage = new AsyncLocalStorage();
+const { AsyncLocalStorage } = require('async_hooks')
+const contextStorage = new AsyncLocalStorage()
 
 const withContext = (context, fn) => {
-  contextStorage.run(context, fn);
-};
+  contextStorage.run(context, fn)
+}
 
 const getContext = () => {
-  return contextStorage.getStore() || {};
-};
+  return contextStorage.getStore() || {}
+}
 ```
 
 **Context Provider Pattern:**
+
 ```javascript
 // React Context for frontend logging
-const LoggingContext = React.createContext();
+const LoggingContext = React.createContext()
 
 const LoggingProvider = ({ children }) => {
   const context = {
     userId: user?.id,
     sessionId: session?.id,
     page: location.pathname,
-    userAgent: navigator.userAgent
-  };
-  
-  return (
-    <LoggingContext.Provider value={context}>
-      {children}
-    </LoggingContext.Provider>
-  );
-};
+    userAgent: navigator.userAgent,
+  }
+
+  return <LoggingContext.Provider value={context}>{children}</LoggingContext.Provider>
+}
 ```
 
 ## Context Enrichment Strategies
@@ -297,6 +313,7 @@ const LoggingProvider = ({ children }) => {
 ### Automatic Enrichment
 
 **Framework Integration:**
+
 ```json
 {
   "framework": {
@@ -310,6 +327,7 @@ const LoggingProvider = ({ children }) => {
 ```
 
 **Infrastructure Context:**
+
 ```json
 {
   "infrastructure": {
@@ -326,6 +344,7 @@ const LoggingProvider = ({ children }) => {
 ### Dynamic Enrichment
 
 **Runtime Context:**
+
 ```json
 {
   "runtime": {
@@ -342,6 +361,7 @@ const LoggingProvider = ({ children }) => {
 ```
 
 **Feature Flag Context:**
+
 ```json
 {
   "features": {
@@ -358,16 +378,18 @@ const LoggingProvider = ({ children }) => {
 ### Context Filtering
 
 **Level-Based Filtering:**
+
 ```javascript
 const contextFilters = {
   ERROR: ['requestId', 'userId', 'traceId', 'error'],
   WARN: ['requestId', 'userId', 'traceId'],
   INFO: ['requestId', 'traceId'],
-  DEBUG: '*' // All context
-};
+  DEBUG: '*', // All context
+}
 ```
 
 **Conditional Enrichment:**
+
 ```javascript
 const enrichContext = (level, baseContext) => {
   if (level === 'DEBUG') {
@@ -375,39 +397,41 @@ const enrichContext = (level, baseContext) => {
       ...baseContext,
       performance: getPerformanceMetrics(),
       memory: getMemoryUsage(),
-      stack: getStackTrace()
-    };
+      stack: getStackTrace(),
+    }
   }
-  return baseContext;
-};
+  return baseContext
+}
 ```
 
 ### Lazy Loading
 
 **Expensive Context Calculation:**
+
 ```javascript
 const createContext = () => ({
   requestId: req.id,
   userId: req.user?.id,
   get detailedUser() {
     // Only calculate when accessed
-    return this._detailedUser || (this._detailedUser = loadUserDetails(this.userId));
-  }
-});
+    return this._detailedUser || (this._detailedUser = loadUserDetails(this.userId))
+  },
+})
 ```
 
 ### Context Caching
 
 **Request-Scoped Caching:**
+
 ```javascript
-const contextCache = new Map();
+const contextCache = new Map()
 
 const getCachedContext = (key, factory) => {
   if (!contextCache.has(key)) {
-    contextCache.set(key, factory());
+    contextCache.set(key, factory())
   }
-  return contextCache.get(key);
-};
+  return contextCache.get(key)
+}
 ```
 
 ## Security Considerations
@@ -415,6 +439,7 @@ const getCachedContext = (key, factory) => {
 ### Sensitive Context Handling
 
 **Data Masking:**
+
 ```json
 {
   "user": {
@@ -427,22 +452,23 @@ const getCachedContext = (key, factory) => {
 ```
 
 **Context Sanitization:**
+
 ```javascript
-const sanitizeContext = (context) => {
-  const sanitized = { ...context };
-  
+const sanitizeContext = context => {
+  const sanitized = { ...context }
+
   // Remove sensitive fields
-  delete sanitized.password;
-  delete sanitized.apiKey;
-  delete sanitized.token;
-  
+  delete sanitized.password
+  delete sanitized.apiKey
+  delete sanitized.token
+
   // Mask PII
   if (sanitized.email) {
-    sanitized.email = maskEmail(sanitized.email);
+    sanitized.email = maskEmail(sanitized.email)
   }
-  
-  return sanitized;
-};
+
+  return sanitized
+}
 ```
 
 ## Best Practices
@@ -450,12 +476,14 @@ const sanitizeContext = (context) => {
 ### Context Design
 
 **Consistency Guidelines:**
+
 - Use standard field names across services
 - Maintain consistent data types
 - Implement proper field hierarchy
 - Document context schema
 
 **Naming Conventions:**
+
 - Use camelCase for field names
 - Prefix context categories (user.id, request.method)
 - Avoid abbreviations
@@ -464,12 +492,14 @@ const sanitizeContext = (context) => {
 ### Performance Guidelines
 
 **Context Size Management:**
+
 - Limit context object size
 - Use references for large objects
 - Implement context pruning
 - Monitor serialization overhead
 
 **Efficient Propagation:**
+
 - Minimize header count
 - Use compact representations
 - Implement header compression
@@ -478,12 +508,14 @@ const sanitizeContext = (context) => {
 ### Operational Guidelines
 
 **Context Validation:**
+
 - Validate context structure
 - Handle missing context gracefully
 - Implement fallback mechanisms
 - Monitor context quality
 
 **Evolution Management:**
+
 - Version context schemas
 - Implement backward compatibility
 - Plan context migrations

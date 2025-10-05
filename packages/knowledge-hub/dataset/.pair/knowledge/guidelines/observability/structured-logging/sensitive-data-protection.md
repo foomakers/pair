@@ -7,6 +7,7 @@ Define strategies and best practices for protecting sensitive data in logging sy
 ## Scope
 
 **In Scope:**
+
 - PII (Personally Identifiable Information) protection
 - Authentication and authorization data security
 - Financial and payment information protection
@@ -15,6 +16,7 @@ Define strategies and best practices for protecting sensitive data in logging sy
 - Secure log transmission and storage
 
 **Out of Scope:**
+
 - General data encryption techniques
 - Infrastructure security measures
 - Database security practices
@@ -27,7 +29,9 @@ Protecting sensitive data in logs is critical for maintaining user privacy, regu
 ## Sensitive Data Categories
 
 ### Personally Identifiable Information (PII)
+
 **Examples:**
+
 - Names, addresses, phone numbers
 - Email addresses
 - Social security numbers
@@ -35,45 +39,55 @@ Protecting sensitive data in logs is critical for maintaining user privacy, regu
 - Government identification numbers
 
 **Protection Strategies:**
+
 - Complete exclusion from logs
 - Hash-based pseudonymization
 - Tokenization for correlation
 - Masking with consistent patterns
 
 ### Authentication and Authorization Data
+
 **Examples:**
+
 - Passwords and password hashes
 - API keys and tokens
 - Session identifiers
 - OAuth tokens and secrets
 
 **Protection Strategies:**
+
 - Never log authentication secrets
 - Use session IDs for correlation only
 - Log authentication events without credentials
 - Implement secure token handling
 
 ### Financial Information
+
 **Examples:**
+
 - Credit card numbers
 - Bank account information
 - Payment processor tokens
 - Transaction amounts (context-dependent)
 
 **Protection Strategies:**
+
 - PCI DSS compliance requirements
 - Tokenization for payment data
 - Masking card numbers (show only last 4 digits)
 - Secure audit trail maintenance
 
 ### Health Information
+
 **Examples:**
+
 - Medical records
 - Health insurance information
 - Biometric data
 - Mental health information
 
 **Protection Strategies:**
+
 - HIPAA compliance requirements
 - Complete exclusion from general logs
 - Secure audit logging for access
@@ -84,6 +98,7 @@ Protecting sensitive data in logs is critical for maintaining user privacy, regu
 ### Data Masking
 
 **Character Masking:**
+
 ```json
 {
   "level": "INFO",
@@ -94,6 +109,7 @@ Protecting sensitive data in logs is critical for maintaining user privacy, regu
 ```
 
 **Pattern-Based Masking:**
+
 ```json
 {
   "level": "INFO",
@@ -106,6 +122,7 @@ Protecting sensitive data in logs is critical for maintaining user privacy, regu
 ### Tokenization
 
 **User Identification:**
+
 ```json
 {
   "level": "INFO",
@@ -117,6 +134,7 @@ Protecting sensitive data in logs is critical for maintaining user privacy, regu
 ```
 
 **Session Tracking:**
+
 ```json
 {
   "level": "DEBUG",
@@ -129,6 +147,7 @@ Protecting sensitive data in logs is critical for maintaining user privacy, regu
 ### Hashing and Pseudonymization
 
 **Consistent User Tracking:**
+
 ```json
 {
   "level": "INFO",
@@ -140,6 +159,7 @@ Protecting sensitive data in logs is critical for maintaining user privacy, regu
 ```
 
 **IP Address Handling:**
+
 ```json
 {
   "level": "WARN",
@@ -154,36 +174,38 @@ Protecting sensitive data in logs is critical for maintaining user privacy, regu
 ### Logging Library Configuration
 
 **Field-Level Protection:**
+
 ```javascript
 // Example configuration
 const loggerConfig = {
-  sensitiveFields: [
-    'password', 'ssn', 'creditCard', 'apiKey'
-  ],
+  sensitiveFields: ['password', 'ssn', 'creditCard', 'apiKey'],
   maskingStrategy: 'redact',
   hashingFields: ['email', 'userId'],
-  tokenizeFields: ['sessionId', 'transactionId']
-};
+  tokenizeFields: ['sessionId', 'transactionId'],
+}
 ```
 
 **Custom Serializers:**
+
 ```javascript
 const sensitiveDataSerializer = {
-  email: (value) => maskEmail(value),
-  creditCard: (value) => maskCreditCard(value),
-  ssn: () => '[REDACTED]'
-};
+  email: value => maskEmail(value),
+  creditCard: value => maskCreditCard(value),
+  ssn: () => '[REDACTED]',
+}
 ```
 
 ### Automated Detection
 
 **Pattern Recognition:**
+
 - Credit card number patterns
 - Social security number formats
 - Email address detection
 - Phone number identification
 
 **Machine Learning Approaches:**
+
 - NLP-based PII detection
 - Context-aware data classification
 - Anomaly detection for data leaks
@@ -192,12 +214,14 @@ const sensitiveDataSerializer = {
 ### Data Classification
 
 **Sensitivity Levels:**
+
 - **Public:** Can be logged without restriction
 - **Internal:** Requires access controls
 - **Confidential:** Requires masking or tokenization
 - **Restricted:** Must not be logged
 
 **Classification Metadata:**
+
 ```json
 {
   "level": "INFO",
@@ -213,12 +237,14 @@ const sensitiveDataSerializer = {
 ### GDPR (General Data Protection Regulation)
 
 **Requirements:**
+
 - Right to erasure (data deletion)
 - Data minimization principles
 - Purpose limitation
 - Consent-based processing
 
 **Implementation:**
+
 - Log data retention policies
 - User consent tracking
 - Data subject request handling
@@ -227,12 +253,14 @@ const sensitiveDataSerializer = {
 ### CCPA (California Consumer Privacy Act)
 
 **Requirements:**
+
 - Consumer right to know
 - Right to delete personal information
 - Right to opt-out of sale
 - Non-discrimination requirements
 
 **Implementation:**
+
 - Consumer request tracking
 - Data inventory maintenance
 - Opt-out mechanism logging
@@ -241,12 +269,14 @@ const sensitiveDataSerializer = {
 ### HIPAA (Health Insurance Portability and Accountability Act)
 
 **Requirements:**
+
 - Minimum necessary standard
 - Access logging and monitoring
 - Breach notification requirements
 - Administrative safeguards
 
 **Implementation:**
+
 - Access audit trails
 - Minimum data logging
 - Secure log storage
@@ -255,12 +285,14 @@ const sensitiveDataSerializer = {
 ### PCI DSS (Payment Card Industry Data Security Standard)
 
 **Requirements:**
+
 - Cardholder data protection
 - Access monitoring and testing
 - Regular security testing
 - Information security policies
 
 **Implementation:**
+
 - Payment data exclusion
 - Tokenization strategies
 - Access logging
@@ -271,12 +303,14 @@ const sensitiveDataSerializer = {
 ### Secure Log Transmission
 
 **Encryption in Transit:**
+
 - TLS 1.3 for log shipping
 - Certificate-based authentication
 - Encrypted log forwarding
 - Secure API communications
 
 **Message Integrity:**
+
 - Digital signatures for log entries
 - Checksum validation
 - Tamper detection mechanisms
@@ -285,12 +319,14 @@ const sensitiveDataSerializer = {
 ### Access Controls
 
 **Role-Based Access:**
+
 - Principle of least privilege
 - Segregation of duties
 - Regular access reviews
 - Automated provisioning/deprovisioning
 
 **Log Access Monitoring:**
+
 ```json
 {
   "level": "AUDIT",
@@ -305,12 +341,14 @@ const sensitiveDataSerializer = {
 ### Data Retention and Disposal
 
 **Retention Policies:**
+
 - Business requirement alignment
 - Regulatory compliance periods
 - Automated purging processes
 - Secure deletion verification
 
 **Disposal Procedures:**
+
 - Cryptographic deletion
 - Physical media destruction
 - Verification of complete removal
@@ -321,12 +359,14 @@ const sensitiveDataSerializer = {
 ### Data Leak Detection
 
 **Automated Scanning:**
+
 - Regular log content analysis
 - PII detection algorithms
 - Pattern matching systems
 - Anomaly detection for sensitive data
 
 **Alert Systems:**
+
 ```json
 {
   "level": "CRITICAL",
@@ -341,12 +381,14 @@ const sensitiveDataSerializer = {
 ### Compliance Auditing
 
 **Regular Assessments:**
+
 - Data protection effectiveness reviews
 - Compliance gap analysis
 - Third-party security audits
 - Internal control testing
 
 **Audit Trail Maintenance:**
+
 - Data protection decisions
 - Policy change documentation
 - Incident response records
@@ -357,12 +399,14 @@ const sensitiveDataSerializer = {
 ### Development Guidelines
 
 **Secure Coding Practices:**
+
 - Input validation for log data
 - Secure default configurations
 - Regular security training
 - Code review for data protection
 
 **Testing Strategies:**
+
 - Automated sensitive data detection tests
 - Penetration testing for log systems
 - Compliance validation testing
@@ -371,12 +415,14 @@ const sensitiveDataSerializer = {
 ### Operational Excellence
 
 **Continuous Improvement:**
+
 - Regular policy updates
 - Technology advancement integration
 - Threat landscape adaptation
 - Stakeholder feedback incorporation
 
 **Incident Response:**
+
 - Data breach response procedures
 - Notification requirements
 - Remediation strategies
