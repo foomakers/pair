@@ -32,7 +32,7 @@ The AI assistant acts as a **User Story Refinement Facilitator** who:
 
 ## Prerequisite
 
-Before starting, **read and consult the Refined User Story Template**: [Refined User Story Template](.pair/knowledge/guidelines/collaboration/assets/user-story-template.md). All required structure and fields are defined in the template.
+Before starting, **read and consult the Refined User Story Template**: [Refined User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md). All required structure and fields are defined in the template.
 
 ## **Issue Access and Tool Integration**
 
@@ -217,9 +217,9 @@ Before documenting refined user stories, identify the configured project managem
 
 ## User Story Refinement Template
 
-> **Note:** This [template](.pair/knowledge/guidelines/collaboration/assets/user-story-template.md) transforms the initial breakdown information into comprehensive, development-ready specifications. All sections must be completed with testable, implementable details.
+> **Note:** This [template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) transforms the initial breakdown information into comprehensive, development-ready specifications. All sections must be completed with testable, implementable details.
 
-User story refined must follow this comprehensive [template](.pair/knowledge/guidelines/collaboration/assets/user-story-template.md) you find in the [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md).
+User story refined must follow this comprehensive [template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) you find in the [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md).
 
 ## Structured Refinement Process
 
@@ -408,7 +408,7 @@ _This split enables incremental value delivery while maintaining manageable spri
 
 1. **Comprehensive Story Documentation**: Update story with all refinement details:
 
-   - Complete refined [template](.pair/knowledge/guidelines/collaboration/assets/user-story-template.md) with all analysis and requirements
+   - Complete refined [template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) with all analysis and requirements
    - Detailed acceptance criteria and technical specifications
    - Risk assessment and mitigation strategies
    - DoD checklist and validation requirements
@@ -448,7 +448,7 @@ _"User Story [STORY_CODE] refinement is complete and status updated to 'Refined'
    - Team alignment confirmed on scope and approach
 
 3. **Quality Standards Validation**: Ensure refinement meets quality standards:
-   - Story follows refined [template](.pair/knowledge/guidelines/collaboration/assets/user-story-template.md) completely
+   - Story follows refined [template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) completely
    - Acceptance criteria follow Given-When-Then format
    - Technical analysis addresses implementation concerns
    - DoD alignment ensures proper completion validation

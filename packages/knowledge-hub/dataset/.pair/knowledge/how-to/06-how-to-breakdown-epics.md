@@ -30,7 +30,7 @@ The AI assistant acts as an **Epic Breakdown Architect** who:
 
 ## Prerequisite
 
-Before starting, **read and consult the Epic Template**: [Epic Template](.pair/knowledge/guidelines/collaboration/assets/epic-template.md). All required structure and fields are defined in the template.
+Before starting, **read and consult the Epic Template**: [Epic Template](.pair/knowledge/guidelines/collaboration/templates/epic-template.md). All required structure and fields are defined in the template.
 
 ## **Issue Access and Tool Integration**
 
@@ -93,7 +93,7 @@ An **Epic** is a substantial piece of work that:
 
 ## Epic Template Structure
 
-Each epic must follow this comprehensive [template](.pair/knowledge/guidelines/collaboration/assets/epic-template.md).
+Each epic must follow this comprehensive [template](.pair/knowledge/guidelines/collaboration/templates/epic-template.md).
 
 ## Prerequisites Verification
 
@@ -196,7 +196,7 @@ If an Epic 0 already exists, proceed directly to functional epic breakdown as de
 
 Each epic file must:
 
-- Use the full epic [template](.pair/knowledge/guidelines/collaboration/assets/epic-template.md) provided in [this guide](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+- Use the full epic [template](.pair/knowledge/guidelines/collaboration/templates/epic-template.md) provided in [this guide](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
 - Include a link to its parent initiative (by filename or relative path)
 - Include links to all child user stories (by filename or relative path) as they are created
 - All references to a markdown document (e.g., architecture, tech stack) must be a markdown link
@@ -338,7 +338,7 @@ _"Does the epic breakdown feel right for your development approach? Should any e
 
 ### Step 6: Individual Epic Documentation
 
-**AI Assistant Instructions:** Document each epic following the [template](.pair/knowledge/guidelines/collaboration/assets/epic-template.md):
+**AI Assistant Instructions:** Document each epic following the [template](.pair/knowledge/guidelines/collaboration/templates/epic-template.md):
 
 1. **Present One Epic at a Time**: Start with the first epic in sequence
 2. **Use Complete Template**: Fill all sections thoroughly
@@ -360,7 +360,7 @@ _"Here's the detailed breakdown for Epic 1: [NAME]. I've focused on [key aspects
 
 **AI Assistant Instructions:** Create epic records in project management tool:
 
-1. **Follow Tool-Specific Format**: Adapt [template](.pair/knowledge/guidelines/collaboration/assets/epic-template.md) to tool requirements
+1. **Follow Tool-Specific Format**: Adapt [template](.pair/knowledge/guidelines/collaboration/templates/epic-template.md) to tool requirements
 2. **Maintain Template Completeness**: Ensure all sections are captured
 3. **Establish Hierarchy Linking**: Create proper linkage according to tool capabilities:
    - **Parent Link**: Connect epic to its parent initiative
@@ -371,7 +371,7 @@ _"Here's the detailed breakdown for Epic 1: [NAME]. I've focused on [key aspects
 
 **Tool Documentation Checklist:**
 
-- [ ] Epic created with complete [template](.pair/knowledge/guidelines/collaboration/assets/epic-template.md) information
+- [ ] Epic created with complete [template](.pair/knowledge/guidelines/collaboration/templates/epic-template.md) information
 - [ ] Properly linked to parent initiative using tool-specific methodology
 - [ ] Epic configured to receive user story links as child items
 - [ ] Hierarchy relationships properly established in tool
@@ -418,7 +418,7 @@ _"All epics for '[INITIATIVE_NAME]' are now documented and ready for development
 
 **Structure Quality:**
 
-- [ ] All [template](.pair/knowledge/guidelines/collaboration/assets/epic-template.md) sections completed comprehensively
+- [ ] All [template](.pair/knowledge/guidelines/collaboration/templates/epic-template.md) sections completed comprehensively
 - [ ] Epic duration falls within 2-4 sprint range
 - [ ] Dependencies are clearly identified and manageable
 - [ ] Definition of Done includes all quality gates

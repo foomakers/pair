@@ -95,7 +95,7 @@ This section covers technology stack selection and standardization:
 
 ### Core Technologies
 
-- **[Core Technologies](core-technologies.md)** - Fundamental technology stack decisions and architectural choices
+- **[Stack Standards](stack-standards.md)** - Fundamental technology stack decisions and architectural choices
   - Frontend & Full-Stack Framework (React 18+, Next.js 14+)
   - Backend for Frontend (BFF) with Next.js API Routes
   - Bounded Context APIs with Fastify
@@ -113,7 +113,7 @@ This section covers technology stack selection and standardization:
 
 ### TypeScript Standards
 
-- **[TypeScript Standards](typescript-standards.md)** - TypeScript configuration and usage standards
+- **[Tech Decisions](tech-decisions.md)** - TypeScript configuration and usage standards
   - Version Management across monorepo workspaces
   - TSConfig Configuration and compiler settings
   - Type Safety Principles and best practices
@@ -121,7 +121,7 @@ This section covers technology stack selection and standardization:
 
 ### Frontend Stack
 
-- **[Frontend Stack](frontend-stack.md)** - Frontend-specific technology standards and patterns
+- **[Framework Selection](framework-selection.md)** - Frontend-specific technology standards and patterns
   - React 18+ patterns and component standards
   - Next.js 14+ configuration and optimization
   - shadcn/ui component library integration
@@ -129,7 +129,7 @@ This section covers technology stack selection and standardization:
 
 ### Backend Stack
 
-- **[Backend Stack](backend-stack.md)** - Backend technology standards and API patterns
+- **[Conventions](conventions.md)** - Backend technology standards and API patterns
   - Fastify framework patterns and plugins
   - Node.js runtime optimization and configuration
   - API design patterns and standards
@@ -137,7 +137,7 @@ This section covers technology stack selection and standardization:
 
 ## 🔗 Related Practices
 
-- **[Cloud Infrastructure](../../cloud-infrastructure/README.md)** - Cloud services and deployment platforms for these technologies
+- **[Infrastructure](.pair/knowledge/guidelines/infrastructure/README.md)** - Cloud services and deployment platforms for these technologies
 - **[Development Tools](.pair/knowledge/guidelines/technical-standards/development-tools/README.md)** - Tools that support these technology choices
 - **[Integration Standards](.pair/knowledge/guidelines/technical-standards/integration-standards/README.md)** - How these technologies integrate together
 - **[Code Design Framework Patterns](.pair/knowledge/guidelines/code-design/framework-patterns/README.md)** - Implementation patterns for these technologies
@@ -146,18 +146,18 @@ This section covers technology stack selection and standardization:
 
 For cloud deployment and infrastructure automation:
 
-- **[Cloud Providers](../../cloud-infrastructure/cloud-providers.md)** - Provider selection for tech stack deployment
-- **[Container Orchestration](../../cloud-infrastructure/container-orchestration.md)** - Containerizing and deploying tech stack components
-- **[Cloud Databases](../../cloud-infrastructure/cloud-databases.md)** - Managed database services aligned with backend stack
-- **[Cloud DevOps](../../cloud-infrastructure/cloud-devops.md)** - CI/CD pipelines for tech stack deployment
+- **[Cloud Providers](.pair/knowledge/guidelines/infrastructure/cloud-providers/README.md)** - Provider selection for tech stack deployment
+- **[Container Orchestration](.pair/knowledge/guidelines/infrastructure/container-orchestration/README.md)** - Containerizing and deploying tech stack components
+- **[Cloud Services](.pair/knowledge/guidelines/infrastructure/cloud-services/README.md)** - Managed database services aligned with backend stack
+- **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - CI/CD pipelines for tech stack deployment
 
 ## 🎯 Quick Start
 
-1. **Foundation**: Review [Core Technologies](core-technologies.md) for the complete technology stack
+1. **Foundation**: Review [Stack Standards](stack-standards.md) for the complete technology stack
 2. **Selection Process**: Use [Framework Selection](framework-selection.md) criteria for new technology choices
-3. **TypeScript Setup**: Configure [TypeScript Standards](typescript-standards.md) across your workspace
-4. **Frontend Implementation**: Apply [Frontend Stack](frontend-stack.md) patterns for client-side development
-5. **Backend Implementation**: Use [Backend Stack](backend-stack.md) standards for server-side development
+3. **TypeScript Setup**: Configure [Tech Decisions](tech-decisions.md) across your workspace
+4. **Frontend Implementation**: Apply [Framework Selection](framework-selection.md) patterns for client-side development
+5. **Backend Implementation**: Use [Conventions](conventions.md) standards for server-side development
 
 ---
 

@@ -146,7 +146,7 @@ Constraints related to platform targeting and deployment preferences for the pro
 ## Cross-References
 
 - **[Team Constraints](team-constraints.md)** - Small team deployment considerations
-- **[Technology Constraints](technology-constraints.md)** - Technology selection criteria
+- **[Technology Constraints](.pair/knowledge/guidelines/architecture/README.md)** - Technology selection criteria
 - **[Deployment Architectures](.pair/knowledge/guidelines/architecture/deployment-architectures/README.md)** - Specific deployment patterns
 
 ## Scope Boundaries

@@ -29,17 +29,17 @@ Provide comprehensive guidance for defining technical standards that support dev
 
 ### Core Technology Standards
 
-- **[Technology Stack](./technology-stack.md)** - Technology selection framework and standardization approach
-- **[Development Tools](./development-tools.md)** - IDE configuration, debugging tools, and development environment setup
-- **[Coding Standards](./coding-standards.md)** - Language conventions, formatting rules, and code organization
-- **[Integration Standards](./integration-standards.md)** - API design, service communication, and system integration patterns
+- **[Technology Stack](./technology-stack/README.md)** - Technology selection framework and standardization approach
+- **[Development Tools](./development-tools/README.md)** - IDE configuration, debugging tools, and development environment setup
+- **[Coding Standards](./coding-standards/README.md)** - Language conventions, formatting rules, and code organization
+- **[Integration Standards](./integration-standards/README.md)** - API design, service communication, and system integration patterns
 
 ### Feature and Deployment Standards
 
 - **[Feature Flags](./feature-flags.md)** - Feature flag implementation, management strategies, and rollout controls
-- **[Internationalization & Localization](./i18n-localization.md)** - Multi-language support, localization workflows, and content management
-- **[Documentation Standards](./documentation-standards.md)** - Documentation structure, writing guidelines, and maintenance processes
-- **[Build Standards](./build-standards.md)** - Build configuration, optimization strategies, and deployment pipelines
+- **[Git Workflow](./git-workflow/README.md)** - Git workflow and versioning strategies
+- **[Deployment Workflow](./deployment-workflow/README.md)** - Deployment pipelines and release management
+- **[AI Development](./ai-development/README.md)** - AI development standards and practices
 
 ### AI Development Framework
 

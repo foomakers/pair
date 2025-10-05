@@ -839,11 +839,11 @@ Each methodology file includes:
 
 - **[Project Management Tools](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)**: Tool support for different methodologies
 - **[Estimation](.pair/knowledge/guidelines/collaboration/estimation/README.md)**: Estimation approaches by methodology
-- **[Board Management](.pair/knowledge/guidelines/collaboration/board-management.md)**: Board configuration for different methodologies
+- **[Board Management](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)**: Board configuration for different methodologies
 - Common pitfalls and mitigation strategies
 
 ## Related Topics
 
 - **[../project-management-tool/](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Tool implementations for each methodology
 - **[../estimation/](.pair/knowledge/guidelines/collaboration/estimation/README.md)** - Estimation approaches by methodology
-- **[.pair/knowledge/guidelines/collaboration/role-responsibilities.md](.pair/knowledge/guidelines/collaboration/role-responsibilities.md)** - Role definitions within methodologies
+- **[.pair/knowledge/guidelines/collaboration/team/role-responsibilities.md](.pair/knowledge/guidelines/collaboration/team/role-responsibilities.md)** - Role definitions within methodologies

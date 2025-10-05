@@ -212,10 +212,10 @@ services:
 
 ## Cross-References
 
-- **[Project Constraints](.pair/knowledge/guidelines/architecture/project-constraints.md)** - Desktop-only and self-hosting constraints
-- **[LLM Integration](.pair/knowledge/guidelines/architecture/llm-integration.md)** - External service integration patterns
+- **[Project Constraints](.pair/knowledge/guidelines/architecture/project-constraints/README.md)** - Desktop-only and self-hosting constraints
+- **[LLM Integration](.pair/knowledge/guidelines/architecture/llm-integration/README.md)** - External service integration patterns
 - **[Structured Monolith](structured-monolith.md)** - Simple deployment architecture
-- **[Tech Stack](.pair/knowledge/guidelines/technical-standards/tech-stack/README.md)** - Technology choices
+- **[Tech Stack](.pair/knowledge/guidelines/technical-standards/technology-stack/README.md)** - Technology choices
 
 ## Scope Boundaries
 

@@ -235,8 +235,8 @@ Selecting cloud provider strategy?
 
 - **[Cloud Services](.pair/knowledge/guidelines/infrastructure/cloud-services/README.md)** - Cloud service selection and integration patterns
 - **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure automation and version control
-- **[Cost Optimization](../cost-optimization/README.md)** - Cloud cost optimization strategies and tools
-- **[Multi-Cloud Strategy](../multi-cloud/README.md)** - Multi-cloud architecture and governance
+- **[Cost Optimization](cost-optimization.md)** - Cloud cost optimization strategies and tools
+- **[Multi-Cloud Strategy](multi-cloud.md)** - Multi-cloud architecture and governance
 
 ## 📈 Cloud Strategy Maturity Progression
 

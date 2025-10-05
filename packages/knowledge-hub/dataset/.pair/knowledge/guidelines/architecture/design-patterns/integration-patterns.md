@@ -114,5 +114,5 @@ interface UserRegisteredEvent extends DomainEvent {
 ## Related Documents
 
 - **[System Design README](README.md)** - Overall system design principles
-- **[Bounded Context Patterns](bounded-context-patterns.md)** - Context boundary implementation
-- **[Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure.md)** - Infrastructure integration patterns
+- **[Bounded Context Patterns](.pair/knowledge/guidelines/architecture/README.md)** - Context boundary implementation
+- **[Infrastructure Guidelines](.pair/knowledge/guidelines/infrastructure/README.md)** - Infrastructure integration patterns

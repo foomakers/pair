@@ -273,10 +273,10 @@ Low Complexity/Benefits  →  High Complexity/Benefits
 
 ## Related Patterns
 
-- **[Domain-Driven Design](.pair/knowledge/guidelines/architecture/domain-driven-design.md)** - Domain modeling approach
-- **[Bounded Context Patterns](.pair/knowledge/guidelines/architecture/bounded-context-patterns.md)** - Context boundaries
-- **[Integration Patterns](.pair/knowledge/guidelines/architecture/integration-patterns.md)** - Service integration
-- **[Scaling Patterns](.pair/knowledge/guidelines/architecture/scaling-patterns/README.md)** - Performance and scaling
+- **[Domain-Driven Design](.pair/knowledge/guidelines/architecture/design-patterns/README.md)** - Domain modeling approach
+- **[Bounded Context Patterns](.pair/knowledge/guidelines/architecture/design-patterns/README.md)** - Context boundaries
+- **[Integration Patterns](.pair/knowledge/guidelines/architecture/design-patterns/README.md)** - Service integration
+- **[Scaling Patterns](.pair/knowledge/guidelines/architecture/design-patterns/README.md)** - Performance and scaling
 - **[Deployment Architectures](.pair/knowledge/guidelines/architecture/deployment-architectures/README.md)** - Deployment strategies
 
 ## Implementation Guides

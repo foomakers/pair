@@ -494,7 +494,7 @@ resource "aws_appautoscaling_target" "app_scale_target" {
 - **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure provisioning and management
 - **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Continuous integration and deployment practices
 - **[Environment Management](.pair/knowledge/guidelines/infrastructure/environments/README.md)** - Environment configuration and consistency
-- **[Monitoring and Observability](../../operations/monitoring/README.md)** - Production monitoring and alerting
+- **[Monitoring and Observability](.pair/knowledge/guidelines/observability/README.md)** - Production monitoring and alerting
 
 ---
 

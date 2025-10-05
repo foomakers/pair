@@ -298,10 +298,10 @@ interface AssembledContext {
 
 ## Cross-References
 
-- **[LLM Services](llm-services.md)** - Integration with LLM providers
-- **[Data Architecture](data-architecture.md)** - Data storage and management
+- **[LLM Services](ai-workflows.md)** - Integration with LLM providers
+- **[Data Architecture](vector-databases.md)** - Data storage and management
 - **[Performance & Security](performance-security.md)** - Performance optimization
-- **[Script Coordination](script-coordination.md)** - Pipeline automation
+- **[Script Coordination](agent-coordination.md)** - Pipeline automation
 
 ## Scope Boundaries
 

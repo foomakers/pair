@@ -16,19 +16,23 @@ This approach reduces folder pollution while maintaining logical organization an
 
 - **[Architecture](architecture/README.md)** - System architecture, patterns, and design decisions
   - **[Architectural Patterns](architecture/architectural-patterns/README.md)** - Core architecture patterns (CRUD, Layered, Hexagonal, Clean, CQRS, Event Sourcing)
-  - **[Scaling Patterns](architecture/scaling-patterns/README.md)** - Horizontal and vertical scaling strategies
   - **[Deployment Architectures](architecture/deployment-architectures/README.md)** - Deployment patterns and strategies
-  - **[Performance Patterns](architecture/performance-patterns/README.md)** - Performance optimization techniques
-  - **[Decision Records](architecture/decision-records.md)** - ADR process, templates, decision frameworks
+  - **[Design Patterns](architecture/design-patterns/README.md)** - Domain-driven design, bounded contexts, and integration patterns
+  - **[Decision Frameworks](architecture/decision-frameworks/README.md)** - ADR process, templates, decision frameworks
+  - **[LLM Integration](architecture/llm-integration/README.md)** - AI/ML integration patterns and architectures
+  - **[Project Constraints](architecture/project-constraints/README.md)** - Platform, deployment, and team constraints
 
-### ☁️ Cloud Infrastructure Guidelines
+### ☁️ Infrastructure Guidelines
 
-- **[Cloud Infrastructure](cloud-infrastructure/README.md)** - Cloud strategy, tools, and infrastructure automation
-  - **[Cloud Providers](cloud-infrastructure/cloud-providers.md)** - Provider selection, service comparison, and multi-cloud strategies
-  - **[Infrastructure as Code](cloud-infrastructure/infrastructure-as-code.md)** - IaC tools, state management, and automation practices
-  - **[Container Orchestration](cloud-infrastructure/container-orchestration.md)** - Docker, Kubernetes, and cloud-native deployment
-  - **[Cloud Databases](cloud-infrastructure/cloud-databases.md)** - Managed databases, storage services, and data migration
-  - **[Cloud DevOps](cloud-infrastructure/cloud-devops.md)** - CI/CD pipelines, monitoring, and cost optimization
+- **[Infrastructure](infrastructure/README.md)** - Cloud strategy, tools, and infrastructure automation
+  - **[Cloud Providers](infrastructure/cloud-providers/README.md)** - Provider selection, service comparison, and multi-cloud strategies
+  - **[Infrastructure as Code](infrastructure/infrastructure-as-code/README.md)** - IaC tools, state management, and automation practices
+  - **[Container Orchestration](infrastructure/container-orchestration/README.md)** - Docker, Kubernetes, and cloud-native deployment
+  - **[Cloud Services](infrastructure/cloud-services/README.md)** - Managed databases, storage services, and data migration
+  - **[CI/CD Strategy](infrastructure/cicd-strategy/README.md)** - CI/CD pipelines, monitoring, and cost optimization
+  - **[Deployment Patterns](infrastructure/deployment-patterns/README.md)** - Deployment strategies and patterns
+  - **[Environments](infrastructure/environments/README.md)** - Environment management and configuration
+  - **[Testing Infrastructure](infrastructure/testing-infrastructure/README.md)** - Testing infrastructure and databases
 
 ### 💻 Development Guidelines
 
@@ -38,51 +42,67 @@ Development guidelines are organized into three specialized practice areas:
 
   - **[Design Principles](code-design/design-principles/README.md)** - Core design principles and code quality fundamentals
   - **[Framework Patterns](code-design/framework-patterns/README.md)** - Framework-specific implementation patterns and standards
-  - **[Implementation Standards](code-design/implementation-standards/README.md)** - Development environment and service implementation standards
-  - **[Organization Patterns](code-design/organization-patterns/README.md)** - Code and workspace organization strategies
+  - **[Code Organization](code-design/code-organization/README.md)** - Code and workspace organization strategies
+  - **[Package Management](code-design/package-management/README.md)** - Dependency management and workspace configuration
   - **[Quality Standards](code-design/quality-standards/README.md)** - Code quality metrics, linting, and technical debt management
 
 - **[Technical Standards](technical-standards/README.md)** - What technologies to use and how to configure them
 
-  - **[Tech Stack](technical-standards/tech-stack/README.md)** - Core technology decisions and framework selection standards
+  - **[Technology Stack](./technical-standards/technology-stack/README.md)** - Core technology decisions and framework selection standards
   - **[Development Tools](technical-standards/development-tools/README.md)** - Development environment and tooling standards
   - **[Integration Standards](technical-standards/integration-standards/README.md)** - API design, data management, and external service integration
   - **[Deployment Workflow](technical-standards/deployment-workflow/README.md)** - Release management, workflow, and deployment standards
+  - **[Coding Standards](technical-standards/coding-standards/README.md)** - Coding conventions and standards
+  - **[Git Workflow](technical-standards/git-workflow/README.md)** - Version control and development process
+  - **[AI Development](technical-standards/ai-development/README.md)** - AI/ML development standards and practices
 
 - **[Testing](testing/README.md)** - How to verify that software works correctly
-  - **[Testing Strategy](testing/testing-strategy/README.md)** - Testing philosophy, pyramid strategy, and comprehensive approaches
+  - **[Test Strategy](testing/test-strategy/README.md)** - Testing philosophy, pyramid strategy, and comprehensive approaches
   - **[Test Automation](testing/test-automation/README.md)** - Automation frameworks, CI/CD integration, and execution strategies
-  - **[Testing Implementation](testing/testing-implementation/README.md)** - Practical testing implementation across different test types
-  - **[Testing Tools](testing/testing-tools/README.md)** - Testing frameworks, utilities, and tool configuration
+  - **[Unit Testing](testing/unit-testing/README.md)** - Unit testing patterns and implementation
+  - **[Integration Testing](testing/integration-testing/README.md)** - Integration testing strategies
+  - **[E2E Testing](testing/e2e-testing/README.md)** - End-to-end testing approaches
+  - **[Performance Testing](testing/performance-testing/README.md)** - Performance testing methodologies
+  - **[Accessibility Testing](testing/accessibility-testing/README.md)** - Accessibility testing practices
 
 ### 🤝 Collaboration Guidelines
 
 - **[Collaboration](collaboration/README.md)** - Process workflows and project management
-  - **[Project Management](collaboration/project-management-tool/README.md)** - PM frameworks with tool-specific guides (GitHub, Filesystem, etc.)
+  - **[Project Management Tool](collaboration/project-management-tool/README.md)** - PM frameworks with tool-specific guides (GitHub, Filesystem, etc.)
+  - **[Issue Management](collaboration/issue-management/README.md)** - Issue tracking and management practices
+  - **[Team Practices](collaboration/team/README.md)** - Team collaboration and communication practices
 
-### ✨ Quality Guidelines
+### ✨ Quality Assurance Guidelines
 
-- **[Quality](quality/README.md)** - Quality criteria, accessibility, performance, and security
-  - **[Standards](quality/standards/README.md)** - Definition of Done, quality criteria, completion standards
-  - **[Accessibility](quality/accessibility.md)** - WCAG compliance, inclusive design, testing tools
-  - **[Performance](quality/performance.md)** - Optimization strategies, monitoring, benchmarking
-  - **[Security](quality/security.md)** - Secure development, vulnerability assessment, practices
+- **[Quality Assurance](quality-assurance/README.md)** - Quality criteria, accessibility, performance, and security
+  - **[Quality Standards](./quality-assurance/quality-standards/README.md)** - Definition of Done, quality criteria, completion standards
+  - **[Manual Verification](quality-assurance/manual-verification.md)** - Manual testing and quality validation
+  - **[Automated Verification](quality-assurance/automated-verification.md)** - Automated testing and quality validation
+  - **[Security](quality-assurance/security/README.md)** - Secure development, vulnerability assessment, practices
 
-### 🏗️ Platform Operations Guidelines
+### 🏗️ Infrastructure Guidelines
 
-- **[Platform Operations](platform-operations/README.md)** - Infrastructure management, deployment, and observability
-  - **[Infrastructure](platform-operations/infrastructure.md)** - Infrastructure architecture, IaC, and container orchestration
-  - **[Deployment](platform-operations/deployment.md)** - Deployment strategies, CI/CD pipelines, and release management
-  - **[Environment Management](platform-operations/environment-management.md)** - Environment configuration, secrets, and consistency
-  - **[Observability](platform-operations/observability.md)** - Monitoring, logging, alerting, and system visibility
+- **[Infrastructure](infrastructure/README.md)** - Infrastructure management, deployment, and observability
+  - **[Cloud Providers](infrastructure/cloud-providers/README.md)** - Infrastructure architecture, IaC, and container orchestration
+  - **[Deployment Patterns](infrastructure/deployment-patterns/README.md)** - Deployment strategies, CI/CD pipelines, and release management
+  - **[CI/CD Strategy](infrastructure/cicd-strategy/README.md)** - Continuous integration and deployment strategies
+
+### 📊 Observability Guidelines
+
+- **[Observability](observability/README.md)** - Monitoring, logging, alerting, and system visibility
+  - **[Observability Principles](observability/observability-principles/README.md)** - Core observability principles and practices
+  - **[Structured Logging](observability/structured-logging/README.md)** - Logging standards and practices
+  - **[Metrics](observability/metrics/README.md)** - Metrics collection and monitoring
+  - **[Distributed Tracing](observability/distributed-tracing.md)** - Distributed tracing implementation
 
 ### 🎨 User Experience Guidelines
 
 - **[User Experience](user-experience/README.md)** - UX design, interface patterns, and content strategy
-  - **[Design Systems](user-experience/design-systems.md)** - Design system architecture, component libraries, and design tokens
-  - **[Interface Design](user-experience/interface-design.md)** - UI patterns, layout principles, and visual standards
-  - **[User Research](user-experience/user-research.md)** - User research methods, testing, and validation strategies
-  - **[Content Strategy](user-experience/content-strategy.md)** - Content guidelines, information architecture, and communication design
+  - **[Design Systems](user-experience/design-systems/README.md)** - Design system architecture, component libraries, and design tokens
+  - **[Interface Design](user-experience/interface-design/README.md)** - UI patterns, layout principles, and visual standards
+  - **[User Research](user-experience/user-research/README.md)** - User research methods, testing, and validation strategies
+  - **[Content Strategy](user-experience/content-strategy/README.md)** - Content guidelines, information architecture, and communication design
+  - **[UX Performance](user-experience/ux-performance.md)** - Performance optimization for user experience
 
 ## 🔗 Cross-References
 
@@ -102,7 +122,7 @@ All documents are designed to work together and contain extensive cross-referenc
 
 ## 📝 Usage Guidelines
 
-1. **Start with Architecture**: Begin with `../01-architectural-guidelines.md` for system design
+1. **Start with Architecture**: Begin with `../architecture/README.md` for system design
 2. **Follow Cross-References**: Use embedded links to navigate between related topics
 3. **Maintain Consistency**: When updating any document, check cross-references for consistency
 4. **Review Regularly**: These are living documents that should evolve with the project

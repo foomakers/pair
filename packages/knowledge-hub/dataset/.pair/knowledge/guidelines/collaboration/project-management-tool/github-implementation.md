@@ -63,7 +63,7 @@ npm install -g @github/github-mcp-server
 
 ### Board Management
 
-**→ See [../board-management.md](../board-management.md)**
+**→ See [.pair/knowledge/guidelines/collaboration/project-tracking/README.md](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)**
 
 - Board layout and column configuration
 - Workflow optimization
@@ -72,7 +72,7 @@ npm install -g @github/github-mcp-server
 
 ### Communication
 
-**→ See [../communication-protocols/](../communication-protocols/README.md)**
+**→ See [.pair/knowledge/guidelines/collaboration/team/README.md](.pair/knowledge/guidelines/collaboration/team/README.md)**
 
 - Pull request workflows and reviews
 - GitHub Discussions integration
@@ -111,7 +111,7 @@ npm install -g @github/github-mcp-server
 
 ### Board Management
 
-**→ See [board-management.md](.pair/knowledge/guidelines/collaboration/board-management.md)**
+**→ See [board-management.md](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)**
 
 - Board layout and column configuration
 - Workflow optimization
@@ -120,7 +120,7 @@ npm install -g @github/github-mcp-server
 
 ### Communication
 
-**→ See [../communication-protocols/](.pair/knowledge/guidelines/collaboration/communication-protocols/README.md)**
+**→ See [../communication-protocols/](.pair/knowledge/guidelines/collaboration/team/README.md)**
 
 - Pull request workflows and reviews
 - GitHub Discussions integration

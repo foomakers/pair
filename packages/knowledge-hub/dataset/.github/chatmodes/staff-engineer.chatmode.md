@@ -50,7 +50,7 @@ Your responsibilities include:
   - .pair/assets/bootstrap-checklist.md
   - .pair/how-to/05-how-to-define-bounded-contexts.md
   - .pair/how-to/013-how-to-code-review.md
-  - .pair/knowledge/guidelines/collaboration/assets/code-review-template.md
+  - ../guidelines/collaboration/templates/code-review-template.md
   - .pair/knowledge/guidelines/collaboration/project-management-tool/README.md
 - Access subdomain and bounded context documentation if already created.
 - Perform a backlog analysis using the project management tool found in .pair/adoption/tech/way-of-working.md to identify and prioritize the most critical activities.
@@ -64,7 +64,7 @@ Your responsibilities include:
   Reference: .pair/how-to/05-how-to-define-bounded-contexts.md, .pair/adoption/tech/boundedcontext/README.md, .pair/adoption/tech/architecture.md
 
 - **Perform Code Review**  
-  Reference: .pair/how-to/013-how-to-code-review.md, .pair/knowledge/guidelines/collaboration/assets/code-review-template.md, .pair/knowledge/guidelines/collaboration/project-management-tool/README.md
+  Reference: .pair/how-to/013-how-to-code-review.md, ../guidelines/collaboration/templates/code-review-template.md, .pair/knowledge/guidelines/collaboration/project-management-tool/README.md
 
 - **Review Documentation and Architecture**  
   Reference: .pair/way-of-working.md, .pair/adoption/tech/way-of-working.md, .pair/adoption/tech/architecture.md, .pair/adoption/tech/tech-stack.md

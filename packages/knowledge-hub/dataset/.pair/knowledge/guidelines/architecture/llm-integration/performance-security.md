@@ -581,10 +581,10 @@ class PerformanceMonitor {
 
 ## Cross-References
 
-- **[LLM Services](llm-services.md)** - LLM performance optimization and security
+- **[LLM Services](ai-workflows.md)** - LLM performance optimization and security
 - **[RAG Architecture](rag-architecture.md)** - RAG performance and security considerations
-- **[Data Architecture](data-architecture.md)** - Data security and performance
-- **[Project Constraints](.pair/knowledge/guidelines/architecture/project-constraints.md)** - Security and performance constraints
+- **[Data Architecture](vector-databases.md)** - Data security and performance
+- **[Project Constraints](.pair/knowledge/guidelines/architecture/project-constraints/README.md)** - Security and performance constraints
 
 ## Scope Boundaries
 

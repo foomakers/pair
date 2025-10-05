@@ -567,4 +567,4 @@ gh issue list --milestone "[Sprint Name]"
 - **[.pair/knowledge/guidelines/collaboration/project-tracking/github-tracking.md](.pair/knowledge/guidelines/collaboration/project-tracking/github-tracking.md)** - Project board integration
 - **[.pair/knowledge/guidelines/collaboration/automation/github-automation.md](.pair/knowledge/guidelines/collaboration/automation/github-automation.md)** - Automated workflows
 - **[.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md](.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md)** - Overall GitHub setup
-- **[.pair/knowledge/guidelines/collaboration/board-management.md](.pair/knowledge/guidelines/collaboration/board-management.md)** - Board setup and optimization strategies
+- **[.pair/knowledge/guidelines/collaboration/project-tracking/README.md](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)** - Board setup and optimization strategies

@@ -84,17 +84,17 @@ Consider test maintainability during test design including clear test structure,
 
 ## 🔗 Related Practices
 
-- **[Testing Strategy](.pair/knowledge/guidelines/testing/testing-strategy/README.md)** - Strategic foundation for automation implementation
-- **[Testing Tools](.pair/knowledge/guidelines/testing/testing-tools/README.md)** - Tools that enable automation frameworks
+- **[Testing Strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md)** - Strategic foundation for automation implementation
+- **[Unit Testing](.pair/knowledge/guidelines/testing/unit-testing/README.md)** - Unit testing automation practices
 - **[Deployment Workflow](.pair/knowledge/guidelines/technical-standards/deployment-workflow/README.md)** - CI/CD integration patterns
 
 ## 🎯 Quick Start
 
-1. **Framework Setup**: Establish [Automation Framework](automation-framework.md) architecture and design
-2. **Pipeline Integration**: Configure [CI/CD Integration](ci-cd-integration.md) for continuous testing
-3. **Execution Management**: Optimize [Test Execution](test-execution.md) strategies and performance
+1. **Framework Setup**: Establish [CI Integration](ci-integration.md) architecture and design
+2. **Pipeline Integration**: Configure [CI Integration](ci-integration.md) for continuous testing
+3. **Execution Management**: Optimize [Test Reporting](test-reporting.md) strategies and performance
 4. **Results Tracking**: Implement [Test Reporting](test-reporting.md) and metrics collection
-5. **Pattern Application**: Apply [Automation Patterns](automation-patterns.md) for maintainable automation
+5. **Pattern Application**: Apply [CI Integration](ci-integration.md) for maintainable automation
 
 ---
 

@@ -235,7 +235,7 @@ Content Tool Selection:
   - [Research Methods](.pair/knowledge/guidelines/user-experience/user-research/research-methods.md) for content testing and validation approaches
 
 - **Interface Design**: Content strategy guides interface copy, labeling, and communication design
-  - Interface design documentation in [.pair/knowledge/guidelines/user-experience/interface-design/README.md](../interface-design/README.md) for content-design integration
+  - Interface design documentation in [.pair/knowledge/guidelines/user-experience/interface-design/README.md](.pair/knowledge/guidelines/user-experience/interface-design/README.md) for content-design integration
 
 ### Related Resources
 

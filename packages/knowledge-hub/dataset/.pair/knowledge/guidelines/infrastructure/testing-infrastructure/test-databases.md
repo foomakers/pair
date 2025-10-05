@@ -212,8 +212,8 @@ L'automazione del database testing garantisce consistency e efficiency:
 
 - **[Test Environments](test-environments.md)** - Test environment management and provisioning
 - **[Performance Testing](performance-testing.md)** - Performance testing infrastructure and methodologies
-- **[Data Management](../../data/data-management/README.md)** - Enterprise data management strategies
-- **[Security Guidelines](../../security/data-security/README.md)** - Data security and privacy frameworks
+- **[Data Management](.pair/knowledge/guidelines/infrastructure/README.md)** - Enterprise data management strategies
+- **[Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)** - Data security and privacy frameworks
 
 ---
 

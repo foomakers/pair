@@ -246,7 +246,7 @@ This project tracking framework ensures systematic progress monitoring, predicti
 
 ### With Board Management
 
-**→ See [board-management.md](.pair/knowledge/guidelines/collaboration/board-management.md)**
+**→ See [board-management.md](README.md)**
 
 - Board configuration for tracking
 - Workflow optimization
@@ -287,4 +287,4 @@ This project tracking framework ensures systematic progress monitoring, predicti
 
 - **[../methodology/](.pair/knowledge/guidelines/collaboration/methodology/README.md)** - Methodology-specific tracking approaches
 - **[../project-management-tool/](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Tool setup and configuration
-- **[.pair/knowledge/guidelines/collaboration/board-management.md](.pair/knowledge/guidelines/collaboration/board-management.md)** - Board and backlog management practices
+- **[README.md](README.md)** - Board and backlog management practices

@@ -269,6 +269,6 @@ When CRUD becomes insufficient:
 
 ## Related Patterns
 
-- **[Layered Architecture](layered.md)** - Natural evolution
+- **[Layered Architecture](layer-architecture.md)** - Natural evolution
 - **[Hexagonal Architecture](hexagonal.md)** - Better testability approach
-- **[Clean Architecture](clean.md)** - Dependency inversion approach
+- **[Clean Architecture](clean-architecture.md)** - Dependency inversion approach

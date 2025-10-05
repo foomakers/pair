@@ -310,7 +310,7 @@ Create systematic consistency standards that enable users to develop mental mode
 
 - **[Design Systems](.pair/knowledge/guidelines/user-experience/design-systems/README.md)** - Component libraries and systematic design implementation
 - **[User-Centered Design](user-centered-design.md)** - User research validation for consistency effectiveness
-- **[Accessibility Guidelines](../../quality-assurance/accessibility/accessibility-guidelines.md)** - Inclusive consistency across all user abilities
+- **[Accessibility Guidelines](.pair/knowledge/guidelines/quality-assurance/accessibility/README.md)** - Inclusive consistency across all user abilities
 - **[Brand Guidelines](.pair/knowledge/guidelines/user-experience/brand-alignment.md)** - Brand consistency integration with user experience standards
 
 ---

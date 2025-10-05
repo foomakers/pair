@@ -327,4 +327,4 @@ gh project item-list [project_number] --format json > project_data.json
 
 - **[.pair/knowledge/guidelines/collaboration/issue-management/github-issues.md](.pair/knowledge/guidelines/collaboration/issue-management/github-issues.md)** - Issue creation and management
 - **[.pair/knowledge/guidelines/collaboration/automation/github-automation.md](.pair/knowledge/guidelines/collaboration/automation/github-automation.md)** - Automation setup
-- **[.pair/knowledge/guidelines/collaboration/project-management-tool/github-tool.md](.pair/knowledge/guidelines/collaboration/project-management-tool/github-tool.md)** - Overall GitHub configuration
+- **[github-implementation.md](.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md)** - Overall GitHub configuration

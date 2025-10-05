@@ -243,7 +243,7 @@ Handle review process based on selected TDD approach:
 4. **Update Progress Counter**: Update the task progress counter
 5. **Preserve All Other Content**: Ensure no refinement details, acceptance criteria, or other story content is overwritten
 
-**Reference**: Follow the [Task Template](.pair/knowledge/guidelines/collaboration/assets/task-template.md) format for proper task completion tracking and documentation.
+**Reference**: Follow the [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) format for proper task completion tracking and documentation.
 
 **Task Completion Validation:**
 _"✅ TASK COMPLETED: Task '[TASK-ID]: [TASK_TITLE]' has been marked as completed in User Story '[STORY_ID]: [STORY_NAME]'. Task progress updated. User story remains in 'In Progress' state until all tasks are completed."_
@@ -360,10 +360,10 @@ _"🎉 ALL TASKS COMPLETED: All tasks for User Story '[STORY_ID]: [STORY_NAME]' 
 
 **Knowledge Base (Complete Technical Guidelines):**
 
-- **[01-architectural-guidelines.md](.pair/knowledge/guidelines/architecture/README.md))** - Architecture patterns and ADR processes
+- **[architecture/README.md](.pair/knowledge/guidelines/architecture/README.md))** - Architecture patterns and ADR processes
 - **[02-code-design-guidelines.md](.pair/knowledge/guidelines/code-design/README.md)** - Code organization and design patterns
-- **[07-testing-strategy.md](.pair/knowledge/guidelines/testing/testing-strategy/README.md)** - Testing frameworks and TDD strategies
-- **[06-definition-of-done.md](.pair/knowledge/guidelines/quality/standards/definition-of-done.md)** - Quality criteria and completion standards
+- **[07-testing-strategy.md](.pair/knowledge/guidelines/testing/test-strategy/README.md)** - Testing frameworks and TDD strategies
+- **[06-definition-of-done.md](.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md)** - Quality criteria and completion standards
 
 **Process Dependencies:**
 

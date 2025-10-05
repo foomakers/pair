@@ -406,7 +406,7 @@ This section covers development environment and tooling standards:
 
 ### IDE Configuration
 
-- **[IDE Configuration](ide-configuration.md)** - IDE setup standards and configuration management
+- **[Tool Configuration](tool-configuration.md)** - IDE setup standards and configuration management
   - VS Code configuration and extensions for React/TypeScript
   - Cursor setup for AI-assisted development workflows
   - Extension recommendations and workspace settings
@@ -424,8 +424,8 @@ This section covers development environment and tooling standards:
 
 ## 🔗 Related Practices
 
-- **[Tech Stack](.pair/knowledge/guidelines/technical-standards/tech-stack/README.md)** - Technology choices that these tools support
-- **[Implementation Standards](.pair/knowledge/guidelines/code-design/implementation-standards/README.md)** - Development environment patterns
+- **[Technology Stack](.pair/knowledge/guidelines/technical-standards/technology-stack/README.md)** - Technology choices that these tools support
+- **[Coding Standards](.pair/knowledge/guidelines/technical-standards/coding-standards/README.md)** - Development environment patterns
 - **[Deployment Workflow](.pair/knowledge/guidelines/technical-standards/deployment-workflow/README.md)** - Tools that support build and deployment
 
 ## 🎯 Quick Start
@@ -433,7 +433,7 @@ This section covers development environment and tooling standards:
 1. **Essential Setup**: Install and configure [Required Tools](required-tools.md) for baseline development
 2. **Productivity Enhancement**: Add [Recommended Tools](recommended-tools.md) for improved workflow
 3. **AI Integration**: Set up AI-Assisted Development for enhanced productivity
-4. **IDE Optimization**: Configure [IDE Configuration](ide-configuration.md) for your development environment
+4. **IDE Optimization**: Configure [Tool Configuration](tool-configuration.md) for your development environment
 5. **Environment Management**: Establish Development Environment standards
 
 ---

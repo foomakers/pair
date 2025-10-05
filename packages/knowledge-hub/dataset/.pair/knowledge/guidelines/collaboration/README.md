@@ -40,7 +40,7 @@ This framework does not cover:
 
 **[Team](team/README.md)** - Team structure, roles, responsibility frameworks, and communication protocols for distributed teams
 
-**[Communication Protocols](communication-protocols/README.md)** - Communication standards for different types of interactions, meeting management, and documentation standards
+**[Communication Protocols](.pair/knowledge/guidelines/README.md)** - Communication standards for different types of interactions, meeting management, and documentation standards
 
 ### Process Automation and Efficiency
 

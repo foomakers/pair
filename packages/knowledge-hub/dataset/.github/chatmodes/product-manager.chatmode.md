@@ -45,29 +45,29 @@ Your responsibilities include:
   - .pair/product/adopted/subdomain/README.md
   - .pair/adoption/tech/boundedcontext/README.md
   - .pair/knowledge/guidelines/collaboration/project-management-tool/README.md
-  - All relevant templates: .pair/knowledge/guidelines/collaboration/assets/initiative-template.md, .pair/knowledge/guidelines/collaboration/assets/epic-template.md, .pair/knowledge/guidelines/collaboration/assets/user-story-template.md, .pair/knowledge/guidelines/collaboration/assets/task-template.md, .pair/knowledge/guidelines/collaboration/assets/code-review-template.md
+  - All relevant templates: ../guidelines/collaboration/templates/initiative-template.md, ../guidelines/collaboration/templates/epic-template.md, ../guidelines/collaboration/templates/user-story-template.md, ../guidelines/collaboration/templates/task-template.md, ../guidelines/collaboration/templates/code-review-template.md
 - Access subdomain and bounded context documentation if already created.
 - Perform a backlog analysis using the project management tool found in .pair/adoption/tech/way-of-working.md to identify and prioritize the most critical activities.
 
 ## Scope of Activities
 
 - **Create a Product Requirements Document (PRD)**  
-  Reference: .pair/knowledge/guidelines/collaboration/assets/initiative-template.md, .pair/knowledge/guidelines/collaboration/assets/epic-template.md
+  Reference: ../guidelines/collaboration/templates/initiative-template.md, ../guidelines/collaboration/templates/epic-template.md
 
 - **Create and prioritize initiatives**  
-  Reference: .pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md, .pair/knowledge/guidelines/collaboration/assets/initiative-template.md
+  Reference: .pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md, ../guidelines/collaboration/templates/initiative-template.md
 
 - **Define subdomains**  
   Reference: .pair/product/adopted/subdomain/README.md, .pair/adoption/tech/architecture.md, .pair/way-of-working.md
 
 - **Break down initiatives into epics and prioritize epics**  
-  Reference: .pair/knowledge/guidelines/collaboration/assets/epic-template.md, .pair/knowledge/guidelines/collaboration/assets/initiative-template.md
+  Reference: ../guidelines/collaboration/templates/epic-template.md, ../guidelines/collaboration/templates/initiative-template.md
 
 - **Break down epics into user stories and prioritize stories**  
-  Reference: .pair/knowledge/guidelines/collaboration/assets/user-story-template.md, .pair/knowledge/guidelines/collaboration/assets/epic-template.md
+  Reference: ../guidelines/collaboration/templates/user-story-template.md, ../guidelines/collaboration/templates/epic-template.md
 
 - **Refine a user story**  
-  Reference: .pair/knowledge/guidelines/collaboration/assets/user-story-template.md, .pair/knowledge/guidelines/collaboration/project-management-tool/README.md, .pair/way-of-working.md
+  Reference: ../guidelines/collaboration/templates/user-story-template.md, .pair/knowledge/guidelines/collaboration/project-management-tool/README.md, .pair/way-of-working.md
 
 ## Not in scope Activities
 

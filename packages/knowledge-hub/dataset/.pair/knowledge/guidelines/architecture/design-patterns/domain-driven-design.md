@@ -59,5 +59,5 @@ src/
 ## Related Documents
 
 - **[System Design README](README.md)** - Overall system design principles
-- **[Decision Records](decision-records/README.md)** - ADR process for DDD decisions
+- **[Decision Records](.pair/knowledge/guidelines/architecture/decision-frameworks/README.md)** - ADR process for DDD decisions
 - **[Code Design](.pair/knowledge/guidelines/code-design/README.md)** - Implementation patterns for DDD

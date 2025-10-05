@@ -4,13 +4,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 
 ## 📁 Essential Folders
 
-`# Getting Started - AI-Human Pairing Repository
-
-Welcome to the AI-Human pairing repository template! This guide provides essential information to start using this framework for collaborative software development.
-
-## 📁 Essential Folders
-
-```
+````
 .pair/
 ├── adoption/                  # 💼 Product requirements and technical standards
 │   ├── product/              # Product requirements and adoption docs
@@ -122,4 +116,4 @@ Before development, **review and adapt** all documents in the `guidelines/` and 
 - 👨‍💻 **Human Only**: Developer-exclusive activities
 
 Happy AI-Human pairing! 🚀🤖👨‍💻
-```
+````

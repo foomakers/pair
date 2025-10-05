@@ -203,9 +203,9 @@ Single Column → Multi-Column → Complex Layouts → Enhanced Functionality
 
 **Tool Integration Resources**:
 
-- **Figma Workflows**: See [.pair/knowledge/guidelines/user-experience/figma-workflows.md](../figma-workflows.md) for design tool optimization
+- **Figma Workflows**: See [.pair/knowledge/guidelines/user-experience/figma-workflows.md](.pair/knowledge/guidelines/user-experience/figma-workflows.md) for design tool optimization
 - **Design System Integration**: [Design Systems](.pair/knowledge/guidelines/user-experience/design-systems/component-libraries.md) for component handoff
-- **Asset Management**: [.pair/knowledge/guidelines/user-experience/asset-collection.md](../asset-collection.md) for interface asset organization
+- **Asset Management**: [.pair/knowledge/guidelines/user-experience/asset-collection.md](.pair/knowledge/guidelines/user-experience/asset-collection.md) for interface asset organization
 
 ## Integration with Other UX Components
 

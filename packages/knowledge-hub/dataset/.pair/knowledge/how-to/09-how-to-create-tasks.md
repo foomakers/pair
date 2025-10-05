@@ -33,7 +33,7 @@ The AI assistant acts as a **Product Software Engineer** who:
 
 ## Prerequisite
 
-Before starting, **read and consult the Task Template**: [Task Template](.pair/knowledge/guidelines/collaboration/assets/task-template.md). All required structure and fields are defined in the template.
+Before starting, **read and consult the Task Template**: [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md). All required structure and fields are defined in the template.
 
 ## **Issue Access and Tool Integration**
 
@@ -113,7 +113,7 @@ If implementations modify, reduce the scope of, or create new bounded contexts, 
 - Document the decision with an ADR
 - Ensure the new structure is aligned with architectural and domain guidelines
 
-Task must follow this comprehensive [template](.pair/knowledge/guidelines/collaboration/assets/task-template.md) you find in the [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md).
+Task must follow this comprehensive [template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) you find in the [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md).
 
 ## Prerequisites Verification
 
@@ -190,17 +190,17 @@ _We can either complete the required process first, or select a different 'Refin
 
 **Core Technical Guidelines** (reference specific sections for task implementation):
 
-- **Architectural Guidelines**: `.pair/knowledge/01-architectural-guidelines.md` – System architecture patterns, ADRs, and design principles
+- **Architectural Guidelines**: `.pair/knowledge/architecture/README.md` – System architecture patterns, ADRs, and design principles
 - **Code Design Guidelines**: `.pair/knowledge/02-code-design-guidelines.md` – Code structure, design patterns, and implementation standards
-- **Technical Guidelines**: `.pair/knowledge/03-technical-guidelines.md` – Tech stack, development tools, and integration requirements
-- **Infrastructure Guidelines**: `.pair/knowledge/04-infrastructure-guidelines.md` – Deployment strategies, environment management, CI/CD
+- **Technical Guidelines**: `.pair/knowledge/technical-standards/README.md` – Tech stack, development tools, and integration requirements
+- **Infrastructure Guidelines**: `.pair/knowledge/infrastructure/README.md` – Deployment strategies, environment management, CI/CD
 - **UX Guidelines**: `.pair/knowledge/05-ux-guidelines.md` – User experience standards and design principles
 - **Definition of Done**: `.pair/knowledge/06-definition-of-done.md` – Quality criteria and completion standards
 - **Testing Strategy**: `.pair/knowledge/07-testing-strategy.md` – Testing frameworks, strategies, and quality gates
 - **Accessibility Guidelines**: `.pair/knowledge/08-accessibility-guidelines.md` – Accessibility standards and compliance requirements
 - **Performance Guidelines**: `.pair/knowledge/09-performance-guidelines.md` – Performance optimization and monitoring strategies
 - **Security Guidelines**: `.pair/knowledge/10-security-guidelines.md` – Security implementation and best practices
-- **Observability Guidelines**: `.pair/knowledge/guidelines/operations/observability.md` – Monitoring, logging, and tracing strategies
+- **Observability Guidelines**: `.pair/knowledge/guidelines/observability/README.md` – Monitoring, logging, and tracing strategies
 
 **Task Reference Requirement**: Every task must reference specific sections from relevant knowledge base documents to provide implementation guidance while avoiding duplication of standards.
 
@@ -342,7 +342,7 @@ _"I've completed analysis of selected User Story '[STORY_ID]: [STORY_NAME]'. The
 
 **AI Assistant Instructions:** Present comprehensive task breakdown:
 
-1. **Create Task Overview**: Present organized task list following the [Task Template](.pair/knowledge/guidelines/collaboration/assets/task-template.md) structure and format
+1. **Create Task Overview**: Present organized task list following the [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) structure and format
 
 2. **Justify Task Boundaries**: Explain task organization:
 
@@ -550,14 +550,14 @@ _"All tasks for User Story '[STORY_ID]: [STORY_NAME]' are documented and ready f
 **AI Assistant Instructions:** Append task breakdown checklist to user story:
 
 1. **Preserve Existing Content**: Read current user story body and append task breakdown without overwriting any existing content
-2. **Add Task Breakdown Section**: Append task breakdown section following the [Task Template](.pair/knowledge/guidelines/collaboration/assets/task-template.md) format
+2. **Add Task Breakdown Section**: Append task breakdown section following the [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) format
 3. **Maintain Task Traceability**: Each task in the checklist should include:
    - **Task ID**: Unique identifier for progress tracking
    - **Task Title**: Clear, descriptive title
    - **Brief Description**: One-line summary of what needs to be implemented
    - **Status**: Unchecked (will be checked when task is completed)
 
-**Reference**: Follow the complete [Task Template](.pair/knowledge/guidelines/collaboration/assets/task-template.md) for proper task documentation format and structure.
+**Reference**: Follow the complete [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) for proper task documentation format and structure.
 
 **State Update Validation:**
 _"✅ TASK BREAKDOWN COMPLETE: User Story '[STORY_ID]: [STORY_NAME]' has been broken down into [X] implementation tasks. Task breakdown checklist appended to user story body. The story has been assigned to [DEVELOPER] and status updated to 'In Progress'. Parent Epic '[EPIC_ID]' status updated accordingly. All tasks are documented and ready for implementation following the **How to Implement a Task** process."_
@@ -661,26 +661,26 @@ _Once updated, the story will be ready for implementation."_
 
 ### 🏗️ Architecture & Design
 
-- **[01-architectural-guidelines.md](.pair/knowledge/guidelines/architecture/README.md))** - System architecture patterns, bounded contexts, and ADR processes
+- **[architecture/README.md](.pair/knowledge/guidelines/architecture/README.md))** - System architecture patterns, bounded contexts, and ADR processes
 - **[02-code-design-guidelines.md](.pair/knowledge/guidelines/code-design/README.md)** - Code organization, design patterns, and implementation standards
 
 ### ⚙️ Technical Implementation
 
-- **[03-technical-guidelines.md](.pair/knowledge/guidelines/technical-standards/README.md)** - Tech stack, development tools, and feature flag management
-- **[04-infrastructure-guidelines.md](.pair/knowledge/guidelines/operations/infrastructure.md)** - Deployment strategies, environment management, and CI/CD
+- **[technical-standards/README.md](.pair/knowledge/guidelines/technical-standards/README.md)** - Tech stack, development tools, and feature flag management
+- **[infrastructure/README.md](.pair/knowledge/guidelines/infrastructure/README.md)** - Deployment strategies, environment management, and CI/CD
 
 ### 🎨 User Experience & Quality
 
-- **[05-ux-guidelines.md](.pair/knowledge/guidelines/operations/ux-design.md)** - User experience standards and design principles
-- **[06-definition-of-done.md](.pair/knowledge/guidelines/quality/standards/definition-of-done.md)** - Quality criteria and completion standards
-- **[07-testing-strategy.md](.pair/knowledge/guidelines/testing/testing-strategy/README.md)** - Testing frameworks, strategies, and quality gates
+- **[05-ux-guidelines.md](.pair/knowledge/guidelines/user-experience/README.md)** - User experience standards and design principles
+- **[06-definition-of-done.md](.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md)** - Quality criteria and completion standards
+- **[07-testing-strategy.md](.pair/knowledge/guidelines/testing/test-strategy/README.md)** - Testing frameworks, strategies, and quality gates
 
 ### 🔒 Security & Performance
 
-- **[08-accessibility-guidelines.md](.pair/knowledge/guidelines/quality/accessibility.md)** - Accessibility standards and compliance requirements
-- **[09-performance-guidelines.md](.pair/knowledge/guidelines/quality/performance.md)** - Performance optimization and monitoring strategies
-- **[10-security-guidelines.md](.pair/knowledge/guidelines/quality/security.md)** - Security implementation and best practices
-- **[11-observability-guidelines.md](.pair/knowledge/guidelines/operations/observability.md)** - Monitoring, logging, and tracing strategies
+- **[08-accessibility-guidelines.md](.pair/knowledge/guidelines/quality-assurance/accessibility/README.md)** - Accessibility standards and compliance requirements
+- **[09-performance-guidelines.md](.pair/knowledge/guidelines/quality-assurance/performance/README.md)** - Performance optimization and monitoring strategies
+- **[10-security-guidelines.md](.pair/knowledge/guidelines/quality-assurance/security/README.md)** - Security implementation and best practices
+- **[11-observability-guidelines.md](.pair/knowledge/guidelines/observability/README.md)** - Monitoring, logging, and tracing strategies
 
 **Process Dependencies:**
 

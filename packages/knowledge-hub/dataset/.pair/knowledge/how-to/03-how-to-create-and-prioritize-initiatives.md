@@ -30,7 +30,7 @@ The AI assistant acts as a **Strategic Initiative Architect** who:
 
 ## Prerequisite
 
-Before starting, **read and consult the Initiative Template**: [Initiative Template](.pair/knowledge/guidelines/collaboration/assets/initiative-template.md). All required structure and fields are defined in the template.
+Before starting, **read and consult the Initiative Template**: [Initiative Template](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md). All required structure and fields are defined in the template.
 
 ## **Issue Access and Tool Integration**
 
@@ -70,7 +70,7 @@ _"I cannot proceed because no project management tool is configured in [.pair/ad
 
 ## Initiative Template Structure
 
-Each initiative must follow the comprehensive [template](.pair/knowledge/guidelines/collaboration/assets/initiative-template.md)
+Each initiative must follow the comprehensive [template](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md)
 
 Step 0: Bootstrap Checklist Validation
 AI Assistant Instructions: Before beginning epic breakdown, verify that all foundational documents exist:
@@ -166,7 +166,7 @@ _"Based on the PRD analysis, I've identified [X] strategic initiatives that woul
 
 **AI Assistant Instructions:** For each initiative, following priority order and adapting to chosen tool:
 
-1. **Present initiative concept** with initial [template](.pair/knowledge/guidelines/collaboration/assets/initiative-template.md) draft formatted for the chosen approach
+1. **Present initiative concept** with initial [template](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md) draft formatted for the chosen approach
 2. **Request specific feedback** on:
    - Business rationale accuracy
    - Scope definition completeness
@@ -208,7 +208,7 @@ _"Here's the refined initiative ready for [Tool Name]. The comprehensive details
 **For Github Tool Approach ([see GitHub Implementation](.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md))**:
 
 1. **Create initiative item** in the chosen project management tool
-2. **Include comprehensive [template](.pair/knowledge/guidelines/collaboration/assets/initiative-template.md) content** adapted to the tool's structure
+2. **Include comprehensive [template](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md) content** adapted to the tool's structure
 3. **Maintain cross-references** between tool items and any supporting documentation
 4. **Ensure tool-specific fields** (priority, labels, assignees) are properly set
 5. **Confirm creation** with developer and move to next initiative
@@ -257,7 +257,7 @@ _"I've created all initiatives in [Tool Name]. Here's the roadmap I've built usi
 **Handoff Checklist:**
 
 - [ ] Project management tool verified and configured
-- [ ] All initiatives documented using complete [template](.pair/knowledge/guidelines/collaboration/assets/initiative-template.md)
+- [ ] All initiatives documented using complete [template](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md)
 - [ ] Initiative organization follows tool-specific best practices
 - [ ] Timeline dependencies clearly mapped in appropriate system
 - [ ] Success metrics are measurable and time-bound
@@ -281,10 +281,10 @@ _"I've created all initiatives in [Tool Name]. Here's the roadmap I've built usi
 
 **Structure Quality:**
 
-- [ ] All [template](.pair/knowledge/guidelines/collaboration/assets/initiative-template.md) sections are completed comprehensively
+- [ ] All [template](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md) sections are completed comprehensively
 - [ ] Information flows logically between sections
 - [ ] Terminology is consistent with PRD and way-of-working
-- [ ] Document formatting matches [template](.pair/knowledge/guidelines/collaboration/assets/initiative-template.md) standard
+- [ ] Document formatting matches [template](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md) standard
 - [ ] File naming and organization follows conventions
 
 **Business Alignment:**

@@ -384,11 +384,11 @@ _Should I update [`[affected-file].md`](.pair/adoption/tech/[affected-file].md) 
 
 - [Architectural Guidelines](.pair/knowledge/guidelines/architecture/README.md) - Detailed architectural patterns and principles
 - [Technical Guidelines](.pair/knowledge/guidelines/technical-standards/README.md) - Technology selection criteria and best practices
-- [Infrastructure Guidelines](.pair/knowledge/guidelines/operations/infrastructure.md) - Deployment and operational guidance
-- [UX Guidelines](.pair/knowledge/guidelines/operations/ux-design.md) - User experience and design system principles
+- [Infrastructure Guidelines](.pair/knowledge/guidelines/infrastructure/README.md) - Deployment and operational guidance
+- [UX Guidelines](.pair/knowledge/guidelines/user-experience/README.md) - User experience and design system principles
 
 ### Process References
 
 - [Task Creation Guide](09-how-to-create-tasks.md) - Connection to development execution phase
-- [Definition of Done](.pair/knowledge/guidelines/quality/standards/definition-of-done.md) - Quality standards for implementation
-- [Testing Strategy](.pair/knowledge/guidelines/testing/testing-strategy/README.md) - Testing approaches and automation requirements
+- [Definition of Done](.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md) - Quality standards for implementation
+- [Testing Strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md) - Testing approaches and automation requirements

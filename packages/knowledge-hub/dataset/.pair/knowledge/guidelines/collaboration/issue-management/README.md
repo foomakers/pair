@@ -157,5 +157,5 @@ The **IssueManagementOrchestrator** provides comprehensive issue handling throug
 ## Related Topics
 
 - **[../project-management-tool/](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Tool setup and configuration
-- **[../assets/](.pair/knowledge/guidelines/collaboration/assets/README.md)** - Issue templates and resources
-- **[../communication-protocols/](.pair/knowledge/guidelines/collaboration/communication-protocols/README.md)** - Communication around issues
+- **[../assets/](.pair/knowledge/guidelines/collaboration/templates/README.md)** - Issue templates and resources
+- **[../communication-protocols/](.pair/knowledge/guidelines/collaboration/team/README.md)** - Communication around issues

@@ -249,10 +249,10 @@ Community → Core Team → Spike → Validation → Release → Knowledge Base
 
 ## Integration with Other UX Components
 
-- **Design Principles**: System architecture embodies and enforces design principles, detailed in [.pair/knowledge/guidelines/user-experience/design-principles/README.md](../design-principles/README.md)
-- **User Research**: Research insights inform component design and system evolution, see [.pair/knowledge/guidelines/user-experience/user-research/README.md](../user-research/README.md)
-- **Interface Design**: System provides the building blocks for interface design execution, documented in [.pair/knowledge/guidelines/user-experience/interface-design/README.md](../interface-design/README.md)
-- **Content Strategy**: System includes content patterns and messaging guidelines, outlined in [.pair/knowledge/guidelines/user-experience/content-strategy/README.md](../content-strategy/README.md)
+- **Design Principles**: System architecture embodies and enforces design principles, detailed in [.pair/knowledge/guidelines/user-experience/design-principles/README.md](.pair/knowledge/guidelines/user-experience/design-principles/README.md)
+- **User Research**: Research insights inform component design and system evolution, see [.pair/knowledge/guidelines/user-experience/user-research/README.md](.pair/knowledge/guidelines/user-experience/user-research/README.md)
+- **Interface Design**: System provides the building blocks for interface design execution, documented in [.pair/knowledge/guidelines/user-experience/interface-design/README.md](.pair/knowledge/guidelines/user-experience/interface-design/README.md)
+- **Content Strategy**: System includes content patterns and messaging guidelines, outlined in [.pair/knowledge/guidelines/user-experience/content-strategy/README.md](.pair/knowledge/guidelines/user-experience/content-strategy/README.md)
 
 ### Related Resources
 

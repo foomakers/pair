@@ -76,7 +76,7 @@ Ensure project management templates are available:
 
 ```bash
 # Check for templates
-ls .pair/knowledge/guidelines/collaboration/assets/
+ls ../guidelines/collaboration/templates/
 
 # Required templates:
 # - initiative-template.md
@@ -116,7 +116,7 @@ ls .pair/knowledge/guidelines/collaboration/assets/
 
 ### Board Management
 
-**→ See [../board-management.md](../board-management.md)**
+**→ See [README.md](README.md)**
 
 - Directory-based board visualization
 - Local backlog management
@@ -125,7 +125,7 @@ ls .pair/knowledge/guidelines/collaboration/assets/
 
 ### Communication
 
-**→ See [../communication-protocols/](../communication-protocols/README.md)**
+**→ See [../communication-protocols/](.pair/knowledge/guidelines/README.md)**
 
 - Documentation-based communication
 - Local changelog management
@@ -220,7 +220,7 @@ pair "Create filesystem initiative from PRD analysis"
 cd .pair/adoption/product/backlog/01-initiatives/2025
 
 # Create initiative file
-cp ../../../../../../knowledge/guidelines/collaboration/assets/initiative-template.md core-data-pipeline.md
+cp ../../../../../.pair/knowledge/guidelines/collaboration/assets/initiative-template.md core-data-pipeline.md
 
 # Edit with your preferred editor
 code core-data-pipeline.md
@@ -267,7 +267,7 @@ pair "Break down epics from filesystem initiative"
 cd .pair/adoption/product/backlog/02-epics/not-started
 
 # Create epic file with proper naming
-cp ../../../../../../../knowledge/guidelines/collaboration/assets/epic-template.md 01-01-data-ingestion-pipeline.md
+cp ../../../../../../.pair/knowledge/guidelines/collaboration/assets/epic-template.md 01-01-data-ingestion-pipeline.md
 
 # Edit epic details
 code 01-01-data-ingestion-pipeline.md
@@ -320,7 +320,7 @@ pair "Break down user stories from filesystem epic"
 cd .pair/adoption/product/backlog/03-user-stories/not-started
 
 # Create story file with proper naming convention
-cp ../../../../../../../knowledge/guidelines/collaboration/assets/user-story-template.md 01-01-001-user-registration.md
+cp ../../../../../../.pair/knowledge/guidelines/collaboration/assets/user-story-template.md 01-01-001-user-registration.md
 
 # Edit story details
 code 01-01-001-user-registration.md
@@ -580,10 +580,10 @@ Add review tasks to the story file:
 
 ## Related Tools
 
-- **Methodology Selection**: [methodology-selection-guide.md](.pair/knowledge/guidelines/collaboration/methodology/methodology-selection-guide.md)
+- **Methodology Selection**: [methodology-selection-guide.md](.pair/knowledge/guidelines/collaboration/methodology/README.md)
 - **Project Tracking**: [project-tracking/README.md](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)
 - **GitHub Integration**: [github-implementation.md](github-implementation.md)
-- **Templates**: [assets/README.md](.pair/knowledge/guidelines/collaboration/assets/README.md)
+- **Templates**: [assets/README.md](.pair/knowledge/guidelines/collaboration/templates/README.md)
 
 ---
 

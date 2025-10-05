@@ -19,7 +19,7 @@ Our template collection covers the complete software development lifecycle, from
 - **[Commit Template](./commit-template.md)** - Commit message formats and best practices
 - **[Pull Request Template](./pr-template.md)** - Comprehensive PR description and review guide
 - **[Code Review Template](./code-review-template.md)** - Structured code review checklists
-- **[Team Template](./team-template.md)** - Team formation and collaboration guidelines
+- **[Team Template](user-story-template.md)** - Team formation and collaboration guidelines
 
 ## Template Categories
 

@@ -197,7 +197,7 @@ Lo staging environment deve validate performance characteristics prima del produ
 - **[Production Environment](production-development.md)** - Production environment management strategies
 - **[Local Development](local-development.md)** - Development environment setup and consistency
 - **[Environment Configuration](environment-config.md)** - Environment configuration management
-- **[Testing Strategy](../../testing/testing-strategy/README.md)** - Comprehensive testing methodologies
+- **[Testing Strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md)** - Comprehensive testing methodologies
 
 ---
 

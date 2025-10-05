@@ -244,10 +244,10 @@ Strategic Goals → User Insights → Methodology → Evidence
 
 ## Integration with Other UX Components
 
-- **Design Principles**: Research validates and informs principle effectiveness and evolution, detailed in [.pair/knowledge/guidelines/user-experience/design-principles/README.md](../design-principles/README.md)
-- **Design Systems**: User research guides component design and system architecture decisions, see [.pair/knowledge/guidelines/user-experience/design-systems/README.md](../design-systems/README.md)
-- **Interface Design**: Research insights directly inform interface design choices and optimization, documented in [.pair/knowledge/guidelines/user-experience/interface-design/README.md](../interface-design/README.md)
-- **Content Strategy**: User research provides foundation for content approach and messaging strategy, outlined in [.pair/knowledge/guidelines/user-experience/content-strategy/README.md](../content-strategy/README.md)
+- **Design Principles**: Research validates and informs principle effectiveness and evolution, detailed in [.pair/knowledge/guidelines/user-experience/design-principles/README.md](.pair/knowledge/guidelines/user-experience/design-principles/README.md)
+- **Design Systems**: User research guides component design and system architecture decisions, see [.pair/knowledge/guidelines/user-experience/design-systems/README.md](.pair/knowledge/guidelines/user-experience/design-systems/README.md)
+- **Interface Design**: Research insights directly inform interface design choices and optimization, documented in [.pair/knowledge/guidelines/user-experience/interface-design/README.md](.pair/knowledge/guidelines/user-experience/interface-design/README.md)
+- **Content Strategy**: User research provides foundation for content approach and messaging strategy, outlined in [.pair/knowledge/guidelines/user-experience/content-strategy/README.md](.pair/knowledge/guidelines/user-experience/content-strategy/README.md)
 
 ### Related Resources
 
