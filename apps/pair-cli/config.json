@@ -18,6 +18,12 @@
       "behavior": "add",
       "target_path": ".pair/adoption",
       "description": "Adoption guides and onboarding materials"
+    },
+    "agents": {
+      "source": "AGENTS.md",
+      "behavior": "mirror",
+      "target_path": "AGENTS.md",
+      "description": "AI agents guidance and session context"
     }
   },
   "default_target_folders": { "pair": ".pair", "github": ".github" }

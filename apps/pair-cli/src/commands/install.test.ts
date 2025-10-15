@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { installCommand } from './install'
+import type { FileSystemService } from '@pair/content-ops/file-system'
 import {
   GITHUB_ONLY_CONFIG,
   GITHUB_KNOWLEDGE_CONFIG,
@@ -179,9 +180,77 @@ describe('installCommand - clean non-overlapping install', () => {
     expect(result).toBeDefined()
     expect(result!.success).toBe(true)
 
-    // Verify files were copied to correct locations
-    expect(await fs.readFile('.clean_test/.github/README.md')).toBe('gh')
-    expect(await fs.readFile('.clean_test/.pair-knowledge/doc.md')).toBe('k')
-    expect(await fs.readFile('.clean_test/.pair-adoption/guide.md')).toBe('a')
+    await verifyCleanInstall(fs)
   })
 })
+
+// eslint-disable-next-line max-lines-per-function
+describe('installCommand - root file installation', () => {
+  it('install copies root file like AGENTS.md to project root when it does not exist', async () => {
+    const datasetRoot = `${realCwd}/dataset`
+    const fs = createTestFs(
+      AGENTS_CONFIG,
+      {
+        [`${datasetRoot}/AGENTS.md`]: 'agents content',
+      },
+      realCwd,
+    )
+
+    // Verify AGENTS.md does not exist in project root before install
+    expect(await fs.exists('AGENTS.md')).toBe(false)
+
+    const result = await installCommand(fs, [], {
+      datasetRoot,
+      useDefaults: true,
+    })
+
+    expect(result).toBeDefined()
+    expect(result!.success).toBe(true)
+
+    // Verify AGENTS.md now exists in project root with correct content
+    expect(await fs.readFile('AGENTS.md')).toBe('agents content')
+  })
+
+  it('install fails when root file like AGENTS.md already exists in project root', async () => {
+    const datasetRoot = `${realCwd}/dataset`
+    const fs = createTestFs(
+      AGENTS_CONFIG,
+      {
+        [`${datasetRoot}/AGENTS.md`]: 'new agents content',
+      },
+      realCwd,
+    )
+
+    // Pre-create AGENTS.md in project root
+    await fs.writeFile('AGENTS.md', 'existing content')
+
+    const result = await installCommand(fs, [], {
+      datasetRoot,
+      useDefaults: true,
+    })
+
+    expect(result).toBeDefined()
+    expect(result!.success).toBe(false)
+    expect(result!.message).toContain('Destination already exists')
+
+    // Verify content was not changed
+    expect(await fs.readFile('AGENTS.md')).toBe('existing content')
+  })
+})
+
+const verifyCleanInstall = async (fs: FileSystemService) => {
+  expect(await fs.readFile('.clean_test/.github/README.md')).toBe('gh')
+  expect(await fs.readFile('.clean_test/.pair-knowledge/doc.md')).toBe('k')
+  expect(await fs.readFile('.clean_test/.pair-adoption/guide.md')).toBe('a')
+}
+
+const AGENTS_CONFIG = {
+  asset_registries: {
+    agents: {
+      source: 'AGENTS.md',
+      behavior: 'mirror' as const,
+      target_path: 'AGENTS.md',
+      description: 'AI agents guidance and session context',
+    },
+  },
+}

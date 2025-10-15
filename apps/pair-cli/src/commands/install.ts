@@ -1,4 +1,4 @@
-import { relative, isAbsolute } from 'path'
+import { relative, isAbsolute, join, dirname } from 'path'
 import { FileSystemService } from '@pair/content-ops'
 import { Behavior } from '@pair/content-ops'
 import {
@@ -12,6 +12,7 @@ import {
 import {
   calculatePaths,
   getKnowledgeHubDatasetPath,
+  calculatePathType,
   loadConfigWithOverrides,
 } from '../config-utils'
 
@@ -38,12 +39,15 @@ export interface InstallContext {
 function calculateAbsoluteTarget(
   registryConfig: AssetRegistryConfig,
   options: InstallOptions | undefined,
+  type: 'file' | 'dir',
   fsService: FileSystemService,
 ): string {
   const targetPath = registryConfig.target_path || registryConfig.source || '.'
+  const targetFolder = type === 'file' ? dirname(targetPath) : targetPath
+
   return options?.baseTarget
-    ? fsService.resolve(options.baseTarget, targetPath)
-    : fsService.resolve(fsService.currentWorkingDirectory(), targetPath)
+    ? fsService.resolve(options.baseTarget, targetFolder)
+    : fsService.resolve(fsService.currentWorkingDirectory(), targetFolder)
 }
 
 async function checkTargetEmptiness(
@@ -52,7 +56,10 @@ async function checkTargetEmptiness(
   context: InstallContext,
   pushLog: (level: LogEntry['level'], message: string) => void,
 ): Promise<boolean> {
-  const check = await ensureTargetIsEmpty(context.fsService, absTarget)
+  const sourcePath = join(context.datasetRoot, registryConfig.source || '')
+  const type = await calculatePathType(context.fsService, sourcePath)
+  const targetPath = type === 'file' ? join(absTarget, registryConfig.source || '') : absTarget
+  const check = await ensureTargetIsEmpty(context.fsService, targetPath)
   if (!check.ok) {
     // For 'add' behavior, allow installing into existing directories
     if (registryConfig.behavior === 'add') {
@@ -109,12 +116,22 @@ async function installSingleRegistry(
     return
   }
 
+  const sourcePath = join(datasetRoot, registryConfig.source || '')
+  if (!fsService.exists(sourcePath)) {
+    pushLog(
+      'info',
+      `Skipping registry ${registryName} due to source path does not exist: ${sourcePath}`,
+    )
+    return
+  }
+
   pushLog(
     'info',
     `Installing registry ${registryName} to ${registryConfig.target_path} with behavior: ${registryConfig.behavior}`,
   )
 
-  const absTarget = calculateAbsoluteTarget(registryConfig, options, fsService)
+  const type = await calculatePathType(fsService, sourcePath)
+  const absTarget = calculateAbsoluteTarget(registryConfig, options, type, fsService)
   await ensureDir(fsService, absTarget)
 
   const shouldProceed = await checkTargetEmptiness(absTarget, registryConfig, context, pushLog)
@@ -141,7 +158,14 @@ async function copyRegistryFiles(params: {
 }) {
   const { fsService, datasetRoot, registryConfig, absTarget, pushLog, copyOptions } = params
 
-  const paths = calculatePaths(fsService, datasetRoot, absTarget, registryConfig.source)
+  const pathType = await calculatePathType(
+    fsService,
+    join(datasetRoot, registryConfig.source || ''),
+  )
+  const fullTargetPath =
+    pathType === 'file' ? join(absTarget, registryConfig.target_path || '') : absTarget
+
+  const paths = calculatePaths(fsService, datasetRoot, fullTargetPath, registryConfig.source)
   logDiagnosticsIfEnabled(paths)
 
   const optionsToPass = copyOptions || buildCopyOptionsForRegistry(registryConfig)
@@ -256,13 +280,14 @@ function loadConfigAndAssetRegistries(fsService: FileSystemService, options?: In
 
 async function ensureTargetIsEmpty(
   fsService: FileSystemService,
-  absTarget: string,
+  targetPath: string,
 ): Promise<{ ok: boolean; message?: string }> {
-  const exists = await fsService.exists(absTarget)
+  const exists = await fsService.exists(targetPath)
   if (!exists) return { ok: true }
-  const entries = await fsService.readdir(absTarget).catch(() => [])
-  if (entries && entries.length > 0)
-    return { ok: false, message: `Destination already exists: ${absTarget}` }
+  const folderEntries = await fsService.readdir(targetPath).catch(() => [])
+  const fileEntries = await fsService.readFile(targetPath).catch(() => [])
+  if (folderEntries.length > 0 || fileEntries.length > 0)
+    return { ok: false, message: `Destination already exists: ${targetPath}` }
   return { ok: true }
 }
 

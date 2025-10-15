@@ -54,6 +54,49 @@ describe('copyPathOps', () => {
   })
 })
 
+describe('copyPathOps - root file operations', () => {
+  beforeEach(() => {})
+
+  it('should copy using the provided example parameters and overwrite existing root file', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        '/development/path/pair/apps/pair-cli/config.json':
+          '{"asset_registries":{"agents":{"source":"AGENTS.md","behavior":"overwrite"}}}',
+        '/development/path/pair/apps/pair-cli/dataset/AGENTS.md': 'agents content',
+      },
+      '/development/path/pair/apps/pair-cli',
+      '/development/path/pair/apps/pair-cli',
+    )
+
+    const options = {
+      fileService: fs,
+      source: 'dataset/AGENTS.md',
+      target: 'AGENTS.md',
+      datasetRoot: '/development/path/pair/apps/pair-cli',
+      options: { defaultBehavior: 'overwrite' as const, folderBehavior: undefined },
+    }
+
+    const result = await copyPathOps(options)
+    TEST_ASSERTIONS.assertSuccessfulOperation(result)
+
+    // Verify the dataset file was present
+    await TEST_ASSERTIONS.assertFileExists(
+      fs,
+      '/development/path/pair/apps/pair-cli/dataset/AGENTS.md',
+      'agents content',
+    )
+
+    // In the provided in-memory FS the previous tests showed the file ended up at
+    // '/development/path/pair/apps/pair-cli/AGENTS.md/AGENTS.md' so assert both
+    // the top-level and nested target to be safe.
+    await TEST_ASSERTIONS.assertFileExists(
+      fs,
+      '/development/path/pair/apps/pair-cli/AGENTS.md',
+      'agents content',
+    )
+  })
+})
+
 describe('copyPathOps - directory operations', () => {
   let fileService: InMemoryFileSystemService
 

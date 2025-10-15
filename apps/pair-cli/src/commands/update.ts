@@ -9,7 +9,11 @@ import {
   CommandOptions,
   LogEntry,
 } from './command-utils'
-import { getKnowledgeHubDatasetPath, loadConfigWithOverrides } from '../config-utils'
+import {
+  calculatePathType,
+  getKnowledgeHubDatasetPath,
+  loadConfigWithOverrides,
+} from '../config-utils'
 
 // Define types for asset registry configuration
 interface AssetRegistryConfig {
@@ -129,7 +133,12 @@ async function updateSingleRegistryFromDefaults(ctx: UpdateDefaultsCtx) {
   pushLog('info', `Updating registry ${registryName} to ${targetPath} with behavior: ${behavior}`)
 
   const absTarget = fsService.resolve(targetPath)
-  await ensureDir(fsService, absTarget)
+  const targetExists = await fsService.exists(absTarget)
+  const pathToCheckType = targetExists ? absTarget : join(datasetRoot, sourcePath)
+
+  const type = await calculatePathType(fsService, pathToCheckType)
+  const targetFolder = type === 'file' ? dirname(targetPath) : targetPath
+  await ensureDir(fsService, targetFolder)
 
   // Build the full source path
   const fullSourcePath = fsService.resolve(datasetRoot, sourcePath)
