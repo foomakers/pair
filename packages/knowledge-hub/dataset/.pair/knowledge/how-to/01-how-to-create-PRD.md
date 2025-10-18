@@ -2,242 +2,219 @@
 
 ## Overview
 
-This guide enables developers and AI assistants to collaboratively create comprehensive Product Requirements Documents (PRDs) through a structured, iterative process. The PRD serves as the definitive blueprint for product development, ensuring alignment between stakeholders, clear feature specifications, and measurable success criteria.
+Transform product ideas into comprehensive Product Requirements Documents through collaborative analysis and structured information gathering.
 
-**Key Benefits of a Well-Written PRD:**
+**Role**: Product Manager (PRD Creation)
+**Process**: 🤖🤝👨‍💻 (AI gathers & drafts, Developer validates & approves)
 
-- Eliminates ambiguity in product requirements
-- Aligns development teams with business objectives
-- Provides clear acceptance criteria for features
-- Establishes measurable success metrics
-- Reduces development rework and miscommunication
+**CRITICAL FIRST STEP**: Before any PRD work begins, complete Phase 0: Template & Reference Analysis to understand structure and quality standards.
 
-## AI-Assisted Workflow Principles
+## Session State Management
 
-The collaborative process follows a **propose-and-validate** model:
+**CRITICAL**: Maintain this context throughout PRD creation:
 
-- **AI Assistant Role**: Analyzes information, proposes content structure, asks targeted questions, drafts PRD sections
-- **Developer Role**: Provides context, validates proposals, reviews content, approves final document
-- **Shared Goal**: Create a comprehensive, actionable PRD that guides successful product development
+```
+PRD CREATION STATE:
+├── Product: [Product/Feature Name]
+├── PRD Status: [template-analysis | info-gathering | drafting | review | approved]
+├── Template: [reviewed: Yes/No from assets/PRD_template.md]
+├── Example Quality: [analyzed: Yes/No from assets/PRD_example.md]
+├── Info Checklist: [completed: X/Y sections]
+├── Documentation: [available docs analyzed]
+├── Target File: [.pair/adoption/product/PRD.md]
+└── Next Action: [specific next step]
+```
 
-## PRD Structure Reference
+## Core Principles
 
-**AI Assistant Instructions:** You have access to the complete PRD template structure at [`.pair/assets/PRD_template.md`](.pair/knowledge/assets/PRD_template.md) and a practical example at [`.pair/assets/PRD_example.md`](.pair/knowledge/assets/PRD_example.md).
+### Template-First PRD Creation
 
-**Before starting the process, you must:**
+- **Study reference materials FIRST** - analyze [PRD template](../assets/PRD_template.md) and [PRD example](../assets/PRD_example.md)
+- **Follow template structure exactly** - use all sections from template
+- **Match example quality standard** - specificity, metrics, professional tone
+- **Create comprehensive information checklist** based on template sections
+- **Target file**: [`.pair/adoption/product/PRD.md`](../adoption/product/PRD.md)
 
-1. **Review the template** ([`.pair/assets/PRD_template.md`](.pair/knowledge/assets/PRD_template.md)) to understand all required sections and their purpose
-2. **Study the example** ([`.pair/assets/PRD_example.md`](.pair/knowledge/assets/PRD_example.md)) to understand the expected level of detail, writing style, and content quality
-3. **Use these as your reference** throughout the entire process
+**CRITICAL**: Before starting information gathering:
 
-The template provides the exact structure you must follow, while the example demonstrates the professional standard and specificity required for each section.
+- **HALT if template not reviewed** - must understand structure first
+- **HALT if example not analyzed** - must understand quality expectations
+- **Create section-by-section checklist** from template
+- **Do NOT proceed** without clear understanding of required content
 
-## Step-by-Step Implementation Process
+## Implementation Workflow
 
-### Step 1: Template Analysis and Checklist Creation
+### Phase 0: Template & Reference Analysis
 
-**AI Assistant Instructions:** Begin by analyzing the reference documents:
+**Before starting**: Review reference materials to understand structure and quality standards.
 
-1. **Review [`./pair/assets/PRD_template.md`](.pair/knowledge/assets/PRD_template.md)** to understand the complete structure and requirements
-2. **Study [`./pair/assets/PRD_example.md`](.pair/knowledge/assets/PRD_example.md)** to understand the expected quality, detail level, and writing style
-3. **Create your information checklist** based on what you learn from these documents
+1. **Analyze template structure** from [PRD template](../assets/PRD_template.md)
+2. **Study quality standards** from [PRD example](../assets/PRD_example.md)
+3. **Create comprehensive checklist** mapping all template sections
+4. **Update session state** with template analysis complete
 
-Your checklist should map to every section and subsection in the template, ensuring you gather sufficient information to match the quality and specificity shown in the example.
+### Phase 1: Information Gathering
 
-**Key observations to extract from the example:**
+**Objective**: Collect all information needed to complete PRD sections.
 
-- Level of specificity required (e.g., exact metrics, dates, user demographics)
-- Professional writing tone and structure
-- How technical requirements are articulated
-- Quality of user stories and acceptance criteria
-- Depth of analysis in problem statements and solution descriptions
+1. **Request existing documentation** - gather all available project materials:
 
-### Step 2: Documentation Gathering
+   - Market research reports, user interviews and surveys
+   - Technical specifications or architecture docs
+   - Business plans or strategy documents
+   - Competitive analysis, previous PRDs or project documents
+   - User personas or journey maps, wireframes or design mockups
 
-**AI Assistant Instructions:** Begin the process by requesting all available project documentation from the developer:
+2. **Analyze provided documents** - map what information is already available
 
-_"To create a comprehensive PRD, I need to analyze all available project documentation first. Please share any materials you have, including:_
+   - Map which checklist items are covered by documentation
+   - Mark completed items in checklist
+   - Identify gaps requiring additional information
 
-- _Market research reports_
-- _User interviews and surveys_
-- _Technical specifications or architecture docs_
-- _Business plans or strategy documents_
-- _Competitive analysis_
-- _Previous PRDs or project documents_
-- _User personas or journey maps_
-- _Wireframes or design mockups_
-- _Any other relevant project materials_
-
-_Please upload these documents or provide the information directly. This will help me understand the current context and minimize the questions I need to ask."_
-
-### Step 3: Documentation Analysis
-
-**AI Assistant Instructions:** After receiving documentation:
-
-1. Thoroughly analyze all provided materials
-2. Map which checklist items are already covered by the documentation
-3. Mark completed items in your checklist
-4. Identify gaps that require additional information from the developer
-5. Prioritize remaining questions based on importance and dependencies
-
-Present a summary to the developer:
-_"Based on the documentation provided, I've identified the following information:_
-
-- _[List items already covered]_
-- _[List remaining gaps]_
-  _I'll now ask targeted questions to gather the missing information."_
-
-### Step 4: Iterative Information Gathering
-
-**AI Assistant Instructions:** For each missing checklist item:
-
-1. **Ask ONE specific, targeted question at a time**
-2. **Always include a plausible hypothesis** based on available information and context
-3. **Wait for the developer's response (confirmation, correction, or elaboration)**
-4. **Update your checklist**
-5. **Move to the next missing item**
-
-**Question Guidelines with Hypothesis:**
-
-- Be specific and actionable
-- Provide context for why the information is needed
-- **Always propose a reasonable assumption** based on documentation and previous answers
-- Ask the developer to confirm, correct, or elaborate on your hypothesis
-- Use the hypothesis to show you understand the project context
+3. **Iterative questioning with hypothesis** - for each missing checklist item:
+   - **Ask ONE specific question at a time** with plausible hypothesis
+   - **Always propose reasonable assumption** based on available context
+   - **Wait for developer response** (confirmation, correction, elaboration)
+   - **Update checklist** and move to next missing item
 
 **Example Questions with Hypothesis:**
 
-- _"Based on the documentation provided, I assume the primary problem this product solves is [specific pain point hypothesis]. Could you confirm if this is accurate or provide corrections?"_
-- _"Given the project context, I believe the primary user persona would be [demographic and role hypothesis] who needs [specific need hypothesis]. Is this correct, or should I adjust this understanding?"_
-- _"From what I understand so far, the must-have features for MVP would likely include [3-4 feature hypotheses]. Are these the right priorities, or would you modify this list?"_
+- _"Based on documentation, I assume the primary problem is [specific pain point hypothesis]. Is this accurate?"_
+- _"Given the project context, the primary user persona would be [demographic/role hypothesis] who needs [specific need hypothesis]. Correct?"_
+- _"The must-have MVP features would likely include [3-4 feature hypotheses]. Are these the right priorities?"_
 
-### Step 5: PRD Drafting
+### Phase 2: PRD Creation
 
-**AI Assistant Instructions:** Once all checklist items are complete:
+**Objective**: Create comprehensive PRD using gathered information.
 
-1. **Copy the template** from [`.pair/assets/PRD_template.md`](.pair/knowledge/assets/PRD_template.md) into [`.pair/product/adopted/PRD.md`](.pair/adoption/product/PRD.md)
-2. **Replace all template placeholders** with the gathered information
-3. **Match the quality standard** demonstrated in [`.pair/assets/PRD_example.md`](.pair/knowledge/assets/PRD_example.md)
-4. **Use clear, actionable language** similar to the example's professional tone
-5. **Include specific details and measurable criteria** as shown in the example
-6. **Reference provided documentation where appropriate**
+1. **Create PRD file** at [`.pair/adoption/product/PRD.md`](../adoption/product/PRD.md)
+2. **Use template structure** from [PRD template](../assets/PRD_template.md)
+3. **Match quality standards** from [PRD example](../assets/PRD_example.md)
+4. **Apply writing guidelines** per [documentation standards](../guidelines/documentation/README.md)
 
-**Quality Guidelines:**
+### Phase 3: Review & Approval
 
-- Follow the writing style and level of detail from the example
-- Use specific numbers, dates, and metrics like the example does
+**Objective**: Refine PRD through developer feedback until approved.
+
+1. **Present complete draft** for comprehensive review with this approach:
+
+   - Present complete draft from target file for initial review
+   - Request specific feedback on each section
+   - Ask for priority on feedback items (critical vs. nice-to-have changes)
+
+2. **Review Request Template:**
+   _"I've completed the first draft of your PRD. Please review each section and provide feedback on:_
+
+   - _Accuracy of information_
+   - _Missing details or requirements_
+   - _Clarity and specificity_
+   - _Alignment with your vision_
+
+   _Please prioritize feedback as critical (must fix) or enhancement (nice to have)."_
+
+3. **Iterate until approved**:
+   - Update PRD file directly based on feedback
+   - Present updated sections for re-review
+   - Repeat until developer approval
+
+## Quality Standards
+
+### PRD Creation Guidelines
+
+**Follow template structure exactly** - use [PRD template](../assets/PRD_template.md):
+
+- Copy template into [`.pair/adoption/product/PRD.md`](../adoption/product/PRD.md)
+- Replace all placeholders with gathered information
+- Match quality standard from [PRD example](../assets/PRD_example.md)
+- Use clear, actionable language with specific details and measurable criteria
+
+**Writing Quality Requirements:**
+
+- Follow writing style and detail level from example
+- Use specific numbers, dates, and metrics
 - Structure user stories and acceptance criteria exactly as shown
-- Ensure technical requirements follow the example's clarity and specificity
-- Make success metrics measurable and time-bound as demonstrated
+- Make technical requirements implementable and clear
+- Ensure success metrics are measurable and time-bound
 
-**Important:** The PRD must be created in [`.pair/product/adopted/PRD.md`](.pair/adoption/product/PRD.md) and will contain all subsequent revisions as you iterate with the developer.
+### Best Practices for AI Assistants
 
-### Step 6: Review and Iteration Process
+**Do's:**
 
-**AI Assistant Instructions:** Present the draft PRD to the developer with this approach:
+- Always start with documentation analysis to minimize questions
+- Ask one question at a time to avoid overwhelming developer
+- Be specific in questions and provide context
+- Update checklist after each response
+- Validate understanding by summarizing complex responses
+- Focus on actionable language in PRD
+- Include measurable criteria wherever possible
 
-1. **Present the complete draft** from [`.pair/product/adopted/PRD.md`](.pair/adoption/product/PRD.md) for initial review
-2. **Request specific feedback** on each section
-3. **Ask for priority on feedback items** (critical vs. nice-to-have changes)
-4. **Update the PRD file directly** based on feedback
-5. **Present updated sections** for re-review
-6. **Repeat until approved**
+**Don'ts:**
 
-**Review Request Template:**
-_"I've completed the first draft of your PRD in [`.pair/product/adopted/PRD.md`](.pair/adoption/product/PRD.md). Please review each section and provide feedback on:_
+- Never assume information not explicitly provided
+- Don't ask multiple questions at once
+- Don't move to next topic until current one is complete
+- Don't include vague requirements in PRD
+- Don't skip documentation analysis step
+- Don't finalize without developer approval
 
-- _Accuracy of information_
-- _Missing details or requirements_
-- _Clarity and specificity_
-- _Alignment with your vision_
-
-_Please prioritize your feedback as critical (must fix) or enhancement (nice to have). I'll update the document directly and present the changes for your review."_
-
-### Step 7: Finalization
-
-**AI Assistant Instructions:** Before final approval:
-
-1. **Cross-reference with the template** from [`.pair/assets/PRD_template.md`](.pair/knowledge/assets/PRD_template.md) to ensure no sections are missing
-2. **Compare quality against the example** in [`.pair/assets/PRD_example.md`](.pair/knowledge/assets/PRD_example.md) to ensure professional standards
-3. **Verify all acceptance criteria are measurable** like those in the example
-4. **Ensure consistency in terminology** throughout the document
-5. **Confirm all stakeholders and timelines** are clearly identified
-6. **Ensure the final version is saved** in [`.pair/product/adopted/PRD.md`](.pair/adoption/product/PRD.md)
-
-**Final Checklist:**
-
-- [ ] All template sections completed per [`.pair/assets/PRD_template.md`](.pair/knowledge/assets/PRD_template.md)
-- [ ] Quality matches the standard of [`.pair/assets/PRD_example.md`](.pair/knowledge/assets/PRD_example.md)
-- [ ] Acceptance criteria are specific and measurable
-- [ ] Technical requirements are implementable and clear
-- [ ] Timeline is realistic and detailed with specific dates
-- [ ] Risks are identified with concrete mitigation plans
-- [ ] Success metrics are quantifiable with target values
-- [ ] Document is saved in [`.pair/product/adopted/PRD.md`](.pair/adoption/product/PRD.md)
-- [ ] Document is ready for development team use
-
-## Best Practices for AI Assistants
-
-### Do's:
-
-- **Always start with documentation analysis** to minimize questions
-- **Ask one question at a time** to avoid overwhelming the developer
-- **Be specific in questions** and provide context
-- **Update your checklist** after each response
-- **Validate understanding** by summarizing complex responses
-- **Focus on actionable language** in the PRD
-- **Include measurable criteria** wherever possible
-
-### Don'ts:
-
-- **Never assume information** not explicitly provided
-- **Don't ask multiple questions at once**
-- **Don't move to the next topic** until the current one is complete
-- **Don't include vague requirements** in the PRD
-- **Don't skip the documentation analysis step**
-- **Don't finalize without developer approval**
-
-## Quality Assurance Checklist
-
-Before presenting the final PRD, ensure:
+### Final Approval Checklist
 
 **Content Quality:**
 
-- [ ] All information matches the specificity level of [`.pair/assets/PRD_example.md`](.pair/knowledge/assets/PRD_example.md)
 - [ ] Success metrics are measurable and time-bound with exact targets
 - [ ] Technical requirements are implementable and clearly articulated
-- [ ] User stories include clear acceptance criteria following the example format
+- [ ] User stories include clear acceptance criteria following example format
 - [ ] Risks have corresponding mitigation strategies with specific actions
 
 **Structure Quality:**
 
-- [ ] All sections from [`.pair/assets/PRD_template.md`](.pair/knowledge/assets/PRD_template.md) are completed
+- [ ] All sections from template are completed
 - [ ] Information flows logically between sections
 - [ ] Terminology is consistent throughout
-- [ ] Document matches the professional formatting of the example
-- [ ] Writing tone and style matches the example standard
+- [ ] Writing tone and style matches example standard
 
 **Completeness:**
 
-- [ ] All checklist items derived from the template are addressed
-- [ ] No assumptions are made without validation
-- [ ] All stakeholder needs are considered
-- [ ] Document provides sufficient detail for development team implementation
-- [ ] Quality meets the professional standard demonstrated in the example
-- [ ] Final document is properly saved in [`.pair/product/adopted/PRD.md`](.pair/adoption/product/PRD.md)
-
-This guide ensures a thorough, collaborative process that produces high-quality PRDs ready for successful product development implementation.
+- [ ] All checklist items derived from template are addressed
+- [ ] No assumptions made without validation
+- [ ] All stakeholder needs considered
+- [ ] Document provides sufficient detail for development team
+- [ ] Final document saved in [`.pair/adoption/product/PRD.md`](../adoption/product/PRD.md)
 
 ---
 
 ## References
 
-- [`.pair/assets/PRD_template.md`](.pair/knowledge/assets/PRD_template.md) - Complete PRD template structure and sections
-- [`.pair/assets/PRD_example.md`](.pair/knowledge/assets/PRD_example.md) - Example PRD demonstrating quality standards
-- [`.pair/product/adopted/PRD.md`](.pair/adoption/product/PRD.md) - Target file where the final PRD will be created and maintained
+**Primary Templates & Examples:**
 
-**Additional Resources:**
+- [PRD Template](../assets/PRD_template.md) - Complete structure and sections
+- [PRD Example](../assets/PRD_example.md) - Quality standards and writing style
 
-- This guide serves as the primary instruction manual for the AI assistant
-- All PRD iterations and revisions should be tracked in the target PRD file
-- The AI assistant should reference the template and example throughout the entire process
+**Implementation Guidelines:**
+
+- [Documentation Standards](../guidelines/documentation/README.md) - Writing and formatting guidelines
+- [Collaboration Guidelines](../guidelines/collaboration/README.md) - Question asking and review processes
+- [User Story Template](../guidelines/collaboration/templates/user-story-template.md) - User story format standards
+
+**Target Output:**
+
+- [Final PRD Location](../adoption/product/PRD.md) - Where completed PRD is saved and maintained
+
+## Next Steps
+
+After PRD approval, proceed with project setup and strategic planning:
+
+**Project Foundation (Critical First):**
+
+- **Complete Bootstrap Checklist** → [02-how-to-complete-bootstrap-checklist.md](02-how-to-complete-bootstrap-checklist.md)
+
+**Strategic Planning:**
+
+- **Create & Prioritize Initiatives** → [03-how-to-create-and-prioritize-initiatives.md](03-how-to-create-and-prioritize-initiatives.md)
+- **Define Project Subdomains** → [04-how-to-define-subdomains.md](04-how-to-define-subdomains.md)
+- **Define Bounded Contexts** → [05-how-to-define-bounded-contexts.md](05-how-to-define-bounded-contexts.md)
+
+**Development Preparation:**
+
+- **Breakdown Epics** → [06-how-to-breakdown-epics.md](06-how-to-breakdown-epics.md)
+- **Create User Stories** → [07-how-to-breakdown-user-stories.md](07-how-to-breakdown-user-stories.md)
