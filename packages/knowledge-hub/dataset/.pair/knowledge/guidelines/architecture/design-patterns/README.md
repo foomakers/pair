@@ -32,37 +32,43 @@ This folder contains guidelines for establishing solid architectural foundations
    - Ubiquitous language development
    - Context mapping techniques
 
-2. **Bounded Contexts** (`bounded-contexts.md`)
+2. **Strategic Subdomain Definition** (`strategic-subdomain-definition.md`)
+
+   - Subdomain identification methodology
+   - Core/Supporting/Generic classification framework
+   - Business value-driven prioritization strategies
+
+3. **Bounded Contexts** (`bounded-contexts.md`)
 
    - Context boundary identification
    - Service decomposition strategies
    - Communication patterns between contexts
 
-3. **Integration Patterns** (`integration-patterns.md`)
+4. **Integration Patterns** (`integration-patterns.md`)
 
    - Inter-service communication
    - Data consistency patterns
    - Event-driven architecture
 
-4. **System Design** (`system-design.md`)
+5. **System Design** (`system-design.md`)
 
    - High-level system architecture
    - Scalability considerations
    - Performance optimization
 
-5. **Repository Structure** (`repository-structure.md`)
+6. **Repository Structure** (`repository-structure.md`)
 
    - Code organization strategies
    - Dependency management
    - Modularization approaches
 
-6. **Workspace Organization** (`workspace-organization.md`)
+7. **Workspace Organization** (`workspace-organization.md`)
 
    - Multi-project workspace setup
    - Shared configuration management
    - Development workflow optimization
 
-7. **Monorepo Patterns** (`monorepo.md`)
+8. **Monorepo Patterns** (`monorepo.md`)
    - Monorepo vs multi-repo decisions
    - Build optimization strategies
    - Dependency isolation techniques
@@ -105,6 +111,13 @@ flowchart TD
 - Multiple stakeholders with different vocabularies
 - Long-term project evolution expected
 - Need for business-technology alignment
+
+**Choose Strategic Subdomain Definition when:**
+
+- Starting new DDD implementation
+- Need to prioritize development efforts
+- Multiple business capabilities to organize
+- Resource allocation decisions required
 
 **Choose Bounded Contexts when:**
 

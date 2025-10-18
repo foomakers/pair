@@ -29,7 +29,7 @@ PRD CREATION STATE:
 
 ### Template-First PRD Creation
 
-- **Study reference materials FIRST** - analyze [PRD template](../assets/PRD_template.md) and [PRD example](../assets/PRD_example.md)
+- **Study reference materials FIRST** - analyze [PRD template](.pair/knowledge/assets/PRD_template.md) and [PRD example](.pair/knowledge/assets/PRD_example.md)
 - **Follow template structure exactly** - use all sections from template
 - **Match example quality standard** - specificity, metrics, professional tone
 - **Create comprehensive information checklist** based on template sections
@@ -48,8 +48,8 @@ PRD CREATION STATE:
 
 **Before starting**: Review reference materials to understand structure and quality standards.
 
-1. **Analyze template structure** from [PRD template](../assets/PRD_template.md)
-2. **Study quality standards** from [PRD example](../assets/PRD_example.md)
+1. **Analyze template structure** from [PRD template](.pair/knowledge/assets/PRD_template.md)
+2. **Study quality standards** from [PRD example](.pair/knowledge/assets/PRD_example.md)
 3. **Create comprehensive checklist** mapping all template sections
 4. **Update session state** with template analysis complete
 
@@ -88,8 +88,8 @@ PRD CREATION STATE:
 **Objective**: Create comprehensive PRD using gathered information.
 
 1. **Create PRD file** at [`.pair/adoption/product/PRD.md`](../adoption/product/PRD.md)
-2. **Use template structure** from [PRD template](../assets/PRD_template.md)
-3. **Match quality standards** from [PRD example](../assets/PRD_example.md)
+2. **Use template structure** from [PRD template](.pair/knowledge/assets/PRD_template.md)
+3. **Match quality standards** from [PRD example](.pair/knowledge/assets/PRD_example.md)
 4. **Apply writing guidelines** per [documentation standards](../guidelines/documentation/README.md)
 
 ### Phase 3: Review & Approval
@@ -121,11 +121,11 @@ PRD CREATION STATE:
 
 ### PRD Creation Guidelines
 
-**Follow template structure exactly** - use [PRD template](../assets/PRD_template.md):
+**Follow template structure exactly** - use [PRD template](.pair/knowledge/assets/PRD_template.md):
 
 - Copy template into [`.pair/adoption/product/PRD.md`](../adoption/product/PRD.md)
 - Replace all placeholders with gathered information
-- Match quality standard from [PRD example](../assets/PRD_example.md)
+- Match quality standard from [PRD example](.pair/knowledge/assets/PRD_example.md)
 - Use clear, actionable language with specific details and measurable criteria
 
 **Writing Quality Requirements:**
@@ -187,14 +187,14 @@ PRD CREATION STATE:
 
 **Primary Templates & Examples:**
 
-- [PRD Template](../assets/PRD_template.md) - Complete structure and sections
-- [PRD Example](../assets/PRD_example.md) - Quality standards and writing style
+- [PRD Template](.pair/knowledge/assets/PRD_template.md) - Complete structure and sections
+- [PRD Example](.pair/knowledge/assets/PRD_example.md) - Quality standards and writing style
 
 **Implementation Guidelines:**
 
 - [Documentation Standards](../guidelines/documentation/README.md) - Writing and formatting guidelines
-- [Collaboration Guidelines](../guidelines/collaboration/README.md) - Question asking and review processes
-- [User Story Template](../guidelines/collaboration/templates/user-story-template.md) - User story format standards
+- [Collaboration Guidelines](.pair/knowledge/guidelines/collaboration/README.md) - Question asking and review processes
+- [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) - User story format standards
 
 **Target Output:**
 

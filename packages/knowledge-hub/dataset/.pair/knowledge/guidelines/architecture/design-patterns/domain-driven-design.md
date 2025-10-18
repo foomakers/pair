@@ -10,6 +10,7 @@ Provide practical implementation guidance for Domain-Driven Design patterns, bou
 
 ### Strategic Design
 
+- **Subdomains**: Business capability areas classified as core, supporting, or generic
 - **Bounded Contexts**: Clear boundaries between domain models
 - **Context Mapping**: Relationships and integration patterns between contexts
 - **Ubiquitous Language**: Shared vocabulary between domain experts and developers
@@ -58,6 +59,8 @@ src/
 
 ## Related Documents
 
+- **[Strategic Subdomain Definition](strategic-subdomain-definition.md)** - Comprehensive subdomain identification and classification guide
+- **[Bounded Contexts](bounded-contexts.md)** - Technical implementation boundaries for subdomains
 - **[System Design README](README.md)** - Overall system design principles
 - **[Decision Records](.pair/knowledge/guidelines/architecture/decision-frameworks/README.md)** - ADR process for DDD decisions
 - **[Code Design](.pair/knowledge/guidelines/code-design/README.md)** - Implementation patterns for DDD

@@ -18,7 +18,7 @@ Provide practical guidance for identifying, designing, and implementing bounded 
 ### Context Boundaries
 
 - **Linguistic Boundaries**: Where terminology changes meaning
-- **Organizational Boundaries**: Team and department structures  
+- **Organizational Boundaries**: Team and department structures
 - **Technical Boundaries**: Different technology or data requirements
 - **Workflow Boundaries**: End-to-end business processes
 
@@ -43,7 +43,7 @@ monolith/
 ```
 services/
 ├── user-service/        # User Management Context
-├── order-service/       # Order Processing Context  
+├── order-service/       # Order Processing Context
 ├── inventory-service/   # Inventory Context
 └── billing-service/     # Billing Context
 ```
@@ -66,6 +66,7 @@ services/
 
 ## Related Documents
 
+- **[Strategic Subdomain Definition](strategic-subdomain-definition.md)** - Subdomain identification and classification before context definition
 - **[System Design README](README.md)** - Overall system design principles
 - **[Domain-Driven Design](domain-driven-design.md)** - DDD implementation details
 - **[Integration Patterns](integration-patterns.md)** - System integration strategies

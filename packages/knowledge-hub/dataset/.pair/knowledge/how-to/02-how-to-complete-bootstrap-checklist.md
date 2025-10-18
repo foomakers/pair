@@ -81,7 +81,7 @@ BOOTSTRAP COMPLETION STATE:
 
 3. **Handle categorization feedback** and proceed when confirmed
 
-**Project Categories Reference**: [Bootstrap Checklist](../assets/bootstrap-checklist.md)
+**Project Categories Reference**: [Bootstrap Checklist](.pair/knowledge/assets/bootstrap-checklist.md)
 
 ### Phase 2: Checklist Completion
 
@@ -110,8 +110,8 @@ BOOTSTRAP COMPLETION STATE:
 
 **Ask 3-4 focused questions at a time** and wait for responses before proceeding.
 
-**Architecture Guidelines Reference**: [Architecture Guidelines](../guidelines/architecture/README.md)
-**Technical Standards Reference**: [Technical Standards](../guidelines/technical-standards/README.md)
+**Architecture Guidelines Reference**: [Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md)
+**Technical Standards Reference**: [Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md)
 
 ### Phase 3: Standards Document Generation
 
@@ -136,8 +136,8 @@ BOOTSTRAP COMPLETION STATE:
 
 3. **Standards Format Requirements**: [Adopted Standards README](../adoption/tech/README.md)
 
-**Infrastructure Guidelines Reference**: [Infrastructure Guidelines](../guidelines/infrastructure/README.md)
-**UX Guidelines Reference**: [UX Guidelines](../guidelines/user-experience/README.md)
+**Infrastructure Guidelines Reference**: [Infrastructure Guidelines](.pair/knowledge/guidelines/infrastructure/README.md)
+**UX Guidelines Reference**: [UX Guidelines](.pair/knowledge/guidelines/user-experience/README.md)
 
 ### Phase 4: Finalization & Storage
 
@@ -211,16 +211,16 @@ BOOTSTRAP COMPLETION STATE:
 
 **Primary Implementation Assets:**
 
-- [Bootstrap Checklist](../assets/bootstrap-checklist.md) - Complete project setup framework
+- [Bootstrap Checklist](.pair/knowledge/assets/bootstrap-checklist.md) - Complete project setup framework
 - [Adopted Standards README](../adoption/tech/README.md) - Format requirements for all documents
 
 **Guidelines for Implementation:**
 
-- [Architecture Guidelines](../guidelines/architecture/README.md) - Architectural patterns and decisions
-- [Technical Standards](../guidelines/technical-standards/README.md) - Technology selection criteria
-- [Infrastructure Guidelines](../guidelines/infrastructure/README.md) - Deployment and operational guidance
-- [UX Guidelines](../guidelines/user-experience/README.md) - Design system and user experience standards
-- [Collaboration Guidelines](../guidelines/collaboration/README.md) - Development processes and team workflows
+- [Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md) - Architectural patterns and decisions
+- [Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md) - Technology selection criteria
+- [Infrastructure Guidelines](.pair/knowledge/guidelines/infrastructure/README.md) - Deployment and operational guidance
+- [UX Guidelines](.pair/knowledge/guidelines/user-experience/README.md) - Design system and user experience standards
+- [Collaboration Guidelines](.pair/knowledge/guidelines/collaboration/README.md) - Development processes and team workflows
 
 **Target Output Locations:**
 

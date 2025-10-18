@@ -32,7 +32,7 @@ INITIATIVE CREATION STATE:
 - **Analyze PRD systematically** - extract business objectives, user value, and constraints
 - **Prioritize by business impact** - use P0/P1/P2 framework aligned with PRD goals
 - **Create collaboratively** - validate each initiative through structured feedback loops
-- **Document comprehensively** - follow [Initiative Template](../guidelines/collaboration/templates/initiative-template.md)
+- **Document comprehensively** - follow [Initiative Template](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md)
 - **Plan dependencies** - establish timeline and resource requirements
 
 **CRITICAL**: Before starting initiative creation:
@@ -57,8 +57,8 @@ INITIATIVE CREATION STATE:
 2. **Configure Project Management Access**:
 
    - **Read tool configuration** from way-of-working.md
-   - **Follow tool-specific guidelines**: [Project Management Framework](../guidelines/collaboration/project-management-tool/README.md)
-   - **Prepare initiative template**: [Initiative Template](../guidelines/collaboration/templates/initiative-template.md)
+   - **Follow tool-specific guidelines**: [Project Management Framework](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+   - **Prepare initiative template**: [Initiative Template](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md)
 
 3. **Handle Missing Configuration**:
 
@@ -110,7 +110,7 @@ INITIATIVE CREATION STATE:
 
 1. **Initiative Draft Creation**:
 
-   - Present complete initiative using [Initiative Template](../guidelines/collaboration/templates/initiative-template.md)
+   - Present complete initiative using [Initiative Template](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md)
    - Focus on business rationale, scope definition, and success metrics
    - Include risk assessment and mitigation strategies
    - Propose timeline and resource estimates
@@ -127,7 +127,7 @@ INITIATIVE CREATION STATE:
    - Confirm risk assessment and mitigation plans
 
 4. **Tool-Specific Documentation**:
-   - **Follow tool guidelines**: [Project Management Framework](../guidelines/collaboration/project-management-tool/README.md)
+   - **Follow tool guidelines**: [Project Management Framework](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
    - Create initiative in configured project management tool
    - Ensure proper labeling, priority assignment, and organization
    - Maintain cross-references and documentation links
@@ -182,7 +182,7 @@ INITIATIVE CREATION STATE:
 
 **Documentation Standards**:
 
-- [ ] Follows [Initiative Template](../guidelines/collaboration/templates/initiative-template.md) structure completely
+- [ ] Follows [Initiative Template](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md) structure completely
 - [ ] Uses consistent terminology with PRD and technical standards
 - [ ] Maintains proper tool-specific formatting and metadata
 - [ ] Includes appropriate cross-references and documentation links
@@ -200,7 +200,7 @@ INITIATIVE CREATION STATE:
 **Do's:**
 
 - Start with comprehensive PRD analysis to understand business context
-- Follow [Project Management Framework](../guidelines/collaboration/project-management-tool/README.md) consistently
+- Follow [Project Management Framework](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) consistently
 - Focus on one initiative at a time for quality and engagement
 - Connect each initiative to specific business value and measurable outcomes
 - Validate assumptions through targeted questions rather than presumptions
@@ -231,8 +231,8 @@ INITIATIVE CREATION STATE:
 
 **Primary Implementation Assets:**
 
-- [Initiative Template](../guidelines/collaboration/templates/initiative-template.md) - Complete structure and fields for initiative documentation
-- [Project Management Framework](../guidelines/collaboration/project-management-tool/README.md) - Tool-specific guidelines and access procedures
+- [Initiative Template](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md) - Complete structure and fields for initiative documentation
+- [Project Management Framework](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) - Tool-specific guidelines and access procedures
 
 **Guidelines for Implementation:**
 

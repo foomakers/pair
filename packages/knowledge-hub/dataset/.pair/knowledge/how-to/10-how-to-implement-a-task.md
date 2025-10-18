@@ -29,7 +29,7 @@ IMPLEMENTATION STATE:
 
 ### Task-First Implementation
 
-- **Implement ONLY** what is specified in the active task you find in the PM tool according to the [task template](../guidelines/collaboration/templates/task-template.md)
+- **Implement ONLY** what is specified in the active task you find in the PM tool according to the [task template](.pair/knowledge/guidelines/collaboration/templates/task-template.md)
 - **No arbitrary additions** - if something seems missing, request task updates
 - **Follow task specifications** for libraries, files, and implementation approach
 - **Use ONLY specified libraries** - never add libraries not listed in task implementation approach
@@ -47,8 +47,8 @@ IMPLEMENTATION STATE:
 - **Architecture**: Follow patterns defined in [adopted architecture](../adoption/tech/architecture.md)
 - **Technology Stack**: Use ONLY libraries/versions from [tech-stack.md](../adoption/tech/tech-stack.md)
 - **Development Process**: Follow workflows from [way-of-working.md](../adoption/tech/way-of-working.md)
-- **Code Design**: Apply principles from [code design guidelines](../guidelines/code-design/README.md)
-- **Testing**: Follow [test strategy](../guidelines/testing/test-strategy/README.md) for TDD implementation
+- **Code Design**: Apply principles from [code design guidelines](.pair/knowledge/guidelines/code-design/README.md)
+- **Testing**: Follow [test strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md) for TDD implementation
 
 ## Prerequisites & Guardrails
 
@@ -60,7 +60,7 @@ IMPLEMENTATION STATE:
 
 ### 📋 Access Requirements
 
-Follow [project management tool guidelines](../guidelines/collaboration/project-management-tool/README.md) for tool-specific access procedures based on the configured tool in [way-of-working.md](../adoption/tech/way-of-working.md).
+Follow [project management tool guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) for tool-specific access procedures based on the configured tool in [way-of-working.md](../adoption/tech/way-of-working.md).
 
 **Access Rules:**
 
@@ -73,7 +73,7 @@ Follow [project management tool guidelines](../guidelines/collaboration/project-
 
 ### Task Type Classification
 
-Based on [task template](../guidelines/collaboration/templates/task-template.md), determine implementation approach:
+Based on [task template](.pair/knowledge/guidelines/collaboration/templates/task-template.md), determine implementation approach:
 
 **Development Tasks (TDD Required):**
 
@@ -92,7 +92,7 @@ Based on [task template](../guidelines/collaboration/templates/task-template.md)
 
 **CRITICAL: Test-Driven Development Rules**
 
-Follow [TDD guidelines](../guidelines/testing/test-strategy/tdd-test-driven-development.md) with strict methodology:
+Follow [TDD guidelines](.pair/knowledge/guidelines/testing/test-strategy/tdd-test-driven-development.md) with strict methodology:
 
 - **Red-Green-Refactor Cycle**: All development code must follow strict TDD methodology
 - **Test First**: ALWAYS write tests before implementation code
@@ -106,14 +106,14 @@ Follow [TDD guidelines](../guidelines/testing/test-strategy/tdd-test-driven-deve
 
 1. **Test Writing Session (RED Phase)**:
 
-   - Write or modify ONLY test code following [unit testing guidelines](../guidelines/testing/unit-testing/README.md)
+   - Write or modify ONLY test code following [unit testing guidelines](.pair/knowledge/guidelines/testing/unit-testing/README.md)
    - NO implementation code changes allowed
    - Tests MUST fail when first written
    - Session ends when tests are written and failing
 
 2. **Implementation Session (GREEN Phase)**:
 
-   - Write or modify ONLY implementation code following [code design principles](../guidelines/code-design/design-principles/README.md)
+   - Write or modify ONLY implementation code following [code design principles](.pair/knowledge/guidelines/code-design/design-principles/README.md)
    - NO test code changes allowed
    - Write minimal code to achieve green state
    - Session ends when all tests pass
@@ -156,7 +156,7 @@ Follow [TDD guidelines](../guidelines/testing/test-strategy/tdd-test-driven-deve
 **Task Analysis Requirements:**
 
 - **Read ALL tasks in the story** - never implement partial understanding
-- **Validate each task follows [task template](../guidelines/collaboration/templates/task-template.md)**:
+- **Validate each task follows [task template](.pair/knowledge/guidelines/collaboration/templates/task-template.md)**:
   - Complete task information (ID, parent story, assignee, priority, status)
   - Detailed implementation approach (technical design, files, dependencies)
   - Acceptance criteria (deliverable, quality standards, verification)
@@ -185,7 +185,7 @@ _"I've analyzed Story [STORY-ID]: [TITLE] with [X] tasks. All task specification
 ```
 
 **Branch Requirements:**
-Follow [branch template](../guidelines/collaboration/templates/branch-template.md) with pattern:
+Follow [branch template](.pair/knowledge/guidelines/collaboration/templates/branch-template.md) with pattern:
 
 ```
 <type>/#<story-id>-<brief-description>
@@ -226,7 +226,7 @@ For each task in story:
 ```
 
 **Task Validation Requirements:**
-Based on [task template](../guidelines/collaboration/templates/task-template.md), each task must have:
+Based on [task template](.pair/knowledge/guidelines/collaboration/templates/task-template.md), each task must have:
 
 - Complete task information (ID, parent story, assignee, priority, status)
 - Detailed implementation approach (technical design, files to modify/create, dependencies)
@@ -237,14 +237,14 @@ Based on [task template](../guidelines/collaboration/templates/task-template.md)
 
 **Development Tasks (TDD Mode):**
 
-- **RED**: Write failing tests only, apply [unit testing guidelines](../guidelines/testing/unit-testing/README.md)
-- **GREEN**: Write minimal implementation only, follow [code design principles](../guidelines/code-design/design-principles/README.md)
+- **RED**: Write failing tests only, apply [unit testing guidelines](.pair/knowledge/guidelines/testing/unit-testing/README.md)
+- **GREEN**: Write minimal implementation only, follow [code design principles](.pair/knowledge/guidelines/code-design/design-principles/README.md)
 - **REFACTOR**: Improve structure only, keep tests green
 
 **Non-Development Tasks (Direct Mode):**
 
-- **Documentation**: Follow [documentation standards](../guidelines/user-experience/markdown-templates.md)
-- **Configuration**: Apply [infrastructure guidelines](../guidelines/infrastructure/README.md)
+- **Documentation**: Follow [documentation standards](.pair/knowledge/guidelines/user-experience/markdown-templates.md)
+- **Configuration**: Apply [infrastructure guidelines](.pair/knowledge/guidelines/infrastructure/README.md)
 - **Research**: Document findings and recommendations
 
 **Task Status Updates:**
@@ -276,7 +276,7 @@ After all tasks complete:
 ```
 
 **Commit Message Format:**
-Follow [commit template](../guidelines/collaboration/templates/commit-template.md):
+Follow [commit template](.pair/knowledge/guidelines/collaboration/templates/commit-template.md):
 
 **For Development Tasks (TDD):**
 
@@ -315,14 +315,14 @@ Refs: #story-id
 ```
 
 **Quality Gates:**
-Apply [quality standards](../guidelines/quality-assurance/quality-standards/README.md):
+Apply [quality standards](.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md):
 
 **For Development Tasks:**
 
 - [ ] All tests passing (TDD cycles complete)
 - [ ] All tasks marked complete in story
 - [ ] All acceptance criteria addressed
-- [ ] Code follows [code design guidelines](../guidelines/code-design/README.md)
+- [ ] Code follows [code design guidelines](.pair/knowledge/guidelines/code-design/README.md)
 - [ ] Only approved libraries from [tech-stack.md](../adoption/tech/tech-stack.md) used
 - [ ] Version consistency maintained per [architecture decisions](../adoption/tech/architecture.md)
 
@@ -330,8 +330,8 @@ Apply [quality standards](../guidelines/quality-assurance/quality-standards/READ
 
 - [ ] All tasks marked complete in story
 - [ ] All acceptance criteria addressed
-- [ ] Documentation follows [markdown standards](../guidelines/user-experience/markdown-templates.md)
-- [ ] Configuration follows [infrastructure guidelines](../guidelines/infrastructure/README.md)
+- [ ] Documentation follows [markdown standards](.pair/knowledge/guidelines/user-experience/markdown-templates.md)
+- [ ] Configuration follows [infrastructure guidelines](.pair/knowledge/guidelines/infrastructure/README.md)
 - [ ] Research findings properly documented and recommendations clear
 
 ### Phase 5: Pull Request Creation & Review Setup
@@ -345,7 +345,7 @@ Apply [quality standards](../guidelines/quality-assurance/quality-standards/READ
 ```
 
 **PR Creation Requirements:**
-Follow [PR template](../guidelines/collaboration/templates/pr-template.md) structure:
+Follow [PR template](.pair/knowledge/guidelines/collaboration/templates/pr-template.md) structure:
 
 **PR Title Format:**
 
@@ -381,12 +381,12 @@ Follow [PR template](../guidelines/collaboration/templates/pr-template.md) struc
 **Technical Constraints:**
 
 - **Libraries**: Only approved from [tech-stack.md](../adoption/tech/tech-stack.md) or task-specified
-- **Architecture**: Follow [architecture decisions](../adoption/tech/architecture.md) and [guidelines](../guidelines/architecture/README.md)
-- **Quality**: Apply [code design](../guidelines/code-design/README.md), [security](../guidelines/quality-assurance/security/README.md), and [quality standards](../guidelines/quality-assurance/quality-standards/README.md)
+- **Architecture**: Follow [architecture decisions](../adoption/tech/architecture.md) and [guidelines](.pair/knowledge/guidelines/architecture/README.md)
+- **Quality**: Apply [code design](.pair/knowledge/guidelines/code-design/README.md), [security](.pair/knowledge/guidelines/quality-assurance/security/README.md), and [quality standards](.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md)
 
 **Emergency Procedures:**
 
-- **Story Issues**: Use [08-refine-story](./08-how-to-refine-a-user-story.md) or [09-create-tasks](./09-how-to-create-tasks.md)
+- **Story Issues**: Use [08-refine-story](08-how-to-refine-a-user-story.md) or [09-create-tasks](09-how-to-create-tasks.md)
 - **Technical Blockers**: Halt implementation, request task updates, consult relevant guidelines
 - **Process Issues**: Reset to last stable state, escalate to developer
 
@@ -399,8 +399,8 @@ Follow [PR template](../guidelines/collaboration/templates/pr-template.md) struc
 - [ ] All acceptance criteria validated
 - [ ] Implementation matches task specifications exactly
 - [ ] Code committed and pushed to feature branch
-- [ ] Quality gates passed per [quality standards](../guidelines/quality-assurance/quality-standards/README.md)
-- [ ] Pull request created with comprehensive description using [PR template](../guidelines/collaboration/templates/pr-template.md)
+- [ ] Quality gates passed per [quality standards](.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md)
+- [ ] Pull request created with comprehensive description using [PR template](.pair/knowledge/guidelines/collaboration/templates/pr-template.md)
 - [ ] Reviewers assigned based on expertise and team patterns
 - [ ] Story status updated to "In Review" in PM tool
 - [ ] Ready for code review process
@@ -412,18 +412,18 @@ Follow [PR template](../guidelines/collaboration/templates/pr-template.md) struc
 
 **Additional for Non-Development Tasks:**
 
-- [ ] Documentation meets [markdown standards](../guidelines/user-experience/markdown-templates.md)
-- [ ] Configuration follows [infrastructure guidelines](../guidelines/infrastructure/README.md)
+- [ ] Documentation meets [markdown standards](.pair/knowledge/guidelines/user-experience/markdown-templates.md)
+- [ ] Configuration follows [infrastructure guidelines](.pair/knowledge/guidelines/infrastructure/README.md)
 - [ ] Research findings properly documented
 
 ## References
 
 ### Templates & Guidelines
 
-- [Task Template](../guidelines/collaboration/templates/task-template.md) - Complete task specification format
-- [Branch Template](../guidelines/collaboration/templates/branch-template.md) - Branch naming standards
-- [Commit Template](../guidelines/collaboration/templates/commit-template.md) - Commit message format
-- [PR Template](../guidelines/collaboration/templates/pr-template.md) - Pull request structure
+- [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) - Complete task specification format
+- [Branch Template](.pair/knowledge/guidelines/collaboration/templates/branch-template.md) - Branch naming standards
+- [Commit Template](.pair/knowledge/guidelines/collaboration/templates/commit-template.md) - Commit message format
+- [PR Template](.pair/knowledge/guidelines/collaboration/templates/pr-template.md) - Pull request structure
 
 ### Technical Standards
 
@@ -433,24 +433,24 @@ Follow [PR template](../guidelines/collaboration/templates/pr-template.md) struc
 
 ### Development Guidelines
 
-- [TDD Guidelines](../guidelines/testing/test-strategy/tdd-test-driven-development.md) - Test-driven development methodology
-- [Unit Testing](../guidelines/testing/unit-testing/README.md) - Testing standards and practices
-- [Code Design](../guidelines/code-design/README.md) - Code design principles and patterns
-- [Quality Standards](../guidelines/quality-assurance/quality-standards/README.md) - Quality gates and criteria
+- [TDD Guidelines](.pair/knowledge/guidelines/testing/test-strategy/tdd-test-driven-development.md) - Test-driven development methodology
+- [Unit Testing](.pair/knowledge/guidelines/testing/unit-testing/README.md) - Testing standards and practices
+- [Code Design](.pair/knowledge/guidelines/code-design/README.md) - Code design principles and patterns
+- [Quality Standards](.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md) - Quality gates and criteria
 
 ### Process Guidelines
 
-- [Project Management Framework](../guidelines/collaboration/project-management-tool/README.md) - PM tool usage
-- [Security Guidelines](../guidelines/quality-assurance/security/README.md) - Security requirements
-- [Infrastructure Guidelines](../guidelines/infrastructure/README.md) - Configuration standards
-- [Documentation Standards](../guidelines/user-experience/markdown-templates.md) - Markdown formatting
+- [Project Management Framework](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) - PM tool usage
+- [Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md) - Security requirements
+- [Infrastructure Guidelines](.pair/knowledge/guidelines/infrastructure/README.md) - Configuration standards
+- [Documentation Standards](.pair/knowledge/guidelines/user-experience/markdown-templates.md) - Markdown formatting
 
 ### Related Workflows
 
-- [08-how-to-refine-a-user-story.md](./08-how-to-refine-a-user-story.md) - Story refinement process
-- [09-how-to-create-tasks.md](./09-how-to-create-tasks.md) - Task creation workflow
-- [13-how-to-code-review.md](./13-how-to-code-review.md) - Code review process
+- [08-how-to-refine-a-user-story.md](08-how-to-refine-a-user-story.md) - Story refinement process
+- [09-how-to-create-tasks.md](09-how-to-create-tasks.md) - Task creation workflow
+- [13-how-to-code-review.md](13-how-to-code-review.md) - Code review process
 
 ## Next Steps
 
-→ [13-how-to-code-review.md](./13-how-to-code-review.md)
+→ [13-how-to-code-review.md](13-how-to-code-review.md)
