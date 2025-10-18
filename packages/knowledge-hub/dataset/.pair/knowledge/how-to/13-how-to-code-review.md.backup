@@ -1,0 +1,1713 @@
+# How to Code Review - AI-Assisted Guide
+
+## Overview
+
+Validate implemented code quality and ensure compliance with technical standards through systematic code review following pull request creation.
+
+**Role**: Product Software Engineer (Code Review)
+**Process**: 🤖🔍👨‍💻 (AI reviews comprehensively, Developer validates and decides)
+
+**CRITICAL FIRST STEP**: Code review begins AFTER pull request creation and requires active PR with implemented code ready for validation.
+
+## Session State Management
+
+**CRITICAL**: Maintain this context throughout code review:
+
+```
+CODE REVIEW STATE:
+├── PR: [#PR-NUMBER: PR Title]
+├── Status: [pending | changes-requested | approved]
+├── Story: [STORY-ID: Story Title]
+├── Review Type: [feature | bug | refactor | docs | config]
+├── Issues Found: [critical: X | major: Y | minor: Z]
+├── Report Generated: [Yes/No using code-review-template.md]
+└── Next Action: [specific next step]
+```
+
+## Core Principles
+
+### PR-First Code Review
+
+- **Start with active PR** - code review validates existing pull request with implemented changes
+- **Follow code review template** per [code-review-template.md](../guidelines/collaboration/templates/code-review-template.md)
+- **Validate against story acceptance criteria** from the user story being implemented
+- **Apply quality standards** defined in [quality standards](../guidelines/quality-assurance/quality-standards/README.md)
+- **Generate comprehensive report** documenting all findings and recommendations
+
+**CRITICAL**: If PR not ready or story context missing:
+
+- **HALT review immediately**
+- **Request PR completion** following [12-how-to-create-a-pr.md](./12-how-to-create-a-pr.md)
+- **Verify story context** and implementation completeness
+- **Do NOT proceed** until PR and story are properly prepared
+
+### Technical Validation Requirements
+
+- **Architecture**: Verify compliance with [architecture decisions](../adoption/tech/architecture.md) and [guidelines](../guidelines/architecture/README.md)
+- **Quality Standards**: Apply [code design](../guidelines/code-design/README.md) and [quality criteria](../guidelines/quality-assurance/quality-standards/README.md)
+- **Security**: Validate [security guidelines](../guidelines/quality-assurance/security/README.md) compliance
+- **Testing**: Verify [testing strategy](../guidelines/testing/test-strategy/README.md) adherence
+- **Performance**: Check [performance guidelines](../guidelines/quality-assurance/performance/README.md) compliance
+
+## Prerequisites & Guardrails
+
+### 🚫 Critical Blockers
+
+- **Active PR Required**: Pull request must exist and be ready for review
+- **PM Tool Configured**: Must exist in [way-of-working.md](../adoption/tech/way-of-working.md)
+- **Story Context Available**: User story must be accessible and understood
+
+### 📋 Access Requirements
+
+Follow [project management tool guidelines](../guidelines/collaboration/project-management-tool/README.md) for tool-specific access procedures based on the configured tool in [way-of-working.md](../adoption/tech/way-of-working.md).
+
+**Access Rules:**
+
+- **✅ PERMITTED**: Filesystem access ONLY when tool = "filesystem" in way-of-working.md
+- **🚫 PROHIBITED**: Filesystem access when any other tool is configured
+
+**IMPORTANT**: Before proceeding with code review, ensure the pull request has been properly created and contains all necessary context for validation.
+
+## Review Methodology
+
+### Review Type Classification
+
+Based on PR type and changes, determine review approach:
+
+**Development Reviews (Comprehensive Validation):**
+
+- **Feature Implementation** - New functionality with full validation
+- **Bug Fix** - Defect correction with regression testing focus
+- **Refactoring** - Code improvement with behavior preservation validation
+- **Testing** - Test implementation with coverage and quality focus
+
+**Non-Development Reviews (Standards Validation):**
+
+- **Documentation** - Content quality and standards compliance
+- **Configuration** - Setup validation and best practices adherence
+- **Research** - Findings validation and recommendation quality
+
+### Quality Validation Framework
+
+**CRITICAL: Code Review Standards**
+
+Follow [code review template](../guidelines/collaboration/templates/code-review-template.md) for comprehensive validation:
+
+- **Functionality Review**: Implementation meets acceptance criteria
+- **Code Quality**: Adherence to [code design guidelines](../guidelines/code-design/README.md)
+- **Security Validation**: Compliance with [security guidelines](../guidelines/quality-assurance/security/README.md)
+- **Performance Assessment**: [Performance standards](../guidelines/quality-assurance/performance/README.md) validation
+- **Testing Coverage**: [Testing strategy](../guidelines/testing/test-strategy/README.md) compliance
+
+## Code Review Flow
+
+### Phase 0: Review Setup & Context Loading
+
+**🚫 CRITICAL: NO REVIEW WITHOUT PROPER PR AND STORY CONTEXT**
+
+```
+1. Identify Active PR → Load PR details, changes, and metadata
+2. Load Story Context → Understand user story and acceptance criteria
+3. Set PR Status → Mark PR as "pending" review
+4. Validate Review Readiness → Ensure all prerequisites met
+```
+
+**PR Context Requirements:**
+
+- **Load PR from configured tool** per [way-of-working.md](../adoption/tech/way-of-working.md)
+- **Understand implementation scope** and changes made
+- **Verify PR status**: Must be open and ready for review
+- **Confirm story linkage**: Understand business context and requirements
+
+**Story Validation Requirements:**
+
+- **Read complete user story** linked to the PR
+- **Understand acceptance criteria** that implementation should satisfy
+- **Validate story completion** and task fulfillment claims
+- **Confirm epic context**: Understand larger initiative context
+
+**BLOCKING VALIDATION:**
+If ANY of these conditions are not met, **HALT ALL REVIEW WORK**:
+
+- [ ] PR not properly created or accessible
+- [ ] Story context missing or unclear
+- [ ] Implementation scope not understood
+- [ ] Review prerequisites not met
+- [ ] PM tool access not configured
+- [ ] Quality standards not accessible
+
+**Developer Confirmation Required:**
+_"I've loaded PR [#PR-NUMBER]: [TITLE] linked to Story [STORY-ID]. I understand the implementation scope and acceptance criteria. PR is ready for comprehensive code review. Proceeding with quality validation?"_
+
+### Phase 1: Technical Standards Validation
+
+```
+1. ADR & Adoption Compliance → Validate technical decisions documentation
+2. Code Quality Assessment → Validate against design guidelines
+3. Architecture Compliance → Verify architectural patterns adherence
+4. Security Review → Check security guidelines compliance
+5. Performance Validation → Assess performance requirements
+```
+
+**🔍 CRITICAL: ADR & Adoption Decisions Validation**
+
+**New Technical Decisions Detection:**
+Scan implementation for introduction of:
+
+- **New Libraries/Dependencies**: Check package.json, requirements.txt, or equivalent dependency files
+- **New Architectural Patterns**: Identify new design patterns, architectural approaches, or system integrations
+- **New Technologies**: Detect usage of new frameworks, tools, or technology stacks
+- **New Security Approaches**: Review new authentication, authorization, or security implementations
+- **New Performance Solutions**: Identify new caching, optimization, or performance strategies
+- **New Infrastructure Decisions**: Check for new deployment, monitoring, or infrastructure choices
+
+**ADR Documentation Validation:**
+For each new technical decision found:
+
+- [ ] **ADR Exists**: Verify corresponding ADR document exists in [architecture ADRs](../adoption/tech/architecture/)
+- [ ] **ADR Quality**: Ensure ADR contains decision context, options considered, and rationale
+- [ ] **ADR Approval**: Confirm ADR has been reviewed and approved by appropriate stakeholders
+- [ ] **ADR Currency**: Verify ADR is up-to-date and reflects actual implementation approach
+
+**Adoption Documentation Validation:**
+For each new technology/library/pattern:
+
+- [ ] **Adoption Updated**: Verify [tech-stack.md](../adoption/tech/tech-stack.md) includes new dependencies with approved versions
+- [ ] **Guidelines Updated**: Check if [technical guidelines](../guidelines/) need updates for new approaches
+- [ ] **Standards Applied**: Ensure new technologies follow established naming and usage conventions
+- [ ] **Version Consistency**: Confirm new dependencies use consistent versions across all workspaces
+
+**BLOCKING ISSUES - IMMEDIATE REVIEW FAILURE:**
+
+If ANY of these critical violations found:
+
+❌ **Undocumented New Library**: New dependency added without ADR or adoption update
+❌ **Unapproved Architecture Change**: New architectural pattern without proper ADR documentation
+❌ **Version Inconsistency**: New library versions inconsistent across workspaces
+❌ **Missing Approval**: Technical decision made without stakeholder review and approval
+
+**Required Actions for Missing Documentation:**
+
+1. **HALT merge process** - Set PR status to "changes-requested"
+2. **Create ADR task** - Generate task to create missing ADR following [ADR template](../guidelines/architecture/adr/template.md)
+3. **Update adoption documents** - Create task to update relevant adoption files
+4. **Stakeholder review** - Ensure technical decisions get appropriate architectural review
+5. **Re-review required** - Schedule follow-up review after documentation completed
+
+**Documentation Validation Examples:**
+
+```
+✅ GOOD: New Redis dependency
+- ADR-015-caching-strategy.md documents Redis choice
+- tech-stack.md updated with approved Redis version
+- All workspaces use same Redis version
+
+❌ BAD: New MongoDB integration
+- No ADR documenting database choice rationale
+- tech-stack.md not updated with MongoDB version
+- Only some workspaces include MongoDB dependency
+```
+
+## Phase 2: Analysis & Requirements Validation
+
+```
+PR Context Loading → Story Requirements → Technical Standards → Quality Validation
+```
+
+**AI Instructions**: Validate against adoption standards and story requirements:
+
+- Load PR context with story/task specifications
+- Verify all acceptance criteria addressed by changes
+- Validate technical standards from adoption guidelines
+- Assess quality against Definition of Done
+- Check dependencies and integration requirements
+
+### Phase 3: Review Report & Decision
+
+```
+Issue Documentation → Developer Collaboration → Final Decision → Status Update
+```
+
+**Review Decisions:**
+
+**APPROVED ✅** → Squash merge with commit template
+**CHANGES REQUESTED ❌** → Create tasks, return to [10-how-to-implement-a-task.md](./10-how-to-implement-a-task.md)
+**TECH DEBT CREATION 📋** → Create tech debt story, approve current PR
+
+### Phase 4: Completion & Integration
+
+```
+Squash Commits → Final Commit Message → Merge to Main → Status Updates
+```
+
+**Final commit using** [commit template](../guidelines/collaboration/templates/commit-template.md):
+
+```
+[US-XXX] feat: story summary
+
+Complete implementation including:
+- Key features and changes
+- Test coverage summary
+- Technical decisions
+
+Closes #T-XXX, #T-YYY
+```
+
+## Success Criteria
+
+**Review Complete When:**
+
+- [ ] PR context loaded with story/task validation
+- [ ] ADR and adoption documentation validated for all new technical decisions
+- [ ] All technical standards verified against adoption guidelines
+- [ ] Review decision made (approved/changes-requested/tech-debt)
+- [ ] PR status updated in project management
+- [ ] Follow-up actions documented and planned
+
+**For Approved Reviews:**
+- [ ] Squash merge completed successfully
+- [ ] Story marked "Done" in PM tool
+- [ ] Branch cleanup completed
+
+## References
+
+### Templates & Guidelines
+- [Code Review Template](../guidelines/collaboration/templates/code-review-template.md) - Comprehensive review structure and format
+- [ADR Template](../guidelines/architecture/adr/template.md) - Architecture Decision Record format for technical decisions
+- [Task Template](../guidelines/collaboration/templates/task-template.md) - Task creation format for follow-up work
+- [Branch Template](../guidelines/collaboration/templates/branch-template.md) - Branch naming standards validation
+- [Commit Template](../guidelines/collaboration/templates/commit-template.md) - Squash commit format for merge
+
+### Technical Standards
+- [Tech Stack](../adoption/tech/tech-stack.md) - Approved libraries and versions validation
+- [Architecture Decisions](../adoption/tech/architecture.md) - System architecture patterns compliance
+- [Way of Working](../adoption/tech/way-of-working.md) - Development process and PM tool configuration
+
+### Quality Standards
+- [Quality Standards](../guidelines/quality-assurance/quality-standards/README.md) - Quality gates and validation criteria
+- [Code Design Guidelines](../guidelines/code-design/README.md) - Code quality and design principles
+- [Testing Strategy](../guidelines/testing/test-strategy/README.md) - Testing coverage and quality requirements
+- [Security Guidelines](../guidelines/quality-assurance/security/README.md) - Security validation requirements
+
+### Process Guidelines
+- [Project Management Framework](../guidelines/collaboration/project-management-tool/README.md) - PM tool usage and integration
+- [Architecture Guidelines](../guidelines/architecture/README.md) - Architectural patterns and compliance
+- [Infrastructure Guidelines](../guidelines/infrastructure/README.md) - Infrastructure and deployment standards
+- [Performance Guidelines](../guidelines/quality-assurance/performance/README.md) - Performance standards and optimization
+
+### Related Workflows
+- [12-how-to-create-a-pr.md](./12-how-to-create-a-pr.md) - Pull request creation requirements
+- [10-how-to-implement-a-task.md](./10-how-to-implement-a-task.md) - Follow-up task implementation process
+- [08-how-to-refine-a-user-story.md](./08-how-to-refine-a-user-story.md) - Story refinement for incomplete requirements
+- [09-how-to-create-tasks.md](./09-how-to-create-tasks.md) - Task creation for review findings
+
+## Next Steps
+
+**For Approved Reviews**: → Merge completion and story closure
+**For Changes Requested**: → [10-how-to-implement-a-task.md](./10-how-to-implement-a-task.md)
+**For Tech Debt Creation**: → Story creation and backlog management
+
+### Phase 2: Story & Requirements Validation
+
+```
+1. Acceptance Criteria Check → Verify all criteria satisfied
+2. Task Completion Validation → Confirm all tasks delivered
+3. Business Logic Review → Validate business requirements
+4. User Experience Assessment → Check UX requirements
+```
+
+**Story Validation Requirements:**
+
+- **Acceptance Criteria**: All criteria from story must be satisfied
+- **Task Completion**: All related tasks marked as complete
+- **Business Value**: Implementation delivers expected value
+- **User Impact**: Changes improve or maintain user experience
+
+**Quality Assurance:**
+
+- **Testing Coverage**: Adequate test coverage per [testing strategy](../guidelines/testing/test-strategy/README.md)
+- **Documentation**: Required documentation completed
+- **Performance**: No performance regressions
+- **Security**: Security requirements satisfied
+
+### Phase 3: Comprehensive Review Report Generation
+
+```
+1. Issue Classification → Categorize findings by severity
+2. Solution Proposals → Provide specific improvement recommendations
+3. Report Generation → Create comprehensive review using template
+4. Quality Assessment → Overall quality evaluation
+```
+
+**Issue Classification:**
+
+- **Critical**: Blocking issues requiring immediate fix
+- **Major**: Important issues that should be addressed
+- **Minor**: Suggestions for improvement
+- **Questions**: Clarifications needed from developer
+
+**Report Generation:**
+Use [code review template](../guidelines/collaboration/templates/code-review-template.md):
+
+- **Review Summary**: Overall assessment and key findings
+- **Technical Analysis**: Detailed technical review results
+- **Security Assessment**: Security validation findings
+- **Performance Review**: Performance analysis results
+- **Recommendations**: Specific improvement suggestions
+
+### Phase 4: Decision Process & Action Planning
+
+```
+1. Review Decision → Approve, request changes, or create tech debt
+2. Action Planning → Define next steps based on findings
+3. Task Creation → Create follow-up tasks if needed
+4. Status Updates → Update PR and story status appropriately
+```
+
+**Review Decision Process:**
+
+**If CRITICAL issues found:**
+- Set PR status to "changes-requested"
+- Provide detailed feedback in PR
+- Block merge until issues resolved
+
+**If MAJOR/MINOR issues found:**
+- Ask developer: "Should these be addressed immediately?"
+- **If YES**: Create tasks in story, return to [10-how-to-implement-a-task.md](./10-how-to-implement-a-task.md)
+- **If NO**: Ask "Should remaining issues be tracked as tech debt?"
+  - **If YES**: Create tech debt story with label and link to original story
+  - **If NO**: Document recommendations, approve PR
+
+**If NO blocking issues:**
+- Set PR status to "approved"
+- Document any minor recommendations
+- Prepare for merge process
+
+### Phase 5: Merge Process & Completion
+
+```
+1. Squash Commits → Prepare clean commit history
+2. Final Commit → Create final commit using commit template
+3. Merge Execution → Complete merge to main branch
+4. Cleanup → Update story status and clean up branch
+```
+
+**Squash and Merge:**
+Follow [commit template](../guidelines/collaboration/templates/commit-template.md):
+
+```
+[US-XXX] [type]: [story summary]
+
+Complete implementation of [story description] including:
+- [List of major changes and features]
+- [Testing coverage summary]
+- [Any important technical decisions]
+
+Closes #T-XXX, #T-YYY, #T-ZZZ
+```
+
+**Final Status Updates:**
+
+- Update story status to "Done" in PM tool
+- Close related tasks as completed
+- Update epic progress tracking
+- Clean up feature branch
+- Archive review documentation
+
+## Key References
+
+**Review Standards:**
+
+- **Template**: [Code review template](../guidelines/collaboration/templates/code-review-template.md) for comprehensive review structure
+- **Quality**: [Quality standards](../guidelines/quality-assurance/quality-standards/README.md) for validation criteria
+- **Testing**: [Testing strategy](../guidelines/testing/test-strategy/README.md) for coverage requirements
+
+**Technical Guidelines:**
+
+- **Code Design**: [Code design guidelines](../guidelines/code-design/README.md) for quality validation
+- **Architecture**: [Architecture guidelines](../guidelines/architecture/README.md) for pattern compliance
+- **Security**: [Security guidelines](../guidelines/quality-assurance/security/README.md) for security validation
+
+**Process References:**
+
+- **Prerequisites**: [12-how-to-create-a-pr.md](./12-how-to-create-a-pr.md) for PR creation requirements
+- **Implementation**: [10-how-to-implement-a-task.md](./10-how-to-implement-a-task.md) for follow-up task work
+- **PM Tool**: [Project management framework](../guidelines/collaboration/project-management-tool/README.md) for tool usage
+
+## Success Criteria
+
+**Code Review Complete When:**
+
+- [ ] PR properly loaded and context understood
+- [ ] Comprehensive review completed using code review template
+- [ ] All technical standards validated against guidelines
+- [ ] Story acceptance criteria verified
+- [ ] Review report generated with findings and recommendations
+- [ ] Decision made: approved, changes-requested, or tech debt created
+- [ ] PR status updated appropriately in PM tool
+- [ ] Follow-up actions planned and documented
+
+**Additional for Approved Reviews:**
+
+- [ ] Squash commit prepared using commit template
+- [ ] Merge completed successfully
+- [ ] Story status updated to "Done"
+- [ ] Branch cleanup completed
+
+**Additional for Changes Requested:**
+
+- [ ] Specific issues documented with solutions
+- [ ] Tasks created for immediate fixes
+- [ ] Developer notified of required changes
+- [ ] Review process ready for re-evaluation
+
+## Next Steps
+
+**For Approved Reviews**: → Merge completion and story closure
+**For Changes Requested**: → [10-how-to-implement-a-task.md](./10-how-to-implement-a-task.md)
+**For Tech Debt Creation**: → Story creation and backlog management
+   - Evaluate [Definition of Done](.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md) compliance with comprehensive quality metrics
+   - Assess testing coverage per [testing strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md) requirements
+   - Validate security standards from [security guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)
+   - Review performance requirements per [performance guidelines](.pair/knowledge/guidelines/quality-assurance/performance/README.md)
+   - Validate documentation requirements per adoption standards
+   - Assess accessibility compliance per [accessibility guidelines](.pair/knowledge/guidelines/quality-assurance/accessibility/README.md)
+   - Review observability requirements per [observability guidelines](.pair/knowledge/guidelines/observability/README.md)
+
+## Review Prerequisites
+
+Before starting a code review, **read and consult the updated template**: [Code Review Template](.pair/knowledge/guidelines/collaboration/templates/code-review-template.md). All phases, checklists, and the report structure are defined and detailed in the template.
+
+### Step 0: Development Status Analysis and Review Setup
+
+**AI Assistant Instructions:** Begin with comprehensive git status analysis and review environment setup following PR priority order:
+
+**Phase 0A: Git Environment Analysis and PR Selection**
+
+1. **Priority-Based PR Selection**: Identify pull requests ready for code review following this priority order:
+
+   - **Primary Target**: Open pull requests for user stories with highest priority (P0 > P1 > P2)
+   - **Assignment Check**: Focus on PRs for stories assigned to the current developer or team
+   - **Sprint Context**: Prioritize PRs for stories in current sprint ready for completion
+   - **Completion Readiness**: Select PRs that are complete and ready for quality validation
+
+2. **Analyze Current Git Status**: Check implementation branch and changes:
+
+   Example (analyze project structure and tech stack from [tech-stack adoption](.pair/adoption/tech/tech-stack.md)):
+
+   ```bash
+   # Verify current branch and status
+   git status
+   git branch --show-current
+   # Analyze recent commits and changes
+   git log --oneline -10
+   git diff main --name-only
+   ```
+
+   **Note**: Adapt git commands based on project branching strategy defined in [way-of-working](.pair/adoption/tech/way-of-working.md).
+
+3. **Identify Implementation Branch**: Extract story information from branch naming:
+
+   - Extract story code from branch name following established naming conventions from [way-of-working](.pair/adoption/tech/way-of-working.md)
+   - If unable to identify current story from branch, check assigned and in-progress stories and propose the appropriate one
+   - If no stories are assigned or in progress, ask user to specify which story to review
+   - If no stories exist for review, explain that code review cannot proceed without a defined user story
+   - Identify implementation scope and context from branch structure
+   - Validate branch follows established naming patterns from [way-of-working](.pair/adoption/tech/way-of-working.md)
+   - Confirm branch contains implementation changes ready for review
+
+4. **Validate Development Environment**: Ensure review environment readiness:
+
+   Example (adapt based on project tech stack from [tech-stack adoption](.pair/adoption/tech/tech-stack.md)):
+
+   ```bash
+   # Verify code compilation (example for Node.js project)
+   pnpm run build  # or yarn build, or appropriate build command
+   # Run test suite validation
+   pnpm test       # or yarn test, or appropriate test command
+   # Check linting and code quality
+   pnpm run lint   # or yarn lint, or appropriate quality command
+   ```
+
+   **Note**: Analyze project structure and tech stack adoption to determine appropriate commands for your specific project.
+
+**Phase 0B: Story and Task Context Loading**
+
+5. **Load Story Context**: Identify and analyze user story from branch information:
+
+   **Story Identification Process:**
+
+   - Extract story ID from branch naming convention (e.g., `feature/US-123-user-authentication`)
+   - Load story file from project management system (file system or external tool)
+   - **Request user confirmation**: _"I've identified User Story '[STORY_ID]: [STORY_NAME]' for code review. This story contains [X] acceptance criteria and [Y] associated tasks. Should I proceed with reviewing this story implementation?"_
+   - Analyze story acceptance criteria, description, and associated tasks
+   - Review story checklist and completion requirements
+
+6. **Load Task Context**: Analyze associated tasks for comprehensive validation:
+
+   **Task Analysis Process:**
+
+   - Identify all tasks associated with the story under review
+   - Load task specifications, requirements, and completion checklists
+   - Review task implementation scope and acceptance criteria
+   - Analyze task dependencies and integration requirements
+
+7. **Load Technical Context**: Reference complete technical foundation:
+
+   **Foundation Documentation:**
+
+   - Product requirements from [PRD.md](.pair/adoption/product/PRD.md)
+   - Technical architecture from [architecture.md](.pair/adoption/tech/architecture.md)
+   - Technology standards from [tech-stack.md](.pair/adoption/tech/tech-stack.md)
+   - UX/UI guidelines from [ux-ui.md](.pair/adoption/tech/ux-ui.md)
+   - Infrastructure requirements from [infrastructure.md](.pair/adoption/tech/infrastructure.md)
+   - Working methodology from [way-of-working.md](.pair/adoption/tech/way-of-working.md)
+
+   **Knowledge Base Guidelines:**
+
+   - [Architectural guidelines and patterns](.pair/knowledge/guidelines/architecture/README.md)
+   - [Code design and quality standards](.pair/knowledge/guidelines/code-design/README.md)
+   - [Technical implementation standards](.pair/knowledge/guidelines/technical-standards/README.md)
+   - [Infrastructure and deployment guidelines](.pair/knowledge/guidelines/infrastructure/README.md)
+   - [UX and design principles](.pair/knowledge/guidelines/user-experience/README.md)
+   - [Definition of Done criteria](.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md)
+   - [Testing strategy and coverage requirements](.pair/knowledge/guidelines/testing/test-strategy/README.md)
+   - [Accessibility compliance standards](.pair/knowledge/guidelines/quality-assurance/accessibility/README.md)
+   - [Performance optimization guidelines](.pair/knowledge/guidelines/quality-assurance/performance/README.md)
+   - [Security implementation standards](.pair/knowledge/guidelines/quality-assurance/security/README.md)
+   - [Observability and monitoring requirements](.pair/knowledge/guidelines/observability/README.md)
+
+**Phase 0C: Review Environment Validation**
+
+7. **Validate Review Readiness**: Confirm environment preparation:
+
+   **Environment Checks:**
+
+   - [ ] **Code Compilation**: All code compiles successfully without errors
+   - [ ] **Test Execution**: All tests pass with comprehensive coverage validation
+   - [ ] **Quality Gates**: Linting and code quality checks pass established standards
+   - [ ] **Story Context**: User story and task context successfully loaded
+   - [ ] **Technical Standards**: All technical adoption guidelines and knowledge base loaded
+   - [ ] **Review Tools**: Code review environment and tools properly configured
+
+**Review Setup Confirmation:**
+_"Code review environment ready for User Story '[STORY_ID]: [STORY_NAME]'. Branch '[BRANCH_NAME]' contains [X] commits with changes to [Y] files. All compilation and testing validation passed. Story context loaded with [Z] associated tasks. Technical standards and adoption guidelines loaded. Ready to begin comprehensive code review process."_
+
+## Step-by-Step Review Process
+
+### Step 1: Comprehensive Code Analysis
+
+**AI Assistant Instructions:** Conduct systematic code analysis across all review dimensions:
+
+**Phase 1A: Technical Standards Compliance Review**
+
+1. **Architecture Pattern Validation**: Assess architectural consistency:
+
+   **Architecture Review Checklist:**
+
+   - [ ] **Design Patterns**: Implementation follows established architectural patterns
+   - [ ] **Bounded Contexts**: Code respects defined bounded context boundaries
+   - [ ] **Service Integration**: External service integration follows established patterns
+   - [ ] **Data Access Patterns**: Database and data access follows architectural guidelines
+   - [ ] **API Design**: API endpoints follow established design principles
+   - [ ] **Event Handling**: Event-driven architecture patterns properly implemented
+   - [ ] **Dependency Management**: Dependency injection and inversion of control properly applied
+   - [ ] **Separation of Concerns**: Clear separation between layers and responsibilities
+
+2. **Technology Standards Assessment**: Validate tech stack compliance:
+
+   **Tech Stack Review Checklist:**
+
+   - [ ] **Framework Usage**: Approved frameworks used correctly and consistently
+   - [ ] **Library Dependencies**: Only approved libraries with specified versions used
+   - [ ] **Language Standards**: Programming language best practices and conventions followed
+   - [ ] **Build Configuration**: Build tools and configuration follow established standards
+   - [ ] **Package Management**: Dependency management follows established patterns
+   - [ ] **Version Consistency**: All dependencies use consistent versions across workspaces
+   - [ ] **Configuration Management**: Environment and application configuration properly managed
+   - [ ] **Tool Integration**: Development tools integrated according to adoption guidelines
+
+3. **Infrastructure Compliance Validation**: Assess infrastructure alignment:
+
+   **Infrastructure Review Checklist:**
+
+   - [ ] **Deployment Patterns**: Code follows established deployment patterns and requirements
+   - [ ] **Environment Configuration**: Proper environment variable and configuration management
+   - [ ] **Resource Management**: Appropriate resource allocation and management patterns
+   - [ ] **Scalability Considerations**: Implementation supports established scalability requirements
+   - [ ] **Monitoring Integration**: Proper integration with monitoring and observability systems
+   - [ ] **Health Check Implementation**: Health checks and system monitoring properly implemented
+   - [ ] **Configuration Externalization**: Configuration properly externalized and managed
+   - [ ] **Container Compliance**: Container and orchestration requirements properly addressed
+
+**Phase 1B: Code Quality Assessment**
+
+4. **Code Design and Structure Review**: Evaluate implementation quality:
+
+   **Code Quality Review Checklist:**
+
+   - [ ] **SOLID Principles**: Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion
+   - [ ] **DRY Principle**: Don't Repeat Yourself - code reuse and abstraction appropriately applied
+   - [ ] **KISS Principle**: Keep It Simple, Stupid - implementation maintains appropriate simplicity
+   - [ ] **Code Organization**: Logical file and directory structure following established conventions
+   - [ ] **Naming Conventions**: Clear, descriptive, and consistent naming throughout codebase
+   - [ ] **Function/Method Size**: Functions and methods maintain appropriate size and complexity
+   - [ ] **Class Design**: Classes have appropriate responsibilities and maintain cohesion
+   - [ ] **Error Handling**: Comprehensive and appropriate error handling throughout implementation
+
+5. **Testing Coverage and Quality Validation**: Assess testing implementation:
+
+   **Testing Review Checklist:**
+
+   - [ ] **Test Coverage**: Comprehensive test coverage meeting established thresholds
+   - [ ] **Test Quality**: Tests validate behavior, not implementation details
+   - [ ] **Test Organization**: Tests well-organized with clear structure and naming
+   - [ ] **Edge Case Coverage**: Edge cases and error conditions properly tested
+   - [ ] **Integration Testing**: Integration points properly tested with appropriate coverage
+   - [ ] **Performance Testing**: Performance-critical paths include appropriate testing
+   - [ ] **Security Testing**: Security-sensitive functionality includes appropriate test coverage
+   - [ ] **Test Maintainability**: Tests are maintainable and provide clear failure diagnostics
+
+6. **Documentation and Code Clarity Review**: Evaluate documentation quality:
+
+   **Documentation Review Checklist:**
+
+   - [ ] **(Optional) Code Comments**: Inline comments explaining complex logic and decisions - only required if specified in [tech stack adoption](.pair/adoption/tech/tech-stack.md) or [code design guidelines](.pair/knowledge/guidelines/code-design/README.md)
+   - [ ] **API Documentation**: Public APIs documented with clear usage examples
+   - [ ] **README Updates**: Project documentation updated to reflect changes
+   - [ ] **Configuration Documentation**: Configuration changes properly documented
+   - [ ] **Architecture Documentation**: Architectural decisions and patterns documented
+   - [ ] **Deployment Documentation**: Deployment and operational changes documented
+   - [ ] **Troubleshooting Guides**: Common issues and solutions documented
+   - [ ] **Code Readability**: Code is self-documenting with clear intent and structure
+
+### Step 2: Story and Task Validation
+
+**AI Assistant Instructions:** Validate implementation against story requirements and task specifications:
+
+**Phase 2A: Story Acceptance Criteria Validation**
+
+1. **Acceptance Criteria Fulfillment Assessment**: Verify story completion:
+
+   **Story Validation Process:**
+
+   - **Load Story Acceptance Criteria**: Extract all acceptance criteria from story specification
+   - **Map Implementation to Criteria**: Identify code changes that address each acceptance criterion
+   - **Validate Completeness**: Confirm all acceptance criteria have corresponding implementation
+   - **Assess Quality**: Evaluate implementation quality for each acceptance criterion
+   - **Test Coverage Validation**: Verify test coverage for all acceptance criteria
+
+   **Acceptance Criteria Review Matrix:**
+
+   | Criteria ID | Description | Implementation Location | Test Coverage | Status  |
+   | ----------- | ----------- | ----------------------- | ------------- | ------- |
+   | AC-1        | [Criterion] | [Files/Functions]       | [Test Files]  | [✅/❌] |
+   | AC-2        | [Criterion] | [Files/Functions]       | [Test Files]  | [✅/❌] |
+
+2. **Story Checklist Completion Validation**: Assess story-level requirements:
+
+   **Story Checklist Review:**
+
+   - [ ] **Functional Requirements**: All functional requirements implemented and tested
+   - [ ] **Non-Functional Requirements**: Performance, security, and usability requirements addressed
+   - [ ] **Integration Requirements**: External system integration properly implemented
+   - [ ] **User Experience Requirements**: UX/UI guidelines and patterns properly followed
+   - [ ] **Data Requirements**: Data model and persistence requirements properly addressed
+   - [ ] **Configuration Requirements**: Configuration and environment requirements addressed
+   - [ ] **Documentation Requirements**: Required documentation created or updated
+   - [ ] **Quality Requirements**: Code quality and maintainability standards met
+
+**Phase 2B: Task Specification Compliance**
+
+3. **Task Implementation Validation**: Verify task completion:
+
+   **Task Review Process:**
+
+   - **Load Task Specifications**: Extract detailed specifications for all story tasks
+   - **Validate Task Completion**: Confirm each task specification fully implemented
+   - **Assess Implementation Quality**: Evaluate quality of task-specific implementation
+   - **Verify Task Dependencies**: Confirm task dependencies properly handled
+   - **Validate Task Integration**: Assess integration between multiple task implementations
+
+   **Task Completion Matrix:**
+
+   | Task ID | Description | Specification Compliance | Quality Assessment | Integration Status |
+   | ------- | ----------- | ------------------------ | ------------------ | ------------------ |
+   | T-1     | [Task]      | [✅/❌/⚠️]               | [Rating/Issues]    | [✅/❌/⚠️]         |
+   | T-2     | [Task]      | [✅/❌/⚠️]               | [Rating/Issues]    | [✅/❌/⚠️]         |
+
+4. **Task Checklist Assessment**: Evaluate task-level quality requirements:
+
+   **Task Quality Validation:**
+
+   - [ ] **Implementation Completeness**: All task requirements fully implemented
+   - [ ] **Technical Specification Adherence**: Implementation follows technical specifications exactly
+   - [ ] **Quality Standards Compliance**: Code meets established quality standards for task
+   - [ ] **Testing Requirements**: Task-specific testing requirements fulfilled
+   - [ ] **Integration Points**: Task integration points properly implemented and tested
+   - [ ] **Error Handling**: Appropriate error handling for task-specific scenarios
+   - [ ] **Performance Considerations**: Task-specific performance requirements addressed
+   - [ ] **Security Considerations**: Task-specific security requirements properly implemented
+
+### Step 3: Quality Assurance Validation
+
+**AI Assistant Instructions:** Conduct comprehensive quality validation against Definition of Done:
+
+**Phase 3A: Definition of Done Compliance**
+
+1. **Load and Apply Definition of Done**: Reference established quality criteria:
+
+   **Definition of Done Validation Process:**
+
+   - **Load DoD Criteria**: Extract all criteria from [Definition of Done](.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md)
+   - **Systematic Assessment**: Evaluate implementation against each DoD requirement
+   - **Quality Metrics Validation**: Verify quantitative quality thresholds met
+   - **Documentation Compliance**: Confirm documentation requirements satisfied
+   - **Process Compliance**: Validate process requirements followed throughout implementation
+
+2. **Quality Standards Assessment**: Evaluate comprehensive quality compliance:
+
+   **Quality Review Checklist:**
+
+   - [ ] **Code Quality Metrics**: Code complexity, maintainability, and readability standards met
+   - [ ] **Test Coverage Thresholds**: Unit test, integration test, and overall coverage thresholds achieved
+   - [ ] **Security Standards**: Security guidelines and vulnerability assessment standards met
+   - [ ] **Performance Standards**: Performance benchmarks and optimization standards achieved
+   - [ ] **Accessibility Compliance**: Accessibility guidelines and WCAG standards properly implemented
+   - [ ] **Documentation Standards**: Code documentation, API documentation, and user documentation complete
+   - [ ] **Review Process Compliance**: Code review process requirements fulfilled
+   - [ ] **Continuous Integration**: CI/CD pipeline requirements and quality gates satisfied
+
+**Phase 3B: Specialized Quality Reviews**
+
+3. **Security Review Assessment**: Validate security implementation:
+
+   **Security Review Checklist:**
+
+   - [ ] **Authentication**: Authentication mechanisms properly implemented and tested
+   - [ ] **Authorization**: Access control and permission systems correctly implemented
+   - [ ] **Data Protection**: Sensitive data handling follows security guidelines
+   - [ ] **Input Validation**: User input validation and sanitization properly implemented
+   - [ ] **Cryptography**: Cryptographic implementations follow established standards
+   - [ ] **Vulnerability Assessment**: Common vulnerability patterns avoided and tested
+   - [ ] **Security Headers**: Appropriate security headers and configurations implemented
+   - [ ] **Audit Logging**: Security-relevant events properly logged for audit trails
+
+4. **Performance Review Assessment**: Validate performance implementation:
+
+   **Performance Review Checklist:**
+
+   - [ ] **Response Time Requirements**: API and user interface response times meet requirements
+   - [ ] **Throughput Requirements**: System throughput and capacity requirements satisfied
+   - [ ] **Resource Utilization**: CPU, memory, and storage utilization within acceptable limits
+   - [ ] **Caching Strategy**: Appropriate caching implementation for performance optimization
+   - [ ] **Database Performance**: Database queries and access patterns optimized
+   - [ ] **Network Optimization**: Network usage and data transfer optimized
+   - [ ] **Scalability Considerations**: Implementation supports scalability requirements
+   - [ ] **Performance Monitoring**: Performance metrics and monitoring properly implemented
+
+5. **Accessibility Review Assessment**: Validate accessibility compliance:
+
+   **Accessibility Review Checklist:**
+
+   - [ ] **WCAG Compliance**: Web Content Accessibility Guidelines properly followed
+   - [ ] **Keyboard Navigation**: Full keyboard navigation support implemented
+   - [ ] **Screen Reader Support**: Proper semantic markup and ARIA labels implemented
+   - [ ] **Color Accessibility**: Color contrast and color-independent design implemented
+   - [ ] **Focus Management**: Proper focus management and visual indicators implemented
+   - [ ] **Alternative Text**: Images and media include appropriate alternative text
+   - [ ] **Form Accessibility**: Forms include proper labels, instructions, and error handling
+   - [ ] **Responsive Design**: Accessible across different devices and screen sizes
+
+### Step 4: Issue Identification and Solution Proposal
+
+**AI Assistant Instructions:** Document comprehensive findings with specific solutions:
+
+**Phase 4A: Issue Categorization and Prioritization**
+
+1. **Categorize Identified Issues**: Organize findings by severity and type:
+
+   **Issue Categories:**
+
+   - **Critical Issues**: Implementation gaps, security vulnerabilities, or architectural violations
+   - **Major Issues**: Quality standard violations, incomplete requirements, or significant technical debt
+   - **Minor Issues**: Code style violations, documentation gaps, or optimization opportunities
+   - **Suggestions**: Best practice improvements, refactoring opportunities, or enhancement recommendations
+
+2. **Issue Documentation Format**: Structure findings with actionable solutions:
+
+   **Issue Documentation Template:**
+
+   ```markdown
+   ### [Issue Category] - [Issue Title]
+
+   **File(s):** [Affected files and line numbers]
+   **Severity:** [Critical/Major/Minor/Suggestion]
+   **Category:** [Architecture/Quality/Security/Performance/Documentation/etc.]
+
+   **Description:**
+   [Clear description of the issue found]
+
+   **Current Implementation:**
+   [Code snippet or description of current implementation]
+
+   **Standard/Requirement:**
+   [Reference to specific standard, guideline, or requirement not met]
+
+   **Proposed Solution:**
+   [Specific solution with code examples or detailed steps]
+
+   **Rationale:**
+   [Why this solution addresses the issue and improves code quality]
+
+   **Impact:**
+   [Impact assessment of implementing the proposed solution]
+   ```
+
+**Phase 4B: Comprehensive Review Report Generation**
+
+3. **Generate Initial Review Report**: Create comprehensive findings document:
+
+   **Review Report Structure:**
+
+   - **Executive Summary**: Overall assessment with key metrics and completion status
+   - **Story Validation Results**: Acceptance criteria fulfillment and task completion assessment
+   - **Technical Standards Compliance**: Architecture, tech stack, and infrastructure compliance results
+   - **Quality Assurance Assessment**: Definition of Done and quality standards compliance
+   - **Detailed Issues and Solutions**: Categorized issues with specific solutions and priorities
+   - **Recommendations**: Improvement recommendations and next steps
+   - **Approval Status**: Current approval status and remaining requirements
+
+### Step 5: Collaborative Review Integration
+
+**AI Assistant Instructions:** Collaborate with developer for review completion:
+
+**Phase 5A: Initial Review Presentation**
+
+1. **Present Review Findings**: Deliver comprehensive review results:
+
+   _"Code review completed for User Story '[STORY_ID]: [STORY_NAME]' on branch '[BRANCH_NAME]'. Here's the comprehensive review report:_
+
+   **📊 Review Summary:**
+
+   - _Story Completion: [X/Y] acceptance criteria satisfied ([percentage]%)_
+   - _Task Completion: [X/Y] tasks fully compliant ([percentage]%)_
+   - _Quality Standards: [X/Y] DoD criteria met ([percentage]%)_
+   - _Issues Identified: [X] Critical, [Y] Major, [Z] Minor, [W] Suggestions_
+
+   **✅ Strengths Identified:**
+
+   - _[List positive aspects and well-implemented features]_
+   - _[Highlight adherence to standards and best practices]_
+   - _[Acknowledge quality implementation areas]_
+
+   **⚠️ Issues Requiring Attention:**
+
+   _[Present categorized issues with solutions as documented]_
+
+   **🔄 Next Steps:**
+
+   - _Review and provide feedback on identified issues_
+   - _Indicate which solutions to implement_
+   - _Discuss any alternative approaches or considerations_
+
+   _Please review these findings and let me know your thoughts, alternative approaches, or additional considerations to integrate into the final review assessment."_
+
+2. **Collect Developer Feedback**: Integrate developer insights and decisions:
+
+   **Feedback Integration Process:**
+
+   - **Issue Prioritization**: Developer input on issue severity and implementation priority
+   - **Solution Validation**: Developer assessment of proposed solutions and alternatives
+   - **Implementation Approach**: Collaborative decision on implementation approach for fixes
+   - **Standard Interpretation**: Clarification on standard application and interpretation
+   - **Additional Considerations**: Developer insights on context, constraints, or requirements
+
+**Phase 5B: Review Report Finalization**
+
+3. **Update Review Report**: Integrate feedback and finalize assessment:
+
+   **Updated Report Components:**
+
+   - **Integrated Feedback**: Developer feedback and decisions incorporated
+   - **Finalized Solutions**: Agreed-upon solutions with implementation approach
+   - **Priority Assessment**: Final priority assessment for issue resolution
+   - **Action Plan**: Specific action plan for issue resolution and implementation
+   - **Approval Criteria**: Clear criteria for review completion and approval
+
+4. **Present Final Review Assessment**: Deliver updated comprehensive review:
+
+   _"Updated code review report incorporating your feedback and decisions:_
+
+   **📋 Finalized Assessment:**
+
+   _[Updated summary with integrated feedback]_
+
+   **🎯 Confirmed Actions:**
+
+   _[List of actions confirmed for implementation]_
+
+   **⏸️ Deferred Items:**
+
+   _[List of items deferred with rationale]_
+
+   **📝 Implementation Plan:**
+
+   _[Specific plan for addressing confirmed issues]_
+
+   _Which of these confirmed actions would you like to proceed with? I can create specific tasks for any items requiring implementation following the established task creation and implementation processes."_
+
+### Step 6: Task Creation and Implementation Coordination
+
+**AI Assistant Instructions:** Coordinate follow-up tasks and implementation activities:
+
+**Phase 6A: Task Creation for Review Findings**
+
+1. **Generate Implementation Tasks**: Create specific tasks for confirmed improvements:
+
+   **Task Creation Process:**
+
+   - **Critical Issue Tasks**: High-priority tasks for critical issues requiring immediate attention
+   - **Quality Improvement Tasks**: Tasks for major quality improvements and standard compliance
+   - **Enhancement Tasks**: Tasks for minor improvements and optimization opportunities
+   - **Technical Debt Stories**: For important but non-urgent improvements, create technical debt stories to be added to product backlog
+   - **Documentation Tasks**: Tasks for documentation updates and maintenance requirements
+
+   **Reference**: Follow the complete [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) for proper task documentation format and structure.
+
+2. **Update Project Management System**: Track review follow-up work:
+
+   **Project Management Integration:**
+
+   - **Task Creation**: Create tasks in project management system following established workflow
+   - **Story Association**: Associate follow-up tasks with original story for traceability
+   - **Priority Assignment**: Assign appropriate priority based on review issue severity
+   - **Status Tracking**: Initialize task status according to established workflow
+   - **Epic Updates**: Update parent epic status to reflect additional work if necessary
+
+**Phase 6B: Implementation Process Coordination**
+
+3. **Coordinate Implementation Process**: Guide follow-up implementation:
+
+   _"Based on the confirmed review actions, I've created [X] follow-up tasks for implementation:_
+
+   **📋 Created Tasks:**
+
+   - _[TASK-ID]: [Task Title] - [Priority] - [Brief Description]_
+   - _[TASK-ID]: [Task Title] - [Priority] - [Brief Description]_
+   - _[Continue for all created tasks]_
+
+   **🔄 Implementation Options:**
+
+   **Option A: Immediate Implementation**
+   _We can proceed immediately with implementing these tasks following the established TDD methodology from [10-how-to-implement-a-task.md](10-how-to-implement-a-task.md). I'll handle the complete implementation process including test-driven development, quality validation, and progress tracking._
+
+   **Option B: Task Queue Addition**
+   _These tasks can be added to the current sprint or next sprint queue for prioritized implementation according to team capacity and sprint planning._
+
+   **Option C: Developer Implementation**
+   _You can implement these tasks independently using the established implementation guide, and I can provide review and validation support as needed._
+
+   _Which implementation approach would you prefer for these review follow-up tasks?"_
+
+4. **Handle Implementation Coordination**: Support chosen implementation approach:
+
+   **Implementation Support Options:**
+
+   - **Direct Implementation**: Guide through complete TDD implementation process
+   - **Implementation Support**: Provide guidance and validation during developer implementation
+   - **Queue Management**: Update sprint planning and task prioritization
+   - **Progress Tracking**: Monitor implementation progress and provide status updates
+
+### Step 7: Adoption and Standard Updates
+
+**AI Assistant Instructions:** Handle adoption updates and standard modifications:
+
+**Phase 7A: Adoption Compliance Assessment**
+
+1. **Identify Adoption Gaps**: Assess implementation against adoption standards:
+
+   **Adoption Analysis Process:**
+
+   - **Standard Violations**: Identify implementation patterns that violate established adoptions
+   - **Missing Standards**: Recognize areas where standards need clarification or extension
+   - **Pattern Inconsistencies**: Find inconsistencies between adoption documents and implementation needs
+   - **Emerging Patterns**: Identify new patterns that should be standardized
+
+2. **Propose Adoption Updates**: Suggest modifications to adoption documents:
+
+   _"During code review, I've identified several areas where our adoption standards may need updates or clarification:_
+
+   **📋 Adoption Update Recommendations:**
+
+   **[Adoption Document]: [Issue and Proposed Change]**
+
+   - **Current Standard:** [Description of current adoption guideline]
+   - **Implementation Challenge:** [Specific implementation issue encountered]
+   - **Proposed Update:** [Specific change to adoption document]
+   - **Rationale:** [Why this change improves development consistency and quality]
+
+   _Would you like me to proceed with updating these adoption documents to better support consistent implementation across the development team?"_
+
+**Phase 7B: Standard Modification Process**
+
+3. **Update Adoption Documents**: Modify standards based on approved changes:
+
+   **Adoption Update Process:**
+
+   - **Document Modification**: Update specific adoption documents with approved changes
+   - **Standard Integration**: Ensure updated standards integrate consistently across related documents
+   - **Pattern Documentation**: Document new patterns and their application contexts
+   - **Example Integration**: Add implementation examples to clarify updated standards
+   - **Review Integration**: Update review checklists to include new standards
+
+4. **Validate Adoption Updates**: Confirm updated standards address identified issues:
+
+   **Validation Process:**
+
+   - **Standard Consistency**: Verify updated standards maintain consistency across all adoption documents
+   - **Implementation Clarity**: Confirm updated standards provide clear implementation guidance
+   - **Review Integration**: Ensure code review processes include updated standard validation
+   - **Team Communication**: Document changes for team awareness and training
+
+### Step 8: Review Completion and Documentation
+
+**AI Assistant Instructions:** Complete review process with comprehensive documentation:
+
+**Phase 8A: Review Completion Validation**
+
+1. **Validate Review Completeness**: Confirm comprehensive review completion:
+
+   **Completion Checklist:**
+
+   - [ ] **Story Validation**: All acceptance criteria and task specifications validated
+   - [ ] **Technical Standards**: All adoption guidelines and knowledge base standards assessed
+   - [ ] **Quality Assurance**: Definition of Done and quality requirements evaluated
+   - [ ] **Issue Documentation**: All issues documented with specific solutions
+   - [ ] **Developer Feedback**: Feedback integrated and decisions documented
+   - [ ] **Task Creation**: Follow-up tasks created for confirmed improvements
+   - [ ] **Adoption Updates**: Standard modifications completed for approved changes
+   - [ ] **Documentation**: Review process and outcomes comprehensively documented
+   - [ ] **Story Review Record**: Review findings and approval status documented in user story
+
+2. **Document Review in User Story**: Record review completion in story:
+
+   **Story Review Documentation:**
+
+   ```markdown
+   ## Code Review Completed
+
+   **Review Date:** [DATE]
+   **Reviewer:** AI Assistant + [DEVELOPER_NAME]
+   **Final Status:** [APPROVED/APPROVED_WITH_CONDITIONS/REQUIRES_REWORK]
+
+   **Review Summary:**
+
+   - Story Completion: [X/Y] acceptance criteria satisfied ([percentage]%)
+   - Quality Standards: [X/Y] DoD criteria met ([percentage]%)
+   - Issues Identified: [X] Critical, [Y] Major, [Z] Minor resolved/addressed
+
+   **Approval Decision:** [Detailed rationale for approval status]
+   **Follow-up Actions:** [List of created tasks or technical debt stories]
+   **Next Phase:** [Integration/Additional Implementation/Re-review]
+   ```
+
+3. **Generate Review Completion Report**: Document final review status:
+
+   **Final Review Report:**
+
+   - **Review Summary**: Complete assessment with final metrics and status
+   - **Implementation Validation**: Story and task completion assessment
+   - **Quality Assessment**: Standards compliance and quality validation results
+   - **Issue Resolution**: Final issue status and resolution approach
+   - **Follow-up Plan**: Created tasks and implementation coordination plan
+   - **Standard Updates**: Adoption document changes and rationale
+   - **Recommendations**: Process improvements and development recommendations
+
+**Phase 8B: Process Handoff and Next Steps**
+
+3. **Coordinate Next Phase Transition**: Prepare for subsequent development activities:
+
+   **Process Transition Options:**
+
+   **Option A: Implementation Complete and Approved**
+   _If all review findings are resolved or accepted:_
+
+   - Mark story as review-complete and ready for integration
+   - Update project management status to reflect completion
+   - Prepare branch for merge following established integration procedures
+   - Document final implementation for knowledge sharing and future reference
+
+   **Option B: Follow-up Implementation Required**
+   _If review findings require additional implementation:_
+
+   - Begin immediate task implementation following [10-how-to-implement-a-task.md](10-how-to-implement-a-task.md)
+   - Coordinate task prioritization and sprint planning integration
+   - Continue review validation cycles for implemented improvements
+   - Maintain development momentum with structured implementation approach
+
+   **Option C: Standard Updates and Re-review**
+   _If adoption standards were updated during review:_
+
+   - Validate updated standards against current implementation
+   - Re-assess implementation compliance with modified standards
+   - Update review criteria and checklists for future reviews
+   - Communicate standard changes to development team
+
+4. **Provide Implementation Guidance**: Support chosen transition approach:
+
+   _"Review process completed for User Story '[STORY_ID]: [STORY_NAME]'. Based on the comprehensive assessment:_
+
+   **✅ Review Completion Status:**
+
+   - _[X/Y] acceptance criteria fully satisfied_
+   - _[X/Y] tasks meet specification requirements_
+   - _[X/Y] quality standards achieved_
+   - _[X] issues resolved, [Y] tasks created for remaining items_
+
+   **🎯 Recommended Next Steps:**
+   _[Specific recommendation based on review results]_
+
+   **📋 Available Actions:**
+   _1. Proceed with immediate task implementation for review findings_
+   _2. Queue tasks for next sprint and complete story integration_
+   _3. Create technical debt story for important but non-urgent improvements and add to backlog_
+   _4. Request additional review cycles after implementing critical fixes_
+   _5. Update sprint planning to accommodate additional work scope_
+
+   _Which approach would you like to take for completing this story and addressing the review findings?"_
+
+## Quality Assurance Framework
+
+### Review Quality Standards
+
+**Review Methodology Compliance:**
+
+- [ ] **Comprehensive Coverage**: All code changes reviewed against complete standard set
+- [ ] **Story Validation**: Complete story acceptance criteria and task specification validation
+- [ ] **Technical Standards**: Full assessment against all adoption guidelines and knowledge base
+- [ ] **Quality Metrics**: Quantitative quality assessment with established thresholds
+- [ ] **Issue Documentation**: All issues documented with specific solutions and rationale
+- [ ] **Priority Assessment**: Issues appropriately categorized and prioritized for resolution
+- [ ] **Solution Quality**: Proposed solutions address root causes and maintain code quality
+- [ ] **Developer Integration**: Developer feedback integrated and decisions documented
+
+**Review Completeness Requirements:**
+
+- [ ] **Architecture Compliance**: Implementation follows established architectural patterns and decisions
+- [ ] **Technology Standards**: Uses approved technologies with consistent versions across workspaces
+- [ ] **Code Quality**: Code meets established design and quality standards comprehensively
+- [ ] **Testing Validation**: Testing coverage and quality meet established strategy requirements
+- [ ] **Security Assessment**: Security guidelines and vulnerability assessments completed
+- [ ] **Performance Evaluation**: Performance standards and optimization requirements assessed
+- [ ] **Accessibility Validation**: Accessibility guidelines and compliance requirements evaluated
+- [ ] **Documentation Review**: Code documentation and project documentation standards met
+
+**Process Quality Assurance:**
+
+- [ ] **Review Methodology**: Systematic review process followed with comprehensive coverage
+- [ ] **Standard References**: All adoption guidelines and knowledge base standards referenced
+- [ ] **Issue Traceability**: Issues traced to specific standards and requirements
+- [ ] **Solution Validation**: Proposed solutions validated against standards and best practices
+- [ ] **Developer Collaboration**: Effective collaboration and feedback integration throughout process
+- [ ] **Documentation Quality**: Review documentation clear, actionable, and comprehensive
+- [ ] **Follow-up Coordination**: Appropriate follow-up tasks and process coordination
+- [ ] **Continuous Improvement**: Process improvements and learning opportunities identified
+
+### Review Efficiency Guidelines
+
+**Efficient Review Practices:**
+
+- [ ] **Automated Validation**: Leverage automated tools for standard compliance checking
+- [ ] **Focused Analysis**: Concentrate on high-impact areas and critical quality factors
+- [ ] **Pattern Recognition**: Identify recurring patterns for process and standard improvements
+- [ ] **Knowledge Reuse**: Apply lessons learned from previous reviews for efficiency
+- [ ] **Tool Integration**: Use established development tools for comprehensive analysis
+- [ ] **Metric Tracking**: Track review metrics for process improvement and optimization
+- [ ] **Standard Evolution**: Continuously improve standards based on review findings
+- [ ] **Team Learning**: Share review insights for team knowledge and skill development
+
+## Best Practices for AI Assistants
+
+### Review-Specific Do's:
+
+- **Always analyze git status and environment** before beginning review process
+- **Load complete technical context** including all adoption guidelines and knowledge base
+- **Verify code compilation and test execution** before conducting review analysis
+- **Extract story and task context** from branch naming and project management system
+- **CRITICAL: Validate ADR and adoption documentation** for all new technical decisions and libraries
+- **Conduct systematic review** against all established standards and quality criteria
+- **Document issues with specific solutions** including code examples and detailed rationale
+- **Categorize and prioritize issues** appropriately based on severity and impact
+- **Integrate developer feedback** collaboratively and update review assessment accordingly
+- **Create actionable follow-up tasks** for confirmed improvements and issue resolution
+- **Coordinate with implementation process** for seamless transition to task execution
+- **Update adoption standards** when gaps or improvements are identified and approved
+- **Provide comprehensive documentation** for review outcomes and process improvement
+
+### Review-Specific Don'ts:
+
+- **Never begin review** without validating compilation and test execution success
+- **Don't skip story context loading** - always understand requirements being validated
+- **NEVER approve PR with undocumented technical decisions** - always halt merge for missing ADRs
+- **Never provide vague feedback** - always include specific solutions and examples
+- **Don't ignore minor issues** - document all findings with appropriate categorization
+- **Never impose solutions** without developer collaboration and decision integration
+- **Don't skip adoption validation** - always assess against complete technical standard set
+- **Never overlook testing quality** - validate both coverage and test implementation quality
+- **Don't forget documentation assessment** - include code and project documentation in review
+- **Never skip follow-up coordination** - ensure clear next steps and implementation support
+- **Don't ignore process improvement** - identify and document process enhancement opportunities
+
+### General Quality Principles:
+
+- **Constructive Feedback**: Provide constructive, actionable feedback with clear improvement paths
+- **Educational Approach**: Use review as learning opportunity for team skill development
+- **Standard Consistency**: Maintain consistent application of standards across all reviews
+- **Quality Focus**: Prioritize quality and maintainability over quick fixes or shortcuts
+- **Collaborative Spirit**: Approach review as collaborative quality improvement process
+- **Continuous Improvement**: Use review insights to improve processes and standards
+- **Knowledge Sharing**: Document and share review learnings for team benefit
+- **System Thinking**: Consider impact of changes on overall system architecture and design
+
+## Common Review Pitfalls and Solutions
+
+| Pitfall                                  | Impact                                                       | Solution                                                                   |
+| ---------------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| **Skipping environment validation**      | Reviewing non-functional code or missing critical errors     | Always verify compilation and test execution before review analysis        |
+| **Missing ADR/adoption validation**      | Undocumented technical decisions and architectural drift     | Always check for new libraries/patterns and validate ADR documentation     |
+| **Incomplete context loading**           | Missing requirements validation and incorrect assessment     | Load complete story, task, and technical context before beginning review   |
+| **Vague issue documentation**            | Unclear feedback that doesn't guide improvement              | Always provide specific issues with detailed solutions and examples        |
+| **Missing adoption validation**          | Implementation inconsistencies and standard violations       | Systematically validate against all adoption guidelines and knowledge base |
+| **Overlooking testing quality**          | Poor test coverage or ineffective testing strategies         | Assess both test coverage metrics and test implementation quality          |
+| **Ignoring security considerations**     | Security vulnerabilities and compliance gaps                 | Include comprehensive security assessment in all reviews                   |
+| **Missing performance assessment**       | Performance bottlenecks and scalability issues               | Evaluate performance against established standards and requirements        |
+| **Inadequate documentation review**      | Poor maintainability and knowledge transfer                  | Include code and project documentation assessment in review process        |
+| **Poor issue prioritization**            | Important issues overlooked or minor issues over-prioritized | Categorize issues appropriately based on impact and severity               |
+| **Insufficient developer collaboration** | Solutions that don't fit context or constraints              | Integrate developer feedback and collaborate on solution development       |
+| **Missing follow-up coordination**       | Review findings not translated into actionable improvements  | Create specific tasks and coordinate implementation process                |
+| **Ignoring adoption gaps**               | Repeated standard violations and process inconsistencies     | Identify and propose adoption updates for improved consistency             |
+
+## Review Session Examples
+
+### Example 1: Critical Issue Identification and Resolution
+
+**Issue:** Security vulnerability in user authentication
+
+**Review Finding Documentation:**
+
+````markdown
+### Critical - Authentication Token Exposure
+
+**File(s):** src/auth/authentication.ts:45-52
+**Severity:** Critical
+**Category:** Security
+
+**Description:**
+JWT tokens are being logged in plain text during authentication process, exposing sensitive authentication data in application logs.
+
+**Current Implementation:**
+
+```typescript
+console.log('User authenticated with token:', token)
+```
+````
+
+**Standard/Requirement:**
+Security guidelines prohibit logging sensitive authentication data (Reference: [security guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md), Section 4.2)
+
+**Proposed Solution:**
+
+```typescript
+// Remove token logging and implement secure audit logging
+logger.audit('User authenticated', {
+  userId: user.id,
+  timestamp: new Date().toISOString(),
+  // Never log actual token
+})
+```
+
+**Rationale:**
+This solution maintains audit trail for security monitoring while preventing token exposure in logs, following established security logging patterns.
+
+**Impact:**
+Eliminates security vulnerability while maintaining required audit capabilities for compliance and monitoring.
+
+````
+
+### Example 2: Architecture Pattern Compliance Review
+
+**Issue:** Violation of established bounded context pattern
+
+**Review Finding Documentation:**
+
+```markdown
+### Major - Bounded Context Violation
+
+**File(s):** src/user/user-service.ts:23-35
+**Severity:** Major
+**Category:** Architecture
+
+**Description:**
+User service directly accessing order database entities, violating established bounded context boundaries between User and Order domains.
+
+**Current Implementation:**
+```typescript
+// Direct database access across bounded contexts
+const userOrders = await orderRepository.findByUserId(userId);
+````
+
+**Standard/Requirement:**
+Bounded context guidelines require inter-context communication through established APIs (Reference: [bounded context](.pair/adoption/tech/boundedcontext/README.md))
+
+**Proposed Solution:**
+
+```typescript
+// Use established Order API for cross-context communication
+const userOrders = await orderApiClient.getUserOrders(userId)
+```
+
+**Rationale:**
+This solution maintains bounded context isolation while providing required functionality through established API contracts.
+
+**Impact:**
+Preserves architectural integrity and enables independent bounded context evolution while maintaining required functionality.
+
+````
+
+### Example 3: Quality Improvement Recommendation
+
+**Issue:** Test coverage below established threshold
+
+**Review Finding Documentation:**
+
+```markdown
+### Minor - Test Coverage Enhancement
+
+**File(s):** src/user/user-validation.ts
+**Severity:** Minor
+**Category:** Quality
+
+**Description:**
+User validation module has 78% test coverage, below established 85% threshold for business logic modules.
+
+**Current Implementation:**
+Missing test coverage for edge cases in email validation and error handling scenarios.
+
+**Standard/Requirement:**
+Testing strategy requires 85% coverage for business logic modules (Reference: [testing strategy](.pair/knowledge/guidelines/07-testing-strategy.md), Section 3.1)
+
+**Proposed Solution:**
+Add comprehensive test cases covering:
+- Invalid email edge cases (empty, whitespace, special characters)
+- Error handling scenarios (network failures, validation timeouts)
+- Boundary conditions (maximum input lengths, unicode handling)
+
+**Rationale:**
+Enhanced test coverage improves code reliability and maintainability while meeting established quality thresholds.
+
+**Impact:**
+Improved code quality and reduced risk of production issues through comprehensive test validation.
+````
+
+## Review Documentation Standards
+
+### Review Report Template
+
+- [Review Report Template](.pair/knowledge/guidelines/collaboration/templates/code-review-template.md)
+
+**Comprehensive Review Report Structure:**
+
+### Review Progress Tracking
+
+**Review Phase Indicators:**
+
+```
+Code Review Progress for [STORY_ID]
+
+🔍 ANALYSIS: Environment Setup and Context Loading
+   ✅ Git status analyzed and branch validated
+   ✅ Code compilation and test execution verified
+   ✅ Story and task context loaded
+   ✅ Technical standards and adoption guidelines loaded
+
+📋 VALIDATION: Standards and Requirements Assessment
+   ✅ Story acceptance criteria validation completed
+   ✅ Task specification compliance assessment completed
+   ✅ Technical adoption guidelines assessment completed
+   ✅ Quality assurance and DoD validation completed
+
+📝 DOCUMENTATION: Issue Analysis and Solution Proposal
+   ✅ Issues categorized and documented with solutions
+   ✅ Developer feedback integrated and decisions recorded
+   ✅ Review report finalized with action plan
+   ✅ Follow-up tasks created for confirmed improvements
+
+🎯 COMPLETION: Process Handoff and Next Steps
+   ⏳ Final review status confirmation pending
+   ⏳ Process transition coordination pending
+   ⏳ Implementation guidance and support pending
+```
+
+## Version Consistency and Library Management in Reviews
+
+### Version Consistency Validation During Review
+
+**CRITICAL: Version Consistency Review Rules**
+
+- **Mandatory Validation**: All reviews MUST include version consistency assessment across workspaces
+- **Library Approval Check**: Verify ONLY approved libraries from adoption documentation are used
+- **Version Alignment**: Confirm all dependencies use consistent versions across all workspaces
+- **Unapproved Usage Detection**: Identify any unapproved library usage or version inconsistencies
+- **Human Approval Required**: NEVER approve version differences or new libraries without explicit human approval
+- **Technical Analysis Reference**: New library needs require reopening technical analysis following [09-how-to-create-tasks.md](09-how-to-create-tasks.md)
+- **Documentation Requirements**: All approved exceptions must be documented with detailed justification
+
+**Version Review Process:**
+
+1. **Workspace Consistency Analysis**: Compare versions across all project workspaces
+2. **Approved Library Validation**: Verify against adoption documentation library lists
+3. **Version Exception Documentation**: Check for documented version differences with justification
+4. **New Library Detection**: Identify any libraries not listed in adoption documentation
+5. **Human Approval Verification**: Confirm human approval for any version differences or new libraries
+6. **ADR Documentation**: Verify Architectural Decision Records for significant changes
+7. **Adoption Update Requirements**: Identify needs for adoption documentation updates
+
+## Review Communication Framework
+
+### Feedback Delivery Standards
+
+**Constructive Feedback Principles:**
+
+- **Specific and Actionable**: All feedback includes specific location, issue, and solution
+- **Educational Focus**: Explain rationale and learning opportunities behind recommendations
+- **Positive Recognition**: Acknowledge well-implemented features and adherence to standards
+- **Solution-Oriented**: Always provide specific solutions rather than just identifying problems
+- **Standard References**: Reference specific adoption guidelines and knowledge base sections
+- **Impact Assessment**: Explain impact of issues and benefits of proposed solutions
+- **Collaborative Tone**: Maintain collaborative and supportive communication throughout
+- **Learning Opportunity**: Frame review as continuous improvement and skill development
+
+### Developer Collaboration Protocol
+
+**Collaborative Review Process:**
+
+1. **Initial Findings Presentation**: Present comprehensive analysis with openness to feedback
+2. **Discussion and Clarification**: Engage in technical discussion about findings and solutions
+3. **Solution Refinement**: Collaboratively refine solutions based on context and constraints
+4. **Priority Negotiation**: Work together to prioritize issues based on impact and effort
+5. **Implementation Planning**: Coordinate implementation approach for approved improvements
+6. **Standard Evolution**: Discuss potential improvements to adoption standards and processes
+7. **Knowledge Sharing**: Share insights and learnings for team development and improvement
+
+## Integration with Development Workflow
+
+### Project Management Integration
+
+**Project Management Tool Coordination:** Reference [way-of-working](.pair/adoption/tech/way-of-working.md) for:
+
+**File System Tool Integration:**
+
+- **Story Status Updates**: Update story files with review completion status and findings
+- **Task Status Management**: Update task completion status based on review validation
+- **Epic Progress Tracking**: Maintain epic progress status based on story review outcomes
+- **Review Documentation**: Store review reports in appropriate project documentation structure
+
+**GitHub:**
+
+Follow the GitHub integration guidelines for instructions.
+
+**External Tool Integration (Jira, etc.):**
+
+- **Review Status Updates**: Update story and task status through appropriate tool APIs
+- **Comment Integration**: Add review findings and action items through tool interface
+- **Workflow Transition**: Trigger appropriate workflow transitions based on review outcomes
+- **Reporting Integration**: Generate reports compatible with established project management reporting
+
+### Git Workflow Integration
+
+**Branch and Commit Management:**
+
+- **Review Branch Validation**: Ensure review conducted on appropriate implementation branch
+- **Commit History Analysis**: Assess commit quality and adherence to established standards
+- **Merge Readiness Assessment**: Validate branch readiness for integration with main branch
+- **Tag and Release Coordination**: Coordinate with release management processes for reviewed code
+
+## Step-by-Step AI Assistant Review Process
+
+### AI Assistant Review Execution Protocol
+
+**Complete Review Process for AI Assistants:**
+
+1. **Environment Analysis and Setup**:
+
+   Example (adapt based on project structure and [tech stack adoption](.pair/adoption/tech/tech-stack.md)):
+
+   ```bash
+   # Analyze current git environment
+   git status && git branch --show-current
+   # Validate code compilation - adjust command based on tech stack
+   pnpm run build  # or maven compile, gradle build, etc.
+   # Execute test suite - adjust command based on testing framework
+   pnpm test       # or mvn test, pytest, etc.
+   # Run quality checks - adjust command based on linting tools
+   pnpm run lint   # or eslint, sonar, etc.
+   ```
+
+   **Note**: Analyze project to determine appropriate commands from build configuration and tech stack adoption.
+
+2. **Context Loading and Preparation**:
+
+   - Extract story ID from branch name following naming conventions
+   - Load story specification from project management system
+   - Load associated task specifications and requirements
+   - Load complete technical context from adoption and knowledge base
+
+3. **Comprehensive Review Execution**:
+
+   - Conduct technical standards compliance review
+   - Validate story acceptance criteria and task specification compliance
+   - Assess quality assurance against Definition of Done
+   - Evaluate specialized areas (security, performance, accessibility)
+
+4. **Issue Documentation and Solution Development**:
+
+   - Document all findings with specific solutions and examples
+   - Categorize and prioritize issues appropriately
+   - Reference specific standards and guidelines for all findings
+   - Develop actionable improvement recommendations
+
+5. **Collaborative Review Integration**:
+
+   - Present findings to developer with comprehensive analysis
+   - Integrate developer feedback and refine solutions collaboratively
+   - Update review assessment based on decisions and context
+   - Finalize action plan and implementation coordination
+
+6. **Follow-up Task Creation and Process Coordination**:
+
+   - Create specific tasks for confirmed improvements
+   - Update project management system with review outcomes
+   - Coordinate implementation process for follow-up work
+   - Update adoption standards if gaps identified and approved
+
+7. **Review Completion and Documentation**:
+   - Generate comprehensive review documentation
+   - Validate review completeness against established criteria
+   - Coordinate process transition to next development phase
+   - Document lessons learned for process improvement
+
+## Quality Gates and Approval Criteria
+
+### Review Completion Gates
+
+**Quality Gate Validation:**
+
+- [ ] **Complete Analysis**: All code changes reviewed against comprehensive standard set
+- [ ] **Issue Documentation**: All issues documented with specific solutions and priorities
+- [ ] **Developer Collaboration**: Developer feedback integrated and decisions documented
+- [ ] **Follow-up Planning**: Action plan created for addressing confirmed issues
+- [ ] **Standard Validation**: Implementation validated against all adoption guidelines
+- [ ] **Process Compliance**: Review process followed systematically and completely
+
+**Approval Criteria Options:**
+
+**✅ APPROVED**:
+
+- All acceptance criteria satisfied
+- All critical and major issues resolved
+- Quality standards met comprehensively
+- Ready for integration and deployment
+
+**✅ APPROVED WITH CONDITIONS**:
+
+- Core functionality satisfies acceptance criteria
+- Minor issues documented with follow-up tasks
+- Quality standards substantially met
+- Integration approved with commitment to address conditions
+
+**❌ REQUIRES REWORK**:
+
+- Critical issues must be resolved before approval
+- Story acceptance criteria not fully satisfied
+- Quality standards not met adequately
+- Additional implementation required before integration
+
+### Review Metrics and Success Criteria
+
+**Review Quality Metrics:**
+
+- **Story Completion Rate**: Percentage of acceptance criteria fully satisfied
+- **Task Compliance Rate**: Percentage of task specifications completely implemented
+- **Standards Compliance Rate**: Percentage of technical standards fully met
+- **Quality Gate Achievement**: Percentage of Definition of Done criteria satisfied
+- **Issue Resolution Rate**: Percentage of identified issues with actionable solutions
+- **Test Coverage Achievement**: Test coverage metrics against established thresholds
+- **Security Compliance**: Security guideline adherence and vulnerability assessment
+- **Performance Validation**: Performance requirement satisfaction and optimization assessment
+
+## References
+
+**Essential Files for AI Assistant:**
+
+**Foundation Documents:**
+
+- [Product vision, user personas, and requirements](.pair/adoption/product/PRD.md)
+- [Development methodology and process definitions](.pair/adoption/tech/way-of-working.md) - [Integration and merge procedures](11-how-to-commit-and-push.md)
+- `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` - Project Management Tool Guidelines
+
+**Technical Context:**
+
+- [System architecture patterns and design decisions](.pair/adoption/tech/architecture.md)
+- [Technology choices and implementation standards](.pair/adoption/tech/tech-stack.md)
+- [Infrastructure and deployment requirements](.pair/adoption/tech/infrastructure.md)
+- [User interface patterns and interaction guidelines](.pair/adoption/tech/ux-ui.md)
+- [Technical workflow and tool configuration](.pair/adoption/tech/way-of-working.md)
+
+**Domain Context:**
+
+- [Functional boundaries affecting review scope](.pair/adoption/product/subdomain)
+- [Technical boundaries affecting implementation validation](.pair/adoption/tech/boundedcontext)
+
+**Knowledge Base (Complete Technical Guidelines):**
+
+### 🏗️ Architecture & Design
+
+- **[architecture/README.md](.pair/knowledge/guidelines/architecture/README.md)** - System architecture patterns, bounded contexts, and ADR processes
+- **[02-code-design-guidelines.md](.pair/knowledge/guidelines/code-design/README.md)** - Code organization, design patterns, and implementation standards
+
+### ⚙️ Technical Implementation
+
+- **[technical-standards/README.md](.pair/knowledge/guidelines/technical-standards/README.md)** - Tech stack, development tools, and feature flag management
+- **[infrastructure/README.md](.pair/knowledge/guidelines/infrastructure/README.md)** - Deployment strategies, environment management, and CI/CD
+
+### 🎨 User Experience & Quality
+
+- **[05-ux-guidelines.md](.pair/knowledge/guidelines/user-experience/README.md)** - User experience standards and design principles
+- **[06-definition-of-done.md](.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md)** - Quality criteria and completion standards
+- **[07-testing-strategy.md](.pair/knowledge/guidelines/testing/test-strategy/README.md)** - Testing frameworks, strategies, and quality gates
+
+### 🔒 Security & Performance
+
+- **[08-accessibility-guidelines.md](.pair/knowledge/guidelines/quality-assurance/accessibility/README.md)** - Accessibility standards and compliance requirements
+- **[09-performance-guidelines.md](.pair/knowledge/guidelines/quality-assurance/performance/README.md)** - Performance optimization and monitoring strategies
+- **[10-security-guidelines.md](.pair/knowledge/guidelines/quality-assurance/security/README.md)** - Security implementation and best practices
+- **[11-observability-guidelines.md](.pair/knowledge/guidelines/observability/README.md)** - Monitoring, logging, and tracing strategies
+
+**Process Dependencies:**
+
+- **Prerequisites**: Implemented code from task implementation ready for quality validation
+- **Input**: Working code with comprehensive test coverage serves as review subject
+- **Output**: Quality-validated code with improvement plan ready for integration process
+- **Review Methodology**: All validation must follow comprehensive quality assessment practices
+- **Standard References**: All review must validate against knowledge base and adoption guidelines
+- **Version Consistency**: Maintain version alignment validation with human approval for exceptions
+- **Next Phase**: Quality-validated code ready for **How to Commit and Push** process
+
+**Related Documents:**
+
+- Previous: [12-how-to-create-a-pr.md](12-how-to-create-a-pr.md)
+- Bootstrap Checklist: [02-how-to-complete-bootstrap-checklist.md](02-how-to-complete-bootstrap-checklist.md)
+- [Code Review Template](.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) - Structure, phases, and operational checklists for code review
+
+This guide ensures systematic, comprehensive code review that validates implementation quality against established technical standards while providing constructive feedback and coordinating improvement processes for continuous development excellence.
