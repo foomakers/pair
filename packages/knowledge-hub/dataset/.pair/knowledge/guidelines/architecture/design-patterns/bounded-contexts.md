@@ -17,10 +17,11 @@ Provide practical guidance for identifying, designing, and implementing bounded 
 
 ### Context Boundaries
 
-- **Linguistic Boundaries**: Where terminology changes meaning
-- **Organizational Boundaries**: Team and department structures
-- **Technical Boundaries**: Different technology or data requirements
-- **Workflow Boundaries**: End-to-end business processes
+- **Linguistic Boundaries**: Where terminology changes meaning or different words mean the same thing
+- **Organizational Boundaries**: Team and department structures that naturally separate concerns
+- **Technical Boundaries**: Different technology stacks, data requirements, or performance needs
+- **Workflow Boundaries**: End-to-end business processes that operate independently
+- **Data Ownership**: Clear boundaries where different entities or aggregates belong to specific contexts
 
 ## Implementation Strategies
 
@@ -48,21 +49,75 @@ services/
 └── billing-service/     # Billing Context
 ```
 
+## Context Relationships
+
+### Upstream and Downstream Dependencies
+
+- **Upstream Context**: Provides data/services to other contexts, free to evolve but changes impact downstream
+- **Downstream Context**: Consumes data/services from upstream contexts, restricted by dependencies
+- **Bidirectional**: Contexts can be both upstream and downstream depending on the relationship
+
+### Relationship Documentation
+
+```
+Context A ----> Context B    (A is upstream, B is downstream)
+Context C <---> Context D    (Bidirectional dependency)
+```
+
 ## Integration Patterns
 
 ### Context Communication
 
-- **API Integration**: RESTful APIs between contexts
-- **Event-Driven**: Asynchronous event communication
-- **Database Integration**: Shared database (discouraged)
-- **File Transfer**: Batch data exchange
+- **Partnership**: Both teams cooperate and coordinate interface evolution
+- **Shared Kernel**: Common codebase shared between contexts (keep minimal)
+- **Customer-Supplier**: Formal upstream-downstream relationship with negotiated interfaces
+- **Conformist**: Downstream context conforms to upstream model without negotiation
+- **Anticorruption Layer**: Downstream context protects itself with translation layer
+- **Open Host Service**: Well-defined services with stable protocols for multiple consumers
+- **Published Language**: Documented exchange format (XML, JSON schemas) for integration
+- **Separate Ways**: No integration - contexts operate independently
 
 ### Data Consistency
 
-- **Eventual Consistency**: Asynchronous data synchronization
-- **Saga Pattern**: Distributed transaction management
-- **Event Sourcing**: Event-based state management
-- **CQRS**: Separate read and write models
+- **Eventual Consistency**: Asynchronous data synchronization between contexts
+- **Saga Pattern**: Distributed transaction management across context boundaries
+- **Event Sourcing**: Event-based state management within contexts
+- **CQRS**: Separate read and write models, often used with event sourcing
+
+## Context Maps
+
+### Creating Context Maps
+
+A context map documents:
+
+- Context boundaries and names
+- Integration patterns between contexts
+- Upstream/downstream relationships
+- Data flow and dependencies
+- Team responsibilities
+
+### Example Context Map Structure
+
+```
+┌─────────────────┐    Partnership    ┌─────────────────┐
+│   User Context  │ ←─────────────→   │  Order Context  │
+└─────────────────┘                   └─────────────────┘
+        │                                      │
+        │ Customer-Supplier                   │ ACL
+        ▼                                      ▼
+┌─────────────────┐                   ┌─────────────────┐
+│ Identity Context│                   │Inventory Context│
+└─────────────────┘                   └─────────────────┘
+```
+
+## Ubiquitous Language
+
+### Context-Specific Language
+
+- Each bounded context has its own dialect of the ubiquitous language
+- Same terms may mean different things in different contexts
+- Context boundaries help prevent language conflicts
+- Translation between contexts happens at integration points
 
 ## Related Documents
 
