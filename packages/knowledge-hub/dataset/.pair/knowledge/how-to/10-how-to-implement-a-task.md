@@ -1,84 +1,119 @@
-# How to Implement a Task (from User Stories) - AI-Assisted Guide
+# How to Implement a Task - AI-Assisted Guide
 
 ## Overview
 
-This guide enables Product Software Engineers and AI assistants to collaboratively implement tasks from user stories, following established technical standards and architectural patterns. Task implementation transforms **specific implementation steps** into working code that delivers story acceptance criteria while maintaining consistency with adopted technical guidelines and architectural decisions.
+Transform task specifications into working, tested code by implementing **exactly what is defined** in task breakdown without additions or modifications.
 
-**Key Benefits:**
+**Role**: Product Software Engineer (Implementation)
+**Process**: 🤖🤝👨‍💻 (AI implements, Developer reviews)
 
-- Transform task specifications into working, tested code
-- Ensure implementation consistency with established technical standards
-- Maintain code quality through systematic TDD development processes
-- Enable continuous integration through proper branch management
-- Provide clear progress tracking and facilitate code review processes
+**CRITICAL FIRST STEP**: Before any implementation work begins, complete Phase 0: Story & Task Analysis to fully understand what needs to be implemented.
 
-**Important**: Tasks are implemented following technical guidelines - they represent the execution phase where task specifications become functional code while adhering to established patterns, standards, and architectural decisions.
+## Session State Management
 
-## AI Assistant Role Definition
+**CRITICAL**: Maintain this context throughout implementation:
 
-**Primary Role**: Product Software Engineer (Implementation)
+```
+IMPLEMENTATION STATE:
+├── Current Story: [STORY-ID: Story Title]
+├── Active Task: [TASK-ID: Task Title]
+├── Task Type: [Development | Documentation | Configuration | Research]
+├── Implementation Mode: [TDD | Direct Implementation]
+├── TDD Phase: [RED | GREEN | REFACTOR | COMPLETE | N/A]
+├── Branch: [feature/#story-id-description]
+├── Commit Strategy: [per-task | per-story]
+└── Next Action: [specific next step]
+```
 
-The AI assistant acts as a **Product Software Engineer** who:
+## Core Principles
 
-- **Analyzes** sprint status and identifies active or next tasks for implementation
-- **Implements** task specifications following established technical guidelines and TDD methodology
-- **Applies** adopted technical standards from architecture, infrastructure, tech stack, and UX/UI guidelines
-- **References** knowledge base documentation for implementation details
-- **Manages** development workflow including branch creation, commits, and progress tracking
-- **Maintains** code quality through systematic TDD development processes
-- **Reviews** implementation progress collaboratively with development team
-- **Ensures** consistency with established technical decisions and ADRs
+### Task-First Implementation
 
-**Working Principles**: Follow the **🤖🤝👨‍💻** model (AI implements, Developer reviews) throughout the entire task implementation process.
+- **Implement ONLY** what is specified in the active task you find in the PM tool according to the [task template](../guidelines/collaboration/templates/task-template.md)
+- **No arbitrary additions** - if something seems missing, request task updates
+- **Follow task specifications** for libraries, files, and implementation approach
+- **Use ONLY specified libraries** - never add libraries not listed in task implementation approach
+- **Validate against task acceptance criteria** before considering complete
 
-## Issue Access and Tool Integration
+**CRITICAL**: If task seems incomplete or requires additional libraries/changes:
 
-**⚠️ MANDATORY COMPLIANCE: These instructions must ALWAYS be followed without exception when accessing initiatives, epics, user stories, or tasks.**
+- **HALT implementation immediately**
+- **Propose specific task updates** to developer
+- **Suggest alternative approaches** based on [tech-stack.md](../adoption/tech/tech-stack.md)
+- **Do NOT proceed** until task is updated and complete
 
-### Access Protocol
+### Technical Alignment Requirements
 
-**Step 1: Tool Configuration Check**
+- **Architecture**: Follow patterns defined in [adopted architecture](../adoption/tech/architecture.md)
+- **Technology Stack**: Use ONLY libraries/versions from [tech-stack.md](../adoption/tech/tech-stack.md)
+- **Development Process**: Follow workflows from [way-of-working.md](../adoption/tech/way-of-working.md)
+- **Code Design**: Apply principles from [code design guidelines](../guidelines/code-design/README.md)
+- **Testing**: Follow [test strategy](../guidelines/testing/test-strategy/README.md) for TDD implementation
 
-1. **Read** [.pair/adoption/tech/way-of-working.md](.pair/adoption/tech/way-of-working.md) to identify configured project management tool
-2. **If no tool configured**: **HALT PROCESS** and request bootstrap completion:
-   _"I cannot proceed because no project management tool is configured. Complete bootstrap first: [How to Complete Bootstrap Checklist](02-how-to-complete-bootstrap-checklist.md). Proceed with bootstrap now?"_
+## Prerequisites & Guardrails
 
-**Step 2: Follow Tool-Specific Instructions**
+### 🚫 Critical Blockers
 
-- **Consult** [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) for all access procedures
-- **Use configured tool** as primary and authoritative source for all issue data
+- **Clean Git**: No uncommitted changes, on main branch
+- **PM Tool Configured**: Must exist in [way-of-working.md](../adoption/tech/way-of-working.md)
+- **Story Analysis Complete**: Phase 0 must be completed before any other work
 
-### Filesystem Access Rules
+### 📋 Access Requirements
 
-**✅ PERMITTED ONLY when:** Tool in [way-of-working.md](.pair/adoption/tech/way-of-working.md) = "filesystem"
-**🚫 PROHIBITED when:** Any other tool is configured
+Follow [project management tool guidelines](../guidelines/collaboration/project-management-tool/README.md) for tool-specific access procedures based on the configured tool in [way-of-working.md](../adoption/tech/way-of-working.md).
 
-## TDD Implementation Methodology
+**Access Rules:**
 
-### Core TDD Principles
+- **✅ PERMITTED**: Filesystem access ONLY when tool = "filesystem" in way-of-working.md
+- **🚫 PROHIBITED**: Filesystem access when any other tool is configured
+
+**IMPORTANT**: Before proceeding to any implementation phases, **Phase 0: Story & Task Analysis** must be completed successfully. This includes reading the complete user story, understanding all tasks, and confirming implementation readiness.
+
+## Implementation Methodology
+
+### Task Type Classification
+
+Based on [task template](../guidelines/collaboration/templates/task-template.md), determine implementation approach:
+
+**Development Tasks (TDD Required):**
+
+- **Feature Implementation** - New functionality development
+- **Bug Fix** - Correcting identified issues or defects
+- **Refactoring** - Code improvement without behavior changes
+- **Testing** - Test creation, execution, or automation
+
+**Non-Development Tasks (Direct Implementation):**
+
+- **Documentation** - Creating or updating documentation
+- **Configuration** - Setup, deployment, or environment tasks
+- **Research** - Investigation, spike, or proof of concept
+
+### TDD Implementation Methodology (Development Tasks Only)
 
 **CRITICAL: Test-Driven Development Rules**
 
-- **Red-Green-Refactor Cycle**: All code must follow strict TDD methodology
+Follow [TDD guidelines](../guidelines/testing/test-strategy/tdd-test-driven-development.md) with strict methodology:
+
+- **Red-Green-Refactor Cycle**: All development code must follow strict TDD methodology
 - **Test First**: ALWAYS write tests before implementation code
 - **Failing Tests Required**: Tests must fail initially to validate correct behavior testing
 - **Single Session Rule**: NEVER modify both tests and implementation code in the same session
-- **Complete Cycle**: Each task requires complete Red-Green-Refactor cycle execution
+- **Complete Cycle**: Each development task requires complete Red-Green-Refactor cycle execution
 
 ### TDD Session Management
 
-**Session Types and Restrictions:**
+**Session Types and Restrictions (Development Tasks Only):**
 
 1. **Test Writing Session (RED Phase)**:
 
-   - Write or modify ONLY test code
+   - Write or modify ONLY test code following [unit testing guidelines](../guidelines/testing/unit-testing/README.md)
    - NO implementation code changes allowed
    - Tests MUST fail when first written
    - Session ends when tests are written and failing
 
 2. **Implementation Session (GREEN Phase)**:
 
-   - Write or modify ONLY implementation code
+   - Write or modify ONLY implementation code following [code design principles](../guidelines/code-design/design-principles/README.md)
    - NO test code changes allowed
    - Write minimal code to achieve green state
    - Session ends when all tests pass
@@ -89,294 +124,333 @@ The AI assistant acts as a **Product Software Engineer** who:
    - All tests must remain green throughout
    - Session ends when refactoring objectives complete
 
-## Implementation Prerequisites
+### Direct Implementation (Non-Development Tasks)
 
-### Version Consistency and Library Management
+**For Documentation, Configuration, and Research tasks:**
 
-**CRITICAL: Version Consistency Rules**
+- **No TDD Required**: These tasks don't require test-driven development
+- **Direct Implementation**: Implement task requirements directly
+- **Quality Focus**: Follow documentation standards, configuration best practices, or research methodology
+- **Validation**: Verify against task acceptance criteria without formal testing
 
-- **Default Rule**: All workspaces MUST use consistent versions of tools and dependencies
-- **Compilers and Libraries**: Same compiler version across all workspaces without exception
-- **Human Decision Required**: NEVER implement version differences without explicit human approval
-- **Documentation Mandatory**: All version exceptions MUST be documented with detailed justification
-- **ADR Creation**: Architectural decisions require Architecture Decision Record
+## Implementation Flow
 
-**CRITICAL: Library Management Rules**
+### Phase 0: Story & Task Analysis (BLOCKING PREREQUISITE)
 
-- **Approved Libraries Only**: ONLY use libraries defined in technical analysis and adoption documents
-- **Exact Versions Required**: Use ONLY the specific versions specified in adoption documentation
-- **No Arbitrary Additions**: NEVER add new libraries without proper technical analysis
-- **Task Analysis Reopening**: Adding new libraries requires reopening technical analysis phase
-- **Human Discussion Required**: All library additions must be discussed following `.pair/how-to/09-how-to-create-tasks.md`
+**🚫 CRITICAL: NO IMPLEMENTATION WITHOUT COMPLETE STORY & TASK UNDERSTANDING**
 
-## Step-by-Step Implementation Process
+```
+1. Read Complete User Story → Load from PM tool, understand business value
+2. Analyze All Story Tasks → Validate task breakdown completeness
+3. Validate Story State → Must be "In Progress" and assigned to me
+4. Confirm Task Specifications → Ensure all implementation details present
+```
 
-### Step 0: Sprint Analysis and Task Identification
+**Story Reading Requirements:**
 
-**Phase 0A: Current Sprint Status Analysis**
+- **Load story from configured PM tool** per [way-of-working.md](../adoption/tech/way-of-working.md)
+- **Understand business value and acceptance criteria** completely
+- **Verify story status**: Must be "In Progress" and assigned to developer
+- **Confirm epic context**: Understand how story fits in larger initiative
 
-1. **Analyze Git Status**: Check current development state:
+**Task Analysis Requirements:**
 
-   ```bash
-   git status
-   git branch -a
-   git log --oneline -10
-   ```
+- **Read ALL tasks in the story** - never implement partial understanding
+- **Validate each task follows [task template](../guidelines/collaboration/templates/task-template.md)**:
+  - Complete task information (ID, parent story, assignee, priority, status)
+  - Detailed implementation approach (technical design, files, dependencies)
+  - Acceptance criteria (deliverable, quality standards, verification)
+  - Development workflow (TDD approach, implementation steps, testing)
 
-2. **Priority-Based Story Selection**: Identify user stories ready for implementation following this priority order:
+**BLOCKING VALIDATION:**
+If ANY of these conditions are not met, **HALT ALL WORK**:
 
-   - **Primary Target**: User stories in "In Progress" state with highest priority (P0 > P1 > P2) assigned to me
-   - **Secondary Check**: If no "In Progress" stories assigned to me, check for "Refined" stories that need task breakdown first
-   - **Tertiary Check**: If stories are in "Todo" state, they need refinement before implementation
+- [ ] Story not fully loaded and understood
+- [ ] Tasks incomplete or missing implementation details
+- [ ] Story not in "In Progress" state
+- [ ] Story not assigned to implementing developer
+- [ ] Task specifications don't follow template requirements
+- [ ] Unclear libraries to use or implementation approach
 
-3. **Identify Project Management Tool**: Reference `.pair/adoption/tech/way-of-working.md` to determine current project management system and access procedures.
+**Developer Confirmation Required:**
+_"I've analyzed Story [STORY-ID]: [TITLE] with [X] tasks. All task specifications are complete and follow the template. Story is in 'In Progress' state and assigned to me. I understand the business value and technical requirements. Ready to proceed with implementation?"_
 
-**Phase 0B: Work Continuation or New Task Selection**
+### Phase 1: Setup & Context Loading
 
-4. **Check for Active Work**: Determine current development status and either continue active work or select next story based on state priority:
+```
+1. Validate Prerequisites → Check blockers and story state
+2. Load Technical Context → Architecture, tech stack, existing patterns
+3. Create Feature Branch → Standard naming with story reference
+4. Choose Commit Strategy → Per-task or per-story completion
+```
 
-   - **Active "In Progress" Stories**: Continue work on highest priority assigned story
-   - **Available "Refined" Stories**: Need task breakdown before implementation
-   - **"Todo" Stories**: Need refinement process before task breakdown
+**Branch Requirements:**
+Follow [branch template](../guidelines/collaboration/templates/branch-template.md) with pattern:
 
-5. **Sprint Story Analysis**: Review current sprint stories and propose next story for implementation based on state, priority, assignment, and readiness.
+```
+<type>/#<story-id>-<brief-description>
+```
 
-### Step 1: Story Selection and Workflow Setup
+**Examples:**
 
-**AI Assistant Instructions:** Handle story selection and workflow initialization:
+- `feature/#US-123-user-authentication`
+- `bug/#BUG-456-login-validation-error`
+- `docs/#DOC-789-api-documentation`
 
-1. **Finalize Story Selection**: Confirm story choice with developer and proceed with workflow setup.
+**Branch Creation:**
 
-   **User Confirmation Required**: _"I've identified [Story/Task identification details]. Should I proceed with implementing this [story/task]?"_
+```bash
+# Ensure clean main branch
+git checkout main
+git pull origin main
 
-2. **MANDATORY PRE-IMPLEMENTATION VALIDATION**: Following collaboration guidelines from `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md`:
+# Create feature branch with story reference
+git checkout -b feature/#US-123-user-authentication
 
-   **⚠️ CRITICAL: PROCESS BLOCKER - Implementation CANNOT proceed until ALL conditions are met:**
+# Set upstream tracking
+git push -u origin feature/#US-123-user-authentication
+```
 
-   - **User story MUST be in 'In Progress' state** (prerequisite for technical development)
-   - **User story MUST be assigned to me** (developer implementing the tasks)
-   - **Tasks MUST be defined** and documented within the user story
-   - **Epic status updated** to In Progress if necessary
-   - **Branch MUST be associated with the user story** if supported by the project management tool
+**Association**: Link branch to story in PM tool
 
-   **If story is in WRONG state:**
+### Phase 2: Task-by-Task Implementation
 
-   - **If story is in 'Todo' state**: **HALT** - Story needs refinement first using [08-how-to-refine-a-user-story.md](08-how-to-refine-a-user-story.md)
-   - **If story is in 'Refined' state**: **HALT** - Story needs task breakdown first using [09-how-to-create-tasks.md](09-how-to-create-tasks.md)
-   - **If story is in 'Done' state**: **HALT** - Story is completed, select different story
+```
+For each task in story:
+  1. Update Session State → Set active task and implementation mode
+  2. Validate Task Completeness → Ensure all required info present
+  3. Execute Implementation → TDD cycle OR Direct implementation
+  4. Update Task Status → Mark complete in PM tool
+  5. Commit Changes → Based on chosen strategy
+  6. Progress to Next → Update state for next task
+```
 
-   **If ANY of these conditions are NOT met:**
+**Task Validation Requirements:**
+Based on [task template](../guidelines/collaboration/templates/task-template.md), each task must have:
 
-   - **HALT ALL IMPLEMENTATION ACTIVITIES**
-   - **DO NOT create branches**
-   - **DO NOT write any code**
-   - **DO NOT proceed to Step 2**
+- Complete task information (ID, parent story, assignee, priority, status)
+- Detailed implementation approach (technical design, files to modify/create, dependencies)
+- Acceptance criteria (primary deliverable, quality standards, verification methods)
+- Development workflow (TDD approach, implementation steps, testing strategy)
 
-   **Required Action:** Request the developer to complete the missing requirements according to the collaboration guidelines, then verify completion before proceeding.
+**Implementation Rules by Task Type:**
 
-**If the project management tool doesn't support story assignment or branch association operations, request the developer to perform them manually according to the collaboration guidelines.**
+**Development Tasks (TDD Mode):**
 
-**Status Update Confirmation:**
-"✅ VALIDATION COMPLETE: Story '[STORY_ID]: [STORY_NAME]' is in 'In Progress' state, assigned to me, with tasks defined. Parent Epic '[EPIC_ID]' status updated accordingly. Branch will be associated with the story. All pre-implementation requirements met. Proceeding with development workflow setup."
+- **RED**: Write failing tests only, apply [unit testing guidelines](../guidelines/testing/unit-testing/README.md)
+- **GREEN**: Write minimal implementation only, follow [code design principles](../guidelines/code-design/design-principles/README.md)
+- **REFACTOR**: Improve structure only, keep tests green
 
-### Step 2: Branch Creation and Development Setup
+**Non-Development Tasks (Direct Mode):**
 
-1. **Verify Git Environment**: Confirm clean staging and main branch status.
+- **Documentation**: Follow [documentation standards](../guidelines/user-experience/markdown-templates.md)
+- **Configuration**: Apply [infrastructure guidelines](../guidelines/infrastructure/README.md)
+- **Research**: Document findings and recommendations
 
-2. **Apply Branch Naming Convention**: Create branch following established pattern:
+**Task Status Updates:**
 
-   - MUST include reference to user story as `#` + story code (e.g. `#231`)
-   - Follow naming pattern from way-of-working
-   - Use descriptive but concise name
+- Mark completed task as ✅ in story checklist
+- Update progress counter (e.g., "Tasks: 3/5 completed")
+- Preserve all story content (acceptance criteria, etc.)
 
-3. **Execute Branch Creation**: Create and switch to branch with upstream tracking.
+### Phase 3: Commit & Push Workflow
 
-### Step 3: Implementation Strategy Selection
+**Strategy Selection (Choose Once Per Story):**
 
-1. **Confirm TDD Approach**: Ask developer whether to follow TDD methodology for each task:
+**Option A: Per-Task Commits**
 
-   - For documentation tasks, TDD is **not required** by default
-   - For other tasks, propose TDD based on task nature
-   - Offer **Task-by-Task TDD Cycles** or **Feature-Complete TDD Implementation** options
+```
+After each task completion:
+1. Stage changes → git add .
+2. Commit with task reference → Follow commit standards
+3. Push to remote → Enable backup and collaboration
+```
 
-2. **Configure TDD Progress Tracking**: Set up appropriate tracking based on selected approach.
+**Option B: Per-Story Commits**
 
-### Step 4: TDD Task Implementation Execution
+```
+After all tasks complete:
+1. Stage all changes → git add .
+2. Commit with story summary → Reference all completed tasks
+3. Push final implementation → Ready for PR creation
+```
 
-**AI Assistant Instructions:** Execute TDD implementation following strict methodology:
+**Commit Message Format:**
+Follow [commit template](../guidelines/collaboration/templates/commit-template.md):
 
-1. **Load Technical Context**: Review all foundation documentation, knowledge base guidelines, and domain context before implementation.
+**For Development Tasks (TDD):**
 
-2. **Execute TDD Cycles**: For each task, follow strict TDD phases:
+```
+[US-XXX] [type]: [task-description]
 
-   - **RED Session**: Write ONLY failing tests for task requirements
-   - **GREEN Session**: Write ONLY implementation code to pass tests
-   - **REFACTOR Session**: Improve ONLY code structure while keeping tests green
+- Implement [specific functionality]
+- TDD: [RED|GREEN|REFACTOR] phase
+- Task: [TASK-ID] - [task title]
 
-3. **Version Consistency Validation**: Verify all dependencies use consistent versions, ensure only approved libraries are used, and request human approval for any changes.
+Refs: #story-id
+```
 
-4. **TDD Progress Tracking**: Maintain progress indicators based on selected approach (task-by-task or feature-complete).
+**For Non-Development Tasks:**
 
-### Step 5: TDD Implementation Review and Completion
+```
+[US-XXX] docs: [task-description]
+# or
+[US-XXX] config: [task-description]
+# or
+[US-XXX] chore: [task-description]
 
-Handle review process based on selected TDD approach:
+- [Description of changes]
+- Task: [TASK-ID] - [task title]
 
-**Task-by-Task Review**: After each complete RED-GREEN-REFACTOR cycle, provide comprehensive TDD cycle completion notification, update task checklist in user story, and handle feedback.
+Refs: #story-id
+```
 
-**Feature-Complete Review**: After all tasks complete TDD cycles, provide complete story TDD implementation summary, update all task checklists in user story, and handle comprehensive review.
+### Phase 4: Quality Validation & Handoff
 
-### Step 6: Implementation Documentation and Handoff
+```
+1. Run Quality Checks → Tests, lints, security scans
+2. Validate Implementation → All acceptance criteria met
+3. Update Story Status → Ready for review
+4. Prepare for PR Creation → Branch ready for pull request
+```
 
-1. **Create TDD Implementation Summary**: Document TDD-compliant work with technical implementation record.
+**Quality Gates:**
+Apply [quality standards](../guidelines/quality-assurance/quality-standards/README.md):
 
-2. **Update Project Management System**: Ensure accurate TDD status tracking with story completion status and epic progress updates.
+**For Development Tasks:**
 
-3. **Prepare for Code Review**: Set up next phase with TDD validation, ensuring branch contains complete TDD commit history and implementation completeness validation.
+- [ ] All tests passing (TDD cycles complete)
+- [ ] All tasks marked complete in story
+- [ ] All acceptance criteria addressed
+- [ ] Code follows [code design guidelines](../guidelines/code-design/README.md)
+- [ ] Only approved libraries from [tech-stack.md](../adoption/tech/tech-stack.md) used
+- [ ] Version consistency maintained per [architecture decisions](../adoption/tech/architecture.md)
 
-### Step 7: Task Completion Tracking
+**For Non-Development Tasks:**
 
-**AI Assistant Instructions:** Update task progress in user story upon task completion and approval:
+- [ ] All tasks marked complete in story
+- [ ] All acceptance criteria addressed
+- [ ] Documentation follows [markdown standards](../guidelines/user-experience/markdown-templates.md)
+- [ ] Configuration follows [infrastructure guidelines](../guidelines/infrastructure/README.md)
+- [ ] Research findings properly documented and recommendations clear
 
-1. **Identify Completed Task**: Determine which specific task has been completed and approved
-2. **Read Current User Story**: Retrieve the current user story body including the task breakdown section
-3. **Update Task Checklist**: Mark the completed task as checked without modifying any other content
-4. **Update Progress Counter**: Update the task progress counter
-5. **Preserve All Other Content**: Ensure no refinement details, acceptance criteria, or other story content is overwritten
+### Phase 5: Pull Request Creation & Review Setup
 
-**Reference**: Follow the [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) format for proper task completion tracking and documentation.
+```
+1. Generate PR Description → Using PR template with complete context
+2. Assign Reviewers → Based on code expertise and team patterns
+3. Create Pull Request → With proper title, description, and metadata
+4. Update Project Status → Mark story as "In Review"
+5. Setup Review Communication → Notify reviewers and establish channels
+```
 
-**Task Completion Validation:**
-_"✅ TASK COMPLETED: Task '[TASK-ID]: [TASK_TITLE]' has been marked as completed in User Story '[STORY_ID]: [STORY_NAME]'. Task progress updated. User story remains in 'In Progress' state until all tasks are completed."_
+**PR Creation Requirements:**
+Follow [PR template](../guidelines/collaboration/templates/pr-template.md) structure:
 
-**When All Tasks Complete:**
-_"🎉 ALL TASKS COMPLETED: All tasks for User Story '[STORY_ID]: [STORY_NAME]' have been completed. The story is ready for final review and potential status update to 'Done' following the code review process."_
+**PR Title Format:**
 
-## Quality Assurance Framework
+```
+[US-XXX] [type]: [brief description of changes]
+```
 
-### TDD Quality Standards
+**PR Description Structure:**
 
-- [ ] **RED Phase Compliance**: All tests written before implementation code
-- [ ] **GREEN Phase Compliance**: Minimal implementation written to pass tests only
-- [ ] **REFACTOR Phase Compliance**: Code improvements made without behavior changes
-- [ ] **Session Separation**: No mixed test/implementation modifications in same session
-- [ ] **Complete Cycles**: All tasks completed full RED-GREEN-REFACTOR cycles
-- [ ] **Test Coverage**: Comprehensive test coverage for all acceptance criteria
+- **Summary**: What changed and why
+- **Story Context**: User story reference and acceptance criteria coverage
+- **Changes Made**: Implementation details and files affected
+- **Testing**: Test coverage and validation steps
+- **Quality Assurance**: Code quality checklist and review areas
+- **Deployment Information**: Environment impact and deployment notes
 
-### Implementation Quality Requirements
+**Reviewer Assignment Strategy:**
 
-- [ ] **Standard Compliance**: All code follows established conventions
-- [ ] **Architecture Alignment**: Implementation follows adopted patterns
-- [ ] **Technology Standards**: Uses approved technologies with exact versions
-- [ ] **Version Consistency**: All dependencies use consistent versions across workspaces
-- [ ] **Documentation**: Code includes appropriate documentation and comments
-- [ ] **Security**: Follows established security standards
+- **Code Area Experts**: Assign reviewers with expertise in affected components
+- **Team Rotation**: Follow team patterns for knowledge distribution
+- **Required Reviewers**: Include mandatory reviewers per team policy
+- **Knowledge Sharing**: Balance expertise with learning opportunities
 
-### Implementation Completeness
+**Project Status Update:**
 
-- [ ] **Task Specifications**: All requirements implemented exactly as specified
-- [ ] **Acceptance Criteria**: All story acceptance criteria addressed
-- [ ] **Technical References**: Implementation follows referenced patterns
-- [ ] **Integration Points**: External dependencies properly integrated
-- [ ] **Error Handling**: Appropriate error handling implemented
-- [ ] **User Experience**: UI/UX follows established patterns
+- Update story status from "Implementation Complete" to "In Review"
+- Add PR reference to all related tasks in PM tool
+- Update epic progress to reflect code review phase
+- Maintain traceability: Story → Tasks → Commits → PR
 
-### Process Compliance
+## Key References
 
-- [ ] **Branch Management**: Development branch properly created with standard naming and story association
-- [ ] **Commit Standards**: All commits follow established message formatting with TDD phases
-- [ ] **Progress Tracking**: Task and story status accurately maintained with TDD indicators
-- [ ] **Task Checklist Updates**: Task completion tracked in user story without overwriting refined content
-- [ ] **Review Process**: Appropriate review checkpoints completed for TDD cycles
-- [ ] **Status Updates**: Project management system properly updated according to collaboration guidelines
-- [ ] **Documentation Updates**: Any new patterns or decisions properly documented
-- [ ] **Epic Management**: Parent epic status properly maintained
-- [ ] **Handoff Preparation**: Implementation ready for code review with TDD documentation
+**Technical Constraints:**
 
-## Best Practices
+- **Libraries**: Only approved from [tech-stack.md](../adoption/tech/tech-stack.md) or task-specified
+- **Architecture**: Follow [architecture decisions](../adoption/tech/architecture.md) and [guidelines](../guidelines/architecture/README.md)
+- **Quality**: Apply [code design](../guidelines/code-design/README.md), [security](../guidelines/quality-assurance/security/README.md), and [quality standards](../guidelines/quality-assurance/quality-standards/README.md)
 
-### TDD-Specific Do's:
+**Emergency Procedures:**
 
-- **Always follow strict TDD methodology** with complete RED-GREEN-REFACTOR cycles
-- **Write tests first in dedicated sessions** without any implementation code modifications
-- **Implement minimal code in separate sessions** focused solely on making tests pass
-- **Never modify tests and implementation together** - maintain strict session separation
-- **Validate test failures are meaningful** before proceeding to implementation
-- **Commit each TDD phase separately** with clear phase identification
+- **Story Issues**: Use [08-refine-story](./08-how-to-refine-a-user-story.md) or [09-create-tasks](./09-how-to-create-tasks.md)
+- **Technical Blockers**: Halt implementation, request task updates, consult relevant guidelines
+- **Process Issues**: Reset to last stable state, escalate to developer
 
-### General Do's:
+## Success Criteria
 
-- **Always analyze sprint status first** to identify active work or priorities
-- **Verify git environment cleanliness** before starting work
-- **Follow established naming conventions** for branches and commits
-- **Reference complete technical context** including architecture and standards
-- **Maintain version consistency** across all workspaces
-- **Request human approval** for any version changes or architectural decisions
-- **Provide clear progress tracking** with regular status updates
-- **Update task checklist in user story** upon task completion without overwriting other content
+**Story Implementation Complete When:**
 
-### TDD-Specific Don'ts:
+- [ ] Phase 0: Story & Task Analysis completed successfully
+- [ ] All tasks marked ✅ in story checklist
+- [ ] All acceptance criteria validated
+- [ ] Implementation matches task specifications exactly
+- [ ] Code committed and pushed to feature branch
+- [ ] Quality gates passed per [quality standards](../guidelines/quality-assurance/quality-standards/README.md)
+- [ ] Pull request created with comprehensive description using [PR template](../guidelines/collaboration/templates/pr-template.md)
+- [ ] Reviewers assigned based on expertise and team patterns
+- [ ] Story status updated to "In Review" in PM tool
+- [ ] Ready for code review process
 
-- **Never write implementation before tests** - always start with RED phase
-- **Don't modify tests and code together** - maintain strict session separation
-- **Never skip test failure validation** - ensure tests fail for correct reasons
-- **Don't over-engineer in GREEN phase** - write minimal code to pass tests
-- **Never change behavior during REFACTOR** - improve structure only
-- **Don't commit mixed changes** - each commit should represent single TDD phase
+**Additional for Development Tasks:**
 
-### General Don'ts:
+- [ ] All TDD cycles completed (RED-GREEN-REFACTOR)
+- [ ] All tests passing with adequate coverage
 
-- **Never start implementation** without analyzing current sprint status
-- **Don't create branches** with uncommitted changes or when not on main
-- **Never implement version differences** without explicit human approval
-- **Don't deviate from task specifications** without documented justification
-- **Never skip testing requirements** established in testing strategy
-- **Don't ignore architectural patterns** established in documentation
-- **Never commit work** without following established standards
-- **Don't update project status** without following collaboration guidelines
+**Additional for Non-Development Tasks:**
 
-## Common Pitfalls and Solutions
-
-| Pitfall                                       | Impact                               | Solution                                                  |
-| --------------------------------------------- | ------------------------------------ | --------------------------------------------------------- |
-| **Writing tests and implementation together** | Violates TDD methodology             | Maintain strict session separation                        |
-| **Adding unapproved libraries**               | Breaks architectural consistency     | Use only libraries from adoption documentation            |
-| **Skipping test failure validation**          | Tests may not test intended behavior | Always validate meaningful failures before implementation |
-| **Over-engineering in GREEN phase**           | Adds unnecessary complexity          | Write minimal code to pass tests                          |
-| **Mixed TDD phase commits**                   | Obscures TDD process                 | Each commit should represent single TDD phase             |
-| **Skipping sprint analysis**                  | Working on wrong priorities          | Always analyze current sprint and git status first        |
-| **Version inconsistency introduction**        | Breaking builds and deployments      | Validate consistency and request approval for changes     |
-| **Improper story/branch association**         | Lost traceability                    | Follow collaboration guidelines for proper association    |
+- [ ] Documentation meets [markdown standards](../guidelines/user-experience/markdown-templates.md)
+- [ ] Configuration follows [infrastructure guidelines](../guidelines/infrastructure/README.md)
+- [ ] Research findings properly documented
 
 ## References
 
-**Essential Files:**
+### Templates & Guidelines
 
-- [Product vision and requirements](.pair/adoption/product/PRD.md)
-- [Development methodology](.pair)
-- [System architecture patterns](.pair/adoption/tech/architecture.md)
-- [Technology standards](.pair/adoption/tech/tech-stack.md)
-- [User interface guidelines](.pair/adoption/tech/ux-ui.md)
-- [Project Management Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+- [Task Template](../guidelines/collaboration/templates/task-template.md) - Complete task specification format
+- [Branch Template](../guidelines/collaboration/templates/branch-template.md) - Branch naming standards
+- [Commit Template](../guidelines/collaboration/templates/commit-template.md) - Commit message format
+- [PR Template](../guidelines/collaboration/templates/pr-template.md) - Pull request structure
 
-**Knowledge Base (Complete Technical Guidelines):**
+### Technical Standards
 
-- **[architecture/README.md](.pair/knowledge/guidelines/architecture/README.md))** - Architecture patterns and ADR processes
-- **[02-code-design-guidelines.md](.pair/knowledge/guidelines/code-design/README.md)** - Code organization and design patterns
-- **[07-testing-strategy.md](.pair/knowledge/guidelines/testing/test-strategy/README.md)** - Testing frameworks and TDD strategies
-- **[06-definition-of-done.md](.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md)** - Quality criteria and completion standards
+- [Tech Stack](../adoption/tech/tech-stack.md) - Approved libraries and versions
+- [Architecture Decisions](../adoption/tech/architecture.md) - System architecture patterns
+- [Way of Working](../adoption/tech/way-of-working.md) - Development process configuration
 
-**Process Dependencies:**
+### Development Guidelines
 
-- **Prerequisites**: Tasks from refined user story ready for implementation
-- **Input**: Task specifications serve as implementation requirements
-- **Output**: Working code with comprehensive test coverage ready for code review
-- **TDD Methodology**: All implementation must follow strict Test-Driven Development
-- **Next Phase**: TDD-compliant code ready for code review process
+- [TDD Guidelines](../guidelines/testing/test-strategy/tdd-test-driven-development.md) - Test-driven development methodology
+- [Unit Testing](../guidelines/testing/unit-testing/README.md) - Testing standards and practices
+- [Code Design](../guidelines/code-design/README.md) - Code design principles and patterns
+- [Quality Standards](../guidelines/quality-assurance/quality-standards/README.md) - Quality gates and criteria
 
-**Related Documents:**
+### Process Guidelines
 
-- Previous: [09-how-to-create-tasks.md](09-how-to-create-tasks.md)
-- Bootstrap: [02-how-to-complete-bootstrap-checklist.md](02-how-to-complete-bootstrap-checklist.md)
-- Next: [11-how-to-commit-and-push](11-how-to-commit-and-push.md)
+- [Project Management Framework](../guidelines/collaboration/project-management-tool/README.md) - PM tool usage
+- [Security Guidelines](../guidelines/quality-assurance/security/README.md) - Security requirements
+- [Infrastructure Guidelines](../guidelines/infrastructure/README.md) - Configuration standards
+- [Documentation Standards](../guidelines/user-experience/markdown-templates.md) - Markdown formatting
 
-This guide ensures systematic, high-quality task implementation following established technical standards and strict Test-Driven Development methodology while maintaining development workflow consistency and preparing code for effective review processes.
+### Related Workflows
+
+- [08-how-to-refine-a-user-story.md](./08-how-to-refine-a-user-story.md) - Story refinement process
+- [09-how-to-create-tasks.md](./09-how-to-create-tasks.md) - Task creation workflow
+- [13-how-to-code-review.md](./13-how-to-code-review.md) - Code review process
+
+## Next Steps
+
+→ [13-how-to-code-review.md](./13-how-to-code-review.md)
