@@ -449,8 +449,8 @@ Follow [PR template](.pair/knowledge/guidelines/collaboration/templates/pr-templ
 
 - [08-how-to-refine-a-user-story.md](08-how-to-refine-a-user-story.md) - Story refinement process
 - [09-how-to-create-tasks.md](09-how-to-create-tasks.md) - Task creation workflow
-- [13-how-to-code-review.md](13-how-to-code-review.md) - Code review process
+- [11-how-to-code-review.md](11-how-to-code-review.md) - Code review process
 
 ## Next Steps
 
-→ [13-how-to-code-review.md](13-how-to-code-review.md)
+→ [11-how-to-code-review.md](11-how-to-code-review.md)

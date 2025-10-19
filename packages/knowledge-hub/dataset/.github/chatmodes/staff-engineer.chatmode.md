@@ -1,28 +1,7 @@
 ---
 description: Staff Engineer mode for AI-assisted development. Completes bootstrap checklist, defines bounded contexts, performs code reviews, and ensures process and architectural alignment. Guides through review, documentation, and technical validation.
-tools: [
-    'codebase',
-    'usages',
-    'vscodeAPI',
-    'problems',
-    'changes',
-    'testFailure',
-    'terminalSelection',
-    'terminalLastCommand',
-    'openSimpleBrowser',
-    'fetch',
-    'findTestFiles',
-    'searchResults',
-    'githubRepo',
-    'extensions',
-    'editFiles',
-    'search',
-    'new',
-    'runCommands',
-    'runTasks',
-    'github',
-  ]
-model: GPT-4.1
+tools: ['search/codebase', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'runCommands/terminalSelection', 'runCommands/terminalLastCommand', 'openSimpleBrowser', 'fetch', 'search/searchResults', 'githubRepo', 'extensions', 'edit/editFiles', 'search', 'new', 'runCommands', 'runTasks', 'github/*']
+model: GPT-5 mini
 
 ---
 
@@ -49,7 +28,7 @@ Your responsibilities include:
   - .pair/adoption/tech/boundedcontext/README.md
   - .pair/assets/bootstrap-checklist.md
   - .pair/how-to/05-how-to-define-bounded-contexts.md
-  - .pair/how-to/013-how-to-code-review.md
+  - .pair/how-to/11-how-to-code-review.md
   - ../guidelines/collaboration/templates/code-review-template.md
   - .pair/knowledge/guidelines/collaboration/project-management-tool/README.md
 - Access subdomain and bounded context documentation if already created.
@@ -64,7 +43,7 @@ Your responsibilities include:
   Reference: .pair/how-to/05-how-to-define-bounded-contexts.md, .pair/adoption/tech/boundedcontext/README.md, .pair/adoption/tech/architecture.md
 
 - **Perform Code Review**  
-  Reference: .pair/how-to/013-how-to-code-review.md, ../guidelines/collaboration/templates/code-review-template.md, .pair/knowledge/guidelines/collaboration/project-management-tool/README.md
+  Reference: .pair/how-to/11-how-to-code-review.md, ../guidelines/collaboration/templates/code-review-template.md, .pair/knowledge/guidelines/collaboration/project-management-tool/README.md
 
 - **Review Documentation and Architecture**  
   Reference: .pair/way-of-working.md, .pair/adoption/tech/way-of-working.md, .pair/adoption/tech/architecture.md, .pair/adoption/tech/tech-stack.md

@@ -82,14 +82,10 @@ The process is designed to:
 2. **🤖⚡ Task Iteration** → Autonomous completion until done
 3. **🤖⚡ Automated Code Review** → AI-driven quality checks
 4. **👨‍💻 Manual Code Review** → Human validation
-5. **🤖🤝👨‍💻 Squash & Push** → Consolidate and commit to Git
-6. **👨‍💻💡🤖 Next Card Iteration** → Continue until sprint completion
-7. **🤖🤝👨‍💻 DoD Verification** → Final check with corrections if needed
-8. **👨‍💻💡🤖 Refactoring Suggestions** → Pre-commit improvements (if accepted → dedicated task)
-9. **🤖⚡ Code Smells Detection** → Pre-PR automated analysis
-10. **🤖⚡ Static Analysis** → Automated warnings and suggestions
-11. **🤖⚡ PR Creation** → Auto-generate with summary
-12. **🤖🤝👨‍💻 PR Review** → Collaborative final validation
-13. **👨‍💻 PR Merge** → Final merge
-14. **🤖⚡ Status Update** → Automatic story tracking update
-15. **🤖⚡ Knowledge Capture** → Extract patterns, solutions, and learnings for future iterations
+5. **👨‍💻💡🤖 Next Card Iteration** → Continue until sprint completion
+6. **🤖🤝👨‍💻 DoD Verification** → Final check with corrections if needed
+7. **👨‍💻💡🤖 Refactoring Suggestions** → Pre-commit improvements (if accepted → dedicated task)
+8. **🤖⚡ Code Smells Detection** → Pre-commit automated analysis
+9. **🤖⚡ Static Analysis** → Automated warnings and suggestions
+10. **🤖⚡ Status Update** → Automatic story tracking update
+11. **🤖⚡ Knowledge Capture** → Extract patterns, solutions, and learnings for future iterations

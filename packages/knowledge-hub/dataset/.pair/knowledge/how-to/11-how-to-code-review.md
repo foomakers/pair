@@ -345,7 +345,6 @@ Closes #T-XXX, #T-YYY
 
 ### Related Workflows
 
-- [12-how-to-create-a-pr.md](12-how-to-create-a-pr.md) - Pull request creation requirements
 - [10-how-to-implement-a-task.md](10-how-to-implement-a-task.md) - Follow-up task implementation process
 - [08-how-to-refine-a-user-story.md](08-how-to-refine-a-user-story.md) - Story refinement for incomplete requirements
 - [09-how-to-create-tasks.md](09-how-to-create-tasks.md) - Task creation for review findings

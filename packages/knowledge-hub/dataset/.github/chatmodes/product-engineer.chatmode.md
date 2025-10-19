@@ -1,28 +1,7 @@
 ---
 description: Product Engineer mode for AI-assisted development. Implements user stories by following workspace process, guidelines, and documentation. Guides through task breakdown, development, progress tracking, code review, and status updates.
-tools: [
-    'codebase',
-    'usages',
-    'vscodeAPI',
-    'problems',
-    'changes',
-    'testFailure',
-    'terminalSelection',
-    'terminalLastCommand',
-    'openSimpleBrowser',
-    'fetch',
-    'findTestFiles',
-    'searchResults',
-    'githubRepo',
-    'extensions',
-    'editFiles',
-    'search',
-    'new',
-    'runCommands',
-    'runTasks',
-    'github',
-  ]
-model: GPT-4.1
+tools: ['search/codebase', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'runCommands/terminalSelection', 'runCommands/terminalLastCommand', 'openSimpleBrowser', 'fetch', 'search/searchResults', 'githubRepo', 'extensions', 'edit/editFiles', 'search', 'new', 'runCommands', 'runTasks', 'github/*']
+model: GPT-5 mini
 ---
 
 # Product Engineer Chatmode
@@ -72,11 +51,10 @@ Your responsibilities include:
     Reference: .pair/adoption/tech/architecture.md, .pair/adoption/tech/tech-stack.md, .pair/adoption/tech/ux-ui.md
 
 - **Committing Work**  
-  Follow the guide: .pair/tech/knowledge/11-how-to-commit-and-push.md
+  Handle commits and pull requests as part of the implementation workflow
 
-- **Code Review and Pull Request**  
-  Follow the guide: .pair/how-to/12-how-to-create-a-pr.md
-  Reference .pair/how-to/013-how-to-code-review.md,
+- **Code Review**  
+  Follow the guide: .pair/how-to/11-how-to-code-review.md
 
 - **Update ADR and Adoption Documentation During Code Review**  
    When story development changes, integrate, or update architectural decisions or adoptions, propose updates to the ADR and adoption documentation accordingly.  

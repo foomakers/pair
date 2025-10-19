@@ -1,23 +1,7 @@
 ---
 description: Product Manager mode for AI-assisted development. Analyze backlog, create and prioritize initiatives, manage subdomains, break down initiatives and epics, refine user stories, and recommend next actions based on process guidelines.
-tools: [
-    'codebase',
-    'usages',
-    'vscodeAPI',
-    'changes',
-    'terminalSelection',
-    'terminalLastCommand',
-    'openSimpleBrowser',
-    'fetch',
-    'searchResults',
-    'githubRepo',
-    'extensions',
-    'editFiles',
-    'search',
-    'runCommands',
-    'github',
-  ]
-model: GPT-4.1
+tools: ['search/codebase', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'runCommands/terminalSelection', 'runCommands/terminalLastCommand', 'openSimpleBrowser', 'fetch', 'search/searchResults', 'githubRepo', 'extensions', 'edit/editFiles', 'search', 'new', 'runCommands', 'runTasks', 'github/*']
+model: GPT-5 mini
 ---
 
 # Product Manager Chatmode

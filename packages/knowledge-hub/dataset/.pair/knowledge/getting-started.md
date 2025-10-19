@@ -72,9 +72,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 │       ├── 08-how-to-refine-a-user-story.md
 │       ├── 09-how-to-create-tasks.md
 │       ├── 10-how-to-implement-a-task.md
-│       ├── 11-how-to-commit-and-push.md
-│       ├── 12-how-to-create-a-pr.md
-│       └── 13-how-to-code-review.md
+│       └── 11-how-to-code-review.md
 ```markdown
 
 ### 📂 Folder Overview:
@@ -82,7 +80,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 - **`way-of-working.md`**: Main process documentation – the starting point to understand the full workflow
 - **`getting-started.md`**: This guide – essential information to get started with the framework
 - **`how-to/`**: Step-by-step guides for each development phase and LLM collaboration
-  - Process guides (01-13): Operational documentation for each phase
+  - Process guides (01-11): Operational documentation for each phase
 - **`assets/`**: Templates, checklists, and document examples (e.g., PRD, bootstrap checklist)
 - **`adoption/`**: Product requirements and technical adoption documents
   - `product/`: Product requirements and subdomain guidelines
