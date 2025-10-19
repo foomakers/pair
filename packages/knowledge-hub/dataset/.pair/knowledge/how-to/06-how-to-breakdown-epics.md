@@ -30,7 +30,7 @@ EPIC BREAKDOWN STATE:
 ### Strategic Epic Architecture
 
 - **Select ready initiatives FIRST** - focus on Todo state, P0 > P1 > P2 priority
-- **Design for sequential execution** - single-team development with clear dependencies  
+- **Design for sequential execution** - single-team development with clear dependencies
 - **Ensure end-to-end value delivery** - each epic provides complete user functionality
 - **Size for 2-4 sprints** - manageable increments with measurable outcomes
 - **Plan Epic 0 for new projects** - application bootstrap and technical foundation
@@ -41,7 +41,7 @@ EPIC BREAKDOWN STATE:
 **CRITICAL**: Before starting epic breakdown:
 
 - **HALT if bootstrap incomplete** - verify [way-of-working.md](../adoption/tech/way-of-working.md) and tool configuration
-- **HALT if no Todo initiatives** - initiatives must be ready for breakdown  
+- **HALT if no Todo initiatives** - initiatives must be ready for breakdown
 - **HALT if tool access unclear** - must understand PM tool hierarchy and linking approach
 - **Do NOT proceed** without clear initiative selection and technical context
 
@@ -52,6 +52,7 @@ EPIC BREAKDOWN STATE:
 **Objective**: Verify prerequisites and establish initiative context for breakdown.
 
 1. **Verify Bootstrap Completion**:
+
    - Confirm [way-of-working.md](../adoption/tech/way-of-working.md) exists with PM tool configuration
    - Check foundational documents: PRD, architecture, tech-stack, boundedcontext
    - Validate PM tool access per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
@@ -59,11 +60,11 @@ EPIC BREAKDOWN STATE:
 2. **Handle Missing Prerequisites**:
 
    _"I need to verify epic breakdown prerequisites:_
-   
+
    - _**Bootstrap Status**: [checked/missing foundation docs]_
-   - _**PM Tool Configuration**: [tool name from way-of-working.md]_  
+   - _**PM Tool Configuration**: [tool name from way-of-working.md]_
    - _**Tool Access**: [verified per PM guidelines]_
-   
+
    _Missing: [specific items]. Should we complete [missing elements] first or proceed with available context?"_
 
 **Foundation Reference**: [Bootstrap Checklist](02-how-to-complete-bootstrap-checklist.md)
@@ -73,6 +74,7 @@ EPIC BREAKDOWN STATE:
 **Objective**: Identify highest-priority Todo initiative ready for epic breakdown.
 
 1. **Apply Initiative Selection Criteria**:
+
    - **Priority Order**: P0 > P1 > P2 initiatives in Todo state
    - **Avoid In-Progress**: Skip initiatives already being executed
    - **Check Dependencies**: Ensure initiative readiness for breakdown
@@ -81,11 +83,11 @@ EPIC BREAKDOWN STATE:
 2. **Present Initiative Recommendation**:
 
    _"Based on analysis, I recommend breaking down Initiative '[INITIATIVE_NAME]' (Priority: [P0/P1/P2], State: Todo) because:_
-   
+
    - _[specific business value and readiness rationale]_
    - _[scope and technical alignment]_
    - _[estimated epic count and duration]_
-   
+
    _This initiative will deliver [key user value]. Should I proceed with epic breakdown for this initiative?"_
 
 **Selection Reference**: [Initiative Guidelines](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md)
@@ -95,12 +97,14 @@ EPIC BREAKDOWN STATE:
 **Objective**: Analyze initiative deeply and propose comprehensive epic structure.
 
 1. **Analyze Initiative Components**:
+
    - Business objectives and success metrics from PRD context
-   - User value propositions and journey stages  
+   - User value propositions and journey stages
    - Technical requirements from architecture and tech-stack
    - Bounded context alignment for service boundaries
 
 2. **Identify Epic Structure**:
+
    - **Epic 0 Assessment**: For new projects, determine if application bootstrap epic needed
    - **Value-Driven Grouping**: Natural feature groupings following user workflows
    - **Sequential Dependencies**: Foundation-first, user journey progression
@@ -109,15 +113,16 @@ EPIC BREAKDOWN STATE:
 3. **Present Epic Breakdown Proposal**:
 
    _"Epic breakdown analysis for '[INITIATIVE_NAME]':_
-   
+
    **Epic Structure** ([X] epics, [Y] sprints total):
+
    - _Epic 0: Application Bootstrap [if needed] (2-3 sprints) - Technical foundation_
-   - _Epic 1: [Name] (2-3 sprints) - [Core user value]_  
+   - _Epic 1: [Name] (2-3 sprints) - [Core user value]_
    - _Epic 2: [Name] (3-4 sprints) - [Extended functionality]_
    - _Epic 3: [Name] (2-3 sprints) - [Advanced features]_
-   
+
    **Execution Logic**: [Foundation → Core → Extensions → Advanced] with clear user value at each stage.
-   
+
    _Does this breakdown structure align with your development approach and initiative objectives?"_
 
 **Epic Sizing Reference**: [Epic Template](.pair/knowledge/guidelines/collaboration/templates/epic-template.md)
@@ -127,6 +132,7 @@ EPIC BREAKDOWN STATE:
 **Objective**: Document each epic comprehensively and create in project management tool.
 
 1. **Document Individual Epics**:
+
    - Use complete [Epic Template](.pair/knowledge/guidelines/collaboration/templates/epic-template.md) structure
    - Start with Epic 0 (if required), then sequential order
    - Include objective, scope, success criteria, technical considerations
@@ -135,13 +141,13 @@ EPIC BREAKDOWN STATE:
 2. **Epic Presentation Format**:
 
    _"Epic [N]: [NAME] documentation:_
-   
+
    - _**Objective**: [Clear user-value statement]_
-   - _**Duration**: [2-4 sprints with rationale]_  
+   - _**Duration**: [2-4 sprints with rationale]_
    - _**Success Criteria**: [Measurable, user-focused outcomes]_
    - _**Technical Scope**: [Architecture and integration considerations]_
    - _**Dependencies**: [Previous epics or external requirements]_
-   
+
    _Does this epic definition capture the right scope and value delivery? Any adjustments needed?"_
 
 3. **Create in Project Management Tool**:
@@ -157,6 +163,7 @@ EPIC BREAKDOWN STATE:
 **Objective**: Finalize epic breakdown and prepare for user story phase.
 
 1. **Validate Complete Breakdown**:
+
    - All epics documented with comprehensive template information
    - Epic sequence logic verified (foundation → user value progression)
    - Initiative objectives fully covered by epic scope
@@ -165,12 +172,12 @@ EPIC BREAKDOWN STATE:
 2. **Update Initiative Status**:
 
    _"✅ EPIC BREAKDOWN COMPLETE:_
-   
+
    - _Initiative '[INITIATIVE_NAME]': [X] epics created spanning [Y] sprints_
    - _Epic sequence: [Epic 0 →] Epic 1 → Epic 2 → Epic 3 [example flow]_
    - _Tool documentation: All epics properly linked in [PM_TOOL]_
    - _Status update: Initiative changed from 'Todo' to 'In Progress'_
-   
+
    _Epic breakdown complete. Ready to proceed with user story breakdown when development begins."_
 
 **Next Phase Reference**: [User Story Breakdown](07-how-to-breakdown-user-stories.md)
