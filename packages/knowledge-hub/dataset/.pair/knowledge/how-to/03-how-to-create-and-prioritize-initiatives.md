@@ -50,9 +50,9 @@ INITIATIVE CREATION STATE:
 
 1. **Check Bootstrap Status**:
 
-   - PRD exists and is complete: [`.pair/product/adopted/PRD.md`](../adoption/product/PRD.md)
-   - Technical standards established: [`.pair/adoption/tech/`](../adoption/tech/)
-   - Project management tool configured: [`.pair/adoption/tech/way-of-working.md`](../adoption/tech/way-of-working.md)
+   - PRD exists and is complete: [`.pair/product/adopted/PRD.md`](.pair/adoption/product/PRD.md)
+   - Technical standards established: [`.pair/adoption/tech/`](.pair/adoption/tech)
+   - Project management tool configured: [`.pair/adoption/tech/way-of-working.md`](.pair/adoption/tech/way-of-working.md)
 
 2. **Configure Project Management Access**:
 
@@ -100,7 +100,7 @@ INITIATIVE CREATION STATE:
 
    _Does this prioritization align with your business strategy? What would you adjust?"_
 
-**Analysis Guidelines**: [Business Value Assessment](../guidelines/collaboration/business-value-assessment.md)
+**Analysis Guidelines**: [Business Value Assessment](.pair/knowledge/guidelines/quality-assurance/performance/continuous-improvement.md#business-value-assessment)
 
 ### Phase 3: Initiative Creation
 
@@ -166,7 +166,7 @@ INITIATIVE CREATION STATE:
    - Establish process for initiative updates and iterations
    - Verify tool integration for next development phase
 
-**Planning Reference**: [Roadmap Planning Guidelines](../guidelines/collaboration/roadmap-planning.md)
+**Planning Reference**: [Roadmap Planning Guidelines](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md#quarterly-roadmap)
 
 ## Quality Standards
 
@@ -236,13 +236,13 @@ INITIATIVE CREATION STATE:
 
 **Guidelines for Implementation:**
 
-- [Business Value Assessment](../guidelines/collaboration/business-value-assessment.md) - Framework for analyzing and prioritizing business impact
-- [Roadmap Planning Guidelines](../guidelines/collaboration/roadmap-planning.md) - Timeline and dependency management best practices
+- [Business Value Assessment](.pair/knowledge/guidelines/quality-assurance/performance/continuous-improvement.md#business-value-assessment) - Framework for analyzing and prioritizing business impact
+- [Roadmap Planning Guidelines](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md#quarterly-roadmap) - Timeline and dependency management best practices
 
 **Prerequisite Documentation:**
 
-- [`.pair/product/adopted/PRD.md`](../adoption/product/PRD.md) - Product Requirements Document with business objectives
-- [`.pair/adoption/tech/way-of-working.md`](../adoption/tech/way-of-working.md) - Project management tool configuration
+- [`.pair/product/adopted/PRD.md`](.pair/adoption/product/PRD.md) - Product Requirements Document with business objectives
+- [`.pair/adoption/tech/way-of-working.md`](.pair/adoption/tech/way-of-working.md) - Project management tool configuration
 - [Bootstrap Checklist](02-how-to-complete-bootstrap-checklist.md) - Process for establishing foundational documentation
 
 ## Next Steps

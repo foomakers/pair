@@ -34,7 +34,7 @@ SUBDOMAIN DEFINITION STATE:
 - **Create catalog before details** - validate complete subdomain landscape first, then define individually
 - **Follow DDD implementation patterns**: [Domain-Driven Design Guidelines](.pair/knowledge/guidelines/architecture/design-patterns/domain-driven-design.md)
 - **Apply strategic subdomain framework**: [Strategic Subdomain Definition](.pair/knowledge/guidelines/architecture/design-patterns/strategic-subdomain-definition.md)
-- **Document with standards**: [Documentation Guidelines](../guidelines/documentation/README.md)
+- **Document with standards**: [Documentation Guidelines](.pair/knowledge/guidelines/README.md)
 
 **CRITICAL**: Before starting subdomain definition:
 
@@ -51,9 +51,9 @@ SUBDOMAIN DEFINITION STATE:
 
 1. **Check Prerequisites**:
 
-   - PRD exists and complete: [`.pair/product/adopted/PRD.md`](../adoption/product/PRD.md)
+   - PRD exists and complete: [`.pair/product/adopted/PRD.md`](.pair/adoption/product/PRD.md)
    - Initiatives identified: Following [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
-   - Bootstrap complete: [`.pair/adoption/tech/`](../adoption/tech/)
+   - Bootstrap complete: [`.pair/adoption/tech/`](.pair/adoption/tech)
 
 2. **Configure Domain Analysis Context**:
 
@@ -147,11 +147,11 @@ SUBDOMAIN DEFINITION STATE:
 
 1. **File Generation**:
 
-   _"Creating subdomain documentation in [`.pair/adoption/product/subdomain/`](../adoption/product/subdomain/):_
+   _"Creating subdomain documentation in [`.pair/adoption/product/subdomain/`](.pair/adoption/product/subdomain):_
 
    - _Individual files: [subdomain-name].md for each subdomain_
    - _README.md: Catalog index with links and descriptions_
-   - _Format: Following [Documentation Standards](../guidelines/documentation/README.md)_
+   - _Format: Following [Documentation Standards](.pair/knowledge/guidelines/README.md)_
 
    _All files will be validated before storage. Ready to generate?"_
 
@@ -179,7 +179,7 @@ SUBDOMAIN DEFINITION STATE:
 
 ### Core Documentation
 
-- [Product Requirements Document](../adoption/product/PRD.md) - Business context and objectives
+- [Product Requirements Document](.pair/adoption/product/PRD.md) - Business context and objectives
 - [Strategic Initiatives](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) - Business priorities and roadmap
 - [Bootstrap Checklist](02-how-to-complete-bootstrap-checklist.md) - Prerequisites and setup
 
@@ -187,7 +187,7 @@ SUBDOMAIN DEFINITION STATE:
 
 - [Domain-Driven Design](.pair/knowledge/guidelines/architecture/design-patterns/domain-driven-design.md) - DDD implementation patterns
 - [Strategic Subdomain Definition](.pair/knowledge/guidelines/architecture/design-patterns/strategic-subdomain-definition.md) - Comprehensive subdomain classification framework
-- [Documentation Standards](../guidelines/documentation/README.md) - Format and structure requirements
+- [Documentation Standards](.pair/knowledge/guidelines/README.md) - Format and structure requirements
 - [Team Responsibilities](.pair/knowledge/guidelines/collaboration/team/role-responsibilities.md) - Subdomain definition roles
 
 ### Next Phase

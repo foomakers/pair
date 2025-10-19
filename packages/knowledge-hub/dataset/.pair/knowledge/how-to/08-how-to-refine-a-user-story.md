@@ -136,7 +136,7 @@ STORY REFINEMENT STATE:
 
    _Does this technical approach align with project architecture and team capabilities?"_
 
-**Technical Reference**: [Architecture Guidelines](.pair/knowledge/guidelines/technical/architecture-patterns.md)
+**Technical Reference**: [Architecture Guidelines](.pair/knowledge/guidelines/architecture/architectural-patterns/README.md)
 
 ### Phase 4: Sprint Readiness Validation
 
@@ -172,7 +172,7 @@ STORY REFINEMENT STATE:
 
    _Does this sizing and potential splitting preserve user value appropriately?"_
 
-**Sizing Reference**: [Story Estimation Guidelines](.pair/knowledge/guidelines/collaboration/story-sizing-standards.md)
+**Sizing Reference**: [Story Estimation Guidelines](.pair/knowledge/guidelines/collaboration/estimation/README.md)
 
 ### Phase 5: Documentation and Tool Updates
 
@@ -278,8 +278,8 @@ STORY REFINEMENT STATE:
 ### Implementation Guidelines
 
 - [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) - Complete documentation structure
-- [Story Estimation Guidelines](.pair/knowledge/guidelines/collaboration/story-sizing-standards.md) - Sizing and splitting standards
-- [Architecture Guidelines](.pair/knowledge/guidelines/technical/architecture-patterns.md) - Technical analysis framework
+- [Story Estimation Guidelines](.pair/knowledge/guidelines/collaboration/estimation/README.md) - Sizing and splitting standards
+- [Architecture Guidelines](.pair/knowledge/guidelines/architecture/architectural-patterns/README.md) - Technical analysis framework
 
 ### Next Phase
 

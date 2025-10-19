@@ -33,7 +33,7 @@ PRD CREATION STATE:
 - **Follow template structure exactly** - use all sections from template
 - **Match example quality standard** - specificity, metrics, professional tone
 - **Create comprehensive information checklist** based on template sections
-- **Target file**: [`.pair/adoption/product/PRD.md`](../adoption/product/PRD.md)
+- **Target file**: [`.pair/adoption/product/PRD.md`](.pair/adoption/product/PRD.md)
 
 **CRITICAL**: Before starting information gathering:
 
@@ -87,10 +87,10 @@ PRD CREATION STATE:
 
 **Objective**: Create comprehensive PRD using gathered information.
 
-1. **Create PRD file** at [`.pair/adoption/product/PRD.md`](../adoption/product/PRD.md)
+1. **Create PRD file** at [`.pair/adoption/product/PRD.md`](.pair/adoption/product/PRD.md)
 2. **Use template structure** from [PRD template](.pair/knowledge/assets/PRD_template.md)
 3. **Match quality standards** from [PRD example](.pair/knowledge/assets/PRD_example.md)
-4. **Apply writing guidelines** per [documentation standards](../guidelines/documentation/README.md)
+4. **Apply writing guidelines** per [documentation standards](.pair/knowledge/guidelines/README.md)
 
 ### Phase 3: Review & Approval
 
@@ -123,7 +123,7 @@ PRD CREATION STATE:
 
 **Follow template structure exactly** - use [PRD template](.pair/knowledge/assets/PRD_template.md):
 
-- Copy template into [`.pair/adoption/product/PRD.md`](../adoption/product/PRD.md)
+- Copy template into [`.pair/adoption/product/PRD.md`](.pair/adoption/product/PRD.md)
 - Replace all placeholders with gathered information
 - Match quality standard from [PRD example](.pair/knowledge/assets/PRD_example.md)
 - Use clear, actionable language with specific details and measurable criteria
@@ -179,7 +179,7 @@ PRD CREATION STATE:
 - [ ] No assumptions made without validation
 - [ ] All stakeholder needs considered
 - [ ] Document provides sufficient detail for development team
-- [ ] Final document saved in [`.pair/adoption/product/PRD.md`](../adoption/product/PRD.md)
+- [ ] Final document saved in [`.pair/adoption/product/PRD.md`](.pair/adoption/product/PRD.md)
 
 ---
 
@@ -192,13 +192,13 @@ PRD CREATION STATE:
 
 **Implementation Guidelines:**
 
-- [Documentation Standards](../guidelines/documentation/README.md) - Writing and formatting guidelines
+- [Documentation Standards](.pair/knowledge/guidelines/README.md) - Writing and formatting guidelines
 - [Collaboration Guidelines](.pair/knowledge/guidelines/collaboration/README.md) - Question asking and review processes
 - [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) - User story format standards
 
 **Target Output:**
 
-- [Final PRD Location](../adoption/product/PRD.md) - Where completed PRD is saved and maintained
+- [Final PRD Location](.pair/adoption/product/PRD.md) - Where completed PRD is saved and maintained
 
 ## Next Steps
 

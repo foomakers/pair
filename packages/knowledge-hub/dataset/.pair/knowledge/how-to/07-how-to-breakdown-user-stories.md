@@ -42,7 +42,7 @@ USER STORY BREAKDOWN STATE:
 
 - **HALT if epic incomplete** - epic must be fully documented and ready
 - **HALT if tool access unclear** - must understand PM tool hierarchy and linking
-- **HALT if bootstrap incomplete** - verify [way-of-working.md](../adoption/tech/way-of-working.md) configuration
+- **HALT if bootstrap incomplete** - verify [way-of-working.md](.pair/adoption/tech/way-of-working.md) configuration
 - **Do NOT proceed** without clear epic context and tool setup
 
 ## Implementation Workflow
@@ -53,7 +53,7 @@ USER STORY BREAKDOWN STATE:
 
 1. **Verify Tool Configuration**:
 
-   - Check [way-of-working.md](../adoption/tech/way-of-working.md) for PM tool setup
+   - Check [way-of-working.md](.pair/adoption/tech/way-of-working.md) for PM tool setup
    - Validate access per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
    - Confirm hierarchy linking methodology (Epic → User Story)
 
@@ -130,7 +130,7 @@ USER STORY BREAKDOWN STATE:
 
    _Does this story identification capture the right user value breakdown and UI manifestations?"_
 
-**Story Patterns Reference**: [Vertical Slicing Guidelines](.pair/knowledge/guidelines/collaboration/user-story-vertical-slicing.md)
+**Story Patterns Reference**: [Vertical Slicing Guidelines](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md)
 
 ### Phase 4: Story Definition & INVEST Validation
 
@@ -170,7 +170,7 @@ USER STORY BREAKDOWN STATE:
 
    _This breakdown provides rough planning units with expected uncertainty. Approved for documentation?"_
 
-**INVEST Reference**: [INVEST Criteria Guidelines](.pair/knowledge/guidelines/collaboration/user-story-invest-criteria.md)
+**INVEST Reference**: [INVEST Criteria Guidelines](.pair/knowledge/guidelines/collaboration/methodology/scrum.md)
 
 ### Phase 5: Documentation & Tool Creation
 
@@ -299,8 +299,8 @@ USER STORY BREAKDOWN STATE:
 ### Implementation Guidelines
 
 - [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md#initial-breakdown-template) - Complete documentation structure
-- [INVEST Criteria Guidelines](.pair/knowledge/guidelines/collaboration/user-story-invest-criteria.md) - Story validation framework
-- [Vertical Slicing Guidelines](.pair/knowledge/guidelines/collaboration/user-story-vertical-slicing.md) - Story cutting patterns
+- [INVEST Criteria Guidelines](.pair/knowledge/guidelines/collaboration/methodology/scrum.md) - Story validation framework
+- [Vertical Slicing Guidelines](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) - Story cutting patterns
 
 ### Next Phase
 

@@ -40,7 +40,7 @@ EPIC BREAKDOWN STATE:
 
 **CRITICAL**: Before starting epic breakdown:
 
-- **HALT if bootstrap incomplete** - verify [way-of-working.md](../adoption/tech/way-of-working.md) and tool configuration
+- **HALT if bootstrap incomplete** - verify [way-of-working.md](.pair/adoption/tech/way-of-working.md) and tool configuration
 - **HALT if no Todo initiatives** - initiatives must be ready for breakdown
 - **HALT if tool access unclear** - must understand PM tool hierarchy and linking approach
 - **Do NOT proceed** without clear initiative selection and technical context
@@ -53,7 +53,7 @@ EPIC BREAKDOWN STATE:
 
 1. **Verify Bootstrap Completion**:
 
-   - Confirm [way-of-working.md](../adoption/tech/way-of-working.md) exists with PM tool configuration
+   - Confirm [way-of-working.md](.pair/adoption/tech/way-of-working.md) exists with PM tool configuration
    - Check foundational documents: PRD, architecture, tech-stack, boundedcontext
    - Validate PM tool access per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
 

@@ -39,14 +39,14 @@ IMPLEMENTATION STATE:
 
 - **HALT implementation immediately**
 - **Propose specific task updates** to developer
-- **Suggest alternative approaches** based on [tech-stack.md](../adoption/tech/tech-stack.md)
+- **Suggest alternative approaches** based on [tech-stack.md](.pair/adoption/tech/tech-stack.md)
 - **Do NOT proceed** until task is updated and complete
 
 ### Technical Alignment Requirements
 
-- **Architecture**: Follow patterns defined in [adopted architecture](../adoption/tech/architecture.md)
-- **Technology Stack**: Use ONLY libraries/versions from [tech-stack.md](../adoption/tech/tech-stack.md)
-- **Development Process**: Follow workflows from [way-of-working.md](../adoption/tech/way-of-working.md)
+- **Architecture**: Follow patterns defined in [adopted architecture](.pair/adoption/tech/architecture.md)
+- **Technology Stack**: Use ONLY libraries/versions from [tech-stack.md](.pair/adoption/tech/tech-stack.md)
+- **Development Process**: Follow workflows from [way-of-working.md](.pair/adoption/tech/way-of-working.md)
 - **Code Design**: Apply principles from [code design guidelines](.pair/knowledge/guidelines/code-design/README.md)
 - **Testing**: Follow [test strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md) for TDD implementation
 
@@ -55,12 +55,12 @@ IMPLEMENTATION STATE:
 ### 🚫 Critical Blockers
 
 - **Clean Git**: No uncommitted changes, on main branch
-- **PM Tool Configured**: Must exist in [way-of-working.md](../adoption/tech/way-of-working.md)
+- **PM Tool Configured**: Must exist in [way-of-working.md](.pair/adoption/tech/way-of-working.md)
 - **Story Analysis Complete**: Phase 0 must be completed before any other work
 
 ### 📋 Access Requirements
 
-Follow [project management tool guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) for tool-specific access procedures based on the configured tool in [way-of-working.md](../adoption/tech/way-of-working.md).
+Follow [project management tool guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) for tool-specific access procedures based on the configured tool in [way-of-working.md](.pair/adoption/tech/way-of-working.md).
 
 **Access Rules:**
 
@@ -148,7 +148,7 @@ Follow [TDD guidelines](.pair/knowledge/guidelines/testing/test-strategy/tdd-tes
 
 **Story Reading Requirements:**
 
-- **Load story from configured PM tool** per [way-of-working.md](../adoption/tech/way-of-working.md)
+- **Load story from configured PM tool** per [way-of-working.md](.pair/adoption/tech/way-of-working.md)
 - **Understand business value and acceptance criteria** completely
 - **Verify story status**: Must be "In Progress" and assigned to developer
 - **Confirm epic context**: Understand how story fits in larger initiative
@@ -323,8 +323,8 @@ Apply [quality standards](.pair/knowledge/guidelines/quality-assurance/quality-s
 - [ ] All tasks marked complete in story
 - [ ] All acceptance criteria addressed
 - [ ] Code follows [code design guidelines](.pair/knowledge/guidelines/code-design/README.md)
-- [ ] Only approved libraries from [tech-stack.md](../adoption/tech/tech-stack.md) used
-- [ ] Version consistency maintained per [architecture decisions](../adoption/tech/architecture.md)
+- [ ] Only approved libraries from [tech-stack.md](.pair/adoption/tech/tech-stack.md) used
+- [ ] Version consistency maintained per [architecture decisions](.pair/adoption/tech/architecture.md)
 
 **For Non-Development Tasks:**
 
@@ -380,8 +380,8 @@ Follow [PR template](.pair/knowledge/guidelines/collaboration/templates/pr-templ
 
 **Technical Constraints:**
 
-- **Libraries**: Only approved from [tech-stack.md](../adoption/tech/tech-stack.md) or task-specified
-- **Architecture**: Follow [architecture decisions](../adoption/tech/architecture.md) and [guidelines](.pair/knowledge/guidelines/architecture/README.md)
+- **Libraries**: Only approved from [tech-stack.md](.pair/adoption/tech/tech-stack.md) or task-specified
+- **Architecture**: Follow [architecture decisions](.pair/adoption/tech/architecture.md) and [guidelines](.pair/knowledge/guidelines/architecture/README.md)
 - **Quality**: Apply [code design](.pair/knowledge/guidelines/code-design/README.md), [security](.pair/knowledge/guidelines/quality-assurance/security/README.md), and [quality standards](.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md)
 
 **Emergency Procedures:**
@@ -427,9 +427,9 @@ Follow [PR template](.pair/knowledge/guidelines/collaboration/templates/pr-templ
 
 ### Technical Standards
 
-- [Tech Stack](../adoption/tech/tech-stack.md) - Approved libraries and versions
-- [Architecture Decisions](../adoption/tech/architecture.md) - System architecture patterns
-- [Way of Working](../adoption/tech/way-of-working.md) - Development process configuration
+- [Tech Stack](.pair/adoption/tech/tech-stack.md) - Approved libraries and versions
+- [Architecture Decisions](.pair/adoption/tech/architecture.md) - System architecture patterns
+- [Way of Working](.pair/adoption/tech/way-of-working.md) - Development process configuration
 
 ### Development Guidelines
 

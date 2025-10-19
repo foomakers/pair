@@ -32,7 +32,7 @@ TASK CREATION STATE:
 ### Strategic Task Architecture
 
 - **Verify story refinement FIRST** - story must be refined and ready for breakdown
-- **Apply technical standards** - follow [Adoption Guidelines](.pair/adoption/tech/) consistently
+- **Apply technical standards** - follow [Adoption Guidelines](.pair/adoption/tech) consistently
 - **Use bounded context mapping** - each task specifies its implementation domain
 - **Size for implementation clarity** - clear guidance without architectural decisions
 - **Focus on executable steps** - every task produces demonstrable progress
@@ -44,7 +44,7 @@ TASK CREATION STATE:
 
 - **HALT if story not refined** - story must be in 'Refined' state with clear acceptance criteria
 - **HALT if tool access unclear** - must understand PM tool hierarchy and linking
-- **HALT if bounded context unknown** - verify [Bounded Context Documentation](.pair/adoption/tech/boundedcontext/)
+- **HALT if bounded context unknown** - verify [Bounded Context Documentation](.pair/adoption/tech/boundedcontext)
 - **Do NOT proceed** without clear story context and technical setup
 
 ## Implementation Workflow
@@ -99,7 +99,7 @@ TASK CREATION STATE:
 
 2. **Identify Bounded Context**:
 
-   - Map story to [Bounded Context](.pair/adoption/tech/boundedcontext/) documentation
+   - Map story to [Bounded Context](.pair/adoption/tech/boundedcontext) documentation
    - Determine implementation scope and affected modules
    - Identify integration points and dependencies
 
