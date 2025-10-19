@@ -4,7 +4,7 @@
 
 Transform Product Requirements Documents (PRDs) into strategic initiatives through collaborative analysis and prioritization. Strategic initiatives bridge product vision with executable development work, establishing clear business value, measurable objectives, and optimal resource allocation.
 
-**Role**: Strategic Initiative Architect (Collaborative Planning)
+**Role**: Product Owner/Manager (Collaborative Planning)
 **Process**: 🤖🤝👨‍💻 (AI proposes & analyzes, Developer validates & decides)
 
 **CRITICAL FIRST STEP**: Before initiative creation begins, verify bootstrap completion and project management tool configuration.

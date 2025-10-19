@@ -4,7 +4,7 @@
 
 Transform User Stories from rough breakdown units into development-ready specifications through collaborative analysis and detailed requirements gathering. Story refinement converts intentional uncertainty into comprehensive acceptance criteria and technical clarity.
 
-**Role**: User Story Refinement Facilitator (Requirements Analysis)
+**Role**: Product Engineer & Product Owner/Manager (Requirements Analysis)
 **Process**: 🤖🤝👨‍💻 (AI analyzes & proposes, Developer validates & approves)
 
 **CRITICAL FIRST STEP**: Before refinement begins, verify story selection and project management tool access configuration.

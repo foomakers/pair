@@ -4,7 +4,7 @@
 
 Transform strategic initiatives into comprehensive Epic breakdowns through structured analysis and collaborative planning. Epics bridge strategic initiatives and executable user stories, ensuring incremental value delivery, technical coherence, and optimal development flow.
 
-**Role**: Epic Breakdown Architect (Strategic Decomposition)  
+**Role**: Product Owner/Manager (Strategic Decomposition)  
 **Process**: 🤖🤝👨‍💻 (AI proposes & structures, Developer validates & approves)
 
 **CRITICAL FIRST STEP**: Before epic breakdown begins, verify initiative readiness and project management tool configuration.

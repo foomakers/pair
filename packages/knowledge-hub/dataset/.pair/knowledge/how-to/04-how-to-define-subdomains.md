@@ -4,7 +4,7 @@
 
 Transform Product Requirements Documents and strategic initiatives into Domain-Driven Design subdomains through collaborative business analysis and systematic domain modeling.
 
-**Role**: Strategic Domain Architect (Subdomain Definition)
+**Role**: Product Engineer & Product Owner/Manager (Subdomain Definition)
 **Process**: 🤖🤝👨‍💻 (AI analyzes & proposes, Developer validates & approves)
 
 **CRITICAL FIRST STEP**: Before subdomain work begins, verify PRD completion and project management tool configuration.

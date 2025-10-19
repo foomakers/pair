@@ -4,7 +4,7 @@
 
 Transform Epics into User Story breakdowns through structured analysis and collaborative planning. User Stories serve as rough plannable units that capture user value with intentional uncertainty to be resolved during future refinement.
 
-**Role**: User Story Breakdown Architect (Epic Decomposition)
+**Role**: Product Engineer & Product Owner/Manager (Epic Decomposition)
 **Process**: 🤖🤝👨‍💻 (AI proposes & structures, Developer validates & approves)
 
 **CRITICAL FIRST STEP**: Before user story breakdown begins, verify epic readiness and project management tool configuration.

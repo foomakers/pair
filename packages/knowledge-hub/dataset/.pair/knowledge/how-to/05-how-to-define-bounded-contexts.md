@@ -4,7 +4,7 @@
 
 Transform subdomain analysis and technical architecture into precise bounded context boundaries through collaborative Domain-Driven Design implementation. Bounded contexts establish service boundaries, data ownership patterns, and team responsibilities that guide microservices design and organizational structure.
 
-**Role**: Strategic Context Architect (Bounded Context Definition)
+**Role**: Product Engineer (Bounded Context Definition)
 **Process**: 🤖🤝👨‍💻 (AI analyzes & proposes, Developer validates & approves)
 
 **CRITICAL FIRST STEP**: Before bounded context work begins, verify subdomain definition completion and technical architecture adoption.
