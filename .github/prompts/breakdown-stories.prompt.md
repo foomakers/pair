@@ -12,7 +12,7 @@ If an epic ID is provided (e.g., `/breakdown-stories: epic_id=EPIC-123`), focus 
 
 ## Process
 
-**Read and follow** the complete process from [how-to-breakdown-user-stories.md](.pair/knowledge/how-to/07-how-to-breakdown-user-stories.md).
+**Read and follow** the complete process from [how-to-breakdown-user-stories.md]../../.pairknowledge/how-to/07-how-to-breakdown-user-stories.md).
 
 **Execute the process exactly as documented**, including:
 

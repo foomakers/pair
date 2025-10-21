@@ -13,7 +13,7 @@ If a story ID is provided (e.g., `/code-review: story_id=STORY-456`), search for
 
 ## Process
 
-**Read and follow** the complete process from [how-to-code-review.md](.pair/knowledge/how-to/11-how-to-code-review.md).
+**Read and follow** the complete process from [how-to-code-review.md]../../.pairknowledge/how-to/11-how-to-code-review.md).
 
 **Execute the process exactly as documented**, including:
 

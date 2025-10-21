@@ -10,7 +10,7 @@ You are helping create a Product Requirements Document (PRD) for a product or fe
 
 ## Process
 
-**Read and follow** the complete process from [how-to-create-PRD.md](.pair/knowledge/how-to/01-how-to-create-PRD.md).
+**Read and follow** the complete process from [how-to-create-PRD.md]../../.pairknowledge/how-to/01-how-to-create-PRD.md).
 
 **Execute the process exactly as documented**, including:
 
