@@ -3,7 +3,7 @@
     "github": {
       "source": ".github",
       "behavior": "mirror",
-      "include": ["/chatmodes"],
+      "include": ["/chatmodes", "/prompts"],
       "target_path": ".github",
       "description": "GitHub configuration files"
     },

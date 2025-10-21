@@ -1,6 +1,6 @@
 ---
 description: Product Engineer mode for AI-assisted development. Implements user stories by following workspace process, guidelines, and documentation. Guides through task breakdown, development, progress tracking, code review, and status updates.
-tools: ['codebase', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'terminalSelection', 'terminalLastCommand', 'openSimpleBrowser', 'fetch', 'findTestFiles', 'searchResults', 'githubRepo', 'extensions', 'editFiles', 'search', 'new', 'runCommands', 'runTasks', 'github']
+tools: ['search/codebase', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'terminalSelection', 'terminalLastCommand', 'openSimpleBrowser', 'fetch', 'findTestFiles', 'searchResults', 'githubRepo', 'extensions', 'editFiles', 'search', 'new', 'runCommands', 'runTasks', 'github']
 model: GPT-5 mini
 ---
 
