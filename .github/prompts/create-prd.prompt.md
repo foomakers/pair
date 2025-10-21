@@ -1,6 +1,6 @@
 ---
 description: Create a Product Requirements Document (PRD) following the structured AI-assisted approach
-mode: agent
+mode: product-manager
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
 ---
 
@@ -10,7 +10,7 @@ You are helping create a Product Requirements Document (PRD) for a product or fe
 
 ## Process
 
-**Read and follow** the complete process from [how-to-create-PRD.md]../../.pairknowledge/how-to/01-how-to-create-PRD.md).
+**Read and follow** the complete process from [how-to-create-PRD.md]../../.pair/knowledge/how-to/01-how-to-create-PRD.md).
 
 **Execute the process exactly as documented**, including:
 

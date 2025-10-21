@@ -1,6 +1,6 @@
 ---
 description: Refine user stories with detailed acceptance criteria and technical specifications
-mode: agent
+mode: product-engineer
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
 ---
 
@@ -12,7 +12,7 @@ If a story ID is provided (e.g., `/refine-story: story_id=STORY-123`), focus on 
 
 ## Process
 
-**Read and follow** the complete process from [how-to-refine-a-user-story.md]../../.pairknowledge/how-to/08-how-to-refine-a-user-story.md).
+**Read and follow** the complete process from [how-to-refine-a-user-story.md]../../.pair/knowledge/how-to/08-how-to-refine-a-user-story.md).
 
 **Execute the process exactly as documented**, including:
 

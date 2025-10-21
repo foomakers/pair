@@ -1,6 +1,6 @@
 ---
 description: Define bounded contexts to establish technical architecture boundaries based on business subdomains
-mode: agent
+mode: staff-engineer
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
 ---
 
@@ -10,7 +10,7 @@ You are helping define bounded contexts that translate business subdomains into 
 
 ## Process
 
-**Read and follow** the complete process from [how-to-define-bounded-contexts.md]../../.pairknowledge/how-to/05-how-to-define-bounded-contexts.md).
+**Read and follow** the complete process from [how-to-define-bounded-contexts.md]../../.pair/knowledge/how-to/05-how-to-define-bounded-contexts.md).
 
 **Execute the process exactly as documented**, including:
 - All phases and checkpoints

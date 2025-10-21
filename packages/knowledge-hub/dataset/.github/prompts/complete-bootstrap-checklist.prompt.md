@@ -1,6 +1,6 @@
 ---
 description: Complete the bootstrap checklist to set up project foundation and structure
-mode: agent
+mode: staff-engineer
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*', 'runCommands']
 ---
 

@@ -1,6 +1,6 @@
 ---
 description: Create and prioritize strategic initiatives based on PRD and business objectives
-mode: agent
+mode: product-manager
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
 ---
 
@@ -10,7 +10,7 @@ You are helping create and prioritize strategic initiatives that translate PRD r
 
 ## Process
 
-**Read and follow** the complete process from [how-to-create-and-prioritize-initiatives.md]../../.pairknowledge/how-to/03-how-to-create-and-prioritize-initiatives.md).
+**Read and follow** the complete process from [how-to-create-and-prioritize-initiatives.md]../../.pair/knowledge/how-to/03-how-to-create-and-prioritize-initiatives.md).
 
 **Execute the process exactly as documented**, including:
 - All phases and checkpoints

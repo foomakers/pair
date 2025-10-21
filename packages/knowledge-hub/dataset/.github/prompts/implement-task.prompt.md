@@ -1,6 +1,6 @@
 ---
 description: Implement a specific task by following technical guidelines and producing working, tested code
-mode: agent
+mode: product-engineer
 tools:[ 'edit/editFiles', 'search/codebase', 'search', 'new', 'github/*',
     'edit/editFiles',
     'search/codebase',

@@ -1,6 +1,6 @@
 ---
 description: Breakdown strategic initiatives into comprehensive epics for iterative development
-mode: agent
+mode: product-manager
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
 ---
 
@@ -12,7 +12,7 @@ If an initiative ID is provided (e.g., `/breakdown-epics: initiative_id=INIT-123
 
 ## Process
 
-**Read and follow** the complete process from [how-to-breakdown-epics.md]../../.pairknowledge/how-to/06-how-to-breakdown-epics.md).
+**Read and follow** the complete process from [how-to-breakdown-epics.md]../../.pair/knowledge/how-to/06-how-to-breakdown-epics.md).
 
 **Execute the process exactly as documented**, including:
 

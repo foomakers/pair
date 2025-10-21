@@ -1,6 +1,6 @@
 ---
 description: Implement a specific task by following technical guidelines and producing working, tested code
-mode: agent
+mode: product-engineer
 tools:[ 'edit/editFiles', 'search/codebase', 'search', 'new', 'github/*',
     'edit/editFiles',
     'search/codebase',
@@ -21,7 +21,7 @@ If a story ID or task ID is provided (e.g., `/implement-task: story_id=STORY-123
 
 ## Process
 
-**Read and follow** the complete process from [how-to-implement-a-task.md]../../.pairknowledge/how-to/10-how-to-implement-a-task.md).
+**Read and follow** the complete process from [how-to-implement-a-task.md]../../.pair/knowledge/how-to/10-how-to-implement-a-task.md).
 
 **Execute the process exactly as documented**, including:
 

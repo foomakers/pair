@@ -1,6 +1,6 @@
 ---
 description: Breakdown strategic initiatives into comprehensive epics for iterative development
-mode: agent
+mode: product-manager
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
 ---
 

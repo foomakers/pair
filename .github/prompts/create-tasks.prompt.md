@@ -1,6 +1,6 @@
 ---
 description: Create specific, actionable development tasks from refined user stories
-mode: agent
+mode: product-engineer
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
 ---
 
@@ -12,7 +12,7 @@ If a story ID is provided (e.g., `/create-tasks: story_id=STORY-123`), focus on 
 
 ## Process
 
-**Read and follow** the complete process from [how-to-create-tasks.md]../../.pairknowledge/how-to/09-how-to-create-tasks.md).
+**Read and follow** the complete process from [how-to-create-tasks.md]../../.pair/knowledge/how-to/09-how-to-create-tasks.md).
 
 **Execute the process exactly as documented**, including:
 

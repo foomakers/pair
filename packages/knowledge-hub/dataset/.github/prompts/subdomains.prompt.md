@@ -1,6 +1,6 @@
 ---
 description: Define business subdomains to organize and structure the product domain model
-mode: agent
+mode: product-manager
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
 ---
 

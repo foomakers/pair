@@ -1,6 +1,6 @@
 ---
 description: Define bounded contexts to establish technical architecture boundaries based on business subdomains
-mode: agent
+mode: staff-engineer
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
 ---
 

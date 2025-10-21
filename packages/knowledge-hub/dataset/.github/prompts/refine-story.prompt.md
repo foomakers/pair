@@ -1,6 +1,6 @@
 ---
 description: Refine user stories with detailed acceptance criteria and technical specifications
-mode: agent
+mode: product-engineer
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
 ---
 
