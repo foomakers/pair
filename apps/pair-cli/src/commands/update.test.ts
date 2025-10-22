@@ -10,8 +10,6 @@ import {
 
 const realCwd = '/development/path/pair/apps/pair-cli'
 
-// Split verbose-related assertions into separate smaller tests to satisfy max-lines-per-function
-
 describe('updateCommand defaults tests', () => {
   it('update with defaults uses config registries', async () => {
     const datasetRoot = realCwd + '/dataset'
@@ -29,6 +27,7 @@ describe('updateCommand defaults tests', () => {
       datasetRoot,
       useDefaults: true,
     })
+
     expect(result!.success).toBe(true)
 
     // Verify files were copied to correct locations
@@ -63,21 +62,23 @@ describe('updateCommand overrides and flags tests', () => {
     const fs = createTestFs(
       GITHUB_KNOWLEDGE_CONFIG,
       {
-        [`${realCwd}/.github/workflows/ci.yml`]: 'workflow content',
-        [`${realCwd}/.pair/knowledge/knowledge.md`]: 'knowledge content',
+        [`${realCwd}/dataset/.github/workflows/ci.yml`]: 'workflow content',
+        [`${realCwd}/dataset/.pair/knowledge/knowledge.md`]: 'knowledge content',
+        [`${realCwd}/.github/workflows/ci.yml`]: 'original workflow content',
+        [`${realCwd}/.pair-knowledge/knowledge.md`]: 'original knowledge content',
       },
       realCwd,
     )
 
     const result = await updateCmd.updateCommand(fs, [], {
-      datasetRoot: fs.currentWorkingDirectory(),
+      datasetRoot: 'dataset',
       useDefaults: true,
     })
     expect(result!.success).toBe(true)
 
     // Verify both registries were updated
-    expect(await fs.readFile('.github/workflows/ci.yml')).toBe('workflow content')
-    expect(await fs.readFile('.pair-knowledge/knowledge.md')).toBe('knowledge content')
+    expect(await fs.readFile(`${realCwd}/.github/workflows/ci.yml`)).toBe('workflow content')
+    expect(await fs.readFile(`${realCwd}/.pair-knowledge/knowledge.md`)).toBe('knowledge content')
   })
 })
 
@@ -163,3 +164,67 @@ describe('updateCommand - error cases', () => {
     expect(result!.message).toContain("Target directory '/nonexistent/target' does not exist")
   })
 })
+
+describe('updateCommand - root file update', () => {
+  it('update overwrites existing root file like AGENTS.md in project root', async () => {
+    const datasetRoot = `${realCwd}/dataset`
+    const fs = setupAgentsFs(datasetRoot, 'updated agents content', true)
+
+    // Verify it exists with original content
+    expect(await fs.readFile('AGENTS.md')).toBe('original content')
+
+    const result = await updateCmd.updateCommand(fs, [], {
+      datasetRoot,
+      useDefaults: true,
+    })
+
+    expect(result).toBeDefined()
+    expect(result!.success).toBe(true)
+
+    // Verify AGENTS.md now has updated content from dataset
+    expect(await fs.readFile('AGENTS.md')).toBe('updated agents content')
+  })
+
+  it('update creates root file like AGENTS.md in project root when it does not exist', async () => {
+    const datasetRoot = `${realCwd}/dataset`
+    const fs = setupAgentsFs(datasetRoot, 'agents content', false)
+
+    // Verify AGENTS.md does not exist in project root before update
+    expect(await fs.exists('AGENTS.md')).toBe(false)
+
+    const result = await updateCmd.updateCommand(fs, [], {
+      datasetRoot,
+      useDefaults: true,
+    })
+
+    expect(result).toBeDefined()
+    expect(result!.success).toBe(true)
+
+    // Verify AGENTS.md now exists in project root with correct content
+    expect(await fs.readFile('AGENTS.md')).toBe('agents content')
+  })
+})
+const setupAgentsFs = (datasetRoot: string, content: string, withExistingFile = false) => {
+  const fs = createTestFs(
+    {
+      asset_registries: {
+        agents: {
+          source: 'AGENTS.md',
+          behavior: 'mirror' as const,
+          target_path: 'AGENTS.md',
+          description: 'AI agents guidance and session context',
+        },
+      },
+    },
+    {
+      [`${datasetRoot}/AGENTS.md`]: content,
+    },
+    realCwd,
+  )
+
+  if (withExistingFile) {
+    fs.writeFile('AGENTS.md', 'original content')
+  }
+
+  return fs
+}

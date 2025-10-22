@@ -43,7 +43,7 @@ describe('validatePathOps - Link Patching', () => {
     })
 
     expect(result.allErrors).toHaveLength(0)
-    expect(fs.getContent('/dataset/guide/index.md')).toContain('[moved](./moved.md)')
+    expect(fs.getContent('/dataset/guide/index.md')).toContain('[moved](moved.md)')
   })
 })
 
@@ -85,7 +85,7 @@ describe('validatePathOps - Link Normalization', () => {
     })
 
     expect(result.allErrors).toHaveLength(0)
-    expect(fs.getContent('/dataset/guide/index.md')).toContain('[target](./target.md#part)')
+    expect(fs.getContent('/dataset/guide/index.md')).toContain('[target](target.md#part)')
   })
 })
 
@@ -128,7 +128,7 @@ describe('validatePathOps - Folder Handling', () => {
     })
 
     expect(result.allErrors).toHaveLength(0)
-    expect(fs.getContent('/dataset/guide/index.md')).toContain('[nested](./nested/page.md)')
+    expect(fs.getContent('/dataset/guide/index.md')).toContain('[nested](nested/page.md)')
   })
 
   it('should patch relative links correctly with ..', async () => {

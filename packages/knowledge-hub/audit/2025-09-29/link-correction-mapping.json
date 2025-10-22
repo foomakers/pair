@@ -1,0 +1,18 @@
+{
+  "defaultBehavior": "add",
+  "overwrite": true,
+  "replacements": {
+    "01-architectural-guidelines.md": "architecture/architectural-guidelines.md",
+    "02-code-design-guidelines.md": "development/code-design-guidelines.md",
+    "03-technical-guidelines.md": "development/technical-guidelines.md",
+    "04-infrastructure-guidelines.md": "operations/infrastructure-guidelines.md",
+    "05-ux-guidelines.md": "operations/ux-guidelines.md",
+    "06-definition-of-done.md": "quality/definition-of-done.md",
+    "07-testing-strategy.md": "development/testing-strategy.md",
+    "08-accessibility-guidelines.md": "quality/accessibility-guidelines.md",
+    "09-performance-guidelines.md": "quality/performance-guidelines.md",
+    "10-security-guidelines.md": "quality/security-guidelines.md",
+    "11-observability-guidelines.md": "operations/observability-guidelines.md",
+    "12-collaboration-and-process-guidelines/": "collaboration/project-management/"
+  }
+}

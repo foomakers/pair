@@ -211,7 +211,6 @@ export class InMemoryFileSystemService implements FileSystemService {
 
   async readdir(path: string): Promise<Dirent[]> {
     const resolvedPath = this.resolvePath(path)
-    // Check if directory exists
     if (!this.dirs.has(resolvedPath)) {
       throw new Error(`no such file or directory '${path}'`)
     }
@@ -279,6 +278,12 @@ export class InMemoryFileSystemService implements FileSystemService {
   getContent(path: string) {
     const resolvedPath = this.resolvePath(path)
     return this.files.get(resolvedPath)
+  }
+  async isFile(path: string) {
+    return this.stat(path).then(stats => stats.isFile())
+  }
+  async isFolder(path: string) {
+    return !this.isFile(path)
   }
 }
 

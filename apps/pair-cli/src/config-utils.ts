@@ -530,6 +530,11 @@ function validateRegistryInclude(registryName: string, include: unknown): string
   return errors
 }
 
+export const calculatePathType = async (fsService: FileSystemService, path: string) => {
+  const stat = await fsService.stat(path)
+  return stat.isDirectory() ? 'dir' : 'file'
+}
+
 export function calculatePaths(
   fsService: FileSystemService,
   datasetRoot: string,

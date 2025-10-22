@@ -42,6 +42,7 @@ function createNpmDeployFs(cwd: string): InMemoryFileSystemService {
   const moduleFolder = cwd + '/node_modules/@foomakers/pair-cli'
 
   // Dataset content in the @foomakers/pair-cli package location
+  seed[moduleFolder + '/bundle-cli/dataset/AGENTS.md'] = 'this is agents.md'
   seed[moduleFolder + '/bundle-cli/dataset/.github/workflows/ci.yml'] = 'name: CI\non: push'
   seed[moduleFolder + '/bundle-cli/dataset/.pair/knowledge/index.md'] = '# Knowledge Base'
   seed[moduleFolder + '/bundle-cli/dataset/.pair/adoption/onboarding.md'] = '# Onboarding Guide'
@@ -77,6 +78,7 @@ function createManualDeployFs(cwd: string): InMemoryFileSystemService {
   })
 
   // Dataset content in the release bundle location (./dataset relative to bundle-cli)
+  seed[moduleFolder + '/bundle-cli/dataset/AGENTS.md'] = 'this is agents.md'
   seed[moduleFolder + '/bundle-cli/dataset/.github/workflows/ci.yml'] = 'name: CI\non: push'
   seed[moduleFolder + '/bundle-cli/dataset/.pair/knowledge/index.md'] = '# Knowledge Base'
   seed[moduleFolder + '/bundle-cli/dataset/.pair/adoption/onboarding.md'] = '# Onboarding Guide'
@@ -93,6 +95,7 @@ function createDevScenarioFs(cwd: string): InMemoryFileSystemService {
   const seed: Record<string, string> = {}
 
   // Dataset content in the @pair/knowledge-hub package location (project's node_modules)
+  seed[cwd + '/node_modules/@pair/knowledge-hub/dataset/AGENTS.md'] = 'this is agents.md'
   seed[cwd + '/node_modules/@pair/knowledge-hub/dataset/.github/workflows/ci.yml'] =
     'name: CI\non: push'
   seed[cwd + '/node_modules/@pair/knowledge-hub/dataset/.pair/knowledge/index.md'] =
@@ -158,6 +161,12 @@ function createTestConfig() {
         behavior: 'mirror',
         target_path: '.pair-adoption',
         description: 'Adoption and onboarding content',
+      },
+      'agents.md': {
+        source: 'AGENTS.md',
+        behavior: 'overwrite',
+        target_path: 'AGENTS.md',
+        description: 'AI agents guidance and session context',
       },
     },
   }

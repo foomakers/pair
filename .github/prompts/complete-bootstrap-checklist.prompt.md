@@ -1,0 +1,22 @@
+---
+description: Complete the bootstrap checklist to set up project foundation and structure
+mode: staff-engineer
+tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*', 'runCommands']
+---
+
+# Complete Bootstrap Checklist
+
+You are helping complete the bootstrap checklist to establish a solid project foundation.
+
+## Process
+
+**Read and follow** the complete process from [how-to-complete-bootstrap-checklist.md]../../.pair/knowledge/how-to/02-how-to-complete-bootstrap-checklist.md).
+
+**Execute the process exactly as documented**, including:
+
+- All phases and checkpoints
+- Session state management
+- Required deliverables
+- Success criteria
+
+**Gather any needed information** by asking the user or analyzing the workspace context as you progress through the how-to guide.

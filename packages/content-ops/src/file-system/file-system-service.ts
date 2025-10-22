@@ -21,6 +21,8 @@ export interface FileSystemService {
   currentWorkingDirectory: () => string
   chdir: (path: string) => void
   resolve: (...paths: string[]) => string
+  isFile: (path: string) => Promise<boolean>
+  isFolder: (path: string) => Promise<boolean>
 }
 
 /**
@@ -57,4 +59,6 @@ export const fileSystemService: FileSystemService = {
   currentWorkingDirectory: () => process.cwd(),
   chdir: path => process.chdir(path),
   resolve: (...paths: string[]) => pathResolve(...paths),
+  isFile: (path: string) => fs.stat(path).then(stats => stats.isFile()),
+  isFolder: (path: string) => fs.stat(path).then(stats => stats.isDirectory()),
 }

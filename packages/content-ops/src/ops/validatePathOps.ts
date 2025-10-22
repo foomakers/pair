@@ -6,7 +6,6 @@ import {
   generateNormalizationReplacements,
   generateExistenceCheckReplacements,
   processFileReplacement,
-  extractLinks,
 } from '../markdown'
 
 type ProcessingResult = {
@@ -142,12 +141,7 @@ export async function validateAndFixFileLinks(
     fileService,
   )
 
-  const finalContent = await restoreDotPrefixPreservingContent(
-    file,
-    content,
-    result.content,
-    fileService,
-  )
+  const finalContent = result.content
 
   return {
     errors,
@@ -156,35 +150,6 @@ export async function validateAndFixFileLinks(
     normalizedFullLinks: result.byKind?.['normalizedFull'] || 0,
     content: finalContent,
   }
-}
-
-async function restoreDotPrefixPreservingContent(
-  file: string,
-  originalContent: string,
-  processedContent: string,
-  fileService: FileSystemService,
-) {
-  let finalContent = processedContent
-  try {
-    const originalLinks = await extractLinks(originalContent)
-    for (const l of originalLinks) {
-      if (l.href && l.href.startsWith('./')) {
-        const withoutDot = l.href.substring(2)
-        const needleNoDot = `](${withoutDot}`
-        const needleWithDot = `](${l.href}`
-        if (!finalContent.includes(needleWithDot) && finalContent.includes(needleNoDot)) {
-          finalContent = finalContent.replace(needleNoDot, needleWithDot)
-        }
-      }
-    }
-  } catch {
-    // best-effort only; if extractLinks fails, continue with existing result
-  }
-
-  if (finalContent !== processedContent) {
-    await fileService.writeFile(file, finalContent)
-  }
-  return finalContent
 }
 
 /**
