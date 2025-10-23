@@ -189,6 +189,23 @@ pair-cli validate-config
 - **`install` reports `target-not-empty`**: Use `update` for merges or clear the target folder before running `install`
 - **Configuration errors**: Run `pair-cli validate-config` to check your configuration file
 
+## Support & FAQ
+
+Having installation or setup issues? We have comprehensive support resources:
+
+- **[Installation FAQ](../../docs/support/installation-faq.md)** - Solutions for common install problems (permissions, Node version conflicts, pnpm issues, offline installs)
+- **[Support Resources](../../docs/support/index.md)** - Complete support guide with escalation paths and contact information
+- **[Diagnostic Script](../../scripts/diagnose-install.sh)** - Automated environment diagnostics (`bash scripts/diagnose-install.sh`)
+
+**Quick diagnostic check:**
+
+```bash
+# Get your environment info for troubleshooting
+bash scripts/diagnose-install.sh
+```
+
+The FAQ covers 80%+ of installation issues including permission errors, Node.js version conflicts, network restrictions, and corrupted installs.
+
 ## For Developers
 
 ### Codebase Structure

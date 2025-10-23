@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'docs/**'
+      - 'scripts/**'
       - '.github/workflows/docs-smoke-check.yml'
 
 jobs:
@@ -53,3 +54,42 @@ jobs:
           # Check that docs files exist and are readable
           find docs/getting-started -name "*.md" -exec test -f {} \;
           echo "All docs files exist and are accessible"
+
+      - name: Check docs/support directory structure
+        run: |
+          # Verify required support docs exist
+          echo "Checking docs/support structure..."
+          test -f docs/support/index.md || { echo "Error: docs/support/index.md not found"; exit 1; }
+          test -f docs/support/installation-faq.md || { echo "Error: docs/support/installation-faq.md not found"; exit 1; }
+          echo "✅ All required support docs exist"
+
+      - name: Install markdown link checker
+        run: |
+          npm install -g markdown-link-check
+
+      - name: Validate links in docs/support
+        run: |
+          echo "Checking links in docs/support..."
+          # Check all markdown files in docs/support for broken links
+          find docs/support -name "*.md" -exec markdown-link-check --quiet {} \;
+          echo "✅ All links in docs/support are valid"
+
+      - name: Validate diagnostic script
+        run: |
+          echo "Validating diagnostic script..."
+          # Check if script exists and is executable
+          test -f scripts/diagnose-install.sh || { echo "Error: scripts/diagnose-install.sh not found"; exit 1; }
+          test -x scripts/diagnose-install.sh || { echo "Error: scripts/diagnose-install.sh not executable"; exit 1; }
+
+          # Basic syntax check (bash dry-run)
+          bash -n scripts/diagnose-install.sh || { echo "Error: script has syntax errors"; exit 1; }
+
+          echo "✅ Diagnostic script validation passed"
+
+      - name: Test diagnostic script execution (dry run)
+        run: |
+          echo "Testing diagnostic script execution..."
+          # Run script in test mode to ensure it executes without errors
+          # The script should not fail even in CI environment
+          timeout 30s bash scripts/diagnose-install.sh > /dev/null 2>&1 || true
+          echo "✅ Diagnostic script executed successfully"

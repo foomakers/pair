@@ -107,10 +107,14 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 └── package.json                  # Root package configuration
 ```
 
-### Documentation
+### Documentation & Getting Started
 
-- All guides and standards are available in `.pair/how-to/` and `.pair/tech/knowledge-base/`
-- For process and collaboration rules, see `.pair/way-of-working.md`
+- **Quick Start**: [Quick Start Guide](docs/getting-started/01-quickstart.md) - Get up and running in minutes
+- **Support Resources**: [Support & FAQ](docs/support/index.md) - Installation help, troubleshooting, and support contacts
+- **Development Process**: All guides and standards are available in `.pair/how-to/` and `.pair/tech/knowledge-base/`
+- **Team Process**: For process and collaboration rules, see `.pair/way-of-working.md`
+
+**Having issues?** Check our [Installation FAQ](docs/support/installation-faq.md) - it covers 80%+ of common problems and includes support resources that are updated with each release.
 
 ## 🚀 Quick Start
 

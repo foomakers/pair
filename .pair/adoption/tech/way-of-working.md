@@ -7,7 +7,7 @@
 - Github Projects is adopted for project management, using Kanban as the workflow methodology. The project is pair under the github organization foomakers. See `/.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` for usage. use #github MCP to access Github Projects, boards and issues.
 - High risk tolerance: quick rollbacks and fast recovery from errors.
 - Team communication is informal and direct, with decisions validated collaboratively.
-- **Commit History Policy:**: All feature branches must be squashed into a single commit before opening a pull request, unless otherwise specified by the story or epic. See [how to commit and push](/.pair/how-to/11-how-to-commit-and-push.md) for details.
+- **Commit History Policy:**: All feature branches must be squashed into a single commit before opening a pull request, unless otherwise specified by the story or epic. See [commit template](/.pair/knowledge/guidelines/collaboration/templates/commit-template.md) for details.
 
 ---
 
