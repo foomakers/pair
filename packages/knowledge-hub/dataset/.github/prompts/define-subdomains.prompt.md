@@ -1,7 +1,7 @@
 ---
 description: Define business subdomains to organize and structure the product domain model
 mode: product-manager
-tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
+tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*']
 ---
 
 # Define Subdomains

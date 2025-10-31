@@ -1,7 +1,7 @@
 ---
 description: Breakdown strategic initiatives into comprehensive epics for iterative development
 mode: product-manager
-tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
+tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*']
 ---
 
 # Breakdown Epics

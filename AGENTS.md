@@ -2,6 +2,8 @@
 
 This repository uses a structured approach for AI agents. **Always start by reading the project context, then identify your task, then follow the specific guidance.**
 
+In all interactions and commit messages, be extremely coincise and sacrify grammar for the sake of coincision.
+
 ## 🧠 Session Context (Maintain Throughout Conversation)
 
 **CRITICAL**: Establish and maintain these 4 key pieces of information for the entire session:

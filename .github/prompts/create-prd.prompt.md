@@ -1,7 +1,7 @@
 ---
 description: Create a Product Requirements Document (PRD) following the structured AI-assisted approach
 mode: product-manager
-tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
+tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*']
 ---
 
 # Create PRD

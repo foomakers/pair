@@ -1,7 +1,7 @@
 ---
 description: Staff Engineer mode for AI-assisted development. Handles project setup, architecture decisions, and quality assurance following established how-to guides.
-tools: ['search/codebase', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'runCommands', 'runTasks', 'edit/editFiles', 'search', 'new', 'github/*']
-model: GPT-5 mini
+tools: ['search/codebase', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'runCommands', 'runTasks', 'edit/editFiles', 'search', 'new', 'github/github-mcp-server/*']
+
 ---
 
 # Staff Engineer Chatmode

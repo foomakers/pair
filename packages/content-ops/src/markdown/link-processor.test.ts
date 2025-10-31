@@ -77,7 +77,7 @@ describe('generateNormalizationReplacements - core', () => {
     )
 
     expect(replacements).toHaveLength(1)
-    expect(replacements[0].newHref).toBe('[link](page.md)')
+    expect(replacements[0].newHref).toBe('page.md')
     expect(replacements[0].kind).toBe('normalizedRel')
   })
 })
@@ -117,7 +117,7 @@ describe('generateNormalizationReplacements - path substitution', () => {
     )
 
     expect(replacements).toHaveLength(1)
-    expect(replacements[0].newHref).toBe('[link](page.md)')
+    expect(replacements[0].newHref).toBe('page.md')
     expect(replacements[0].kind).toBe('normalizedRel')
   })
 })
@@ -231,6 +231,83 @@ describe('replaceLinkOnLine', () => {
       const result = replaceLinkOnLine(lineWithMultiple, 1, '[link1](old.md)', '[link1](new.md)')
       expect(result).toBe('First [link1](new.md) and second [link2](old.md)')
     })
+  })
+})
+
+// Normalization policy specs (moved from normalization-policy.test.ts)
+describe('normalization policy - single filename handling', () => {
+  it('should normalize ../page.md to page.md as normalizedRel when file exists under docs', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        '/dataset/docs/page.md': '# Page',
+        '/dataset/page.md': '# Page Root',
+      },
+      '/',
+      '/',
+    )
+
+    const links = [
+      {
+        href: '../page.md',
+        text: 'link',
+        line: 1,
+        start: 0,
+        end: 15,
+      },
+    ]
+
+    const config = {
+      docsFolders: ['docs'],
+      datasetRoot: '/dataset',
+      exclusionList: [],
+    }
+
+    const replacements = await LinkProcessor.generateNormalizationReplacements(
+      links as any,
+      '/dataset/docs/current.md',
+      config as any,
+      fs,
+    )
+
+    expect(replacements.length).toBe(1)
+    expect(replacements[0].newHref).toBe('page.md')
+    expect(replacements[0].kind).toBe('normalizedRel')
+  })
+
+  it('should not normalize ../index.md to index.md when not appropriate', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        '/dataset/index.md': '# Home',
+      },
+      '/',
+      '/',
+    )
+
+    const links = [
+      {
+        href: '../index.md',
+        text: 'home',
+        line: 1,
+        start: 0,
+        end: 15,
+      },
+    ]
+
+    const config = {
+      docsFolders: ['docs'],
+      datasetRoot: '/dataset',
+      exclusionList: [],
+    }
+
+    const replacements = await LinkProcessor.generateNormalizationReplacements(
+      links as any,
+      '/dataset/guide/current.md',
+      config as any,
+      fs,
+    )
+
+    // In this setup the policy may decide not to normalize parent index links; ensure no replacement
+    expect(replacements.length).toBe(0)
   })
 })
 

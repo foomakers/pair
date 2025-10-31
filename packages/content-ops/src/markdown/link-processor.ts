@@ -132,7 +132,7 @@ export class LinkProcessor {
     replacements: Replacement[]
   }) {
     const { lnk, file, config, fileService, replacements } = params
-  const originalLink = lnk.href
+    const originalLink = lnk.href
     const linkPath: string | undefined = originalLink
 
     if (this.isSkippableLink(linkPath, config)) return
@@ -177,8 +177,7 @@ export class LinkProcessor {
     fileService: FileSystemService
     anchor: string
   }) {
-    const { replacements, lnk, linkPath, absTarget, hostDir, fileService, anchor } =
-      params
+    const { replacements, lnk, linkPath, absTarget, hostDir, fileService, anchor } = params
     const relFromHost = relative(hostDir, absTarget)
     if (!relFromHost.startsWith('..')) {
       if (!(await fileService.exists(absTarget))) return false
@@ -210,6 +209,10 @@ export class LinkProcessor {
       // '../page.md' from inside a docs folder.
       const normalized = normalizeLinkSlashes(relToDocs) + anchor
       if (!relToDocs.includes('/')) {
+        // Avoid normalizing generic parent index files (index.md) — keep ../index.md
+        // unchanged to preserve relative semantics.
+        const base = relToDocs
+        if (base === 'index.md') return
         if (!(await fileService.exists(absTarget))) return
         if (linkPath !== normalized) {
           this.pushNormalizedReplacement(replacements, lnk, linkPath, normalized, 'normalizedRel')

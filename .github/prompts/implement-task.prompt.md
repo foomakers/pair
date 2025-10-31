@@ -1,12 +1,12 @@
 ---
 description: Implement a specific task by following technical guidelines and producing working, tested code
 mode: product-engineer
-tools:[ 'edit/editFiles', 'search/codebase', 'search', 'new', 'github/*',
+tools:[ 'edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*',
     'edit/editFiles',
     'search/codebase',
     'search',
     'new',
-    'github/*',
+    'github/github-mcp-server/*',
     'runCommands',
     'runTests',
     'problems',
