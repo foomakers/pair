@@ -5,7 +5,6 @@ import { resolveMarkdownPath } from './path-resolution'
 import {
   isExternalLink,
   normalizeLinkSlashes,
-  stripAnchor,
   walkMarkdownFiles,
 } from '../file-system/file-system-utils'
 import {
@@ -108,6 +107,27 @@ export class LinkProcessor {
   }
 
   /**
+   * Split a link into filesystem path, query string (including '?') and anchor (including '#')
+   */
+  static splitLinkParts(href?: string) {
+    if (!href) return { path: '', query: '', anchor: '' }
+    const hashIdx = href.indexOf('#')
+    const qIdx = href.indexOf('?')
+
+    let pathEnd = href.length
+    if (hashIdx >= 0) pathEnd = Math.min(pathEnd, hashIdx)
+    if (qIdx >= 0) pathEnd = Math.min(pathEnd, qIdx)
+
+    const path = href.substring(0, pathEnd)
+    const query =
+      qIdx >= 0 && (hashIdx < 0 || qIdx < hashIdx)
+        ? href.substring(qIdx, hashIdx >= 0 ? hashIdx : undefined)
+        : ''
+    const anchor = hashIdx >= 0 ? href.substring(hashIdx) : ''
+    return { path, query, anchor }
+  }
+
+  /**
    * Generate replacements for link normalization
    */
   static async generateNormalizationReplacements(
@@ -137,9 +157,9 @@ export class LinkProcessor {
 
     if (this.isSkippableLink(linkPath, config)) return
 
-    const linkForResolve = stripAnchor(linkPath)
-    const anchor = this.getAnchor(linkPath)
-    const absTarget = await this.resolveAbsTarget(file, linkForResolve, config)
+    // split into path/query/anchor — resolve against filesystem using only the path
+    const { path: linkPathOnly, query, anchor } = this.splitLinkParts(linkPath)
+    const absTarget = await this.resolveAbsTarget(file, linkPathOnly, config)
     const hostDir = dirname(file)
 
     // Try same-directory relative normalization
@@ -151,6 +171,7 @@ export class LinkProcessor {
         absTarget,
         hostDir,
         fileService,
+        query,
         anchor,
       })
     )
@@ -164,6 +185,7 @@ export class LinkProcessor {
       absTarget,
       config,
       fileService,
+      query,
       anchor,
     })
   }
@@ -175,16 +197,24 @@ export class LinkProcessor {
     absTarget: string
     hostDir: string
     fileService: FileSystemService
+    query: string
     anchor: string
   }) {
     const { replacements, lnk, linkPath, absTarget, hostDir, fileService, anchor } = params
+    const { query } = params
     const relFromHost = relative(hostDir, absTarget)
     if (!relFromHost.startsWith('..')) {
       if (!(await fileService.exists(absTarget))) return false
       // preserve anchors but do not introduce a leading './' that wasn't present
-      const normalized = relFromHost + anchor
+      const normalized = relFromHost + (query || '') + (anchor || '')
       if (linkPath !== normalized) {
-        this.pushNormalizedReplacement(replacements, lnk, linkPath, normalized, 'normalizedRel')
+        this.pushNormalizedReplacement({
+          replacements,
+          lnk,
+          oldHref: linkPath,
+          newHref: normalized,
+          kind: 'normalizedRel',
+        })
       }
       return true
     }
@@ -198,34 +228,100 @@ export class LinkProcessor {
     absTarget: string
     config: LinkProcessingConfig
     fileService: FileSystemService
+    query: string
+    anchor: string
+  }) {
+    return this.handleFullNormalization(params)
+  }
+
+  private static async handleFullNormalization(params: {
+    replacements: Replacement[]
+    lnk: ParsedLink
+    linkPath: string
+    absTarget: string
+    config: LinkProcessingConfig
+    fileService: FileSystemService
+    query: string
     anchor: string
   }) {
     const { replacements, lnk, linkPath, absTarget, config, fileService, anchor } = params
+    const { query } = params
     const relToDocs = relative(config.datasetRoot, absTarget)
-    if (relToDocs && !relToDocs.startsWith('..')) {
-      // If relToDocs is a single filename (no '/'), allow normalization to
-      // a simple filename (normalizedRel) even if the top folder doesn't match
-      // docsFolders. This preserves expected normalization for links like
-      // '../page.md' from inside a docs folder.
-      const normalized = normalizeLinkSlashes(relToDocs) + anchor
-      if (!relToDocs.includes('/')) {
-        // Avoid normalizing generic parent index files (index.md) — keep ../index.md
-        // unchanged to preserve relative semantics.
-        const base = relToDocs
-        if (base === 'index.md') return
-        if (!(await fileService.exists(absTarget))) return
-        if (linkPath !== normalized) {
-          this.pushNormalizedReplacement(replacements, lnk, linkPath, normalized, 'normalizedRel')
-        }
-        return
-      }
+    if (!relToDocs || relToDocs.startsWith('..')) return
 
-      const topFolder = relToDocs.split('/')[0] ?? ''
-      if (!config.docsFolders.includes(topFolder)) return
-      if (!(await fileService.exists(absTarget))) return
-      if (linkPath !== normalized) {
-        this.pushNormalizedReplacement(replacements, lnk, linkPath, normalized, 'normalizedFull')
-      }
+    const normalized = normalizeLinkSlashes(relToDocs) + (query || '') + (anchor || '')
+
+    // handle single-filename normalization
+    if (!relToDocs.includes('/')) {
+      await this.tryPushSingleFileNormalization({
+        replacements,
+        lnk,
+        linkPath,
+        absTarget,
+        fileService,
+        normalized,
+        relToDocs,
+      })
+      return
+    }
+
+    // handle multi-file path normalization
+    await this.tryPushMultiFileNormalization({
+      replacements,
+      lnk,
+      linkPath,
+      absTarget,
+      config,
+      fileService,
+      normalized,
+    })
+  }
+
+  private static async tryPushSingleFileNormalization(params: {
+    replacements: Replacement[]
+    lnk: ParsedLink
+    linkPath: string
+    absTarget: string
+    fileService: FileSystemService
+    normalized: string
+    relToDocs: string
+  }) {
+    const { replacements, lnk, linkPath, absTarget, fileService, normalized, relToDocs } = params
+    const base = relToDocs
+    if (base === 'index.md') return
+    if (!(await fileService.exists(absTarget))) return
+    if (linkPath !== normalized) {
+      this.pushNormalizedReplacement({
+        replacements,
+        lnk,
+        oldHref: linkPath,
+        newHref: normalized,
+        kind: 'normalizedRel',
+      })
+    }
+  }
+
+  private static async tryPushMultiFileNormalization(params: {
+    replacements: Replacement[]
+    lnk: ParsedLink
+    linkPath: string
+    absTarget: string
+    config: LinkProcessingConfig
+    fileService: FileSystemService
+    normalized: string
+  }) {
+    const { replacements, lnk, linkPath, absTarget, config, fileService, normalized } = params
+    const topFolder = normalized.split('/')[0] ?? ''
+    if (!config.docsFolders.includes(topFolder)) return
+    if (!(await fileService.exists(absTarget))) return
+    if (linkPath !== normalized) {
+      this.pushNormalizedReplacement({
+        replacements,
+        lnk,
+        oldHref: linkPath,
+        newHref: normalized,
+        kind: 'normalizedFull',
+      })
     }
   }
 
@@ -238,9 +334,7 @@ export class LinkProcessor {
     )
   }
 
-  private static getAnchor(linkPath?: string) {
-    return linkPath && linkPath.includes('#') ? linkPath.substring(linkPath.indexOf('#')) : ''
-  }
+  // NOTE: anchor extraction is handled via splitLinkParts; keep helper-free implementation.
 
   private static async resolveAbsTarget(
     file: string,
@@ -250,13 +344,14 @@ export class LinkProcessor {
     return resolveMarkdownPath(file, linkForResolve, config.docsFolders, config.datasetRoot)
   }
 
-  private static pushNormalizedReplacement(
-    replacements: Replacement[],
-    lnk: ParsedLink,
-    oldHref: string,
-    newHref: string,
-    kind: 'normalizedRel' | 'normalizedFull' = 'normalizedRel',
-  ) {
+  private static pushNormalizedReplacement(opts: {
+    replacements: Replacement[]
+    lnk: ParsedLink
+    oldHref: string
+    newHref: string
+    kind?: 'normalizedRel' | 'normalizedFull'
+  }) {
+    const { replacements, lnk, oldHref, newHref, kind = 'normalizedRel' } = opts
     replacements.push({
       start: lnk.start,
       end: lnk.end,

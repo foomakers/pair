@@ -35,8 +35,8 @@ const TEST_DEFAULT_CONFIG = {
   },
 }
 
-describe('installCommand new functionality tests', () => {
-  it('install with defaults uses config registries', async () => {
+describe('installCommand new functionality tests', function () {
+  it('install with defaults uses config registries', async function () {
     const datasetRoot = `${realCwd}/node_modules/knowledge-hub/dataset`
     const fs = createTestFs(
       TEST_DEFAULT_CONFIG,
@@ -60,7 +60,7 @@ describe('installCommand new functionality tests', () => {
     expect(await fs.readFile('.pair-adoption/guide.md')).toBe('adoption content')
   })
 
-  it('install with registry override', async () => {
+  it('install with registry override', async function () {
     const fs = createTestFs(
       GITHUB_ONLY_CONFIG,
       {
@@ -82,8 +82,8 @@ describe('installCommand new functionality tests', () => {
   })
 })
 
-describe('installCommand - multiple registries', () => {
-  it('install with multiple registry overrides', async () => {
+describe('installCommand - multiple registries', function () {
+  it('install with multiple registry overrides', async function () {
     const fs = createTestFs(
       GITHUB_KNOWLEDGE_CONFIG,
       {
@@ -106,8 +106,8 @@ describe('installCommand - multiple registries', () => {
   })
 })
 
-describe('installCommand - idempotency / existing target', () => {
-  it('fails when installing twice to the same existing target', async () => {
+describe('installCommand - idempotency / existing target', function () {
+  it('fails when installing twice to the same existing target', async function () {
     // Simulate a dataset located at /dataset so installs copy into the cwd target
     const datasetRoot = realCwd + '/dataset'
     const fs = createTestFs(
@@ -137,8 +137,8 @@ describe('installCommand - idempotency / existing target', () => {
   })
 })
 
-describe('installCommand - overlapping targets', () => {
-  it('fails when registries have overlapping targets under a base target', async () => {
+describe('installCommand - overlapping targets', function () {
+  it('fails when registries have overlapping targets under a base target', async function () {
     // Use a filesystem with minimal dataset and overlapping config
     const fs = createTestFs(
       OVERLAPPING_CONFIG,
@@ -160,8 +160,8 @@ describe('installCommand - overlapping targets', () => {
   })
 })
 
-describe('installCommand - clean non-overlapping install', () => {
-  it('succeeds when base target is empty and registry targets do not overlap', async () => {
+describe('installCommand - clean non-overlapping install', function () {
+  it('succeeds when base target is empty and registry targets do not overlap', async function () {
     const fs = createTestFs(
       CLEAN_CONFIG,
       {
@@ -184,9 +184,8 @@ describe('installCommand - clean non-overlapping install', () => {
   })
 })
 
-// eslint-disable-next-line max-lines-per-function
-describe('installCommand - root file installation', () => {
-  it('install copies root file like AGENTS.md to project root when it does not exist', async () => {
+describe('installCommand - root file installation', function () {
+  it('install copies root file like AGENTS.md to project root when it does not exist', async function () {
     const datasetRoot = `${realCwd}/dataset`
     const fs = createTestFs(
       AGENTS_CONFIG,
@@ -210,8 +209,10 @@ describe('installCommand - root file installation', () => {
     // Verify AGENTS.md now exists in project root with correct content
     expect(await fs.readFile('AGENTS.md')).toBe('agents content')
   })
+})
 
-  it('install fails when root file like AGENTS.md already exists in project root', async () => {
+describe('installCommand - root file installation (existing target)', function () {
+  it('install fails when root file like AGENTS.md already exists in project root', async function () {
     const datasetRoot = `${realCwd}/dataset`
     const fs = createTestFs(
       AGENTS_CONFIG,
@@ -238,7 +239,7 @@ describe('installCommand - root file installation', () => {
   })
 })
 
-const verifyCleanInstall = async (fs: FileSystemService) => {
+async function verifyCleanInstall(fs: FileSystemService) {
   expect(await fs.readFile('.clean_test/.github/README.md')).toBe('gh')
   expect(await fs.readFile('.clean_test/.pair-knowledge/doc.md')).toBe('k')
   expect(await fs.readFile('.clean_test/.pair-adoption/guide.md')).toBe('a')

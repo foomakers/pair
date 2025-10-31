@@ -41,7 +41,7 @@ export async function generateNormalizationReplacements(
 ): Promise<Replacement[]> {
   // Delegate to centralized LinkProcessor implementation. Cast config to LinkProcessingConfig
   const cfg = config as unknown as LinkProcessingConfig
-  return LinkProcessor.generateNormalizationReplacements(links as any, file, cfg, fileService)
+  return LinkProcessor.generateNormalizationReplacements(links, file, cfg, fileService)
 }
 
 // Normalization logic delegated to LinkProcessor
@@ -102,5 +102,5 @@ export async function generatePathSubstitutionReplacements(
   newBase: string,
 ): Promise<Replacement[]> {
   // Delegate to LinkProcessor implementation
-  return LinkProcessor.generatePathSubstitutionReplacements(links as any, oldBase, newBase)
+  return LinkProcessor.generatePathSubstitutionReplacements(links, oldBase, newBase)
 }
