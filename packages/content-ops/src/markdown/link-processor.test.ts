@@ -597,3 +597,81 @@ describe('LinkProcessor - edge cases (T-69-02)', () => {
     expect(links[0].href).toBe('file%20with%20spaces.md')
   })
 })
+
+describe('normalization policy - anchor preservation (option 3)', () => {
+  it('should preserve simple anchors when normalizing relative links', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        '/dataset/docs/page.md': '# Page',
+        '/dataset/page.md': '# Root',
+      },
+      '/',
+      '/',
+    )
+
+    const links = [
+      {
+        href: '../page.md#overview',
+        text: 'link',
+        line: 1,
+        start: 0,
+        end: 20,
+      },
+    ]
+
+    const config = {
+      docsFolders: ['docs'],
+      datasetRoot: '/dataset',
+      exclusionList: [],
+    }
+
+    const replacements = await LinkProcessor.generateNormalizationReplacements(
+      links as any,
+      '/dataset/docs/current.md',
+      config as any,
+      fs,
+    )
+
+    expect(replacements.length).toBe(1)
+    expect(replacements[0].newHref).toBe('page.md#overview')
+    expect(replacements[0].kind).toBe('normalizedRel')
+  })
+
+  it('should preserve encoded anchors when normalizing', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        '/dataset/docs/page.md': '# Page',
+        '/dataset/page.md': '# Root',
+      },
+      '/',
+      '/',
+    )
+
+    const links = [
+      {
+        href: '../page.md#sec%20one',
+        text: 'link',
+        line: 1,
+        start: 0,
+        end: 25,
+      },
+    ]
+
+    const config = {
+      docsFolders: ['docs'],
+      datasetRoot: '/dataset',
+      exclusionList: [],
+    }
+
+    const replacements = await LinkProcessor.generateNormalizationReplacements(
+      links as any,
+      '/dataset/docs/current.md',
+      config as any,
+      fs,
+    )
+
+    expect(replacements.length).toBe(1)
+    expect(replacements[0].newHref).toBe('page.md#sec%20one')
+    expect(replacements[0].kind).toBe('normalizedRel')
+  })
+})
