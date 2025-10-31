@@ -674,4 +674,80 @@ describe('normalization policy - anchor preservation (option 3)', () => {
     expect(replacements[0].newHref).toBe('page.md#sec%20one')
     expect(replacements[0].kind).toBe('normalizedRel')
   })
+
+  it('should preserve query parameters alongside anchors when normalizing', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        '/dataset/docs/page.md': '# Page',
+        '/dataset/page.md': '# Root',
+      },
+      '/',
+      '/',
+    )
+
+    const links = [
+      {
+        href: '../page.md?version=2#overview',
+        text: 'link',
+        line: 1,
+        start: 0,
+        end: 35,
+      },
+    ]
+
+    const config = {
+      docsFolders: ['docs'],
+      datasetRoot: '/dataset',
+      exclusionList: [],
+    }
+
+    const replacements = await LinkProcessor.generateNormalizationReplacements(
+      links as any,
+      '/dataset/docs/current.md',
+      config as any,
+      fs,
+    )
+
+    expect(replacements.length).toBe(1)
+    expect(replacements[0].newHref).toBe('page.md?version=2#overview')
+    expect(replacements[0].kind).toBe('normalizedRel')
+  })
+
+  it('should preserve encoded query and anchor characters when normalizing', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        '/dataset/docs/page.md': '# Page',
+        '/dataset/page.md': '# Root',
+      },
+      '/',
+      '/',
+    )
+
+    const links = [
+      {
+        href: '../page.md?q=one%20two#sec%20one',
+        text: 'link',
+        line: 1,
+        start: 0,
+        end: 40,
+      },
+    ]
+
+    const config = {
+      docsFolders: ['docs'],
+      datasetRoot: '/dataset',
+      exclusionList: [],
+    }
+
+    const replacements = await LinkProcessor.generateNormalizationReplacements(
+      links as any,
+      '/dataset/docs/current.md',
+      config as any,
+      fs,
+    )
+
+    expect(replacements.length).toBe(1)
+    expect(replacements[0].newHref).toBe('page.md?q=one%20two#sec%20one')
+    expect(replacements[0].kind).toBe('normalizedRel')
+  })
 })
