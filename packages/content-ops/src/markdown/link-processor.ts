@@ -1,7 +1,8 @@
-import { relative, dirname } from 'path'
+import { dirname } from 'path'
 import { FileSystemService } from '../file-system/file-system-service'
 import { extractLinks as parseExtractLinks } from './markdown-parser'
 import { resolveMarkdownPath } from './path-resolution'
+import { convertToRelative } from '../path-resolution'
 import {
   isExternalLink,
   normalizeLinkSlashes,
@@ -202,10 +203,14 @@ export class LinkProcessor {
   }) {
     const { replacements, lnk, linkPath, absTarget, hostDir, fileService, anchor } = params
     const { query } = params
-    const relFromHost = relative(hostDir, absTarget)
+    let relFromHost = convertToRelative(hostDir, absTarget)
     if (!relFromHost.startsWith('..')) {
       if (!(await fileService.exists(absTarget))) return false
       // preserve anchors but do not introduce a leading './' that wasn't present
+      // if the original link didn't start with './', strip the './' prefix
+      if (!linkPath.startsWith('./') && relFromHost.startsWith('./')) {
+        relFromHost = relFromHost.slice(2)
+      }
       const normalized = relFromHost + (query || '') + (anchor || '')
       if (linkPath !== normalized) {
         this.pushNormalizedReplacement({
@@ -246,8 +251,10 @@ export class LinkProcessor {
   }) {
     const { replacements, lnk, linkPath, absTarget, config, fileService, anchor } = params
     const { query } = params
-    const relToDocs = relative(config.datasetRoot, absTarget)
-    if (!relToDocs || relToDocs.startsWith('..')) return
+    const relToDocs = convertToRelative(config.datasetRoot, absTarget)
+    // convertToRelative returns './' when paths are identical; preserve original
+    // behavior by treating './' as not valid
+    if (!relToDocs || relToDocs.startsWith('..') || relToDocs === './') return
 
     const normalized = normalizeLinkSlashes(relToDocs) + (query || '') + (anchor || '')
 

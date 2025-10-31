@@ -14,6 +14,7 @@ import {
   handleMirrorCleanup,
   validateSubfolderOperation,
 } from './path-operation-helpers'
+import { convertToRelative } from '../path-resolution'
 import { isAbsolute } from 'path'
 
 type CopyPathOpsParams = {
@@ -329,7 +330,8 @@ function resolveSourceFolderBehavior(
   folderBehavior?: Record<string, Behavior>,
   defaultBehavior: Behavior = 'overwrite',
 ) {
-  const relSourceKey = normalizeKey(join(datasetRoot, normSource).replace(datasetRoot, ''))
+  const rel = convertToRelative(datasetRoot, join(datasetRoot, normSource))
+  const relSourceKey = normalizeKey(rel)
   return resolveBehavior(relSourceKey, folderBehavior, defaultBehavior)
 }
 

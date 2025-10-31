@@ -1,5 +1,5 @@
 import { relative, dirname, join } from 'path'
-import { FileSystemService } from '@pair/content-ops'
+import { convertToRelative, FileSystemService } from '@pair/content-ops'
 import { Behavior } from '@pair/content-ops'
 import {
   parseTargetAndSource,
@@ -123,6 +123,11 @@ type UpdateDefaultsCtx = {
   reg: AssetRegistryConfig
 }
 
+function buildFolderBehavior(include: string[], behavior: string) {
+  if (!include || include.length === 0) return undefined
+  return Object.fromEntries(include.map(path => [path, behavior as Behavior]))
+}
+
 async function updateSingleRegistryFromDefaults(ctx: UpdateDefaultsCtx) {
   const { fsService, datasetRoot, pushLog, registryName, reg } = ctx
   const behavior = reg.behavior || 'mirror'
@@ -140,11 +145,41 @@ async function updateSingleRegistryFromDefaults(ctx: UpdateDefaultsCtx) {
   const targetFolder = type === 'file' ? dirname(targetPath) : targetPath
   await ensureDir(fsService, targetFolder)
 
-  // Build the full source path
+  // Build the full source path and delegate copy to helper to reduce complexity
   const fullSourcePath = fsService.resolve(datasetRoot, sourcePath)
   const rmd = fsService.currentWorkingDirectory()
-  const relativeSourcePath = relative(rmd, fullSourcePath)
-  const relativeTargetPath = relative(rmd, absTarget)
+  await runRegistryCopy({
+    fsService,
+    rmd,
+    fullSourcePath,
+    absTarget,
+    behavior,
+    include,
+    registryName,
+    pushLog,
+  })
+}
+
+async function runRegistryCopy(params: {
+  fsService: FileSystemService
+  rmd: string
+  fullSourcePath: string
+  absTarget: string
+  behavior: string
+  include: string[]
+  registryName: string
+  pushLog: (level: LogEntry['level'], message: string) => void
+}) {
+  const { fsService, rmd, fullSourcePath, absTarget, behavior, include, registryName, pushLog } =
+    params
+
+  let relativeSourcePath = relative(rmd, fullSourcePath)
+  let relativeTargetPath = relative(rmd, absTarget)
+
+  relativeSourcePath = relativeSourcePath || convertToRelative(rmd, fullSourcePath)
+  relativeTargetPath = relativeTargetPath || convertToRelative(rmd, absTarget)
+  if (relativeSourcePath === './') relativeSourcePath = ''
+  if (relativeTargetPath === './') relativeTargetPath = ''
 
   await doCopyAndUpdateLinks(fsService, {
     source: relativeSourcePath,
@@ -152,10 +187,7 @@ async function updateSingleRegistryFromDefaults(ctx: UpdateDefaultsCtx) {
     datasetRoot: rmd,
     options: {
       defaultBehavior: behavior as Behavior,
-      folderBehavior:
-        include.length > 0
-          ? Object.fromEntries(include.map(path => [path, behavior as Behavior]))
-          : undefined,
+      folderBehavior: buildFolderBehavior(include, behavior),
     },
   })
   pushLog('info', `Successfully updated ${registryName}`)
@@ -178,9 +210,14 @@ async function updateFromSource(context: SourceUpdateContext): Promise<{
     const cwd = fsService.currentWorkingDirectory()
     pushLog('info', `Copying/updating from ${source} to ${target} (datasetRoot: ${cwd})`)
     const fullSourcePath = fsService.resolve(datasetRoot, source)
-    const relativeSourcePath = relative(cwd, fullSourcePath)
+    let relativeSourcePath = relative(cwd, fullSourcePath)
     const fullTargetPath = fsService.resolve(cwd, target)
-    const relativeTargetPath = relative(cwd, fullTargetPath)
+    let relativeTargetPath = relative(cwd, fullTargetPath)
+
+    relativeSourcePath = relativeSourcePath || convertToRelative(cwd, fullSourcePath)
+    relativeTargetPath = relativeTargetPath || convertToRelative(cwd, fullTargetPath)
+    if (relativeSourcePath === './') relativeSourcePath = ''
+    if (relativeTargetPath === './') relativeTargetPath = ''
 
     await doCopyAndUpdateLinks(fsService, {
       source: relativeSourcePath,

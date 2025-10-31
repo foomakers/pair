@@ -15,3 +15,4 @@ export {
 } from './ops/link-batch-processor'
 
 export { logger, setLogLevel, getLogLevel, LogLevel } from './observability'
+export { detectRepoRoot, convertToRelative, convertToAbsolute } from './path-resolution'
