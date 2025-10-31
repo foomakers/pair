@@ -2,7 +2,12 @@ import { relative, dirname } from 'path'
 import { FileSystemService } from '../file-system/file-system-service'
 import { extractLinks as parseExtractLinks } from './markdown-parser'
 import { resolveMarkdownPath } from './path-resolution'
-import { isExternalLink, normalizeLinkSlashes, stripAnchor } from '../file-system/file-system-utils'
+import {
+  isExternalLink,
+  normalizeLinkSlashes,
+  stripAnchor,
+  walkMarkdownFiles,
+} from '../file-system/file-system-utils'
 import {
   type Replacement,
   applyReplacements,
@@ -48,6 +53,61 @@ export class LinkProcessor {
   }
 
   /**
+   * Extract links from a single markdown file and enrich with file context
+   */
+  static async extractLinksFromFile(
+    filePath: string,
+    fileService: FileSystemService,
+  ): Promise<
+    Array<ParsedLink & { filePath: string; type?: string | undefined; anchor?: string | undefined }>
+  > {
+    const content = await fileService.readFile(filePath)
+    const parsed = await this.extractLinks(content)
+
+    return parsed.map(p => {
+      const href = p.href
+      const type = this.classifyLinkType(href)
+      const anchor = this.extractAnchor(href)
+      return Object.assign({}, p, { filePath, type: type as string | undefined, anchor })
+    })
+  }
+
+  /**
+   * Extract links from all markdown files under a directory (recursively)
+   */
+  static async extractLinksFromDirectory(
+    dir: string,
+    fileService: FileSystemService,
+  ): Promise<
+    Array<ParsedLink & { filePath: string; type?: string | undefined; anchor?: string | undefined }>
+  > {
+    const files = await walkMarkdownFiles(dir, fileService)
+    const results = await Promise.all(files.map(f => this.extractLinksFromFile(f, fileService)))
+    return results.flat()
+  }
+
+  /**
+   * Classify a link href into a simple type for downstream logic
+   */
+  static classifyLinkType(
+    href?: string,
+  ): 'relative' | 'absolute' | 'http' | 'mailto' | 'anchor' | 'other' {
+    if (!href) return 'other'
+    const h = href.trim()
+    if (h.startsWith('#')) return 'anchor'
+    if (/^https?:\/\//i.test(h)) return 'http'
+    if (/^mailto:/i.test(h)) return 'mailto'
+    if (h.startsWith('/')) return 'absolute'
+    return 'relative'
+  }
+
+  static extractAnchor(href?: string): string | undefined {
+    if (!href) return undefined
+    const idx = href.indexOf('#')
+    return idx >= 0 ? href.substring(idx) : undefined
+  }
+
+  /**
    * Generate replacements for link normalization
    */
   static async generateNormalizationReplacements(
@@ -72,8 +132,7 @@ export class LinkProcessor {
     replacements: Replacement[]
   }) {
     const { lnk, file, config, fileService, replacements } = params
-    const linkText = lnk.text
-    const originalLink = lnk.href
+  const originalLink = lnk.href
     const linkPath: string | undefined = originalLink
 
     if (this.isSkippableLink(linkPath, config)) return
@@ -89,7 +148,6 @@ export class LinkProcessor {
         replacements,
         lnk,
         linkPath,
-        linkText,
         absTarget,
         hostDir,
         fileService,
@@ -103,7 +161,6 @@ export class LinkProcessor {
       replacements,
       lnk,
       linkPath,
-      linkText,
       absTarget,
       config,
       fileService,
@@ -115,20 +172,20 @@ export class LinkProcessor {
     replacements: Replacement[]
     lnk: ParsedLink
     linkPath: string
-    linkText: string
     absTarget: string
     hostDir: string
     fileService: FileSystemService
     anchor: string
   }) {
-    const { replacements, lnk, linkPath, linkText, absTarget, hostDir, fileService, anchor } =
+    const { replacements, lnk, linkPath, absTarget, hostDir, fileService, anchor } =
       params
     const relFromHost = relative(hostDir, absTarget)
     if (!relFromHost.startsWith('..')) {
       if (!(await fileService.exists(absTarget))) return false
-      const normalized = (relFromHost.startsWith('./') ? relFromHost : `./${relFromHost}`) + anchor
+      // preserve anchors but do not introduce a leading './' that wasn't present
+      const normalized = relFromHost + anchor
       if (linkPath !== normalized) {
-        this.pushNormalizedReplacement(replacements, lnk, linkPath, `[${linkText}](${normalized})`)
+        this.pushNormalizedReplacement(replacements, lnk, linkPath, normalized, 'normalizedRel')
       }
       return true
     }
@@ -139,19 +196,32 @@ export class LinkProcessor {
     replacements: Replacement[]
     lnk: ParsedLink
     linkPath: string
-    linkText: string
     absTarget: string
     config: LinkProcessingConfig
     fileService: FileSystemService
     anchor: string
   }) {
-    const { replacements, lnk, linkPath, linkText, absTarget, config, fileService, anchor } = params
+    const { replacements, lnk, linkPath, absTarget, config, fileService, anchor } = params
     const relToDocs = relative(config.datasetRoot, absTarget)
     if (relToDocs && !relToDocs.startsWith('..')) {
-      if (!(await fileService.exists(absTarget))) return
+      // If relToDocs is a single filename (no '/'), allow normalization to
+      // a simple filename (normalizedRel) even if the top folder doesn't match
+      // docsFolders. This preserves expected normalization for links like
+      // '../page.md' from inside a docs folder.
       const normalized = normalizeLinkSlashes(relToDocs) + anchor
+      if (!relToDocs.includes('/')) {
+        if (!(await fileService.exists(absTarget))) return
+        if (linkPath !== normalized) {
+          this.pushNormalizedReplacement(replacements, lnk, linkPath, normalized, 'normalizedRel')
+        }
+        return
+      }
+
+      const topFolder = relToDocs.split('/')[0] ?? ''
+      if (!config.docsFolders.includes(topFolder)) return
+      if (!(await fileService.exists(absTarget))) return
       if (linkPath !== normalized) {
-        this.pushNormalizedReplacement(replacements, lnk, linkPath, `[${linkText}](${normalized})`)
+        this.pushNormalizedReplacement(replacements, lnk, linkPath, normalized, 'normalizedFull')
       }
     }
   }
@@ -182,6 +252,7 @@ export class LinkProcessor {
     lnk: ParsedLink,
     oldHref: string,
     newHref: string,
+    kind: 'normalizedRel' | 'normalizedFull' = 'normalizedRel',
   ) {
     replacements.push({
       start: lnk.start,
@@ -189,7 +260,7 @@ export class LinkProcessor {
       line: lnk.line,
       oldHref,
       newHref,
-      kind: 'normalizedRel',
+      kind,
     })
   }
 
