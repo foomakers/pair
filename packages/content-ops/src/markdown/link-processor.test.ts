@@ -281,3 +281,242 @@ describe('replaceLinkOnLine - no replacements', () => {
     })
   })
 })
+
+// T-69-02: Link Detection & Parsing Engine - New Tests
+describe('LinkProcessor - extractLinksFromFile (T-69-02)', () => {
+  it('should extract links with file context', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/project/docs/guide.md': '# Guide\n\nSee [intro](./intro.md) and [config](../config.md).',
+      },
+      '/project',
+      '/project',
+    )
+
+    const links = await LinkProcessor.extractLinksFromFile('/project/docs/guide.md', fileService)
+
+    expect(links).toHaveLength(2)
+    expect(links[0]).toMatchObject({
+      href: './intro.md',
+      text: 'intro',
+      filePath: '/project/docs/guide.md',
+      line: 3,
+    })
+    expect(links[1]).toMatchObject({
+      href: '../config.md',
+      text: 'config',
+      filePath: '/project/docs/guide.md',
+      line: 3,
+    })
+  })
+
+  it('should classify link types', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/project/test.md': [
+          '# Links',
+          '[rel](./file.md)',
+          '[abs](/docs/file.md)',
+          '[http](https://example.com)',
+          '[mailto](mailto:test@example.com)',
+          '[anchor](#section)',
+        ].join('\n'),
+      },
+      '/project',
+      '/project',
+    )
+
+    const links = await LinkProcessor.extractLinksFromFile('/project/test.md', fileService)
+
+    expect(links).toHaveLength(5)
+    expect(links[0]).toMatchObject({ href: './file.md', type: 'relative' })
+    expect(links[1]).toMatchObject({ href: '/docs/file.md', type: 'absolute' })
+    expect(links[2]).toMatchObject({ href: 'https://example.com', type: 'http' })
+    expect(links[3]).toMatchObject({ href: 'mailto:test@example.com', type: 'mailto' })
+    expect(links[4]).toMatchObject({ href: '#section', type: 'anchor' })
+  })
+
+  it('should extract anchor from links with fragments', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/project/test.md': 'See [section](./docs/file.md#overview).',
+      },
+      '/project',
+      '/project',
+    )
+
+    const links = await LinkProcessor.extractLinksFromFile('/project/test.md', fileService)
+
+    expect(links).toHaveLength(1)
+    expect(links[0]).toMatchObject({
+      href: './docs/file.md#overview',
+      type: 'relative',
+      anchor: '#overview',
+    })
+  })
+
+  it('should handle files with no links', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/project/plain.md': '# No Links\n\nJust text.',
+      },
+      '/project',
+      '/project',
+    )
+
+    const links = await LinkProcessor.extractLinksFromFile('/project/plain.md', fileService)
+
+    expect(links).toHaveLength(0)
+  })
+})
+
+describe('LinkProcessor - extractLinksFromDirectory (T-69-02)', () => {
+  it('should extract links from all markdown files in directory', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/project/docs/guide.md': 'See [intro](intro.md).',
+        '/project/docs/intro.md': 'See [guide](guide.md).',
+        '/project/README.md': 'See [docs](./docs/guide.md).',
+      },
+      '/project',
+      '/project',
+    )
+
+    const links = await LinkProcessor.extractLinksFromDirectory('/project/docs', fileService)
+
+    expect(links.length).toBeGreaterThanOrEqual(2)
+    const filesParsed = [...new Set(links.map(l => l.filePath))]
+    expect(filesParsed).toContain('/project/docs/guide.md')
+    expect(filesParsed).toContain('/project/docs/intro.md')
+  })
+
+  it('should handle nested directories', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/project/docs/a/guide.md': 'Link [b](../b/intro.md).',
+        '/project/docs/b/intro.md': 'Link [a](../a/guide.md).',
+      },
+      '/project',
+      '/project',
+    )
+
+    const links = await LinkProcessor.extractLinksFromDirectory('/project/docs', fileService)
+
+    expect(links.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('should skip non-markdown files', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/project/docs/guide.md': 'See [intro](intro.md).',
+        '/project/docs/data.json': '{"link": "test.md"}',
+        '/project/docs/script.js': 'const link = "test.md";',
+      },
+      '/project',
+      '/project',
+    )
+
+    const links = await LinkProcessor.extractLinksFromDirectory('/project/docs', fileService)
+
+    const filesParsed = [...new Set(links.map(l => l.filePath))]
+    expect(filesParsed).toHaveLength(1)
+    expect(filesParsed[0]).toBe('/project/docs/guide.md')
+  })
+
+  it('should handle empty directories', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/project/docs/.gitkeep': '',
+      },
+      '/project',
+      '/project',
+    )
+
+    const links = await LinkProcessor.extractLinksFromDirectory('/project/docs', fileService)
+
+    expect(links).toHaveLength(0)
+  })
+})
+
+describe('LinkProcessor - classifyLinkType (T-69-02)', () => {
+  it('should classify relative paths', () => {
+    expect(LinkProcessor.classifyLinkType('./file.md')).toBe('relative')
+    expect(LinkProcessor.classifyLinkType('../file.md')).toBe('relative')
+    expect(LinkProcessor.classifyLinkType('file.md')).toBe('relative')
+    expect(LinkProcessor.classifyLinkType('docs/file.md')).toBe('relative')
+  })
+
+  it('should classify absolute paths', () => {
+    expect(LinkProcessor.classifyLinkType('/docs/file.md')).toBe('absolute')
+    expect(LinkProcessor.classifyLinkType('/file.md')).toBe('absolute')
+  })
+
+  it('should classify HTTP/HTTPS URLs', () => {
+    expect(LinkProcessor.classifyLinkType('https://example.com')).toBe('http')
+    expect(LinkProcessor.classifyLinkType('http://example.com')).toBe('http')
+  })
+
+  it('should classify mailto links', () => {
+    expect(LinkProcessor.classifyLinkType('mailto:test@example.com')).toBe('mailto')
+  })
+
+  it('should classify anchor-only links', () => {
+    expect(LinkProcessor.classifyLinkType('#section')).toBe('anchor')
+    expect(LinkProcessor.classifyLinkType('#')).toBe('anchor')
+  })
+})
+
+describe('LinkProcessor - performance (T-69-02)', () => {
+  it('should handle large files efficiently', async () => {
+    const largeContent = Array(1000)
+      .fill(0)
+      .map((_, i) => `Line ${i} with [link${i}](file${i}.md).`)
+      .join('\n')
+
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/project/large.md': largeContent,
+      },
+      '/project',
+      '/project',
+    )
+
+    const startTime = Date.now()
+    const links = await LinkProcessor.extractLinksFromFile('/project/large.md', fileService)
+    const duration = Date.now() - startTime
+
+    expect(links).toHaveLength(1000)
+    expect(duration).toBeLessThan(5000) // Target: < 5s for 1000 links
+  })
+})
+
+describe('LinkProcessor - edge cases (T-69-02)', () => {
+  it('should handle malformed markdown gracefully', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/project/malformed.md': '[broken link](file.md\n[valid](other.md)',
+      },
+      '/project',
+      '/project',
+    )
+
+    const links = await LinkProcessor.extractLinksFromFile('/project/malformed.md', fileService)
+
+    expect(links.length).toBeGreaterThanOrEqual(0)
+  })
+
+  it('should handle links with special characters', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/project/special.md': 'Link [test](file%20with%20spaces.md).',
+      },
+      '/project',
+      '/project',
+    )
+
+    const links = await LinkProcessor.extractLinksFromFile('/project/special.md', fileService)
+
+    expect(links).toHaveLength(1)
+    expect(links[0].href).toBe('file%20with%20spaces.md')
+  })
+})
