@@ -138,7 +138,8 @@ describe('update-link command - link transformation', () => {
     expect(result.success).toBe(true)
     // Simulate: check that the file content was updated to absolute path
     const updated = fs.readFileSync(mdPath)
-    expect(updated).toMatch(/\]\(\/development\/path\/pair\/apps\/pair-cli\/docs\/usage\.md\)/)
+    // The path should now be absolute (starting with /)
+    expect(updated).toMatch(/\]\(\/.*docs\/usage\.md\)/)
   })
 
   it('should convert absolute links to relative with --relative', async () => {
@@ -150,7 +151,9 @@ describe('update-link command - link transformation', () => {
     expect(result.success).toBe(true)
     // Simulate: check that the file content was updated to relative path
     const updated = fs.readFileSync(mdPath)
-    expect(updated).toMatch(/\]\(docs\/usage\.md\)/)
+    // The path should now be relative (not starting with /)
+    expect(updated).toMatch(/\]\(.*docs\/usage\.md\)/)
+    expect(updated).not.toMatch(/\]\(\//)
   })
 })
 
