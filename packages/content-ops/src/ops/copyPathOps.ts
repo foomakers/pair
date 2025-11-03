@@ -174,7 +174,6 @@ export async function copyPathOps(params: CopyPathOpsParams) {
     if (setup.shouldSkip) return {}
 
     const { normSource, normTarget, srcPath, destPath, defaultBehavior, folderBehavior } = setup
-    console.log('#copyPathOps - datasetRoot:', datasetRoot)
     if (!srcPath || !destPath) {
       throw createError({
         type: 'IO_ERROR',

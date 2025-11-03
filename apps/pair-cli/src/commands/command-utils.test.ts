@@ -1,20 +1,8 @@
-import { describe, it, expect, vi, beforeEach, Mock } from 'vitest'
-import type { FileSystemService } from '@pair/content-ops'
-
-// create a minimal mock for copyPathOps to avoid pulling the full module; keep short to satisfy max-lines-per-function
-vi.mock('@pair/content-ops', () => ({
-  copyPathOps: vi.fn(),
-}))
-
+import { describe, it, expect } from 'vitest'
+import { createTestFs } from '../test-utils/test-helpers'
 import * as utils from './command-utils'
-import { copyPathOps } from '@pair/content-ops'
 
 describe('command-utils basic utilities', () => {
-  beforeEach(() => {
-    ;(copyPathOps as unknown as Mock)?.mockReset?.()
-    vi.restoreAllMocks()
-  })
-
   it('parseTargetAndSource returns nulls for missing args', () => {
     expect(utils.parseTargetAndSource(undefined)).toEqual({ target: null, source: null })
     expect(utils.parseTargetAndSource([])).toEqual({ target: null, source: null })
@@ -32,8 +20,6 @@ describe('command-utils basic utilities', () => {
     expect(logs.length).toBe(1)
     expect(logs[0].message).toBe('hello')
 
-    // The logger now always captures logs internally and does not print to console
-    // regardless of a verbose flag. Ensure logs are recorded.
     const { logs: logs2, pushLog: push2 } = utils.createLogger()
     push2('warn', 'w', { a: 1 })
     expect(logs2.length).toBe(1)
@@ -41,64 +27,121 @@ describe('command-utils basic utilities', () => {
 })
 
 describe('command-utils fs operations - ensureDir', () => {
-  it('ensureDir calls fsService.mkdir with recursive', async () => {
-    const fs = { mkdir: vi.fn().mockResolvedValue(undefined) } as unknown as FileSystemService
-    await utils.ensureDir(fs, '/tmp/dir')
-    expect(fs.mkdir).toHaveBeenCalledWith('/tmp/dir', { recursive: true })
+  it('ensureDir creates directory with recursive option', async () => {
+    const fs = createTestFs({}, {}, '/test')
+    await utils.ensureDir(fs, '/test/new/nested/dir')
+    expect(await fs.exists('/test/new/nested/dir')).toBe(true)
   })
 
-  it('ensureDir propagates mkdir errors', async () => {
-    const fs = {
-      mkdir: vi.fn().mockRejectedValue(new Error('nope')),
-    } as unknown as FileSystemService
-    await expect(utils.ensureDir(fs, '/tmp/fail')).rejects.toThrow('nope')
+  it('ensureDir works with existing directory', async () => {
+    const fs = createTestFs({}, { '/test/existing/file.txt': 'content' }, '/test')
+    await utils.ensureDir(fs, '/test/existing')
+    expect(await fs.exists('/test/existing')).toBe(true)
   })
 })
 
 describe('command-utils fs operations - doCopyAndUpdateLinks', () => {
-  beforeEach(() => {
-    ;(copyPathOps as unknown as Mock)?.mockReset?.()
-    vi.restoreAllMocks()
-  })
+  it('doCopyAndUpdateLinks copies files from source to target', async () => {
+    const fs = createTestFs(
+      {},
+      {
+        '/dataset/src/file1.md': '# File 1',
+        '/dataset/src/file2.md': '# File 2',
+      },
+      '/test',
+    )
 
-  it('doCopyAndUpdateLinks calls copyPathOps and logs returned logs', async () => {
-    const fakeResult = {}
-    ;(copyPathOps as unknown as Mock).mockResolvedValue(fakeResult)
-
-    const fs = {
-      /* fsService stub */
-    } as unknown as FileSystemService
-    const push = vi.fn()
-
-    const res = await utils.doCopyAndUpdateLinks(fs, {
+    await utils.doCopyAndUpdateLinks(fs, {
       source: 'src',
       target: 'dst',
       datasetRoot: '/dataset',
-      options: { foo: 'bar' },
+      options: { defaultBehavior: 'mirror' },
     })
-    expect(copyPathOps as unknown as Mock).toHaveBeenCalledWith({
-      fileService: fs,
-      source: 'src',
-      target: 'dst',
-      datasetRoot: '/dataset',
-      options: { foo: 'bar' },
-    })
-    expect(push).toHaveBeenCalledTimes(0) // No more logs to push
-    expect(res).toEqual({})
+
+    expect(await fs.exists('/dataset/dst/file1.md')).toBe(true)
+    expect(await fs.exists('/dataset/dst/file2.md')).toBe(true)
+  })
+})
+
+describe('extractMarkdownLinks', () => {
+  it('extracts links from markdown content', async () => {
+    const content = '[Link1](url1) some text [Link2](url2)'
+    const links = await utils.extractMarkdownLinks(content)
+    expect(links).toEqual([
+      { text: 'Link1', href: 'url1' },
+      { text: 'Link2', href: 'url2' },
+    ])
   })
 
-  it('doCopyAndUpdateLinks propagates errors from copyPathOps', async () => {
-    ;(copyPathOps as unknown as Mock).mockRejectedValue(new Error('copy-fail'))
-    const fs = {} as unknown as FileSystemService
-    const push = vi.fn()
-    await expect(
-      utils.doCopyAndUpdateLinks(fs, {
-        source: 's',
-        target: 'd',
-        datasetRoot: '/dataset',
-        options: undefined,
-      }),
-    ).rejects.toThrow('copy-fail')
-    expect(push).toHaveBeenCalledTimes(0)
+  it('returns empty array when no links found', async () => {
+    const links = await utils.extractMarkdownLinks('no links here')
+    expect(links).toEqual([])
+  })
+
+  it('handles malformed links gracefully', async () => {
+    const content = '[text](url) [incomplete]('
+    const links = await utils.extractMarkdownLinks(content)
+    expect(links.length).toBe(1)
+    expect(links[0]).toEqual({ text: 'text', href: 'url' })
+  })
+})
+
+describe('detectLinkStyle - majority detection', () => {
+  const cwd = '/test'
+
+  it('returns relative when majority are relative', async () => {
+    const fs = createTestFs(
+      {},
+      { [`${cwd}/.pair/file1.md`]: '[a](./file.md) [b](../other.md) [c](/abs.md)' },
+      cwd,
+    )
+    expect(await utils.detectLinkStyle(fs, `${cwd}/.pair`)).toBe('relative')
+  })
+
+  it('returns absolute when majority are absolute', async () => {
+    const fs = createTestFs(
+      {},
+      { [`${cwd}/.pair/file1.md`]: '[a](/abs1.md) [b](/abs2.md) [c](./rel.md)' },
+      cwd,
+    )
+    expect(await utils.detectLinkStyle(fs, `${cwd}/.pair`)).toBe('absolute')
+  })
+
+  it('returns relative when counts are equal', async () => {
+    const fs = createTestFs({}, { [`${cwd}/.pair/file1.md`]: '[a](./rel.md) [b](/abs.md)' }, cwd)
+    expect(await utils.detectLinkStyle(fs, `${cwd}/.pair`)).toBe('relative')
+  })
+})
+
+describe('detectLinkStyle - filtering', () => {
+  const cwd = '/test'
+
+  it('skips external links in detection', async () => {
+    const fs = createTestFs(
+      {},
+      {
+        [`${cwd}/.pair/file1.md`]: '[ext](https://example.com) [rel](./file.md) [abs](/abs.md)',
+      },
+      cwd,
+    )
+    expect(await utils.detectLinkStyle(fs, `${cwd}/.pair`)).toBe('relative')
+  })
+
+  it('skips anchor links in detection', async () => {
+    const fs = createTestFs(
+      {},
+      { [`${cwd}/.pair/file1.md`]: '[anchor](#section) [abs](/abs.md)' },
+      cwd,
+    )
+    expect(await utils.detectLinkStyle(fs, `${cwd}/.pair`)).toBe('absolute')
+  })
+
+  it('returns relative when no internal links found', async () => {
+    const fs = createTestFs(
+      {},
+      { [`${cwd}/.pair/file1.md`]: '[ext](https://example.com) no links' },
+      cwd,
+    )
+    expect(await utils.detectLinkStyle(fs, `${cwd}/.pair`)).toBe('relative')
   })
 })

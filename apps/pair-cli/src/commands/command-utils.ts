@@ -1,5 +1,12 @@
-import { copyPathOps } from '@pair/content-ops'
+import {
+  copyPathOps,
+  walkMarkdownFiles,
+  isExternalLink,
+  extractLinks,
+  type ParsedLink,
+} from '@pair/content-ops'
 import type { FileSystemService } from '@pair/content-ops'
+import { updateLinkCommand, type UpdateLinkOptions } from './update-link'
 
 export type LogEntry = {
   time: string
@@ -91,4 +98,91 @@ export async function doCopyAndUpdateLinks(
     ...copyOptions,
   })
   return {}
+}
+
+/**
+ * Extract markdown links from content (delegates to content-ops)
+ */
+export async function extractMarkdownLinks(
+  content: string,
+): Promise<Array<{ href: string; text: string }>> {
+  const links = await extractLinks(content)
+  return links.map((l: ParsedLink) => ({ href: l.href, text: l.text }))
+}
+
+/**
+ * Detect the dominant link style in markdown files at targetPath
+
+/**
+ * Detect the dominant link style in markdown files at targetPath
+ * Returns 'relative' if relative links are >= absolute links, otherwise 'absolute'
+ */
+export async function detectLinkStyle(
+  fsService: FileSystemService,
+  targetPath: string,
+): Promise<'relative' | 'absolute'> {
+  const files = await walkMarkdownFiles(targetPath, fsService)
+  let relativeCount = 0
+  let absoluteCount = 0
+
+  for (const file of files) {
+    const content = await fsService.readFile(file)
+    const links = await extractMarkdownLinks(content)
+
+    for (const link of links) {
+      if (isExternalLink(link.href)) continue
+      if (link.href.startsWith('#')) continue
+
+      if (link.href.startsWith('/')) {
+        absoluteCount++
+      } else {
+        relativeCount++
+      }
+    }
+  }
+
+  return relativeCount >= absoluteCount ? 'relative' : 'absolute'
+}
+
+/**
+ * Apply link transformation after install/update
+ */
+export async function applyLinkTransformation(
+  fsService: FileSystemService,
+  options: { linkStyle?: 'relative' | 'absolute' | 'auto'; minLogLevel?: string },
+  pushLog: (level: LogEntry['level'], message: string) => void,
+  mode: 'install' | 'update',
+): Promise<void> {
+  const linkStyle = options.linkStyle
+  if (!linkStyle) return
+
+  pushLog('info', `Applying link transformation: ${linkStyle}`)
+
+  try {
+    let style: 'relative' | 'absolute' = 'relative'
+
+    if (linkStyle === 'auto') {
+      if (mode === 'update') {
+        // For update, auto means detect existing style
+        const kbPath = fsService.resolve('.pair')
+        if (await fsService.exists(kbPath)) {
+          style = await detectLinkStyle(fsService, kbPath)
+          pushLog('info', `Auto-detected link style: ${style}`)
+        }
+      } else {
+        // For install, auto means relative (default)
+        style = 'relative'
+      }
+    } else {
+      style = linkStyle
+    }
+
+    const args = style === 'relative' ? ['--relative'] : ['--absolute']
+    const opts: UpdateLinkOptions = {}
+    if (options.minLogLevel) opts.minLogLevel = options.minLogLevel
+    await updateLinkCommand(fsService, args, opts)
+    pushLog('info', `Link transformation completed: ${style}`)
+  } catch (err) {
+    pushLog('warn', `Link transformation failed: ${String(err)}`)
+  }
 }

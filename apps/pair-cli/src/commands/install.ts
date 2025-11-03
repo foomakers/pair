@@ -7,6 +7,7 @@ import {
   createLogger,
   ensureDir,
   doCopyAndUpdateLinks,
+  applyLinkTransformation,
   CommandOptions,
   LogEntry,
 } from './command-utils'
@@ -28,6 +29,7 @@ export interface AssetRegistryConfig {
 
 export type InstallOptions = CommandOptions & {
   baseTarget?: string
+  linkStyle?: 'relative' | 'absolute' | 'auto'
 }
 
 export interface InstallContext {
@@ -622,6 +624,11 @@ async function performInstallation(context: {
       pushLog,
       ...(options && { options }),
     })
+
+    // Apply link transformation if requested
+    if (result.success && options?.linkStyle) {
+      await applyLinkTransformation(fsService, options, pushLog, 'install')
+    }
 
     return processInstallationResult(result, logs, options)
   } catch (err) {

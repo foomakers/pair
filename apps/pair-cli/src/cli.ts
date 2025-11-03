@@ -99,6 +99,10 @@ program
   .argument('[target]', 'Target folder (omit to use defaults from config)')
   .option('-c, --config <file>', 'Path to config file (if provided, uses this config)')
   .option('--list-targets', 'List available target folders and their descriptions')
+  .option(
+    '--link-style <style>',
+    'Link style: relative, absolute, or auto (default: relative for install)',
+  )
   .action((targetArg: unknown, cmdOptions: unknown) => {
     return handleInstallCommand(targetArg, cmdOptions, fsService).then(() => undefined)
   })
@@ -115,24 +119,29 @@ function buildInstallOptions(
   const argsToPass = first && !first.startsWith('--') ? ['--target', first] : rawArgs
 
   const { baseTarget, useDefaults } = parseInstallUpdateArgs(argsToPass)
-
-  // Resolve relative baseTarget against the current working directory
-  let resolvedBaseTarget = baseTarget
-  if (baseTarget && !isAbsolute(baseTarget)) {
-    resolvedBaseTarget = fsService.resolve(fsService.currentWorkingDirectory(), baseTarget)
-  }
-
+  const resolvedBaseTarget = resolveBaseTarget(fsService, baseTarget)
   const parsedRec = getParsedOpts(cmdOptions)
 
-  const opts: Record<string, unknown> = {
-    useDefaults,
-  }
-  if (parsedRec && parsedRec['config'])
-    (opts as Record<string, unknown>)['customConfigPath'] = parsedRec['config']
-  if (resolvedBaseTarget) (opts as Record<string, unknown>)['baseTarget'] = resolvedBaseTarget
-  ;(opts as Record<string, unknown>)['minLogLevel'] = MIN_LOG_LEVEL
+  const opts: Record<string, unknown> = { useDefaults }
+  if (parsedRec?.['config']) opts['customConfigPath'] = parsedRec['config']
+  if (resolvedBaseTarget) opts['baseTarget'] = resolvedBaseTarget
+  if (parsedRec) addLinkStyleToOpts(opts, parsedRec)
+  opts['minLogLevel'] = MIN_LOG_LEVEL
 
   return { argsToPass, opts }
+}
+
+function resolveBaseTarget(fsService: FileSystemService, baseTarget: string | null): string | null {
+  if (!baseTarget || isAbsolute(baseTarget)) return baseTarget
+  return fsService.resolve(fsService.currentWorkingDirectory(), baseTarget)
+}
+
+function addLinkStyleToOpts(opts: Record<string, unknown>, parsedRec: Record<string, unknown>) {
+  if (!parsedRec['linkStyle']) return
+  const style = String(parsedRec['linkStyle'])
+  if (style === 'relative' || style === 'absolute' || style === 'auto') {
+    opts['linkStyle'] = style
+  }
 }
 
 function getParsedOpts(cmdOptions: unknown): Record<string, unknown> {
@@ -209,34 +218,50 @@ export async function handleUpdateCommand(
 
   try {
     const datasetRoot = validateUpdateConfigAndGetRoot(fsService, cmdOptions)
-
     const { args, useDefaults } = buildUpdateArgs(fsService, cmdOptions)
-
-    // Execute update command
-    const opts: Record<string, unknown> = { datasetRoot, useDefaults }
-    if (cmdOptions.config) opts['customConfigPath'] = cmdOptions.config
-    opts['minLogLevel'] = MIN_LOG_LEVEL
-
+    const opts = buildUpdateCommandOpts(cmdOptions, datasetRoot, useDefaults)
     const res = await updateCommand(fsService, args, opts)
-    if (!res) {
-      console.error(chalk.red('[update] failed: Command returned undefined'))
-      return
-    }
 
-    if (res.success) {
-      if (useDefaults) {
-        console.log(chalk.green(`[update] success - used default targets from config`))
-      } else {
-        console.log(chalk.green(`[update] success - updated specified registries`))
-      }
-    } else {
-      console.error(
-        chalk.red(`[update] failed: ${'message' in res ? res.message : 'Unknown error'}`),
-      )
-      process.exitCode = 1
-    }
+    handleUpdateResult(res, useDefaults)
   } catch (err) {
     console.error(chalk.red(String(err)))
+    process.exitCode = 1
+  }
+}
+
+function buildUpdateCommandOpts(
+  cmdOptions: CommandOptions,
+  datasetRoot: string,
+  useDefaults: boolean,
+): Record<string, unknown> {
+  const opts: Record<string, unknown> = { datasetRoot, useDefaults }
+  if (cmdOptions.config) opts['customConfigPath'] = cmdOptions.config
+  if ('linkStyle' in cmdOptions && cmdOptions.linkStyle) {
+    const style = String(cmdOptions.linkStyle)
+    if (style === 'relative' || style === 'absolute' || style === 'auto') {
+      opts['linkStyle'] = style
+    }
+  }
+  opts['minLogLevel'] = MIN_LOG_LEVEL
+  return opts
+}
+
+function handleUpdateResult(
+  res: { success?: boolean; message?: string } | undefined,
+  useDefaults: boolean,
+): void {
+  if (!res) {
+    console.error(chalk.red('[update] failed: Command returned undefined'))
+    return
+  }
+
+  if (res.success) {
+    const msg = useDefaults
+      ? '[update] success - used default targets from config'
+      : '[update] success - updated specified registries'
+    console.log(chalk.green(msg))
+  } else {
+    console.error(chalk.red(`[update] failed: ${'message' in res ? res.message : 'Unknown error'}`))
     process.exitCode = 1
   }
 }
@@ -338,6 +363,10 @@ program
   .argument('[target]', 'Target folder (omit to use defaults from config)')
   .option('-c, --config <file>', 'Path to config file (if provided, uses this config)')
   .option('--list-targets', 'List available target folders and their descriptions')
+  .option(
+    '--link-style <style>',
+    'Link style: relative, absolute, or auto (default: auto-detect for update)',
+  )
   .action(async (targetArg, cmdOptions) => {
     // Preserve backward compatibility for tests that call handleUpdateCommand({}, fs)
     const merged = { ...(cmdOptions as Record<string, unknown>), positionalTarget: targetArg }

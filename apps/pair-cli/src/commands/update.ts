@@ -6,6 +6,7 @@ import {
   createLogger,
   ensureDir,
   doCopyAndUpdateLinks,
+  applyLinkTransformation,
   CommandOptions,
   LogEntry,
 } from './command-utils'
@@ -24,7 +25,9 @@ interface AssetRegistryConfig {
   description: string
 }
 
-export type UpdateOptions = CommandOptions
+export type UpdateOptions = CommandOptions & {
+  linkStyle?: 'relative' | 'absolute' | 'auto'
+}
 
 // Context for source-based updates
 interface SourceUpdateContext {
@@ -92,6 +95,11 @@ async function updateWithDefaults(
         registryName,
         reg: registryConfig as AssetRegistryConfig,
       })
+    }
+
+    // Apply link transformation if requested
+    if (options?.linkStyle) {
+      await applyLinkTransformation(fsService, options, pushLog, 'update')
     }
 
     pushLog('info', 'updateWithDefaults completed')
