@@ -2,6 +2,7 @@ import type { FileSystemService } from '@pair/content-ops'
 import type { LogEntry, CommandOptions } from './command-utils'
 import { createLogger } from './command-utils'
 import { convertToRelative, convertToAbsolute } from '@pair/content-ops'
+import { isExternalLink, walkMarkdownFiles } from '@pair/content-ops/file-system'
 import { dirname } from 'path'
 
 export type UpdateLinkOptions = CommandOptions & {
@@ -42,20 +43,6 @@ function extractMarkdownLinks(content: string): Array<{ href: string; text: stri
 }
 
 /**
- * Check if a link is external (http/https/mailto/etc)
- */
-function isExternalLink(href: string): boolean {
-  return /^(https?|mailto|ftp):/.test(href)
-}
-
-/**
- * Check if a link is an anchor
- */
-function isAnchor(href: string): boolean {
-  return href.startsWith('#')
-}
-
-/**
  * Process markdown files in a directory and transform links
  */
 // eslint-disable-next-line complexity, max-lines-per-function, max-params
@@ -77,7 +64,7 @@ async function processMarkdownFiles(
   }
 
   // Find all markdown files
-  const files = await findMarkdownFiles(fsService, kbPath)
+  const files = await walkMarkdownFiles(kbPath, fsService)
   pushLog('info', `Found ${files.length} markdown files`)
 
   for (const filePath of files) {
@@ -91,7 +78,7 @@ async function processMarkdownFiles(
     let newContent = content
 
     for (const link of links) {
-      if (isExternalLink(link.href) || isAnchor(link.href)) {
+      if (isExternalLink(link.href)) {
         continue
       }
 
@@ -134,31 +121,6 @@ async function processMarkdownFiles(
   }
 
   return stats
-}
-
-/**
- * Find all markdown files in a directory recursively
- */
-async function findMarkdownFiles(fsService: FileSystemService, dirPath: string): Promise<string[]> {
-  const files: string[] = []
-
-  async function walk(dir: string) {
-    const entries = await fsService.readdir(dir)
-
-    for (const entry of entries) {
-      const fullPath = fsService.resolve(dir, entry.name)
-      const isDir = entry.isDirectory()
-
-      if (isDir) {
-        await walk(fullPath)
-      } else if (entry.name.endsWith('.md')) {
-        files.push(fullPath)
-      }
-    }
-  }
-
-  await walk(dirPath)
-  return files
 }
 
 /**
