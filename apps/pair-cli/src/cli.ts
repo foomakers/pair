@@ -6,6 +6,7 @@ import chalk from 'chalk'
 
 import { updateCommand } from './commands/update'
 import { installCommand } from './commands/install'
+import { updateLinkCommand } from './commands/update-link'
 import { parseInstallUpdateArgs } from './commands/command-utils'
 import { fileSystemService, FileSystemService, Behavior, setLogLevel } from '@pair/content-ops'
 import {
@@ -341,6 +342,42 @@ program
     // Preserve backward compatibility for tests that call handleUpdateCommand({}, fs)
     const merged = { ...(cmdOptions as Record<string, unknown>), positionalTarget: targetArg }
     await handleUpdateCommand(merged, fsService)
+  })
+
+program
+  .command('update-link')
+  .description('Validate and update links in installed Knowledge Base content')
+  .option('--relative', 'Convert all links to relative paths (default)')
+  .option('--absolute', 'Convert all links to absolute paths')
+  .option('--dry-run', 'Show what would be changed without modifying files')
+  .option('--verbose', 'Show detailed processing information')
+  .action(async cmdOptions => {
+    try {
+      const args: string[] = []
+      const opts = cmdOptions as Record<string, unknown>
+
+      if (opts['relative']) args.push('--relative')
+      if (opts['absolute']) args.push('--absolute')
+      if (opts['dryRun']) args.push('--dry-run')
+      if (opts['verbose']) args.push('--verbose')
+
+      const result = await updateLinkCommand(fsService, args, { minLogLevel: MIN_LOG_LEVEL })
+
+      if (result.success) {
+        console.log(chalk.green(`✅ ${result.message}`))
+        if (result.stats) {
+          console.log(chalk.blue('\n📊 Summary:'))
+          console.log(chalk.gray(`  • Total links processed: ${result.stats.totalLinks}`))
+          console.log(chalk.gray(`  • Files modified: ${result.stats.filesModified}`))
+        }
+      } else {
+        console.error(chalk.red(`❌ ${result.message}`))
+        process.exitCode = 1
+      }
+    } catch (err) {
+      console.error(chalk.red(`Failed to update links: ${String(err)}`))
+      process.exitCode = 1
+    }
   })
 
 program

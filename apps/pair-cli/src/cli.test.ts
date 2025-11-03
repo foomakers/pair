@@ -21,6 +21,53 @@ const pkg = JSON.parse(
 describe('pair-cli basics', () => {
   it.skip('should print the correct version with --version', execVersionTestWrapper)
   it.skip('help output does not mention --dry-run or --verbose', execHelpTestWrapper)
+  it('update-link --absolute converts relative links to absolute (e2e)', async () => {
+    // Setup: create a temp markdown file with a relative link
+    const fs = require('fs')
+    const path = require('path')
+    const tmpDir = fs.mkdtempSync(path.join(__dirname, 'tmp-'))
+    const mdPath = path.join(tmpDir, 'README.md')
+    fs.writeFileSync(mdPath, '[Doc](docs/usage.md)')
+    // Simulate .pair directory
+    fs.mkdirSync(path.join(tmpDir, '.pair'))
+    fs.writeFileSync(path.join(tmpDir, '.pair', 'README.md'), '[Doc](docs/usage.md)')
+    // Run CLI
+    const cliPath = path.join(__dirname, 'cli.ts')
+    const tsNodePath = path.join(__dirname, '..', 'node_modules', '.bin', 'ts-node')
+    const result = require('child_process').execSync(`${tsNodePath} ${cliPath} update-link --absolute`, {
+      cwd: tmpDir,
+      encoding: 'utf8',
+    })
+    // Check that the link was converted to absolute
+    const updated = fs.readFileSync(path.join(tmpDir, '.pair', 'README.md'), 'utf8')
+    expect(updated).toMatch(/\]\(.*\/README\.md\)/)
+    // Cleanup
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it('update-link --relative converts absolute links to relative (e2e)', async () => {
+    // Setup: create a temp markdown file with an absolute link
+    const fs = require('fs')
+    const path = require('path')
+    const tmpDir = fs.mkdtempSync(path.join(__dirname, 'tmp-'))
+    const mdPath = path.join(tmpDir, 'README.md')
+    fs.writeFileSync(mdPath, '[Doc](/absolute/path/docs/usage.md)')
+    // Simulate .pair directory
+    fs.mkdirSync(path.join(tmpDir, '.pair'))
+    fs.writeFileSync(path.join(tmpDir, '.pair', 'README.md'), '[Doc](/absolute/path/docs/usage.md)')
+    // Run CLI
+    const cliPath = path.join(__dirname, 'cli.ts')
+    const tsNodePath = path.join(__dirname, '..', 'node_modules', '.bin', 'ts-node')
+    const result = require('child_process').execSync(`${tsNodePath} ${cliPath} update-link --relative`, {
+      cwd: tmpDir,
+      encoding: 'utf8',
+    })
+    // Check that the link was converted to relative
+    const updated = fs.readFileSync(path.join(tmpDir, '.pair', 'README.md'), 'utf8')
+    expect(updated).toMatch(/\]\(docs\/usage\.md\)/)
+    // Cleanup
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  })
   it('returns knowledge-hub dataset path', testKnowledgeHubDatasetPath)
   it('shows welcome message for invalid commands', testWelcomeMessage)
   it('fails when dataset path exists but is not readable', testDatasetNotAccessible)
