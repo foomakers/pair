@@ -22,11 +22,8 @@ const pkg = JSON.parse(
 describe('pair-cli basics', () => {
   it.skip('should print the correct version with --version', execVersionTestWrapper)
   it.skip('help output does not mention --dry-run or --verbose', execHelpTestWrapper)
-  // eslint-disable-next-line max-lines-per-function
   it.skip('update-link --absolute converts relative links to absolute (e2e)', async () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-unused-vars
     const fs = require('fs')
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const path = require('path')
     const tmpDir = fs.mkdtempSync(path.join(__dirname, 'tmp-'))
     const mdPath = path.join(tmpDir, 'README.md')

@@ -43,84 +43,126 @@ function extractMarkdownLinks(content: string): Array<{ href: string; text: stri
 }
 
 /**
+ * Transform a single link based on path mode
+ */
+function transformLink(
+  link: { href: string; text: string },
+  filePath: string,
+  pathMode: 'relative' | 'absolute',
+): { newHref: string; category?: string } {
+  if (isExternalLink(link.href)) {
+    return { newHref: link.href }
+  }
+
+  if (pathMode === 'absolute') {
+    // Convert to absolute
+    if (!link.href.startsWith('/')) {
+      const fileDir = dirname(filePath)
+      const absPath = convertToAbsolute(fileDir, link.href)
+      return { newHref: absPath, category: 'relative→absolute' }
+    }
+  } else {
+    // Convert to relative
+    if (link.href.startsWith('/')) {
+      const fileDir = dirname(filePath)
+      const relPath = convertToRelative(fileDir, link.href)
+      return { newHref: relPath, category: 'absolute→relative' }
+    }
+  }
+
+  return { newHref: link.href }
+}
+
+/**
+ * Process a single markdown file and transform links
+ */
+function processMarkdownFile(
+  content: string,
+  filePath: string,
+  pathMode: 'relative' | 'absolute',
+): {
+  newContent: string
+  modified: boolean
+  stats: { totalLinks: number; byCategory: Record<string, number> }
+} {
+  const links = extractMarkdownLinks(content)
+  const stats = {
+    totalLinks: links.length,
+    byCategory: {} as Record<string, number>,
+  }
+
+  if (links.length === 0) {
+    return { newContent: content, modified: false, stats }
+  }
+
+  let modified = false
+  let newContent = content
+
+  for (const link of links) {
+    const { newHref, category } = transformLink(link, filePath, pathMode)
+
+    if (newHref !== link.href) {
+      newContent = newContent.replace(`](${link.href})`, `](${newHref})`)
+      modified = true
+      if (category) {
+        stats.byCategory[category] = (stats.byCategory[category] || 0) + 1
+      }
+    }
+  }
+
+  return { newContent, modified, stats }
+}
+
+/**
+ * Configuration for processing markdown files
+ */
+type ProcessConfig = {
+  fsService: FileSystemService
+  kbPath: string
+  pathMode: 'relative' | 'absolute'
+  dryRun: boolean
+  pushLog: (level: LogEntry['level'], message: string) => void
+}
+
+/**
  * Process markdown files in a directory and transform links
  */
-// eslint-disable-next-line complexity, max-lines-per-function, max-params
-async function processMarkdownFiles(
-  fsService: FileSystemService,
-  kbPath: string,
-  pathMode: 'relative' | 'absolute',
-  dryRun: boolean,
-  pushLog: (level: LogEntry['level'], message: string) => void,
-): Promise<{
+async function processMarkdownFiles(config: ProcessConfig): Promise<{
   totalLinks: number
   filesModified: number
   linksByCategory: Record<string, number>
 }> {
-  const stats = {
+  const { fsService, kbPath, pathMode, dryRun, pushLog } = config
+  const aggregateStats = {
     totalLinks: 0,
     filesModified: 0,
     linksByCategory: {} as Record<string, number>,
   }
 
-  // Find all markdown files
   const files = await walkMarkdownFiles(kbPath, fsService)
   pushLog('info', `Found ${files.length} markdown files`)
 
   for (const filePath of files) {
     const content = fsService.readFileSync(filePath)
-    const links = extractMarkdownLinks(content)
+    const { newContent, modified, stats } = processMarkdownFile(content, filePath, pathMode)
 
-    if (links.length === 0) continue
+    aggregateStats.totalLinks += stats.totalLinks
 
-    stats.totalLinks += links.length
-    let modified = false
-    let newContent = content
-
-    for (const link of links) {
-      if (isExternalLink(link.href)) {
-        continue
-      }
-
-      let newHref = link.href
-
-      if (pathMode === 'absolute') {
-        // Convert to absolute
-        if (!link.href.startsWith('/')) {
-          const fileDir = dirname(filePath)
-          const absPath = convertToAbsolute(fileDir, link.href)
-          newHref = absPath
-          modified = true
-          stats.linksByCategory['relative→absolute'] =
-            (stats.linksByCategory['relative→absolute'] || 0) + 1
-        }
-      } else {
-        // Convert to relative
-        if (link.href.startsWith('/')) {
-          const fileDir = dirname(filePath)
-          const relPath = convertToRelative(fileDir, link.href)
-          newHref = relPath
-          modified = true
-          stats.linksByCategory['absolute→relative'] =
-            (stats.linksByCategory['absolute→relative'] || 0) + 1
-        }
-      }
-
-      if (newHref !== link.href) {
-        newContent = newContent.replace(`](${link.href})`, `](${newHref})`)
-      }
+    for (const [category, count] of Object.entries(stats.byCategory)) {
+      aggregateStats.linksByCategory[category] =
+        (aggregateStats.linksByCategory[category] || 0) + count
     }
 
     if (modified && !dryRun) {
       await fsService.writeFile(filePath, newContent)
-      stats.filesModified++
+      aggregateStats.filesModified++
       pushLog('info', `Updated ${filePath}`)
     } else if (modified && dryRun) {
       pushLog('info', `Would update ${filePath}`)
     }
   }
 
-  return stats
+  return aggregateStats
 }
 
 /**
@@ -167,7 +209,6 @@ function detectKnowledgeBase(fsService: FileSystemService): string | null {
 /**
  * Main update-link command handler
  */
-// eslint-disable-next-line max-lines-per-function
 export async function updateLinkCommand(
   fsService: FileSystemService,
   args: string[],
@@ -177,51 +218,34 @@ export async function updateLinkCommand(
 
   pushLog('info', 'Starting update-link command')
 
-  // Parse arguments
   const parseResult = parseUpdateLinkArgs(args)
   if (parseResult.error) {
     pushLog('error', parseResult.error)
-    return {
-      success: false,
-      message: parseResult.error,
-      logs,
-    }
+    return { success: false, message: parseResult.error, logs }
   }
 
   const { pathMode, dryRun } = parseResult
-
   pushLog('info', `Path mode: ${pathMode}, Dry run: ${dryRun}`)
 
-  // Detect Knowledge Base
   const kbPath = detectKnowledgeBase(fsService)
   if (!kbPath) {
     const message = 'No Knowledge Base found. Please run "pair install" first.'
     pushLog('error', message)
-    return {
-      success: false,
-      message,
-      logs,
-    }
+    return { success: false, message, logs }
   }
 
   pushLog('info', `Knowledge Base detected at: ${kbPath}`)
 
-  // Process markdown files and transform links
-  const stats = await processMarkdownFiles(fsService, kbPath, pathMode, dryRun, pushLog)
+  const stats = await processMarkdownFiles({ fsService, kbPath, pathMode, dryRun, pushLog })
 
   pushLog('info', `Processed ${stats.totalLinks} links, modified ${stats.filesModified} files`)
 
-  const result: UpdateLinkResult = {
+  return {
     success: true,
     message: 'Link update completed successfully',
     pathMode,
     stats,
     logs,
+    ...(dryRun && { dryRun: true }),
   }
-
-  if (dryRun) {
-    result.dryRun = true
-  }
-
-  return result
 }
