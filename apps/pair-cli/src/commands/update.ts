@@ -177,7 +177,7 @@ async function updateWithDefaults(
       await applyLinkTransformation(fsService, options, pushLog, 'update')
     }
 
-    await backupService.commit()
+    await backupService.commit(keepBackup)
     pushLog('info', 'updateWithDefaults completed')
     return { success: true, target: 'defaults', logs }
   } catch (err) {
@@ -331,7 +331,7 @@ async function updateFromSource(context: SourceUpdateContext): Promise<{
     const fullTargetPath = fsService.resolve(fsService.currentWorkingDirectory(), target)
     await backupService.createRegistryBackup('source-update', fullTargetPath)
     await performSourceCopy({ source, target, datasetRoot, fsService, pushLog })
-    await backupService.commit()
+    await backupService.commit(keepBackup)
     pushLog('info', 'copyPathAndUpdateLinks finished')
     return { success: true, target: abs }
   } catch (err) {
@@ -395,7 +395,7 @@ async function updateAllRegistries(context: AllRegistriesContext): Promise<{
     const registryConfig = buildAllRegistriesBackupConfig(target, fsService)
     await backupService.backupAllRegistries(registryConfig)
     await processAssetRegistries({ target, datasetRoot, fsService, options, pushLog })
-    await backupService.commit()
+    await backupService.commit(keepBackup)
 
     pushLog('info', 'All asset registries processed')
     return { success: true, target: abs, logs: [] }

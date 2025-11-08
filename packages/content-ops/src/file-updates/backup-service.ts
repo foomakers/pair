@@ -1,5 +1,5 @@
 import { FileSystemService } from '../file-system/file-system-service'
-import { join, dirname } from 'path'
+import { join, dirname, isAbsolute, relative } from 'path'
 
 export interface BackupSession {
   id: string
@@ -27,11 +27,14 @@ export class BackupService {
   /**
    * Creates backup for an entire asset registry
    * @param registryName - Name of the registry (e.g., 'github', 'knowledge')
-   * @param registryPath - Path to registry (e.g., '.github', '.pair/knowledge', 'AGENTS.md')
+   * @param registryPath - Path to registry (can be absolute or relative)
    * @returns Path to the backup location
    */
   async createRegistryBackup(registryName: string, registryPath: string): Promise<string> {
-    const backupPath = join('.pair/backups', this.session.id, registryPath)
+    // Extract relative path from absolute path if needed
+    const cwd = this.fileService.currentWorkingDirectory()
+    const relPath = isAbsolute(registryPath) ? relative(cwd, registryPath) : registryPath
+    const backupPath = join('.pair/backups', this.session.id, relPath)
 
     // Check if source is file or directory
     const isFile = await this.isFilePath(registryPath)
@@ -113,10 +116,13 @@ export class BackupService {
   }
 
   /**
-   * Commits changes and removes backups
+   * Commits changes and optionally removes backups
+   * @param persist - If true, keep backups; if false (default), remove them
    */
-  async commit(): Promise<void> {
-    await this.clearBackups(this.session.id)
+  async commit(persist = false): Promise<void> {
+    if (!persist) {
+      await this.clearBackups(this.session.id)
+    }
   }
 
   /**

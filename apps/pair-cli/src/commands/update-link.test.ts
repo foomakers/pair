@@ -1,11 +1,10 @@
-/* eslint-disable max-lines-per-function */
 import { describe, it, expect } from 'vitest'
 import { updateLinkCommand } from './update-link'
 import { createTestFs } from '../test-utils/test-helpers'
 
 const realCwd = '/development/path/pair/apps/pair-cli'
 
-describe('update-link command - flag parsing', () => {
+describe('update-link command - path mode flags', () => {
   it('should accept --relative flag', async () => {
     const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
 
@@ -26,25 +25,6 @@ describe('update-link command - flag parsing', () => {
     expect(result.pathMode).toBe('absolute')
   })
 
-  it('should accept --dry-run flag', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
-
-    const result = await updateLinkCommand(fs, ['--dry-run'], {})
-
-    expect(result).toBeDefined()
-    expect(result.success).toBe(true)
-    expect(result.dryRun).toBe(true)
-  })
-
-  it('should accept --verbose flag', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
-
-    const result = await updateLinkCommand(fs, ['--verbose'], {})
-
-    expect(result).toBeDefined()
-    expect(result.success).toBe(true)
-  })
-
   it('should default to --relative when no path option specified', async () => {
     const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
 
@@ -62,6 +42,27 @@ describe('update-link command - flag parsing', () => {
 
     expect(result.success).toBe(false)
     expect(result.message).toContain('Cannot specify both')
+  })
+})
+
+describe('update-link command - execution flags', () => {
+  it('should accept --dry-run flag', async () => {
+    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+
+    const result = await updateLinkCommand(fs, ['--dry-run'], {})
+
+    expect(result).toBeDefined()
+    expect(result.success).toBe(true)
+    expect(result.dryRun).toBe(true)
+  })
+
+  it('should accept --verbose flag', async () => {
+    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+
+    const result = await updateLinkCommand(fs, ['--verbose'], {})
+
+    expect(result).toBeDefined()
+    expect(result.success).toBe(true)
   })
 })
 
@@ -157,7 +158,7 @@ describe('update-link command - link transformation', () => {
   })
 })
 
-describe('update-link command - reporting and messages', () => {
+describe('update-link command - success reporting', () => {
   it('should report correct success message', async () => {
     const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
 
@@ -165,24 +166,6 @@ describe('update-link command - reporting and messages', () => {
 
     expect(result.success).toBe(true)
     expect(result.message).toBe('Link update completed successfully')
-  })
-
-  it('should report error message when KB not found', async () => {
-    const fs = createTestFs({}, {}, realCwd)
-
-    const result = await updateLinkCommand(fs, [], {})
-
-    expect(result.success).toBe(false)
-    expect(result.message).toContain('No Knowledge Base')
-  })
-
-  it('should report error message for conflicting flags', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
-
-    const result = await updateLinkCommand(fs, ['--relative', '--absolute'], {})
-
-    expect(result.success).toBe(false)
-    expect(result.message).toContain('Cannot specify both')
   })
 
   it('should include stats with zero counts when no links found', async () => {
@@ -205,6 +188,38 @@ describe('update-link command - reporting and messages', () => {
     expect(result.stats?.totalLinks).toBeGreaterThan(0)
   })
 
+  it('should include linksByCategory in stats when links are processed', async () => {
+    const mdContent = '[Rel](./a.md) [Abs](/abs/path.md)'
+    const fs = createTestFs({}, { [`${realCwd}/.pair/doc.md`]: mdContent }, realCwd)
+
+    const result = await updateLinkCommand(fs, [], {})
+
+    expect(result.success).toBe(true)
+    expect(result.stats?.linksByCategory).toBeDefined()
+  })
+})
+
+describe('update-link command - error reporting', () => {
+  it('should report error message when KB not found', async () => {
+    const fs = createTestFs({}, {}, realCwd)
+
+    const result = await updateLinkCommand(fs, [], {})
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain('No Knowledge Base')
+  })
+
+  it('should report error message for conflicting flags', async () => {
+    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+
+    const result = await updateLinkCommand(fs, ['--relative', '--absolute'], {})
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain('Cannot specify both')
+  })
+})
+
+describe('update-link command - dry-run mode', () => {
   it('should include dry-run indicator in result when --dry-run used', async () => {
     const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '[Link](./doc.md)' }, realCwd)
 
@@ -212,17 +227,6 @@ describe('update-link command - reporting and messages', () => {
 
     expect(result.success).toBe(true)
     expect(result.dryRun).toBe(true)
-  })
-
-  it('should log appropriate messages in verbose mode', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
-
-    const result = await updateLinkCommand(fs, ['--verbose'], {})
-
-    expect(result.success).toBe(true)
-    expect(result.logs).toBeDefined()
-    expect(result.logs!.length).toBeGreaterThan(0)
-    expect(result.logs!.some(log => log.message.includes('update-link'))).toBe(true)
   })
 
   it('should differentiate messages between dry-run and actual execution', async () => {
@@ -235,15 +239,18 @@ describe('update-link command - reporting and messages', () => {
     expect(dryResult.dryRun).toBe(true)
     expect(realResult.dryRun).toBeUndefined()
   })
+})
 
-  it('should include linksByCategory in stats when links are processed', async () => {
-    const mdContent = '[Rel](./a.md) [Abs](/abs/path.md)'
-    const fs = createTestFs({}, { [`${realCwd}/.pair/doc.md`]: mdContent }, realCwd)
+describe('update-link command - verbose mode', () => {
+  it('should log appropriate messages in verbose mode', async () => {
+    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
 
-    const result = await updateLinkCommand(fs, [], {})
+    const result = await updateLinkCommand(fs, ['--verbose'], {})
 
     expect(result.success).toBe(true)
-    expect(result.stats?.linksByCategory).toBeDefined()
+    expect(result.logs).toBeDefined()
+    expect(result.logs!.length).toBeGreaterThan(0)
+    expect(result.logs!.some(log => log.message.includes('update-link'))).toBe(true)
   })
 })
 

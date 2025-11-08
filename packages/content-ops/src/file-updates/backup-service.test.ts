@@ -204,7 +204,7 @@ describe('BackupService - Rollback Cleanup', () => {
   })
 })
 
-describe('BackupService - Commit and Cleanup', () => {
+describe('BackupService - Commit Cleanup', () => {
   let fileService: InMemoryFileSystemService
   let backupService: BackupService
 
@@ -219,17 +219,38 @@ describe('BackupService - Commit and Cleanup', () => {
     backupService = new BackupService(fileService)
   })
 
-  it('should remove backups on commit', async () => {
+  it('should remove backups on commit (default persist=false)', async () => {
     const backupPath = await backupService.createRegistryBackup('github', '.github')
-
-    // Verify backup exists
     expect(await fileService.exists(backupPath)).toBe(true)
 
-    // Commit (cleanup)
     await backupService.commit()
 
-    // Verify backup removed
     expect(await fileService.exists(backupPath)).toBe(false)
+  })
+
+  it('should keep backups on commit when persist=true', async () => {
+    const backupPath = await backupService.createRegistryBackup('github', '.github')
+    expect(await fileService.exists(backupPath)).toBe(true)
+
+    await backupService.commit(true)
+
+    expect(await fileService.exists(backupPath)).toBe(true)
+  })
+})
+
+describe('BackupService - Session Cleanup', () => {
+  let fileService: InMemoryFileSystemService
+  let backupService: BackupService
+
+  beforeEach(() => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '.github/prompts/test.md': '# Test Prompt',
+      },
+      '/',
+      '/',
+    )
+    backupService = new BackupService(fileService)
   })
 
   it('should clear specific session backups', async () => {
