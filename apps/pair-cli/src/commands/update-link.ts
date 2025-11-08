@@ -230,6 +230,37 @@ function verifyKnowledgeBase(
 /**
  * Main update-link command handler
  */
+/**
+ * Update-link command - Validates, fixes, and updates links in installed Knowledge Base content
+ *
+ * This command automatically:
+ * - Validates all markdown links against the current file system
+ * - Fixes broken links where possible
+ * - Adjusts paths when projects are moved
+ * - Converts links between relative and absolute formats
+ *
+ * Usage:
+ *   pair update-link                  # Default: convert to relative paths
+ *   pair update-link --relative       # Explicit relative conversion
+ *   pair update-link --absolute       # Convert to absolute paths
+ *   pair update-link --dry-run        # Preview changes without modifying
+ *   pair update-link --verbose        # Detailed processing logs
+ *
+ * Examples:
+ *   # Validate and fix links after project restructuring
+ *   pair update-link
+ *
+ *   # Preview changes before applying
+ *   pair update-link --dry-run
+ *
+ *   # Convert all links to absolute paths for portability
+ *   pair update-link --absolute
+ *
+ *   # Check link health with detailed output
+ *   pair update-link --verbose --dry-run
+ *
+ * See: docs/getting-started/05-cli-update-link.md
+ */
 export async function updateLinkCommand(
   fsService: FileSystemService,
   args: string[],

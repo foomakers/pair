@@ -410,6 +410,24 @@ program
   .option('--absolute', 'Convert all links to absolute paths')
   .option('--dry-run', 'Show what would be changed without modifying files')
   .option('--verbose', 'Show detailed processing information')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  $ pair update-link                      Validate and convert links to relative paths
+  $ pair update-link --dry-run            Preview changes without modifying files
+  $ pair update-link --absolute           Convert all links to absolute paths
+  $ pair update-link --verbose            Show detailed processing logs
+
+Usage Notes:
+  • Default behavior converts all links to relative paths
+  • Creates automatic backup before modifications
+  • Skips external URLs and mailto links
+  • Processes all markdown files in .pair/ directory
+
+See also: docs/getting-started/05-cli-update-link.md
+`,
+  )
   .action(async cmdOptions => {
     try {
       const args: string[] = []
