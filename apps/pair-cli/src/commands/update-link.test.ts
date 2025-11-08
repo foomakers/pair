@@ -274,3 +274,47 @@ describe('update-link command - combined flags', () => {
     expect(result.pathMode).toBe('relative')
   })
 })
+
+describe('update-link command - KB detection consistency', () => {
+  it('should detect KB in node_modules like install/update commands', async () => {
+    const nodeModulesPath = `${realCwd}/node_modules/@pair/knowledge-hub/dataset`
+    const fs = createTestFs(
+      {},
+      {
+        [`${nodeModulesPath}/README.md`]: '# KB from node_modules',
+        [`${nodeModulesPath}/.pair/knowledge/doc.md`]: '# Doc',
+      },
+      realCwd,
+    )
+
+    const result = await updateLinkCommand(fs, [], {})
+
+    expect(result.success).toBe(true)
+    expect(result.logs?.some(log => log.message.includes('node_modules'))).toBe(true)
+  })
+
+  it('should use datasetRoot option when provided like install/update', async () => {
+    const customDatasetPath = '/custom/dataset/path'
+    const fs = createTestFs(
+      {},
+      {
+        [`${customDatasetPath}/README.md`]: '# Custom KB',
+        [`${customDatasetPath}/.pair/knowledge/doc.md`]: '# Doc',
+      },
+      realCwd,
+    )
+
+    const result = await updateLinkCommand(fs, [], { datasetRoot: customDatasetPath })
+
+    expect(result.success).toBe(true)
+  })
+
+  it('should fail with same error as install/update when KB not found', async () => {
+    const fs = createTestFs({}, {}, realCwd)
+
+    const result = await updateLinkCommand(fs, [], {})
+
+    expect(result.success).toBe(false)
+    expect(result.message).toContain('No Knowledge Base')
+  })
+})
