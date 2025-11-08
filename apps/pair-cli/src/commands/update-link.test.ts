@@ -383,3 +383,158 @@ describe('update-link command - summary reporting', () => {
     expect(result.stats?.filesModified).toBe(0)
   })
 })
+
+describe('update-link command - AC1 & AC2', () => {
+  it('AC1: default behavior validates, fixes, adjusts and converts to relative', async () => {
+    const fs = createTestFsWithKB({
+      [`${realCwd}/.pair/guide.md`]: '[Doc](./doc.md) [Abs](/abs/file.md)',
+      [`${realCwd}/.pair/doc.md`]: '# Documentation',
+    })
+
+    const result = await updateLinkCommand(fs, [], {}) // No flags = default
+
+    expect(result.success).toBe(true)
+    expect(result.pathMode).toBe('relative') // Default to relative
+    expect(result.stats?.totalLinks).toBe(2)
+    expect(result.stats?.linksByCategory).toBeDefined()
+  })
+
+  it('AC2: --relative explicitly converts absolute paths to relative', async () => {
+    const fs = createTestFsWithKB({
+      [`${realCwd}/.pair/test.md`]: '[Absolute](/abs/path.md) [Another](/docs/file.md)',
+    })
+
+    const result = await updateLinkCommand(fs, ['--relative'], {})
+
+    expect(result.success).toBe(true)
+    expect(result.pathMode).toBe('relative')
+    expect(result.stats?.linksByCategory?.['absolute→relative']).toBeGreaterThan(0)
+  })
+})
+
+describe('update-link command - AC3 & AC4', () => {
+  it('AC3: --absolute converts relative paths to absolute', async () => {
+    const fs = createTestFsWithKB({
+      [`${realCwd}/.pair/test.md`]: '[Relative](./doc.md) [Another](../sibling.md)',
+    })
+
+    const result = await updateLinkCommand(fs, ['--absolute'], {})
+
+    expect(result.success).toBe(true)
+    expect(result.pathMode).toBe('absolute')
+    expect(result.stats?.linksByCategory?.['relative→absolute']).toBeGreaterThan(0)
+  })
+
+  it('AC4: --dry-run shows changes without modifying files', async () => {
+    const originalContent = '[Link](./test.md)'
+    const fs = createTestFsWithKB({
+      [`${realCwd}/.pair/doc.md`]: originalContent,
+    })
+
+    const result = await updateLinkCommand(fs, ['--absolute', '--dry-run'], {})
+
+    expect(result.success).toBe(true)
+    expect(result.dryRun).toBe(true)
+    // File should remain unchanged in dry-run
+    const content = fs.readFileSync(`${realCwd}/.pair/doc.md`)
+    expect(content).toBe(originalContent)
+  })
+})
+
+describe('update-link command - AC5', () => {
+  it('AC5: comprehensive summary with all required statistics', async () => {
+    const fs = createTestFsWithKB({
+      [`${realCwd}/.pair/file1.md`]: '[Rel](./a.md) [Abs](/abs/b.md)',
+      [`${realCwd}/.pair/file2.md`]: '[Another](./c.md)',
+    })
+
+    const result = await updateLinkCommand(fs, ['--relative'], {})
+
+    expect(result.success).toBe(true)
+    // AC5 requirements: total links, categories, files modified
+    expect(result.stats?.totalLinks).toBe(3)
+    expect(result.stats?.filesModified).toBeGreaterThan(0)
+    expect(result.stats?.linksByCategory).toBeDefined()
+    expect(Object.keys(result.stats?.linksByCategory || {}).length).toBeGreaterThan(0)
+  })
+})
+
+describe('update-link command - E2E complex scenarios', () => {
+  it('E2E: complex KB structure with multiple markdown files', async () => {
+    const fs = createTestFsWithKB({
+      [`${realCwd}/.pair/how-to/guide.md`]: '[Setup](../setup.md) [API](/api/reference.md)',
+      [`${realCwd}/.pair/setup.md`]: '[Config](./config/settings.md)',
+      [`${realCwd}/.pair/config/settings.md`]: '[Back](../setup.md)',
+    })
+
+    const result = await updateLinkCommand(fs, ['--relative'], {})
+
+    expect(result.success).toBe(true)
+    expect(result.stats?.totalLinks).toBeGreaterThan(2)
+    expect(result.stats?.filesModified).toBeGreaterThan(0)
+  })
+})
+
+describe('update-link command - E2E mixed links', () => {
+  it('E2E: handles mixed link types (relative, absolute, external)', async () => {
+    const fs = createTestFsWithKB({
+      [`${realCwd}/.pair/mixed.md`]: `
+[Relative](./doc.md)
+[Absolute](/abs/path.md)
+[External](https://example.com)
+[Mailto](mailto:test@example.com)
+      `,
+    })
+
+    const result = await updateLinkCommand(fs, ['--relative'], {})
+
+    expect(result.success).toBe(true)
+    expect(result.stats?.totalLinks).toBe(4)
+    // External and mailto links should not be converted
+    const content = fs.readFileSync(`${realCwd}/.pair/mixed.md`)
+    expect(content).toContain('https://example.com')
+    expect(content).toContain('mailto:test@example.com')
+  })
+})
+
+describe('update-link command - E2E formatting', () => {
+  it('E2E: preserves markdown formatting and context', async () => {
+    const fs = createTestFsWithKB({
+      [`${realCwd}/.pair/formatted.md`]: `# Title
+
+This is a paragraph with [inline link](./doc.md) in the middle.
+
+- List item with [link](/abs/file.md)
+- Another item
+
+> Blockquote with [reference](./ref.md)
+      `,
+    })
+
+    const result = await updateLinkCommand(fs, ['--absolute'], {})
+
+    expect(result.success).toBe(true)
+    const content = fs.readFileSync(`${realCwd}/.pair/formatted.md`)
+    // Verify structure is preserved
+    expect(content).toContain('# Title')
+    expect(content).toContain('This is a paragraph')
+    expect(content).toContain('- List item')
+    expect(content).toContain('> Blockquote')
+  })
+})
+
+describe('update-link command - E2E verbose', () => {
+  it('E2E: verbose mode provides detailed logging', async () => {
+    const fs = createTestFsWithKB({
+      [`${realCwd}/.pair/test.md`]: '[Link](./doc.md)',
+    })
+
+    const result = await updateLinkCommand(fs, ['--relative', '--verbose'], {
+      minLogLevel: 'info',
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.logs).toBeDefined()
+    expect(result.logs!.length).toBeGreaterThan(0)
+  })
+})
