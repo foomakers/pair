@@ -19,8 +19,14 @@ const SIZES = [
 
 // Generate test KB structure
 function generateTestKB(size) {
-  const kbDir = path.join(BENCHMARK_DIR, `.pair-${size.name}`)
+  const testDir = path.join(BENCHMARK_DIR, `test-${size.name}`)
+  const kbDir = path.join(testDir, '.pair')
   fs.mkdirSync(kbDir, { recursive: true })
+
+  // Create mock dataset structure to satisfy KB detection
+  const datasetDir = path.join(testDir, 'node_modules', '@pair', 'knowledge-hub', 'dataset')
+  fs.mkdirSync(datasetDir, { recursive: true })
+  fs.writeFileSync(path.join(datasetDir, '.gitkeep'), '')
 
   for (let i = 0; i < size.files; i++) {
     const fileName = `doc-${i.toString().padStart(4, '0')}.md`
@@ -37,17 +43,17 @@ function generateTestKB(size) {
   console.log(
     `✅ Generated ${size.files} files with ${size.linksPerFile} links each (${size.name})`,
   )
-  return kbDir
+  return testDir
 }
 
 // Run benchmark
-function runBenchmark(kbDir, sizeName) {
+function runBenchmark(testDir, sizeName) {
   const cliPath = path.join(__dirname, '../../apps/pair-cli/dist/cli.js')
 
   const startTime = Date.now()
   try {
     execSync(`node ${cliPath} update-link --dry-run`, {
-      cwd: kbDir,
+      cwd: testDir,
       stdio: 'pipe',
     })
   } catch (error) {
@@ -55,6 +61,7 @@ function runBenchmark(kbDir, sizeName) {
   }
   const duration = Date.now() - startTime
 
+  const kbDir = path.join(testDir, '.pair')
   const files = fs.readdirSync(kbDir).filter(f => f.endsWith('.md')).length
   const linksProcessed = files * SIZES.find(s => s.name === sizeName).linksPerFile
 
@@ -77,20 +84,25 @@ async function main() {
   }
   fs.mkdirSync(BENCHMARK_DIR, { recursive: true })
 
-  // Build CLI
-  console.log('📦 Building CLI...')
-  execSync('pnpm --filter @pair/pair-cli build', {
-    cwd: path.join(__dirname, '../..'),
-    stdio: 'inherit',
-  })
+  // Build CLI if not already built
+  const cliDistPath = path.join(__dirname, '../../apps/pair-cli/dist/cli.js')
+  if (!fs.existsSync(cliDistPath)) {
+    console.log('📦 Building CLI...')
+    execSync('pnpm --filter @pair/pair-cli build', {
+      cwd: path.join(__dirname, '../..'),
+      stdio: 'inherit',
+    })
+  } else {
+    console.log('✓ CLI already built, skipping build step')
+  }
 
   const results = []
 
   // Run benchmarks
   for (const size of SIZES) {
     console.log(`\n📊 Benchmarking ${size.name} KB...`)
-    const kbDir = generateTestKB(size)
-    const result = runBenchmark(kbDir, size.name)
+    const testDir = generateTestKB(size)
+    const result = runBenchmark(testDir, size.name)
     results.push(result)
 
     console.log(`⏱️  Duration: ${result.duration}ms`)
