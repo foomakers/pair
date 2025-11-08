@@ -367,6 +367,8 @@ program
     '--link-style <style>',
     'Link style: relative, absolute, or auto (default: auto-detect for update)',
   )
+  .option('--persist-backup', 'Keep backup files after successful update')
+  .option('--auto-rollback', 'Automatically restore from backup on error (default: true)', true)
   .action(async (targetArg, cmdOptions) => {
     // Preserve backward compatibility for tests that call handleUpdateCommand({}, fs)
     const merged = { ...(cmdOptions as Record<string, unknown>), positionalTarget: targetArg }

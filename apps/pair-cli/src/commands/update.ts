@@ -1,5 +1,5 @@
 import { relative, dirname, join } from 'path'
-import { convertToRelative, FileSystemService } from '@pair/content-ops'
+import { convertToRelative, FileSystemService, BackupService } from '@pair/content-ops'
 import { Behavior } from '@pair/content-ops'
 import {
   parseTargetAndSource,
@@ -27,6 +27,8 @@ interface AssetRegistryConfig {
 
 export type UpdateOptions = CommandOptions & {
   linkStyle?: 'relative' | 'absolute' | 'auto'
+  persistBackup?: boolean
+  autoRollback?: boolean
 }
 
 // Context for source-based updates
@@ -36,6 +38,7 @@ interface SourceUpdateContext {
   abs: string
   datasetRoot: string
   fsService: FileSystemService
+  options?: UpdateOptions | undefined
   pushLog: (level: LogEntry['level'], message: string) => void
 }
 
@@ -60,6 +63,87 @@ interface RegistryUpdateContext {
 }
 
 /**
+ * Helper to handle backup rollback on error
+ */
+async function handleBackupRollback(
+  backupService: BackupService,
+  error: unknown,
+  options: { autoRollback: boolean; keepBackup: boolean },
+  pushLog: (level: LogEntry['level'], message: string) => void,
+): Promise<void> {
+  if (!options.autoRollback) return
+
+  try {
+    await backupService.rollback(error as Error, options.keepBackup)
+  } catch (rollbackErr) {
+    pushLog('error', `Rollback failed: ${String(rollbackErr)}`)
+  }
+}
+
+/**
+ * Helper to create registry backup configuration map
+ */
+function buildRegistryBackupConfig(
+  assetRegistries: Record<string, unknown>,
+  fsService: FileSystemService,
+): Record<string, string> {
+  const registryConfig: Record<string, string> = {}
+  for (const [registryName, config] of Object.entries(assetRegistries)) {
+    const regConfig = config as AssetRegistryConfig
+    const targetPath = regConfig.target_path || registryName
+    registryConfig[registryName] = fsService.resolve(targetPath)
+  }
+  return registryConfig
+}
+
+/**
+ * Helper to update all registries from defaults
+ */
+async function updateAllDefaultRegistries(ctx: {
+  assetRegistries: Record<string, unknown>
+  datasetRoot: string
+  fsService: FileSystemService
+  options?: UpdateOptions | undefined
+  pushLog: (level: LogEntry['level'], message: string) => void
+}): Promise<void> {
+  const { assetRegistries, datasetRoot, fsService, options, pushLog } = ctx
+  for (const [registryName, registryConfig] of Object.entries(assetRegistries)) {
+    await updateSingleRegistryFromDefaults({
+      fsService,
+      datasetRoot,
+      options,
+      pushLog,
+      registryName,
+      reg: registryConfig as AssetRegistryConfig,
+    })
+  }
+}
+
+/**
+ * Helper to resolve dataset root path
+ */
+function resolveDatasetRoot(fsService: FileSystemService, options?: UpdateOptions): string {
+  const datasetRoot =
+    (options && (options as { datasetRoot?: string }).datasetRoot) ||
+    getKnowledgeHubDatasetPath(fsService)
+  return datasetRoot === '' ? fsService.currentWorkingDirectory() : datasetRoot
+}
+
+/**
+ * Helper to load and validate asset registries
+ */
+function loadAndValidateRegistries(fsService: FileSystemService): {
+  registries: Record<string, AssetRegistryConfig>
+  error?: string
+} {
+  const registries = loadAssetRegistriesForUpdate(fsService)
+  if (Object.keys(registries).length === 0) {
+    return { registries, error: 'no asset registries found in config' }
+  }
+  return { registries }
+}
+
+/**
  * Update using default targets from config
  */
 async function updateWithDefaults(
@@ -67,45 +151,38 @@ async function updateWithDefaults(
   options?: UpdateOptions,
 ): Promise<{ success: boolean; message?: string; target?: string; logs?: LogEntry[] }> {
   const { logs, pushLog } = createLogger(options?.minLogLevel as LogEntry['level'] | undefined)
-
   pushLog('info', 'Starting updateWithDefaults')
 
+  const backupService = new BackupService(fsService)
+  const autoRollback = options?.autoRollback ?? true
+  const keepBackup = options?.persistBackup ?? false
+
   try {
-    const assetRegistries = loadAssetRegistriesForUpdate(fsService)
+    const { registries: assetRegistries, error } = loadAndValidateRegistries(fsService)
+    if (error) return { success: false, message: error }
 
-    if (Object.keys(assetRegistries).length === 0) {
-      return { success: false, message: 'no asset registries found in config' }
-    }
-    let datasetRoot =
-      (options && (options as { datasetRoot?: string }).datasetRoot) ||
-      getKnowledgeHubDatasetPath(fsService)
+    const datasetRoot = resolveDatasetRoot(fsService, options)
+    const registryConfig = buildRegistryBackupConfig(assetRegistries, fsService)
+    await backupService.backupAllRegistries(registryConfig)
 
-    // If upstream helper returned empty string to signal a bundle layout,
-    // interpret that as the FileSystemService's current working directory
-    // so we don't accidentally resolve paths against the real process.cwd().
-    if (datasetRoot === '') datasetRoot = fsService.currentWorkingDirectory()
+    await updateAllDefaultRegistries({
+      assetRegistries,
+      datasetRoot,
+      fsService,
+      options,
+      pushLog,
+    })
 
-    // Update each registry to its default target
-    for (const [registryName, registryConfig] of Object.entries(assetRegistries)) {
-      await updateSingleRegistryFromDefaults({
-        fsService,
-        datasetRoot,
-        options,
-        pushLog,
-        registryName,
-        reg: registryConfig as AssetRegistryConfig,
-      })
-    }
-
-    // Apply link transformation if requested
     if (options?.linkStyle) {
       await applyLinkTransformation(fsService, options, pushLog, 'update')
     }
 
+    await backupService.commit()
     pushLog('info', 'updateWithDefaults completed')
     return { success: true, target: 'defaults', logs }
   } catch (err) {
     pushLog('error', `updateWithDefaults failed: ${String(err)}`)
+    await handleBackupRollback(backupService, err, { autoRollback, keepBackup }, pushLog)
     return { success: false, message: String(err) }
   }
 }
@@ -204,6 +281,39 @@ async function runRegistryCopy(params: {
 /**
  * Update from a specific source to target
  */
+/**
+ * Helper to perform source copy and update
+ */
+async function performSourceCopy(context: {
+  source: string
+  target: string
+  datasetRoot: string
+  fsService: FileSystemService
+  pushLog: (level: LogEntry['level'], message: string) => void
+}): Promise<void> {
+  const { source, target, datasetRoot, fsService, pushLog } = context
+  const cwd = fsService.currentWorkingDirectory()
+  pushLog('info', `Copying/updating from ${source} to ${target} (datasetRoot: ${cwd})`)
+
+  const fullSourcePath = fsService.resolve(datasetRoot, source)
+  const fullTargetPath = fsService.resolve(cwd, target)
+
+  let relativeSourcePath = relative(cwd, fullSourcePath) || convertToRelative(cwd, fullSourcePath)
+  let relativeTargetPath = relative(cwd, fullTargetPath) || convertToRelative(cwd, fullTargetPath)
+
+  if (relativeSourcePath === './') relativeSourcePath = ''
+  if (relativeTargetPath === './') relativeTargetPath = ''
+
+  await doCopyAndUpdateLinks(fsService, {
+    source: relativeSourcePath,
+    target: relativeTargetPath,
+    datasetRoot: cwd,
+    options: {
+      defaultBehavior: 'mirror',
+    },
+  })
+}
+
 async function updateFromSource(context: SourceUpdateContext): Promise<{
   success: boolean
   target: string
@@ -211,35 +321,48 @@ async function updateFromSource(context: SourceUpdateContext): Promise<{
   logs?: LogEntry[]
   dryRun?: boolean
 }> {
-  const { source, target, abs, datasetRoot, fsService, pushLog } = context
+  const { source, target, abs, datasetRoot, fsService, options, pushLog } = context
+
+  const backupService = new BackupService(fsService)
+  const autoRollback = options?.autoRollback ?? true
+  const keepBackup = options?.persistBackup ?? false
+
   try {
-    // Perform update unconditionally (no dry-run support)
-
-    const cwd = fsService.currentWorkingDirectory()
-    pushLog('info', `Copying/updating from ${source} to ${target} (datasetRoot: ${cwd})`)
-    const fullSourcePath = fsService.resolve(datasetRoot, source)
-    let relativeSourcePath = relative(cwd, fullSourcePath)
-    const fullTargetPath = fsService.resolve(cwd, target)
-    let relativeTargetPath = relative(cwd, fullTargetPath)
-
-    relativeSourcePath = relativeSourcePath || convertToRelative(cwd, fullSourcePath)
-    relativeTargetPath = relativeTargetPath || convertToRelative(cwd, fullTargetPath)
-    if (relativeSourcePath === './') relativeSourcePath = ''
-    if (relativeTargetPath === './') relativeTargetPath = ''
-
-    await doCopyAndUpdateLinks(fsService, {
-      source: relativeSourcePath,
-      target: relativeTargetPath,
-      datasetRoot: cwd,
-      options: {
-        defaultBehavior: 'mirror',
-      },
-    })
+    const fullTargetPath = fsService.resolve(fsService.currentWorkingDirectory(), target)
+    await backupService.createRegistryBackup('source-update', fullTargetPath)
+    await performSourceCopy({ source, target, datasetRoot, fsService, pushLog })
+    await backupService.commit()
     pushLog('info', 'copyPathAndUpdateLinks finished')
     return { success: true, target: abs }
   } catch (err) {
+    await handleBackupRollback(backupService, err, { autoRollback, keepBackup }, pushLog)
     return { success: false, target: abs, message: `update-failed: ${String(err)}` }
   }
+}
+
+/**
+ * Helper to build registry backup config for updateAllRegistries
+ */
+function buildAllRegistriesBackupConfig(
+  target: string,
+  fsService: FileSystemService,
+): Record<string, string> {
+  const projectRoot = fsService.currentWorkingDirectory()
+  const loader = loadConfigWithOverrides(fsService, { projectRoot })
+  const config = loader.config
+  const assetRegistries = config.asset_registries || {}
+
+  const registryConfig: Record<string, string> = {}
+  for (const [registryName, regConfig] of Object.entries(assetRegistries)) {
+    const rc = regConfig as AssetRegistryConfig
+    const targetPath = calculateEffectiveTarget(fsService, {
+      registryName,
+      registryConfig: rc,
+      target,
+    })
+    registryConfig[registryName] = targetPath
+  }
+  return registryConfig
 }
 
 /**
@@ -253,6 +376,11 @@ async function updateAllRegistries(context: AllRegistriesContext): Promise<{
   dryRun?: boolean
 }> {
   const { target, abs, datasetRoot, fsService, options, pushLog } = context
+
+  const backupService = new BackupService(fsService)
+  const autoRollback = options?.autoRollback ?? true
+  const keepBackup = options?.persistBackup ?? false
+
   try {
     if (!datasetRoot) {
       return {
@@ -264,15 +392,16 @@ async function updateAllRegistries(context: AllRegistriesContext): Promise<{
 
     pushLog('info', `Updating from knowledge-hub dataset: ${datasetRoot} to ${target}`)
 
-    // Perform update unconditionally (no dry-run support)
-
-    // Delegate the registry processing to a shared helper
+    const registryConfig = buildAllRegistriesBackupConfig(target, fsService)
+    await backupService.backupAllRegistries(registryConfig)
     await processAssetRegistries({ target, datasetRoot, fsService, options, pushLog })
+    await backupService.commit()
 
     pushLog('info', 'All asset registries processed')
     return { success: true, target: abs, logs: [] }
   } catch (err) {
     pushLog('error', `Failed to update from knowledge-hub: ${String(err)}`)
+    await handleBackupRollback(backupService, err, { autoRollback, keepBackup }, pushLog)
     return { success: false, target: abs, message: `update-failed: ${String(err)}` }
   }
 }
@@ -688,11 +817,19 @@ async function executeUpdate(params: {
         abs,
         datasetRoot,
         fsService,
+        options: params.options,
         pushLog,
       })
     }
 
-    return await updateAllRegistries({ target, abs, datasetRoot, fsService, pushLog })
+    return await updateAllRegistries({
+      target,
+      abs,
+      datasetRoot,
+      fsService,
+      options: params.options,
+      pushLog,
+    })
   } catch (err) {
     return { success: false, message: (err as Error)?.message ?? String(err) }
   }

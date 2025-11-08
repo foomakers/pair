@@ -18,3 +18,10 @@ export {
 
 export { logger, setLogLevel, getLogLevel, LogLevel } from './observability'
 export { detectRepoRoot, convertToRelative, convertToAbsolute } from './path-resolution'
+
+export {
+  BackupService,
+  type BackupSession,
+  type RegistryConfig,
+} from './file-updates/backup-service'
+export { AtomicWriter, type AtomicWriterOptions } from './file-updates/atomic-write'
