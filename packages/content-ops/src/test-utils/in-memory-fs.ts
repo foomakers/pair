@@ -13,12 +13,14 @@ export class InMemoryFileSystemService implements FileSystemService {
     moduleDirectory: string,
     workingDirectory: string,
   ) {
+    // Set directories first so resolvePath works
+    this.moduleDirectory = moduleDirectory
+    this.workingDirectory = workingDirectory
+
     this.dirs.add('/')
     this.addParentDirectories(moduleDirectory)
     this.addParentDirectories(workingDirectory)
     this.addInitialFiles(initial)
-    this.moduleDirectory = moduleDirectory
-    this.workingDirectory = workingDirectory
 
     // Ensure moduleDirectory and workingDirectory exist
     this.dirs.add(moduleDirectory)
@@ -37,8 +39,9 @@ export class InMemoryFileSystemService implements FileSystemService {
 
   private addInitialFiles(initial: Record<string, string>): void {
     for (const [path, content] of Object.entries(initial)) {
-      this.files.set(path, content)
-      this.addParentDirectories(path)
+      const resolvedPath = this.resolvePath(path)
+      this.files.set(resolvedPath, content)
+      this.addParentDirectories(resolvedPath)
     }
   }
 
@@ -283,7 +286,12 @@ export class InMemoryFileSystemService implements FileSystemService {
     return this.stat(path).then(stats => stats.isFile())
   }
   async isFolder(path: string) {
-    return !this.isFile(path)
+    try {
+      const isFileResult = await this.isFile(path)
+      return !isFileResult
+    } catch {
+      return false
+    }
   }
 }
 
