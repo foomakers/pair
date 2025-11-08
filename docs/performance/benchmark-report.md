@@ -27,6 +27,7 @@ Performance benchmarks for the `pair update-link` command across different Knowl
 ### Test Data Generation
 
 Each benchmark generates a synthetic KB with:
+
 - Markdown files with headers and content
 - Random internal links between documents
 - Mix of relative path references
@@ -48,8 +49,8 @@ node scripts/perf/benchmark-update-link.js
 ### CI Execution
 
 Benchmarks run automatically on:
+
 - Push to `main` branch
-- Push to `feature/US-69-*` branches
 - Pull requests modifying update-link code
 
 Results uploaded as artifacts in GitHub Actions.
@@ -117,6 +118,7 @@ Results are stored in `benchmark-report.json` with structure:
 ### Performance Degradation
 
 If benchmarks show degradation:
+
 1. Check recent code changes in affected modules
 2. Profile with `node --prof` for hotspots
 3. Review file I/O patterns

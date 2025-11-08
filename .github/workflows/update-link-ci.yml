@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - 'feature/US-69-*'
   pull_request:
     paths:
       - 'apps/pair-cli/src/commands/update-link.ts'
@@ -64,7 +63,7 @@ jobs:
         run: pnpm test:perf
 
       - name: Upload benchmark results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: benchmark-report
           path: docs/performance/benchmark-report.json
