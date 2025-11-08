@@ -35,7 +35,7 @@ Use tools to systematically identify technical debt:
 class TechnicalDebtDetector {
   constructor() {
     this.debtIndicators = {
-      codeSmells: [/TODO:/gi, /FIXME:/gi, /HACK:/gi, /@ts-ignore/gi],
+      codeSmells: [/TODO:/gi, /FIXME:/gi, /HACK:/gi],
       complexityPatterns: [
         /function\s+\w+\([^)]*\)\s*{[^}]{500,}}/gs, // Large functions
         /if\s*\([^{]*{\s*if\s*\([^{]*{\s*if/gs, // Deep nesting

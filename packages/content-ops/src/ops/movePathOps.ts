@@ -5,6 +5,7 @@ import { validateSourceExists } from '../file-system/file-validations'
 import { FileSystemService } from '../file-system'
 import { SyncOptions } from './SyncOptions'
 import { Behavior, normalizeKey, resolveBehavior } from './behavior'
+import { convertToRelative } from '../path-resolution'
 import {
   setupPathOperation,
   determineFinalDestination,
@@ -215,7 +216,7 @@ async function handleDirectoryMove(params: HandleDirectoryMoveParams) {
   const entries = await fileService.readdir(srcPath)
   validateSubfolderOperation({ srcPath, destPath, normSource, normTarget, operation: 'move' })
 
-  const relSourceKey = normalizeKey(join(datasetRoot, normSource).replace(datasetRoot, ''))
+  const relSourceKey = normalizeKey(convertToRelative(datasetRoot, join(datasetRoot, normSource)))
   const sourceFolderBehavior = resolveBehavior(relSourceKey, folderBehavior, defaultBehavior)
 
   if (sourceFolderBehavior === 'mirror') {
@@ -371,7 +372,7 @@ async function moveDirectoryEntry(
 ) {
   const { fileService, srcPath, destPath, datasetRoot, defaultBehavior, folderBehavior } = ctx
   try {
-    const entryRel = normalizeKey(join(datasetRoot, entry.name).replace(datasetRoot, ''))
+    const entryRel = normalizeKey(convertToRelative(datasetRoot, join(datasetRoot, entry.name)))
     const entryBehavior = resolveBehavior(entryRel, folderBehavior, defaultBehavior)
     const from = join(srcPath, entry.name)
     const to = join(destPath, entry.name)

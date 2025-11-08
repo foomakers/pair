@@ -1,7 +1,7 @@
 ---
 description: Refine user stories with detailed acceptance criteria and technical specifications
 mode: product-engineer
-tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
+tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*']
 ---
 
 # Refine Story

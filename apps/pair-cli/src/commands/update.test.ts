@@ -228,3 +228,139 @@ const setupAgentsFs = (datasetRoot: string, content: string, withExistingFile = 
 
   return fs
 }
+
+const setupBackupTestFs = (datasetRoot: string, newContent = 'new workflow') => {
+  const fs = createTestFs(
+    {
+      asset_registries: {
+        github: {
+          source: '.github',
+          behavior: 'additive' as const,
+          target_path: '.github',
+          description: 'GitHub Actions workflows',
+        },
+      },
+    },
+    {
+      [`${datasetRoot}/.github/workflows/ci.yml`]: newContent,
+    },
+    realCwd,
+  )
+  fs.writeFile('.github/workflows/ci.yml', 'existing workflow')
+  return fs
+}
+
+const setupMultiRegistryFs = (datasetRoot: string) => {
+  const fs = createTestFs(
+    {
+      asset_registries: {
+        github: {
+          source: '.github',
+          behavior: 'additive' as const,
+          target_path: '.github',
+          description: 'GitHub Actions',
+        },
+        docs: {
+          source: 'docs',
+          behavior: 'mirror' as const,
+          target_path: 'documentation',
+          description: 'Documentation',
+        },
+      },
+    },
+    {
+      [`${datasetRoot}/.github/workflows/ci.yml`]: 'workflow',
+      [`${datasetRoot}/docs/README.md`]: 'readme',
+    },
+    realCwd,
+  )
+  fs.writeFile('.github/workflows/ci.yml', 'old workflow')
+  fs.writeFile('documentation/README.md', 'old readme')
+  return fs
+}
+
+describe('updateCommand - backup behavior', () => {
+  it('creates backup during update and deletes after success (default persistBackup=false)', async () => {
+    const datasetRoot = `${realCwd}/dataset`
+    const fs = setupBackupTestFs(datasetRoot)
+
+    const result = await updateCmd.updateCommand(fs, [], {
+      datasetRoot,
+      useDefaults: true,
+    })
+
+    expect(result!.success).toBe(true)
+
+    const backupDirExistsAfter = await fs.exists('.pair/backups')
+    if (backupDirExistsAfter) {
+      const backupsAfter = await fs.readdir('.pair/backups')
+      expect(backupsAfter.map(e => e.name)).toEqual([])
+    }
+
+    expect(await fs.readFile('.github/workflows/ci.yml')).toBe('new workflow')
+  })
+})
+
+describe('updateCommand - backup persistence', () => {
+  it('keeps backup after success when persistBackup=true', async () => {
+    const datasetRoot = `${realCwd}/dataset`
+    const fs = setupBackupTestFs(datasetRoot)
+
+    const result = await updateCmd.updateCommand(fs, [], {
+      datasetRoot,
+      useDefaults: true,
+      persistBackup: true,
+    })
+
+    expect(result!.success).toBe(true)
+
+    const backupDirExists = await fs.exists('.pair/backups')
+    expect(backupDirExists).toBe(true)
+
+    const backupEntries = await fs.readdir('.pair/backups')
+    const backups = backupEntries.map(e => e.name)
+    expect(backups.length).toBeGreaterThan(0)
+
+    const sessionFolder = backups.find((name: string) => name.startsWith('root-'))
+    expect(sessionFolder).toBeDefined()
+
+    const backupContents = (await fs.readdir(`.pair/backups/${sessionFolder}`)).map(e => e.name)
+    expect(backupContents).toContain('.github')
+
+    const backedUpContent = await fs.readFile(
+      `.pair/backups/${sessionFolder}/.github/workflows/ci.yml`,
+    )
+    expect(backedUpContent).toBe('existing workflow')
+    expect(await fs.readFile('.github/workflows/ci.yml')).toBe('new workflow')
+  })
+})
+
+describe('updateCommand - backup multi-registry', () => {
+  it('backup contains all registries when updating all registries', async () => {
+    const datasetRoot = `${realCwd}/dataset`
+    const fs = setupMultiRegistryFs(datasetRoot)
+
+    const result = await updateCmd.updateCommand(fs, [], {
+      datasetRoot,
+      useDefaults: true,
+      persistBackup: true,
+    })
+
+    expect(result!.success).toBe(true)
+
+    const backups = (await fs.readdir('.pair/backups')).map(e => e.name)
+    const sessionFolder = backups.find((name: string) => name.startsWith('root-'))
+    expect(sessionFolder).toBeDefined()
+    const backupContents = (await fs.readdir(`.pair/backups/${sessionFolder}`)).map(e => e.name)
+
+    expect(backupContents).toContain('.github')
+    expect(backupContents).toContain('documentation')
+
+    expect(await fs.readFile(`.pair/backups/${sessionFolder}/.github/workflows/ci.yml`)).toBe(
+      'old workflow',
+    )
+    expect(await fs.readFile(`.pair/backups/${sessionFolder}/documentation/README.md`)).toBe(
+      'old readme',
+    )
+  })
+})

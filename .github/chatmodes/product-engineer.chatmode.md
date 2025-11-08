@@ -1,7 +1,7 @@
 ---
 description: Product Engineer mode for AI-assisted development. Creates tasks, implements features, and manages development lifecycle following established how-to guides.
-tools: ['search/codebase', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'runCommands', 'runTasks', 'edit/editFiles', 'search', 'new', 'github/*']
-model: GPT-5 mini
+tools: ['search/codebase', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'runCommands', 'runTasks', 'edit/editFiles', 'search', 'new', 'github/github-mcp-server/*']
+
 ---
 
 # Product Engineer Chatmode

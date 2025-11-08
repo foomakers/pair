@@ -6,6 +6,7 @@ import chalk from 'chalk'
 
 import { updateCommand } from './commands/update'
 import { installCommand } from './commands/install'
+import { updateLinkCommand } from './commands/update-link'
 import { parseInstallUpdateArgs } from './commands/command-utils'
 import { fileSystemService, FileSystemService, Behavior, setLogLevel } from '@pair/content-ops'
 import {
@@ -98,6 +99,10 @@ program
   .argument('[target]', 'Target folder (omit to use defaults from config)')
   .option('-c, --config <file>', 'Path to config file (if provided, uses this config)')
   .option('--list-targets', 'List available target folders and their descriptions')
+  .option(
+    '--link-style <style>',
+    'Link style: relative, absolute, or auto (default: relative for install)',
+  )
   .action((targetArg: unknown, cmdOptions: unknown) => {
     return handleInstallCommand(targetArg, cmdOptions, fsService).then(() => undefined)
   })
@@ -114,24 +119,29 @@ function buildInstallOptions(
   const argsToPass = first && !first.startsWith('--') ? ['--target', first] : rawArgs
 
   const { baseTarget, useDefaults } = parseInstallUpdateArgs(argsToPass)
-
-  // Resolve relative baseTarget against the current working directory
-  let resolvedBaseTarget = baseTarget
-  if (baseTarget && !isAbsolute(baseTarget)) {
-    resolvedBaseTarget = fsService.resolve(fsService.currentWorkingDirectory(), baseTarget)
-  }
-
+  const resolvedBaseTarget = resolveBaseTarget(fsService, baseTarget)
   const parsedRec = getParsedOpts(cmdOptions)
 
-  const opts: Record<string, unknown> = {
-    useDefaults,
-  }
-  if (parsedRec && parsedRec['config'])
-    (opts as Record<string, unknown>)['customConfigPath'] = parsedRec['config']
-  if (resolvedBaseTarget) (opts as Record<string, unknown>)['baseTarget'] = resolvedBaseTarget
-  ;(opts as Record<string, unknown>)['minLogLevel'] = MIN_LOG_LEVEL
+  const opts: Record<string, unknown> = { useDefaults }
+  if (parsedRec?.['config']) opts['customConfigPath'] = parsedRec['config']
+  if (resolvedBaseTarget) opts['baseTarget'] = resolvedBaseTarget
+  if (parsedRec) addLinkStyleToOpts(opts, parsedRec)
+  opts['minLogLevel'] = MIN_LOG_LEVEL
 
   return { argsToPass, opts }
+}
+
+function resolveBaseTarget(fsService: FileSystemService, baseTarget: string | null): string | null {
+  if (!baseTarget || isAbsolute(baseTarget)) return baseTarget
+  return fsService.resolve(fsService.currentWorkingDirectory(), baseTarget)
+}
+
+function addLinkStyleToOpts(opts: Record<string, unknown>, parsedRec: Record<string, unknown>) {
+  if (!parsedRec['linkStyle']) return
+  const style = String(parsedRec['linkStyle'])
+  if (style === 'relative' || style === 'absolute' || style === 'auto') {
+    opts['linkStyle'] = style
+  }
 }
 
 function getParsedOpts(cmdOptions: unknown): Record<string, unknown> {
@@ -208,34 +218,50 @@ export async function handleUpdateCommand(
 
   try {
     const datasetRoot = validateUpdateConfigAndGetRoot(fsService, cmdOptions)
-
     const { args, useDefaults } = buildUpdateArgs(fsService, cmdOptions)
-
-    // Execute update command
-    const opts: Record<string, unknown> = { datasetRoot, useDefaults }
-    if (cmdOptions.config) opts['customConfigPath'] = cmdOptions.config
-    opts['minLogLevel'] = MIN_LOG_LEVEL
-
+    const opts = buildUpdateCommandOpts(cmdOptions, datasetRoot, useDefaults)
     const res = await updateCommand(fsService, args, opts)
-    if (!res) {
-      console.error(chalk.red('[update] failed: Command returned undefined'))
-      return
-    }
 
-    if (res.success) {
-      if (useDefaults) {
-        console.log(chalk.green(`[update] success - used default targets from config`))
-      } else {
-        console.log(chalk.green(`[update] success - updated specified registries`))
-      }
-    } else {
-      console.error(
-        chalk.red(`[update] failed: ${'message' in res ? res.message : 'Unknown error'}`),
-      )
-      process.exitCode = 1
-    }
+    handleUpdateResult(res, useDefaults)
   } catch (err) {
     console.error(chalk.red(String(err)))
+    process.exitCode = 1
+  }
+}
+
+function buildUpdateCommandOpts(
+  cmdOptions: CommandOptions,
+  datasetRoot: string,
+  useDefaults: boolean,
+): Record<string, unknown> {
+  const opts: Record<string, unknown> = { datasetRoot, useDefaults }
+  if (cmdOptions.config) opts['customConfigPath'] = cmdOptions.config
+  if ('linkStyle' in cmdOptions && cmdOptions.linkStyle) {
+    const style = String(cmdOptions.linkStyle)
+    if (style === 'relative' || style === 'absolute' || style === 'auto') {
+      opts['linkStyle'] = style
+    }
+  }
+  opts['minLogLevel'] = MIN_LOG_LEVEL
+  return opts
+}
+
+function handleUpdateResult(
+  res: { success?: boolean; message?: string } | undefined,
+  useDefaults: boolean,
+): void {
+  if (!res) {
+    console.error(chalk.red('[update] failed: Command returned undefined'))
+    return
+  }
+
+  if (res.success) {
+    const msg = useDefaults
+      ? '[update] success - used default targets from config'
+      : '[update] success - updated specified registries'
+    console.log(chalk.green(msg))
+  } else {
+    console.error(chalk.red(`[update] failed: ${'message' in res ? res.message : 'Unknown error'}`))
     process.exitCode = 1
   }
 }
@@ -337,10 +363,87 @@ program
   .argument('[target]', 'Target folder (omit to use defaults from config)')
   .option('-c, --config <file>', 'Path to config file (if provided, uses this config)')
   .option('--list-targets', 'List available target folders and their descriptions')
+  .option(
+    '--link-style <style>',
+    'Link style: relative, absolute, or auto (default: auto-detect for update)',
+  )
+  .option('--persist-backup', 'Keep backup files after successful update')
+  .option('--auto-rollback', 'Automatically restore from backup on error (default: true)', true)
   .action(async (targetArg, cmdOptions) => {
     // Preserve backward compatibility for tests that call handleUpdateCommand({}, fs)
     const merged = { ...(cmdOptions as Record<string, unknown>), positionalTarget: targetArg }
     await handleUpdateCommand(merged, fsService)
+  })
+
+/**
+ * Display update-link command results
+ */
+function displayUpdateLinkResults(result: Awaited<ReturnType<typeof updateLinkCommand>>): void {
+  if (result.success) {
+    console.log(chalk.green(`✅ ${result.message}`))
+    if (result.stats) {
+      console.log(chalk.blue('\n📊 Summary:'))
+      console.log(chalk.gray(`  • Path mode: ${result.pathMode || 'relative'}`))
+      if (result.dryRun) {
+        console.log(chalk.yellow(`  • Mode: DRY RUN (no files modified)`))
+      }
+      console.log(chalk.gray(`  • Total links processed: ${result.stats.totalLinks}`))
+      console.log(chalk.gray(`  • Files modified: ${result.stats.filesModified}`))
+
+      if (result.stats.linksByCategory && Object.keys(result.stats.linksByCategory).length > 0) {
+        console.log(chalk.blue('\n🔗 Links by transformation:'))
+        for (const [category, count] of Object.entries(result.stats.linksByCategory)) {
+          console.log(chalk.gray(`  • ${category}: ${count}`))
+        }
+      }
+    }
+  } else {
+    console.error(chalk.red(`❌ ${result.message}`))
+    process.exitCode = 1
+  }
+}
+
+program
+  .command('update-link')
+  .description('Validate and update links in installed Knowledge Base content')
+  .option('--relative', 'Convert all links to relative paths (default)')
+  .option('--absolute', 'Convert all links to absolute paths')
+  .option('--dry-run', 'Show what would be changed without modifying files')
+  .option('--verbose', 'Show detailed processing information')
+  .addHelpText(
+    'after',
+    `
+Examples:
+  $ pair update-link                      Validate and convert links to relative paths
+  $ pair update-link --dry-run            Preview changes without modifying files
+  $ pair update-link --absolute           Convert all links to absolute paths
+  $ pair update-link --verbose            Show detailed processing logs
+
+Usage Notes:
+  • Default behavior converts all links to relative paths
+  • Creates automatic backup before modifications
+  • Skips external URLs and mailto links
+  • Processes all markdown files in .pair/ directory
+
+See also: docs/getting-started/05-cli-update-link.md
+`,
+  )
+  .action(async cmdOptions => {
+    try {
+      const args: string[] = []
+      const opts = cmdOptions as Record<string, unknown>
+
+      if (opts['relative']) args.push('--relative')
+      if (opts['absolute']) args.push('--absolute')
+      if (opts['dryRun']) args.push('--dry-run')
+      if (opts['verbose']) args.push('--verbose')
+
+      const result = await updateLinkCommand(fsService, args, { minLogLevel: MIN_LOG_LEVEL })
+      displayUpdateLinkResults(result)
+    } catch (err) {
+      console.error(chalk.red(`Failed to update links: ${String(err)}`))
+      process.exitCode = 1
+    }
   })
 
 program

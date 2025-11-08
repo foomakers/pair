@@ -1,7 +1,7 @@
 ---
 description: Define bounded contexts to establish technical architecture boundaries based on business subdomains
 mode: staff-engineer
-tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/*']
+tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*']
 ---
 
 # Define Bounded Contexts

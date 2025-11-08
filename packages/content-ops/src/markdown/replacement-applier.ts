@@ -1,4 +1,5 @@
 import { ParsedLink, extractLinks } from './markdown-parser'
+import { LinkProcessor } from './link-processor'
 import { FileSystemService } from '../file-system'
 
 function applyOffsetReplacement(content: string, r: Replacement) {
@@ -106,9 +107,55 @@ export async function processFileReplacement(
 ): Promise<{ content: string; applied: number; byKind?: Record<string, number> }> {
   const content = await fileService.readFile(file)
   const lines = content.split(/\r?\n/)
-  const result = await processFileWithLinks(content, links =>
-    generateReplacements(links, content, lines),
-  )
+  // Use enriched link extraction when possible (includes filePath, type, anchor)
+  // This is an adapter to prefer LinkProcessor.extractLinksFromFile while
+  // keeping existing processFileWithLinks available for compatibility.
+  let result = await tryEnrichedProcess({ file, generateReplacements, content, lines, fileService })
+  if (!result) {
+    // Fallback to content-based extraction if the enriched path fails for any reason
+    result = await processFileWithLinks(content, links =>
+      generateReplacements(links, content, lines),
+    )
+  }
+
+  await persistIfModified(result, fileService, file)
+  return result
+}
+
+async function tryEnrichedProcess(opts: {
+  file: string
+  generateReplacements: (
+    links: ParsedLink[],
+    content: string,
+    lines: string[],
+  ) => Promise<Replacement[]>
+  content: string
+  lines: string[]
+  fileService: FileSystemService
+}): Promise<ApplyResult | null> {
+  const { file, generateReplacements, content, lines, fileService } = opts
+  try {
+    const enriched = await LinkProcessor.extractLinksFromFile(file, fileService)
+    // Pass only the ParsedLink shape expected by generators (enriched includes extras)
+    const parsedLinks: ParsedLink[] = enriched.map(l => ({
+      href: l.href,
+      text: l.text,
+      line: l.line,
+      start: l.start,
+      end: l.end,
+    }))
+    const replacements = await generateReplacements(parsedLinks, content, lines)
+    return applyReplacements(content, replacements)
+  } catch {
+    return null
+  }
+}
+
+async function persistIfModified(
+  result: ApplyResult,
+  fileService: FileSystemService,
+  file: string,
+) {
   const modified =
     (result.byKind?.['normalizedFull'] || 0) +
       (result.byKind?.['patched'] || 0) +
@@ -118,7 +165,6 @@ export async function processFileReplacement(
   if (modified) {
     await fileService.writeFile(file, result.content)
   }
-  return result
 }
 
 export async function processFileWithLinks(

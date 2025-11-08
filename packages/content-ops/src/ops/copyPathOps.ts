@@ -14,6 +14,7 @@ import {
   handleMirrorCleanup,
   validateSubfolderOperation,
 } from './path-operation-helpers'
+import { convertToRelative } from '../path-resolution'
 import { isAbsolute } from 'path'
 
 type CopyPathOpsParams = {
@@ -173,7 +174,6 @@ export async function copyPathOps(params: CopyPathOpsParams) {
     if (setup.shouldSkip) return {}
 
     const { normSource, normTarget, srcPath, destPath, defaultBehavior, folderBehavior } = setup
-    console.log('#copyPathOps - datasetRoot:', datasetRoot)
     if (!srcPath || !destPath) {
       throw createError({
         type: 'IO_ERROR',
@@ -329,7 +329,8 @@ function resolveSourceFolderBehavior(
   folderBehavior?: Record<string, Behavior>,
   defaultBehavior: Behavior = 'overwrite',
 ) {
-  const relSourceKey = normalizeKey(join(datasetRoot, normSource).replace(datasetRoot, ''))
+  const rel = convertToRelative(datasetRoot, join(datasetRoot, normSource))
+  const relSourceKey = normalizeKey(rel)
   return resolveBehavior(relSourceKey, folderBehavior, defaultBehavior)
 }
 

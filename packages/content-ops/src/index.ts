@@ -1,5 +1,7 @@
 export { FileSystemService, fileSystemService } from './file-system'
 export { InMemoryFileSystemService } from './test-utils/in-memory-fs'
+export { walkMarkdownFiles, isExternalLink } from './file-system/file-system-utils'
+export { extractLinks, type ParsedLink } from './markdown/markdown-parser'
 
 export { SyncOptions } from './ops/SyncOptions'
 export { Behavior } from './ops/behavior'
@@ -15,3 +17,13 @@ export {
 } from './ops/link-batch-processor'
 
 export { logger, setLogLevel, getLogLevel, LogLevel } from './observability'
+export { detectRepoRoot, convertToRelative, convertToAbsolute } from './path-resolution'
+export { StatsCollector, formatSummary, formatJSON } from './reporting'
+export type { LinkStats, FormatOptions } from './reporting'
+
+export {
+  BackupService,
+  type BackupSession,
+  type RegistryConfig,
+} from './file-updates/backup-service'
+export { AtomicWriter, type AtomicWriterOptions } from './file-updates/atomic-write'

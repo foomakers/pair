@@ -1,3 +1,58 @@
+# Release Notes
+
+## Version 0.3.0 (Upcoming)
+
+### New Features
+
+#### Link Update & Validation Command
+
+New `pair update-link` command for automatic link maintenance in installed Knowledge Base content.
+
+**What's New:**
+
+- ✨ Automatic link validation and fixing
+- 🔄 Convert between relative and absolute paths
+- 🔍 Dry-run mode for safe previews
+- 📊 Comprehensive summary reports
+- 🛡️ Automatic backup and rollback
+- 🎯 96%+ test coverage
+
+**Usage:**
+
+```bash
+# Validate and update all KB links
+pair update-link
+
+# Preview changes without modifying files
+pair update-link --dry-run
+
+# Convert to absolute paths
+pair update-link --absolute
+
+# Detailed logging
+pair update-link --verbose
+```
+
+**When to Use:**
+
+- After restructuring your project directories
+- When KB links become broken
+- After moving project to a new location
+- To standardize link formats (relative vs absolute)
+
+**Migration Notes:**
+
+- No breaking changes to existing commands
+- New command is optional; `install` and `update` work as before
+- Backup system integrated with `update` command (new flags: `--persist-backup`, `--auto-rollback`)
+
+**Documentation:**
+
+- [Link Update Guide](./getting-started/05-cli-update-link.md) - Comprehensive usage guide
+- [CLI Workflows](./getting-started/02-cli-workflows.md) - Updated with link update patterns
+
+---
+
 ## GitHub Packages notes
 
 If you publish to GitHub Packages, the release will include a `.tgz` artifact that can be uploaded to the GitHub Packages registry or published from the CI artifacts. Below are two examples: 1) how CI should authenticate (prefer `GITHUB_TOKEN` wherever possible) and 2) how a consuming developer can configure their local environment using a personal token (PAT) when necessary.

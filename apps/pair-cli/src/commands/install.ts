@@ -1,4 +1,5 @@
 import { relative, isAbsolute, join, dirname } from 'path'
+import { convertToRelative } from '@pair/content-ops'
 import { FileSystemService } from '@pair/content-ops'
 import { Behavior } from '@pair/content-ops'
 import {
@@ -6,6 +7,7 @@ import {
   createLogger,
   ensureDir,
   doCopyAndUpdateLinks,
+  applyLinkTransformation,
   CommandOptions,
   LogEntry,
 } from './command-utils'
@@ -27,6 +29,7 @@ export interface AssetRegistryConfig {
 
 export type InstallOptions = CommandOptions & {
   baseTarget?: string
+  linkStyle?: 'relative' | 'absolute' | 'auto'
 }
 
 export interface InstallContext {
@@ -169,9 +172,20 @@ async function copyRegistryFiles(params: {
   logDiagnosticsIfEnabled(paths)
 
   const optionsToPass = copyOptions || buildCopyOptionsForRegistry(registryConfig)
+  // Use convertToRelative to normalize relative paths consistently with content-ops
+  let sourceToPass =
+    paths.relativeSourcePath ?? convertToRelative(paths.monorepoRoot, paths.fullSourcePath)
+  let targetToPass =
+    paths.relativeTargetPath ?? convertToRelative(paths.monorepoRoot, paths.fullTargetPath)
+
+  // Preserve previous relative() behavior: if convertToRelative returned './' (same dir),
+  // convert it to '' so downstream callers that expect an empty string continue to work.
+  if (sourceToPass === './') sourceToPass = ''
+  if (targetToPass === './') targetToPass = ''
+
   await doCopyAndUpdateLinks(fsService, {
-    source: paths.relativeSourcePath ?? paths.fullSourcePath,
-    target: paths.relativeTargetPath ?? paths.fullTargetPath,
+    source: sourceToPass,
+    target: targetToPass,
     datasetRoot: paths.monorepoRoot,
     options: optionsToPass,
   })
@@ -610,6 +624,11 @@ async function performInstallation(context: {
       pushLog,
       ...(options && { options }),
     })
+
+    // Apply link transformation if requested
+    if (result.success && options?.linkStyle) {
+      await applyLinkTransformation(fsService, options, pushLog, 'install')
+    }
 
     return processInstallationResult(result, logs, options)
   } catch (err) {

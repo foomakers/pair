@@ -104,6 +104,7 @@ pair-cli update
 
 - `install [target]` - Install documentation and assets
 - `update [target]` - Update existing documentation and assets
+- `update-link [options]` - Validate and update links in installed KB content
 
 ### Utility Commands
 
@@ -182,6 +183,11 @@ pair-cli install --config ./my-config.json
 ```bash
 pair-cli validate-config
 ```
+
+- **Common Options** - Shared flags across commands
+- **Help and Examples** - Built-in usage documentation
+
+For detailed usage of the link update command, see [CLI Update Link Guide](../../docs/getting-started/05-cli-update-link.md).
 
 ## Troubleshooting
 

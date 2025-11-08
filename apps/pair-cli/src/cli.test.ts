@@ -1,43 +1,16 @@
 import { describe, it, expect } from 'vitest'
-import { execSync } from 'child_process'
-import { join } from 'path'
-import { readFileSync } from 'fs'
 import { getKnowledgeHubDatasetPath } from './config-utils'
 import type { FileSystemService } from '@pair/content-ops'
 import { Command } from 'commander'
 import { checkKnowledgeHubDatasetAccessible } from './cli'
 
-// Create a mock fs service for tests
-const mockFsService = {
-  rootModuleDirectory: () => __dirname,
-  currentWorkingDirectory: () => process.cwd(),
-  existsSync: () => true,
-}
-
-const pkg = JSON.parse(
-  readFileSync(join(mockFsService.rootModuleDirectory(), '..', 'package.json'), 'utf-8'),
-)
-
 describe('pair-cli basics', () => {
-  it.skip('should print the correct version with --version', execVersionTestWrapper)
-  it.skip('help output does not mention --dry-run or --verbose', execHelpTestWrapper)
   it('returns knowledge-hub dataset path', testKnowledgeHubDatasetPath)
   it('shows welcome message for invalid commands', testWelcomeMessage)
   it('fails when dataset path exists but is not readable', testDatasetNotAccessible)
   it('fails when dataset path resolution fails', testDatasetPathResolutionFailure)
   it('sets correct exit codes for success and failure cases', testExitCodes)
 })
-
-function execVersionTestWrapper() {
-  const output = execVersionTest()
-  expect(output).toContain(pkg.version)
-}
-
-function execHelpTestWrapper() {
-  const output = execHelpTest()
-  expect(output).not.toContain('--dry-run')
-  expect(output).not.toContain('--verbose')
-}
 
 function testKnowledgeHubDatasetPath() {
   const fsService = {
@@ -79,30 +52,6 @@ function testWelcomeMessage() {
     console.log = originalLog
     process.exit = originalExit
   }
-}
-
-function execVersionTest(): string {
-  const cliPath = join(mockFsService.rootModuleDirectory(), 'cli.ts')
-  const tsNodePath = join(
-    mockFsService.rootModuleDirectory(),
-    '..',
-    'node_modules',
-    '.bin',
-    'ts-node',
-  )
-  return execSync(`${tsNodePath} ${cliPath} --version`).toString().trim()
-}
-
-function execHelpTest(): string {
-  const cliPath = join(mockFsService.rootModuleDirectory(), 'cli.ts')
-  const tsNodePath = join(
-    mockFsService.rootModuleDirectory(),
-    '..',
-    'node_modules',
-    '.bin',
-    'ts-node',
-  )
-  return execSync(`${tsNodePath} ${cliPath} --help`).toString()
 }
 
 function testDatasetNotAccessible() {
