@@ -4,10 +4,12 @@ import { createLogger } from './command-utils'
 import { convertToRelative, convertToAbsolute } from '@pair/content-ops'
 import { isExternalLink, walkMarkdownFiles } from '@pair/content-ops/file-system'
 import { dirname } from 'path'
+import { getKnowledgeHubDatasetPath } from '../config-utils'
 
 export type UpdateLinkOptions = CommandOptions & {
   dryRun?: boolean
   verbose?: boolean
+  datasetRoot?: string
 }
 
 export type UpdateLinkResult = {
@@ -193,17 +195,36 @@ function parseUpdateLinkArgs(args: string[]): {
 }
 
 /**
- * Detect if Knowledge Base is installed in the project
+ * Verify KB is available using same detection as install/update commands
  */
-function detectKnowledgeBase(fsService: FileSystemService): string | null {
-  const cwd = fsService.currentWorkingDirectory()
-  const pairPath = fsService.resolve(cwd, '.pair')
-
-  if (fsService.existsSync(pairPath)) {
-    return pairPath
+function verifyKnowledgeBase(
+  fsService: FileSystemService,
+  pushLog: (level: LogEntry['level'], message: string) => void,
+  options?: UpdateLinkOptions,
+): { kbPath: string } | { error: string } {
+  // Verify KB dataset is available
+  try {
+    const datasetRoot = options?.datasetRoot || getKnowledgeHubDatasetPath(fsService)
+    pushLog('info', `Knowledge Base dataset detected at: ${datasetRoot}`)
+  } catch (error) {
+    const message = 'No Knowledge Base found. Please run "pair install" first.'
+    pushLog('error', message)
+    pushLog('error', String(error))
+    return { error: message }
   }
 
-  return null
+  // Process installed KB content in .pair directory
+  const cwd = fsService.currentWorkingDirectory()
+  const kbPath = fsService.resolve(cwd, '.pair')
+
+  if (!fsService.existsSync(kbPath)) {
+    const message = 'No Knowledge Base installed. Please run "pair install" first.'
+    pushLog('error', message)
+    return { error: message }
+  }
+
+  pushLog('info', `Processing installed KB at: ${kbPath}`)
+  return { kbPath }
 }
 
 /**
@@ -227,14 +248,13 @@ export async function updateLinkCommand(
   const { pathMode, dryRun } = parseResult
   pushLog('info', `Path mode: ${pathMode}, Dry run: ${dryRun}`)
 
-  const kbPath = detectKnowledgeBase(fsService)
-  if (!kbPath) {
-    const message = 'No Knowledge Base found. Please run "pair install" first.'
-    pushLog('error', message)
-    return { success: false, message, logs }
+  // Verify KB is available
+  const kbResult = verifyKnowledgeBase(fsService, pushLog, options)
+  if ('error' in kbResult) {
+    return { success: false, message: kbResult.error, logs }
   }
 
-  pushLog('info', `Knowledge Base detected at: ${kbPath}`)
+  const { kbPath } = kbResult
 
   const stats = await processMarkdownFiles({ fsService, kbPath, pathMode, dryRun, pushLog })
 

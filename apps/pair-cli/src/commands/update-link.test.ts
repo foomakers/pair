@@ -4,9 +4,29 @@ import { createTestFs } from '../test-utils/test-helpers'
 
 const realCwd = '/development/path/pair/apps/pair-cli'
 
+// Helper to create test fs with both dataset (SOURCE) and .pair (TARGET)
+function createTestFsWithKB(pairFiles?: Record<string, string>) {
+  const nodeModulesPath = `${realCwd}/node_modules/@pair/knowledge-hub/dataset`
+  const defaultPairFiles = { [`${realCwd}/.pair/README.md`]: '# Installed KB' }
+  const mergedPairFiles =
+    pairFiles && Object.keys(pairFiles).length > 0 ? pairFiles : defaultPairFiles
+
+  return createTestFs(
+    {},
+    {
+      [`${nodeModulesPath}/README.md`]: '# KB Dataset',
+      [`${realCwd}/node_modules/@pair/knowledge-hub/package.json`]: JSON.stringify({
+        name: '@pair/knowledge-hub',
+      }),
+      ...mergedPairFiles,
+    },
+    realCwd,
+  )
+}
+
 describe('update-link command - path mode flags', () => {
   it('should accept --relative flag', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, ['--relative'], {})
 
@@ -16,7 +36,7 @@ describe('update-link command - path mode flags', () => {
   })
 
   it('should accept --absolute flag', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, ['--absolute'], {})
 
@@ -26,7 +46,7 @@ describe('update-link command - path mode flags', () => {
   })
 
   it('should default to --relative when no path option specified', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, [], {})
 
@@ -36,7 +56,7 @@ describe('update-link command - path mode flags', () => {
   })
 
   it('should reject conflicting --relative and --absolute flags', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, ['--relative', '--absolute'], {})
 
@@ -47,7 +67,7 @@ describe('update-link command - path mode flags', () => {
 
 describe('update-link command - execution flags', () => {
   it('should accept --dry-run flag', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, ['--dry-run'], {})
 
@@ -57,7 +77,7 @@ describe('update-link command - execution flags', () => {
   })
 
   it('should accept --verbose flag', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, ['--verbose'], {})
 
@@ -77,7 +97,7 @@ describe('update-link command - KB detection', () => {
   })
 
   it('should detect KB in .pair directory', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, [], {})
 
@@ -87,7 +107,7 @@ describe('update-link command - KB detection', () => {
 
 describe('update-link command - integration', () => {
   it('should return logs array for observability', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, [], {})
 
@@ -97,7 +117,7 @@ describe('update-link command - integration', () => {
   })
 
   it('should respect minLogLevel option', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, [], { minLogLevel: 'error' })
 
@@ -108,7 +128,7 @@ describe('update-link command - integration', () => {
 
 describe('update-link command - result structure', () => {
   it('should return success, message, and stats', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, [], {})
 
@@ -118,7 +138,7 @@ describe('update-link command - result structure', () => {
   })
 
   it('should include processed links count in stats', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, [], {})
 
@@ -133,7 +153,7 @@ describe('update-link command - link transformation', () => {
   it('should convert relative links to absolute with --absolute', async () => {
     const mdPath = `${realCwd}/.pair/README.md`
     const relLink = '[Doc](docs/usage.md)'
-    const fs = createTestFs({}, { [mdPath]: relLink }, realCwd)
+    const fs = createTestFsWithKB({ [mdPath]: relLink })
 
     const result = await updateLinkCommand(fs, ['--absolute'], {})
     expect(result.success).toBe(true)
@@ -146,7 +166,7 @@ describe('update-link command - link transformation', () => {
   it('should convert absolute links to relative with --relative', async () => {
     const mdPath = `${realCwd}/.pair/README.md`
     const absLink = '[Doc](/development/path/pair/apps/pair-cli/docs/usage.md)'
-    const fs = createTestFs({}, { [mdPath]: absLink }, realCwd)
+    const fs = createTestFsWithKB({ [mdPath]: absLink })
 
     const result = await updateLinkCommand(fs, ['--relative'], {})
     expect(result.success).toBe(true)
@@ -160,7 +180,7 @@ describe('update-link command - link transformation', () => {
 
 describe('update-link command - success reporting', () => {
   it('should report correct success message', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, [], {})
 
@@ -169,7 +189,7 @@ describe('update-link command - success reporting', () => {
   })
 
   it('should include stats with zero counts when no links found', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# No links here' }, realCwd)
+    const fs = createTestFsWithKB({ [`${realCwd}/.pair/README.md`]: '# No links here' })
 
     const result = await updateLinkCommand(fs, [], {})
 
@@ -180,7 +200,7 @@ describe('update-link command - success reporting', () => {
 
   it('should report stats with correct link counts', async () => {
     const mdContent = '[Link1](./a.md) and [Link2](./b.md)'
-    const fs = createTestFs({}, { [`${realCwd}/.pair/doc.md`]: mdContent }, realCwd)
+    const fs = createTestFsWithKB({ [`${realCwd}/.pair/doc.md`]: mdContent })
 
     const result = await updateLinkCommand(fs, [], {})
 
@@ -190,7 +210,7 @@ describe('update-link command - success reporting', () => {
 
   it('should include linksByCategory in stats when links are processed', async () => {
     const mdContent = '[Rel](./a.md) [Abs](/abs/path.md)'
-    const fs = createTestFs({}, { [`${realCwd}/.pair/doc.md`]: mdContent }, realCwd)
+    const fs = createTestFsWithKB({ [`${realCwd}/.pair/doc.md`]: mdContent })
 
     const result = await updateLinkCommand(fs, [], {})
 
@@ -210,7 +230,7 @@ describe('update-link command - error reporting', () => {
   })
 
   it('should report error message for conflicting flags', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, ['--relative', '--absolute'], {})
 
@@ -221,7 +241,7 @@ describe('update-link command - error reporting', () => {
 
 describe('update-link command - dry-run mode', () => {
   it('should include dry-run indicator in result when --dry-run used', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '[Link](./doc.md)' }, realCwd)
+    const fs = createTestFsWithKB({ [`${realCwd}/.pair/README.md`]: '[Link](./doc.md)' })
 
     const result = await updateLinkCommand(fs, ['--dry-run'], {})
 
@@ -231,7 +251,7 @@ describe('update-link command - dry-run mode', () => {
 
   it('should differentiate messages between dry-run and actual execution', async () => {
     const mdContent = '[Link](./doc.md)'
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: mdContent }, realCwd)
+    const fs = createTestFsWithKB({ [`${realCwd}/.pair/README.md`]: mdContent })
 
     const dryResult = await updateLinkCommand(fs, ['--dry-run'], {})
     const realResult = await updateLinkCommand(fs, [], {})
@@ -243,7 +263,7 @@ describe('update-link command - dry-run mode', () => {
 
 describe('update-link command - verbose mode', () => {
   it('should log appropriate messages in verbose mode', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, ['--verbose'], {})
 
@@ -256,7 +276,7 @@ describe('update-link command - verbose mode', () => {
 
 describe('update-link command - combined flags', () => {
   it('should handle --dry-run with --absolute', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, ['--dry-run', '--absolute'], {})
 
@@ -266,7 +286,7 @@ describe('update-link command - combined flags', () => {
   })
 
   it('should handle --verbose with --relative', async () => {
-    const fs = createTestFs({}, { [`${realCwd}/.pair/README.md`]: '# KB' }, realCwd)
+    const fs = createTestFsWithKB()
 
     const result = await updateLinkCommand(fs, ['--verbose', '--relative'], {})
 
@@ -283,6 +303,10 @@ describe('update-link command - KB detection consistency', () => {
       {
         [`${nodeModulesPath}/README.md`]: '# KB from node_modules',
         [`${nodeModulesPath}/.pair/knowledge/doc.md`]: '# Doc',
+        [`${realCwd}/node_modules/@pair/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${realCwd}/.pair/README.md`]: '# Installed KB',
       },
       realCwd,
     )
@@ -300,6 +324,7 @@ describe('update-link command - KB detection consistency', () => {
       {
         [`${customDatasetPath}/README.md`]: '# Custom KB',
         [`${customDatasetPath}/.pair/knowledge/doc.md`]: '# Doc',
+        [`${realCwd}/.pair/README.md`]: '# Installed KB',
       },
       realCwd,
     )
