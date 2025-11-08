@@ -375,6 +375,34 @@ program
     await handleUpdateCommand(merged, fsService)
   })
 
+/**
+ * Display update-link command results
+ */
+function displayUpdateLinkResults(result: Awaited<ReturnType<typeof updateLinkCommand>>): void {
+  if (result.success) {
+    console.log(chalk.green(`✅ ${result.message}`))
+    if (result.stats) {
+      console.log(chalk.blue('\n📊 Summary:'))
+      console.log(chalk.gray(`  • Path mode: ${result.pathMode || 'relative'}`))
+      if (result.dryRun) {
+        console.log(chalk.yellow(`  • Mode: DRY RUN (no files modified)`))
+      }
+      console.log(chalk.gray(`  • Total links processed: ${result.stats.totalLinks}`))
+      console.log(chalk.gray(`  • Files modified: ${result.stats.filesModified}`))
+
+      if (result.stats.linksByCategory && Object.keys(result.stats.linksByCategory).length > 0) {
+        console.log(chalk.blue('\n🔗 Links by transformation:'))
+        for (const [category, count] of Object.entries(result.stats.linksByCategory)) {
+          console.log(chalk.gray(`  • ${category}: ${count}`))
+        }
+      }
+    }
+  } else {
+    console.error(chalk.red(`❌ ${result.message}`))
+    process.exitCode = 1
+  }
+}
+
 program
   .command('update-link')
   .description('Validate and update links in installed Knowledge Base content')
@@ -393,18 +421,7 @@ program
       if (opts['verbose']) args.push('--verbose')
 
       const result = await updateLinkCommand(fsService, args, { minLogLevel: MIN_LOG_LEVEL })
-
-      if (result.success) {
-        console.log(chalk.green(`✅ ${result.message}`))
-        if (result.stats) {
-          console.log(chalk.blue('\n📊 Summary:'))
-          console.log(chalk.gray(`  • Total links processed: ${result.stats.totalLinks}`))
-          console.log(chalk.gray(`  • Files modified: ${result.stats.filesModified}`))
-        }
-      } else {
-        console.error(chalk.red(`❌ ${result.message}`))
-        process.exitCode = 1
-      }
+      displayUpdateLinkResults(result)
     } catch (err) {
       console.error(chalk.red(`Failed to update links: ${String(err)}`))
       process.exitCode = 1

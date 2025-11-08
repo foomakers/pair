@@ -18,6 +18,8 @@ export {
 
 export { logger, setLogLevel, getLogLevel, LogLevel } from './observability'
 export { detectRepoRoot, convertToRelative, convertToAbsolute } from './path-resolution'
+export { StatsCollector, formatSummary, formatJSON } from './reporting'
+export type { LinkStats, FormatOptions } from './reporting'
 
 export {
   BackupService,

@@ -343,3 +343,43 @@ describe('update-link command - KB detection consistency', () => {
     expect(result.message).toContain('No Knowledge Base')
   })
 })
+
+describe('update-link command - summary reporting', () => {
+  it('should include linksByCategory in stats when links are transformed', async () => {
+    const mdPath = `${realCwd}/.pair/README.md`
+    const mdContent = '[Rel](./doc.md) [Abs](/abs/path.md)'
+    const fs = createTestFsWithKB({ [mdPath]: mdContent })
+
+    const result = await updateLinkCommand(fs, ['--absolute'], {})
+
+    expect(result.success).toBe(true)
+    expect(result.stats?.linksByCategory).toBeDefined()
+    expect(result.stats?.linksByCategory?.['relative→absolute']).toBeGreaterThan(0)
+  })
+
+  it('should report totalLinks and filesModified in stats', async () => {
+    const fs = createTestFsWithKB({
+      [`${realCwd}/.pair/doc1.md`]: '[Link](./test.md)',
+      [`${realCwd}/.pair/doc2.md`]: '[Another](/abs/path.md)',
+    })
+
+    const result = await updateLinkCommand(fs, ['--relative'], {})
+
+    expect(result.success).toBe(true)
+    expect(result.stats?.totalLinks).toBe(2)
+    expect(result.stats?.filesModified).toBeGreaterThan(0)
+  })
+
+  it('should provide detailed stats for dry-run mode', async () => {
+    const mdContent = '[Link1](./a.md) [Link2](/abs/b.md)'
+    const fs = createTestFsWithKB({ [`${realCwd}/.pair/test.md`]: mdContent })
+
+    const result = await updateLinkCommand(fs, ['--absolute', '--dry-run'], {})
+
+    expect(result.success).toBe(true)
+    expect(result.dryRun).toBe(true)
+    expect(result.stats?.totalLinks).toBe(2)
+    // Dry-run should not modify files
+    expect(result.stats?.filesModified).toBe(0)
+  })
+})
