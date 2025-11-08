@@ -3,7 +3,7 @@
 ## 🌟 Product Context
 
 **Product Name:** pair
-**Version:** 0.0.1-wip
+**Version:** 0.2.0
 **Owner:** Foomakers
 
 ### Vision

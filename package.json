@@ -6,6 +6,7 @@
   "scripts": {
     "test": "turbo test",
     "test:coverage": "turbo test:coverage",
+    "test:perf": "node scripts/perf/benchmark-update-link.js",
     "ts:check": "turbo ts:check",
     "build": "turbo build",
     "lint": "turbo lint",

@@ -75,6 +75,7 @@ pair-cli update-link --verbose
 ```
 
 **Common Scenarios:**
+
 - **After project restructure**: `pair-cli update-link` to fix broken links
 - **After moving project**: `pair-cli update-link --absolute` for portability
 - **Link health check**: `pair-cli update-link --dry-run --verbose` to inspect

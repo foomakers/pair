@@ -16,3 +16,5 @@ tsconfig.*tsbuildinfo
 release/
 !scripts/workflows/release
 .tmp/
+.benchmark-tmp/
+docs/performance/benchmark-report.json
