@@ -1,209 +1,164 @@
 # Task Template
 
+> **Note**: This template is used to document individual tasks within the Task Breakdown section of a User Story.
+> Tasks are appended to the story body using this format.
+
 ## Task Information
 
 **Task ID:** [T-XXX]  
-**Parent Story:** [US-XXX - Link to parent user story]  
-**Sprint:** [Sprint number/name]  
-**Assignee:** [Developer/team member name]  
-**Reporter:** [Person who created the task]  
-**Priority:** [High/Medium/Low or P0/P1/P2]  
-**Estimated Hours:** [Time estimate in hours]  
-**Status:** [To Do/In Progress/In Review/Done/Blocked]
+**Priority:** [P0/P1/P2]  
+**Estimated Hours:** [Time estimate]  
+**Bounded Context:** [Specific implementation domain]
 
-## Task Description
+## Summary
 
-### Summary
 [Clear, concise description of what needs to be accomplished]
 
-### Detailed Description
-[More comprehensive explanation of the task requirements, context, and expected outcomes]
+## Task Type
 
-### Task Type
-- [ ] **Feature Implementation** - New functionality development
-- [ ] **Bug Fix** - Correcting identified issues or defects
-- [ ] **Refactoring** - Code improvement without behavior changes
-- [ ] **Testing** - Test creation, execution, or automation
-- [ ] **Documentation** - Creating or updating documentation
-- [ ] **Configuration** - Setup, deployment, or environment tasks
-- [ ] **Research** - Investigation, spike, or proof of concept
+**Type:** [Feature Implementation | Bug Fix | Refactoring | Testing | Documentation | Configuration | Research]
+
+## Description
+
+[Comprehensive explanation of task requirements, context, and expected outcomes]
 
 ## Acceptance Criteria
 
-### Task Completion Criteria
-- [ ] **Primary deliverable:** [Main output or result expected]
-- [ ] **Quality standard:** [Code quality, test coverage, or documentation standard]
-- [ ] **Integration requirement:** [How this integrates with existing system]
-- [ ] **Verification method:** [How completion will be verified]
+**Completion Criteria:**
 
-### Technical Requirements
-- [ ] **Functionality:** [Specific functional requirements]
-- [ ] **Performance:** [Performance or efficiency requirements]
-- [ ] **Security:** [Security considerations or requirements]
-- [ ] **Compatibility:** [Browser, platform, or system compatibility]
+- **Primary deliverable:** [Main output or result expected]
+- **Quality standard:** [Code quality, test coverage, or documentation standard]
+- **Integration requirement:** [How this integrates with existing system]
+- **Verification method:** [How completion will be verified]
+
+**Technical Requirements:**
+
+- **Functionality:** [Specific functional requirements]
+- **Performance:** [Performance or efficiency requirements]
+- **Security:** [Security considerations or requirements]
+- **Compatibility:** [Browser, platform, or system compatibility]
 
 ## Implementation Approach
 
-### Technical Design
+**Technical Design:**
 [High-level approach to implementing the task]
 
-### Files to Modify/Create
-- [ ] **File 1:** `path/to/file.ext` - [Purpose of changes]
-- [ ] **File 2:** `path/to/file.ext` - [What will be modified]
-- [ ] **File 3:** `path/to/file.ext` - [New file creation purpose]
+**Bounded Context & Modules:**
 
-### Dependencies
-- [ ] **Technical dependency:** [Required library, service, or component]
-- [ ] **Task dependency:** [Other tasks that must be completed first]
-- [ ] **Resource dependency:** [Required access, credentials, or permissions]
+- **Bounded Context:** [Specific context for implementation]
+- **Affected Modules:** [Specific components that will be modified]
 
-### Risks & Considerations
-- **Risk 1:** [Potential technical risk or challenge]
-- **Risk 2:** [Integration or compatibility concern]
-- **Risk 3:** [Timeline or resource constraint]
+**Files to Modify/Create:**
 
-## Development Workflow
+- `path/to/file.ext` - [Purpose of changes]
+- `path/to/file.ext` - [What will be modified]
+- `path/to/file.ext` - [New file creation purpose]
 
-### TDD Approach (for code tasks)
-1. **RED Phase:** Write failing tests for required functionality
-2. **GREEN Phase:** Implement minimal code to make tests pass
-3. **REFACTOR Phase:** Improve code structure while maintaining tests
+**Technical Standards References:**
 
-### Implementation Steps
-1. [ ] **Step 1:** [Specific action or milestone]
-2. [ ] **Step 2:** [Next implementation step]
-3. [ ] **Step 3:** [Subsequent development action]
-4. [ ] **Step 4:** [Testing or validation step]
-5. [ ] **Step 5:** [Documentation or cleanup step]
+- [Link to relevant Architecture Guidelines section]
+- [Link to relevant Code Design Guidelines section]
+- [Link to relevant Testing Strategy section]
 
-### Testing Strategy
-- [ ] **Unit Tests:** [Required unit test coverage and scenarios]
-- [ ] **Integration Tests:** [Integration testing requirements]
-- [ ] **Manual Testing:** [Manual verification steps needed]
-- [ ] **Performance Testing:** [Performance validation requirements]
+## Dependencies
 
-## Code Quality Standards
+**Technical Dependencies:**
 
-### Code Review Checklist
-- [ ] Code follows established style guides and conventions
-- [ ] All functions and classes have appropriate documentation
-- [ ] Error handling is implemented for edge cases
-- [ ] Security best practices are followed
-- [ ] Performance considerations are addressed
+- [Required library, service, or component]
 
-### Test Coverage Requirements
-- [ ] **Minimum coverage:** [Percentage or specific areas]
-- [ ] **Critical path testing:** [Key functionality must be tested]
-- [ ] **Edge case coverage:** [Boundary conditions and error scenarios]
+**Task Dependencies:**
 
-## Version Control & Documentation
+- [Other tasks that must be completed first]
 
-### Branch Management
-- [ ] **Branch naming:** `[type]/[story-code]/[task-description]`
-  - Example: `feature/US-123/user-authentication`
-- [ ] **Commit strategy:** [Single commit, atomic commits, or squash merge]
-- [ ] **Merge strategy:** [PR/MR process and approval requirements]
+**Resource Dependencies:**
 
-### Commit Message Template
-```
-[STORY_CODE] [type]: [task description]
+- [Required access, credentials, or permissions]
 
-- [Change 1: specific modification made]
-- [Change 2: another change in this commit]
-- [Change 3: additional change if applicable]
+## Implementation Steps
 
-Refs: #[TASK_ID]
-```
+1. **Step 1:** [Specific action or milestone]
+2. **Step 2:** [Next implementation step]
+3. **Step 3:** [Subsequent development action]
+4. **Step 4:** [Testing or validation step]
+5. **Step 5:** [Documentation or cleanup step]
 
-### Documentation Updates
-- [ ] **API Documentation:** [Required API doc updates]
-- [ ] **README Updates:** [README modifications needed]
-- [ ] **Code Comments:** [Inline documentation requirements]
-- [ ] **Architecture Docs:** [Architectural documentation updates]
+## Testing Strategy
 
-## Definition of Done
+**Unit Tests:** [Required unit test coverage and scenarios]  
+**Integration Tests:** [Integration testing requirements]  
+**Manual Testing:** [Manual verification steps needed]
 
-### Development Complete
-- [ ] All acceptance criteria implemented and verified
-- [ ] Code written following TDD methodology
-- [ ] Unit tests created with required coverage
-- [ ] Integration tests passing
-- [ ] Code reviewed and approved by team member
+## Notes
 
-### Quality Assurance
-- [ ] Manual testing completed successfully
-- [ ] Performance requirements validated
-- [ ] Security scanning completed (if applicable)
-- [ ] Cross-browser/platform testing completed
-
-### Documentation & Communication
-- [ ] Code properly documented and commented
-- [ ] README or relevant documentation updated
-- [ ] Changes communicated to relevant stakeholders
-- [ ] Knowledge transfer completed (if needed)
-
-### Deployment Ready
-- [ ] Code merged to appropriate branch
-- [ ] Build pipeline passing all checks
-- [ ] Deployment configuration updated (if needed)
-- [ ] Feature flag configured (if applicable)
-
-## Communication & Collaboration
-
-### Stakeholders
-- **Assignee:** [Primary person responsible]
-- **Reviewer:** [Code reviewer(s)]
-- **Product Owner:** [For acceptance and validation]
-- **Technical Lead:** [For technical guidance]
-
-### Progress Updates
-- [ ] **Daily standup updates:** Progress and blockers reported
-- [ ] **Midpoint check-in:** Status update at 50% completion
-- [ ] **Completion notification:** Stakeholders informed when done
-
-### Knowledge Sharing
-- [ ] **Technical decisions documented:** Architecture or design choices
-- [ ] **Lessons learned captured:** For future similar tasks
-- [ ] **Best practices shared:** With team members
-
-## Time Tracking & Estimation
-
-### Estimate Breakdown
-- **Analysis & Planning:** [Hours] - Understanding requirements and planning approach
-- **Implementation:** [Hours] - Core development work
-- **Testing:** [Hours] - Unit, integration, and manual testing
-- **Documentation:** [Hours] - Code comments, docs, and knowledge sharing
-- **Review & Fixes:** [Hours] - Code review feedback and corrections
-
-### Actual Time Tracking
-| Date | Hours | Activity | Notes |
-|------|--------|----------|-------|
-| [Date] | [Hours] | [Activity description] | [Progress notes] |
-
-### Estimation Accuracy
-- **Original Estimate:** [Total hours]
-- **Actual Time:** [Total hours spent]
-- **Variance:** [Difference and reasons]
-- **Lessons Learned:** [For future estimation improvement]
+[Space for technical decisions, implementation details, or architectural choices]
 
 ---
 
-## Notes & Updates
+## Task Breakdown Format for Story Body
 
-### Technical Notes
-[Space for technical decisions, implementation details, or architectural choices]
+When appending tasks to a User Story, use this format:
 
-### Change Log
-| Date | Change | Reason | Updated By |
-|------|---------|---------|------------|
-| [Date] | [Description of change] | [Rationale] | [Person] |
+```markdown
+## Task Breakdown
 
-### Blockers & Issues
-| Date | Blocker/Issue | Impact | Resolution |
-|------|---------------|--------|------------|
-| [Date] | [Description] | [Impact level] | [How resolved] |
+- [ ] **T-1**: [Task title]
+- [ ] **T-2**: [Task title]
+- [ ] **T-3**: [Task title]
 
-### Related Tasks
-- [Link to related or dependent tasks]
-- [Link to follow-up tasks or future work]
-- [Link to tasks that provide context]
+---
+
+### T-1: [Task title]
+
+**Priority:** P0 | **Estimated Hours:** 4h | **Bounded Context:** [Context]
+
+**Summary:** [Brief description]
+
+**Type:** Feature Implementation
+
+**Description:** [Detailed explanation]
+
+**Acceptance Criteria:**
+
+- Primary deliverable: [Deliverable]
+- Quality standard: [Standard]
+- Integration requirement: [Requirement]
+- Verification method: [Method]
+
+**Technical Requirements:**
+
+- Functionality: [Requirements]
+- Performance: [Requirements]
+- Security: [Requirements]
+
+**Implementation Approach:**
+
+- Technical Design: [Approach]
+- Bounded Context & Modules: [Context and modules]
+- Files to Modify/Create:
+  - `path/to/file` - [Purpose]
+- Technical Standards: [Links to guidelines]
+
+**Dependencies:**
+
+- Technical: [Dependencies]
+- Tasks: [Task dependencies]
+
+**Implementation Steps:**
+
+1. [Step 1]
+2. [Step 2]
+3. [Step 3]
+
+**Testing Strategy:**
+
+- Unit Tests: [Coverage]
+- Integration Tests: [Requirements]
+
+**Notes:** [Any additional context]
+
+---
+
+### T-2: [Task title]
+
+[Repeat format for each task]
+```

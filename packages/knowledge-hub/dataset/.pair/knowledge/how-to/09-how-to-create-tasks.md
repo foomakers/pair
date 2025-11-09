@@ -178,28 +178,28 @@ TASK CREATION STATE:
 
 ### Phase 6: Documentation & Tool Creation
 
-**Objective**: Document tasks using template and create in project management tool.
+**Objective**: Document tasks using template and append to story body.
 
-1. **Document Individual Tasks**:
+1. **Format Task Breakdown Section**:
 
-   - Follow [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) precisely
-   - Include bounded context, technical standards, and module specifications
+   Create a task breakdown section with:
+
+   - Checkbox list of all tasks with IDs and titles (for status tracking)
+   - Detailed documentation for each task following [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md)
+
+2. **Append to Story Body**:
+
+   Add task breakdown to end of user story body (do not modify existing content):
+
+   - Use checkbox list format: `- [ ] **T-N**: [Task title]`
+   - Follow template structure for each task detail section
+   - Checkboxes only in task list, not in task details
+
+3. **Template Compliance**:
+
+   - Follow [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) structure precisely
+   - Include: bounded context, technical standards, module specifications
    - Reference specific guideline sections for implementation
-
-2. **Create in Project Management Tool**:
-
-   - Follow tool-specific format per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
-   - Establish proper Story → Task hierarchy linking
-   - Update story with task breakdown section
-
-3. **Update Story Documentation**:
-
-   ```
-   Append to user story (do not modify existing content):
-
-   ## Task Breakdown
-   [List of created tasks with IDs and brief descriptions]
-   ```
 
 **Template Reference**: [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md)
 
@@ -235,9 +235,9 @@ TASK CREATION STATE:
 - [ ] Task identification using acceptance criteria mapping
 - [ ] All tasks specify bounded context and affected modules
 - [ ] Technical standards properly referenced in each task
-- [ ] Complete [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) used
-- [ ] Tool hierarchy properly established per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
-- [ ] Story coverage validated and status updated
+- [ ] Task breakdown appended to story body with checkbox list and detailed documentation
+- [ ] Template structure followed for each task detail section
+- [ ] Story coverage validated - all acceptance criteria addressed
 - [ ] Session state maintained throughout process
 
 ## Best Practices
@@ -249,8 +249,9 @@ TASK CREATION STATE:
 - **Apply bounded context mapping consistently** - every task must specify implementation domain
 - **Use adopted technical standards religiously** - reference specific guideline sections
 - **Maintain clear module scope** - specify exactly which components will be modified
-- **Follow task template precisely** - use all required fields and structure
-- **Establish proper tool hierarchy** - Story → Task linkage per PM tool guidelines
+- **Follow task template structure** - use consistent format for all task details
+- **Append to story body** - add task breakdown section to end of user story
+- **Use checkboxes only for task list** - checkboxes track status, not in detailed documentation
 - **Focus on implementation clarity** - provide enough detail to avoid architectural decisions during development
 - **Include dependency identification** - capture task dependencies within story
 - **Preserve story context throughout** - maintain connection to acceptance criteria and epic objectives
@@ -265,8 +266,9 @@ TASK CREATION STATE:
 - **Don't reinvent technical solutions** - always reference adopted standards and patterns
 - **Don't create oversized tasks** - keep tasks focused on single implementation concerns
 - **Don't forget technical standards** - every task must reference relevant guidelines
-- **Don't skip template compliance** - task documentation must follow template precisely
-- **Don't bypass tool integration** - proper PM tool documentation is mandatory
+- **Don't skip template structure** - task documentation must follow consistent format
+- **Don't modify existing story content** - only append task breakdown section
+- **Don't use checkboxes in task details** - checkboxes only in task list for status tracking
 - **Don't assume implementation details** - provide clear technical guidance with references
 - **Don't treat uncertainty as acceptable** - tasks must have clear implementation path
 - **Don't forget module impact** - specify which components will be affected
@@ -280,41 +282,14 @@ TASK CREATION STATE:
 | **Creating tasks without bounded context**         | Implementation confusion and scope creep                           | Map each task to specific bounded context and affected modules |
 | **Ignoring adopted technical standards**           | Inconsistent implementation and technical debt                     | Reference specific guideline sections in every task            |
 | **Missing technical specification**                | Developers must make architectural decisions during implementation | Provide clear technical guidance with standard references      |
-| **Poor task template compliance**                  | Incomplete task documentation and tracking issues                  | Follow task template precisely with all required fields        |
-| **Weak tool integration**                          | Lost traceability and coordination problems                        | Establish proper Story → Task hierarchy in PM tool             |
+| **Inconsistent task documentation format**         | Confusion and lost information                                     | Follow template structure consistently for all task details    |
+| **Using checkboxes in task details**               | Cluttered documentation and status confusion                       | Checkboxes only in task list at top, not in detailed sections  |
+| **Modifying existing story content**               | Lost original story information                                    | Only append task breakdown section, never modify existing text |
 | **Over-detailed implementation**                   | Premature optimization and inflexible approach                     | Focus on clear guidance while referencing standards            |
 | **Inconsistent module specification**              | Unclear scope leading to regression risks                          | Specify exactly which components will be modified              |
 | **Dependency blindness**                           | Development blocking and sprint planning issues                    | Identify task dependencies and implementation order            |
 | **Forgetting non-standard solutions**              | Technical debt and inconsistent patterns                           | Document alternatives with ADR requirements when needed        |
 | **Poor coverage validation**                       | Missing functionality discovered during development                | Map all acceptance criteria to specific tasks                  |
-
-### Don'ts ❌
-
-- **Never skip backlog analysis** - always propose stories based on readiness and priority
-- **Don't create tasks without technical references** - always link to established patterns
-- **Don't ignore acceptance criteria** - ensure every AC is addressed by specific tasks
-- **Don't reinvent solutions** - reference knowledge base and adoption guidelines first
-- **Don't create oversized tasks** - keep tasks completable in a few hours
-- **Don't forget alternative documentation** - document non-standard approaches with justification
-- **Don't skip ADR creation** - alternative technical decisions require architectural decision records
-- **Don't ignore dependencies** - identify and plan for task execution order
-- **Don't separate technical layers artificially** - maintain cohesive implementation approach
-- **Don't assume technical knowledge** - provide clear implementation guidance with references
-
-## Common Pitfalls and Solutions
-
-| Pitfall                                | Impact                            | Solution                                                         |
-| -------------------------------------- | --------------------------------- | ---------------------------------------------------------------- |
-| **Skipping backlog analysis**          | Working on wrong priority stories | Always analyze TODO stories and propose based on readiness       |
-| **Tasks without technical references** | Inconsistent implementation       | Reference specific sections from knowledge base and adoptions    |
-| **Ignoring acceptance criteria**       | Incomplete story implementation   | Map every AC to specific tasks with clear traceability           |
-| **Oversized task creation**            | Implementation bottlenecks        | Keep tasks to 2-4 hours maximum with clear completion criteria   |
-| **Missing alternative documentation**  | Lost technical decision context   | Document standard and alternative approaches with justification  |
-| **Skipping ADR creation**              | Inconsistent technical decisions  | Create ADRs for all non-standard technical approaches            |
-| **Undefined task dependencies**        | Implementation blocking issues    | Identify and plan task execution order and prerequisites         |
-| **Weak implementation guidance**       | Developer confusion and delays    | Provide clear "what to implement" with specific technical links  |
-| **Standard reference gaps**            | Technical inconsistency           | Ensure all tasks reference appropriate knowledge base guidelines |
-| **Poor sprint integration planning**   | Capacity and timeline issues      | Validate task sizing and dependencies against sprint capacity    |
 
 ---
 
