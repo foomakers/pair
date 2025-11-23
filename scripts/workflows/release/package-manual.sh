@@ -198,14 +198,15 @@ if [ -f "$PKG_DIR/dist/cli.js" ]; then
   else
     (cd "$PKG_DIR" && npx @vercel/ncc build "dist/cli.js" -o "$RELEASE_DIR/bundle-cli" --source-map) || { echo "ncc bundling failed"; exit 1; }
   fi
-  # Include dataset if present in the repo
-  if [ -d "$ROOT_DIR/packages/knowledge-hub/dataset" ]; then
-    if [ "$DRY_RUN" = true ]; then
-      echo "[dry-run] would copy dataset to $RELEASE_DIR/bundle-cli/"
-    else
-      cp -R "$ROOT_DIR/packages/knowledge-hub/dataset" "$RELEASE_DIR/bundle-cli/" || { echo "Failed to copy dataset"; exit 1; }
-    fi
-  fi
+  
+  # NOTE: Dataset no longer included in bundle - KB manager downloads it on first run
+  # if [ -d "$ROOT_DIR/packages/knowledge-hub/dataset" ]; then
+  #   if [ "$DRY_RUN" = true ]; then
+  #     echo "[dry-run] would copy dataset to $RELEASE_DIR/bundle-cli/"
+  #   else
+  #     cp -R "$ROOT_DIR/packages/knowledge-hub/dataset" "$RELEASE_DIR/bundle-cli/" || { echo "Failed to copy dataset"; exit 1; }
+  #   fi
+  # fi
   
   # Remove unnecessary package.json from bundle-cli (created by ncc)
   if [ "$DRY_RUN" = true ]; then
