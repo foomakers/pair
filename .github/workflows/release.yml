@@ -86,6 +86,11 @@ jobs:
           chmod +x scripts/workflows/release/package-manual.sh
           ./scripts/workflows/release/package-manual.sh ${{ steps.normalize_version.outputs.version_no_v }}
 
+      - name: Create knowledge base dataset release artifact
+        run: |
+          chmod +x scripts/workflows/release/package-kb-dataset.sh
+          ./scripts/workflows/release/package-kb-dataset.sh ${{ steps.normalize_version.outputs.version_no_v }}
+
       - name: Upload release artifacts as workflow artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -93,6 +98,15 @@ jobs:
           path: |
             release/pair-cli-manual-${{ steps.normalize_version.outputs.version_no_v }}.zip
             release/pair-cli-manual-${{ steps.normalize_version.outputs.version_no_v }}.zip.sha256
+          retention-days: 30
+
+      - name: Upload knowledge base dataset artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: knowledge-base-dataset-${{ steps.normalize_version.outputs.version_no_v }}
+          path: |
+            release/knowledge-base-${{ steps.normalize_version.outputs.version_no_v }}.zip
+            release/knowledge-base-${{ steps.normalize_version.outputs.version_no_v }}.zip.sha256
           retention-days: 30
 
       - name: Create registry TGZ from manual release folder
