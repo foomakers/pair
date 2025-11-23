@@ -77,6 +77,3 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 
 All technology choices must follow these adopted standards. For process and rationale, see [way-of-working.md](../../way-of-working.md).
 
----
-
-All technology choices must follow these adopted standards. For process and rationale, see [way-of-working.md](../../way-of-working.md).

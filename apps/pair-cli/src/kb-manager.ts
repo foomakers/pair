@@ -32,14 +32,14 @@ export function getCachedKBPath(version: string): string {
 export async function isKBCached(version: string, fs?: FileSystemService): Promise<boolean> {
   try {
     const cachePath = getCachedKBPath(version)
-    if (DIAG) console.error(`[diag] Checking KB cache at ${cachePath}`)
+    logDiag(`Checking KB cache at ${cachePath}`)
     if (fs) {
       return fs.existsSync(cachePath)
     }
     // Production: use fs-extra pathExists
     const { pathExists } = await import('fs-extra')
     const exists = await pathExists(cachePath)
-    if (DIAG) console.error(`[diag] Cache ${exists ? 'hit' : 'miss'}`)
+    logDiag(`Cache ${exists ? 'hit' : 'miss'}`)
     return exists
   } catch {
     return false
@@ -54,46 +54,62 @@ export async function isKBCached(version: string, fs?: FileSystemService): Promi
  */
 export async function ensureKBAvailable(version: string, deps?: KBManagerDeps): Promise<string> {
   const cachePath = getCachedKBPath(version)
-  const fs = deps?.fs
-  const extract = deps?.extract || defaultExtract
+  const cached = await isKBCached(version, deps?.fs)
 
-  // Check cache
-  const cached = await isKBCached(version, fs)
   if (cached) {
-    if (DIAG) console.error(`[diag] Using cached KB at ${cachePath}`)
+    logDiag(`Using cached KB at ${cachePath}`)
     return cachePath
   }
 
-  // Download and install
-  if (DIAG) console.error(`[diag] KB cache miss, downloading v${version} from GitHub`)
+  return downloadAndInstallKB(version, cachePath, deps)
+}
+
+async function downloadAndInstallKB(
+  version: string,
+  cachePath: string,
+  deps?: KBManagerDeps,
+): Promise<string> {
+  const fs = deps?.fs
+  const extract = deps?.extract || defaultExtract
+  const cleanVersion = version.startsWith('v') ? version.slice(1) : version
+
+  logDiag(`KB cache miss, downloading v${version} from GitHub`)
   console.log(`KB not found, downloading v${version} from GitHub...`)
 
-  const cleanVersion = version.startsWith('v') ? version.slice(1) : version
-  const tagVersion = version.startsWith('v') ? version : `v${version}`
-  const assetName = `knowledge-base-${cleanVersion}.zip`
-  const downloadUrl = `https://github.com/foomakers/pair/releases/download/${tagVersion}/${assetName}`
+  const downloadUrl = buildDownloadUrl(version)
   const zipPath = join(tmpdir(), `kb-${cleanVersion}.zip`)
 
-  if (DIAG) console.error(`[diag] Download URL: ${downloadUrl}`)
-  if (DIAG) console.error(`[diag] Temp ZIP path: ${zipPath}`)
+  logDiag(`Download URL: ${downloadUrl}`)
+  logDiag(`Temp ZIP path: ${zipPath}`)
 
   try {
     await ensureCacheDirectory(cachePath, fs)
-    if (DIAG) console.error(`[diag] Starting KB download...`)
+    logDiag('Starting KB download...')
     await downloadFile(downloadUrl, zipPath, fs)
-    if (DIAG) console.error(`[diag] Download complete, extracting to ${cachePath}`)
+    logDiag(`Download complete, extracting to ${cachePath}`)
     await extract(zipPath, cachePath)
-    if (DIAG) console.error(`[diag] Extraction complete, cleaning up ZIP`)
+    logDiag('Extraction complete, cleaning up ZIP')
     await cleanupZip(zipPath, fs)
 
     console.log(`✅ KB v${cleanVersion} installed at ${cachePath}`)
-    if (DIAG) console.error(`[diag] KB installation successful`)
+    logDiag('KB installation successful')
     return cachePath
   } catch (error) {
-    if (DIAG) console.error(`[diag] KB installation failed: ${String(error)}`)
+    logDiag(`KB installation failed: ${String(error)}`)
     await cleanupZip(zipPath, fs)
     throw error
   }
+}
+
+function buildDownloadUrl(version: string): string {
+  const cleanVersion = version.startsWith('v') ? version.slice(1) : version
+  const tagVersion = version.startsWith('v') ? version : `v${version}`
+  const assetName = `knowledge-base-${cleanVersion}.zip`
+  return `https://github.com/foomakers/pair/releases/download/${tagVersion}/${assetName}`
+}
+
+function logDiag(message: string): void {
+  if (DIAG) console.error(`[diag] ${message}`)
 }
 
 async function defaultExtract(zipPath: string, targetPath: string): Promise<void> {
