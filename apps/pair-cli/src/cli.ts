@@ -7,6 +7,7 @@ import chalk from 'chalk'
 import { updateCommand } from './commands/update'
 import { installCommand } from './commands/install'
 import { updateLinkCommand } from './commands/update-link'
+import { packageCommand } from './commands/package'
 import { parseInstallUpdateArgs } from './commands/command-utils'
 import { fileSystemService, FileSystemService, Behavior, setLogLevel } from '@pair/content-ops'
 import {
@@ -109,6 +110,9 @@ async function main() {
   await ensureKBAvailableOnStartup(fileSystemService, pkg.version)
 
   checkKnowledgeHubDatasetAccessible(fileSystemService)
+
+  // Register package command
+  packageCommand(program)
 
   program.parse(process.argv)
 }
