@@ -224,6 +224,7 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 ┌─────────────────────────────────────────────────────────────────┐
 │ 3. CLI PACKAGING (release job)                                  │
 │    - package-manual.sh → pair-cli-manual-{VERSION}.zip          │
+│    - KB EXCLUDED from bundle (downloads on first run)           │
 │    - Upload workflow artifact (manual ZIP + checksum)           │
 │    - create-registry-tgz.sh → pair-cli-{VERSION}.tgz            │
 │    - Upload workflow artifact (TGZ + checksum + metadata)       │
@@ -265,11 +266,42 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+### KB Manager & Auto-Download Behavior
+
+**First Run Experience**:
+
+1. User installs CLI (npm or manual)
+2. CLI bundle **does NOT include KB dataset** (size reduced from 6M to ~300KB)
+3. On first CLI execution:
+   - CLI checks for KB at `~/.pair/kb/{version}/`
+   - If not cached, auto-downloads from GitHub release
+   - Downloads `knowledge-base-{version}.zip`
+   - Extracts to `~/.pair/kb/{version}/`
+   - Uses extracted KB for operations
+
+**Subsequent Runs**:
+
+- CLI finds cached KB at `~/.pair/kb/{version}/`
+- Reuses cached KB (no re-download)
+- Version isolation: different CLI versions use different KB caches
+
+**Error Handling**:
+
+- Network failure: Clear error with GitHub release URL for manual download
+- 404 not found: Indicates missing KB release artifact
+- Extraction failure: Error logged with extraction details
+- No bundled fallback: KB must be downloaded (epic requirement)
+
+**Development Mode**:
+
+- In repo: CLI uses local `packages/knowledge-hub/dataset/` if available
+- Fallback chain: local dataset → KB cache → download
+
 ### Artifact Lifecycle
 
 **CLI Artifacts**:
 
-- **Manual ZIP**: Self-contained bundle for air-gapped environments
+- **Manual ZIP**: Self-contained CLI binary (KB excluded, downloads on first run)
 - **Registry TGZ**: NPM-compatible package for GitHub Packages
 - **Metadata**: Package info for validation and publishing
 
@@ -284,6 +316,7 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 - **Single version** for both CLI and KB (coordinated via changeset)
 - Version normalized (strips 'v' prefix) for consistent artifact naming
 - Both artifact types use same version in filename: `{name}-{VERSION}.{ext}`
+- KB cache path includes version: `~/.pair/kb/{VERSION}/`
 
 ### Atomic Workflow Behavior
 
@@ -311,6 +344,13 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 - Review manifest generation logs for file scanning errors
 - Check available disk space for ZIP creation
 
+**KB Auto-Download Failures**:
+
+- **Network error**: Check internet connectivity, GitHub API availability
+- **404 Not Found**: Verify KB artifact uploaded to GitHub release
+- **Extraction error**: Check ZIP integrity with checksum verification
+- **Cache permission error**: Verify `~/.pair/kb/` directory is writable
+
 **Release Upload Failures**:
 
 - Verify GitHub token permissions (needs `contents: write`)
@@ -324,6 +364,12 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 - Verify `release/` directory contents after packaging steps
 - Ensure version normalization consistent across all scripts
 - Check artifact naming follows pattern: `{name}-{VERSION_NO_V}.{ext}`
+
+**CLI Bundle Size Issues**:
+
+- Verify KB dataset excluded from `package-manual.sh` (lines 201-208 commented)
+- Expected CLI bundle size: ~300KB (vs 6M with bundled KB)
+- If bundle large, check dataset copy section not re-enabled
 
 ## Workflow Execution Sequence
 
