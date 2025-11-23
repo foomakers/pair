@@ -1,6 +1,6 @@
 ---
 description: Create and prioritize strategic initiatives based on PRD and business objectives
-mode: product-manager
+agent: product-manager
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*']
 ---
 

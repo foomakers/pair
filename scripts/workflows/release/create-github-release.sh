@@ -76,27 +76,46 @@ else
 
   NOTES_FILE=$(mktemp)
   {
-    echo '## Manual Installation Artifacts'
+    echo '## Release Artifacts'
     echo ''
-    echo 'This release includes bundled artifacts for manual installation in air-gapped or restricted environments.'
+    echo 'This release includes two bundled artifacts:'
     echo ''
-    echo '### Downloads'
+    echo '### 1. Pair CLI - Manual Installation'
+    echo ''
+    echo 'For manual installation in air-gapped or restricted environments.'
+    echo ''
+    echo '**Downloads:**'
     echo "- **ZIP Archive**: \`pair-cli-manual-${VERSION}.zip\`"
     echo "- **SHA256 Checksum**: \`pair-cli-manual-${VERSION}.zip.sha256\`"
     echo ''
-    echo '### Installation Instructions'
+    echo '**Installation Instructions:**'
     echo ''
     echo '1. Download the ZIP archive'
     echo "2. Verify the checksum: \`sha256sum pair-cli-manual-${VERSION}.zip\`"
     echo '3. Extract the archive'
     echo '4. Run the executable: \`./pair-cli --help\`'
     echo ''
-    echo '### What'\''s Included'
+    echo '**What'\''s Included:**'
     echo '- Self-contained Node.js bundle (no external dependencies required)'
     echo '- Cross-platform executables (Linux/macOS/Windows)'
     echo '- TypeScript definitions'
     echo '- Configuration files'
     echo '- Documentation and license'
+    echo ''
+    echo '### 2. Knowledge Base Dataset'
+    echo ''
+    echo 'Complete knowledge base dataset for AI agent context.'
+    echo ''
+    echo '**Downloads:**'
+    echo "- **ZIP Archive**: \`knowledge-base-${VERSION}.zip\`"
+    echo "- **SHA256 Checksum**: \`knowledge-base-${VERSION}.zip.sha256\`"
+    echo ''
+    echo '**Contents:**'
+    echo '- Project documentation and guides'
+    echo '- AI agent configuration files'
+    echo '- Technical architecture decisions'
+    echo '- Code design guidelines'
+    echo '- Manifest with file inventory and checksums'
     echo ''
     echo 'For more details, see [RELEASE.md](docs/RELEASE.md) and [CLI README](apps/pair-cli/README.md).'
   } > "$NOTES_FILE"
@@ -161,6 +180,10 @@ upload_asset "pair-cli-manual" ".zip.sha256" || true
 upload_asset "pair-cli" ".tgz" || true
 upload_asset "pair-cli" ".tgz.sha256" || true
 upload_asset "pair-cli" ".meta.json" || true
+
+# Upload knowledge base dataset and checksum
+upload_asset "knowledge-base" ".zip" || true
+upload_asset "knowledge-base" ".zip.sha256" || true
 
 if [ "$DRY_RUN" = true ]; then
   echo "[DRY RUN] All assets would be uploaded successfully."

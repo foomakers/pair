@@ -16,7 +16,7 @@ const TEST_DEFAULT_CONFIG = {
     github: {
       source: '.github',
       behavior: 'mirror' as const,
-      include: ['/chatmodes', '/workflows'],
+      include: ['/agents', '/workflows'],
       target_path: '.github-copy',
       description: 'GitHub workflows and configuration files',
     },

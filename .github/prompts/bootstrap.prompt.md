@@ -1,6 +1,6 @@
 ---
 description: Complete the bootstrap checklist to set up project foundation and structure
-mode: product-manager
+agent: product-manager
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*', 'runCommands']
 ---
 

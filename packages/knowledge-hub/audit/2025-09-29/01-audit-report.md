@@ -41,9 +41,9 @@ Located at: `packages/knowledge-hub/dataset/.pair/`
   - `guidelines/` (25 files)
   - `how-to/` (13 files)
 
-### GitHub Chatmodes (3 files)
+### GitHub Agents (3 files)
 
-Located at: `packages/knowledge-hub/dataset/.github/chatmodes/`
+Located at: `packages/knowledge-hub/dataset/.github/agents/`
 
 ## Content Synchronization Status
 

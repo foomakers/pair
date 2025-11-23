@@ -12,6 +12,7 @@ import { fileSystemService, FileSystemService, Behavior, setLogLevel } from '@pa
 import {
   validateConfig,
   getKnowledgeHubDatasetPath,
+  getKnowledgeHubDatasetPathWithFallback,
   loadConfigWithOverrides,
   isInRelease,
 } from './config-utils'
@@ -53,6 +54,33 @@ if (DIAG) {
   }
 }
 
+async function ensureKBAvailableOnStartup(
+  fsService: FileSystemService,
+  version: string,
+): Promise<void> {
+  try {
+    // Try to get local dataset first
+    const datasetPath = getKnowledgeHubDatasetPath(fsService)
+    if (fsService.existsSync(datasetPath)) {
+      if (DIAG) console.error('[diag] Using local dataset')
+      return
+    }
+  } catch {
+    // Local dataset not available, will fallback to KB manager
+    if (DIAG) console.error('[diag] Local dataset not available, using KB manager')
+  }
+
+  // Fallback to KB manager
+  try {
+    const datasetPath = await getKnowledgeHubDatasetPathWithFallback(fsService, version)
+    if (DIAG) console.error(`[diag] KB dataset available at: ${datasetPath}`)
+  } catch (err) {
+    console.error(chalk.red(`[startup] Failed to ensure KB available: ${err}`))
+    process.exitCode = 1
+    process.exit(1)
+  }
+}
+
 export function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService): void {
   try {
     const datasetPath = getKnowledgeHubDatasetPath(fsService)
@@ -76,7 +104,19 @@ export function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService)
   }
 }
 
-checkKnowledgeHubDatasetAccessible(fileSystemService)
+async function main() {
+  // Ensure KB is available before running commands
+  await ensureKBAvailableOnStartup(fileSystemService, pkg.version)
+
+  checkKnowledgeHubDatasetAccessible(fileSystemService)
+
+  program.parse(process.argv)
+}
+
+main().catch(err => {
+  console.error(chalk.red(`Fatal error: ${err}`))
+  process.exit(1)
+})
 
 interface AssetRegistryConfig {
   source?: string
@@ -478,5 +518,3 @@ program.action(() => {
     chalk.gray('💡 Tip: Use "pair install --list-targets" to see available asset registries'),
   )
 })
-
-program.parse(process.argv)

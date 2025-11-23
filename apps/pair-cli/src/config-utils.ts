@@ -1,5 +1,6 @@
 import { join, dirname } from 'path'
 import { Behavior, FileSystemService } from '@pair/content-ops'
+import { isKBCached, ensureKBAvailable } from './kb-manager'
 
 // Define proper types for configuration
 export interface RegistryConfig {
@@ -286,6 +287,53 @@ export function getKnowledgeHubDatasetPath(fsService: FileSystemService): string
         datasetPath,
       )}`,
     )
+  return datasetPath
+}
+
+/**
+ * Get knowledge hub dataset path with KB manager fallback
+ * @param fsService File system service
+ * @param version CLI version for KB download
+ * @param isKBCachedFn Optional KB cache check function (for testing)
+ * @param ensureKBAvailableFn Optional KB ensure function (for testing)
+ * @returns Path to dataset directory
+ */
+/* eslint-disable complexity */
+export async function getKnowledgeHubDatasetPathWithFallback(
+  fsService: FileSystemService,
+  version: string,
+  isKBCachedFn: typeof isKBCached = isKBCached,
+  ensureKBAvailableFn: typeof ensureKBAvailable = ensureKBAvailable,
+): Promise<string> {
+  const currentDir = fsService.rootModuleDirectory()
+  const diagEnv = process.env['PAIR_DIAG']
+  const DIAG = diagEnv === '1' || diagEnv === 'true'
+
+  if (DIAG) console.error(`[diag] getKnowledgeHubDatasetPathWithFallback currentDir=${currentDir}`)
+
+  // Try local dataset first
+  try {
+    const localDatasetPath = getKnowledgeHubDatasetPath(fsService)
+    if (fsService.existsSync(localDatasetPath)) {
+      if (DIAG) console.error(`[diag] Using local dataset: ${localDatasetPath}`)
+      return localDatasetPath
+    }
+  } catch (err) {
+    if (DIAG) console.error(`[diag] Local dataset not found: ${String(err)}`)
+  }
+
+  // Fallback to KB manager
+  if (DIAG) console.error(`[diag] Checking KB cache for version ${version}`)
+  const cached = await isKBCachedFn(version, fsService)
+
+  if (!cached) {
+    if (DIAG) console.error(`[diag] KB not cached, downloading...`)
+  }
+
+  const kbPath = await ensureKBAvailableFn(version, { fs: fsService })
+  const datasetPath = join(kbPath, 'dataset')
+
+  if (DIAG) console.error(`[diag] Using KB dataset: ${datasetPath}`)
   return datasetPath
 }
 

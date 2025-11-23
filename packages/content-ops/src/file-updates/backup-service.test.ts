@@ -7,7 +7,7 @@ function createTestFileService(): InMemoryFileSystemService {
   return new InMemoryFileSystemService(
     {
       '.github/prompts/test.md': '# Test Prompt',
-      '.github/chatmodes/test.md': '# Test Chatmode',
+      '.github/agents/test.md': '# Test Agent',
       '.pair/knowledge/guide.md': '# Knowledge Guide',
       '.pair/adoption/readme.md': '# Adoption README',
       'AGENTS.md': '# Agents Guide',
@@ -35,10 +35,10 @@ describe('BackupService - Backup Path Format', () => {
     const backupPath = await backupService.createRegistryBackup('github', '.github')
 
     const promptBackup = `${backupPath}/prompts/test.md`
-    const chatmodeBackup = `${backupPath}/chatmodes/test.md`
+    const agentBackup = `${backupPath}/agents/test.md`
 
     expect(await fileService.readFile(promptBackup)).toBe('# Test Prompt')
-    expect(await fileService.readFile(chatmodeBackup)).toBe('# Test Chatmode')
+    expect(await fileService.readFile(agentBackup)).toBe('# Test Agent')
   })
 
   it('should create backup for knowledge registry', async () => {

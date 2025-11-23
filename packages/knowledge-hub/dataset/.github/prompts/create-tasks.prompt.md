@@ -1,6 +1,6 @@
 ---
 description: Create specific, actionable development tasks from refined user stories
-mode: product-engineer
+agent: product-engineer
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*']
 ---
 

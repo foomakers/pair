@@ -50,7 +50,7 @@ Normalized full links: 0
 
 ### **4. UI/UX Impact Assessment ✅**
 
-- [x] **Chatmode Prompts**: No obsolete path references in `.github/prompts/`
+- [x] **Agent Prompts**: No obsolete path references in `.github/prompts/`
 - [x] **README Updates**: Navigation updated where needed
 - [x] **Documentation Flow**: User journey through docs maintained
 - [x] **Discoverability**: New structure improves content discovery
