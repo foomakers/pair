@@ -11,6 +11,14 @@
 - No formal scalability or performance constraints are adopted.
 - No external integrations are required for initial release.
 
+## Knowledge Base Distribution
+
+- KB dataset is distributed separately from CLI bundle as GitHub release artifact.
+- CLI auto-downloads KB on first run from GitHub releases (default) or custom URL.
+- KB cache location: `~/.pair/kb/{version}/` (version-specific isolation).
+- Fallback chain: cache hit → default GitHub release → custom URL (via `--url` flag).
+- Version coordination: CLI version maps to KB version (e.g. CLI v0.2.0 → KB v0.2.0).
+
 ---
 
 All architectural implementations must follow these adopted standards. For process and rationale, see [way-of-working.md](../../way-of-working.md).
