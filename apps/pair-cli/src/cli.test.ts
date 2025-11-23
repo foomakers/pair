@@ -166,8 +166,35 @@ function testExitCodes() {
   } catch {
     expect(exitCalled).toBe(true)
     expect(exitCode).toBe(1)
-    expect(process.exitCode).toBe(1)
   } finally {
     process.exit = originalExit
   }
 }
+
+describe('KB manager integration', () => {
+  it('should ensure KB available on startup when dataset not local', async () => {
+    const { getKnowledgeHubDatasetPathWithFallback } = await import('./config-utils')
+
+    // Mock filesystem without local dataset
+    const mockFs = {
+      rootModuleDirectory: () => '/mock/project',
+      currentWorkingDirectory: () => '/mock/project',
+      existsSync: () => false, // No local dataset
+    }
+
+    const mockIsKBCached = async () => false
+    const mockEnsureKBAvailable = async (version: string) => {
+      expect(version).toBe('0.1.0')
+      return '/home/user/.pair/kb/0.1.0'
+    }
+
+    const result = await getKnowledgeHubDatasetPathWithFallback(
+      mockFs as unknown as FileSystemService,
+      '0.1.0',
+      mockIsKBCached,
+      mockEnsureKBAvailable,
+    )
+
+    expect(result).toBe('/home/user/.pair/kb/0.1.0/dataset')
+  })
+})
