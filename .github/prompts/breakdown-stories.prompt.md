@@ -1,6 +1,6 @@
 ---
 description: Breakdown epics into detailed user stories with clear acceptance criteria
-mode: product-engineer
+agent: product-engineer
 tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*']
 ---
 
