@@ -7,7 +7,7 @@ export const DEFAULT_CONFIG = {
     github: {
       source: '.github',
       behavior: 'mirror' as const,
-      include: ['/chatmodes', '/workflows'],
+      include: ['/agents', '/workflows'],
       target_path: '.github',
       description: 'GitHub workflows and configuration files',
     },
@@ -31,7 +31,7 @@ export const GITHUB_KNOWLEDGE_CONFIG = {
     github: {
       source: '.github',
       behavior: 'mirror' as const,
-      include: ['/chatmodes', '/workflows'],
+      include: ['/agents', '/workflows'],
       target_path: '.github',
       description: 'GitHub workflows and configuration files',
     },
@@ -90,7 +90,7 @@ export const GITHUB_ONLY_CONFIG = {
     github: {
       source: '.github',
       behavior: 'mirror' as const,
-      include: ['/chatmodes', '/workflows'],
+      include: ['/agents', '/workflows'],
       target_path: '.github',
       description: 'GitHub workflows and configuration files',
     },

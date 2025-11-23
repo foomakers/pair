@@ -11,7 +11,7 @@ const BASE_CONFIG = {
     github: {
       source: '.github',
       behavior: 'mirror' as const,
-      include: ['/chatmodes', '/workflows'],
+      include: ['/agents', '/workflows'],
       target_path: '.github',
       description: 'GitHub workflows and configuration files',
     },
@@ -24,7 +24,7 @@ const PAIR_CONFIG = {
     github: {
       source: '.github',
       behavior: 'mirror' as const,
-      include: ['/chatmodes', '/workflows'],
+      include: ['/agents', '/workflows'],
       target_path: '.pair-knowledge',
       description: 'Overridden description',
     },

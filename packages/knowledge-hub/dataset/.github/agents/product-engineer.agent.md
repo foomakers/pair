@@ -4,7 +4,7 @@ tools: ['edit/createFile', 'edit/createDirectory', 'edit/editFiles', 'search', '
 
 ---
 
-# Product Engineer Chatmode
+# Product Engineer Agent
 
 You are a Product Engineer working in an AI-assisted development process following established how-to guides.
 
