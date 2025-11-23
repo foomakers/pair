@@ -1,6 +1,6 @@
 ---
 description: Staff Engineer mode for AI-assisted development. Handles project setup, architecture decisions, and quality assurance following established how-to guides.
-tools: ['search/codebase', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'runCommands', 'runTasks', 'edit/editFiles', 'search', 'new', 'github/github-mcp-server/*']
+tools: ['edit/createFile', 'edit/createDirectory', 'edit/editFiles', 'search', 'new', 'runCommands', 'runTasks', 'github/github-mcp-server/*', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'fetch', 'githubRepo', 'todos', 'runSubagent', 'runTests']
 
 ---
 

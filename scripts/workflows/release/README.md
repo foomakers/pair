@@ -268,11 +268,13 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 ### Artifact Lifecycle
 
 **CLI Artifacts**:
+
 - **Manual ZIP**: Self-contained bundle for air-gapped environments
 - **Registry TGZ**: NPM-compatible package for GitHub Packages
 - **Metadata**: Package info for validation and publishing
 
 **KB Dataset Artifacts**:
+
 - **Dataset ZIP**: Complete knowledge-hub dataset with preserved structure
 - **Manifest**: Version tracking, file list, integrity checksums
 - **Checksum**: ZIP integrity verification
@@ -303,18 +305,21 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 ### Troubleshooting
 
 **KB Packaging Failures**:
+
 - Check `packages/knowledge-hub/dataset/` exists and is readable
 - Verify dataset size (warning if >50MB)
 - Review manifest generation logs for file scanning errors
 - Check available disk space for ZIP creation
 
 **Release Upload Failures**:
+
 - Verify GitHub token permissions (needs `contents: write`)
 - Check network connectivity for artifact uploads
 - Review GitHub API rate limits
 - Verify release doesn't already exist (create-github-release.sh checks first)
 
 **Artifact Missing**:
+
 - Check workflow logs for packaging step failures
 - Verify `release/` directory contents after packaging steps
 - Ensure version normalization consistent across all scripts
