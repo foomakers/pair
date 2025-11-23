@@ -28,8 +28,14 @@ done
 # Clean-only mode
 if [[ "$CLEAN" == true ]] && [[ -z "$VERSION" ]]; then
   echo "🧹 Cleaning KB dataset release artifacts..."
-  rm -rf release/knowledge-base-*.zip release/knowledge-base-*.zip.sha256
-  echo "✅ Clean complete"
+  rm -f release/knowledge-base-*.zip release/knowledge-base-*.zip.sha256 2>/dev/null || true
+  # Remove release/ directory if empty after cleanup
+  if [[ -d release ]] && [[ -z "$(ls -A release 2>/dev/null)" ]]; then
+    rmdir release
+    echo "✅ Clean complete (release/ directory removed - was empty)"
+  else
+    echo "✅ Clean complete (release/ directory kept - contains other files)"
+  fi
   exit 0
 fi
 
@@ -60,7 +66,11 @@ cd "$PROJECT_ROOT"
 # Clean release artifacts if requested
 if [[ "$CLEAN" == true ]]; then
   echo "🧹 Cleaning previous KB dataset artifacts..."
-  rm -f release/knowledge-base-*.zip release/knowledge-base-*.zip.sha256
+  rm -f release/knowledge-base-*.zip release/knowledge-base-*.zip.sha256 2>/dev/null || true
+  # Remove release/ directory if empty after cleanup (will be recreated by mkdir below)
+  if [[ -d release ]] && [[ -z "$(ls -A release 2>/dev/null)" ]]; then
+    rmdir release
+  fi
 fi
 
 mkdir -p "$RELEASE_DIR"
