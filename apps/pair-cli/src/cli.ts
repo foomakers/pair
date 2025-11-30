@@ -19,6 +19,7 @@ import {
 } from './config-utils'
 import { LogLevel } from '@pair/content-ops'
 import { validateKBUrl } from './url-validator'
+import { validateCliOptions } from './cli-options'
 
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
 
@@ -29,6 +30,7 @@ program
   .description(pkg.description)
   .version(pkg.version)
   .option('--url <url>', 'Custom URL for KB download (overrides default GitHub release)')
+  .option('--no-kb', 'Skip knowledge base download')
 
 const MIN_LOG_LEVEL: LogLevel = 'INFO'
 setLogLevel(MIN_LOG_LEVEL)
@@ -64,7 +66,14 @@ async function ensureKBAvailableOnStartup(
   fsService: FileSystemService,
   version: string,
   customUrl?: string,
+  skipKB?: boolean,
 ): Promise<void> {
+  // Skip KB download if --no-kb flag is set
+  if (skipKB) {
+    if (DIAG) console.error('[diag] Skipping KB download (--no-kb flag set)')
+    return
+  }
+
   try {
     // Try to get local dataset first
     const datasetPath = getKnowledgeHubDatasetPath(fsService)
@@ -132,12 +141,24 @@ export function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService)
 async function main() {
   // Parse global options
   program.parse(process.argv)
-  const options = program.opts<{ url?: string }>()
+  const options = program.opts<{ url?: string; kb: boolean }>()
+
+  // Validate option combinations
+  try {
+    validateCliOptions({ ...(options.url && { url: options.url }), kb: options.kb })
+  } catch (err) {
+    console.error(chalk.red(`Invalid options: ${err}`))
+    process.exitCode = 1
+    process.exit(1)
+  }
 
   // Ensure KB is available before running commands
-  await ensureKBAvailableOnStartup(fileSystemService, pkg.version, options.url)
+  await ensureKBAvailableOnStartup(fileSystemService, pkg.version, options.url, !options.kb)
 
-  checkKnowledgeHubDatasetAccessible(fileSystemService)
+  // Skip dataset check if --no-kb is set
+  if (options.kb !== false) {
+    checkKnowledgeHubDatasetAccessible(fileSystemService)
+  }
 
   // Register package command
   packageCommand(program)
