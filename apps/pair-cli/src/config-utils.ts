@@ -1,6 +1,6 @@
 import { join, dirname } from 'path'
 import { Behavior, FileSystemService } from '@pair/content-ops'
-import { isKBCached, ensureKBAvailable } from './kb-manager'
+import { isKBCached, ensureKBAvailable } from './kb-manager/kb-manager'
 
 // Define proper types for configuration
 export interface RegistryConfig {

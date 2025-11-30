@@ -18,8 +18,8 @@ import {
   isInRelease,
 } from './config-utils'
 import { LogLevel } from '@pair/content-ops'
-import { validateKBUrl } from './url-validator'
-import { validateCliOptions } from './cli-options'
+import { validateKBUrl } from './kb-manager/url-validator'
+import { validateCliOptions } from './kb-manager/cli-options'
 
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
 

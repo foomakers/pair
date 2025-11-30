@@ -4,7 +4,7 @@ import { homedir, tmpdir } from 'os'
 import * as https from 'https'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { ensureKBAvailable, getCachedKBPath, isKBCached } from './kb-manager'
-import { createMockResponse, createMockRequest } from './test-utils/http-mocks'
+import { createMockResponse, createMockRequest } from '../test-utils/http-mocks'
 
 vi.mock('https', () => ({
   get: vi.fn(),
