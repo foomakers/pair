@@ -360,3 +360,109 @@ describe('KB Manager - Success message', () => {
     consoleLogSpy.mockRestore()
   })
 })
+
+describe('KB Manager - Progress Reporting', () => {
+  it('reports download progress with percentage and speed', async () => {
+    vi.clearAllMocks()
+    mockExtract.mockReset().mockResolvedValue(undefined)
+
+    const testVersion = '0.2.0'
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+    const mockStdout = { write: vi.fn() }
+
+    const mockResponse = createMockResponse(200, { 'content-length': '1024' })
+
+    vi.mocked(https.get).mockImplementation((url, callback) => {
+      if (typeof callback === 'function') {
+        setImmediate(() => {
+          ;(callback as (res: unknown) => void)(mockResponse)
+          // Simulate data chunks
+          setImmediate(() => mockResponse.emit('data', Buffer.alloc(512)))
+          setImmediate(() => mockResponse.emit('data', Buffer.alloc(512)))
+          setImmediate(() => mockResponse.emit('end'))
+        })
+      }
+      return createMockRequest()
+    })
+
+    await ensureKBAvailable(testVersion, {
+      fs,
+      extract: mockExtract,
+      progressWriter: mockStdout as any,
+    })
+
+    // Verify progress was reported
+    expect(mockStdout.write).toHaveBeenCalled()
+    const calls = mockStdout.write.mock.calls.map(c => c[0])
+    const hasPercentage = calls.some(c => c.includes('%'))
+    expect(hasPercentage).toBe(true)
+  })
+
+  it('uses TTY mode for progress when isTTY is true', async () => {
+    vi.clearAllMocks()
+    mockExtract.mockReset().mockResolvedValue(undefined)
+
+    const testVersion = '0.2.0'
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+    const mockStdout = { write: vi.fn() }
+
+    const mockResponse = createMockResponse(200, { 'content-length': '1024' })
+
+    vi.mocked(https.get).mockImplementation((url, callback) => {
+      if (typeof callback === 'function') {
+        setImmediate(() => {
+          ;(callback as (res: unknown) => void)(mockResponse)
+          setImmediate(() => mockResponse.emit('data', Buffer.alloc(512)))
+          setImmediate(() => mockResponse.emit('end'))
+        })
+      }
+      return createMockRequest()
+    })
+
+    await ensureKBAvailable(testVersion, {
+      fs,
+      extract: mockExtract,
+      progressWriter: mockStdout as any,
+      isTTY: true,
+    })
+
+    // TTY mode uses \r for inline updates
+    const calls = mockStdout.write.mock.calls.map(c => c[0])
+    const hasCarriageReturn = calls.some(c => c.includes('\r'))
+    expect(hasCarriageReturn).toBe(true)
+  })
+
+  it('uses non-TTY mode for progress when isTTY is false', async () => {
+    vi.clearAllMocks()
+    mockExtract.mockReset().mockResolvedValue(undefined)
+
+    const testVersion = '0.2.0'
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+    const mockStdout = { write: vi.fn() }
+
+    const mockResponse = createMockResponse(200, { 'content-length': '1024' })
+
+    vi.mocked(https.get).mockImplementation((url, callback) => {
+      if (typeof callback === 'function') {
+        setImmediate(() => {
+          ;(callback as (res: unknown) => void)(mockResponse)
+          setImmediate(() => mockResponse.emit('data', Buffer.alloc(512)))
+          setImmediate(() => mockResponse.emit('end'))
+        })
+      }
+      return createMockRequest()
+    })
+
+    await ensureKBAvailable(testVersion, {
+      fs,
+      extract: mockExtract,
+      progressWriter: mockStdout as any,
+      isTTY: false,
+    })
+
+    // Non-TTY mode uses simple logs with "Downloading"
+    const calls = mockStdout.write.mock.calls.map(c => c[0])
+    const hasDownloadingText = calls.some(c => c.includes('Downloading'))
+    expect(hasDownloadingText).toBe(true)
+  })
+})

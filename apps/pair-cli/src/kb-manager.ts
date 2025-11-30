@@ -4,6 +4,7 @@ import * as https from 'https'
 import { IncomingMessage } from 'http'
 import { createWriteStream } from 'fs'
 import type { FileSystemService } from '@pair/content-ops'
+import { ProgressReporter, type ProgressWriter } from './progress-reporter'
 
 // Diagnostic logging (PAIR_DIAG=1)
 const DIAG = process.env['PAIR_DIAG'] === '1' || process.env['PAIR_DIAG'] === 'true'
@@ -11,6 +12,8 @@ const DIAG = process.env['PAIR_DIAG'] === '1' || process.env['PAIR_DIAG'] === 't
 export interface KBManagerDeps {
   fs?: FileSystemService
   extract?: (zipPath: string, targetPath: string) => Promise<void>
+  progressWriter?: ProgressWriter
+  isTTY?: boolean
 }
 
 /**
@@ -85,7 +88,7 @@ async function downloadAndInstallKB(
   try {
     await ensureCacheDirectory(cachePath, fs)
     logDiag('Starting KB download...')
-    await downloadFile(downloadUrl, zipPath, fs)
+    await downloadFile(downloadUrl, zipPath, fs, deps?.progressWriter, deps?.isTTY)
     logDiag(`Download complete, extracting to ${cachePath}`)
     await extract(zipPath, cachePath)
     logDiag('Extraction complete, cleaning up ZIP')
@@ -162,10 +165,20 @@ function writeToInMemoryFs(
   response: IncomingMessage,
   destination: string,
   fs: FileSystemService,
+  progressReporter?: ProgressReporter,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
-    response.on('data', (chunk: Buffer) => chunks.push(chunk))
+    let bytesDownloaded = 0
+
+    response.on('data', (chunk: Buffer) => {
+      chunks.push(chunk)
+      bytesDownloaded += chunk.length
+      if (progressReporter) {
+        progressReporter.update(bytesDownloaded)
+      }
+    })
+
     response.on('end', () => {
       try {
         const buffer = Buffer.concat(chunks)
@@ -179,9 +192,22 @@ function writeToInMemoryFs(
   })
 }
 
-function writeToRealFs(response: IncomingMessage, destination: string): Promise<void> {
+function writeToRealFs(
+  response: IncomingMessage,
+  destination: string,
+  progressReporter?: ProgressReporter,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const fileStream = createWriteStream(destination)
+    let bytesDownloaded = 0
+
+    response.on('data', (chunk: Buffer) => {
+      bytesDownloaded += chunk.length
+      if (progressReporter) {
+        progressReporter.update(bytesDownloaded)
+      }
+    })
+
     response.pipe(fileStream)
     fileStream.on('finish', () => {
       fileStream.close()
@@ -192,16 +218,24 @@ function writeToRealFs(response: IncomingMessage, destination: string): Promise<
 }
 
 /**
- * Download file via HTTPS
+ * Download file via HTTPS with optional progress reporting
  */
-function downloadFile(url: string, destination: string, fs?: FileSystemService): Promise<void> {
+function downloadFile(
+  url: string,
+  destination: string,
+  fs?: FileSystemService,
+  progressWriter?: ProgressWriter,
+  isTTY?: boolean,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const request = https.get(url, response => {
       // Handle redirects
       if (response.statusCode === 301 || response.statusCode === 302) {
         const redirectUrl = response.headers.location
         if (redirectUrl) {
-          downloadFile(redirectUrl, destination, fs).then(resolve).catch(reject)
+          downloadFile(redirectUrl, destination, fs, progressWriter, isTTY)
+            .then(resolve)
+            .catch(reject)
           return
         }
       }
@@ -213,12 +247,32 @@ function downloadFile(url: string, destination: string, fs?: FileSystemService):
         return
       }
 
-      // Write to file
-      const writePromise = fs
-        ? writeToInMemoryFs(response, destination, fs)
-        : writeToRealFs(response, destination)
+      // Setup progress reporter if writer provided
+      let progressReporter: ProgressReporter | undefined
+      if (progressWriter) {
+        const contentLength = parseInt(response.headers['content-length'] || '0', 10)
+        if (contentLength > 0) {
+          progressReporter = new ProgressReporter(
+            contentLength,
+            isTTY !== undefined ? isTTY : process.stdout.isTTY || false,
+            progressWriter,
+          )
+        }
+      }
 
-      writePromise.then(resolve).catch(reject)
+      // Write to file with progress tracking
+      const writePromise = fs
+        ? writeToInMemoryFs(response, destination, fs, progressReporter)
+        : writeToRealFs(response, destination, progressReporter)
+
+      writePromise
+        .then(() => {
+          if (progressReporter) {
+            progressReporter.complete()
+          }
+          resolve()
+        })
+        .catch(reject)
     })
 
     request.on('error', error => {
