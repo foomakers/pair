@@ -9,6 +9,11 @@ CLI for installing, managing, and processing documentation, knowledge base asset
 - Manage pairing session files and AI assistant config files as assets, with default and configurable folders
 - Validate target folder paths and provide clear error messages
 - **Discover available installation targets** with `--list-targets` flag for easy setup guidance
+- **Automatic KB download** from GitHub releases with progress tracking and resume support
+- **Custom KB sources** via `--url` flag for air-gapped or custom installations
+- **Skip KB download** with `--no-kb` flag when KB is already available locally
+- **Integrity verification** with SHA256 checksum validation
+- **User-friendly errors** with actionable suggestions for common failures
 
 ## Installation
 
@@ -115,7 +120,74 @@ pair-cli update
 
 - `--list-targets` - List available target folders and their descriptions
 - `--config <file>` - Use a custom configuration file
+- `--url <url>` - Download KB from custom HTTP/HTTPS URL instead of GitHub releases
+- `--no-kb` - Skip automatic KB download (use when KB already available locally)
 - `--help` - Show help for a command
+
+## KB Installation Features
+
+The CLI automatically downloads and installs the Knowledge Base from GitHub releases when needed. Key features include:
+
+### Automatic Download with Progress
+
+- Downloads latest KB version automatically on first use
+- Shows real-time progress bar with speed (TTY mode)
+- Falls back to simple progress updates (non-TTY environments)
+- Caches downloads in `~/.pair/kb/{version}/` for reuse
+
+### Custom KB Sources
+
+Use the `--url` flag to download KB from custom sources:
+
+```bash
+# Use custom mirror or internal server
+pair install --url https://internal-mirror.company.com/kb.zip
+
+# Use specific GitHub release
+pair install --url https://github.com/org/repo/releases/download/v1.0.0/kb.zip
+```
+
+### Skip KB Download
+
+When KB is already available locally (e.g., from manual install):
+
+```bash
+pair install --no-kb
+```
+
+**Note**: Cannot combine `--url` and `--no-kb` - use one or the other.
+
+### Resume Support
+
+Interrupted downloads automatically resume from where they left off:
+
+- Partial downloads saved with `.partial` extension
+- HTTP Range requests used to continue download
+- Automatic cleanup on successful completion
+
+### Integrity Verification
+
+Downloads are verified using SHA256 checksums when available:
+
+- Fetches `.sha256` file from same location as KB
+- Validates file integrity before extraction
+- Clear error messages if checksum mismatch detected
+- Gracefully skips validation if checksum file not found (404)
+
+### Enhanced Error Messages
+
+All download and installation errors include:
+
+- **Clear problem description** (network timeout, disk full, etc.)
+- **Actionable suggestions** (check internet, free disk space, etc.)
+- **Diagnostic hints** (use `PAIR_DIAG=1` for detailed logs)
+
+Common error scenarios covered:
+
+- Network failures (connection refused, timeout, DNS errors)
+- File system errors (permissions, disk space)
+- Download errors (404, 403, checksum mismatch)
+- Extraction errors (corrupted files)
 
 ## Asset Registry Behaviors
 
