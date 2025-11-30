@@ -45,7 +45,7 @@ describe('ProgressReporter', () => {
 
   beforeEach(() => {
     mockStdout = { write: vi.fn() }
-    reporter = new ProgressReporter(10 * 1024 * 1024, true, mockStdout as any)
+    reporter = new ProgressReporter(10 * 1024 * 1024, true, mockStdout)
   })
 
   it('creates reporter with total bytes', () => {
@@ -59,7 +59,7 @@ describe('ProgressReporter', () => {
 
   it('throttles updates to max 10Hz (100ms)', () => {
     vi.useFakeTimers()
-    const reporter2 = new ProgressReporter(1000, true, mockStdout as any)
+    const reporter2 = new ProgressReporter(1000, true, mockStdout)
     mockStdout.write.mockClear()
 
     reporter2.update(100)
@@ -88,7 +88,7 @@ describe('ProgressReporter', () => {
 describe('TTY detection', () => {
   it('uses progress bar in TTY mode', () => {
     const mockStdout = { write: vi.fn() }
-    const reporter = new ProgressReporter(1000, true, mockStdout as any)
+    const reporter = new ProgressReporter(1000, true, mockStdout)
     reporter.update(500)
 
     const output = mockStdout.write.mock.calls[0][0]
@@ -97,7 +97,7 @@ describe('TTY detection', () => {
 
   it('uses simple logs in non-TTY mode', () => {
     const mockStdout = { write: vi.fn() }
-    const reporter = new ProgressReporter(1000, false, mockStdout as any)
+    const reporter = new ProgressReporter(1000, false, mockStdout)
     reporter.update(500)
 
     const output = mockStdout.write.mock.calls[0][0]
@@ -107,10 +107,11 @@ describe('TTY detection', () => {
 
   it('does not use ANSI codes in non-TTY mode', () => {
     const mockStdout = { write: vi.fn() }
-    const reporter = new ProgressReporter(1000, false, mockStdout as any)
+    const reporter = new ProgressReporter(1000, false, mockStdout)
     reporter.update(500)
 
     const output = mockStdout.write.mock.calls[0][0]
+    // eslint-disable-next-line no-control-regex -- checking for absence of ANSI codes
     expect(output).not.toMatch(/\x1b\[/) // No ANSI escape codes
   })
 })

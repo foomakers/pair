@@ -2,6 +2,8 @@
  * URL validation utilities for KB downloads
  */
 
+import { URL } from 'url'
+
 const ALLOWED_PROTOCOLS = ['http:', 'https:']
 
 /**

@@ -370,7 +370,6 @@ describe('getKnowledgeHubDatasetPath - release bundle resolution', () => {
   })
 })
 
-/* eslint-disable max-lines-per-function */
 describe('getKnowledgeHubDatasetPath with KB manager fallback', () => {
   it('should use cached KB when dataset not found locally', async () => {
     const mockDir = '/mock/project'

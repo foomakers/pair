@@ -298,7 +298,6 @@ export function getKnowledgeHubDatasetPath(fsService: FileSystemService): string
  * @param ensureKBAvailableFn Optional KB ensure function (for testing)
  * @returns Path to dataset directory
  */
-/* eslint-disable complexity */
 export async function getKnowledgeHubDatasetPathWithFallback(
   fsService: FileSystemService,
   version: string,

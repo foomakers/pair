@@ -2,6 +2,8 @@ import type { IncomingMessage, ClientRequest } from 'http'
 import { vi } from 'vitest'
 import { EventEmitter } from 'events'
 
+type EventHandler = (...args: unknown[]) => void
+
 export function createMockResponse(
   statusCode: number,
   headers: Record<string, string> = {},
@@ -10,11 +12,11 @@ export function createMockResponse(
   const mockResponse = {
     statusCode,
     headers,
-    on: (event: string, handler: (...args: any[]) => void) => {
+    on: (event: string, handler: EventHandler) => {
       emitter.on(event, handler)
       return mockResponse
     },
-    emit: (event: string, ...args: any[]) => {
+    emit: (event: string, ...args: unknown[]) => {
       return emitter.emit(event, ...args)
     },
     pipe: vi.fn(),
