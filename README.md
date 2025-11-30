@@ -151,11 +151,20 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 
 ### Key Packages
 
-- **@pair/pair-cli**: CLI tool for documentation management
+- **@pair/pair-cli**: CLI tool for documentation management and KB packaging
 - **@pair/knowledge-hub**: Centralized documentation and assets
 - **@pair/content-ops**: File operations and markdown link processing
 - **@pair/eslint-config**: Shared linting rules
 - **@pair/prettier-config**: Shared code formatting rules
+
+**CLI Commands:**
+
+- `pair install` - Install knowledge base documentation
+- `pair update` - Update knowledge base to latest version
+- `pair update-link` - Normalize markdown links (relative/absolute)
+- `pair kb package` - Package .pair/ folder into distributable ZIP with manifest
+
+See [Pair CLI documentation](apps/pair-cli/README.md) for complete command reference.
 
 ## GitHub Packages (private) — installation and auth
 

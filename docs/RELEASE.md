@@ -4,6 +4,60 @@
 
 ### New Features
 
+#### Knowledge Base Packaging Command
+
+New `pair kb package` command for creating distributable knowledge base packages from installed .pair/ folders.
+
+**What's New:**
+
+- 📦 Package .pair/ folder into ZIP with manifest
+- ✅ Automatic validation of config.json and directory structure
+- 📊 Manifest generation with version, file list, and checksums
+- 🔍 Package verification and integrity checks
+- 📈 Size warnings for large packages (>10MB, >50MB, >100MB)
+- 🎯 94%+ test coverage
+
+**Usage:**
+
+```bash
+# Package current repo's .pair/ folder
+pair kb package
+
+# Specify output location
+pair kb package --output custom-package.zip
+
+# Override package metadata
+pair kb package --name "my-kb" --version "2.0.0"
+
+# Verbose logging
+pair kb package --verbose
+```
+
+**When to Use:**
+
+- Distributing knowledge base to other teams
+- Creating versioned snapshots of documentation
+- Packaging for offline use or archival
+- Sharing standardized .pair/ configurations
+
+**Exit Codes:**
+
+- 0: Success
+- 1: Validation error (missing .pair/, invalid config.json)
+- 2: Packaging error (file operations, ZIP creation)
+
+**Integration:**
+
+- Release workflow uses this to package official KB dataset
+- Link normalization runs before packaging (ensures relative paths)
+- Package verification integrated in release scripts
+- Smoke tests validate kb package feature on installed repos
+
+**Documentation:**
+
+- [CLI Reference](../apps/pair-cli/README.md#kb-package-options)
+- [Release Scripts](../scripts/workflows/release/README.md)
+
 #### Link Update & Validation Command
 
 New `pair update-link` command for automatic link maintenance in installed Knowledge Base content.
@@ -125,8 +179,7 @@ This script creates a completely self-contained bundled artifact using [ncc](htt
 pair-cli-manual-vX.Y.Z/
 ├── bundle-cli/           # Self-contained JavaScript bundle
 │   ├── index.js         # Main bundled application
-│   ├── index.d.ts       # TypeScript definitions
-│   └── dataset/         # Knowledge base data (if present)
+│   └── index.d.ts       # TypeScript definitions
 ├── bin/                 # Executable wrappers
 │   └── pair-cli        # Unix/Linux/macOS executable
 ├── pair-cli            # Top-level executable (Unix/Linux/macOS)
@@ -136,6 +189,8 @@ pair-cli-manual-vX.Y.Z/
 ├── LICENSE             # License file
 └── config.json         # Default configuration
 ```
+
+**Note**: Knowledge base dataset is **NOT included** in the CLI bundle. KB is downloaded automatically on first run from GitHub releases, reducing bundle size from 6M to ~300KB.
 
 ## CI Integration
 
@@ -294,11 +349,32 @@ The release process is now fully automated through GitHub Actions using a **3-ph
 
 The automated process produces:
 
-- `pair-cli-manual-{version}.zip` - Complete bundled artifact
+**CLI Artifacts:**
+
+- `pair-cli-manual-{version}.zip` - Complete bundled artifact (KB excluded)
 - `pair-cli-manual-{version}.zip.sha256` - SHA256 checksum for verification
+- `pair-cli-{version}.tgz` - NPM package for GitHub Packages registry
+- `pair-cli-{version}.tgz.sha256` - TGZ checksum
+- `pair-cli-{version}.tgz.meta.json` - Package metadata
+
+**Knowledge Base Artifacts:**
+
+- `knowledge-base-{version}.zip` - Complete KB dataset with manifest
+- `knowledge-base-{version}.zip.sha256` - SHA256 checksum for verification
+- `manifest.json` (inside ZIP) - Version, file list, checksums, timestamp
+
+**Additional:**
+
 - GitHub release with download links and installation instructions
 - Cross-platform executables (Linux/macOS/Windows)
 - TypeScript definitions and metadata
+
+**KB Auto-Download:**
+
+- CLI auto-downloads KB on first run from GitHub releases
+- KB cached at `~/.pair/kb/{version}/`
+- Version-isolated caching (different versions use different caches)
+- Fallback chain: local dataset → KB cache → download from release
 
 ### Manual Workflow Dispatch
 

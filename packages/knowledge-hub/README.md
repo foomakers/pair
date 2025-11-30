@@ -14,6 +14,7 @@ For details about the documentation layout and how to get started, see [dataset/
 
 - Validate and normalize Markdown links across the documentation
 - Move/rename documentation pages or folders while updating internal links
+- Package .pair/ folder into distributable ZIP with manifest (via CLI)
 - Provide a shared set of assets and templates for the repository
 
 ## Scripts / Commands
@@ -42,6 +43,16 @@ Package-specific helper scripts:
 - update Markdown links that point to moved resources
 - useful for manual refactors of the documentation tree
 
+**CLI Commands** (via @pair/pair-cli):
+
+- `pair kb package` — package .pair/ folder into ZIP with manifest:
+  - Creates distributable knowledge base package
+  - Generates manifest.json with version, file list, checksums
+  - Validates .pair/ structure and config.json
+  - Displays package size and file count
+  - Exit codes: 0 (success), 1 (validation error), 2 (packaging error)
+  - See [CLI documentation](../../apps/pair-cli/README.md#kb-package-options) for details
+
 ## Quick examples
 
 Run the link checker locally:
@@ -54,6 +65,14 @@ Move a folder `foo` into `bar/baz` (example usage of the move script):
 
 ```bash
 pnpm --filter @pair/knowledge-hub run transfer:dataset -- foo bar/baz
+```
+
+Package the knowledge base (from a repo with .pair/ installed):
+
+```bash
+pair kb package
+pair kb package --output custom-package.zip
+pair kb package --verbose
 ```
 
 Note: `check:links` and `transfer:dataset` are TypeScript scripts invoked with `ts-node` in the package context.

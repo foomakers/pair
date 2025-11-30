@@ -83,26 +83,53 @@ The release workflow handles the complete process of building, packaging, testin
 ./create-registry-tgz.sh v1.0.0 release/pair-cli-manual-v1.0.0.zip
 ```
 
-### Smoke tests: manual and npm artifact verifications
+### Smoke tests: three-tier verification architecture
 
-There are two smoke-test scripts that exercise the packaged release artifacts in different distribution modes:
+Three smoke-test scripts validate different aspects of the release:
 
-- `smoke-test-manual-artifact.sh` — smoke-test the manual ZIP artifact (unzip, run the bundled CLI `--version`, and run `pair install` against the sample project).
-- `smoke-test-npm-artifact.sh` — smoke-test the registry/TGZ artifact by extracting the TGZ, installing the extracted package into the sample project, and running `npm run pair:install`.
+**1. Feature Testing: `smoke-test-kb-package.sh`**
 
-Both scripts accept a `VERSION` or the direct path to the artifact file as the first parameter. They also support two optional flags after the first parameter:
+Tests the `pair kb package` command on any repository with `.pair/` installed.
 
-- `--cleanup` or `-c`: force removal of temporary folders at the end of the test. Default is to KEEP debug folders so they can be inspected after a run.
-- `--persist-logs` or `-p`: persist diagnostic logs under `./.tmp/smoke-logs/` (when not provided the scripts print diagnostics to stdout only and do not write persistent log files).
+- **Purpose**: Verify kb package feature works on installed repos
+- **Parameters**: `<repo-root> [--cleanup|-c] [--persist-logs|-p]`
+- **Test suite** (6 comprehensive tests):
+  1. Run kb package command (verify exit code 0)
+  2. Verify package creation and size (warns if >100MB)
+  3. Verify ZIP extraction works
+  4. Verify manifest.json presence and structure
+  5. Verify registry content matches config.json
+  6. Verify file count > 0
+- **Auto-detection**: Finds pair CLI in global/npm/manual installations
+- **Cleanup**: Optional temp directory removal with `--cleanup`
+- **Logging**: Optional persistent logs with `--persist-logs`
+
+**2. Artifact Testing: `smoke-test-manual-artifact.sh` & `smoke-test-npm-artifact.sh`**
+
+Test the packaged release artifacts in different distribution modes:
+
+- `smoke-test-manual-artifact.sh` — test manual ZIP artifact (unzip, run CLI `--version`, run `pair install`)
+- `smoke-test-npm-artifact.sh` — test registry/TGZ artifact (extract TGZ, install package, run `npm run pair:install`)
+
+Both scripts accept a `VERSION` or artifact file path as first parameter with optional flags:
+
+- `--cleanup` or `-c`: force removal of temporary folders (default: keep for inspection)
+- `--persist-logs` or `-p`: persist diagnostic logs under `./.tmp/smoke-logs/`
 
 Environment variables:
 
-- `PAIR_DIAG=1` — additional diagnostic information can be enabled (the scripts respect this env var; note that `--cleanup` overrides `PAIR_DIAG` if you request removal explicitly).
+- `PAIR_DIAG=1` — enable additional diagnostic information
 
 Usage examples:
 
 ```bash
-# Manual ZIP (pass version or zip path). Default: keep tmpdir, do not persist logs
+# Test kb package feature on current repo
+./smoke-test-kb-package.sh . --cleanup --persist-logs
+
+# Test kb package on sample project
+./smoke-test-kb-package.sh /path/to/sample-project
+
+# Manual ZIP (pass version or zip path). Default: keep tmpdir, no logs
 PAIR_DIAG=1 ./smoke-test-manual-artifact.sh v1.0.0
 
 # NPM TGZ (pass version or tgz path). Force cleanup and persist logs
@@ -117,6 +144,7 @@ PAIR_DIAG=1 ./smoke-test-manual-artifact.sh v1.0.0
 
 - `VERSION`: Release version (e.g., `1.0.0` or `v1.0.0`)
 - `--clean`: Remove previous KB dataset artifacts before packaging (optional)
+- `--no-verify`: Skip package verification after creation (optional)
 
 **Outputs**:
 
@@ -127,11 +155,14 @@ PAIR_DIAG=1 ./smoke-test-manual-artifact.sh v1.0.0
 **Usage**:
 
 ```bash
-# Production packaging
+# Production packaging (with verification)
 ./package-kb-dataset.sh 1.0.0
 
 # Clean previous artifacts then package
 ./package-kb-dataset.sh --clean 1.0.0
+
+# Skip verification (faster, less safe)
+./package-kb-dataset.sh --no-verify 1.0.0
 
 # Clean-only mode (no packaging)
 ./package-kb-dataset.sh --clean
@@ -139,6 +170,13 @@ PAIR_DIAG=1 ./smoke-test-manual-artifact.sh v1.0.0
 
 **Features**:
 
+- **Link normalization**: Runs `update-link --relative` before packaging to ensure relative paths
+- **Package verification** (default, skip with `--no-verify`):
+  - Extracts package to temp directory
+  - Verifies manifest.json structure (version, timestamp, files)
+  - Creates test project with .pair/ directory
+  - Runs `pair kb package` on extracted dataset
+  - Verifies package creation, size, manifest inclusion
 - Preserves complete directory structure from `packages/knowledge-hub/dataset/`
 - Generates manifest with recursive file scanning and per-file SHA256 checksums
 - Dataset size validation (warns if >50MB)
@@ -242,6 +280,7 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 │ 5. SMOKE TESTS (release job)                                    │
 │    - smoke-test-manual-artifact.sh (ZIP integrity + install)    │
 │    - smoke-test-npm-artifact.sh (TGZ install in sample project) │
+│    - smoke-test-kb-package.sh (kb package feature verification) │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -379,13 +418,14 @@ The scripts are called in the following order within the `release.yml` workflow:
 1. determine-version.sh        → Determines VERSION
 2. package-manual.sh           → Creates CLI ZIP artifact
 3. create-registry-tgz.sh      → Creates CLI TGZ from ZIP
-4. package-kb-dataset.sh       → Creates KB ZIP artifact (NEW)
+4. package-kb-dataset.sh       → Creates KB ZIP artifact (with link normalization + verification)
 5. smoke-test-manual-artifact.sh  → Tests CLI ZIP
 6. smoke-test-npm-artifact.sh     → Tests CLI TGZ
-7. create-github-release.sh    → Creates release + uploads all assets (CLI + KB)
+7. smoke-test-kb-package.sh       → Tests kb package feature (optional)
+8. create-github-release.sh    → Creates release + uploads all assets (CLI + KB)
 ```
 
-**Note**: Steps 2-4 can run in parallel (independent artifact creation). Steps 5-6 require artifacts from steps 2-3.
+**Note**: Steps 2-4 can run in parallel (independent artifact creation). Steps 5-7 require artifacts from steps 2-4.
 
 ## Testing
 
@@ -409,13 +449,19 @@ All scripts can be tested locally without running the full workflow:
 # Test CLI TGZ creation (requires ZIP artifact)
 ./create-registry-tgz.sh v1.0.0-test release/pair-cli-manual-v1.0.0-test.zip
 
-# Test KB dataset packaging (NEW)
+# Test KB dataset packaging (with link normalization + verification)
 ./package-kb-dataset.sh 1.0.0-test
 
 # Test KB packaging with cleanup
 ./package-kb-dataset.sh --clean 1.0.0-test
 
-# Test smoke testing (requires artifacts)
+# Test KB packaging without verification (faster)
+./package-kb-dataset.sh --no-verify 1.0.0-test
+
+# Test kb package feature smoke test
+./smoke-test-kb-package.sh . --cleanup --persist-logs
+
+# Test artifact smoke tests (requires artifacts)
 PAIR_DIAG=1 ./smoke-test-manual-artifact.sh v1.0.0-test
 PAIR_DIAG=1 ./smoke-test-npm-artifact.sh v1.0.0-test
 
