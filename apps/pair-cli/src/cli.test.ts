@@ -197,4 +197,32 @@ describe('KB manager integration', () => {
 
     expect(result).toBe('/home/user/.pair/kb/0.1.0/dataset')
   })
+
+  it('should pass custom URL to ensureKBAvailable when provided', async () => {
+    const { getKnowledgeHubDatasetPathWithFallback } = await import('./config-utils')
+
+    const customUrl = 'https://custom.example.com/kb.zip'
+    const mockFs = {
+      rootModuleDirectory: () => '/mock/project',
+      currentWorkingDirectory: () => '/mock/project',
+      existsSync: () => false,
+    }
+
+    const mockIsKBCached = async () => false
+    const mockEnsureKBAvailable = async (version: string, deps?: any) => {
+      expect(version).toBe('0.1.0')
+      expect(deps?.customUrl).toBe(customUrl)
+      return '/home/user/.pair/kb/0.1.0'
+    }
+
+    const result = await getKnowledgeHubDatasetPathWithFallback(
+      mockFs as unknown as FileSystemService,
+      '0.1.0',
+      mockIsKBCached,
+      mockEnsureKBAvailable,
+      customUrl,
+    )
+
+    expect(result).toBe('/home/user/.pair/kb/0.1.0/dataset')
+  })
 })

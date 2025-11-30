@@ -304,6 +304,7 @@ export async function getKnowledgeHubDatasetPathWithFallback(
   version: string,
   isKBCachedFn: typeof isKBCached = isKBCached,
   ensureKBAvailableFn: typeof ensureKBAvailable = ensureKBAvailable,
+  customUrl?: string,
 ): Promise<string> {
   const currentDir = fsService.rootModuleDirectory()
   const diagEnv = process.env['PAIR_DIAG']
@@ -330,7 +331,10 @@ export async function getKnowledgeHubDatasetPathWithFallback(
     if (DIAG) console.error(`[diag] KB not cached, downloading...`)
   }
 
-  const kbPath = await ensureKBAvailableFn(version, { fs: fsService })
+  const kbPath = await ensureKBAvailableFn(version, {
+    fs: fsService,
+    ...(customUrl && { customUrl }),
+  })
   const datasetPath = join(kbPath, 'dataset')
 
   if (DIAG) console.error(`[diag] Using KB dataset: ${datasetPath}`)

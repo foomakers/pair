@@ -18,12 +18,17 @@ import {
   isInRelease,
 } from './config-utils'
 import { LogLevel } from '@pair/content-ops'
+import { validateKBUrl } from './url-validator'
 
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
 
 const program = new Command()
 
-program.name(chalk.blue(pkg.name)).description(pkg.description).version(pkg.version)
+program
+  .name(chalk.blue(pkg.name))
+  .description(pkg.description)
+  .version(pkg.version)
+  .option('--url <url>', 'Custom URL for KB download (overrides default GitHub release)')
 
 const MIN_LOG_LEVEL: LogLevel = 'INFO'
 setLogLevel(MIN_LOG_LEVEL)
@@ -58,6 +63,7 @@ if (DIAG) {
 async function ensureKBAvailableOnStartup(
   fsService: FileSystemService,
   version: string,
+  customUrl?: string,
 ): Promise<void> {
   try {
     // Try to get local dataset first
@@ -71,9 +77,27 @@ async function ensureKBAvailableOnStartup(
     if (DIAG) console.error('[diag] Local dataset not available, using KB manager')
   }
 
+  // Validate custom URL if provided
+  if (customUrl) {
+    try {
+      validateKBUrl(customUrl)
+      if (DIAG) console.error(`[diag] Using custom URL: ${customUrl}`)
+    } catch (err) {
+      console.error(chalk.red(`Invalid --url parameter: ${err}`))
+      process.exitCode = 1
+      process.exit(1)
+    }
+  }
+
   // Fallback to KB manager
   try {
-    const datasetPath = await getKnowledgeHubDatasetPathWithFallback(fsService, version)
+    const datasetPath = await getKnowledgeHubDatasetPathWithFallback(
+      fsService,
+      version,
+      undefined,
+      undefined,
+      customUrl,
+    )
     if (DIAG) console.error(`[diag] KB dataset available at: ${datasetPath}`)
   } catch (err) {
     console.error(chalk.red(`[startup] Failed to ensure KB available: ${err}`))
@@ -106,8 +130,12 @@ export function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService)
 }
 
 async function main() {
+  // Parse global options
+  program.parse(process.argv)
+  const options = program.opts<{ url?: string }>()
+
   // Ensure KB is available before running commands
-  await ensureKBAvailableOnStartup(fileSystemService, pkg.version)
+  await ensureKBAvailableOnStartup(fileSystemService, pkg.version, options.url)
 
   checkKnowledgeHubDatasetAccessible(fileSystemService)
 

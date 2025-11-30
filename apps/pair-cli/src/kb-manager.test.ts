@@ -466,3 +466,60 @@ describe('KB Manager - Progress Reporting', () => {
     expect(hasDownloadingText).toBe(true)
   })
 })
+
+describe('KB Manager - Custom URL', () => {
+  const testVersion = '0.2.0'
+
+  it('should use custom URL when provided', async () => {
+    const customUrl = 'https://custom.example.com/kb.zip'
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+    const mockResponse = createMockResponse(200, { 'content-length': '1024' })
+    let capturedUrl = ''
+
+    vi.mocked(https.get).mockImplementation((url, callback) => {
+      capturedUrl = typeof url === 'string' ? url : url.toString()
+      if (typeof callback === 'function') {
+        setImmediate(() => {
+          ;(callback as (res: unknown) => void)(mockResponse)
+          setImmediate(() => mockResponse.emit('data', Buffer.alloc(512)))
+          setImmediate(() => mockResponse.emit('end'))
+        })
+      }
+      return createMockRequest()
+    })
+
+    await ensureKBAvailable(testVersion, {
+      fs,
+      extract: mockExtract,
+      customUrl,
+    })
+
+    expect(capturedUrl).toBe(customUrl)
+  })
+
+  it('should use default GitHub URL when custom URL not provided', async () => {
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+    const mockResponse = createMockResponse(200, { 'content-length': '1024' })
+    let capturedUrl = ''
+
+    vi.mocked(https.get).mockImplementation((url, callback) => {
+      capturedUrl = typeof url === 'string' ? url : url.toString()
+      if (typeof callback === 'function') {
+        setImmediate(() => {
+          ;(callback as (res: unknown) => void)(mockResponse)
+          setImmediate(() => mockResponse.emit('data', Buffer.alloc(512)))
+          setImmediate(() => mockResponse.emit('end'))
+        })
+      }
+      return createMockRequest()
+    })
+
+    await ensureKBAvailable(testVersion, {
+      fs,
+      extract: mockExtract,
+    })
+
+    expect(capturedUrl).toContain('github.com/foomakers/pair/releases')
+    expect(capturedUrl).toContain('knowledge-base-0.2.0.zip')
+  })
+})

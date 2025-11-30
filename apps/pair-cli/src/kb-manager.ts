@@ -14,6 +14,7 @@ export interface KBManagerDeps {
   extract?: (zipPath: string, targetPath: string) => Promise<void>
   progressWriter?: ProgressWriter
   isTTY?: boolean
+  customUrl?: string
 }
 
 /**
@@ -79,7 +80,7 @@ async function downloadAndInstallKB(
   logDiag(`KB cache miss, downloading v${version} from GitHub`)
   console.log(`KB not found, downloading v${version} from GitHub...`)
 
-  const downloadUrl = buildDownloadUrl(version)
+  const downloadUrl = deps?.customUrl || buildDownloadUrl(version)
   const zipPath = join(tmpdir(), `kb-${cleanVersion}.zip`)
 
   logDiag(`Download URL: ${downloadUrl}`)
