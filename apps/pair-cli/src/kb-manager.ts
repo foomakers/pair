@@ -10,6 +10,7 @@ import {
   getPartialFilePath,
   cleanupPartialFile,
 } from './resume-manager'
+import { validateChecksum, getExpectedChecksum } from './checksum-validator'
 
 // Diagnostic logging (PAIR_DIAG=1)
 const DIAG = process.env['PAIR_DIAG'] === '1' || process.env['PAIR_DIAG'] === 'true'
@@ -95,7 +96,12 @@ async function downloadAndInstallKB(
     await ensureCacheDirectory(cachePath, fs)
     logDiag('Starting KB download...')
     await downloadFile(downloadUrl, zipPath, fs, deps?.progressWriter, deps?.isTTY)
-    logDiag(`Download complete, extracting to ${cachePath}`)
+    logDiag(`Download complete, validating checksum...`)
+    
+    // Validate checksum if available
+    await validateDownloadChecksum(downloadUrl, zipPath, fs)
+    
+    logDiag(`Checksum valid, extracting to ${cachePath}`)
     await extract(zipPath, cachePath)
     logDiag('Extraction complete, cleaning up ZIP')
     await cleanupZip(zipPath, fs)
@@ -115,6 +121,77 @@ function buildDownloadUrl(version: string): string {
   const tagVersion = version.startsWith('v') ? version : `v${version}`
   const assetName = `knowledge-base-${cleanVersion}.zip`
   return `https://github.com/foomakers/pair/releases/download/${tagVersion}/${assetName}`
+}
+
+/**
+ * Validate downloaded file checksum if .sha256 file is available
+ */
+async function validateDownloadChecksum(
+  downloadUrl: string,
+  filePath: string,
+  fs?: FileSystemService,
+): Promise<void> {
+  const checksumUrl = `${downloadUrl}.sha256`
+  
+  try {
+    // Try to fetch checksum file
+    const checksumContent = await fetchChecksumFile(checksumUrl)
+    if (!checksumContent) {
+      logDiag('No checksum file found, skipping validation')
+      return
+    }
+    
+    const expectedChecksum = await getExpectedChecksum(checksumContent)
+    if (!expectedChecksum) {
+      logDiag('Could not extract checksum from file, skipping validation')
+      return
+    }
+    
+    logDiag(`Expected checksum: ${expectedChecksum}`)
+    const result = await validateChecksum(filePath, expectedChecksum, fs)
+    
+    if (!result.isValid) {
+      throw new Error(
+        `Checksum validation failed!\n` +
+        `Expected: ${result.expectedChecksum}\n` +
+        `Actual:   ${result.actualChecksum}\n` +
+        `File may be corrupted. Please retry the download.`
+      )
+    }
+    
+    logDiag('Checksum validation passed')
+  } catch (error) {
+    // If checksum file doesn't exist (404), skip validation
+    if (error && (error as any).message?.includes('404')) {
+      logDiag('Checksum file not found (404), skipping validation')
+      return
+    }
+    throw error
+  }
+}
+
+/**
+ * Fetch checksum file content
+ */
+function fetchChecksumFile(url: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    https.get(url, response => {
+      if (response.statusCode === 404) {
+        resolve(null)
+        return
+      }
+      
+      if (response.statusCode !== 200) {
+        resolve(null)
+        return
+      }
+      
+      let data = ''
+      response.on('data', chunk => { data += chunk })
+      response.on('end', () => resolve(data))
+      response.on('error', () => resolve(null))
+    }).on('error', () => resolve(null))
+  })
 }
 
 function logDiag(message: string): void {

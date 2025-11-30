@@ -614,3 +614,98 @@ describe('KB Manager - Resume Support', () => {
     expect(rangeHeader).toBeUndefined()
   })
 })
+
+describe('KB Manager - Checksum Validation', () => {
+  const testVersion = '0.2.0'
+
+  it('validates checksum when .sha256 file is available', async () => {
+    const content = Buffer.alloc(1024, 'kb content')
+    const { createHash } = await import('crypto')
+    const expectedChecksum = createHash('sha256').update(content).digest('hex')
+    
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+    const mockGetResponse = createMockResponse(200, { 'content-length': '1024' })
+    const mockHeadResponse = createMockResponse(200, { 'content-length': '1024' })
+    const mockChecksumResponse = createMockResponse(200, {})
+
+    // Mock HEAD request
+    vi.mocked(https.request).mockImplementation(((url: any, options: any, callback: any) => {
+      const cb = typeof options === 'function' ? options : callback
+      if (typeof cb === 'function') {
+        setImmediate(() => cb(mockHeadResponse))
+      }
+      return createMockRequest()
+    }) as any)
+
+    // Track which URL is being fetched
+    let checksumFetched = false
+    vi.mocked(https.get).mockImplementation(((url: any, options: any, callback: any) => {
+      const cb = typeof options === 'function' ? options : callback
+      
+      // Check if this is checksum URL
+      if (typeof url === 'string' && url.endsWith('.sha256')) {
+        checksumFetched = true
+        if (typeof cb === 'function') {
+          setImmediate(() => {
+            cb(mockChecksumResponse)
+            setImmediate(() => mockChecksumResponse.emit('data', `${expectedChecksum}  kb.zip`))
+            setImmediate(() => mockChecksumResponse.emit('end'))
+          })
+        }
+      } else {
+        // Regular file download
+        if (typeof cb === 'function') {
+          setImmediate(() => {
+            cb(mockGetResponse)
+            setImmediate(() => mockGetResponse.emit('data', content))
+            setImmediate(() => mockGetResponse.emit('end'))
+          })
+        }
+      }
+      return createMockRequest()
+    }) as any)
+
+    await ensureKBAvailable(testVersion, { fs, extract: mockExtract })
+    
+    expect(checksumFetched).toBe(true)
+  })
+
+  it('proceeds without checksum when .sha256 file not found', async () => {
+    const content = Buffer.alloc(1024, 'kb content')
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+    const mockGetResponse = createMockResponse(200, { 'content-length': '1024' })
+    const mockHeadResponse = createMockResponse(200, { 'content-length': '1024' })
+    const mockChecksumResponse = createMockResponse(404, {})
+
+    // Mock HEAD request
+    vi.mocked(https.request).mockImplementation(((url: any, options: any, callback: any) => {
+      const cb = typeof options === 'function' ? options : callback
+      if (typeof cb === 'function') {
+        setImmediate(() => cb(mockHeadResponse))
+      }
+      return createMockRequest()
+    }) as any)
+
+    vi.mocked(https.get).mockImplementation(((url: any, options: any, callback: any) => {
+      const cb = typeof options === 'function' ? options : callback
+      
+      if (typeof url === 'string' && url.endsWith('.sha256')) {
+        if (typeof cb === 'function') {
+          setImmediate(() => cb(mockChecksumResponse))
+        }
+      } else {
+        if (typeof cb === 'function') {
+          setImmediate(() => {
+            cb(mockGetResponse)
+            setImmediate(() => mockGetResponse.emit('data', content))
+            setImmediate(() => mockGetResponse.emit('end'))
+          })
+        }
+      }
+      return createMockRequest()
+    }) as any)
+
+    // Should not throw even though checksum file is missing
+    await expect(ensureKBAvailable(testVersion, { fs, extract: mockExtract })).resolves.not.toThrow()
+  })
+})
