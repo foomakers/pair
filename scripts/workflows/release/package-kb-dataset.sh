@@ -3,9 +3,11 @@ set -euo pipefail
 
 # KB Dataset Packaging Script
 # Creates ZIP from knowledge-hub dataset with manifest and checksum
+# Includes link normalization and package verification
 
 CLEAN=false
 VERSION=""
+VERIFY=true
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -13,9 +15,13 @@ while [[ $# -gt 0 ]]; do
       CLEAN=true
       shift
       ;;
+    --no-verify)
+      VERIFY=false
+      shift
+      ;;
     -*)
       echo "❌ Unknown option: $1"
-      echo "Usage: $0 [--clean] <version>"
+      echo "Usage: $0 [--clean] [--no-verify] <version>"
       exit 1
       ;;
     *)
@@ -41,7 +47,7 @@ fi
 
 if [[ -z "$VERSION" ]]; then
   echo "❌ Error: Version parameter required"
-  echo "Usage: $0 [--clean] <version>"
+  echo "Usage: $0 [--clean] [--no-verify] <version>"
   exit 1
 fi
 
@@ -74,6 +80,28 @@ if [[ "$CLEAN" == true ]]; then
 fi
 
 mkdir -p "$RELEASE_DIR"
+
+# Normalize links before packaging
+echo "🔗 Normalizing markdown links to relative paths..."
+PAIR_CLI="node apps/pair-cli/dist/cli.js"
+
+# Check if CLI is built
+if [[ ! -f "apps/pair-cli/dist/cli.js" ]]; then
+  echo "⚠️  CLI not built, building now..."
+  pnpm --filter @pair/pair-cli build
+fi
+
+# Run update-link on dataset to normalize all links to relative
+echo "   Running: $PAIR_CLI update-link --relative on dataset..."
+LINK_LOG=$(mktemp)
+if (cd "$DATASET_SOURCE" && $PROJECT_ROOT/$PAIR_CLI update-link --relative > "$LINK_LOG" 2>&1); then
+  LINKS_UPDATED=$(grep -c "Updated" "$LINK_LOG" 2>/dev/null || echo "0")
+  echo "   ✓ Links normalized: $LINKS_UPDATED files updated"
+else
+  echo "⚠️  Warning: Link normalization failed (continuing anyway)"
+  cat "$LINK_LOG"
+fi
+rm -f "$LINK_LOG"
 
 echo "📦 Packaging KB dataset v${VERSION}..."
 echo "   Source: $DATASET_SOURCE"
@@ -143,3 +171,100 @@ echo "✅ KB dataset packaged successfully"
 echo "   ZIP: $OUTPUT_ZIP ($ZIP_SIZE)"
 echo "   Checksum: $CHECKSUM_FILE"
 echo "   Manifest included with $MANIFEST_FILES files"
+
+# Verification phase
+if [[ "$VERIFY" == true ]]; then
+  echo ""
+  echo "🔍 Verifying package..."
+  
+  # Create temp directory for extraction
+  VERIFY_DIR=$(mktemp -d)
+  trap 'rm -rf "$VERIFY_DIR"' EXIT
+  
+  # Extract package
+  echo "   Extracting to temporary directory..."
+  unzip -q "$OUTPUT_ZIP" -d "$VERIFY_DIR"
+  
+  # Verify manifest exists
+  if [[ ! -f "$VERIFY_DIR/manifest.json" ]]; then
+    echo "❌ Error: manifest.json not found in package"
+    exit 1
+  fi
+  echo "   ✓ manifest.json present"
+  
+  # Verify manifest has expected structure
+  if ! grep -q '"version"' "$VERIFY_DIR/manifest.json" || \
+     ! grep -q '"timestamp"' "$VERIFY_DIR/manifest.json" || \
+     ! grep -q '"files"' "$VERIFY_DIR/manifest.json"; then
+    echo "❌ Error: manifest.json missing required fields"
+    exit 1
+  fi
+  echo "   ✓ manifest.json structure valid"
+  
+  # Count files in package (excluding manifest)
+  EXTRACTED_COUNT=$(find "$VERIFY_DIR" -type f ! -name "manifest.json" | wc -l | tr -d ' ')
+  echo "   ✓ Package contains $EXTRACTED_COUNT files (+ manifest)"
+  
+  # Test kb package command on extracted dataset
+  echo ""
+  echo "🧪 Testing 'pair kb package' on extracted dataset..."
+  
+  # Create temporary project structure
+  TEST_PROJECT="$VERIFY_DIR/test-project"
+  mkdir -p "$TEST_PROJECT/.pair"
+  
+  # Copy extracted dataset to .pair directory
+  cp -r "$VERIFY_DIR"/* "$TEST_PROJECT/.pair/" 2>/dev/null || true
+  rm -f "$TEST_PROJECT/.pair/manifest.json" # Remove manifest from .pair
+  
+  # Create minimal config.json for the test
+  cat > "$TEST_PROJECT/config.json" <<EOF
+{
+  "asset_registries": {
+    "knowledge": {
+      "source": ".pair/knowledge",
+      "behavior": "mirror",
+      "target_path": ".pair/knowledge",
+      "description": "Knowledge base content"
+    },
+    "adoption": {
+      "source": ".pair/adoption",
+      "behavior": "mirror",
+      "target_path": ".pair/adoption",
+      "description": "Adoption content"
+    }
+  }
+}
+EOF
+  
+  # Run pair kb package
+  PKG_OUTPUT="$TEST_PROJECT/test-package.zip"
+  if (cd "$TEST_PROJECT" && $PROJECT_ROOT/$PAIR_CLI kb package --output "$PKG_OUTPUT" > /dev/null 2>&1); then
+    echo "   ✓ kb package command succeeded"
+    
+    # Verify package was created
+    if [[ ! -f "$PKG_OUTPUT" ]]; then
+      echo "❌ Error: package not created"
+      exit 1
+    fi
+    
+    PKG_SIZE=$(du -h "$PKG_OUTPUT" | cut -f1)
+    echo "   ✓ Package created: $PKG_SIZE"
+    
+    # Verify package contains manifest
+    if unzip -l "$PKG_OUTPUT" | grep -q "manifest.json"; then
+      echo "   ✓ Package contains manifest.json"
+    else
+      echo "❌ Error: Package missing manifest.json"
+      exit 1
+    fi
+    
+    echo ""
+    echo "✅ Package verification complete - all checks passed"
+  else
+    echo "❌ Error: kb package command failed"
+    echo "   This may indicate issues with the dataset structure"
+    exit 1
+  fi
+fi
+

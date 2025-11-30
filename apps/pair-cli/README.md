@@ -105,6 +105,7 @@ pair-cli update
 - `install [target]` - Install documentation and assets
 - `update [target]` - Update existing documentation and assets
 - `update-link [options]` - Validate and update links in installed KB content
+- `kb package [options]` - Package KB content into distributable ZIP file
 
 ### Utility Commands
 
@@ -183,6 +184,31 @@ pair-cli install --config ./my-config.json
 ```bash
 pair-cli validate-config
 ```
+
+### Package KB content
+
+Create a validated ZIP package of your KB content for distribution:
+
+```bash
+# Package with defaults (output to ./dist/kb-package-{timestamp}.zip)
+pair-cli kb package
+
+# Package to custom location
+pair-cli kb package --output custom/path/output.zip
+
+# Package with metadata
+pair-cli kb package --name "My KB" --version "1.0.0" --author "Team Name"
+
+# Package with verbose progress output
+pair-cli kb package --verbose
+```
+
+The `kb package` command:
+
+- Validates `.pair/` structure against `config.json` registries
+- Creates ZIP archive with `manifest.json` metadata
+- Displays file size and warns if >100MB
+- Exit codes: 0 (success), 1 (validation error), 2 (packaging error)
 
 - **Common Options** - Shared flags across commands
 - **Help and Examples** - Built-in usage documentation
