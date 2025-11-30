@@ -5,6 +5,7 @@ import {
   EXIT_SUCCESS,
   EXIT_VALIDATION_ERROR,
   EXIT_PACKAGING_ERROR,
+  formatFileSize,
 } from './package'
 
 describe('package command - RED phase', () => {
@@ -62,5 +63,24 @@ describe('package command - exit codes', () => {
 
   it('exports EXIT_PACKAGING_ERROR = 2', () => {
     expect(EXIT_PACKAGING_ERROR).toBe(2)
+  })
+})
+
+describe('package command - file size formatting', () => {
+  it('formats bytes in KB for files under 1MB', () => {
+    expect(formatFileSize(512)).toBe('0.50 KB')
+    expect(formatFileSize(1024)).toBe('1.00 KB')
+    expect(formatFileSize(512 * 1024)).toBe('512.00 KB')
+  })
+
+  it('formats bytes in MB for files over 1MB', () => {
+    expect(formatFileSize(1024 * 1024)).toBe('1.00 MB')
+    expect(formatFileSize(2.5 * 1024 * 1024)).toBe('2.50 MB')
+    expect(formatFileSize(100 * 1024 * 1024)).toBe('100.00 MB')
+  })
+
+  it('rounds to 2 decimal places', () => {
+    expect(formatFileSize(1536)).toBe('1.50 KB')
+    expect(formatFileSize(1.5 * 1024 * 1024)).toBe('1.50 MB')
   })
 })

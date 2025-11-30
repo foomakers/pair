@@ -3,7 +3,7 @@ import { loadConfigWithOverrides, type Config } from '../config-utils'
 import { validatePackageStructure } from './package/validators'
 import { generateManifestMetadata } from './package/metadata'
 import { createPackageZip } from './package/zip-creator'
-import { fileSystemService } from '@pair/content-ops'
+import { fileSystemService, type FileSystemService } from '@pair/content-ops'
 import path from 'path'
 import type { AssetRegistryConfig } from './install'
 
@@ -83,14 +83,44 @@ async function prepareOutputDir(outputDir: string, outputPath: string) {
   }
 }
 
+async function displayProgress(message: string, verbose?: boolean) {
+  if (verbose) console.log(message)
+}
+
+export function formatFileSize(bytes: number): string {
+  const sizeKB = (bytes / 1024).toFixed(2)
+  const sizeMB = (bytes / (1024 * 1024)).toFixed(2)
+  return bytes >= 1024 * 1024 ? `${sizeMB} MB` : `${sizeKB} KB`
+}
+
+async function displayPackageSuccess(outputPath: string, fileService: FileSystemService) {
+  const stats = await fileService.stat(outputPath)
+  const sizeDisplay = formatFileSize(stats.size)
+
+  console.log(`✅ Package created: ${outputPath}`)
+  console.log(`   Size: ${sizeDisplay}`)
+
+  if (stats.size > 100 * 1024 * 1024) {
+    const sizeMB = (stats.size / (1024 * 1024)).toFixed(2)
+    console.warn(`⚠️  Large package size (${sizeMB} MB) - consider reviewing content`)
+  }
+}
+
 async function executePackage(options: PackageOptions): Promise<void> {
   const projectRoot = options.sourceDir || process.cwd()
 
+  await displayProgress('📦 Starting package creation...', options.verbose)
+  await displayProgress(`   Source: ${projectRoot}`, options.verbose)
+
   // Load and validate
+  await displayProgress('🔍 Loading configuration...', options.verbose)
   const result = await loadAndValidateConfig(options, projectRoot)
+
+  await displayProgress('✓ Validating package structure...', options.verbose)
   await validateConfig(result.config, projectRoot)
 
   // Generate manifest
+  await displayProgress('📋 Generating manifest metadata...', options.verbose)
   const registries: AssetRegistryConfig[] = Object.values(result.config.asset_registries)
   const registryNames = registries.map(r => r.source || '').filter(Boolean)
   const cliParams = {
@@ -105,12 +135,17 @@ async function executePackage(options: PackageOptions): Promise<void> {
   const outputPath =
     options.output || path.join(projectRoot, 'dist', `kb-package-${manifest.created_at}.zip`)
   const outputDir = path.dirname(outputPath)
+
+  await displayProgress(`📁 Preparing output directory: ${outputDir}`, options.verbose)
   await prepareOutputDir(outputDir, outputPath)
 
   // Create ZIP
+  await displayProgress('🗜️  Creating ZIP archive...', options.verbose)
+  await displayProgress(`   Packaging ${registryNames.length} registries`, options.verbose)
+
   try {
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fileSystemService)
-    console.log(`✅ Package created: ${outputPath}`)
+    await displayPackageSuccess(outputPath, fileSystemService)
   } catch (error) {
     console.error('❌ ZIP creation failed:', error instanceof Error ? error.message : error)
     process.exit(EXIT_PACKAGING_ERROR)
