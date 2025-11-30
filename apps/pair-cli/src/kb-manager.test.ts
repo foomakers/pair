@@ -8,6 +8,7 @@ import { createMockResponse, createMockRequest } from './test-utils/http-mocks'
 
 vi.mock('https', () => ({
   get: vi.fn(),
+  request: vi.fn(),
 }))
 
 const mockExtract = vi.fn()
@@ -521,5 +522,95 @@ describe('KB Manager - Custom URL', () => {
 
     expect(capturedUrl).toContain('github.com/foomakers/pair/releases')
     expect(capturedUrl).toContain('knowledge-base-0.2.0.zip')
+  })
+})
+
+describe('KB Manager - Resume Support', () => {
+  const testVersion = '0.2.0'
+
+  it('should resume partial download using Range header', async () => {
+    const partialSize = 512
+    const totalSize = 1024
+    const partialPath = join(tmpdir(), 'kb-0.2.0.zip.partial')
+    const fs = new InMemoryFileSystemService(
+      { [partialPath]: Buffer.alloc(partialSize).toString() },
+      '/',
+      '/',
+    )
+    
+    let rangeHeader: string | undefined
+    const mockGetResponse = createMockResponse(206, {
+      'content-length': String(totalSize - partialSize),
+    })
+    const mockHeadResponse = createMockResponse(200, {
+      'content-length': String(totalSize),
+    })
+
+    // Mock HEAD request for content-length
+    vi.mocked(https.request).mockImplementation(((url: any, options: any, callback: any) => {
+      const cb = typeof options === 'function' ? options : callback
+      if (typeof cb === 'function') {
+        setImmediate(() => cb(mockHeadResponse))
+      }
+      return createMockRequest()
+    }) as any)
+
+    // Mock GET request with Range header
+    vi.mocked(https.get).mockImplementation(((url: any, options: any, callback: any) => {
+      // https.get(url, { headers }, callback)
+      if (options && typeof options === 'object' && options.headers) {
+        rangeHeader = options.headers['Range'] as string
+      }
+      
+      if (typeof callback === 'function') {
+        setImmediate(() => {
+          callback(mockGetResponse)
+          setImmediate(() => mockGetResponse.emit('data', Buffer.alloc(totalSize - partialSize)))
+          setImmediate(() => mockGetResponse.emit('end'))
+        })
+      }
+      return createMockRequest()
+    }) as any)
+
+    await ensureKBAvailable(testVersion, { fs, extract: mockExtract })
+    
+    expect(rangeHeader).toBe(`bytes=${partialSize}-`)
+  })
+
+  it('should start fresh download when no partial file exists', async () => {
+    const totalSize = 1024
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+    let rangeHeader: string | undefined
+    const mockGetResponse = createMockResponse(200, { 'content-length': String(totalSize) })
+    const mockHeadResponse = createMockResponse(200, { 'content-length': String(totalSize) })
+
+    // Mock HEAD request
+    vi.mocked(https.request).mockImplementation((url, options, callback) => {
+      const cb = typeof options === 'function' ? options : callback
+      if (typeof cb === 'function') {
+        setImmediate(() => (cb as (res: unknown) => void)(mockHeadResponse))
+      }
+      return createMockRequest()
+    })
+
+    // Mock GET request
+    vi.mocked(https.get).mockImplementation(((url: any, options: any, callback: any) => {
+      if (options && typeof options === 'object' && options.headers) {
+        rangeHeader = options.headers['Range'] as string
+      }
+      
+      if (typeof callback === 'function') {
+        setImmediate(() => {
+          callback(mockGetResponse)
+          setImmediate(() => mockGetResponse.emit('data', Buffer.alloc(512)))
+          setImmediate(() => mockGetResponse.emit('end'))
+        })
+      }
+      return createMockRequest()
+    }) as any)
+
+    await ensureKBAvailable(testVersion, { fs, extract: mockExtract })
+    
+    expect(rangeHeader).toBeUndefined()
   })
 })

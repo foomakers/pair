@@ -26,5 +26,6 @@ export function createMockResponse(
 export function createMockRequest(): ClientRequest {
   return {
     on: vi.fn(),
+    end: vi.fn(),
   } as unknown as ClientRequest
 }

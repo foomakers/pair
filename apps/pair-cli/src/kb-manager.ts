@@ -5,6 +5,11 @@ import { IncomingMessage } from 'http'
 import { createWriteStream } from 'fs'
 import type { FileSystemService } from '@pair/content-ops'
 import { ProgressReporter, type ProgressWriter } from './progress-reporter'
+import {
+  shouldResume,
+  getPartialFilePath,
+  cleanupPartialFile,
+} from './resume-manager'
 
 // Diagnostic logging (PAIR_DIAG=1)
 const DIAG = process.env['PAIR_DIAG'] === '1' || process.env['PAIR_DIAG'] === 'true'
@@ -156,7 +161,7 @@ function handleHttpError(statusCode: number, url: string): Error | null {
   if (statusCode === 403) {
     return new Error(`Access denied (403). Check network/permissions. URL: ${url}`)
   }
-  if (statusCode !== 200) {
+  if (statusCode !== 200 && statusCode !== 206) {
     return new Error(`Download failed: HTTP ${statusCode}`)
   }
   return null
@@ -167,10 +172,11 @@ function writeToInMemoryFs(
   destination: string,
   fs: FileSystemService,
   progressReporter?: ProgressReporter,
+  resumeFrom?: number,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
-    let bytesDownloaded = 0
+    let bytesDownloaded = resumeFrom || 0
 
     response.on('data', (chunk: Buffer) => {
       chunks.push(chunk)
@@ -182,8 +188,16 @@ function writeToInMemoryFs(
 
     response.on('end', () => {
       try {
-        const buffer = Buffer.concat(chunks)
-        fs.writeFile(destination, buffer.toString())
+        const newData = Buffer.concat(chunks)
+        
+        // If resuming, append to existing data
+        if (resumeFrom && resumeFrom > 0 && fs.existsSync(destination)) {
+          const existingData = fs.readFileSync(destination)
+          const combined = Buffer.concat([Buffer.from(existingData), newData])
+          fs.writeFile(destination, combined.toString())
+        } else {
+          fs.writeFile(destination, newData.toString())
+        }
         resolve()
       } catch (error) {
         reject(error)
@@ -197,10 +211,12 @@ function writeToRealFs(
   response: IncomingMessage,
   destination: string,
   progressReporter?: ProgressReporter,
+  resumeFrom?: number,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const fileStream = createWriteStream(destination)
-    let bytesDownloaded = 0
+    const flags = resumeFrom && resumeFrom > 0 ? 'a' : 'w'
+    const fileStream = createWriteStream(destination, { flags })
+    let bytesDownloaded = resumeFrom || 0
 
     response.on('data', (chunk: Buffer) => {
       bytesDownloaded += chunk.length
@@ -219,17 +235,39 @@ function writeToRealFs(
 }
 
 /**
- * Download file via HTTPS with optional progress reporting
+ * Download file via HTTPS with optional progress reporting and resume support
  */
-function downloadFile(
+async function downloadFile(
   url: string,
   destination: string,
   fs?: FileSystemService,
   progressWriter?: ProgressWriter,
   isTTY?: boolean,
 ): Promise<void> {
+  // Check for partial download and determine resume strategy
+  let resumeFrom = 0
+  let totalBytes = 0
+  
+  // First HEAD request to get total size
+  totalBytes = await getContentLength(url)
+  
+  // Check if we should resume
+  const resumeDecision = await shouldResume(destination, totalBytes, fs)
+  if (resumeDecision.shouldResume) {
+    resumeFrom = resumeDecision.bytesDownloaded
+    logDiag(`Resuming download from byte ${resumeFrom} of ${totalBytes}`)
+  }
+  
+  const partialPath = getPartialFilePath(destination)
+  const targetPath = resumeFrom > 0 ? partialPath : destination
+  
   return new Promise((resolve, reject) => {
-    const request = https.get(url, response => {
+    const headers: Record<string, string> = {}
+    if (resumeFrom > 0) {
+      headers['Range'] = `bytes=${resumeFrom}-`
+    }
+    
+    const request = https.get(url, { headers }, response => {
       // Handle redirects
       if (response.statusCode === 301 || response.statusCode === 302) {
         const redirectUrl = response.headers.location
@@ -252,32 +290,69 @@ function downloadFile(
       let progressReporter: ProgressReporter | undefined
       if (progressWriter) {
         const contentLength = parseInt(response.headers['content-length'] || '0', 10)
-        if (contentLength > 0) {
+        const total = contentLength > 0 ? contentLength + resumeFrom : totalBytes
+        if (total > 0) {
           progressReporter = new ProgressReporter(
-            contentLength,
+            total,
             isTTY !== undefined ? isTTY : process.stdout.isTTY || false,
             progressWriter,
           )
+          // Update progress with already downloaded bytes
+          if (resumeFrom > 0) {
+            progressReporter.update(resumeFrom)
+          }
         }
       }
 
       // Write to file with progress tracking
       const writePromise = fs
-        ? writeToInMemoryFs(response, destination, fs, progressReporter)
-        : writeToRealFs(response, destination, progressReporter)
+        ? writeToInMemoryFs(response, targetPath, fs, progressReporter, resumeFrom)
+        : writeToRealFs(response, targetPath, progressReporter, resumeFrom)
 
       writePromise
-        .then(() => {
+        .then(async () => {
           if (progressReporter) {
             progressReporter.complete()
           }
+          
+          // Move partial file to final destination if resuming
+          if (resumeFrom > 0) {
+            if (fs) {
+              const content = fs.readFileSync(partialPath)
+              await fs.writeFile(destination, content)
+              await cleanupPartialFile(destination, fs)
+            } else {
+              const { rename } = await import('fs-extra')
+              await rename(partialPath, destination)
+            }
+          }
+          
           resolve()
         })
-        .catch(reject)
+        .catch(async (err) => {
+          // On error, clean up partial file
+          await cleanupPartialFile(destination, fs)
+          reject(err)
+        })
     })
 
-    request.on('error', error => {
+    request.on('error', async (error) => {
+      await cleanupPartialFile(destination, fs)
       reject(new Error(`Network error downloading KB: ${error.message}. Check connectivity.`))
     })
+  })
+}
+
+/**
+ * Get content length via HEAD request
+ */
+function getContentLength(url: string): Promise<number> {
+  return new Promise((resolve) => {
+    const request = https.request(url, { method: 'HEAD' }, response => {
+      const contentLength = parseInt(response.headers['content-length'] || '0', 10)
+      resolve(contentLength)
+    })
+    request.on('error', () => resolve(0))
+    request.end()
   })
 }
