@@ -236,3 +236,52 @@ describe('validatePackageStructure - file registry', () => {
     expect(result.errors).toHaveLength(0)
   })
 })
+
+describe('validatePackageStructure - error detection', () => {
+  let fsService: InMemoryFileSystemService
+
+  beforeEach(() => {
+    fsService = new InMemoryFileSystemService({}, '/test-module', '/test-project')
+  })
+
+  it('detects missing .pair directory', async () => {
+    const config: Config = {
+      asset_registries: {
+        knowledge: {
+          source: '.pair/knowledge',
+          target_path: '.pair-knowledge',
+          behavior: 'mirror',
+          description: 'KB',
+        },
+      },
+    }
+
+    const result = await validatePackageStructure(config, '/test-project', fsService)
+
+    expect(result.valid).toBe(false)
+    expect(result.errors[0]).toContain('source path does not exist')
+    expect(result.errors[0]).toContain('.pair/knowledge')
+  })
+
+  it('detects empty registry directories', async () => {
+    const projectRoot = '/test-project'
+    await fsService.mkdir(`${projectRoot}/.pair/knowledge`, { recursive: true })
+
+    const config: Config = {
+      asset_registries: {
+        knowledge: {
+          source: '.pair/knowledge',
+          target_path: '.pair-knowledge',
+          behavior: 'mirror',
+          description: 'KB',
+        },
+      },
+    }
+
+    const result = await validatePackageStructure(config, projectRoot, fsService)
+
+    expect(result.valid).toBe(false)
+    expect(result.errors[0]).toContain('directory is empty')
+    expect(result.errors[0]).toContain('knowledge')
+  })
+})

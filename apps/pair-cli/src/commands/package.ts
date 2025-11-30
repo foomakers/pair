@@ -1,5 +1,5 @@
 import { Command } from 'commander'
-import { loadConfigWithOverrides } from '../config-utils'
+import { loadConfigWithOverrides, type Config } from '../config-utils'
 import { validatePackageStructure } from './package/validators'
 import { generateManifestMetadata } from './package/metadata'
 import { createPackageZip } from './package/zip-creator'
@@ -32,23 +32,67 @@ export interface PackageContext {
   metadata: PackageMetadata
 }
 
+// Exit codes
+export const EXIT_SUCCESS = 0
+export const EXIT_VALIDATION_ERROR = 1
+export const EXIT_PACKAGING_ERROR = 2
+
+async function loadAndValidateConfig(options: PackageOptions, projectRoot: string) {
+  try {
+    return loadConfigWithOverrides(fileSystemService, {
+      ...(options.config && { customConfigPath: options.config }),
+      projectRoot,
+    })
+  } catch (error) {
+    console.error('❌ Config loading failed:', error instanceof Error ? error.message : error)
+    process.exit(EXIT_VALIDATION_ERROR)
+  }
+}
+
+async function validateConfig(config: Config, projectRoot: string) {
+  const validation = await validatePackageStructure(config, projectRoot, fileSystemService)
+  if (!validation.valid) {
+    console.error('❌ Validation failed:')
+    validation.errors.forEach(err => console.error(`  - ${err}`))
+    process.exit(EXIT_VALIDATION_ERROR)
+  }
+}
+
+async function prepareOutputDir(outputDir: string, outputPath: string) {
+  try {
+    if (!fileSystemService.existsSync(outputDir)) {
+      await fileSystemService.mkdir(outputDir, { recursive: true })
+    }
+  } catch (error) {
+    console.error(
+      `❌ Cannot create output directory: ${outputDir}`,
+      error instanceof Error ? error.message : error,
+    )
+    process.exit(EXIT_PACKAGING_ERROR)
+  }
+
+  try {
+    fileSystemService.accessSync(outputDir)
+  } catch {
+    console.error(`❌ Output directory is not writable: ${outputDir}`)
+    process.exit(EXIT_PACKAGING_ERROR)
+  }
+
+  if (fileSystemService.existsSync(outputPath)) {
+    console.warn(`⚠️  Overwriting existing file: ${outputPath}`)
+  }
+}
+
 async function executePackage(options: PackageOptions): Promise<void> {
   const projectRoot = options.sourceDir || process.cwd()
 
-  const result = loadConfigWithOverrides(fileSystemService, {
-    ...(options.config && { customConfigPath: options.config }),
-    projectRoot,
-  })
+  // Load and validate
+  const result = await loadAndValidateConfig(options, projectRoot)
+  await validateConfig(result.config, projectRoot)
 
-  const validation = await validatePackageStructure(result.config, projectRoot, fileSystemService)
-  if (!validation.valid) {
-    console.error('Validation failed:', validation.errors.join(', '))
-    process.exit(1)
-  }
-
+  // Generate manifest
   const registries: AssetRegistryConfig[] = Object.values(result.config.asset_registries)
   const registryNames = registries.map(r => r.source || '').filter(Boolean)
-
   const cliParams = {
     ...(options.name && { name: options.name }),
     ...(options.version && { version: options.version }),
@@ -57,12 +101,20 @@ async function executePackage(options: PackageOptions): Promise<void> {
   }
   const manifest = generateManifestMetadata(registryNames, cliParams)
 
+  // Prepare output
   const outputPath =
     options.output || path.join(projectRoot, 'dist', `kb-package-${manifest.created_at}.zip`)
+  const outputDir = path.dirname(outputPath)
+  await prepareOutputDir(outputDir, outputPath)
 
-  await createPackageZip({ projectRoot, registries, manifest, outputPath }, fileSystemService)
-
-  console.log(`✅ Package created: ${outputPath}`)
+  // Create ZIP
+  try {
+    await createPackageZip({ projectRoot, registries, manifest, outputPath }, fileSystemService)
+    console.log(`✅ Package created: ${outputPath}`)
+  } catch (error) {
+    console.error('❌ ZIP creation failed:', error instanceof Error ? error.message : error)
+    process.exit(EXIT_PACKAGING_ERROR)
+  }
 }
 
 export function packageCommand(program: Command): void {
