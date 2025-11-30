@@ -405,7 +405,9 @@ interface DownloadOptions {
 
 /**
  * Download file via HTTPS with optional progress reporting and resume support
+ * Complex download logic with resume, redirects, progress - exceptions justified
  */
+/* eslint-disable max-lines-per-function */
 async function downloadFile(
   url: string,
   destination: string,

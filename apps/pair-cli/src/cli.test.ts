@@ -230,19 +230,9 @@ describe('KB manager integration', () => {
     // This test verifies that ensureKBAvailableOnStartup respects skipKB parameter
     // In a real scenario, this would be tested through CLI integration
     // Here we verify the logic is callable with skipKB=true
-    
-    const mockFs = {
-      rootModuleDirectory: () => '/mock/project',
-      currentWorkingDirectory: () => '/mock/project',
-      existsSync: () => false,
-    }
 
     // The function should return early when skipKB=true without calling ensureKBAvailable
-    let ensureKBCalled = false
-    const mockEnsureKBAvailable = async () => {
-      ensureKBCalled = true
-      return '/home/user/.pair/kb/0.1.0'
-    }
+    const ensureKBCalled = false
 
     // This test would require access to ensureKBAvailableOnStartup which is not exported
     // Instead we verify the validateCliOptions correctly rejects the conflict

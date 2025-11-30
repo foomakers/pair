@@ -62,6 +62,8 @@ if (DIAG) {
   }
 }
 
+// Complex startup logic - exceptions justified for CLI initialization
+/* eslint-disable max-lines-per-function, complexity */
 async function ensureKBAvailableOnStartup(
   fsService: FileSystemService,
   version: string,

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { join } from 'path'
 import { homedir, tmpdir } from 'os'
 import * as https from 'https'
@@ -12,6 +12,20 @@ vi.mock('https', () => ({
 }))
 
 const mockExtract = vi.fn()
+
+// Default mock setup to prevent "Cannot read properties of undefined"
+beforeEach(() => {
+  // Default https.request mock for HEAD requests (getContentLength)
+  vi.mocked(https.request).mockImplementation((url, options, callback) => {
+    // Handle both overloads: request(url, options, callback) and request(url, callback)
+    const cb = typeof options === 'function' ? options : callback
+    if (typeof cb === 'function') {
+      const mockResponse = createMockResponse(200, { 'content-length': '1024' })
+      setImmediate(() => cb(mockResponse))
+    }
+    return createMockRequest()
+  })
+})
 
 describe('KB Manager - Cache Operations', () => {
   const testVersion = '0.2.0'

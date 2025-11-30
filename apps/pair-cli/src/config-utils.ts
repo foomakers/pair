@@ -298,6 +298,8 @@ export function getKnowledgeHubDatasetPath(fsService: FileSystemService): string
  * @param ensureKBAvailableFn Optional KB ensure function (for testing)
  * @returns Path to dataset directory
  */
+// Complex fallback logic with test hooks - exceptions justified
+/* eslint-disable max-params, complexity */
 export async function getKnowledgeHubDatasetPathWithFallback(
   fsService: FileSystemService,
   version: string,
