@@ -350,6 +350,7 @@ The release process is now fully automated through GitHub Actions using a **3-ph
 The automated process produces:
 
 **CLI Artifacts:**
+
 - `pair-cli-manual-{version}.zip` - Complete bundled artifact (KB excluded)
 - `pair-cli-manual-{version}.zip.sha256` - SHA256 checksum for verification
 - `pair-cli-{version}.tgz` - NPM package for GitHub Packages registry
@@ -357,16 +358,19 @@ The automated process produces:
 - `pair-cli-{version}.tgz.meta.json` - Package metadata
 
 **Knowledge Base Artifacts:**
+
 - `knowledge-base-{version}.zip` - Complete KB dataset with manifest
 - `knowledge-base-{version}.zip.sha256` - SHA256 checksum for verification
 - `manifest.json` (inside ZIP) - Version, file list, checksums, timestamp
 
 **Additional:**
+
 - GitHub release with download links and installation instructions
 - Cross-platform executables (Linux/macOS/Windows)
 - TypeScript definitions and metadata
 
 **KB Auto-Download:**
+
 - CLI auto-downloads KB on first run from GitHub releases
 - KB cached at `~/.pair/kb/{version}/`
 - Version-isolated caching (different versions use different caches)

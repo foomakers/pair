@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # KB Dataset Packaging Script
-# Creates ZIP from knowledge-hub dataset with manifest and checksum
+# Creates ZIP from knowledge-hub dataset using 'pair package' command
+# Ensures consistent packaging logic with manual KB packaging
 # Includes link normalization and package verification
 
 CLEAN=false
@@ -55,7 +56,6 @@ fi
 DATASET_SOURCE="packages/knowledge-hub/dataset"
 RELEASE_DIR="release"
 OUTPUT_ZIP="${RELEASE_DIR}/knowledge-base-${VERSION}.zip"
-MANIFEST_FILE="manifest.json"
 CHECKSUM_FILE="${OUTPUT_ZIP}.sha256"
 
 # Validate dataset exists
@@ -83,10 +83,10 @@ mkdir -p "$RELEASE_DIR"
 
 # Normalize links before packaging
 echo "🔗 Normalizing markdown links to relative paths..."
-PAIR_CLI="node apps/pair-cli/dist/cli.js"
+PAIR_CLI="apps/pair-cli/dist/cli.js"
 
 # Check if CLI is built
-if [[ ! -f "apps/pair-cli/dist/cli.js" ]]; then
+if [[ ! -f "$PAIR_CLI" ]]; then
   echo "⚠️  CLI not built, building now..."
   pnpm --filter @pair/pair-cli build
 fi
@@ -94,7 +94,7 @@ fi
 # Run update-link on dataset to normalize all links to relative
 echo "   Running: $PAIR_CLI update-link --relative on dataset..."
 LINK_LOG=$(mktemp)
-if (cd "$DATASET_SOURCE" && $PROJECT_ROOT/$PAIR_CLI update-link --relative > "$LINK_LOG" 2>&1); then
+if (cd "$DATASET_SOURCE" && node "$PROJECT_ROOT/$PAIR_CLI" update-link --relative > "$LINK_LOG" 2>&1); then
   LINKS_UPDATED=$(grep -c "Updated" "$LINK_LOG" 2>/dev/null || echo "0")
   echo "   ✓ Links normalized: $LINKS_UPDATED files updated"
 else
@@ -117,49 +117,35 @@ if [[ $DATASET_SIZE_MB -gt 50 ]]; then
   echo "   Consider optimization for faster downloads"
 fi
 
-# Generate manifest.json
-echo "📝 Generating manifest.json..."
-TEMP_MANIFEST=$(mktemp)
-TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+# Create temporary config.json for pair kb package
+echo "📝 Creating packaging config..."
+TEMP_CONFIG=$(mktemp)
+cat > "$TEMP_CONFIG" <<EOF
+{
+  "asset_registries": {
+    "knowledge-base": {
+      "source": ".",
+      "behavior": "mirror",
+      "target_path": ".",
+      "description": "Knowledge base dataset v${VERSION}"
+    }
+  }
+}
+EOF
 
-# Start JSON
-echo "{" > "$TEMP_MANIFEST"
-echo "  \"version\": \"${VERSION}\"," >> "$TEMP_MANIFEST"
-echo "  \"timestamp\": \"${TIMESTAMP}\"," >> "$TEMP_MANIFEST"
-echo "  \"files\": [" >> "$TEMP_MANIFEST"
+# Use pair package command to create the ZIP
+echo "🗜️  Creating ZIP archive with pair package..."
+(cd "$DATASET_SOURCE" && node "$PROJECT_ROOT/$PAIR_CLI" package \
+  --config="$TEMP_CONFIG" \
+  --output="$PROJECT_ROOT/$OUTPUT_ZIP" \
+  --name="knowledge-base" \
+  --version="$VERSION" \
+  --description="Pair knowledge base dataset")
 
-# Scan files and compute checksums
-FIRST_FILE=true
-while IFS= read -r -d '' file; do
-  RELATIVE_PATH="${file#$DATASET_SOURCE/}"
-  CHECKSUM=$(shasum -a 256 "$file" | awk '{print $1}')
-  
-  if [[ "$FIRST_FILE" == "true" ]]; then
-    FIRST_FILE=false
-  else
-    echo "," >> "$TEMP_MANIFEST"
-  fi
-  
-  echo -n "    {\"path\": \"$RELATIVE_PATH\", \"sha256\": \"$CHECKSUM\"}" >> "$TEMP_MANIFEST"
-done < <(find "$DATASET_SOURCE" -type f -print0 | sort -z)
+rm "$TEMP_CONFIG"
 
-echo "" >> "$TEMP_MANIFEST"
-echo "  ]" >> "$TEMP_MANIFEST"
-echo "}" >> "$TEMP_MANIFEST"
-
-# Copy manifest to dataset temporarily
-cp "$TEMP_MANIFEST" "$DATASET_SOURCE/$MANIFEST_FILE"
-
-# Create ZIP with preserved structure
-echo "🗜️  Creating ZIP archive..."
-(cd "$DATASET_SOURCE" && zip -r "$PROJECT_ROOT/$OUTPUT_ZIP" . -q)
-
-# Count files before cleanup
-MANIFEST_FILES=$(grep -c '"path"' "$TEMP_MANIFEST" 2>/dev/null || echo "0")
-
-# Remove temporary manifest from dataset
-rm "$DATASET_SOURCE/$MANIFEST_FILE"
-rm "$TEMP_MANIFEST"
+# Count files in created package
+MANIFEST_FILES=$(unzip -l "$OUTPUT_ZIP" | grep -c "^\s*[0-9]" | tail -1)
 
 # Generate checksum for ZIP
 echo "🔒 Generating SHA256 checksum..."
@@ -194,8 +180,7 @@ if [[ "$VERIFY" == true ]]; then
   
   # Verify manifest has expected structure
   if ! grep -q '"version"' "$VERIFY_DIR/manifest.json" || \
-     ! grep -q '"timestamp"' "$VERIFY_DIR/manifest.json" || \
-     ! grep -q '"files"' "$VERIFY_DIR/manifest.json"; then
+     ! grep -q '"name"' "$VERIFY_DIR/manifest.json"; then
     echo "❌ Error: manifest.json missing required fields"
     exit 1
   fi
@@ -205,66 +190,7 @@ if [[ "$VERIFY" == true ]]; then
   EXTRACTED_COUNT=$(find "$VERIFY_DIR" -type f ! -name "manifest.json" | wc -l | tr -d ' ')
   echo "   ✓ Package contains $EXTRACTED_COUNT files (+ manifest)"
   
-  # Test kb package command on extracted dataset
   echo ""
-  echo "🧪 Testing 'pair kb package' on extracted dataset..."
-  
-  # Create temporary project structure
-  TEST_PROJECT="$VERIFY_DIR/test-project"
-  mkdir -p "$TEST_PROJECT/.pair"
-  
-  # Copy extracted dataset to .pair directory
-  cp -r "$VERIFY_DIR"/* "$TEST_PROJECT/.pair/" 2>/dev/null || true
-  rm -f "$TEST_PROJECT/.pair/manifest.json" # Remove manifest from .pair
-  
-  # Create minimal config.json for the test
-  cat > "$TEST_PROJECT/config.json" <<EOF
-{
-  "asset_registries": {
-    "knowledge": {
-      "source": ".pair/knowledge",
-      "behavior": "mirror",
-      "target_path": ".pair/knowledge",
-      "description": "Knowledge base content"
-    },
-    "adoption": {
-      "source": ".pair/adoption",
-      "behavior": "mirror",
-      "target_path": ".pair/adoption",
-      "description": "Adoption content"
-    }
-  }
-}
-EOF
-  
-  # Run pair kb package
-  PKG_OUTPUT="$TEST_PROJECT/test-package.zip"
-  if (cd "$TEST_PROJECT" && $PROJECT_ROOT/$PAIR_CLI kb package --output "$PKG_OUTPUT" > /dev/null 2>&1); then
-    echo "   ✓ kb package command succeeded"
-    
-    # Verify package was created
-    if [[ ! -f "$PKG_OUTPUT" ]]; then
-      echo "❌ Error: package not created"
-      exit 1
-    fi
-    
-    PKG_SIZE=$(du -h "$PKG_OUTPUT" | cut -f1)
-    echo "   ✓ Package created: $PKG_SIZE"
-    
-    # Verify package contains manifest
-    if unzip -l "$PKG_OUTPUT" | grep -q "manifest.json"; then
-      echo "   ✓ Package contains manifest.json"
-    else
-      echo "❌ Error: Package missing manifest.json"
-      exit 1
-    fi
-    
-    echo ""
-    echo "✅ Package verification complete - all checks passed"
-  else
-    echo "❌ Error: kb package command failed"
-    echo "   This may indicate issues with the dataset structure"
-    exit 1
-  fi
+  echo "✅ Package verification complete - all checks passed"
 fi
 
