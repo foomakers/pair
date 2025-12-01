@@ -62,53 +62,54 @@ if (DIAG) {
   }
 }
 
-// Complex startup logic - exceptions justified for CLI initialization
-/* eslint-disable max-lines-per-function, complexity */
+function hasLocalDataset(fsService: FileSystemService): boolean {
+  try {
+    const datasetPath = getKnowledgeHubDatasetPath(fsService)
+    return fsService.existsSync(datasetPath)
+  } catch {
+    return false
+  }
+}
+
+function validateAndLogCustomUrl(customUrl: string): void {
+  try {
+    validateKBUrl(customUrl)
+    if (DIAG) console.error(`[diag] Using custom URL: ${customUrl}`)
+  } catch (err) {
+    console.error(chalk.red(`Invalid --url parameter: ${err}`))
+    process.exitCode = 1
+    process.exit(1)
+  }
+}
+
 async function ensureKBAvailableOnStartup(
   fsService: FileSystemService,
   version: string,
   customUrl?: string,
   skipKB?: boolean,
 ): Promise<void> {
-  // Skip KB download if --no-kb flag is set
   if (skipKB) {
     if (DIAG) console.error('[diag] Skipping KB download (--no-kb flag set)')
     return
   }
 
-  try {
-    // Try to get local dataset first
-    const datasetPath = getKnowledgeHubDatasetPath(fsService)
-    if (fsService.existsSync(datasetPath)) {
-      if (DIAG) console.error('[diag] Using local dataset')
-      return
-    }
-  } catch {
-    // Local dataset not available, will fallback to KB manager
-    if (DIAG) console.error('[diag] Local dataset not available, using KB manager')
+  if (hasLocalDataset(fsService)) {
+    if (DIAG) console.error('[diag] Using local dataset')
+    return
   }
 
-  // Validate custom URL if provided
+  if (DIAG) console.error('[diag] Local dataset not available, using KB manager')
+
   if (customUrl) {
-    try {
-      validateKBUrl(customUrl)
-      if (DIAG) console.error(`[diag] Using custom URL: ${customUrl}`)
-    } catch (err) {
-      console.error(chalk.red(`Invalid --url parameter: ${err}`))
-      process.exitCode = 1
-      process.exit(1)
-    }
+    validateAndLogCustomUrl(customUrl)
   }
 
-  // Fallback to KB manager
   try {
-    const datasetPath = await getKnowledgeHubDatasetPathWithFallback(
+    const datasetPath = await getKnowledgeHubDatasetPathWithFallback({
       fsService,
       version,
-      undefined,
-      undefined,
-      customUrl,
-    )
+      ...(customUrl !== undefined && { customUrl }),
+    })
     if (DIAG) console.error(`[diag] KB dataset available at: ${datasetPath}`)
   } catch (err) {
     console.error(chalk.red(`[startup] Failed to ensure KB available: ${err}`))

@@ -15,6 +15,8 @@ export interface CliOptions {
 export function validateCliOptions(options: CliOptions): void {
   // Check for conflicting --url and --no-kb flags
   if (options.url && options.kb === false) {
-    throw new Error('Cannot use --url and --no-kb together. Use --url to specify a custom KB source, or --no-kb to skip KB download entirely.')
+    throw new Error(
+      'Cannot use --url and --no-kb together. Use --url to specify a custom KB source, or --no-kb to skip KB download entirely.',
+    )
   }
 }

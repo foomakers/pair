@@ -3,9 +3,9 @@ import { InMemoryFileSystemService } from '@pair/content-ops'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
-const { 
-  getPartialFilePath, 
-  hasPartialDownload, 
+const {
+  getPartialFilePath,
+  hasPartialDownload,
   getPartialFileSize,
   cleanupPartialFile,
   shouldResume,
@@ -27,11 +27,7 @@ describe('Resume Manager - Partial File Paths', () => {
 
 describe('Resume Manager - Partial File Detection', () => {
   it('returns true when partial file exists', async () => {
-    const fs = new InMemoryFileSystemService(
-      { '/tmp/kb.zip.partial': 'partial data' },
-      '/',
-      '/',
-    )
+    const fs = new InMemoryFileSystemService({ '/tmp/kb.zip.partial': 'partial data' }, '/', '/')
     const result = await hasPartialDownload('/tmp/kb.zip', fs)
     expect(result).toBe(true)
   })
@@ -70,12 +66,8 @@ describe('Resume Manager - Partial File Size', () => {
 
 describe('Resume Manager - Cleanup', () => {
   it('deletes partial file', async () => {
-    const fs = new InMemoryFileSystemService(
-      { '/tmp/kb.zip.partial': 'partial data' },
-      '/',
-      '/',
-    )
-    
+    const fs = new InMemoryFileSystemService({ '/tmp/kb.zip.partial': 'partial data' }, '/', '/')
+
     expect(fs.existsSync('/tmp/kb.zip.partial')).toBe(true)
     await cleanupPartialFile('/tmp/kb.zip', fs)
     expect(fs.existsSync('/tmp/kb.zip.partial')).toBe(false)
@@ -94,7 +86,7 @@ describe('Resume Manager - Resume Decision', () => {
       '/',
       '/',
     )
-    
+
     const result = await shouldResume('/tmp/kb.zip', 1000, fs)
     expect(result.shouldResume).toBe(true)
     expect(result.bytesDownloaded).toBeGreaterThan(0)
@@ -107,7 +99,7 @@ describe('Resume Manager - Resume Decision', () => {
       '/',
       '/',
     )
-    
+
     const result = await shouldResume('/tmp/kb.zip', 500, fs)
     expect(result.shouldResume).toBe(false)
     expect(result.bytesDownloaded).toBe(0)
@@ -115,7 +107,7 @@ describe('Resume Manager - Resume Decision', () => {
 
   it('does not resume when partial file does not exist', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
-    
+
     const result = await shouldResume('/tmp/kb.zip', 1000, fs)
     expect(result.shouldResume).toBe(false)
     expect(result.bytesDownloaded).toBe(0)
@@ -127,7 +119,7 @@ describe('Resume Manager - Resume Decision', () => {
       '/',
       '/',
     )
-    
+
     const result = await shouldResume('/tmp/kb.zip', 0, fs)
     expect(result.shouldResume).toBe(false)
   })

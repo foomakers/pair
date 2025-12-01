@@ -29,11 +29,11 @@ export async function hasPartialDownload(
   fs?: FileSystemService,
 ): Promise<boolean> {
   const partialPath = getPartialFilePath(filePath)
-  
+
   if (fs) {
     return fs.existsSync(partialPath)
   }
-  
+
   // Production: use fs-extra
   const { pathExists } = await import('fs-extra')
   return pathExists(partialPath)
@@ -50,14 +50,14 @@ export async function getPartialFileSize(
   fs?: FileSystemService,
 ): Promise<number> {
   const partialPath = getPartialFilePath(filePath)
-  
+
   try {
     if (fs) {
       if (!fs.existsSync(partialPath)) return 0
       const content = fs.readFileSync(partialPath)
       return Buffer.from(content).length
     }
-    
+
     // Production: use fs stat
     const { stat } = await import('fs-extra')
     const stats = await stat(partialPath)
@@ -72,12 +72,9 @@ export async function getPartialFileSize(
  * @param filePath - Original file path
  * @param fs - Optional filesystem service (for testing)
  */
-export async function cleanupPartialFile(
-  filePath: string,
-  fs?: FileSystemService,
-): Promise<void> {
+export async function cleanupPartialFile(filePath: string, fs?: FileSystemService): Promise<void> {
   const partialPath = getPartialFilePath(filePath)
-  
+
   try {
     if (fs) {
       if (fs.existsSync(partialPath)) {
@@ -85,7 +82,7 @@ export async function cleanupPartialFile(
       }
       return
     }
-    
+
     // Production: use fs-extra
     const { remove } = await import('fs-extra')
     await remove(partialPath)
@@ -110,18 +107,18 @@ export async function shouldResume(
   if (totalBytes <= 0) {
     return { shouldResume: false, bytesDownloaded: 0 }
   }
-  
+
   const hasPartial = await hasPartialDownload(filePath, fs)
   if (!hasPartial) {
     return { shouldResume: false, bytesDownloaded: 0 }
   }
-  
+
   const partialSize = await getPartialFileSize(filePath, fs)
-  
+
   // Resume only if partial file is smaller than total
   if (partialSize > 0 && partialSize < totalBytes) {
     return { shouldResume: true, bytesDownloaded: partialSize }
   }
-  
+
   return { shouldResume: false, bytesDownloaded: 0 }
 }

@@ -370,26 +370,50 @@ describe('getKnowledgeHubDatasetPath - release bundle resolution', () => {
   })
 })
 
+// Helper: create cached KB in mock fs
+function setupCachedKB(fs: InMemoryFileSystemService, cachedKBPath: string, content: string) {
+  fs.writeFile(path.join(cachedKBPath, 'dataset', 'dummy.txt'), content)
+}
+
+// Helper: create mock KB manager functions
+function createKBMocks(isCached: boolean, cachedPath: string) {
+  return {
+    mockIsKBCached: vi.fn().mockResolvedValue(isCached),
+    mockEnsureKBAvailable: vi.fn().mockResolvedValue(cachedPath),
+  }
+}
+
+// Helper: setup local dataset in filesystem
+function setupLocalDataset(fs: InMemoryFileSystemService, mockDir: string) {
+  const packageJsonPath = path.join(
+    mockDir,
+    'node_modules',
+    '@pair',
+    'knowledge-hub',
+    'package.json',
+  )
+  const localDatasetPath = path.join(mockDir, 'node_modules', '@pair', 'knowledge-hub', 'dataset')
+
+  fs.writeFile(packageJsonPath, JSON.stringify({ name: '@pair/knowledge-hub' }))
+  fs.writeFile(path.join(localDatasetPath, 'dummy.txt'), 'local')
+  return localDatasetPath
+}
+
 describe('getKnowledgeHubDatasetPath with KB manager fallback', () => {
   it('should use cached KB when dataset not found locally', async () => {
     const mockDir = '/mock/project'
     const cachedKBPath = '/home/user/.pair/kb/0.1.0'
-
     const fs = new InMemoryFileSystemService({}, mockDir, '/')
+    const { mockIsKBCached, mockEnsureKBAvailable } = createKBMocks(true, cachedKBPath)
 
-    // Mock KB manager to return cached path
-    const mockIsKBCached = vi.fn().mockResolvedValue(true)
-    const mockEnsureKBAvailable = vi.fn().mockResolvedValue(cachedKBPath)
+    setupCachedKB(fs, cachedKBPath, 'cached')
 
-    // Create dataset in cached KB path
-    fs.writeFile(path.join(cachedKBPath, 'dataset', 'dummy.txt'), 'cached')
-
-    const result = await configUtils.getKnowledgeHubDatasetPathWithFallback(
-      fs,
-      '0.1.0',
-      mockIsKBCached,
-      mockEnsureKBAvailable,
-    )
+    const result = await configUtils.getKnowledgeHubDatasetPathWithFallback({
+      fsService: fs,
+      version: '0.1.0',
+      isKBCachedFn: mockIsKBCached,
+      ensureKBAvailableFn: mockEnsureKBAvailable,
+    })
 
     expect(mockIsKBCached).toHaveBeenCalledWith('0.1.0', fs)
     expect(mockEnsureKBAvailable).toHaveBeenCalledWith('0.1.0', { fs })
@@ -399,22 +423,17 @@ describe('getKnowledgeHubDatasetPath with KB manager fallback', () => {
   it('should download KB when not cached', async () => {
     const mockDir = '/mock/project'
     const cachedKBPath = '/home/user/.pair/kb/0.1.0'
-
     const fs = new InMemoryFileSystemService({}, mockDir, '/')
+    const { mockIsKBCached, mockEnsureKBAvailable } = createKBMocks(false, cachedKBPath)
 
-    // Mock KB manager to download
-    const mockIsKBCached = vi.fn().mockResolvedValue(false)
-    const mockEnsureKBAvailable = vi.fn().mockResolvedValue(cachedKBPath)
+    setupCachedKB(fs, cachedKBPath, 'downloaded')
 
-    // Create dataset in cached KB path
-    fs.writeFile(path.join(cachedKBPath, 'dataset', 'dummy.txt'), 'downloaded')
-
-    const result = await configUtils.getKnowledgeHubDatasetPathWithFallback(
-      fs,
-      '0.1.0',
-      mockIsKBCached,
-      mockEnsureKBAvailable,
-    )
+    const result = await configUtils.getKnowledgeHubDatasetPathWithFallback({
+      fsService: fs,
+      version: '0.1.0',
+      isKBCachedFn: mockIsKBCached,
+      ensureKBAvailableFn: mockEnsureKBAvailable,
+    })
 
     expect(mockIsKBCached).toHaveBeenCalledWith('0.1.0', fs)
     expect(mockEnsureKBAvailable).toHaveBeenCalledWith('0.1.0', { fs })
@@ -423,33 +442,19 @@ describe('getKnowledgeHubDatasetPath with KB manager fallback', () => {
 
   it('should use local dataset when available', async () => {
     const mockDir = '/mock/project'
-
     const fs = new InMemoryFileSystemService({}, mockDir, '/')
-
-    // Create local dataset with package.json
-    const packageJsonPath = path.join(
-      mockDir,
-      'node_modules',
-      '@pair',
-      'knowledge-hub',
-      'package.json',
-    )
-    const localDatasetPath = path.join(mockDir, 'node_modules', '@pair', 'knowledge-hub', 'dataset')
-
-    fs.writeFile(packageJsonPath, JSON.stringify({ name: '@pair/knowledge-hub' }))
-    fs.writeFile(path.join(localDatasetPath, 'dummy.txt'), 'local')
-
     const mockIsKBCached = vi.fn()
     const mockEnsureKBAvailable = vi.fn()
 
-    const result = await configUtils.getKnowledgeHubDatasetPathWithFallback(
-      fs,
-      '0.1.0',
-      mockIsKBCached,
-      mockEnsureKBAvailable,
-    )
+    const localDatasetPath = setupLocalDataset(fs, mockDir)
 
-    // Should not call KB manager when local dataset exists
+    const result = await configUtils.getKnowledgeHubDatasetPathWithFallback({
+      fsService: fs,
+      version: '0.1.0',
+      isKBCachedFn: mockIsKBCached,
+      ensureKBAvailableFn: mockEnsureKBAvailable,
+    })
+
     expect(mockIsKBCached).not.toHaveBeenCalled()
     expect(mockEnsureKBAvailable).not.toHaveBeenCalled()
     expect(result).toBe(localDatasetPath)

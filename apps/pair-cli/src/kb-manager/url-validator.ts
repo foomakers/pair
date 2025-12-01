@@ -29,13 +29,13 @@ export function isValidHttpUrl(urlString: string): boolean {
 export function validateKBUrl(urlString: string): string {
   try {
     const url = new URL(urlString)
-    
+
     if (!ALLOWED_PROTOCOLS.includes(url.protocol)) {
       throw new Error(
-        `Invalid URL protocol: ${url.protocol}. Only http:// and https:// are allowed.`
+        `Invalid URL protocol: ${url.protocol}. Only http:// and https:// are allowed.`,
       )
     }
-    
+
     return urlString
   } catch (error) {
     if (error instanceof Error && error.message.includes('Invalid URL protocol')) {

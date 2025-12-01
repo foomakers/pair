@@ -4,16 +4,30 @@ import * as https from 'https'
 import { IncomingMessage } from 'http'
 import { createWriteStream } from 'fs'
 import type { FileSystemService } from '@pair/content-ops'
-import { ProgressReporter, type ProgressWriter } from './progress-reporter'
-import { shouldResume, getPartialFilePath, cleanupPartialFile } from './resume-manager'
-import { validateChecksum, getExpectedChecksum } from './checksum-validator'
+import { ProgressReporter, type ProgressWriter } from './kb-manager/progress-reporter'
+import { shouldResume, getPartialFilePath, cleanupPartialFile } from './kb-manager/resume-manager'
+import { validateChecksum, getExpectedChecksum } from './kb-manager/checksum-validator'
+
+interface WriteOptions {
+  progressReporter?: ProgressReporter | undefined
+  resumeFrom?: number | undefined
+}
+
+interface ProgressConfig {
+  resumeFrom: number
+  totalBytes: number
+  progressWriter?: ProgressWriter | undefined
+  isTTY?: boolean | undefined
+}
+
+interface DownloadDeps {
+  fs?: FileSystemService | undefined
+  progressWriter?: ProgressWriter | undefined
+  isTTY?: boolean | undefined
+}
 
 // Diagnostic logging (PAIR_DIAG=1)
 const DIAG = process.env['PAIR_DIAG'] === '1' || process.env['PAIR_DIAG'] === 'true'
-
-interface HttpError extends Error {
-  statusCode?: number
-}
 
 export interface KBManagerDeps {
   fs?: FileSystemService
@@ -138,41 +152,62 @@ async function validateDownloadChecksum(
   const checksumUrl = `${downloadUrl}.sha256`
 
   try {
-    // Try to fetch checksum file
     const checksumContent = await fetchChecksumFile(checksumUrl)
     if (!checksumContent) {
       logDiag('No checksum file found, skipping validation')
       return
     }
 
-    const expectedChecksum = await getExpectedChecksum(checksumContent)
-    if (!expectedChecksum) {
-      logDiag('Could not extract checksum from file, skipping validation')
-      return
-    }
-
-    logDiag(`Expected checksum: ${expectedChecksum}`)
-    const result = await validateChecksum(filePath, expectedChecksum, fs)
-
-    if (!result.isValid) {
-      throw new Error(
-        `Checksum validation failed!\n` +
-          `Expected: ${result.expectedChecksum}\n` +
-          `Actual:   ${result.actualChecksum}\n` +
-          `File may be corrupted. Please retry the download.`,
-      )
-    }
-
+    await performChecksumValidation(filePath, checksumContent, fs)
     logDiag('Checksum validation passed')
   } catch (error) {
-    // If checksum file doesn't exist (404), skip validation
-    const httpError = error as HttpError
-    if (httpError.message?.includes('404')) {
-      logDiag('Checksum file not found (404), skipping validation')
-      return
-    }
-    throw error
+    handleChecksumError(error)
   }
+}
+
+/**
+ * Perform checksum validation
+ */
+async function performChecksumValidation(
+  filePath: string,
+  checksumContent: string,
+  fs?: FileSystemService,
+): Promise<void> {
+  const expectedChecksum = await getExpectedChecksum(checksumContent)
+  if (!expectedChecksum) {
+    logDiag('Could not extract checksum from file, skipping validation')
+    return
+  }
+
+  logDiag(`Expected checksum: ${expectedChecksum}`)
+  const result = await validateChecksum(filePath, expectedChecksum, fs)
+
+  if (!result.isValid) {
+    throw new Error(
+      `Checksum validation failed!\n` +
+        `Expected: ${result.expectedChecksum}\n` +
+        `Actual:   ${result.actualChecksum}\n` +
+        `File may be corrupted. Please retry the download.`,
+    )
+  }
+}
+
+/**
+ * Handle checksum validation errors
+ */
+function handleChecksumError(error: unknown): void {
+  const isError = error && typeof error === 'object' && error !== null
+  const hasMessage = isError && 'message' in error && typeof error.message === 'string'
+  const is404 =
+    hasMessage &&
+    typeof (error as { message: string }).message === 'string' &&
+    (error as { message: string }).message.includes('404')
+
+  if (is404) {
+    logDiag('Checksum file not found (404), skipping validation')
+    return
+  }
+  throw error
 }
 
 /**
@@ -253,11 +288,6 @@ function handleHttpError(statusCode: number, url: string): Error | null {
   return null
 }
 
-interface WriteOptions {
-  progressReporter?: ProgressReporter | undefined
-  resumeFrom?: number | undefined
-}
-
 function writeToInMemoryFs(
   response: IncomingMessage,
   destination: string,
@@ -301,13 +331,13 @@ function writeToInMemoryFs(
 function writeToRealFs(
   response: IncomingMessage,
   destination: string,
-  progressReporter?: ProgressReporter,
-  resumeFrom?: number,
+  options: WriteOptions = {},
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const flags = resumeFrom && resumeFrom > 0 ? 'a' : 'w'
+    const { progressReporter, resumeFrom = 0 } = options
+    const flags = resumeFrom > 0 ? 'a' : 'w'
     const fileStream = createWriteStream(destination, { flags })
-    let bytesDownloaded = resumeFrom || 0
+    let bytesDownloaded = resumeFrom
 
     response.on('data', (chunk: Buffer) => {
       bytesDownloaded += chunk.length
@@ -331,254 +361,181 @@ interface DownloadContext {
   fs?: FileSystemService | undefined
   progressWriter?: ProgressWriter | undefined
   isTTY?: boolean | undefined
-}
-
-async function setupResumeContext(ctx: DownloadContext) {
-  const totalBytes = await getContentLength(ctx.url)
-  const resumeDecision = await shouldResume(ctx.destination, totalBytes, ctx.fs)
-
-  if (resumeDecision.shouldResume) {
-    logDiag(`Resuming download from byte ${resumeDecision.bytesDownloaded} of ${totalBytes}`)
-  }
-
-  return {
-    totalBytes,
-    resumeFrom: resumeDecision.shouldResume ? resumeDecision.bytesDownloaded : 0,
-  }
-}
-
-interface ProgressReporterContext {
-  totalBytes: number
   resumeFrom: number
-  progressWriter?: ProgressWriter | undefined
-  isTTY?: boolean | undefined
+  totalBytes: number
 }
 
+interface ResponseHandlerResult {
+  progressReporter?: ProgressReporter | undefined
+  writePromise: Promise<void>
+}
+
+/**
+ * Setup progress reporter
+ */
 function createProgressReporter(
   response: IncomingMessage,
-  context: ProgressReporterContext,
+  config: ProgressConfig,
 ): ProgressReporter | undefined {
-  const { totalBytes, resumeFrom, progressWriter, isTTY } = context
-  if (!progressWriter) return undefined
+  if (!config.progressWriter) return undefined
 
   const contentLength = parseInt(response.headers['content-length'] || '0', 10)
-  const total = contentLength > 0 ? contentLength + resumeFrom : totalBytes
-
+  const total = contentLength > 0 ? contentLength + config.resumeFrom : config.totalBytes
   if (total <= 0) return undefined
 
   const reporter = new ProgressReporter(
     total,
-    isTTY !== undefined ? isTTY : process.stdout.isTTY || false,
-    progressWriter,
+    config.isTTY !== undefined ? config.isTTY : process.stdout.isTTY || false,
+    config.progressWriter,
   )
 
-  if (resumeFrom > 0) {
-    reporter.update(resumeFrom)
+  if (config.resumeFrom > 0) {
+    reporter.update(config.resumeFrom)
   }
 
   return reporter
 }
 
-async function finalizeDownload(
-  destination: string,
-  partialPath: string,
-  resumeFrom: number,
-  fs?: FileSystemService,
-): Promise<void> {
-  if (resumeFrom <= 0) return
+/**
+ * Handle response and start download
+ */
+function handleDownloadResponse(
+  response: IncomingMessage,
+  ctx: DownloadContext,
+): ResponseHandlerResult {
+  const partialPath = getPartialFilePath(ctx.destination)
+  const targetPath = ctx.resumeFrom > 0 ? partialPath : ctx.destination
 
-  if (fs) {
-    const content = fs.readFileSync(partialPath)
-    await fs.writeFile(destination, content)
-    await cleanupPartialFile(destination, fs)
-  } else {
-    const { rename } = await import('fs-extra')
-    await rename(partialPath, destination)
+  const progressConfig: ProgressConfig = {
+    resumeFrom: ctx.resumeFrom,
+    totalBytes: ctx.totalBytes,
+    progressWriter: ctx.progressWriter,
+    isTTY: ctx.isTTY,
   }
+
+  const progressReporter = createProgressReporter(response, progressConfig)
+
+  const writeOptions: WriteOptions = {
+    progressReporter,
+    resumeFrom: ctx.resumeFrom,
+  }
+
+  const writePromise = ctx.fs
+    ? writeToInMemoryFs(response, targetPath, ctx.fs, writeOptions)
+    : writeToRealFs(response, targetPath, writeOptions)
+
+  return { progressReporter, writePromise }
 }
 
-interface DownloadOptions {
-  fs?: FileSystemService | undefined
-  progressWriter?: ProgressWriter | undefined
-  isTTY?: boolean | undefined
+/**
+ * Finalize download by moving partial file to final destination
+ */
+async function finalizeDownload(ctx: DownloadContext): Promise<void> {
+  if (ctx.resumeFrom <= 0) return
+
+  const partialPath = getPartialFilePath(ctx.destination)
+
+  if (ctx.fs) {
+    const content = ctx.fs.readFileSync(partialPath)
+    await ctx.fs.writeFile(ctx.destination, content)
+    await cleanupPartialFile(ctx.destination, ctx.fs)
+  } else {
+    const { rename } = await import('fs-extra')
+    await rename(partialPath, ctx.destination)
+  }
 }
 
 /**
  * Download file via HTTPS with optional progress reporting and resume support
  */
-function handleRedirect(params: {
-  response: IncomingMessage
-  url: string
-  destination: string
-  options: DownloadOptions
-  resolve: (value: void | PromiseLike<void>) => void
-  reject: (reason?: unknown) => void
-}): boolean {
-  const { response, destination, options, resolve, reject } = params
-  if (response.statusCode === 301 || response.statusCode === 302) {
-    const redirectUrl = response.headers.location
-    if (redirectUrl) {
-      downloadFile(redirectUrl, destination, options).then(resolve).catch(reject)
-      return true
-    }
-  }
-  return false
-}
-
-async function handleDownloadSuccess(params: {
-  destination: string
-  partialPath: string
-  resumeFrom: number
-  fs: FileSystemService | undefined
-  progressReporter: ProgressReporter | undefined
-}): Promise<void> {
-  const { destination, partialPath, resumeFrom, fs, progressReporter } = params
-  if (progressReporter) {
-    progressReporter.complete()
-  }
-  await finalizeDownload(destination, partialPath, resumeFrom, fs)
-}
-
 async function downloadFile(
   url: string,
   destination: string,
-  options: DownloadOptions = {},
+  deps: DownloadDeps = {},
 ): Promise<void> {
-  const { fs, progressWriter, isTTY } = options
-  const ctx: DownloadContext = { url, destination, fs, progressWriter, isTTY }
-  const { totalBytes, resumeFrom } = await setupResumeContext(ctx)
+  const totalBytes = await getContentLength(url)
+  const resumeDecision = await shouldResume(destination, totalBytes, deps.fs)
+  const resumeFrom = resumeDecision.shouldResume ? resumeDecision.bytesDownloaded : 0
 
-  const partialPath = getPartialFilePath(destination)
-  const targetPath = resumeFrom > 0 ? partialPath : destination
+  if (resumeFrom > 0) {
+    logDiag(`Resuming download from byte ${resumeFrom} of ${totalBytes}`)
+  }
 
-  return executeDownload({
+  const ctx: DownloadContext = {
     url,
     destination,
-    targetPath,
-    partialPath,
+    fs: deps.fs,
+    progressWriter: deps.progressWriter,
+    isTTY: deps.isTTY,
     resumeFrom,
     totalBytes,
-    fs,
-    progressWriter,
-    isTTY,
-    options,
-  })
+  }
+
+  return downloadFileImpl(ctx)
 }
 
 /**
- * Execute download with promise-based HTTPS request
+ * Implementation of file download
  */
-function executeDownload(params: {
-  url: string
-  destination: string
-  targetPath: string
-  partialPath: string
-  resumeFrom: number
-  totalBytes: number
-  fs?: FileSystemService | undefined
-  progressWriter?: ProgressWriter | undefined
-  isTTY?: boolean | undefined
-  options: DownloadOptions
-}): Promise<void> {
-  const { url, destination, resumeFrom, fs, options } = params
-
+function downloadFileImpl(ctx: DownloadContext): Promise<void> {
   return new Promise((resolve, reject) => {
-    const headers: Record<string, string> = resumeFrom > 0 ? { Range: `bytes=${resumeFrom}-` } : {}
+    const headers: Record<string, string> = {}
+    if (ctx.resumeFrom > 0) {
+      headers['Range'] = `bytes=${ctx.resumeFrom}-`
+    }
 
-    const request = https.get(url, { headers }, response => {
-      handleDownloadResponse({ response, params, resolve, reject, url, destination, options })
+    const request = https.get(ctx.url, { headers }, response => {
+      if (handleRedirect(response, ctx, resolve, reject)) return
+
+      const error = handleHttpError(response.statusCode || 0, ctx.url)
+      if (error) {
+        reject(error)
+        return
+      }
+
+      const { progressReporter, writePromise } = handleDownloadResponse(response, ctx)
+
+      writePromise
+        .then(async () => {
+          if (progressReporter) progressReporter.complete()
+          await finalizeDownload(ctx)
+          resolve()
+        })
+        .catch(async err => {
+          await cleanupPartialFile(ctx.destination, ctx.fs)
+          reject(err)
+        })
     })
 
     request.on('error', async error => {
-      await cleanupPartialFile(destination, fs)
+      await cleanupPartialFile(ctx.destination, ctx.fs)
       reject(new Error(`Network error downloading KB: ${error.message}. Check connectivity.`))
     })
   })
 }
 
 /**
- * Handle download HTTP response
+ * Handle HTTP redirects
  */
-function handleDownloadResponse(ctx: {
-  response: IncomingMessage
-  params: {
-    url: string
-    destination: string
-    targetPath: string
-    partialPath: string
-    resumeFrom: number
-    totalBytes: number
-    fs?: FileSystemService | undefined
-    progressWriter?: ProgressWriter | undefined
-    isTTY?: boolean | undefined
-    options: DownloadOptions
+function handleRedirect(
+  response: IncomingMessage,
+  ctx: DownloadContext,
+  resolve: (value: void | PromiseLike<void>) => void,
+  reject: (reason: unknown) => void,
+): boolean {
+  if (response.statusCode === 301 || response.statusCode === 302) {
+    const redirectUrl = response.headers.location
+    if (redirectUrl) {
+      const deps: DownloadDeps = {
+        fs: ctx.fs,
+        progressWriter: ctx.progressWriter,
+        isTTY: ctx.isTTY,
+      }
+      downloadFile(redirectUrl, ctx.destination, deps).then(resolve).catch(reject)
+      return true
+    }
   }
-  resolve: (value: void | PromiseLike<void>) => void
-  reject: (reason: unknown) => void
-  url: string
-  destination: string
-  options: DownloadOptions
-}): void {
-  const { response, params, resolve, reject, url, destination, options } = ctx
-
-  if (handleRedirect({ response, url, destination, options, resolve, reject })) return
-
-  const error = handleHttpError(response.statusCode || 0, url)
-  if (error) {
-    reject(error)
-    return
-  }
-
-  processDownloadStream({ response, params, resolve, reject })
-}
-
-/**
- * Process download stream and handle completion
- */
-function processDownloadStream(ctx: {
-  response: IncomingMessage
-  params: {
-    targetPath: string
-    partialPath: string
-    resumeFrom: number
-    totalBytes: number
-    destination: string
-    fs?: FileSystemService | undefined
-    progressWriter?: ProgressWriter | undefined
-    isTTY?: boolean | undefined
-  }
-  resolve: (value: void | PromiseLike<void>) => void
-  reject: (reason: unknown) => void
-}): void {
-  const { response, params, resolve, reject } = ctx
-  const { targetPath, resumeFrom, totalBytes, fs, progressWriter, isTTY, destination } = params
-
-  const progressReporter = createProgressReporter(response, {
-    totalBytes,
-    resumeFrom,
-    progressWriter,
-    isTTY,
-  })
-
-  const writePromise = fs
-    ? writeToInMemoryFs(response, targetPath, fs, { progressReporter, resumeFrom })
-    : writeToRealFs(response, targetPath, progressReporter, resumeFrom)
-
-  writePromise
-    .then(() =>
-      handleDownloadSuccess({
-        destination,
-        partialPath: params.partialPath,
-        resumeFrom,
-        fs,
-        progressReporter,
-      }),
-    )
-    .then(resolve)
-    .catch(async err => {
-      await cleanupPartialFile(destination, fs)
-      reject(err)
-    })
+  return false
 }
 
 /**

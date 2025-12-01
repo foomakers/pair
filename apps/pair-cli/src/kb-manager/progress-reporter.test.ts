@@ -1,10 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import {
-  ProgressReporter,
-  ProgressData,
-  formatProgress,
-  calculateSpeed,
-} from './progress-reporter'
+import { ProgressReporter, ProgressData, formatProgress, calculateSpeed } from './progress-reporter'
 
 describe('Progress calculations', () => {
   it('calculates percentage correctly', () => {
@@ -111,7 +106,6 @@ describe('TTY detection', () => {
     reporter.update(500)
 
     const output = mockStdout.write.mock.calls[0][0]
-    // eslint-disable-next-line no-control-regex -- checking for absence of ANSI codes
-    expect(output).not.toMatch(/\x1b\[/) // No ANSI escape codes
+    expect(output).not.toContain('\u001b[') // No ANSI escape codes
   })
 })

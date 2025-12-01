@@ -98,19 +98,6 @@ module.exports = [
         vi: 'readonly',
       },
     },
-    rules: {
-      // Test files can have longer functions and any types for mocks
-      'max-lines-per-function': 'off',
-      '@typescript-eslint/no-explicit-any': 'off',
-    },
-  },
-  {
-    // Error formatter can have complex logic
-    files: ['**/error-formatter.ts'],
-    rules: {
-      'max-lines-per-function': 'off',
-      complexity: 'off',
-    },
   },
   {
     ignores: ['dist/', 'build/', 'node_modules/', '*.config.js', '*.config.ts'],
