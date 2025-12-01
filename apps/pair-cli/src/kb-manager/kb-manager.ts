@@ -5,7 +5,13 @@ import { IncomingMessage } from 'http'
 import { createWriteStream } from 'fs'
 import type { FileSystemService } from '@pair/content-ops'
 import { ProgressReporter, type ProgressWriter } from './progress-reporter'
-import { shouldResume, getPartialFilePath, cleanupPartialFile } from './resume-manager'
+import {
+  getPartialFilePath,
+  cleanupPartialFile,
+  setupResumeContext,
+  finalizeDownload,
+  type DownloadContext,
+} from './resume-manager'
 import { validateChecksum, getExpectedChecksum } from './checksum-validator'
 
 // Diagnostic logging (PAIR_DIAG=1)
@@ -331,28 +337,6 @@ function writeToRealFs(
   })
 }
 
-interface DownloadContext {
-  url: string
-  destination: string
-  fs?: FileSystemService | undefined
-  progressWriter?: ProgressWriter | undefined
-  isTTY?: boolean | undefined
-}
-
-async function setupResumeContext(ctx: DownloadContext) {
-  const totalBytes = await getContentLength(ctx.url)
-  const resumeDecision = await shouldResume(ctx.destination, totalBytes, ctx.fs)
-
-  if (resumeDecision.shouldResume) {
-    logDiag(`Resuming download from byte ${resumeDecision.bytesDownloaded} of ${totalBytes}`)
-  }
-
-  return {
-    totalBytes,
-    resumeFrom: resumeDecision.shouldResume ? resumeDecision.bytesDownloaded : 0,
-  }
-}
-
 interface ProgressReporterContext {
   totalBytes: number
   resumeFrom: number
@@ -383,24 +367,6 @@ function createProgressReporter(
   }
 
   return reporter
-}
-
-async function finalizeDownload(
-  destination: string,
-  partialPath: string,
-  resumeFrom: number,
-  fs?: FileSystemService,
-): Promise<void> {
-  if (resumeFrom <= 0) return
-
-  if (fs) {
-    const content = fs.readFileSync(partialPath)
-    await fs.writeFile(destination, content)
-    await cleanupPartialFile(destination, fs)
-  } else {
-    const { rename } = await import('fs-extra')
-    await rename(partialPath, destination)
-  }
 }
 
 interface DownloadOptions {
@@ -585,18 +551,4 @@ function processDownloadStream(ctx: {
       await cleanupPartialFile(destination, fs)
       reject(err)
     })
-}
-
-/**
- * Get content length via HEAD request
- */
-function getContentLength(url: string): Promise<number> {
-  return new Promise(resolve => {
-    const request = https.request(url, { method: 'HEAD' }, response => {
-      const contentLength = parseInt(response.headers['content-length'] || '0', 10)
-      resolve(contentLength)
-    })
-    request.on('error', () => resolve(0))
-    request.end()
-  })
 }

@@ -2,11 +2,80 @@
  * Download resume management utilities
  */
 
+import * as https from 'https'
 import type { FileSystemService } from '@pair/content-ops'
+import type { ProgressWriter } from './progress-reporter'
+
+// Diagnostic logging (PAIR_DIAG=1)
+const DIAG = process.env['PAIR_DIAG'] === '1' || process.env['PAIR_DIAG'] === 'true'
+
+function logDiag(message: string): void {
+  if (DIAG) console.error(`[diag] ${message}`)
+}
 
 export interface ResumeDecision {
   shouldResume: boolean
   bytesDownloaded: number
+}
+
+export interface DownloadContext {
+  url: string
+  destination: string
+  fs?: FileSystemService | undefined
+  progressWriter?: ProgressWriter | undefined
+  isTTY?: boolean | undefined
+}
+
+/**
+ * Get content length via HEAD request
+ */
+export function getContentLength(url: string): Promise<number> {
+  return new Promise(resolve => {
+    const request = https.request(url, { method: 'HEAD' }, response => {
+      const contentLength = parseInt(response.headers['content-length'] || '0', 10)
+      resolve(contentLength)
+    })
+    request.on('error', () => resolve(0))
+    request.end()
+  })
+}
+
+/**
+ * Setup resume context by checking content length and partial file
+ */
+export async function setupResumeContext(ctx: DownloadContext) {
+  const totalBytes = await getContentLength(ctx.url)
+  const resumeDecision = await shouldResume(ctx.destination, totalBytes, ctx.fs)
+
+  if (resumeDecision.shouldResume) {
+    logDiag(`Resuming download from byte ${resumeDecision.bytesDownloaded} of ${totalBytes}`)
+  }
+
+  return {
+    totalBytes,
+    resumeFrom: resumeDecision.shouldResume ? resumeDecision.bytesDownloaded : 0,
+  }
+}
+
+/**
+ * Finalize download by renaming partial file to destination
+ */
+export async function finalizeDownload(
+  destination: string,
+  partialPath: string,
+  resumeFrom: number,
+  fs?: FileSystemService,
+): Promise<void> {
+  if (resumeFrom <= 0) return
+
+  if (fs) {
+    const content = fs.readFileSync(partialPath)
+    await fs.writeFile(destination, content)
+    await cleanupPartialFile(destination, fs)
+  } else {
+    const { rename } = await import('fs-extra')
+    await rename(partialPath, destination)
+  }
 }
 
 /**
