@@ -198,7 +198,7 @@ function createMockKBFunctions() {
   return { mockIsKBCached, mockEnsureKBAvailable }
 }
 
-describe('KB manager integration', () => {
+describe('KB manager integration - ensure KB available', () => {
   it('should ensure KB available on startup when dataset not local', async () => {
     const { getKnowledgeHubDatasetPathWithFallback } = await import('./config-utils')
     const mockFs = createMockFsWithoutLocal()
@@ -213,7 +213,9 @@ describe('KB manager integration', () => {
 
     expect(result).toBe('/home/user/.pair/kb/0.1.0/dataset')
   })
+})
 
+describe('KB manager integration - custom URL', () => {
   it('should pass custom URL to ensureKBAvailable when provided', async () => {
     const { getKnowledgeHubDatasetPathWithFallback } = await import('./config-utils')
     const customUrl = 'https://custom.example.com/kb.zip'
@@ -239,7 +241,9 @@ describe('KB manager integration', () => {
 
     expect(result).toBe('/home/user/.pair/kb/0.1.0/dataset')
   })
+})
 
+describe('KB manager integration - skip KB', () => {
   it('should skip KB download when --no-kb flag is set', async () => {
     // This test verifies that ensureKBAvailableOnStartup respects skipKB parameter
     // In a real scenario, this would be tested through CLI integration

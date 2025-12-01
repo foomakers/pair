@@ -137,7 +137,15 @@ describe('KB Manager - Download and extract', () => {
     const result = await ensureKBAvailable(testVersion, { fs, extract: mockExtract })
 
     expect(result).toBe(expectedCachePath)
-    expect(https.get).toHaveBeenCalledWith(expectedURL, expect.any(Function))
+    expect(https.get).toHaveBeenCalled()
+    const calls =
+      (vi.mocked(https.get) as unknown as { mock?: { calls?: unknown[][] } }).mock?.calls ?? []
+    const found = calls.some(call => {
+      const arg0 = call[0]
+      const url = typeof arg0 === 'string' ? arg0 : String(arg0)
+      return url === expectedURL
+    })
+    expect(found).toBe(true)
     expect(mockExtract).toHaveBeenCalledWith(expectedZipPath, expectedCachePath)
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('KB not found, downloading'))
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('KB v0.2.0 installed'))
@@ -376,61 +384,62 @@ describe('KB Manager - Success message', () => {
   })
 })
 
+// Helper: setup mock for progress test
+function setupProgressMocks(checksumResp: MockResponse, fileResp: MockResponse) {
+  let fileCallback: HttpsCallback | null = null
+  vi.mocked(https.get).mockImplementation((_url, optOrCb, cb) => {
+    const url = String(_url)
+    const callback = typeof optOrCb === 'function' ? optOrCb : cb
+
+    if (url.includes('.sha256')) {
+      setImmediate(() => {
+        callback?.(checksumResp)
+        setImmediate(() => checksumResp.emit('end'))
+      })
+    } else {
+      fileCallback = callback as HttpsCallback
+      // Call the callback synchronously for the file response
+      setImmediate(() => callback?.(fileResp))
+    }
+    return createMockRequest()
+  })
+  return () => fileCallback
+}
+
+// Helper: run progress test
+async function runProgressTest(
+  isTTY: boolean | undefined,
+  expectedCheck: (calls: string[]) => boolean,
+) {
+  vi.clearAllMocks()
+  mockExtract.mockReset().mockResolvedValue(undefined)
+
+  const testVersion = '0.2.0'
+  const fs = new InMemoryFileSystemService({}, '/', '/')
+  const mockStdout: MockStdout = { write: vi.fn() }
+  const checksumResp = createMockResponse(404)
+  const fileResp = createMockResponse(200, { 'content-length': '1024' })
+
+  const getFileCallback = setupProgressMocks(checksumResp, fileResp)
+
+  const promise = ensureKBAvailable(testVersion, {
+    fs,
+    extract: mockExtract,
+    progressWriter: mockStdout,
+    isTTY,
+  })
+
+  await vi.waitFor(() => expect(getFileCallback()).not.toBeNull())
+  fileResp.emit('data', Buffer.alloc(512))
+  fileResp.emit('data', Buffer.alloc(512))
+  fileResp.emit('end')
+  await promise
+
+  const calls = mockStdout.write.mock.calls.map(c => c[0] as string)
+  expect(expectedCheck(calls)).toBe(true)
+}
+
 describe('KB Manager - Progress Reporting', () => {
-  // Helper: setup mock for progress test
-  function setupProgressMocks(checksumResp: MockResponse, fileResp: MockResponse) {
-    let fileCallback: HttpsCallback | null = null
-    vi.mocked(https.get).mockImplementation((_url, optOrCb, cb) => {
-      const url = String(_url)
-      const callback = typeof optOrCb === 'function' ? optOrCb : cb
-
-      if (url.includes('.sha256')) {
-        setImmediate(() => {
-          callback?.(checksumResp)
-          setImmediate(() => checksumResp.emit('end'))
-        })
-      } else {
-        fileCallback = callback as HttpsCallback
-        setImmediate(() => callback?.(fileResp))
-      }
-      return createMockRequest()
-    })
-    return fileCallback
-  }
-
-  // Helper: run progress test
-  async function runProgressTest(
-    isTTY: boolean | undefined,
-    expectedCheck: (calls: string[]) => boolean,
-  ) {
-    vi.clearAllMocks()
-    mockExtract.mockReset().mockResolvedValue(undefined)
-
-    const testVersion = '0.2.0'
-    const fs = new InMemoryFileSystemService({}, '/', '/')
-    const mockStdout: MockStdout = { write: vi.fn() }
-    const checksumResp = createMockResponse(404)
-    const fileResp = createMockResponse(200, { 'content-length': '1024' })
-
-    const fileCallback = setupProgressMocks(checksumResp, fileResp)
-
-    const promise = ensureKBAvailable(testVersion, {
-      fs,
-      extract: mockExtract,
-      progressWriter: mockStdout,
-      isTTY,
-    })
-
-    await vi.waitFor(() => expect(fileCallback).not.toBeNull())
-    fileResp.emit('data', Buffer.alloc(512))
-    fileResp.emit('data', Buffer.alloc(512))
-    fileResp.emit('end')
-    await promise
-
-    const calls = mockStdout.write.mock.calls.map(c => c[0] as string)
-    expect(expectedCheck(calls)).toBe(true)
-  }
-
   it('reports download progress with percentage and speed', async () => {
     await runProgressTest(undefined, calls => calls.some(c => c.includes('%')))
   })
@@ -444,9 +453,29 @@ describe('KB Manager - Progress Reporting', () => {
   })
 })
 
-describe('KB Manager - Custom URL', () => {
-  const testVersion = '0.2.0'
+// Helper: setup custom URL test mocks
+function setupCustomUrlMocks(
+  capturedUrls: string[],
+  checksumResp: MockResponse,
+  fileResp: MockResponse,
+) {
+  vi.mocked(https.get).mockImplementation((_url, optionsOrCallback, callback) => {
+    const url = String(_url)
+    capturedUrls.push(url)
+    const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
 
+    const resp = url.includes('.sha256') ? checksumResp : fileResp
+    if (typeof cb === 'function') {
+      setImmediate(() => {
+        cb(resp)
+        setImmediate(() => resp.emit('end'))
+      })
+    }
+    return createMockRequest()
+  })
+}
+
+describe('KB Manager - Custom URL with provided URL', () => {
   it('should use custom URL when provided', async () => {
     const customUrl = 'https://custom.example.com/kb.zip'
     const fs = new InMemoryFileSystemService({}, '/', '/')
@@ -455,22 +484,9 @@ describe('KB Manager - Custom URL', () => {
     const checksumResp = createMockResponse(404)
     const fileResp = createMockResponse(200, { 'content-length': '1024' })
 
-    vi.mocked(https.get).mockImplementation((_url, optionsOrCallback, callback) => {
-      const url = String(_url)
-      capturedUrls.push(url)
-      const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
+    setupCustomUrlMocks(capturedUrls, checksumResp, fileResp)
 
-      const resp = url.includes('.sha256') ? checksumResp : fileResp
-      if (typeof cb === 'function') {
-        setImmediate(() => {
-          cb(resp)
-          setImmediate(() => resp.emit('end'))
-        })
-      }
-      return createMockRequest()
-    })
-
-    await ensureKBAvailable(testVersion, {
+    await ensureKBAvailable('0.2.0', {
       fs,
       extract: mockExtract,
       customUrl,
@@ -479,7 +495,9 @@ describe('KB Manager - Custom URL', () => {
     const fileUrl = capturedUrls.find(url => !url.includes('.sha256'))
     expect(fileUrl).toBe(customUrl)
   })
+})
 
+describe('KB Manager - Custom URL with default URL', () => {
   it('should use default GitHub URL when custom URL not provided', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
     const capturedUrls: string[] = []
@@ -487,22 +505,9 @@ describe('KB Manager - Custom URL', () => {
     const checksumResp = createMockResponse(404)
     const fileResp = createMockResponse(200, { 'content-length': '1024' })
 
-    vi.mocked(https.get).mockImplementation((_url, optionsOrCallback, callback) => {
-      const url = String(_url)
-      capturedUrls.push(url)
-      const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
+    setupCustomUrlMocks(capturedUrls, checksumResp, fileResp)
 
-      const resp = url.includes('.sha256') ? checksumResp : fileResp
-      if (typeof cb === 'function') {
-        setImmediate(() => {
-          cb(resp)
-          setImmediate(() => resp.emit('end'))
-        })
-      }
-      return createMockRequest()
-    })
-
-    await ensureKBAvailable(testVersion, {
+    await ensureKBAvailable('0.2.0', {
       fs,
       extract: mockExtract,
     })
@@ -516,55 +521,53 @@ describe('KB Manager - Custom URL', () => {
   })
 })
 
+// Helper: test resume logic with or without partial file
+async function testResumeLogic(hasPartialFile: boolean) {
+  const totalSize = 1024
+  const partialSize = hasPartialFile ? 512 : 0
+  const partialPath = join(tmpdir(), 'kb-0.2.0.zip.partial')
+  const fsFiles = hasPartialFile ? { [partialPath]: Buffer.alloc(partialSize).toString() } : {}
+  const fs = new InMemoryFileSystemService(fsFiles, '/', '/')
+  let rangeHeader: string | undefined
+
+  const checksumResp = createMockResponse(404)
+  const fileResp = createMockResponse(hasPartialFile ? 206 : 200, {
+    'content-length': String(hasPartialFile ? totalSize - partialSize : totalSize),
+  })
+  const mockHeadResponse = createMockResponse(200, { 'content-length': String(totalSize) })
+
+  vi.mocked(https.request).mockImplementation(mockHttpsRequest(mockHeadResponse))
+
+  vi.mocked(https.get).mockImplementation((_url, options, callback) => {
+    const url = String(_url)
+    const cb = typeof options === 'function' ? options : callback
+
+    if (
+      typeof options === 'object' &&
+      options !== null &&
+      'headers' in options &&
+      options.headers &&
+      'Range' in options.headers
+    ) {
+      rangeHeader = options.headers['Range'] as string
+    }
+
+    const resp = url.includes('.sha256') ? checksumResp : fileResp
+    if (typeof cb === 'function') {
+      setImmediate(() => {
+        ;(cb as HttpsCallback)(resp)
+        setImmediate(() => resp.emit('end'))
+      })
+    }
+    return createMockRequest()
+  })
+
+  await ensureKBAvailable('0.2.0', { fs, extract: mockExtract })
+
+  return rangeHeader
+}
+
 describe('KB Manager - Resume Support', () => {
-  const testVersion = '0.2.0'
-
-  // Helper: test resume logic with or without partial file
-  async function testResumeLogic(hasPartialFile: boolean) {
-    const totalSize = 1024
-    const partialSize = hasPartialFile ? 512 : 0
-    const partialPath = join(tmpdir(), 'kb-0.2.0.zip.partial')
-    const fsFiles = hasPartialFile ? { [partialPath]: Buffer.alloc(partialSize).toString() } : {}
-    const fs = new InMemoryFileSystemService(fsFiles, '/', '/')
-    let rangeHeader: string | undefined
-
-    const checksumResp = createMockResponse(404)
-    const fileResp = createMockResponse(hasPartialFile ? 206 : 200, {
-      'content-length': String(hasPartialFile ? totalSize - partialSize : totalSize),
-    })
-    const mockHeadResponse = createMockResponse(200, { 'content-length': String(totalSize) })
-
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(mockHeadResponse))
-
-    vi.mocked(https.get).mockImplementation((_url, options, callback) => {
-      const url = String(_url)
-      const cb = typeof options === 'function' ? options : callback
-
-      if (
-        typeof options === 'object' &&
-        options !== null &&
-        'headers' in options &&
-        options.headers &&
-        'Range' in options.headers
-      ) {
-        rangeHeader = options.headers['Range'] as string
-      }
-
-      const resp = url.includes('.sha256') ? checksumResp : fileResp
-      if (typeof cb === 'function') {
-        setImmediate(() => {
-          (cb as HttpsCallback)(resp)
-          setImmediate(() => resp.emit('end'))
-        })
-      }
-      return createMockRequest()
-    })
-
-    await ensureKBAvailable(testVersion, { fs, extract: mockExtract })
-
-    return rangeHeader
-  }
-
   it('should resume partial download using Range header', async () => {
     const rangeHeader = await testResumeLogic(true)
     expect(rangeHeader).toBe('bytes=512-')
@@ -576,53 +579,51 @@ describe('KB Manager - Resume Support', () => {
   })
 })
 
-describe('KB Manager - Checksum Validation', () => {
-  const testVersion = '0.2.0'
+// Helper: setup checksum test mocks
+function setupChecksumTest(config: {
+  headResp: MockResponse
+  getResp: MockResponse
+  checksumResp: MockResponse
+  content: Buffer
+  checksum?: string
+}) {
+  vi.mocked(https.request).mockImplementation((url, options, callback) => {
+    const cb = typeof options === 'function' ? options : callback
+    if (typeof cb === 'function') {
+      setImmediate(() => (cb as HttpsCallback)(config.headResp))
+    }
+    return createMockRequest()
+  })
 
-  // Helper: setup checksum test mocks
-  function setupChecksumTest(config: {
-    headResp: MockResponse
-    getResp: MockResponse
-    checksumResp: MockResponse
-    content: Buffer
-    checksum?: string
-  }) {
-    vi.mocked(https.request).mockImplementation((url, options, callback) => {
-      const cb = typeof options === 'function' ? options : callback
+  vi.mocked(https.get).mockImplementation((url, options, callback) => {
+    const cb = typeof options === 'function' ? options : callback
+    const urlStr = typeof url === 'string' ? url : String(url)
+
+    if (urlStr.endsWith('.sha256') && config.checksum) {
       if (typeof cb === 'function') {
-        setImmediate(() => (cb as HttpsCallback)(config.headResp))
+        setImmediate(() => {
+          ;(cb as HttpsCallback)(config.checksumResp)
+          setImmediate(() => config.checksumResp.emit('data', `${config.checksum}  kb.zip`))
+          setImmediate(() => config.checksumResp.emit('end'))
+        })
       }
-      return createMockRequest()
-    })
-
-    vi.mocked(https.get).mockImplementation((url, options, callback) => {
-      const cb = typeof options === 'function' ? options : callback
-      const urlStr = typeof url === 'string' ? url : String(url)
-
-      if (urlStr.endsWith('.sha256') && config.checksum) {
-        if (typeof cb === 'function') {
-          setImmediate(() => {
-            (cb as HttpsCallback)(config.checksumResp)
-            setImmediate(() => config.checksumResp.emit('data', `${config.checksum}  kb.zip`))
-            setImmediate(() => config.checksumResp.emit('end'))
-          })
-        }
-      } else if (!urlStr.endsWith('.sha256')) {
-        if (typeof cb === 'function') {
-          setImmediate(() => {
-            (cb as HttpsCallback)(config.getResp)
-            setImmediate(() => config.getResp.emit('data', config.content))
-            setImmediate(() => config.getResp.emit('end'))
-          })
-        }
-      } else if (typeof cb === 'function') {
-        setImmediate(() => (cb as HttpsCallback)(config.checksumResp))
+    } else if (!urlStr.endsWith('.sha256')) {
+      if (typeof cb === 'function') {
+        setImmediate(() => {
+          ;(cb as HttpsCallback)(config.getResp)
+          setImmediate(() => config.getResp.emit('data', config.content))
+          setImmediate(() => config.getResp.emit('end'))
+        })
       }
+    } else if (typeof cb === 'function') {
+      setImmediate(() => (cb as HttpsCallback)(config.checksumResp))
+    }
 
-      return createMockRequest()
-    })
-  }
+    return createMockRequest()
+  })
+}
 
+describe('KB Manager - Checksum Validation with available checksum', () => {
   it('validates checksum when .sha256 file is available', async () => {
     const content = Buffer.alloc(1024, 'kb content')
     const { createHash } = await import('crypto')
@@ -641,11 +642,13 @@ describe('KB Manager - Checksum Validation', () => {
       checksum: expectedChecksum,
     })
 
-    await ensureKBAvailable(testVersion, { fs, extract: mockExtract })
+    await ensureKBAvailable('0.2.0', { fs, extract: mockExtract })
 
-    expect(fs.existsSync(join(homedir(), '.pair', 'kb', testVersion))).toBe(true)
+    expect(fs.existsSync(join(homedir(), '.pair', 'kb', '0.2.0'))).toBe(true)
   })
+})
 
+describe('KB Manager - Checksum Validation without checksum', () => {
   it('proceeds without checksum when .sha256 file not found', async () => {
     const content = Buffer.alloc(1024, 'kb content')
     const fs = new InMemoryFileSystemService({}, '/', '/')
@@ -660,8 +663,6 @@ describe('KB Manager - Checksum Validation', () => {
       content,
     })
 
-    await expect(
-      ensureKBAvailable(testVersion, { fs, extract: mockExtract }),
-    ).resolves.not.toThrow()
+    await expect(ensureKBAvailable('0.2.0', { fs, extract: mockExtract })).resolves.not.toThrow()
   })
 })

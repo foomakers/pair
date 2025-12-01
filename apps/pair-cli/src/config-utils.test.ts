@@ -399,7 +399,7 @@ function setupLocalDataset(fs: InMemoryFileSystemService, mockDir: string) {
   return localDatasetPath
 }
 
-describe('getKnowledgeHubDatasetPath with KB manager fallback', () => {
+describe('getKnowledgeHubDatasetPath with cached KB', () => {
   it('should use cached KB when dataset not found locally', async () => {
     const mockDir = '/mock/project'
     const cachedKBPath = '/home/user/.pair/kb/0.1.0'
@@ -419,7 +419,9 @@ describe('getKnowledgeHubDatasetPath with KB manager fallback', () => {
     expect(mockEnsureKBAvailable).toHaveBeenCalledWith('0.1.0', { fs })
     expect(result).toBe(path.join(cachedKBPath, 'dataset'))
   })
+})
 
+describe('getKnowledgeHubDatasetPath with download', () => {
   it('should download KB when not cached', async () => {
     const mockDir = '/mock/project'
     const cachedKBPath = '/home/user/.pair/kb/0.1.0'
@@ -439,7 +441,9 @@ describe('getKnowledgeHubDatasetPath with KB manager fallback', () => {
     expect(mockEnsureKBAvailable).toHaveBeenCalledWith('0.1.0', { fs })
     expect(result).toBe(path.join(cachedKBPath, 'dataset'))
   })
+})
 
+describe('getKnowledgeHubDatasetPath with local dataset', () => {
   it('should use local dataset when available', async () => {
     const mockDir = '/mock/project'
     const fs = new InMemoryFileSystemService({}, mockDir, '/')

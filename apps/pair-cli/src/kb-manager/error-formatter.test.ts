@@ -27,40 +27,60 @@ describe('Error Formatter - Network Errors', () => {
   })
 
   it('formats timeout error', () => {
-    testErrorFormat('ETIMEDOUT', { url: 'https://example.com/file.zip' }, {
-      message: ['Connection timed out'],
-      suggestion: ['retry'],
-    })
+    testErrorFormat(
+      'ETIMEDOUT',
+      { url: 'https://example.com/file.zip' },
+      {
+        message: ['Connection timed out'],
+        suggestion: ['retry'],
+      },
+    )
   })
 
   it('formats DNS resolution error', () => {
-    testErrorFormat('getaddrinfo ENOTFOUND', { url: 'https://example.com/file.zip' }, {
-      message: ['Could not resolve hostname'],
-      suggestion: ['DNS'],
-    })
+    testErrorFormat(
+      'getaddrinfo ENOTFOUND',
+      { url: 'https://example.com/file.zip' },
+      {
+        message: ['Could not resolve hostname'],
+        suggestion: ['DNS'],
+      },
+    )
   })
 
   it('formats 404 not found error', () => {
-    testErrorFormat('HTTP 404', { url: 'https://github.com/org/repo/v1.0.0/kb.zip' }, {
-      message: ['File not found', 'v1.0.0'],
-      suggestion: ['Check version exists'],
-    })
+    testErrorFormat(
+      'HTTP 404',
+      { url: 'https://github.com/org/repo/v1.0.0/kb.zip' },
+      {
+        message: ['File not found', 'v1.0.0'],
+        suggestion: ['Check version exists'],
+      },
+    )
   })
 })
 
 describe('Error Formatter - Filesystem Errors', () => {
   it('formats permission denied error', () => {
-    testErrorFormat('EACCES: permission denied', { filePath: '/path/to/file.zip' }, {
-      message: ['Permission denied', '/path/to/file.zip'],
-      suggestion: ['Check file permissions'],
-    })
+    testErrorFormat(
+      'EACCES: permission denied',
+      { filePath: '/path/to/file.zip' },
+      {
+        message: ['Permission denied', '/path/to/file.zip'],
+        suggestion: ['Check file permissions'],
+      },
+    )
   })
 
   it('formats disk full error', () => {
-    testErrorFormat('ENOSPC: no space left on device', { filePath: '/path/to/file.zip' }, {
-      message: ['No disk space'],
-      suggestion: ['Free up disk space'],
-    })
+    testErrorFormat(
+      'ENOSPC: no space left on device',
+      { filePath: '/path/to/file.zip' },
+      {
+        message: ['No disk space'],
+        suggestion: ['Free up disk space'],
+      },
+    )
   })
 
   it('formats extraction error', () => {
@@ -87,7 +107,10 @@ describe('Error Formatter - Generic Errors', () => {
     testErrorFormat(
       'Something went wrong',
       { url: 'https://example.com/file.zip', filePath: '/tmp/file.zip' },
-      { message: ['Something went wrong', 'https://example.com/file.zip'], suggestion: ['PAIR_DIAG=1'] },
+      {
+        message: ['Something went wrong', 'https://example.com/file.zip'],
+        suggestion: ['PAIR_DIAG=1'],
+      },
     )
   })
 

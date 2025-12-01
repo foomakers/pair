@@ -16,10 +16,10 @@ export function createMockResponse(
   const mockResponse = {
     statusCode,
     headers,
-    on: (event: string, handler: EventHandler) => {
+    on: vi.fn((event: string, handler: EventHandler) => {
       emitter.on(event, handler)
       return mockResponse
-    },
+    }),
     emit: (event: string, ...args: unknown[]) => {
       return emitter.emit(event, ...args)
     },
@@ -36,10 +36,10 @@ export function createMockResponse(
 export function createMockRequest(): ClientRequest {
   const emitter = new EventEmitter()
   const mockRequest = {
-    on: (event: string, handler: EventHandler) => {
+    on: vi.fn((event: string, handler: EventHandler) => {
       emitter.on(event, handler)
       return mockRequest
-    },
+    }),
     emit: (event: string, ...args: unknown[]) => {
       return emitter.emit(event, ...args)
     },

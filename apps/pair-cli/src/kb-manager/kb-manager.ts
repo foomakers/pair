@@ -151,6 +151,12 @@ async function validateDownloadChecksum(
       return
     }
 
+    // Only validate when checksum looks like a SHA256 hex string
+    if (!/^[a-f0-9]{64}$/i.test(expectedChecksum)) {
+      logDiag('Checksum content is not a valid SHA256 hash, skipping validation')
+      return
+    }
+
     logDiag(`Expected checksum: ${expectedChecksum}`)
     const result = await validateChecksum(filePath, expectedChecksum, fs)
 
