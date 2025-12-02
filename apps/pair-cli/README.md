@@ -189,6 +189,16 @@ Common error scenarios covered:
 - Download errors (404, 403, checksum mismatch)
 - Extraction errors (corrupted files)
 
+## Internal module responsibilities (KB installation)
+
+The KB installation logic is split across small focused modules to improve testability and maintenance:
+
+- `kb-manager` (orchestration): decides when to download, validates cache, verifies checksums, and extracts the KB into the cache or target folders.
+- `download-manager` (HTTP + streaming): low-level download implementation handling redirects, progress reporting, streaming writes, and retry/error translation.
+- `resume-manager` (resume support): manages partial download files, HTTP Range logic, and finalization of resumed downloads.
+
+This separation lets the CLI orchestrator remain simple while HTTP and resume logic are unit-tested independently.
+
 ## Asset Registry Behaviors
 
 The CLI supports different behaviors for how files are copied:

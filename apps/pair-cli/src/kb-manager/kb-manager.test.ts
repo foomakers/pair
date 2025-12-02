@@ -17,7 +17,7 @@ vi.mock('https', () => ({
 }))
 
 // Type helpers
-type MockStdout = { write: ReturnType<typeof vi.fn>; isTTY?: boolean }
+// MockStdout type moved to unit tests where needed
 type HttpsCallback = (res: unknown) => void
 type MockResponse = ReturnType<typeof createMockResponse>
 
@@ -384,74 +384,11 @@ describe('KB Manager - Success message', () => {
   })
 })
 
-// Helper: setup mock for progress test
-function setupProgressMocks(checksumResp: MockResponse, fileResp: MockResponse) {
-  let fileCallback: HttpsCallback | null = null
-  vi.mocked(https.get).mockImplementation((_url, optOrCb, cb) => {
-    const url = String(_url)
-    const callback = typeof optOrCb === 'function' ? optOrCb : cb
+// Progress mocks moved to download-manager.test.ts
 
-    if (url.includes('.sha256')) {
-      setImmediate(() => {
-        callback?.(checksumResp)
-        setImmediate(() => checksumResp.emit('end'))
-      })
-    } else {
-      fileCallback = callback as HttpsCallback
-      // Call the callback synchronously for the file response
-      setImmediate(() => callback?.(fileResp))
-    }
-    return createMockRequest()
-  })
-  return () => fileCallback
-}
+// Progress helper removed; unit-level progress tests live in download-manager.test.ts
 
-// Helper: run progress test
-async function runProgressTest(
-  isTTY: boolean | undefined,
-  expectedCheck: (calls: string[]) => boolean,
-) {
-  vi.clearAllMocks()
-  mockExtract.mockReset().mockResolvedValue(undefined)
-
-  const testVersion = '0.2.0'
-  const fs = new InMemoryFileSystemService({}, '/', '/')
-  const mockStdout: MockStdout = { write: vi.fn() }
-  const checksumResp = createMockResponse(404)
-  const fileResp = createMockResponse(200, { 'content-length': '1024' })
-
-  const getFileCallback = setupProgressMocks(checksumResp, fileResp)
-
-  const promise = ensureKBAvailable(testVersion, {
-    fs,
-    extract: mockExtract,
-    progressWriter: mockStdout,
-    isTTY,
-  })
-
-  await vi.waitFor(() => expect(getFileCallback()).not.toBeNull())
-  fileResp.emit('data', Buffer.alloc(512))
-  fileResp.emit('data', Buffer.alloc(512))
-  fileResp.emit('end')
-  await promise
-
-  const calls = mockStdout.write.mock.calls.map(c => c[0] as string)
-  expect(expectedCheck(calls)).toBe(true)
-}
-
-describe('KB Manager - Progress Reporting', () => {
-  it('reports download progress with percentage and speed', async () => {
-    await runProgressTest(undefined, calls => calls.some(c => c.includes('%')))
-  })
-
-  it('uses TTY mode for progress when isTTY is true', async () => {
-    await runProgressTest(true, calls => calls.some(c => c.includes('\r')))
-  })
-
-  it('uses non-TTY mode for progress when isTTY is false', async () => {
-    await runProgressTest(false, calls => calls.some(c => c.includes('Downloading')))
-  })
-})
+// Progress reporting unit tests moved to download-manager.test.ts
 
 // Helper: setup custom URL test mocks
 function setupCustomUrlMocks(
