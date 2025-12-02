@@ -18,7 +18,7 @@ function testKnowledgeHubDatasetPath() {
     currentWorkingDirectory: () => '/',
     existsSync: () => true,
   }
-  const p = getKnowledgeHubDatasetPath(fsService as unknown as FileSystemService)
+  const p = getKnowledgeHubDatasetPath(fsService as FileSystemService)
   expect(p).toContain('packages')
   expect(p).toContain('knowledge-hub')
   expect(p).toContain('dataset')
@@ -69,7 +69,7 @@ function testDatasetNotAccessible() {
   }
 
   try {
-    checkKnowledgeHubDatasetAccessible(mockFs as unknown as FileSystemService)
+    checkKnowledgeHubDatasetAccessible(mockFs as FileSystemService)
     expect.fail('Expected process.exit to be called')
   } catch (err) {
     verifyExitCalled(exitCalled, exitCode, err)
@@ -111,7 +111,7 @@ function testDatasetPathResolutionFailure() {
   }
 
   try {
-    checkKnowledgeHubDatasetAccessible(mockFs as unknown as FileSystemService)
+    checkKnowledgeHubDatasetAccessible(mockFs as FileSystemService)
     expect.fail('Expected process.exit to be called')
   } catch (err) {
     verifyExitCalled(exitCalled, exitCode, err)
@@ -146,7 +146,7 @@ function testSuccessfulCase() {
   }
 
   process.exitCode = undefined
-  checkKnowledgeHubDatasetAccessible(mockFsSuccess as unknown as FileSystemService)
+  checkKnowledgeHubDatasetAccessible(mockFsSuccess as FileSystemService)
   expect(process.exitCode).toBeUndefined()
 }
 
@@ -169,7 +169,7 @@ function testFailureCase() {
   }
 
   try {
-    checkKnowledgeHubDatasetAccessible(mockFsFailure as unknown as FileSystemService)
+    checkKnowledgeHubDatasetAccessible(mockFsFailure as FileSystemService)
     expect.fail('Expected process.exit to be called')
   } catch {
     expect(exitCalled).toBe(true)
@@ -205,7 +205,7 @@ describe('KB manager integration - ensure KB available', () => {
     const { mockIsKBCached, mockEnsureKBAvailable } = createMockKBFunctions()
 
     const result = await getKnowledgeHubDatasetPathWithFallback({
-      fsService: mockFs as unknown as FileSystemService,
+      fsService: mockFs as FileSystemService,
       version: '0.1.0',
       isKBCachedFn: mockIsKBCached,
       ensureKBAvailableFn: mockEnsureKBAvailable,
@@ -232,7 +232,7 @@ describe('KB manager integration - custom URL', () => {
     }
 
     const result = await getKnowledgeHubDatasetPathWithFallback({
-      fsService: mockFs as unknown as FileSystemService,
+      fsService: mockFs as FileSystemService,
       version: '0.1.0',
       isKBCachedFn: mockIsKBCached,
       ensureKBAvailableFn: mockEnsureKBAvailable,

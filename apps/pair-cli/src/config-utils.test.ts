@@ -4,7 +4,7 @@ import * as configUtils from './config-utils'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import type { FileSystemService } from '@pair/content-ops'
 
-let inMemoryFs: FileSystemService
+let inMemoryFs: FileSystemService | undefined
 
 const BASE_CONFIG = {
   asset_registries: {
@@ -55,7 +55,7 @@ function setupInMemoryFs() {
 }
 
 function resetBaseConfigMocks() {
-  inMemoryFs = undefined as unknown as FileSystemService
+  inMemoryFs = undefined
 }
 
 describe('loadConfigWithOverrides (in-memory FS) - base config', () => {
@@ -65,7 +65,9 @@ describe('loadConfigWithOverrides (in-memory FS) - base config', () => {
   it('loads base config when no overrides provided', () => {
     setupInMemoryFs()
 
-    const result = configUtils.loadConfigWithOverrides(inMemoryFs, { projectRoot: '/mock/project' })
+    const result = configUtils.loadConfigWithOverrides(inMemoryFs!, {
+      projectRoot: '/mock/project',
+    })
 
     expect(result.config).toBeDefined()
     expect(result.config.asset_registries.github.target_path).toBe('.github')
@@ -84,7 +86,9 @@ describe('loadConfigWithOverrides (in-memory FS) - overrides', () => {
 
     inMemoryFs.writeFile(pairConfigPath, JSON.stringify(PAIR_CONFIG))
 
-    const result = configUtils.loadConfigWithOverrides(inMemoryFs, { projectRoot: '/mock/project' })
+    const result = configUtils.loadConfigWithOverrides(inMemoryFs!, {
+      projectRoot: '/mock/project',
+    })
 
     expect(result.source).toBe('pair.config.json')
     expect(result.config.asset_registries.github.target_path).toBe('.pair-knowledge')
@@ -98,7 +102,7 @@ describe('loadConfigWithOverrides (in-memory FS) - overrides', () => {
 
     inMemoryFs.writeFile(customConfigPath, JSON.stringify(CUSTOM_CONFIG))
 
-    const result = configUtils.loadConfigWithOverrides(inMemoryFs, {
+    const result = configUtils.loadConfigWithOverrides(inMemoryFs!, {
       customConfigPath,
       projectRoot: '/mock/project',
     })

@@ -138,7 +138,7 @@ describe('updateCommand - verbose logging', () => {
     })
 
     expect(result!.success).toBe(true)
-    const logs = (result as unknown as { logs: LogEntry[] }).logs
+    const logs = (result as { logs?: LogEntry[] }).logs ?? []
     expect(logs).toBeDefined()
     expect(logs.some((log: LogEntry) => log.message?.includes('Starting updateWithDefaults'))).toBe(
       true,

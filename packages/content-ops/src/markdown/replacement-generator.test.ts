@@ -75,7 +75,7 @@ describe('normalization idempotence', () => {
     const { extractLinks } = await import('./markdown-parser')
     const links = await extractLinks(content)
     const repls = await generateNormalizationReplacements(
-      links as unknown as ParsedLink[],
+      links as ParsedLink[],
       file,
       { docsFolders: [], datasetRoot: '/root', exclusionList: [] },
       mockFs as FileSystemService,
@@ -86,7 +86,7 @@ describe('normalization idempotence', () => {
     // run the generator again against the new content
     const linksAfter = await extractLinks(res.content)
     const replsAfter = await generateNormalizationReplacements(
-      linksAfter as unknown as ParsedLink[],
+      linksAfter as ParsedLink[],
       file,
       { docsFolders: [], datasetRoot: '/root', exclusionList: [] },
       mockFs as FileSystemService,

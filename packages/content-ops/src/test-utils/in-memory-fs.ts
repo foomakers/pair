@@ -204,10 +204,10 @@ export class InMemoryFileSystemService implements FileSystemService {
   async stat(path: string): Promise<Stats> {
     const resolvedPath = this.resolvePath(path)
     if (this.dirs.has(resolvedPath)) {
-      return { isDirectory: () => true, isFile: () => false } as unknown as Stats
+      return { isDirectory: () => true, isFile: () => false } as Stats
     }
     if (this.files.has(resolvedPath)) {
-      return { isDirectory: () => false, isFile: () => true } as unknown as Stats
+      return { isDirectory: () => false, isFile: () => true } as Stats
     }
     throw new Error(`no such file or directory '${path}'`)
   }

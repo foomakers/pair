@@ -361,7 +361,7 @@ describe('processFileReplacement - empty file handling', () => {
     const result = await processFileReplacement(
       'empty.md',
       generateReplacements,
-      mockFileService as unknown as FileSystemService,
+      mockFileService as FileSystemService,
     )
 
     expect(result.applied).toBe(0)
