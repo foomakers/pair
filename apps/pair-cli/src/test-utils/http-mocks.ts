@@ -11,6 +11,7 @@ type EventHandler = (...args: unknown[]) => void
 export function createMockResponse(
   statusCode: number,
   headers: Record<string, string> = {},
+  body?: string,
 ): IncomingMessage {
   const emitter = new EventEmitter()
   const mockResponse = {
@@ -24,6 +25,8 @@ export function createMockResponse(
       return emitter.emit(event, ...args)
     },
     pipe: vi.fn(),
+    // include body for convenience in mocks
+    __body: body,
   } as unknown as IncomingMessage
 
   return mockResponse
@@ -57,12 +60,22 @@ export function createMockRequest(): ClientRequest {
  *   vi.mocked(https.get).mockImplementation(mockHttpsGet(mockResp))
  *   // mockResp.emit('end') called automatically
  */
+type MockResp = IncomingMessage & {
+  __body?: string
+  emit: (event: string, ...args: unknown[]) => boolean
+}
+
 export function mockHttpsGet(response: IncomingMessage, autoEnd = true) {
   return (_url: unknown, optionsOrCallback: unknown, callback?: unknown) => {
     const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
     if (typeof cb === 'function') {
       setImmediate(() => {
         ;(cb as (res: IncomingMessage) => void)(response)
+        // emit data if provided on the response mock
+        const r = response as MockResp
+        if (r.__body) {
+          setImmediate(() => r.emit('data', r.__body))
+        }
         if (autoEnd) {
           setImmediate(() => response.emit('end'))
         }
@@ -116,6 +129,11 @@ export function mockMultipleHttpsGet(
     if (typeof cb === 'function') {
       setImmediate(() => {
         ;(cb as (res: IncomingMessage) => void)(config.response)
+        // emit data if body present
+        const r = config.response as MockResp
+        if (r.__body) {
+          setImmediate(() => r.emit('data', r.__body))
+        }
         if (config.autoEnd !== false) {
           setImmediate(() => config.response.emit('end'))
         }

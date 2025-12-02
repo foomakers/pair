@@ -98,6 +98,9 @@ module.exports = [
         vi: 'readonly',
       },
     },
+    rules: {
+      'max-lines-per-function': 'off',
+    },
   },
   {
     ignores: ['dist/', 'build/', 'node_modules/', '*.config.js', '*.config.ts'],

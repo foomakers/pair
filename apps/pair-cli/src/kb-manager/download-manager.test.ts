@@ -13,18 +13,22 @@ vi.mock('https', () => ({
 function setupBasicDownload() {
   const mockResponse = createMockResponse(200, { 'content-length': '1024' })
   const mockHeadResponse = createMockResponse(200, { 'content-length': '1024' })
-
-  vi.mocked(https.request).mockImplementation((url, options, callback) => {
-    const cb = typeof options === 'function' ? options : callback
-    if (typeof cb === 'function') setImmediate(() => cb(mockHeadResponse))
+  vi.mocked(https.request).mockImplementation((...args: unknown[]) => {
+    const optionsOrCallback = args[1]
+    const callback = args[2]
+    const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
+    if (typeof cb === 'function')
+      setImmediate(() => (cb as (res: unknown) => void)(mockHeadResponse))
     return createMockRequest()
   })
 
-  vi.mocked(https.get).mockImplementation((url, options, callback) => {
-    const cb = typeof options === 'function' ? options : callback
+  vi.mocked(https.get).mockImplementation((...args: unknown[]) => {
+    const optionsOrCallback = args[1]
+    const callback = args[2]
+    const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
     if (typeof cb === 'function') {
       setImmediate(() => {
-        cb(mockResponse as unknown as IncomingMessage)
+        ;(cb as (res: unknown) => void)(mockResponse as unknown as IncomingMessage)
         setImmediate(() => mockResponse.emit('end'))
       })
     }
@@ -38,21 +42,25 @@ function setupRedirect() {
   const finalResponse = createMockResponse(200, { 'content-length': '512' })
   const mockHeadResponse = createMockResponse(200, { 'content-length': '512' })
 
-  vi.mocked(https.request).mockImplementation((url, options, callback) => {
-    const cb = typeof options === 'function' ? options : callback
-    if (typeof cb === 'function') setImmediate(() => cb(mockHeadResponse))
+  vi.mocked(https.request).mockImplementation((...args: unknown[]) => {
+    const optionsOrCallback = args[1]
+    const callback = args[2]
+    const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
+    if (typeof cb === 'function')
+      setImmediate(() => (cb as (res: unknown) => void)(mockHeadResponse))
     return createMockRequest()
   })
 
   let callCount = 0
-  vi.mocked(https.get).mockImplementation((url, options, callback) => {
-    const cb = typeof options === 'function' ? options : callback
+  vi.mocked(https.get).mockImplementation((...args: unknown[]) => {
+    const optionsOrCallback = args[1]
+    const callback = args[2]
+    const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
     callCount++
     const resp = callCount === 1 ? redirectResponse : finalResponse
-
     if (typeof cb === 'function') {
       setImmediate(() => {
-        cb(resp as unknown as IncomingMessage)
+        ;(cb as (res: unknown) => void)(resp as unknown as IncomingMessage)
         if (callCount > 1) setImmediate(() => finalResponse.emit('end'))
       })
     }
@@ -66,17 +74,22 @@ function setupProgress() {
   const mockResponse = createMockResponse(200, { 'content-length': '2048' })
   const mockHeadResponse = createMockResponse(200, { 'content-length': '2048' })
 
-  vi.mocked(https.request).mockImplementation((url, options, callback) => {
-    const cb = typeof options === 'function' ? options : callback
-    if (typeof cb === 'function') setImmediate(() => cb(mockHeadResponse))
+  vi.mocked(https.request).mockImplementation((...args: unknown[]) => {
+    const optionsOrCallback = args[1]
+    const callback = args[2]
+    const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
+    if (typeof cb === 'function')
+      setImmediate(() => (cb as (res: unknown) => void)(mockHeadResponse))
     return createMockRequest()
   })
 
-  vi.mocked(https.get).mockImplementation((url, options, callback) => {
-    const cb = typeof options === 'function' ? options : callback
+  vi.mocked(https.get).mockImplementation((...args: unknown[]) => {
+    const optionsOrCallback = args[1]
+    const callback = args[2]
+    const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
     if (typeof cb === 'function') {
       setImmediate(() => {
-        cb(mockResponse as unknown as IncomingMessage)
+        ;(cb as (res: unknown) => void)(mockResponse as unknown as IncomingMessage)
         setImmediate(() => mockResponse.emit('data', Buffer.alloc(1024)))
         setImmediate(() => mockResponse.emit('end'))
       })
@@ -118,17 +131,22 @@ describe('Download Manager - downloadFile', () => {
     const notFoundResponse = createMockResponse(404, {})
     const mockHeadResponse = createMockResponse(200, { 'content-length': '0' })
 
-    vi.mocked(https.request).mockImplementation((url, options, callback) => {
-      const cb = typeof options === 'function' ? options : callback
-      if (typeof cb === 'function') setImmediate(() => cb(mockHeadResponse))
+    vi.mocked(https.request).mockImplementation((...args: unknown[]) => {
+      const optionsOrCallback = args[1]
+      const callback = args[2]
+      const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
+      if (typeof cb === 'function')
+        setImmediate(() => (cb as (res: unknown) => void)(mockHeadResponse))
       return createMockRequest()
     })
 
-    vi.mocked(https.get).mockImplementation((url, options, callback) => {
-      const cb = typeof options === 'function' ? options : callback
+    vi.mocked(https.get).mockImplementation((...args: unknown[]) => {
+      const optionsOrCallback = args[1]
+      const callback = args[2]
+      const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
       if (typeof cb === 'function') {
         setImmediate(() => {
-          cb(notFoundResponse as unknown as IncomingMessage)
+          ;(cb as (res: unknown) => void)(notFoundResponse as unknown as IncomingMessage)
           setImmediate(() => notFoundResponse.emit('end'))
         })
       }
@@ -144,13 +162,16 @@ describe('Download Manager - downloadFile', () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
     const mockHeadResponse = createMockResponse(200, { 'content-length': '0' })
 
-    vi.mocked(https.request).mockImplementation((url, options, callback) => {
-      const cb = typeof options === 'function' ? options : callback
-      if (typeof cb === 'function') setImmediate(() => cb(mockHeadResponse))
+    vi.mocked(https.request).mockImplementation((...args: unknown[]) => {
+      const optionsOrCallback = args[1]
+      const callback = args[2]
+      const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
+      if (typeof cb === 'function')
+        setImmediate(() => (cb as (res: unknown) => void)(mockHeadResponse))
       return createMockRequest()
     })
 
-    vi.mocked(https.get).mockImplementation((url, options, callback) => {
+    vi.mocked(https.get).mockImplementation(() => {
       // simulate network error via request.emit('error')
       const req = createMockRequest()
       setImmediate(() => req.emit('error', new Error('network failure')))

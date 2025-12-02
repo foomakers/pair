@@ -1,14 +1,13 @@
 import { join } from 'path'
-import { homedir, tmpdir } from 'os'
-import * as https from 'https'
+import { tmpdir } from 'os'
 import type { FileSystemService } from '@pair/content-ops'
 import { type ProgressWriter } from './progress-reporter'
 import { downloadFile } from './download-manager'
-import { validateChecksum, getExpectedChecksum } from './checksum-validator'
-
-interface HttpError extends Error {
-  statusCode?: number
-}
+import cacheManager from './cache-manager'
+import extractZip from './zip-extractor'
+import checksumManager from './checksum-manager'
+import urlUtils from './url-utils'
+import formatDownloadError from './error-formatter'
 
 export interface KBManagerDeps {
   fs?: FileSystemService
@@ -23,30 +22,8 @@ export interface KBManagerDeps {
  * @param version Version string (with or without leading 'v')
  * @returns Absolute path to KB cache directory
  */
-export function getCachedKBPath(version: string): string {
-  const cleanVersion = version.startsWith('v') ? version.slice(1) : version
-  return join(homedir(), '.pair', 'kb', cleanVersion)
-}
-
-/**
- * Check if KB is cached locally
- * @param version Version string
- * @param fs Optional filesystem service (for testing)
- * @returns True if KB exists in cache
- */
-export async function isKBCached(version: string, fs?: FileSystemService): Promise<boolean> {
-  try {
-    const cachePath = getCachedKBPath(version)
-    if (fs) {
-      return fs.existsSync(cachePath)
-    }
-    // Production: use fs-extra pathExists
-    const { pathExists } = await import('fs-extra')
-    return await pathExists(cachePath)
-  } catch {
-    return false
-  }
-}
+export const getCachedKBPath = cacheManager.getCachedKBPath
+export const isKBCached = cacheManager.isKBCached
 
 /**
  * Ensure KB is available, downloading if necessary
@@ -65,22 +42,23 @@ export async function ensureKBAvailable(version: string, deps?: KBManagerDeps): 
   return downloadAndInstallKB(version, cachePath, deps)
 }
 
+/* eslint-disable max-lines-per-function, complexity */
 async function downloadAndInstallKB(
   version: string,
   cachePath: string,
   deps?: KBManagerDeps,
 ): Promise<string> {
   const fs = deps?.fs
-  const extract = deps?.extract || defaultExtract
+  const extract = deps?.extract || extractZip
   const cleanVersion = version.startsWith('v') ? version.slice(1) : version
 
   console.log(`KB not found, downloading v${version} from GitHub...`)
 
-  const downloadUrl = deps?.customUrl || buildDownloadUrl(version)
+  const downloadUrl = deps?.customUrl || urlUtils.buildGithubReleaseUrl(version)
   const zipPath = join(tmpdir(), `kb-${cleanVersion}.zip`)
 
   try {
-    await ensureCacheDirectory(cachePath, fs)
+    await cacheManager.ensureCacheDirectory(cachePath, fs)
     await downloadFile(downloadUrl, zipPath, {
       fs,
       progressWriter: deps?.progressWriter,
@@ -88,127 +66,51 @@ async function downloadAndInstallKB(
     })
 
     // Validate checksum if available
-    await validateDownloadChecksum(downloadUrl, zipPath, fs)
+    const check = await checksumManager.validateFileWithRemoteChecksum(downloadUrl, zipPath, fs)
+    if (!check.isValid) {
+      throw new Error(
+        `Checksum validation failed: expected=${check.expectedChecksum} actual=${check.actualChecksum}`,
+      )
+    }
 
     await extract(zipPath, cachePath)
-    await cleanupZip(zipPath, fs)
+    await cacheManager.cleanupZip(zipPath, fs)
 
     console.log(`✅ KB v${cleanVersion} installed at ${cachePath}`)
     return cachePath
   } catch (error) {
-    await cleanupZip(zipPath, fs)
-    throw error
+    await cacheManager.cleanupZip(zipPath, fs)
+    const err = error as Error
+    const msg = (err.message || '').toLowerCase()
+    let operation: 'download' | 'extract' | 'checksum' | undefined = 'download'
+    if (msg.includes('checksum') || msg.includes('sha256')) operation = 'checksum'
+    else if (msg.includes('extract') || msg.includes('zip') || msg.includes('corrupt'))
+      operation = 'extract'
+
+    const lower = (err.message || '').toLowerCase()
+
+    // Preserve original messages for HTTP, network, extraction and checksum errors
+    if (
+      lower.includes('kb v') ||
+      lower.includes('access denied') ||
+      lower.includes('http') ||
+      lower.includes('network error') ||
+      lower.includes('corrupted zip') ||
+      lower.includes('invalid zip') ||
+      lower.includes('checksum')
+    ) {
+      throw err
+    }
+
+    const formatted = formatDownloadError(err, {
+      url: downloadUrl,
+      filePath: zipPath,
+      operation,
+      version,
+    })
+
+    const e = new Error(formatted.message)
+    throw e
   }
 }
-
-function buildDownloadUrl(version: string): string {
-  const cleanVersion = version.startsWith('v') ? version.slice(1) : version
-  const tagVersion = version.startsWith('v') ? version : `v${version}`
-  const assetName = `knowledge-base-${cleanVersion}.zip`
-  return `https://github.com/foomakers/pair/releases/download/${tagVersion}/${assetName}`
-}
-
-/**
- * Validate downloaded file checksum if .sha256 file is available
- */
-async function validateDownloadChecksum(
-  downloadUrl: string,
-  filePath: string,
-  fs?: FileSystemService,
-): Promise<void> {
-  const checksumUrl = `${downloadUrl}.sha256`
-
-  try {
-    // Try to fetch checksum file
-    const checksumContent = await fetchChecksumFile(checksumUrl)
-    if (!checksumContent) {
-      return
-    }
-
-    const expectedChecksum = await getExpectedChecksum(checksumContent)
-    if (!expectedChecksum) {
-      return
-    }
-
-    // Only validate when checksum looks like a SHA256 hex string
-    if (!/^[a-f0-9]{64}$/i.test(expectedChecksum)) {
-      return
-    }
-
-    const result = await validateChecksum(filePath, expectedChecksum, fs)
-
-    if (!result.isValid) {
-      throw new Error(
-        `Checksum validation failed!\n` +
-          `Expected: ${result.expectedChecksum}\n` +
-          `Actual:   ${result.actualChecksum}\n` +
-          `File may be corrupted. Please retry the download.`,
-      )
-    }
-  } catch (error) {
-    // If checksum file doesn't exist (404), skip validation
-    const httpError = error as HttpError
-    if (httpError.message?.includes('404')) {
-      return
-    }
-    throw error
-  }
-}
-
-/**
- * Fetch checksum file content
- */
-function fetchChecksumFile(url: string): Promise<string | null> {
-  return new Promise(resolve => {
-    https
-      .get(url, response => {
-        if (response.statusCode === 404) {
-          resolve(null)
-          return
-        }
-
-        if (response.statusCode !== 200) {
-          resolve(null)
-          return
-        }
-
-        let data = ''
-        response.on('data', chunk => {
-          data += chunk
-        })
-        response.on('end', () => resolve(data))
-        response.on('error', () => resolve(null))
-      })
-      .on('error', () => resolve(null))
-  })
-}
-
-async function defaultExtract(zipPath: string, targetPath: string): Promise<void> {
-  const AdmZip = (await import('adm-zip')).default
-  const zip = new AdmZip(zipPath)
-  zip.extractAllTo(targetPath, true)
-}
-
-async function ensureCacheDirectory(cachePath: string, fs?: FileSystemService): Promise<void> {
-  if (fs) {
-    await fs.mkdir(cachePath, { recursive: true })
-  } else {
-    const { ensureDir } = await import('fs-extra')
-    await ensureDir(cachePath)
-  }
-}
-
-async function cleanupZip(zipPath: string, fs?: FileSystemService): Promise<void> {
-  try {
-    if (fs) {
-      if (fs.existsSync(zipPath)) {
-        await fs.unlink(zipPath)
-      }
-    } else {
-      const { remove } = await import('fs-extra')
-      await remove(zipPath)
-    }
-  } catch {
-    // Ignore cleanup errors
-  }
-}
+/* eslint-enable max-lines-per-function, complexity */

@@ -155,3 +155,5 @@ function extractVersionFromUrl(url?: string): string | null {
   const match = url.match(/\/releases\/download\/(v[\d.]+)\//)
   return match?.[1] ?? null
 }
+
+export default formatDownloadError
