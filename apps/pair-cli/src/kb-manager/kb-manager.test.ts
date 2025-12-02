@@ -5,10 +5,12 @@ import * as https from 'https'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { ensureKBAvailable, getCachedKBPath, isKBCached } from './kb-manager'
 import {
-  createMockResponse,
-  createMockRequest,
   mockHttpsRequest,
   mockMultipleHttpsGet,
+  buildTestResponse,
+  toIncomingMessage,
+  toClientRequest,
+  buildTestRequest,
 } from '../test-utils/http-mocks'
 
 vi.mock('https', () => ({
@@ -19,14 +21,13 @@ vi.mock('https', () => ({
 // Type helpers
 // MockStdout type moved to unit tests where needed
 type HttpsCallback = (res: unknown) => void
-type MockResponse = ReturnType<typeof createMockResponse>
 
 const mockExtract = vi.fn()
 
 // Default mock setup to prevent "Cannot read properties of undefined"
 beforeEach(() => {
   vi.mocked(https.request).mockImplementation(
-    mockHttpsRequest(createMockResponse(200, { 'content-length': '1024' })),
+    mockHttpsRequest(toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))),
   )
 })
 
@@ -120,14 +121,14 @@ describe('KB Manager - Download and extract', () => {
     const expectedURL = `https://github.com/foomakers/pair/releases/download/v${testVersion}/knowledge-base-${testVersion}.zip`
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
-    const mockResponse = createMockResponse(200)
+    const mockResponse = toIncomingMessage(buildTestResponse(200))
 
     vi.mocked(https.get).mockImplementation((...args: unknown[]) => {
       const callback = args[1]
       if (typeof callback === 'function') {
         setImmediate(() => (callback as (res: unknown) => void)(mockResponse))
       }
-      return createMockRequest()
+      return toClientRequest(buildTestRequest())
     })
 
     mockExtract.mockImplementation(async (zipPath: string, targetPath: string) => {
@@ -139,8 +140,8 @@ describe('KB Manager - Download and extract', () => {
 
     expect(result).toBe(expectedCachePath)
     expect(https.get).toHaveBeenCalled()
-    const calls =
-      (vi.mocked(https.get) as unknown as { mock?: { calls?: unknown[][] } }).mock?.calls ?? []
+    const mockedGet = vi.mocked(https.get) as { mock?: { calls?: unknown[][] } }
+    const calls = mockedGet.mock?.calls ?? []
     const found = calls.some(call => {
       const arg0 = call[0]
       const url = typeof arg0 === 'string' ? arg0 : String(arg0)
@@ -166,8 +167,8 @@ describe('KB Manager - GitHub URL construction', () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
     // Mock checksum (404) and file download (200) - auto-emit end
-    const checksumResp = createMockResponse(404)
-    const fileResp = createMockResponse(200, { 'content-length': '1024' })
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
+    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
     vi.mocked(https.get).mockImplementation(
       mockMultipleHttpsGet([
         { pattern: '.sha256', response: checksumResp },
@@ -187,8 +188,8 @@ describe('KB Manager - Version handling', () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
     const versionWithV = 'v1.2.3'
 
-    const checksumResp = createMockResponse(404)
-    const fileResp = createMockResponse(200, { 'content-length': '1024' })
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
+    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
     vi.mocked(https.get).mockImplementation(
       mockMultipleHttpsGet([
         { pattern: '.sha256', response: checksumResp },
@@ -209,8 +210,8 @@ describe('KB Manager - 404 error handling', () => {
     const testVersion404 = '0.0.404-test'
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
-    const checksumResp = createMockResponse(404)
-    const fileResp = createMockResponse(404)
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
+    const fileResp = toIncomingMessage(buildTestResponse(404))
     vi.mocked(https.get).mockImplementation(
       mockMultipleHttpsGet([
         { pattern: '.sha256', response: checksumResp },
@@ -232,8 +233,8 @@ describe('KB Manager - 403 error handling', () => {
     const testVersion403 = '0.0.403-test'
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
-    const checksumResp = createMockResponse(404)
-    const fileResp = createMockResponse(403)
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
+    const fileResp = toIncomingMessage(buildTestResponse(403))
     vi.mocked(https.get).mockImplementation(
       mockMultipleHttpsGet([
         { pattern: '.sha256', response: checksumResp },
@@ -256,7 +257,7 @@ describe('KB Manager - Network failure', () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
     vi.mocked(https.get).mockImplementation(() => {
-      const mockRequest = createMockRequest()
+      const mockRequest = toClientRequest(buildTestRequest())
       setImmediate(() => mockRequest.emit('error', new Error('ENOTFOUND: network unreachable')))
       return mockRequest
     })
@@ -277,8 +278,8 @@ describe('KB Manager - ZIP cleanup', () => {
     const expectedZipPath = join(tmpdir(), `kb-${testVersion}.zip`)
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
-    const checksumResp = createMockResponse(404)
-    const fileResp = createMockResponse(200, { 'content-length': '1024' })
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
+    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
     vi.mocked(https.get).mockImplementation(
       mockMultipleHttpsGet([
         { pattern: '.sha256', response: checksumResp },
@@ -303,8 +304,8 @@ describe('KB Manager - Extraction error', () => {
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
-    const checksumResp = createMockResponse(404)
-    const fileResp = createMockResponse(200, { 'content-length': '1024' })
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
+    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
     vi.mocked(https.get).mockImplementation(
       mockMultipleHttpsGet([
         { pattern: '.sha256', response: checksumResp },
@@ -328,8 +329,8 @@ describe('KB Manager - Download message', () => {
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
-    const checksumResp = createMockResponse(404)
-    const fileResp = createMockResponse(200, { 'content-length': '1024' })
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
+    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
     vi.mocked(https.get).mockImplementation(
       mockMultipleHttpsGet([
         { pattern: '.sha256', response: checksumResp },
@@ -356,8 +357,8 @@ describe('KB Manager - Success message', () => {
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
-    const checksumResp = createMockResponse(404)
-    const fileResp = createMockResponse(200, { 'content-length': '1024' })
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
+    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
     vi.mocked(https.get).mockImplementation(
       mockMultipleHttpsGet([
         { pattern: '.sha256', response: checksumResp },
@@ -382,8 +383,8 @@ describe('KB Manager - Success message', () => {
 // Helper: setup custom URL test mocks
 function setupCustomUrlMocks(
   capturedUrls: string[],
-  checksumResp: MockResponse,
-  fileResp: MockResponse,
+  checksumResp: ReturnType<typeof toIncomingMessage>,
+  fileResp: ReturnType<typeof toIncomingMessage>,
 ) {
   vi.mocked(https.get).mockImplementation((...args: unknown[]) => {
     const url = String(args[0])
@@ -399,7 +400,7 @@ function setupCustomUrlMocks(
         setImmediate(() => resp.emit('end'))
       })
     }
-    return createMockRequest()
+    return toClientRequest(buildTestRequest())
   })
 }
 
@@ -409,8 +410,8 @@ describe('KB Manager - Custom URL with provided URL', () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
     const capturedUrls: string[] = []
 
-    const checksumResp = createMockResponse(404)
-    const fileResp = createMockResponse(200, { 'content-length': '1024' })
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
+    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
 
     setupCustomUrlMocks(capturedUrls, checksumResp, fileResp)
 
@@ -430,8 +431,8 @@ describe('KB Manager - Custom URL with default URL', () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
     const capturedUrls: string[] = []
 
-    const checksumResp = createMockResponse(404)
-    const fileResp = createMockResponse(200, { 'content-length': '1024' })
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
+    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
 
     setupCustomUrlMocks(capturedUrls, checksumResp, fileResp)
 
@@ -458,11 +459,15 @@ async function testResumeLogic(hasPartialFile: boolean) {
   const fs = new InMemoryFileSystemService(fsFiles, '/', '/')
   let rangeHeader: string | undefined
 
-  const checksumResp = createMockResponse(404)
-  const fileResp = createMockResponse(hasPartialFile ? 206 : 200, {
-    'content-length': String(hasPartialFile ? totalSize - partialSize : totalSize),
-  })
-  const mockHeadResponse = createMockResponse(200, { 'content-length': String(totalSize) })
+  const checksumResp = toIncomingMessage(buildTestResponse(404))
+  const fileResp = toIncomingMessage(
+    buildTestResponse(hasPartialFile ? 206 : 200, {
+      'content-length': String(hasPartialFile ? totalSize - partialSize : totalSize),
+    }),
+  )
+  const mockHeadResponse = toIncomingMessage(
+    buildTestResponse(200, { 'content-length': String(totalSize) }),
+  )
 
   vi.mocked(https.request).mockImplementation(mockHttpsRequest(mockHeadResponse))
 
@@ -472,9 +477,10 @@ async function testResumeLogic(hasPartialFile: boolean) {
     const callback = args[2]
     const cb = typeof options === 'function' ? options : callback
 
-    const hdrs = (options as unknown as Record<string, unknown> | undefined)?.headers
+    const optionsRec = options as Record<string, unknown> | undefined
+    const hdrs = optionsRec?.headers as Record<string, unknown> | undefined
     if (hdrs && typeof hdrs === 'object' && 'Range' in hdrs) {
-      rangeHeader = hdrs['Range'] as string
+      rangeHeader = String(hdrs['Range'])
     }
 
     const resp = url.includes('.sha256') ? checksumResp : fileResp
@@ -484,7 +490,7 @@ async function testResumeLogic(hasPartialFile: boolean) {
         setImmediate(() => resp.emit('end'))
       })
     }
-    return createMockRequest()
+    return toClientRequest(buildTestRequest())
   })
 
   await ensureKBAvailable('0.2.0', { fs, extract: mockExtract })
@@ -506,9 +512,9 @@ describe('KB Manager - Resume Support', () => {
 
 // Helper: setup checksum test mocks
 function setupChecksumTest(config: {
-  headResp: MockResponse
-  getResp: MockResponse
-  checksumResp: MockResponse
+  headResp: ReturnType<typeof toIncomingMessage>
+  getResp: ReturnType<typeof toIncomingMessage>
+  checksumResp: ReturnType<typeof toIncomingMessage>
   content: Buffer
   checksum?: string
 }) {
@@ -517,7 +523,7 @@ function setupChecksumTest(config: {
     if (typeof cb === 'function') {
       setImmediate(() => (cb as HttpsCallback)(config.headResp))
     }
-    return createMockRequest()
+    return toClientRequest(buildTestRequest())
   })
 
   vi.mocked(https.get).mockImplementation((url, options, callback) => {
@@ -544,7 +550,7 @@ function setupChecksumTest(config: {
       setImmediate(() => (cb as HttpsCallback)(config.checksumResp))
     }
 
-    return createMockRequest()
+    return toClientRequest(buildTestRequest())
   })
 }
 
@@ -555,9 +561,9 @@ describe('KB Manager - Checksum Validation with available checksum', () => {
     const expectedChecksum = createHash('sha256').update(content).digest('hex')
 
     const fs = new InMemoryFileSystemService({}, '/', '/')
-    const mockGetResponse = createMockResponse(200, { 'content-length': '1024' })
-    const mockHeadResponse = createMockResponse(200, { 'content-length': '1024' })
-    const mockChecksumResponse = createMockResponse(200, {})
+    const mockGetResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    const mockHeadResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    const mockChecksumResponse = toIncomingMessage(buildTestResponse(200, {}))
 
     setupChecksumTest({
       headResp: mockHeadResponse,
@@ -577,9 +583,9 @@ describe('KB Manager - Checksum Validation without checksum', () => {
   it('proceeds without checksum when .sha256 file not found', async () => {
     const content = Buffer.alloc(1024, 'kb content')
     const fs = new InMemoryFileSystemService({}, '/', '/')
-    const mockGetResponse = createMockResponse(200, { 'content-length': '1024' })
-    const mockHeadResponse = createMockResponse(200, { 'content-length': '1024' })
-    const mockChecksumResponse = createMockResponse(404, {})
+    const mockGetResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    const mockHeadResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    const mockChecksumResponse = toIncomingMessage(buildTestResponse(404, {}))
 
     setupChecksumTest({
       headResp: mockHeadResponse,

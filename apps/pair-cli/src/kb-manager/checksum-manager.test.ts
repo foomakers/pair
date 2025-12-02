@@ -2,7 +2,11 @@ import { describe, it, expect, vi } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import checksumManager from './checksum-manager'
 import * as https from 'https'
-import { createMockResponse, mockMultipleHttpsGet } from '../test-utils/http-mocks'
+import {
+  mockMultipleHttpsGet,
+  buildTestResponse,
+  toIncomingMessage,
+} from '../test-utils/http-mocks'
 import * as checksumValidator from './checksum-validator'
 
 vi.mock('https')
@@ -10,7 +14,9 @@ vi.mock('https')
 describe('checksum-manager', () => {
   it('validates when checksum matches', async () => {
     const fs = new InMemoryFileSystemService({ '/tmp/file': 'data' }, '/', '/')
-    const checksumResp = createMockResponse(200, {}, 'd41d8cd98f00b204e9800998ecf8427e')
+    const checksumResp = toIncomingMessage(
+      buildTestResponse(200, {}, 'd41d8cd98f00b204e9800998ecf8427e'),
+    )
     vi.mocked(https.get).mockImplementation(
       mockMultipleHttpsGet([{ pattern: '.sha256', response: checksumResp }]),
     )
@@ -26,7 +32,7 @@ describe('checksum-manager', () => {
 
   it('proceeds when checksum missing (404)', async () => {
     const fs = new InMemoryFileSystemService({ '/tmp/file': 'data' }, '/', '/')
-    const checksumResp = createMockResponse(404)
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
     vi.mocked(https.get).mockImplementation(
       mockMultipleHttpsGet([{ pattern: '.sha256', response: checksumResp }]),
     )
@@ -41,10 +47,12 @@ describe('checksum-manager', () => {
 
   it('fails when checksum mismatch', async () => {
     const fs = new InMemoryFileSystemService({ '/tmp/file': 'data' }, '/', '/')
-    const checksumResp = createMockResponse(
-      200,
-      {},
-      '0000000000000000000000000000000000000000000000000000000000000000',
+    const checksumResp = toIncomingMessage(
+      buildTestResponse(
+        200,
+        {},
+        '0000000000000000000000000000000000000000000000000000000000000000',
+      ),
     )
     vi.mocked(https.get).mockImplementation(
       mockMultipleHttpsGet([{ pattern: '.sha256', response: checksumResp }]),
@@ -53,7 +61,7 @@ describe('checksum-manager', () => {
     // Mock validateChecksum to return mismatch
     vi.spyOn(
       checksumValidator,
-      'validateChecksum' as unknown as keyof typeof checksumValidator,
+      'validateChecksum' as keyof typeof checksumValidator,
     ).mockResolvedValue({
       isValid: false,
       expectedChecksum: '0000000000000000000000000000000000000000000000000000000000000000',
