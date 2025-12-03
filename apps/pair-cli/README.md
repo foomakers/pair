@@ -193,7 +193,7 @@ Common error scenarios covered:
 
 The KB installation logic is split across small focused modules to improve testability and maintenance:
 
-- `kb-manager` (orchestration): decides when to download, validates cache, verifies checksums, and extracts the KB into the cache or target folders.
+- `kb-availability` (orchestration): decides when to download, validates cache, and delegates install/extract to the installer. The public API for callers is exported from the `kb-manager` index (which re-exports cache helpers from `cache-manager`).
 - `download-manager` (HTTP + streaming): low-level download implementation handling redirects, progress reporting, streaming writes, and retry/error translation.
 - `resume-manager` (resume support): manages partial download files, HTTP Range logic, and finalization of resumed downloads.
 

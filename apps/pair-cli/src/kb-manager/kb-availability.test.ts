@@ -341,4 +341,4 @@ describe('KB Manager - Custom URL with default URL', () => {
 // NOTE: Download/resume/checksum heavy-integration tests were migrated to their
 // owning test suites (`kb-installer.test.ts`, `download-manager.test.ts`,
 // `checksum-manager.test.ts`). This file keeps only the API-surface tests for
-// `kb-manager` (cache and custom URL passthrough).
+// the KB availability orchestration. Public API is exported from `kb-manager/index.ts`.
