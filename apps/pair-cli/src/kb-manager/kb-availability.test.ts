@@ -3,7 +3,7 @@ import { join } from 'path'
 import { homedir, tmpdir } from 'os'
 import * as https from 'https'
 import { InMemoryFileSystemService } from '@pair/content-ops'
-import { ensureKBAvailable } from './index'
+import { ensureKBAvailable } from './kb-availability'
 import {
   mockHttpsRequest,
   mockMultipleHttpsGet,
@@ -50,55 +50,6 @@ describe('KB Manager - ensureKBAvailable - Cache Hit', () => {
 
     expect(result).toBe(expectedCachePath)
     expect(https.get).not.toHaveBeenCalled()
-  })
-})
-
-describe('KB Manager - Download and extract', () => {
-  it.skip('should download and extract KB when cache miss', async () => {
-    vi.clearAllMocks()
-    mockExtract.mockReset().mockResolvedValue(undefined)
-    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    const testVersion = '0.2.0'
-    const expectedCachePath = join(homedir(), '.pair', 'kb', testVersion)
-    const expectedZipPath = join(tmpdir(), `kb-${testVersion}.zip`)
-    const expectedURL = `https://github.com/foomakers/pair/releases/download/v${testVersion}/knowledge-base-${testVersion}.zip`
-    const fs = new InMemoryFileSystemService({}, '/', '/')
-
-    const mockResponse = toIncomingMessage(buildTestResponse(200))
-
-    vi.mocked(https.get).mockImplementation((...args: unknown[]) => {
-      const callback = args[1]
-      if (typeof callback === 'function') {
-        setImmediate(() => (callback as (res: unknown) => void)(mockResponse))
-      }
-      return toClientRequest(buildTestRequest())
-    })
-
-    mockExtract.mockImplementation(async (zipPath: string, targetPath: string) => {
-      fs.writeFile(join(targetPath, 'manifest.json'), '{"version":"0.2.0"}')
-      fs.writeFile(join(targetPath, '.pair/knowledge/test.md'), 'test')
-    })
-
-    const result = await ensureKBAvailable(testVersion, { fs, extract: mockExtract })
-
-    expect(result).toBe(expectedCachePath)
-    expect(https.get).toHaveBeenCalled()
-    const mockedGet = vi.mocked(https.get) as { mock?: { calls?: unknown[][] } }
-    const calls = mockedGet.mock?.calls ?? []
-    const found = calls.some(call => {
-      const arg0 = call[0]
-      const url = typeof arg0 === 'string' ? arg0 : String(arg0)
-      return url === expectedURL
-    })
-    expect(found).toBe(true)
-    expect(mockExtract).toHaveBeenCalledWith(expectedZipPath, expectedCachePath)
-    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('KB not found, downloading'))
-    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('KB v0.2.0 installed'))
-    expect(fs.existsSync(expectedCachePath)).toBe(true)
-    expect(fs.existsSync(join(expectedCachePath, 'manifest.json'))).toBe(true)
-
-    consoleLogSpy.mockRestore()
   })
 })
 
@@ -317,12 +268,6 @@ describe('KB Manager - Success message', () => {
     consoleLogSpy.mockRestore()
   })
 })
-
-// Progress mocks moved to download-manager.test.ts
-
-// Progress helper removed; unit-level progress tests live in download-manager.test.ts
-
-// Progress reporting unit tests moved to download-manager.test.ts
 
 // Helper: setup custom URL test mocks
 function setupCustomUrlMocks(
