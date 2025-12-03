@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import * as https from 'https'
 import { InMemoryFileSystemService } from '@pair/content-ops'
-import { ensureKBAvailable } from './kb-manager'
+import { ensureKBAvailable } from './kb-availability'
 import {
   mockMultipleHttpsGet,
   mockHttpsRequest,
