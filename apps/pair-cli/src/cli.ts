@@ -141,7 +141,7 @@ export function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService)
   }
 }
 
-async function main() {
+export async function main() {
   // Parse global options
   program.parse(process.argv)
   const options = program.opts<{ url?: string; kb: boolean }>()
@@ -169,10 +169,12 @@ async function main() {
   program.parse(process.argv)
 }
 
-main().catch(err => {
-  console.error(chalk.red(`Fatal error: ${err}`))
-  process.exit(1)
-})
+if (require.main === module) {
+  main().catch(err => {
+    console.error(chalk.red(`Fatal error: ${err}`))
+    process.exit(1)
+  })
+}
 
 interface AssetRegistryConfig {
   source?: string

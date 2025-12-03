@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 import { handleInstallCommand } from './cli'
 import { updateCommand } from './commands/update'
@@ -413,5 +413,102 @@ describe('pair-cli e2e - KB availability', () => {
       expect(result).toBeDefined()
       expect((result as { success?: boolean }).success).toBe(false)
     })
+  })
+})
+
+describe('CLI Entry Point Flags', () => {
+  const originalArgv = process.argv
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let mockExit: any
+  let mockConsoleError: any
+
+  // Mocks need to be defined here to be accessible in doMock
+  const mockGetDatasetPath = vi.fn()
+  const mockGetDatasetPathWithFallback = vi.fn()
+  const mockInstallCommand = vi.fn()
+  const mockValidateCliOptions = vi.fn()
+
+  beforeEach(async () => {
+    vi.resetModules()
+
+    // Setup mocks using doMock
+    vi.doMock('./config-utils', () => ({
+      validateConfig: vi.fn(),
+      getKnowledgeHubDatasetPath: mockGetDatasetPath,
+      getKnowledgeHubDatasetPathWithFallback: mockGetDatasetPathWithFallback,
+      loadConfigWithOverrides: vi.fn(),
+      isInRelease: vi.fn().mockReturnValue(false),
+    }))
+
+    vi.doMock('./commands/install', () => ({
+      installCommand: mockInstallCommand,
+    }))
+
+    vi.doMock('./commands/package', () => ({
+      packageCommand: vi.fn(),
+    }))
+
+    vi.doMock('./kb-manager/cli-options', () => ({
+      validateCliOptions: mockValidateCliOptions,
+    }))
+
+    // Default mock implementations
+    mockGetDatasetPath.mockReturnValue('/mock/dataset/path')
+    mockGetDatasetPathWithFallback.mockResolvedValue('/mock/dataset/path')
+    mockInstallCommand.mockResolvedValue({ success: true })
+
+    // Mock process.exit and console.error
+    mockExit = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any)
+    mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    process.argv = originalArgv
+    vi.clearAllMocks()
+    vi.doUnmock('./config-utils')
+    vi.doUnmock('./commands/install')
+    vi.doUnmock('./commands/package')
+    vi.doUnmock('./kb-manager/cli-options')
+  })
+
+  it('passes --url flag to KB availability check', async () => {
+    process.argv = ['node', 'pair', 'install', '--url', 'https://custom.com/kb.zip']
+    const { main } = await import('./cli')
+    await main()
+    expect(mockGetDatasetPathWithFallback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customUrl: 'https://custom.com/kb.zip',
+      }),
+    )
+  })
+
+  it('skips KB check when --no-kb flag is present', async () => {
+    process.argv = ['node', 'pair', 'install', '--no-kb']
+    const { main } = await import('./cli')
+    await main()
+    expect(mockGetDatasetPathWithFallback).not.toHaveBeenCalled()
+  })
+
+  it('uses default behavior when no flags provided', async () => {
+    process.argv = ['node', 'pair', 'install']
+    const { main } = await import('./cli')
+    await main()
+    expect(mockGetDatasetPathWithFallback).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        customUrl: expect.anything(),
+      }),
+    )
+  })
+
+  it('validates options using validateCliOptions', async () => {
+    process.argv = ['node', 'pair', 'install', '--url', 'http://foo', '--no-kb']
+    mockValidateCliOptions.mockImplementation(() => {
+      throw new Error('Mutually exclusive')
+    })
+    const { main } = await import('./cli')
+    await main()
+    expect(mockExit).toHaveBeenCalledWith(1)
+    expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('Invalid options'))
+    expect(mockValidateCliOptions).toHaveBeenCalled()
   })
 })
