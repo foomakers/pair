@@ -177,14 +177,14 @@ async function testInstallWithDefaults(deployType: 'npm' | 'manual' | 'dev') {
     deployType === 'npm'
       ? '/.tmp/npm-test/sample-project'
       : deployType === 'manual'
-      ? '/tmp/test-project'
-      : '/dev/test-project'
+        ? '/tmp/test-project'
+        : '/dev/test-project'
   const fs =
     deployType === 'npm'
       ? createNpmDeployFs(cwd)
       : deployType === 'manual'
-      ? createManualDeployFs(cwd)
-      : createDevScenarioFs(cwd)
+        ? createManualDeployFs(cwd)
+        : createDevScenarioFs(cwd)
 
   await withTempConfig(fs, createTestConfig(), async () => {
     const result = await handleInstallCommand(undefined, { config: undefined }, fs)
@@ -198,14 +198,14 @@ async function testUpdateWithDefaults(deployType: 'npm' | 'manual' | 'dev') {
     deployType === 'npm'
       ? '/.tmp/npm-test/sample-project'
       : deployType === 'manual'
-      ? '/tmp/test-project'
-      : '/dev/test-project'
+        ? '/tmp/test-project'
+        : '/dev/test-project'
   const fs =
     deployType === 'npm'
       ? createNpmDeployFs(cwd)
       : deployType === 'manual'
-      ? createManualDeployFs(cwd)
-      : createDevScenarioFs(cwd)
+        ? createManualDeployFs(cwd)
+        : createDevScenarioFs(cwd)
 
   await withTempConfig(fs, createTestConfig(), async () => {
     // First install to set up the targets
