@@ -19,6 +19,13 @@
 - Fallback chain: cache hit → default GitHub release → custom URL (via `--url` flag).
 - Version coordination: CLI version maps to KB version (e.g. CLI v0.2.0 → KB v0.2.0).
 
+### CLI Download Patterns
+
+- **TTY Detection**: CLI UX adapts to environment using `process.stdout.isTTY` - progress bars in interactive terminals, simple logs in CI/CD. See [ADR-001](adr/adr-001-tty-detection-pattern.md).
+- **Resume Support**: Interrupted downloads resume using HTTP Range requests with `.partial` file tracking. See [ADR-002](adr/adr-002-http-range-resume.md).
+- **Integrity Validation**: All KB downloads validated using SHA256 checksums for security and corruption detection. See [ADR-003](adr/adr-003-checksum-validation.md).
+- **Streaming Downloads**: Memory-efficient streaming writes with real-time progress tracking. See [ADR-004](adr/adr-004-streaming-downloads.md).
+
 ---
 
 All architectural implementations must follow these adopted standards. For process and rationale, see [way-of-working.md](../../way-of-working.md).
