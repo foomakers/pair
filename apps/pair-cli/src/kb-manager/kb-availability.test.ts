@@ -53,6 +53,44 @@ describe('KB Manager - ensureKBAvailable - Cache Hit', () => {
   })
 })
 
+describe('KB Manager - ensureKBAvailable - Cache Miss', () => {
+  it('should download and extract KB when cache miss', async () => {
+    vi.clearAllMocks()
+    mockExtract.mockReset().mockResolvedValue(undefined)
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    const testVersion = '0.2.0'
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+
+    // Mock checksum (404) and file download (200) - auto-emit end
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
+    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    vi.mocked(https.get).mockImplementation(
+      mockMultipleHttpsGet([
+        { pattern: '.sha256', response: checksumResp },
+        { response: fileResp },
+      ]),
+    )
+
+    mockExtract.mockImplementation(async (zipPath: string, targetPath: string) => {
+      fs.writeFile(join(targetPath, 'manifest.json'), '{"version":"0.2.0"}')
+      fs.writeFile(join(targetPath, '.pair/knowledge/test.md'), 'test')
+    })
+
+    const result = await ensureKBAvailable(testVersion, { fs, extract: mockExtract })
+
+    expect(result).toBe(join(homedir(), '.pair', 'kb', testVersion))
+    expect(https.get).toHaveBeenCalled()
+    expect(mockExtract).toHaveBeenCalled()
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('KB not found, downloading'))
+    expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('KB v0.2.0 installed'))
+    expect(fs.existsSync(join(homedir(), '.pair', 'kb', testVersion))).toBe(true)
+    expect(fs.existsSync(join(homedir(), '.pair', 'kb', testVersion, 'manifest.json'))).toBe(true)
+
+    consoleLogSpy.mockRestore()
+  })
+})
+
 describe('KB Manager - GitHub URL construction', () => {
   it('should construct correct GitHub release URL', async () => {
     vi.clearAllMocks()

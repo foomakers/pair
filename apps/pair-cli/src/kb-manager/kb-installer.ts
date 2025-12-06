@@ -1,5 +1,7 @@
 import { join } from 'path'
 import { tmpdir } from 'os'
+import { copy } from 'fs-extra'
+import { existsSync } from 'fs'
 import type { FileSystemService } from '@pair/content-ops'
 import { downloadFile } from './download-manager'
 import cacheManager from './cache-manager'
@@ -50,7 +52,8 @@ function shouldPreserveError(err: Error): boolean {
     lower.includes('network error') ||
     lower.includes('corrupted zip') ||
     lower.includes('invalid zip') ||
-    lower.includes('checksum')
+    lower.includes('checksum') ||
+    lower.includes('invalid kb structure')
   )
 }
 
@@ -87,4 +90,127 @@ export async function installKB(
   }
 }
 
-export default { installKB }
+async function copyDirectoryInMemory(
+  fs: FileSystemService,
+  sourceDir: string,
+  targetDir: string,
+): Promise<void> {
+  // Ensure target directory exists
+  await fs.mkdir(targetDir, { recursive: true })
+
+  // Read all entries in the source directory
+  const entries = await fs.readdir(sourceDir)
+
+  // Process each entry
+  for (const entry of entries) {
+    const sourcePath = join(sourceDir, entry.name)
+    const targetPath = join(targetDir, entry.name)
+
+    if (entry.isDirectory()) {
+      // Recursively copy subdirectory
+      await copyDirectoryInMemory(fs, sourcePath, targetPath)
+    } else {
+      // Copy file
+      const content = await fs.readFile(sourcePath)
+      await fs.writeFile(targetPath, content)
+    }
+  }
+}
+
+function validateKBStructure(cachePath: string, fs?: FileSystemService): boolean {
+  const hasPairDir = fs
+    ? fs.existsSync(join(cachePath, '.pair'))
+    : existsSync(join(cachePath, '.pair'))
+  const hasAgentsMd = fs
+    ? fs.existsSync(join(cachePath, 'AGENTS.md'))
+    : existsSync(join(cachePath, 'AGENTS.md'))
+
+  return hasPairDir || hasAgentsMd
+}
+
+export async function installKBFromLocalDirectory(
+  version: string,
+  dirPath: string,
+  deps?: InstallerDeps,
+): Promise<string> {
+  const fs = deps?.fs
+  const cachePath = cacheManager.getCachedKBPath(version)
+
+  // Resolve relative paths
+  const resolvedDirPath = dirPath.startsWith('/') ? dirPath : join(process.cwd(), dirPath)
+
+  // Validate directory exists
+  const dirExists = fs
+    ? fs.existsSync(resolvedDirPath)
+    : (await import('fs')).existsSync(resolvedDirPath)
+  if (!dirExists) {
+    throw new Error(`Directory not found: ${resolvedDirPath}`)
+  }
+
+  await cacheManager.ensureCacheDirectory(cachePath, fs)
+
+  try {
+    // Copy directory contents recursively
+    if (fs) {
+      // For in-memory filesystem, implement manual copy
+      await copyDirectoryInMemory(fs, resolvedDirPath, cachePath)
+    } else {
+      await copy(resolvedDirPath, cachePath, { overwrite: true })
+    }
+
+    // Validate KB structure
+    const kbStructureValid = validateKBStructure(cachePath, fs)
+    if (!kbStructureValid) {
+      throw new Error('Invalid KB structure')
+    }
+
+    announceSuccess(version, cachePath)
+    return cachePath
+  } catch (error) {
+    const err = error as Error
+    if (shouldPreserveError(err)) throw err
+    throw new Error(`Failed to install KB from local directory: ${err.message}`)
+  }
+}
+
+export async function installKBFromLocalZip(
+  version: string,
+  zipPath: string,
+  deps?: InstallerDeps,
+): Promise<string> {
+  const fs = deps?.fs
+  const extract = deps?.extract || extractZip
+  const cachePath = cacheManager.getCachedKBPath(version)
+
+  // Resolve relative paths
+  const resolvedZipPath = zipPath.startsWith('/') ? zipPath : join(process.cwd(), zipPath)
+
+  // Validate ZIP file exists
+  const fileExists = fs
+    ? fs.existsSync(resolvedZipPath)
+    : (await import('fs')).existsSync(resolvedZipPath)
+  if (!fileExists) {
+    throw new Error(`ZIP file not found: ${resolvedZipPath}`)
+  }
+
+  await cacheManager.ensureCacheDirectory(cachePath, fs)
+
+  try {
+    await extract(resolvedZipPath, cachePath, fs)
+
+    // Validate KB structure
+    const kbStructureValid = validateKBStructure(cachePath, fs)
+    if (!kbStructureValid) {
+      throw new Error('Invalid KB structure')
+    }
+
+    announceSuccess(version, cachePath)
+    return cachePath
+  } catch (error) {
+    const err = error as Error
+    if (shouldPreserveError(err)) throw err
+    throw new Error(`Failed to install KB from local ZIP: ${err.message}`)
+  }
+}
+
+export default { installKB, installKBFromLocalZip, installKBFromLocalDirectory }

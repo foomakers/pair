@@ -3,7 +3,7 @@ import * as https from 'https'
 import { join } from 'path'
 import { homedir } from 'os'
 import { InMemoryFileSystemService } from '@pair/content-ops'
-import { installKB } from './kb-installer'
+import { installKB, installKBFromLocalZip, installKBFromLocalDirectory } from './kb-installer'
 import {
   mockMultipleHttpsGet,
   mockHttpsRequest,
@@ -80,5 +80,162 @@ describe('KB Installer', () => {
     await expect(async () => {
       await installKB(version, cachePath, downloadUrl, { fs, extract: mockExtract })
     }).rejects.toThrow(/invalid zip/i)
+  })
+})
+
+describe('KB Installer - installKBFromLocalZip', () => {
+  it('should install KB from absolute path local ZIP', async () => {
+    // Arrange
+    const version = '0.2.0'
+    const zipPath = '/absolute/path/kb.zip'
+    const expectedCachePath = join(homedir(), '.pair', 'kb', version)
+    const fs = new InMemoryFileSystemService(
+      {
+        [zipPath]: 'fake zip content',
+        [join(expectedCachePath, '.pair', 'knowledge', 'test.md')]: 'existing content',
+      },
+      '/',
+      '/',
+    )
+
+    // Act
+    const result = await installKBFromLocalZip(version, zipPath, { fs })
+
+    // Assert
+    expect(result).toBe(expectedCachePath)
+  })
+
+  it('should install KB from relative path local ZIP', async () => {
+    // Arrange
+    const version = '0.2.0'
+    const zipPath = './downloads/kb.zip'
+    const resolvedZipPath = join(process.cwd(), 'downloads', 'kb.zip')
+    const expectedCachePath = join(homedir(), '.pair', 'kb', version)
+    const fs = new InMemoryFileSystemService(
+      {
+        [resolvedZipPath]: 'fake zip content',
+        [join(expectedCachePath, 'AGENTS.md')]: 'existing content',
+      },
+      '/',
+      '/',
+    )
+
+    // Act
+    const result = await installKBFromLocalZip(version, zipPath, { fs })
+
+    // Assert
+    expect(result).toBe(expectedCachePath)
+  })
+
+  it('should throw error if ZIP file does not exist', async () => {
+    // Arrange
+    const version = '0.2.0'
+    const zipPath = '/nonexistent/kb.zip'
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+
+    // Act & Assert
+    await expect(installKBFromLocalZip(version, zipPath, { fs })).rejects.toThrow(
+      'ZIP file not found: /nonexistent/kb.zip',
+    )
+  })
+
+  it('should validate KB structure after extraction', async () => {
+    // Arrange
+    const version = '0.2.0'
+    const zipPath = '/path/kb.zip'
+    const fs = new InMemoryFileSystemService(
+      {
+        [zipPath]: 'fake zip content',
+        // No .pair/ or AGENTS.md after extraction
+      },
+      '/',
+      '/',
+    )
+
+    // Act & Assert
+    await expect(installKBFromLocalZip(version, zipPath, { fs })).rejects.toThrow(
+      'Invalid KB structure',
+    )
+  })
+})
+
+describe('KB Installer - installKBFromLocalDirectory', () => {
+  it('should install KB from absolute path local directory', async () => {
+    // Arrange
+    const version = '0.2.0'
+    const dirPath = '/absolute/path/kb'
+    const expectedCachePath = join(homedir(), '.pair', 'kb', version)
+    const fs = new InMemoryFileSystemService(
+      {
+        [join(dirPath, '.pair', 'knowledge', 'test.md')]: 'existing content',
+        [join(dirPath, 'AGENTS.md')]: 'agents content',
+      },
+      '/',
+      '/',
+    )
+
+    // Act
+    const result = await installKBFromLocalDirectory(version, dirPath, { fs })
+
+    // Assert
+    expect(result).toBe(expectedCachePath)
+  })
+
+  it('should install KB from relative path local directory', async () => {
+    // Arrange
+    const version = '0.2.0'
+
+    // Create a temporary directory for testing
+    const { mkdirSync, writeFileSync, rmSync } = await import('fs')
+    const { tmpdir } = await import('os')
+    const tempDir = join(tmpdir(), 'kb-test-dir')
+    const tempSubDir = join(tempDir, '.pair', 'knowledge')
+    const expectedCachePath = join(homedir(), '.pair', 'kb', version)
+
+    try {
+      mkdirSync(tempSubDir, { recursive: true })
+      writeFileSync(join(tempSubDir, 'test.md'), 'existing content')
+      writeFileSync(join(tempDir, 'AGENTS.md'), 'agents content')
+
+      // Act
+      const result = await installKBFromLocalDirectory(version, tempDir)
+
+      // Assert
+      expect(result).toBe(expectedCachePath)
+    } finally {
+      // Cleanup
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('should throw error if directory does not exist', async () => {
+    // Arrange
+    const version = '0.2.0'
+    const dirPath = '/nonexistent/kb'
+    const fs = new InMemoryFileSystemService({}, '/', '/')
+
+    // Act & Assert
+    await expect(installKBFromLocalDirectory(version, dirPath, { fs })).rejects.toThrow(
+      'Directory not found: /nonexistent/kb',
+    )
+  })
+
+  it('should validate KB structure after copy', async () => {
+    // Arrange
+    const version = '0.2.0'
+    const dirPath = '/path/kb'
+    const fs = new InMemoryFileSystemService(
+      {
+        [join(dirPath, 'some-file.txt')]: 'content',
+        // No .pair/ or AGENTS.md
+      },
+      '/',
+      '/',
+    )
+
+    // Act & Assert
+    await expect(installKBFromLocalDirectory(version, dirPath, { fs })).rejects.toThrow(
+      'Invalid KB structure',
+    )
   })
 })
