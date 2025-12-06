@@ -298,20 +298,10 @@ export function getKnowledgeHubDatasetPath(fsService: FileSystemService): string
  * @param ensureKBAvailableFn Optional KB ensure function (for testing)
  * @returns Path to dataset directory
  */
-/* eslint-disable complexity */
-export async function getKnowledgeHubDatasetPathWithFallback(
+async function tryLocalDatasetPath(
   fsService: FileSystemService,
-  version: string,
-  isKBCachedFn: typeof isKBCached = isKBCached,
-  ensureKBAvailableFn: typeof ensureKBAvailable = ensureKBAvailable,
-): Promise<string> {
-  const currentDir = fsService.rootModuleDirectory()
-  const diagEnv = process.env['PAIR_DIAG']
-  const DIAG = diagEnv === '1' || diagEnv === 'true'
-
-  if (DIAG) console.error(`[diag] getKnowledgeHubDatasetPathWithFallback currentDir=${currentDir}`)
-
-  // Try local dataset first
+  DIAG: boolean,
+): Promise<string | null> {
   try {
     const localDatasetPath = getKnowledgeHubDatasetPath(fsService)
     if (fsService.existsSync(localDatasetPath)) {
@@ -321,18 +311,64 @@ export async function getKnowledgeHubDatasetPathWithFallback(
   } catch (err) {
     if (DIAG) console.error(`[diag] Local dataset not found: ${String(err)}`)
   }
+  return null
+}
 
-  // Fallback to KB manager
+async function downloadKBIfNeeded(options: {
+  version: string
+  fsService: FileSystemService
+  customUrl?: string
+  isKBCachedFn: typeof isKBCached
+  ensureKBAvailableFn: typeof ensureKBAvailable
+  DIAG: boolean
+}): Promise<string> {
+  const { version, fsService, customUrl, isKBCachedFn, ensureKBAvailableFn, DIAG } = options
+
   if (DIAG) console.error(`[diag] Checking KB cache for version ${version}`)
   const cached = await isKBCachedFn(version, fsService)
 
-  if (!cached) {
-    if (DIAG) console.error(`[diag] KB not cached, downloading...`)
+  if (!cached && DIAG) {
+    console.error(`[diag] KB not cached, downloading...`)
   }
 
-  const kbPath = await ensureKBAvailableFn(version, { fs: fsService })
-  const datasetPath = join(kbPath, 'dataset')
+  const kbPath = await ensureKBAvailableFn(version, {
+    fs: fsService,
+    ...(customUrl && { customUrl }),
+  })
+  return join(kbPath, 'dataset')
+}
 
+export async function getKnowledgeHubDatasetPathWithFallback(options: {
+  fsService: FileSystemService
+  version: string
+  isKBCachedFn?: typeof isKBCached
+  ensureKBAvailableFn?: typeof ensureKBAvailable
+  customUrl?: string
+}): Promise<string> {
+  const {
+    fsService,
+    version,
+    isKBCachedFn = isKBCached,
+    ensureKBAvailableFn = ensureKBAvailable,
+    customUrl,
+  } = options
+  const currentDir = fsService.rootModuleDirectory()
+  const diagEnv = process.env['PAIR_DIAG']
+  const DIAG = diagEnv === '1' || diagEnv === 'true'
+
+  if (DIAG) console.error(`[diag] getKnowledgeHubDatasetPathWithFallback currentDir=${currentDir}`)
+
+  const localPath = await tryLocalDatasetPath(fsService, DIAG)
+  if (localPath) return localPath
+
+  const datasetPath = await downloadKBIfNeeded({
+    version,
+    fsService,
+    ...(customUrl !== undefined && { customUrl }),
+    isKBCachedFn,
+    ensureKBAvailableFn,
+    DIAG,
+  })
   if (DIAG) console.error(`[diag] Using KB dataset: ${datasetPath}`)
   return datasetPath
 }

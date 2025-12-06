@@ -463,9 +463,7 @@ export async function createUserWithProfile(userData: any, profileData: any) {
 // lib/database.ts
 import { PrismaClient } from '@prisma/client'
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined
-}
+const globalForPrisma = globalThis as { prisma?: PrismaClient | undefined }
 
 export const prisma = globalForPrisma.prisma ?? new PrismaClient()
 

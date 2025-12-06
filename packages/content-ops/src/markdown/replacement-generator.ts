@@ -38,12 +38,11 @@ function shouldSkipLink(linkPath: string, config?: { exclusionList?: string[] })
 export async function generateNormalizationReplacements(
   links: ParsedLink[],
   file: string,
-  config: { docsFolders: string[]; datasetRoot: string; exclusionList: string[] },
+  config: LinkProcessingConfig,
   fileService: FileSystemService,
 ): Promise<Replacement[]> {
-  // Delegate to centralized LinkProcessor implementation. Cast config to LinkProcessingConfig
-  const cfg = config as unknown as LinkProcessingConfig
-  return LinkProcessor.generateNormalizationReplacements(links, file, cfg, fileService)
+  // Delegate to centralized LinkProcessor implementation using a typed config
+  return LinkProcessor.generateNormalizationReplacements(links, file, config, fileService)
 }
 
 // Normalization logic delegated to LinkProcessor

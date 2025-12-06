@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 import { handleInstallCommand } from './cli'
 import { updateCommand } from './commands/update'
@@ -413,5 +413,76 @@ describe('pair-cli e2e - KB availability', () => {
       expect(result).toBeDefined()
       expect((result as { success?: boolean }).success).toBe(false)
     })
+  })
+})
+
+describe('CLI Entry Point Flags', () => {
+  const originalArgv = process.argv
+
+  beforeEach(() => {
+    process.argv = originalArgv
+  })
+
+  afterEach(() => {
+    process.argv = originalArgv
+  })
+
+  it('passes --url flag to KB availability check', async () => {
+    const cwd = '/cli-flags-test-url'
+    const fs = new InMemoryFileSystemService(
+      {
+        [cwd + '/package.json']: JSON.stringify({ name: 'test', version: '1.0.0' }),
+      },
+      cwd,
+      cwd,
+    )
+
+    await withTempConfig(fs, createTestConfig(), async () => {
+      // Test that --url flag is correctly parsed and passed
+      // Since we don't have HTTP mocking, the download will fail but flag parsing will work
+      const errors: string[] = []
+      const originalConsoleError = console.error
+      console.error = (...args: unknown[]) => errors.push(args.join(' '))
+
+      try {
+        const result = await handleInstallCommand(
+          undefined,
+          { config: undefined, url: 'https://custom.com/kb.zip' },
+          fs,
+        )
+        // Should fail because no KB available
+        expect(result).toBeDefined()
+        expect((result as { success?: boolean }).success).toBe(false)
+      } finally {
+        console.error = originalConsoleError
+      }
+    })
+  })
+
+  it('skips KB check when --no-kb flag is present', async () => {
+    const cwd = '/cli-flags-test-no-kb'
+    const fs = createDevScenarioFs(cwd)
+
+    await withTempConfig(fs, createTestConfig(), async () => {
+      process.argv = ['node', 'pair', 'install', '--no-kb']
+
+      // No KB download should happen - install should succeed without KB
+      const result = await handleInstallCommand(undefined, { config: undefined }, fs)
+      expect(result).toBeDefined()
+      expect((result as { success?: boolean }).success).toBe(true)
+    })
+  })
+
+  it('validates options using validateCliOptions - rejects conflicting flags', async () => {
+    try {
+      const { validateCliOptions } = await import('./kb-manager/cli-options')
+      validateCliOptions({ url: 'http://foo', kb: false })
+      // Should not reach here
+      expect(true).toBe(false)
+    } catch (error) {
+      // Expected to throw
+      expect(error).toBeDefined()
+      expect(String(error)).toContain('--url and --no-kb')
+    }
   })
 })

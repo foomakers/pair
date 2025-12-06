@@ -18,12 +18,19 @@ import {
   isInRelease,
 } from './config-utils'
 import { LogLevel } from '@pair/content-ops'
+import { validateKBUrl } from './kb-manager/url-validator'
+import { validateCliOptions } from './kb-manager/cli-options'
 
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
 
 const program = new Command()
 
-program.name(chalk.blue(pkg.name)).description(pkg.description).version(pkg.version)
+program
+  .name(chalk.blue(pkg.name))
+  .description(pkg.description)
+  .version(pkg.version)
+  .option('--url <url>', 'Custom URL for KB download (overrides default GitHub release)')
+  .option('--no-kb', 'Skip knowledge base download')
 
 const MIN_LOG_LEVEL: LogLevel = 'INFO'
 setLogLevel(MIN_LOG_LEVEL)
@@ -55,25 +62,54 @@ if (DIAG) {
   }
 }
 
+function hasLocalDataset(fsService: FileSystemService): boolean {
+  try {
+    const datasetPath = getKnowledgeHubDatasetPath(fsService)
+    return fsService.existsSync(datasetPath)
+  } catch {
+    return false
+  }
+}
+
+function validateAndLogCustomUrl(customUrl: string): void {
+  try {
+    validateKBUrl(customUrl)
+    if (DIAG) console.error(`[diag] Using custom URL: ${customUrl}`)
+  } catch (err) {
+    console.error(chalk.red(`Invalid --url parameter: ${err}`))
+    process.exitCode = 1
+    process.exit(1)
+  }
+}
+
 async function ensureKBAvailableOnStartup(
   fsService: FileSystemService,
   version: string,
+  customUrl?: string,
+  skipKB?: boolean,
 ): Promise<void> {
-  try {
-    // Try to get local dataset first
-    const datasetPath = getKnowledgeHubDatasetPath(fsService)
-    if (fsService.existsSync(datasetPath)) {
-      if (DIAG) console.error('[diag] Using local dataset')
-      return
-    }
-  } catch {
-    // Local dataset not available, will fallback to KB manager
-    if (DIAG) console.error('[diag] Local dataset not available, using KB manager')
+  if (skipKB) {
+    if (DIAG) console.error('[diag] Skipping KB download (--no-kb flag set)')
+    return
   }
 
-  // Fallback to KB manager
+  if (hasLocalDataset(fsService)) {
+    if (DIAG) console.error('[diag] Using local dataset')
+    return
+  }
+
+  if (DIAG) console.error('[diag] Local dataset not available, using KB manager')
+
+  if (customUrl) {
+    validateAndLogCustomUrl(customUrl)
+  }
+
   try {
-    const datasetPath = await getKnowledgeHubDatasetPathWithFallback(fsService, version)
+    const datasetPath = await getKnowledgeHubDatasetPathWithFallback({
+      fsService,
+      version,
+      ...(customUrl !== undefined && { customUrl }),
+    })
     if (DIAG) console.error(`[diag] KB dataset available at: ${datasetPath}`)
   } catch (err) {
     console.error(chalk.red(`[startup] Failed to ensure KB available: ${err}`))
@@ -105,11 +141,27 @@ export function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService)
   }
 }
 
-async function main() {
-  // Ensure KB is available before running commands
-  await ensureKBAvailableOnStartup(fileSystemService, pkg.version)
+export async function main() {
+  // Parse global options
+  program.parse(process.argv)
+  const options = program.opts<{ url?: string; kb: boolean }>()
 
-  checkKnowledgeHubDatasetAccessible(fileSystemService)
+  // Validate option combinations
+  try {
+    validateCliOptions({ ...(options.url && { url: options.url }), kb: options.kb })
+  } catch (err) {
+    console.error(chalk.red(`Invalid options: ${err}`))
+    process.exitCode = 1
+    process.exit(1)
+  }
+
+  // Ensure KB is available before running commands
+  await ensureKBAvailableOnStartup(fileSystemService, pkg.version, options.url, !options.kb)
+
+  // Skip dataset check if --no-kb is set
+  if (options.kb !== false) {
+    checkKnowledgeHubDatasetAccessible(fileSystemService)
+  }
 
   // Register package command
   packageCommand(program)
@@ -117,10 +169,12 @@ async function main() {
   program.parse(process.argv)
 }
 
-main().catch(err => {
-  console.error(chalk.red(`Fatal error: ${err}`))
-  process.exit(1)
-})
+if (require.main === module) {
+  main().catch(err => {
+    console.error(chalk.red(`Fatal error: ${err}`))
+    process.exit(1)
+  })
+}
 
 interface AssetRegistryConfig {
   source?: string
