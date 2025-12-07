@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+vi.mock('https', () => ({
+  get: vi.fn(),
+  request: vi.fn(),
+}))
+
 import * as https from 'https'
 import { join } from 'path'
 import { homedir } from 'os'
@@ -10,11 +16,6 @@ import {
   buildTestResponse,
   toIncomingMessage,
 } from '../test-utils/http-mocks'
-
-vi.mock('https', () => ({
-  get: vi.fn(),
-  request: vi.fn(),
-}))
 
 const mockExtract = vi.fn()
 
@@ -34,6 +35,10 @@ describe('KB Installer', () => {
     const cachePath = join(homedir(), '.pair', 'kb', version)
     const downloadUrl = `https://github.com/foomakers/pair/releases/download/v${version}/knowledge-base-${version}.zip`
     const fs = new InMemoryFileSystemService({}, '/', '/')
+
+    // Setup both https.request (for HEAD) and https.get (for downloads)
+    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
@@ -67,6 +72,10 @@ describe('KB Installer', () => {
     const cachePath = join(homedir(), '.pair', 'kb', version)
     const downloadUrl = `https://github.com/foomakers/pair/releases/download/v${version}/knowledge-base-${version}.zip`
     const fs = new InMemoryFileSystemService({}, '/', '/')
+
+    // Setup both https.request (for HEAD) and https.get (for downloads)
+    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))

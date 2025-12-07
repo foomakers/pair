@@ -16,6 +16,11 @@
       "import": "./dist/file-system/index.js",
       "require": "./dist/file-system/index.js"
     },
+    "./http": {
+      "types": "./dist/http/index.d.ts",
+      "import": "./dist/http/index.js",
+      "require": "./dist/http/index.js"
+    },
     "./ops/SyncOptions": {
       "types": "./dist/ops/SyncOptions.d.ts",
       "import": "./dist/ops/SyncOptions.js",

@@ -37,3 +37,27 @@ export {
   type RegistryConfig,
 } from './file-updates/backup-service'
 export { AtomicWriter, type AtomicWriterOptions } from './file-updates/atomic-write'
+
+// HTTP download utilities
+export type {
+  DownloadOptions,
+  DownloadErrorHandler,
+  ProgressWriter,
+  ProgressData,
+  ResumeDecision,
+  DownloadContext,
+} from './http'
+export {
+  downloadFile,
+  ProgressReporter,
+  calculateSpeed,
+  formatProgress,
+  setupResumeContext,
+  finalizeDownload,
+  getContentLength,
+  getPartialFilePath,
+  hasPartialDownload,
+  getPartialFileSize,
+  cleanupPartialFile,
+  shouldResume,
+} from './http'

@@ -1,6 +1,6 @@
 import type { FileSystemService } from '@pair/content-ops'
 import { fileSystemService } from '@pair/content-ops'
-import { type ProgressWriter } from './progress-reporter'
+import { type ProgressWriter } from '@pair/content-ops/http'
 import cacheManager from './cache-manager'
 import urlUtils from './url-utils'
 import { installKB, type InstallerDeps } from './kb-installer'

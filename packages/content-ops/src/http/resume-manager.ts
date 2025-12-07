@@ -1,10 +1,10 @@
 /**
- * Download resume management utilities
+ * Download resume management utilities for HTTP downloads
  */
 
 import * as https from 'https'
-import type { FileSystemService } from '@pair/content-ops'
-import { cleanupFile } from '@pair/content-ops'
+import type { FileSystemService } from '../file-system'
+import { cleanupFile } from '../file-system'
 import type { ProgressWriter } from './progress-reporter'
 
 // Diagnostic logging (PAIR_DIAG=1)
