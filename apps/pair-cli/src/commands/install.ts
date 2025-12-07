@@ -886,11 +886,11 @@ async function executeSourceInstallation(
     pushLog('info', 'Remote URL installation finished')
   } else if (sourceType === SourceType.LOCAL_ZIP) {
     const version = 'local-zip'
-    await installKBFromLocalZip(version, source, { fs: fsService })
+    await installKBFromLocalZip(version, source, fsService)
     pushLog('info', 'Local ZIP installation finished')
   } else if (sourceType === SourceType.LOCAL_DIRECTORY) {
     const version = 'local-dir'
-    await installKBFromLocalDirectory(version, source, { fs: fsService })
+    await installKBFromLocalDirectory(version, source, fsService)
     pushLog('info', 'Local directory installation finished')
   } else {
     // Fallback to copy (for other sources)

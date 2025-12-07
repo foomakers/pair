@@ -21,7 +21,6 @@ function buildInstallerDeps(deps?: KBManagerDeps): InstallerDeps | undefined {
   if (!deps) return undefined
 
   const result: InstallerDeps = {}
-  if (deps.fs) result.fs = deps.fs
   if (deps.extract) result.extract = deps.extract
   if (deps.progressWriter) result.progressWriter = deps.progressWriter
   if (typeof deps.isTTY !== 'undefined') result.isTTY = deps.isTTY
@@ -40,5 +39,5 @@ export async function ensureKBAvailable(version: string, deps?: KBManagerDeps): 
   const downloadUrl = deps?.customUrl || urlUtils.buildGithubReleaseUrl(version)
   const installerDeps = buildInstallerDeps(deps)
 
-  return installKB(version, cachePath, downloadUrl, installerDeps)
+  return installKB(version, cachePath, downloadUrl, { fs, ...installerDeps })
 }

@@ -99,7 +99,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     )
 
     // Act
-    const result = await installKBFromLocalZip(version, zipPath, { fs })
+    const result = await installKBFromLocalZip(version, zipPath, fs)
 
     // Assert
     expect(result).toBe(expectedCachePath)
@@ -121,7 +121,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     )
 
     // Act
-    const result = await installKBFromLocalZip(version, zipPath, { fs })
+    const result = await installKBFromLocalZip(version, zipPath, fs)
 
     // Assert
     expect(result).toBe(expectedCachePath)
@@ -134,7 +134,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
     // Act & Assert
-    await expect(installKBFromLocalZip(version, zipPath, { fs })).rejects.toThrow(
+    await expect(installKBFromLocalZip(version, zipPath, fs)).rejects.toThrow(
       'ZIP file not found: /nonexistent/kb.zip',
     )
   })
@@ -153,7 +153,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     )
 
     // Act & Assert
-    await expect(installKBFromLocalZip(version, zipPath, { fs })).rejects.toThrow(
+    await expect(installKBFromLocalZip(version, zipPath, fs)).rejects.toThrow(
       'Invalid KB structure',
     )
   })
@@ -175,7 +175,7 @@ describe('KB Installer - installKBFromLocalDirectory', () => {
     )
 
     // Act
-    const result = await installKBFromLocalDirectory(version, dirPath, { fs })
+    const result = await installKBFromLocalDirectory(version, dirPath, fs)
 
     // Assert
     expect(result).toBe(expectedCachePath)
@@ -215,7 +215,7 @@ describe('KB Installer - installKBFromLocalDirectory', () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
     // Act & Assert
-    await expect(installKBFromLocalDirectory(version, dirPath, { fs })).rejects.toThrow(
+    await expect(installKBFromLocalDirectory(version, dirPath, fs)).rejects.toThrow(
       'Directory not found: /nonexistent/kb',
     )
   })
@@ -234,7 +234,7 @@ describe('KB Installer - installKBFromLocalDirectory', () => {
     )
 
     // Act & Assert
-    await expect(installKBFromLocalDirectory(version, dirPath, { fs })).rejects.toThrow(
+    await expect(installKBFromLocalDirectory(version, dirPath, fs)).rejects.toThrow(
       'Invalid KB structure',
     )
   })

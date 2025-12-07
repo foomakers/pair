@@ -1,7 +1,6 @@
 import { join } from 'path'
 import { homedir } from 'os'
 import type { FileSystemService } from '@pair/content-ops'
-import { cleanupFile } from '@pair/content-ops'
 
 export function getCachedKBPath(version: string): string {
   const cleanVersion = version.startsWith('v') ? version.slice(1) : version
@@ -24,13 +23,8 @@ export async function ensureCacheDirectory(
   await fs.mkdir(cachePath, { recursive: true })
 }
 
-export async function cleanupZip(zipPath: string, fs: FileSystemService): Promise<void> {
-  await cleanupFile(zipPath, fs)
-}
-
 export default {
   getCachedKBPath,
   isKBCached,
   ensureCacheDirectory,
-  cleanupZip,
 }

@@ -9,7 +9,6 @@ import formatDownloadError from './error-formatter'
 import { announceDownload, announceSuccess } from './download-ui'
 
 export interface InstallerDeps {
-  fs?: FileSystemService
   extract?: (zipPath: string, targetPath: string) => Promise<void>
   progressWriter?: { write(s: string): void }
   isTTY?: boolean
@@ -19,15 +18,20 @@ async function doInstallSteps(
   downloadUrl: string,
   zipPath: string,
   cachePath: string,
-  options: { fs: FileSystemService; deps?: InstallerDeps },
+  options: {
+    fs: FileSystemService
+    progressWriter?: { write(s: string): void }
+    isTTY?: boolean
+    extract?: (zipPath: string, targetPath: string) => Promise<void>
+  },
 ): Promise<void> {
-  const { fs, deps } = options
-  const extract = deps?.extract || extractZip
+  const { fs, progressWriter, isTTY, extract: customExtract } = options
+  const extract = customExtract || extractZip
 
   await downloadFile(downloadUrl, zipPath, {
     fs,
-    progressWriter: deps?.progressWriter,
-    isTTY: deps?.isTTY,
+    progressWriter,
+    isTTY,
   })
 
   const check = await checksumManager.validateFileWithRemoteChecksum(downloadUrl, zipPath, fs)
@@ -55,24 +59,51 @@ function shouldPreserveError(err: Error): boolean {
   )
 }
 
+function buildInstallOptions(options?: {
+  fs?: FileSystemService
+  progressWriter?: { write(s: string): void }
+  isTTY?: boolean
+  extract?: (zipPath: string, targetPath: string) => Promise<void>
+}): {
+  fs: FileSystemService
+  progressWriter?: { write(s: string): void }
+  isTTY?: boolean
+  extract?: (zipPath: string, targetPath: string) => Promise<void>
+} {
+  const result: {
+    fs: FileSystemService
+    progressWriter?: { write(s: string): void }
+    isTTY?: boolean
+    extract?: (zipPath: string, targetPath: string) => Promise<void>
+  } = { fs: options?.fs || fileSystemService }
+  if (options?.progressWriter) result.progressWriter = options.progressWriter
+  if (options?.isTTY) result.isTTY = options.isTTY
+  if (options?.extract) result.extract = options.extract
+  return result
+}
+
 export async function installKB(
   version: string,
   cachePath: string,
   downloadUrl: string,
-  deps?: InstallerDeps,
+  options?: {
+    fs?: FileSystemService
+    progressWriter?: { write(s: string): void }
+    isTTY?: boolean
+    extract?: (zipPath: string, targetPath: string) => Promise<void>
+  },
 ): Promise<string> {
-  const fs = deps?.fs || fileSystemService
   const cleanVersion = version.startsWith('v') ? version.slice(1) : version
   const zipPath = join(tmpdir(), `kb-${cleanVersion}.zip`)
 
   announceDownload(version, downloadUrl)
 
+  const fs = options?.fs || fileSystemService
   await cacheManager.ensureCacheDirectory(cachePath, fs)
 
   try {
-    const options: { fs: FileSystemService; deps?: InstallerDeps } = { fs }
-    if (deps) options.deps = deps
-    await doInstallSteps(downloadUrl, zipPath, cachePath, options)
+    const installOptions = buildInstallOptions(options)
+    await doInstallSteps(downloadUrl, zipPath, cachePath, installOptions)
     announceSuccess(cleanVersion, cachePath)
     return cachePath
   } catch (error) {
@@ -127,9 +158,8 @@ function validateKBStructure(cachePath: string, fs: FileSystemService): boolean 
 export async function installKBFromLocalDirectory(
   version: string,
   dirPath: string,
-  deps?: InstallerDeps,
+  fs: FileSystemService = fileSystemService,
 ): Promise<string> {
-  const fs = deps?.fs || fileSystemService
   const cachePath = cacheManager.getCachedKBPath(version)
 
   // Resolve relative paths
@@ -165,10 +195,9 @@ export async function installKBFromLocalDirectory(
 export async function installKBFromLocalZip(
   version: string,
   zipPath: string,
-  deps?: InstallerDeps,
+  fs: FileSystemService = fileSystemService,
 ): Promise<string> {
-  const fs = deps?.fs || fileSystemService
-  const extract = deps?.extract || extractZip
+  const extract = extractZip
   const cachePath = cacheManager.getCachedKBPath(version)
 
   // Resolve relative paths
