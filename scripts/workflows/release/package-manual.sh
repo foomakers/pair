@@ -219,11 +219,11 @@ if [ -f "$PKG_DIR/dist/cli.js" ]; then
   # Generate TypeScript definitions from source
   echo "Generating TypeScript definitions..."
   if [ "$DRY_RUN" = true ]; then
-    echo "[dry-run] would run: (cd $PKG_DIR && npx dts-bundle-generator --external-inlines @pair/content-ops @pair/knowledge-hub --external-types commander chalk dotenv fs-extra markdown-it --project tsconfig.json -o $RELEASE_DIR/bundle-cli/index.d.ts src/cli.ts)"
+    echo "[dry-run] would run: (cd $PKG_DIR && npx dts-bundle-generator --external-inlines @pair/content-ops @pair/knowledge-hub --external-types commander chalk dotenv markdown-it --project tsconfig.json -o $RELEASE_DIR/bundle-cli/index.d.ts src/cli.ts)"
   else
     (cd "$PKG_DIR" && npx dts-bundle-generator \
       --external-inlines @pair/content-ops @pair/knowledge-hub \
-      --external-types commander chalk dotenv fs-extra markdown-it \
+      --external-types commander chalk dotenv markdown-it \
       --project tsconfig.json \
       -o "$RELEASE_DIR/bundle-cli/index.d.ts" \
       "src/cli.ts") || echo "Warning: dts-bundle-generator failed, skipping types"

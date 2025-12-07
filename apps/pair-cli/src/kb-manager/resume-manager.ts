@@ -4,6 +4,7 @@
 
 import * as https from 'https'
 import type { FileSystemService } from '@pair/content-ops'
+import { cleanupFile } from '@pair/content-ops'
 import type { ProgressWriter } from './progress-reporter'
 
 // Diagnostic logging (PAIR_DIAG=1)
@@ -121,14 +122,7 @@ export async function getPartialFileSize(filePath: string, fs: FileSystemService
  */
 export async function cleanupPartialFile(filePath: string, fs: FileSystemService): Promise<void> {
   const partialPath = getPartialFilePath(filePath)
-
-  try {
-    if (fs.existsSync(partialPath)) {
-      await fs.unlink(partialPath)
-    }
-  } catch {
-    // Ignore errors (file might not exist)
-  }
+  await cleanupFile(partialPath, fs)
 }
 
 /**

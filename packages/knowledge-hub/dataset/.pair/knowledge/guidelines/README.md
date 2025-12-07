@@ -1,3 +1,4 @@
+
 # 📚 Technical Guidelines Knowledge Base
 
 This directory contains the complete technical guidelines knowledge base for the project, organized for optimal discoverability and RAG performance.

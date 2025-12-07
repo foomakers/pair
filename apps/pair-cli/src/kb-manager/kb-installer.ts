@@ -1,7 +1,7 @@
 import { join } from 'path'
 import { tmpdir } from 'os'
 import type { FileSystemService } from '@pair/content-ops'
-import { extractZip, fileSystemService } from '@pair/content-ops'
+import { extractZip, fileSystemService, cleanupFile } from '@pair/content-ops'
 import { downloadFile } from './download-manager'
 import cacheManager from './cache-manager'
 import checksumManager from './checksum-manager'
@@ -19,9 +19,9 @@ async function doInstallSteps(
   downloadUrl: string,
   zipPath: string,
   cachePath: string,
-  deps?: InstallerDeps,
+  options: { fs: FileSystemService; deps?: InstallerDeps },
 ): Promise<void> {
-  const fs = deps?.fs || fileSystemService
+  const { fs, deps } = options
   const extract = deps?.extract || extractZip
 
   await downloadFile(downloadUrl, zipPath, {
@@ -38,7 +38,7 @@ async function doInstallSteps(
   }
 
   await extract(zipPath, cachePath)
-  await cacheManager.cleanupZip(zipPath, fs)
+  await cleanupFile(zipPath, fs)
 }
 
 function shouldPreserveError(err: Error): boolean {
@@ -70,11 +70,13 @@ export async function installKB(
   await cacheManager.ensureCacheDirectory(cachePath, fs)
 
   try {
-    await doInstallSteps(downloadUrl, zipPath, cachePath, deps)
+    const options: { fs: FileSystemService; deps?: InstallerDeps } = { fs }
+    if (deps) options.deps = deps
+    await doInstallSteps(downloadUrl, zipPath, cachePath, options)
     announceSuccess(cleanVersion, cachePath)
     return cachePath
   } catch (error) {
-    await cacheManager.cleanupZip(zipPath, fs)
+    await cleanupFile(zipPath, fs)
     const err = error as Error
     if (shouldPreserveError(err)) throw err
 

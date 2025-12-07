@@ -36,7 +36,6 @@
     "chalk": "catalog:",
     "commander": "catalog:",
     "dotenv": "catalog:",
-    "fs-extra": "catalog:",
     "markdown-it": "catalog:"
   },
   "devDependencies": {
@@ -44,7 +43,6 @@
     "@pair/eslint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
     "@types/adm-zip": "catalog:",
-    "@types/fs-extra": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "ts-node": "catalog:",

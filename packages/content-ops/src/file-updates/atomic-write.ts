@@ -1,4 +1,5 @@
 import { FileSystemService } from '../file-system/file-system-service'
+import { cleanupFile } from '../file-system/file-operations'
 import { dirname } from 'path'
 
 export interface AtomicWriterOptions {
@@ -38,11 +39,7 @@ export class AtomicWriter {
       await this.fileService.rename(tempPath, filePath)
     } catch (error) {
       // Clean up temp file on error
-      try {
-        await this.fileService.unlink(tempPath)
-      } catch {
-        // Ignore cleanup errors
-      }
+      await cleanupFile(tempPath, this.fileService)
       throw error
     }
   }
