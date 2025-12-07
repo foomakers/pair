@@ -1,4 +1,4 @@
-import { constants, Dirent, promises as fs, Stats } from 'fs'
+import { constants, Dirent, promises as fs, Stats, copyFileSync } from 'fs'
 import { readFileSync, existsSync, accessSync } from 'fs'
 import { dirname, resolve as pathResolve } from 'path'
 
@@ -17,6 +17,7 @@ export interface FileSystemService {
   rm: (path: string, options?: { recursive?: boolean; force?: boolean }) => Promise<void>
   stat: (path: string) => Promise<Stats>
   copy: (oldPath: string, newPath: string) => Promise<void>
+  copySync: (oldPath: string, newPath: string) => void
   rootModuleDirectory: () => string
   currentWorkingDirectory: () => string
   chdir: (path: string) => void
@@ -49,12 +50,16 @@ export const fileSystemService: FileSystemService = {
   },
   rename: (oldPath, newPath) => fs.rename(oldPath, newPath),
   copy: (oldPath, newPath) => fs.copyFile(oldPath, newPath),
+  copySync: (oldPath, newPath) => copyFileSync(oldPath, newPath),
   rm: async (path, options) => {
     await fs.rm(path, options)
   },
   stat: path => fs.stat(path),
   rootModuleDirectory: () => {
-    return dirname(require.main?.path ?? '')
+    // Return the directory of the main module, or fallback to cwd
+    return typeof require !== 'undefined' && require.main?.path
+      ? dirname(require.main.path)
+      : process.cwd()
   },
   currentWorkingDirectory: () => process.cwd(),
   chdir: path => process.chdir(path),

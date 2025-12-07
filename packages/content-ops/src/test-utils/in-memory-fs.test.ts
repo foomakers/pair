@@ -310,9 +310,51 @@ describe('InMemoryFileSystemService - Advanced Operations - Copy', () => {
 
     it('should throw error when copying non-existent file', async () => {
       await expect(fs.copy('/nonexistent.txt', '/dest.txt')).rejects.toThrow(
-        'File not found: /nonexistent.txt',
+        'Path not found: /nonexistent.txt',
       )
     })
+  })
+})
+
+describe('InMemoryFileSystemService - Advanced Operations - CopySync', () => {
+  const moduleDir = '/app'
+  const workingDir = '/app'
+  let fs: InMemoryFileSystemService
+
+  beforeEach(() => {
+    fs = new InMemoryFileSystemService({}, moduleDir, workingDir)
+  })
+
+  it('should copy a file to a new path', () => {
+    fs.writeFile('/foo.txt', 'hello')
+    fs.copySync('/foo.txt', '/bar.txt')
+    expect(fs.getContent('/bar.txt')).toBe('hello')
+    expect(fs.getContent('/foo.txt')).toBe('hello')
+  })
+
+  it('should copy a file to a new directory', () => {
+    fs.writeFile('/foo.txt', 'hello')
+    fs.copySync('/foo.txt', '/dir/bar.txt')
+    expect(fs.getContent('/dir/bar.txt')).toBe('hello')
+  })
+
+  it('should copy a directory recursively', () => {
+    fs.writeFile('/foo/bar/baz.txt', 'baz')
+    fs.copySync('/foo/bar', '/foo/barcopy')
+    expect(fs.getContent('/foo/barcopy/baz.txt')).toBe('baz')
+    expect(fs.getContent('/foo/bar/baz.txt')).toBe('baz')
+  })
+
+  it('should throw if source does not exist', () => {
+    expect(() => fs.copySync('/notfound', '/foo/x')).toThrow()
+  })
+
+  it('should copy nested directories and files', () => {
+    fs.writeFile('/foo/file.txt', 'hello')
+    fs.writeFile('/foo/bar/baz.txt', 'baz')
+    fs.copySync('/foo', '/fooCopy')
+    expect(fs.getContent('/fooCopy/file.txt')).toBe('hello')
+    expect(fs.getContent('/fooCopy/bar/baz.txt')).toBe('baz')
   })
 })
 

@@ -189,6 +189,7 @@ interface CommandOptions {
   listTargets?: boolean
   // Optional positional target forwarded from commander action
   positionalTarget?: unknown
+  url?: string
 }
 
 program
@@ -200,6 +201,10 @@ program
   .option(
     '--link-style <style>',
     'Link style: relative, absolute, or auto (default: relative for install)',
+  )
+  .option(
+    '--url <url>',
+    'URL or path to KB source (remote URL, local ZIP file, or local directory)',
   )
   .action((targetArg: unknown, cmdOptions: unknown) => {
     return handleInstallCommand(targetArg, cmdOptions, fsService).then(() => undefined)
@@ -225,6 +230,11 @@ function buildInstallOptions(
   if (resolvedBaseTarget) opts['baseTarget'] = resolvedBaseTarget
   if (parsedRec) addLinkStyleToOpts(opts, parsedRec)
   opts['minLogLevel'] = MIN_LOG_LEVEL
+
+  // Handle --url option
+  if (parsedRec?.['url']) {
+    argsToPass.push('--source', String(parsedRec['url']))
+  }
 
   return { argsToPass, opts }
 }
@@ -254,6 +264,23 @@ function getParsedOpts(cmdOptions: unknown): Record<string, unknown> {
 
 type CmdResult = { success?: boolean; message?: string; target?: string }
 
+/**
+ * Handle install command result - prints success/error messages and sets exit code
+ */
+function handleInstallResult(res: CmdResult, sourceContext?: string): void {
+  if (res && res.success) {
+    const msg = sourceContext
+      ? `[install] success - installed from ${sourceContext}`
+      : `[install] success - target ${res.target || ''}`
+    console.log(chalk.green(msg))
+  } else {
+    console.error(
+      chalk.red(`[install] failed: ${res && res.message ? res.message : 'Unknown error'}`),
+    )
+    process.exitCode = 1
+  }
+}
+
 export async function handleInstallCommand(
   targetArg: unknown,
   cmdOptions: unknown,
@@ -262,16 +289,12 @@ export async function handleInstallCommand(
   const arr = Array.isArray(targetArg) ? targetArg : targetArg ? [String(targetArg)] : []
   try {
     const { argsToPass, opts } = buildInstallOptions(fsService, arr, cmdOptions)
+    const parsedRec = getParsedOpts(cmdOptions)
     const res = (await installCommand(fsService, argsToPass, opts)) as CmdResult
 
-    if (res && res.success) {
-      console.log(chalk.green(`[install] success - target ${res.target || ''}`))
-    } else {
-      console.error(
-        chalk.red(`[install] failed: ${res && res.message ? res.message : 'Unknown error'}`),
-      )
-      process.exitCode = 1
-    }
+    // Determine source context for output message
+    const sourceContext = parsedRec?.['url'] ? String(parsedRec['url']) : undefined
+    handleInstallResult(res, sourceContext)
 
     return res
   } catch (err) {
@@ -315,12 +338,23 @@ export async function handleUpdateCommand(
   }
 
   try {
-    const datasetRoot = validateUpdateConfigAndGetRoot(fsService, cmdOptions)
+    // Handle --url option: use provided URL/path as dataset root
+    let datasetRoot: string
+    if (cmdOptions.url) {
+      datasetRoot = String(cmdOptions.url)
+      // Resolve relative paths
+      if (!isAbsolute(datasetRoot)) {
+        datasetRoot = fsService.resolve(fsService.currentWorkingDirectory(), datasetRoot)
+      }
+    } else {
+      datasetRoot = validateUpdateConfigAndGetRoot(fsService, cmdOptions)
+    }
+
     const { args, useDefaults } = buildUpdateArgs(fsService, cmdOptions)
     const opts = buildUpdateCommandOpts(cmdOptions, datasetRoot, useDefaults)
     const res = await updateCommand(fsService, args, opts)
 
-    handleUpdateResult(res, useDefaults)
+    return res
   } catch (err) {
     console.error(chalk.red(String(err)))
     process.exitCode = 1
@@ -344,25 +378,6 @@ function buildUpdateCommandOpts(
   return opts
 }
 
-function handleUpdateResult(
-  res: { success?: boolean; message?: string } | undefined,
-  useDefaults: boolean,
-): void {
-  if (!res) {
-    console.error(chalk.red('[update] failed: Command returned undefined'))
-    return
-  }
-
-  if (res.success) {
-    const msg = useDefaults
-      ? '[update] success - used default targets from config'
-      : '[update] success - updated specified registries'
-    console.log(chalk.green(msg))
-  } else {
-    console.error(chalk.red(`[update] failed: ${'message' in res ? res.message : 'Unknown error'}`))
-    process.exitCode = 1
-  }
-}
 /**
  * Handle the --list-targets flag for update command
  */
@@ -467,6 +482,10 @@ program
   )
   .option('--persist-backup', 'Keep backup files after successful update')
   .option('--auto-rollback', 'Automatically restore from backup on error (default: true)', true)
+  .option(
+    '--url <url>',
+    'URL or path to KB source (remote URL, local ZIP file, or local directory)',
+  )
   .action(async (targetArg, cmdOptions) => {
     // Preserve backward compatibility for tests that call handleUpdateCommand({}, fs)
     const merged = { ...(cmdOptions as Record<string, unknown>), positionalTarget: targetArg }
