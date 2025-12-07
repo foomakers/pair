@@ -1,12 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { InMemoryFileSystemService } from '@pair/content-ops'
+import { InMemoryFileSystemService } from '../test-utils/in-memory-fs'
 import { createHash } from 'crypto'
+import { calculateSHA256, validateChecksum, getExpectedChecksum } from './integrity-validator'
 
-const { calculateSHA256, validateChecksum, getExpectedChecksum } = await import(
-  './checksum-validator'
-)
-
-describe('Checksum Validator - SHA256 Calculation', () => {
+describe('Integrity Validator - SHA256 Calculation', () => {
   it('calculates SHA256 hash of file content', async () => {
     const content = 'test content'
     const expectedHash = createHash('sha256').update(content).digest('hex')
@@ -52,7 +49,7 @@ describe('Checksum Validator - SHA256 Calculation', () => {
   })
 })
 
-describe('Checksum Validator - Validation', () => {
+describe('Integrity Validator - Validation', () => {
   it('validates correct checksum', async () => {
     const content = 'test content for validation'
     const expectedHash = createHash('sha256').update(content).digest('hex')
@@ -89,7 +86,7 @@ describe('Checksum Validator - Validation', () => {
   })
 })
 
-describe('Checksum Validator - Expected Checksum Retrieval', () => {
+describe('Integrity Validator - Expected Checksum Retrieval', () => {
   it('fetches checksum from .sha256 file', async () => {
     const checksumContent = 'abc123def456'
 
@@ -125,7 +122,7 @@ describe('Checksum Validator - Expected Checksum Retrieval', () => {
   })
 })
 
-describe('Checksum Validator - Integration', () => {
+describe('Integrity Validator - Integration', () => {
   it('validates downloaded file against checksum', async () => {
     const content = 'KB archive content'
     const expectedHash = createHash('sha256').update(content).digest('hex')

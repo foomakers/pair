@@ -9,7 +9,13 @@ import { installCommand } from './commands/install'
 import { updateLinkCommand } from './commands/update-link'
 import { packageCommand } from './commands/package'
 import { parseInstallUpdateArgs } from './commands/command-utils'
-import { fileSystemService, FileSystemService, Behavior, setLogLevel } from '@pair/content-ops'
+import {
+  fileSystemService,
+  FileSystemService,
+  Behavior,
+  setLogLevel,
+  validateUrl,
+} from '@pair/content-ops'
 import {
   validateConfig,
   getKnowledgeHubDatasetPath,
@@ -18,7 +24,6 @@ import {
   isInRelease,
 } from './config-utils'
 import { LogLevel } from '@pair/content-ops'
-import { validateKBUrl } from './kb-manager/url-validator'
 import { validateCliOptions } from './kb-manager/cli-options'
 
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
@@ -73,7 +78,7 @@ function hasLocalDataset(fsService: FileSystemService): boolean {
 
 function validateAndLogCustomUrl(customUrl: string): void {
   try {
-    validateKBUrl(customUrl)
+    validateUrl(customUrl)
     if (DIAG) console.error(`[diag] Using custom URL: ${customUrl}`)
   } catch (err) {
     console.error(chalk.red(`Invalid --url parameter: ${err}`))

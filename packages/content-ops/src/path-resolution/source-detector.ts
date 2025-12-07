@@ -1,6 +1,6 @@
-// Source detector for `pair install --url` (T-79.1)
-// Detects REMOTE_URL, LOCAL_ZIP, LOCAL_DIRECTORY
-// Usage: detectSourceType(source: string): SourceType
+/**
+ * Source type detector for local and remote paths
+ */
 
 import * as path from 'path'
 import * as fs from 'fs'
@@ -12,6 +12,11 @@ export enum SourceType {
   INVALID = 'INVALID',
 }
 
+/**
+ * Detect the type of source (remote URL, local ZIP, or local directory)
+ * @param source - Source string (URL or file path)
+ * @returns SourceType enum value
+ */
 export function detectSourceType(source: string): SourceType {
   // Reject unsafe protocols
   if (/^(file|ftp):\/\//i.test(source)) return SourceType.INVALID

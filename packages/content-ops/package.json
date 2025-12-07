@@ -40,6 +40,7 @@
   "devDependencies": {
     "@pair/eslint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
+    "@types/adm-zip": "^0.5.5",
     "@types/markdown-it": "catalog:",
     "@types/mdast": "catalog:",
     "@types/node": "catalog:",
@@ -50,6 +51,7 @@
     "vitest": "catalog:"
   },
   "dependencies": {
+    "adm-zip": "^0.5.9",
     "markdown-it": "catalog:",
     "mdast": "catalog:",
     "remark-parse": "catalog:",

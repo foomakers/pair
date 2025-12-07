@@ -1,6 +1,16 @@
-import type { FileSystemService } from '@pair/content-ops'
+/**
+ * Archive operations utilities for ZIP extraction
+ */
+
+import type { FileSystemService } from './file-system-service'
 import { join } from 'path'
 
+/**
+ * Extract a ZIP file to target path
+ * @param zipPath - Path to ZIP file
+ * @param targetPath - Target extraction path
+ * @param fs - Optional filesystem service (for testing)
+ */
 export async function extractZip(
   zipPath: string,
   targetPath: string,

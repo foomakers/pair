@@ -2,6 +2,15 @@ export { FileSystemService, fileSystemService } from './file-system'
 export { InMemoryFileSystemService } from './test-utils/in-memory-fs'
 export { walkMarkdownFiles, isExternalLink } from './file-system/file-system-utils'
 export { extractLinks, type ParsedLink } from './markdown/markdown-parser'
+export {
+  calculateSHA256,
+  validateChecksum,
+  getExpectedChecksum,
+  type ChecksumValidationResult,
+} from './file-system/integrity-validator'
+export { isValidHttpUrl, validateUrl } from './file-system/url-validator'
+export { extractZip } from './file-system/archive-operations'
+export { detectSourceType, SourceType } from './path-resolution/source-detector'
 
 export { SyncOptions } from './ops/SyncOptions'
 export { Behavior } from './ops/behavior'

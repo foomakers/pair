@@ -1,6 +1,6 @@
 import * as https from 'https'
 import type { FileSystemService } from '@pair/content-ops'
-import { getExpectedChecksum, validateChecksum } from './checksum-validator'
+import { getExpectedChecksum, validateChecksum } from '@pair/content-ops'
 
 async function fetchChecksumFile(url: string): Promise<string | null> {
   return new Promise(resolve => {

@@ -1,5 +1,5 @@
 import { relative, isAbsolute, join, dirname } from 'path'
-import { convertToRelative } from '@pair/content-ops'
+import { convertToRelative, detectSourceType, SourceType } from '@pair/content-ops'
 import { FileSystemService } from '@pair/content-ops'
 import { Behavior } from '@pair/content-ops'
 import {
@@ -17,7 +17,6 @@ import {
   calculatePathType,
   loadConfigWithOverrides,
 } from '../config-utils'
-import { detectSourceType, SourceType } from '../kb-manager/source-detector'
 import {
   installKB,
   installKBFromLocalZip,

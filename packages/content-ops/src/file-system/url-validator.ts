@@ -1,5 +1,5 @@
 /**
- * URL validation utilities for KB downloads
+ * URL validation utilities for HTTP(S) URLs
  */
 
 import { URL } from 'url'
@@ -21,12 +21,12 @@ export function isValidHttpUrl(urlString: string): boolean {
 }
 
 /**
- * Validates a KB source URL and returns it if valid
+ * Validates a URL and returns it if valid
  * @param urlString - The URL to validate
  * @returns The validated URL string
  * @throws Error if URL is invalid or uses non-HTTP protocol
  */
-export function validateKBUrl(urlString: string): string {
+export function validateUrl(urlString: string): string {
   try {
     const url = new URL(urlString)
 

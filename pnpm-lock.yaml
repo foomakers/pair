@@ -168,6 +168,9 @@ importers:
 
   packages/content-ops:
     dependencies:
+      adm-zip:
+        specifier: ^0.5.9
+        version: 0.5.16
       markdown-it:
         specifier: 'catalog:'
         version: 14.1.0
@@ -187,6 +190,9 @@ importers:
       '@pair/prettier-config':
         specifier: workspace:*
         version: link:../../tools/prettier-config
+      '@types/adm-zip':
+        specifier: ^0.5.5
+        version: 0.5.7
       '@types/markdown-it':
         specifier: 'catalog:'
         version: 14.1.2

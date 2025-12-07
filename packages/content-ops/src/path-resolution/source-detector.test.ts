@@ -17,7 +17,7 @@ afterAll(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true })
 })
 
-describe('detectSourceType', () => {
+describe('Source Detector', () => {
   it('detects REMOTE_URL', () => {
     expect(detectSourceType('https://example.com/kb.zip')).toBe(SourceType.REMOTE_URL)
     expect(detectSourceType('http://example.com/kb.zip')).toBe(SourceType.REMOTE_URL)
