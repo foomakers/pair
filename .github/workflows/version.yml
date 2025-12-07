@@ -41,6 +41,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check for changeset files
+        id: check_changeset
+        run: |
+          if [ -d ".changeset" ] && [ "$(ls -A .changeset/*.md 2>/dev/null | wc -l)" -gt 0 ]; then
+            echo "has_changeset=true" >> $GITHUB_OUTPUT
+            echo "HAS_NEW_CHANGESET=true" >> $GITHUB_ENV
+            echo "Found $(ls -A .changeset/*.md | wc -l) changeset files"
+          else
+            echo "has_changeset=false" >> $GITHUB_OUTPUT
+            echo "HAS_NEW_CHANGESET=false" >> $GITHUB_ENV
+            echo "No changeset files found"
+          fi
+
       - name: Create version commits and tags (Changesets)
         if: ${{ env.HAS_NEW_CHANGESET == 'true' }}
         run: |
