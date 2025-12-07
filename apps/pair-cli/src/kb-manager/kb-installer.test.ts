@@ -184,28 +184,23 @@ describe('KB Installer - installKBFromLocalDirectory', () => {
   it('should install KB from relative path local directory', async () => {
     // Arrange
     const version = '0.2.0'
-
-    // Create a temporary directory for testing
-    const { mkdirSync, writeFileSync, rmSync } = await import('fs')
-    const { tmpdir } = await import('os')
-    const tempDir = join(tmpdir(), 'kb-test-dir')
-    const tempSubDir = join(tempDir, '.pair', 'knowledge')
+    const dirPath = './relative/kb'
+    const resolvedDirPath = join(process.cwd(), 'relative', 'kb')
     const expectedCachePath = join(homedir(), '.pair', 'kb', version)
+    const fs = new InMemoryFileSystemService(
+      {
+        [join(resolvedDirPath, '.pair', 'knowledge', 'test.md')]: 'existing content',
+        [join(resolvedDirPath, 'AGENTS.md')]: 'agents content',
+      },
+      '/',
+      '/',
+    )
 
-    try {
-      mkdirSync(tempSubDir, { recursive: true })
-      writeFileSync(join(tempSubDir, 'test.md'), 'existing content')
-      writeFileSync(join(tempDir, 'AGENTS.md'), 'agents content')
+    // Act
+    const result = await installKBFromLocalDirectory(version, dirPath, fs)
 
-      // Act
-      const result = await installKBFromLocalDirectory(version, tempDir)
-
-      // Assert
-      expect(result).toBe(expectedCachePath)
-    } finally {
-      // Cleanup
-      rmSync(tempDir, { recursive: true, force: true })
-    }
+    // Assert
+    expect(result).toBe(expectedCachePath)
   })
 
   it('should throw error if directory does not exist', async () => {

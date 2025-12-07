@@ -1,7 +1,7 @@
 import { join } from 'path'
 import { tmpdir } from 'os'
 import type { FileSystemService } from '@pair/content-ops'
-import { extractZip, fileSystemService, cleanupFile } from '@pair/content-ops'
+import { extractZip, cleanupFile } from '@pair/content-ops'
 import { downloadFile } from './download-manager'
 import cacheManager from './cache-manager'
 import checksumManager from './checksum-manager'
@@ -59,8 +59,8 @@ function shouldPreserveError(err: Error): boolean {
   )
 }
 
-function buildInstallOptions(options?: {
-  fs?: FileSystemService
+function buildInstallOptions(options: {
+  fs: FileSystemService
   progressWriter?: { write(s: string): void }
   isTTY?: boolean
   extract?: (zipPath: string, targetPath: string) => Promise<void>
@@ -75,10 +75,10 @@ function buildInstallOptions(options?: {
     progressWriter?: { write(s: string): void }
     isTTY?: boolean
     extract?: (zipPath: string, targetPath: string) => Promise<void>
-  } = { fs: options?.fs || fileSystemService }
-  if (options?.progressWriter) result.progressWriter = options.progressWriter
-  if (options?.isTTY) result.isTTY = options.isTTY
-  if (options?.extract) result.extract = options.extract
+  } = { fs: options.fs }
+  if (options.progressWriter) result.progressWriter = options.progressWriter
+  if (options.isTTY) result.isTTY = options.isTTY
+  if (options.extract) result.extract = options.extract
   return result
 }
 
@@ -86,8 +86,8 @@ export async function installKB(
   version: string,
   cachePath: string,
   downloadUrl: string,
-  options?: {
-    fs?: FileSystemService
+  options: {
+    fs: FileSystemService
     progressWriter?: { write(s: string): void }
     isTTY?: boolean
     extract?: (zipPath: string, targetPath: string) => Promise<void>
@@ -98,7 +98,7 @@ export async function installKB(
 
   announceDownload(version, downloadUrl)
 
-  const fs = options?.fs || fileSystemService
+  const { fs } = options
   await cacheManager.ensureCacheDirectory(cachePath, fs)
 
   try {
@@ -158,7 +158,7 @@ function validateKBStructure(cachePath: string, fs: FileSystemService): boolean 
 export async function installKBFromLocalDirectory(
   version: string,
   dirPath: string,
-  fs: FileSystemService = fileSystemService,
+  fs: FileSystemService,
 ): Promise<string> {
   const cachePath = cacheManager.getCachedKBPath(version)
 
@@ -195,7 +195,7 @@ export async function installKBFromLocalDirectory(
 export async function installKBFromLocalZip(
   version: string,
   zipPath: string,
-  fs: FileSystemService = fileSystemService,
+  fs: FileSystemService,
 ): Promise<string> {
   const extract = extractZip
   const cachePath = cacheManager.getCachedKBPath(version)

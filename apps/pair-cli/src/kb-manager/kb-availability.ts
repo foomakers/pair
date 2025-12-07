@@ -6,7 +6,7 @@ import urlUtils from './url-utils'
 import { installKB, type InstallerDeps } from './kb-installer'
 
 export interface KBManagerDeps {
-  fs?: FileSystemService
+  fs: FileSystemService
   extract?: (zipPath: string, targetPath: string) => Promise<void>
   progressWriter?: ProgressWriter
   isTTY?: boolean
