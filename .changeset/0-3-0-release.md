@@ -1,9 +1,9 @@
 ---
-"@pair/pair-cli": minor
-"@pair/content-ops": minor
-"@pair/knowledge-hub": minor
-"@pair/eslint-config": patch
-"@pair/prettier-config": patch
+'@pair/pair-cli': minor
+'@pair/content-ops': minor
+'@pair/knowledge-hub': minor
+'@pair/eslint-config': patch
+'@pair/prettier-config': patch
 ---
 
 Prepare release `0.3.0`.
@@ -20,6 +20,7 @@ Highlights:
   for runtime KB consumption.
 - Multiple UX and reliability improvements: retry logic, TTY detection,
   streaming downloads, and improved error messages.
+- Minor fixes.
 
 This release is backward compatible and focuses on KB distribution and
 packaging features for adopters and teams managing private KBs.
