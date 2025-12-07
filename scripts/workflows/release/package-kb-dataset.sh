@@ -81,27 +81,9 @@ fi
 
 mkdir -p "$RELEASE_DIR"
 
-# Normalize links before packaging
-echo "🔗 Normalizing markdown links to relative paths..."
-PAIR_CLI="apps/pair-cli/dist/cli.js"
-
-# Check if CLI is built
-if [[ ! -f "$PAIR_CLI" ]]; then
-  echo "⚠️  CLI not built, building now..."
-  pnpm --filter @pair/pair-cli build
-fi
-
-# Run update-link on dataset to normalize all links to relative
-echo "   Running: $PAIR_CLI update-link --relative on dataset..."
-LINK_LOG=$(mktemp)
-if (cd "$DATASET_SOURCE" && node "$PROJECT_ROOT/$PAIR_CLI" update-link --relative > "$LINK_LOG" 2>&1); then
-  LINKS_UPDATED=$(grep -c "Updated" "$LINK_LOG" 2>/dev/null || echo "0")
-  echo "   ✓ Links normalized: $LINKS_UPDATED files updated"
-else
-  echo "⚠️  Warning: Link normalization failed (continuing anyway)"
-  cat "$LINK_LOG"
-fi
-rm -f "$LINK_LOG"
+# Note: Link normalization via 'pair update-link' is not applicable to dataset source
+# because update-link command works on installed KB content in .pair directory
+# The dataset source links should already be in correct format (relative paths)
 
 echo "📦 Packaging KB dataset v${VERSION}..."
 echo "   Source: $DATASET_SOURCE"
@@ -135,9 +117,17 @@ EOF
 
 # Use pair package command to create the ZIP
 echo "🗜️  Creating ZIP archive with pair package..."
+PAIR_CLI="apps/pair-cli/dist/cli.js"
+
+# Check if CLI is built
+if [[ ! -f "$PAIR_CLI" ]]; then
+  echo "⚠️  CLI not built, building now..."
+  pnpm --filter @pair/pair-cli build
+fi
+
 (cd "$DATASET_SOURCE" && node "$PROJECT_ROOT/$PAIR_CLI" package \
-  --config="$TEMP_CONFIG" \
-  --output="$PROJECT_ROOT/$OUTPUT_ZIP" \
+  -c "$TEMP_CONFIG" \
+  -o "$PROJECT_ROOT/$OUTPUT_ZIP" \
   --name="knowledge-base" \
   --version="$VERSION" \
   --description="Pair knowledge base dataset")
