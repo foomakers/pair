@@ -1,5 +1,6 @@
 import { ErrorLog, createFormatError } from '../observability'
 import { FileSystemService, walkMarkdownFiles } from '../file-system'
+import { cleanupFile } from '../file-system/file-operations'
 import {
   ParsedLink,
   Replacement,
@@ -103,12 +104,8 @@ async function handleErrorsAndLogs(
     )
     logs.push(`\nAll errors have been written to: ${errorsPath}`)
   } else {
-    try {
-      await fileService.unlink(errorsPath)
-      logs.push('No errors found. Previous errors.txt deleted.')
-    } catch {
-      logs.push('No previous errors file to delete or delete failed.')
-    }
+    await cleanupFile(errorsPath, fileService)
+    logs.push('No previous errors file to delete or delete failed.')
     logs.push('All markdown links are valid.')
   }
 

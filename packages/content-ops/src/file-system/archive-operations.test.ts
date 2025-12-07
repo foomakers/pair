@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { join } from 'path'
-import { InMemoryFileSystemService } from '@pair/content-ops'
-import extractZip from './zip-extractor'
+import { InMemoryFileSystemService } from '../test-utils/in-memory-fs'
+import extractZip from './archive-operations'
 
-describe('zip-extractor', () => {
+describe('Archive Operations - ZIP Extraction', () => {
   it('extractZip extracts files into target path (in-memory)', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
     const zipPath = '/tmp/fake.zip'

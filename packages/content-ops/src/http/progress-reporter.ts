@@ -22,22 +22,22 @@ export function calculateSpeed(bytesDownloaded: number, startTime: number): numb
 /**
  * Format progress data for display
  */
-export function formatProgress(data: ProgressData, isTTY: boolean): string {
+export function formatProgress(data: ProgressData, isTTY: boolean, label = 'Downloading'): string {
   const percentage = Math.round((data.bytesDownloaded / data.totalBytes) * 100)
   const downloadedMB = (data.bytesDownloaded / (1024 * 1024)).toFixed(1)
   const speed = calculateSpeed(data.bytesDownloaded, data.startTime)
 
   if (isTTY) {
     // TTY mode: inline progress with ANSI codes
-    return `\rDownloading KB... ${percentage}% (${downloadedMB} MB) @ ${speed.toFixed(1)} MB/s`
+    return `\r${label}... ${percentage}% (${downloadedMB} MB) @ ${speed.toFixed(1)} MB/s`
   } else {
     // Non-TTY mode: simple log lines
-    return `Downloading KB... ${percentage}% complete\n`
+    return `${label}... ${percentage}% complete\n`
   }
 }
 
 /**
- * Progress reporter for KB downloads
+ * Progress reporter for HTTP downloads
  */
 export class ProgressReporter {
   private totalBytes: number
@@ -47,11 +47,13 @@ export class ProgressReporter {
   private writer: ProgressWriter
   private lastUpdateTime = 0
   private readonly UPDATE_INTERVAL = 100 // 100ms = 10Hz
+  private label: string
 
-  constructor(totalBytes: number, isTTY: boolean, writer: ProgressWriter) {
+  constructor(totalBytes: number, isTTY: boolean, writer: ProgressWriter, label = 'Downloading') {
     this.totalBytes = totalBytes
     this.isTTY = isTTY
     this.writer = writer
+    this.label = label
     this.startTime = Date.now()
   }
 
@@ -75,7 +77,7 @@ export class ProgressReporter {
       startTime: this.startTime,
     }
 
-    const formatted = formatProgress(data, this.isTTY)
+    const formatted = formatProgress(data, this.isTTY, this.label)
     this.writer.write(formatted)
   }
 

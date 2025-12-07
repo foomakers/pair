@@ -7,7 +7,7 @@ import {
   buildTestResponse,
   toIncomingMessage,
 } from '../test-utils/http-mocks'
-import * as checksumValidator from './checksum-validator'
+import * as checksumValidator from '@pair/content-ops'
 
 vi.mock('https')
 

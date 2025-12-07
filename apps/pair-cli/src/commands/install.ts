@@ -1,5 +1,5 @@
 import { relative, isAbsolute, join, dirname } from 'path'
-import { convertToRelative } from '@pair/content-ops'
+import { convertToRelative, detectSourceType, SourceType } from '@pair/content-ops'
 import { FileSystemService } from '@pair/content-ops'
 import { Behavior } from '@pair/content-ops'
 import {
@@ -17,6 +17,11 @@ import {
   calculatePathType,
   loadConfigWithOverrides,
 } from '../config-utils'
+import {
+  installKB,
+  installKBFromLocalZip,
+  installKBFromLocalDirectory,
+} from '../kb-manager/kb-installer'
 
 // Define types for asset registry configuration
 export interface AssetRegistryConfig {
@@ -226,18 +231,30 @@ function buildCopyOptionsForRegistry(registryConfig: AssetRegistryConfig): Recor
 /**
  * Install using default targets from config
  */
+/**
+ * Normalize dataset root to absolute path if needed
+ */
+function normalizeDatasetRoot(fsService: FileSystemService, datasetRoot: string): string {
+  let normalized = datasetRoot
+  // Convert to absolute path if it's a relative path
+  if (normalized && !normalized.startsWith('/') && !normalized.match(/^\w:[\\/]/)) {
+    normalized = fsService.resolve(fsService.rootModuleDirectory(), normalized)
+  }
+  return normalized
+}
+
 async function installWithDefaults(
   fsService: FileSystemService,
   options?: InstallOptions,
 ): Promise<{ success: boolean; message?: string; target?: string; logs?: LogEntry[] }> {
   const { logs, pushLog } = createLogger(options?.minLogLevel as LogEntry['level'] | undefined)
-
   pushLog('info', 'Starting installWithDefaults')
-
   try {
-    const { assetRegistries, datasetRoot } = loadConfigAndAssetRegistries(fsService, options)
-
-    // Validate all targets before performing any copies to avoid partial installs
+    const { assetRegistries, datasetRoot: rawDatasetRoot } = loadConfigAndAssetRegistries(
+      fsService,
+      options,
+    )
+    const datasetRoot = normalizeDatasetRoot(fsService, rawDatasetRoot)
     const entries = Object.entries(assetRegistries) as Array<[string, AssetRegistryConfig]>
     const precheck = await ensureAllTargetsAreEmptyForEntries(
       fsService,
@@ -250,8 +267,6 @@ async function installWithDefaults(
       pushLog('error', msg)
       return { success: false, message: msg }
     }
-
-    // Install each registry to its default target
     for (const [registryName, registryConfig] of entries) {
       const context: InstallContext = {
         fsService,
@@ -261,7 +276,6 @@ async function installWithDefaults(
       }
       await installSingleRegistry(registryName, registryConfig as AssetRegistryConfig, context)
     }
-
     pushLog('info', 'installWithDefaults completed')
     return { success: true, target: 'defaults', logs }
   } catch (err) {
@@ -284,10 +298,6 @@ function loadConfigAndAssetRegistries(fsService: FileSystemService, options?: In
     throw new Error('no asset registries found in config')
   }
   let datasetRoot = options?.datasetRoot || getKnowledgeHubDatasetPath(fsService)
-  // Some tests/mock setups may return an empty string to signal a "bundle"
-  // layout where dataset files are present directly under the FileSystemService
-  // working directory. Normalize that to the service cwd to avoid touching
-  // the real process.cwd during tests.
   if (datasetRoot === '') datasetRoot = fsService.currentWorkingDirectory()
   return { assetRegistries, datasetRoot }
 }
@@ -586,15 +596,25 @@ async function executeInstall(
   const abs = targetValidation.abs!
   let datasetRoot = options?.datasetRoot || getKnowledgeHubDatasetPath(fsService)
   if (datasetRoot === '') datasetRoot = fsService.currentWorkingDirectory()
+  // Use the normalized dataset root
+  datasetRoot = normalizeDatasetRoot(fsService, datasetRoot)
 
-  return await performInstallation({
+  const context: {
+    source: string | undefined
+    target: string | undefined
+    abs: string
+    datasetRoot: string
+    fsService: FileSystemService
+    options?: InstallOptions
+  } = {
     source: source || undefined,
     target: resolvedTarget,
     abs,
     datasetRoot,
     fsService,
     options: { ...(options || {}), baseTarget: abs },
-  })
+  }
+  return await performInstallation(context)
 }
 
 /**
@@ -845,6 +865,48 @@ async function processRegistryTarget(context: {
 }
 
 /**
+ * Execute installation based on detected source type
+ */
+async function executeSourceInstallation(
+  sourceType: string,
+  context: {
+    source: string
+    target: string
+    abs: string
+    datasetRoot: string
+    fsService: FileSystemService
+    pushLog: (level: LogEntry['level'], message: string) => void
+  },
+): Promise<void> {
+  const { source, target, abs, datasetRoot, fsService, pushLog } = context
+
+  if (sourceType === SourceType.REMOTE_URL) {
+    const version = 'custom'
+    await installKB(version, abs, source, { fs: fsService })
+    pushLog('info', 'Remote URL installation finished')
+  } else if (sourceType === SourceType.LOCAL_ZIP) {
+    const version = 'local-zip'
+    await installKBFromLocalZip(version, source, fsService)
+    pushLog('info', 'Local ZIP installation finished')
+  } else if (sourceType === SourceType.LOCAL_DIRECTORY) {
+    const version = 'local-dir'
+    await installKBFromLocalDirectory(version, source, fsService)
+    pushLog('info', 'Local directory installation finished')
+  } else {
+    // Fallback to copy (for other sources)
+    await doCopyAndUpdateLinks(fsService, {
+      source: source,
+      target: target,
+      datasetRoot: datasetRoot,
+      options: {
+        defaultBehavior: 'mirror',
+      },
+    })
+    pushLog('info', 'copyPathAndUpdateLinks finished')
+  }
+}
+
+/**
  * Handle installation from source
  */
 async function handleSourceInstallation(context: {
@@ -859,19 +921,16 @@ async function handleSourceInstallation(context: {
   target: string
   message?: string
 }> {
-  const { source, target, abs, datasetRoot, fsService, pushLog } = context
+  const { source, pushLog, abs } = context
 
   try {
-    pushLog('info', `Installing from source: ${source} to ${target}`)
-    await doCopyAndUpdateLinks(fsService, {
-      source: source,
-      target: target,
-      datasetRoot: datasetRoot,
-      options: {
-        defaultBehavior: 'mirror',
-      },
-    })
-    pushLog('info', 'copyPathAndUpdateLinks finished')
+    pushLog('info', `Installing from source: ${source} to ${context.target}`)
+
+    // Detect source type and execute installation
+    const sourceType = detectSourceType(source)
+    pushLog('info', `Detected source type: ${sourceType}`)
+    await executeSourceInstallation(sourceType, context)
+
     return { success: true, target: abs }
   } catch (err) {
     pushLog('error', `Failed to install from source: ${String(err)}`)

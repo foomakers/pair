@@ -29,12 +29,4 @@ describe('cache-manager', () => {
     await cacheManager.ensureCacheDirectory(path, fs)
     expect(fs.existsSync(path)).toBe(true)
   })
-
-  it('cleanupZip removes zip file if exists', async () => {
-    const fs = new InMemoryFileSystemService({}, '/', '/')
-    const tmp = '/tmp/kb-test.zip'
-    fs.writeFile(tmp, 'data')
-    await cacheManager.cleanupZip(tmp, fs)
-    expect(fs.existsSync(tmp)).toBe(false)
-  })
 })

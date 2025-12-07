@@ -16,6 +16,11 @@
       "import": "./dist/file-system/index.js",
       "require": "./dist/file-system/index.js"
     },
+    "./http": {
+      "types": "./dist/http/index.d.ts",
+      "import": "./dist/http/index.js",
+      "require": "./dist/http/index.js"
+    },
     "./ops/SyncOptions": {
       "types": "./dist/ops/SyncOptions.d.ts",
       "import": "./dist/ops/SyncOptions.js",
@@ -40,6 +45,7 @@
   "devDependencies": {
     "@pair/eslint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
+    "@types/adm-zip": "^0.5.5",
     "@types/markdown-it": "catalog:",
     "@types/mdast": "catalog:",
     "@types/node": "catalog:",
@@ -50,6 +56,7 @@
     "vitest": "catalog:"
   },
   "dependencies": {
+    "adm-zip": "^0.5.9",
     "markdown-it": "catalog:",
     "mdast": "catalog:",
     "remark-parse": "catalog:",

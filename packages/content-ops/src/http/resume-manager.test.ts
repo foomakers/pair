@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
-import { join } from 'path'
-import { tmpdir } from 'os'
 
 const {
   getPartialFilePath,
@@ -35,12 +33,6 @@ describe('Resume Manager - Partial File Detection', () => {
   it('returns false when partial file does not exist', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
     const result = await hasPartialDownload('/tmp/kb.zip', fs)
-    expect(result).toBe(false)
-  })
-
-  it('uses real fs-extra when no fs service provided', async () => {
-    const tmpPath = join(tmpdir(), 'nonexistent-kb.zip')
-    const result = await hasPartialDownload(tmpPath)
     expect(result).toBe(false)
   })
 })

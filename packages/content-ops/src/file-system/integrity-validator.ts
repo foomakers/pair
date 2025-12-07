@@ -1,9 +1,9 @@
 /**
- * Checksum validation utilities for download integrity
+ * Checksum validation utilities for file integrity verification
  */
 
 import { createHash } from 'crypto'
-import type { FileSystemService } from '@pair/content-ops'
+import type { FileSystemService } from './file-system-service'
 
 export interface ChecksumValidationResult {
   isValid: boolean

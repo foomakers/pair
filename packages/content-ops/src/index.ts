@@ -1,7 +1,17 @@
 export { FileSystemService, fileSystemService } from './file-system'
 export { InMemoryFileSystemService } from './test-utils/in-memory-fs'
 export { walkMarkdownFiles, isExternalLink } from './file-system/file-system-utils'
+export { cleanupFile } from './file-system/file-operations'
 export { extractLinks, type ParsedLink } from './markdown/markdown-parser'
+export {
+  calculateSHA256,
+  validateChecksum,
+  getExpectedChecksum,
+  type ChecksumValidationResult,
+} from './file-system/integrity-validator'
+export { isValidHttpUrl, validateUrl } from './file-system/url-validator'
+export { extractZip } from './file-system/archive-operations'
+export { detectSourceType, SourceType } from './path-resolution/source-detector'
 
 export { SyncOptions } from './ops/SyncOptions'
 export { Behavior } from './ops/behavior'
@@ -27,3 +37,27 @@ export {
   type RegistryConfig,
 } from './file-updates/backup-service'
 export { AtomicWriter, type AtomicWriterOptions } from './file-updates/atomic-write'
+
+// HTTP download utilities
+export type {
+  DownloadOptions,
+  DownloadErrorHandler,
+  ProgressWriter,
+  ProgressData,
+  ResumeDecision,
+  DownloadContext,
+} from './http'
+export {
+  downloadFile,
+  ProgressReporter,
+  calculateSpeed,
+  formatProgress,
+  setupResumeContext,
+  finalizeDownload,
+  getContentLength,
+  getPartialFilePath,
+  hasPartialDownload,
+  getPartialFileSize,
+  cleanupPartialFile,
+  shouldResume,
+} from './http'

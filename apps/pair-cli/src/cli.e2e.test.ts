@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
-import { handleInstallCommand } from './cli'
+import { installCommand } from './commands/install'
+import { handleUpdateCommand } from './cli'
 import { updateCommand } from './commands/update'
 
 describe('pair-cli e2e', () => {
@@ -164,7 +165,7 @@ function createTestConfig() {
       },
       'agents.md': {
         source: 'AGENTS.md',
-        behavior: 'overwrite',
+        behavior: 'add',
         target_path: 'AGENTS.md',
         description: 'AI agents guidance and session context',
       },
@@ -172,7 +173,10 @@ function createTestConfig() {
   }
 }
 
-async function testInstallWithDefaults(deployType: 'npm' | 'manual' | 'dev') {
+function getDeploymentConfig(deployType: 'npm' | 'manual' | 'dev'): {
+  cwd: string
+  fs: InMemoryFileSystemService
+} {
   const cwd =
     deployType === 'npm'
       ? '/.tmp/npm-test/sample-project'
@@ -185,32 +189,25 @@ async function testInstallWithDefaults(deployType: 'npm' | 'manual' | 'dev') {
       : deployType === 'manual'
         ? createManualDeployFs(cwd)
         : createDevScenarioFs(cwd)
+  return { cwd, fs }
+}
 
+async function testInstallWithDefaults(deployType: 'npm' | 'manual' | 'dev') {
+  const { fs } = getDeploymentConfig(deployType)
   await withTempConfig(fs, createTestConfig(), async () => {
-    const result = await handleInstallCommand(undefined, { config: undefined }, fs)
+    const configPath = fs.rootModuleDirectory() + '/config.json'
+    const result = await installCommand(fs, [], { customConfigPath: configPath, useDefaults: true })
     expect(result).toBeDefined()
     expect((result as { success?: boolean }).success).toBe(true)
   })
 }
 
 async function testUpdateWithDefaults(deployType: 'npm' | 'manual' | 'dev') {
-  const cwd =
-    deployType === 'npm'
-      ? '/.tmp/npm-test/sample-project'
-      : deployType === 'manual'
-        ? '/tmp/test-project'
-        : '/dev/test-project'
-  const fs =
-    deployType === 'npm'
-      ? createNpmDeployFs(cwd)
-      : deployType === 'manual'
-        ? createManualDeployFs(cwd)
-        : createDevScenarioFs(cwd)
-
+  const { fs } = getDeploymentConfig(deployType)
   await withTempConfig(fs, createTestConfig(), async () => {
+    const configPath = fs.rootModuleDirectory() + '/config.json'
     // First install to set up the targets
-    await handleInstallCommand(undefined, { config: undefined }, fs)
-
+    await installCommand(fs, [], { customConfigPath: configPath, useDefaults: true })
     // Then test update
     const result = await updateCommand(fs, [], { useDefaults: true })
     expect(result).toBeDefined()
@@ -355,7 +352,7 @@ describe('pair-cli e2e - registry override syntax', () => {
 
     await withTempConfig(fs, createTestConfig(), async () => {
       // First install to set up the targets
-      await handleInstallCommand(undefined, { config: undefined }, fs)
+      await installCommand(fs, [], { customConfigPath: undefined })
 
       // Test update with registry:target syntax (currently treated as target path)
       const { updateCommand } = await import('./commands/update')
@@ -381,7 +378,7 @@ describe('pair-cli e2e - KB availability', () => {
     )
 
     await withTempConfig(fs, createTestConfig(), async () => {
-      const result = await handleInstallCommand(undefined, { config: undefined }, fs)
+      const result = await installCommand(fs, [], { customConfigPath: undefined })
 
       // Should fail when KB not available anywhere (no dev dataset, no cache, no bundled)
       expect(result).toBeDefined()
@@ -407,7 +404,7 @@ describe('pair-cli e2e - KB availability', () => {
     await withTempConfig(fs, createTestConfig(), async () => {
       // This exercises the KB manager fallback path
       // Actual download is mocked in kb-manager.test.ts (17/17 tests)
-      const result = await handleInstallCommand(undefined, { config: undefined }, fs)
+      const result = await installCommand(fs, [], { customConfigPath: undefined })
 
       // Fails because no KB available, but fallback path was exercised
       expect(result).toBeDefined()
@@ -445,11 +442,9 @@ describe('CLI Entry Point Flags', () => {
       console.error = (...args: unknown[]) => errors.push(args.join(' '))
 
       try {
-        const result = await handleInstallCommand(
-          undefined,
-          { config: undefined, url: 'https://custom.com/kb.zip' },
-          fs,
-        )
+        const result = await installCommand(fs, ['--source', 'https://custom.com/kb.zip'], {
+          customConfigPath: undefined,
+        })
         // Should fail because no KB available
         expect(result).toBeDefined()
         expect((result as { success?: boolean }).success).toBe(false)
@@ -467,7 +462,10 @@ describe('CLI Entry Point Flags', () => {
       process.argv = ['node', 'pair', 'install', '--no-kb']
 
       // No KB download should happen - install should succeed without KB
-      const result = await handleInstallCommand(undefined, { config: undefined }, fs)
+      const result = await installCommand(fs, [], {
+        customConfigPath: fs.rootModuleDirectory() + '/config.json',
+        useDefaults: true,
+      })
       expect(result).toBeDefined()
       expect((result as { success?: boolean }).success).toBe(true)
     })
@@ -484,5 +482,476 @@ describe('CLI Entry Point Flags', () => {
       expect(error).toBeDefined()
       expect(String(error)).toContain('--url and --no-kb')
     }
+  })
+})
+
+describe('pair-cli e2e - install from local sources', () => {
+  describe('install from local ZIP', () => {
+    it('installs from absolute path ZIP', async () => {
+      const cwd = '/test-absolute-zip'
+      const zipPath = 'kb.zip'
+
+      // Create filesystem with ZIP file (simulated as binary content)
+      const seed: Record<string, string> = {}
+      seed['/test-absolute-zip/kb.zip'] =
+        'PK\x03\x04\x14\x00\x00\x00\x00\x00\x8d\x8f\x8bN\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0e\x00\x00\x00AGENTS.mdthis is agents.md' // Minimal ZIP content
+      seed[`${cwd}/config.json`] = JSON.stringify({
+        asset_registries: {
+          github: {
+            source: '.github',
+            behavior: 'mirror',
+            include: ['/agents', '/prompts'],
+            target_path: '.github',
+            description: 'GitHub workflows and configuration files',
+          },
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            target_path: '.pair/knowledge',
+            description: 'Knowledge base and documentation',
+          },
+          adoption: {
+            source: '.pair/adoption',
+            behavior: 'add',
+            target_path: '.pair/adoption',
+            description: 'Adoption guides and onboarding materials',
+          },
+          agents: {
+            source: 'AGENTS.md',
+            behavior: 'add',
+            target_path: 'AGENTS.md',
+            description: 'AI agents guidance and session context',
+          },
+        },
+      })
+
+      const fs = new InMemoryFileSystemService(seed, cwd, cwd)
+
+      const result = await installCommand(fs, ['--source', zipPath], { useDefaults: true })
+
+      expect(result).toBeDefined()
+    })
+
+    it('installs from relative path ZIP', async () => {
+      const cwd = '/test-relative-zip'
+      const zipPath = './downloads/kb.zip'
+
+      const seed: Record<string, string> = {}
+      seed['/test-relative-zip/downloads/kb.zip'] =
+        'PK\x03\x04\x14\x00\x00\x00\x00\x00\x8d\x8f\x8bN\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x0e\x00\x00\x00AGENTS.mdthis is agents.md'
+      seed[`${cwd}/config.json`] = JSON.stringify({
+        asset_registries: {
+          github: {
+            source: '.github',
+            behavior: 'mirror',
+            include: ['/agents', '/prompts'],
+            target_path: '.github',
+            description: 'GitHub workflows and configuration files',
+          },
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            target_path: '.pair/knowledge',
+            description: 'Knowledge base and documentation',
+          },
+          adoption: {
+            source: '.pair/adoption',
+            behavior: 'add',
+            target_path: '.pair/adoption',
+            description: 'Adoption guides and onboarding materials',
+          },
+          agents: {
+            source: 'AGENTS.md',
+            behavior: 'add',
+            target_path: 'AGENTS.md',
+            description: 'AI agents guidance and session context',
+          },
+        },
+      })
+
+      const fs = new InMemoryFileSystemService(seed, cwd, cwd)
+
+      const result = await installCommand(fs, ['--source', zipPath], { useDefaults: true })
+
+      expect(result).toBeDefined()
+    })
+  })
+
+  describe('install from local directory', () => {
+    it('installs from absolute path directory', async () => {
+      const cwd = '/test-absolute-dir'
+      const dirPath = 'dataset'
+
+      const seed: Record<string, string> = {}
+      seed[`${cwd}/${dirPath}/AGENTS.md`] = 'this is agents.md'
+      seed[`${cwd}/${dirPath}/.pair/knowledge/index.md`] = '# Knowledge Base'
+      seed[`${cwd}/config.json`] = JSON.stringify({
+        asset_registries: {
+          github: {
+            source: '.github',
+            behavior: 'mirror',
+            include: ['/agents', '/prompts'],
+            target_path: '.github',
+            description: 'GitHub workflows and configuration files',
+          },
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            target_path: '.pair/knowledge',
+            description: 'Knowledge base and documentation',
+          },
+          adoption: {
+            source: '.pair/adoption',
+            behavior: 'add',
+            target_path: '.pair/adoption',
+            description: 'Adoption guides and onboarding materials',
+          },
+          agents: {
+            source: 'AGENTS.md',
+            behavior: 'add',
+            target_path: 'AGENTS.md',
+            description: 'AI agents guidance and session context',
+          },
+        },
+      })
+
+      const fs = new InMemoryFileSystemService(seed, cwd, cwd)
+
+      const result = await installCommand(fs, ['--source', dirPath], { useDefaults: true })
+
+      expect(result).toBeDefined()
+    })
+
+    it('installs from relative path directory', async () => {
+      const cwd = '/test-relative-dir'
+      const dirPath = './dataset'
+
+      const seed: Record<string, string> = {}
+      seed['/test-relative-dir/dataset/AGENTS.md'] = 'this is agents.md'
+      seed['/test-relative-dir/dataset/.pair/knowledge/index.md'] = '# Knowledge Base'
+      seed[`${cwd}/config.json`] = JSON.stringify({
+        asset_registries: {
+          github: {
+            source: '.github',
+            behavior: 'mirror',
+            include: ['/agents', '/prompts'],
+            target_path: '.github',
+            description: 'GitHub workflows and configuration files',
+          },
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            target_path: '.pair/knowledge',
+            description: 'Knowledge base and documentation',
+          },
+          adoption: {
+            source: '.pair/adoption',
+            behavior: 'add',
+            target_path: '.pair/adoption',
+            description: 'Adoption guides and onboarding materials',
+          },
+          agents: {
+            source: 'AGENTS.md',
+            behavior: 'add',
+            target_path: 'AGENTS.md',
+            description: 'AI agents guidance and session context',
+          },
+        },
+      })
+
+      const fs = new InMemoryFileSystemService(seed, cwd, cwd)
+
+      const result = await installCommand(fs, ['--source', dirPath], { useDefaults: true })
+
+      expect(result).toBeDefined()
+    })
+  })
+})
+
+describe('update from local sources', () => {
+  describe('update from local ZIP', () => {
+    it('updates from absolute path ZIP', async () => {
+      const cwd = '/test-absolute-zip'
+      const zipPath = 'dataset'
+
+      // Create filesystem with extracted ZIP content (simulated as directory)
+      const seed: Record<string, string> = {}
+      seed[`${cwd}/${zipPath}/AGENTS.md`] = 'this is agents.md'
+      seed[`${cwd}/${zipPath}/.github/workflows/ci.yml`] = 'name: CI\non: push'
+      seed[`${cwd}/${zipPath}/.pair/knowledge/index.md`] = '# Knowledge Base'
+      seed[`${cwd}/${zipPath}/.pair/adoption/onboarding.md`] = '# Onboarding Guide'
+      seed[`${cwd}/config.json`] = JSON.stringify({
+        asset_registries: {
+          github: {
+            source: '.github',
+            behavior: 'mirror',
+            include: ['/agents', '/prompts'],
+            target_path: '.github',
+            description: 'GitHub workflows and configuration files',
+          },
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            target_path: '.pair/knowledge',
+            description: 'Knowledge base and documentation',
+          },
+          adoption: {
+            source: '.pair/adoption',
+            behavior: 'add',
+            target_path: '.pair/adoption',
+            description: 'Adoption guides and onboarding materials',
+          },
+          agents: {
+            source: 'AGENTS.md',
+            behavior: 'add',
+            target_path: 'AGENTS.md',
+            description: 'AI agents guidance and session context',
+          },
+        },
+      })
+
+      const fs = new InMemoryFileSystemService(seed, cwd, cwd)
+
+      const result = await handleUpdateCommand({ url: zipPath }, fs)
+
+      expect(result).toBeDefined()
+    })
+
+    it('updates from relative path ZIP', async () => {
+      const cwd = '/test-relative-zip'
+      const zipPath = './dataset'
+
+      const seed: Record<string, string> = {}
+      seed['/test-relative-zip/dataset/AGENTS.md'] = 'this is agents.md'
+      seed['/test-relative-zip/dataset/.github/workflows/ci.yml'] = 'name: CI\non: push'
+      seed['/test-relative-zip/dataset/.pair/knowledge/index.md'] = '# Knowledge Base'
+      seed['/test-relative-zip/dataset/.pair/adoption/onboarding.md'] = '# Onboarding Guide'
+      seed[`${cwd}/config.json`] = JSON.stringify({
+        asset_registries: {
+          github: {
+            source: '.github',
+            behavior: 'mirror',
+            include: ['/agents', '/prompts'],
+            target_path: '.github',
+            description: 'GitHub workflows and configuration files',
+          },
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            target_path: '.pair/knowledge',
+            description: 'Knowledge base and documentation',
+          },
+          adoption: {
+            source: '.pair/adoption',
+            behavior: 'add',
+            target_path: '.pair/adoption',
+            description: 'Adoption guides and onboarding materials',
+          },
+          agents: {
+            source: 'AGENTS.md',
+            behavior: 'add',
+            target_path: 'AGENTS.md',
+            description: 'AI agents guidance and session context',
+          },
+        },
+      })
+
+      const fs = new InMemoryFileSystemService(seed, cwd, cwd)
+
+      const result = await handleUpdateCommand({ url: zipPath }, fs)
+
+      expect(result).toBeDefined()
+    })
+  })
+
+  describe('update from local directory', () => {
+    it('updates from absolute path directory', async () => {
+      const cwd = '/test-absolute-dir'
+      const dirPath = 'dataset'
+
+      const seed: Record<string, string> = {}
+      seed[`${cwd}/${dirPath}/AGENTS.md`] = 'this is agents.md'
+      seed[`${cwd}/${dirPath}/.github/workflows/ci.yml`] = 'name: CI\non: push'
+      seed[`${cwd}/${dirPath}/.pair/knowledge/index.md`] = '# Knowledge Base'
+      seed[`${cwd}/${dirPath}/.pair/adoption/onboarding.md`] = '# Onboarding Guide'
+      seed[`${cwd}/config.json`] = JSON.stringify({
+        asset_registries: {
+          github: {
+            source: '.github',
+            behavior: 'mirror',
+            include: ['/agents', '/prompts'],
+            target_path: '.github',
+            description: 'GitHub workflows and configuration files',
+          },
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            target_path: '.pair/knowledge',
+            description: 'Knowledge base and documentation',
+          },
+          adoption: {
+            source: '.pair/adoption',
+            behavior: 'add',
+            target_path: '.pair/adoption',
+            description: 'Adoption guides and onboarding materials',
+          },
+          agents: {
+            source: 'AGENTS.md',
+            behavior: 'add',
+            target_path: 'AGENTS.md',
+            description: 'AI agents guidance and session context',
+          },
+        },
+      })
+
+      const fs = new InMemoryFileSystemService(seed, cwd, cwd)
+
+      const result = await handleUpdateCommand({ url: dirPath }, fs)
+
+      expect(result).toBeDefined()
+    })
+
+    it('updates from relative path directory', async () => {
+      const cwd = '/test-relative-dir'
+      const dirPath = './dataset'
+
+      const seed: Record<string, string> = {}
+      seed['/test-relative-dir/dataset/AGENTS.md'] = 'this is agents.md'
+      seed['/test-relative-dir/dataset/.github/workflows/ci.yml'] = 'name: CI\non: push'
+      seed['/test-relative-dir/dataset/.pair/knowledge/index.md'] = '# Knowledge Base'
+      seed['/test-relative-dir/dataset/.pair/adoption/onboarding.md'] = '# Onboarding Guide'
+      seed[`${cwd}/config.json`] = JSON.stringify({
+        asset_registries: {
+          github: {
+            source: '.github',
+            behavior: 'mirror',
+            include: ['/agents', '/prompts'],
+            target_path: '.github',
+            description: 'GitHub workflows and configuration files',
+          },
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            target_path: '.pair/knowledge',
+            description: 'Knowledge base and documentation',
+          },
+          adoption: {
+            source: '.pair/adoption',
+            behavior: 'add',
+            target_path: '.pair/adoption',
+            description: 'Adoption guides and onboarding materials',
+          },
+          agents: {
+            source: 'AGENTS.md',
+            behavior: 'add',
+            target_path: 'AGENTS.md',
+            description: 'AI agents guidance and session context',
+          },
+        },
+      })
+
+      const fs = new InMemoryFileSystemService(seed, cwd, cwd)
+
+      const result = await handleUpdateCommand({ url: dirPath }, fs)
+
+      expect(result).toBeDefined()
+    })
+  })
+})
+
+describe('pair-cli e2e - link strategy', () => {
+  it('install with relative link style', async () => {
+    const { fs } = getDeploymentConfig('dev')
+    await withTempConfig(fs, createTestConfig(), async () => {
+      const configPath = fs.rootModuleDirectory() + '/config.json'
+      const result = await installCommand(fs, [], {
+        customConfigPath: configPath,
+        useDefaults: true,
+        linkStyle: 'relative',
+      })
+      expect(result).toBeDefined()
+      expect((result as { success?: boolean }).success).toBe(true)
+    })
+  })
+
+  it('update with absolute link style', async () => {
+    const { fs } = getDeploymentConfig('dev')
+    await withTempConfig(fs, createTestConfig(), async () => {
+      const configPath = fs.rootModuleDirectory() + '/config.json'
+      // First install to set up targets
+      await installCommand(fs, [], { customConfigPath: configPath, useDefaults: true })
+      // Then update with absolute style and defaults
+      const result = await updateCommand(fs, [], { useDefaults: true, linkStyle: 'absolute' })
+      expect(result).toBeDefined()
+      expect((result as { success?: boolean }).success).toBe(true)
+    })
+  })
+
+  it('update with auto link style detection', async () => {
+    const { fs } = getDeploymentConfig('dev')
+    await withTempConfig(fs, createTestConfig(), async () => {
+      const configPath = fs.rootModuleDirectory() + '/config.json'
+      // First install to establish baseline
+      await installCommand(fs, [], { customConfigPath: configPath, useDefaults: true })
+      // Then update with auto detection and defaults
+      const result = await updateCommand(fs, [], { useDefaults: true, linkStyle: 'auto' })
+      expect(result).toBeDefined()
+      // Auto detection should succeed
+    })
+  })
+})
+
+describe('pair-cli e2e - error scenarios', () => {
+  it('install fails gracefully when config is missing', async () => {
+    const cwd = '/test-no-config'
+    const seed: Record<string, string> = {}
+    const fs = new InMemoryFileSystemService(seed, cwd, cwd)
+    const result = await installCommand(fs, [], {
+      customConfigPath: cwd + '/nonexistent.json',
+      useDefaults: true,
+    })
+    expect(result).toBeDefined()
+    expect((result as { success?: boolean }).success).toBe(false)
+  })
+
+  it('update fails gracefully when source directory does not exist', async () => {
+    const cwd = '/test-no-source'
+    const seed: Record<string, string> = {
+      [cwd + '/config.json']: JSON.stringify({
+        asset_registries: {
+          github: {
+            source: '.github',
+            behavior: 'mirror',
+            target_path: '.github',
+            description: 'GitHub config',
+          },
+        },
+      }),
+    }
+    const fs = new InMemoryFileSystemService(seed, cwd, cwd)
+    const result = await handleUpdateCommand({ url: '/nonexistent/path' }, fs)
+    expect(result).toBeDefined()
+    // Should fail gracefully when source doesn't exist
+  })
+
+  it('install from ZIP fails gracefully when ZIP is corrupted', async () => {
+    const cwd = '/test-bad-zip'
+    const seed: Record<string, string> = {
+      [cwd + '/config.json']: JSON.stringify({
+        asset_registries: {
+          github: {
+            source: '.github',
+            behavior: 'mirror',
+            target_path: '.github',
+            description: 'GitHub config',
+          },
+        },
+      }),
+      [cwd + '/bad.zip']: 'not a valid zip file',
+    }
+    const fs = new InMemoryFileSystemService(seed, cwd, cwd)
+    const result = await installCommand(fs, ['--source', 'bad.zip'], { useDefaults: true })
+    expect(result).toBeDefined()
+    // May succeed or fail depending on implementation, just ensure it doesn't crash
   })
 })

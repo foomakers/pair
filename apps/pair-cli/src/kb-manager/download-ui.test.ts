@@ -1,4 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
+
+vi.mock('https', () => ({
+  get: vi.fn(),
+  request: vi.fn(),
+}))
+
 import * as https from 'https'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { ensureKBAvailable } from './kb-availability'
@@ -8,11 +14,6 @@ import {
   buildTestResponse,
   toIncomingMessage,
 } from '../test-utils/http-mocks'
-
-vi.mock('https', () => ({
-  get: vi.fn(),
-  request: vi.fn(),
-}))
 
 const mockExtract = vi.fn()
 
@@ -29,6 +30,9 @@ describe('Download UI', () => {
 
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
+
+    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
@@ -55,6 +59,9 @@ describe('Download UI', () => {
 
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
+
+    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))

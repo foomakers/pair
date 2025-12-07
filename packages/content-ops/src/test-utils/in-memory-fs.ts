@@ -154,10 +154,50 @@ export class InMemoryFileSystemService implements FileSystemService {
   async copy(oldPath: string, newPath: string): Promise<void> {
     const resolvedOldPath = this.resolvePath(oldPath)
     const resolvedNewPath = this.resolvePath(newPath)
-    if (!this.files.has(resolvedOldPath)) throw new Error(`File not found: ${oldPath}`)
-    const content = this.files.get(resolvedOldPath)!
-    this.files.set(resolvedNewPath, content)
-    this.dirs.add(dirname(resolvedNewPath))
+    if (this.dirs.has(resolvedOldPath)) {
+      // copy directory recursively
+      this.dirs.add(resolvedNewPath)
+      const prefix = resolvedOldPath.endsWith('/') ? resolvedOldPath : resolvedOldPath + '/'
+      for (const key of this.files.keys()) {
+        if (key.startsWith(prefix)) {
+          const relative = key.slice(prefix.length)
+          const newKey = this.resolve(resolvedNewPath, relative)
+          this.files.set(newKey, this.files.get(key)!)
+          this.addParentDirectories(newKey)
+        }
+      }
+    } else if (this.files.has(resolvedOldPath)) {
+      const content = this.files.get(resolvedOldPath)!
+      this.files.set(resolvedNewPath, content)
+      this.addParentDirectories(resolvedNewPath)
+    } else {
+      throw new Error(`Path not found: ${oldPath}`)
+    }
+  }
+
+  copySync(oldPath: string, newPath: string): void {
+    // For simplicity, make it sync by not awaiting
+    const resolvedOldPath = this.resolvePath(oldPath)
+    const resolvedNewPath = this.resolvePath(newPath)
+    if (this.dirs.has(resolvedOldPath)) {
+      // copy directory recursively
+      this.dirs.add(resolvedNewPath)
+      const prefix = resolvedOldPath.endsWith('/') ? resolvedOldPath : resolvedOldPath + '/'
+      for (const key of this.files.keys()) {
+        if (key.startsWith(prefix)) {
+          const relative = key.slice(prefix.length)
+          const newKey = this.resolve(resolvedNewPath, relative)
+          this.files.set(newKey, this.files.get(key)!)
+          this.addParentDirectories(newKey)
+        }
+      }
+    } else if (this.files.has(resolvedOldPath)) {
+      const content = this.files.get(resolvedOldPath)!
+      this.files.set(resolvedNewPath, content)
+      this.addParentDirectories(resolvedNewPath)
+    } else {
+      throw new Error(`Path not found: ${oldPath}`)
+    }
   }
 
   async rm(path: string, options?: { recursive?: boolean; force?: boolean }): Promise<void> {
