@@ -3,6 +3,21 @@ import { FileSystemService } from './file-system-service'
 import { Behavior, normalizeKey, resolveBehavior } from '../ops/behavior'
 import { logger } from '../observability'
 
+/**
+ * Clean up a file, ignoring errors if file doesn't exist
+ * @param filePath - Path to file to delete
+ * @param fs - Filesystem service
+ */
+export async function cleanupFile(filePath: string, fs: FileSystemService): Promise<void> {
+  try {
+    if (fs.existsSync(filePath)) {
+      await fs.unlink(filePath)
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
 export async function copyFileHelper(
   fileService: FileSystemService,
   oldPath: string,

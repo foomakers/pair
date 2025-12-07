@@ -1,4 +1,5 @@
 import type { FileSystemService } from '@pair/content-ops'
+import { fileSystemService } from '@pair/content-ops'
 import { type ProgressWriter } from './progress-reporter'
 import cacheManager from './cache-manager'
 import urlUtils from './url-utils'
@@ -30,8 +31,9 @@ function buildInstallerDeps(deps?: KBManagerDeps): InstallerDeps | undefined {
 }
 
 export async function ensureKBAvailable(version: string, deps?: KBManagerDeps): Promise<string> {
+  const fs = deps?.fs || fileSystemService
   const cachePath = getCachedKBPath(version)
-  const cached = await isKBCached(version, deps?.fs)
+  const cached = await isKBCached(version, fs)
 
   if (cached) return cachePath
 

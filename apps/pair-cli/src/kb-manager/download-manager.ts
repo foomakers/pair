@@ -1,7 +1,7 @@
 import * as https from 'https'
 import { IncomingMessage } from 'http'
-import { createWriteStream } from 'fs'
 import type { FileSystemService } from '@pair/content-ops'
+import { fileSystemService } from '@pair/content-ops'
 import { ProgressReporter, type ProgressWriter } from './progress-reporter'
 import {
   getPartialFilePath,
@@ -53,33 +53,6 @@ function writeToInMemoryFs(
       }
     })
     response.on('error', reject)
-  })
-}
-
-function writeToRealFs(
-  response: IncomingMessage,
-  destination: string,
-  progressReporter?: ProgressReporter,
-  resumeFrom?: number,
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const flags = resumeFrom && resumeFrom > 0 ? 'a' : 'w'
-    const fileStream = createWriteStream(destination, { flags })
-    let bytesDownloaded = resumeFrom || 0
-
-    response.on('data', (chunk: Buffer) => {
-      bytesDownloaded += chunk.length
-      if (progressReporter) {
-        progressReporter.update(bytesDownloaded)
-      }
-    })
-
-    response.pipe(fileStream)
-    fileStream.on('finish', () => {
-      fileStream.close()
-      resolve()
-    })
-    fileStream.on('error', reject)
   })
 }
 
@@ -144,7 +117,7 @@ async function handleDownloadSuccess(params: {
   destination: string
   partialPath: string
   resumeFrom: number
-  fs: FileSystemService | undefined
+  fs: FileSystemService
   progressReporter: ProgressReporter | undefined
 }): Promise<void> {
   const { destination, partialPath, resumeFrom, fs, progressReporter } = params
@@ -179,7 +152,7 @@ function executeDownload(params: {
   partialPath: string
   resumeFrom: number
   totalBytes: number
-  fs?: FileSystemService | undefined
+  fs: FileSystemService
   progressWriter?: ProgressWriter | undefined
   isTTY?: boolean | undefined
   options: DownloadOptions
@@ -209,7 +182,7 @@ function handleDownloadResponse(ctx: {
     partialPath: string
     resumeFrom: number
     totalBytes: number
-    fs?: FileSystemService | undefined
+    fs: FileSystemService
     progressWriter?: ProgressWriter | undefined
     isTTY?: boolean | undefined
     options: DownloadOptions
@@ -241,7 +214,7 @@ function processDownloadStream(ctx: {
     resumeFrom: number
     totalBytes: number
     destination: string
-    fs?: FileSystemService | undefined
+    fs: FileSystemService
     progressWriter?: ProgressWriter | undefined
     isTTY?: boolean | undefined
   }
@@ -258,9 +231,7 @@ function processDownloadStream(ctx: {
     isTTY,
   })
 
-  const writePromise = fs
-    ? writeToInMemoryFs(response, targetPath, fs, { progressReporter, resumeFrom })
-    : writeToRealFs(response, targetPath, progressReporter, resumeFrom)
+  const writePromise = writeToInMemoryFs(response, targetPath, fs, { progressReporter, resumeFrom })
 
   writePromise
     .then(() =>
@@ -284,7 +255,8 @@ export async function downloadFile(
   destination: string,
   options: DownloadOptions = {},
 ): Promise<void> {
-  const { fs, progressWriter, isTTY } = options
+  const fs = options.fs || fileSystemService
+  const { progressWriter, isTTY } = options
   const ctx: DownloadContext = { url, destination, fs, progressWriter, isTTY }
   const { totalBytes, resumeFrom } = await setupResumeContext(ctx)
 

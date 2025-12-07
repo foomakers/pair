@@ -1,9 +1,7 @@
 import { join } from 'path'
 import { tmpdir } from 'os'
-import { copy } from 'fs-extra'
-import { existsSync } from 'fs'
 import type { FileSystemService } from '@pair/content-ops'
-import { extractZip } from '@pair/content-ops'
+import { extractZip, fileSystemService } from '@pair/content-ops'
 import { downloadFile } from './download-manager'
 import cacheManager from './cache-manager'
 import checksumManager from './checksum-manager'
@@ -23,7 +21,7 @@ async function doInstallSteps(
   cachePath: string,
   deps?: InstallerDeps,
 ): Promise<void> {
-  const fs = deps?.fs
+  const fs = deps?.fs || fileSystemService
   const extract = deps?.extract || extractZip
 
   await downloadFile(downloadUrl, zipPath, {
@@ -32,7 +30,7 @@ async function doInstallSteps(
     isTTY: deps?.isTTY,
   })
 
-  const check = await checksumManager.validateFileWithRemoteChecksum(downloadUrl, zipPath, deps?.fs)
+  const check = await checksumManager.validateFileWithRemoteChecksum(downloadUrl, zipPath, fs)
   if (!check.isValid) {
     throw new Error(
       `Checksum validation failed: expected=${check.expectedChecksum} actual=${check.actualChecksum}`,
@@ -40,7 +38,7 @@ async function doInstallSteps(
   }
 
   await extract(zipPath, cachePath)
-  await cacheManager.cleanupZip(zipPath, deps?.fs)
+  await cacheManager.cleanupZip(zipPath, fs)
 }
 
 function shouldPreserveError(err: Error): boolean {
@@ -63,7 +61,7 @@ export async function installKB(
   downloadUrl: string,
   deps?: InstallerDeps,
 ): Promise<string> {
-  const fs = deps?.fs
+  const fs = deps?.fs || fileSystemService
   const cleanVersion = version.startsWith('v') ? version.slice(1) : version
   const zipPath = join(tmpdir(), `kb-${cleanVersion}.zip`)
 
@@ -117,13 +115,9 @@ async function copyDirectoryInMemory(
   }
 }
 
-function validateKBStructure(cachePath: string, fs?: FileSystemService): boolean {
-  const hasPairDir = fs
-    ? fs.existsSync(join(cachePath, '.pair'))
-    : existsSync(join(cachePath, '.pair'))
-  const hasAgentsMd = fs
-    ? fs.existsSync(join(cachePath, 'AGENTS.md'))
-    : existsSync(join(cachePath, 'AGENTS.md'))
+function validateKBStructure(cachePath: string, fs: FileSystemService): boolean {
+  const hasPairDir = fs.existsSync(join(cachePath, '.pair'))
+  const hasAgentsMd = fs.existsSync(join(cachePath, 'AGENTS.md'))
 
   return hasPairDir || hasAgentsMd
 }
@@ -133,17 +127,14 @@ export async function installKBFromLocalDirectory(
   dirPath: string,
   deps?: InstallerDeps,
 ): Promise<string> {
-  const fs = deps?.fs
+  const fs = deps?.fs || fileSystemService
   const cachePath = cacheManager.getCachedKBPath(version)
 
   // Resolve relative paths
   const resolvedDirPath = dirPath.startsWith('/') ? dirPath : join(process.cwd(), dirPath)
 
   // Validate directory exists
-  const dirExists = fs
-    ? fs.existsSync(resolvedDirPath)
-    : (await import('fs')).existsSync(resolvedDirPath)
-  if (!dirExists) {
+  if (!fs.existsSync(resolvedDirPath)) {
     throw new Error(`Directory not found: ${resolvedDirPath}`)
   }
 
@@ -151,12 +142,8 @@ export async function installKBFromLocalDirectory(
 
   try {
     // Copy directory contents recursively
-    if (fs) {
-      // For in-memory filesystem, implement manual copy
-      await copyDirectoryInMemory(fs, resolvedDirPath, cachePath)
-    } else {
-      await copy(resolvedDirPath, cachePath, { overwrite: true })
-    }
+    // For in-memory filesystem, implement manual copy
+    await copyDirectoryInMemory(fs, resolvedDirPath, cachePath)
 
     // Validate KB structure
     const kbStructureValid = validateKBStructure(cachePath, fs)
@@ -178,7 +165,7 @@ export async function installKBFromLocalZip(
   zipPath: string,
   deps?: InstallerDeps,
 ): Promise<string> {
-  const fs = deps?.fs
+  const fs = deps?.fs || fileSystemService
   const extract = deps?.extract || extractZip
   const cachePath = cacheManager.getCachedKBPath(version)
 
@@ -186,10 +173,7 @@ export async function installKBFromLocalZip(
   const resolvedZipPath = zipPath.startsWith('/') ? zipPath : join(process.cwd(), zipPath)
 
   // Validate ZIP file exists
-  const fileExists = fs
-    ? fs.existsSync(resolvedZipPath)
-    : (await import('fs')).existsSync(resolvedZipPath)
-  if (!fileExists) {
+  if (!fs.existsSync(resolvedZipPath)) {
     throw new Error(`ZIP file not found: ${resolvedZipPath}`)
   }
 

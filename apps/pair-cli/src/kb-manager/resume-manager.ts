@@ -21,7 +21,7 @@ export interface ResumeDecision {
 export interface DownloadContext {
   url: string
   destination: string
-  fs?: FileSystemService | undefined
+  fs: FileSystemService
   progressWriter?: ProgressWriter | undefined
   isTTY?: boolean | undefined
 }
@@ -64,18 +64,13 @@ export async function finalizeDownload(
   destination: string,
   partialPath: string,
   resumeFrom: number,
-  fs?: FileSystemService,
+  fs: FileSystemService,
 ): Promise<void> {
   if (resumeFrom <= 0) return
 
-  if (fs) {
-    const content = fs.readFileSync(partialPath)
-    await fs.writeFile(destination, content)
-    await cleanupPartialFile(destination, fs)
-  } else {
-    const { rename } = await import('fs-extra')
-    await rename(partialPath, destination)
-  }
+  const content = fs.readFileSync(partialPath)
+  await fs.writeFile(destination, content)
+  await cleanupPartialFile(destination, fs)
 }
 
 /**
@@ -90,47 +85,30 @@ export function getPartialFilePath(filePath: string): string {
 /**
  * Check if a partial download exists
  * @param filePath - Original file path
- * @param fs - Optional filesystem service (for testing)
+ * @param fs - Filesystem service
  * @returns True if partial file exists
  */
 export async function hasPartialDownload(
   filePath: string,
-  fs?: FileSystemService,
+  fs: FileSystemService,
 ): Promise<boolean> {
   const partialPath = getPartialFilePath(filePath)
-
-  if (fs) {
-    return fs.existsSync(partialPath)
-  }
-
-  // Production: use fs-extra
-  const { pathExists } = await import('fs-extra')
-  return pathExists(partialPath)
+  return fs.existsSync(partialPath)
 }
 
 /**
  * Get the size of a partial download file
  * @param filePath - Original file path
- * @param fs - Optional filesystem service (for testing)
+ * @param fs - Filesystem service
  * @returns Size in bytes, or 0 if file doesn't exist
  */
-export async function getPartialFileSize(
-  filePath: string,
-  fs?: FileSystemService,
-): Promise<number> {
+export async function getPartialFileSize(filePath: string, fs: FileSystemService): Promise<number> {
   const partialPath = getPartialFilePath(filePath)
 
   try {
-    if (fs) {
-      if (!fs.existsSync(partialPath)) return 0
-      const content = fs.readFileSync(partialPath)
-      return Buffer.from(content).length
-    }
-
-    // Production: use fs stat
-    const { stat } = await import('fs-extra')
-    const stats = await stat(partialPath)
-    return stats.size
+    if (!fs.existsSync(partialPath)) return 0
+    const content = fs.readFileSync(partialPath)
+    return Buffer.from(content).length
   } catch {
     return 0
   }
@@ -139,22 +117,15 @@ export async function getPartialFileSize(
 /**
  * Delete a partial download file
  * @param filePath - Original file path
- * @param fs - Optional filesystem service (for testing)
+ * @param fs - Filesystem service
  */
-export async function cleanupPartialFile(filePath: string, fs?: FileSystemService): Promise<void> {
+export async function cleanupPartialFile(filePath: string, fs: FileSystemService): Promise<void> {
   const partialPath = getPartialFilePath(filePath)
 
   try {
-    if (fs) {
-      if (fs.existsSync(partialPath)) {
-        await fs.unlink(partialPath)
-      }
-      return
+    if (fs.existsSync(partialPath)) {
+      await fs.unlink(partialPath)
     }
-
-    // Production: use fs-extra
-    const { remove } = await import('fs-extra')
-    await remove(partialPath)
   } catch {
     // Ignore errors (file might not exist)
   }
@@ -164,13 +135,13 @@ export async function cleanupPartialFile(filePath: string, fs?: FileSystemServic
  * Determine if download should resume
  * @param filePath - Original file path
  * @param totalBytes - Total file size from Content-Length header
- * @param fs - Optional filesystem service (for testing)
+ * @param fs - Filesystem service
  * @returns Resume decision with bytes already downloaded
  */
 export async function shouldResume(
   filePath: string,
   totalBytes: number,
-  fs?: FileSystemService,
+  fs: FileSystemService,
 ): Promise<ResumeDecision> {
   // Cannot resume without known total size
   if (totalBytes <= 0) {
