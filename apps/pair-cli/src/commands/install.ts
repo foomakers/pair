@@ -23,6 +23,64 @@ import {
   installKBFromLocalDirectory,
 } from '../kb-manager/kb-installer'
 
+/**
+ * Check if a path string is a local file system path
+ */
+function isLocalPath(str: string): boolean {
+  return (
+    str.startsWith('/') ||
+    str.startsWith('./') ||
+    str.startsWith('../') ||
+    (str.length > 1 && str[1] === ':')
+  )
+}
+
+/**
+ * Resolve datasetRoot from source parameter if provided
+ */
+function resolveDatasetRootFromSource(
+  fsService: FileSystemService,
+  source: string | undefined,
+  options?: InstallOptions,
+): InstallOptions {
+  if (!source || !isLocalPath(source)) {
+    return { ...options }
+  }
+
+  // Resolve relative paths from current working directory
+  const resolvedPath =
+    !source.startsWith('/') && !source.match(/^\w:[\\/]/)
+      ? fsService.resolve(fsService.currentWorkingDirectory(), source)
+      : source
+
+  return { ...options, datasetRoot: resolvedPath }
+}
+
+/**
+ * Resolve and normalize the datasetRoot for installation
+ */
+function resolveInstallDatasetRoot(
+  fsService: FileSystemService,
+  source: string | undefined,
+  options?: InstallOptions,
+): string {
+  let datasetRoot: string
+
+  if (source && isLocalPath(source)) {
+    // Resolve relative paths from current working directory
+    if (!source.startsWith('/') && !source.match(/^\w:[\\/]/)) {
+      datasetRoot = fsService.resolve(fsService.currentWorkingDirectory(), source)
+    } else {
+      datasetRoot = source
+    }
+  } else {
+    datasetRoot = options?.datasetRoot || getKnowledgeHubDatasetPath(fsService)
+  }
+
+  if (datasetRoot === '') datasetRoot = fsService.currentWorkingDirectory()
+  return normalizeDatasetRoot(fsService, datasetRoot)
+}
+
 // Define types for asset registry configuration
 export interface AssetRegistryConfig {
   source?: string
@@ -234,26 +292,26 @@ function buildCopyOptionsForRegistry(registryConfig: AssetRegistryConfig): Recor
 /**
  * Normalize dataset root to absolute path if needed
  */
-function normalizeDatasetRoot(fsService: FileSystemService, datasetRoot: string): string {
-  let normalized = datasetRoot
-  // Convert to absolute path if it's a relative path
-  if (normalized && !normalized.startsWith('/') && !normalized.match(/^\w:[\\/]/)) {
-    normalized = fsService.resolve(fsService.rootModuleDirectory(), normalized)
-  }
-  return normalized
+function normalizeDatasetRoot(_fsService: FileSystemService, datasetRoot: string): string {
+  // datasetRoot is already normalized when passed from resolveDatasetRootFromSource
+  // or resolveInstallDatasetRoot, so just return it as-is
+  return datasetRoot
 }
 
 async function installWithDefaults(
   fsService: FileSystemService,
   options?: InstallOptions,
+  source?: string,
 ): Promise<{ success: boolean; message?: string; target?: string; logs?: LogEntry[] }> {
   const { logs, pushLog } = createLogger(options?.minLogLevel as LogEntry['level'] | undefined)
   pushLog('info', 'Starting installWithDefaults')
   try {
+    const finalOptions = resolveDatasetRootFromSource(fsService, source, options)
     const { assetRegistries, datasetRoot: rawDatasetRoot } = loadConfigAndAssetRegistries(
       fsService,
-      options,
+      finalOptions,
     )
+
     const datasetRoot = normalizeDatasetRoot(fsService, rawDatasetRoot)
     const entries = Object.entries(assetRegistries) as Array<[string, AssetRegistryConfig]>
     const precheck = await ensureAllTargetsAreEmptyForEntries(
@@ -288,9 +346,18 @@ async function installWithDefaults(
  * Load config (with overrides) and return asset registries plus dataset root.
  * Extracted to keep installWithDefaults / installWithOverrides small.
  */
-function loadConfigAndAssetRegistries(fsService: FileSystemService, options?: InstallOptions) {
-  const loaderOpts: { customConfigPath?: string } = {}
+function createConfigLoaderOptions(options?: InstallOptions): {
+  customConfigPath?: string
+  projectRoot?: string
+} {
+  const loaderOpts: { customConfigPath?: string; projectRoot?: string } = {}
   if (options?.customConfigPath) loaderOpts.customConfigPath = options.customConfigPath
+  if (options?.datasetRoot) loaderOpts.projectRoot = options.datasetRoot
+  return loaderOpts
+}
+
+function loadConfigAndAssetRegistries(fsService: FileSystemService, options?: InstallOptions) {
+  const loaderOpts = createConfigLoaderOptions(options)
   const loader = loadConfigWithOverrides(fsService, loaderOpts)
   const config = loader.config
   const assetRegistries = config.asset_registries || {}
@@ -565,16 +632,21 @@ export async function installCommand(
   options?: InstallOptions,
 ) {
   const { target, source } = parseTargetAndSource(args)
+  console.error(
+    `[DEBUG] installCommand: args=${JSON.stringify(args)}, target=${target}, source=${source}`,
+  )
 
   // Handle special modes first
-  const specialMode = await handleSpecialModes(fsService, options)
+  const specialMode = await handleSpecialModes(fsService, options, source ?? undefined)
   if (specialMode.handled) {
     return specialMode.result
   }
 
-  const resolvedTarget = options?.baseTarget || target || undefined
+  const resolvedTarget: string | undefined = options?.baseTarget
+    ? options.baseTarget
+    : target ?? undefined
 
-  return await executeInstall(fsService, resolvedTarget, source || undefined, options)
+  return await executeInstall(fsService, resolvedTarget, source ?? undefined, options)
 }
 
 async function executeInstall(
@@ -594,10 +666,7 @@ async function executeInstall(
   }
 
   const abs = targetValidation.abs!
-  let datasetRoot = options?.datasetRoot || getKnowledgeHubDatasetPath(fsService)
-  if (datasetRoot === '') datasetRoot = fsService.currentWorkingDirectory()
-  // Use the normalized dataset root
-  datasetRoot = normalizeDatasetRoot(fsService, datasetRoot)
+  const datasetRoot = resolveInstallDatasetRoot(fsService, source, options)
 
   const context: {
     source: string | undefined
@@ -607,12 +676,13 @@ async function executeInstall(
     fsService: FileSystemService
     options?: InstallOptions
   } = {
-    source: source || undefined,
+    // Don't pass source if it's a local path - it's already used for datasetRoot
+    source: source && isLocalPath(source) ? undefined : source || undefined,
     target: resolvedTarget,
     abs,
     datasetRoot,
     fsService,
-    options: { ...(options || {}), baseTarget: abs },
+    options: { ...(options || {}), baseTarget: abs, datasetRoot },
   }
   return await performInstallation(context)
 }
@@ -683,13 +753,14 @@ function processInstallationResult(
 async function handleSpecialModes(
   fsService: FileSystemService,
   options?: InstallOptions,
+  source?: string,
 ): Promise<{
   handled: boolean
   result?: { success: boolean; target?: string; message?: string; logs?: LogEntry[] }
 }> {
   // Handle useDefaults mode when requested through options
   if (options?.useDefaults) {
-    return { handled: true, result: await installWithDefaults(fsService, options) }
+    return { handled: true, result: await installWithDefaults(fsService, options, source) }
   }
   return { handled: false }
 }
@@ -767,6 +838,26 @@ async function executeInstallation(context: {
 }
 
 /**
+ * Load config and prepare options with datasetRoot
+ */
+function prepareRegistryInstallContext(
+  fsService: FileSystemService,
+  datasetRoot: string,
+  options?: InstallOptions,
+): {
+  assetRegistries: Record<string, AssetRegistryConfig>
+  optionsWithDatasetRoot: InstallOptions
+} {
+  const loaderOpts: { customConfigPath?: string } = {}
+  if (options?.customConfigPath) loaderOpts.customConfigPath = options.customConfigPath
+  const loader = loadConfigWithOverrides(fsService, loaderOpts)
+  const config = loader.config
+  const assetRegistries = config.asset_registries || {}
+  const optionsWithDatasetRoot = options ? { ...options, datasetRoot } : { datasetRoot }
+  return { assetRegistries, optionsWithDatasetRoot }
+}
+
+/**
  * Handle installation from knowledge-hub dataset using asset registries
  */
 async function handleRegistryInstallation(context: {
@@ -795,11 +886,11 @@ async function handleRegistryInstallation(context: {
 
     pushLog('info', `Installing from knowledge-hub dataset: ${datasetRoot} to ${target}`)
 
-    const loaderOpts: { customConfigPath?: string } = {}
-    if (options?.customConfigPath) loaderOpts.customConfigPath = options.customConfigPath
-    const loader = loadConfigWithOverrides(fsService, loaderOpts)
-    const config = loader.config
-    const assetRegistries = config.asset_registries || {}
+    const { assetRegistries, optionsWithDatasetRoot } = prepareRegistryInstallContext(
+      fsService,
+      datasetRoot,
+      options,
+    )
 
     const result = await processRegistryTarget({
       target,
@@ -808,7 +899,7 @@ async function handleRegistryInstallation(context: {
       datasetRoot,
       fsService,
       pushLog,
-      ...(options && { options }),
+      options: optionsWithDatasetRoot,
     })
 
     pushLog('info', 'All asset registries processed')
@@ -836,7 +927,7 @@ async function processRegistryTarget(context: {
   if (target === '.' || target === './') {
     pushLog('info', 'Installing all registries to their default target paths')
 
-    const result = await installWithDefaults(fsService, options)
+    const result = await installWithDefaults(fsService, { ...options, datasetRoot })
     return result.message
       ? { success: result.success, target: abs, message: result.message }
       : { success: result.success, target: abs }
@@ -857,7 +948,7 @@ async function processRegistryTarget(context: {
     return { success: true, target: abs }
   } else {
     pushLog('info', `Target '${target}' doesn't match any registry, using default targets`)
-    const result = await installWithDefaults(fsService, options)
+    const result = await installWithDefaults(fsService, { ...options, datasetRoot })
     return result.message
       ? { success: result.success, target: abs, message: result.message }
       : { success: result.success, target: abs }

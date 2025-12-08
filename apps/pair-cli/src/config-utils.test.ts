@@ -468,3 +468,60 @@ describe('getKnowledgeHubDatasetPath with local dataset', () => {
     expect(result).toBe(localDatasetPath)
   })
 })
+
+describe('getKnowledgeHubDatasetPath', () => {
+  it('returns knowledge-hub dataset path', () => {
+    const fsService = {
+      rootModuleDirectory: () => '/',
+      currentWorkingDirectory: () => '/',
+      existsSync: () => true,
+    }
+    const p = configUtils.getKnowledgeHubDatasetPath(fsService as FileSystemService)
+    expect(p).toContain('packages')
+    expect(p).toContain('knowledge-hub')
+    expect(p).toContain('dataset')
+  })
+})
+
+describe('URL validation for local paths', () => {
+  it('should accept absolute path to local directory', async () => {
+    const { validateUrl } = await import('@pair/content-ops')
+    const testPath = '/absolute/path/to/kb-dataset'
+    expect(() => validateUrl(testPath)).not.toThrow()
+    expect(validateUrl(testPath)).toBe(testPath)
+  })
+
+  it('should accept relative path starting with ./', async () => {
+    const { validateUrl } = await import('@pair/content-ops')
+    const testPath = './packages/knowledge-hub/dataset'
+    expect(() => validateUrl(testPath)).not.toThrow()
+    expect(validateUrl(testPath)).toBe(testPath)
+  })
+
+  it('should accept relative path starting with ../', async () => {
+    const { validateUrl } = await import('@pair/content-ops')
+    const testPath = '../dataset'
+    expect(() => validateUrl(testPath)).not.toThrow()
+    expect(validateUrl(testPath)).toBe(testPath)
+  })
+
+  it('should accept valid HTTPS URL', async () => {
+    const { validateUrl } = await import('@pair/content-ops')
+    const testUrl = 'https://github.com/foomakers/pair/releases/download/v0.3.0/kb.zip'
+    expect(() => validateUrl(testUrl)).not.toThrow()
+    expect(validateUrl(testUrl)).toBe(testUrl)
+  })
+
+  it('should accept valid HTTP URL', async () => {
+    const { validateUrl } = await import('@pair/content-ops')
+    const testUrl = 'http://example.com/kb.zip'
+    expect(() => validateUrl(testUrl)).not.toThrow()
+    expect(validateUrl(testUrl)).toBe(testUrl)
+  })
+
+  it('should reject invalid URL format without protocol', async () => {
+    const { validateUrl } = await import('@pair/content-ops')
+    const testInput = 'not-a-valid-url-or-path'
+    expect(() => validateUrl(testInput)).toThrow('Invalid URL format')
+  })
+})

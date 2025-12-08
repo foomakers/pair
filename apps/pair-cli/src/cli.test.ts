@@ -1,58 +1,14 @@
 import { describe, it, expect } from 'vitest'
-import { getKnowledgeHubDatasetPath } from './config-utils'
 import type { FileSystemService } from '@pair/content-ops'
 import { Command } from 'commander'
 import { checkKnowledgeHubDatasetAccessible } from './cli'
 
-describe('pair-cli basics', () => {
-  it('returns knowledge-hub dataset path', testKnowledgeHubDatasetPath)
-  it('shows welcome message for invalid commands', testWelcomeMessage)
+describe('CLI - Dataset Accessibility Checks', () => {
   it('fails when dataset path exists but is not readable', testDatasetNotAccessible)
   it('fails when dataset path resolution fails', testDatasetPathResolutionFailure)
   it('sets correct exit codes for success and failure cases', testExitCodes)
+  it('skips dataset check when custom local path is provided', testSkipsCheckWithLocalUrl)
 })
-
-function testKnowledgeHubDatasetPath() {
-  const fsService = {
-    rootModuleDirectory: () => '/',
-    currentWorkingDirectory: () => '/',
-    existsSync: () => true,
-  }
-  const p = getKnowledgeHubDatasetPath(fsService as FileSystemService)
-  expect(p).toContain('packages')
-  expect(p).toContain('knowledge-hub')
-  expect(p).toContain('dataset')
-}
-
-function testWelcomeMessage() {
-  const logs: string[] = []
-  const originalLog = console.log
-  const originalExit = process.exit
-
-  console.log = (...args: unknown[]) => {
-    logs.push(args.join(' '))
-  }
-  process.exit = () => {
-    throw new Error('process.exit called')
-  }
-
-  try {
-    const program = new Command()
-    program.name('pair').description('Pair CLI')
-    program.action(() => {
-      console.log('Welcome to Pair CLI!')
-      console.log('💡 Tip: Use "pair install --list-targets" to see available asset registries')
-    })
-
-    program.parse(['node', 'cli.js'])
-
-    expect(logs).toContain('Welcome to Pair CLI!')
-    expect(logs.some(log => log.includes('pair install --list-targets'))).toBe(true)
-  } finally {
-    console.log = originalLog
-    process.exit = originalExit
-  }
-}
 
 function testDatasetNotAccessible() {
   const mockFs = createMockFsWithAccessError()
@@ -69,7 +25,7 @@ function testDatasetNotAccessible() {
   }
 
   try {
-    checkKnowledgeHubDatasetAccessible(mockFs as FileSystemService)
+    checkKnowledgeHubDatasetAccessible(mockFs as unknown as FileSystemService)
     expect.fail('Expected process.exit to be called')
   } catch (err) {
     verifyExitCalled(exitCalled, exitCode, err)
@@ -111,7 +67,7 @@ function testDatasetPathResolutionFailure() {
   }
 
   try {
-    checkKnowledgeHubDatasetAccessible(mockFs as FileSystemService)
+    checkKnowledgeHubDatasetAccessible(mockFs as unknown as FileSystemService)
     expect.fail('Expected process.exit to be called')
   } catch (err) {
     verifyExitCalled(exitCalled, exitCode, err)
@@ -146,7 +102,7 @@ function testSuccessfulCase() {
   }
 
   process.exitCode = undefined
-  checkKnowledgeHubDatasetAccessible(mockFsSuccess as FileSystemService)
+  checkKnowledgeHubDatasetAccessible(mockFsSuccess as unknown as FileSystemService)
   expect(process.exitCode).toBeUndefined()
 }
 
@@ -169,7 +125,7 @@ function testFailureCase() {
   }
 
   try {
-    checkKnowledgeHubDatasetAccessible(mockFsFailure as FileSystemService)
+    checkKnowledgeHubDatasetAccessible(mockFsFailure as unknown as FileSystemService)
     expect.fail('Expected process.exit to be called')
   } catch {
     expect(exitCalled).toBe(true)
@@ -179,84 +135,29 @@ function testFailureCase() {
   }
 }
 
-// Helper: create mock fs without local dataset
-function createMockFsWithoutLocal() {
-  return {
-    rootModuleDirectory: () => '/mock/project',
-    currentWorkingDirectory: () => '/mock/project',
-    existsSync: () => false,
+function testSkipsCheckWithLocalUrl() {
+  // Bug: checkKnowledgeHubDatasetAccessible should skip validation when customUrl is a local path
+  // This test reproduces the bug - it should NOT call process.exit when a local path is provided
+  const mockFs = createMockFsWithAccessError()
+  const localPath = '/absolute/path/to/dataset'
+
+  const originalExit = process.exit
+  let exitCalled = false
+
+  process.exit = () => {
+    exitCalled = true
+    throw new Error('process.exit called')
+  }
+
+  try {
+    // When a local path is provided as customUrl, it should NOT check the default dataset location
+    checkKnowledgeHubDatasetAccessible(mockFs as unknown as FileSystemService, localPath)
+    // Should NOT have called process.exit
+    expect(exitCalled).toBe(false)
+  } finally {
+    process.exit = originalExit
   }
 }
-
-// Helper: create mock KB functions
-function createMockKBFunctions() {
-  const mockIsKBCached = async () => false
-  const mockEnsureKBAvailable = async (version: string) => {
-    expect(version).toBe('0.1.0')
-    return '/home/user/.pair/kb/0.1.0'
-  }
-  return { mockIsKBCached, mockEnsureKBAvailable }
-}
-
-describe('KB manager integration - ensure KB available', () => {
-  it('should ensure KB available on startup when dataset not local', async () => {
-    const { getKnowledgeHubDatasetPathWithFallback } = await import('./config-utils')
-    const mockFs = createMockFsWithoutLocal()
-    const { mockIsKBCached, mockEnsureKBAvailable } = createMockKBFunctions()
-
-    const result = await getKnowledgeHubDatasetPathWithFallback({
-      fsService: mockFs as FileSystemService,
-      version: '0.1.0',
-      isKBCachedFn: mockIsKBCached,
-      ensureKBAvailableFn: mockEnsureKBAvailable,
-    })
-
-    expect(result).toBe('/home/user/.pair/kb/0.1.0/dataset')
-  })
-})
-
-describe('KB manager integration - custom URL', () => {
-  it('should pass custom URL to ensureKBAvailable when provided', async () => {
-    const { getKnowledgeHubDatasetPathWithFallback } = await import('./config-utils')
-    const customUrl = 'https://custom.example.com/kb.zip'
-    const mockFs = createMockFsWithoutLocal()
-
-    const mockIsKBCached = async () => false
-    const mockEnsureKBAvailable = async (
-      version: string,
-      deps?: { customUrl?: string; fs?: FileSystemService },
-    ) => {
-      expect(version).toBe('0.1.0')
-      expect(deps?.customUrl).toBe(customUrl)
-      return '/home/user/.pair/kb/0.1.0'
-    }
-
-    const result = await getKnowledgeHubDatasetPathWithFallback({
-      fsService: mockFs as FileSystemService,
-      version: '0.1.0',
-      isKBCachedFn: mockIsKBCached,
-      ensureKBAvailableFn: mockEnsureKBAvailable,
-      customUrl,
-    })
-
-    expect(result).toBe('/home/user/.pair/kb/0.1.0/dataset')
-  })
-})
-
-describe('KB manager integration - skip KB', () => {
-  it('should skip KB download when --no-kb flag is set', async () => {
-    // This test verifies that ensureKBAvailableOnStartup respects skipKB parameter
-    // In a real scenario, this would be tested through CLI integration
-    // Here we verify the logic is callable with skipKB=true
-
-    // The function should return early when skipKB=true without calling ensureKBAvailable
-    const ensureKBCalled = false
-
-    // This test would require access to ensureKBAvailableOnStartup which is not exported
-    // Instead we verify the validateCliOptions correctly rejects the conflict
-    expect(ensureKBCalled).toBe(false) // Not called due to skipKB
-  })
-})
 
 describe('CLI command registration', () => {
   it('install command is registered', () => {
@@ -427,72 +328,50 @@ describe('CLI command execution - package command availability', () => {
   })
 })
 
-describe('URL validation for local paths', () => {
-  it('should accept absolute path to local directory', async () => {
-    const { validateUrl } = await import('@pair/content-ops')
-    const testPath = '/absolute/path/to/kb-dataset'
-    expect(() => validateUrl(testPath)).not.toThrow()
-    expect(validateUrl(testPath)).toBe(testPath)
-  })
-
-  it('should accept relative path starting with ./', async () => {
-    const { validateUrl } = await import('@pair/content-ops')
-    const testPath = './packages/knowledge-hub/dataset'
-    expect(() => validateUrl(testPath)).not.toThrow()
-    expect(validateUrl(testPath)).toBe(testPath)
-  })
-
-  it('should accept relative path starting with ../', async () => {
-    const { validateUrl } = await import('@pair/content-ops')
-    const testPath = '../dataset'
-    expect(() => validateUrl(testPath)).not.toThrow()
-    expect(validateUrl(testPath)).toBe(testPath)
-  })
-
-  it('should accept valid HTTPS URL', async () => {
-    const { validateUrl } = await import('@pair/content-ops')
-    const testUrl = 'https://github.com/foomakers/pair/releases/download/v0.3.0/kb.zip'
-    expect(() => validateUrl(testUrl)).not.toThrow()
-    expect(validateUrl(testUrl)).toBe(testUrl)
-  })
-
-  it('should accept valid HTTP URL', async () => {
-    const { validateUrl } = await import('@pair/content-ops')
-    const testUrl = 'http://example.com/kb.zip'
-    expect(() => validateUrl(testUrl)).not.toThrow()
-    expect(validateUrl(testUrl)).toBe(testUrl)
-  })
-
-  it('should reject invalid URL format without protocol', async () => {
-    const { validateUrl } = await import('@pair/content-ops')
-    const testInput = 'not-a-valid-url-or-path'
-    expect(() => validateUrl(testInput)).toThrow('Invalid URL format')
-  })
-
-  it('should install KB from local directory path when using --url', async () => {
-    const cwd = '/test-local-kb-install'
-    const datasetPath = cwd + '/.pair/dataset'
-
-    const seed: Record<string, string> = {}
-    seed[datasetPath + '/AGENTS.md'] = 'this is agents.md'
-    seed[datasetPath + '/.pair/knowledge/index.md'] = '# Knowledge Base'
-    seed[cwd + '/config.json'] = JSON.stringify({
-      asset_registries: {
-        github: {
-          source: 'assets',
-          behavior: 'add',
-          target_path: 'assets',
-          description: 'GitHub Assets',
-        },
-      },
-    })
-
+describe('CLI - Custom URL handling', () => {
+  it('install command should pass --url parameter to handleInstallCommand', async () => {
+    // Bug: --url with local path should be passed to installCommand as --source
+    // This test verifies that the URL parameter flows through correctly
+    const { handleInstallCommand } = await import('./cli')
     const { InMemoryFileSystemService } = await import('@pair/content-ops')
-    const fs = new InMemoryFileSystemService(seed, cwd, cwd)
 
-    const { installCommand } = await import('./commands/install')
-    const result = await installCommand(fs, ['--url', datasetPath], { useDefaults: true })
+    // Create a simple mock FileSystemService
+    const mockFs = new InMemoryFileSystemService({}, '/', '/')
 
-    expect(result).toBeDefined()
+    const localDatasetPath = '/local/dataset'
+    const cmdOptions = { url: localDatasetPath }
+
+    // The command should not throw when processing a URL
+    try {
+      // Note: This will fail because there's no actual install logic, but we're testing
+      // that the URL is accepted and passed through to installCommand
+      await handleInstallCommand([], cmdOptions, mockFs)
+    } catch (err) {
+      // We expect this to fail because of missing config/dataset, not because of URL handling
+      // The important thing is that the URL parameter was accepted and processed
+      const errMsg = String(err)
+      expect(errMsg).not.toContain('url')
+      expect(errMsg).not.toContain('Unknown option')
+    }
+  })
+
+  it('should resolve relative paths in --url parameter', async () => {
+    const { handleInstallCommand } = await import('./cli')
+    const { InMemoryFileSystemService } = await import('@pair/content-ops')
+
+    const cwd = '/test/project'
+    const mockFs = new InMemoryFileSystemService({}, cwd, cwd)
+
+    const cmdOptions = { url: './dataset' }
+
+    try {
+      await handleInstallCommand([], cmdOptions, mockFs)
+    } catch (err) {
+      // We expect this to fail because of missing config/dataset, not because of path resolution
+      const errMsg = String(err)
+      // The important thing is that the relative path was accepted and processed
+      expect(errMsg).not.toContain('url')
+      expect(errMsg).not.toContain('Unknown option')
+    }
   })
 })

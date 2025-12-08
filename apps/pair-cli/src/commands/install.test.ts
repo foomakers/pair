@@ -255,3 +255,63 @@ const AGENTS_CONFIG = {
     },
   },
 }
+
+describe('installCommand - custom source (--source with local path)', function () {
+  it('uses source as datasetRoot when source is a local path', async function () {
+    // Create a custom dataset location within the test environment
+    const customDatasetRoot = `${realCwd}/custom-dataset`
+    const fs = createTestFs(
+      TEST_DEFAULT_CONFIG,
+      {
+        [`${customDatasetRoot}/.github/workflows/ci.yml`]: 'custom workflow content',
+        [`${customDatasetRoot}/.pair/knowledge/knowledge.md`]: 'custom knowledge content',
+        [`${customDatasetRoot}/.pair/adoption/guide.md`]: 'custom adoption content',
+      },
+      realCwd,
+    )
+
+    // Call installCommand with --source pointing to custom dataset location
+    // When useDefaults is true, it installs to configured default locations (not the target)
+    // This simulates: pair install --source /custom/dataset/location
+    const result = await installCommand(fs, ['--source', customDatasetRoot], {
+      useDefaults: true,
+    })
+
+    expect(result).toBeDefined()
+    if (!result!.success) {
+      console.error('Install failed:', result!.message)
+    }
+    expect(result!.success).toBe(true)
+
+    // Verify files were copied from custom dataset location to configured default locations
+    // (useDefaults ignores the target and uses config target_path values)
+    expect(await fs.readFile('.github-copy/workflows/ci.yml')).toBe('custom workflow content')
+    expect(await fs.readFile('.pair-knowledge/knowledge.md')).toBe('custom knowledge content')
+    expect(await fs.readFile('.pair-adoption/guide.md')).toBe('custom adoption content')
+  })
+
+  it('uses custom URL dataset when installed to explicit target path', async () => {
+    // Bug: when user provides --source with local path, the datasetRoot should be used
+    // even when loading config. Currently it loads from bundled dataset instead
+    const realCwd = process.cwd()
+    const customDatasetRoot = `${realCwd}/custom-dataset-url-test`
+    const fs = createTestFs(
+      TEST_DEFAULT_CONFIG,
+      {
+        [`${customDatasetRoot}/.github/workflows/ci.yml`]: 'custom url github content',
+        [`${customDatasetRoot}/.pair/knowledge/knowledge.md`]: 'custom url knowledge content',
+        [`${customDatasetRoot}/.pair/adoption/guide.md`]: 'custom url adoption content',
+      },
+      realCwd,
+    )
+
+    // When installCommand receives --source with local path and useDefaults
+    // it should load config from custom dataset path
+    const result = await installCommand(fs, ['--source', customDatasetRoot], {
+      useDefaults: true,
+    })
+
+    // After fix: datasetRoot is passed as projectRoot to loadConfigWithOverrides
+    expect(result?.success).toBe(true)
+  })
+})

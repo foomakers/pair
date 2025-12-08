@@ -51,7 +51,7 @@ PM Access: MCP github_projects (org: mycompany, repo: myproject)
 
 ## 📋 Available Tasks
 
-**Task index**: `.pair/how-to/index.json` - consult this for precise task matching
+**Task index**: `.pair/knowledge/how-to` - consult this for precise task matching
 
 ### Induction (Getting Started)
 
@@ -135,6 +135,53 @@ pnpm lint --filter <package_name>
 - **Package-specific rules win** - check for `.pair/knowledge/guidelines/` in target package
 - **No secrets in code** - ask for secure access instructions if needed
 - **Context consistency** - if switching how-to mid-session, explicitly update your session context
+- **Bug fix workflow** - NEVER modify code to fix a bug before creating a test that reproduces it. Test-first debugging ensures the fix actually addresses the problem.
+
+## 🐛 Bug Resolution Workflow
+
+**Critical principle**: Test-first debugging prevents code changes that don't fix the actual problem.
+
+### Process
+
+1. **Understand the bug** - Read error messages, logs, and problem descriptions thoroughly
+2. **Create a failing test** - Write a test that reproduces the bug (test should FAIL)
+3. **Verify test fails** - Run test to confirm it fails with the expected error
+4. **Fix the code** - Make minimal code changes to make the test pass
+5. **Verify fix** - Run all tests to ensure fix doesn't break anything else
+6. **Clean up** - Refactor and optimize once the test passes
+
+### Example Bug Fix
+
+```typescript
+// ❌ WRONG: modifying code before understanding the bug
+// Just changing things hoping it works
+
+// ✅ RIGHT: create test first, then fix
+// Step 1: Write failing test
+test('should handle local path in --url parameter', () => {
+  const result = isLocalPath('/absolute/path')
+  expect(result).toBe(true) // This FAILS first
+})
+
+// Step 2: Verify it fails
+// $ pnpm test  →  FAIL: expected false to equal true
+
+// Step 3: Fix the code
+function isLocalPath(str: string): boolean {
+  return str.startsWith('/') || str.startsWith('./')
+  // was missing slash check
+}
+
+// Step 4: Verify test passes
+// $ pnpm test  →  PASS
+```
+
+### Key Benefits
+
+- **Evidence-based**: Proves the fix actually works
+- **Regression prevention**: Test stays in codebase to catch future breaks
+- **Clarity**: Test documents expected behavior
+- **Confidence**: Linting + tests pass before committing
 
 ## 🔄 Task Selection Algorithm
 

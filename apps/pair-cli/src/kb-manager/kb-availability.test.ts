@@ -8,7 +8,7 @@ vi.mock('https', () => ({
 }))
 
 import * as https from 'https'
-import { InMemoryFileSystemService } from '@pair/content-ops'
+import { InMemoryFileSystemService, type FileSystemService } from '@pair/content-ops'
 import { ensureKBAvailable } from './kb-availability'
 import {
   mockHttpsRequest,
@@ -419,6 +419,86 @@ describe('KB Manager - Custom URL with default URL', () => {
     expect(hasGitHubURL).toBe(true)
   })
 })
+
+describe('KB manager integration - ensure KB available', () => {
+  it('should ensure KB available on startup when dataset not local', async () => {
+    const mockFs = createMockFsWithoutLocal()
+    const mockIsKBCached = async () => false
+    const mockEnsureKBAvailable = async (version: string) => {
+      expect(version).toBe('0.1.0')
+      return '/home/user/.pair/kb/0.1.0'
+    }
+
+    const result = await import('../config-utils').then(m =>
+      m.getKnowledgeHubDatasetPathWithFallback({
+        fsService: mockFs as unknown as FileSystemService,
+        version: '0.1.0',
+        isKBCachedFn: mockIsKBCached,
+        ensureKBAvailableFn: mockEnsureKBAvailable,
+      }),
+    )
+
+    expect(result).toBe('/home/user/.pair/kb/0.1.0/dataset')
+  })
+})
+
+describe('KB manager integration - custom URL', () => {
+  it('should pass custom URL to ensureKBAvailable when provided', async () => {
+    const customUrl = 'https://custom.example.com/kb.zip'
+    const mockFs = createMockFsWithoutLocal()
+
+    const mockIsKBCached = async () => false
+    const mockEnsureKBAvailable = async (
+      version: string,
+      deps?: { customUrl?: string; fs?: FileSystemService },
+    ) => {
+      expect(version).toBe('0.1.0')
+      expect(deps?.customUrl).toBe(customUrl)
+      return '/home/user/.pair/kb/0.1.0'
+    }
+
+    const result = await import('../config-utils').then(m =>
+      m.getKnowledgeHubDatasetPathWithFallback({
+        fsService: mockFs as unknown as FileSystemService,
+        version: '0.1.0',
+        isKBCachedFn: mockIsKBCached,
+        ensureKBAvailableFn: mockEnsureKBAvailable,
+        customUrl,
+      }),
+    )
+
+    expect(result).toBe('/home/user/.pair/kb/0.1.0/dataset')
+  })
+})
+
+describe('KB manager integration - local directory paths via customUrl', () => {
+  it('should handle local directory paths via customUrl', async () => {
+    const datasetPath = '/local/kb/dataset'
+
+    const seed: Record<string, string> = {}
+    seed[datasetPath + '/AGENTS.md'] = 'this is agents.md'
+    seed[datasetPath + '/.pair/knowledge/index.md'] = '# Knowledge Base'
+
+    const fs = new InMemoryFileSystemService(seed, '/', '/')
+
+    const result = await ensureKBAvailable('local-test', {
+      fs: fs,
+      customUrl: datasetPath,
+    })
+
+    expect(result).toBeDefined()
+  })
+})
+
+// Helper functions
+function createMockFsWithoutLocal() {
+  return {
+    rootModuleDirectory: () => '/mock/project',
+    currentWorkingDirectory: () => '/mock/project',
+    existsSync: () => false,
+  }
+}
+
 // NOTE: Download/resume/checksum heavy-integration tests were migrated to their
 // owning test suites (`kb-installer.test.ts`, `download-manager.test.ts`,
 // `checksum-manager.test.ts`). This file keeps only the API-surface tests for
