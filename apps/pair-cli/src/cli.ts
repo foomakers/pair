@@ -146,7 +146,146 @@ export function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService)
   }
 }
 
+function registerInstallCommand(prog: typeof program): void {
+  prog
+    .command('install')
+    .description('Install documentation and assets')
+    .argument('[target]', 'Target folder (omit to use defaults from config)')
+    .option('-c, --config <file>', 'Path to config file (if provided, uses this config)')
+    .option('--list-targets', 'List available target folders and their descriptions')
+    .option(
+      '--link-style <style>',
+      'Link style: relative, absolute, or auto (default: relative for install)',
+    )
+    .option(
+      '--url <url>',
+      'URL or path to KB source (remote URL, local ZIP file, or local directory)',
+    )
+    .action((targetArg: unknown, cmdOptions: unknown) => {
+      return handleInstallCommand(targetArg, cmdOptions, fsService).then(() => undefined)
+    })
+}
+
+function registerUpdateCommand(prog: typeof program): void {
+  prog
+    .command('update')
+    .description('Update documentation and assets')
+    .argument('[target]', 'Target folder (omit to use defaults from config)')
+    .option('-c, --config <file>', 'Path to config file (if provided, uses this config)')
+    .option('--list-targets', 'List available target folders and their descriptions')
+    .option(
+      '--link-style <style>',
+      'Link style: relative, absolute, or auto (default: auto-detect for update)',
+    )
+    .option('--persist-backup', 'Keep backup files after successful update')
+    .option('--auto-rollback', 'Automatically restore from backup on error (default: true)', true)
+    .option(
+      '--url <url>',
+      'URL or path to KB source (remote URL, local ZIP file, or local directory)',
+    )
+    .action(async (targetArg, cmdOptions) => {
+      const merged = { ...(cmdOptions as Record<string, unknown>), positionalTarget: targetArg }
+      await handleUpdateCommand(merged, fsService)
+    })
+}
+
+function registerUpdateLinkCommand(prog: typeof program): void {
+  prog
+    .command('update-link')
+    .description('Validate and update links in installed Knowledge Base content')
+    .option('--relative', 'Convert all links to relative paths (default)')
+    .option('--absolute', 'Convert all links to absolute paths')
+    .option('--dry-run', 'Show what would be changed without modifying files')
+    .option('--verbose', 'Show detailed processing information')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  $ pair update-link                      Validate and convert links to relative paths
+  $ pair update-link --dry-run            Preview changes without modifying files
+  $ pair update-link --absolute           Convert all links to absolute paths
+  $ pair update-link --verbose            Show detailed processing logs
+
+Usage Notes:
+  • Default behavior converts all links to relative paths
+  • Creates automatic backup before modifications
+  • Skips external URLs and mailto links
+  • Processes all markdown files in .pair/ directory
+
+See also: docs/getting-started/05-cli-update-link.md
+`,
+    )
+    .action(async cmdOptions => {
+      try {
+        const args: string[] = []
+        const opts = cmdOptions as Record<string, unknown>
+
+        if (opts['relative']) args.push('--relative')
+        if (opts['absolute']) args.push('--absolute')
+        if (opts['dryRun']) args.push('--dry-run')
+        if (opts['verbose']) args.push('--verbose')
+
+        const result = await updateLinkCommand(fsService, args, { minLogLevel: MIN_LOG_LEVEL })
+        displayUpdateLinkResults(result)
+      } catch (err) {
+        console.error(chalk.red(`Failed to update links: ${String(err)}`))
+        process.exitCode = 1
+      }
+    })
+}
+
+function registerValidateConfigCommand(prog: typeof program): void {
+  prog
+    .command('validate-config')
+    .description('Validate the asset registry configuration')
+    .action(async () => {
+      try {
+        const { config } = loadConfigWithOverrides(fileSystemService)
+        const validation = validateConfig(config)
+
+        if (validation.valid) {
+          console.log(chalk.green('✅ Configuration is valid!'))
+          console.log(
+            chalk.gray(
+              `Found ${Object.keys(config.asset_registries || {}).length} asset registries`,
+            ),
+          )
+        } else {
+          console.log(chalk.red('❌ Configuration has errors:'))
+          validation.errors.forEach((error: string) => {
+            console.log(chalk.red(`  • ${error}`))
+          })
+          process.exitCode = 1
+        }
+      } catch (err) {
+        console.error(chalk.red(`Failed to validate config: ${String(err)}`))
+        process.exitCode = 1
+      }
+    })
+}
+
+function registerDefaultAction(prog: typeof program): void {
+  prog.action(() => {
+    console.log(chalk.green('Welcome to Pair CLI! Use --help to see available commands.'))
+    console.log(
+      chalk.gray('💡 Tip: Use "pair install --list-targets" to see available asset registries'),
+    )
+  })
+}
+
+function setupCommands(prog: typeof program): void {
+  registerInstallCommand(prog)
+  registerUpdateCommand(prog)
+  registerUpdateLinkCommand(prog)
+  registerValidateConfigCommand(prog)
+  packageCommand(prog)
+  registerDefaultAction(prog)
+}
+
 export async function main() {
+  // Register all commands BEFORE parsing
+  setupCommands(program)
+
   // Parse global options
   program.parse(process.argv)
   const options = program.opts<{ url?: string; kb: boolean }>()
@@ -167,11 +306,6 @@ export async function main() {
   if (options.kb !== false) {
     checkKnowledgeHubDatasetAccessible(fileSystemService)
   }
-
-  // Register package command
-  packageCommand(program)
-
-  program.parse(process.argv)
 }
 
 if (require.main === module) {
@@ -196,24 +330,6 @@ interface CommandOptions {
   positionalTarget?: unknown
   url?: string
 }
-
-program
-  .command('install')
-  .description('Install documentation and assets')
-  .argument('[target]', 'Target folder (omit to use defaults from config)')
-  .option('-c, --config <file>', 'Path to config file (if provided, uses this config)')
-  .option('--list-targets', 'List available target folders and their descriptions')
-  .option(
-    '--link-style <style>',
-    'Link style: relative, absolute, or auto (default: relative for install)',
-  )
-  .option(
-    '--url <url>',
-    'URL or path to KB source (remote URL, local ZIP file, or local directory)',
-  )
-  .action((targetArg: unknown, cmdOptions: unknown) => {
-    return handleInstallCommand(targetArg, cmdOptions, fsService).then(() => undefined)
-  })
 
 function buildInstallOptions(
   fsService: FileSystemService,
@@ -470,11 +586,6 @@ function validateUpdateConfigAndGetRoot(
   }
 }
 
-/**
- * Execute the update command with provided options
- */
-// executeUpdateCommand removed; logic handled inside exported handleUpdateCommand
-
 program
   .command('update')
   .description('Update documentation and assets')
@@ -524,79 +635,3 @@ function displayUpdateLinkResults(result: Awaited<ReturnType<typeof updateLinkCo
     process.exitCode = 1
   }
 }
-
-program
-  .command('update-link')
-  .description('Validate and update links in installed Knowledge Base content')
-  .option('--relative', 'Convert all links to relative paths (default)')
-  .option('--absolute', 'Convert all links to absolute paths')
-  .option('--dry-run', 'Show what would be changed without modifying files')
-  .option('--verbose', 'Show detailed processing information')
-  .addHelpText(
-    'after',
-    `
-Examples:
-  $ pair update-link                      Validate and convert links to relative paths
-  $ pair update-link --dry-run            Preview changes without modifying files
-  $ pair update-link --absolute           Convert all links to absolute paths
-  $ pair update-link --verbose            Show detailed processing logs
-
-Usage Notes:
-  • Default behavior converts all links to relative paths
-  • Creates automatic backup before modifications
-  • Skips external URLs and mailto links
-  • Processes all markdown files in .pair/ directory
-
-See also: docs/getting-started/05-cli-update-link.md
-`,
-  )
-  .action(async cmdOptions => {
-    try {
-      const args: string[] = []
-      const opts = cmdOptions as Record<string, unknown>
-
-      if (opts['relative']) args.push('--relative')
-      if (opts['absolute']) args.push('--absolute')
-      if (opts['dryRun']) args.push('--dry-run')
-      if (opts['verbose']) args.push('--verbose')
-
-      const result = await updateLinkCommand(fsService, args, { minLogLevel: MIN_LOG_LEVEL })
-      displayUpdateLinkResults(result)
-    } catch (err) {
-      console.error(chalk.red(`Failed to update links: ${String(err)}`))
-      process.exitCode = 1
-    }
-  })
-
-program
-  .command('validate-config')
-  .description('Validate the asset registry configuration')
-  .action(async () => {
-    try {
-      const { config } = loadConfigWithOverrides(fileSystemService)
-      const validation = validateConfig(config)
-
-      if (validation.valid) {
-        console.log(chalk.green('✅ Configuration is valid!'))
-        console.log(
-          chalk.gray(`Found ${Object.keys(config.asset_registries || {}).length} asset registries`),
-        )
-      } else {
-        console.log(chalk.red('❌ Configuration has errors:'))
-        validation.errors.forEach((error: string) => {
-          console.log(chalk.red(`  • ${error}`))
-        })
-        process.exitCode = 1
-      }
-    } catch (err) {
-      console.error(chalk.red(`Failed to validate config: ${String(err)}`))
-      process.exitCode = 1
-    }
-  })
-
-program.action(() => {
-  console.log(chalk.green('Welcome to Pair CLI! Use --help to see available commands.'))
-  console.log(
-    chalk.gray('💡 Tip: Use "pair install --list-targets" to see available asset registries'),
-  )
-})

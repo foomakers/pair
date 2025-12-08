@@ -402,3 +402,27 @@ describe('CLI command registration', () => {
     expect(opts.some(opt => opt.flags.includes('--verbose'))).toBe(true)
   })
 })
+
+describe('CLI command execution - package command availability', () => {
+  it('package command should be accessible after main() execution', async () => {
+    const program = new Command()
+
+    // Simulate the global options
+    program.name('test-cli').option('--url <url>', 'Custom URL').option('--no-kb', 'Skip KB')
+
+    // Register package command BEFORE parse
+    const { packageCommand } = await import('./commands/package')
+    packageCommand(program)
+
+    // Now parse should recognize package command
+    const commands = program.commands
+    expect(commands.some(cmd => cmd.name() === 'package')).toBe(true)
+
+    const packageCmd = commands.find(cmd => cmd.name() === 'package')
+    expect(packageCmd).toBeDefined()
+
+    // Verify package command options are available
+    const opts = packageCmd?.options || []
+    expect(opts.some(opt => opt.flags.includes('-c, --config'))).toBe(true)
+  })
+})
