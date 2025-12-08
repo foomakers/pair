@@ -138,6 +138,14 @@ fi
 
 echo "Version check passed. Now testing 'pair install' against the sample project."
 
+# Determine local KB dataset path (use current repo's dataset if available for smoke testing)
+KB_DATASET=""
+REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+if [ -d "$REPO_ROOT/packages/knowledge-hub/dataset" ]; then
+  KB_DATASET="$REPO_ROOT/packages/knowledge-hub/dataset"
+  echo "Using local KB dataset for smoke test: $KB_DATASET"
+fi
+
 # Prepare sample project copy
 SAMPLE_SRC="docs/getting-started/sample-project"
 if [ ! -d "$SAMPLE_SRC" ]; then
@@ -198,14 +206,29 @@ pushd "$SAMPLE_TMP" >/dev/null
 # Use the binary from the pair-cli folder in the sample project
 PAIR_CLI_DIR="./pair-cli"
 if [[ -x "$PAIR_CLI_DIR/pair-cli" ]]; then
-  echo "Executing: ./pair-cli/pair-cli install"
-  ./pair-cli/pair-cli install
+  if [ -n "$KB_DATASET" ]; then
+    echo "Executing: ./pair-cli/pair-cli install --url $KB_DATASET"
+    ./pair-cli/pair-cli install --url "$KB_DATASET"
+  else
+    echo "Executing: ./pair-cli/pair-cli install --no-kb"
+    ./pair-cli/pair-cli install --no-kb
+  fi
 elif [[ -x "$PAIR_CLI_DIR/bin/pair-cli" ]]; then
-  echo "Executing: ./pair-cli/bin/pair-cli install"
-  ./pair-cli/bin/pair-cli install
+  if [ -n "$KB_DATASET" ]; then
+    echo "Executing: ./pair-cli/bin/pair-cli install --url $KB_DATASET"
+    ./pair-cli/bin/pair-cli install --url "$KB_DATASET"
+  else
+    echo "Executing: ./pair-cli/bin/pair-cli install --no-kb"
+    ./pair-cli/bin/pair-cli install --no-kb
+  fi
 elif [[ -f "$PAIR_CLI_DIR/bundle-cli/index.js" ]]; then
-  echo "Executing: node ./pair-cli/bundle-cli/index.js install"
-  node ./pair-cli/bundle-cli/index.js install
+  if [ -n "$KB_DATASET" ]; then
+    echo "Executing: node ./pair-cli/bundle-cli/index.js install --url $KB_DATASET"
+    node ./pair-cli/bundle-cli/index.js install --url "$KB_DATASET"
+  else
+    echo "Executing: node ./pair-cli/bundle-cli/index.js install --no-kb"
+    node ./pair-cli/bundle-cli/index.js install --no-kb
+  fi
 else
   echo "Error: no runnable binary found in $PAIR_CLI_DIR"
   echo "Checked paths:"
