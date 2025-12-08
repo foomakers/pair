@@ -125,12 +125,14 @@ if [[ ! -f "$PAIR_CLI" ]]; then
   pnpm --filter @pair/pair-cli build
 fi
 
-(cd "$DATASET_SOURCE" && node "$PROJECT_ROOT/$PAIR_CLI" package \
+# Execute from project root to ensure correct path resolution
+node "$PROJECT_ROOT/$PAIR_CLI" package \
   -c "$TEMP_CONFIG" \
-  -o "$PROJECT_ROOT/$OUTPUT_ZIP" \
+  --source-dir "$DATASET_SOURCE" \
+  -o "$OUTPUT_ZIP" \
   --name="knowledge-base" \
   --version="$VERSION" \
-  --description="Pair knowledge base dataset")
+  --description="Pair knowledge base dataset"
 
 rm "$TEMP_CONFIG"
 
