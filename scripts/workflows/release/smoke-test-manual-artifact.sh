@@ -138,14 +138,6 @@ fi
 
 echo "Version check passed. Now testing 'pair install' against the sample project."
 
-# Determine local KB dataset path (use current repo's dataset if available for smoke testing)
-KB_DATASET=""
-REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-if [ -d "$REPO_ROOT/packages/knowledge-hub/dataset" ]; then
-  KB_DATASET="$REPO_ROOT/packages/knowledge-hub/dataset"
-  echo "Using local KB dataset for smoke test: $KB_DATASET"
-fi
-
 # Prepare sample project copy
 SAMPLE_SRC="docs/getting-started/sample-project"
 if [ ! -d "$SAMPLE_SRC" ]; then
@@ -155,6 +147,17 @@ fi
 
 SAMPLE_TMP="$TMPDIR/sample-project"
 cp -a "$SAMPLE_SRC" "$SAMPLE_TMP"
+
+# For smoke testing, copy the local KB dataset directly into the sample project's .pair directory
+# This allows testing the install functionality without needing a published release
+REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+KB_DATASET_LOCAL="$REPO_ROOT/packages/knowledge-hub/dataset"
+if [ -d "$KB_DATASET_LOCAL" ]; then
+  echo "Copying local KB dataset into sample project for smoke test..."
+  mkdir -p "$SAMPLE_TMP/.pair"
+  cp -a "$KB_DATASET_LOCAL" "$SAMPLE_TMP/.pair/"
+  echo "✓ Local KB dataset ready for install test"
+fi
 
 # Copy the extracted manual package under the sample project in a pair-cli folder
 echo "Copying manual package to sample project under pair-cli folder..."
@@ -205,30 +208,25 @@ pushd "$SAMPLE_TMP" >/dev/null
 
 # Use the binary from the pair-cli folder in the sample project
 PAIR_CLI_DIR="./pair-cli"
+# Build the install command - use local KB if available, else use --no-kb
+KB_SOURCE=""
+if [ -d ".pair/dataset" ]; then
+  # Use absolute path for KB dataset
+  ABS_KB_PATH="$(cd .pair/dataset && pwd)"
+  KB_SOURCE="--url $ABS_KB_PATH"
+else
+  KB_SOURCE="--no-kb"
+fi
+
 if [[ -x "$PAIR_CLI_DIR/pair-cli" ]]; then
-  if [ -n "$KB_DATASET" ]; then
-    echo "Executing: ./pair-cli/pair-cli install --url $KB_DATASET"
-    ./pair-cli/pair-cli install --url "$KB_DATASET"
-  else
-    echo "Executing: ./pair-cli/pair-cli install --no-kb"
-    ./pair-cli/pair-cli install --no-kb
-  fi
+  echo "Executing: ./pair-cli/pair-cli install $KB_SOURCE"
+  ./pair-cli/pair-cli install $KB_SOURCE
 elif [[ -x "$PAIR_CLI_DIR/bin/pair-cli" ]]; then
-  if [ -n "$KB_DATASET" ]; then
-    echo "Executing: ./pair-cli/bin/pair-cli install --url $KB_DATASET"
-    ./pair-cli/bin/pair-cli install --url "$KB_DATASET"
-  else
-    echo "Executing: ./pair-cli/bin/pair-cli install --no-kb"
-    ./pair-cli/bin/pair-cli install --no-kb
-  fi
+  echo "Executing: ./pair-cli/bin/pair-cli install $KB_SOURCE"
+  ./pair-cli/bin/pair-cli install $KB_SOURCE
 elif [[ -f "$PAIR_CLI_DIR/bundle-cli/index.js" ]]; then
-  if [ -n "$KB_DATASET" ]; then
-    echo "Executing: node ./pair-cli/bundle-cli/index.js install --url $KB_DATASET"
-    node ./pair-cli/bundle-cli/index.js install --url "$KB_DATASET"
-  else
-    echo "Executing: node ./pair-cli/bundle-cli/index.js install --no-kb"
-    node ./pair-cli/bundle-cli/index.js install --no-kb
-  fi
+  echo "Executing: node ./pair-cli/bundle-cli/index.js install $KB_SOURCE"
+  node ./pair-cli/bundle-cli/index.js install $KB_SOURCE
 else
   echo "Error: no runnable binary found in $PAIR_CLI_DIR"
   echo "Checked paths:"

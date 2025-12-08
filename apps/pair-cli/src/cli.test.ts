@@ -426,3 +426,73 @@ describe('CLI command execution - package command availability', () => {
     expect(opts.some(opt => opt.flags.includes('-c, --config'))).toBe(true)
   })
 })
+
+describe('URL validation for local paths', () => {
+  it('should accept absolute path to local directory', async () => {
+    const { validateUrl } = await import('@pair/content-ops')
+    const testPath = '/absolute/path/to/kb-dataset'
+    expect(() => validateUrl(testPath)).not.toThrow()
+    expect(validateUrl(testPath)).toBe(testPath)
+  })
+
+  it('should accept relative path starting with ./', async () => {
+    const { validateUrl } = await import('@pair/content-ops')
+    const testPath = './packages/knowledge-hub/dataset'
+    expect(() => validateUrl(testPath)).not.toThrow()
+    expect(validateUrl(testPath)).toBe(testPath)
+  })
+
+  it('should accept relative path starting with ../', async () => {
+    const { validateUrl } = await import('@pair/content-ops')
+    const testPath = '../dataset'
+    expect(() => validateUrl(testPath)).not.toThrow()
+    expect(validateUrl(testPath)).toBe(testPath)
+  })
+
+  it('should accept valid HTTPS URL', async () => {
+    const { validateUrl } = await import('@pair/content-ops')
+    const testUrl = 'https://github.com/foomakers/pair/releases/download/v0.3.0/kb.zip'
+    expect(() => validateUrl(testUrl)).not.toThrow()
+    expect(validateUrl(testUrl)).toBe(testUrl)
+  })
+
+  it('should accept valid HTTP URL', async () => {
+    const { validateUrl } = await import('@pair/content-ops')
+    const testUrl = 'http://example.com/kb.zip'
+    expect(() => validateUrl(testUrl)).not.toThrow()
+    expect(validateUrl(testUrl)).toBe(testUrl)
+  })
+
+  it('should reject invalid URL format without protocol', async () => {
+    const { validateUrl } = await import('@pair/content-ops')
+    const testInput = 'not-a-valid-url-or-path'
+    expect(() => validateUrl(testInput)).toThrow('Invalid URL format')
+  })
+
+  it('should install KB from local directory path when using --url', async () => {
+    const cwd = '/test-local-kb-install'
+    const datasetPath = cwd + '/.pair/dataset'
+
+    const seed: Record<string, string> = {}
+    seed[datasetPath + '/AGENTS.md'] = 'this is agents.md'
+    seed[datasetPath + '/.pair/knowledge/index.md'] = '# Knowledge Base'
+    seed[cwd + '/config.json'] = JSON.stringify({
+      asset_registries: {
+        github: {
+          source: 'assets',
+          behavior: 'add',
+          target_path: 'assets',
+          description: 'GitHub Assets',
+        },
+      },
+    })
+
+    const { InMemoryFileSystemService } = await import('@pair/content-ops')
+    const fs = new InMemoryFileSystemService(seed, cwd, cwd)
+
+    const { installCommand } = await import('./commands/install')
+    const result = await installCommand(fs, ['--url', datasetPath], { useDefaults: true })
+
+    expect(result).toBeDefined()
+  })
+})
