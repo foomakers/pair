@@ -67,6 +67,15 @@ if (DIAG) {
   }
 }
 
+function isLocalPath(str: string): boolean {
+  return (
+    str.startsWith('/') ||
+    str.startsWith('./') ||
+    str.startsWith('../') ||
+    (str.length > 1 && str[1] === ':')
+  )
+}
+
 function hasLocalDataset(fsService: FileSystemService): boolean {
   try {
     const datasetPath = getKnowledgeHubDatasetPath(fsService)
@@ -87,19 +96,37 @@ function validateAndLogCustomUrl(customUrl: string): void {
   }
 }
 
+function shouldSkipKBDownload(
+  skipKB?: boolean,
+  fsService?: FileSystemService,
+  customUrl?: string,
+): boolean {
+  if (skipKB) {
+    if (DIAG) console.error('[diag] Skipping KB download (--no-kb flag set)')
+    return true
+  }
+
+  if (fsService && hasLocalDataset(fsService)) {
+    if (DIAG) console.error('[diag] Using local dataset')
+    return true
+  }
+
+  // If customUrl is a local path, skip KB download - ensureKBAvailable will handle it
+  if (customUrl && isLocalPath(customUrl)) {
+    if (DIAG) console.error(`[diag] Using local path: ${customUrl}`)
+    return true
+  }
+
+  return false
+}
+
 async function ensureKBAvailableOnStartup(
   fsService: FileSystemService,
   version: string,
   customUrl?: string,
   skipKB?: boolean,
 ): Promise<void> {
-  if (skipKB) {
-    if (DIAG) console.error('[diag] Skipping KB download (--no-kb flag set)')
-    return
-  }
-
-  if (hasLocalDataset(fsService)) {
-    if (DIAG) console.error('[diag] Using local dataset')
+  if (shouldSkipKBDownload(skipKB, fsService, customUrl)) {
     return
   }
 
@@ -123,7 +150,16 @@ async function ensureKBAvailableOnStartup(
   }
 }
 
-export function checkKnowledgeHubDatasetAccessible(fsService: FileSystemService): void {
+export function checkKnowledgeHubDatasetAccessible(
+  fsService: FileSystemService,
+  customUrl?: string,
+): void {
+  // If customUrl is a local path, skip the standard dataset check
+  // ensureKBAvailableOnStartup already validated it exists
+  if (customUrl && isLocalPath(customUrl)) {
+    return
+  }
+
   try {
     const datasetPath = getKnowledgeHubDatasetPath(fsService)
     if (!fsService.existsSync(datasetPath)) {
@@ -157,12 +193,8 @@ function registerInstallCommand(prog: typeof program): void {
       '--link-style <style>',
       'Link style: relative, absolute, or auto (default: relative for install)',
     )
-    .option(
-      '--url <url>',
-      'URL or path to KB source (remote URL, local ZIP file, or local directory)',
-    )
-    .action((targetArg: unknown, cmdOptions: unknown) => {
-      return handleInstallCommand(targetArg, cmdOptions, fsService).then(() => undefined)
+    .action((targetArg: unknown, options: unknown) => {
+      return handleInstallCommand(targetArg, options, fsService).then(() => undefined)
     })
 }
 
@@ -179,10 +211,6 @@ function registerUpdateCommand(prog: typeof program): void {
     )
     .option('--persist-backup', 'Keep backup files after successful update')
     .option('--auto-rollback', 'Automatically restore from backup on error (default: true)', true)
-    .option(
-      '--url <url>',
-      'URL or path to KB source (remote URL, local ZIP file, or local directory)',
-    )
     .action(async (targetArg, cmdOptions) => {
       const merged = { ...(cmdOptions as Record<string, unknown>), positionalTarget: targetArg }
       await handleUpdateCommand(merged, fsService)
@@ -302,9 +330,9 @@ export async function main() {
   // Ensure KB is available before running commands
   await ensureKBAvailableOnStartup(fileSystemService, pkg.version, options.url, !options.kb)
 
-  // Skip dataset check if --no-kb is set
+  // Skip dataset check if --no-kb is set or if custom URL is a local path
   if (options.kb !== false) {
-    checkKnowledgeHubDatasetAccessible(fileSystemService)
+    checkKnowledgeHubDatasetAccessible(fileSystemService, options.url)
   }
 }
 
@@ -354,9 +382,10 @@ function buildInstallOptions(
 
   // Handle --url option
   if (parsedRec?.['url']) {
-    argsToPass.push('--source', String(parsedRec['url']))
+    const urlStr = String(parsedRec['url'])
+    const resolvedUrl = resolveBaseTarget(fsService, urlStr)
+    argsToPass.push('--source', resolvedUrl || urlStr)
   }
-
   return { argsToPass, opts }
 }
 
@@ -585,28 +614,6 @@ function validateUpdateConfigAndGetRoot(
     throw new Error('Unable to determine dataset root path')
   }
 }
-
-program
-  .command('update')
-  .description('Update documentation and assets')
-  .argument('[target]', 'Target folder (omit to use defaults from config)')
-  .option('-c, --config <file>', 'Path to config file (if provided, uses this config)')
-  .option('--list-targets', 'List available target folders and their descriptions')
-  .option(
-    '--link-style <style>',
-    'Link style: relative, absolute, or auto (default: auto-detect for update)',
-  )
-  .option('--persist-backup', 'Keep backup files after successful update')
-  .option('--auto-rollback', 'Automatically restore from backup on error (default: true)', true)
-  .option(
-    '--url <url>',
-    'URL or path to KB source (remote URL, local ZIP file, or local directory)',
-  )
-  .action(async (targetArg, cmdOptions) => {
-    // Preserve backward compatibility for tests that call handleUpdateCommand({}, fs)
-    const merged = { ...(cmdOptions as Record<string, unknown>), positionalTarget: targetArg }
-    await handleUpdateCommand(merged, fsService)
-  })
 
 /**
  * Display update-link command results
