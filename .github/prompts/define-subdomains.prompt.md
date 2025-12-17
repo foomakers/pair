@@ -1,7 +1,7 @@
 ---
 description: Define business subdomains to organize and structure the product domain model
 agent: product-manager
-tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*']
+tools: ['edit/editFiles', 'search/codebase', 'search', 'vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'github/*']
 ---
 
 # Define Subdomains

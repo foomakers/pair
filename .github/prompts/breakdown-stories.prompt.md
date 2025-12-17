@@ -1,7 +1,7 @@
 ---
 description: Breakdown epics into detailed user stories with clear acceptance criteria
 agent: product-engineer
-tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*']
+tools: ['edit/editFiles', 'search/codebase', 'search', 'vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'github/*']
 ---
 
 # Breakdown Stories

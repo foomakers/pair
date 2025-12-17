@@ -1,7 +1,7 @@
 ---
 description: Implement a specific task by following technical guidelines and producing working, tested code
 agent: product-engineer
-tools:[ 'edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*',
+tools:[ 'edit/editFiles', 'search/codebase', 'search', 'vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'github/*',
     'edit/editFiles',
     'search/codebase',
     'search',

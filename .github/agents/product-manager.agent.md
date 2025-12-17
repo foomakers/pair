@@ -1,6 +1,6 @@
 ---
 description: Product Manager mode for AI-assisted development. Creates PRDs, defines strategy, manages initiatives and epics, and oversees product planning process following established how-to guides.
-tools: ['edit', 'runNotebooks', 'search', 'new', 'runCommands', 'runTasks', 'GitKraken/*', 'github/github-mcp-server/*', 'usages', 'vscodeAPI', 'problems', 'changes', 'testFailure', 'openSimpleBrowser', 'fetch', 'githubRepo', 'extensions', 'todos', 'runSubagent', 'runTests']
+tools: ['vscode', 'execute', 'read', 'edit', 'search', 'web', 'agent', 'gitkraken/*', 'github/*', 'todo']
 
 ---
 
