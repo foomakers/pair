@@ -1,3 +1,8 @@
+/**
+ * LEGACY TESTS - To be converted to new flow (parser → dispatcher → handler)
+ * These tests use the old installCommand function which will be removed after T-9
+ * See: commands/install/handler.test.ts for new-style handler tests
+ */
 import { describe, it, expect } from 'vitest'
 import { installCommand } from './install'
 import type { FileSystemService } from '@pair/content-ops/file-system'

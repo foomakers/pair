@@ -1,3 +1,8 @@
+/**
+ * LEGACY TESTS - To be converted to new flow (parser → dispatcher → handler)
+ * These tests use the old updateCommand function which will be removed after T-9
+ * See: commands/update/handler.test.ts for new-style handler tests
+ */
 import { describe, it, expect } from 'vitest'
 import * as updateCmd from './update'
 import type { LogEntry } from './command-utils'
