@@ -6,9 +6,13 @@ import chalk from 'chalk'
 
 import { updateCommand } from './commands/update'
 import { installCommand } from './commands/install'
-import { updateLinkCommand } from './commands/update-link'
 import { packageCommand } from './commands/package'
 import { parseInstallUpdateArgs } from './commands/command-utils'
+import { parseInstallCommand } from './commands/install/parser'
+import { parseUpdateCommand } from './commands/update/parser'
+import { parseUpdateLinkCommand } from './commands/update-link/parser'
+import { parseValidateConfigCommand } from './commands/validate-config/parser'
+import { dispatchCommand } from './commands/dispatcher'
 import {
   fileSystemService,
   FileSystemService,
@@ -19,7 +23,6 @@ import {
   SourceType,
 } from '@pair/content-ops'
 import {
-  validateConfig,
   getKnowledgeHubDatasetPath,
   getKnowledgeHubDatasetPathWithFallback,
   loadConfigWithOverrides,
@@ -205,8 +208,17 @@ Usage Notes:
   • --offline requires explicit local --source path
 `,
     )
-    .action((targetArg: unknown, options: unknown) => {
-      return handleInstallCommand(targetArg, options, fsService).then(() => undefined)
+    .action(async (_targetArg: unknown, options: unknown) => {
+      try {
+        const parsedOptions = options as Record<string, unknown>
+        const config = parseInstallCommand(parsedOptions)
+        await dispatchCommand(config)
+      } catch (err) {
+        console.error(
+          chalk.red(`Install failed: ${err instanceof Error ? err.message : String(err)}`),
+        )
+        process.exitCode = 1
+      }
     })
 }
 
@@ -245,9 +257,17 @@ Usage Notes:
   • Creates automatic backup before update
 `,
     )
-    .action(async (targetArg, cmdOptions) => {
-      const merged = { ...(cmdOptions as Record<string, unknown>), positionalTarget: targetArg }
-      await handleUpdateCommand(merged, fsService)
+    .action(async (_targetArg, cmdOptions) => {
+      try {
+        const parsedOptions = cmdOptions as Record<string, unknown>
+        const config = parseUpdateCommand(parsedOptions)
+        await dispatchCommand(config)
+      } catch (err) {
+        console.error(
+          chalk.red(`Update failed: ${err instanceof Error ? err.message : String(err)}`),
+        )
+        process.exitCode = 1
+      }
     })
 }
 
@@ -279,18 +299,13 @@ See also: docs/getting-started/05-cli-update-link.md
     )
     .action(async cmdOptions => {
       try {
-        const args: string[] = []
-        const opts = cmdOptions as Record<string, unknown>
-
-        if (opts['relative']) args.push('--relative')
-        if (opts['absolute']) args.push('--absolute')
-        if (opts['dryRun']) args.push('--dry-run')
-        if (opts['verbose']) args.push('--verbose')
-
-        const result = await updateLinkCommand(fsService, args, { minLogLevel: MIN_LOG_LEVEL })
-        displayUpdateLinkResults(result)
+        const parsedOptions = cmdOptions as Record<string, unknown>
+        const config = parseUpdateLinkCommand(parsedOptions)
+        await dispatchCommand(config)
       } catch (err) {
-        console.error(chalk.red(`Failed to update links: ${String(err)}`))
+        console.error(
+          chalk.red(`Failed to update links: ${err instanceof Error ? err.message : String(err)}`),
+        )
         process.exitCode = 1
       }
     })
@@ -315,27 +330,17 @@ Usage Notes:
   • Displays detailed error messages for failed validations
 `,
     )
-    .action(async () => {
+    .action(async cmdOptions => {
       try {
-        const { config } = loadConfigWithOverrides(fileSystemService)
-        const validation = validateConfig(config)
-
-        if (validation.valid) {
-          console.log(chalk.green('✅ Configuration is valid!'))
-          console.log(
-            chalk.gray(
-              `Found ${Object.keys(config.asset_registries || {}).length} asset registries`,
-            ),
-          )
-        } else {
-          console.log(chalk.red('❌ Configuration has errors:'))
-          validation.errors.forEach((error: string) => {
-            console.log(chalk.red(`  • ${error}`))
-          })
-          process.exitCode = 1
-        }
+        const parsedOptions = cmdOptions as Record<string, unknown>
+        const config = parseValidateConfigCommand(parsedOptions)
+        await dispatchCommand(config)
       } catch (err) {
-        console.error(chalk.red(`Failed to validate config: ${String(err)}`))
+        console.error(
+          chalk.red(
+            `Config validation failed: ${err instanceof Error ? err.message : String(err)}`,
+          ),
+        )
         process.exitCode = 1
       }
     })
@@ -661,33 +666,5 @@ function validateUpdateConfigAndGetRoot(
     console.error(chalk.red('Unable to determine dataset root path'))
     process.exitCode = 1
     throw new Error('Unable to determine dataset root path')
-  }
-}
-
-/**
- * Display update-link command results
- */
-function displayUpdateLinkResults(result: Awaited<ReturnType<typeof updateLinkCommand>>): void {
-  if (result.success) {
-    console.log(chalk.green(`✅ ${result.message}`))
-    if (result.stats) {
-      console.log(chalk.blue('\n📊 Summary:'))
-      console.log(chalk.gray(`  • Path mode: ${result.pathMode || 'relative'}`))
-      if (result.dryRun) {
-        console.log(chalk.yellow(`  • Mode: DRY RUN (no files modified)`))
-      }
-      console.log(chalk.gray(`  • Total links processed: ${result.stats.totalLinks}`))
-      console.log(chalk.gray(`  • Files modified: ${result.stats.filesModified}`))
-
-      if (result.stats.linksByCategory && Object.keys(result.stats.linksByCategory).length > 0) {
-        console.log(chalk.blue('\n🔗 Links by transformation:'))
-        for (const [category, count] of Object.entries(result.stats.linksByCategory)) {
-          console.log(chalk.gray(`  • ${category}: ${count}`))
-        }
-      }
-    }
-  } else {
-    console.error(chalk.red(`❌ ${result.message}`))
-    process.exitCode = 1
   }
 }
