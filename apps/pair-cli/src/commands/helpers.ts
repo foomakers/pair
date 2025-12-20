@@ -1,4 +1,4 @@
-import { detectSourceType, SourceType } from '@pair/content-ops'
+import { detectSourceType, SourceType, type FileSystemService } from '@pair/content-ops'
 
 interface CommandOptions {
   source?: string
@@ -26,4 +26,21 @@ export function validateCommandOptions(_command: string, options: CommandOptions
       throw new Error('Cannot use --offline with remote URL source')
     }
   }
+}
+
+/**
+ * Check if current execution is within the pair monorepo
+ */
+export function isInPairMonorepo(fsService: FileSystemService): boolean {
+  const cwd = fsService.currentWorkingDirectory()
+  const knowledgeHubPackageJson = fsService.resolve(cwd, 'packages/knowledge-hub/package.json')
+  return fsService.existsSync(knowledgeHubPackageJson)
+}
+
+/**
+ * Get knowledge hub dataset path (only valid in monorepo context)
+ */
+export function getKnowledgeHubDatasetPath(fsService: FileSystemService): string {
+  const moduleDir = fsService.rootModuleDirectory()
+  return fsService.resolve(moduleDir, '../knowledge-hub/dataset')
 }
