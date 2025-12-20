@@ -374,7 +374,32 @@ packages/
 
 ### Architecture Notes
 
-- Uses Commander.js for CLI parsing
+**Command Flow (Parser → Dispatcher → Handler)**:
+
+```
+CLI Options → Parser → CommandConfig → Dispatcher → Handler → Actions
+```
+
+1. **Parser**: Validates and transforms CLI options into typed `CommandConfig`
+2. **Dispatcher**: Routes `CommandConfig` to appropriate handler (type-safe switch)
+3. **Handler**: Orchestrates command execution logic
+4. **Actions**: Performs actual file operations
+
+**Adding New Commands**:
+
+1. Create `commands/<command-name>/` folder
+2. Add `parser.ts` with `parse<Command>Command()` and types
+3. Add `handler.ts` with `handle<Command>Command()`  
+4. Add `metadata.ts` with Commander.js help text
+5. Register in `commands/index.ts` commandRegistry
+6. Tests auto-discovered, metadata drives CLI setup
+
+**Key Design Principles**:
+
+- **Type Safety**: Discriminated unions for CommandConfig prevent runtime errors
+- **Single Source of Truth**: commandRegistry centralizes parse/handle/metadata
+- **Testability**: In-memory FileSystemService, pure parser functions
+- **DRY**: Metadata-driven CLI setup eliminates duplication
 - Abstract FileSystemService enables testing with in-memory filesystem
 - Structured logging with LogEntry objects
 - TypeScript throughout for type safety

@@ -18,7 +18,7 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
 
       expect(config.command).toBe('install')
       expect(config.resolution).toBe('remote')
-      
+
       await expect(dispatchCommand(config)).resolves.toBeUndefined()
     })
 
@@ -28,14 +28,14 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
 
       expect(config.command).toBe('install')
       expect(config.resolution).toBe('local')
-      
+
       await expect(dispatchCommand(config)).resolves.toBeUndefined()
     })
 
     it('should parse offline mode with local source', () => {
-      const config = parseInstallCommand({ 
+      const config = parseInstallCommand({
         source: '/local/path',
-        offline: true 
+        offline: true,
       })
       expect(config.offline).toBe(true)
       expect(config.resolution).toBe('local')
@@ -49,7 +49,7 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
 
       expect(config.command).toBe('update')
       expect(config.resolution).toBe('remote')
-      
+
       await expect(dispatchCommand(config)).resolves.toBeUndefined()
     })
 
@@ -59,14 +59,14 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
 
       expect(config.command).toBe('update')
       expect(config.resolution).toBe('local')
-      
+
       await expect(dispatchCommand(config)).resolves.toBeUndefined()
     })
 
     it('should parse offline mode with local source', () => {
-      const config = parseUpdateCommand({ 
+      const config = parseUpdateCommand({
         source: './local/kb',
-        offline: true 
+        offline: true,
       })
       expect(config.offline).toBe(true)
       expect(config.resolution).toBe('local')
@@ -78,7 +78,7 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
       const config = parseUpdateLinkCommand({})
 
       expect(config.command).toBe('update-link')
-      
+
       await expect(dispatchCommand(config)).resolves.toBeUndefined()
     })
 
@@ -88,9 +88,9 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
     })
 
     it('should parse verbose and dryRun flags', () => {
-      const config = parseUpdateLinkCommand({ 
+      const config = parseUpdateLinkCommand({
         verbose: true,
-        dryRun: true 
+        dryRun: true,
       })
       expect(config.verbose).toBe(true)
       expect(config.dryRun).toBe(true)
@@ -102,7 +102,7 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
       const config = parseValidateConfigCommand({})
 
       expect(config.command).toBe('validate-config')
-      
+
       await expect(dispatchCommand(config)).resolves.toBeUndefined()
     })
 
@@ -114,12 +114,12 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
 
   describe('Package command', () => {
     it('should parse and dispatch package command', async () => {
-      const config = parsePackageCommand({ 
-        sourceDir: '/source/path' 
+      const config = parsePackageCommand({
+        sourceDir: '/source/path',
       })
 
       expect(config.command).toBe('package')
-      
+
       await expect(dispatchCommand(config)).resolves.toBeUndefined()
     })
 
@@ -144,10 +144,10 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
     it('should parse verbose flag with default false', () => {
       const config1 = parsePackageCommand({ sourceDir: '/src' })
       expect(config1.verbose).toBe(false)
-      
-      const config2 = parsePackageCommand({ 
+
+      const config2 = parsePackageCommand({
         sourceDir: '/src',
-        verbose: true 
+        verbose: true,
       })
       expect(config2.verbose).toBe(true)
     })
