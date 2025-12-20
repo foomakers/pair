@@ -213,13 +213,13 @@ pair update-link --dry-run
 # Output:
 # 🔍 Scanning .pair for markdown files...
 # 📝 DRY RUN - No files will be modified
-# 
+#
 # Would fix:
 #   .pair/tech/architecture.md
 #     - ../old-path/doc.md → ../knowledge-base/doc.md
 #   .pair/how-to/guide.md
 #     - ./missing.md → ./guides/missing.md
-# 
+#
 # ✅ 2 links would be fixed
 ```
 

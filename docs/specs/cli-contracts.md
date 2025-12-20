@@ -132,14 +132,14 @@ interface ValidateConfigConstraints {
 
 ### Error Categories
 
-| Category | Exit Code | Description |
-|----------|-----------|-------------|
-| **Option Validation** | 1 | Invalid option combination or missing required option |
-| **File System** | 1 | Path not found, permission denied, not writable |
-| **Network** | 2 | Download failure, connection timeout, DNS error |
-| **Checksum** | 2 | SHA256 validation failure |
-| **Configuration** | 1 | Invalid config.json structure or values |
-| **KB Structure** | 1 | Invalid KB directory structure |
+| Category              | Exit Code | Description                                           |
+| --------------------- | --------- | ----------------------------------------------------- |
+| **Option Validation** | 1         | Invalid option combination or missing required option |
+| **File System**       | 1         | Path not found, permission denied, not writable       |
+| **Network**           | 2         | Download failure, connection timeout, DNS error       |
+| **Checksum**          | 2         | SHA256 validation failure                             |
+| **Configuration**     | 1         | Invalid config.json structure or values               |
+| **KB Structure**      | 1         | Invalid KB directory structure                        |
 
 ### Option Validation Errors
 
@@ -322,10 +322,7 @@ function validateInstallUpdateOptions(options: InstallOptions | UpdateOptions): 
   const offline = options.kb === false
 
   if (offline && !options.source) {
-    throw new ValidationError(
-      'V002',
-      '--offline requires --source with local filesystem path',
-    )
+    throw new ValidationError('V002', '--offline requires --source with local filesystem path')
   }
 
   if (offline && options.source && isUrl(options.source)) {
@@ -355,10 +352,7 @@ function validatePackageOptions(options: PackageOptions): void {
   if (options.sourceDir) {
     const resolved = path.resolve(options.sourceDir)
     if (!fs.existsSync(resolved)) {
-      throw new ValidationError(
-        'FS001',
-        `Source directory not found: ${options.sourceDir}`,
-      )
+      throw new ValidationError('FS001', `Source directory not found: ${options.sourceDir}`)
     }
   }
 
@@ -366,16 +360,10 @@ function validatePackageOptions(options: PackageOptions): void {
   if (options.output) {
     const outputDir = path.dirname(path.resolve(options.output))
     if (!fs.existsSync(outputDir)) {
-      throw new ValidationError(
-        'FS001',
-        `Output directory does not exist: ${outputDir}`,
-      )
+      throw new ValidationError('FS001', `Output directory does not exist: ${outputDir}`)
     }
     if (!isWritable(outputDir)) {
-      throw new ValidationError(
-        'FS003',
-        `Output directory is not writable: ${outputDir}`,
-      )
+      throw new ValidationError('FS003', `Output directory is not writable: ${outputDir}`)
     }
   }
 
@@ -424,7 +412,9 @@ function validateConfig(config: Config): ConfigValidationResult {
     const validBehaviors = ['mirror', 'add', 'overwrite', 'skip']
     if (registry.behavior && !validBehaviors.includes(registry.behavior)) {
       errors.push(
-        `Asset registry '${name}': invalid behavior '${registry.behavior}' (must be: ${validBehaviors.join(', ')})`,
+        `Asset registry '${name}': invalid behavior '${
+          registry.behavior
+        }' (must be: ${validBehaviors.join(', ')})`,
       )
     }
 
@@ -454,12 +444,12 @@ function validateConfig(config: Config): ConfigValidationResult {
 
 All commands follow this exit code contract:
 
-| Code | Meaning | Examples |
-|------|---------|----------|
-| `0` | Success | Command completed successfully |
-| `1` | Validation Error | Invalid options, config errors, KB structure errors, path not found |
-| `2` | Download/Network Error | Network timeout, checksum mismatch, HTTP errors |
-| `3` | File System Error | Disk full, permission denied (during operation, not validation) |
+| Code | Meaning                | Examples                                                            |
+| ---- | ---------------------- | ------------------------------------------------------------------- |
+| `0`  | Success                | Command completed successfully                                      |
+| `1`  | Validation Error       | Invalid options, config errors, KB structure errors, path not found |
+| `2`  | Download/Network Error | Network timeout, checksum mismatch, HTTP errors                     |
+| `3`  | File System Error      | Disk full, permission denied (during operation, not validation)     |
 
 ### Per-Command Exit Codes
 
@@ -521,36 +511,36 @@ enum ValidateConfigExitCode {
 
 ### Install/Update Option Validation Matrix
 
-| `--source` | `--offline` | Monorepo | Expected Result | Exit Code | Error Code |
-|------------|-------------|----------|-----------------|-----------|------------|
-| - | - | ✅ | Use monorepo dataset | 0 | - |
-| - | - | ❌ | Auto-download | 0 or 2 | - |
-| `https://...` | - | - | Download from URL | 0 or 2 | - |
-| `./local` | - | - | Use local path | 0 or 1 | FS001 if not found |
-| `./local` | ✅ | - | Use local (offline) | 0 or 1 | FS001 if not found |
-| - | ✅ | - | ERROR | 1 | V002 |
-| `https://...` | ✅ | - | ERROR | 1 | V003 |
-| `/missing` | - | - | ERROR | 1 | FS001 |
+| `--source`    | `--offline` | Monorepo | Expected Result      | Exit Code | Error Code         |
+| ------------- | ----------- | -------- | -------------------- | --------- | ------------------ |
+| -             | -           | ✅       | Use monorepo dataset | 0         | -                  |
+| -             | -           | ❌       | Auto-download        | 0 or 2    | -                  |
+| `https://...` | -           | -        | Download from URL    | 0 or 2    | -                  |
+| `./local`     | -           | -        | Use local path       | 0 or 1    | FS001 if not found |
+| `./local`     | ✅          | -        | Use local (offline)  | 0 or 1    | FS001 if not found |
+| -             | ✅          | -        | ERROR                | 1         | V002               |
+| `https://...` | ✅          | -        | ERROR                | 1         | V003               |
+| `/missing`    | -           | -        | ERROR                | 1         | FS001              |
 
 ### Package Option Validation Matrix
 
-| `--source-dir` | `--output` | KB Structure | Expected Result | Exit Code | Error Code |
-|----------------|------------|--------------|-----------------|-----------|------------|
-| - | - | ✅ | Package cwd | 0 | - |
-| `./kb` | - | ✅ | Package ./kb | 0 | - |
-| - | `dist/kb.zip` | ✅ | Package to dist/ | 0 | - |
-| `./missing` | - | - | ERROR | 1 | FS001 |
-| - | `/readonly/kb.zip` | - | ERROR | 1 | FS003 |
-| `./no-pair` | - | ❌ | ERROR | 1 | KB001 |
+| `--source-dir` | `--output`         | KB Structure | Expected Result  | Exit Code | Error Code |
+| -------------- | ------------------ | ------------ | ---------------- | --------- | ---------- |
+| -              | -                  | ✅           | Package cwd      | 0         | -          |
+| `./kb`         | -                  | ✅           | Package ./kb     | 0         | -          |
+| -              | `dist/kb.zip`      | ✅           | Package to dist/ | 0         | -          |
+| `./missing`    | -                  | -            | ERROR            | 1         | FS001      |
+| -              | `/readonly/kb.zip` | -            | ERROR            | 1         | FS003      |
+| `./no-pair`    | -                  | ❌           | ERROR            | 1         | KB001      |
 
 ### Validate-Config Matrix
 
-| Config File | JSON Valid | Structure Valid | Expected Result | Exit Code |
-|-------------|------------|-----------------|-----------------|-----------|
-| `config.json` | ✅ | ✅ | Success | 0 |
-| `config.json` | ✅ | ❌ | Validation errors | 1 |
-| `config.json` | ❌ | - | Parse error | 1 |
-| `missing.json` | - | - | File not found | 1 |
+| Config File    | JSON Valid | Structure Valid | Expected Result   | Exit Code |
+| -------------- | ---------- | --------------- | ----------------- | --------- |
+| `config.json`  | ✅         | ✅              | Success           | 0         |
+| `config.json`  | ✅         | ❌              | Validation errors | 1         |
+| `config.json`  | ❌         | -               | Parse error       | 1         |
+| `missing.json` | -          | -               | File not found    | 1         |
 
 ---
 
@@ -608,10 +598,7 @@ type KBStructureErrorCode =
 type ErrorCode = ValidationErrorCode | FileSystemErrorCode | KBStructureErrorCode
 
 class ValidationError extends Error {
-  constructor(
-    public code: ErrorCode,
-    message: string,
-  ) {
+  constructor(public code: ErrorCode, message: string) {
     super(message)
     this.name = 'ValidationError'
   }

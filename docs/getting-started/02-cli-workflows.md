@@ -1,6 +1,11 @@
 # CLI Workflows and Common Use Cases
 
-This guide covers common pair-cli workflows and commands for managing documentation and configuration assets.
+This guide covers common pair-cli workflows for managing documentation and configuration assets.
+
+**📚 For complete command documentation with all options, see:**
+
+- **[CLI Commands Reference](../cli/commands.md)** - Full command syntax and options
+- **[CLI Help Examples](../cli/help-examples.md)** - 20+ copy-paste ready examples
 
 ## Common Workflows
 
@@ -66,95 +71,46 @@ pair-cli update-link --dry-run
 
 # Update all links to relative paths (default)
 pair-cli update-link
-
-# Convert to absolute paths
-pair-cli update-link --absolute
-
-# Detailed logging for troubleshooting
-pair-cli update-link --verbose
 ```
 
 **Common Scenarios:**
 
 - **After project restructure**: `pair-cli update-link` to fix broken links
-- **After moving project**: `pair-cli update-link --absolute` for portability
 - **Link health check**: `pair-cli update-link --dry-run --verbose` to inspect
 
 See [Link Update Guide](./05-cli-update-link.md) for comprehensive documentation.
 
-## Command Reference
+---
 
-### Install Command
+## Quick Command Reference
 
-```bash
-pair-cli install [target] [path]
-```
+For complete documentation, see [CLI Commands Reference](../cli/commands.md).
 
-**Examples:**
+### Most Common Commands
 
 ```bash
-# Install all targets to default paths
-pair-cli install
+# Install all assets with defaults
+pair install
 
-# Install specific target
-pair-cli install knowledge
+# Update existing assets
+pair update
 
-# Install to custom path
-pair-cli install knowledge ./docs/
+# Validate and fix KB links
+pair update-link
 
-# List available targets
-pair-cli install --list-targets
+# List available registries
+pair install --list-targets
+
+# Validate configuration
+pair validate-config
+
+# Get help for any command
+pair <command> --help
 ```
 
-### Update Command
+For 20+ complete examples, see [CLI Help Examples](../cli/help-examples.md).
 
-```bash
-pair-cli update [target]
-```
-
-**Examples:**
-
-```bash
-# Update all installed assets
-pair-cli update
-
-# Update specific asset type
-pair-cli update github
-```
-
-### Update-Link Command
-
-```bash
-pair-cli update-link [options]
-```
-
-**Examples:**
-
-```bash
-# Update all KB links to relative paths (default)
-pair-cli update-link
-
-# Preview changes first
-pair-cli update-link --dry-run
-
-# Convert to absolute paths
-pair-cli update-link --absolute
-
-# Verbose output for debugging
-pair-cli update-link --verbose
-```
-
-See [Link Update Guide](./05-cli-update-link.md) for detailed usage.
-
-### Help and Version
-
-```bash
-# Show help
-pair-cli --help
-
-# Show version
-pair-cli --version
-```
+---
 
 ## Working with Temporary Directories
 

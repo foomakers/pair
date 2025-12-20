@@ -102,10 +102,7 @@ Running from monorepo is detected by:
 ```typescript
 function isMonorepo(): boolean {
   // Check if packages/knowledge-hub/dataset exists
-  const monorepoKbPath = path.resolve(
-    process.cwd(),
-    'packages/knowledge-hub/dataset',
-  )
+  const monorepoKbPath = path.resolve(process.cwd(), 'packages/knowledge-hub/dataset')
   return fs.existsSync(monorepoKbPath)
 }
 ```
@@ -114,14 +111,14 @@ function isMonorepo(): boolean {
 
 ### Constraint: `--offline` + `--source` Combination
 
-| `--source` value | `--offline` | Valid? | Action |
-|------------------|-------------|--------|--------|
-| Not provided | `false` | ✅ | Auto-download or use monorepo |
-| Not provided | `true` | ❌ | ERROR: `--offline requires --source` |
-| HTTP/HTTPS URL | `false` | ✅ | Download from URL |
-| HTTP/HTTPS URL | `true` | ❌ | ERROR: Cannot combine remote URL with `--offline` |
-| Local path | `false` | ✅ | Use local source |
-| Local path | `true` | ✅ | Use local source (offline mode) |
+| `--source` value | `--offline` | Valid? | Action                                            |
+| ---------------- | ----------- | ------ | ------------------------------------------------- |
+| Not provided     | `false`     | ✅     | Auto-download or use monorepo                     |
+| Not provided     | `true`      | ❌     | ERROR: `--offline requires --source`              |
+| HTTP/HTTPS URL   | `false`     | ✅     | Download from URL                                 |
+| HTTP/HTTPS URL   | `true`      | ❌     | ERROR: Cannot combine remote URL with `--offline` |
+| Local path       | `false`     | ✅     | Use local source                                  |
+| Local path       | `true`      | ✅     | Use local source (offline mode)                   |
 
 ### Validation Pseudocode
 
@@ -154,10 +151,7 @@ interface KbSource {
   requiresDownload: boolean
 }
 
-async function resolveKbSource(options: {
-  source?: string
-  offline?: boolean
-}): Promise<KbSource> {
+async function resolveKbSource(options: { source?: string; offline?: boolean }): Promise<KbSource> {
   // Precedence 1: Explicit --source flag
   if (options.source) {
     if (isUrl(options.source)) {
@@ -196,9 +190,7 @@ async function resolveKbSource(options: {
 
   // Precedence 3: GitHub release auto-download
   if (options.offline) {
-    throw new Error(
-      'Cannot auto-download KB in offline mode. Use --source with local path.',
-    )
+    throw new Error('Cannot auto-download KB in offline mode. Use --source with local path.')
   }
 
   return {
@@ -213,12 +205,12 @@ async function resolveKbSource(options: {
 
 ### Exit Codes
 
-| Code | Category | Description |
-|------|----------|-------------|
-| `0` | Success | KB source resolved successfully |
-| `1` | Validation Error | Invalid options or source not found |
-| `2` | Download Error | Network failure or checksum mismatch |
-| `3` | File System Error | Permission denied or disk full |
+| Code | Category          | Description                          |
+| ---- | ----------------- | ------------------------------------ |
+| `0`  | Success           | KB source resolved successfully      |
+| `1`  | Validation Error  | Invalid options or source not found  |
+| `2`  | Download Error    | Network failure or checksum mismatch |
+| `3`  | File System Error | Permission denied or disk full       |
 
 ### Error Scenarios
 
@@ -392,17 +384,17 @@ function getCachedKb(source: KbSource): string | null {
 
 ### Test Matrix
 
-| Scenario | `--source` | `--offline` | Monorepo | Expected Result |
-|----------|------------|-------------|----------|-----------------|
-| Default (monorepo) | - | - | ✅ | Use `packages/knowledge-hub/dataset` |
-| Default (release) | - | - | ❌ | Auto-download from GitHub |
-| Custom URL | `https://...` | - | - | Download from URL |
-| Custom local path | `./kb` | - | - | Use local path |
-| Offline with local | `./kb` | ✅ | - | Use local path (offline) |
-| Offline without source | - | ✅ | - | ERROR: E001 |
-| Offline with URL | `https://...` | ✅ | - | ERROR: E002 |
-| Invalid source | `invalid` | - | - | ERROR: E004 |
-| Missing path | `/missing` | - | - | ERROR: E003 |
+| Scenario               | `--source`    | `--offline` | Monorepo | Expected Result                      |
+| ---------------------- | ------------- | ----------- | -------- | ------------------------------------ |
+| Default (monorepo)     | -             | -           | ✅       | Use `packages/knowledge-hub/dataset` |
+| Default (release)      | -             | -           | ❌       | Auto-download from GitHub            |
+| Custom URL             | `https://...` | -           | -        | Download from URL                    |
+| Custom local path      | `./kb`        | -           | -        | Use local path                       |
+| Offline with local     | `./kb`        | ✅          | -        | Use local path (offline)             |
+| Offline without source | -             | ✅          | -        | ERROR: E001                          |
+| Offline with URL       | `https://...` | ✅          | -        | ERROR: E002                          |
+| Invalid source         | `invalid`     | -           | -        | ERROR: E004                          |
+| Missing path           | `/missing`    | -           | -        | ERROR: E003                          |
 
 ### Unit Test Example
 
@@ -417,9 +409,7 @@ describe('KB Source Resolution', () => {
   })
 
   it('should throw error for --offline without --source', async () => {
-    await expect(
-      resolveKbSource({ offline: true }),
-    ).rejects.toThrow('--offline requires --source')
+    await expect(resolveKbSource({ offline: true })).rejects.toThrow('--offline requires --source')
   })
 
   it('should use monorepo default when available', async () => {
@@ -466,11 +456,11 @@ Same resolution logic applies - both `install` and `update` share the KB source 
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PAIR_KB_CACHE_DIR` | Override KB cache directory | `~/.pair/kb` |
+| Variable              | Description                         | Default               |
+| --------------------- | ----------------------------------- | --------------------- |
+| `PAIR_KB_CACHE_DIR`   | Override KB cache directory         | `~/.pair/kb`          |
 | `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL | GitHub latest release |
-| `PAIR_DIAG` | Enable diagnostic logging | `0` (disabled) |
+| `PAIR_DIAG`           | Enable diagnostic logging           | `0` (disabled)        |
 
 ### Example Configuration
 

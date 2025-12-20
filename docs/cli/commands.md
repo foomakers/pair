@@ -30,12 +30,12 @@ pair install [registry:target ...]
 
 ### Options
 
-| Option | Description |
-|--------|-------------|
-| `--list-targets` | List all available asset registries with descriptions |
-| `--config <file>` | Use custom configuration file (default: `config.json`) |
-| `--source <url\|path>` | KB source URL or local path (overrides auto-download) |
-| `--offline` | Skip KB download, use local source only |
+| Option                 | Description                                            |
+| ---------------------- | ------------------------------------------------------ |
+| `--list-targets`       | List all available asset registries with descriptions  |
+| `--config <file>`      | Use custom configuration file (default: `config.json`) |
+| `--source <url\|path>` | KB source URL or local path (overrides auto-download)  |
+| `--offline`            | Skip KB download, use local source only                |
 
 **KB Source Options:**
 
@@ -115,11 +115,11 @@ pair update [registry:target ...]
 
 ### Options
 
-| Option | Description |
-|--------|-------------|
-| `--config <file>` | Use custom configuration file (default: `config.json`) |
-| `--source <url\|path>` | KB source URL or local path (overrides auto-download) |
-| `--offline` | Skip KB download, use local source only |
+| Option                 | Description                                            |
+| ---------------------- | ------------------------------------------------------ |
+| `--config <file>`      | Use custom configuration file (default: `config.json`) |
+| `--source <url\|path>` | KB source URL or local path (overrides auto-download)  |
+| `--offline`            | Skip KB download, use local source only                |
 
 **KB Source Options:**
 
@@ -190,11 +190,11 @@ pair update-link [target]
 
 ### Options
 
-| Option | Description |
-|--------|-------------|
-| `--url <url\|path>` | KB source URL or local filesystem path |
-| `--dry-run` | Preview changes without writing to files |
-| `--verbose` | Show detailed processing information |
+| Option              | Description                              |
+| ------------------- | ---------------------------------------- |
+| `--url <url\|path>` | KB source URL or local filesystem path   |
+| `--dry-run`         | Preview changes without writing to files |
+| `--verbose`         | Show detailed processing information     |
 
 ### Examples
 
@@ -253,16 +253,16 @@ pair package [options]
 
 ### Options
 
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--output <path>` | `-o` | Output ZIP file path (default: `kb-package.zip`) |
-| `--source-dir <path>` | `-s` | Source directory to package (default: current directory) |
-| `--config <path>` | `-c` | Path to config.json file |
-| `--name <name>` | | Package name for manifest |
-| `--version <version>` | | Package version for manifest |
-| `--description <description>` | | Package description for manifest |
-| `--author <author>` | | Package author for manifest |
-| `--verbose` | `-v` | Enable verbose logging |
+| Option                        | Short | Description                                              |
+| ----------------------------- | ----- | -------------------------------------------------------- |
+| `--output <path>`             | `-o`  | Output ZIP file path (default: `kb-package.zip`)         |
+| `--source-dir <path>`         | `-s`  | Source directory to package (default: current directory) |
+| `--config <path>`             | `-c`  | Path to config.json file                                 |
+| `--name <name>`               |       | Package name for manifest                                |
+| `--version <version>`         |       | Package version for manifest                             |
+| `--description <description>` |       | Package description for manifest                         |
+| `--author <author>`           |       | Package author for manifest                              |
+| `--verbose`                   | `-v`  | Enable verbose logging                                   |
 
 ### Examples
 
@@ -313,7 +313,7 @@ pair package --verbose
 - **Manifest:** Creates `manifest.json` with package metadata and timestamp.
 - **Output structure:** ZIP includes all KB content, assets, and manifest.
 - **Size warnings:** Displays warning if package exceeds 100MB.
-- **Exit codes:** 
+- **Exit codes:**
   - `0` - Success
   - `1` - Validation error
   - `2` - Packaging error
@@ -332,9 +332,9 @@ pair validate-config [options]
 
 ### Options
 
-| Option | Short | Description |
-|--------|-------|-------------|
-| `--config <file>` | `-c` | Path to config.json file to validate (default: `config.json`) |
+| Option            | Short | Description                                                   |
+| ----------------- | ----- | ------------------------------------------------------------- |
+| `--config <file>` | `-c`  | Path to config.json file to validate (default: `config.json`) |
 
 ### Examples
 
@@ -373,10 +373,10 @@ pair validate-config --config ./my-config.json
 
 Options available for all commands:
 
-| Option | Description |
-|--------|-------------|
-| `--help` | Display help for command |
-| `--version` | Display CLI version |
+| Option      | Description              |
+| ----------- | ------------------------ |
+| `--help`    | Display help for command |
+| `--version` | Display CLI version      |
 
 ### Quick Help
 
@@ -394,11 +394,11 @@ pair package --help
 
 Standard exit codes across all commands:
 
-| Code | Meaning |
-|------|---------|
-| `0` | Success |
-| `1` | Validation error or command failure |
-| `2` | Packaging-specific error (package command only) |
+| Code | Meaning                                         |
+| ---- | ----------------------------------------------- |
+| `0`  | Success                                         |
+| `1`  | Validation error or command failure             |
+| `2`  | Packaging-specific error (package command only) |
 
 ---
 
