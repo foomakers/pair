@@ -4,15 +4,12 @@ import { readFileSync } from 'fs'
 import { join, isAbsolute } from 'path'
 import chalk from 'chalk'
 
-import { updateCommand } from './commands/update'
-import { installCommand } from './commands/install'
-import { packageCommand } from './commands/package'
 import { parseInstallUpdateArgs } from './commands/command-utils'
-import { parseInstallCommand } from './commands/install/parser'
-import { parseUpdateCommand } from './commands/update/parser'
-import { parseUpdateLinkCommand } from './commands/update-link/parser'
-import { parseValidateConfigCommand } from './commands/validate-config/parser'
+import { commandRegistry } from './commands'
 import { dispatchCommand } from './commands/dispatcher'
+// Legacy imports for old test functions (TODO: migrate tests to use parser + dispatcher)
+import { installCommand } from './commands/install'
+import { updateCommand } from './commands/update'
 import {
   fileSystemService,
   FileSystemService,
@@ -178,172 +175,50 @@ export function checkKnowledgeHubDatasetAccessible(
   }
 }
 
-function registerInstallCommand(prog: typeof program): void {
-  prog
-    .command('install')
-    .description('Install documentation and assets from Knowledge Base source')
-    .argument('[target]', 'Target folder (omit to use defaults from config)')
-    .option('-c, --config <file>', 'Path to config file')
-    .option('--source <path|url>', 'KB source: URL (http/https), absolute path, or relative path')
-    .option('--offline', 'Prevent network access (requires local --source)')
-    .option('--list-targets', 'List available target folders and descriptions')
-    .option('--link-style <style>', 'Link style: relative, absolute, or auto (default: relative)')
-    .addHelpText(
-      'after',
-      `
+function registerCommandFromMetadata(
+  prog: typeof program,
+  commandName: keyof typeof commandRegistry,
+): void {
+  const cmdConfig = commandRegistry[commandName]
+  const cmd = prog.command(cmdConfig.metadata.name).description(cmdConfig.metadata.description)
+
+  // Add options from metadata
+  for (const opt of cmdConfig.metadata.options) {
+    if (opt.flags.startsWith('[')) {
+      cmd.argument(opt.flags, opt.description)
+    } else {
+      if ('defaultValue' in opt) {
+        cmd.option(opt.flags, opt.description, opt.defaultValue)
+      } else {
+        cmd.option(opt.flags, opt.description)
+      }
+    }
+  }
+
+  // Build help text from metadata
+  const helpText = `
 Examples:
-  $ pair install                                    Install from default source
-  $ pair install --source https://github.com/org/repo/releases/download/v1.0/kb.zip
-                                                    Install from remote URL
-  $ pair install --source /absolute/path/to/kb     Install from local directory
-  $ pair install --source ./relative/path/to/kb    Install from relative directory
-  $ pair install --offline --source /local/kb      Install offline from local source
-  $ pair install --list-targets                    List available asset registries
+${cmdConfig.metadata.examples.map((ex: string) => `  $ ${ex}`).join('\n')}
 
 Usage Notes:
-  • Default source: monorepo uses packages/knowledge-hub/dataset/
-  • Release mode: downloads from GitHub release ZIP
-  • --source accepts: http(s) URLs, absolute paths, relative paths
-  • Relative paths resolved from current working directory
-  • --offline requires explicit local --source path
-`,
-    )
-    .action(async (_targetArg: unknown, options: unknown) => {
-      try {
-        const parsedOptions = options as Record<string, unknown>
-        const config = parseInstallCommand(parsedOptions)
-        await dispatchCommand(config)
-      } catch (err) {
-        console.error(
-          chalk.red(`Install failed: ${err instanceof Error ? err.message : String(err)}`),
-        )
-        process.exitCode = 1
-      }
-    })
-}
+${cmdConfig.metadata.notes.map((note: string) => `  • ${note}`).join('\n')}
+`
+  cmd.addHelpText('after', helpText)
 
-function registerUpdateCommand(prog: typeof program): void {
-  prog
-    .command('update')
-    .description('Update documentation and assets from Knowledge Base source')
-    .argument('[target]', 'Target folder (omit to use defaults from config)')
-    .option('-c, --config <file>', 'Path to config file')
-    .option('--source <path|url>', 'KB source: URL (http/https), absolute path, or relative path')
-    .option('--offline', 'Prevent network access (requires local --source)')
-    .option('--list-targets', 'List available target folders and descriptions')
-    .option(
-      '--link-style <style>',
-      'Link style: relative, absolute, or auto (default: auto-detect)',
-    )
-    .option('--persist-backup', 'Keep backup files after successful update')
-    .option('--auto-rollback', 'Automatically restore from backup on error (default: true)', true)
-    .addHelpText(
-      'after',
-      `
-Examples:
-  $ pair update                                     Update from default source
-  $ pair update --source https://example.com/kb.zip Update from remote URL
-  $ pair update --source /absolute/path/to/kb      Update from local directory
-  $ pair update --source ./relative/kb             Update from relative path
-  $ pair update --offline --source /local/kb       Update offline mode
-  $ pair update --list-targets                     List available targets
-
-Usage Notes:
-  • Default source: monorepo uses packages/knowledge-hub/dataset/
-  • Release mode: downloads from GitHub release ZIP
-  • --source accepts: http(s) URLs, absolute paths, relative paths
-  • Relative paths resolved from current working directory
-  • --offline requires explicit local --source path
-  • Creates automatic backup before update
-`,
-    )
-    .action(async (_targetArg, cmdOptions) => {
-      try {
-        const parsedOptions = cmdOptions as Record<string, unknown>
-        const config = parseUpdateCommand(parsedOptions)
-        await dispatchCommand(config)
-      } catch (err) {
-        console.error(
-          chalk.red(`Update failed: ${err instanceof Error ? err.message : String(err)}`),
-        )
-        process.exitCode = 1
-      }
-    })
-}
-
-function registerUpdateLinkCommand(prog: typeof program): void {
-  prog
-    .command('update-link')
-    .description('Validate and update links in installed Knowledge Base content')
-    .option('--relative', 'Convert all links to relative paths (default)')
-    .option('--absolute', 'Convert all links to absolute paths')
-    .option('--dry-run', 'Show what would be changed without modifying files')
-    .option('--verbose', 'Show detailed processing information')
-    .addHelpText(
-      'after',
-      `
-Examples:
-  $ pair update-link                      Validate and convert links to relative paths
-  $ pair update-link --dry-run            Preview changes without modifying files
-  $ pair update-link --absolute           Convert all links to absolute paths
-  $ pair update-link --verbose            Show detailed processing logs
-
-Usage Notes:
-  • Default behavior converts all links to relative paths
-  • Creates automatic backup before modifications
-  • Skips external URLs and mailto links
-  • Processes all markdown files in .pair/ directory
-
-See also: docs/getting-started/05-cli-update-link.md
-`,
-    )
-    .action(async cmdOptions => {
-      try {
-        const parsedOptions = cmdOptions as Record<string, unknown>
-        const config = parseUpdateLinkCommand(parsedOptions)
-        await dispatchCommand(config)
-      } catch (err) {
-        console.error(
-          chalk.red(`Failed to update links: ${err instanceof Error ? err.message : String(err)}`),
-        )
-        process.exitCode = 1
-      }
-    })
-}
-
-function registerValidateConfigCommand(prog: typeof program): void {
-  prog
-    .command('validate-config')
-    .description('Validate asset registry configuration and KB structure')
-    .option('-c, --config <file>', 'Path to config.json file to validate')
-    .addHelpText(
-      'after',
-      `
-Examples:
-  $ pair validate-config                           Validate default config.json
-  $ pair validate-config --config ./my-config.json Validate custom config file
-
-Usage Notes:
-  • Validates config.json structure and required fields
-  • Checks asset registry definitions for correctness
-  • Returns exit code 0 on success, 1 on validation errors
-  • Displays detailed error messages for failed validations
-`,
-    )
-    .action(async cmdOptions => {
-      try {
-        const parsedOptions = cmdOptions as Record<string, unknown>
-        const config = parseValidateConfigCommand(parsedOptions)
-        await dispatchCommand(config)
-      } catch (err) {
-        console.error(
-          chalk.red(
-            `Config validation failed: ${err instanceof Error ? err.message : String(err)}`,
-          ),
-        )
-        process.exitCode = 1
-      }
-    })
+  cmd.action(async (...args: unknown[]) => {
+    try {
+      const options = args[args.length - 1] as Record<string, unknown>
+      const config = cmdConfig.parse(options)
+      await dispatchCommand(config)
+    } catch (err) {
+      console.error(
+        chalk.red(
+          `${cmdConfig.metadata.name} failed: ${err instanceof Error ? err.message : String(err)}`,
+        ),
+      )
+      process.exitCode = 1
+    }
+  })
 }
 
 function registerDefaultAction(prog: typeof program): void {
@@ -356,11 +231,13 @@ function registerDefaultAction(prog: typeof program): void {
 }
 
 function setupCommands(prog: typeof program): void {
-  registerInstallCommand(prog)
-  registerUpdateCommand(prog)
-  registerUpdateLinkCommand(prog)
-  registerValidateConfigCommand(prog)
-  packageCommand(prog)
+  // Register commands with metadata from registry
+  registerCommandFromMetadata(prog, 'install')
+  registerCommandFromMetadata(prog, 'update')
+  registerCommandFromMetadata(prog, 'update-link')
+  registerCommandFromMetadata(prog, 'package')
+  registerCommandFromMetadata(prog, 'validate-config')
+
   registerDefaultAction(prog)
 }
 
