@@ -1,7 +1,7 @@
 ---
 description: Complete the bootstrap checklist to set up project foundation and structure
 agent: product-manager
-tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*', 'runCommands']
+tools: ['edit/editFiles', 'search/codebase', 'search', 'vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'github/*', 'execute/getTerminalOutput','execute/runInTerminal','read/terminalLastCommand','read/terminalSelection']
 ---
 
 # Complete Bootstrap Checklist

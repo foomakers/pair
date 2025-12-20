@@ -76,9 +76,16 @@ This creates the standard `.pair` and `.github` folders with documentation, work
 
 ## Next Steps
 
-- [Explore CLI Workflows](./02-cli-workflows.md) - Learn common commands and use cases
+### Learning Resources
+
+- **[CLI Commands Reference](../cli/commands.md)** - Complete command documentation with all options
+- **[CLI Help Examples](../cli/help-examples.md)** - Copy-paste ready examples for common workflows
+- [Explore CLI Workflows](./02-cli-workflows.md) - Common use cases and patterns
 - [Troubleshooting](./03-troubleshooting.md) - Common issues and solutions
-- [Adopter Checklist](./04-adopter-checklist.md) - Complete setup validation
+
+### Setup Validation
+
+- [Adopter Checklist](./04-adopter-checklist.md) - Complete setup verification
 
 ## Need Help?
 

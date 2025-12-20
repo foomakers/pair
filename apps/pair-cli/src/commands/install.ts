@@ -644,7 +644,7 @@ export async function installCommand(
 
   const resolvedTarget: string | undefined = options?.baseTarget
     ? options.baseTarget
-    : target ?? undefined
+    : (target ?? undefined)
 
   return await executeInstall(fsService, resolvedTarget, source ?? undefined, options)
 }

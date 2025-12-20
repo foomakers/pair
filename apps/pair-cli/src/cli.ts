@@ -185,13 +185,32 @@ export function checkKnowledgeHubDatasetAccessible(
 function registerInstallCommand(prog: typeof program): void {
   prog
     .command('install')
-    .description('Install documentation and assets')
+    .description('Install documentation and assets from Knowledge Base source')
     .argument('[target]', 'Target folder (omit to use defaults from config)')
-    .option('-c, --config <file>', 'Path to config file (if provided, uses this config)')
-    .option('--list-targets', 'List available target folders and their descriptions')
-    .option(
-      '--link-style <style>',
-      'Link style: relative, absolute, or auto (default: relative for install)',
+    .option('-c, --config <file>', 'Path to config file')
+    .option('--source <path|url>', 'KB source: URL (http/https), absolute path, or relative path')
+    .option('--offline', 'Prevent network access (requires local --source)')
+    .option('--list-targets', 'List available target folders and descriptions')
+    .option('--link-style <style>', 'Link style: relative, absolute, or auto (default: relative)')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  $ pair install                                    Install from default source
+  $ pair install --source https://github.com/org/repo/releases/download/v1.0/kb.zip
+                                                    Install from remote URL
+  $ pair install --source /absolute/path/to/kb     Install from local directory
+  $ pair install --source ./relative/path/to/kb    Install from relative directory
+  $ pair install --offline --source /local/kb      Install offline from local source
+  $ pair install --list-targets                    List available asset registries
+
+Usage Notes:
+  • Default source: monorepo uses packages/knowledge-hub/dataset/
+  • Release mode: downloads from GitHub release ZIP
+  • --source accepts: http(s) URLs, absolute paths, relative paths
+  • Relative paths resolved from current working directory
+  • --offline requires explicit local --source path
+`,
     )
     .action((targetArg: unknown, options: unknown) => {
       return handleInstallCommand(targetArg, options, fsService).then(() => undefined)
@@ -201,16 +220,38 @@ function registerInstallCommand(prog: typeof program): void {
 function registerUpdateCommand(prog: typeof program): void {
   prog
     .command('update')
-    .description('Update documentation and assets')
+    .description('Update documentation and assets from Knowledge Base source')
     .argument('[target]', 'Target folder (omit to use defaults from config)')
-    .option('-c, --config <file>', 'Path to config file (if provided, uses this config)')
-    .option('--list-targets', 'List available target folders and their descriptions')
+    .option('-c, --config <file>', 'Path to config file')
+    .option('--source <path|url>', 'KB source: URL (http/https), absolute path, or relative path')
+    .option('--offline', 'Prevent network access (requires local --source)')
+    .option('--list-targets', 'List available target folders and descriptions')
     .option(
       '--link-style <style>',
-      'Link style: relative, absolute, or auto (default: auto-detect for update)',
+      'Link style: relative, absolute, or auto (default: auto-detect)',
     )
     .option('--persist-backup', 'Keep backup files after successful update')
     .option('--auto-rollback', 'Automatically restore from backup on error (default: true)', true)
+    .addHelpText(
+      'after',
+      `
+Examples:
+  $ pair update                                     Update from default source
+  $ pair update --source https://example.com/kb.zip Update from remote URL
+  $ pair update --source /absolute/path/to/kb      Update from local directory
+  $ pair update --source ./relative/kb             Update from relative path
+  $ pair update --offline --source /local/kb       Update offline mode
+  $ pair update --list-targets                     List available targets
+
+Usage Notes:
+  • Default source: monorepo uses packages/knowledge-hub/dataset/
+  • Release mode: downloads from GitHub release ZIP
+  • --source accepts: http(s) URLs, absolute paths, relative paths
+  • Relative paths resolved from current working directory
+  • --offline requires explicit local --source path
+  • Creates automatic backup before update
+`,
+    )
     .action(async (targetArg, cmdOptions) => {
       const merged = { ...(cmdOptions as Record<string, unknown>), positionalTarget: targetArg }
       await handleUpdateCommand(merged, fsService)
@@ -265,7 +306,22 @@ See also: docs/getting-started/05-cli-update-link.md
 function registerValidateConfigCommand(prog: typeof program): void {
   prog
     .command('validate-config')
-    .description('Validate the asset registry configuration')
+    .description('Validate asset registry configuration and KB structure')
+    .option('-c, --config <file>', 'Path to config.json file to validate')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  $ pair validate-config                           Validate default config.json
+  $ pair validate-config --config ./my-config.json Validate custom config file
+
+Usage Notes:
+  • Validates config.json structure and required fields
+  • Checks asset registry definitions for correctness
+  • Returns exit code 0 on success, 1 on validation errors
+  • Displays detailed error messages for failed validations
+`,
+    )
     .action(async () => {
       try {
         const { config } = loadConfigWithOverrides(fileSystemService)

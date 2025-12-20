@@ -1,7 +1,7 @@
 ---
 description: Complete the bootstrap checklist to set up project foundation and structure
 agent: staff-engineer
-tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*', 'runCommands']
+tools: ['edit/editFiles', 'search/codebase', 'search', 'vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'github/*', 'runCommands']
 ---
 
 # Complete Bootstrap Checklist

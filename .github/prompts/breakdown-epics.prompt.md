@@ -1,7 +1,7 @@
 ---
 description: Breakdown strategic initiatives into comprehensive epics for iterative development
 agent: product-manager
-tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*']
+tools: ['edit/editFiles', 'search/codebase', 'search', 'vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'github/*']
 ---
 
 # Breakdown Epics

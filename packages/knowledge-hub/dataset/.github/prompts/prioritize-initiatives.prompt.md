@@ -1,7 +1,7 @@
 ---
 description: Create and prioritize strategic initiatives based on PRD and business objectives
 agent: product-manager
-tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*']
+tools: ['edit/editFiles', 'search/codebase', 'search', 'vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'github/*']
 ---
 
 # Create Prioritize Initiatives

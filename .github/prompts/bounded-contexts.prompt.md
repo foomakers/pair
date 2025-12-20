@@ -1,7 +1,7 @@
 ---
 description: Define bounded contexts to establish technical architecture boundaries based on business subdomains
 agent: staff-engineer
-tools: ['edit/editFiles', 'search/codebase', 'search', 'new', 'github/github-mcp-server/*']
+tools: ['edit/editFiles', 'search/codebase', 'search', 'vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'github/*']
 ---
 
 # Define Bounded Contexts

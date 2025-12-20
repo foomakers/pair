@@ -1,7 +1,7 @@
 ---
 description: Perform comprehensive code review following quality guidelines and best practices
 agent: staff-engineer
-tools: ['search/codebase', 'edit/editFiles', 'search', 'problems', 'changes', 'runTests', 'github/github-mcp-server/*']
+tools: ['search/codebase', 'edit/editFiles', 'search', 'read/problems', 'search/changes', 'execute/runTests', 'github/*']
 ---
 
 # Code Review

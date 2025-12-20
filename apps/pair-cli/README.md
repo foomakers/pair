@@ -105,24 +105,17 @@ pair-cli update
 
 ## Commands
 
-### Main Commands
+| Command                 | Description                                       | Reference                                                   |
+| ----------------------- | ------------------------------------------------- | ----------------------------------------------------------- |
+| `install [target]`      | Install documentation and assets to target folder | [CLI Reference](../../docs/cli/commands.md#install)         |
+| `update [target]`       | Update existing documentation and assets          | [CLI Reference](../../docs/cli/commands.md#update)          |
+| `update-link [options]` | Validate and update links in installed KB content | [CLI Reference](../../docs/cli/commands.md#update-link)     |
+| `package [options]`     | Package KB content into distributable ZIP file    | [CLI Reference](../../docs/cli/commands.md#package)         |
+| `validate-config`       | Validate asset registry configuration             | [CLI Reference](../../docs/cli/commands.md#validate-config) |
 
-- `install [target]` - Install documentation and assets
-- `update [target]` - Update existing documentation and assets
-- `update-link [options]` - Validate and update links in installed KB content
-- `kb package [options]` - Package KB content into distributable ZIP file
+**Quick Help**: Run `pair-cli <command> --help` for detailed syntax, options, and examples.
 
-### Utility Commands
-
-- `validate-config` - Validate asset registry configuration
-
-### Common Options
-
-- `--list-targets` - List available target folders and their descriptions
-- `--config <file>` - Use a custom configuration file
-- `--url <url>` - Download KB from custom HTTP/HTTPS URL instead of GitHub releases
-- `--no-kb` - Skip automatic KB download (use when KB already available locally)
-- `--help` - Show help for a command
+**Full Documentation**: See [CLI Commands Reference](../../docs/cli/commands.md) for complete usage guide with examples.
 
 ## KB Installation Features
 
@@ -273,19 +266,19 @@ Create a validated ZIP package of your KB content for distribution:
 
 ```bash
 # Package with defaults (output to ./dist/kb-package-{timestamp}.zip)
-pair-cli kb package
+pair package
 
 # Package to custom location
-pair-cli kb package --output custom/path/output.zip
+pair package --output custom/path/output.zip
 
 # Package with metadata
-pair-cli kb package --name "My KB" --version "1.0.0" --author "Team Name"
+pair package --name "My KB" --version "1.0.0" --author "Team Name"
 
 # Package with verbose progress output
-pair-cli kb package --verbose
+pair package --verbose
 ```
 
-The `kb package` command:
+The `package` command:
 
 - Validates `.pair/` structure against `config.json` registries
 - Creates ZIP archive with `manifest.json` metadata

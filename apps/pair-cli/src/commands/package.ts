@@ -155,18 +155,32 @@ async function executePackage(options: PackageOptions): Promise<void> {
 export function packageCommand(program: Command): void {
   program
     .command('package')
-    .description('Package KB content into a validated ZIP file for distribution')
-    .option('-o, --output <path>', 'Output ZIP file path')
-    .option(
-      '-s, --source-dir <path>',
-      'Source directory to package (defaults to current directory)',
-    )
+    .description('Package KB content into validated ZIP file for distribution')
+    .option('-o, --output <path>', 'Output ZIP file path (default: kb-package.zip)')
+    .option('-s, --source-dir <path>', 'Source directory to package (default: current directory)')
     .option('-c, --config <path>', 'Path to config.json file')
     .option('--name <name>', 'Package name for manifest')
     .option('--version <version>', 'Package version for manifest')
     .option('--description <description>', 'Package description for manifest')
     .option('--author <author>', 'Package author for manifest')
     .option('-v, --verbose', 'Enable verbose logging', false)
+    .addHelpText(
+      'after',
+      `
+Examples:
+  $ pair package                                   Package current directory
+  $ pair package -o dist/kb-v1.0.0.zip            Package with custom output path
+  $ pair package -s ./kb-content -o kb.zip        Package specific source directory
+  $ pair package --name "My KB" --version 1.0.0   Package with metadata
+  $ pair package --verbose                         Package with detailed logging
+
+Usage Notes:
+  • Validates KB structure before packaging (.pair directory required)
+  • Creates manifest with package metadata
+  • Output ZIP includes all KB content and assets
+  • Validates required files and directory structure
+`,
+    )
     .action(async (options: PackageOptions) => {
       try {
         await executePackage(options)
