@@ -157,10 +157,7 @@ export function packageCommand(program: Command): void {
     .command('package')
     .description('Package KB content into validated ZIP file for distribution')
     .option('-o, --output <path>', 'Output ZIP file path (default: kb-package.zip)')
-    .option(
-      '-s, --source-dir <path>',
-      'Source directory to package (default: current directory)',
-    )
+    .option('-s, --source-dir <path>', 'Source directory to package (default: current directory)')
     .option('-c, --config <path>', 'Path to config.json file')
     .option('--name <name>', 'Package name for manifest')
     .option('--version <version>', 'Package version for manifest')

@@ -5,11 +5,11 @@ tools:[ 'edit/editFiles', 'search/codebase', 'search', 'vscode/getProjectSetupIn
     'edit/editFiles',
     'search/codebase',
     'search',
-    'new',
-    'github/github-mcp-server/*',
-    'runCommands',
-    'runTests',
-    'problems',
+    'vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand',
+    'github/*',
+    'execute/getTerminalOutput', 'execute/runInTerminal', 'read/terminalLastCommand', 'read/terminalSelection',
+    'execute/runTests',
+    'read/problems',
   ]
 ---
 

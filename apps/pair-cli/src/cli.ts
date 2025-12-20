@@ -191,10 +191,7 @@ function registerInstallCommand(prog: typeof program): void {
     .option('--source <path|url>', 'KB source: URL (http/https), absolute path, or relative path')
     .option('--offline', 'Prevent network access (requires local --source)')
     .option('--list-targets', 'List available target folders and descriptions')
-    .option(
-      '--link-style <style>',
-      'Link style: relative, absolute, or auto (default: relative)',
-    )
+    .option('--link-style <style>', 'Link style: relative, absolute, or auto (default: relative)')
     .addHelpText(
       'after',
       `
