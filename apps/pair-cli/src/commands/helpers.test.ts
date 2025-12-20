@@ -1,26 +1,31 @@
 import { describe, it, expect } from 'vitest'
-import { detectSourceType, validateCommandOptions } from './helpers'
+import { detectSourceType, SourceType } from '@pair/content-ops'
+import { validateCommandOptions } from './helpers'
 
 describe('detectSourceType', () => {
   it('detects http URLs as remote', () => {
-    expect(detectSourceType('http://example.com/kb.zip')).toBe('remote')
+    expect(detectSourceType('http://example.com/kb.zip')).toBe(SourceType.REMOTE_URL)
   })
 
   it('detects https URLs as remote', () => {
-    expect(detectSourceType('https://example.com/kb.zip')).toBe('remote')
+    expect(detectSourceType('https://example.com/kb.zip')).toBe(SourceType.REMOTE_URL)
   })
 
   it('detects absolute paths as local', () => {
-    expect(detectSourceType('/absolute/path/to/kb')).toBe('local')
+    const result = detectSourceType('/absolute/path/to/kb')
+    expect(result).not.toBe(SourceType.REMOTE_URL)
   })
 
   it('detects relative paths as local', () => {
-    expect(detectSourceType('./relative/path')).toBe('local')
-    expect(detectSourceType('../parent/path')).toBe('local')
+    const result1 = detectSourceType('./relative/path')
+    const result2 = detectSourceType('../parent/path')
+    expect(result1).not.toBe(SourceType.REMOTE_URL)
+    expect(result2).not.toBe(SourceType.REMOTE_URL)
   })
 
   it('detects plain names as local', () => {
-    expect(detectSourceType('kb-folder')).toBe('local')
+    const result = detectSourceType('kb-folder')
+    expect(result).not.toBe(SourceType.REMOTE_URL)
   })
 })
 

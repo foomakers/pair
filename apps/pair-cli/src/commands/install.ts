@@ -677,7 +677,10 @@ async function executeInstall(
     options?: InstallOptions
   } = {
     // Don't pass source if it's a local path - it's already used for datasetRoot
-    source: source && isLocalPath(source) ? undefined : source || undefined,
+    source:
+      source && detectSourceType(source) !== SourceType.REMOTE_URL
+        ? undefined
+        : source || undefined,
     target: resolvedTarget,
     abs,
     datasetRoot,

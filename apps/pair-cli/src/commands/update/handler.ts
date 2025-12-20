@@ -9,14 +9,10 @@ import type { UpdateCommandConfig } from './parser'
  * @throws Error if update fails
  */
 export async function handleUpdateCommand(config: UpdateCommandConfig): Promise<void> {
-  // Validate config has either url or path
-  if (!('url' in config) && !('path' in config)) {
-    throw new Error('Update command requires either url or path source')
-  }
-
   // TODO: Implement actual update logic
   // This is a minimal implementation to make tests pass (GREEN phase)
   // Will be enhanced in subsequent tasks
+  // Default resolution handled in config builder (T-7)
 
   // For now, just validate the config structure is correct
   if ('url' in config && config.url) {

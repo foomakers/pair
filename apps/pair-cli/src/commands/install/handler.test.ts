@@ -61,16 +61,4 @@ describe('handleInstallCommand', () => {
       await expect(handleInstallCommand(config)).resolves.toBeUndefined()
     })
   })
-
-  describe('error handling', () => {
-    it('should throw error for invalid config', async () => {
-      const config = {
-        command: 'install',
-        resolution: 'local',
-        offline: false,
-      } as InstallCommandConfig
-
-      await expect(handleInstallCommand(config)).rejects.toThrow()
-    })
-  })
 })

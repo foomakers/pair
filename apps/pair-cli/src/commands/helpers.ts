@@ -1,12 +1,4 @@
-/**
- * Detect whether a source string is a remote URL or local path
- */
-export function detectSourceType(source: string): 'remote' | 'local' {
-  if (source.startsWith('http://') || source.startsWith('https://')) {
-    return 'remote'
-  }
-  return 'local'
-}
+import { detectSourceType, SourceType } from '@pair/content-ops'
 
 interface CommandOptions {
   source?: string
@@ -29,7 +21,8 @@ export function validateCommandOptions(_command: string, options: CommandOptions
     if (!source) {
       throw new Error('Offline mode requires explicit --source with local path')
     }
-    if (detectSourceType(source) === 'remote') {
+    const sourceType = detectSourceType(source)
+    if (sourceType === SourceType.REMOTE_URL) {
       throw new Error('Cannot use --offline with remote URL source')
     }
   }

@@ -39,16 +39,4 @@ describe('handleUpdateCommand', () => {
       await expect(handleUpdateCommand(config)).resolves.toBeUndefined()
     })
   })
-
-  describe('error handling', () => {
-    it('should throw error for invalid config', async () => {
-      const config = {
-        command: 'update',
-        resolution: 'local',
-        offline: false,
-      } as UpdateCommandConfig
-
-      await expect(handleUpdateCommand(config)).rejects.toThrow()
-    })
-  })
 })

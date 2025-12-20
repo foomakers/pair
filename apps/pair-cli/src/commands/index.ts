@@ -33,3 +33,18 @@ export * from './update'
 export * from './update-link'
 export * from './package'
 export * from './validate-config'
+
+// Command registry for dynamic dispatch
+import { installCommand } from './install/index'
+import { updateCommand } from './update/index'
+import { updateLinkCommand } from './update-link/index'
+import { packageCommand } from './package/index'
+import { validateConfigCommand } from './validate-config/index'
+
+export const commandRegistry = {
+  install: installCommand,
+  update: updateCommand,
+  'update-link': updateLinkCommand,
+  package: packageCommand,
+  'validate-config': validateConfigCommand,
+} as const

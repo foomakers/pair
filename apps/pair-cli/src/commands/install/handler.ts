@@ -9,14 +9,10 @@ import type { InstallCommandConfig } from './parser'
  * @throws Error if installation fails
  */
 export async function handleInstallCommand(config: InstallCommandConfig): Promise<void> {
-  // Validate config has either url or path
-  if (!('url' in config) && !('path' in config)) {
-    throw new Error('Install command requires either url or path source')
-  }
-
   // TODO: Implement actual installation logic
   // This is a minimal implementation to make tests pass (GREEN phase)
   // Will be enhanced in subsequent tasks
+  // Default resolution handled in config builder (T-7)
 
   // For now, just validate the config structure is correct
   if ('url' in config && config.url) {

@@ -15,6 +15,8 @@ import {
   Behavior,
   setLogLevel,
   validateUrl,
+  detectSourceType,
+  SourceType,
 } from '@pair/content-ops'
 import {
   validateConfig,
@@ -67,15 +69,6 @@ if (DIAG) {
   }
 }
 
-function isLocalPath(str: string): boolean {
-  return (
-    str.startsWith('/') ||
-    str.startsWith('./') ||
-    str.startsWith('../') ||
-    (str.length > 1 && str[1] === ':')
-  )
-}
-
 function hasLocalDataset(fsService: FileSystemService): boolean {
   try {
     const datasetPath = getKnowledgeHubDatasetPath(fsService)
@@ -112,7 +105,7 @@ function shouldSkipKBDownload(
   }
 
   // If customUrl is a local path, skip KB download - ensureKBAvailable will handle it
-  if (customUrl && isLocalPath(customUrl)) {
+  if (customUrl && detectSourceType(customUrl) !== SourceType.REMOTE_URL) {
     if (DIAG) console.error(`[diag] Using local path: ${customUrl}`)
     return true
   }
@@ -156,7 +149,7 @@ export function checkKnowledgeHubDatasetAccessible(
 ): void {
   // If customUrl is a local path, skip the standard dataset check
   // ensureKBAvailableOnStartup already validated it exists
-  if (customUrl && isLocalPath(customUrl)) {
+  if (customUrl && detectSourceType(customUrl) !== SourceType.REMOTE_URL) {
     return
   }
 

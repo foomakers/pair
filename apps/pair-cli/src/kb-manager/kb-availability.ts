@@ -1,5 +1,5 @@
 import type { FileSystemService } from '@pair/content-ops'
-import { fileSystemService } from '@pair/content-ops'
+import { fileSystemService, detectSourceType, SourceType } from '@pair/content-ops'
 import { type ProgressWriter } from '@pair/content-ops/http'
 import cacheManager from './cache-manager'
 import urlUtils from './url-utils'
@@ -34,18 +34,6 @@ function buildInstallerDeps(deps?: KBManagerDeps): InstallerDeps | undefined {
   return result
 }
 
-/**
- * Check if a string is a local file path (not a remote URL)
- */
-function isLocalPath(str: string): boolean {
-  return (
-    str.startsWith('/') ||
-    str.startsWith('./') ||
-    str.startsWith('../') ||
-    (str.length > 1 && str[1] === ':')
-  )
-}
-
 export async function ensureKBAvailable(version: string, deps?: KBManagerDeps): Promise<string> {
   const fs = deps?.fs || fileSystemService
   const cachePath = getCachedKBPath(version)
@@ -57,7 +45,8 @@ export async function ensureKBAvailable(version: string, deps?: KBManagerDeps): 
   const installerDeps = buildInstallerDeps(deps)
 
   // Check if source is a local path instead of a remote URL
-  if (isLocalPath(sourceUrl)) {
+  const sourceType = detectSourceType(sourceUrl)
+  if (sourceType !== SourceType.REMOTE_URL) {
     if (sourceUrl.endsWith('.zip')) {
       // Local ZIP file
       await installKBFromLocalZip(version, sourceUrl, fs)

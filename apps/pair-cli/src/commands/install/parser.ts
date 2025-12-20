@@ -1,4 +1,5 @@
-import { detectSourceType, validateCommandOptions } from '../helpers'
+import { detectSourceType, SourceType } from '@pair/content-ops'
+import { validateCommandOptions } from '../helpers'
 
 /**
  * Discriminated union for install command with default resolution
@@ -60,7 +61,8 @@ export function parseInstallCommand(options: ParseInstallOptions): InstallComman
   }
 
   // Remote source
-  if (detectSourceType(source) === 'remote') {
+  const sourceType = detectSourceType(source)
+  if (sourceType === SourceType.REMOTE_URL) {
     return {
       command: 'install',
       resolution: 'remote',
@@ -69,7 +71,7 @@ export function parseInstallCommand(options: ParseInstallOptions): InstallComman
     }
   }
 
-  // Local source
+  // Local source (ZIP or directory)
   return {
     command: 'install',
     resolution: 'local',
