@@ -1,7 +1,7 @@
 ---
 description: Perform comprehensive code review following quality guidelines and best practices
 agent: staff-engineer
-tools: ['search/codebase', 'edit/editFiles', 'search', 'read/problems', 'search/changes', 'execute/runTests', 'github/*']
+tools: ['edit', 'execute/runNotebookCell', 'read/getNotebookSummary', 'read/readNotebookCellOutput', 'search', 'vscode/getProjectSetupInfo', 'vscode/installExtension', 'vscode/newWorkspace', 'vscode/runCommand', 'execute/getTerminalOutput', 'execute/runInTerminal', 'read/terminalLastCommand', 'read/terminalSelection', 'execute/createAndRunTask', 'execute/getTaskOutput', 'execute/runTask', 'gitkraken/*', 'github/*', 'search/usages', 'vscode/vscodeAPI', 'read/problems', 'search/changes', 'execute/testFailure', 'vscode/openSimpleBrowser', 'web/fetch', 'web/githubRepo', 'vscode/extensions', 'todo', 'agent', 'execute/runTests']
 ---
 
 # Code Review
