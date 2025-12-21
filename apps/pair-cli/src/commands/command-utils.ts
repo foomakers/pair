@@ -6,7 +6,6 @@ import {
   type ParsedLink,
 } from '@pair/content-ops'
 import type { FileSystemService } from '@pair/content-ops'
-import { updateLinkCommand, type UpdateLinkOptions } from './update-link'
 
 export type LogEntry = {
   time: string
@@ -177,10 +176,17 @@ export async function applyLinkTransformation(
       style = linkStyle
     }
 
-    const args = style === 'relative' ? ['--relative'] : ['--absolute']
-    const opts: UpdateLinkOptions = {}
-    if (options.minLogLevel) opts.minLogLevel = options.minLogLevel
-    await updateLinkCommand(fsService, args, opts)
+    // Import handler locally to avoid circular dependency
+    const { handleUpdateLinkCommand } = await import('./update-link/handler.js')
+    await handleUpdateLinkCommand(
+      {
+        command: 'update-link',
+        absolute: style === 'absolute',
+        dryRun: false,
+        verbose: options.minLogLevel === 'info' || options.minLogLevel === 'debug',
+      },
+      fsService,
+    )
     pushLog('info', `Link transformation completed: ${style}`)
   } catch (err) {
     pushLog('warn', `Link transformation failed: ${String(err)}`)

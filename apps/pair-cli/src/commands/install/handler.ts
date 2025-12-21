@@ -1,6 +1,6 @@
 import type { InstallCommandConfig } from './parser'
-import { installCommand } from '../install'
 import type { FileSystemService } from '@pair/content-ops'
+import { installCommand } from '../install'
 
 /**
  * Handles the install command execution.
