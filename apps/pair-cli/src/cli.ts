@@ -30,15 +30,6 @@ import { validateCliOptions } from './kb-manager/cli-options'
 
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
 
-const program = new Command()
-
-program
-  .name(chalk.blue(pkg.name))
-  .description(pkg.description)
-  .version(pkg.version)
-  .option('--url <url>', 'Custom URL for KB download (overrides default GitHub release)')
-  .option('--no-kb', 'Skip knowledge base download')
-
 const MIN_LOG_LEVEL: LogLevel = 'INFO'
 setLogLevel(MIN_LOG_LEVEL)
 
@@ -188,7 +179,7 @@ export function checkKnowledgeHubDatasetAccessible(
 }
 
 function registerCommandFromMetadata(
-  prog: typeof program,
+  prog: Command,
   commandName: keyof typeof commandRegistry,
   fsService: FileSystemService,
 ): void {
@@ -240,7 +231,7 @@ ${cmdConfig.metadata.notes.map((note: string) => `  • ${note}`).join('\n')}
   })
 }
 
-function registerDefaultAction(prog: typeof program): void {
+function registerDefaultAction(prog: Command): void {
   prog.action(() => {
     console.log(chalk.green('Welcome to Pair CLI! Use --help to see available commands.'))
     console.log(
@@ -249,7 +240,7 @@ function registerDefaultAction(prog: typeof program): void {
   })
 }
 
-function setupCommands(prog: typeof program, fsService: FileSystemService): void {
+function setupCommands(prog: Command, fsService: FileSystemService): void {
   // Register commands with metadata from registry
   registerCommandFromMetadata(prog, 'install', fsService)
   registerCommandFromMetadata(prog, 'update', fsService)
@@ -265,6 +256,15 @@ function setupCommands(prog: typeof program, fsService: FileSystemService): void
  */
 export async function runCli(argv: string[], deps: CliDependencies = { fs: fileSystemService }): Promise<void> {
   const fsService = deps.fs
+
+  // Create fresh program instance for each invocation (prevents state pollution in tests)
+  const program = new Command()
+  program
+    .name(chalk.blue(pkg.name))
+    .description(pkg.description)
+    .version(pkg.version)
+    .option('--url <url>', 'Custom URL for KB download (overrides default GitHub release)')
+    .option('--no-kb', 'Skip knowledge base download')
 
   // Run diagnostics
   runDiagnostics(fsService)

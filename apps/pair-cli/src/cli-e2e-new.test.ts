@@ -8,18 +8,19 @@ import { runCli } from './cli'
 
 // Mock process.exit to prevent tests from exiting
 const originalExit = process.exit
-const mockExit = vi.fn((code?: number) => {
-  throw new Error(`process.exit called with code ${code}`)
-}) as never
+let mockExit: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
+  // Recreate mock for each test to avoid state pollution
+  mockExit = vi.fn((code?: number) => {
+    throw new Error(`process.exit called with code ${code}`)
+  }) as never
   process.exit = mockExit
   process.exitCode = 0
 })
 
 afterEach(() => {
   process.exit = originalExit
-  mockExit.mockClear()
 })
 
 describe('CLI E2E - Install Command', () => {
