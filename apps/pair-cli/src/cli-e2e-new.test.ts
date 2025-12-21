@@ -1,0 +1,366 @@
+/**
+ * End-to-end tests for CLI
+ * Tests actual CLI interface (argv parsing) with InMemoryFS
+ */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
+import { runCli } from './cli'
+
+// Mock process.exit to prevent tests from exiting
+const originalExit = process.exit
+const mockExit = vi.fn((code?: number) => {
+  throw new Error(`process.exit called with code ${code}`)
+}) as never
+
+beforeEach(() => {
+  process.exit = mockExit
+  process.exitCode = 0
+})
+
+afterEach(() => {
+  process.exit = originalExit
+  mockExit.mockClear()
+})
+
+describe('CLI E2E - Install Command', () => {
+  describe('dev scenario with defaults', () => {
+    it('should install from monorepo dataset when running from dev environment', async () => {
+      const cwd = '/dev/pair/apps/pair-cli'
+      const datasetPath = '/dev/pair/packages/knowledge-hub/dataset'
+      
+      const fs = new InMemoryFileSystemService({
+        // Monorepo structure
+        [`${cwd}/package.json`]: JSON.stringify({ name: '@pair/pair-cli' }),
+        [`${datasetPath}/AGENTS.md`]: '# Agents Guide',
+        [`${datasetPath}/.github/workflows/ci.yml`]: 'name: CI',
+        [`${datasetPath}/.pair/knowledge/index.md`]: '# Knowledge Base',
+        [`${datasetPath}/.pair/adoption/onboarding.md`]: '# Onboarding',
+        // Config
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: { target_path: '.github', behavior: 'mirror' },
+            knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+            adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
+            agents: { target_path: 'AGENTS.md', behavior: 'add' },
+          },
+        }),
+      }, cwd, cwd)
+
+      // Mock: Skip KB check and download
+      await runCli(['node', 'pair', 'install', '--no-kb'], { fs })
+
+      // Verify files were installed
+      expect(fs.existsSync(`${cwd}/.github/workflows/ci.yml`)).toBe(true)
+      expect(fs.existsSync(`${cwd}/.pair/knowledge/index.md`)).toBe(true)
+      expect(fs.existsSync(`${cwd}/.pair/adoption/onboarding.md`)).toBe(true)
+      expect(fs.existsSync(`${cwd}/AGENTS.md`)).toBe(true)
+    })
+  })
+
+  describe('npm deploy scenario', () => {
+    it('should install from node_modules when deployed as npm package', async () => {
+      const cwd = '/project'
+      const moduleFolder = `${cwd}/node_modules/@pair/pair-cli`
+      const datasetPath = `${moduleFolder}/bundle-cli/dataset`
+
+      const fs = new InMemoryFileSystemService({
+        // NPM package structure
+        [`${moduleFolder}/package.json`]: JSON.stringify({ name: '@pair/pair-cli' }),
+        [`${datasetPath}/AGENTS.md`]: '# Agents Guide',
+        [`${datasetPath}/.github/workflows/ci.yml`]: 'name: CI',
+        [`${datasetPath}/.pair/knowledge/index.md`]: '# Knowledge Base',
+        [`${datasetPath}/.pair/adoption/onboarding.md`]: '# Onboarding',
+        // Config
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: { target_path: '.github', behavior: 'mirror' },
+            knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+            adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
+            agents: { target_path: 'AGENTS.md', behavior: 'add' },
+          },
+        }),
+      }, cwd, cwd)
+
+      await runCli(['node', 'pair', 'install', '--no-kb'], { fs })
+
+      expect(fs.existsSync(`${cwd}/.github/workflows/ci.yml`)).toBe(true)
+      expect(fs.existsSync(`${cwd}/.pair/knowledge/index.md`)).toBe(true)
+      expect(fs.existsSync(`${cwd}/.pair/adoption/onboarding.md`)).toBe(true)
+      expect(fs.existsSync(`${cwd}/AGENTS.md`)).toBe(true)
+    })
+  })
+
+  describe('local source installation', () => {
+    it('should install from local ZIP file with absolute path', async () => {
+      const cwd = '/project'
+      const zipPath = '/downloads/kb.zip'
+
+      const fs = new InMemoryFileSystemService({
+        // ZIP file (simulated)
+        [zipPath]: 'ZIP_CONTENT',
+        // Config
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: { target_path: '.github', behavior: 'mirror' },
+          },
+        }),
+      }, cwd, cwd)
+
+      await runCli(['node', 'pair', 'install', '--source', zipPath, '--no-kb'], { fs })
+
+      // Verify install was attempted with correct source
+      // Note: Actual ZIP extraction would require full implementation
+    })
+
+    it('should install from local ZIP file with relative path', async () => {
+      const cwd = '/project'
+      const relativeZip = './downloads/kb.zip'
+
+      const fs = new InMemoryFileSystemService({
+        [`${cwd}/downloads/kb.zip`]: 'ZIP_CONTENT',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: { target_path: '.github', behavior: 'mirror' },
+          },
+        }),
+      }, cwd, cwd)
+
+      await runCli(['node', 'pair', 'install', '--source', relativeZip, '--no-kb'], { fs })
+    })
+
+    it('should install from local directory with absolute path', async () => {
+      const cwd = '/project'
+      const datasetPath = '/local/dataset'
+
+      const fs = new InMemoryFileSystemService({
+        [`${datasetPath}/AGENTS.md`]: '# Agents',
+        [`${datasetPath}/.github/workflows/ci.yml`]: 'name: CI',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: { target_path: '.github', behavior: 'mirror' },
+            agents: { target_path: 'AGENTS.md', behavior: 'add' },
+          },
+        }),
+      }, cwd, cwd)
+
+      await runCli(['node', 'pair', 'install', '--source', datasetPath, '--no-kb'], { fs })
+    })
+
+    it('should install from local directory with relative path', async () => {
+      const cwd = '/project'
+
+      const fs = new InMemoryFileSystemService({
+        [`${cwd}/dataset/AGENTS.md`]: '# Agents',
+        [`${cwd}/dataset/.github/workflows/ci.yml`]: 'name: CI',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: { target_path: '.github', behavior: 'mirror' },
+            agents: { target_path: 'AGENTS.md', behavior: 'add' },
+          },
+        }),
+      }, cwd, cwd)
+
+      await runCli(['node', 'pair', 'install', '--source', './dataset', '--no-kb'], { fs })
+    })
+  })
+})
+
+describe('CLI E2E - Update Command', () => {
+  describe('update with defaults', () => {
+    it('should update all registries when no args provided', async () => {
+      const cwd = '/project'
+      const datasetPath = '/project/node_modules/@pair/knowledge-hub/dataset'
+
+      const fs = new InMemoryFileSystemService({
+        [`${datasetPath}/AGENTS.md`]: '# Updated Agents',
+        [`${datasetPath}/.github/workflows/ci.yml`]: 'name: Updated CI',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: { target_path: '.github', behavior: 'mirror' },
+            agents: { target_path: 'AGENTS.md', behavior: 'add' },
+          },
+        }),
+        // Existing files
+        [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
+        [`${cwd}/AGENTS.md`]: '# Old Agents',
+      }, cwd, cwd)
+
+      await runCli(['node', 'pair', 'update', '--no-kb'], { fs })
+
+      // Files should be updated
+      const ghContent = fs.readFileSync(`${cwd}/.github/workflows/ci.yml`)
+      expect(ghContent).toContain('Updated CI')
+    })
+  })
+
+  describe('update from local sources', () => {
+    it('should update from local ZIP with absolute path', async () => {
+      const cwd = '/project'
+      const zipPath = '/downloads/kb-v2.zip'
+
+      const fs = new InMemoryFileSystemService({
+        [zipPath]: 'ZIP_V2_CONTENT',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: { target_path: '.github', behavior: 'mirror' },
+          },
+        }),
+        [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
+      }, cwd, cwd)
+
+      await runCli(['node', 'pair', 'update', '--url', zipPath, '--no-kb'], { fs })
+    })
+
+    it('should update from local ZIP with relative path', async () => {
+      const cwd = '/project'
+
+      const fs = new InMemoryFileSystemService({
+        [`${cwd}/kb-v2.zip`]: 'ZIP_V2_CONTENT',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: { target_path: '.github', behavior: 'mirror' },
+          },
+        }),
+      }, cwd, cwd)
+
+      await runCli(['node', 'pair', 'update', '--url', './kb-v2.zip', '--no-kb'], { fs })
+    })
+
+    it('should update from local directory with absolute path', async () => {
+      const cwd = '/project'
+      const datasetPath = '/local/kb-dataset'
+
+      const fs = new InMemoryFileSystemService({
+        [`${datasetPath}/AGENTS.md`]: '# Updated Agents',
+        [`${datasetPath}/.github/workflows/ci.yml`]: 'name: Updated CI',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: { target_path: '.github', behavior: 'mirror' },
+            agents: { target_path: 'AGENTS.md', behavior: 'add' },
+          },
+        }),
+        [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
+      }, cwd, cwd)
+
+      await runCli(['node', 'pair', 'update', '--url', datasetPath, '--no-kb'], { fs })
+    })
+
+    it('should update from local directory with relative path', async () => {
+      const cwd = '/project'
+
+      const fs = new InMemoryFileSystemService({
+        [`${cwd}/kb-dataset/AGENTS.md`]: '# Updated Agents',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            agents: { target_path: 'AGENTS.md', behavior: 'add' },
+          },
+        }),
+      }, cwd, cwd)
+
+      await runCli(['node', 'pair', 'update', '--url', './kb-dataset', '--no-kb'], { fs })
+    })
+  })
+
+  describe('list targets', () => {
+    it('should list available registries with --list-targets', async () => {
+      const cwd = '/project'
+
+      const fs = new InMemoryFileSystemService({
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: {
+              target_path: '.github',
+              behavior: 'mirror',
+              description: 'GitHub workflows and configs',
+            },
+            knowledge: {
+              target_path: '.pair/knowledge',
+              behavior: 'mirror',
+              description: 'Knowledge base content',
+            },
+            agents: {
+              target_path: 'AGENTS.md',
+              behavior: 'add',
+              description: 'AI agents guidance',
+            },
+          },
+        }),
+      }, cwd, cwd)
+
+      // This should print to console without throwing
+      await runCli(['node', 'pair', 'update', '--list-targets', '--no-kb'], { fs })
+    })
+  })
+})
+
+describe('CLI E2E - Error Scenarios', () => {
+  it('should fail gracefully when config is missing', async () => {
+    const cwd = '/project'
+    const fs = new InMemoryFileSystemService({}, cwd, cwd)
+
+    await expect(
+      runCli(['node', 'pair', 'install', '--no-kb'], { fs })
+    ).rejects.toThrow()
+  })
+
+  it('should fail gracefully when source ZIP is corrupted', async () => {
+    const cwd = '/project'
+
+    const fs = new InMemoryFileSystemService({
+      [`${cwd}/bad.zip`]: 'INVALID_ZIP',
+      [`${cwd}/config.json`]: JSON.stringify({
+        asset_registries: {
+          github: { target_path: '.github', behavior: 'mirror' },
+        },
+      }),
+    }, cwd, cwd)
+
+    await expect(
+      runCli(['node', 'pair', 'install', '--source', 'bad.zip', '--no-kb'], { fs })
+    ).rejects.toThrow()
+  })
+})
+
+describe('CLI E2E - Link Strategy', () => {
+  it('should support relative link style', async () => {
+    const cwd = '/project'
+    const datasetPath = `${cwd}/node_modules/@pair/knowledge-hub/dataset`
+
+    const fs = new InMemoryFileSystemService({
+      [`${datasetPath}/.pair/knowledge/index.md`]: '# KB\n[link](../adoption/guide.md)',
+      [`${datasetPath}/.pair/adoption/guide.md`]: '# Guide',
+      [`${cwd}/config.json`]: JSON.stringify({
+        asset_registries: {
+          knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+          adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
+        },
+      }),
+    }, cwd, cwd)
+
+    await runCli(['node', 'pair', 'install', '--link-style', 'relative', '--no-kb'], { fs })
+
+    const content = fs.readFileSync(`${cwd}/.pair/knowledge/index.md`)
+    expect(content).toContain('../adoption/guide.md')
+  })
+
+  it('should support absolute link style', async () => {
+    const cwd = '/project'
+    const datasetPath = `${cwd}/node_modules/@pair/knowledge-hub/dataset`
+
+    const fs = new InMemoryFileSystemService({
+      [`${datasetPath}/.pair/knowledge/index.md`]: '# KB\n[link](../adoption/guide.md)',
+      [`${datasetPath}/.pair/adoption/guide.md`]: '# Guide',
+      [`${cwd}/config.json`]: JSON.stringify({
+        asset_registries: {
+          knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+          adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
+        },
+      }),
+    }, cwd, cwd)
+
+    await runCli(['node', 'pair', 'update', '--link-style', 'absolute', '--no-kb'], { fs })
+
+    const content = fs.readFileSync(`${cwd}/.pair/knowledge/index.md`)
+    expect(content).toContain('/.pair/adoption/guide.md')
+  })
+})

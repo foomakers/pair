@@ -46,7 +46,7 @@ setLogLevel(MIN_LOG_LEVEL)
  * Dependencies that can be injected for testing
  */
 export interface CliDependencies {
-  fs?: FileSystemService
+  fs: FileSystemService
 }
 
 function isDiagEnabled(): boolean {
@@ -59,25 +59,25 @@ function isDiagEnabled(): boolean {
 // resolving the knowledge-hub dataset.
 function runDiagnostics(fsService: FileSystemService): void {
   const DIAG = isDiagEnabled()
-if (DIAG) {
-  try {
-    console.error(`[diag] __dirname=${fsService.rootModuleDirectory()}`)
-    console.error(`[diag] process cwd=${fsService.currentWorkingDirectory()}`)
-    console.error(`[diag] argv=${process.argv.join(' ')}`)
-    console.error(
-      `[diag] isInRelease(__dirname)=${isInRelease(fsService, fsService.rootModuleDirectory())}`,
-    )
+  if (DIAG) {
     try {
-      const resolved = getKnowledgeHubDatasetPath(fsService)
-      console.error(`[diag] getKnowledgeHubDatasetPath resolved to: ${resolved}`)
+      console.error(`[diag] __dirname=${fsService.rootModuleDirectory()}`)
+      console.error(`[diag] process cwd=${fsService.currentWorkingDirectory()}`)
+      console.error(`[diag] argv=${process.argv.join(' ')}`)
+      console.error(
+        `[diag] isInRelease(__dirname)=${isInRelease(fsService, fsService.rootModuleDirectory())}`,
+      )
+      try {
+        const resolved = getKnowledgeHubDatasetPath(fsService)
+        console.error(`[diag] getKnowledgeHubDatasetPath resolved to: ${resolved}`)
+      } catch (err) {
+        console.error(`[diag] getKnowledgeHubDatasetPath threw: ${String(err)}`)
+        if (err && (err as Error).stack) console.error((err as Error).stack)
+      }
     } catch (err) {
-      console.error(`[diag] getKnowledgeHubDatasetPath threw: ${String(err)}`)
-      if (err && (err as Error).stack) console.error((err as Error).stack)
+      // Avoid crashing diagnostics
+      console.error('[diag] failed to emit diagnostics', String(err))
     }
-  } catch (err) {
-    // Avoid crashing diagnostics
-    console.error('[diag] failed to emit diagnostics', String(err))
-  }
   }
 }
 
@@ -256,11 +256,8 @@ function setupCommands(prog: typeof program): void {
 /**
  * Run CLI with injected dependencies (for testing)
  */
-export async function runCli(
-  argv: string[],
-  deps?: CliDependencies,
-): Promise<void> {
-  const fsService = deps?.fs || fileSystemService
+export async function runCli(argv: string[], deps: CliDependencies = { fs: fileSystemService }): Promise<void> {
+  const fsService = deps.fs
 
   // Run diagnostics
   runDiagnostics(fsService)
