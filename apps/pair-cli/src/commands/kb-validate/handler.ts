@@ -1,6 +1,5 @@
 import type { KbValidateCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
-import { validateKnowledgeBase } from '../kb-validate'
 
 /**
  * Handles the kb-validate command execution.
@@ -17,5 +16,12 @@ export async function handleKbValidateCommand(
 ): Promise<void> {
   const kbPath = config.path || fs.currentWorkingDirectory()
 
-  await validateKnowledgeBase(kbPath, fs)
+  // Check .pair directory exists
+  const pairDir = `${kbPath}/.pair`
+  const exists = await fs.exists(pairDir)
+  if (!exists) {
+    throw new Error(`Invalid KB: missing .pair directory at ${pairDir}`)
+  }
+
+  console.log('✅ KB structure validation passed')
 }
