@@ -428,7 +428,7 @@ describe('CLI E2E - Validate Config Command', () => {
       }),
     }, cwd, cwd)
 
-    await runCli(['node', 'pair', 'validate-config'], { fs })
+    await runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })
     // Should not throw - valid config
   })
 
@@ -449,7 +449,7 @@ describe('CLI E2E - Validate Config Command', () => {
     }, cwd, cwd)
 
     await expect(
-      runCli(['node', 'pair', 'validate-config'], { fs })
+      runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })
     ).rejects.toThrow()
   })
 
@@ -461,7 +461,7 @@ describe('CLI E2E - Validate Config Command', () => {
     }, cwd, cwd)
 
     await expect(
-      runCli(['node', 'pair', 'validate-config'], { fs })
+      runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })
     ).rejects.toThrow()
   })
 
@@ -477,7 +477,7 @@ describe('CLI E2E - Validate Config Command', () => {
     }, cwd, cwd)
 
     await expect(
-      runCli(['node', 'pair', 'validate-config'], { fs })
+      runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })
     ).rejects.toThrow()
   })
 
@@ -499,7 +499,7 @@ describe('CLI E2E - Validate Config Command', () => {
     }, cwd, cwd)
 
     await expect(
-      runCli(['node', 'pair', 'validate-config'], { fs })
+      runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })
     ).rejects.toThrow()
   })
 
@@ -519,7 +519,7 @@ describe('CLI E2E - Validate Config Command', () => {
     }, cwd, cwd)
 
     await expect(
-      runCli(['node', 'pair', 'validate-config'], { fs })
+      runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })
     ).rejects.toThrow()
   })
 })

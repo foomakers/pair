@@ -219,12 +219,13 @@ ${cmdConfig.metadata.notes.map((note: string) => `  • ${note}`).join('\n')}
   cmd.addHelpText('after', helpText)
 
   cmd.action(async (...args: unknown[]) => {
+    const cmdOptions = args[args.length - 1] as Record<string, unknown>
+    const globalOptions = prog.opts<Record<string, unknown>>()
+    // Merge command options with global options (command options take precedence)
+    const options = { ...globalOptions, ...cmdOptions }
+    const config = cmdConfig.parse(options)
+    
     try {
-      const cmdOptions = args[args.length - 1] as Record<string, unknown>
-      const globalOptions = prog.opts<Record<string, unknown>>()
-      // Merge command options with global options (command options take precedence)
-      const options = { ...globalOptions, ...cmdOptions }
-      const config = cmdConfig.parse(options)
       await dispatchCommand(config, fsService)
     } catch (err) {
       console.error(
@@ -233,6 +234,8 @@ ${cmdConfig.metadata.notes.map((note: string) => `  • ${note}`).join('\n')}
         ),
       )
       process.exitCode = 1
+      process.exit(1)
+      throw err  // Re-throw for test environments
     }
   })
 }
@@ -270,7 +273,7 @@ export async function runCli(argv: string[], deps: CliDependencies = { fs: fileS
   setupCommands(program, fsService)
 
   // Parse global options
-  program.parse(argv)
+  await program.parseAsync(argv)
   const options = program.opts<{ url?: string; kb: boolean }>()
 
   // Validate option combinations
