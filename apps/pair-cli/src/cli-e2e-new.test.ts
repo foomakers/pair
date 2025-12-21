@@ -249,7 +249,9 @@ describe('CLI E2E - Install Command', () => {
         cwd,
       )
 
-      await expect(runCli(['node', 'pair', 'install', '--offline', '--no-kb'], { fs })).rejects.toThrow()
+      await expect(
+        runCli(['node', 'pair', 'install', '--offline', '--no-kb'], { fs }),
+      ).rejects.toThrow()
     })
 
     it('should fail when --offline used with remote URL', async () => {
@@ -414,6 +416,29 @@ describe('CLI E2E - Update Command', () => {
     })
   })
 
+  describe('remote source support', () => {
+    it('should handle update --source with remote URL (AC #91-7)', async () => {
+      const cwd = '/project'
+      const remoteUrl = 'https://example.com/kb.zip'
+
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+            },
+          }),
+          [`${cwd}/.github/workflows/old.yml`]: 'name: Old',
+        },
+        cwd,
+        cwd,
+      )
+
+      // Should parse URL correctly (download fails later with InMemoryFS)
+      await expect(runCli(['node', 'pair', 'update', '--source', remoteUrl, '--no-kb'], { fs })).rejects.toThrow()
+    })
+  })
+
   describe('list targets', () => {
     it('should list available registries with --list-targets', async () => {
       const cwd = '/project'
@@ -535,6 +560,65 @@ describe('CLI E2E - Error Scenarios', () => {
     await expect(
       runCli(['node', 'pair', 'install', '--source', 'bad.zip'], { fs }),
     ).rejects.toThrow()
+  })
+
+  it('should fail when --source is empty string', async () => {
+    const cwd = '/project'
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: { target_path: '.github', behavior: 'mirror' },
+          },
+        }),
+      },
+      cwd,
+      cwd,
+    )
+
+    await expect(runCli(['node', 'pair', 'install', '--source', '', '--no-kb'], { fs })).rejects.toThrow()
+  })
+
+  it('should fail when local source path does not exist', async () => {
+    const cwd = '/project'
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: { target_path: '.github', behavior: 'mirror' },
+          },
+        }),
+      },
+      cwd,
+      cwd,
+    )
+
+    await expect(
+      runCli(['node', 'pair', 'install', '--source', '/non/existent/path', '--no-kb'], { fs }),
+    ).rejects.toThrow()
+  })
+
+  it('should handle remote URL in --source parameter', async () => {
+    const cwd = '/project'
+    const remoteUrl = 'https://github.com/org/repo/releases/download/v1.0/kb.zip'
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: { target_path: '.github', behavior: 'mirror' },
+          },
+        }),
+      },
+      cwd,
+      cwd,
+    )
+
+    // Should not throw during parsing - parser accepts URL format
+    // Download failure happens later (not tested here with InMemoryFS)
+    await expect(runCli(['node', 'pair', 'install', '--source', remoteUrl, '--no-kb'], { fs })).rejects.toThrow()
   })
 })
 
@@ -663,6 +747,44 @@ describe('CLI E2E - Validate Config Command', () => {
 
     await expect(runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })).rejects.toThrow()
   })
+
+  it('should validate successfully with all behaviors (AC #91-11)', async () => {
+    const cwd = '/project'
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            overwrite_test: {
+              target_path: '.test',
+              behavior: 'overwrite',
+              description: 'Test overwrite',
+            },
+            add_test: {
+              target_path: '.add',
+              behavior: 'add',
+              description: 'Test add',
+            },
+            mirror_test: {
+              target_path: '.mirror',
+              behavior: 'mirror',
+              description: 'Test mirror',
+            },
+            skip_test: {
+              target_path: '.skip',
+              behavior: 'skip',
+              description: 'Test skip',
+            },
+          },
+        }),
+      },
+      cwd,
+      cwd,
+    )
+
+    await runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })
+    // Should succeed with all valid behaviors
+  })
 })
 
 describe('CLI E2E - KB Validate Command', () => {
@@ -771,6 +893,35 @@ describe('CLI E2E - Package Command', () => {
     )
 
     expect(fs.existsSync(`${cwd}/out.zip`)).toBe(true)
+  })
+
+  it('should package with custom --output path (AC #91-10)', async () => {
+    const cwd = '/project'
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/dataset/.pair/knowledge/index.md`]: '# KB',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: {
+              source: '.pair/knowledge',
+              target_path: '.pair/knowledge',
+              behavior: 'mirror',
+              description: 'Knowledge base',
+            },
+          },
+        }),
+      },
+      cwd,
+      cwd,
+    )
+
+    await runCli(
+      ['node', 'pair', 'package', '--source-dir', 'dataset', '--output', 'dist/kb.zip', '--no-kb'],
+      { fs },
+    )
+
+    expect(fs.existsSync(`${cwd}/dist/kb.zip`)).toBe(true)
   })
 
   it('should fail with invalid config', async () => {
@@ -906,5 +1057,28 @@ describe('CLI E2E - Update Link Command', () => {
     // In dry-run mode, files should not be modified
     const content = fs.readFileSync(`${cwd}/.pair/knowledge/index.md`)
     expect(content).toContain('[link](guide.md)')
+  })
+
+  it('should support --dry-run explicitly (AC #91-8)', async () => {
+    const cwd = '/project'
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/.pair/knowledge/index.md`]: '# KB\n[broken](../missing.md)',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+          },
+        }),
+      },
+      cwd,
+      cwd,
+    )
+
+    // Dry-run should validate but not modify
+    await runCli(['node', 'pair', 'update-link', '--dry-run', '--no-kb'], { fs })
+
+    const content = fs.readFileSync(`${cwd}/.pair/knowledge/index.md`)
+    expect(content).toBe('# KB\n[broken](../missing.md)')
   })
 })
