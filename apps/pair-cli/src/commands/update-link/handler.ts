@@ -16,11 +16,11 @@ export async function handleUpdateLinkCommand(
 ): Promise<void> {
   // Build args array from config
   const args: string[] = []
-  
+
   if (config.dryRun) {
     args.push('--dry-run')
   }
-  
+
   if (config.verbose) {
     args.push('--verbose')
   }
