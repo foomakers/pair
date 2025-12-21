@@ -8,6 +8,7 @@ describe('parseUpdateCommand', () => {
 
       expect(config).toEqual({
         command: 'update',
+        kb: true,
         resolution: 'default',
         offline: false,
       })
@@ -22,6 +23,7 @@ describe('parseUpdateCommand', () => {
 
       expect(config).toEqual({
         command: 'update',
+        kb: true,
         resolution: 'remote',
         url: 'https://example.com/kb.zip',
         offline: false,
@@ -37,6 +39,7 @@ describe('parseUpdateCommand', () => {
 
       expect(config).toEqual({
         command: 'update',
+        kb: true,
         resolution: 'local',
         path: '/local/kb',
         offline: false,

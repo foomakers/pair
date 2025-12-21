@@ -106,6 +106,20 @@ export class InMemoryFileSystemService implements FileSystemService {
     }
   }
 
+  mkdirSync(path: string, options?: { recursive?: boolean }): void {
+    const resolvedPath = this.resolvePath(path)
+    this.dirs.add(resolvedPath)
+    if (options?.recursive) {
+      let p = resolvedPath
+      while (p && p !== dirname(p)) {
+        this.dirs.add(p)
+        const next = dirname(p)
+        if (next === p) break
+        p = next
+      }
+    }
+  }
+
   async rename(oldPath: string, newPath: string): Promise<void> {
     const resolvedOldPath = this.resolvePath(oldPath)
     const resolvedNewPath = this.resolvePath(newPath)

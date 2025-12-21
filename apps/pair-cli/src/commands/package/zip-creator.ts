@@ -109,6 +109,6 @@ async function copyRecursive(
 function validateOutputDirectory(outputPath: string, fsService: FileSystemService): void {
   const outputDir = path.dirname(outputPath)
   if (!fsService.existsSync(outputDir)) {
-    throw new Error(`Output directory does not exist: ${outputDir}`)
+    fsService.mkdirSync(outputDir, { recursive: true })
   }
 }

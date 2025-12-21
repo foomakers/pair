@@ -1,4 +1,4 @@
-import { constants, Dirent, promises as fs, Stats, copyFileSync } from 'fs'
+import { constants, Dirent, promises as fs, Stats, copyFileSync, mkdirSync } from 'fs'
 import { readFileSync, existsSync, accessSync } from 'fs'
 import { dirname, resolve as pathResolve } from 'path'
 import AdmZip from 'adm-zip'
@@ -14,6 +14,7 @@ export interface FileSystemService {
   exists: (path: string) => Promise<boolean>
   unlink: (path: string) => Promise<void>
   mkdir: (path: string, options?: { recursive?: boolean }) => Promise<void>
+  mkdirSync: (path: string, options?: { recursive?: boolean }) => void
   rename: (oldPath: string, newPath: string) => Promise<void>
   rm: (path: string, options?: { recursive?: boolean; force?: boolean }) => Promise<void>
   stat: (path: string) => Promise<Stats>
@@ -51,6 +52,7 @@ export const fileSystemService: FileSystemService = {
   mkdir: async (path, options) => {
     await fs.mkdir(path, options)
   },
+  mkdirSync: (path, options) => mkdirSync(path, options),
   rename: (oldPath, newPath) => fs.rename(oldPath, newPath),
   copy: (oldPath, newPath) => fs.copyFile(oldPath, newPath),
   copySync: (oldPath, newPath) => copyFileSync(oldPath, newPath),

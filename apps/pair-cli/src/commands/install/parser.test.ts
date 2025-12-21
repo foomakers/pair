@@ -8,6 +8,7 @@ describe('parseInstallCommand', () => {
 
       expect(config).toEqual({
         command: 'install',
+        kb: true,
         resolution: 'default',
         offline: false,
       })
@@ -22,6 +23,7 @@ describe('parseInstallCommand', () => {
 
       expect(config).toEqual({
         command: 'install',
+        kb: true,
         resolution: 'remote',
         url: 'https://example.com/kb.zip',
         offline: false,
@@ -46,6 +48,7 @@ describe('parseInstallCommand', () => {
 
       expect(config).toEqual({
         command: 'install',
+        kb: true,
         resolution: 'local',
         path: '/absolute/path/to/kb',
         offline: false,
@@ -71,6 +74,7 @@ describe('parseInstallCommand', () => {
 
       expect(config).toEqual({
         command: 'install',
+        kb: true,
         resolution: 'local',
         path: '/local/kb',
         offline: true,
