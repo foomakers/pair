@@ -232,6 +232,70 @@ describe('CLI E2E - Install Command', () => {
       await runCli(['node', 'pair', 'install', '--source', './dataset'], { fs })
     })
   })
+
+  describe('offline mode validation', () => {
+    it('should fail when --offline used without --source', async () => {
+      const cwd = '/project'
+
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+            },
+          }),
+        },
+        cwd,
+        cwd,
+      )
+
+      await expect(runCli(['node', 'pair', 'install', '--offline', '--no-kb'], { fs })).rejects.toThrow()
+    })
+
+    it('should fail when --offline used with remote URL', async () => {
+      const cwd = '/project'
+      const remoteUrl = 'https://example.com/kb.zip'
+
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+            },
+          }),
+        },
+        cwd,
+        cwd,
+      )
+
+      await expect(
+        runCli(['node', 'pair', 'install', '--source', remoteUrl, '--offline', '--no-kb'], { fs }),
+      ).rejects.toThrow()
+    })
+
+    it('should succeed with --offline and local source', async () => {
+      const cwd = '/project'
+      const localSource = '/local/kb'
+
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${localSource}/.pair/knowledge/index.md`]: '# KB',
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+            },
+          }),
+        },
+        cwd,
+        cwd,
+      )
+
+      await runCli(['node', 'pair', 'install', '--source', localSource, '--offline', '--no-kb'], {
+        fs,
+      })
+      // Should not throw - valid offline install
+    })
+  })
 })
 
 describe('CLI E2E - Update Command', () => {
