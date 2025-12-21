@@ -42,12 +42,23 @@ program
 const MIN_LOG_LEVEL: LogLevel = 'INFO'
 setLogLevel(MIN_LOG_LEVEL)
 
+/**
+ * Dependencies that can be injected for testing
+ */
+export interface CliDependencies {
+  fs?: FileSystemService
+}
+
+function isDiagEnabled(): boolean {
+  const diagEnv = process.env['PAIR_DIAG']
+  return diagEnv === '1' || diagEnv === 'true'
+}
+
 // Diagnostic logging: enable by setting PAIR_DIAG=1 in the environment. This
 // prints key runtime values so we can reproduce CI vs local differences when
 // resolving the knowledge-hub dataset.
-const diagEnv = process.env['PAIR_DIAG']
-const fsService = fileSystemService
-const DIAG = diagEnv === '1' || diagEnv === 'true'
+function runDiagnostics(fsService: FileSystemService): void {
+  const DIAG = isDiagEnabled()
 if (DIAG) {
   try {
     console.error(`[diag] __dirname=${fsService.rootModuleDirectory()}`)
@@ -67,6 +78,7 @@ if (DIAG) {
     // Avoid crashing diagnostics
     console.error('[diag] failed to emit diagnostics', String(err))
   }
+  }
 }
 
 function hasLocalDataset(fsService: FileSystemService): boolean {
@@ -81,7 +93,7 @@ function hasLocalDataset(fsService: FileSystemService): boolean {
 function validateAndLogCustomUrl(customUrl: string): void {
   try {
     validateUrl(customUrl)
-    if (DIAG) console.error(`[diag] Using custom URL: ${customUrl}`)
+    if (isDiagEnabled()) console.error(`[diag] Using custom URL: ${customUrl}`)
   } catch (err) {
     console.error(chalk.red(`Invalid --url parameter: ${err}`))
     process.exitCode = 1
@@ -95,18 +107,18 @@ function shouldSkipKBDownload(
   customUrl?: string,
 ): boolean {
   if (skipKB) {
-    if (DIAG) console.error('[diag] Skipping KB download (--no-kb flag set)')
+    if (isDiagEnabled()) console.error('[diag] Skipping KB download (--no-kb flag set)')
     return true
   }
 
   if (fsService && hasLocalDataset(fsService)) {
-    if (DIAG) console.error('[diag] Using local dataset')
+    if (isDiagEnabled()) console.error('[diag] Using local dataset')
     return true
   }
 
   // If customUrl is a local path, skip KB download - ensureKBAvailable will handle it
   if (customUrl && detectSourceType(customUrl) !== SourceType.REMOTE_URL) {
-    if (DIAG) console.error(`[diag] Using local path: ${customUrl}`)
+    if (isDiagEnabled()) console.error(`[diag] Using local path: ${customUrl}`)
     return true
   }
 
@@ -123,7 +135,7 @@ async function ensureKBAvailableOnStartup(
     return
   }
 
-  if (DIAG) console.error('[diag] Local dataset not available, using KB manager')
+  if (isDiagEnabled()) console.error('[diag] Local dataset not available, using KB manager')
 
   if (customUrl) {
     validateAndLogCustomUrl(customUrl)
@@ -135,7 +147,7 @@ async function ensureKBAvailableOnStartup(
       version,
       ...(customUrl !== undefined && { customUrl }),
     })
-    if (DIAG) console.error(`[diag] KB dataset available at: ${datasetPath}`)
+    if (isDiagEnabled()) console.error(`[diag] KB dataset available at: ${datasetPath}`)
   } catch (err) {
     console.error(chalk.red(`[startup] Failed to ensure KB available: ${err}`))
     process.exitCode = 1
@@ -241,12 +253,23 @@ function setupCommands(prog: typeof program): void {
   registerDefaultAction(prog)
 }
 
-export async function main() {
+/**
+ * Run CLI with injected dependencies (for testing)
+ */
+export async function runCli(
+  argv: string[],
+  deps?: CliDependencies,
+): Promise<void> {
+  const fsService = deps?.fs || fileSystemService
+
+  // Run diagnostics
+  runDiagnostics(fsService)
+
   // Register all commands BEFORE parsing
   setupCommands(program)
 
   // Parse global options
-  program.parse(process.argv)
+  program.parse(argv)
   const options = program.opts<{ url?: string; kb: boolean }>()
 
   // Validate option combinations
@@ -259,12 +282,16 @@ export async function main() {
   }
 
   // Ensure KB is available before running commands
-  await ensureKBAvailableOnStartup(fileSystemService, pkg.version, options.url, !options.kb)
+  await ensureKBAvailableOnStartup(fsService, pkg.version, options.url, !options.kb)
 
   // Skip dataset check if --no-kb is set or if custom URL is a local path
   if (options.kb !== false) {
-    checkKnowledgeHubDatasetAccessible(fileSystemService, options.url)
+    checkKnowledgeHubDatasetAccessible(fsService, options.url)
   }
+}
+
+export async function main() {
+  await runCli(process.argv)
 }
 
 if (require.main === module) {
