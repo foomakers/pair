@@ -1,9 +1,7 @@
 import type { PackageCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
-
-// Import executePackage from package.ts
-// Since executePackage is not exported, we need to access the logic differently
-// For now, we'll create a simple wrapper that mimics the behavior
+import type { PackageOptions } from '../package'
+import { executePackage } from '../package'
 
 /**
  * Handles the package command execution.
@@ -16,10 +14,10 @@ import type { FileSystemService } from '@pair/content-ops'
  */
 export async function handlePackageCommand(
   config: PackageCommandConfig,
-  _fs: FileSystemService,
+  fs: FileSystemService,
 ): Promise<void> {
   // Map config to package options
-  const options: Record<string, unknown> = {}
+  const options: PackageOptions = {}
   
   if (config.output) options['output'] = config.output
   if (config.sourceDir) options['sourceDir'] = config.sourceDir
@@ -29,8 +27,5 @@ export async function handlePackageCommand(
   if (config.author) options['author'] = config.author
   options['verbose'] = config.verbose
 
-  // For now, just validate the config is well-formed
-  // Full implementation requires refactoring executePackage to accept FileSystemService
-  // TODO: Refactor package.ts executePackage to be testable with injected fs
-  throw new Error('Package command not yet fully implemented - requires executePackage refactoring')
+  await executePackage(options, fs)
 }

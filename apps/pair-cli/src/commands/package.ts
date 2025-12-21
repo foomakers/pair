@@ -37,9 +37,13 @@ export const EXIT_SUCCESS = 0
 export const EXIT_VALIDATION_ERROR = 1
 export const EXIT_PACKAGING_ERROR = 2
 
-async function loadAndValidateConfig(options: PackageOptions, projectRoot: string) {
+async function loadAndValidateConfig(
+  options: PackageOptions,
+  projectRoot: string,
+  fs: FileSystemService,
+) {
   try {
-    return loadConfigWithOverrides(fileSystemService, {
+    return loadConfigWithOverrides(fs, {
       ...(options.config && { customConfigPath: options.config }),
       projectRoot,
     })
@@ -49,8 +53,8 @@ async function loadAndValidateConfig(options: PackageOptions, projectRoot: strin
   }
 }
 
-async function validateConfig(config: Config, projectRoot: string) {
-  const validation = await validatePackageStructure(config, projectRoot, fileSystemService)
+async function validateConfig(config: Config, projectRoot: string, fs: FileSystemService) {
+  const validation = await validatePackageStructure(config, projectRoot, fs)
   if (!validation.valid) {
     console.error('❌ Validation failed:')
     validation.errors.forEach(err => console.error(`  - ${err}`))
@@ -58,10 +62,10 @@ async function validateConfig(config: Config, projectRoot: string) {
   }
 }
 
-async function prepareOutputDir(outputDir: string, outputPath: string) {
+async function prepareOutputDir(outputDir: string, outputPath: string, fs: FileSystemService) {
   try {
-    if (!fileSystemService.existsSync(outputDir)) {
-      await fileSystemService.mkdir(outputDir, { recursive: true })
+    if (!fs.existsSync(outputDir)) {
+      await fs.mkdir(outputDir, { recursive: true })
     }
   } catch (error) {
     console.error(
@@ -72,13 +76,13 @@ async function prepareOutputDir(outputDir: string, outputPath: string) {
   }
 
   try {
-    fileSystemService.accessSync(outputDir)
+    fs.accessSync(outputDir)
   } catch {
     console.error(`❌ Output directory is not writable: ${outputDir}`)
     process.exit(EXIT_PACKAGING_ERROR)
   }
 
-  if (fileSystemService.existsSync(outputPath)) {
+  if (fs.existsSync(outputPath)) {
     console.warn(`⚠️  Overwriting existing file: ${outputPath}`)
   }
 }
@@ -106,18 +110,21 @@ async function displayPackageSuccess(outputPath: string, fileService: FileSystem
   }
 }
 
-async function executePackage(options: PackageOptions): Promise<void> {
-  const projectRoot = options.sourceDir || process.cwd()
+export async function executePackage(
+  options: PackageOptions,
+  fs: FileSystemService = fileSystemService,
+): Promise<void> {
+  const projectRoot = options.sourceDir || fs.currentWorkingDirectory()
 
   await displayProgress('📦 Starting package creation...', options.verbose)
   await displayProgress(`   Source: ${projectRoot}`, options.verbose)
 
   // Load and validate
   await displayProgress('🔍 Loading configuration...', options.verbose)
-  const result = await loadAndValidateConfig(options, projectRoot)
+  const result = await loadAndValidateConfig(options, projectRoot, fs)
 
   await displayProgress('✓ Validating package structure...', options.verbose)
-  await validateConfig(result.config, projectRoot)
+  await validateConfig(result.config, projectRoot, fs)
 
   // Generate manifest
   await displayProgress('📋 Generating manifest metadata...', options.verbose)
@@ -137,15 +144,15 @@ async function executePackage(options: PackageOptions): Promise<void> {
   const outputDir = path.dirname(outputPath)
 
   await displayProgress(`📁 Preparing output directory: ${outputDir}`, options.verbose)
-  await prepareOutputDir(outputDir, outputPath)
+  await prepareOutputDir(outputDir, outputPath, fs)
 
   // Create ZIP
   await displayProgress('🗜️  Creating ZIP archive...', options.verbose)
   await displayProgress(`   Packaging ${registryNames.length} registries`, options.verbose)
 
   try {
-    await createPackageZip({ projectRoot, registries, manifest, outputPath }, fileSystemService)
-    await displayPackageSuccess(outputPath, fileSystemService)
+    await createPackageZip({ projectRoot, registries, manifest, outputPath }, fs)
+    await displayPackageSuccess(outputPath, fs)
   } catch (error) {
     console.error('❌ ZIP creation failed:', error instanceof Error ? error.message : error)
     process.exit(EXIT_PACKAGING_ERROR)
