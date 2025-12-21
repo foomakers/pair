@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { handleKbValidateCommand } from './handler'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 

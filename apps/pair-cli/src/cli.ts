@@ -178,6 +178,30 @@ export function checkKnowledgeHubDatasetAccessible(
   }
 }
 
+function addCommandOptions(cmd: Command, options: readonly { flags: string; description: string; defaultValue?: unknown }[]): void {
+  for (const opt of options) {
+    if (opt.flags.startsWith('[')) {
+      cmd.argument(opt.flags, opt.description)
+    } else {
+      if ('defaultValue' in opt) {
+        cmd.option(opt.flags, opt.description, opt.defaultValue as string | boolean | string[])
+      } else {
+        cmd.option(opt.flags, opt.description)
+      }
+    }
+  }
+}
+
+function buildCommandHelpText(examples: readonly string[], notes: readonly string[]): string {
+  return `
+Examples:
+${examples.map((ex: string) => `  $ ${ex}`).join('\n')}
+
+Usage Notes:
+${notes.map((note: string) => `  • ${note}`).join('\n')}
+`
+}
+
 function registerCommandFromMetadata(
   prog: Command,
   commandName: keyof typeof commandRegistry,
@@ -186,28 +210,8 @@ function registerCommandFromMetadata(
   const cmdConfig = commandRegistry[commandName]
   const cmd = prog.command(cmdConfig.metadata.name).description(cmdConfig.metadata.description)
 
-  // Add options from metadata
-  for (const opt of cmdConfig.metadata.options) {
-    if (opt.flags.startsWith('[')) {
-      cmd.argument(opt.flags, opt.description)
-    } else {
-      if ('defaultValue' in opt) {
-        cmd.option(opt.flags, opt.description, opt.defaultValue)
-      } else {
-        cmd.option(opt.flags, opt.description)
-      }
-    }
-  }
-
-  // Build help text from metadata
-  const helpText = `
-Examples:
-${cmdConfig.metadata.examples.map((ex: string) => `  $ ${ex}`).join('\n')}
-
-Usage Notes:
-${cmdConfig.metadata.notes.map((note: string) => `  • ${note}`).join('\n')}
-`
-  cmd.addHelpText('after', helpText)
+  addCommandOptions(cmd, cmdConfig.metadata.options)
+  cmd.addHelpText('after', buildCommandHelpText(cmdConfig.metadata.examples, cmdConfig.metadata.notes))
 
   cmd.action(async (...args: unknown[]) => {
     // Commander.js passes the command instance as last arg, not options

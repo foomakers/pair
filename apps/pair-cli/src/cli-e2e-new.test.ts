@@ -435,7 +435,9 @@ describe('CLI E2E - Update Command', () => {
       )
 
       // Should parse URL correctly (download fails later with InMemoryFS)
-      await expect(runCli(['node', 'pair', 'update', '--source', remoteUrl, '--no-kb'], { fs })).rejects.toThrow()
+      await expect(
+        runCli(['node', 'pair', 'update', '--source', remoteUrl, '--no-kb'], { fs }),
+      ).rejects.toThrow()
     })
   })
 
@@ -577,7 +579,9 @@ describe('CLI E2E - Error Scenarios', () => {
       cwd,
     )
 
-    await expect(runCli(['node', 'pair', 'install', '--source', '', '--no-kb'], { fs })).rejects.toThrow()
+    await expect(
+      runCli(['node', 'pair', 'install', '--source', '', '--no-kb'], { fs }),
+    ).rejects.toThrow()
   })
 
   it('should fail when local source path does not exist', async () => {
@@ -618,7 +622,9 @@ describe('CLI E2E - Error Scenarios', () => {
 
     // Should not throw during parsing - parser accepts URL format
     // Download failure happens later (not tested here with InMemoryFS)
-    await expect(runCli(['node', 'pair', 'install', '--source', remoteUrl, '--no-kb'], { fs })).rejects.toThrow()
+    await expect(
+      runCli(['node', 'pair', 'install', '--source', remoteUrl, '--no-kb'], { fs }),
+    ).rejects.toThrow()
   })
 })
 

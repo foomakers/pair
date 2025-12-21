@@ -22,48 +22,63 @@ export async function createPackageZip(
   const tempDir = path.join(path.dirname(options.outputPath), '.zip-temp')
 
   try {
-    // Create temp directory
     await fsService.mkdir(tempDir, { recursive: true })
-
-    // Write manifest
-    const manifestJson = JSON.stringify(options.manifest, null, 2)
-    await fsService.writeFile(path.join(tempDir, 'manifest.json'), manifestJson)
-
-    // Copy registry sources
-    const sourcePaths: string[] = []
-    for (const registry of options.registries) {
-      if (!registry.source) {
-        throw new Error(`Registry missing source field`)
-      }
-
-      const sourcePath = path.join(options.projectRoot, registry.source)
-      const exists = await fsService.exists(sourcePath)
-      if (!exists) {
-        throw new Error(`Registry source does not exist: ${registry.source}`)
-      }
-
-      // Copy to temp dir
-      const targetPath = path.join(tempDir, registry.source)
-      await copyRecursive(sourcePath, targetPath, fsService)
-      sourcePaths.push(targetPath)
-    }
-
-    // Add manifest to sources
-    sourcePaths.unshift(path.join(tempDir, 'manifest.json'))
-
-    // Create ZIP from temp directory
+    await writeManifest(tempDir, options.manifest, fsService)
+    await copyRegistrySources(tempDir, options, fsService)
     await fsService.createZip([tempDir], options.outputPath)
   } catch (error) {
-    // Cleanup on error
-    if (await fsService.exists(options.outputPath)) {
-      await fsService.unlink(options.outputPath)
-    }
+    await cleanupOnError(options.outputPath, fsService)
     throw error
   } finally {
-    // Cleanup temp directory
-    if (await fsService.exists(tempDir)) {
-      await fsService.rm(tempDir, { recursive: true, force: true })
+    await cleanupTempDirectory(tempDir, fsService)
+  }
+}
+
+async function writeManifest(
+  tempDir: string,
+  manifest: ManifestMetadata,
+  fsService: FileSystemService,
+): Promise<void> {
+  const manifestJson = JSON.stringify(manifest, null, 2)
+  await fsService.writeFile(path.join(tempDir, 'manifest.json'), manifestJson)
+}
+
+async function copyRegistrySources(
+  tempDir: string,
+  options: ZipOptions,
+  fsService: FileSystemService,
+): Promise<void> {
+  for (const registry of options.registries) {
+    if (!registry.source) {
+      throw new Error(`Registry missing source field`)
     }
+
+    const sourcePath = path.join(options.projectRoot, registry.source)
+    const exists = await fsService.exists(sourcePath)
+    if (!exists) {
+      throw new Error(`Registry source does not exist: ${registry.source}`)
+    }
+
+    const targetPath = path.join(tempDir, registry.source)
+    await copyRecursive(sourcePath, targetPath, fsService)
+  }
+}
+
+async function cleanupOnError(
+  outputPath: string,
+  fsService: FileSystemService,
+): Promise<void> {
+  if (await fsService.exists(outputPath)) {
+    await fsService.unlink(outputPath)
+  }
+}
+
+async function cleanupTempDirectory(
+  tempDir: string,
+  fsService: FileSystemService,
+): Promise<void> {
+  if (await fsService.exists(tempDir)) {
+    await fsService.rm(tempDir, { recursive: true, force: true })
   }
 }
 
