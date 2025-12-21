@@ -43,7 +43,7 @@ export async function handleInstallCommand(
 
   // Call legacy installCommand with mapped parameters
   const result = await installCommand(fs, source ? [source] : [], options)
-  
+
   if (!result || !result.success) {
     throw new Error(result?.message || 'Installation failed')
   }

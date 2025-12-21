@@ -18,7 +18,7 @@ export async function handlePackageCommand(
 ): Promise<void> {
   // Map config to package options
   const options: PackageOptions = {}
-  
+
   if (config.output) options['output'] = config.output
   if (config.sourceDir) options['sourceDir'] = config.sourceDir
   if (config.name) options['name'] = config.name

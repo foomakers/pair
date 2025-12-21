@@ -5,7 +5,7 @@ import type { FileSystemService } from '@pair/content-ops'
 /**
  * Dispatch CommandConfig to appropriate handler using command registry
  * Type-safe implementation using discriminated union narrowing
- * 
+ *
  * @param config - Command configuration from parser
  * @param fs - FileSystemService instance for file operations
  */
@@ -22,5 +22,7 @@ export async function dispatchCommand(config: CommandConfig, fs: FileSystemServi
       return commandRegistry.package.handle(config, fs)
     case 'validate-config':
       return commandRegistry['validate-config'].handle(config, fs)
+    case 'kb-validate':
+      return commandRegistry['kb-validate'].handle(config, fs)
   }
 }

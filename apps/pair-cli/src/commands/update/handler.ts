@@ -38,7 +38,7 @@ export async function handleUpdateCommand(
   }
 
   const result = await updateCommand(fs, args, options)
-  
+
   if (!result || !result.success) {
     throw new Error(result?.message || 'Update failed')
   }

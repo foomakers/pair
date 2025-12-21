@@ -24,7 +24,7 @@ export async function handleValidateConfigCommand(
 
   // Validate the config
   const validation = validateConfig(result.config)
-  
+
   if (!validation.valid) {
     const errorMessages = validation.errors.join('\n  - ')
     throw new Error(`Configuration validation failed:\n  - ${errorMessages}`)

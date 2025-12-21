@@ -20,7 +20,7 @@ export async function createPackageZip(
   validateOutputDirectory(options.outputPath, fsService)
 
   const tempDir = path.join(path.dirname(options.outputPath), '.zip-temp')
-  
+
   try {
     // Create temp directory
     await fsService.mkdir(tempDir, { recursive: true })
@@ -53,7 +53,6 @@ export async function createPackageZip(
 
     // Create ZIP from temp directory
     await fsService.createZip([tempDir], options.outputPath)
-
   } catch (error) {
     // Cleanup on error
     if (await fsService.exists(options.outputPath)) {
@@ -78,10 +77,10 @@ async function copyRecursive(
   if (stats.isDirectory()) {
     await fsService.mkdir(targetPath, { recursive: true })
     const entries = await fsService.readdir(sourcePath)
-    
+
     for (const entry of entries) {
       if (entry.isSymbolicLink()) continue
-      
+
       const srcPath = path.join(sourcePath, entry.name)
       const dstPath = path.join(targetPath, entry.name)
       await copyRecursive(srcPath, dstPath, fsService)

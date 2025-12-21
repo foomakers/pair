@@ -28,31 +28,35 @@ describe('CLI E2E - Install Command', () => {
     it('should install from monorepo dataset when running from dev environment', async () => {
       const cwd = '/dev/pair/apps/pair-cli'
       const datasetPath = '/dev/pair/apps/pair-cli/node_modules/@pair/knowledge-hub/dataset'
-      
-      const fs = new InMemoryFileSystemService({
-        // Monorepo structure (node_modules with @pair/knowledge-hub)
-        [`${cwd}/package.json`]: JSON.stringify({ 
-          name: '@pair/pair-cli',
-          dependencies: { '@pair/knowledge-hub': 'workspace:*' }
-        }),
-        [`${cwd}/node_modules/@pair/knowledge-hub/package.json`]: JSON.stringify({
-          name: '@pair/knowledge-hub',
-          version: '0.3.0'
-        }),
-        [`${datasetPath}/AGENTS.md`]: '# Agents Guide',
-        [`${datasetPath}/.github/workflows/ci.yml`]: 'name: CI',
-        [`${datasetPath}/.pair/knowledge/index.md`]: '# Knowledge Base',
-        [`${datasetPath}/.pair/adoption/onboarding.md`]: '# Onboarding',
-        // Config
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            github: { target_path: '.github', behavior: 'mirror' },
-            knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
-            adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
-            agents: { target_path: 'AGENTS.md', behavior: 'add' },
-          },
-        }),
-      }, cwd, cwd)
+
+      const fs = new InMemoryFileSystemService(
+        {
+          // Monorepo structure (node_modules with @pair/knowledge-hub)
+          [`${cwd}/package.json`]: JSON.stringify({
+            name: '@pair/pair-cli',
+            dependencies: { '@pair/knowledge-hub': 'workspace:*' },
+          }),
+          [`${cwd}/node_modules/@pair/knowledge-hub/package.json`]: JSON.stringify({
+            name: '@pair/knowledge-hub',
+            version: '0.3.0',
+          }),
+          [`${datasetPath}/AGENTS.md`]: '# Agents Guide',
+          [`${datasetPath}/.github/workflows/ci.yml`]: 'name: CI',
+          [`${datasetPath}/.pair/knowledge/index.md`]: '# Knowledge Base',
+          [`${datasetPath}/.pair/adoption/onboarding.md`]: '# Onboarding',
+          // Config
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+              knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+              adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
+              agents: { target_path: 'AGENTS.md', behavior: 'add' },
+            },
+          }),
+        },
+        cwd,
+        cwd,
+      )
 
       // Mock: Skip KB check and download
       await runCli(['node', 'pair', 'install', '--no-kb'], { fs })
@@ -71,23 +75,27 @@ describe('CLI E2E - Install Command', () => {
       const moduleFolder = `${cwd}/libs/pair-cli`
       const datasetPath = `${moduleFolder}/bundle-cli/dataset`
 
-      const fs = new InMemoryFileSystemService({
-        // Manual bundle structure
-        [`${moduleFolder}/package.json`]: JSON.stringify({ name: '@pair/pair-cli' }),
-        [`${datasetPath}/AGENTS.md`]: '# Agents Guide',
-        [`${datasetPath}/.github/workflows/ci.yml`]: 'name: CI',
-        [`${datasetPath}/.pair/knowledge/index.md`]: '# Knowledge Base',
-        [`${datasetPath}/.pair/adoption/onboarding.md`]: '# Onboarding',
-        // Config
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            github: { target_path: '.github', behavior: 'mirror' },
-            knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
-            adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
-            agents: { target_path: 'AGENTS.md', behavior: 'add' },
-          },
-        }),
-      }, moduleFolder, cwd)
+      const fs = new InMemoryFileSystemService(
+        {
+          // Manual bundle structure
+          [`${moduleFolder}/package.json`]: JSON.stringify({ name: '@pair/pair-cli' }),
+          [`${datasetPath}/AGENTS.md`]: '# Agents Guide',
+          [`${datasetPath}/.github/workflows/ci.yml`]: 'name: CI',
+          [`${datasetPath}/.pair/knowledge/index.md`]: '# Knowledge Base',
+          [`${datasetPath}/.pair/adoption/onboarding.md`]: '# Onboarding',
+          // Config
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+              knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+              adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
+              agents: { target_path: 'AGENTS.md', behavior: 'add' },
+            },
+          }),
+        },
+        moduleFolder,
+        cwd,
+      )
 
       await runCli(['node', 'pair', 'install', '--no-kb'], { fs })
 
@@ -104,23 +112,27 @@ describe('CLI E2E - Install Command', () => {
       const moduleFolder = `${cwd}/node_modules/@pair/pair-cli`
       const datasetPath = `${moduleFolder}/bundle-cli/dataset`
 
-      const fs = new InMemoryFileSystemService({
-        // NPM package structure
-        [`${moduleFolder}/package.json`]: JSON.stringify({ name: '@pair/pair-cli' }),
-        [`${datasetPath}/AGENTS.md`]: '# Agents Guide',
-        [`${datasetPath}/.github/workflows/ci.yml`]: 'name: CI',
-        [`${datasetPath}/.pair/knowledge/index.md`]: '# Knowledge Base',
-        [`${datasetPath}/.pair/adoption/onboarding.md`]: '# Onboarding',
-        // Config
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            github: { target_path: '.github', behavior: 'mirror' },
-            knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
-            adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
-            agents: { target_path: 'AGENTS.md', behavior: 'add' },
-          },
-        }),
-      }, cwd, cwd)
+      const fs = new InMemoryFileSystemService(
+        {
+          // NPM package structure
+          [`${moduleFolder}/package.json`]: JSON.stringify({ name: '@pair/pair-cli' }),
+          [`${datasetPath}/AGENTS.md`]: '# Agents Guide',
+          [`${datasetPath}/.github/workflows/ci.yml`]: 'name: CI',
+          [`${datasetPath}/.pair/knowledge/index.md`]: '# Knowledge Base',
+          [`${datasetPath}/.pair/adoption/onboarding.md`]: '# Onboarding',
+          // Config
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+              knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+              adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
+              agents: { target_path: 'AGENTS.md', behavior: 'add' },
+            },
+          }),
+        },
+        cwd,
+        cwd,
+      )
 
       await runCli(['node', 'pair', 'install', '--no-kb'], { fs })
 
@@ -136,16 +148,20 @@ describe('CLI E2E - Install Command', () => {
       const cwd = '/project'
       const zipPath = '/downloads/kb.zip'
 
-      const fs = new InMemoryFileSystemService({
-        // ZIP file (simulated)
-        [zipPath]: 'ZIP_CONTENT',
-        // Config
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            github: { target_path: '.github', behavior: 'mirror' },
-          },
-        }),
-      }, cwd, cwd)
+      const fs = new InMemoryFileSystemService(
+        {
+          // ZIP file (simulated)
+          [zipPath]: 'ZIP_CONTENT',
+          // Config
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+            },
+          }),
+        },
+        cwd,
+        cwd,
+      )
 
       await runCli(['node', 'pair', 'install', '--source', zipPath], { fs })
 
@@ -157,14 +173,18 @@ describe('CLI E2E - Install Command', () => {
       const cwd = '/project'
       const relativeZip = './downloads/kb.zip'
 
-      const fs = new InMemoryFileSystemService({
-        [`${cwd}/downloads/kb.zip`]: 'ZIP_CONTENT',
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            github: { target_path: '.github', behavior: 'mirror' },
-          },
-        }),
-      }, cwd, cwd)
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${cwd}/downloads/kb.zip`]: 'ZIP_CONTENT',
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+            },
+          }),
+        },
+        cwd,
+        cwd,
+      )
 
       await runCli(['node', 'pair', 'install', '--source', relativeZip], { fs })
     })
@@ -173,16 +193,20 @@ describe('CLI E2E - Install Command', () => {
       const cwd = '/project'
       const datasetPath = '/local/dataset'
 
-      const fs = new InMemoryFileSystemService({
-        [`${datasetPath}/AGENTS.md`]: '# Agents',
-        [`${datasetPath}/.github/workflows/ci.yml`]: 'name: CI',
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            github: { target_path: '.github', behavior: 'mirror' },
-            agents: { target_path: 'AGENTS.md', behavior: 'add' },
-          },
-        }),
-      }, cwd, cwd)
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${datasetPath}/AGENTS.md`]: '# Agents',
+          [`${datasetPath}/.github/workflows/ci.yml`]: 'name: CI',
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+              agents: { target_path: 'AGENTS.md', behavior: 'add' },
+            },
+          }),
+        },
+        cwd,
+        cwd,
+      )
 
       await runCli(['node', 'pair', 'install', '--source', datasetPath], { fs })
     })
@@ -190,16 +214,20 @@ describe('CLI E2E - Install Command', () => {
     it('should install from local directory with relative path', async () => {
       const cwd = '/project'
 
-      const fs = new InMemoryFileSystemService({
-        [`${cwd}/dataset/AGENTS.md`]: '# Agents',
-        [`${cwd}/dataset/.github/workflows/ci.yml`]: 'name: CI',
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            github: { target_path: '.github', behavior: 'mirror' },
-            agents: { target_path: 'AGENTS.md', behavior: 'add' },
-          },
-        }),
-      }, cwd, cwd)
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${cwd}/dataset/AGENTS.md`]: '# Agents',
+          [`${cwd}/dataset/.github/workflows/ci.yml`]: 'name: CI',
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+              agents: { target_path: 'AGENTS.md', behavior: 'add' },
+            },
+          }),
+        },
+        cwd,
+        cwd,
+      )
 
       await runCli(['node', 'pair', 'install', '--source', './dataset'], { fs })
     })
@@ -212,19 +240,23 @@ describe('CLI E2E - Update Command', () => {
       const cwd = '/project'
       const datasetPath = '/project/node_modules/@pair/knowledge-hub/dataset'
 
-      const fs = new InMemoryFileSystemService({
-        [`${datasetPath}/AGENTS.md`]: '# Updated Agents',
-        [`${datasetPath}/.github/workflows/ci.yml`]: 'name: Updated CI',
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            github: { target_path: '.github', behavior: 'mirror' },
-            agents: { target_path: 'AGENTS.md', behavior: 'add' },
-          },
-        }),
-        // Existing files
-        [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
-        [`${cwd}/AGENTS.md`]: '# Old Agents',
-      }, cwd, cwd)
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${datasetPath}/AGENTS.md`]: '# Updated Agents',
+          [`${datasetPath}/.github/workflows/ci.yml`]: 'name: Updated CI',
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+              agents: { target_path: 'AGENTS.md', behavior: 'add' },
+            },
+          }),
+          // Existing files
+          [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
+          [`${cwd}/AGENTS.md`]: '# Old Agents',
+        },
+        cwd,
+        cwd,
+      )
 
       await runCli(['node', 'pair', 'update', '--no-kb'], { fs })
 
@@ -239,15 +271,19 @@ describe('CLI E2E - Update Command', () => {
       const cwd = '/project'
       const zipPath = '/downloads/kb-v2.zip'
 
-      const fs = new InMemoryFileSystemService({
-        [zipPath]: 'ZIP_V2_CONTENT',
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            github: { target_path: '.github', behavior: 'mirror' },
-          },
-        }),
-        [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
-      }, cwd, cwd)
+      const fs = new InMemoryFileSystemService(
+        {
+          [zipPath]: 'ZIP_V2_CONTENT',
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+            },
+          }),
+          [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
+        },
+        cwd,
+        cwd,
+      )
 
       await runCli(['node', 'pair', 'update', '--source', zipPath], { fs })
     })
@@ -255,14 +291,18 @@ describe('CLI E2E - Update Command', () => {
     it('should update from local ZIP with relative path', async () => {
       const cwd = '/project'
 
-      const fs = new InMemoryFileSystemService({
-        [`${cwd}/kb-v2.zip`]: 'ZIP_V2_CONTENT',
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            github: { target_path: '.github', behavior: 'mirror' },
-          },
-        }),
-      }, cwd, cwd)
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${cwd}/kb-v2.zip`]: 'ZIP_V2_CONTENT',
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+            },
+          }),
+        },
+        cwd,
+        cwd,
+      )
 
       await runCli(['node', 'pair', 'update', '--source', './kb-v2.zip'], { fs })
     })
@@ -271,17 +311,21 @@ describe('CLI E2E - Update Command', () => {
       const cwd = '/project'
       const datasetPath = '/local/kb-dataset'
 
-      const fs = new InMemoryFileSystemService({
-        [`${datasetPath}/AGENTS.md`]: '# Updated Agents',
-        [`${datasetPath}/.github/workflows/ci.yml`]: 'name: Updated CI',
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            github: { target_path: '.github', behavior: 'mirror' },
-            agents: { target_path: 'AGENTS.md', behavior: 'add' },
-          },
-        }),
-        [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
-      }, cwd, cwd)
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${datasetPath}/AGENTS.md`]: '# Updated Agents',
+          [`${datasetPath}/.github/workflows/ci.yml`]: 'name: Updated CI',
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+              agents: { target_path: 'AGENTS.md', behavior: 'add' },
+            },
+          }),
+          [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
+        },
+        cwd,
+        cwd,
+      )
 
       await runCli(['node', 'pair', 'update', '--source', datasetPath], { fs })
     })
@@ -289,14 +333,18 @@ describe('CLI E2E - Update Command', () => {
     it('should update from local directory with relative path', async () => {
       const cwd = '/project'
 
-      const fs = new InMemoryFileSystemService({
-        [`${cwd}/kb-dataset/AGENTS.md`]: '# Updated Agents',
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            agents: { target_path: 'AGENTS.md', behavior: 'add' },
-          },
-        }),
-      }, cwd, cwd)
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${cwd}/kb-dataset/AGENTS.md`]: '# Updated Agents',
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              agents: { target_path: 'AGENTS.md', behavior: 'add' },
+            },
+          }),
+        },
+        cwd,
+        cwd,
+      )
 
       await runCli(['node', 'pair', 'update', '--source', './kb-dataset'], { fs })
     })
@@ -306,27 +354,31 @@ describe('CLI E2E - Update Command', () => {
     it('should list available registries with --list-targets', async () => {
       const cwd = '/project'
 
-      const fs = new InMemoryFileSystemService({
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            github: {
-              target_path: '.github',
-              behavior: 'mirror',
-              description: 'GitHub workflows and configs',
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: {
+                target_path: '.github',
+                behavior: 'mirror',
+                description: 'GitHub workflows and configs',
+              },
+              knowledge: {
+                target_path: '.pair/knowledge',
+                behavior: 'mirror',
+                description: 'Knowledge base content',
+              },
+              agents: {
+                target_path: 'AGENTS.md',
+                behavior: 'add',
+                description: 'AI agents guidance',
+              },
             },
-            knowledge: {
-              target_path: '.pair/knowledge',
-              behavior: 'mirror',
-              description: 'Knowledge base content',
-            },
-            agents: {
-              target_path: 'AGENTS.md',
-              behavior: 'add',
-              description: 'AI agents guidance',
-            },
-          },
-        }),
-      }, cwd, cwd)
+          }),
+        },
+        cwd,
+        cwd,
+      )
 
       // This should print to console without throwing
       await runCli(['node', 'pair', 'update', '--list-targets', '--no-kb'], { fs })
@@ -339,20 +391,24 @@ describe('CLI E2E - Update Command', () => {
       const moduleFolder = `${cwd}/libs/pair-cli`
       const datasetPath = `${moduleFolder}/bundle-cli/dataset`
 
-      const fs = new InMemoryFileSystemService({
-        [`${moduleFolder}/package.json`]: JSON.stringify({ name: '@pair/pair-cli' }),
-        [`${datasetPath}/AGENTS.md`]: '# Updated Agents',
-        [`${datasetPath}/.github/workflows/ci.yml`]: 'name: Updated CI',
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            github: { target_path: '.github', behavior: 'mirror' },
-            agents: { target_path: 'AGENTS.md', behavior: 'add' },
-          },
-        }),
-        // Existing files
-        [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
-        [`${cwd}/AGENTS.md`]: '# Old Agents',
-      }, moduleFolder, cwd)
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${moduleFolder}/package.json`]: JSON.stringify({ name: '@pair/pair-cli' }),
+          [`${datasetPath}/AGENTS.md`]: '# Updated Agents',
+          [`${datasetPath}/.github/workflows/ci.yml`]: 'name: Updated CI',
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+              agents: { target_path: 'AGENTS.md', behavior: 'add' },
+            },
+          }),
+          // Existing files
+          [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
+          [`${cwd}/AGENTS.md`]: '# Old Agents',
+        },
+        moduleFolder,
+        cwd,
+      )
 
       await runCli(['node', 'pair', 'update', '--no-kb'], { fs })
 
@@ -366,17 +422,21 @@ describe('CLI E2E - Update Command', () => {
       const cwd = '/project'
       const datasetPath = `${cwd}/node_modules/@pair/knowledge-hub/dataset`
 
-      const fs = new InMemoryFileSystemService({
-        [`${datasetPath}/AGENTS.md`]: '# Updated Agents',
-        [`${datasetPath}/.github/workflows/ci.yml`]: 'name: Updated CI',
-        [`${cwd}/config.json`]: JSON.stringify({
-          asset_registries: {
-            github: { target_path: '.github', behavior: 'mirror' },
-            agents: { target_path: 'AGENTS.md', behavior: 'add' },
-          },
-        }),
-        [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
-      }, cwd, cwd)
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${datasetPath}/AGENTS.md`]: '# Updated Agents',
+          [`${datasetPath}/.github/workflows/ci.yml`]: 'name: Updated CI',
+          [`${cwd}/config.json`]: JSON.stringify({
+            asset_registries: {
+              github: { target_path: '.github', behavior: 'mirror' },
+              agents: { target_path: 'AGENTS.md', behavior: 'add' },
+            },
+          }),
+          [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
+        },
+        cwd,
+        cwd,
+      )
 
       // Test registry:target syntax (e.g., github:.github)
       await runCli(['node', 'pair', 'update', '--target', 'github:.github', '--no-kb'], { fs })
@@ -389,25 +449,27 @@ describe('CLI E2E - Error Scenarios', () => {
     const cwd = '/project'
     const fs = new InMemoryFileSystemService({}, cwd, cwd)
 
-    await expect(
-      runCli(['node', 'pair', 'install', '--no-kb'], { fs })
-    ).rejects.toThrow()
+    await expect(runCli(['node', 'pair', 'install', '--no-kb'], { fs })).rejects.toThrow()
   })
 
   it('should fail gracefully when source ZIP is corrupted', async () => {
     const cwd = '/project'
 
-    const fs = new InMemoryFileSystemService({
-      [`${cwd}/bad.zip`]: 'INVALID_ZIP',
-      [`${cwd}/config.json`]: JSON.stringify({
-        asset_registries: {
-          github: { target_path: '.github', behavior: 'mirror' },
-        },
-      }),
-    }, cwd, cwd)
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/bad.zip`]: 'INVALID_ZIP',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: { target_path: '.github', behavior: 'mirror' },
+          },
+        }),
+      },
+      cwd,
+      cwd,
+    )
 
     await expect(
-      runCli(['node', 'pair', 'install', '--source', 'bad.zip'], { fs })
+      runCli(['node', 'pair', 'install', '--source', 'bad.zip'], { fs }),
     ).rejects.toThrow()
   })
 })
@@ -416,18 +478,22 @@ describe('CLI E2E - Validate Config Command', () => {
   it('should succeed with valid config', async () => {
     const cwd = '/project'
 
-    const fs = new InMemoryFileSystemService({
-      [`${cwd}/config.json`]: JSON.stringify({
-        asset_registries: {
-          github: {
-            source: '.github',
-            behavior: 'mirror',
-            target_path: '.github',
-            description: 'GitHub workflows',
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: {
+              source: '.github',
+              behavior: 'mirror',
+              target_path: '.github',
+              description: 'GitHub workflows',
+            },
           },
-        },
-      }),
-    }, cwd, cwd)
+        }),
+      },
+      cwd,
+      cwd,
+    )
 
     await runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })
     // Should not throw - valid config
@@ -436,92 +502,150 @@ describe('CLI E2E - Validate Config Command', () => {
   it('should fail with invalid behavior', async () => {
     const cwd = '/project'
 
-    const fs = new InMemoryFileSystemService({
-      [`${cwd}/config.json`]: JSON.stringify({
-        asset_registries: {
-          github: {
-            source: '.github',
-            behavior: 'invalid-behavior',
-            target_path: '.github',
-            description: 'GitHub workflows',
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: {
+              source: '.github',
+              behavior: 'invalid-behavior',
+              target_path: '.github',
+              description: 'GitHub workflows',
+            },
           },
-        },
-      }),
-    }, cwd, cwd)
+        }),
+      },
+      cwd,
+      cwd,
+    )
 
-    await expect(
-      runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })
-    ).rejects.toThrow()
+    await expect(runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })).rejects.toThrow()
   })
 
   it('should fail with missing asset_registries', async () => {
     const cwd = '/project'
 
-    const fs = new InMemoryFileSystemService({
-      [`${cwd}/config.json`]: JSON.stringify({}),
-    }, cwd, cwd)
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify({}),
+      },
+      cwd,
+      cwd,
+    )
 
-    await expect(
-      runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })
-    ).rejects.toThrow()
+    await expect(runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })).rejects.toThrow()
   })
 
   it('should fail with invalid registry structure', async () => {
     const cwd = '/project'
 
-    const fs = new InMemoryFileSystemService({
-      [`${cwd}/config.json`]: JSON.stringify({
-        asset_registries: {
-          github: 'invalid-not-an-object',
-        },
-      }),
-    }, cwd, cwd)
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: 'invalid-not-an-object',
+          },
+        }),
+      },
+      cwd,
+      cwd,
+    )
 
-    await expect(
-      runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })
-    ).rejects.toThrow()
+    await expect(runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })).rejects.toThrow()
   })
 
   it('should fail with invalid include array', async () => {
     const cwd = '/project'
 
-    const fs = new InMemoryFileSystemService({
-      [`${cwd}/config.json`]: JSON.stringify({
-        asset_registries: {
-          github: {
-            source: '.github',
-            behavior: 'mirror',
-            target_path: '.github',
-            description: 'GitHub workflows',
-            include: ['valid', 123],
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: {
+              source: '.github',
+              behavior: 'mirror',
+              target_path: '.github',
+              description: 'GitHub workflows',
+              include: ['valid', 123],
+            },
           },
-        },
-      }),
-    }, cwd, cwd)
+        }),
+      },
+      cwd,
+      cwd,
+    )
 
-    await expect(
-      runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })
-    ).rejects.toThrow()
+    await expect(runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })).rejects.toThrow()
   })
 
   it('should fail with missing required fields', async () => {
     const cwd = '/project'
 
-    const fs = new InMemoryFileSystemService({
-      [`${cwd}/config.json`]: JSON.stringify({
-        asset_registries: {
-          github: {
-            source: '.github',
-            behavior: 'mirror',
-            // Missing target_path and description
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            github: {
+              source: '.github',
+              behavior: 'mirror',
+              // Missing target_path and description
+            },
           },
-        },
-      }),
-    }, cwd, cwd)
+        }),
+      },
+      cwd,
+      cwd,
+    )
 
-    await expect(
-      runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })
-    ).rejects.toThrow()
+    await expect(runCli(['node', 'pair', 'validate-config', '--no-kb'], { fs })).rejects.toThrow()
+  })
+})
+
+describe('CLI E2E - KB Validate Command', () => {
+  it('should succeed with valid KB structure', async () => {
+    const cwd = '/project'
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/.pair/knowledge/index.md`]: '# Knowledge Base',
+        [`${cwd}/.pair/adoption/guide.md`]: '# Adoption Guide',
+      },
+      cwd,
+      cwd,
+    )
+
+    await runCli(['node', 'pair', 'kb-validate', '--no-kb'], { fs })
+    // Should not throw - valid KB structure
+  })
+
+  it('should fail with missing .pair directory', async () => {
+    const cwd = '/project'
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/README.md`]: '# Project',
+      },
+      cwd,
+      cwd,
+    )
+
+    await expect(runCli(['node', 'pair', 'kb-validate', '--no-kb'], { fs })).rejects.toThrow()
+  })
+
+  it('should validate KB at specified path', async () => {
+    const cwd = '/project'
+    const kbPath = '/custom/kb'
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${kbPath}/.pair/knowledge/index.md`]: '# KB',
+      },
+      cwd,
+      cwd,
+    )
+
+    await runCli(['node', 'pair', 'kb-validate', '--path', kbPath, '--no-kb'], { fs })
+    // Should not throw - valid KB at custom path
   })
 })
 
@@ -529,22 +653,29 @@ describe('CLI E2E - Package Command', () => {
   it('should create valid package', async () => {
     const cwd = '/project'
 
-    const fs = new InMemoryFileSystemService({
-      [`${cwd}/dataset/AGENTS.md`]: '# Agents',
-      [`${cwd}/dataset/.pair/knowledge/index.md`]: '# KB',
-      [`${cwd}/config.json`]: JSON.stringify({
-        asset_registries: {
-          knowledge: {
-            source: '.',
-            behavior: 'mirror',
-            target_path: '.',
-            description: 'Knowledge base',
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/dataset/AGENTS.md`]: '# Agents',
+        [`${cwd}/dataset/.pair/knowledge/index.md`]: '# KB',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: {
+              source: '.',
+              behavior: 'mirror',
+              target_path: '.',
+              description: 'Knowledge base',
+            },
           },
-        },
-      }),
-    }, cwd, cwd)
+        }),
+      },
+      cwd,
+      cwd,
+    )
 
-    await runCli(['node', 'pair', 'package', '--source-dir', 'dataset', '--output', 'kb.zip', '--no-kb'], { fs })
+    await runCli(
+      ['node', 'pair', 'package', '--source-dir', 'dataset', '--output', 'kb.zip', '--no-kb'],
+      { fs },
+    )
 
     expect(fs.existsSync(`${cwd}/kb.zip`)).toBe(true)
   })
@@ -552,21 +683,28 @@ describe('CLI E2E - Package Command', () => {
   it('should package with source-dir option', async () => {
     const cwd = '/project'
 
-    const fs = new InMemoryFileSystemService({
-      [`${cwd}/my-dataset/AGENTS.md`]: '# Agents',
-      [`${cwd}/config.json`]: JSON.stringify({
-        asset_registries: {
-          agents: {
-            source: 'AGENTS.md',
-            behavior: 'add',
-            target_path: 'AGENTS.md',
-            description: 'Agents guide',
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/my-dataset/AGENTS.md`]: '# Agents',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            agents: {
+              source: 'AGENTS.md',
+              behavior: 'add',
+              target_path: 'AGENTS.md',
+              description: 'Agents guide',
+            },
           },
-        },
-      }),
-    }, cwd, cwd)
+        }),
+      },
+      cwd,
+      cwd,
+    )
 
-    await runCli(['node', 'pair', 'package', '--source-dir', 'my-dataset', '--output', 'out.zip', '--no-kb'], { fs })
+    await runCli(
+      ['node', 'pair', 'package', '--source-dir', 'my-dataset', '--output', 'out.zip', '--no-kb'],
+      { fs },
+    )
 
     expect(fs.existsSync(`${cwd}/out.zip`)).toBe(true)
   })
@@ -574,25 +712,33 @@ describe('CLI E2E - Package Command', () => {
   it('should fail with invalid config', async () => {
     const cwd = '/project'
 
-    const fs = new InMemoryFileSystemService({
-      [`${cwd}/dataset/AGENTS.md`]: '# Agents',
-      [`${cwd}/config.json`]: '{ invalid json',
-    }, cwd, cwd)
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/dataset/AGENTS.md`]: '# Agents',
+        [`${cwd}/config.json`]: '{ invalid json',
+      },
+      cwd,
+      cwd,
+    )
 
     await expect(
-      runCli(['node', 'pair', 'package', '--source-dir', 'dataset'], { fs })
+      runCli(['node', 'pair', 'package', '--source-dir', 'dataset'], { fs }),
     ).rejects.toThrow()
   })
 
   it('should fail with missing config', async () => {
     const cwd = '/project'
 
-    const fs = new InMemoryFileSystemService({
-      [`${cwd}/dataset/AGENTS.md`]: '# Agents',
-    }, cwd, cwd)
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/dataset/AGENTS.md`]: '# Agents',
+      },
+      cwd,
+      cwd,
+    )
 
     await expect(
-      runCli(['node', 'pair', 'package', '--source-dir', 'dataset'], { fs })
+      runCli(['node', 'pair', 'package', '--source-dir', 'dataset'], { fs }),
     ).rejects.toThrow()
   })
 })
@@ -602,16 +748,20 @@ describe('CLI E2E - Link Strategy', () => {
     const cwd = '/project'
     const datasetPath = `${cwd}/node_modules/@pair/knowledge-hub/dataset`
 
-    const fs = new InMemoryFileSystemService({
-      [`${datasetPath}/.pair/knowledge/index.md`]: '# KB\n[link](../adoption/guide.md)',
-      [`${datasetPath}/.pair/adoption/guide.md`]: '# Guide',
-      [`${cwd}/config.json`]: JSON.stringify({
-        asset_registries: {
-          knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
-          adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
-        },
-      }),
-    }, cwd, cwd)
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${datasetPath}/.pair/knowledge/index.md`]: '# KB\n[link](../adoption/guide.md)',
+        [`${datasetPath}/.pair/adoption/guide.md`]: '# Guide',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+            adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
+          },
+        }),
+      },
+      cwd,
+      cwd,
+    )
 
     await runCli(['node', 'pair', 'install', '--link-style', 'relative', '--no-kb'], { fs })
 
@@ -623,16 +773,20 @@ describe('CLI E2E - Link Strategy', () => {
     const cwd = '/project'
     const datasetPath = `${cwd}/node_modules/@pair/knowledge-hub/dataset`
 
-    const fs = new InMemoryFileSystemService({
-      [`${datasetPath}/.pair/knowledge/index.md`]: '# KB\n[link](../adoption/guide.md)',
-      [`${datasetPath}/.pair/adoption/guide.md`]: '# Guide',
-      [`${cwd}/config.json`]: JSON.stringify({
-        asset_registries: {
-          knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
-          adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
-        },
-      }),
-    }, cwd, cwd)
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${datasetPath}/.pair/knowledge/index.md`]: '# KB\n[link](../adoption/guide.md)',
+        [`${datasetPath}/.pair/adoption/guide.md`]: '# Guide',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+            adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
+          },
+        }),
+      },
+      cwd,
+      cwd,
+    )
 
     await runCli(['node', 'pair', 'update', '--link-style', 'absolute', '--no-kb'], { fs })
 
@@ -644,16 +798,21 @@ describe('CLI E2E - Update Link Command', () => {
   it('should update and validate links in installed KB content', async () => {
     const cwd = '/project'
 
-    const fs = new InMemoryFileSystemService({
-      [`${cwd}/.pair/knowledge/index.md`]: '# KB\n[link](../adoption/guide.md)\n[broken](missing.md)',
-      [`${cwd}/.pair/adoption/guide.md`]: '# Guide',
-      [`${cwd}/config.json`]: JSON.stringify({
-        asset_registries: {
-          knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
-          adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
-        },
-      }),
-    }, cwd, cwd)
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/.pair/knowledge/index.md`]:
+          '# KB\n[link](../adoption/guide.md)\n[broken](missing.md)',
+        [`${cwd}/.pair/adoption/guide.md`]: '# Guide',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+            adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
+          },
+        }),
+      },
+      cwd,
+      cwd,
+    )
 
     await runCli(['node', 'pair', 'update-link', '--no-kb'], { fs })
 
@@ -664,15 +823,19 @@ describe('CLI E2E - Update Link Command', () => {
   it('should support --dry-run mode for link validation', async () => {
     const cwd = '/project'
 
-    const fs = new InMemoryFileSystemService({
-      [`${cwd}/.pair/knowledge/index.md`]: '# KB\n[link](guide.md)',
-      [`${cwd}/.pair/knowledge/guide.md`]: '# Guide',
-      [`${cwd}/config.json`]: JSON.stringify({
-        asset_registries: {
-          knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
-        },
-      }),
-    }, cwd, cwd)
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/.pair/knowledge/index.md`]: '# KB\n[link](guide.md)',
+        [`${cwd}/.pair/knowledge/guide.md`]: '# Guide',
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+          },
+        }),
+      },
+      cwd,
+      cwd,
+    )
 
     await runCli(['node', 'pair', 'update-link', '--dry-run', '--no-kb'], { fs })
 

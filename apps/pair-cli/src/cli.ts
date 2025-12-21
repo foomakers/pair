@@ -217,7 +217,7 @@ ${cmdConfig.metadata.notes.map((note: string) => `  • ${note}`).join('\n')}
     // Merge command options with global options (command options take precedence)
     const options = { ...globalOptions, ...cmdOptions }
     const config = cmdConfig.parse(options)
-    
+
     try {
       await dispatchCommand(config, fsService)
     } catch (err) {
@@ -228,7 +228,7 @@ ${cmdConfig.metadata.notes.map((note: string) => `  • ${note}`).join('\n')}
       )
       process.exitCode = 1
       process.exit(1)
-      throw err  // Re-throw for test environments
+      throw err // Re-throw for test environments
     }
   })
 }
@@ -249,6 +249,7 @@ function setupCommands(prog: Command, fsService: FileSystemService): void {
   registerCommandFromMetadata(prog, 'update-link', fsService)
   registerCommandFromMetadata(prog, 'package', fsService)
   registerCommandFromMetadata(prog, 'validate-config', fsService)
+  registerCommandFromMetadata(prog, 'kb-validate', fsService)
 
   registerDefaultAction(prog)
 }
@@ -256,7 +257,10 @@ function setupCommands(prog: Command, fsService: FileSystemService): void {
 /**
  * Run CLI with injected dependencies (for testing)
  */
-export async function runCli(argv: string[], deps: CliDependencies = { fs: fileSystemService }): Promise<void> {
+export async function runCli(
+  argv: string[],
+  deps: CliDependencies = { fs: fileSystemService },
+): Promise<void> {
   const fsService = deps.fs
 
   // Create fresh program instance for each invocation (prevents state pollution in tests)

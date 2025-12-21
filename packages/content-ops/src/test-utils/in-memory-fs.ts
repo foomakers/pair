@@ -340,7 +340,7 @@ export class InMemoryFileSystemService implements FileSystemService {
 
     for (const sourcePath of sourcePaths) {
       const resolvedSourcePath = this.resolvePath(sourcePath)
-      
+
       // Check if source is file or directory
       if (this.files.has(resolvedSourcePath)) {
         // Single file - add to zip root

@@ -7,6 +7,7 @@ import type { UpdateCommandConfig } from './update/parser'
 import type { UpdateLinkCommandConfig } from './update-link/parser'
 import type { PackageCommandConfig } from './package/parser'
 import type { ValidateConfigCommandConfig } from './validate-config/parser'
+import type { KbValidateCommandConfig } from './kb-validate/parser'
 
 // Command registry for dynamic dispatch
 import { parseInstallCommand } from './install/parser'
@@ -24,6 +25,9 @@ import { packageCommandMetadata } from './package/metadata'
 import { parseValidateConfigCommand } from './validate-config/parser'
 import { validateConfigMetadata } from './validate-config/metadata'
 import { handleValidateConfigCommand } from './validate-config/handler'
+import { parseKbValidateCommand } from './kb-validate/parser'
+import { handleKbValidateCommand } from './kb-validate/handler'
+import { kbValidateMetadata } from './kb-validate/metadata'
 
 /**
  * Discriminated union of all command configurations
@@ -32,6 +36,7 @@ export type CommandConfig =
   | InstallCommandConfig
   | UpdateCommandConfig
   | UpdateLinkCommandConfig
+  | KbValidateCommandConfig
   | PackageCommandConfig
   | ValidateConfigCommandConfig
 
@@ -60,5 +65,10 @@ export const commandRegistry = {
     parse: parseValidateConfigCommand,
     handle: handleValidateConfigCommand,
     metadata: validateConfigMetadata,
+  },
+  'kb-validate': {
+    parse: parseKbValidateCommand,
+    handle: handleKbValidateCommand,
+    metadata: kbValidateMetadata,
   },
 } as const
