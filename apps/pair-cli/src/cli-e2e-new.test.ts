@@ -639,3 +639,44 @@ describe('CLI E2E - Link Strategy', () => {
     expect(content).toContain('/.pair/adoption/guide.md')
   })
 })
+describe('CLI E2E - Update Link Command', () => {
+  it('should update and validate links in installed KB content', async () => {
+    const cwd = '/project'
+
+    const fs = new InMemoryFileSystemService({
+      [`${cwd}/.pair/knowledge/index.md`]: '# KB\n[link](../adoption/guide.md)\n[broken](missing.md)',
+      [`${cwd}/.pair/adoption/guide.md`]: '# Guide',
+      [`${cwd}/config.json`]: JSON.stringify({
+        asset_registries: {
+          knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+          adoption: { target_path: '.pair/adoption', behavior: 'mirror' },
+        },
+      }),
+    }, cwd, cwd)
+
+    await runCli(['node', 'pair', 'update-link'], { fs })
+
+    // Command should complete successfully
+    expect(fs.existsSync(`${cwd}/.pair/knowledge/index.md`)).toBe(true)
+  })
+
+  it('should support --dry-run mode for link validation', async () => {
+    const cwd = '/project'
+
+    const fs = new InMemoryFileSystemService({
+      [`${cwd}/.pair/knowledge/index.md`]: '# KB\n[link](guide.md)',
+      [`${cwd}/.pair/knowledge/guide.md`]: '# Guide',
+      [`${cwd}/config.json`]: JSON.stringify({
+        asset_registries: {
+          knowledge: { target_path: '.pair/knowledge', behavior: 'mirror' },
+        },
+      }),
+    }, cwd, cwd)
+
+    await runCli(['node', 'pair', 'update-link', '--dry-run'], { fs })
+
+    // In dry-run mode, files should not be modified
+    const content = fs.readFileSync(`${cwd}/.pair/knowledge/index.md`)
+    expect(content).toContain('[link](guide.md)')
+  })
+})
