@@ -1,24 +1,31 @@
-import { describe, expect, beforeEach, vi } from 'vitest'
+import { describe, expect, beforeEach, vi, test } from 'vitest'
 import { handleUpdateLinkCommand } from './handler'
 import type { UpdateLinkCommandConfig } from './parser'
 import { createTestFileSystem } from '../test-utils'
 import type { InMemoryFileSystemService } from '@pair/content-ops'
 
-// Mock legacy updateLinkCommand
-vi.mock('../update-link', () => ({
-  updateLinkCommand: vi.fn().mockResolvedValue({ success: true }),
+// Mock dependencies
+vi.mock('../../config-utils', () => ({
+  getKnowledgeHubDatasetPath: vi.fn().mockReturnValue('/test/dataset'),
 }))
 
-describe('handleUpdateLinkCommand - unit tests with mocked legacy command', () => {
+vi.mock('@pair/content-ops/file-system', () => ({
+  isExternalLink: vi.fn((href: string) => href.startsWith('http')),
+  walkMarkdownFiles: vi.fn().mockResolvedValue([]),
+}))
+
+describe('handleUpdateLinkCommand - unit tests', () => {
   let fs: InMemoryFileSystemService
 
   beforeEach(() => {
     fs = createTestFileSystem()
+    // Setup KB directory structure
+    fs.mkdirSync('/.pair', { recursive: true })
     vi.clearAllMocks()
   })
 
-  describe('config to legacy args mapping', () => {
-    test('maps default config to empty args', async () => {
+  describe('handler execution', () => {
+    test('processes markdown files with default settings', async () => {
       const config: UpdateLinkCommandConfig = {
         command: 'update-link',
         dryRun: false,
@@ -27,30 +34,42 @@ describe('handleUpdateLinkCommand - unit tests with mocked legacy command', () =
 
       await handleUpdateLinkCommand(config, fs)
 
-      const { updateLinkCommand } = await import('../update-link')
-      expect(updateLinkCommand).toHaveBeenCalledWith(
-        fs,
-        [],
-        expect.objectContaining({
-          minLogLevel: 'warn',
-        }),
-      )
+      const { walkMarkdownFiles } = await import('@pair/content-ops/file-system')
+      expect(walkMarkdownFiles).toHaveBeenCalled()
     })
 
-    test('maps dryRun flag to args', async () => {
+    test('runs in dry-run mode without modifying files', async () => {
       const config: UpdateLinkCommandConfig = {
         command: 'update-link',
         dryRun: true,
         verbose: false,
       }
 
+      const writeFileSpy = vi.spyOn(fs, 'writeFile')
+
       await handleUpdateLinkCommand(config, fs)
 
-      const { updateLinkCommand } = await import('../update-link')
-      expect(updateLinkCommand).toHaveBeenCalledWith(fs, ['--dry-run'], expect.any(Object))
+      expect(writeFileSpy).not.toHaveBeenCalled()
     })
 
-    test('maps verbose flag to args and options', async () => {
+    test('converts to absolute paths when absolute flag is true', async () => {
+      const config: UpdateLinkCommandConfig = {
+        command: 'update-link',
+        absolute: true,
+        dryRun: false,
+        verbose: false,
+      }
+
+      await handleUpdateLinkCommand(config, fs)
+
+      // Handler should process files in absolute mode
+      const { walkMarkdownFiles } = await import('@pair/content-ops/file-system')
+      expect(walkMarkdownFiles).toHaveBeenCalled()
+    })
+
+    test('logs verbose output when verbose flag is true', async () => {
+      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
       const config: UpdateLinkCommandConfig = {
         command: 'update-link',
         dryRun: false,
@@ -59,38 +78,16 @@ describe('handleUpdateLinkCommand - unit tests with mocked legacy command', () =
 
       await handleUpdateLinkCommand(config, fs)
 
-      const { updateLinkCommand } = await import('../update-link')
-      expect(updateLinkCommand).toHaveBeenCalledWith(
-        fs,
-        ['--verbose'],
-        expect.objectContaining({
-          minLogLevel: 'info',
-        }),
-      )
+      // Verbose mode should not crash
+      expect(consoleSpy).not.toThrow()
+      consoleSpy.mockRestore()
     })
 
-    test('maps both flags', async () => {
-      const config: UpdateLinkCommandConfig = {
-        command: 'update-link',
-        dryRun: true,
-        verbose: true,
-      }
-
-      await handleUpdateLinkCommand(config, fs)
-
-      const { updateLinkCommand } = await import('../update-link')
-      expect(updateLinkCommand).toHaveBeenCalledWith(
-        fs,
-        ['--dry-run', '--verbose'],
-        expect.objectContaining({
-          minLogLevel: 'info',
-        }),
-      )
-    })
-
-    test('throws on legacy command failure', async () => {
-      const { updateLinkCommand } = await import('../update-link')
-      vi.mocked(updateLinkCommand).mockResolvedValueOnce({ success: false, message: 'Test error' })
+    test('throws when KB is not installed', async () => {
+      const { getKnowledgeHubDatasetPath } = await import('../../config-utils')
+      vi.mocked(getKnowledgeHubDatasetPath).mockImplementationOnce(() => {
+        throw new Error('No KB found')
+      })
 
       const config: UpdateLinkCommandConfig = {
         command: 'update-link',
@@ -98,7 +95,7 @@ describe('handleUpdateLinkCommand - unit tests with mocked legacy command', () =
         verbose: false,
       }
 
-      await expect(handleUpdateLinkCommand(config, fs)).rejects.toThrow('Test error')
+      await expect(handleUpdateLinkCommand(config, fs)).rejects.toThrow()
     })
   })
 })

@@ -28,7 +28,7 @@ async function loadAndValidate(
 
 async function prepareOutput(outputPath: string, fs: FileSystemService) {
   const outputDir = path.dirname(outputPath)
-  
+
   if (!fs.existsSync(outputDir)) {
     await fs.mkdir(outputDir, { recursive: true })
   }
@@ -53,14 +53,14 @@ async function createAndReportZip(params: {
   fs: FileSystemService
 }) {
   const { config, projectRoot, registries, manifest, outputPath, fs } = params
-  
+
   if (config.verbose) {
     console.log('🗜️  Creating ZIP archive...')
     console.log(`   Packaging ${registries.length} registries`)
   }
 
   await createPackageZip({ projectRoot, registries, manifest, outputPath }, fs)
-    
+
   const stats = await fs.stat(outputPath)
   const sizeKB = (stats.size / 1024).toFixed(2)
   const sizeMB = (stats.size / (1024 * 1024)).toFixed(2)
@@ -107,7 +107,7 @@ export async function handlePackageCommand(
 
   const outputPath =
     config.output || path.join(projectRoot, 'dist', `kb-package-${manifest.created_at}.zip`)
-  
+
   if (config.verbose) console.log(`📁 Preparing output directory: ${path.dirname(outputPath)}`)
   await prepareOutput(outputPath, fs)
 

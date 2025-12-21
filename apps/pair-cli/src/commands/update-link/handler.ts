@@ -120,7 +120,7 @@ async function processFiles(params: {
   pushLog: (level: LogEntry['level'], message: string) => void
 }) {
   const { kbPath, pathMode, dryRun, fs, pushLog } = params
-  
+
   const aggregateStats = {
     totalLinks: 0,
     filesModified: 0,
@@ -163,14 +163,17 @@ export async function handleUpdateLinkCommand(
   const { pushLog } = createLogger(config.verbose ? 'info' : ('warn' as LogEntry['level']))
 
   pushLog('info', 'Starting update-link command')
-  
+
   const pathMode = config.absolute ? 'absolute' : 'relative'
   const dryRun = config.dryRun ?? false
-  
+
   pushLog('info', `Path mode: ${pathMode}, Dry run: ${dryRun}`)
 
   const kbPath = await verifyKB(fs, pushLog)
   const aggregateStats = await processFiles({ kbPath, pathMode, dryRun, fs, pushLog })
 
-  pushLog('info', `Processed ${aggregateStats.totalLinks} links, modified ${aggregateStats.filesModified} files`)
+  pushLog(
+    'info',
+    `Processed ${aggregateStats.totalLinks} links, modified ${aggregateStats.filesModified} files`,
+  )
 }
