@@ -41,3 +41,8 @@ describe('Install Command - CLI Integration (Legacy)', () => {
     })
   })
 })
+/**
+ * LEGACY TESTS - To be converted to new flow (parser → dispatcher → handler)
+ * These tests use the old installCommand function which will be removed after T-9
+ * See: commands/install/handler.test.ts for new-style handler tests
+ */
