@@ -526,8 +526,7 @@ describe('CLI E2E - Validate Config Command', () => {
 })
 
 describe('CLI E2E - Package Command', () => {
-  // AdmZip reads from real FS, incompatible with InMemoryFS
-  it.skip('should create valid package', async () => {
+  it('should create valid package', async () => {
     const cwd = '/project'
 
     const fs = new InMemoryFileSystemService({
@@ -545,14 +544,12 @@ describe('CLI E2E - Package Command', () => {
       }),
     }, cwd, cwd)
 
-    await runCli(['node', 'pair', 'package', '--source-dir', 'dataset', '--output', '/tmp/kb.zip', '--no-kb'], { fs })
+    await runCli(['node', 'pair', 'package', '--source-dir', 'dataset', '--output', 'kb.zip', '--no-kb'], { fs })
 
-    // Note: ZIP file is written to real FS by AdmZip at /tmp/kb.zip
-    // Test passes if command completes without throwing
+    expect(fs.existsSync(`${cwd}/kb.zip`)).toBe(true)
   })
 
-  // AdmZip reads from real FS, incompatible with InMemoryFS
-  it.skip('should package with source-dir option', async () => {
+  it('should package with source-dir option', async () => {
     const cwd = '/project'
 
     const fs = new InMemoryFileSystemService({
@@ -569,10 +566,9 @@ describe('CLI E2E - Package Command', () => {
       }),
     }, cwd, cwd)
 
-    await runCli(['node', 'pair', 'package', '--source-dir', 'my-dataset', '--output', '/tmp/out.zip', '--no-kb'], { fs })
+    await runCli(['node', 'pair', 'package', '--source-dir', 'my-dataset', '--output', 'out.zip', '--no-kb'], { fs })
 
-    // Note: ZIP file is written to real FS by AdmZip at /tmp/out.zip
-    // Test passes if command completes without throwing
+    expect(fs.existsSync(`${cwd}/out.zip`)).toBe(true)
   })
 
   it('should fail with invalid config', async () => {

@@ -333,6 +333,59 @@ export class InMemoryFileSystemService implements FileSystemService {
       return false
     }
   }
+
+  async createZip(sourcePaths: string[], outputPath: string): Promise<void> {
+    const resolvedOutputPath = this.resolvePath(outputPath)
+    const zipContent: Record<string, string> = {}
+
+    for (const sourcePath of sourcePaths) {
+      const resolvedSourcePath = this.resolvePath(sourcePath)
+      
+      // Check if source is file or directory
+      if (this.files.has(resolvedSourcePath)) {
+        // Single file - add to zip root
+        const fileName = resolvedSourcePath.split('/').pop() || 'file'
+        zipContent[fileName] = this.files.get(resolvedSourcePath)!
+      } else if (this.dirs.has(resolvedSourcePath)) {
+        // Directory - add all files recursively
+        for (const [filePath, content] of this.files.entries()) {
+          if (filePath.startsWith(resolvedSourcePath + '/')) {
+            // Relative path within zip
+            const relativePath = filePath.substring(resolvedSourcePath.length + 1)
+            zipContent[relativePath] = content
+          }
+        }
+      }
+    }
+
+    // Serialize zip content as JSON (simple in-memory representation)
+    const zipData = JSON.stringify(zipContent)
+    this.files.set(resolvedOutputPath, zipData)
+    this.addParentDirectories(resolvedOutputPath)
+  }
+
+  async extractZip(zipPath: string, outputDir: string): Promise<void> {
+    const resolvedZipPath = this.resolvePath(zipPath)
+    const resolvedOutputDir = this.resolvePath(outputDir)
+
+    const zipData = this.files.get(resolvedZipPath)
+    if (!zipData) {
+      throw new Error(`ZIP file not found: ${zipPath}`)
+    }
+
+    // Deserialize zip content
+    const zipContent = JSON.parse(zipData) as Record<string, string>
+
+    // Extract all files
+    for (const [relativePath, content] of Object.entries(zipContent)) {
+      const outputPath = resolve(resolvedOutputDir, relativePath)
+      this.files.set(outputPath, content)
+      this.addParentDirectories(outputPath)
+    }
+
+    // Ensure output directory exists
+    this.dirs.add(resolvedOutputDir)
+  }
 }
 
 export default InMemoryFileSystemService
