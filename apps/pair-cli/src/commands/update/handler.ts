@@ -24,16 +24,19 @@ export async function handleUpdateCommand(
 
   switch (config.resolution) {
     case 'default':
-      // No URL - use default dataset
+      // No URL - use default dataset with useDefaults flag
+      options['useDefaults'] = true
       break
     case 'remote':
-      // Remote URL
+      // Remote URL with useDefaults
       options['url'] = config.url
+      options['useDefaults'] = true
       break
     case 'local':
-      // Local path (ZIP or directory)
+      // Local path (ZIP or directory) with useDefaults
       options['url'] = config.path
       options['offline'] = config.offline
+      options['useDefaults'] = true
       break
   }
 

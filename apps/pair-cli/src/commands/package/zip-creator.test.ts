@@ -56,12 +56,13 @@ describe('createPackageZip - basic operations', () => {
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
-    expect(fs.existsSync(outputPath)).toBe(true)
+    expect(fsService.existsSync(outputPath)).toBe(true)
   })
 
-  it('throws error if output directory does not exist', async () => {
+  it('creates output directory if it does not exist', async () => {
+    // validateOutputDirectory now creates directory with mkdir -p behavior
     const projectRoot = '/test-project'
-    const invalidOutput = '/nonexistent/dir/package.zip'
+    const testOutput = path.join(tempDir, 'nested/deep/package.zip')
     const registries: never[] = []
     const manifest: ManifestMetadata = {
       name: 'test',
@@ -70,9 +71,9 @@ describe('createPackageZip - basic operations', () => {
       registries: [],
     }
 
-    await expect(
-      createPackageZip({ projectRoot, registries, manifest, outputPath: invalidOutput }, fsService),
-    ).rejects.toThrow()
+    await createPackageZip({ projectRoot, registries, manifest, outputPath: testOutput }, fsService)
+    
+    expect(fsService.existsSync(testOutput)).toBe(true)
   })
 })
 
@@ -96,7 +97,7 @@ describe('createPackageZip - manifest injection', () => {
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
-    expect(fs.existsSync(outputPath)).toBe(true)
+    expect(fsService.existsSync(outputPath)).toBe(true)
   })
 
   it('manifest.json contains correct metadata fields', async () => {
@@ -115,7 +116,7 @@ describe('createPackageZip - manifest injection', () => {
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
-    expect(fs.existsSync(outputPath)).toBe(true)
+    expect(fsService.existsSync(outputPath)).toBe(true)
   })
 })
 
@@ -139,7 +140,7 @@ describe('createPackageZip - single registry', () => {
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
-    expect(fs.existsSync(outputPath)).toBe(true)
+    expect(fsService.existsSync(outputPath)).toBe(true)
   })
 
   it('includes file-based registry (AGENTS.md)', async () => {
@@ -156,7 +157,7 @@ describe('createPackageZip - single registry', () => {
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
-    expect(fs.existsSync(outputPath)).toBe(true)
+    expect(fsService.existsSync(outputPath)).toBe(true)
   })
 })
 
@@ -184,7 +185,7 @@ describe('createPackageZip - multiple registries', () => {
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
-    expect(fs.existsSync(outputPath)).toBe(true)
+    expect(fsService.existsSync(outputPath)).toBe(true)
   })
 
   it('preserves directory structure within registries', async () => {
@@ -202,7 +203,7 @@ describe('createPackageZip - multiple registries', () => {
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
-    expect(fs.existsSync(outputPath)).toBe(true)
+    expect(fsService.existsSync(outputPath)).toBe(true)
   })
 })
 
@@ -249,7 +250,7 @@ describe('createPackageZip - symlink and structure', () => {
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
-    expect(fs.existsSync(outputPath)).toBe(true)
+    expect(fsService.existsSync(outputPath)).toBe(true)
   })
 })
 
@@ -290,6 +291,6 @@ describe('createPackageZip - error handling', () => {
       // Expected error
     }
 
-    expect(fs.existsSync(outputPath)).toBe(false)
+    expect(fsService.existsSync(outputPath)).toBe(false)
   })
 })

@@ -12,15 +12,13 @@ interface ParseKbValidateOptions {
 
 /**
  * Parse kb-validate command options into KbValidateCommandConfig.
- * 
+ *
  * Extracts KB path for validation. If not provided, uses current directory.
- * 
+ *
  * @param options - Raw CLI options from Commander.js
  * @returns Typed KbValidateCommandConfig with optional KB path
  */
-export function parseKbValidateCommand(
-  options: ParseKbValidateOptions,
-): KbValidateCommandConfig {
+export function parseKbValidateCommand(options: ParseKbValidateOptions): KbValidateCommandConfig {
   const { path } = options
 
   return {

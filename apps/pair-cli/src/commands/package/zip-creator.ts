@@ -64,19 +64,13 @@ async function copyRegistrySources(
   }
 }
 
-async function cleanupOnError(
-  outputPath: string,
-  fsService: FileSystemService,
-): Promise<void> {
+async function cleanupOnError(outputPath: string, fsService: FileSystemService): Promise<void> {
   if (await fsService.exists(outputPath)) {
     await fsService.unlink(outputPath)
   }
 }
 
-async function cleanupTempDirectory(
-  tempDir: string,
-  fsService: FileSystemService,
-): Promise<void> {
+async function cleanupTempDirectory(tempDir: string, fsService: FileSystemService): Promise<void> {
   if (await fsService.exists(tempDir)) {
     await fsService.rm(tempDir, { recursive: true, force: true })
   }

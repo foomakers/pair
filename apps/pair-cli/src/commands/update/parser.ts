@@ -49,12 +49,12 @@ interface ParseUpdateOptions {
 
 /**
  * Parse update command options into UpdateCommandConfig.
- * 
+ *
  * Determines resolution strategy based on source parameter:
  * - No source: default resolution (uses configured defaults)
  * - Remote URL (http/https): remote resolution
  * - Local path (absolute/relative): local resolution
- * 
+ *
  * @param options - Raw CLI options from Commander.js
  * @returns Typed UpdateCommandConfig with discriminated union for resolution
  * @throws Error if options validation fails

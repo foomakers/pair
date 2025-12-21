@@ -178,7 +178,10 @@ export function checkKnowledgeHubDatasetAccessible(
   }
 }
 
-function addCommandOptions(cmd: Command, options: readonly { flags: string; description: string; defaultValue?: unknown }[]): void {
+function addCommandOptions(
+  cmd: Command,
+  options: readonly { flags: string; description: string; defaultValue?: unknown }[],
+): void {
   for (const opt of options) {
     if (opt.flags.startsWith('[')) {
       cmd.argument(opt.flags, opt.description)
@@ -211,7 +214,10 @@ function registerCommandFromMetadata(
   const cmd = prog.command(cmdConfig.metadata.name).description(cmdConfig.metadata.description)
 
   addCommandOptions(cmd, cmdConfig.metadata.options)
-  cmd.addHelpText('after', buildCommandHelpText(cmdConfig.metadata.examples, cmdConfig.metadata.notes))
+  cmd.addHelpText(
+    'after',
+    buildCommandHelpText(cmdConfig.metadata.examples, cmdConfig.metadata.notes),
+  )
 
   cmd.action(async (...args: unknown[]) => {
     // Commander.js passes the command instance as last arg, not options
