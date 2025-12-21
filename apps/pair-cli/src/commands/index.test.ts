@@ -9,8 +9,11 @@ import { parseUpdateLinkCommand } from './update-link/parser'
 import { parseValidateConfigCommand } from './validate-config/parser'
 import { parsePackageCommand } from './package/parser'
 import { dispatchCommand } from './dispatcher'
+import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 
 describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
+  const fs = new InMemoryFileSystemService({}, '/test', '/test')
+
   describe('Install command', () => {
     it('should parse and dispatch remote URL install', async () => {
       const options = { source: 'https://example.com/kb.zip' }
@@ -19,7 +22,7 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
       expect(config.command).toBe('install')
       expect(config.resolution).toBe('remote')
 
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
 
     it('should parse and dispatch local path install', async () => {
@@ -29,7 +32,7 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
       expect(config.command).toBe('install')
       expect(config.resolution).toBe('local')
 
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
 
     it('should parse offline mode with local source', () => {
@@ -50,7 +53,7 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
       expect(config.command).toBe('update')
       expect(config.resolution).toBe('remote')
 
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
 
     it('should parse and dispatch local path update', async () => {
@@ -60,7 +63,7 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
       expect(config.command).toBe('update')
       expect(config.resolution).toBe('local')
 
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
 
     it('should parse offline mode with local source', () => {
@@ -79,7 +82,7 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
 
       expect(config.command).toBe('update-link')
 
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
 
     it('should parse url option', () => {
@@ -103,7 +106,7 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
 
       expect(config.command).toBe('validate-config')
 
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
 
     it('should parse custom config path', () => {
@@ -120,7 +123,7 @@ describe('Command Integration Flow (Parser → Dispatcher → Handler)', () => {
 
       expect(config.command).toBe('package')
 
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
 
     it('should parse all package options', () => {

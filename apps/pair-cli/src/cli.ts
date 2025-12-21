@@ -190,6 +190,7 @@ export function checkKnowledgeHubDatasetAccessible(
 function registerCommandFromMetadata(
   prog: typeof program,
   commandName: keyof typeof commandRegistry,
+  fsService: FileSystemService,
 ): void {
   const cmdConfig = commandRegistry[commandName]
   const cmd = prog.command(cmdConfig.metadata.name).description(cmdConfig.metadata.description)
@@ -221,7 +222,7 @@ ${cmdConfig.metadata.notes.map((note: string) => `  • ${note}`).join('\n')}
     try {
       const options = args[args.length - 1] as Record<string, unknown>
       const config = cmdConfig.parse(options)
-      await dispatchCommand(config)
+      await dispatchCommand(config, fsService)
     } catch (err) {
       console.error(
         chalk.red(
@@ -242,13 +243,13 @@ function registerDefaultAction(prog: typeof program): void {
   })
 }
 
-function setupCommands(prog: typeof program): void {
+function setupCommands(prog: typeof program, fsService: FileSystemService): void {
   // Register commands with metadata from registry
-  registerCommandFromMetadata(prog, 'install')
-  registerCommandFromMetadata(prog, 'update')
-  registerCommandFromMetadata(prog, 'update-link')
-  registerCommandFromMetadata(prog, 'package')
-  registerCommandFromMetadata(prog, 'validate-config')
+  registerCommandFromMetadata(prog, 'install', fsService)
+  registerCommandFromMetadata(prog, 'update', fsService)
+  registerCommandFromMetadata(prog, 'update-link', fsService)
+  registerCommandFromMetadata(prog, 'package', fsService)
+  registerCommandFromMetadata(prog, 'validate-config', fsService)
 
   registerDefaultAction(prog)
 }
@@ -263,7 +264,7 @@ export async function runCli(argv: string[], deps: CliDependencies = { fs: fileS
   runDiagnostics(fsService)
 
   // Register all commands BEFORE parsing
-  setupCommands(program)
+  setupCommands(program, fsService)
 
   // Parse global options
   program.parse(argv)

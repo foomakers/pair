@@ -26,11 +26,18 @@ describe('CLI E2E - Install Command', () => {
   describe('dev scenario with defaults', () => {
     it('should install from monorepo dataset when running from dev environment', async () => {
       const cwd = '/dev/pair/apps/pair-cli'
-      const datasetPath = '/dev/pair/packages/knowledge-hub/dataset'
+      const datasetPath = '/dev/pair/apps/pair-cli/node_modules/@pair/knowledge-hub/dataset'
       
       const fs = new InMemoryFileSystemService({
-        // Monorepo structure
-        [`${cwd}/package.json`]: JSON.stringify({ name: '@pair/pair-cli' }),
+        // Monorepo structure (node_modules with @pair/knowledge-hub)
+        [`${cwd}/package.json`]: JSON.stringify({ 
+          name: '@pair/pair-cli',
+          dependencies: { '@pair/knowledge-hub': 'workspace:*' }
+        }),
+        [`${cwd}/node_modules/@pair/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+          version: '0.3.0'
+        }),
         [`${datasetPath}/AGENTS.md`]: '# Agents Guide',
         [`${datasetPath}/.github/workflows/ci.yml`]: 'name: CI',
         [`${datasetPath}/.pair/knowledge/index.md`]: '# Knowledge Base',

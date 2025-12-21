@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import { dispatchCommand } from './dispatcher'
+import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 import type {
   InstallCommandConfig,
   UpdateCommandConfig,
@@ -9,6 +10,8 @@ import type {
 } from './index'
 
 describe('dispatchCommand()', () => {
+  const fs = new InMemoryFileSystemService({}, '/test', '/test')
+
   describe('install command dispatch', () => {
     test('dispatches install default config', async () => {
       const config: InstallCommandConfig = {
@@ -16,7 +19,7 @@ describe('dispatchCommand()', () => {
         resolution: 'default',
         offline: false,
       }
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
 
     test('dispatches install remote config', async () => {
@@ -26,7 +29,7 @@ describe('dispatchCommand()', () => {
         url: 'https://example.com/kb.zip',
         offline: false,
       }
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
 
     test('dispatches install local config', async () => {
@@ -36,7 +39,7 @@ describe('dispatchCommand()', () => {
         path: '/local/kb',
         offline: true,
       }
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
   })
 
@@ -47,7 +50,7 @@ describe('dispatchCommand()', () => {
         resolution: 'default',
         offline: false,
       }
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
 
     test('dispatches update remote config', async () => {
@@ -57,7 +60,7 @@ describe('dispatchCommand()', () => {
         url: 'https://example.com/kb-v2.zip',
         offline: false,
       }
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
   })
 
@@ -66,21 +69,21 @@ describe('dispatchCommand()', () => {
       const config: UpdateLinkCommandConfig = {
         command: 'update-link',
       }
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
 
     test('dispatches package command', async () => {
       const config: PackageCommandConfig = {
         command: 'package',
       }
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
 
     test('dispatches validate-config command', async () => {
       const config: ValidateConfigCommandConfig = {
         command: 'validate-config',
       }
-      await expect(dispatchCommand(config)).resolves.toBeUndefined()
+      await expect(dispatchCommand(config, fs)).resolves.toBeUndefined()
     })
   })
 

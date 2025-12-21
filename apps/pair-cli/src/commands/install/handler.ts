@@ -1,27 +1,47 @@
 import type { InstallCommandConfig } from './parser'
+import { installCommand } from '../install'
+import type { FileSystemService } from '@pair/content-ops'
 
 /**
  * Handles the install command execution.
  * Processes InstallCommandConfig to install KB content from various sources.
  *
  * @param config - The parsed install command configuration
+ * @param fs - FileSystemService instance (injected for testing)
  * @returns Promise that resolves when installation completes successfully
  * @throws Error if installation fails
  */
-export async function handleInstallCommand(config: InstallCommandConfig): Promise<void> {
-  // TODO: Implement actual installation logic
-  // This is a minimal implementation to make tests pass (GREEN phase)
-  // Will be enhanced in subsequent tasks
-  // Default resolution handled in config builder (T-7)
+export async function handleInstallCommand(
+  config: InstallCommandConfig,
+  fs: FileSystemService,
+): Promise<void> {
+  // Map new config to legacy installCommand parameters
+  let source: string | undefined
+  const options: Record<string, unknown> = {}
 
-  // For now, just validate the config structure is correct
-  if ('url' in config && config.url) {
-    // Remote URL installation logic will go here
-    return
+  switch (config.resolution) {
+    case 'default':
+      // No source - use default KB resolution with useDefaults
+      source = undefined
+      options['useDefaults'] = true
+      break
+    case 'remote':
+      // Remote URL
+      source = config.url
+      options['useDefaults'] = true
+      break
+    case 'local':
+      // Local path (ZIP or directory)
+      source = config.path
+      options['offline'] = config.offline
+      options['useDefaults'] = true
+      break
   }
 
-  if ('path' in config && config.path) {
-    // Local path installation logic will go here
-    return
+  // Call legacy installCommand with mapped parameters
+  const result = await installCommand(fs, source ? [source] : [], options)
+  
+  if (!result || !result.success) {
+    throw new Error(result?.message || 'Installation failed')
   }
 }

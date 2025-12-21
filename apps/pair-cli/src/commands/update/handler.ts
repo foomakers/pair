@@ -1,27 +1,42 @@
 import type { UpdateCommandConfig } from './parser'
+import { updateCommand } from '../update'
+import type { FileSystemService } from '@pair/content-ops'
 
 /**
  * Handles the update command execution.
  * Processes UpdateCommandConfig to update KB content from various sources.
  *
  * @param config - The parsed update command configuration
+ * @param fs - FileSystemService instance (injected for testing)
  * @returns Promise that resolves when update completes successfully
  * @throws Error if update fails
  */
-export async function handleUpdateCommand(config: UpdateCommandConfig): Promise<void> {
-  // TODO: Implement actual update logic
-  // This is a minimal implementation to make tests pass (GREEN phase)
-  // Will be enhanced in subsequent tasks
-  // Default resolution handled in config builder (T-7)
+export async function handleUpdateCommand(
+  config: UpdateCommandConfig,
+  fs: FileSystemService,
+): Promise<void> {
+  // Map new config to legacy updateCommand parameters
+  const args: string[] = []
+  const options: Record<string, unknown> = {}
 
-  // For now, just validate the config structure is correct
-  if ('url' in config && config.url) {
-    // Remote URL update logic will go here
-    return
+  switch (config.resolution) {
+    case 'default':
+      // No URL - use default dataset
+      break
+    case 'remote':
+      // Remote URL
+      options['url'] = config.url
+      break
+    case 'local':
+      // Local path (ZIP or directory)
+      options['url'] = config.path
+      options['offline'] = config.offline
+      break
   }
 
-  if ('path' in config && config.path) {
-    // Local path update logic will go here
-    return
+  const result = await updateCommand(fs, args, options)
+  
+  if (!result || !result.success) {
+    throw new Error(result?.message || 'Update failed')
   }
 }
