@@ -8,6 +8,7 @@ export interface InstallCommandConfigDefault {
   command: 'install'
   resolution: 'default'
   offline: false
+  kb: boolean
 }
 
 /**
@@ -18,6 +19,7 @@ export interface InstallCommandConfigRemote {
   resolution: 'remote'
   url: string
   offline: false
+  kb: boolean
 }
 
 /**
@@ -28,6 +30,7 @@ export interface InstallCommandConfigLocal {
   resolution: 'local'
   path: string
   offline: boolean
+  kb: boolean
 }
 
 /**
@@ -41,6 +44,7 @@ export type InstallCommandConfig =
 interface ParseInstallOptions {
   source?: string
   offline?: boolean
+  kb?: boolean
 }
 
 /**
@@ -49,7 +53,7 @@ interface ParseInstallOptions {
 export function parseInstallCommand(options: ParseInstallOptions): InstallCommandConfig {
   validateCommandOptions('install', options)
 
-  const { source, offline = false } = options
+  const { source, offline = false, kb = true } = options
 
   // Default resolution (no source)
   if (!source) {
@@ -57,6 +61,7 @@ export function parseInstallCommand(options: ParseInstallOptions): InstallComman
       command: 'install',
       resolution: 'default',
       offline: false,
+      kb,
     }
   }
 
@@ -68,6 +73,7 @@ export function parseInstallCommand(options: ParseInstallOptions): InstallComman
       resolution: 'remote',
       url: source,
       offline: false,
+      kb,
     }
   }
 
@@ -77,5 +83,6 @@ export function parseInstallCommand(options: ParseInstallOptions): InstallComman
     resolution: 'local',
     path: source,
     offline,
+    kb,
   }
 }

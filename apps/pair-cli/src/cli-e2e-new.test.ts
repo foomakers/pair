@@ -146,7 +146,7 @@ describe('CLI E2E - Install Command', () => {
         }),
       }, cwd, cwd)
 
-      await runCli(['node', 'pair', 'install', '--source', zipPath, '--no-kb'], { fs })
+      await runCli(['node', 'pair', 'install', '--source', zipPath], { fs })
 
       // Verify install was attempted with correct source
       // Note: Actual ZIP extraction would require full implementation
@@ -165,7 +165,7 @@ describe('CLI E2E - Install Command', () => {
         }),
       }, cwd, cwd)
 
-      await runCli(['node', 'pair', 'install', '--source', relativeZip, '--no-kb'], { fs })
+      await runCli(['node', 'pair', 'install', '--source', relativeZip], { fs })
     })
 
     it('should install from local directory with absolute path', async () => {
@@ -183,7 +183,7 @@ describe('CLI E2E - Install Command', () => {
         }),
       }, cwd, cwd)
 
-      await runCli(['node', 'pair', 'install', '--source', datasetPath, '--no-kb'], { fs })
+      await runCli(['node', 'pair', 'install', '--source', datasetPath], { fs })
     })
 
     it('should install from local directory with relative path', async () => {
@@ -200,7 +200,7 @@ describe('CLI E2E - Install Command', () => {
         }),
       }, cwd, cwd)
 
-      await runCli(['node', 'pair', 'install', '--source', './dataset', '--no-kb'], { fs })
+      await runCli(['node', 'pair', 'install', '--source', './dataset'], { fs })
     })
   })
 })
@@ -248,7 +248,7 @@ describe('CLI E2E - Update Command', () => {
         [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
       }, cwd, cwd)
 
-      await runCli(['node', 'pair', 'update', '--url', zipPath, '--no-kb'], { fs })
+      await runCli(['node', 'pair', 'update', '--source', zipPath], { fs })
     })
 
     it('should update from local ZIP with relative path', async () => {
@@ -263,7 +263,7 @@ describe('CLI E2E - Update Command', () => {
         }),
       }, cwd, cwd)
 
-      await runCli(['node', 'pair', 'update', '--url', './kb-v2.zip', '--no-kb'], { fs })
+      await runCli(['node', 'pair', 'update', '--source', './kb-v2.zip'], { fs })
     })
 
     it('should update from local directory with absolute path', async () => {
@@ -282,7 +282,7 @@ describe('CLI E2E - Update Command', () => {
         [`${cwd}/.github/workflows/ci.yml`]: 'name: Old CI',
       }, cwd, cwd)
 
-      await runCli(['node', 'pair', 'update', '--url', datasetPath, '--no-kb'], { fs })
+      await runCli(['node', 'pair', 'update', '--source', datasetPath], { fs })
     })
 
     it('should update from local directory with relative path', async () => {
@@ -297,7 +297,7 @@ describe('CLI E2E - Update Command', () => {
         }),
       }, cwd, cwd)
 
-      await runCli(['node', 'pair', 'update', '--url', './kb-dataset', '--no-kb'], { fs })
+      await runCli(['node', 'pair', 'update', '--source', './kb-dataset'], { fs })
     })
   })
 
@@ -406,7 +406,7 @@ describe('CLI E2E - Error Scenarios', () => {
     }, cwd, cwd)
 
     await expect(
-      runCli(['node', 'pair', 'install', '--source', 'bad.zip', '--no-kb'], { fs })
+      runCli(['node', 'pair', 'install', '--source', 'bad.zip'], { fs })
     ).rejects.toThrow()
   })
 })

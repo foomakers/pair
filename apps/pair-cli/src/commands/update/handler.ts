@@ -19,6 +19,9 @@ export async function handleUpdateCommand(
   const args: string[] = []
   const options: Record<string, unknown> = {}
 
+  // Pass kb flag from config
+  options['kb'] = config.kb
+
   switch (config.resolution) {
     case 'default':
       // No URL - use default dataset

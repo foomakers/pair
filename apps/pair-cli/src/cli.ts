@@ -220,7 +220,10 @@ ${cmdConfig.metadata.notes.map((note: string) => `  • ${note}`).join('\n')}
 
   cmd.action(async (...args: unknown[]) => {
     try {
-      const options = args[args.length - 1] as Record<string, unknown>
+      const cmdOptions = args[args.length - 1] as Record<string, unknown>
+      const globalOptions = prog.opts<Record<string, unknown>>()
+      // Merge command options with global options (command options take precedence)
+      const options = { ...globalOptions, ...cmdOptions }
       const config = cmdConfig.parse(options)
       await dispatchCommand(config, fsService)
     } catch (err) {

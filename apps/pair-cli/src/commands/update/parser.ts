@@ -8,6 +8,7 @@ export interface UpdateCommandConfigDefault {
   command: 'update'
   resolution: 'default'
   offline: false
+  kb: boolean
 }
 
 /**
@@ -18,6 +19,7 @@ export interface UpdateCommandConfigRemote {
   resolution: 'remote'
   url: string
   offline: false
+  kb: boolean
 }
 
 /**
@@ -28,6 +30,7 @@ export interface UpdateCommandConfigLocal {
   resolution: 'local'
   path: string
   offline: boolean
+  kb: boolean
 }
 
 /**
@@ -41,6 +44,7 @@ export type UpdateCommandConfig =
 interface ParseUpdateOptions {
   source?: string
   offline?: boolean
+  kb?: boolean
 }
 
 /**
@@ -49,7 +53,7 @@ interface ParseUpdateOptions {
 export function parseUpdateCommand(options: ParseUpdateOptions): UpdateCommandConfig {
   validateCommandOptions('update', options)
 
-  const { source, offline = false } = options
+  const { source, offline = false, kb = true } = options
 
   // Default resolution (no source)
   if (!source) {
@@ -57,6 +61,7 @@ export function parseUpdateCommand(options: ParseUpdateOptions): UpdateCommandCo
       command: 'update',
       resolution: 'default',
       offline: false,
+      kb,
     }
   }
 
@@ -68,6 +73,7 @@ export function parseUpdateCommand(options: ParseUpdateOptions): UpdateCommandCo
       resolution: 'remote',
       url: source,
       offline: false,
+      kb,
     }
   }
 
@@ -77,5 +83,6 @@ export function parseUpdateCommand(options: ParseUpdateOptions): UpdateCommandCo
     resolution: 'local',
     path: source,
     offline,
+    kb,
   }
 }
