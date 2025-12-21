@@ -16,6 +16,6 @@ export async function handleKbValidateCommand(
   fs: FileSystemService,
 ): Promise<void> {
   const kbPath = config.path || fs.currentWorkingDirectory()
-  
+
   await validateKnowledgeBase(kbPath, fs)
 }

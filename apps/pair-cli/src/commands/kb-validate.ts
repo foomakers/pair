@@ -8,10 +8,7 @@ import type { FileSystemService } from '@pair/content-ops'
  * @param fs - FileSystemService instance
  * @throws Error if KB structure is invalid
  */
-export async function validateKnowledgeBase(
-  kbPath: string,
-  fs: FileSystemService,
-): Promise<void> {
+export async function validateKnowledgeBase(kbPath: string, fs: FileSystemService): Promise<void> {
   // Check .pair directory exists
   const pairDir = `${kbPath}/.pair`
   const exists = await fs.exists(pairDir)

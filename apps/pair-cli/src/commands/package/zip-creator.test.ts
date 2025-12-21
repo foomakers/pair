@@ -72,7 +72,7 @@ describe('createPackageZip - basic operations', () => {
     }
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath: testOutput }, fsService)
-    
+
     expect(fsService.existsSync(testOutput)).toBe(true)
   })
 })

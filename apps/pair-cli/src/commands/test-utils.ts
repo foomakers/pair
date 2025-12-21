@@ -22,10 +22,10 @@ export function createTestFileSystem(): InMemoryFileSystemService {
 
   // Config in project root
   fs.writeFile('/test-project/config.json', configContent)
-  
+
   // Config in module dir (for pair-cli)
   fs.writeFile('/test-module/config.json', configContent)
-  
+
   // Create basic .pair directory structure
   fs.writeFile('/test-project/.pair/knowledge/README.md', '# Test KB')
 
