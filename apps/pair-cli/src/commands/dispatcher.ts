@@ -19,8 +19,8 @@ export async function dispatchCommand(config: CommandConfig, fs: FileSystemServi
     case 'update-link':
       return commandRegistry['update-link'].handle()
     case 'package':
-      return commandRegistry.package.handle()
+      return commandRegistry.package.handle(config, fs)
     case 'validate-config':
-      return commandRegistry['validate-config'].handle()
+      return commandRegistry['validate-config'].handle(config, fs)
   }
 }
