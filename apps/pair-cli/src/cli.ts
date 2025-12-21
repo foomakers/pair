@@ -7,9 +7,7 @@ import chalk from 'chalk'
 import { parseInstallUpdateArgs } from './commands/command-utils'
 import { commandRegistry } from './commands'
 import { dispatchCommand } from './commands/dispatcher'
-// Legacy imports for old test functions (TODO: migrate tests to use parser + dispatcher)
-import { installCommand } from './commands/install'
-import { updateCommand } from './commands/update'
+import { installCommand, updateCommand } from './commands'
 import {
   fileSystemService,
   FileSystemService,
@@ -18,6 +16,8 @@ import {
   validateUrl,
   detectSourceType,
   SourceType,
+  HttpClientService,
+  NodeHttpClientService,
 } from '@pair/content-ops'
 import {
   getKnowledgeHubDatasetPath,
@@ -38,6 +38,7 @@ setLogLevel(MIN_LOG_LEVEL)
  */
 export interface CliDependencies {
   fs: FileSystemService
+  httpClient?: HttpClientService
 }
 
 function isDiagEnabled(): boolean {
@@ -116,12 +117,14 @@ function shouldSkipKBDownload(
   return false
 }
 
-async function ensureKBAvailableOnStartup(
-  fsService: FileSystemService,
-  version: string,
-  customUrl?: string,
-  skipKB?: boolean,
-): Promise<void> {
+async function ensureKBAvailableOnStartup(options: {
+  fsService: FileSystemService
+  version: string
+  customUrl?: string
+  skipKB?: boolean
+  httpClient?: HttpClientService
+}): Promise<void> {
+  const { fsService, version, customUrl, skipKB, httpClient } = options
   if (shouldSkipKBDownload(skipKB, fsService, customUrl)) {
     return
   }
@@ -136,6 +139,7 @@ async function ensureKBAvailableOnStartup(
     const datasetPath = await getKnowledgeHubDatasetPathWithFallback({
       fsService,
       version,
+      ...(httpClient && { httpClient }),
       ...(customUrl !== undefined && { customUrl }),
     })
     if (isDiagEnabled()) console.error(`[diag] KB dataset available at: ${datasetPath}`)
@@ -267,11 +271,69 @@ function setupCommands(prog: Command, fsService: FileSystemService): void {
 /**
  * Run CLI with injected dependencies (for testing)
  */
+function buildKBStartupOptions(opts: {
+  fsService: FileSystemService
+  version: string
+  url?: string
+  kb: boolean
+  httpClient: HttpClientService
+}): {
+  fsService: FileSystemService
+  version: string
+  customUrl?: string
+  skipKB?: boolean
+  httpClient?: HttpClientService
+} {
+  const result: {
+    fsService: FileSystemService
+    version: string
+    customUrl?: string
+    skipKB?: boolean
+    httpClient?: HttpClientService
+  } = { fsService: opts.fsService, version: opts.version }
+  if (opts.url !== undefined) result.customUrl = opts.url
+  if (opts.kb === false) result.skipKB = true
+  if (opts.httpClient !== undefined) result.httpClient = opts.httpClient
+  return result
+}
+
+async function setupAndValidateKB(
+  fsService: FileSystemService,
+  httpClient: HttpClientService,
+  options: { url?: string; kb: boolean },
+): Promise<void> {
+  // Validate option combinations
+  try {
+    validateCliOptions({ ...(options.url && { url: options.url }), kb: options.kb })
+  } catch (err) {
+    console.error(chalk.red(`Invalid options: ${err}`))
+    process.exitCode = 1
+    process.exit(1)
+  }
+
+  // Ensure KB is available before running commands
+  await ensureKBAvailableOnStartup(
+    buildKBStartupOptions({
+      fsService,
+      version: pkg.version,
+      kb: options.kb,
+      httpClient,
+      ...(options.url !== undefined && { url: options.url }),
+    }),
+  )
+
+  // Skip dataset check if --no-kb is set or if custom URL is a local path
+  if (options.kb !== false) {
+    checkKnowledgeHubDatasetAccessible(fsService, options.url)
+  }
+}
+
 export async function runCli(
   argv: string[],
-  deps: CliDependencies = { fs: fileSystemService },
+  deps: CliDependencies = { fs: fileSystemService, httpClient: new NodeHttpClientService() },
 ): Promise<void> {
   const fsService = deps.fs
+  const httpClient = deps.httpClient || new NodeHttpClientService()
 
   // Create fresh program instance for each invocation (prevents state pollution in tests)
   const program = new Command()
@@ -292,22 +354,7 @@ export async function runCli(
   await program.parseAsync(argv)
   const options = program.opts<{ url?: string; kb: boolean }>()
 
-  // Validate option combinations
-  try {
-    validateCliOptions({ ...(options.url && { url: options.url }), kb: options.kb })
-  } catch (err) {
-    console.error(chalk.red(`Invalid options: ${err}`))
-    process.exitCode = 1
-    process.exit(1)
-  }
-
-  // Ensure KB is available before running commands
-  await ensureKBAvailableOnStartup(fsService, pkg.version, options.url, !options.kb)
-
-  // Skip dataset check if --no-kb is set or if custom URL is a local path
-  if (options.kb !== false) {
-    checkKnowledgeHubDatasetAccessible(fsService, options.url)
-  }
+  await setupAndValidateKB(fsService, httpClient, options)
 }
 
 export async function main() {

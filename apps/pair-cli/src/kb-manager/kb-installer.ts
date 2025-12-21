@@ -1,7 +1,7 @@
 import { join } from 'path'
 import { tmpdir } from 'os'
-import type { FileSystemService } from '@pair/content-ops'
-import { extractZip, cleanupFile } from '@pair/content-ops'
+import type { FileSystemService, HttpClientService } from '@pair/content-ops'
+import { extractZip, cleanupFile, NodeHttpClientService } from '@pair/content-ops'
 import { downloadFile } from './download-manager'
 import cacheManager from './cache-manager'
 import checksumManager from './checksum-manager'
@@ -9,6 +9,7 @@ import formatDownloadError from './error-formatter'
 import { announceDownload, announceSuccess } from './download-ui'
 
 export interface InstallerDeps {
+  httpClient: HttpClientService
   extract?: (zipPath: string, targetPath: string) => Promise<void>
   progressWriter?: { write(s: string): void }
   isTTY?: boolean
@@ -20,21 +21,34 @@ async function doInstallSteps(
   cachePath: string,
   options: {
     fs: FileSystemService
+    httpClient?: HttpClientService
     progressWriter?: { write(s: string): void }
     isTTY?: boolean
     extract?: (zipPath: string, targetPath: string) => Promise<void>
   },
 ): Promise<void> {
-  const { fs, progressWriter, isTTY, extract: customExtract } = options
+  const {
+    fs,
+    httpClient = new NodeHttpClientService(),
+    progressWriter,
+    isTTY,
+    extract: customExtract,
+  } = options
   const extract = customExtract || extractZip
 
   await downloadFile(downloadUrl, zipPath, {
+    httpClient,
     fs,
     progressWriter,
     isTTY,
   })
 
-  const check = await checksumManager.validateFileWithRemoteChecksum(downloadUrl, zipPath, fs)
+  const check = await checksumManager.validateFileWithRemoteChecksum(
+    downloadUrl,
+    zipPath,
+    httpClient,
+    fs,
+  )
   if (!check.isValid) {
     throw new Error(
       `Checksum validation failed: expected=${check.expectedChecksum} actual=${check.actualChecksum}`,
@@ -61,21 +75,25 @@ function shouldPreserveError(err: Error): boolean {
 
 function buildInstallOptions(options: {
   fs: FileSystemService
+  httpClient?: HttpClientService
   progressWriter?: { write(s: string): void }
   isTTY?: boolean
   extract?: (zipPath: string, targetPath: string) => Promise<void>
 }): {
   fs: FileSystemService
+  httpClient?: HttpClientService
   progressWriter?: { write(s: string): void }
   isTTY?: boolean
   extract?: (zipPath: string, targetPath: string) => Promise<void>
 } {
   const result: {
     fs: FileSystemService
+    httpClient?: HttpClientService
     progressWriter?: { write(s: string): void }
     isTTY?: boolean
     extract?: (zipPath: string, targetPath: string) => Promise<void>
   } = { fs: options.fs }
+  if (options.httpClient) result.httpClient = options.httpClient
   if (options.progressWriter) result.progressWriter = options.progressWriter
   if (options.isTTY) result.isTTY = options.isTTY
   if (options.extract) result.extract = options.extract
@@ -88,6 +106,7 @@ export async function installKB(
   downloadUrl: string,
   options: {
     fs: FileSystemService
+    httpClient?: HttpClientService
     progressWriter?: { write(s: string): void }
     isTTY?: boolean
     extract?: (zipPath: string, targetPath: string) => Promise<void>

@@ -1,29 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-
-vi.mock('https', () => ({
-  get: vi.fn(),
-  request: vi.fn(),
-}))
-
-import * as https from 'https'
+import { describe, it, expect, vi } from 'vitest'
 import { join } from 'path'
 import { homedir } from 'os'
-import { InMemoryFileSystemService } from '@pair/content-ops'
-import { installKB, installKBFromLocalZip, installKBFromLocalDirectory } from './kb-installer'
 import {
-  mockMultipleHttpsGet,
-  mockHttpsRequest,
+  InMemoryFileSystemService,
+  MockHttpClientService,
   buildTestResponse,
   toIncomingMessage,
-} from '../test-utils/http-mocks'
+} from '@pair/content-ops'
+import { installKB, installKBFromLocalZip, installKBFromLocalDirectory } from './kb-installer'
 
 const mockExtract = vi.fn()
-
-beforeEach(() => {
-  vi.mocked(https.request).mockImplementation(
-    mockHttpsRequest(toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))),
-  )
-})
 
 describe('KB Installer', () => {
   it('downloads and installs when checksum absent', async () => {
@@ -35,25 +21,26 @@ describe('KB Installer', () => {
     const cachePath = join(homedir(), '.pair', 'kb', version)
     const downloadUrl = `https://github.com/foomakers/pair/releases/download/v${version}/knowledge-base-${version}.zip`
     const fs = new InMemoryFileSystemService({}, '/', '/')
+    const httpClient = new MockHttpClientService()
 
-    // Setup both https.request (for HEAD) and https.get (for downloads)
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
-
     const checksumResp = toIncomingMessage(buildTestResponse(404))
-    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.get).mockImplementation(
-      mockMultipleHttpsGet([
-        { pattern: '.sha256', response: checksumResp },
-        { response: fileResp },
-      ]),
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
+
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp]) // file first, checksum second
 
     mockExtract.mockImplementation(async (_zipPath: string, targetPath: string) => {
       fs.writeFile(join(targetPath, 'manifest.json'), JSON.stringify({ version }))
     })
 
-    const result = await installKB(version, cachePath, downloadUrl, { fs, extract: mockExtract })
+    const result = await installKB(version, cachePath, downloadUrl, {
+      httpClient,
+      fs,
+      extract: mockExtract,
+    })
 
     expect(result).toBe(cachePath)
     expect(consoleLogSpy).toHaveBeenCalledWith(
@@ -72,22 +59,19 @@ describe('KB Installer', () => {
     const cachePath = join(homedir(), '.pair', 'kb', version)
     const downloadUrl = `https://github.com/foomakers/pair/releases/download/v${version}/knowledge-base-${version}.zip`
     const fs = new InMemoryFileSystemService({}, '/', '/')
+    const httpClient = new MockHttpClientService()
 
-    // Setup both https.request (for HEAD) and https.get (for downloads)
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
-
     const checksumResp = toIncomingMessage(buildTestResponse(404))
-    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.get).mockImplementation(
-      mockMultipleHttpsGet([
-        { pattern: '.sha256', response: checksumResp },
-        { response: fileResp },
-      ]),
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
 
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp]) // file first, checksum second
+
     await expect(async () => {
-      await installKB(version, cachePath, downloadUrl, { fs, extract: mockExtract })
+      await installKB(version, cachePath, downloadUrl, { httpClient, fs, extract: mockExtract })
     }).rejects.toThrow(/invalid zip/i)
   })
 })

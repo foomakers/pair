@@ -1,15 +1,44 @@
-import { describe, expect, beforeEach, vi } from 'vitest'
+import { describe, expect, beforeEach, vi, test } from 'vitest'
 import { handleUpdateCommand } from './handler'
 import type { UpdateCommandConfig } from './parser'
 import { createTestFileSystem } from '../test-utils'
 import type { InMemoryFileSystemService } from '@pair/content-ops'
 
-// Mock legacy updateCommand
-vi.mock('../update', () => ({
-  updateCommand: vi.fn().mockResolvedValue({ success: true }),
+// Mock config-utils and command-utils
+vi.mock('../../config-utils', () => ({
+  loadConfigWithOverrides: vi.fn(() => ({
+    config: {
+      asset_registries: {
+        'test-registry': {
+          source: 'test-source',
+          behavior: 'mirror',
+          target_path: '.test-update-target',
+          description: 'Test registry',
+        },
+      },
+    },
+  })),
+  getKnowledgeHubDatasetPath: vi.fn(() => '/test-dataset'),
+  calculatePathType: vi.fn(),
 }))
 
-describe('handleUpdateCommand - unit tests with mocked legacy command', () => {
+vi.mock('../command-utils', () => ({
+  createLogger: vi.fn(() => ({
+    logs: [],
+    pushLog: vi.fn(),
+  })),
+  parseTargetAndSource: vi.fn(),
+  doCopyAndUpdateLinks: vi.fn().mockResolvedValue(undefined),
+  applyLinkTransformation: vi.fn().mockResolvedValue(undefined),
+  ensureDir: vi.fn().mockResolvedValue(undefined),
+}))
+
+vi.mock('../backup', () => ({
+  handleBackupRollback: vi.fn().mockResolvedValue(undefined),
+  buildRegistryBackupConfig: vi.fn(() => ({ 'test-registry': '/test-update-target' })),
+}))
+
+describe('handleUpdateCommand - direct implementation', () => {
   let fs: InMemoryFileSystemService
 
   beforeEach(() => {
@@ -17,107 +46,87 @@ describe('handleUpdateCommand - unit tests with mocked legacy command', () => {
     vi.clearAllMocks()
   })
 
-  describe('config to legacy args mapping', () => {
-    test('maps default resolution to useDefaults flag', async () => {
+  describe('default resolution', () => {
+    test('updates from default dataset root', async () => {
       const config: UpdateCommandConfig = {
         command: 'update',
-        kb: true,
         resolution: 'default',
+        kb: true,
       }
 
-      await handleUpdateCommand(config, fs)
+      await expect(handleUpdateCommand(config, fs)).resolves.not.toThrow()
 
-      const { updateCommand } = await import('../update')
-      expect(updateCommand).toHaveBeenCalledWith(
-        fs,
-        [],
-        expect.objectContaining({
-          kb: true,
-          useDefaults: true,
-        }),
-      )
+      const { doCopyAndUpdateLinks } = await import('../command-utils')
+      expect(doCopyAndUpdateLinks).toHaveBeenCalled()
     })
+  })
 
-    test('maps remote URL to args array', async () => {
+  describe('remote resolution', () => {
+    test('handles remote URL source', async () => {
       const config: UpdateCommandConfig = {
         command: 'update',
-        kb: true,
         resolution: 'remote',
         url: 'https://example.com/kb.zip',
         offline: false,
+        kb: true,
       }
 
-      await handleUpdateCommand(config, fs)
-
-      const { updateCommand } = await import('../update')
-      expect(updateCommand).toHaveBeenCalledWith(
-        fs,
-        [],
-        expect.objectContaining({
-          kb: true,
-          url: 'https://example.com/kb.zip',
-          useDefaults: true,
-        }),
-      )
+      await expect(handleUpdateCommand(config, fs)).resolves.not.toThrow()
     })
+  })
 
-    test('maps local source to args array', async () => {
+  describe('local resolution', () => {
+    test('handles local path source', async () => {
       const config: UpdateCommandConfig = {
         command: 'update',
-        kb: true,
         resolution: 'local',
-        source: '/path/to/kb.zip',
-      }
-
-      await handleUpdateCommand(config, fs)
-
-      const { updateCommand } = await import('../update')
-      expect(updateCommand).toHaveBeenCalledWith(
-        fs,
-        [],
-        expect.objectContaining({
-          kb: true,
-        }),
-      )
-    })
-
-    test('preserves kb flag', async () => {
-      const config: UpdateCommandConfig = {
-        command: 'update',
-        kb: false,
-        resolution: 'default',
-      }
-
-      await handleUpdateCommand(config, fs)
-
-      const { updateCommand } = await import('../update')
-      expect(updateCommand).toHaveBeenCalledWith(
-        fs,
-        [],
-        expect.objectContaining({
-          kb: false,
-        }),
-      )
-    })
-
-    test('maps targets array to args', async () => {
-      const config: UpdateCommandConfig = {
-        command: 'update',
+        path: '/path/to/kb.zip',
+        offline: false,
         kb: true,
-        resolution: 'targets',
-        targets: ['github:.github', 'adoption:.pair'],
       }
 
-      await handleUpdateCommand(config, fs)
+      await expect(handleUpdateCommand(config, fs)).resolves.not.toThrow()
+    })
+  })
 
-      const { updateCommand } = await import('../update')
-      expect(updateCommand).toHaveBeenCalledWith(
+  describe('link style transformation', () => {
+    test('applies link transformation when specified', async () => {
+      const config: UpdateCommandConfig = {
+        command: 'update',
+        resolution: 'default',
+        kb: true,
+      }
+
+      await expect(
+        handleUpdateCommand(config, fs, { linkStyle: 'relative' }),
+      ).resolves.not.toThrow()
+
+      const { applyLinkTransformation } = await import('../command-utils')
+      expect(applyLinkTransformation).toHaveBeenCalledWith(
         fs,
-        [],
-        expect.objectContaining({
-          kb: true,
-        }),
+        { linkStyle: 'relative' },
+        expect.any(Function),
+        'update',
       )
+    })
+  })
+
+  describe('error handling', () => {
+    test('throws on invalid registry configuration', async () => {
+      const { loadConfigWithOverrides } = await import('../../config-utils')
+      vi.mocked(loadConfigWithOverrides).mockReturnValueOnce({
+        config: {
+          asset_registries: {},
+        },
+      })
+
+      const config: UpdateCommandConfig = {
+        command: 'update',
+        resolution: 'default',
+        kb: true,
+      }
+
+      await expect(handleUpdateCommand(config, fs)).rejects.toThrow(/asset registries/)
     })
   })
 })

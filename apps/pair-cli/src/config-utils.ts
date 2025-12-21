@@ -1,5 +1,10 @@
 import { join, dirname } from 'path'
-import { Behavior, FileSystemService } from '@pair/content-ops'
+import {
+  Behavior,
+  FileSystemService,
+  HttpClientService,
+  NodeHttpClientService,
+} from '@pair/content-ops'
 import { isKBCached, ensureKBAvailable } from './kb-manager'
 
 // Define proper types for configuration
@@ -317,12 +322,14 @@ async function tryLocalDatasetPath(
 async function downloadKBIfNeeded(options: {
   version: string
   fsService: FileSystemService
+  httpClient: HttpClientService
   customUrl?: string
   isKBCachedFn: typeof isKBCached
   ensureKBAvailableFn: typeof ensureKBAvailable
   DIAG: boolean
 }): Promise<string> {
-  const { version, fsService, customUrl, isKBCachedFn, ensureKBAvailableFn, DIAG } = options
+  const { version, fsService, httpClient, customUrl, isKBCachedFn, ensureKBAvailableFn, DIAG } =
+    options
 
   if (DIAG) console.error(`[diag] Checking KB cache for version ${version}`)
   const cached = await isKBCachedFn(version, fsService)
@@ -332,6 +339,7 @@ async function downloadKBIfNeeded(options: {
   }
 
   const kbPath = await ensureKBAvailableFn(version, {
+    httpClient,
     fs: fsService,
     ...(customUrl && { customUrl }),
   })
@@ -340,6 +348,7 @@ async function downloadKBIfNeeded(options: {
 
 export async function getKnowledgeHubDatasetPathWithFallback(options: {
   fsService: FileSystemService
+  httpClient?: HttpClientService
   version: string
   isKBCachedFn?: typeof isKBCached
   ensureKBAvailableFn?: typeof ensureKBAvailable
@@ -347,6 +356,7 @@ export async function getKnowledgeHubDatasetPathWithFallback(options: {
 }): Promise<string> {
   const {
     fsService,
+    httpClient = new NodeHttpClientService(),
     version,
     isKBCachedFn = isKBCached,
     ensureKBAvailableFn = ensureKBAvailable,
@@ -364,6 +374,7 @@ export async function getKnowledgeHubDatasetPathWithFallback(options: {
   const datasetPath = await downloadKBIfNeeded({
     version,
     fsService,
+    httpClient,
     ...(customUrl !== undefined && { customUrl }),
     isKBCachedFn,
     ensureKBAvailableFn,

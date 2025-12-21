@@ -84,3 +84,7 @@ export const commandRegistry = {
     metadata: kbValidateMetadata,
   },
 } as const
+
+// Legacy exports for backward compatibility
+export { installCommand } from './install'
+export { updateCommand } from './update'

@@ -4,7 +4,7 @@ import { loadConfigWithOverrides } from '../../config-utils'
 import { validatePackageStructure } from './validators'
 import { generateManifestMetadata } from './metadata'
 import { createPackageZip } from './zip-creator'
-import type { AssetRegistryConfig } from '../install/types'
+import type { AssetRegistryConfig } from '../registry'
 import path from 'path'
 
 async function loadAndValidate(

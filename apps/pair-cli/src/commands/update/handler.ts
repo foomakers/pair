@@ -1,6 +1,33 @@
 import type { UpdateCommandConfig } from './parser'
-import { updateCommand } from '../update'
 import type { FileSystemService } from '@pair/content-ops'
+import { loadConfigWithOverrides, getKnowledgeHubDatasetPath } from '../../config-utils'
+import type { LogEntry } from '../command-utils'
+import {
+  createLogger,
+  doCopyAndUpdateLinks,
+  applyLinkTransformation,
+  ensureDir,
+} from '../command-utils'
+import {
+  loadRegistriesFromConfig,
+  validateRegistries,
+  calculateEffectiveTarget,
+  processAssetRegistries,
+  type AssetRegistryConfig,
+} from '../registry'
+
+/**
+ * Update options for handler
+ */
+interface UpdateHandlerOptions {
+  baseTarget?: string
+  linkStyle?: 'relative' | 'absolute' | 'auto'
+  config?: string
+  verbose?: boolean
+  minLogLevel?: LogEntry['level']
+  persistBackup?: boolean
+  autoRollback?: boolean
+}
 
 /**
  * Handles the update command execution.
@@ -8,41 +35,120 @@ import type { FileSystemService } from '@pair/content-ops'
  *
  * @param config - The parsed update command configuration
  * @param fs - FileSystemService instance (injected for testing)
- * @returns Promise that resolves when update completes successfully
+ * @param options - Optional handler configuration (baseTarget, linkStyle, etc)
  * @throws Error if update fails
  */
 export async function handleUpdateCommand(
   config: UpdateCommandConfig,
   fs: FileSystemService,
+  options?: UpdateHandlerOptions,
 ): Promise<void> {
-  // Map new config to legacy updateCommand parameters
-  const args: string[] = []
-  const options: Record<string, unknown> = {}
+  const logLevel = options?.verbose ? 'debug' : 'info'
+  const { pushLog } = createLogger(logLevel)
 
-  // Pass kb flag from config
-  options['kb'] = config.kb
+  try {
+    const { datasetRoot, registries, baseTarget } = await setupUpdateContext(fs, config, options)
+    await executeUpdate({ fs, datasetRoot, registries, baseTarget, options, pushLog })
+    pushLog('info', 'Update completed successfully')
+  } catch (err) {
+    pushLog('error', `Update failed: ${String(err)}`)
+    throw err
+  }
+}
 
+async function setupUpdateContext(
+  fs: FileSystemService,
+  config: UpdateCommandConfig,
+  options?: UpdateHandlerOptions,
+): Promise<{
+  datasetRoot: string
+  registries: Record<string, AssetRegistryConfig>
+  baseTarget: string
+}> {
+  const datasetRoot = resolveDatasetRoot(fs, config)
+  const configOptions: { customConfigPath?: string; projectRoot?: string } = {}
+  if (options?.config) configOptions.customConfigPath = options.config
+  const configContent = loadConfigWithOverrides(fs, configOptions)
+  const registries = loadRegistriesFromConfig(configContent.config)
+  const validation = validateRegistries(registries)
+  if (!validation.valid) {
+    throw new Error(validation.error || 'Invalid registry configuration')
+  }
+  const baseTarget = options?.baseTarget || fs.currentWorkingDirectory()
+  return { datasetRoot, registries, baseTarget }
+}
+
+async function executeUpdate(context: {
+  fs: FileSystemService
+  datasetRoot: string
+  registries: Record<string, AssetRegistryConfig>
+  baseTarget: string
+  options: UpdateHandlerOptions | undefined
+  pushLog: (level: LogEntry['level'], message: string) => void
+}): Promise<void> {
+  const { fs, datasetRoot, registries, baseTarget, options, pushLog } = context
+  await processAssetRegistries(registries, async (registryName, registryConfig) => {
+    const effectiveTarget = calculateEffectiveTarget(registryName, registryConfig, baseTarget, fs)
+    await ensureDir(fs, effectiveTarget)
+    const datasetPath = fs.resolve(datasetRoot, registryName)
+    const copyOptions = buildCopyOptions(registryConfig)
+    pushLog('info', `Updating registry '${registryName}' at '${effectiveTarget}'`)
+    await doCopyAndUpdateLinks(fs, {
+      source: datasetPath,
+      target: effectiveTarget,
+      datasetRoot: datasetRoot,
+      options: copyOptions,
+    })
+    pushLog('info', `Successfully updated registry '${registryName}'`)
+  })
+  if (options?.linkStyle) {
+    await applyLinkTransformation(fs, { linkStyle: options.linkStyle }, pushLog, 'update')
+  }
+}
+
+/**
+ * Resolve dataset root based on update config resolution strategy
+ */
+function resolveDatasetRoot(fs: FileSystemService, config: UpdateCommandConfig): string {
   switch (config.resolution) {
     case 'default':
-      // No URL - use default dataset with useDefaults flag
-      options['useDefaults'] = true
-      break
+      // Use default KB dataset path
+      return getKnowledgeHubDatasetPath(fs)
+
     case 'remote':
-      // Remote URL with useDefaults
-      options['url'] = config.url
-      options['useDefaults'] = true
-      break
+      // Remote URL would need download handling - for now use default
+      // TODO: implement remote download logic
+      return getKnowledgeHubDatasetPath(fs)
+
     case 'local':
-      // Local path (ZIP or directory) with useDefaults
-      options['url'] = config.path
-      options['offline'] = config.offline
-      options['useDefaults'] = true
-      break
+      // Local source (ZIP or directory) - use source as dataset root if offline
+      if (config.offline) {
+        return config.path
+      }
+      return getKnowledgeHubDatasetPath(fs)
+  }
+}
+
+/**
+ * Build copy options for registry based on behavior and includes
+ */
+function buildCopyOptions(registryConfig: AssetRegistryConfig): Record<string, unknown> {
+  const behavior = registryConfig.behavior || 'mirror'
+  const include = registryConfig.include || []
+
+  const copyOptions: Record<string, unknown> = {
+    defaultBehavior: behavior,
   }
 
-  const result = await updateCommand(fs, args, options)
-
-  if (!result || !result.success) {
-    throw new Error(result?.message || 'Update failed')
+  // For selective behavior, set folder behaviors for included folders
+  if (include.length > 0 && behavior === 'mirror') {
+    const folderBehavior: Record<string, string> = {}
+    include.forEach((folder: string) => {
+      folderBehavior[folder] = 'mirror'
+    })
+    copyOptions['folderBehavior'] = folderBehavior
+    copyOptions['defaultBehavior'] = 'skip'
   }
+
+  return copyOptions
 }

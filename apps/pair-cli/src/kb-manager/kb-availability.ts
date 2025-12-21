@@ -1,4 +1,4 @@
-import type { FileSystemService } from '@pair/content-ops'
+import type { FileSystemService, HttpClientService } from '@pair/content-ops'
 import { fileSystemService, detectSourceType, SourceType } from '@pair/content-ops'
 import { type ProgressWriter } from '@pair/content-ops/http'
 import cacheManager from './cache-manager'
@@ -11,6 +11,7 @@ import {
 } from './kb-installer'
 
 export interface KBManagerDeps {
+  httpClient: HttpClientService
   fs: FileSystemService
   extract?: (zipPath: string, targetPath: string) => Promise<void>
   progressWriter?: ProgressWriter
@@ -22,26 +23,25 @@ export interface KBManagerDeps {
 const getCachedKBPath = cacheManager.getCachedKBPath
 const isKBCached = cacheManager.isKBCached
 
-function buildInstallerDeps(deps?: KBManagerDeps): InstallerDeps | undefined {
-  if (!deps) return undefined
-
-  const result: InstallerDeps = {}
+function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
+  const result: InstallerDeps = {
+    httpClient: deps.httpClient,
+  }
   if (deps.extract) result.extract = deps.extract
   if (deps.progressWriter) result.progressWriter = deps.progressWriter
   if (typeof deps.isTTY !== 'undefined') result.isTTY = deps.isTTY
 
-  if (Object.keys(result).length === 0) return undefined
   return result
 }
 
-export async function ensureKBAvailable(version: string, deps?: KBManagerDeps): Promise<string> {
-  const fs = deps?.fs || fileSystemService
+export async function ensureKBAvailable(version: string, deps: KBManagerDeps): Promise<string> {
+  const fs = deps.fs || fileSystemService
   const cachePath = getCachedKBPath(version)
   const cached = await isKBCached(version, fs)
 
   if (cached) return cachePath
 
-  const sourceUrl = deps?.customUrl || urlUtils.buildGithubReleaseUrl(version)
+  const sourceUrl = deps.customUrl || urlUtils.buildGithubReleaseUrl(version)
   const installerDeps = buildInstallerDeps(deps)
 
   // Check if source is a local path instead of a remote URL

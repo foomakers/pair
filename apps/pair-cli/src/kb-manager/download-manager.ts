@@ -3,7 +3,9 @@ import {
   type DownloadOptions as GenericDownloadOptions,
   type DownloadErrorHandler,
   type ProgressWriter,
-} from '@pair/content-ops/http'
+  type HttpClientService,
+  NodeHttpClientService,
+} from '@pair/content-ops'
 import type { FileSystemService } from '@pair/content-ops'
 import { fileSystemService } from '@pair/content-ops'
 
@@ -36,6 +38,7 @@ const kbErrorHandler: DownloadErrorHandler = {
 }
 
 interface DownloadOptions {
+  httpClient?: HttpClientService | undefined
   fs?: FileSystemService | undefined
   progressWriter?: ProgressWriter | undefined
   isTTY?: boolean | undefined
@@ -50,10 +53,12 @@ export async function downloadFile(
   destination: string,
   options: DownloadOptions = {},
 ): Promise<void> {
+  const httpClient = options.httpClient || new NodeHttpClientService()
   const fs = options.fs || fileSystemService
   const { progressWriter, isTTY } = options
 
   const genericOptions: GenericDownloadOptions = {
+    httpClient,
     fs,
     progressWriter,
     isTTY,

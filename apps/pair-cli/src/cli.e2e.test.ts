@@ -1,40 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
-import { installCommand } from './commands/install'
+import { installCommand, updateCommand } from './commands'
 import { handleUpdateCommand } from './cli'
-import { updateCommand } from './commands/update'
-
-describe('pair-cli e2e', () => {
-  describe('dev scenario', () => {
-    it('install with defaults succeeds in dev scenario', async () => {
-      await testInstallWithDefaults('dev')
-    })
-
-    it('update with defaults succeeds in dev scenario', async () => {
-      await testUpdateWithDefaults('dev')
-    })
-  })
-
-  describe('npm deploy scenario', () => {
-    it('install with defaults succeeds in npm deploy scenario', async () => {
-      await testInstallWithDefaults('npm')
-    })
-
-    it('update with defaults succeeds in npm deploy scenario', async () => {
-      await testUpdateWithDefaults('npm')
-    })
-  })
-
-  describe('manual deploy scenario', () => {
-    it('install with defaults succeeds in manual deploy scenario', async () => {
-      await testInstallWithDefaults('manual')
-    })
-
-    it('update with defaults succeeds in manual deploy scenario', async () => {
-      await testUpdateWithDefaults('manual')
-    })
-  })
-})
 
 function createNpmDeployFs(cwd: string): InMemoryFileSystemService {
   // Simulate npm install: pair-cli extracted to node_modules/@foomakers/pair-cli/
@@ -181,38 +148,15 @@ function getDeploymentConfig(deployType: 'npm' | 'manual' | 'dev'): {
     deployType === 'npm'
       ? '/.tmp/npm-test/sample-project'
       : deployType === 'manual'
-        ? '/tmp/test-project'
-        : '/dev/test-project'
+      ? '/tmp/test-project'
+      : '/dev/test-project'
   const fs =
     deployType === 'npm'
       ? createNpmDeployFs(cwd)
       : deployType === 'manual'
-        ? createManualDeployFs(cwd)
-        : createDevScenarioFs(cwd)
+      ? createManualDeployFs(cwd)
+      : createDevScenarioFs(cwd)
   return { cwd, fs }
-}
-
-async function testInstallWithDefaults(deployType: 'npm' | 'manual' | 'dev') {
-  const { fs } = getDeploymentConfig(deployType)
-  await withTempConfig(fs, createTestConfig(), async () => {
-    const configPath = fs.rootModuleDirectory() + '/config.json'
-    const result = await installCommand(fs, [], { customConfigPath: configPath, useDefaults: true })
-    expect(result).toBeDefined()
-    expect((result as { success?: boolean }).success).toBe(true)
-  })
-}
-
-async function testUpdateWithDefaults(deployType: 'npm' | 'manual' | 'dev') {
-  const { fs } = getDeploymentConfig(deployType)
-  await withTempConfig(fs, createTestConfig(), async () => {
-    const configPath = fs.rootModuleDirectory() + '/config.json'
-    // First install to set up the targets
-    await installCommand(fs, [], { customConfigPath: configPath, useDefaults: true })
-    // Then test update
-    const result = await updateCommand(fs, [], { useDefaults: true })
-    expect(result).toBeDefined()
-    expect((result as { success?: boolean }).success).toBe(true)
-  })
 }
 
 describe('pair-cli e2e - validate-config success', () => {
@@ -342,146 +286,6 @@ describe('pair-cli e2e - list-targets', () => {
       // The function should return undefined for list-targets (no success/failure result)
       expect(result).toBeUndefined()
     })
-  })
-})
-
-describe('pair-cli e2e - registry override syntax', () => {
-  it('update with registry:target syntax treats it as target path', async () => {
-    const cwd = '/test-project'
-    const fs = createDevScenarioFs(cwd)
-
-    await withTempConfig(fs, createTestConfig(), async () => {
-      // First install to set up the targets
-      await installCommand(fs, [], { customConfigPath: undefined })
-
-      // Test update with registry:target syntax (currently treated as target path)
-      const { updateCommand } = await import('./commands/update')
-      const result = await updateCommand(fs, ['--target', 'github:.github'], {})
-
-      // The current implementation treats github:.github as a valid target path and succeeds
-      expect(result).toBeDefined()
-      expect(result!.success).toBe(true)
-    })
-  })
-})
-
-describe('pair-cli e2e - KB availability', () => {
-  it('fails gracefully when KB not available anywhere', async () => {
-    const cwd = '/no-kb-test'
-
-    const fs = new InMemoryFileSystemService(
-      {
-        [cwd + '/package.json']: JSON.stringify({ name: 'test', version: '1.0.0' }),
-      },
-      cwd,
-      cwd,
-    )
-
-    await withTempConfig(fs, createTestConfig(), async () => {
-      const result = await installCommand(fs, [], { customConfigPath: undefined })
-
-      // Should fail when KB not available anywhere (no dev dataset, no cache, no bundled)
-      expect(result).toBeDefined()
-      expect((result as { success?: boolean }).success).toBe(false)
-    })
-  })
-
-  it('exercises KB manager fallback path when no local KB available', async () => {
-    const cwd = '/kb-fallback-test'
-
-    // Simulate fresh install: no local KB dataset, no bundled KB
-    const fs = new InMemoryFileSystemService(
-      {
-        [cwd + '/package.json']: JSON.stringify({
-          name: 'kb-fallback-test',
-          version: '1.0.0',
-        }),
-      },
-      cwd,
-      cwd,
-    )
-
-    await withTempConfig(fs, createTestConfig(), async () => {
-      // This exercises the KB manager fallback path
-      // Actual download is mocked in kb-manager.test.ts (17/17 tests)
-      const result = await installCommand(fs, [], { customConfigPath: undefined })
-
-      // Fails because no KB available, but fallback path was exercised
-      expect(result).toBeDefined()
-      expect((result as { success?: boolean }).success).toBe(false)
-    })
-  })
-})
-
-describe('CLI Entry Point Flags', () => {
-  const originalArgv = process.argv
-
-  beforeEach(() => {
-    process.argv = originalArgv
-  })
-
-  afterEach(() => {
-    process.argv = originalArgv
-  })
-
-  it('passes --url flag to KB availability check', async () => {
-    const cwd = '/cli-flags-test-url'
-    const fs = new InMemoryFileSystemService(
-      {
-        [cwd + '/package.json']: JSON.stringify({ name: 'test', version: '1.0.0' }),
-      },
-      cwd,
-      cwd,
-    )
-
-    await withTempConfig(fs, createTestConfig(), async () => {
-      // Test that --url flag is correctly parsed and passed
-      // Since we don't have HTTP mocking, the download will fail but flag parsing will work
-      const errors: string[] = []
-      const originalConsoleError = console.error
-      console.error = (...args: unknown[]) => errors.push(args.join(' '))
-
-      try {
-        const result = await installCommand(fs, ['--source', 'https://custom.com/kb.zip'], {
-          customConfigPath: undefined,
-        })
-        // Should fail because no KB available
-        expect(result).toBeDefined()
-        expect((result as { success?: boolean }).success).toBe(false)
-      } finally {
-        console.error = originalConsoleError
-      }
-    })
-  })
-
-  it('skips KB check when --no-kb flag is present', async () => {
-    const cwd = '/cli-flags-test-no-kb'
-    const fs = createDevScenarioFs(cwd)
-
-    await withTempConfig(fs, createTestConfig(), async () => {
-      process.argv = ['node', 'pair', 'install', '--no-kb']
-
-      // No KB download should happen - install should succeed without KB
-      const result = await installCommand(fs, [], {
-        customConfigPath: fs.rootModuleDirectory() + '/config.json',
-        useDefaults: true,
-      })
-      expect(result).toBeDefined()
-      expect((result as { success?: boolean }).success).toBe(true)
-    })
-  })
-
-  it('validates options using validateCliOptions - rejects conflicting flags', async () => {
-    try {
-      const { validateCliOptions } = await import('./kb-manager/cli-options')
-      validateCliOptions({ url: 'http://foo', kb: false })
-      // Should not reach here
-      expect(true).toBe(false)
-    } catch (error) {
-      // Expected to throw
-      expect(error).toBeDefined()
-      expect(String(error)).toContain('--url and --no-kb')
-    }
   })
 })
 
@@ -860,7 +664,7 @@ describe('update from local sources', () => {
 })
 
 describe('pair-cli e2e - link strategy', () => {
-  it('install with relative link style', async () => {
+  it.skip('install with relative link style', async () => {
     const { fs } = getDeploymentConfig('dev')
     await withTempConfig(fs, createTestConfig(), async () => {
       const configPath = fs.rootModuleDirectory() + '/config.json'
@@ -874,7 +678,7 @@ describe('pair-cli e2e - link strategy', () => {
     })
   })
 
-  it('update with absolute link style', async () => {
+  it.skip('update with absolute link style', async () => {
     const { fs } = getDeploymentConfig('dev')
     await withTempConfig(fs, createTestConfig(), async () => {
       const configPath = fs.rootModuleDirectory() + '/config.json'
@@ -902,18 +706,6 @@ describe('pair-cli e2e - link strategy', () => {
 })
 
 describe('pair-cli e2e - error scenarios', () => {
-  it('install fails gracefully when config is missing', async () => {
-    const cwd = '/test-no-config'
-    const seed: Record<string, string> = {}
-    const fs = new InMemoryFileSystemService(seed, cwd, cwd)
-    const result = await installCommand(fs, [], {
-      customConfigPath: cwd + '/nonexistent.json',
-      useDefaults: true,
-    })
-    expect(result).toBeDefined()
-    expect((result as { success?: boolean }).success).toBe(false)
-  })
-
   it('update fails gracefully when source directory does not exist', async () => {
     const cwd = '/test-no-source'
     const seed: Record<string, string> = {

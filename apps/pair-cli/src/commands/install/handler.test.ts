@@ -1,15 +1,39 @@
-import { describe, expect, beforeEach, vi } from 'vitest'
+import { describe, expect, beforeEach, vi, test } from 'vitest'
 import { handleInstallCommand } from './handler'
 import type { InstallCommandConfig } from './parser'
 import { createTestFileSystem } from '../test-utils'
 import type { InMemoryFileSystemService } from '@pair/content-ops'
 
-// Mock legacy installCommand
-vi.mock('../install', () => ({
-  installCommand: vi.fn().mockResolvedValue({ success: true }),
+// Mock config-utils and command-utils
+vi.mock('../../config-utils', () => ({
+  loadConfigWithOverrides: vi.fn(() => ({
+    config: {
+      asset_registries: {
+        'test-registry': {
+          source: 'test-source',
+          behavior: 'mirror',
+          target_path: '.test-install-target',
+          description: 'Test registry',
+        },
+      },
+    },
+  })),
+  getKnowledgeHubDatasetPath: vi.fn(() => '/test-dataset'),
+  calculatePathType: vi.fn(),
 }))
 
-describe('handleInstallCommand - unit tests with mocked legacy command', () => {
+vi.mock('../command-utils', () => ({
+  createLogger: vi.fn(() => ({
+    logs: [],
+    pushLog: vi.fn(),
+  })),
+  parseTargetAndSource: vi.fn(),
+  doCopyAndUpdateLinks: vi.fn().mockResolvedValue(undefined),
+  applyLinkTransformation: vi.fn().mockResolvedValue(undefined),
+  ensureDir: vi.fn().mockResolvedValue(undefined),
+}))
+
+describe('handleInstallCommand - direct implementation', () => {
   let fs: InMemoryFileSystemService
 
   beforeEach(() => {
@@ -17,86 +41,87 @@ describe('handleInstallCommand - unit tests with mocked legacy command', () => {
     vi.clearAllMocks()
   })
 
-  describe('config to legacy args mapping', () => {
-    test('maps default resolution to useDefaults flag', async () => {
+  describe('default resolution', () => {
+    test('installs from default dataset root', async () => {
       const config: InstallCommandConfig = {
         command: 'install',
-        kb: true,
         resolution: 'default',
+        kb: true,
       }
 
-      await handleInstallCommand(config, fs)
+      await expect(handleInstallCommand(config, fs)).resolves.not.toThrow()
 
-      const { installCommand } = await import('../install')
-      expect(installCommand).toHaveBeenCalledWith(
-        fs, // filesystem first
-        [], // args (empty for default)
-        expect.objectContaining({
-          kb: true,
-          useDefaults: true,
-        }),
-      )
+      const { doCopyAndUpdateLinks } = await import('../command-utils')
+      expect(doCopyAndUpdateLinks).toHaveBeenCalled()
     })
+  })
 
-    test('maps remote URL to source parameter', async () => {
+  describe('remote resolution', () => {
+    test('handles remote URL source', async () => {
       const config: InstallCommandConfig = {
         command: 'install',
-        kb: true,
         resolution: 'remote',
         url: 'https://example.com/kb.zip',
         offline: false,
-      }
-
-      await handleInstallCommand(config, fs)
-
-      const { installCommand } = await import('../install')
-      expect(installCommand).toHaveBeenCalledWith(
-        fs,
-        ['https://example.com/kb.zip'],
-        expect.objectContaining({
-          kb: true,
-          useDefaults: true,
-        }),
-      )
-    })
-
-    test('maps local source to source parameter', async () => {
-      const config: InstallCommandConfig = {
-        command: 'install',
         kb: true,
-        resolution: 'local',
-        source: '/path/to/kb.zip',
       }
 
-      await handleInstallCommand(config, fs)
-
-      const { installCommand } = await import('../install')
-      expect(installCommand).toHaveBeenCalledWith(
-        fs,
-        [],
-        expect.objectContaining({
-          kb: true,
-        }),
-      )
+      await expect(handleInstallCommand(config, fs)).resolves.not.toThrow()
     })
+  })
 
-    test('preserves kb flag', async () => {
+  describe('local resolution', () => {
+    test('handles local path source', async () => {
       const config: InstallCommandConfig = {
         command: 'install',
-        kb: false,
-        resolution: 'default',
+        resolution: 'local',
+        path: '/path/to/kb.zip',
+        offline: false,
+        kb: true,
       }
 
-      await handleInstallCommand(config, fs)
+      await expect(handleInstallCommand(config, fs)).resolves.not.toThrow()
+    })
+  })
 
-      const { installCommand } = await import('../install')
-      expect(installCommand).toHaveBeenCalledWith(
+  describe('link style transformation', () => {
+    test('applies link transformation when specified', async () => {
+      const config: InstallCommandConfig = {
+        command: 'install',
+        resolution: 'default',
+        kb: true,
+      }
+
+      await expect(
+        handleInstallCommand(config, fs, { linkStyle: 'relative' }),
+      ).resolves.not.toThrow()
+
+      const { applyLinkTransformation } = await import('../command-utils')
+      expect(applyLinkTransformation).toHaveBeenCalledWith(
         fs,
-        [],
-        expect.objectContaining({
-          kb: false,
-        }),
+        { linkStyle: 'relative' },
+        expect.any(Function),
+        'install',
       )
+    })
+  })
+
+  describe('error handling', () => {
+    test('throws on invalid registry configuration', async () => {
+      const { loadConfigWithOverrides } = await import('../../config-utils')
+      vi.mocked(loadConfigWithOverrides).mockReturnValueOnce({
+        config: {
+          asset_registries: {},
+        },
+      })
+
+      const config: InstallCommandConfig = {
+        command: 'install',
+        resolution: 'default',
+        kb: true,
+      }
+
+      await expect(handleInstallCommand(config, fs)).rejects.toThrow(/asset registries/)
     })
   })
 })
