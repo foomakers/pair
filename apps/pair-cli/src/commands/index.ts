@@ -40,6 +40,18 @@ export type CommandConfig =
   | PackageCommandConfig
   | ValidateConfigCommandConfig
 
+/**
+ * Command registry mapping command names to their parse/handle/metadata functions.
+ * 
+ * Provides centralized registration for all CLI commands:
+ * - parse: Transforms Commander.js options into typed CommandConfig
+ * - handle: Executes command logic using typed config
+ * - metadata: Provides CLI help text, examples, and option definitions
+ * 
+ * Used by:
+ * - cli.ts: registerCommandFromMetadata() for dynamic CLI registration
+ * - dispatcher.ts: dispatchCommand() for type-safe command routing
+ */
 export const commandRegistry = {
   install: {
     parse: parseInstallCommand,

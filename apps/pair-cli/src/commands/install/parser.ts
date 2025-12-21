@@ -48,7 +48,16 @@ interface ParseInstallOptions {
 }
 
 /**
- * Parse install command options into InstallCommandConfig
+ * Parse install command options into InstallCommandConfig.
+ * 
+ * Determines resolution strategy based on source parameter:
+ * - No source: default resolution (uses monorepo dataset or release ZIP)
+ * - Remote URL (http/https): remote resolution
+ * - Local path (absolute/relative): local resolution
+ * 
+ * @param options - Raw CLI options from Commander.js
+ * @returns Typed InstallCommandConfig with discriminated union for resolution
+ * @throws Error if options validation fails
  */
 export function parseInstallCommand(options: ParseInstallOptions): InstallCommandConfig {
   validateCommandOptions('install', options)

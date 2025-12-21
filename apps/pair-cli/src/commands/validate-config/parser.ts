@@ -11,7 +11,12 @@ interface ParseValidateConfigOptions {
 }
 
 /**
- * Parse validate-config command options into ValidateConfigCommandConfig
+ * Parse validate-config command options into ValidateConfigCommandConfig.
+ * 
+ * Extracts custom config path if provided, otherwise uses default.
+ * 
+ * @param options - Raw CLI options from Commander.js
+ * @returns Typed ValidateConfigCommandConfig with optional custom config path
  */
 export function parseValidateConfigCommand(
   options: ParseValidateConfigOptions,
