@@ -210,7 +210,9 @@ ${cmdConfig.metadata.notes.map((note: string) => `  • ${note}`).join('\n')}
   cmd.addHelpText('after', helpText)
 
   cmd.action(async (...args: unknown[]) => {
-    const cmdOptions = args[args.length - 1] as Record<string, unknown>
+    // Commander.js passes the command instance as last arg, not options
+    const cmdInstance = args[args.length - 1] as Command
+    const cmdOptions = cmdInstance.opts<Record<string, unknown>>()
     const globalOptions = prog.opts<Record<string, unknown>>()
     // Merge command options with global options (command options take precedence)
     const options = { ...globalOptions, ...cmdOptions }
