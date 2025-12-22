@@ -148,14 +148,14 @@ function getDeploymentConfig(deployType: 'npm' | 'manual' | 'dev'): {
     deployType === 'npm'
       ? '/.tmp/npm-test/sample-project'
       : deployType === 'manual'
-        ? '/tmp/test-project'
-        : '/dev/test-project'
+      ? '/tmp/test-project'
+      : '/dev/test-project'
   const fs =
     deployType === 'npm'
       ? createNpmDeployFs(cwd)
       : deployType === 'manual'
-        ? createManualDeployFs(cwd)
-        : createDevScenarioFs(cwd)
+      ? createManualDeployFs(cwd)
+      : createDevScenarioFs(cwd)
   return { cwd, fs }
 }
 
