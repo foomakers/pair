@@ -148,14 +148,14 @@ function getDeploymentConfig(deployType: 'npm' | 'manual' | 'dev'): {
     deployType === 'npm'
       ? '/.tmp/npm-test/sample-project'
       : deployType === 'manual'
-      ? '/tmp/test-project'
-      : '/dev/test-project'
+        ? '/tmp/test-project'
+        : '/dev/test-project'
   const fs =
     deployType === 'npm'
       ? createNpmDeployFs(cwd)
       : deployType === 'manual'
-      ? createManualDeployFs(cwd)
-      : createDevScenarioFs(cwd)
+        ? createManualDeployFs(cwd)
+        : createDevScenarioFs(cwd)
   return { cwd, fs }
 }
 
@@ -664,7 +664,7 @@ describe('update from local sources', () => {
 })
 
 describe('pair-cli e2e - link strategy', () => {
-  it.skip('install with relative link style', async () => {
+  it('install with relative link style', async () => {
     const { fs } = getDeploymentConfig('dev')
     await withTempConfig(fs, createTestConfig(), async () => {
       const configPath = fs.rootModuleDirectory() + '/config.json'
@@ -678,7 +678,7 @@ describe('pair-cli e2e - link strategy', () => {
     })
   })
 
-  it.skip('update with absolute link style', async () => {
+  it('update with absolute link style', async () => {
     const { fs } = getDeploymentConfig('dev')
     await withTempConfig(fs, createTestConfig(), async () => {
       const configPath = fs.rootModuleDirectory() + '/config.json'

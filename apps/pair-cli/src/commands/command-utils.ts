@@ -6,6 +6,7 @@ import {
   type ParsedLink,
 } from '@pair/content-ops'
 import type { FileSystemService } from '@pair/content-ops'
+import { isAbsolute } from 'node:path'
 
 export type LogEntry = {
   time: string
@@ -83,6 +84,35 @@ export async function ensureDir(fsService: FileSystemService, abs: string) {
   await fsService.mkdir(abs, { recursive: true })
 }
 
+/**
+ * Recursively copy directory or file from source to target
+ */
+async function copyRecursive(
+  fsService: FileSystemService,
+  srcPath: string,
+  tgtPath: string,
+): Promise<void> {
+  const stat = await fsService.stat(srcPath)
+  if (!stat.isDirectory()) {
+    const content = await fsService.readFile(srcPath)
+    await fsService.writeFile(tgtPath, content)
+    return
+  }
+
+  await fsService.mkdir(tgtPath, { recursive: true })
+  const entries = await fsService.readdir(srcPath)
+  for (const entry of entries) {
+    const srcEntryPath = fsService.resolve(srcPath, entry.name)
+    const tgtEntryPath = fsService.resolve(tgtPath, entry.name)
+    if (entry.isDirectory()) {
+      await copyRecursive(fsService, srcEntryPath, tgtEntryPath)
+    } else {
+      const content = await fsService.readFile(srcEntryPath)
+      await fsService.writeFile(tgtEntryPath, content)
+    }
+  }
+}
+
 export async function doCopyAndUpdateLinks(
   fsService: FileSystemService,
   copyOptions: {
@@ -92,10 +122,28 @@ export async function doCopyAndUpdateLinks(
     options?: Record<string, unknown>
   },
 ) {
-  await copyPathOps({
-    fileService: fsService,
-    ...copyOptions,
-  })
+  const { source, target, datasetRoot, options } = copyOptions
+
+  // copyPathOps requires BOTH source and target to be relative to datasetRoot
+  // For cross-directory copies, manually copy files instead
+  if (isAbsolute(source) || isAbsolute(target)) {
+    const srcPath = isAbsolute(source) ? source : fsService.resolve(datasetRoot, source)
+    const tgtPath = isAbsolute(target) ? target : fsService.resolve(datasetRoot, target)
+
+    if (await fsService.exists(srcPath)) {
+      await copyRecursive(fsService, srcPath, tgtPath)
+    }
+  } else {
+    // Both relative - use copyPathOps normally
+    await copyPathOps({
+      fileService: fsService,
+      source,
+      target,
+      datasetRoot,
+      ...(options && { options }),
+    })
+  }
+
   return {}
 }
 

@@ -220,31 +220,16 @@ describe('CLI command registration', () => {
     expect(validateConfigCmd?.description()).toContain('Validate the asset registry configuration')
   })
 
-  it.skip('package command is registered', async () => {
-    // TODO: Update test to use new command registry system
-    // Legacy packageCommand export no longer exists (moved to handlers)
-    const program = new Command()
-
-    const { packageCommand } = await import('./commands/package')
-    packageCommand(program)
-
-    const commands = program.commands
-    expect(commands.some(cmd => cmd.name() === 'package')).toBe(true)
-
-    const packageCmd = commands.find(cmd => cmd.name() === 'package')
-    expect(packageCmd?.description()).toContain('Package KB content')
+  it('package command is registered', async () => {
+    const { commandRegistry } = await import('./commands')
+    expect(commandRegistry.package).toBeDefined()
+    expect(commandRegistry.package.metadata.name).toBe('package')
+    expect(commandRegistry.package.metadata.description).toContain('Package KB content')
   })
 
-  it.skip('package command has required options', async () => {
-    // TODO: Update test to use new command registry system
-    // Legacy packageCommand export no longer exists (moved to handlers)
-    const program = new Command()
-
-    const { packageCommand } = await import('./commands/package')
-    packageCommand(program)
-
-    const packageCmd = program.commands.find((cmd: Command) => cmd.name() === 'package')
-    const opts = packageCmd?.options || []
+  it('package command has required options', async () => {
+    const { commandRegistry } = await import('./commands')
+    const opts = commandRegistry.package.metadata.options
 
     expect(opts.some(opt => opt.flags.includes('--config'))).toBe(true)
     expect(opts.some(opt => opt.flags.includes('--source-dir'))).toBe(true)
@@ -309,27 +294,19 @@ describe('CLI command registration', () => {
 })
 
 describe('CLI command execution - package command availability', () => {
-  it.skip('package command should be accessible after main() execution', async () => {
-    // TODO: Update test to use new command registry system
-    // Legacy packageCommand export no longer exists (moved to handlers)
-    const program = new Command()
+  it('package command should be accessible after main() execution', async () => {
+    const { commandRegistry } = await import('./commands')
 
-    // Simulate the global options
-    program.name('test-cli').option('--url <url>', 'Custom URL').option('--no-kb', 'Skip KB')
+    // Verify package command is in the registry
+    expect(commandRegistry.package).toBeDefined()
+    expect(commandRegistry.package.metadata).toBeDefined()
+    expect(commandRegistry.package.parse).toBeDefined()
+    expect(commandRegistry.package.handle).toBeDefined()
 
-    // Register package command BEFORE parse
-    const { packageCommand } = await import('./commands/package')
-    packageCommand(program)
-
-    // Now parse should recognize package command
-    const commands = program.commands
-    expect(commands.some(cmd => cmd.name() === 'package')).toBe(true)
-
-    const packageCmd = commands.find(cmd => cmd.name() === 'package')
-    expect(packageCmd).toBeDefined()
-
-    // Verify package command options are available
-    const opts = packageCmd?.options || []
-    expect(opts.some(opt => opt.flags.includes('-c, --config'))).toBe(true)
+    // Verify package command metadata
+    expect(commandRegistry.package.metadata.name).toBe('package')
+    expect(
+      commandRegistry.package.metadata.options.some(opt => opt.flags.includes('--config')),
+    ).toBe(true)
   })
 })

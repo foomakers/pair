@@ -42,8 +42,21 @@ function parseInstallArgs(args: string[]): InstallCommandConfig {
 
 function buildInstallHandlerOptions(options?: Record<string, unknown>): Record<string, unknown> {
   const handlerOptions: Record<string, unknown> = {}
-  if (options?.['baseTarget']) handlerOptions['baseTarget'] = String(options['baseTarget'])
-  if (options?.['customConfigPath']) handlerOptions['config'] = String(options['customConfigPath'])
-  if (options?.['verbose']) handlerOptions['verbose'] = Boolean(options['verbose'])
+  const stringProps = ['baseTarget', 'customConfigPath', 'linkStyle'] as const
+  const boolProps = ['verbose', 'useDefaults'] as const
+
+  for (const prop of stringProps) {
+    if (options?.[prop]) {
+      const key = prop === 'customConfigPath' ? 'config' : prop
+      handlerOptions[key] = String(options[prop])
+    }
+  }
+
+  for (const prop of boolProps) {
+    if (options?.[prop]) {
+      handlerOptions[prop] = Boolean(options[prop])
+    }
+  }
+
   return handlerOptions
 }
