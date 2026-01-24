@@ -1,6 +1,7 @@
 import type { ValidateConfigCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
-import { loadConfigWithOverrides, validateConfig } from '../../config-utils'
+import { loadConfigWithOverrides } from '../../config'
+import { extractRegistries, validateAllRegistries } from '../../registry'
 
 /**
  * Handles the validate-config command execution.
@@ -23,7 +24,8 @@ export async function handleValidateConfigCommand(
   })
 
   // Validate the config
-  const validation = validateConfig(result.config)
+  const registries = extractRegistries(result.config)
+  const validation = validateAllRegistries(registries)
 
   if (!validation.valid) {
     const errorMessages = validation.errors.join('\n  - ')

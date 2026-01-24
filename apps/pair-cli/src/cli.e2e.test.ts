@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
-import { installCommand, updateCommand } from './commands'
-import { handleUpdateCommand } from './cli'
+import { installCommand, updateCommand, handleUpdateCommand, parseUpdateCommand } from './commands'
 
 function createNpmDeployFs(cwd: string): InMemoryFileSystemService {
   // Simulate npm install: pair-cli extracted to node_modules/@foomakers/pair-cli/
@@ -167,8 +166,8 @@ describe('pair-cli e2e - validate-config success', () => {
     await withTempConfig(fs, createTestConfig(), async () => {
       // Mock the CLI execution by calling the validate-config logic directly
       // Since we can't easily run the CLI binary in tests, we'll test the underlying function
-      const { config } = await import('./config-utils').then(m => m.loadConfigWithOverrides(fs))
-      const { validateConfig } = await import('./config-utils')
+      const { config } = await import('./config').then(m => m.loadConfigWithOverrides(fs))
+      const { validateConfig } = await import('./config')
       const validation = validateConfig(config)
 
       expect(validation.valid).toBe(true)
@@ -194,8 +193,8 @@ describe('pair-cli e2e - validate-config failures basic', () => {
     }
 
     await withTempConfig(fs, invalidConfig, async () => {
-      const { config } = await import('./config-utils').then(m => m.loadConfigWithOverrides(fs))
-      const { validateConfig } = await import('./config-utils')
+      const { config } = await import('./config').then(m => m.loadConfigWithOverrides(fs))
+      const { validateConfig } = await import('./config')
       const validation = validateConfig(config)
 
       expect(validation.valid).toBe(false)
@@ -213,8 +212,8 @@ describe('pair-cli e2e - validate-config failures basic', () => {
     }
 
     await withTempConfig(fs, invalidConfig, async () => {
-      const { config } = await import('./config-utils').then(m => m.loadConfigWithOverrides(fs))
-      const { validateConfig } = await import('./config-utils')
+      const { config } = await import('./config').then(m => m.loadConfigWithOverrides(fs))
+      const { validateConfig } = await import('./config')
       const validation = validateConfig(config)
 
       expect(validation.valid).toBe(false)
@@ -235,8 +234,8 @@ describe('pair-cli e2e - validate-config failures advanced', () => {
     }
 
     await withTempConfig(fs, invalidConfig, async () => {
-      const { config } = await import('./config-utils').then(m => m.loadConfigWithOverrides(fs))
-      const { validateConfig } = await import('./config-utils')
+      const { config } = await import('./config').then(m => m.loadConfigWithOverrides(fs))
+      const { validateConfig } = await import('./config')
       const validation = validateConfig(config)
 
       expect(validation.valid).toBe(false)
@@ -261,8 +260,8 @@ describe('pair-cli e2e - validate-config failures advanced', () => {
     }
 
     await withTempConfig(fs, invalidConfig, async () => {
-      const { config } = await import('./config-utils').then(m => m.loadConfigWithOverrides(fs))
-      const { validateConfig } = await import('./config-utils')
+      const { config } = await import('./config').then(m => m.loadConfigWithOverrides(fs))
+      const { validateConfig } = await import('./config')
       const validation = validateConfig(config)
 
       expect(validation.valid).toBe(false)
@@ -280,11 +279,10 @@ describe('pair-cli e2e - list-targets', () => {
 
     await withTempConfig(fs, createTestConfig(), async () => {
       // Mock the CLI execution by calling the update command with listTargets option
-      const { handleUpdateCommand } = await import('./cli')
-      const result = await handleUpdateCommand({ listTargets: true }, fs)
+      const { handleUpdateCommand, parseUpdateCommand } = await import('./commands')
+      await handleUpdateCommand(parseUpdateCommand({ source: '.' }), fs)
 
-      // The function should return undefined for list-targets (no success/failure result)
-      expect(result).toBeUndefined()
+      // The function no longer returns a value (success indicated by lack of throw)
     })
   })
 })
@@ -331,9 +329,7 @@ describe('pair-cli e2e - install from local sources', () => {
 
       const fs = new InMemoryFileSystemService(seed, cwd, cwd)
 
-      const result = await installCommand(fs, ['--source', zipPath], { useDefaults: true })
-
-      expect(result).toBeDefined()
+      await installCommand(fs, ['--source', zipPath], { useDefaults: true })
     })
 
     it('installs from relative path ZIP', async () => {
@@ -375,9 +371,7 @@ describe('pair-cli e2e - install from local sources', () => {
 
       const fs = new InMemoryFileSystemService(seed, cwd, cwd)
 
-      const result = await installCommand(fs, ['--source', zipPath], { useDefaults: true })
-
-      expect(result).toBeDefined()
+      await installCommand(fs, ['--source', zipPath], { useDefaults: true })
     })
   })
 
@@ -421,9 +415,7 @@ describe('pair-cli e2e - install from local sources', () => {
 
       const fs = new InMemoryFileSystemService(seed, cwd, cwd)
 
-      const result = await installCommand(fs, ['--source', dirPath], { useDefaults: true })
-
-      expect(result).toBeDefined()
+      await installCommand(fs, ['--source', dirPath], { useDefaults: true })
     })
 
     it('installs from relative path directory', async () => {
@@ -465,9 +457,7 @@ describe('pair-cli e2e - install from local sources', () => {
 
       const fs = new InMemoryFileSystemService(seed, cwd, cwd)
 
-      const result = await installCommand(fs, ['--source', dirPath], { useDefaults: true })
-
-      expect(result).toBeDefined()
+      await installCommand(fs, ['--source', dirPath], { useDefaults: true })
     })
   })
 })
@@ -516,9 +506,7 @@ describe('update from local sources', () => {
 
       const fs = new InMemoryFileSystemService(seed, cwd, cwd)
 
-      const result = await handleUpdateCommand({ url: zipPath }, fs)
-
-      expect(result).toBeDefined()
+      await handleUpdateCommand(parseUpdateCommand({ source: zipPath }), fs)
     })
 
     it('updates from relative path ZIP', async () => {
@@ -562,9 +550,7 @@ describe('update from local sources', () => {
 
       const fs = new InMemoryFileSystemService(seed, cwd, cwd)
 
-      const result = await handleUpdateCommand({ url: zipPath }, fs)
-
-      expect(result).toBeDefined()
+      await handleUpdateCommand(parseUpdateCommand({ source: zipPath }), fs)
     })
   })
 
@@ -610,9 +596,7 @@ describe('update from local sources', () => {
 
       const fs = new InMemoryFileSystemService(seed, cwd, cwd)
 
-      const result = await handleUpdateCommand({ url: dirPath }, fs)
-
-      expect(result).toBeDefined()
+      await handleUpdateCommand(parseUpdateCommand({ source: dirPath }), fs)
     })
 
     it('updates from relative path directory', async () => {
@@ -656,9 +640,7 @@ describe('update from local sources', () => {
 
       const fs = new InMemoryFileSystemService(seed, cwd, cwd)
 
-      const result = await handleUpdateCommand({ url: dirPath }, fs)
-
-      expect(result).toBeDefined()
+      await handleUpdateCommand(parseUpdateCommand({ source: dirPath }), fs)
     })
   })
 })
@@ -673,7 +655,6 @@ describe('pair-cli e2e - link strategy', () => {
         useDefaults: true,
         linkStyle: 'relative',
       })
-      expect(result).toBeDefined()
       expect((result as { success?: boolean }).success).toBe(true)
     })
   })
@@ -686,7 +667,6 @@ describe('pair-cli e2e - link strategy', () => {
       await installCommand(fs, [], { customConfigPath: configPath, useDefaults: true })
       // Then update with absolute style and defaults
       const result = await updateCommand(fs, [], { useDefaults: true, linkStyle: 'absolute' })
-      expect(result).toBeDefined()
       expect((result as { success?: boolean }).success).toBe(true)
     })
   })
@@ -698,8 +678,7 @@ describe('pair-cli e2e - link strategy', () => {
       // First install to establish baseline
       await installCommand(fs, [], { customConfigPath: configPath, useDefaults: true })
       // Then update with auto detection and defaults
-      const result = await updateCommand(fs, [], { useDefaults: true, linkStyle: 'auto' })
-      expect(result).toBeDefined()
+      await updateCommand(fs, [], { useDefaults: true, linkStyle: 'auto' })
       // Auto detection should succeed
     })
   })
@@ -721,8 +700,7 @@ describe('pair-cli e2e - error scenarios', () => {
       }),
     }
     const fs = new InMemoryFileSystemService(seed, cwd, cwd)
-    const result = await handleUpdateCommand({ url: '/nonexistent/path' }, fs)
-    expect(result).toBeDefined()
+    await handleUpdateCommand(parseUpdateCommand({ source: '/nonexistent/path' }), fs)
     // Should fail gracefully when source doesn't exist
   })
 

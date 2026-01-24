@@ -1,15 +1,18 @@
 import { join } from 'path'
 import { FileSystemService } from '@pair/content-ops'
-import { RegistryConfig, Config, validateAllRegistries, extractRegistries } from './registry'
+import { Config, extractRegistries, validateAllRegistries } from '../registry'
 
-export type { RegistryConfig, Config }
-
+/**
+ * Loads the CLI configuration with optional overrides from project-local
+ * pair.config.json or a custom configuration path.
+ */
 export function loadConfigWithOverrides(
   fsService: FileSystemService,
   options: { customConfigPath?: string; projectRoot?: string } = {},
 ): { config: Config; source: string } {
   const { customConfigPath, projectRoot = fsService.rootModuleDirectory() } = options
   let { config, source } = loadBaseConfig(fsService)
+
   const pairApplied = applyPairConfigIfExists(fsService, config, projectRoot)
   if (pairApplied) {
     config = pairApplied.config
@@ -28,12 +31,14 @@ function baseConfigPath(currentDir: string) {
   return join(currentDir, 'config.json')
 }
 
+/**
+ * Loads the internal base configuration from the module directory.
+ */
 function loadBaseConfig(fsService: FileSystemService): { config: Config; source: string } {
   const appConfigPath = baseConfigPath(fsService.rootModuleDirectory())
   try {
     if (fsService.existsSync(appConfigPath)) {
       const appConfigContent = fsService.readFileSync(appConfigPath)
-
       return { config: JSON.parse(appConfigContent) as Config, source: 'pair-cli config.json' }
     } else {
       throw new Error(`Config file not found in pair-cli. expected path: ${appConfigPath}`)
@@ -75,6 +80,9 @@ function mergeWithCustomConfig(
   }
 }
 
+/**
+ * Performs a deep-ish merge of configurations, specifically handling the asset_registries map correctly.
+ */
 function mergeConfigs(baseConfig: Config, overrideConfig: Config): Config {
   const merged = { ...baseConfig }
 
@@ -93,13 +101,16 @@ function mergeConfigs(baseConfig: Config, overrideConfig: Config): Config {
 
   Object.keys(overrideConfig).forEach(key => {
     if (key !== 'asset_registries') {
-      merged[key] = overrideConfig[key]
+      merged[key] = (overrideConfig as Record<string, unknown>)[key]
     }
   })
 
   return merged
 }
 
+/**
+ * Validates the provided configuration object.
+ */
 export function validateConfig(config: unknown): { valid: boolean; errors: string[] } {
   const registries = extractRegistries(config)
   return validateAllRegistries(registries)

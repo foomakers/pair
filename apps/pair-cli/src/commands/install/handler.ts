@@ -1,7 +1,11 @@
 import type { InstallCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
 import { dirname } from 'path'
-import { loadConfigWithOverrides } from '../../config-utils'
+import {
+  loadConfigWithOverrides,
+  getKnowledgeHubDatasetPath,
+  getKnowledgeHubDatasetPathWithFallback,
+} from '../../config'
 
 import type { LogEntry } from '../command-utils'
 import {
@@ -17,8 +21,6 @@ import {
   forEachRegistry,
   detectOverlappingTargets,
   checkTargetsEmptiness,
-  getKnowledgeHubDatasetPath,
-  getKnowledgeHubDatasetPathWithFallback,
   type RegistryConfig,
 } from '../../registry'
 import type { HttpClientService } from '@pair/content-ops'

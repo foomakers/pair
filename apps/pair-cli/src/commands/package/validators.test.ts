@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { validatePackageStructure } from './validators'
-import type { Config } from '../../config-utils'
+import type { Config } from '../../registry'
 
 describe('validatePackageStructure - path existence', () => {
   let fsService: InMemoryFileSystemService

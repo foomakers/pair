@@ -1,6 +1,6 @@
 import type { PackageCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
-import { loadConfigWithOverrides } from '../../config-utils'
+import { loadConfigWithOverrides } from '../../config'
 import { validatePackageStructure } from './validators'
 import { generateManifestMetadata } from './metadata'
 import { createPackageZip } from './zip-creator'

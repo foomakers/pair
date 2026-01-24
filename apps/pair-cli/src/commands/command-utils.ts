@@ -7,7 +7,7 @@ import {
 } from '@pair/content-ops'
 import { isAbsolute, dirname } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
-import { LogEntry, createLogger } from '../logger'
+import { LogEntry, createLogger } from '../diagnostics'
 
 export { createLogger, type LogEntry }
 

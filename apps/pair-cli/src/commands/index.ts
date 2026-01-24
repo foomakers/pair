@@ -38,6 +38,21 @@ import { parseKbValidateCommand } from './kb-validate/parser'
 import { handleKbValidateCommand } from './kb-validate/handler'
 import { kbValidateMetadata } from './kb-validate/metadata'
 
+export {
+  handleInstallCommand,
+  handleUpdateCommand,
+  handleUpdateLinkCommand,
+  handlePackageCommand,
+  handleValidateConfigCommand,
+  handleKbValidateCommand,
+  parseInstallCommand,
+  parseUpdateCommand,
+  parseUpdateLinkCommand,
+  parsePackageCommand,
+  parseValidateConfigCommand,
+  parseKbValidateCommand,
+}
+
 /**
  * Discriminated union of all command configurations
  */
