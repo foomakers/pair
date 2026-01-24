@@ -10,15 +10,11 @@ import {
   fileSystemService,
   FileSystemService,
   setLogLevel,
-  validateUrl,
-  detectSourceType,
-  SourceType,
   HttpClientService,
   NodeHttpClientService,
 } from '@pair/content-ops'
-import { getKnowledgeHubDatasetPath, getKnowledgeHubDatasetPathWithFallback } from './config'
-import { validateCliOptions } from './kb-manager/cli-options'
-import { isDiagEnabled, runDiagnostics, MIN_LOG_LEVEL } from './diagnostics'
+import { bootstrapEnvironment } from './config'
+import { runDiagnostics, MIN_LOG_LEVEL } from './diagnostics'
 
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
 
@@ -36,113 +32,6 @@ interface CommandDeps {
   fsService: FileSystemService
   httpClient: HttpClientService
   version: string
-}
-
-function hasLocalDataset(fsService: FileSystemService): boolean {
-  try {
-    const datasetPath = getKnowledgeHubDatasetPath(fsService)
-    return fsService.existsSync(datasetPath)
-  } catch {
-    return false
-  }
-}
-
-function validateAndLogCustomUrl(customUrl: string): void {
-  try {
-    validateUrl(customUrl)
-    if (isDiagEnabled()) console.error(`[diag] Using custom URL: ${customUrl}`)
-  } catch (err) {
-    console.error(chalk.red(`Invalid --url parameter: ${err}`))
-    process.exitCode = 1
-    process.exit(1)
-  }
-}
-
-function shouldSkipKBDownload(
-  skipKB?: boolean,
-  fsService?: FileSystemService,
-  customUrl?: string,
-): boolean {
-  if (skipKB) {
-    if (isDiagEnabled()) console.error('[diag] Skipping KB download (--no-kb flag set)')
-    return true
-  }
-
-  if (fsService && hasLocalDataset(fsService)) {
-    if (isDiagEnabled()) console.error('[diag] Using local dataset')
-    return true
-  }
-
-  // If customUrl is a local path, skip KB download - ensureKBAvailable will handle it
-  if (customUrl && detectSourceType(customUrl) !== SourceType.REMOTE_URL) {
-    if (isDiagEnabled()) console.error(`[diag] Using local path: ${customUrl}`)
-    return true
-  }
-
-  return false
-}
-
-async function ensureKBAvailableOnStartup(options: {
-  fsService: FileSystemService
-  version: string
-  customUrl?: string
-  skipKB?: boolean
-  httpClient?: HttpClientService
-}): Promise<void> {
-  const { fsService, version, customUrl, skipKB, httpClient } = options
-  if (shouldSkipKBDownload(skipKB, fsService, customUrl)) {
-    return
-  }
-
-  if (isDiagEnabled()) console.error('[diag] Local dataset not available, using KB manager')
-
-  if (customUrl) {
-    validateAndLogCustomUrl(customUrl)
-  }
-
-  try {
-    const datasetPath = await getKnowledgeHubDatasetPathWithFallback({
-      fsService,
-      version,
-      ...(httpClient && { httpClient }),
-      ...(customUrl !== undefined && { customUrl }),
-    })
-    if (isDiagEnabled()) console.error(`[diag] KB dataset available at: ${datasetPath}`)
-  } catch (err) {
-    console.error(chalk.red(`[startup] Failed to ensure KB available: ${err}`))
-    process.exitCode = 1
-    process.exit(1)
-  }
-}
-
-export function checkKnowledgeHubDatasetAccessible(
-  fsService: FileSystemService,
-  customUrl?: string,
-): void {
-  if (customUrl && detectSourceType(customUrl) !== SourceType.REMOTE_URL) {
-    return
-  }
-
-  try {
-    const datasetPath = getKnowledgeHubDatasetPath(fsService)
-    if (!fsService.existsSync(datasetPath)) {
-      console.error(chalk.red(`[startup] dataset folder not found at: ${datasetPath}`))
-      process.exitCode = 1
-      process.exit(1)
-    }
-
-    try {
-      fsService.accessSync(datasetPath)
-    } catch {
-      console.error(chalk.red(`[startup] dataset folder is not readable: ${datasetPath}`))
-      process.exitCode = 1
-      process.exit(1)
-    }
-  } catch (err) {
-    console.error(chalk.red(`[startup] failed to resolve knowledge-hub dataset. Error is: ${err}`))
-    process.exitCode = 1
-    process.exit(1)
-  }
 }
 
 function addCommandOptions(
@@ -221,32 +110,6 @@ function setupCommands(prog: Command, deps: CommandDeps): void {
   })
 }
 
-async function setupAndValidateKB(
-  fsService: FileSystemService,
-  httpClient: HttpClientService,
-  options: { url?: string; kb: boolean },
-): Promise<void> {
-  try {
-    validateCliOptions({ ...(options.url && { url: options.url }), kb: options.kb })
-  } catch (err) {
-    console.error(chalk.red(`Invalid options: ${err}`))
-    process.exitCode = 1
-    process.exit(1)
-  }
-
-  await ensureKBAvailableOnStartup({
-    fsService,
-    version: pkg.version,
-    ...(options.url !== undefined && { customUrl: options.url }),
-    skipKB: !options.kb,
-    httpClient,
-  })
-
-  if (options.kb !== false) {
-    checkKnowledgeHubDatasetAccessible(fsService, options.url)
-  }
-}
-
 export async function runCli(
   argv: string[],
   deps: CliDependencies = { fs: fileSystemService, httpClient: new NodeHttpClientService() },
@@ -267,7 +130,21 @@ export async function runCli(
   await program.parseAsync(argv)
   const options = program.opts<{ url?: string; kb: boolean }>()
 
-  await setupAndValidateKB(fsService, httpClient, options)
+  try {
+    await bootstrapEnvironment({
+      fsService,
+      httpClient,
+      version: pkg.version,
+      url: options.url,
+      kb: options.kb,
+    })
+  } catch (err) {
+    console.error(
+      chalk.red(`Environment setup failed: ${err instanceof Error ? err.message : String(err)}`),
+    )
+    process.exitCode = 1
+    process.exit(1)
+  }
 }
 
 export async function main() {

@@ -5,14 +5,15 @@ import {
   createRegistryBackupConfig,
 } from './backup'
 import type { BackupService, FileSystemService } from '@pair/content-ops'
-import type { LogEntry } from './command-utils'
+import type { LogEntry } from '../diagnostics'
 
 describe('backup utilities', () => {
   describe('handleBackupRollback', () => {
     it('skips rollback when autoRollback is false', async () => {
       const mockBackup: BackupService = { rollback: vi.fn() } as unknown as BackupService
       const logs: LogEntry[] = []
-      const pushLog = (level: LogEntry['level'], message: string) => logs.push({ level, message })
+      const pushLog = (level: LogEntry['level'], message: string) =>
+        logs.push({ level, message, time: new Date().toISOString() })
 
       await handleBackupRollback(
         mockBackup,
@@ -30,7 +31,8 @@ describe('backup utilities', () => {
         rollback: vi.fn().mockResolvedValue(undefined),
       } as unknown as BackupService
       const logs: LogEntry[] = []
-      const pushLog = (level: LogEntry['level'], message: string) => logs.push({ level, message })
+      const pushLog = (level: LogEntry['level'], message: string) =>
+        logs.push({ level, message, time: new Date().toISOString() })
       const error = new Error('test error')
 
       await handleBackupRollback(
@@ -49,7 +51,8 @@ describe('backup utilities', () => {
         rollback: vi.fn().mockResolvedValue(undefined),
       } as unknown as BackupService
       const logs: LogEntry[] = []
-      const pushLog = (level: LogEntry['level'], message: string) => logs.push({ level, message })
+      const pushLog = (level: LogEntry['level'], message: string) =>
+        logs.push({ level, message, time: new Date().toISOString() })
       const error = new Error('test error')
 
       await handleBackupRollback(
@@ -68,7 +71,8 @@ describe('backup utilities', () => {
         rollback: vi.fn().mockRejectedValue(rollbackError),
       } as unknown as BackupService
       const logs: LogEntry[] = []
-      const pushLog = (level: LogEntry['level'], message: string) => logs.push({ level, message })
+      const pushLog = (level: LogEntry['level'], message: string) =>
+        logs.push({ level, message, time: new Date().toISOString() })
 
       await handleBackupRollback(
         mockBackup,

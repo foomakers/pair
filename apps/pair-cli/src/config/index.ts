@@ -1,3 +1,6 @@
 export * from './loader'
 export * from './discovery'
 export * from './kb-resolver'
+export * from './fs-utils'
+export * from './bootstrap'
+export * from './errors'

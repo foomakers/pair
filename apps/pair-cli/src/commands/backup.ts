@@ -4,7 +4,7 @@
  */
 
 import type { BackupService, FileSystemService } from '@pair/content-ops'
-import type { LogEntry } from './command-utils'
+import type { LogEntry } from '../diagnostics'
 
 /**
  * Handle backup rollback on error

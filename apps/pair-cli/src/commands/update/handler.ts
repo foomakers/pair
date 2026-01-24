@@ -6,20 +6,17 @@ import {
   getKnowledgeHubDatasetPath,
   getKnowledgeHubDatasetPathWithFallback,
 } from '../../config'
-import type { LogEntry } from '../command-utils'
-import {
-  createLogger,
-  doCopyAndUpdateLinks,
-  applyLinkTransformation,
-  ensureDir,
-} from '../command-utils'
+import { createLogger, type LogEntry } from '../../diagnostics'
+import { ensureDir } from '../../config'
 import {
   extractRegistries,
   validateAllRegistries,
   resolveTarget,
   forEachRegistry,
+  doCopyAndUpdateLinks,
   type RegistryConfig,
 } from '../../registry'
+import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
 import { BackupService } from '@pair/content-ops'
 import { installKBFromLocalZip } from '../../kb-manager/kb-installer'
