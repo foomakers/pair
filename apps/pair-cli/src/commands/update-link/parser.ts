@@ -7,6 +7,7 @@ export interface UpdateLinkCommandConfig {
   absolute?: boolean
   dryRun: boolean
   verbose: boolean
+  target?: string
 }
 
 interface ParseUpdateLinkOptions {
@@ -23,10 +24,15 @@ interface ParseUpdateLinkOptions {
  * Defaults: absolute=false, dryRun=false, verbose=false
  *
  * @param options - Raw CLI options from Commander.js
+ * @param args - Positional arguments from Commander.js
  * @returns Typed UpdateLinkCommandConfig with dry-run and verbosity settings
  */
-export function parseUpdateLinkCommand(options: ParseUpdateLinkOptions): UpdateLinkCommandConfig {
+export function parseUpdateLinkCommand(
+  options: ParseUpdateLinkOptions,
+  args: string[] = [],
+): UpdateLinkCommandConfig {
   const { url, absolute = false, dryRun = false, verbose = false } = options
+  const target = args[0]
 
   return {
     command: 'update-link',
@@ -34,5 +40,6 @@ export function parseUpdateLinkCommand(options: ParseUpdateLinkOptions): UpdateL
     ...(absolute && { absolute }),
     dryRun,
     verbose,
+    ...(target && { target }),
   }
 }

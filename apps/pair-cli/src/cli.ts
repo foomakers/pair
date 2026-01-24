@@ -137,7 +137,8 @@ function registerCommandFromMetadata(
     const cmdOptions = cmdInstance.opts<Record<string, unknown>>()
     const globalOptions = prog.opts<Record<string, unknown>>()
     const options = { ...globalOptions, ...cmdOptions }
-    const config = cmdConfig.parse(options)
+    const positionalArgs = args.slice(0, -1) as string[]
+    const config = cmdConfig.parse(options, positionalArgs)
 
     await dispatchCommand(config, fsService, httpClient, version)
   })

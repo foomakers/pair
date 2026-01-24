@@ -31,7 +31,13 @@ interface ParsePackageOptions {
  * @param options - Raw CLI options from Commander.js
  * @returns Typed PackageCommandConfig with package metadata
  */
-export function parsePackageCommand(options: ParsePackageOptions): PackageCommandConfig {
+export function parsePackageCommand(
+  options: ParsePackageOptions,
+  args: string[] = [],
+): PackageCommandConfig {
+  if (args.length > 0) {
+    throw new Error(`Command 'package' does not accept positional arguments: ${args.join(', ')}`)
+  }
   const { output, sourceDir, name, version, description, author, verbose = false } = options
 
   return {

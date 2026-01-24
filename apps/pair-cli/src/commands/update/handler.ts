@@ -89,7 +89,7 @@ async function setupUpdateContext(
     throw new Error(validation.errors.join('; ') || 'Invalid registry configuration')
   }
 
-  const baseTarget = options?.baseTarget || fs.currentWorkingDirectory()
+  const baseTarget = config.target || options?.baseTarget || fs.currentWorkingDirectory()
   return { datasetRoot, registries, baseTarget }
 }
 

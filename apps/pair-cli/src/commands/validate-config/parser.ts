@@ -20,7 +20,13 @@ interface ParseValidateConfigOptions {
  */
 export function parseValidateConfigCommand(
   options: ParseValidateConfigOptions,
+  args: string[] = [],
 ): ValidateConfigCommandConfig {
+  if (args.length > 0) {
+    throw new Error(
+      `Command 'validate-config' does not accept positional arguments: ${args.join(', ')}`,
+    )
+  }
   const { config } = options
 
   return {

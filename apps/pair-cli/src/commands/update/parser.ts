@@ -9,6 +9,7 @@ export interface UpdateCommandConfigDefault {
   resolution: 'default'
   offline: false
   kb: boolean
+  target?: string
 }
 
 /**
@@ -20,6 +21,7 @@ export interface UpdateCommandConfigRemote {
   url: string
   offline: false
   kb: boolean
+  target?: string
 }
 
 /**
@@ -31,6 +33,7 @@ export interface UpdateCommandConfigLocal {
   path: string
   offline: boolean
   kb: boolean
+  target?: string
 }
 
 /**
@@ -56,13 +59,18 @@ interface ParseUpdateOptions {
  * - Local path (absolute/relative): local resolution
  *
  * @param options - Raw CLI options from Commander.js
+ * @param args - Positional arguments from Commander.js
  * @returns Typed UpdateCommandConfig with discriminated union for resolution
  * @throws Error if options validation fails
  */
-export function parseUpdateCommand(options: ParseUpdateOptions): UpdateCommandConfig {
+export function parseUpdateCommand(
+  options: ParseUpdateOptions,
+  args: string[] = [],
+): UpdateCommandConfig {
   validateCommandOptions('update', options)
 
   const { source, offline = false, kb = true } = options
+  const target = args[0]
 
   // Default resolution (no source)
   if (!source) {
@@ -71,6 +79,7 @@ export function parseUpdateCommand(options: ParseUpdateOptions): UpdateCommandCo
       resolution: 'default',
       offline: false,
       kb,
+      ...(target && { target }),
     }
   }
 
@@ -83,6 +92,7 @@ export function parseUpdateCommand(options: ParseUpdateOptions): UpdateCommandCo
       url: source,
       offline: false,
       kb,
+      ...(target && { target }),
     }
   }
 
@@ -93,5 +103,6 @@ export function parseUpdateCommand(options: ParseUpdateOptions): UpdateCommandCo
     path: source,
     offline,
     kb,
+    ...(target && { target }),
   }
 }

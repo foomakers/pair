@@ -18,7 +18,15 @@ interface ParseKbValidateOptions {
  * @param options - Raw CLI options from Commander.js
  * @returns Typed KbValidateCommandConfig with optional KB path
  */
-export function parseKbValidateCommand(options: ParseKbValidateOptions): KbValidateCommandConfig {
+export function parseKbValidateCommand(
+  options: ParseKbValidateOptions,
+  args: string[] = [],
+): KbValidateCommandConfig {
+  if (args.length > 0) {
+    throw new Error(
+      `Command 'kb-validate' does not accept positional arguments: ${args.join(', ')}`,
+    )
+  }
   const { path } = options
 
   return {

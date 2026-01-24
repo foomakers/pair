@@ -78,24 +78,25 @@ async function processMarkdownFile(
 }
 
 async function verifyKB(
+  config: UpdateLinkCommandConfig,
   fs: FileSystemService,
   pushLog: (level: LogEntry['level'], message: string) => void,
 ): Promise<string> {
+  let datasetRoot: string | undefined
   try {
-    const datasetRoot = getKnowledgeHubDatasetPath(fs)
+    datasetRoot = getKnowledgeHubDatasetPath(fs)
     pushLog('info', `Knowledge Base dataset detected at: ${datasetRoot}`)
   } catch (error) {
-    const message = 'No Knowledge Base found. Please run "pair install" first.'
-    pushLog('error', message)
-    pushLog('error', String(error))
-    throw new Error(message)
+    pushLog(
+      'warn',
+      `Knowledge Base dataset not found: ${String(error)}. Link fixing might be limited.`,
+    )
   }
 
-  const cwd = fs.currentWorkingDirectory()
-  const kbPath = fs.resolve(cwd, '.pair')
+  const kbPath = config.target ? fs.resolve(config.target) : fs.resolve('.pair')
 
   if (!fs.existsSync(kbPath)) {
-    const message = 'No Knowledge Base installed. Please run "pair install" first.'
+    const message = `No Knowledge Base found at: ${kbPath}. Please run "pair install" first.`
     pushLog('error', message)
     throw new Error(message)
   }
@@ -181,7 +182,7 @@ async function executeUpdateLinkSequence(
 ): Promise<void> {
   const pathMode = config.absolute ? 'absolute' : 'relative'
   const dryRun = config.dryRun ?? false
-  const kbPath = await verifyKB(fs, pushLog)
+  const kbPath = await verifyKB(config, fs, pushLog)
   const backupService = new BackupService(fs)
   const shouldBackup = !dryRun
 
