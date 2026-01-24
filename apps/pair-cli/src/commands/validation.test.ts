@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  validateCommandOptions,
-  detectOverlappingTargets,
-  checkTargetEmptiness,
-} from './validation'
+import { validateCommandOptions, checkTargetEmptiness } from './validation'
 import { createTestFs } from '../test-utils'
 
 describe('command validation - validateCommandOptions', () => {
@@ -37,37 +33,6 @@ describe('command validation - validateCommandOptions', () => {
         validateCommandOptions('install', { source: '' })
       }).toThrow('Source path/URL cannot be empty')
     })
-  })
-})
-
-describe('target validation - detectOverlappingTargets', () => {
-  it('detects identical targets', () => {
-    const targets = {
-      reg1: 'path/a',
-      reg2: 'path/a',
-    }
-    const { overlapping } = detectOverlappingTargets(targets)
-    expect(overlapping).toHaveLength(1)
-    expect(overlapping[0]).toContain('same target')
-  })
-
-  it('detects nested targets', () => {
-    const targets = {
-      parent: 'path/a',
-      child: 'path/a/b',
-    }
-    const { overlapping } = detectOverlappingTargets(targets)
-    expect(overlapping).toHaveLength(1)
-    expect(overlapping[0]).toContain('overlap')
-  })
-
-  it('allows distinct targets', () => {
-    const targets = {
-      reg1: 'path/a',
-      reg2: 'path/b',
-    }
-    const { overlapping } = detectOverlappingTargets(targets)
-    expect(overlapping).toHaveLength(0)
   })
 })
 

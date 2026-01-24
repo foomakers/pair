@@ -4,7 +4,7 @@ import { loadConfigWithOverrides } from '../../config-utils'
 import { validatePackageStructure } from './validators'
 import { generateManifestMetadata } from './metadata'
 import { createPackageZip } from './zip-creator'
-import type { AssetRegistryConfig } from '../registry'
+import { extractRegistries, type RegistryConfig } from '../../registry'
 import path from 'path'
 
 async function loadAndValidate(
@@ -47,7 +47,7 @@ async function prepareOutput(outputPath: string, fs: FileSystemService) {
 async function createAndReportZip(params: {
   config: PackageCommandConfig
   projectRoot: string
-  registries: AssetRegistryConfig[]
+  registries: RegistryConfig[]
   manifest: ReturnType<typeof generateManifestMetadata>
   outputPath: string
   fs: FileSystemService
@@ -101,7 +101,7 @@ export async function handlePackageCommand(
   const result = await loadAndValidate(config, fs, projectRoot)
 
   if (config.verbose) console.log('📋 Generating manifest metadata...')
-  const registries: AssetRegistryConfig[] = Object.values(result.config.asset_registries)
+  const registries = Object.values(extractRegistries(result.config))
   const registryNames = registries.map(r => r.source || '').filter(Boolean)
   const manifest = generateManifestMetadata(registryNames, buildCliParams(config))
 

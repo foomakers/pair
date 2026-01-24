@@ -75,41 +75,6 @@ export async function ensureTargetIsEmpty(
 }
 
 /**
- * Detect overlapping target paths across multiple registries
- * Prevents installation of registries with conflicting target directories
- * @param targets Map of registry name to target path
- * @returns { overlapping: string[] }
- */
-export function detectOverlappingTargets(targets: Record<string, string>): {
-  overlapping: string[]
-} {
-  const overlapping: string[] = []
-  const paths = Object.entries(targets)
-
-  for (let i = 0; i < paths.length; i++) {
-    const entry1 = paths[i]
-    if (!entry1) continue
-    const [name1, path1] = entry1
-    for (let j = i + 1; j < paths.length; j++) {
-      const entry2 = paths[j]
-      if (!entry2) continue
-      const [name2, path2] = entry2
-
-      // Check if paths are the same or one contains the other
-      if (path1 === path2) {
-        overlapping.push(`registries '${name1}' and '${name2}' have same target: ${path1}`)
-      } else if (path1.startsWith(path2 + '/') || path2.startsWith(path1 + '/')) {
-        overlapping.push(
-          `registry targets overlap: '${name1}' (${path1}) and '${name2}' (${path2})`,
-        )
-      }
-    }
-  }
-
-  return { overlapping }
-}
-
-/**
  * Check multiple targets for emptiness
  * Used in install to validate all targets before proceeding
  * @param targets Map of registry name to target path

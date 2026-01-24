@@ -1,10 +1,5 @@
 import { join, dirname } from 'path'
-import {
-  Behavior,
-  FileSystemService,
-  HttpClientService,
-  NodeHttpClientService,
-} from '@pair/content-ops'
+import { FileSystemService, HttpClientService, NodeHttpClientService } from '@pair/content-ops'
 import { isKBCached, ensureKBAvailable } from './kb-manager'
 
 import {
@@ -14,21 +9,9 @@ import {
   findPackageJsonPath,
 } from './env-utils'
 
-// Define proper types for configuration
-export interface RegistryConfig {
-  source?: string
-  behavior: Behavior
-  target_path: string
-  description: string
-  include?: string[]
-}
+import { RegistryConfig, Config, validateAllRegistries, extractRegistries } from './registry'
 
-export interface Config {
-  asset_registries: Record<string, RegistryConfig>
-  default_target_folders?: Record<string, string>
-  folders_to_include?: Record<string, string[]>
-  [key: string]: unknown
-}
+export type { RegistryConfig, Config }
 
 export function getKnowledgeHubDatasetPath(fsService: FileSystemService): string {
   const currentDir = fsService.rootModuleDirectory()
@@ -241,91 +224,8 @@ function mergeConfigs(baseConfig: Config, overrideConfig: Config): Config {
 }
 
 export function validateConfig(config: unknown): { valid: boolean; errors: string[] } {
-  const errors: string[] = []
-  const basicValidation = validateBasicConfigStructure(config)
-  if (!basicValidation.valid) {
-    return basicValidation
-  }
-
-  const configObj = config as Record<string, unknown>
-  const registries = configObj['asset_registries'] as Record<string, unknown>
-
-  for (const [registryName, registry] of Object.entries(registries)) {
-    const registryErrors = validateSingleRegistry(registryName, registry)
-    errors.push(...registryErrors)
-  }
-
-  return { valid: errors.length === 0, errors }
-}
-
-function validateBasicConfigStructure(config: unknown): { valid: boolean; errors: string[] } {
-  const errors: string[] = []
-
-  if (!config || typeof config !== 'object') {
-    errors.push('Config must be a valid object')
-    return { valid: false, errors }
-  }
-
-  const configObj = config as Record<string, unknown>
-
-  if (!configObj['asset_registries'] || typeof configObj['asset_registries'] !== 'object') {
-    errors.push('Config must have asset_registries object')
-    return { valid: false, errors }
-  }
-
-  return { valid: true, errors }
-}
-
-function validateSingleRegistry(registryName: string, registry: unknown): string[] {
-  const errors: string[] = []
-
-  if (!registry || typeof registry !== 'object') {
-    errors.push(`Registry '${registryName}' must be a valid object`)
-    return errors
-  }
-
-  const reg = registry as Record<string, unknown>
-  const validBehaviors: Behavior[] = ['overwrite', 'add', 'mirror', 'skip']
-
-  if (!reg['behavior'] || !validBehaviors.includes(reg['behavior'] as Behavior)) {
-    errors.push(
-      `Registry '${registryName}' has invalid behavior '${
-        reg['behavior']
-      }'. Must be one of: ${validBehaviors.join(', ')}`,
-    )
-  }
-
-  if (!reg['target_path'] || typeof reg['target_path'] !== 'string') {
-    errors.push(`Registry '${registryName}' must have a valid target_path string`)
-  }
-
-  const includeErrors = validateRegistryInclude(registryName, reg['include'])
-  errors.push(...includeErrors)
-
-  if (!reg['description'] || typeof reg['description'] !== 'string') {
-    errors.push(`Registry '${registryName}' must have a valid description string`)
-  }
-
-  return errors
-}
-
-function validateRegistryInclude(registryName: string, include: unknown): string[] {
-  const errors: string[] = []
-
-  if (include !== undefined) {
-    if (!Array.isArray(include)) {
-      errors.push(`Registry '${registryName}' include must be an array of strings`)
-    } else {
-      for (const item of include as unknown[]) {
-        if (typeof item !== 'string') {
-          errors.push(`Registry '${registryName}' include array must contain only strings`)
-          break
-        }
-      }
-    }
-  }
-
-  return errors
+  const registries = extractRegistries(config)
+  return validateAllRegistries(registries)
 }
 
 export const calculatePathType = async (fsService: FileSystemService, path: string) => {

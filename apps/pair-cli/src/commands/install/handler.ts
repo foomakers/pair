@@ -14,13 +14,14 @@ import {
   ensureDir,
 } from '../command-utils'
 import {
-  loadRegistriesFromConfig,
-  validateRegistries,
-  calculateEffectiveTarget,
-  processAssetRegistries,
-  type AssetRegistryConfig,
-} from '../registry'
-import { detectOverlappingTargets, checkTargetsEmptiness } from '../validation'
+  extractRegistries,
+  validateAllRegistries,
+  resolveTarget,
+  forEachRegistry,
+  detectOverlappingTargets,
+  type RegistryConfig,
+} from '../../registry'
+import { checkTargetsEmptiness } from '../validation'
 import type { HttpClientService } from '@pair/content-ops'
 import { installKBFromLocalZip } from '../../kb-manager/kb-installer'
 
@@ -40,11 +41,6 @@ interface InstallHandlerOptions {
 /**
  * Handles the install command execution.
  * Processes InstallCommandConfig to install KB content from various sources.
- *
- * @param config - The parsed install command configuration
- * @param fs - FileSystemService instance (injected for testing)
- * @param options - Optional handler configuration (baseTarget, linkStyle, etc)
- * @throws Error if installation fails
  */
 export async function handleInstallCommand(
   config: InstallCommandConfig,
@@ -71,25 +67,27 @@ async function setupInstallContext(
   options?: InstallHandlerOptions,
 ): Promise<{
   datasetRoot: string
-  registries: Record<string, AssetRegistryConfig>
+  registries: Record<string, RegistryConfig>
   baseTarget: string
 }> {
   const datasetRoot = await resolveDatasetRoot(fs, config, options)
   const configOptions: { customConfigPath?: string; projectRoot?: string } = {}
   if (options?.config) configOptions.customConfigPath = options.config
   const configContent = loadConfigWithOverrides(fs, configOptions)
-  const registries = loadRegistriesFromConfig(configContent.config)
-  const validation = validateRegistries(registries)
+
+  const registries = extractRegistries(configContent.config)
+  const validation = validateAllRegistries(registries)
   if (!validation.valid) {
-    throw new Error(validation.error || 'Invalid registry configuration')
+    throw new Error(validation.errors.join('; ') || 'Invalid registry configuration')
   }
+
   const baseTarget = options?.baseTarget || fs.currentWorkingDirectory()
   return { datasetRoot, registries, baseTarget }
 }
 
 async function validateInstallContext(
   fs: FileSystemService,
-  registries: Record<string, AssetRegistryConfig>,
+  registries: Record<string, RegistryConfig>,
   baseTarget: string,
 ): Promise<void> {
   const targetValidation = await validateAllTargetsBeforeInstall(fs, registries, baseTarget)
@@ -101,14 +99,15 @@ async function validateInstallContext(
 async function executeInstall(context: {
   fs: FileSystemService
   datasetRoot: string
-  registries: Record<string, AssetRegistryConfig>
+  registries: Record<string, RegistryConfig>
   baseTarget: string
   options: InstallHandlerOptions | undefined
   pushLog: (level: LogEntry['level'], message: string) => void
 }): Promise<void> {
   const { fs, datasetRoot, registries, baseTarget, options, pushLog } = context
-  await processAssetRegistries(registries, async (registryName, registryConfig) => {
-    const effectiveTarget = calculateEffectiveTarget(registryName, registryConfig, baseTarget, fs)
+
+  await forEachRegistry(registries, async (registryName, registryConfig) => {
+    const effectiveTarget = resolveTarget(registryName, registryConfig, fs, baseTarget)
     await ensureDir(fs, dirname(effectiveTarget))
     const datasetPath = fs.resolve(datasetRoot, registryName)
     const copyOptions = buildCopyOptions(registryConfig)
@@ -121,6 +120,7 @@ async function executeInstall(context: {
     })
     pushLog('info', `Successfully installed registry '${registryName}'`)
   })
+
   if (options?.linkStyle) {
     await applyLinkTransformation(fs, { linkStyle: options.linkStyle }, pushLog, 'install')
   }
@@ -138,11 +138,9 @@ async function resolveDatasetRoot(
 
   switch (config.resolution) {
     case 'default':
-      // Use default KB dataset path
       return getKnowledgeHubDatasetPath(fs)
 
     case 'remote':
-      // Remote resolution using KB manager
       return getKnowledgeHubDatasetPathWithFallback({
         fsService: fs,
         version,
@@ -151,12 +149,9 @@ async function resolveDatasetRoot(
       })
 
     case 'local':
-      // Local source (ZIP or directory)
       if (config.path.endsWith('.zip')) {
-        // Install from ZIP to cache and return cache path
         return installKBFromLocalZip(version, config.path, fs)
       }
-      // Use directory directly
       return config.path
   }
 }
@@ -166,18 +161,18 @@ async function resolveDatasetRoot(
  */
 async function validateAllTargetsBeforeInstall(
   fs: FileSystemService,
-  registries: Record<string, AssetRegistryConfig>,
+  registries: Record<string, RegistryConfig>,
   baseTarget: string,
 ): Promise<{ valid: boolean; error?: string }> {
   const targets: Record<string, string> = {}
 
   for (const [registryName, registryConfig] of Object.entries(registries)) {
-    const effectiveTarget = calculateEffectiveTarget(registryName, registryConfig, baseTarget, fs)
+    const effectiveTarget = resolveTarget(registryName, registryConfig, fs, baseTarget)
     targets[registryName] = effectiveTarget
   }
 
   // Check for overlapping targets
-  const { overlapping } = detectOverlappingTargets(targets)
+  const overlapping = detectOverlappingTargets(targets)
   if (overlapping.length > 0) {
     return {
       valid: false,
@@ -198,7 +193,7 @@ async function validateAllTargetsBeforeInstall(
 /**
  * Build copy options for registry based on behavior and includes
  */
-function buildCopyOptions(registryConfig: AssetRegistryConfig): Record<string, unknown> {
+function buildCopyOptions(registryConfig: RegistryConfig): Record<string, unknown> {
   const behavior = registryConfig.behavior || 'mirror'
   const include = registryConfig.include || []
 

@@ -11,7 +11,6 @@ import { installCommand, updateCommand } from './commands'
 import {
   fileSystemService,
   FileSystemService,
-  Behavior,
   setLogLevel,
   validateUrl,
   detectSourceType,
@@ -25,6 +24,7 @@ import {
   loadConfigWithOverrides,
 } from './config-utils'
 import { isInRelease } from './env-utils'
+import { RegistryConfig, extractRegistries } from './registry'
 import { LogLevel } from '@pair/content-ops'
 import { validateCliOptions } from './kb-manager/cli-options'
 
@@ -375,14 +375,6 @@ if (require.main === module) {
   })
 }
 
-interface AssetRegistryConfig {
-  source?: string
-  behavior: Behavior
-  include?: string[]
-  target_path: string
-  description: string
-}
-
 interface CommandOptions {
   config?: string
   listTargets?: boolean
@@ -574,9 +566,10 @@ function handleUpdateListTargets(fsService: FileSystemService, cmdOptions: Comma
       })
   console.log(chalk.blue('\n📁 Available asset registries:\n'))
 
-  if (config.asset_registries) {
-    Object.entries(config.asset_registries).forEach(([key, registry]) => {
-      const reg = registry as AssetRegistryConfig
+  const registries = extractRegistries(config)
+  if (registries) {
+    Object.entries(registries).forEach(([key, registry]) => {
+      const reg = registry as RegistryConfig
       const behavior = reg.behavior || 'unknown'
       const hasInclude = reg.include && Array.isArray(reg.include) && reg.include.length > 0
       const description = reg.description || `Asset registry: ${key}`

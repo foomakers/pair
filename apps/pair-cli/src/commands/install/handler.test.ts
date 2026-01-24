@@ -131,7 +131,7 @@ describe('handleInstallCommand - direct implementation', () => {
         offline: false,
       }
 
-      await expect(handleInstallCommand(config, fs)).rejects.toThrow(/asset registries/)
+      await expect(handleInstallCommand(config, fs)).rejects.toThrow(/asset_registries/)
     })
   })
 })

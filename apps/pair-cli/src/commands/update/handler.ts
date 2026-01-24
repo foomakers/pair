@@ -14,12 +14,12 @@ import {
   ensureDir,
 } from '../command-utils'
 import {
-  loadRegistriesFromConfig,
-  validateRegistries,
-  calculateEffectiveTarget,
-  processAssetRegistries,
-  type AssetRegistryConfig,
-} from '../registry'
+  extractRegistries,
+  validateAllRegistries,
+  resolveTarget,
+  forEachRegistry,
+  type RegistryConfig,
+} from '../../registry'
 import type { HttpClientService } from '@pair/content-ops'
 import { BackupService } from '@pair/content-ops'
 import { installKBFromLocalZip } from '../../kb-manager/kb-installer'
@@ -43,7 +43,7 @@ interface UpdateHandlerOptions {
 type UpdateContext = {
   fs: FileSystemService
   datasetRoot: string
-  registries: Record<string, AssetRegistryConfig>
+  registries: Record<string, RegistryConfig>
   baseTarget: string
   options: UpdateHandlerOptions | undefined
   pushLog: (level: LogEntry['level'], message: string) => void
@@ -52,11 +52,6 @@ type UpdateContext = {
 /**
  * Handles the update command execution.
  * Processes UpdateCommandConfig to update KB content from various sources.
- *
- * @param config - The parsed update command configuration
- * @param fs - FileSystemService instance (injected for testing)
- * @param options - Optional handler configuration (baseTarget, linkStyle, etc)
- * @throws Error if update fails
  */
 export async function handleUpdateCommand(
   config: UpdateCommandConfig,
@@ -82,18 +77,20 @@ async function setupUpdateContext(
   options?: UpdateHandlerOptions,
 ): Promise<{
   datasetRoot: string
-  registries: Record<string, AssetRegistryConfig>
+  registries: Record<string, RegistryConfig>
   baseTarget: string
 }> {
   const datasetRoot = await resolveDatasetRoot(fs, config, options)
   const configOptions: { customConfigPath?: string; projectRoot?: string } = {}
   if (options?.config) configOptions.customConfigPath = options.config
   const configContent = loadConfigWithOverrides(fs, configOptions)
-  const registries = loadRegistriesFromConfig(configContent.config)
-  const validation = validateRegistries(registries)
+
+  const registries = extractRegistries(configContent.config)
+  const validation = validateAllRegistries(registries)
   if (!validation.valid) {
-    throw new Error(validation.error || 'Invalid registry configuration')
+    throw new Error(validation.errors.join('; ') || 'Invalid registry configuration')
   }
+
   const baseTarget = options?.baseTarget || fs.currentWorkingDirectory()
   return { datasetRoot, registries, baseTarget }
 }
@@ -147,8 +144,9 @@ async function performBackup(backupService: BackupService, context: UpdateContex
 
 async function updateRegistries(context: UpdateContext): Promise<void> {
   const { fs, datasetRoot, registries, baseTarget, pushLog } = context
-  await processAssetRegistries(registries, async (registryName, registryConfig) => {
-    const effectiveTarget = calculateEffectiveTarget(registryName, registryConfig, baseTarget, fs)
+
+  await forEachRegistry(registries, async (registryName, registryConfig) => {
+    const effectiveTarget = resolveTarget(registryName, registryConfig, fs, baseTarget)
     await ensureDir(fs, dirname(effectiveTarget))
     const datasetPath = fs.resolve(datasetRoot, registryName)
     const copyOptions = buildCopyOptions(registryConfig)
@@ -185,13 +183,13 @@ async function executeRollback(
  * Helper to map full AssetRegistryConfig to simple path config for backup service
  */
 function mapRegistriesToBackupConfig(
-  registries: Record<string, AssetRegistryConfig>,
+  registries: Record<string, RegistryConfig>,
   baseTarget: string,
   fs: FileSystemService,
 ): Record<string, { target_path: string }> {
   const result: Record<string, { target_path: string }> = {}
   for (const [name, config] of Object.entries(registries)) {
-    const effectiveTarget = calculateEffectiveTarget(name, config, baseTarget, fs)
+    const effectiveTarget = resolveTarget(name, config, fs, baseTarget)
     result[name] = { target_path: effectiveTarget }
   }
   return result
@@ -209,11 +207,9 @@ async function resolveDatasetRoot(
 
   switch (config.resolution) {
     case 'default':
-      // Use default KB dataset path
       return getKnowledgeHubDatasetPath(fs)
 
     case 'remote':
-      // Remote resolution using KB manager
       return getKnowledgeHubDatasetPathWithFallback({
         fsService: fs,
         version,
@@ -222,12 +218,9 @@ async function resolveDatasetRoot(
       })
 
     case 'local':
-      // Local source (ZIP or directory)
       if (config.path.endsWith('.zip')) {
-        // Install from ZIP to cache and return cache path
         return installKBFromLocalZip(version, config.path, fs)
       }
-      // Use directory directly
       return config.path
   }
 }
@@ -235,7 +228,7 @@ async function resolveDatasetRoot(
 /**
  * Build copy options for registry based on behavior and includes
  */
-function buildCopyOptions(registryConfig: AssetRegistryConfig): Record<string, unknown> {
+function buildCopyOptions(registryConfig: RegistryConfig): Record<string, unknown> {
   const behavior = registryConfig.behavior || 'mirror'
   const include = registryConfig.include || []
 
