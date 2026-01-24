@@ -1,7 +1,7 @@
 import { describe, expect, beforeEach, vi, test } from 'vitest'
 import { handleInstallCommand } from './handler'
 import type { InstallCommandConfig } from './parser'
-import { createTestFileSystem } from '../test-utils'
+import { createTestFileSystem } from '../../test-utils'
 import type { InMemoryFileSystemService } from '@pair/content-ops'
 
 // Mock config-utils and command-utils
@@ -17,6 +17,7 @@ vi.mock('../../config-utils', () => ({
         },
       },
     },
+    source: 'test-config-source',
   })),
   getKnowledgeHubDatasetPath: vi.fn(() => '/test-dataset'),
   getKnowledgeHubDatasetPathWithFallback: vi.fn().mockResolvedValue('/test-dataset-fallback'),
@@ -52,6 +53,7 @@ describe('handleInstallCommand - direct implementation', () => {
         command: 'install',
         resolution: 'default',
         kb: true,
+        offline: false,
       }
 
       await expect(handleInstallCommand(config, fs)).resolves.not.toThrow()
@@ -95,6 +97,7 @@ describe('handleInstallCommand - direct implementation', () => {
         command: 'install',
         resolution: 'default',
         kb: true,
+        offline: false,
       }
 
       await expect(
@@ -118,12 +121,14 @@ describe('handleInstallCommand - direct implementation', () => {
         config: {
           asset_registries: {},
         },
+        source: 'empty-config',
       })
 
       const config: InstallCommandConfig = {
         command: 'install',
         resolution: 'default',
         kb: true,
+        offline: false,
       }
 
       await expect(handleInstallCommand(config, fs)).rejects.toThrow(/asset registries/)

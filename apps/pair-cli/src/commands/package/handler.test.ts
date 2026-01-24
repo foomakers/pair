@@ -1,7 +1,7 @@
 import { describe, expect, beforeEach, vi, test } from 'vitest'
 import { handlePackageCommand } from './handler'
 import type { PackageCommandConfig } from './parser'
-import { createTestFileSystem } from '../test-utils'
+import { createTestFileSystem } from '../../test-utils'
 import type { InMemoryFileSystemService } from '@pair/content-ops'
 
 // Mock handler dependencies
@@ -17,6 +17,7 @@ vi.mock('../../config-utils', () => ({
         },
       },
     },
+    source: 'test-config-source',
   }),
 }))
 

@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach, vi } from 'vitest'
 import { dispatchCommand } from './dispatcher'
 import type { InMemoryFileSystemService } from '@pair/content-ops'
-import { createTestFileSystem } from './test-utils'
+import { createTestFileSystem } from '../test-utils'
 import type {
   InstallCommandConfig,
   UpdateCommandConfig,
@@ -45,6 +45,7 @@ describe('dispatchCommand() - unit tests with mocked handlers', () => {
         command: 'install',
         kb: true,
         resolution: 'default',
+        offline: false,
       }
 
       await dispatchCommand(config, fs)
@@ -74,7 +75,8 @@ describe('dispatchCommand() - unit tests with mocked handlers', () => {
         command: 'install',
         kb: true,
         resolution: 'local',
-        source: '/path/to/kb.zip',
+        path: '/path/to/kb.zip',
+        offline: false,
       }
 
       await dispatchCommand(config, fs)
@@ -90,6 +92,7 @@ describe('dispatchCommand() - unit tests with mocked handlers', () => {
         command: 'update',
         kb: true,
         resolution: 'default',
+        offline: false,
       }
 
       await dispatchCommand(config, fs)

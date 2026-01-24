@@ -23,8 +23,8 @@ import {
   getKnowledgeHubDatasetPath,
   getKnowledgeHubDatasetPathWithFallback,
   loadConfigWithOverrides,
-  isInRelease,
 } from './config-utils'
+import { isInRelease } from './env-utils'
 import { LogLevel } from '@pair/content-ops'
 import { validateCliOptions } from './kb-manager/cli-options'
 
@@ -340,7 +340,7 @@ export async function runCli(
   deps: CliDependencies = { fs: fileSystemService, httpClient: new NodeHttpClientService() },
 ): Promise<void> {
   const fsService = deps.fs
-  const httpClient = deps.httpClient || new NodeHttpClientService()
+  const httpClient = deps.httpClient
 
   // Create fresh program instance for each invocation (prevents state pollution in tests)
   const program = new Command()
