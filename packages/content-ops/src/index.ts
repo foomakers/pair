@@ -3,8 +3,9 @@ export { InMemoryFileSystemService } from './test-utils/in-memory-fs'
 export { MockHttpClientService } from './test-utils/mock-http-client-service'
 export { buildTestResponse, toIncomingMessage } from './test-utils/http-test-helpers'
 export { walkMarkdownFiles, isExternalLink } from './file-system/file-system-utils'
-export { cleanupFile } from './file-system/file-operations'
+export { cleanupFile, copyFileHelper, copyDirHelper } from './file-system/file-operations'
 export { extractLinks, type ParsedLink } from './markdown/markdown-parser'
+export { detectLinkStyle } from './markdown/link-utils'
 export {
   calculateSHA256,
   validateChecksum,

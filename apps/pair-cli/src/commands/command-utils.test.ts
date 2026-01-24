@@ -63,29 +63,6 @@ describe('command-utils fs operations - doCopyAndUpdateLinks', () => {
   })
 })
 
-describe('extractMarkdownLinks', () => {
-  it('extracts links from markdown content', async () => {
-    const content = '[Link1](url1) some text [Link2](url2)'
-    const links = await utils.extractMarkdownLinks(content)
-    expect(links).toEqual([
-      { text: 'Link1', href: 'url1' },
-      { text: 'Link2', href: 'url2' },
-    ])
-  })
-
-  it('returns empty array when no links found', async () => {
-    const links = await utils.extractMarkdownLinks('no links here')
-    expect(links).toEqual([])
-  })
-
-  it('handles malformed links gracefully', async () => {
-    const content = '[text](url) [incomplete]('
-    const links = await utils.extractMarkdownLinks(content)
-    expect(links.length).toBe(1)
-    expect(links[0]).toEqual({ text: 'text', href: 'url' })
-  })
-})
-
 describe('detectLinkStyle - majority detection', () => {
   const cwd = '/test'
 

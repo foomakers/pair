@@ -1,31 +1,21 @@
 import type { UpdateLinkCommandConfig } from './parser'
-import type { FileSystemService } from '@pair/content-ops'
-import { createLogger, type LogEntry } from '../command-utils'
-import { convertToRelative, convertToAbsolute } from '@pair/content-ops'
-import { isExternalLink, walkMarkdownFiles } from '@pair/content-ops/file-system'
+import {
+  type FileSystemService,
+  convertToRelative,
+  convertToAbsolute,
+  extractLinks,
+  type ParsedLink,
+  isExternalLink,
+  walkMarkdownFiles,
+  BackupService,
+} from '@pair/content-ops'
 import { dirname } from 'path'
 import { getKnowledgeHubDatasetPath } from '../../config-utils'
-import { BackupService } from '@pair/content-ops'
+import { createLogger, type LogEntry } from '../logging'
 import { createRegistryBackupConfig, handleBackupRollback } from '../backup'
 
-function extractMarkdownLinks(content: string): Array<{ href: string; text: string }> {
-  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g
-  const links: Array<{ href: string; text: string }> = []
-  let match
-
-  while ((match = linkRegex.exec(content)) !== null) {
-    const text = match[1]
-    const href = match[2]
-    if (text && href) {
-      links.push({ text, href })
-    }
-  }
-
-  return links
-}
-
 function transformLink(
-  link: { href: string; text: string },
+  link: ParsedLink,
   filePath: string,
   pathMode: 'relative' | 'absolute',
 ): { newHref: string; category?: string } {
@@ -50,16 +40,16 @@ function transformLink(
   return { newHref: link.href }
 }
 
-function processMarkdownFile(
+async function processMarkdownFile(
   content: string,
   filePath: string,
   pathMode: 'relative' | 'absolute',
-): {
+): Promise<{
   newContent: string
   modified: boolean
   stats: { totalLinks: number; byCategory: Record<string, number> }
-} {
-  const links = extractMarkdownLinks(content)
+}> {
+  const links = await extractLinks(content)
   const stats = {
     totalLinks: links.length,
     byCategory: {} as Record<string, number>,
@@ -134,13 +124,13 @@ async function processFiles(params: {
 
   for (const filePath of files) {
     const content = fs.readFileSync(filePath)
-    const { newContent, modified, stats } = processMarkdownFile(content, filePath, pathMode)
+    const { newContent, modified, stats } = await processMarkdownFile(content, filePath, pathMode)
 
     aggregateStats.totalLinks += stats.totalLinks
 
     for (const [category, count] of Object.entries(stats.byCategory)) {
       aggregateStats.linksByCategory[category] =
-        (aggregateStats.linksByCategory[category] || 0) + count
+        (aggregateStats.linksByCategory[category] || 0) + (count as number)
     }
 
     if (modified && !dryRun) {
