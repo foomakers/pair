@@ -19,7 +19,12 @@ vi.mock('../../config-utils', () => ({
     },
   })),
   getKnowledgeHubDatasetPath: vi.fn(() => '/test-dataset'),
+  getKnowledgeHubDatasetPathWithFallback: vi.fn().mockResolvedValue('/test-dataset-fallback'),
   calculatePathType: vi.fn(),
+}))
+
+vi.mock('../../kb-manager/kb-installer', () => ({
+  installKBFromLocalZip: vi.fn().mockResolvedValue('/test-local-zip-cache'),
 }))
 
 vi.mock('../command-utils', () => ({

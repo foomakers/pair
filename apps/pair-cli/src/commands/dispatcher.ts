@@ -1,6 +1,6 @@
 import type { CommandConfig } from './index'
 import { commandRegistry } from './index'
-import type { FileSystemService } from '@pair/content-ops'
+import type { FileSystemService, HttpClientService } from '@pair/content-ops'
 
 /**
  * Dispatch CommandConfig to appropriate handler using command registry
@@ -8,14 +8,21 @@ import type { FileSystemService } from '@pair/content-ops'
  *
  * @param config - Command configuration from parser
  * @param fs - FileSystemService instance for file operations
+ * @param httpClient - HttpClientService instance for network operations (optional)
+ * @param cliVersion - CLI version string (optional, used for KB cache path)
  */
-export async function dispatchCommand(config: CommandConfig, fs: FileSystemService): Promise<void> {
+export async function dispatchCommand(
+  config: CommandConfig,
+  fs: FileSystemService,
+  httpClient?: HttpClientService,
+  cliVersion?: string,
+): Promise<void> {
   // TypeScript can properly narrow discriminated unions through switch
   switch (config.command) {
     case 'install':
-      return commandRegistry.install.handle(config, fs)
+      return commandRegistry.install.handle(config, fs, resolveOptions(httpClient, cliVersion))
     case 'update':
-      return commandRegistry.update.handle(config, fs)
+      return commandRegistry.update.handle(config, fs, resolveOptions(httpClient, cliVersion))
     case 'update-link':
       return commandRegistry['update-link'].handle(config, fs)
     case 'package':
@@ -24,5 +31,12 @@ export async function dispatchCommand(config: CommandConfig, fs: FileSystemServi
       return commandRegistry['validate-config'].handle(config, fs)
     case 'kb-validate':
       return commandRegistry['kb-validate'].handle(config, fs)
+  }
+}
+
+function resolveOptions(httpClient?: HttpClientService, cliVersion?: string) {
+  return {
+    ...(httpClient && { httpClient }),
+    ...(cliVersion && { cliVersion }),
   }
 }

@@ -1,6 +1,11 @@
 import type { InstallCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
-import { loadConfigWithOverrides, getKnowledgeHubDatasetPath } from '../../config-utils'
+import { dirname } from 'path'
+import {
+  loadConfigWithOverrides,
+  getKnowledgeHubDatasetPath,
+  getKnowledgeHubDatasetPathWithFallback,
+} from '../../config-utils'
 import type { LogEntry } from '../command-utils'
 import {
   createLogger,
@@ -16,6 +21,8 @@ import {
   type AssetRegistryConfig,
 } from '../registry'
 import { detectOverlappingTargets, checkTargetsEmptiness } from '../validation'
+import type { HttpClientService } from '@pair/content-ops'
+import { installKBFromLocalZip } from '../../kb-manager/kb-installer'
 
 /**
  * Install options for handler
@@ -26,6 +33,8 @@ interface InstallHandlerOptions {
   config?: string
   verbose?: boolean
   minLogLevel?: LogEntry['level']
+  httpClient?: HttpClientService
+  cliVersion?: string
 }
 
 /**
@@ -65,7 +74,7 @@ async function setupInstallContext(
   registries: Record<string, AssetRegistryConfig>
   baseTarget: string
 }> {
-  const datasetRoot = resolveDatasetRoot(fs, config)
+  const datasetRoot = await resolveDatasetRoot(fs, config, options)
   const configOptions: { customConfigPath?: string; projectRoot?: string } = {}
   if (options?.config) configOptions.customConfigPath = options.config
   const configContent = loadConfigWithOverrides(fs, configOptions)
@@ -100,7 +109,7 @@ async function executeInstall(context: {
   const { fs, datasetRoot, registries, baseTarget, options, pushLog } = context
   await processAssetRegistries(registries, async (registryName, registryConfig) => {
     const effectiveTarget = calculateEffectiveTarget(registryName, registryConfig, baseTarget, fs)
-    await ensureDir(fs, effectiveTarget)
+    await ensureDir(fs, dirname(effectiveTarget))
     const datasetPath = fs.resolve(datasetRoot, registryName)
     const copyOptions = buildCopyOptions(registryConfig)
     pushLog('info', `Installing registry '${registryName}' to '${effectiveTarget}'`)
@@ -120,23 +129,35 @@ async function executeInstall(context: {
 /**
  * Resolve dataset root based on install config resolution strategy
  */
-function resolveDatasetRoot(fs: FileSystemService, config: InstallCommandConfig): string {
+async function resolveDatasetRoot(
+  fs: FileSystemService,
+  config: InstallCommandConfig,
+  options?: InstallHandlerOptions,
+): Promise<string> {
+  const version = options?.cliVersion || '0.0.0'
+
   switch (config.resolution) {
     case 'default':
       // Use default KB dataset path
       return getKnowledgeHubDatasetPath(fs)
 
     case 'remote':
-      // Remote URL would need download handling - for now use default
-      // TODO: implement remote download logic
-      return getKnowledgeHubDatasetPath(fs)
+      // Remote resolution using KB manager
+      return getKnowledgeHubDatasetPathWithFallback({
+        fsService: fs,
+        version,
+        ...(options?.httpClient && { httpClient: options.httpClient }),
+        customUrl: config.url,
+      })
 
     case 'local':
-      // Local source (ZIP or directory) - use source as dataset root if offline
-      if (config.offline) {
-        return config.path
+      // Local source (ZIP or directory)
+      if (config.path.endsWith('.zip')) {
+        // Install from ZIP to cache and return cache path
+        return installKBFromLocalZip(version, config.path, fs)
       }
-      return getKnowledgeHubDatasetPath(fs)
+      // Use directory directly
+      return config.path
   }
 }
 

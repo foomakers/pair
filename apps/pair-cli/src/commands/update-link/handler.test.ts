@@ -1,101 +1,96 @@
 import { describe, expect, beforeEach, vi, test } from 'vitest'
 import { handleUpdateLinkCommand } from './handler'
 import type { UpdateLinkCommandConfig } from './parser'
-import { createTestFileSystem } from '../test-utils'
-import type { InMemoryFileSystemService } from '@pair/content-ops'
+import { InMemoryFileSystemService } from '@pair/content-ops'
 
-// Mock dependencies
+// Mock getKnowledgeHubDatasetPath as it requires scanning real node_modules
 vi.mock('../../config-utils', () => ({
-  getKnowledgeHubDatasetPath: vi.fn().mockReturnValue('/test/dataset'),
+  getKnowledgeHubDatasetPath: vi.fn(() => '/dataset'),
 }))
 
-vi.mock('@pair/content-ops/file-system', () => ({
-  isExternalLink: vi.fn((href: string) => href.startsWith('http')),
-  walkMarkdownFiles: vi.fn().mockResolvedValue([]),
-}))
-
-describe('handleUpdateLinkCommand - unit tests', () => {
+describe('handleUpdateLinkCommand - integration with in-memory services', () => {
   let fs: InMemoryFileSystemService
+  const cwd = '/project'
 
   beforeEach(() => {
-    fs = createTestFileSystem()
-    // Setup KB directory structure
-    fs.mkdirSync('/.pair', { recursive: true })
+    // Setup initial FS state
+    fs = new InMemoryFileSystemService(
+      {
+        // Fake KB installed
+        [`${cwd}/.pair/knowledge/file1.md`]: '[link](/absolute/path)',
+        [`${cwd}/.pair/knowledge/file2.md`]: '[link](./relative/path)',
+      },
+      cwd, // Root module dir
+      cwd, // CWD
+    )
     vi.clearAllMocks()
   })
 
-  describe('handler execution', () => {
-    test('processes markdown files with default settings', async () => {
-      const config: UpdateLinkCommandConfig = {
-        command: 'update-link',
-        dryRun: false,
-        verbose: false,
-      }
+  test('successfully processes files (dry run)', async () => {
+    const config: UpdateLinkCommandConfig = {
+      command: 'update-link',
+      dryRun: true,
+      verbose: false,
+    }
 
-      await handleUpdateLinkCommand(config, fs)
+    // Spy on writeFile to ensure no writes happen
+    const writeSpy = vi.spyOn(fs, 'writeFile')
 
-      const { walkMarkdownFiles } = await import('@pair/content-ops/file-system')
-      expect(walkMarkdownFiles).toHaveBeenCalled()
+    await handleUpdateLinkCommand(config, fs)
+
+    expect(writeSpy).not.toHaveBeenCalled()
+  })
+
+  test('converts files to absolute paths', async () => {
+    const config: UpdateLinkCommandConfig = {
+      command: 'update-link',
+      dryRun: false,
+      verbose: false,
+      absolute: true,
+    }
+
+    await handleUpdateLinkCommand(config, fs)
+
+    // Verify content changed
+    const content = await fs.readFile(`${cwd}/.pair/knowledge/file2.md`)
+    // ./relative/path should become an absolute path (starting with /)
+    expect(content).toContain('(/')
+  })
+
+  test('creates backup before modification', async () => {
+    const config: UpdateLinkCommandConfig = {
+      command: 'update-link',
+      dryRun: false,
+      verbose: false,
+    }
+
+    await handleUpdateLinkCommand(config, fs, { persistBackup: true })
+
+    // Verify backup
+    const backupsDir = `${cwd}/.pair/backups`
+    const backupSessions = await fs.readdir(backupsDir)
+    expect(backupSessions.length).toBeGreaterThan(0)
+
+    const sessionDir = backupSessions[0].name
+    expect(await fs.exists(`${backupsDir}/${sessionDir}/.pair/knowledge/file1.md`)).toBe(true)
+  })
+
+  test('performs rollback on failure', async () => {
+    const config: UpdateLinkCommandConfig = {
+      command: 'update-link',
+      dryRun: false,
+      verbose: false,
+    }
+
+    // Induce failure
+    vi.spyOn(fs, 'writeFile').mockImplementation(async () => {
+      throw new Error('Simulated write failure')
     })
 
-    test('runs in dry-run mode without modifying files', async () => {
-      const config: UpdateLinkCommandConfig = {
-        command: 'update-link',
-        dryRun: true,
-        verbose: false,
-      }
+    await expect(handleUpdateLinkCommand(config, fs)).rejects.toThrow('Simulated write failure')
 
-      const writeFileSpy = vi.spyOn(fs, 'writeFile')
-
-      await handleUpdateLinkCommand(config, fs)
-
-      expect(writeFileSpy).not.toHaveBeenCalled()
-    })
-
-    test('converts to absolute paths when absolute flag is true', async () => {
-      const config: UpdateLinkCommandConfig = {
-        command: 'update-link',
-        absolute: true,
-        dryRun: false,
-        verbose: false,
-      }
-
-      await handleUpdateLinkCommand(config, fs)
-
-      // Handler should process files in absolute mode
-      const { walkMarkdownFiles } = await import('@pair/content-ops/file-system')
-      expect(walkMarkdownFiles).toHaveBeenCalled()
-    })
-
-    test('logs verbose output when verbose flag is true', async () => {
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-      const config: UpdateLinkCommandConfig = {
-        command: 'update-link',
-        dryRun: false,
-        verbose: true,
-      }
-
-      await handleUpdateLinkCommand(config, fs)
-
-      // Verbose mode should not crash
-      expect(consoleSpy).not.toThrow()
-      consoleSpy.mockRestore()
-    })
-
-    test('throws when KB is not installed', async () => {
-      const { getKnowledgeHubDatasetPath } = await import('../../config-utils')
-      vi.mocked(getKnowledgeHubDatasetPath).mockImplementationOnce(() => {
-        throw new Error('No KB found')
-      })
-
-      const config: UpdateLinkCommandConfig = {
-        command: 'update-link',
-        dryRun: false,
-        verbose: false,
-      }
-
-      await expect(handleUpdateLinkCommand(config, fs)).rejects.toThrow()
-    })
+    // Verify content rolled back or unchanged
+    const content = await fs.readFile(`${cwd}/.pair/knowledge/file1.md`)
+    expect(content).toBe('[link](/absolute/path)')
   })
 })

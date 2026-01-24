@@ -182,10 +182,16 @@ export class BackupService {
     await this.fileService.mkdir(destDir, { recursive: true })
 
     const entries = await this.fileService.readdir(sourceDir)
+    const backupRoot = '.pair/backups'
 
     for (const entry of entries) {
       const sourcePath = join(sourceDir, entry.name)
       const destPath = join(destDir, entry.name)
+
+      // Skip the backup root folder to prevent infinite recursion if backing up its parent
+      if (sourcePath === backupRoot || sourcePath.endsWith('/' + backupRoot)) {
+        continue
+      }
 
       if (entry.isDirectory()) {
         await this.copyDirectoryRecursive(sourcePath, destPath)

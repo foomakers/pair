@@ -50,7 +50,7 @@ describe('dispatchCommand() - unit tests with mocked handlers', () => {
       await dispatchCommand(config, fs)
 
       const { handleInstallCommand } = await import('./install/handler')
-      expect(handleInstallCommand).toHaveBeenCalledWith(config, fs)
+      expect(handleInstallCommand).toHaveBeenCalledWith(config, fs, {})
       expect(handleInstallCommand).toHaveBeenCalledOnce()
     })
 
@@ -66,7 +66,7 @@ describe('dispatchCommand() - unit tests with mocked handlers', () => {
       await dispatchCommand(config, fs)
 
       const { handleInstallCommand } = await import('./install/handler')
-      expect(handleInstallCommand).toHaveBeenCalledWith(config, fs)
+      expect(handleInstallCommand).toHaveBeenCalledWith(config, fs, {})
     })
 
     test('dispatches install local config', async () => {
@@ -80,7 +80,7 @@ describe('dispatchCommand() - unit tests with mocked handlers', () => {
       await dispatchCommand(config, fs)
 
       const { handleInstallCommand } = await import('./install/handler')
-      expect(handleInstallCommand).toHaveBeenCalledWith(config, fs)
+      expect(handleInstallCommand).toHaveBeenCalledWith(config, fs, {})
     })
   })
 
@@ -95,7 +95,7 @@ describe('dispatchCommand() - unit tests with mocked handlers', () => {
       await dispatchCommand(config, fs)
 
       const { handleUpdateCommand } = await import('./update/handler')
-      expect(handleUpdateCommand).toHaveBeenCalledWith(config, fs)
+      expect(handleUpdateCommand).toHaveBeenCalledWith(config, fs, {})
       expect(handleUpdateCommand).toHaveBeenCalledOnce()
     })
 
@@ -111,7 +111,7 @@ describe('dispatchCommand() - unit tests with mocked handlers', () => {
       await dispatchCommand(config, fs)
 
       const { handleUpdateCommand } = await import('./update/handler')
-      expect(handleUpdateCommand).toHaveBeenCalledWith(config, fs)
+      expect(handleUpdateCommand).toHaveBeenCalledWith(config, fs, {})
     })
   })
 

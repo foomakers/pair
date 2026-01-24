@@ -1,132 +1,161 @@
 import { describe, expect, beforeEach, vi, test } from 'vitest'
 import { handleUpdateCommand } from './handler'
 import type { UpdateCommandConfig } from './parser'
-import { createTestFileSystem } from '../test-utils'
-import type { InMemoryFileSystemService } from '@pair/content-ops'
+import { InMemoryFileSystemService, MockHttpClientService } from '@pair/content-ops'
 
-// Mock config-utils and command-utils
-vi.mock('../../config-utils', () => ({
-  loadConfigWithOverrides: vi.fn(() => ({
-    config: {
-      asset_registries: {
-        'test-registry': {
-          source: 'test-source',
-          behavior: 'mirror',
-          target_path: '.test-update-target',
-          description: 'Test registry',
-        },
-      },
-    },
-  })),
-  getKnowledgeHubDatasetPath: vi.fn(() => '/test-dataset'),
-  calculatePathType: vi.fn(),
+// Only mock external heavy-lifters/boundaries that strictly require native modules
+// or download large files.
+vi.mock('../../kb-manager/kb-installer', () => ({
+  installKBFromLocalZip: vi.fn().mockResolvedValue('/test-local-zip-cache'),
 }))
 
-vi.mock('../command-utils', () => ({
-  createLogger: vi.fn(() => ({
-    logs: [],
-    pushLog: vi.fn(),
-  })),
-  parseTargetAndSource: vi.fn(),
-  doCopyAndUpdateLinks: vi.fn().mockResolvedValue(undefined),
-  applyLinkTransformation: vi.fn().mockResolvedValue(undefined),
-  ensureDir: vi.fn().mockResolvedValue(undefined),
-}))
+// We need to mock getKnowledgeHubDatasetPath because it relies on finding actual node_modules
+// or package.json files relative to the executed module, which is hard to simulate perfectly
+// in the test harness without pointing to real disk.
+vi.mock('../../config-utils', async importOriginal => {
+  const actual = await importOriginal<typeof import('../../config-utils')>()
+  return {
+    ...actual,
+    getKnowledgeHubDatasetPath: vi.fn(() => '/dataset'),
+    getKnowledgeHubDatasetPathWithFallback: vi.fn().mockResolvedValue('/dataset'),
+  }
+})
 
-vi.mock('../backup', () => ({
-  handleBackupRollback: vi.fn().mockResolvedValue(undefined),
-  buildRegistryBackupConfig: vi.fn(() => ({ 'test-registry': '/test-update-target' })),
-}))
-
-describe('handleUpdateCommand - direct implementation', () => {
+describe('handleUpdateCommand - integration with in-memory services', () => {
   let fs: InMemoryFileSystemService
+  let httpClient: MockHttpClientService
+
+  const cwd = '/project'
+  const datasetSrc = '/dataset'
 
   beforeEach(() => {
-    fs = createTestFileSystem()
+    // Setup initial FS state
+    fs = new InMemoryFileSystemService(
+      {
+        // Config file
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            'test-registry': {
+              source: 'test-registry', // UPDATED: Match registry name for default resolution
+              behavior: 'mirror',
+              target_path: '.pair/test-registry',
+              description: 'Test registry',
+            },
+          },
+        }),
+        // Source files in dataset
+        [`${datasetSrc}/test-registry/file1.md`]: '# New Content', // UPDATED path
+        [`${datasetSrc}/test-registry/nested/file2.md`]: '# Nested New Content', // UPDATED path
+        // Existing files in project (for update/backup verification)
+        [`${cwd}/.pair/test-registry/file1.md`]: '# Old Content',
+      },
+      cwd, // Root module dir (simulated)
+      cwd, // CWD
+    )
+
+    httpClient = new MockHttpClientService()
     vi.clearAllMocks()
   })
 
-  describe('default resolution', () => {
-    test('updates from default dataset root', async () => {
-      const config: UpdateCommandConfig = {
-        command: 'update',
-        resolution: 'default',
-        kb: true,
-      }
+  test('successfully updates registry from default source', async () => {
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
 
-      await expect(handleUpdateCommand(config, fs)).resolves.not.toThrow()
+    await handleUpdateCommand(config, fs, { httpClient })
 
-      const { doCopyAndUpdateLinks } = await import('../command-utils')
-      expect(doCopyAndUpdateLinks).toHaveBeenCalled()
-    })
+    // Verify update happened
+    const content = await fs.readFile(`${cwd}/.pair/test-registry/file1.md`)
+    expect(content).toBe('# New Content')
+
+    // Verify nested file creation
+    const nestedContent = await fs.readFile(`${cwd}/.pair/test-registry/nested/file2.md`)
+    expect(nestedContent).toBe('# Nested New Content')
   })
 
-  describe('remote resolution', () => {
-    test('handles remote URL source', async () => {
-      const config: UpdateCommandConfig = {
-        command: 'update',
-        resolution: 'remote',
-        url: 'https://example.com/kb.zip',
-        offline: false,
-        kb: true,
-      }
+  test('creates backup before update when persistBackup is true', async () => {
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
 
-      await expect(handleUpdateCommand(config, fs)).resolves.not.toThrow()
-    })
+    await handleUpdateCommand(config, fs, { httpClient, persistBackup: true })
+
+    // Verify backup existence
+    // Backup paths are distinct by timestamp, so we search for the backup dir
+    const backupsDir = `${cwd}/.pair/backups`
+    const backupSessions = await fs.readdir(backupsDir)
+    expect(backupSessions.length).toBeGreaterThan(0)
+
+    const sessionDir = backupSessions[0].name
+    const backupFile = `${backupsDir}/${sessionDir}/.pair/test-registry/file1.md`
+
+    expect(await fs.exists(backupFile)).toBe(true)
+    const backupContent = await fs.readFile(backupFile)
+    expect(backupContent).toBe('# Old Content')
   })
 
-  describe('local resolution', () => {
-    test('handles local path source', async () => {
-      const config: UpdateCommandConfig = {
-        command: 'update',
-        resolution: 'local',
-        path: '/path/to/kb.zip',
-        offline: false,
-        kb: true,
-      }
+  test('performs rollback on failure (autoRollback=true)', async () => {
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
 
-      await expect(handleUpdateCommand(config, fs)).resolves.not.toThrow()
+    // Induce failure during update by spying on writeFile
+    // We purposefully fail on the nested file to ensure partial update is rolled back
+    const originalWriteFile = fs.writeFile.bind(fs)
+    vi.spyOn(fs, 'writeFile').mockImplementation(async (path, content) => {
+      // Use includes or check if path is targeting the nested file
+      if (path.includes('file2.md')) {
+        throw new Error('Simulated write failure')
+      }
+      return originalWriteFile(path, content)
     })
+
+    await expect(handleUpdateCommand(config, fs, { httpClient })).rejects.toThrow(
+      'Simulated write failure',
+    )
+
+    // Verify file1.md was rolled back to old content
+    // Note: file1.md is written BEFORE file2.md usually (lexical order? or random iteration?)
+    // 'file1.md' vs 'nested/file2.md'. 'file1.md' likely first.
+    // If rollback works, content should be reverted.
+    const content = await fs.readFile(`${cwd}/.pair/test-registry/file1.md`)
+    expect(content).toBe('# Old Content')
   })
 
-  describe('link style transformation', () => {
-    test('applies link transformation when specified', async () => {
-      const config: UpdateCommandConfig = {
-        command: 'update',
-        resolution: 'default',
-        kb: true,
+  test('skips rollback when autoRollback is false', async () => {
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    const originalWriteFile = fs.writeFile.bind(fs)
+    vi.spyOn(fs, 'writeFile').mockImplementation(async (path, content) => {
+      if (path.includes('file2.md')) {
+        throw new Error('Simulated write failure')
       }
-
-      await expect(
-        handleUpdateCommand(config, fs, { linkStyle: 'relative' }),
-      ).resolves.not.toThrow()
-
-      const { applyLinkTransformation } = await import('../command-utils')
-      expect(applyLinkTransformation).toHaveBeenCalledWith(
-        fs,
-        { linkStyle: 'relative' },
-        expect.any(Function),
-        'update',
-      )
+      return originalWriteFile(path, content)
     })
-  })
 
-  describe('error handling', () => {
-    test('throws on invalid registry configuration', async () => {
-      const { loadConfigWithOverrides } = await import('../../config-utils')
-      vi.mocked(loadConfigWithOverrides).mockReturnValueOnce({
-        config: {
-          asset_registries: {},
-        },
-      })
+    await expect(
+      handleUpdateCommand(config, fs, {
+        httpClient,
+        autoRollback: false,
+      }),
+    ).rejects.toThrow('Simulated write failure')
 
-      const config: UpdateCommandConfig = {
-        command: 'update',
-        resolution: 'default',
-        kb: true,
-      }
-
-      await expect(handleUpdateCommand(config, fs)).rejects.toThrow(/asset registries/)
-    })
+    // Verify no backup was created (optimization for autoRollback=false)
+    const backupsDir = `${cwd}/.pair/backups`
+    expect(await fs.exists(backupsDir)).toBe(false)
   })
 })

@@ -5,6 +5,8 @@ import { convertToRelative, convertToAbsolute } from '@pair/content-ops'
 import { isExternalLink, walkMarkdownFiles } from '@pair/content-ops/file-system'
 import { dirname } from 'path'
 import { getKnowledgeHubDatasetPath } from '../../config-utils'
+import { BackupService } from '@pair/content-ops'
+import { createRegistryBackupConfig, handleBackupRollback } from '../backup'
 
 function extractMarkdownLinks(content: string): Array<{ href: string; text: string }> {
   const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g
@@ -154,26 +156,89 @@ async function processFiles(params: {
 }
 
 /**
+ * Update link options for handler
+ */
+interface UpdateLinkHandlerOptions {
+  persistBackup?: boolean
+}
+
+/**
  * Handles update-link command execution.
  */
 export async function handleUpdateLinkCommand(
   config: UpdateLinkCommandConfig,
   fs: FileSystemService,
+  options?: UpdateLinkHandlerOptions,
 ): Promise<void> {
   const { pushLog } = createLogger(config.verbose ? 'info' : ('warn' as LogEntry['level']))
 
   pushLog('info', 'Starting update-link command')
 
+  try {
+    await executeUpdateLinkSequence(config, fs, options, pushLog)
+    pushLog('info', 'Update-link completed')
+  } catch (error) {
+    pushLog('error', `Update-link failed: ${String(error)}`)
+    throw error
+  }
+}
+
+async function executeUpdateLinkSequence(
+  config: UpdateLinkCommandConfig,
+  fs: FileSystemService,
+  options: UpdateLinkHandlerOptions | undefined,
+  pushLog: (level: LogEntry['level'], message: string) => void,
+): Promise<void> {
   const pathMode = config.absolute ? 'absolute' : 'relative'
   const dryRun = config.dryRun ?? false
-
-  pushLog('info', `Path mode: ${pathMode}, Dry run: ${dryRun}`)
-
   const kbPath = await verifyKB(fs, pushLog)
-  const aggregateStats = await processFiles({ kbPath, pathMode, dryRun, fs, pushLog })
+  const backupService = new BackupService(fs)
+  const shouldBackup = !dryRun
 
-  pushLog(
-    'info',
-    `Processed ${aggregateStats.totalLinks} links, modified ${aggregateStats.filesModified} files`,
+  if (shouldBackup) {
+    await performLinkBackup(backupService, kbPath, pushLog)
+  }
+
+  try {
+    const aggregateStats = await processFiles({ kbPath, pathMode, dryRun, fs, pushLog })
+
+    if (shouldBackup && !options?.persistBackup) {
+      await backupService.commit(false)
+    }
+
+    pushLog(
+      'info',
+      `Processed ${aggregateStats.totalLinks} links, modified ${aggregateStats.filesModified} files`,
+    )
+  } catch (error) {
+    if (shouldBackup) {
+      await handleLinkRollback(backupService, error, options, pushLog)
+    }
+    throw error
+  }
+}
+
+async function performLinkBackup(
+  backupService: BackupService,
+  kbPath: string,
+  pushLog: (level: LogEntry['level'], message: string) => void,
+): Promise<void> {
+  pushLog('info', 'Creating backup before modifications...')
+  const backupConfig = createRegistryBackupConfig('knowledge-base', kbPath)
+  await backupService.backupAllRegistries(backupConfig)
+}
+
+async function handleLinkRollback(
+  backupService: BackupService,
+  error: unknown,
+  options: UpdateLinkHandlerOptions | undefined,
+  pushLog: (level: LogEntry['level'], message: string) => void,
+): Promise<void> {
+  pushLog('warn', 'Update failed, attempting rollback...')
+  await handleBackupRollback(
+    backupService,
+    error,
+    { autoRollback: true, keepBackup: options?.persistBackup ?? false },
+    pushLog,
   )
 }

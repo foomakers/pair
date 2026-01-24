@@ -28,6 +28,7 @@ export async function updateCommand(
     )
     return { success: true, message: 'Update completed successfully' }
   } catch (err) {
+    console.error('Update command failed:', err)
     return { success: false, message: `Update failed: ${String(err)}` }
   }
 }

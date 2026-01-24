@@ -1,6 +1,11 @@
 import type { UpdateCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
-import { loadConfigWithOverrides, getKnowledgeHubDatasetPath } from '../../config-utils'
+import { dirname } from 'path'
+import {
+  loadConfigWithOverrides,
+  getKnowledgeHubDatasetPath,
+  getKnowledgeHubDatasetPathWithFallback,
+} from '../../config-utils'
 import type { LogEntry } from '../command-utils'
 import {
   createLogger,
@@ -15,6 +20,10 @@ import {
   processAssetRegistries,
   type AssetRegistryConfig,
 } from '../registry'
+import type { HttpClientService } from '@pair/content-ops'
+import { BackupService } from '@pair/content-ops'
+import { installKBFromLocalZip } from '../../kb-manager/kb-installer'
+import { buildRegistryBackupConfig, handleBackupRollback } from '../backup'
 
 /**
  * Update options for handler
@@ -27,6 +36,17 @@ interface UpdateHandlerOptions {
   minLogLevel?: LogEntry['level']
   persistBackup?: boolean
   autoRollback?: boolean
+  httpClient?: HttpClientService
+  cliVersion?: string
+}
+
+type UpdateContext = {
+  fs: FileSystemService
+  datasetRoot: string
+  registries: Record<string, AssetRegistryConfig>
+  baseTarget: string
+  options: UpdateHandlerOptions | undefined
+  pushLog: (level: LogEntry['level'], message: string) => void
 }
 
 /**
@@ -65,7 +85,7 @@ async function setupUpdateContext(
   registries: Record<string, AssetRegistryConfig>
   baseTarget: string
 }> {
-  const datasetRoot = resolveDatasetRoot(fs, config)
+  const datasetRoot = await resolveDatasetRoot(fs, config, options)
   const configOptions: { customConfigPath?: string; projectRoot?: string } = {}
   if (options?.config) configOptions.customConfigPath = options.config
   const configContent = loadConfigWithOverrides(fs, configOptions)
@@ -78,18 +98,58 @@ async function setupUpdateContext(
   return { datasetRoot, registries, baseTarget }
 }
 
-async function executeUpdate(context: {
-  fs: FileSystemService
-  datasetRoot: string
-  registries: Record<string, AssetRegistryConfig>
-  baseTarget: string
-  options: UpdateHandlerOptions | undefined
-  pushLog: (level: LogEntry['level'], message: string) => void
-}): Promise<void> {
-  const { fs, datasetRoot, registries, baseTarget, options, pushLog } = context
+async function executeUpdate(context: UpdateContext): Promise<void> {
+  const { fs, options } = context
+  const backupService = new BackupService(fs)
+  const shouldBackup = options?.persistBackup || options?.autoRollback !== false
+
+  if (shouldBackup) {
+    await performBackup(backupService, context)
+  }
+
+  try {
+    await runUpdateSequence(backupService, context)
+  } catch (err) {
+    if (shouldBackup) {
+      await executeRollback(backupService, err, context)
+    }
+    throw err
+  }
+}
+
+async function runUpdateSequence(
+  backupService: BackupService,
+  context: UpdateContext,
+): Promise<void> {
+  const { fs, options, pushLog } = context
+  const shouldBackup = options?.persistBackup || options?.autoRollback !== false
+
+  await updateRegistries(context)
+
+  if (options?.linkStyle) {
+    await applyLinkTransformation(fs, { linkStyle: options.linkStyle }, pushLog, 'update')
+  }
+
+  if (!options?.persistBackup && shouldBackup) {
+    await backupService.commit(false)
+  }
+}
+
+async function performBackup(backupService: BackupService, context: UpdateContext): Promise<void> {
+  const { fs, registries, baseTarget, pushLog } = context
+  const backupConfig = buildRegistryBackupConfig(
+    mapRegistriesToBackupConfig(registries, baseTarget, fs),
+    fs,
+  )
+  pushLog('info', 'Creating backup before update...')
+  await backupService.backupAllRegistries(backupConfig)
+}
+
+async function updateRegistries(context: UpdateContext): Promise<void> {
+  const { fs, datasetRoot, registries, baseTarget, pushLog } = context
   await processAssetRegistries(registries, async (registryName, registryConfig) => {
     const effectiveTarget = calculateEffectiveTarget(registryName, registryConfig, baseTarget, fs)
-    await ensureDir(fs, effectiveTarget)
+    await ensureDir(fs, dirname(effectiveTarget))
     const datasetPath = fs.resolve(datasetRoot, registryName)
     const copyOptions = buildCopyOptions(registryConfig)
     pushLog('info', `Updating registry '${registryName}' at '${effectiveTarget}'`)
@@ -101,31 +161,74 @@ async function executeUpdate(context: {
     })
     pushLog('info', `Successfully updated registry '${registryName}'`)
   })
-  if (options?.linkStyle) {
-    await applyLinkTransformation(fs, { linkStyle: options.linkStyle }, pushLog, 'update')
+}
+
+async function executeRollback(
+  backupService: BackupService,
+  err: unknown,
+  context: UpdateContext,
+): Promise<void> {
+  const { options, pushLog } = context
+  pushLog('warn', 'Update failed, attempting rollback...')
+  await handleBackupRollback(
+    backupService,
+    err,
+    {
+      autoRollback: options?.autoRollback !== false,
+      keepBackup: options?.persistBackup ?? false,
+    },
+    pushLog,
+  )
+}
+
+/**
+ * Helper to map full AssetRegistryConfig to simple path config for backup service
+ */
+function mapRegistriesToBackupConfig(
+  registries: Record<string, AssetRegistryConfig>,
+  baseTarget: string,
+  fs: FileSystemService,
+): Record<string, { target_path: string }> {
+  const result: Record<string, { target_path: string }> = {}
+  for (const [name, config] of Object.entries(registries)) {
+    const effectiveTarget = calculateEffectiveTarget(name, config, baseTarget, fs)
+    result[name] = { target_path: effectiveTarget }
   }
+  return result
 }
 
 /**
  * Resolve dataset root based on update config resolution strategy
  */
-function resolveDatasetRoot(fs: FileSystemService, config: UpdateCommandConfig): string {
+async function resolveDatasetRoot(
+  fs: FileSystemService,
+  config: UpdateCommandConfig,
+  options?: UpdateHandlerOptions,
+): Promise<string> {
+  const version = options?.cliVersion || '0.0.0'
+
   switch (config.resolution) {
     case 'default':
       // Use default KB dataset path
       return getKnowledgeHubDatasetPath(fs)
 
     case 'remote':
-      // Remote URL would need download handling - for now use default
-      // TODO: implement remote download logic
-      return getKnowledgeHubDatasetPath(fs)
+      // Remote resolution using KB manager
+      return getKnowledgeHubDatasetPathWithFallback({
+        fsService: fs,
+        version,
+        ...(options?.httpClient && { httpClient: options.httpClient }),
+        customUrl: config.url,
+      })
 
     case 'local':
-      // Local source (ZIP or directory) - use source as dataset root if offline
-      if (config.offline) {
-        return config.path
+      // Local source (ZIP or directory)
+      if (config.path.endsWith('.zip')) {
+        // Install from ZIP to cache and return cache path
+        return installKBFromLocalZip(version, config.path, fs)
       }
-      return getKnowledgeHubDatasetPath(fs)
+      // Use directory directly
+      return config.path
   }
 }
 

@@ -38,7 +38,13 @@ setLogLevel(MIN_LOG_LEVEL)
  */
 export interface CliDependencies {
   fs: FileSystemService
-  httpClient?: HttpClientService
+  httpClient: HttpClientService
+}
+
+interface CommandDeps {
+  fsService: FileSystemService
+  httpClient: HttpClientService
+  version: string
 }
 
 function isDiagEnabled(): boolean {
@@ -212,8 +218,9 @@ ${notes.map((note: string) => `  • ${note}`).join('\n')}
 function registerCommandFromMetadata(
   prog: Command,
   commandName: keyof typeof commandRegistry,
-  fsService: FileSystemService,
+  deps: CommandDeps,
 ): void {
+  const { fsService, httpClient, version } = deps
   const cmdConfig = commandRegistry[commandName]
   const cmd = prog.command(cmdConfig.metadata.name).description(cmdConfig.metadata.description)
 
@@ -233,7 +240,7 @@ function registerCommandFromMetadata(
     const config = cmdConfig.parse(options)
 
     try {
-      await dispatchCommand(config, fsService)
+      await dispatchCommand(config, fsService, httpClient, version)
     } catch (err) {
       console.error(
         chalk.red(
@@ -256,14 +263,14 @@ function registerDefaultAction(prog: Command): void {
   })
 }
 
-function setupCommands(prog: Command, fsService: FileSystemService): void {
+function setupCommands(prog: Command, deps: CommandDeps): void {
   // Register commands with metadata from registry
-  registerCommandFromMetadata(prog, 'install', fsService)
-  registerCommandFromMetadata(prog, 'update', fsService)
-  registerCommandFromMetadata(prog, 'update-link', fsService)
-  registerCommandFromMetadata(prog, 'package', fsService)
-  registerCommandFromMetadata(prog, 'validate-config', fsService)
-  registerCommandFromMetadata(prog, 'kb-validate', fsService)
+  registerCommandFromMetadata(prog, 'install', deps)
+  registerCommandFromMetadata(prog, 'update', deps)
+  registerCommandFromMetadata(prog, 'update-link', deps)
+  registerCommandFromMetadata(prog, 'package', deps)
+  registerCommandFromMetadata(prog, 'validate-config', deps)
+  registerCommandFromMetadata(prog, 'kb-validate', deps)
 
   registerDefaultAction(prog)
 }
@@ -348,7 +355,7 @@ export async function runCli(
   runDiagnostics(fsService)
 
   // Register all commands BEFORE parsing
-  setupCommands(program, fsService)
+  setupCommands(program, { fsService, httpClient, version: pkg.version })
 
   // Parse global options
   await program.parseAsync(argv)
