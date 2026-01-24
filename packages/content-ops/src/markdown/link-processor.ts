@@ -414,4 +414,52 @@ export class LinkProcessor {
   ): Promise<{ content: string; applied: number; byKind: Record<string, number> }> {
     return processFileWithLinks(content, generateReplacements)
   }
+
+  /**
+   * Detect the dominant link style in markdown files within a directory
+   * Returns 'relative' if relative links are >= absolute links, otherwise 'absolute'
+   */
+  static async detectLinkStyle(
+    fsService: FileSystemService,
+    targetPath: string,
+  ): Promise<'relative' | 'absolute'> {
+    const files = await walkMarkdownFiles(targetPath, fsService)
+    let relativeCount = 0
+    let absoluteCount = 0
+
+    for (const file of files) {
+      const content = await fsService.readFile(file)
+      const links = await this.extractLinks(content)
+
+      for (const link of links) {
+        if (isExternalLink(link.href)) continue
+        if (link.href.startsWith('#')) continue
+
+        if (link.href.startsWith('/')) {
+          absoluteCount++
+        } else {
+          relativeCount++
+        }
+      }
+    }
+
+    return relativeCount >= absoluteCount ? 'relative' : 'absolute'
+  }
+}
+
+/**
+ * Standalone export for extractLinks to maintain compatibility
+ */
+export async function extractLinks(content: string): Promise<ParsedLink[]> {
+  return LinkProcessor.extractLinks(content)
+}
+
+/**
+ * Standalone export for detectLinkStyle to maintain compatibility
+ */
+export async function detectLinkStyle(
+  fs: FileSystemService,
+  targetPath: string,
+): Promise<'relative' | 'absolute'> {
+  return LinkProcessor.detectLinkStyle(fs, targetPath)
 }
