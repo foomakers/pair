@@ -26,6 +26,45 @@ describe('command-utils basic utilities', () => {
   })
 })
 
+describe('command-utils validation', () => {
+  it('validateCommandOptions allows offline with local source', () => {
+    expect(() => {
+      utils.validateCommandOptions('install', {
+        source: '/local/kb',
+        offline: true,
+      })
+    }).not.toThrow()
+  })
+
+  it('validateCommandOptions throws when offline without source', () => {
+    expect(() => {
+      utils.validateCommandOptions('install', { offline: true })
+    }).toThrow('Offline mode requires explicit --source with local path')
+  })
+
+  it('validateCommandOptions throws when source is empty', () => {
+    expect(() => {
+      utils.validateCommandOptions('install', { source: '' })
+    }).toThrow('Source path/URL cannot be empty')
+  })
+})
+
+describe('command-utils path calculation', () => {
+  it('calculatePathType returns dir for directory', async () => {
+    const fs = createTestFs({}, {}, '/test')
+    await fs.mkdir('/test/dir')
+    expect(await utils.calculatePathType(fs, '/test/dir')).toBe('dir')
+  })
+
+  it('calculatePaths resolves absolute and relative paths', () => {
+    const fs = createTestFs({}, {}, '/test-root')
+    const result = utils.calculatePaths(fs, '/dataset', 'target/pkg', 'src/reg')
+
+    expect(result.fullSourcePath).toBe('/dataset/src/reg')
+    expect(result.fullTargetPath).toBe('/test-root/target/pkg')
+  })
+})
+
 describe('command-utils fs operations - ensureDir', () => {
   it('ensureDir creates directory with recursive option', async () => {
     const fs = createTestFs({}, {}, '/test')

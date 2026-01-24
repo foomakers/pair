@@ -18,13 +18,14 @@ import {
   HttpClientService,
   NodeHttpClientService,
 } from '@pair/content-ops'
+import { loadConfigWithOverrides } from './config-utils'
+import { isInRelease } from './env-utils'
 import {
+  RegistryConfig,
+  extractRegistries,
   getKnowledgeHubDatasetPath,
   getKnowledgeHubDatasetPathWithFallback,
-  loadConfigWithOverrides,
-} from './config-utils'
-import { isInRelease } from './env-utils'
-import { RegistryConfig, extractRegistries } from './registry'
+} from './registry'
 import { LogLevel } from '@pair/content-ops'
 import { validateCliOptions } from './kb-manager/cli-options'
 

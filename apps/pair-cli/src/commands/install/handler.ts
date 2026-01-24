@@ -1,11 +1,8 @@
 import type { InstallCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
 import { dirname } from 'path'
-import {
-  loadConfigWithOverrides,
-  getKnowledgeHubDatasetPath,
-  getKnowledgeHubDatasetPathWithFallback,
-} from '../../config-utils'
+import { loadConfigWithOverrides } from '../../config-utils'
+
 import type { LogEntry } from '../command-utils'
 import {
   createLogger,
@@ -19,9 +16,11 @@ import {
   resolveTarget,
   forEachRegistry,
   detectOverlappingTargets,
+  checkTargetsEmptiness,
+  getKnowledgeHubDatasetPath,
+  getKnowledgeHubDatasetPathWithFallback,
   type RegistryConfig,
 } from '../../registry'
-import { checkTargetsEmptiness } from '../validation'
 import type { HttpClientService } from '@pair/content-ops'
 import { installKBFromLocalZip } from '../../kb-manager/kb-installer'
 

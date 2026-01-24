@@ -1,5 +1,64 @@
-import { Behavior } from '@pair/content-ops'
+import { Behavior, FileSystemService } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
+
+/**
+ * Check if a target directory is empty or doesn't exist
+ */
+export async function checkTargetEmptiness(
+  targetPath: string,
+  fsService: FileSystemService,
+): Promise<{ empty: boolean; exists: boolean }> {
+  try {
+    const stat = await fsService.stat(targetPath)
+    if (!stat.isDirectory?.()) {
+      return { empty: false, exists: true }
+    }
+
+    const entries = await fsService.readdir(targetPath)
+    return { empty: entries.length === 0, exists: true }
+  } catch {
+    // Directory doesn't exist
+    return { empty: true, exists: false }
+  }
+}
+
+/**
+ * Ensure target directory is empty (required for installation)
+ */
+export async function ensureTargetIsEmpty(
+  targetPath: string,
+  fsService: FileSystemService,
+): Promise<{ valid: boolean; error?: string }> {
+  const { empty, exists } = await checkTargetEmptiness(targetPath, fsService)
+
+  if (exists && !empty) {
+    return {
+      valid: false,
+      error: `target directory '${targetPath}' is not empty. Please remove existing content or choose a different target.`,
+    }
+  }
+
+  return { valid: true }
+}
+
+/**
+ * Check multiple targets for emptiness
+ */
+export async function checkTargetsEmptiness(
+  targets: Record<string, string>,
+  fsService: FileSystemService,
+): Promise<{ valid: boolean; errors: Array<{ registry: string; error: string }> }> {
+  const errors: Array<{ registry: string; error: string }> = []
+
+  for (const [registryName, targetPath] of Object.entries(targets)) {
+    const result = await ensureTargetIsEmpty(targetPath, fsService)
+    if (!result.valid && result.error) {
+      errors.push({ registry: registryName, error: result.error })
+    }
+  }
+
+  return { valid: errors.length === 0, errors }
+}
 
 /**
  * Validates a single registry configuration for required fields and correct types.

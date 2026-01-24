@@ -357,7 +357,7 @@ describe('KB manager integration - ensure KB available', () => {
       return '/home/user/.pair/kb/0.1.0'
     }
 
-    const result = await import('../config-utils').then(m =>
+    const result = await import('../registry').then(m =>
       m.getKnowledgeHubDatasetPathWithFallback({
         fsService: mockFs as unknown as FileSystemService,
         version: '0.1.0',
@@ -385,7 +385,7 @@ describe('KB manager integration - custom URL', () => {
       return '/home/user/.pair/kb/0.1.0'
     }
 
-    const result = await import('../config-utils').then(m =>
+    const result = await import('../registry').then(m =>
       m.getKnowledgeHubDatasetPathWithFallback({
         fsService: mockFs as unknown as FileSystemService,
         version: '0.1.0',

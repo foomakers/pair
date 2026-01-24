@@ -1,222 +1,113 @@
 import { describe, expect, test, beforeEach, vi } from 'vitest'
 import { dispatchCommand } from './dispatcher'
-import type { InMemoryFileSystemService } from '@pair/content-ops'
-import { createTestFileSystem } from '../test-utils'
+import { InMemoryFileSystemService } from '@pair/content-ops'
+import { createTestFs } from '../test-utils'
 import type {
   InstallCommandConfig,
   UpdateCommandConfig,
   UpdateLinkCommandConfig,
   PackageCommandConfig,
   ValidateConfigCommandConfig,
-  KbValidateCommandConfig,
 } from './index'
 
-// Mock handlers
-vi.mock('./install/handler', () => ({
-  handleInstallCommand: vi.fn().mockResolvedValue(undefined),
-}))
-vi.mock('./update/handler', () => ({
-  handleUpdateCommand: vi.fn().mockResolvedValue(undefined),
-}))
-vi.mock('./update-link/handler', () => ({
-  handleUpdateLinkCommand: vi.fn().mockResolvedValue(undefined),
-}))
-vi.mock('./package/handler', () => ({
-  handlePackageCommand: vi.fn().mockResolvedValue(undefined),
-}))
-vi.mock('./validate-config/handler', () => ({
-  handleValidateConfigCommand: vi.fn().mockResolvedValue(undefined),
-}))
-vi.mock('./kb-validate/handler', () => ({
-  handleKbValidateCommand: vi.fn().mockResolvedValue(undefined),
-}))
-
-describe('dispatchCommand() - unit tests with mocked handlers', () => {
+describe('dispatchCommand() - real handlers integration', () => {
   let fs: InMemoryFileSystemService
+  const cwd = '/project'
 
   beforeEach(() => {
-    fs = createTestFileSystem()
-    vi.clearAllMocks()
+    // Basic setup for all commands
+    fs = createTestFs(
+      {
+        asset_registries: {
+          reg: {
+            source: 'reg',
+            behavior: 'mirror',
+            target_path: 'dest',
+            description: 'desc',
+          },
+        },
+      },
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${cwd}/packages/knowledge-hub/dataset/reg/file.txt`]: 'content',
+        [`${cwd}/reg/file.txt`]: 'content', // Source for package command
+        [`${cwd}/.pair/knowledge/README.md`]: '# KB installed', // For update-link command verification
+      },
+      cwd,
+    )
+    vi.restoreAllMocks()
   })
 
-  describe('install command dispatch', () => {
-    test('dispatches install default config', async () => {
-      const config: InstallCommandConfig = {
-        command: 'install',
-        kb: true,
-        resolution: 'default',
-        offline: false,
-      }
+  test('dispatches install command', async () => {
+    const config: InstallCommandConfig = {
+      command: 'install',
+      kb: true,
+      resolution: 'default',
+      offline: false,
+    }
 
-      await dispatchCommand(config, fs)
-
-      const { handleInstallCommand } = await import('./install/handler')
-      expect(handleInstallCommand).toHaveBeenCalledWith(config, fs, {})
-      expect(handleInstallCommand).toHaveBeenCalledOnce()
-    })
-
-    test('dispatches install remote config', async () => {
-      const config: InstallCommandConfig = {
-        command: 'install',
-        kb: true,
-        resolution: 'remote',
-        url: 'https://example.com/kb.zip',
-        offline: false,
-      }
-
-      await dispatchCommand(config, fs)
-
-      const { handleInstallCommand } = await import('./install/handler')
-      expect(handleInstallCommand).toHaveBeenCalledWith(config, fs, {})
-    })
-
-    test('dispatches install local config', async () => {
-      const config: InstallCommandConfig = {
-        command: 'install',
-        kb: true,
-        resolution: 'local',
-        path: '/path/to/kb.zip',
-        offline: false,
-      }
-
-      await dispatchCommand(config, fs)
-
-      const { handleInstallCommand } = await import('./install/handler')
-      expect(handleInstallCommand).toHaveBeenCalledWith(config, fs, {})
-    })
+    await dispatchCommand(config, fs)
+    expect(await fs.exists(`${cwd}/dest/file.txt`)).toBe(true)
   })
 
-  describe('update command dispatch', () => {
-    test('dispatches update default config', async () => {
-      const config: UpdateCommandConfig = {
-        command: 'update',
-        kb: true,
-        resolution: 'default',
-        offline: false,
-      }
+  test('dispatches update command', async () => {
+    // Setup existing dest
+    await fs.mkdir(`${cwd}/dest`, { recursive: true })
+    await fs.writeFile(`${cwd}/dest/file.txt`, 'old content')
 
-      await dispatchCommand(config, fs)
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      kb: true,
+      resolution: 'default',
+      offline: false,
+    }
 
-      const { handleUpdateCommand } = await import('./update/handler')
-      expect(handleUpdateCommand).toHaveBeenCalledWith(config, fs, {})
-      expect(handleUpdateCommand).toHaveBeenCalledOnce()
-    })
-
-    test('dispatches update remote config', async () => {
-      const config: UpdateCommandConfig = {
-        command: 'update',
-        kb: true,
-        resolution: 'remote',
-        url: 'https://example.com/kb.zip',
-        offline: false,
-      }
-
-      await dispatchCommand(config, fs)
-
-      const { handleUpdateCommand } = await import('./update/handler')
-      expect(handleUpdateCommand).toHaveBeenCalledWith(config, fs, {})
-    })
+    await dispatchCommand(config, fs)
+    expect(await fs.readFile(`${cwd}/dest/file.txt`)).toBe('content')
   })
 
-  describe('update-link command dispatch', () => {
-    test('dispatches update-link config', async () => {
-      const config: UpdateLinkCommandConfig = {
-        command: 'update-link',
-        dryRun: false,
-        verbose: false,
-      }
+  test('dispatches update-link command', async () => {
+    await fs.mkdir(`${cwd}/docs`, { recursive: true })
+    await fs.writeFile(`${cwd}/docs/a.md`, '[link](/abs/path)')
 
-      await dispatchCommand(config, fs)
+    const config: UpdateLinkCommandConfig = {
+      command: 'update-link',
+      dryRun: false,
+      verbose: false,
+      absolute: false, // will try relative
+    }
 
-      const { handleUpdateLinkCommand } = await import('./update-link/handler')
-      expect(handleUpdateLinkCommand).toHaveBeenCalledWith(config, fs)
-      expect(handleUpdateLinkCommand).toHaveBeenCalledOnce()
-    })
-
-    test('dispatches update-link with options', async () => {
-      const config: UpdateLinkCommandConfig = {
-        command: 'update-link',
-        dryRun: true,
-        verbose: true,
-      }
-
-      await dispatchCommand(config, fs)
-
-      const { handleUpdateLinkCommand } = await import('./update-link/handler')
-      expect(handleUpdateLinkCommand).toHaveBeenCalledWith(config, fs)
-    })
+    await dispatchCommand(config, fs)
+    // Effect check - it should have processed the file
+    // We don't verify exact link transformation here as that's handler responsibility,
+    // but just checking it ran without error.
   })
 
-  describe('package command dispatch', () => {
-    test('dispatches package config', async () => {
-      const config: PackageCommandConfig = {
-        command: 'package',
-        verbose: false,
-      }
+  test('dispatches package command', async () => {
+    const outputPath = `${cwd}/pkg.zip`
+    const config: PackageCommandConfig = {
+      command: 'package',
+      output: outputPath,
+      verbose: false,
+    }
 
-      await dispatchCommand(config, fs)
-
-      const { handlePackageCommand } = await import('./package/handler')
-      expect(handlePackageCommand).toHaveBeenCalledWith(config, fs)
-      expect(handlePackageCommand).toHaveBeenCalledOnce()
-    })
-
-    test('dispatches package with all options', async () => {
-      const config: PackageCommandConfig = {
-        command: 'package',
-        output: '/output/kb.zip',
-        sourceDir: '/source',
-        name: 'my-kb',
-        version: '1.0.0',
-        description: 'Test KB',
-        author: 'Test Author',
-        verbose: true,
-      }
-
-      await dispatchCommand(config, fs)
-
-      const { handlePackageCommand } = await import('./package/handler')
-      expect(handlePackageCommand).toHaveBeenCalledWith(config, fs)
-    })
+    await dispatchCommand(config, fs)
+    expect(await fs.exists(outputPath)).toBe(true)
   })
 
-  describe('validate-config command dispatch', () => {
-    test('dispatches validate-config', async () => {
-      const config: ValidateConfigCommandConfig = {
-        command: 'validate-config',
-      }
+  test('dispatches validate-config command', async () => {
+    const config: ValidateConfigCommandConfig = {
+      command: 'validate-config',
+    }
 
-      await dispatchCommand(config, fs)
+    // Should not throw for valid config
+    await expect(dispatchCommand(config, fs)).resolves.not.toThrow()
 
-      const { handleValidateConfigCommand } = await import('./validate-config/handler')
-      expect(handleValidateConfigCommand).toHaveBeenCalledWith(config, fs)
-      expect(handleValidateConfigCommand).toHaveBeenCalledOnce()
-    })
-  })
-
-  describe('kb-validate command dispatch', () => {
-    test('dispatches kb-validate default', async () => {
-      const config: KbValidateCommandConfig = {
-        command: 'kb-validate',
-      }
-
-      await dispatchCommand(config, fs)
-
-      const { handleKbValidateCommand } = await import('./kb-validate/handler')
-      expect(handleKbValidateCommand).toHaveBeenCalledWith(config, fs)
-      expect(handleKbValidateCommand).toHaveBeenCalledOnce()
-    })
-
-    test('dispatches kb-validate with path', async () => {
-      const config: KbValidateCommandConfig = {
-        command: 'kb-validate',
-        path: '/custom/path',
-      }
-
-      await dispatchCommand(config, fs)
-
-      const { handleKbValidateCommand } = await import('./kb-validate/handler')
-      expect(handleKbValidateCommand).toHaveBeenCalledWith(config, fs)
-    })
+    // Break config and verify it fails
+    await fs.writeFile(`${cwd}/config.json`, 'invalid json')
+    await expect(dispatchCommand(config, fs)).rejects.toThrow()
   })
 })

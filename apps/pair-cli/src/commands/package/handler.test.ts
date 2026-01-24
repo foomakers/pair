@@ -1,107 +1,83 @@
 import { describe, expect, beforeEach, vi, test } from 'vitest'
 import { handlePackageCommand } from './handler'
 import type { PackageCommandConfig } from './parser'
-import { createTestFileSystem } from '../../test-utils'
-import type { InMemoryFileSystemService } from '@pair/content-ops'
+import { InMemoryFileSystemService } from '@pair/content-ops'
 
-// Mock handler dependencies
-vi.mock('../../config-utils', () => ({
-  loadConfigWithOverrides: vi.fn().mockReturnValue({
-    config: {
-      asset_registries: {
-        'test-registry': {
-          source: 'test-source',
-          behavior: 'mirror',
-          target_path: '.pair',
-          description: 'Test registry',
-        },
-      },
-    },
-    source: 'test-config-source',
-  }),
-}))
-
-vi.mock('./validators', () => ({
-  validatePackageStructure: vi.fn().mockResolvedValue({ valid: true, errors: [] }),
-}))
-
-vi.mock('./metadata', () => ({
-  generateManifestMetadata: vi.fn().mockReturnValue({
-    name: 'test-package',
-    version: '1.0.0',
-    created_at: '2025-12-21',
-  }),
-}))
-
-vi.mock('./zip-creator', () => ({
-  createPackageZip: vi.fn().mockResolvedValue(undefined),
-}))
-
-describe('handlePackageCommand - unit tests', () => {
+describe('handlePackageCommand - real services integration', () => {
   let fs: InMemoryFileSystemService
+  const cwd = '/my-project'
 
   beforeEach(() => {
-    fs = createTestFileSystem()
-    // Mock stat to return file size for created ZIP
-    fs.stat = vi.fn().mockResolvedValue({ size: 1024 })
-    vi.clearAllMocks()
+    // Setup initial FS state with a valid project structure
+    fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            reg1: {
+              source: 'source/reg1',
+              behavior: 'mirror',
+              target_path: '.pair/reg1',
+              description: 'Registry 1',
+            },
+          },
+        }),
+        [`${cwd}/source/reg1/file.txt`]: 'content of reg1',
+        [`${cwd}/README.md`]: '# My KB',
+      },
+      cwd,
+      cwd,
+    )
+    vi.restoreAllMocks()
   })
 
-  describe('handler execution', () => {
-    test('executes with minimal config', async () => {
-      const config: PackageCommandConfig = {
-        command: 'package',
-        verbose: false,
-      }
+  test('successfully creates a package with manifest', async () => {
+    const outputPath = `${cwd}/dist/my-kb.zip`
+    const config: PackageCommandConfig = {
+      command: 'package',
+      output: outputPath,
+      name: 'test-kb',
+      version: '1.2.3',
+      verbose: false,
+    }
 
-      await handlePackageCommand(config, fs)
+    await handlePackageCommand(config, fs)
 
-      const { createPackageZip } = await import('./zip-creator')
-      expect(createPackageZip).toHaveBeenCalled()
-    })
+    // Verify ZIP was created
+    expect(await fs.exists(outputPath)).toBe(true)
 
-    test('passes all metadata to manifest generator', async () => {
-      const config: PackageCommandConfig = {
-        command: 'package',
-        output: '/output/kb.zip',
-        sourceDir: '/source',
-        name: 'my-kb',
-        version: '1.0.0',
-        description: 'Test KB',
-        author: 'Test Author',
-        verbose: true,
-      }
+    // Verify we can "extract" it (since it's an in-memory ZIP)
+    const extractDir = `${cwd}/extracted`
+    await fs.extractZip(outputPath, extractDir)
 
-      await handlePackageCommand(config, fs)
+    // Verify manifest content
+    const manifestStr = await fs.readFile(`${extractDir}/manifest.json`)
+    const manifest = JSON.parse(manifestStr)
+    expect(manifest.version).toBe('1.2.3')
+    expect(manifest.name).toBe('test-kb')
 
-      const { generateManifestMetadata } = await import('./metadata')
-      expect(generateManifestMetadata).toHaveBeenCalledWith(
-        ['test-source'],
-        expect.objectContaining({
-          name: 'my-kb',
-          version: '1.0.0',
-          description: 'Test KB',
-          author: 'Test Author',
-        }),
-      )
-    })
+    // Verify registry content
+    expect(await fs.exists(`${extractDir}/source/reg1/file.txt`)).toBe(true)
+    expect(await fs.readFile(`${extractDir}/source/reg1/file.txt`)).toBe('content of reg1')
+  })
 
-    test('uses custom output path when provided', async () => {
-      const config: PackageCommandConfig = {
-        command: 'package',
-        output: '/custom/output.zip',
-        verbose: true,
-      }
+  test('fails if registry source does not exist', async () => {
+    const invalidConfig = {
+      asset_registries: {
+        broken: {
+          source: 'non-existent',
+          behavior: 'mirror',
+          target_path: 'pkg',
+          description: 'broken',
+        },
+      },
+    }
+    await fs.writeFile(`${cwd}/config.json`, JSON.stringify(invalidConfig))
 
-      await handlePackageCommand(config, fs)
+    const config: PackageCommandConfig = {
+      command: 'package',
+      verbose: false,
+    }
 
-      const { createPackageZip } = await import('./zip-creator')
-      expect(createPackageZip).toHaveBeenCalledWith(
-        expect.objectContaining({
-          outputPath: '/custom/output.zip',
-        }),
-        fs,
-      )
-    })
+    await expect(handlePackageCommand(config, fs)).rejects.toThrow(/source path does not exist/)
   })
 })

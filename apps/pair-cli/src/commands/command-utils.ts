@@ -1,7 +1,15 @@
-import { copyDirHelper, copyFileHelper, detectLinkStyle } from '@pair/content-ops'
+import {
+  copyDirHelper,
+  copyFileHelper,
+  detectLinkStyle,
+  detectSourceType,
+  SourceType,
+} from '@pair/content-ops'
 import { isAbsolute, dirname } from 'path'
 import type { FileSystemService } from '@pair/content-ops'
-import type { LogEntry } from './logging'
+import { LogEntry, createLogger } from '../logger'
+
+export { createLogger, type LogEntry }
 
 export type CommandOptions = {
   datasetRoot?: string
@@ -9,6 +17,34 @@ export type CommandOptions = {
   baseTarget?: string
   useDefaults?: boolean
   minLogLevel?: LogEntry['level'] | string
+}
+
+interface ValidationCommandOptions {
+  source?: string
+  offline?: boolean
+}
+
+/**
+ * Validate command options for consistency
+ */
+export function validateCommandOptions(_command: string, options: ValidationCommandOptions): void {
+  const { source, offline } = options
+
+  // Validate source not empty
+  if (source !== undefined && source === '') {
+    throw new Error('Source path/URL cannot be empty')
+  }
+
+  // Validate offline mode requirements
+  if (offline) {
+    if (!source) {
+      throw new Error('Offline mode requires explicit --source with local path')
+    }
+    const sourceType = detectSourceType(source)
+    if (sourceType === SourceType.REMOTE_URL) {
+      throw new Error('Cannot use --offline with remote URL source')
+    }
+  }
 }
 
 export function parseTargetAndSource(args?: string[] | null) {
@@ -120,5 +156,41 @@ export async function applyLinkTransformation(
   }
 }
 
-export { createLogger, type LogEntry } from './logging'
 export { detectLinkStyle } from '@pair/content-ops'
+
+export const calculatePathType = async (fsService: FileSystemService, path: string) => {
+  const stat = await fsService.stat(path)
+  return stat.isDirectory() ? 'dir' : 'file'
+}
+
+export function calculatePaths(
+  fsService: FileSystemService,
+  datasetRoot: string,
+  absTarget: string,
+  source?: string,
+) {
+  const fullSourcePath = fsService.resolve(datasetRoot, source || '.')
+  const cwd = fsService.currentWorkingDirectory()
+
+  const fullTargetPath = fsService.resolve(cwd, absTarget)
+
+  const effectiveMonorepoRoot = fsService.currentWorkingDirectory()
+  const canUseRelativePaths =
+    fullSourcePath.startsWith(effectiveMonorepoRoot) &&
+    fullTargetPath.startsWith(effectiveMonorepoRoot)
+  const relativeSourcePath = canUseRelativePaths
+    ? fullSourcePath.replace(effectiveMonorepoRoot + '/', '')
+    : undefined
+  const relativeTargetPath = canUseRelativePaths
+    ? fullTargetPath.replace(effectiveMonorepoRoot + '/', '')
+    : undefined
+
+  return {
+    fullSourcePath,
+    cwd,
+    monorepoRoot: effectiveMonorepoRoot,
+    relativeSourcePath,
+    fullTargetPath,
+    relativeTargetPath,
+  }
+}

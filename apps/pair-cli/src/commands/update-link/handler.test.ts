@@ -3,11 +3,6 @@ import { handleUpdateLinkCommand } from './handler'
 import type { UpdateLinkCommandConfig } from './parser'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 
-// Mock getKnowledgeHubDatasetPath as it requires scanning real node_modules
-vi.mock('../../config-utils', () => ({
-  getKnowledgeHubDatasetPath: vi.fn(() => '/dataset'),
-}))
-
 describe('handleUpdateLinkCommand - integration with in-memory services', () => {
   let fs: InMemoryFileSystemService
   const cwd = '/project'
@@ -16,14 +11,23 @@ describe('handleUpdateLinkCommand - integration with in-memory services', () => 
     // Setup initial FS state
     fs = new InMemoryFileSystemService(
       {
+        // package.json for discovery
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        // packages/knowledge-hub/package.json for monorepo discovery
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
         // Fake KB installed
         [`${cwd}/.pair/knowledge/file1.md`]: '[link](/absolute/path)',
         [`${cwd}/.pair/knowledge/file2.md`]: '[link](./relative/path)',
+        // dataset folders for resolution
+        [`${cwd}/packages/knowledge-hub/dataset/.pair/knowledge/file1.md`]:
+          '[link](/absolute/path)',
       },
       cwd, // Root module dir
       cwd, // CWD
     )
-    vi.clearAllMocks()
+    vi.restoreAllMocks()
   })
 
   test('successfully processes files (dry run)', async () => {

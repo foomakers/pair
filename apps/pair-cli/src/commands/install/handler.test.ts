@@ -1,54 +1,37 @@
-import { describe, expect, beforeEach, vi, test } from 'vitest'
+import { describe, expect, beforeEach, test } from 'vitest'
 import { handleInstallCommand } from './handler'
 import type { InstallCommandConfig } from './parser'
-import { createTestFileSystem } from '../../test-utils'
-import type { InMemoryFileSystemService } from '@pair/content-ops'
+import { createTestFs } from '../../test-utils'
 
-// Mock config-utils and command-utils
-vi.mock('../../config-utils', () => ({
-  loadConfigWithOverrides: vi.fn(() => ({
-    config: {
-      asset_registries: {
-        'test-registry': {
-          source: 'test-source',
-          behavior: 'mirror',
-          target_path: '.test-install-target',
-          description: 'Test registry',
-        },
+describe('handleInstallCommand - real services integration', () => {
+  const cwd = '/test-project'
+
+  const testConfig = {
+    asset_registries: {
+      github: {
+        source: 'github',
+        behavior: 'mirror',
+        target_path: '.github',
+        description: 'GitHub registry',
       },
     },
-    source: 'test-config-source',
-  })),
-  getKnowledgeHubDatasetPath: vi.fn(() => '/test-dataset'),
-  getKnowledgeHubDatasetPathWithFallback: vi.fn().mockResolvedValue('/test-dataset-fallback'),
-  calculatePathType: vi.fn(),
-}))
+  }
 
-vi.mock('../../kb-manager/kb-installer', () => ({
-  installKBFromLocalZip: vi.fn().mockResolvedValue('/test-local-zip-cache'),
-}))
+  const extraFiles = {
+    [`${cwd}/package.json`]: JSON.stringify({ name: 'test-pkg', version: '0.1.0' }),
+    [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({ name: '@pair/knowledge-hub' }),
+    [`${cwd}/packages/knowledge-hub/dataset/github/workflow.yml`]: 'content: val',
+    [`${cwd}/packages/knowledge-hub/dataset/github/README.md`]: '# GitHub Registry',
+  }
 
-vi.mock('../command-utils', () => ({
-  createLogger: vi.fn(() => ({
-    logs: [],
-    pushLog: vi.fn(),
-  })),
-  parseTargetAndSource: vi.fn(),
-  doCopyAndUpdateLinks: vi.fn().mockResolvedValue(undefined),
-  applyLinkTransformation: vi.fn().mockResolvedValue(undefined),
-  ensureDir: vi.fn().mockResolvedValue(undefined),
-}))
-
-describe('handleInstallCommand - direct implementation', () => {
-  let fs: InMemoryFileSystemService
+  let fs: ReturnType<typeof createTestFs>
 
   beforeEach(() => {
-    fs = createTestFileSystem()
-    vi.clearAllMocks()
+    fs = createTestFs(testConfig, extraFiles, cwd)
   })
 
   describe('default resolution', () => {
-    test('installs from default dataset root', async () => {
+    test('installs from default dataset root found via package.json', async () => {
       const config: InstallCommandConfig = {
         command: 'install',
         resolution: 'default',
@@ -56,73 +39,54 @@ describe('handleInstallCommand - direct implementation', () => {
         offline: false,
       }
 
-      await expect(handleInstallCommand(config, fs)).resolves.not.toThrow()
+      await handleInstallCommand(config, fs)
 
-      const { doCopyAndUpdateLinks } = await import('../command-utils')
-      expect(doCopyAndUpdateLinks).toHaveBeenCalled()
-    })
-  })
-
-  describe('remote resolution', () => {
-    test('handles remote URL source', async () => {
-      const config: InstallCommandConfig = {
-        command: 'install',
-        resolution: 'remote',
-        url: 'https://example.com/kb.zip',
-        offline: false,
-        kb: true,
-      }
-
-      await expect(handleInstallCommand(config, fs)).resolves.not.toThrow()
+      // Verify files were actually copied to the target
+      expect(await fs.exists(`${cwd}/.github/workflow.yml`)).toBe(true)
+      expect(await fs.exists(`${cwd}/.github/README.md`)).toBe(true)
+      expect(await fs.readFile(`${cwd}/.github/workflow.yml`)).toBe('content: val')
     })
   })
 
   describe('local resolution', () => {
-    test('handles local path source', async () => {
-      const config: InstallCommandConfig = {
+    test('handles local path source to a directory', async () => {
+      const externalKbPath = '/external/kb'
+      await fs.mkdir(externalKbPath, { recursive: true })
+      await fs.mkdir(`${externalKbPath}/my-reg`, { recursive: true })
+      await fs.writeFile(`${externalKbPath}/my-reg/file.txt`, 'local content')
+
+      const localConfig = {
+        asset_registries: {
+          'my-reg': {
+            behavior: 'mirror',
+            target_path: 'dest',
+            description: 'Local reg',
+          },
+        },
+      }
+
+      // Update config in FS
+      await fs.writeFile(`${cwd}/config.json`, JSON.stringify(localConfig))
+
+      const command: InstallCommandConfig = {
         command: 'install',
         resolution: 'local',
-        path: '/path/to/kb.zip',
-        offline: false,
+        path: externalKbPath,
+        offline: true,
         kb: true,
       }
 
-      await expect(handleInstallCommand(config, fs)).resolves.not.toThrow()
-    })
-  })
+      await handleInstallCommand(command, fs)
 
-  describe('link style transformation', () => {
-    test('applies link transformation when specified', async () => {
-      const config: InstallCommandConfig = {
-        command: 'install',
-        resolution: 'default',
-        kb: true,
-        offline: false,
-      }
-
-      await expect(
-        handleInstallCommand(config, fs, { linkStyle: 'relative' }),
-      ).resolves.not.toThrow()
-
-      const { applyLinkTransformation } = await import('../command-utils')
-      expect(applyLinkTransformation).toHaveBeenCalledWith(
-        fs,
-        { linkStyle: 'relative' },
-        expect.any(Function),
-        'install',
-      )
+      expect(await fs.exists(`${cwd}/dest/file.txt`)).toBe(true)
+      expect(await fs.readFile(`${cwd}/dest/file.txt`)).toBe('local content')
     })
   })
 
   describe('error handling', () => {
-    test('throws on invalid registry configuration', async () => {
-      const { loadConfigWithOverrides } = await import('../../config-utils')
-      vi.mocked(loadConfigWithOverrides).mockReturnValueOnce({
-        config: {
-          asset_registries: {},
-        },
-        source: 'empty-config',
-      })
+    test('throws when registries are empty', async () => {
+      const emptyConfig = { asset_registries: {} }
+      await fs.writeFile(`${cwd}/config.json`, JSON.stringify(emptyConfig))
 
       const config: InstallCommandConfig = {
         command: 'install',

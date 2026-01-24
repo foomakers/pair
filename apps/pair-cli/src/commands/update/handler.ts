@@ -1,11 +1,7 @@
 import type { UpdateCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
 import { dirname } from 'path'
-import {
-  loadConfigWithOverrides,
-  getKnowledgeHubDatasetPath,
-  getKnowledgeHubDatasetPathWithFallback,
-} from '../../config-utils'
+import { loadConfigWithOverrides } from '../../config-utils'
 import type { LogEntry } from '../command-utils'
 import {
   createLogger,
@@ -18,6 +14,8 @@ import {
   validateAllRegistries,
   resolveTarget,
   forEachRegistry,
+  getKnowledgeHubDatasetPath,
+  getKnowledgeHubDatasetPathWithFallback,
   type RegistryConfig,
 } from '../../registry'
 import type { HttpClientService } from '@pair/content-ops'

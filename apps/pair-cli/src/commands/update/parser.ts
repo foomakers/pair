@@ -1,5 +1,5 @@
 import { detectSourceType, SourceType } from '@pair/content-ops'
-import { validateCommandOptions } from '../validation'
+import { validateCommandOptions } from '../command-utils'
 
 /**
  * Discriminated union for update command with default resolution

@@ -3,40 +3,28 @@ import { handleUpdateCommand } from './handler'
 import type { UpdateCommandConfig } from './parser'
 import { InMemoryFileSystemService, MockHttpClientService } from '@pair/content-ops'
 
-// Only mock external heavy-lifters/boundaries that strictly require native modules
-// or download large files.
-vi.mock('../../kb-manager/kb-installer', () => ({
-  installKBFromLocalZip: vi.fn().mockResolvedValue('/test-local-zip-cache'),
-}))
-
-// We need to mock getKnowledgeHubDatasetPath because it relies on finding actual node_modules
-// or package.json files relative to the executed module, which is hard to simulate perfectly
-// in the test harness without pointing to real disk.
-vi.mock('../../config-utils', async importOriginal => {
-  const actual = await importOriginal<typeof import('../../config-utils')>()
-  return {
-    ...actual,
-    getKnowledgeHubDatasetPath: vi.fn(() => '/dataset'),
-    getKnowledgeHubDatasetPathWithFallback: vi.fn().mockResolvedValue('/dataset'),
-  }
-})
-
 describe('handleUpdateCommand - integration with in-memory services', () => {
   let fs: InMemoryFileSystemService
   let httpClient: MockHttpClientService
 
   const cwd = '/project'
-  const datasetSrc = '/dataset'
+  const datasetSrc = '/project/packages/knowledge-hub/dataset' // Match discovery logic
 
   beforeEach(() => {
     // Setup initial FS state
     fs = new InMemoryFileSystemService(
       {
+        // package.json for discovery
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        // packages/knowledge-hub/package.json for monorepo discovery
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
         // Config file
         [`${cwd}/config.json`]: JSON.stringify({
           asset_registries: {
             'test-registry': {
-              source: 'test-registry', // UPDATED: Match registry name for default resolution
+              source: 'test-registry',
               behavior: 'mirror',
               target_path: '.pair/test-registry',
               description: 'Test registry',
@@ -44,8 +32,8 @@ describe('handleUpdateCommand - integration with in-memory services', () => {
           },
         }),
         // Source files in dataset
-        [`${datasetSrc}/test-registry/file1.md`]: '# New Content', // UPDATED path
-        [`${datasetSrc}/test-registry/nested/file2.md`]: '# Nested New Content', // UPDATED path
+        [`${datasetSrc}/test-registry/file1.md`]: '# New Content',
+        [`${datasetSrc}/test-registry/nested/file2.md`]: '# Nested New Content',
         // Existing files in project (for update/backup verification)
         [`${cwd}/.pair/test-registry/file1.md`]: '# Old Content',
       },
@@ -54,7 +42,7 @@ describe('handleUpdateCommand - integration with in-memory services', () => {
     )
 
     httpClient = new MockHttpClientService()
-    vi.clearAllMocks()
+    vi.restoreAllMocks()
   })
 
   test('successfully updates registry from default source', async () => {
@@ -87,7 +75,6 @@ describe('handleUpdateCommand - integration with in-memory services', () => {
     await handleUpdateCommand(config, fs, { httpClient, persistBackup: true })
 
     // Verify backup existence
-    // Backup paths are distinct by timestamp, so we search for the backup dir
     const backupsDir = `${cwd}/.pair/backups`
     const backupSessions = await fs.readdir(backupsDir)
     expect(backupSessions.length).toBeGreaterThan(0)
@@ -112,7 +99,6 @@ describe('handleUpdateCommand - integration with in-memory services', () => {
     // We purposefully fail on the nested file to ensure partial update is rolled back
     const originalWriteFile = fs.writeFile.bind(fs)
     vi.spyOn(fs, 'writeFile').mockImplementation(async (path, content) => {
-      // Use includes or check if path is targeting the nested file
       if (path.includes('file2.md')) {
         throw new Error('Simulated write failure')
       }
@@ -124,9 +110,6 @@ describe('handleUpdateCommand - integration with in-memory services', () => {
     )
 
     // Verify file1.md was rolled back to old content
-    // Note: file1.md is written BEFORE file2.md usually (lexical order? or random iteration?)
-    // 'file1.md' vs 'nested/file2.md'. 'file1.md' likely first.
-    // If rollback works, content should be reverted.
     const content = await fs.readFile(`${cwd}/.pair/test-registry/file1.md`)
     expect(content).toBe('# Old Content')
   })
