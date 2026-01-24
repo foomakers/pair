@@ -2,13 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import { createPackageZip } from './zip-creator'
 import type { ManifestMetadata } from './metadata'
-import type { AssetRegistryConfig } from '../registry'
+import type { RegistryConfig } from '#registry'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
 
 // Helper to create test registry config
-function testRegistry(source: string, target_path = source): AssetRegistryConfig {
+function testRegistry(source: string, target_path = source): RegistryConfig {
   return {
     source,
     target_path,
@@ -63,7 +63,7 @@ describe('createPackageZip - basic operations', () => {
     // validateOutputDirectory now creates directory with mkdir -p behavior
     const projectRoot = '/test-project'
     const testOutput = path.join(tempDir, 'nested/deep/package.zip')
-    const registries: never[] = []
+    const registries: RegistryConfig[] = []
     const manifest: ManifestMetadata = {
       name: 'test',
       version: '1.0.0',

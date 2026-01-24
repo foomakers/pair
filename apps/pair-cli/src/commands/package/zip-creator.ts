@@ -1,6 +1,6 @@
 import type { FileSystemService } from '@pair/content-ops'
 import type { ManifestMetadata } from './metadata'
-import type { RegistryConfig } from '../../registry'
+import type { RegistryConfig } from '#registry'
 import path from 'path'
 
 interface ZipOptions {

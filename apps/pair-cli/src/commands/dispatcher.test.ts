@@ -1,7 +1,7 @@
 import { describe, expect, test, beforeEach, vi } from 'vitest'
 import { dispatchCommand } from './dispatcher'
 import { InMemoryFileSystemService } from '@pair/content-ops'
-import { createTestFs } from '../test-utils'
+import { createTestFs } from '#test-utils'
 import type {
   InstallCommandConfig,
   UpdateCommandConfig,

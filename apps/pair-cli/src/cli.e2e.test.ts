@@ -166,8 +166,8 @@ describe('pair-cli e2e - validate-config success', () => {
     await withTempConfig(fs, createTestConfig(), async () => {
       // Mock the CLI execution by calling the validate-config logic directly
       // Since we can't easily run the CLI binary in tests, we'll test the underlying function
-      const { config } = await import('./config').then(m => m.loadConfigWithOverrides(fs))
-      const { validateConfig } = await import('./config')
+      const { config } = await import('#config').then(m => m.loadConfigWithOverrides(fs))
+      const { validateConfig } = (await import('#config')) as typeof import('#config')
       const validation = validateConfig(config)
 
       expect(validation.valid).toBe(true)
@@ -193,8 +193,8 @@ describe('pair-cli e2e - validate-config failures basic', () => {
     }
 
     await withTempConfig(fs, invalidConfig, async () => {
-      const { config } = await import('./config').then(m => m.loadConfigWithOverrides(fs))
-      const { validateConfig } = await import('./config')
+      const { config } = await import('#config').then(m => m.loadConfigWithOverrides(fs))
+      const { validateConfig } = (await import('#config')) as typeof import('#config')
       const validation = validateConfig(config)
 
       expect(validation.valid).toBe(false)
@@ -212,8 +212,8 @@ describe('pair-cli e2e - validate-config failures basic', () => {
     }
 
     await withTempConfig(fs, invalidConfig, async () => {
-      const { config } = await import('./config').then(m => m.loadConfigWithOverrides(fs))
-      const { validateConfig } = await import('./config')
+      const { config } = await import('#config').then(m => m.loadConfigWithOverrides(fs))
+      const { validateConfig } = (await import('#config')) as typeof import('#config')
       const validation = validateConfig(config)
 
       expect(validation.valid).toBe(false)
@@ -234,8 +234,8 @@ describe('pair-cli e2e - validate-config failures advanced', () => {
     }
 
     await withTempConfig(fs, invalidConfig, async () => {
-      const { config } = await import('./config').then(m => m.loadConfigWithOverrides(fs))
-      const { validateConfig } = await import('./config')
+      const { config } = await import('#config').then(m => m.loadConfigWithOverrides(fs))
+      const { validateConfig } = (await import('#config')) as typeof import('#config')
       const validation = validateConfig(config)
 
       expect(validation.valid).toBe(false)
@@ -260,8 +260,8 @@ describe('pair-cli e2e - validate-config failures advanced', () => {
     }
 
     await withTempConfig(fs, invalidConfig, async () => {
-      const { config } = await import('./config').then(m => m.loadConfigWithOverrides(fs))
-      const { validateConfig } = await import('./config')
+      const { config } = await import('#config').then(m => m.loadConfigWithOverrides(fs))
+      const { validateConfig } = (await import('#config')) as typeof import('#config')
       const validation = validateConfig(config)
 
       expect(validation.valid).toBe(false)
@@ -279,7 +279,9 @@ describe('pair-cli e2e - list-targets', () => {
 
     await withTempConfig(fs, createTestConfig(), async () => {
       // Mock the CLI execution by calling the update command with listTargets option
-      const { handleUpdateCommand, parseUpdateCommand } = await import('./commands')
+      const { handleUpdateCommand, parseUpdateCommand } = (await import(
+        './commands/index.js'
+      )) as typeof import('./commands/index.js')
       await handleUpdateCommand(parseUpdateCommand({ source: '.' }), fs)
 
       // The function no longer returns a value (success indicated by lack of throw)

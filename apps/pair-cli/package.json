@@ -18,6 +18,17 @@
   },
   "author": "Gianluca Carucci <gianluca@carucci.org>",
   "private": false,
+  "imports": {
+    "#config": "./src/config/index.ts",
+    "#config/*": "./src/config/*",
+    "#registry": "./src/registry/index.ts",
+    "#registry/*": "./src/registry/*",
+    "#kb-manager": "./src/kb-manager/index.ts",
+    "#kb-manager/*": "./src/kb-manager/*",
+    "#diagnostics": "./src/diagnostics.ts",
+    "#test-utils": "./src/test-utils/index.ts",
+    "#test-utils/*": "./src/test-utils/*"
+  },
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
     "postbuild": "chmod +x dist/cli.js",

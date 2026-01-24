@@ -51,7 +51,7 @@ describe('KB Manager - ensureKBAvailable - Cache Miss', () => {
       buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
 
-    mockExtract.mockImplementation(async (zipPath: string, targetPath: string) => {
+    mockExtract.mockImplementation(async (_zipPath: string, targetPath: string) => {
       fs.writeFile(join(targetPath, 'manifest.json'), '{"version":"0.2.0"}')
       fs.writeFile(join(targetPath, '.pair/knowledge/test.md'), 'test')
     })
@@ -357,7 +357,7 @@ describe('KB manager integration - ensure KB available', () => {
       return '/home/user/.pair/kb/0.1.0'
     }
 
-    const result = await import('../config').then(m =>
+    const result = await import('#config').then(m =>
       m.getKnowledgeHubDatasetPathWithFallback({
         fsService: mockFs as unknown as FileSystemService,
         version: '0.1.0',
@@ -385,7 +385,7 @@ describe('KB manager integration - custom URL', () => {
       return '/home/user/.pair/kb/0.1.0'
     }
 
-    const result = await import('../config').then(m =>
+    const result = await import('#config').then(m =>
       m.getKnowledgeHubDatasetPathWithFallback({
         fsService: mockFs as unknown as FileSystemService,
         version: '0.1.0',

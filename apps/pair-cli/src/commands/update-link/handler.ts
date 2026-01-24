@@ -10,9 +10,9 @@ import {
   BackupService,
 } from '@pair/content-ops'
 import { dirname } from 'path'
-import { getKnowledgeHubDatasetPath } from '../../config'
-import { createLogger, type LogEntry } from '../../diagnostics'
-import { createRegistryBackupConfig, handleBackupRollback } from '../backup'
+import { getKnowledgeHubDatasetPath } from '#config'
+import { createLogger, type LogEntry } from '#diagnostics'
+import { createRegistryBackupConfig, handleBackupRollback } from '#registry'
 
 function transformLink(
   link: ParsedLink,

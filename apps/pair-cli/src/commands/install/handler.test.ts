@@ -1,7 +1,7 @@
 import { describe, expect, beforeEach, test } from 'vitest'
 import { handleInstallCommand } from './handler'
 import type { InstallCommandConfig } from './parser'
-import { createTestFs } from '../../test-utils'
+import { createTestFs } from '#test-utils'
 
 describe('handleInstallCommand - real services integration', () => {
   const cwd = '/test-project'

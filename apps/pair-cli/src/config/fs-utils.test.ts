@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createTestFs } from '../test-utils/test-helpers'
+import { createTestFs } from '#test-utils/test-helpers'
 import { ensureDir, calculatePathType } from './fs-utils'
 
 describe('config fs-utils', () => {

@@ -5,22 +5,23 @@ import {
   loadConfigWithOverrides,
   getKnowledgeHubDatasetPath,
   getKnowledgeHubDatasetPathWithFallback,
-} from '../../config'
-import { createLogger, type LogEntry } from '../../diagnostics'
-import { ensureDir } from '../../config'
+  ensureDir,
+} from '#config'
+import { createLogger, type LogEntry } from '#diagnostics'
 import {
   extractRegistries,
   validateAllRegistries,
   resolveTarget,
   forEachRegistry,
   doCopyAndUpdateLinks,
+  buildRegistryBackupConfig,
+  handleBackupRollback,
   type RegistryConfig,
-} from '../../registry'
+} from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
 import { BackupService } from '@pair/content-ops'
-import { installKBFromLocalZip } from '../../kb-manager/kb-installer'
-import { buildRegistryBackupConfig, handleBackupRollback } from '../backup'
+import { installKBFromLocalZip } from '#kb-manager/kb-installer'
 
 /**
  * Update options for handler

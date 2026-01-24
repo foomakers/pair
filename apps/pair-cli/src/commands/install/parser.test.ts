@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseInstallCommand } from './parser'
+import type { InstallCommandConfigRemote, InstallCommandConfigLocal } from './parser'
 
 describe('parseInstallCommand', () => {
   describe('default resolution', () => {
@@ -36,7 +37,7 @@ describe('parseInstallCommand', () => {
       })
 
       expect(config.resolution).toBe('remote')
-      expect(config.url).toBe('http://example.com/kb.zip')
+      expect((config as InstallCommandConfigRemote).url).toBe('http://example.com/kb.zip')
     })
   })
 
@@ -61,7 +62,7 @@ describe('parseInstallCommand', () => {
       })
 
       expect(config.resolution).toBe('local')
-      expect(config.path).toBe('./relative/path')
+      expect((config as InstallCommandConfigLocal).path).toBe('./relative/path')
     })
   })
 

@@ -5,10 +5,10 @@ import {
   loadConfigWithOverrides,
   getKnowledgeHubDatasetPath,
   getKnowledgeHubDatasetPathWithFallback,
-} from '../../config'
+  ensureDir,
+} from '#config'
 
-import { createLogger, type LogEntry } from '../../diagnostics'
-import { ensureDir } from '../../config'
+import { createLogger, type LogEntry } from '#diagnostics'
 import {
   extractRegistries,
   validateAllRegistries,
@@ -18,10 +18,10 @@ import {
   checkTargetsEmptiness,
   doCopyAndUpdateLinks,
   type RegistryConfig,
-} from '../../registry'
+} from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
-import { installKBFromLocalZip } from '../../kb-manager/kb-installer'
+import { installKBFromLocalZip } from '#kb-manager/kb-installer'
 
 /**
  * Install options for handler

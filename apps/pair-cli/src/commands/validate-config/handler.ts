@@ -1,7 +1,7 @@
 import type { ValidateConfigCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
-import { loadConfigWithOverrides } from '../../config'
-import { extractRegistries, validateAllRegistries } from '../../registry'
+import { loadConfigWithOverrides } from '#config'
+import { extractRegistries, validateAllRegistries } from '#registry'
 
 /**
  * Handles the validate-config command execution.

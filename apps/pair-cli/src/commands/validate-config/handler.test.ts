@@ -1,4 +1,4 @@
-import { describe, expect } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { handleValidateConfigCommand } from './handler'
 import type { ValidateConfigCommandConfig } from './parser'
 import { InMemoryFileSystemService } from '@pair/content-ops'

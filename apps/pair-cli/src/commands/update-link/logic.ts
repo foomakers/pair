@@ -1,5 +1,5 @@
 import { FileSystemService, detectLinkStyle } from '@pair/content-ops'
-import { LogEntry } from '../../diagnostics'
+import { LogEntry } from '#diagnostics'
 import { handleUpdateLinkCommand } from './handler'
 
 /**

@@ -1,10 +1,10 @@
 import type { PackageCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
-import { loadConfigWithOverrides } from '../../config'
+import { loadConfigWithOverrides } from '#config'
 import { validatePackageStructure } from './validators'
 import { generateManifestMetadata } from './metadata'
 import { createPackageZip } from './zip-creator'
-import { extractRegistries, type RegistryConfig } from '../../registry'
+import { extractRegistries, type RegistryConfig } from '#registry'
 import path from 'path'
 
 async function loadAndValidate(

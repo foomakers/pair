@@ -20,9 +20,6 @@ const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-
 
 setLogLevel(MIN_LOG_LEVEL)
 
-/**
- * Dependencies that can be injected for testing
- */
 export interface CliDependencies {
   fs: FileSystemService
   httpClient: HttpClientService
@@ -32,6 +29,65 @@ interface CommandDeps {
   fsService: FileSystemService
   httpClient: HttpClientService
   version: string
+}
+
+export async function runCli(
+  argv: string[],
+  deps: CliDependencies = { fs: fileSystemService, httpClient: new NodeHttpClientService() },
+): Promise<void> {
+  const { fs: fsService, httpClient } = deps
+  const program = new Command()
+
+  program
+    .name(chalk.blue(pkg.name))
+    .description(pkg.description)
+    .version(pkg.version)
+    .option('--url <url>', 'Custom URL for KB download (overrides default GitHub release)')
+    .option('--no-kb', 'Skip knowledge base download')
+    // Prevent Commander from calling process.exit() automatically
+    .exitOverride()
+
+  runDiagnostics(fsService)
+  setupCommands(program, { fsService, httpClient, version: pkg.version })
+
+  // Use preAction hook to ensure environment is READY before command logic runs
+  program.hook('preAction', async thisCommand => {
+    const options = thisCommand.opts<{ url?: string; kb: boolean }>()
+    await bootstrapEnvironment({
+      fsService,
+      httpClient,
+      version: pkg.version,
+      url: options.url,
+      kb: options.kb,
+    })
+  })
+
+  await program.parseAsync(argv)
+}
+
+export async function main() {
+  try {
+    await runCli(process.argv)
+  } catch (err: unknown) {
+    // Handling Commander specific errors (like --help or invalid command)
+    // that should not result in a red "failed" message if they are just info requests.
+    const commanderErr = err as { code?: string }
+    if (
+      commanderErr.code === 'commander.helpDisplayed' ||
+      commanderErr.code === 'commander.version'
+    ) {
+      return
+    }
+
+    const message = err instanceof Error ? err.message : String(err)
+
+    // Distinguish between environment errors and command execution errors if possible,
+    // but centralize colors and exit logic here.
+    console.error(chalk.red(`Error: ${message}`))
+
+    process.exitCode = 1
+    process.exit(1)
+  }
 }
 
 function addCommandOptions(
@@ -83,17 +139,7 @@ function registerCommandFromMetadata(
     const options = { ...globalOptions, ...cmdOptions }
     const config = cmdConfig.parse(options)
 
-    try {
-      await dispatchCommand(config, fsService, httpClient, version)
-    } catch (err) {
-      console.error(
-        chalk.red(
-          `${cmdConfig.metadata.name} failed: ${err instanceof Error ? err.message : String(err)}`,
-        ),
-      )
-      process.exitCode = 1
-      process.exit(1)
-    }
+    await dispatchCommand(config, fsService, httpClient, version)
   })
 }
 
@@ -110,50 +156,6 @@ function setupCommands(prog: Command, deps: CommandDeps): void {
   })
 }
 
-export async function runCli(
-  argv: string[],
-  deps: CliDependencies = { fs: fileSystemService, httpClient: new NodeHttpClientService() },
-): Promise<void> {
-  const { fs: fsService, httpClient } = deps
-  const program = new Command()
-
-  program
-    .name(chalk.blue(pkg.name))
-    .description(pkg.description)
-    .version(pkg.version)
-    .option('--url <url>', 'Custom URL for KB download (overrides default GitHub release)')
-    .option('--no-kb', 'Skip knowledge base download')
-
-  runDiagnostics(fsService)
-  setupCommands(program, { fsService, httpClient, version: pkg.version })
-
-  await program.parseAsync(argv)
-  const options = program.opts<{ url?: string; kb: boolean }>()
-
-  try {
-    await bootstrapEnvironment({
-      fsService,
-      httpClient,
-      version: pkg.version,
-      url: options.url,
-      kb: options.kb,
-    })
-  } catch (err) {
-    console.error(
-      chalk.red(`Environment setup failed: ${err instanceof Error ? err.message : String(err)}`),
-    )
-    process.exitCode = 1
-    process.exit(1)
-  }
-}
-
-export async function main() {
-  await runCli(process.argv)
-}
-
 if (require.main === module) {
-  main().catch(err => {
-    console.error(chalk.red(`Fatal error: ${err}`))
-    process.exit(1)
-  })
+  main()
 }

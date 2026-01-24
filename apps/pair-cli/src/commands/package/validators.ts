@@ -1,6 +1,6 @@
 import { join } from 'path'
 import { FileSystemService } from '@pair/content-ops'
-import type { Config } from '../../registry'
+import type { Config } from '#registry'
 
 export interface ValidationResult {
   valid: boolean

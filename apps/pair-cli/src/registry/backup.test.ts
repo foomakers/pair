@@ -5,9 +5,9 @@ import {
   createRegistryBackupConfig,
 } from './backup'
 import type { BackupService, FileSystemService } from '@pair/content-ops'
-import type { LogEntry } from '../diagnostics'
+import type { LogEntry } from '#diagnostics'
 
-describe('backup utilities', () => {
+describe('registry backup utilities', () => {
   describe('handleBackupRollback', () => {
     it('skips rollback when autoRollback is false', async () => {
       const mockBackup: BackupService = { rollback: vi.fn() } as unknown as BackupService
@@ -82,9 +82,9 @@ describe('backup utilities', () => {
       )
 
       expect(logs).toHaveLength(1)
-      expect(logs[0].level).toBe('error')
-      expect(logs[0].message).toContain('Rollback failed')
-      expect(logs[0].message).toContain('rollback failed')
+      expect(logs[0]!.level).toBe('error')
+      expect(logs[0]!.message).toContain('Rollback failed')
+      expect(logs[0]!.message).toContain('rollback failed')
     })
   })
 

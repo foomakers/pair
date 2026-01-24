@@ -79,7 +79,7 @@ describe('handleUpdateCommand - integration with in-memory services', () => {
     const backupSessions = await fs.readdir(backupsDir)
     expect(backupSessions.length).toBeGreaterThan(0)
 
-    const sessionDir = backupSessions[0].name
+    const sessionDir = backupSessions[0]!.name
     const backupFile = `${backupsDir}/${sessionDir}/.pair/test-registry/file1.md`
 
     expect(await fs.exists(backupFile)).toBe(true)

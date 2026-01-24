@@ -63,21 +63,21 @@ describe('CLI command registration', () => {
   })
 
   it('package command is registered', async () => {
-    const { commandRegistry } = await import('./commands')
+    const { commandRegistry } = await import('./commands/index.js')
     expect(commandRegistry.package).toBeDefined()
     expect(commandRegistry.package.metadata.name).toBe('package')
     expect(commandRegistry.package.metadata.description).toContain('Package KB content')
   })
 
   it('package command has required options', async () => {
-    const { commandRegistry } = await import('./commands')
+    const { commandRegistry } = await import('./commands/index.js')
     const opts = commandRegistry.package.metadata.options
 
-    expect(opts.some(opt => opt.flags.includes('--config'))).toBe(true)
-    expect(opts.some(opt => opt.flags.includes('--source-dir'))).toBe(true)
-    expect(opts.some(opt => opt.flags.includes('--output'))).toBe(true)
-    expect(opts.some(opt => opt.flags.includes('--name'))).toBe(true)
-    expect(opts.some(opt => opt.flags.includes('--version'))).toBe(true)
+    expect(opts.some((opt: { flags: string }) => opt.flags.includes('--config'))).toBe(true)
+    expect(opts.some((opt: { flags: string }) => opt.flags.includes('--source-dir'))).toBe(true)
+    expect(opts.some((opt: { flags: string }) => opt.flags.includes('--output'))).toBe(true)
+    expect(opts.some((opt: { flags: string }) => opt.flags.includes('--name'))).toBe(true)
+    expect(opts.some((opt: { flags: string }) => opt.flags.includes('--version'))).toBe(true)
   })
 
   it('install command has required options', () => {
@@ -137,7 +137,7 @@ describe('CLI command registration', () => {
 
 describe('CLI command execution - package command availability', () => {
   it('package command should be accessible after main() execution', async () => {
-    const { commandRegistry } = await import('./commands')
+    const { commandRegistry } = await import('./commands/index.js')
 
     // Verify package command is in the registry
     expect(commandRegistry.package).toBeDefined()
@@ -148,7 +148,9 @@ describe('CLI command execution - package command availability', () => {
     // Verify package command metadata
     expect(commandRegistry.package.metadata.name).toBe('package')
     expect(
-      commandRegistry.package.metadata.options.some(opt => opt.flags.includes('--config')),
+      commandRegistry.package.metadata.options.some((opt: { flags: string }) =>
+        opt.flags.includes('--config'),
+      ),
     ).toBe(true)
   })
 })

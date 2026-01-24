@@ -1,6 +1,6 @@
 import { join } from 'path'
 import { FileSystemService } from '@pair/content-ops'
-import { Config, extractRegistries, validateAllRegistries } from '../registry'
+import { Config, extractRegistries, validateAllRegistries } from '#registry'
 
 /**
  * Loads the CLI configuration with optional overrides from project-local

@@ -6,8 +6,8 @@ import {
   findManualPairCliPackage,
   findPackageJsonPath,
 } from './discovery'
-import { isKBCached, ensureKBAvailable } from '../kb-manager'
-import { isDiagEnabled } from '../diagnostics'
+import { isKBCached, ensureKBAvailable } from '#kb-manager'
+import { isDiagEnabled } from '#diagnostics'
 
 /**
  * Resolves the absolute path to the knowledge hub dataset directory.

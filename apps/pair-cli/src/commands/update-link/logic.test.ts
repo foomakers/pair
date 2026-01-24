@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { createTestFs } from '../../test-utils/test-helpers'
+import { createTestFs } from '#test-utils/test-helpers'
 import { applyLinkTransformation } from './logic'
 import * as handler from './handler'
 

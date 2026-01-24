@@ -7,7 +7,7 @@ import {
   checkTargetsEmptiness,
 } from './validation'
 import { RegistryConfig } from './resolver'
-import { createTestFs } from '../test-utils'
+import { createTestFs } from '#test-utils'
 
 describe('registry validation - checkTargetEmptiness', () => {
   it('returns empty if directory does not exist', async () => {
@@ -36,7 +36,7 @@ describe('registry validation - checkTargetEmptiness', () => {
     const result = await checkTargetsEmptiness(targets, fs)
     expect(result.valid).toBe(false)
     expect(result.errors).toHaveLength(1)
-    expect(result.errors[0].registry).toBe('occupied')
+    expect(result.errors[0]!.registry).toBe('occupied')
   })
 })
 

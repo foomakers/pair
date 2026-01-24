@@ -75,7 +75,7 @@ describe('handleUpdateLinkCommand - integration with in-memory services', () => 
     const backupSessions = await fs.readdir(backupsDir)
     expect(backupSessions.length).toBeGreaterThan(0)
 
-    const sessionDir = backupSessions[0].name
+    const sessionDir = backupSessions[0]!.name
     expect(await fs.exists(`${backupsDir}/${sessionDir}/.pair/knowledge/file1.md`)).toBe(true)
   })
 

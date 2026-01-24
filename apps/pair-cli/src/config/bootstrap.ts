@@ -6,8 +6,8 @@ import {
   SourceType,
 } from '@pair/content-ops'
 import { getKnowledgeHubDatasetPath, getKnowledgeHubDatasetPathWithFallback } from './kb-resolver'
-import { validateCliOptions } from '../kb-manager/cli-options'
-import { isDiagEnabled } from '../diagnostics'
+import { validateCliOptions } from '#kb-manager/cli-options'
+import { isDiagEnabled } from '#diagnostics'
 import { DatasetAccessError, DatasetNotFoundError, KnowledgeHubSetupError } from './errors'
 
 /**
