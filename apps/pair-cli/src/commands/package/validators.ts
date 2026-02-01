@@ -88,7 +88,7 @@ export async function validatePackageStructure(
     return structureValidation
   }
 
-  const registryEntries = Object.entries(config.asset_registries!)
+  const registryEntries = Object.entries(config.asset_registries ?? {})
   let validRegistryCount = 0
 
   for (const [name, registry] of registryEntries) {

@@ -33,4 +33,10 @@ describe('parseKbValidateCommand', () => {
 
     expect(config.command).toBe('kb-validate')
   })
+
+  it('throws when positional args provided', () => {
+    expect(() => parseKbValidateCommand({}, ['pos'])).toThrow(
+      "Command 'kb-validate' does not accept positional arguments: pos",
+    )
+  })
 })

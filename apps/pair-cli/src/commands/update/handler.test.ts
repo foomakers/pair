@@ -141,4 +141,67 @@ describe('handleUpdateCommand - integration with in-memory services', () => {
     const backupsDir = `${cwd}/.pair/backups`
     expect(await fs.exists(backupsDir)).toBe(false)
   })
+
+  test('uses installKBFromLocalZip for .zip local resolution', async () => {
+    const kbInstaller = await import('#kb-manager/kb-installer')
+    vi.spyOn(kbInstaller, 'installKBFromLocalZip').mockResolvedValue(datasetSrc)
+
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'local',
+      path: '/tmp/kb.zip',
+      kb: true,
+      offline: false,
+    }
+
+    await handleUpdateCommand(config, fs, { httpClient })
+
+    const content = await fs.readFile(`${cwd}/.pair/test-registry/file1.md`)
+    expect(content).toBe('# New Content')
+  })
+
+  test('supports remote resolution by calling getKnowledgeHubDatasetPathWithFallback', async () => {
+    const cfg = await import('#config')
+    vi.spyOn(cfg, 'getKnowledgeHubDatasetPathWithFallback').mockResolvedValue(datasetSrc)
+
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'remote',
+      url: 'https://example.com/kb.zip',
+      kb: true,
+      offline: false,
+    }
+
+    await handleUpdateCommand(config, fs, { httpClient })
+
+    const content = await fs.readFile(`${cwd}/.pair/test-registry/file1.md`)
+    expect(content).toBe('# New Content')
+  })
+
+  test('continues update when fs.readdir returns empty entries while PAIR_DIAG=1', async () => {
+    process.env['PAIR_DIAG'] = '1'
+    const originalReaddir = fs.readdir.bind(fs)
+    let first = true
+    vi.spyOn(fs, 'readdir').mockImplementation(async (path: string) => {
+      // First diagnostic check should throw (exercise catch branch), subsequent calls should succeed so copy proceeds
+      if (path.includes('packages/knowledge-hub') && first) {
+        first = false
+        throw new Error('nope')
+      }
+      return originalReaddir(path)
+    })
+
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleUpdateCommand(config, fs, { httpClient })
+
+    const content = await fs.readFile(`${cwd}/.pair/test-registry/file1.md`)
+    expect(content).toBe('# New Content')
+    delete process.env['PAIR_DIAG']
+  })
 })

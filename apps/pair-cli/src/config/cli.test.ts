@@ -34,4 +34,10 @@ describe('cli config - validation', () => {
       validateCommandOptions('install', { source: '' })
     }).toThrow('Source path/URL cannot be empty')
   })
+
+  it('validateCommandOptions throws when offline with remote URL', () => {
+    expect(() => {
+      validateCommandOptions('install', { source: 'https://example.com/kb.zip', offline: true })
+    }).toThrow('Cannot use --offline with remote URL source')
+  })
 })

@@ -39,4 +39,10 @@ describe('parsePackageCommand', () => {
     expect(config.description).toBe('Test KB')
     expect(config.author).toBe('Test Author')
   })
+
+  it('throws when positional args provided', () => {
+    expect(() => parsePackageCommand({}, ['pos'])).toThrow(
+      "Command 'package' does not accept positional arguments: pos",
+    )
+  })
 })
