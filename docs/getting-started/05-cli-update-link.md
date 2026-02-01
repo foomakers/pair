@@ -15,7 +15,7 @@ pair update-link --dry-run
 pair update-link --absolute
 
 # Get detailed logging
-pair update-link --verbose
+pair update-link --log-level debug
 ```
 
 ## Use Cases
@@ -75,31 +75,35 @@ pair update-link [options]
 
 ### Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--relative` | Convert all links to relative paths | Implicit default |
-| `--absolute` | Convert all links to absolute paths | - |
-| `--dry-run` | Preview changes without modifying files | `false` |
-| `--verbose` | Show detailed processing logs | `false` |
+| Option                | Description                                                                                    | Default          |
+| --------------------- | ---------------------------------------------------------------------------------------------- | ---------------- |
+| `--relative`          | Convert all links to relative paths                                                            | Implicit default |
+| `--absolute`          | Convert all links to absolute paths                                                            | -                |
+| `--dry-run`           | Preview changes without modifying files                                                        | `false`          |
+| `--log-level <level>` | Set logging level (trace, debug, info, warn, error). Use `--log-level debug` for detailed logs | `info`           |
 
 ### Examples
 
 **Default behavior (relative paths):**
+
 ```bash
 pair update-link
 ```
 
 **Explicit relative conversion:**
+
 ```bash
 pair update-link --relative
 ```
 
 **Convert to absolute paths:**
+
 ```bash
 pair update-link --absolute
 ```
 
 **Preview without changes:**
+
 ```bash
 pair update-link --dry-run
 # or combine with path mode
@@ -107,6 +111,7 @@ pair update-link --absolute --dry-run
 ```
 
 **Detailed logging:**
+
 ```bash
 pair update-link --verbose
 ```
@@ -193,8 +198,8 @@ pair update-link
 ### Checking Link Health
 
 ```bash
-# Run dry-run with verbose logging
-pair update-link --dry-run --verbose
+# Run dry-run with debug-level logging
+pair update-link --dry-run --log-level debug
 
 # Review output for broken links
 # Fix issues manually if needed
@@ -219,6 +224,7 @@ pair update-link --absolute
 **Problem**: Command reports no Knowledge Base found.
 
 **Solution**:
+
 ```bash
 # Install KB first
 pair install
@@ -232,6 +238,7 @@ pair update-link
 **Problem**: Cannot write to files.
 
 **Solution**:
+
 ```bash
 # Check file permissions
 ls -la .pair/
@@ -248,6 +255,7 @@ pair update-link
 **Problem**: Some links still broken after update.
 
 **Solution**:
+
 ```bash
 # Use verbose mode to see details
 pair update-link --verbose
@@ -263,6 +271,7 @@ pair update-link
 **Problem**: Cannot determine project root.
 
 **Solution**:
+
 ```bash
 # Ensure you're in a git repository
 git rev-parse --show-toplevel

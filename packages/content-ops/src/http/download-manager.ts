@@ -2,10 +2,11 @@
  * Generic HTTP download manager with resume capability
  */
 
-import * as https from 'https'
-import { IncomingMessage } from 'http'
+import type { IncomingMessage, ClientRequest, RequestOptions } from 'http'
 import type { FileSystemService } from '../file-system'
 import { fileSystemService } from '../file-system'
+import type { HttpClientService } from './http-client-service'
+import { NodeHttpClientService } from './http-client-service'
 import { ProgressReporter, type ProgressWriter } from './progress-reporter'
 import {
   getPartialFilePath,
@@ -139,6 +140,7 @@ function createProgressReporter(
 }
 
 export interface DownloadOptions {
+  httpClient?: HttpClientService | undefined
   fs?: FileSystemService | undefined
   progressWriter?: ProgressWriter | undefined
   isTTY?: boolean | undefined
@@ -193,19 +195,32 @@ function executeDownload(params: {
   options: DownloadOptions
 }): Promise<void> {
   const { url, destination, resumeFrom, fs, options } = params
+  const httpClient = options.httpClient || new NodeHttpClientService()
 
   return new Promise((resolve, reject) => {
     const headers: Record<string, string> = resumeFrom > 0 ? { Range: `bytes=${resumeFrom}-` } : {}
 
-    const request = https.get(url, { headers }, response => {
-      handleDownloadResponse({ response, params, resolve, reject, url, destination, options })
-    })
+    const errorCallback = (error: Error) => {
+      cleanupPartialFile(destination, fs)
+        .then(() => {
+          const errorHandler = options.errorHandler || defaultErrorHandler
+          reject(errorHandler.handleNetworkError(error, url))
+        })
+        .catch(reject)
+    }
 
-    request.on('error', async error => {
-      await cleanupPartialFile(destination, fs)
-      const errorHandler = options.errorHandler || defaultErrorHandler
-      reject(errorHandler.handleNetworkError(error as Error, url))
-    })
+    const successCallback = (response: IncomingMessage) => {
+      handleDownloadResponse({ response, params, resolve, reject, url, destination, options })
+    }
+
+    ;(
+      httpClient.get as unknown as (
+        url: string,
+        options: RequestOptions,
+        callback: (res: IncomingMessage) => void,
+        errorCallback: (error: Error) => void,
+      ) => ClientRequest
+    )(url, { headers }, successCallback, errorCallback)
   })
 }
 

@@ -1,10 +1,12 @@
-import * as https from 'https'
-import type { FileSystemService } from '@pair/content-ops'
+import type { FileSystemService, HttpClientService } from '@pair/content-ops'
 import { getExpectedChecksum, validateChecksum } from '@pair/content-ops'
 
-async function fetchChecksumFile(url: string): Promise<string | null> {
+async function fetchChecksumFile(
+  url: string,
+  httpClient: HttpClientService,
+): Promise<string | null> {
   return new Promise(resolve => {
-    https
+    httpClient
       .get(url, response => {
         if (response.statusCode === 404) {
           resolve(null)
@@ -30,11 +32,12 @@ async function fetchChecksumFile(url: string): Promise<string | null> {
 export async function validateFileWithRemoteChecksum(
   downloadUrl: string,
   filePath: string,
+  httpClient: HttpClientService,
   fs?: FileSystemService,
 ): Promise<{ isValid: boolean; expectedChecksum?: string; actualChecksum?: string }> {
   const checksumUrl = `${downloadUrl}.sha256`
 
-  const checksumContent = await fetchChecksumFile(checksumUrl)
+  const checksumContent = await fetchChecksumFile(checksumUrl, httpClient)
   if (!checksumContent) return { isValid: true }
 
   const expectedChecksum = await getExpectedChecksum(checksumContent)

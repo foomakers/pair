@@ -159,6 +159,51 @@ else
   exit 1
 fi
 
+# ------------------------------------------------------------------------------------------------
+# NEW SMOKE TEST SUITE INTEGRATION
+# ------------------------------------------------------------------------------------------------
+echo "Invoking standardized smoke test suite..."
+
+REPO_ROOT="$(cd "$REPO_ROOT" && pwd)" # Ensure absolute path
+RUNNER_SCRIPT="$REPO_ROOT/scripts/smoke-tests/run-all.sh"
+
+if [ ! -x "$RUNNER_SCRIPT" ]; then
+  chmod +x "$RUNNER_SCRIPT"
+fi
+
+# Locate the installed binary in node_modules
+# It should be at node_modules/.bin/pair (symlink)
+INSTALLED_BIN="$SAMPLE_TMP/node_modules/.bin/pair"
+
+if [ ! -x "$INSTALLED_BIN" ]; then
+  echo "Warning: Installed binary not found at $INSTALLED_BIN. Skipping suite."
+else
+  # Determine KB source path for offline tests
+  KB_SOURCE_PATH="$REPO_ROOT/packages/knowledge-hub/dataset"
+  if [ ! -d "$KB_SOURCE_PATH" ]; then
+    echo "Warning: Local KB source not found at $KB_SOURCE_PATH. Offline tests may fail."
+    KB_SOURCE_PATH=""
+  fi
+
+  # Build arguments for run-all.sh
+  ARGS=(--binary "$INSTALLED_BIN")
+  if [ -n "$KB_SOURCE_PATH" ]; then
+    ARGS+=(--kb-source "$KB_SOURCE_PATH")
+  fi
+  if [ "$FORCE_CLEANUP" = "1" ]; then
+    ARGS+=(--cleanup)
+  fi
+
+  echo "Running: $RUNNER_SCRIPT ${ARGS[*]}"
+  "$RUNNER_SCRIPT" "${ARGS[@]}"
+  
+  SUITE_RET=$?
+  if [ $SUITE_RET -ne 0 ]; then
+    echo "Standardized smoke-test suite failed with exit code $SUITE_RET"
+    exit $SUITE_RET
+  fi
+fi
+
 popd >/dev/null
 
 echo "NPM artifact smoke-test completed successfully."

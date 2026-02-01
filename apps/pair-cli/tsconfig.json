@@ -29,12 +29,23 @@
     "noEmit": true,
     "skipLibCheck": true,
     "declarationMap": false,
-    "composite": true
+    "composite": true,
+    "paths": {
+      "#config": ["src/config/index.ts"],
+      "#config/*": ["src/config/*"],
+      "#registry": ["src/registry/index.ts"],
+      "#registry/*": ["src/registry/*"],
+      "#kb-manager": ["src/kb-manager/index.ts"],
+      "#kb-manager/*": ["src/kb-manager/*"],
+      "#diagnostics": ["src/diagnostics.ts"],
+      "#test-utils": ["src/test-utils/index.ts"],
+      "#test-utils/*": ["src/test-utils/*"]
+    }
   },
   "references": [
     { "path": "../../packages/content-ops" },
     { "path": "../../packages/knowledge-hub" }
   ],
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "**/*.test.ts"]
+  "exclude": ["node_modules", "dist"]
 }

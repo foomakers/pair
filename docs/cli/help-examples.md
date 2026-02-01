@@ -295,7 +295,7 @@ pair package \
 
 ```bash
 # Package KB from different location
-pair package -s ./kb-content -o dist/kb.zip --verbose
+pair package -s ./kb-content -o kb.zip --log-level debug
 
 # Output:
 # 📦 Source directory: ./kb-content

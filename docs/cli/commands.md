@@ -190,11 +190,11 @@ pair update-link [target]
 
 ### Options
 
-| Option              | Description                              |
-| ------------------- | ---------------------------------------- |
-| `--url <url\|path>` | KB source URL or local filesystem path   |
-| `--dry-run`         | Preview changes without writing to files |
-| `--verbose`         | Show detailed processing information     |
+| Option                | Description                                                                                                      |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `--url <url\|path>`   | KB source URL or local filesystem path                                                                           |
+| `--dry-run`           | Preview changes without writing to files                                                                         |
+| `--log-level <level>` | Set logging level for the command (trace, debug, info, warn, error). Use `--log-level debug` for detailed output |
 
 ### Examples
 
@@ -253,16 +253,16 @@ pair package [options]
 
 ### Options
 
-| Option                        | Short | Description                                              |
-| ----------------------------- | ----- | -------------------------------------------------------- |
-| `--output <path>`             | `-o`  | Output ZIP file path (default: `kb-package.zip`)         |
-| `--source-dir <path>`         | `-s`  | Source directory to package (default: current directory) |
-| `--config <path>`             | `-c`  | Path to config.json file                                 |
-| `--name <name>`               |       | Package name for manifest                                |
-| `--version <version>`         |       | Package version for manifest                             |
-| `--description <description>` |       | Package description for manifest                         |
-| `--author <author>`           |       | Package author for manifest                              |
-| `--verbose`                   | `-v`  | Enable verbose logging                                   |
+| Option                        | Short             | Description                                                                                                       |
+| ----------------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `--output <path>`             | `-o`              | Output ZIP file path (default: `kb-package.zip`)                                                                  |
+| `--source-dir <path>`         | `-s`              | Source directory to package (default: current directory)                                                          |
+| `--config <path>`             | `-c`              | Path to config.json file                                                                                          |
+| `--name <name>`               |                   | Package name for manifest                                                                                         |
+| `--version <version>`         |                   | Package version for manifest                                                                                      |
+| `--description <description>` |                   | Package description for manifest                                                                                  |
+| `--author <author>`           |                   | Package author for manifest                                                                                       |
+| `--log-level <level>`         | `-l, --log-level` | Set logging level for this command (trace, debug, info, warn, error). Use `--log-level debug` for detailed output |
 
 ### Examples
 
@@ -373,10 +373,11 @@ pair validate-config --config ./my-config.json
 
 Options available for all commands:
 
-| Option      | Description              |
-| ----------- | ------------------------ |
-| `--help`    | Display help for command |
-| `--version` | Display CLI version      |
+| Option                | Description                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------- |
+| `--help`              | Display help for command                                                                                |
+| `--version`           | Display CLI version                                                                                     |
+| `--log-level <level>` | Set global logging level (trace, debug, info, warn, error). Use `--log-level debug` for detailed output |
 
 ### Quick Help
 

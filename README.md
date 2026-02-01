@@ -126,7 +126,6 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
    ```
 
 2. **Review the AI development process**
-
    - Check out the comprehensive guides in `.pair/how-to/`
    - Understand the way of working in `.pair/way-of-working.md`
 
@@ -148,6 +147,58 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 - **ESLint** with shared configuration (`@pair/eslint-config`)
 - **Prettier** with shared configuration (`@pair/prettier-config`)
 - **Husky** for git hooks
+
+## 🏛️ CLI Command Architecture (CommandConfig Pattern)
+
+The CLI uses a **discriminated union pattern** for type-safe command parsing and dispatch:
+
+```
+apps/pair-cli/src/commands/
+├── {command}/
+│   ├── parser.ts         # Pure parser function + CommandConfig type definition
+│   ├── handler.ts        # Command execution logic
+│   ├── metadata.ts       # CLI metadata (help text, options, examples)
+│   └── index.ts          # Public API exports
+├── dispatcher.ts         # Routes CommandConfig to appropriate handler
+└── index.ts              # Root exports (CommandConfig union, registry)
+```
+
+### Key Components
+
+1. **CommandConfig Type** (Discriminated Union)
+   - Each command has a unique config type with `command` field as discriminator
+   - Root `CommandConfig` = union of all command types
+   - Ensures type-safe dispatch: TypeScript compiler validates all variants are handled
+
+2. **Pure Parser Functions** (`commands/{command}/parser.ts`)
+   - Transform CLI options into `CommandConfig`
+   - No side effects (no file I/O, no network calls)
+   - Validation happens before config creation (fail-fast)
+   - Errors throw descriptive validation messages
+
+3. **Handler Functions** (`commands/{command}/handler.ts`)
+   - Accept `CommandConfig` and execute command logic
+   - Orchestrate config building and execution
+   - Async operations with proper error handling
+
+4. **Command Dispatch** (`commands/dispatcher.ts`)
+   - Switch statement with exhaustiveness checking (via `assertNever` pattern)
+   - TypeScript compiler validates all command types are handled
+   - Enables safe addition of new commands
+
+5. **CLI Metadata** (`commands/{command}/metadata.ts`)
+   - Centralizes help text, option definitions, usage examples
+   - Drives dynamic Commander.js configuration
+   - Keeps CLI documentation with command implementation
+
+### Guard Clause: Monorepo Context
+
+The `hasLocalDataset()` function in `config/bootstrap.ts` serves as a guard clause:
+
+- **Call**: `getKnowledgeHubDatasetPath()` (which may throw in release mode)
+- **Protection**: Try-catch ensures safe behavior in both monorepo and release contexts
+- **Result**: Returns `false` gracefully if called outside monorepo; dataset discovery succeeds in monorepo
+- **Benefits**: KB download works correctly whether running in development (monorepo) or production (release)
 
 ### Key Packages
 
@@ -408,7 +459,6 @@ PAIR_ADOPTION_FOLDER=.pair
 ### Secret Rotation & Troubleshooting
 
 - **Secret Rotation:**
-
   - For GitHub Secrets: Go to repository settings → Secrets → Actions, update the value, and save. All workflows will use the new value on next run.
   - For local `.env` files: Update the value in your `.env` or workspace `.env` and restart your application. Never commit real secrets.
   - For workspace overrides: Update the workspace `.env` and ensure it is not tracked by git.
@@ -428,18 +478,15 @@ For more details, see `.pair/how-to/` and `.pair/tech/knowledge-base/`.
 ### Common Issues
 
 - **Hooks not running:**
-
   - Ensure you have run `pnpm install` after cloning the repo.
   - Make sure Husky is installed as a devDependency and `.husky/` directory exists in the repo root.
   - If hooks are not triggered, run `pnpm husky install` or `npx husky install` to reinitialize.
   - Check that your git client is not bypassing hooks (e.g., using `--no-verify`).
 
 - **Permission errors:**
-
   - Make sure hook scripts in `.husky/` are executable (`chmod +x .husky/*`).
 
 - **Pre-commit/pre-push fails unexpectedly:**
-
   - Run the hook commands manually to debug (e.g., `pnpm lint`, `pnpm test`).
   - Check for missing dependencies or misconfigured scripts in `package.json`.
 

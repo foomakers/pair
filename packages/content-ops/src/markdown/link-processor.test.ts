@@ -743,3 +743,59 @@ it('should preserve encoded query and anchor characters when normalizing', async
   expect(replacements[0].newHref).toBe('page.md?q=one%20two#sec%20one')
   expect(replacements[0].kind).toBe('normalizedRel')
 })
+
+describe('LinkProcessor - detectLinkStyle', () => {
+  const cwd = '/test'
+
+  it('should return relative when majority are relative', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/file1.md`]: '[a](./file.md) [b](../other.md) [c](/abs.md)',
+      },
+      cwd,
+      cwd,
+    )
+    expect(await LinkProcessor.detectLinkStyle(fs, cwd)).toBe('relative')
+  })
+
+  it('should return absolute when majority are absolute', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/file1.md`]: '[a](/abs1.md) [b](/abs2.md) [c](./rel.md)',
+      },
+      cwd,
+      cwd,
+    )
+    expect(await LinkProcessor.detectLinkStyle(fs, cwd)).toBe('absolute')
+  })
+
+  it('should skip external and anchor links', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/file1.md`]: '[ext](https://ex.com) [anchor](#sec) [rel](./rel.md) [abs](/abs.md)',
+        [`${cwd}/file2.md`]: '[abs2](/abs2.md)',
+      },
+      cwd,
+      cwd,
+    )
+    // 2 absolute vs 1 relative (anchor and external skipped)
+    expect(await LinkProcessor.detectLinkStyle(fs, cwd)).toBe('absolute')
+  })
+
+  it('should return relative when counts are equal', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/file1.md`]: '[rel](./rel.md) [abs](/abs.md)',
+      },
+      cwd,
+      cwd,
+    )
+    expect(await LinkProcessor.detectLinkStyle(fs, cwd)).toBe('relative')
+  })
+
+  it('should return relative in empty directory', async () => {
+    const fs = new InMemoryFileSystemService({}, cwd, cwd)
+    await fs.mkdir(cwd, { recursive: true })
+    expect(await LinkProcessor.detectLinkStyle(fs, cwd)).toBe('relative')
+  })
+})

@@ -1,28 +1,15 @@
 import { describe, it, expect, vi } from 'vitest'
-
-vi.mock('https', () => ({
-  get: vi.fn(),
-  request: vi.fn(),
-}))
-
-import * as https from 'https'
-import { InMemoryFileSystemService } from '@pair/content-ops'
-import { ensureKBAvailable } from './kb-availability'
 import {
-  mockMultipleHttpsGet,
-  mockHttpsRequest,
+  InMemoryFileSystemService,
+  MockHttpClientService,
   buildTestResponse,
   toIncomingMessage,
-} from '../test-utils/http-mocks'
+} from '@pair/content-ops'
+import { ensureKBAvailable } from './kb-availability'
 
 const mockExtract = vi.fn()
 
 describe('Download UI', () => {
-  beforeEach(() => {
-    vi.mocked(https.request).mockImplementation(
-      mockHttpsRequest(toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))),
-    )
-  })
   it('should display download start message', async () => {
     vi.clearAllMocks()
     mockExtract.mockReset().mockResolvedValue(undefined)
@@ -30,20 +17,18 @@ describe('Download UI', () => {
 
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
+    const httpClient = new MockHttpClientService()
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
-
-    const checksumResp = toIncomingMessage(buildTestResponse(404))
-    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.get).mockImplementation(
-      mockMultipleHttpsGet([
-        { pattern: '.sha256', response: checksumResp },
-        { response: fileResp },
-      ]),
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
 
-    await ensureKBAvailable(testVersion, { fs, extract: mockExtract })
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
+
+    await ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract })
 
     expect(consoleLogSpy).toHaveBeenCalledWith(
       expect.stringContaining('KB not found, downloading v0.2.0 from GitHub'),
@@ -59,20 +44,18 @@ describe('Download UI', () => {
 
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
+    const httpClient = new MockHttpClientService()
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
-
-    const checksumResp = toIncomingMessage(buildTestResponse(404))
-    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.get).mockImplementation(
-      mockMultipleHttpsGet([
-        { pattern: '.sha256', response: checksumResp },
-        { response: fileResp },
-      ]),
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
 
-    await ensureKBAvailable(testVersion, { fs, extract: mockExtract })
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
+
+    await ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract })
 
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('✅ KB v0.2.0 installed'))
 

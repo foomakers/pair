@@ -1,13 +1,11 @@
 import type { FileSystemService } from '@pair/content-ops'
 import type { ManifestMetadata } from './metadata'
-import type { AssetRegistryConfig } from '../install'
-import AdmZip from 'adm-zip'
-import fs from 'fs'
+import type { RegistryConfig } from '#registry'
 import path from 'path'
 
 interface ZipOptions {
   projectRoot: string
-  registries: AssetRegistryConfig[]
+  registries: RegistryConfig[]
   manifest: ManifestMetadata
   outputPath: string
 }
@@ -19,34 +17,34 @@ export async function createPackageZip(
   options: ZipOptions,
   fsService: FileSystemService,
 ): Promise<void> {
-  validateOutputDirectory(options.outputPath)
+  validateOutputDirectory(options.outputPath, fsService)
 
-  const zip = new AdmZip()
+  const tempDir = path.join(path.dirname(options.outputPath), '.zip-temp')
 
   try {
-    await addManifestToZip(zip, options.manifest)
-    await addRegistriesToZip(zip, options, fsService)
-    await writeZipFile(zip, options.outputPath)
+    await fsService.mkdir(tempDir, { recursive: true })
+    await writeManifest(tempDir, options.manifest, fsService)
+    await copyRegistrySources(tempDir, options, fsService)
+    await fsService.createZip([tempDir], options.outputPath)
   } catch (error) {
-    cleanupPartialZip(options.outputPath)
+    await cleanupOnError(options.outputPath, fsService)
     throw error
+  } finally {
+    await cleanupTempDirectory(tempDir, fsService)
   }
 }
 
-function validateOutputDirectory(outputPath: string): void {
-  const outputDir = path.dirname(outputPath)
-  if (!fs.existsSync(outputDir)) {
-    throw new Error(`Output directory does not exist: ${outputDir}`)
-  }
-}
-
-async function addManifestToZip(zip: AdmZip, manifest: ManifestMetadata): Promise<void> {
+async function writeManifest(
+  tempDir: string,
+  manifest: ManifestMetadata,
+  fsService: FileSystemService,
+): Promise<void> {
   const manifestJson = JSON.stringify(manifest, null, 2)
-  zip.addFile('manifest.json', Buffer.from(manifestJson, 'utf-8'))
+  await fsService.writeFile(path.join(tempDir, 'manifest.json'), manifestJson)
 }
 
-async function addRegistriesToZip(
-  zip: AdmZip,
+async function copyRegistrySources(
+  tempDir: string,
   options: ZipOptions,
   fsService: FileSystemService,
 ): Promise<void> {
@@ -56,88 +54,55 @@ async function addRegistriesToZip(
     }
 
     const sourcePath = path.join(options.projectRoot, registry.source)
-    await addRegistrySource(zip, sourcePath, registry.source, fsService)
+    const exists = await fsService.exists(sourcePath)
+    if (!exists) {
+      throw new Error(`Registry source path does not exist: ${sourcePath}`)
+    }
+
+    const targetPath = path.join(tempDir, registry.source)
+    await copyRecursive(sourcePath, targetPath, fsService)
   }
 }
 
-async function addRegistrySource(
-  zip: AdmZip,
+async function cleanupOnError(outputPath: string, fsService: FileSystemService): Promise<void> {
+  if (await fsService.exists(outputPath)) {
+    await fsService.unlink(outputPath)
+  }
+}
+
+async function cleanupTempDirectory(tempDir: string, fsService: FileSystemService): Promise<void> {
+  if (await fsService.exists(tempDir)) {
+    await fsService.rm(tempDir, { recursive: true, force: true })
+  }
+}
+
+async function copyRecursive(
   sourcePath: string,
-  relativePath: string,
+  targetPath: string,
   fsService: FileSystemService,
 ): Promise<void> {
-  const exists = await fsService.exists(sourcePath)
-  if (!exists) {
-    throw new Error(`Registry source does not exist: ${relativePath}`)
-  }
-
   const stats = await fsService.stat(sourcePath)
 
   if (stats.isDirectory()) {
-    await addDirectoryToZip(zip, sourcePath, relativePath, fsService)
+    await fsService.mkdir(targetPath, { recursive: true })
+    const entries = await fsService.readdir(sourcePath)
+
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue
+
+      const srcPath = path.join(sourcePath, entry.name)
+      const dstPath = path.join(targetPath, entry.name)
+      await copyRecursive(srcPath, dstPath, fsService)
+    }
   } else {
     const content = await fsService.readFile(sourcePath)
-    zip.addFile(relativePath, Buffer.from(content))
+    await fsService.writeFile(targetPath, content)
   }
 }
 
-async function addDirectoryToZip(
-  zip: AdmZip,
-  dirPath: string,
-  relativePath: string,
-  fsService: FileSystemService,
-): Promise<void> {
-  const entries = await fsService.readdir(dirPath)
-
-  for (const entry of entries) {
-    await processDirectoryEntry({ zip, dirPath, relativePath, entry, fsService })
-  }
-}
-
-interface ProcessEntryOptions {
-  zip: AdmZip
-  dirPath: string
-  relativePath: string
-  entry: {
-    name: string
-    isDirectory: () => boolean
-    isSymbolicLink: () => boolean
-    isFile: () => boolean
-  }
-  fsService: FileSystemService
-}
-
-async function processDirectoryEntry(options: ProcessEntryOptions): Promise<void> {
-  const { zip, dirPath, relativePath, entry, fsService } = options
-
-  if (entry.isSymbolicLink()) {
-    return
-  }
-
-  const fullPath = path.join(dirPath, entry.name)
-  const entryRelativePath = path.join(relativePath, entry.name)
-
-  if (entry.isDirectory()) {
-    await addDirectoryToZip(zip, fullPath, entryRelativePath, fsService)
-  } else if (entry.isFile()) {
-    const content = await fsService.readFile(fullPath)
-    zip.addFile(entryRelativePath, Buffer.from(content))
-  }
-}
-
-async function writeZipFile(zip: AdmZip, outputPath: string): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    try {
-      zip.writeZip(outputPath)
-      resolve()
-    } catch (error) {
-      reject(error)
-    }
-  })
-}
-
-function cleanupPartialZip(outputPath: string): void {
-  if (fs.existsSync(outputPath)) {
-    fs.unlinkSync(outputPath)
+function validateOutputDirectory(outputPath: string, fsService: FileSystemService): void {
+  const outputDir = path.dirname(outputPath)
+  if (!fsService.existsSync(outputDir)) {
+    fsService.mkdirSync(outputDir, { recursive: true })
   }
 }

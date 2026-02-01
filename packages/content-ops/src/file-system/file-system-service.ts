@@ -1,6 +1,7 @@
-import { constants, Dirent, promises as fs, Stats, copyFileSync } from 'fs'
+import { constants, Dirent, promises as fs, Stats, copyFileSync, mkdirSync } from 'fs'
 import { readFileSync, existsSync, accessSync } from 'fs'
 import { dirname, resolve as pathResolve } from 'path'
+import AdmZip from 'adm-zip'
 
 // File system service interface
 export interface FileSystemService {
@@ -13,6 +14,7 @@ export interface FileSystemService {
   exists: (path: string) => Promise<boolean>
   unlink: (path: string) => Promise<void>
   mkdir: (path: string, options?: { recursive?: boolean }) => Promise<void>
+  mkdirSync: (path: string, options?: { recursive?: boolean }) => void
   rename: (oldPath: string, newPath: string) => Promise<void>
   rm: (path: string, options?: { recursive?: boolean; force?: boolean }) => Promise<void>
   stat: (path: string) => Promise<Stats>
@@ -24,6 +26,8 @@ export interface FileSystemService {
   resolve: (...paths: string[]) => string
   isFile: (path: string) => Promise<boolean>
   isFolder: (path: string) => Promise<boolean>
+  createZip: (sourcePaths: string[], outputPath: string) => Promise<void>
+  extractZip: (zipPath: string, outputDir: string) => Promise<void>
 }
 
 /**
@@ -48,6 +52,7 @@ export const fileSystemService: FileSystemService = {
   mkdir: async (path, options) => {
     await fs.mkdir(path, options)
   },
+  mkdirSync: (path, options) => mkdirSync(path, options),
   rename: (oldPath, newPath) => fs.rename(oldPath, newPath),
   copy: (oldPath, newPath) => fs.copyFile(oldPath, newPath),
   copySync: (oldPath, newPath) => copyFileSync(oldPath, newPath),
@@ -66,4 +71,34 @@ export const fileSystemService: FileSystemService = {
   resolve: (...paths: string[]) => pathResolve(...paths),
   isFile: (path: string) => fs.stat(path).then(stats => stats.isFile()),
   isFolder: (path: string) => fs.stat(path).then(stats => stats.isDirectory()),
+  createZip: async (sourcePaths: string[], outputPath: string) => {
+    const zip = new AdmZip()
+    for (const sourcePath of sourcePaths) {
+      const stats = await fs.stat(sourcePath)
+      if (stats.isDirectory()) {
+        zip.addLocalFolder(sourcePath)
+      } else {
+        zip.addLocalFile(sourcePath)
+      }
+    }
+    await new Promise<void>((resolve, reject) => {
+      try {
+        zip.writeZip(outputPath)
+        resolve()
+      } catch (error) {
+        reject(error)
+      }
+    })
+  },
+  extractZip: async (zipPath: string, outputDir: string) => {
+    const zip = new AdmZip(zipPath)
+    await new Promise<void>((resolve, reject) => {
+      try {
+        zip.extractAllTo(outputDir, true)
+        resolve()
+      } catch (error) {
+        reject(error)
+      }
+    })
+  },
 }

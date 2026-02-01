@@ -4,6 +4,8 @@
 
 export { downloadFile, type DownloadOptions, type DownloadErrorHandler } from './download-manager'
 
+export { type HttpClientService, NodeHttpClientService } from './http-client-service'
+
 export {
   ProgressReporter,
   type ProgressWriter,

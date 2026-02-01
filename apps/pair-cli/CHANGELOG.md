@@ -13,6 +13,7 @@
     and checksum generation for distribution.
   - Introduce `pair update-link` command to validate and convert KB links
     (relative/absolute) and provide CI-friendly dry-run and verbose modes.
+  - Replace boolean `--verbose` flags with explicit `--log-level <level>` across the CLI. Migration: use `--log-level debug` where you previously used `--verbose`. (Note: backward-compat alias not added in this release.)
   - Separate KB dataset release workflow and auto-download/cache manager
     for runtime KB consumption.
   - Multiple UX and reliability improvements: retry logic, TTY detection,

@@ -1,39 +1,16 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { join } from 'path'
 import { homedir, tmpdir } from 'os'
-
-vi.mock('https', () => ({
-  get: vi.fn(),
-  request: vi.fn(),
-}))
-
-import * as https from 'https'
-import { InMemoryFileSystemService, type FileSystemService } from '@pair/content-ops'
-import { ensureKBAvailable } from './kb-availability'
 import {
-  mockHttpsRequest,
-  mockHttpsGet,
-  mockMultipleHttpsGet,
+  InMemoryFileSystemService,
+  MockHttpClientService,
   buildTestResponse,
   toIncomingMessage,
-  toClientRequest,
-  buildTestRequest,
-} from '../test-utils/http-mocks'
-
-// Type helpers
-// MockStdout type moved to unit tests where needed
+  type FileSystemService,
+} from '@pair/content-ops'
+import { ensureKBAvailable } from './kb-availability'
 
 const mockExtract = vi.fn()
-
-// Default mock setup to prevent "Cannot read properties of undefined"
-beforeEach(() => {
-  // Mock both https.request (for HEAD requests from resume-manager) and https.get (for file downloads)
-  const defaultResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-  vi.mocked(https.request).mockImplementation(mockHttpsRequest(defaultResponse))
-  vi.mocked(https.get).mockImplementation(mockHttpsGet(defaultResponse))
-})
-
-// Cache-specific tests were moved to cache-manager.test.ts
 
 describe('KB Manager - ensureKBAvailable - Cache Hit', () => {
   const testVersion = '0.2.0'
@@ -49,10 +26,11 @@ describe('KB Manager - ensureKBAvailable - Cache Hit', () => {
       '/',
     )
 
-    const result = await ensureKBAvailable(testVersion, { fs })
+    const httpClient = new MockHttpClientService()
+    const result = await ensureKBAvailable(testVersion, { httpClient, fs })
 
-    expect(result).toBe(expectedCachePath)
-    expect(https.get).not.toHaveBeenCalled()
+    // When the cache contains a .pair directory, prefer returning the dataset root
+    expect(result).toBe(join(expectedCachePath, '.pair'))
   })
 })
 
@@ -67,27 +45,26 @@ describe('KB Manager - ensureKBAvailable - Cache Miss', () => {
 
     // Mock HEAD request for content-length
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
 
     // Mock checksum (404) and file download (200) - auto-emit end
     const checksumResp = toIncomingMessage(buildTestResponse(404))
-    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.get).mockImplementation(
-      mockMultipleHttpsGet([
-        { pattern: '.sha256', response: checksumResp },
-        { response: fileResp },
-      ]),
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
 
-    mockExtract.mockImplementation(async (zipPath: string, targetPath: string) => {
+    mockExtract.mockImplementation(async (_zipPath: string, targetPath: string) => {
       fs.writeFile(join(targetPath, 'manifest.json'), '{"version":"0.2.0"}')
       fs.writeFile(join(targetPath, '.pair/knowledge/test.md'), 'test')
     })
 
-    const result = await ensureKBAvailable(testVersion, { fs, extract: mockExtract })
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
+    const result = await ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract })
 
-    expect(result).toBe(join(homedir(), '.pair', 'kb', testVersion))
-    expect(https.get).toHaveBeenCalled()
+    // When the installed KB contains a .pair directory installers return the
+    // dataset root (cachePath/.pair)
+    expect(result).toBe(join(homedir(), '.pair', 'kb', testVersion, '.pair'))
     expect(mockExtract).toHaveBeenCalled()
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('KB not found, downloading'))
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('KB v0.2.0 installed'))
@@ -108,19 +85,17 @@ describe('KB Manager - GitHub URL construction', () => {
 
     // Mock HEAD request for content-length
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
 
     // Mock checksum (404) and file download (200) - auto-emit end
     const checksumResp = toIncomingMessage(buildTestResponse(404))
-    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.get).mockImplementation(
-      mockMultipleHttpsGet([
-        { pattern: '.sha256', response: checksumResp },
-        { response: fileResp },
-      ]),
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
 
-    await ensureKBAvailable(testVersion, { fs, extract: mockExtract })
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
+    await ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract })
   })
 })
 
@@ -133,19 +108,17 @@ describe('KB Manager - Version handling', () => {
     const versionWithV = 'v1.2.3'
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
-    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.get).mockImplementation(
-      mockMultipleHttpsGet([
-        { pattern: '.sha256', response: checksumResp },
-        { response: fileResp },
-      ]),
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
 
-    await ensureKBAvailable(versionWithV, { fs, extract: mockExtract })
-    await ensureKBAvailable(versionWithV, { fs, extract: mockExtract })
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
+    await ensureKBAvailable(versionWithV, { httpClient, fs, extract: mockExtract })
+    await ensureKBAvailable(versionWithV, { httpClient, fs, extract: mockExtract })
   })
 })
 
@@ -158,20 +131,16 @@ describe('KB Manager - 404 error handling', () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '0' }))
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(buildTestResponse(404))
-    vi.mocked(https.get).mockImplementation(
-      mockMultipleHttpsGet([
-        { pattern: '.sha256', response: checksumResp },
-        { response: fileResp },
-      ]),
-    )
 
-    await expect(ensureKBAvailable(testVersion404, { fs, extract: mockExtract })).rejects.toThrow(
-      /KB v0\.0\.404 not found \(404\).*github\.com/s,
-    )
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
+    await expect(
+      ensureKBAvailable(testVersion404, { httpClient, fs, extract: mockExtract }),
+    ).rejects.toThrow(/KB v0\.0\.404 not found \(404\).*github\.com/s)
   })
 })
 
@@ -183,24 +152,19 @@ describe('KB Manager - 403 error handling', () => {
     const testVersion403 = '0.0.403-test'
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
-    // Keep https.request mocked for HEAD requests, replace https.get for specific responses
     const defaultHeadResponse = toIncomingMessage(
       buildTestResponse(200, { 'content-length': '1024' }),
     )
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(defaultHeadResponse))
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(buildTestResponse(403))
-    vi.mocked(https.get).mockImplementation(
-      mockMultipleHttpsGet([
-        { pattern: '.sha256', response: checksumResp },
-        { response: fileResp },
-      ]),
-    )
 
-    await expect(ensureKBAvailable(testVersion403, { fs, extract: mockExtract })).rejects.toThrow(
-      /Access denied \(403\).*github\.com/s,
-    )
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([defaultHeadResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
+    await expect(
+      ensureKBAvailable(testVersion403, { httpClient, fs, extract: mockExtract }),
+    ).rejects.toThrow(/Access denied \(403\).*github\.com/s)
   })
 })
 
@@ -213,17 +177,13 @@ describe('KB Manager - Network failure', () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
 
-    vi.mocked(https.get).mockImplementation(() => {
-      const mockRequest = toClientRequest(buildTestRequest())
-      setImmediate(() => mockRequest.emit('error', new Error('ENOTFOUND: network unreachable')))
-      return mockRequest
-    })
-
-    await expect(ensureKBAvailable(testVersion, { fs, extract: mockExtract })).rejects.toThrow(
-      /network/,
-    )
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetError(new Error('ENOTFOUND: network unreachable'))
+    await expect(
+      ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract }),
+    ).rejects.toThrow(/network/)
   })
 })
 
@@ -238,21 +198,20 @@ describe('KB Manager - ZIP cleanup', () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
-    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.get).mockImplementation(
-      mockMultipleHttpsGet([
-        { pattern: '.sha256', response: checksumResp },
-        { response: fileResp },
-      ]),
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
+
     mockExtract.mockRejectedValue(new Error('Corrupted ZIP'))
 
-    await expect(ensureKBAvailable(testVersion, { fs, extract: mockExtract })).rejects.toThrow(
-      /Corrupted ZIP/,
-    )
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
+    await expect(
+      ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract }),
+    ).rejects.toThrow(/Corrupted ZIP/)
 
     expect(mockExtract).toHaveBeenCalledWith(expectedZipPath, expectedCachePath)
   })
@@ -267,21 +226,20 @@ describe('KB Manager - Extraction error', () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
-    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.get).mockImplementation(
-      mockMultipleHttpsGet([
-        { pattern: '.sha256', response: checksumResp },
-        { response: fileResp },
-      ]),
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
+
     mockExtract.mockRejectedValue(new Error('Invalid ZIP format'))
 
-    await expect(ensureKBAvailable(testVersion, { fs, extract: mockExtract })).rejects.toThrow(
-      /Invalid ZIP format/,
-    )
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
+    await expect(
+      ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract }),
+    ).rejects.toThrow(/Invalid ZIP format/)
   })
 })
 
@@ -295,18 +253,16 @@ describe('KB Manager - Download message', () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
-    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.get).mockImplementation(
-      mockMultipleHttpsGet([
-        { pattern: '.sha256', response: checksumResp },
-        { response: fileResp },
-      ]),
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
 
-    await ensureKBAvailable(testVersion, { fs, extract: mockExtract })
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
+    await ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract })
 
     expect(consoleLogSpy).toHaveBeenCalledWith(
       expect.stringContaining('KB not found, downloading v0.2.0 from GitHub'),
@@ -326,18 +282,16 @@ describe('KB Manager - Success message', () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
-    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-    vi.mocked(https.get).mockImplementation(
-      mockMultipleHttpsGet([
-        { pattern: '.sha256', response: checksumResp },
-        { response: fileResp },
-      ]),
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
 
-    await ensureKBAvailable(testVersion, { fs, extract: mockExtract })
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
+    await ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract })
 
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('✅ KB v0.2.0 installed'))
 
@@ -345,53 +299,29 @@ describe('KB Manager - Success message', () => {
   })
 })
 
-// Helper: setup custom URL test mocks
-function setupCustomUrlMocks(
-  capturedUrls: string[],
-  checksumResp: ReturnType<typeof toIncomingMessage>,
-  fileResp: ReturnType<typeof toIncomingMessage>,
-) {
-  const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
-  vi.mocked(https.request).mockImplementation(mockHttpsRequest(headResponse))
-
-  vi.mocked(https.get).mockImplementation((...args: unknown[]) => {
-    const url = String(args[0])
-    capturedUrls.push(url)
-    const optionsOrCallback = args[1]
-    const callback = args[2]
-    const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback
-
-    const resp = url.includes('.sha256') ? checksumResp : fileResp
-    if (typeof cb === 'function') {
-      setImmediate(() => {
-        cb(resp)
-        setImmediate(() => resp.emit('end'))
-      })
-    }
-    return toClientRequest(buildTestRequest())
-  })
-}
-
 describe('KB Manager - Custom URL with provided URL', () => {
   it('should use custom URL when provided', async () => {
     mockExtract.mockReset().mockResolvedValue(undefined)
     const customUrl = 'https://custom.example.com/kb.zip'
     const fs = new InMemoryFileSystemService({}, '/', '/')
-    const capturedUrls: string[] = []
 
+    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
     const checksumResp = toIncomingMessage(buildTestResponse(404))
-    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+    )
 
-    setupCustomUrlMocks(capturedUrls, checksumResp, fileResp)
-
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
     await ensureKBAvailable('0.2.0', {
+      httpClient,
       fs,
       extract: mockExtract,
       customUrl,
     })
 
-    const fileUrl = capturedUrls.find(url => !url.includes('.sha256'))
-    expect(fileUrl).toBe(customUrl)
+    expect(httpClient.getUrls()[0]).toBe(customUrl)
   })
 })
 
@@ -399,24 +329,25 @@ describe('KB Manager - Custom URL with default URL', () => {
   it('should use default GitHub URL when custom URL not provided', async () => {
     mockExtract.mockReset().mockResolvedValue(undefined)
     const fs = new InMemoryFileSystemService({}, '/', '/')
-    const capturedUrls: string[] = []
 
+    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
     const checksumResp = toIncomingMessage(buildTestResponse(404))
-    const fileResp = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+    )
 
-    setupCustomUrlMocks(capturedUrls, checksumResp, fileResp)
-
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
     await ensureKBAvailable('0.2.0', {
+      httpClient,
       fs,
       extract: mockExtract,
     })
 
-    const hasGitHubURL = capturedUrls.some(
-      url =>
-        url.includes('github.com/foomakers/pair/releases') &&
-        url.includes('knowledge-base-0.2.0.zip'),
-    )
-    expect(hasGitHubURL).toBe(true)
+    const lastUrl = httpClient.getLastUrl()
+    expect(lastUrl).toContain('github.com/foomakers/pair/releases')
+    expect(lastUrl).toContain('knowledge-base-0.2.0.zip')
   })
 })
 
@@ -429,7 +360,7 @@ describe('KB manager integration - ensure KB available', () => {
       return '/home/user/.pair/kb/0.1.0'
     }
 
-    const result = await import('../config-utils').then(m =>
+    const result = await import('#config').then(m =>
       m.getKnowledgeHubDatasetPathWithFallback({
         fsService: mockFs as unknown as FileSystemService,
         version: '0.1.0',
@@ -457,7 +388,7 @@ describe('KB manager integration - custom URL', () => {
       return '/home/user/.pair/kb/0.1.0'
     }
 
-    const result = await import('../config-utils').then(m =>
+    const result = await import('#config').then(m =>
       m.getKnowledgeHubDatasetPathWithFallback({
         fsService: mockFs as unknown as FileSystemService,
         version: '0.1.0',
@@ -481,7 +412,9 @@ describe('KB manager integration - local directory paths via customUrl', () => {
 
     const fs = new InMemoryFileSystemService(seed, '/', '/')
 
+    const httpClient = new MockHttpClientService()
     const result = await ensureKBAvailable('local-test', {
+      httpClient,
       fs: fs,
       customUrl: datasetPath,
     })

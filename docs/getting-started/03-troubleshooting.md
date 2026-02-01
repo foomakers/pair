@@ -167,8 +167,8 @@ pwd
 # Ensure you have write permissions
 touch test.txt && rm test.txt
 
-# Try with verbose output (if available)
-pair-cli install --verbose
+# Try with debug-level logging (if available)
+pair-cli install --log-level debug
 
 # Check if assets are available
 pair-cli install --list-targets
