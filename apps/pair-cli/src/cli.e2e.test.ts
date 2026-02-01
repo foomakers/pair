@@ -285,9 +285,8 @@ describe('pair-cli e2e - list-targets', () => {
 
     await withTempConfig(fs, createTestConfig(), async () => {
       // Mock the CLI execution by calling the update command with listTargets option
-      const { handleUpdateCommand, parseUpdateCommand } = (await import(
-        './commands/index.js'
-      )) as typeof import('./commands/index.js')
+      const { handleUpdateCommand, parseUpdateCommand } =
+        (await import('./commands/index.js')) as typeof import('./commands/index.js')
       await handleUpdateCommand(parseUpdateCommand({ source: '.' }), fs)
 
       // The function no longer returns a value (success indicated by lack of throw)
@@ -890,7 +889,7 @@ describe('pair-cli e2e - disjoint installation (source and target disjoint)', ()
         command: 'update-link',
         target: disjointTarget,
         dryRun: false,
-        verbose: true,
+        logLevel: 'debug',
       },
       fs,
     )

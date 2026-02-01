@@ -61,9 +61,14 @@ describe('validatePackageStructure - multiple missing paths', () => {
     const result = await validatePackageStructure(config, projectRoot, fsService)
 
     expect(result.valid).toBe(false)
-    expect(result.errors).toHaveLength(2)
-    expect(result.errors[0]).toContain("Registry 'knowledge' source path does not exist")
-    expect(result.errors[1]).toContain("Registry 'adoption' source path does not exist")
+    expect(result.errors).toHaveLength(3)
+    expect(result.errors).toContain(
+      "Registry 'knowledge' source path does not exist: /test/project/.pair/knowledge",
+    )
+    expect(result.errors).toContain(
+      "Registry 'adoption' source path does not exist: /test/project/.pair/adoption",
+    )
+    expect(result.errors).toContain('No valid registries found for packaging')
   })
 })
 
@@ -128,9 +133,10 @@ describe('validatePackageStructure - all empty dirs', () => {
     const result = await validatePackageStructure(config, projectRoot, fsService)
 
     expect(result.valid).toBe(false)
-    expect(result.errors).toHaveLength(2)
+    expect(result.errors).toHaveLength(3)
     expect(result.errors).toContain("Registry 'knowledge' directory is empty")
     expect(result.errors).toContain("Registry 'adoption' directory is empty")
+    expect(result.errors).toContain('No valid registries found for packaging')
   })
 })
 

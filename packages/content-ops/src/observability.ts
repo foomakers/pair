@@ -69,25 +69,29 @@ export const logger = {
   info: (message: string, data?: unknown) => {
     if (!loggerEnabled) return
     if (!shouldLog('INFO')) return
-    console.log(`ℹ️ ${message}`, data || '')
+    const payload = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : ''
+    console.log(payload ? `ℹ️ ${message} ${payload}` : `ℹ️ ${message}`)
   },
 
   warn: (message: string, data?: unknown) => {
     if (!loggerEnabled) return
     if (!shouldLog('WARN')) return
-    console.warn(`⚠️ ${message}`, data || '')
+    const payload = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : ''
+    console.warn(payload ? `⚠️ ${message} ${payload}` : `⚠️ ${message}`)
   },
 
   error: (message: string, data?: unknown) => {
     if (!loggerEnabled) return
     if (!shouldLog('ERROR')) return
-    console.error(`❌ ${message}`, data || '')
+    const payload = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : ''
+    console.error(payload ? `❌ ${message} ${payload}` : `❌ ${message}`)
   },
 
   debug: (message: string, data?: unknown) => {
     if (!loggerEnabled) return
     if (!shouldLog('DEBUG')) return
-    console.debug(`🔍 ${message}`, data || '')
+    const payload = data ? (typeof data === 'string' ? data : JSON.stringify(data)) : ''
+    console.debug(payload ? `🔍 ${message} ${payload}` : `🔍 ${message}`)
   },
 
   // Security-specific logging (semplificato)

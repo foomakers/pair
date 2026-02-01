@@ -199,14 +199,19 @@ if [ -f "$PKG_DIR/dist/cli.js" ]; then
     (cd "$PKG_DIR" && npx @vercel/ncc build "dist/cli.js" -o "$RELEASE_DIR/bundle-cli" --source-map) || { echo "ncc bundling failed"; exit 1; }
   fi
   
-  # NOTE: Dataset no longer included in bundle - KB manager downloads it on first run
-  # if [ -d "$ROOT_DIR/packages/knowledge-hub/dataset" ]; then
-  #   if [ "$DRY_RUN" = true ]; then
-  #     echo "[dry-run] would copy dataset to $RELEASE_DIR/bundle-cli/"
-  #   else
-  #     cp -R "$ROOT_DIR/packages/knowledge-hub/dataset" "$RELEASE_DIR/bundle-cli/" || { echo "Failed to copy dataset"; exit 1; }
-  #   fi
-  # fi
+  # Optionally include the knowledge-hub dataset in the bundle (useful for smoke tests).
+  # Controlled via INCLUDE_DATASET=1 environment variable so CI or local smoke scenarios can opt-in.
+  if [ "${INCLUDE_DATASET:-}" = "1" ]; then
+    if [ -d "$ROOT_DIR/packages/knowledge-hub/dataset" ]; then
+      if [ "$DRY_RUN" = true ]; then
+        echo "[dry-run] would copy dataset to $RELEASE_DIR/bundle-cli/"
+      else
+        cp -R "$ROOT_DIR/packages/knowledge-hub/dataset" "$RELEASE_DIR/bundle-cli/" || { echo "Failed to copy dataset"; exit 1; }
+      fi
+    else
+      echo "Warning: INCLUDE_DATASET=1 set, but local dataset not found at $ROOT_DIR/packages/knowledge-hub/dataset"
+    fi
+  fi
   
   # Remove unnecessary package.json from bundle-cli (created by ncc)
   if [ "$DRY_RUN" = true ]; then
@@ -218,15 +223,31 @@ if [ -f "$PKG_DIR/dist/cli.js" ]; then
   fi
   # Generate TypeScript definitions from source
   echo "Generating TypeScript definitions..."
+  DTS_TSCONF="$PKG_DIR/tsconfig.dts.json"
   if [ "$DRY_RUN" = true ]; then
-    echo "[dry-run] would run: (cd $PKG_DIR && npx dts-bundle-generator --external-inlines @pair/content-ops @pair/knowledge-hub --external-types commander chalk dotenv markdown-it --project tsconfig.json -o $RELEASE_DIR/bundle-cli/index.d.ts src/cli.ts)"
+    echo "[dry-run] would create temporary tsconfig at $DTS_TSCONF and run dts-bundle-generator"
   else
-    (cd "$PKG_DIR" && npx dts-bundle-generator \
+    # Create a temporary tsconfig tailored for dts-bundle-generator to avoid composite-project warnings
+    cat > "$DTS_TSCONF" <<'JSON'
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "skipLibCheck": true,
+    "composite": false
+  }
+}
+JSON
+    # Run dts-bundle-generator and filter known informational messages to keep CI output clean
+    if ! (cd "$PKG_DIR" && npx dts-bundle-generator \
       --external-inlines @pair/content-ops @pair/knowledge-hub \
       --external-types commander chalk dotenv markdown-it \
-      --project tsconfig.json \
+      --project tsconfig.dts.json \
       -o "$RELEASE_DIR/bundle-cli/index.d.ts" \
-      "src/cli.ts") || echo "Warning: dts-bundle-generator failed, skipping types"
+      "src/cli.ts" 2>&1 | grep -v -E "Composite projects aren't supported|skipLibCheck") ; then
+      echo "Warning: dts-bundle-generator failed, skipping types"
+    fi
+    # Cleanup temporary tsconfig
+    rm -f "$DTS_TSCONF" || true
   fi
 else
   echo "Bundle requested but $PKG_DIR/dist/cli.js not found"

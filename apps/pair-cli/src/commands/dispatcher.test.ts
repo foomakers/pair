@@ -76,7 +76,6 @@ describe('dispatchCommand() - real handlers integration', () => {
     const config: UpdateLinkCommandConfig = {
       command: 'update-link',
       dryRun: false,
-      verbose: false,
       absolute: false, // will try relative
     }
 
@@ -91,7 +90,6 @@ describe('dispatchCommand() - real handlers integration', () => {
     const config: PackageCommandConfig = {
       command: 'package',
       output: outputPath,
-      verbose: false,
     }
 
     await dispatchCommand(config, fs)

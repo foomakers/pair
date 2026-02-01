@@ -93,6 +93,19 @@ else
   echo "[smoke-test-manual] TMPDIR=$TMPDIR FORCE_CLEANUP=$FORCE_CLEANUP PAIR_DIAG=${PAIR_DIAG:-}"
 fi
 
+# Cleanup handler: remove TMPDIR when requested via --cleanup, otherwise keep artifacts for debugging
+cleanup() {
+  local rc=$?
+  if [ "$FORCE_CLEANUP" = "1" ]; then
+    echo "🧹 Cleaning up: $TMPDIR"
+    rm -rf "$TMPDIR" || true
+  else
+    echo "📁 Artifacts and logs kept at: $TMPDIR"
+  fi
+  exit $rc
+}
+trap cleanup EXIT
+
 unzip -q "$ZIP" -d "$TMPDIR"
 
 # Find the artifact directory (should be pair-cli-manual-* but handle version mismatches)
@@ -136,143 +149,43 @@ if [ "$RAN" -ne 1 ]; then
   exit 1
 fi
 
-echo "Version check passed. Now testing 'pair install' against the sample project."
 
-# Prepare sample project copy
-SAMPLE_SRC="docs/getting-started/sample-project"
-if [ ! -d "$SAMPLE_SRC" ]; then
-  echo "Error: sample project not found at $SAMPLE_SRC"
-  exit 1
+# ------------------------------------------------------------------------------------------------
+# NEW SMOKE TEST SUITE INTEGRATION
+# ------------------------------------------------------------------------------------------------
+echo "Invoking standardized smoke test suite..."
+
+# Locate `run-all.sh`
+MYSCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$MYSCRIPT_DIR/../../.." && pwd)"
+RUNNER_SCRIPT="$REPO_ROOT/scripts/smoke-tests/run-all.sh"
+
+if [ ! -x "$RUNNER_SCRIPT" ]; then
+  chmod +x "$RUNNER_SCRIPT"
 fi
 
-SAMPLE_TMP="$TMPDIR/sample-project"
-cp -a "$SAMPLE_SRC" "$SAMPLE_TMP"
-
-# For smoke testing, copy the local KB dataset directly into the sample project's .pair directory
-# This allows testing the install functionality without needing a published release
-REPO_ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-KB_DATASET_LOCAL="$REPO_ROOT/packages/knowledge-hub/dataset"
-if [ -d "$KB_DATASET_LOCAL" ]; then
-  echo "Copying local KB dataset into sample project for smoke test..."
-  mkdir -p "$SAMPLE_TMP/.pair"
-  cp -a "$KB_DATASET_LOCAL" "$SAMPLE_TMP/.pair/"
-  echo "✓ Local KB dataset ready for install test"
+# Determine KB source path for offline tests
+KB_SOURCE_PATH="$REPO_ROOT/packages/knowledge-hub/dataset"
+if [ ! -d "$KB_SOURCE_PATH" ]; then
+  echo "Warning: Local KB source not found at $KB_SOURCE_PATH. Offline tests may fail."
+  KB_SOURCE_PATH=""
 fi
 
-# Copy the extracted manual package under the sample project in a pair-cli folder
-echo "Copying manual package to sample project under pair-cli folder..."
-cp -a "$ART_DIR" "$SAMPLE_TMP/pair-cli"
-
-cleanup() {
-  local rc=$?
-  # write cleanup log (only if persisting logs was requested)
-  if [ "$PERSIST_LOGS" = "1" ]; then
-    echo "[cleanup] rc=$rc FORCE_CLEANUP=$FORCE_CLEANUP PAIR_DIAG=${PAIR_DIAG:-}" | tee -a "$LOGFILE"
-    echo "TMPDIR_EXISTS=$( [ -d \"$TMPDIR\" ] && echo yes || echo no )" | tee -a "$LOGFILE"
-    echo "Listing TMPDIR contents (first 50 lines):" >> "$LOGFILE"
-    ls -la "$TMPDIR" 2>/dev/null | head -n 50 >> "$LOGFILE" || true
-  else
-    echo "[cleanup] rc=$rc FORCE_CLEANUP=$FORCE_CLEANUP PAIR_DIAG=${PAIR_DIAG:-}"
-    echo "TMPDIR_EXISTS=$( [ -d \"$TMPDIR\" ] && echo yes || echo no )"
-  fi
-
-  if [ "$FORCE_CLEANUP" = "1" ]; then
-    if [ "$PERSIST_LOGS" = "1" ]; then
-      echo "FORCE_CLEANUP=1: removing debug folders: $TMPDIR" | tee -a "$LOGFILE"
-    else
-      echo "FORCE_CLEANUP=1: removing debug folders: $TMPDIR"
-    fi
-    rm -rf "$TMPDIR" || true
-  else
-    # Default: keep tmpdir so debugging artifacts are preserved. Use --cleanup to remove.
-    if [ "${PAIR_DIAG:-}" = "1" ]; then
-      if [ "$PERSIST_LOGS" = "1" ]; then
-        echo "PAIR_DIAG=1: keeping debug folders: $TMPDIR" | tee -a "$LOGFILE"
-      else
-        echo "PAIR_DIAG=1: keeping debug folders: $TMPDIR"
-      fi
-    else
-      if [ "$PERSIST_LOGS" = "1" ]; then
-        echo "Keeping debug folders: $TMPDIR (pass --cleanup or -c to remove)" | tee -a "$LOGFILE"
-      else
-        echo "Keeping debug folders: $TMPDIR (pass --cleanup or -c to remove)"
-      fi
-    fi
-  fi
-  exit $rc
-}
-trap cleanup EXIT
-
-echo "Running install from inside the sample project directory (no absolute path)"
-pushd "$SAMPLE_TMP" >/dev/null
-
-# Use the binary from the pair-cli folder in the sample project
-PAIR_CLI_DIR="./pair-cli"
-# Build the install command - use local KB if available, else use --no-kb
-KB_SOURCE=""
-if [ -d ".pair/dataset" ]; then
-  # Use absolute path for KB dataset
-  ABS_KB_PATH="$(cd .pair/dataset && pwd)"
-  KB_SOURCE="--url $ABS_KB_PATH"
-else
-  KB_SOURCE="--no-kb"
+# Build arguments for run-all.sh
+ARGS=(--binary "$BIN_PATH")
+if [ -n "$KB_SOURCE_PATH" ]; then
+  ARGS+=(--kb-source "$KB_SOURCE_PATH")
+fi
+if [ "$FORCE_CLEANUP" = "1" ]; then
+  ARGS+=(--cleanup)
 fi
 
-if [[ -x "$PAIR_CLI_DIR/pair-cli" ]]; then
-  echo "Executing: ./pair-cli/pair-cli install $KB_SOURCE"
-  ./pair-cli/pair-cli install $KB_SOURCE
-elif [[ -x "$PAIR_CLI_DIR/bin/pair-cli" ]]; then
-  echo "Executing: ./pair-cli/bin/pair-cli install $KB_SOURCE"
-  ./pair-cli/bin/pair-cli install $KB_SOURCE
-elif [[ -f "$PAIR_CLI_DIR/bundle-cli/index.js" ]]; then
-  echo "Executing: node ./pair-cli/bundle-cli/index.js install $KB_SOURCE"
-  node ./pair-cli/bundle-cli/index.js install $KB_SOURCE
-else
-  echo "Error: no runnable binary found in $PAIR_CLI_DIR"
-  echo "Checked paths:"
-  echo "  - $PAIR_CLI_DIR/pair-cli"
-  echo "  - $PAIR_CLI_DIR/bin/pair-cli"
-  echo "  - $PAIR_CLI_DIR/bundle-cli/index.js"
-  exit 1
-fi
+echo "Running: $RUNNER_SCRIPT ${ARGS[*]}"
+"$RUNNER_SCRIPT" "${ARGS[@]}"
 
 RET=$?
-popd >/dev/null
+echo "Standardized smoke-test suite exit code: $RET"
 
-echo "pair install exit code: $RET"
+# Let EXIT trap run cleanup and exit with the suite return code
+exit $RET
 
-# Basic verification: check for .pair folder and knowledge base contents
-if [ -d "$SAMPLE_TMP/.pair" ]; then
-  echo "pair install appears to have created $SAMPLE_TMP/.pair"
-  
-  # Verify knowledge base contents
-  echo "Verifying knowledge base installation..."
-  KB_ITEMS=(".pair/knowledge" ".pair/adoption")
-  MISSING_ITEMS=()
-  
-  for item in "${KB_ITEMS[@]}"; do
-    if [ ! -d "$SAMPLE_TMP/$item" ]; then
-      MISSING_ITEMS+=("$item")
-    fi
-  done
-  
-  if [ ${#MISSING_ITEMS[@]} -eq 0 ]; then
-    echo "✓ Knowledge base installed successfully - all expected directories found"
-  else
-    echo "Warning: Some knowledge base directories are missing:"
-    for missing in "${MISSING_ITEMS[@]}"; do
-      echo "  - $missing"
-    done
-  fi
-else
-  echo "Warning: $SAMPLE_TMP/.pair not found after pair install."
-  echo "Listing sample project contents for debugging:"
-  ls -la "$SAMPLE_TMP" || true
-fi
-
-if [ $RET -ne 0 ]; then
-  echo "Error: pair install failed with exit code $RET"
-  exit $RET
-fi
-
-echo "Manual artifact smoke-test completed successfully."

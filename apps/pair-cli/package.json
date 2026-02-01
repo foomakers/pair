@@ -20,14 +20,14 @@
   "private": false,
   "imports": {
     "#config": "./src/config/index.ts",
-    "#config/*": "./src/config/*",
+    "#config/*": "./src/config/*.ts",
     "#registry": "./src/registry/index.ts",
-    "#registry/*": "./src/registry/*",
+    "#registry/*": "./src/registry/*.ts",
     "#kb-manager": "./src/kb-manager/index.ts",
-    "#kb-manager/*": "./src/kb-manager/*",
+    "#kb-manager/*": "./src/kb-manager/*.ts",
     "#diagnostics": "./src/diagnostics.ts",
     "#test-utils": "./src/test-utils/index.ts",
-    "#test-utils/*": "./src/test-utils/*"
+    "#test-utils/*": "./src/test-utils/*.ts"
   },
   "scripts": {
     "build": "tsc -b tsconfig.build.json",

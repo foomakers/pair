@@ -43,7 +43,7 @@ function parseUpdateArgs(args: string[]): UpdateCommandConfig {
 function buildUpdateHandlerOptions(options?: Record<string, unknown>): Record<string, unknown> {
   const handlerOptions: Record<string, unknown> = {}
   const stringProps = ['baseTarget', 'customConfigPath', 'linkStyle'] as const
-  const boolProps = ['verbose', 'useDefaults'] as const
+  const boolProps = ['useDefaults'] as const
 
   for (const prop of stringProps) {
     if (options?.[prop]) {

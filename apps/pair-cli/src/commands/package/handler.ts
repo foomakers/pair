@@ -6,16 +6,19 @@ import { generateManifestMetadata } from './metadata'
 import { createPackageZip } from './zip-creator'
 import { extractRegistries, type RegistryConfig } from '#registry'
 import path from 'path'
+import { logger, setLogLevel } from '@pair/content-ops'
 
 async function loadAndValidate(
   config: PackageCommandConfig,
   fs: FileSystemService,
   projectRoot: string,
 ) {
-  if (config.verbose) console.log('🔍 Loading configuration...')
-  const result = loadConfigWithOverrides(fs, { projectRoot })
+  if (config.logLevel) setLogLevel(config.logLevel)
+  logger.debug('🔍 Loading configuration...')
+  // When sourceDir is provided, skip base config to avoid requiring all default registries
+  const result = loadConfigWithOverrides(fs, { projectRoot, skipBaseConfig: !!config.sourceDir })
 
-  if (config.verbose) console.log('✓ Validating package structure...')
+  logger.debug('✓ Validating package structure...')
   const validation = await validatePackageStructure(result.config, projectRoot, fs)
   if (!validation.valid) {
     const message = `Validation failed:\n${validation.errors.join('\n')}`
@@ -52,12 +55,10 @@ async function createAndReportZip(params: {
   outputPath: string
   fs: FileSystemService
 }) {
-  const { config, projectRoot, registries, manifest, outputPath, fs } = params
+  const { projectRoot, registries, manifest, outputPath, fs } = params
 
-  if (config.verbose) {
-    console.log('🗜️  Creating ZIP archive...')
-    console.log(`   Packaging ${registries.length} registries`)
-  }
+  logger.debug('🗜️  Creating ZIP archive...')
+  logger.debug(`   Packaging ${registries.length} registries`)
 
   await createPackageZip({ projectRoot, registries, manifest, outputPath }, fs)
 
@@ -66,11 +67,11 @@ async function createAndReportZip(params: {
   const sizeMB = (stats.size / (1024 * 1024)).toFixed(2)
   const sizeDisplay = stats.size >= 1024 * 1024 ? `${sizeMB} MB` : `${sizeKB} KB`
 
-  console.log(`✅ Package created: ${outputPath}`)
-  console.log(`   Size: ${sizeDisplay}`)
+  logger.info(`✅ Package created: ${outputPath}`)
+  logger.info(`   Size: ${sizeDisplay}`)
 
   if (stats.size > 100 * 1024 * 1024) {
-    console.warn(`⚠️  Large package size (${sizeMB} MB) - consider reviewing content`)
+    logger.warn(`⚠️  Large package size (${sizeMB} MB) - consider reviewing content`)
   }
 }
 
@@ -93,22 +94,22 @@ export async function handlePackageCommand(
 ): Promise<void> {
   const projectRoot = config.sourceDir || fs.currentWorkingDirectory()
 
-  if (config.verbose) {
-    console.log('📦 Starting package creation...')
-    console.log(`   Source: ${projectRoot}`)
-  }
+  logger.debug('📦 Starting package creation...')
+  logger.debug(`   Source: ${projectRoot}`)
 
   const result = await loadAndValidate(config, fs, projectRoot)
 
-  if (config.verbose) console.log('📋 Generating manifest metadata...')
+  logger.debug('📋 Generating manifest metadata...')
   const registries = Object.values(extractRegistries(result.config))
   const registryNames = registries.map(r => r.source || '').filter(Boolean)
   const manifest = generateManifestMetadata(registryNames, buildCliParams(config))
 
-  const outputPath =
-    config.output || path.join(projectRoot, 'dist', `kb-package-${manifest.created_at}.zip`)
+  // Resolve output path - if relative, make it relative to current working directory
+  const outputPath = config.output
+    ? path.resolve(config.output)
+    : path.join(projectRoot, 'dist', `kb-package-${manifest.created_at}.zip`)
 
-  if (config.verbose) console.log(`📁 Preparing output directory: ${path.dirname(outputPath)}`)
+  logger.debug(`📁 Preparing output directory: ${path.dirname(outputPath)}`)
   await prepareOutput(outputPath, fs)
 
   await createAndReportZip({ config, projectRoot, registries, manifest, outputPath, fs })

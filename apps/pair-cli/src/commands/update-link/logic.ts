@@ -38,7 +38,7 @@ export async function applyLinkTransformation(
         command: 'update-link',
         absolute: style === 'absolute',
         dryRun: false,
-        verbose: options.minLogLevel === 'info' || options.minLogLevel === 'debug',
+        ...(options.minLogLevel && { logLevel: options.minLogLevel }),
       },
       fsService,
     )

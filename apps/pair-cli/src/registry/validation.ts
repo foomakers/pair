@@ -94,10 +94,14 @@ function validateBehavior(name: string, reg: Record<string, unknown>): string[] 
 }
 
 function validatePaths(name: string, reg: Record<string, unknown>): string[] {
+  const errors: string[] = []
   if (!reg['target_path'] || typeof reg['target_path'] !== 'string') {
-    return [`Registry '${name}' must have a valid target_path string`]
+    errors.push(`Registry '${name}' must have a valid target_path string`)
   }
-  return []
+  if (!reg['behavior'] || typeof reg['behavior'] !== 'string') {
+    errors.push(`Registry '${name}' must have a valid behavior string`)
+  }
+  return errors
 }
 
 function validateIncludes(name: string, reg: Record<string, unknown>): string[] {
@@ -168,13 +172,22 @@ export function validateAllRegistries(registries: Record<string, RegistryConfig>
   }
 
   const targets: Record<string, string> = {}
+  let validRegistryCount = 0
 
   for (const [name, config] of Object.entries(registries)) {
     const regErrors = validateRegistry(name, config)
     errors.push(...regErrors)
+    if (regErrors.length === 0) {
+      validRegistryCount++
+    }
     if (config.target_path) {
       targets[name] = config.target_path
     }
+  }
+
+  // Fail if no valid registries after validation
+  if (validRegistryCount === 0) {
+    return { valid: false, errors }
   }
 
   if (errors.length === 0) {

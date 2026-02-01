@@ -34,7 +34,6 @@ describe('handleUpdateLinkCommand - integration with in-memory services', () => 
     const config: UpdateLinkCommandConfig = {
       command: 'update-link',
       dryRun: true,
-      verbose: false,
     }
 
     // Spy on writeFile to ensure no writes happen
@@ -49,7 +48,6 @@ describe('handleUpdateLinkCommand - integration with in-memory services', () => 
     const config: UpdateLinkCommandConfig = {
       command: 'update-link',
       dryRun: false,
-      verbose: false,
       absolute: true,
     }
 
@@ -65,7 +63,6 @@ describe('handleUpdateLinkCommand - integration with in-memory services', () => 
     const config: UpdateLinkCommandConfig = {
       command: 'update-link',
       dryRun: false,
-      verbose: false,
     }
 
     await handleUpdateLinkCommand(config, fs, { persistBackup: true })
@@ -83,7 +80,6 @@ describe('handleUpdateLinkCommand - integration with in-memory services', () => 
     const config: UpdateLinkCommandConfig = {
       command: 'update-link',
       dryRun: false,
-      verbose: false,
     }
 
     // Induce failure

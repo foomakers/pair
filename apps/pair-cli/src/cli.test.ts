@@ -42,7 +42,7 @@ describe('CLI command registration', () => {
       .option('--relative', 'Convert all links to relative paths')
       .option('--absolute', 'Convert all links to absolute paths')
       .option('--dry-run', 'Show what would be changed without modifying files')
-      .option('--verbose', 'Show detailed processing information')
+      .option('-l, --log-level <level>', 'Set minimum log level (debug|info|warn|error)')
 
     const commands = program.commands
     expect(commands.some(cmd => cmd.name() === 'update-link')).toBe(true)
@@ -77,7 +77,7 @@ describe('CLI command registration', () => {
     expect(opts.some((opt: { flags: string }) => opt.flags.includes('--source-dir'))).toBe(true)
     expect(opts.some((opt: { flags: string }) => opt.flags.includes('--output'))).toBe(true)
     expect(opts.some((opt: { flags: string }) => opt.flags.includes('--name'))).toBe(true)
-    expect(opts.some((opt: { flags: string }) => opt.flags.includes('--version'))).toBe(true)
+    expect(opts.some((opt: { flags: string }) => opt.flags.includes('--pkg-version'))).toBe(true)
   })
 
   it('install command has required options', () => {
@@ -123,7 +123,7 @@ describe('CLI command registration', () => {
       .option('--relative', 'Convert to relative paths')
       .option('--absolute', 'Convert to absolute paths')
       .option('--dry-run', 'Dry run mode')
-      .option('--verbose', 'Verbose logging')
+      .option('-l, --log-level <level>', 'Set minimum log level (debug|info|warn|error)')
 
     const updateLinkCmd = program.commands.find(cmd => cmd.name() === 'update-link')
     const opts = updateLinkCmd?.options || []
@@ -131,7 +131,7 @@ describe('CLI command registration', () => {
     expect(opts.some(opt => opt.flags.includes('--relative'))).toBe(true)
     expect(opts.some(opt => opt.flags.includes('--absolute'))).toBe(true)
     expect(opts.some(opt => opt.flags.includes('--dry-run'))).toBe(true)
-    expect(opts.some(opt => opt.flags.includes('--verbose'))).toBe(true)
+    expect(opts.some(opt => opt.flags.includes('--log-level'))).toBe(true)
   })
 })
 

@@ -8,10 +8,18 @@ import { Config, extractRegistries, validateAllRegistries } from '#registry'
  */
 export function loadConfigWithOverrides(
   fsService: FileSystemService,
-  options: { customConfigPath?: string; projectRoot?: string } = {},
+  options: { customConfigPath?: string; projectRoot?: string; skipBaseConfig?: boolean } = {},
 ): { config: Config; source: string } {
-  const { customConfigPath, projectRoot = fsService.rootModuleDirectory() } = options
-  let { config, source } = loadBaseConfig(fsService)
+  const {
+    customConfigPath,
+    projectRoot = fsService.rootModuleDirectory(),
+    skipBaseConfig,
+  } = options
+
+  // If skipBaseConfig is true, start with empty config instead of base config
+  let { config, source } = skipBaseConfig
+    ? { config: { asset_registries: {} } as Config, source: 'empty' }
+    : loadBaseConfig(fsService)
 
   const pairApplied = applyPairConfigIfExists(fsService, config, projectRoot)
   if (pairApplied) {
@@ -54,13 +62,22 @@ function applyPairConfigIfExists(
   projectRoot: string,
 ): { config: Config } | null {
   const pairConfigPath = join(projectRoot, 'pair.config.json')
-  if (fsService.existsSync(pairConfigPath)) {
+  const configJsonPath = join(projectRoot, 'config.json')
+
+  // Try pair.config.json first, then fall back to config.json
+  const configPath = fsService.existsSync(pairConfigPath)
+    ? pairConfigPath
+    : fsService.existsSync(configJsonPath)
+      ? configJsonPath
+      : null
+
+  if (configPath) {
     try {
-      const pairConfigContent = fsService.readFileSync(pairConfigPath)
+      const pairConfigContent = fsService.readFileSync(configPath)
       const pairConfig = JSON.parse(pairConfigContent)
       return { config: mergeConfigs(baseConfig, pairConfig) }
     } catch {
-      console.warn('Warning: Failed to load pair.config.json, continuing with base config')
+      console.warn(`Warning: Failed to load ${configPath}, continuing with base config`)
     }
   }
   return null

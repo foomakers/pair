@@ -113,4 +113,21 @@ describe('registry validation - validateAllRegistries', () => {
     expect(result.valid).toBe(false)
     expect(result.errors).toHaveLength(1)
   })
+
+  it('fails when no valid registries exist (all invalid)', () => {
+    const registries: Record<string, RegistryConfig> = {
+      // Registry with missing required fields
+      invalid1: { behavior: '' as unknown as 'mirror', target_path: '', description: '' },
+    }
+    const result = validateAllRegistries(registries)
+    expect(result.valid).toBe(false)
+    expect(result.errors.length).toBeGreaterThan(0)
+  })
+
+  it('fails when registries object is empty', () => {
+    const registries: Record<string, RegistryConfig> = {}
+    const result = validateAllRegistries(registries)
+    expect(result.valid).toBe(false)
+    expect(result.errors[0]).toContain('Config must have asset_registries object')
+  })
 })

@@ -56,7 +56,7 @@ async function copyRegistrySources(
     const sourcePath = path.join(options.projectRoot, registry.source)
     const exists = await fsService.exists(sourcePath)
     if (!exists) {
-      throw new Error(`Registry source does not exist: ${registry.source}`)
+      throw new Error(`Registry source path does not exist: ${sourcePath}`)
     }
 
     const targetPath = path.join(tempDir, registry.source)

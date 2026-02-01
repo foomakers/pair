@@ -1,7 +1,7 @@
 import type { ValidateConfigCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
 import { loadConfigWithOverrides } from '#config'
-import { extractRegistries, validateAllRegistries } from '#registry'
+import { extractRegistries, validateAllRegistries, type RegistryConfig } from '#registry'
 
 /**
  * Handles the validate-config command execution.
@@ -23,8 +23,20 @@ export async function handleValidateConfigCommand(
     projectRoot,
   })
 
-  // Validate the config
-  const registries = extractRegistries(result.config)
+  // Validate the config - if a custom config is provided, validate only that config
+  // without merging with base config (to catch errors in the user's config)
+  let registries: Record<string, RegistryConfig>
+  if (config.config) {
+    // For custom config, read and validate only that config file
+    const customConfigContent = fs.readFileSync(config.config)
+    const customConfig = JSON.parse(customConfigContent) as {
+      asset_registries?: Record<string, RegistryConfig>
+    }
+    registries = customConfig.asset_registries || {}
+  } else {
+    registries = extractRegistries(result.config)
+  }
+
   const validation = validateAllRegistries(registries)
 
   if (!validation.valid) {

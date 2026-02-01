@@ -7,7 +7,6 @@ describe('parsePackageCommand', () => {
 
     expect(config).toEqual({
       command: 'package',
-      verbose: false,
     })
   })
 

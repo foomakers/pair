@@ -30,7 +30,6 @@ interface UpdateHandlerOptions {
   baseTarget?: string
   linkStyle?: 'relative' | 'absolute' | 'auto'
   config?: string
-  verbose?: boolean
   minLogLevel?: LogEntry['level']
   persistBackup?: boolean
   autoRollback?: boolean
@@ -56,8 +55,11 @@ export async function handleUpdateCommand(
   fs: FileSystemService,
   options?: UpdateHandlerOptions,
 ): Promise<void> {
-  const logLevel = options?.verbose ? 'debug' : 'info'
-  const { pushLog } = createLogger(logLevel)
+  const logLevel =
+    (config as unknown as { logLevel?: LogEntry['level'] }).logLevel ??
+    options?.minLogLevel ??
+    'info'
+  const { pushLog } = createLogger(logLevel as LogEntry['level'])
 
   try {
     const { datasetRoot, registries, baseTarget } = await setupUpdateContext(fs, config, options)
@@ -148,6 +150,21 @@ async function updateRegistries(context: UpdateContext): Promise<void> {
     await ensureDir(fs, dirname(effectiveTarget))
     const datasetPath = fs.resolve(datasetRoot, registryName)
     const copyOptions = buildCopyOptions(registryConfig)
+
+    // Debugging: When running with diagnostics, emit dataset contents to help
+    // track whether the expected files are present in the dataset before copying.
+    if (process.env['PAIR_DIAG'] || process.env['DEBUG'] || process.env['NODE_ENV'] === 'test') {
+      try {
+        const entries = await fs.readdir(datasetPath)
+        pushLog(
+          'debug',
+          `Dataset entries at ${datasetPath}: ${entries.map(e => (e && e.name) || String(e)).join(', ')}`,
+        )
+      } catch (e) {
+        pushLog('debug', `Failed to read dataset path ${datasetPath}: ${String(e)}`)
+      }
+    }
+
     pushLog('info', `Updating registry '${registryName}' at '${effectiveTarget}'`)
     await doCopyAndUpdateLinks(fs, {
       source: datasetPath,

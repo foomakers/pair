@@ -6,7 +6,7 @@ export interface UpdateLinkCommandConfig {
   url?: string
   absolute?: boolean
   dryRun: boolean
-  verbose: boolean
+  logLevel?: string
   target?: string
 }
 
@@ -14,14 +14,14 @@ interface ParseUpdateLinkOptions {
   url?: string
   absolute?: boolean
   dryRun?: boolean
-  verbose?: boolean
+  logLevel?: string
 }
 
 /**
  * Parse update-link command options into UpdateLinkCommandConfig.
  *
  * Processes link validation and update flags for KB content.
- * Defaults: absolute=false, dryRun=false, verbose=false
+ * Defaults: absolute=false, dryRun=false, logLevel not set by default
  *
  * @param options - Raw CLI options from Commander.js
  * @param args - Positional arguments from Commander.js
@@ -31,7 +31,7 @@ export function parseUpdateLinkCommand(
   options: ParseUpdateLinkOptions,
   args: string[] = [],
 ): UpdateLinkCommandConfig {
-  const { url, absolute = false, dryRun = false, verbose = false } = options
+  const { url, absolute = false, dryRun = false, logLevel } = options
   const target = args[0]
 
   return {
@@ -39,7 +39,7 @@ export function parseUpdateLinkCommand(
     ...(url && { url }),
     ...(absolute && { absolute }),
     dryRun,
-    verbose,
+    ...(logLevel && { logLevel }),
     ...(target && { target }),
   }
 }

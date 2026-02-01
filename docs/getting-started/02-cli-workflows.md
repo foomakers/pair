@@ -76,7 +76,7 @@ pair-cli update-link
 **Common Scenarios:**
 
 - **After project restructure**: `pair-cli update-link` to fix broken links
-- **Link health check**: `pair-cli update-link --dry-run --verbose` to inspect
+- **Link health check**: `pair-cli update-link --dry-run --log-level debug` to inspect
 
 See [Link Update Guide](./05-cli-update-link.md) for comprehensive documentation.
 

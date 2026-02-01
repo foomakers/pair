@@ -23,5 +23,6 @@ export async function handleKbValidateCommand(
     throw new Error(`Invalid KB: missing .pair directory at ${pairDir}`)
   }
 
-  console.log('✅ KB structure validation passed')
+  const { logger } = await import('@pair/content-ops')
+  logger.info('✅ KB structure validation passed')
 }

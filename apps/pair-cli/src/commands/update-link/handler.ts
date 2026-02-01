@@ -12,6 +12,7 @@ import {
 import { dirname } from 'path'
 import { getKnowledgeHubDatasetPath } from '#config'
 import { createLogger, type LogEntry } from '#diagnostics'
+import { setLogLevel } from '@pair/content-ops'
 import { createRegistryBackupConfig, handleBackupRollback } from '#registry'
 
 function transformLink(
@@ -93,7 +94,7 @@ async function verifyKB(
     )
   }
 
-  const kbPath = config.target ? fs.resolve(config.target) : fs.resolve('.pair')
+  const kbPath = config.target ? fs.resolve(config.target) : fs.resolve('.pair/knowledge')
 
   if (!fs.existsSync(kbPath)) {
     const message = `No Knowledge Base found at: ${kbPath}. Please run "pair install" first.`
@@ -161,7 +162,8 @@ export async function handleUpdateLinkCommand(
   fs: FileSystemService,
   options?: UpdateLinkHandlerOptions,
 ): Promise<void> {
-  const { pushLog } = createLogger(config.verbose ? 'info' : ('warn' as LogEntry['level']))
+  if (config.logLevel) setLogLevel(config.logLevel)
+  const { pushLog } = createLogger((config.logLevel as LogEntry['level']) ?? 'info')
 
   pushLog('info', 'Starting update-link command')
 

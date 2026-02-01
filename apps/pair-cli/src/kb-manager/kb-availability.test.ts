@@ -29,7 +29,8 @@ describe('KB Manager - ensureKBAvailable - Cache Hit', () => {
     const httpClient = new MockHttpClientService()
     const result = await ensureKBAvailable(testVersion, { httpClient, fs })
 
-    expect(result).toBe(expectedCachePath)
+    // When the cache contains a .pair directory, prefer returning the dataset root
+    expect(result).toBe(join(expectedCachePath, '.pair'))
   })
 })
 
@@ -61,7 +62,9 @@ describe('KB Manager - ensureKBAvailable - Cache Miss', () => {
     httpClient.setGetResponses([fileResp, checksumResp])
     const result = await ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract })
 
-    expect(result).toBe(join(homedir(), '.pair', 'kb', testVersion))
+    // When the installed KB contains a .pair directory installers return the
+    // dataset root (cachePath/.pair)
+    expect(result).toBe(join(homedir(), '.pair', 'kb', testVersion, '.pair'))
     expect(mockExtract).toHaveBeenCalled()
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('KB not found, downloading'))
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('KB v0.2.0 installed'))

@@ -56,7 +56,6 @@ For environments without internet access or when you need a self-contained versi
    ```
 
    The manual artifact is completely self-contained and includes:
-
    - All dependencies bundled in a single JavaScript file
    - Cross-platform executables
    - TypeScript definitions
@@ -274,8 +273,8 @@ pair package --output custom/path/output.zip
 # Package with metadata
 pair package --name "My KB" --version "1.0.0" --author "Team Name"
 
-# Package with verbose progress output
-pair package --verbose
+# Package with debug-level progress output
+pair package --log-level debug
 ```
 
 The `package` command:
@@ -389,7 +388,7 @@ CLI Options → Parser → CommandConfig → Dispatcher → Handler → Actions
 
 1. Create `commands/<command-name>/` folder
 2. Add `parser.ts` with `parse<Command>Command()` and types
-3. Add `handler.ts` with `handle<Command>Command()`  
+3. Add `handler.ts` with `handle<Command>Command()`
 4. Add `metadata.ts` with Commander.js help text
 5. Register in `commands/index.ts` commandRegistry
 6. Tests auto-discovered, metadata drives CLI setup

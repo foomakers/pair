@@ -59,7 +59,15 @@ export function resolveRegistryPaths(params: {
   const { name, config, datasetRoot, fs, baseTarget } = params
 
   // Source is always relative to the dataset root
-  const source = fs.resolve(datasetRoot, name)
+  // Use explicit registry config source if provided, otherwise fall back to registry name
+  // Prefer a direct registry folder under datasetRoot when present (useful for
+  // disjoint sources passed via --source). Otherwise fallback to configured
+  // registry 'source' (e.g., '.pair/knowledge').
+  const directPath = fs.resolve(datasetRoot, name)
+  const source = fs.existsSync(directPath)
+    ? directPath
+    : fs.resolve(datasetRoot, config && config.source ? config.source : name)
+
   const target = resolveTarget(name, config, fs, baseTarget)
 
   return { source, target }

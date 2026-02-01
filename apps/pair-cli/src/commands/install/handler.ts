@@ -13,6 +13,7 @@ import {
   extractRegistries,
   validateAllRegistries,
   resolveTarget,
+  resolveRegistryPaths,
   forEachRegistry,
   detectOverlappingTargets,
   checkTargetsEmptiness,
@@ -30,7 +31,6 @@ interface InstallHandlerOptions {
   baseTarget?: string
   linkStyle?: 'relative' | 'absolute' | 'auto'
   config?: string
-  verbose?: boolean
   minLogLevel?: LogEntry['level']
   httpClient?: HttpClientService
   cliVersion?: string
@@ -45,8 +45,11 @@ export async function handleInstallCommand(
   fs: FileSystemService,
   options?: InstallHandlerOptions,
 ): Promise<void> {
-  const logLevel = options?.verbose ? 'debug' : 'info'
-  const { pushLog } = createLogger(logLevel)
+  const logLevel =
+    (config as unknown as { logLevel?: LogEntry['level'] }).logLevel ??
+    options?.minLogLevel ??
+    'info'
+  const { pushLog } = createLogger(logLevel as LogEntry['level'])
 
   try {
     const { datasetRoot, registries, baseTarget } = await setupInstallContext(fs, config, options)
@@ -105,11 +108,22 @@ async function executeInstall(context: {
   const { fs, datasetRoot, registries, baseTarget, options, pushLog } = context
 
   await forEachRegistry(registries, async (registryName, registryConfig) => {
-    const effectiveTarget = resolveTarget(registryName, registryConfig, fs, baseTarget)
+    // Resolve source and target paths respecting explicit registry 'source' and 'target_path'
+    const resolved = resolveRegistryPaths({
+      name: registryName,
+      config: registryConfig,
+      datasetRoot,
+      fs,
+      baseTarget,
+    })
+    const datasetPath = resolved.source
+    const effectiveTarget = resolved.target
     await ensureDir(fs, dirname(effectiveTarget))
-    const datasetPath = fs.resolve(datasetRoot, registryName)
     const copyOptions = buildCopyOptions(registryConfig)
-    pushLog('info', `Installing registry '${registryName}' to '${effectiveTarget}'`)
+    pushLog(
+      'info',
+      `Installing registry '${registryName}' from '${datasetPath}' to '${effectiveTarget}'`,
+    )
     await doCopyAndUpdateLinks(fs, {
       source: datasetPath,
       target: effectiveTarget,

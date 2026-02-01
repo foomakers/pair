@@ -8,7 +8,6 @@ describe('parseUpdateLinkCommand', () => {
     expect(config).toEqual({
       command: 'update-link',
       dryRun: false,
-      verbose: false,
     })
   })
 
@@ -18,10 +17,10 @@ describe('parseUpdateLinkCommand', () => {
     expect(config.dryRun).toBe(true)
   })
 
-  it('creates config with verbose mode', () => {
-    const config = parseUpdateLinkCommand({ verbose: true })
+  it('creates config with log level option', () => {
+    const config = parseUpdateLinkCommand({ logLevel: 'debug' })
 
-    expect(config.verbose).toBe(true)
+    expect(config.logLevel).toBe('debug')
   })
 
   it('creates config with url option', () => {
@@ -33,7 +32,6 @@ describe('parseUpdateLinkCommand', () => {
       command: 'update-link',
       url: 'https://example.com/kb.zip',
       dryRun: false,
-      verbose: false,
     })
   })
 })

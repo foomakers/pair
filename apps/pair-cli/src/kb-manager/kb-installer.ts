@@ -124,7 +124,12 @@ export async function installKB(
     const installOptions = buildInstallOptions(options)
     await doInstallSteps(downloadUrl, zipPath, cachePath, installOptions)
     announceSuccess(cleanVersion, cachePath)
-    return cachePath
+    // Prefer to return the dataset root when .pair exists inside cache so callers
+    // resolve registries like 'knowledge' correctly (datasetRoot/knowledge)
+    const datasetRoot = fs.existsSync(join(cachePath, '.pair'))
+      ? join(cachePath, '.pair')
+      : cachePath
+    return datasetRoot
   } catch (error) {
     await cleanupFile(zipPath, fs)
     const err = error as Error
@@ -167,11 +172,133 @@ async function copyDirectoryInMemory(
   }
 }
 
-function validateKBStructure(cachePath: string, fs: FileSystemService): boolean {
+async function validateKBStructure(cachePath: string, fs: FileSystemService): Promise<boolean> {
+  // Check for .pair directory or AGENTS.md at the root of cachePath
   const hasPairDir = fs.existsSync(join(cachePath, '.pair'))
   const hasAgentsMd = fs.existsSync(join(cachePath, 'AGENTS.md'))
+  const hasManifestJson = fs.existsSync(join(cachePath, 'manifest.json'))
 
-  return hasPairDir || hasAgentsMd
+  // If we have a .pair dir or AGENTS.md it's valid
+  if (hasPairDir || hasAgentsMd) return true
+
+  // If there's a manifest.json, ensure there are other files present too (manifest alone is not enough)
+  if (hasManifestJson) {
+    try {
+      const entries = await fs.readdir(cachePath)
+      // If there's any non-hidden entry other than manifest.json, consider it valid
+      return entries.some(e => e.name !== 'manifest.json' && !e.name.startsWith('.'))
+    } catch {
+      return false
+    }
+  }
+
+  return false
+}
+
+/**
+ * Checks if a directory contains a single subdirectory (common in ZIP extractions)
+ * and returns that subdirectory path if it contains valid KB structure
+ */
+async function findKBStructureInSubdirectories(
+  cachePath: string,
+  fs: FileSystemService,
+): Promise<string | null> {
+  try {
+    const entries = await fs.readdir(cachePath)
+    // Filter out files and hidden directories
+    const dirs = entries.filter(e => e.isDirectory() && !e.name.startsWith('.'))
+
+    // If there's exactly one directory, check if it has KB structure
+    if (dirs.length === 1) {
+      const subDir = join(cachePath, dirs[0]!.name)
+      if (await validateKBStructure(subDir, fs)) {
+        return subDir
+      }
+    }
+
+    // Check if there's a .zip-temp directory (created by package command)
+    const zipTempDir = entries.find(e => e.isDirectory() && e.name === '.zip-temp')
+    if (zipTempDir) {
+      const subDir = join(cachePath, zipTempDir.name)
+      if (await validateKBStructure(subDir, fs)) {
+        return subDir
+      }
+    }
+  } catch {
+    // If we can't read the directory, return null
+  }
+  return null
+}
+
+/**
+ * Moves all contents from source directory to target directory
+ */
+async function moveDirectoryContents(
+  sourceDir: string,
+  targetDir: string,
+  fs: FileSystemService,
+): Promise<void> {
+  const entries = await fs.readdir(sourceDir)
+
+  for (const entry of entries) {
+    const sourcePath = join(sourceDir, entry.name)
+    const targetPath = join(targetDir, entry.name)
+
+    // Move the entry (copy then delete for cross-device safety)
+    if (entry.isDirectory()) {
+      await fs.mkdir(targetPath, { recursive: true })
+      await moveDirectoryContents(sourcePath, targetPath, fs)
+      await fs.rm(sourcePath, { recursive: true, force: true })
+    } else {
+      const content = await fs.readFile(sourcePath)
+      await fs.writeFile(targetPath, content)
+      await fs.unlink(sourcePath)
+    }
+  }
+}
+
+// Debug helper: log directory entries when running tests or debug mode
+async function logDirEntriesIfDebug(
+  pathToLog: string,
+  fsService: FileSystemService,
+  label: string,
+) {
+  try {
+    if (process.env['NODE_ENV'] === 'test' || process.env['DEBUG'] || process.env['PAIR_DIAG']) {
+      const entries = await fsService.readdir(pathToLog)
+      const names = entries.map(e => (e && e.name ? e.name : String(e)))
+
+      // Use unified logger for debug output
+      const { logger } = await import('@pair/content-ops')
+      logger.debug(`[debug] ${label} ${pathToLog}`, names)
+    }
+  } catch {
+    // ignore logging failures
+  }
+}
+
+/**
+ * Normalize the extracted cache path to ensure KB structure exists at the root.
+ * Returns true if the cachePath contains a valid KB after normalization.
+ */
+async function normalizeExtractedKB(cachePath: string, fs: FileSystemService): Promise<boolean> {
+  // Initial validation
+  let kbStructureValid = await validateKBStructure(cachePath, fs)
+  if (kbStructureValid) return true
+
+  await logDirEntriesIfDebug(cachePath, fs, 'normalizeExtractedKB entries:')
+
+  // If not valid at root, try to find a single subdirectory that contains the KB
+  const subDirWithKB = await findKBStructureInSubdirectories(cachePath, fs)
+  if (subDirWithKB) {
+    await moveDirectoryContents(subDirWithKB, cachePath, fs)
+    await fs.rm(subDirWithKB, { recursive: true, force: true })
+    return true
+  }
+
+  // Final attempt: re-validate (covers manifest + other files case)
+  kbStructureValid = await validateKBStructure(cachePath, fs)
+  return kbStructureValid
 }
 
 export async function installKBFromLocalDirectory(
@@ -197,18 +324,55 @@ export async function installKBFromLocalDirectory(
     await copyDirectoryInMemory(fs, resolvedDirPath, cachePath)
 
     // Validate KB structure
-    const kbStructureValid = validateKBStructure(cachePath, fs)
+    const kbStructureValid = await validateKBStructure(cachePath, fs)
     if (!kbStructureValid) {
       throw new Error('Invalid KB structure')
     }
 
     announceSuccess(version, cachePath)
-    return cachePath
+    // If the extracted/copy result contains a .pair directory, return that as the
+    // dataset root so callers resolve registries correctly
+    const datasetRoot = fs.existsSync(join(cachePath, '.pair'))
+      ? join(cachePath, '.pair')
+      : cachePath
+    return datasetRoot
   } catch (error) {
     const err = error as Error
     if (shouldPreserveError(err)) throw err
     throw new Error(`Failed to install KB from local directory: ${err.message}`)
   }
+}
+
+// Helper: perform extract using the proper extract call for in-memory tests
+async function performExtractForZip(
+  resolvedZipPath: string,
+  cachePath: string,
+  fs: FileSystemService,
+  extractFn: (zipPath: string, targetPath: string, fsArg?: FileSystemService) => Promise<void>,
+): Promise<void> {
+  if (fs && fs.constructor && fs.constructor.name === 'InMemoryFileSystemService') {
+    await extractFn(resolvedZipPath, cachePath, fs)
+  } else {
+    await extractFn(resolvedZipPath, cachePath)
+  }
+}
+
+// Helper: finalize installation, normalize and return dataset root
+async function finalizeZipInstall(
+  version: string,
+  cachePath: string,
+  fs: FileSystemService,
+): Promise<string> {
+  await logDirEntriesIfDebug(cachePath, fs, 'after extract entries:')
+  const ok = await normalizeExtractedKB(cachePath, fs)
+  await logDirEntriesIfDebug(cachePath, fs, 'final entries at')
+  if (await fs.existsSync(join(cachePath, '.pair'))) {
+    await logDirEntriesIfDebug(join(cachePath, '.pair'), fs, '.pair entries:')
+  }
+  if (!ok) throw new Error('Invalid KB structure')
+
+  announceSuccess(version, cachePath)
+  return fs.existsSync(join(cachePath, '.pair')) ? join(cachePath, '.pair') : cachePath
 }
 
 export async function installKBFromLocalZip(
@@ -230,16 +394,8 @@ export async function installKBFromLocalZip(
   await cacheManager.ensureCacheDirectory(cachePath, fs)
 
   try {
-    await extract(resolvedZipPath, cachePath, fs)
-
-    // Validate KB structure
-    const kbStructureValid = validateKBStructure(cachePath, fs)
-    if (!kbStructureValid) {
-      throw new Error('Invalid KB structure')
-    }
-
-    announceSuccess(version, cachePath)
-    return cachePath
+    await performExtractForZip(resolvedZipPath, cachePath, fs, extract)
+    return await finalizeZipInstall(version, cachePath, fs)
   } catch (error) {
     const err = error as Error
     if (shouldPreserveError(err)) throw err

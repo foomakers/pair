@@ -42,12 +42,13 @@ function parseInstallArgs(args: string[]): InstallCommandConfig {
 
 function buildInstallHandlerOptions(options?: Record<string, unknown>): Record<string, unknown> {
   const handlerOptions: Record<string, unknown> = {}
-  const stringProps = ['baseTarget', 'customConfigPath', 'linkStyle'] as const
-  const boolProps = ['verbose', 'useDefaults'] as const
+  const stringProps = ['baseTarget', 'customConfigPath', 'linkStyle', 'logLevel'] as const
+  const boolProps = ['useDefaults'] as const
 
   for (const prop of stringProps) {
     if (options?.[prop]) {
-      const key = prop === 'customConfigPath' ? 'config' : prop
+      const key =
+        prop === 'customConfigPath' ? 'config' : prop === 'logLevel' ? 'minLogLevel' : prop
       handlerOptions[key] = String(options[prop])
     }
   }

@@ -17,4 +17,5 @@ release/
 !scripts/workflows/release
 .tmp/
 .benchmark-tmp/
+.kilocode/
 docs/performance/benchmark-report.json
