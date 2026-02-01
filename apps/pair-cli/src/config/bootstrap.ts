@@ -52,6 +52,14 @@ export async function bootstrapEnvironment(options: {
   }
 }
 
+/**
+ * Check if local dataset exists in monorepo pair context
+ * Guard clause: prevents getKnowledgeHubDatasetPath() call in release mode
+ * Safe to call in both monorepo and release contexts - fails gracefully
+ *
+ * @param fsService - FileSystemService for path resolution
+ * @returns true if dataset found locally, false otherwise
+ */
 function hasLocalDataset(fsService: FileSystemService): boolean {
   try {
     const datasetPath = getKnowledgeHubDatasetPath(fsService)
@@ -61,11 +69,26 @@ function hasLocalDataset(fsService: FileSystemService): boolean {
   }
 }
 
+/**
+ * Validate custom URL format and log for diagnostics
+ *
+ * @param customUrl - URL to validate
+ * @throws Error if URL format is invalid
+ */
 function validateAndLogCustomUrl(customUrl: string): void {
   validateUrl(customUrl)
   if (isDiagEnabled()) console.error(`[diag] Using custom URL: ${customUrl}`)
 }
 
+/**
+ * Determine if KB download should be skipped based on flags and local dataset availability
+ * Checks in order: --no-kb flag, custom local path, local dataset in monorepo context
+ *
+ * @param kb - Knowledge base flag value
+ * @param fsService - FileSystemService for local dataset check (optional)
+ * @param customUrl - Custom URL provided via CLI (optional)
+ * @returns true if KB download can be skipped, false if download required
+ */
 function shouldSkipKBDownload(
   kb: boolean,
   fsService?: FileSystemService,
@@ -89,6 +112,15 @@ function shouldSkipKBDownload(
   return false
 }
 
+/**
+ * Verify that the Knowledge Hub dataset is accessible
+ * Skips check for local custom URLs; validates accessibility for default/remote sources
+ *
+ * @param fsService - FileSystemService for dataset path resolution
+ * @param customUrl - Custom URL from CLI (optional, skips check if local path)
+ * @throws DatasetNotFoundError if dataset not found
+ * @throws DatasetAccessError if dataset exists but not accessible
+ */
 function checkKnowledgeHubDatasetAccessible(
   fsService: FileSystemService,
   customUrl?: string,

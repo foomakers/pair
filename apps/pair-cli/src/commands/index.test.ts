@@ -16,7 +16,7 @@ describe('commandRegistry', () => {
     )
 
     for (const key of keys) {
-      const entry = (commandRegistry as any)[key]
+      const entry = commandRegistry[key as keyof typeof commandRegistry]
       expect(typeof entry.parse).toBe('function')
       expect(typeof entry.handle).toBe('function')
       expect(typeof entry.metadata).toBe('object')

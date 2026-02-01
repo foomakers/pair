@@ -1,5 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest'
 import { isDiagEnabled, runDiagnostics, createLogger } from './diagnostics'
+import type { FileSystemService } from '@pair/content-ops'
 import * as config from './config'
 
 describe('diagnostics', () => {
@@ -40,7 +41,7 @@ describe('diagnostics', () => {
     const fs = {
       rootModuleDirectory: () => '/root',
       currentWorkingDirectory: () => '/cwd',
-    } as any
+    } as unknown as FileSystemService
 
     // Ensure the thrown error from getKnowledgeHubDatasetPath is caught and does not propagate
     expect(() => runDiagnostics(fs)).not.toThrow()
@@ -59,7 +60,7 @@ describe('diagnostics', () => {
         throw new Error('root-fail')
       },
       currentWorkingDirectory: () => '/cwd',
-    } as any
+    } as unknown as FileSystemService
 
     runDiagnostics(fs)
 
