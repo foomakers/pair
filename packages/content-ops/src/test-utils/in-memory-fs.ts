@@ -332,6 +332,22 @@ export class InMemoryFileSystemService implements FileSystemService {
     } as Dirent
   }
 
+  private symlinks = new Map<string, string>()
+
+  async symlink(target: string, path: string): Promise<void> {
+    const resolvedPath = this.resolvePath(path)
+    const resolvedTarget = this.resolvePath(target)
+    if (this.symlinks.has(resolvedPath) || this.files.has(resolvedPath)) {
+      throw new Error(`Path already exists: ${path}`)
+    }
+    this.symlinks.set(resolvedPath, resolvedTarget)
+    this.addParentDirectories(resolvedPath)
+  }
+
+  getSymlinks(): Map<string, string> {
+    return new Map(this.symlinks)
+  }
+
   getContent(path: string) {
     const resolvedPath = this.resolvePath(path)
     return this.files.get(resolvedPath)

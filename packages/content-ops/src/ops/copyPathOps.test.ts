@@ -73,7 +73,12 @@ describe('copyPathOps - root file operations', () => {
       source: 'dataset/AGENTS.md',
       target: 'AGENTS.md',
       datasetRoot: '/development/path/pair/apps/pair-cli',
-      options: { defaultBehavior: 'overwrite' as const, folderBehavior: undefined },
+      options: {
+        defaultBehavior: 'overwrite' as const,
+        folderBehavior: undefined,
+        flatten: false,
+        targets: [],
+      },
     }
 
     const result = await copyPathOps(options)
@@ -122,6 +127,157 @@ describe('copyPathOps - directory operations', () => {
   })
 })
 
+describe('copyPathOps - flatten and prefix', () => {
+  it('should flatten directory hierarchy into hyphen-separated names', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/navigator/next/SKILL.md': '# Next Skill',
+        '/dataset/source/process/implement/SKILL.md': '# Implement Skill',
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true, targets: [] },
+    })
+
+    await TEST_ASSERTIONS.assertFileExists(
+      fileService,
+      '/dataset/target/navigator-next/SKILL.md',
+      '# Next Skill',
+    )
+    await TEST_ASSERTIONS.assertFileExists(
+      fileService,
+      '/dataset/target/process-implement/SKILL.md',
+      '# Implement Skill',
+    )
+  })
+
+  it('should apply prefix to top-level directory names', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/navigator/SKILL.md': '# Nav Skill',
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: false, prefix: 'pair', targets: [] },
+    })
+
+    await TEST_ASSERTIONS.assertFileExists(
+      fileService,
+      '/dataset/target/pair-navigator/SKILL.md',
+      '# Nav Skill',
+    )
+  })
+
+  it('should apply both flatten and prefix', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/navigator/next/SKILL.md': '# Next Skill',
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true, prefix: 'pair', targets: [] },
+    })
+
+    await TEST_ASSERTIONS.assertFileExists(
+      fileService,
+      '/dataset/target/pair-navigator-next/SKILL.md',
+      '# Next Skill',
+    )
+  })
+
+  it('should apply prefix only without flatten (prefix top-level, keep hierarchy)', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/navigator/next/SKILL.md': '# Next Skill',
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: false, prefix: 'pair', targets: [] },
+    })
+
+    await TEST_ASSERTIONS.assertFileExists(
+      fileService,
+      '/dataset/target/pair-navigator/next/SKILL.md',
+      '# Next Skill',
+    )
+  })
+
+  it('should rewrite relative links after flatten+prefix copy (full pipeline)', async () => {
+    // File at source/navigator/next/ (depth 3) links up 3 levels to reach dataset root
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/navigator/next/SKILL.md':
+          '# Next\n[guide](../../../.pair/knowledge/testing/README.md)',
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true, prefix: 'pair', targets: [] },
+    })
+
+    // After flatten+prefix: source/navigator/next/ → target/pair-navigator-next/
+    // Original: ../../../ from source/navigator/next/ → /dataset/.pair/knowledge/testing/README.md
+    // New location target/pair-navigator-next/ (depth 2): ../../.pair/knowledge/testing/README.md
+    const content = await fileService.readFile('/dataset/target/pair-navigator-next/SKILL.md')
+    expect(content).toContain('../../.pair/knowledge/testing/README.md')
+  })
+
+  it('should detect and throw on flatten collisions', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/a/b/SKILL.md': '# Skill 1',
+        '/dataset/source/a-b/SKILL.md': '# Skill 2',
+      },
+      '/',
+      '/',
+    )
+
+    await expect(
+      copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, targets: [] },
+      }),
+    ).rejects.toThrow(/collision/i)
+  })
+})
+
 describe('copyPathOps - error cases', () => {
   let fileService: InMemoryFileSystemService
 
@@ -150,6 +306,8 @@ describe('copyPathOps - error cases', () => {
       datasetRoot: '/dataset',
       options: {
         defaultBehavior: 'add',
+        flatten: false,
+        targets: [],
       },
     })
 

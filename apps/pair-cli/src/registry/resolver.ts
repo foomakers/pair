@@ -1,14 +1,17 @@
-import { FileSystemService, Behavior } from '@pair/content-ops'
+import { FileSystemService, Behavior, type TargetConfig } from '@pair/content-ops'
 
 /**
  * Unified configuration for an individual asset registry.
+ * `targets` must have at least one entry with mode 'canonical'.
  */
 export interface RegistryConfig {
-  source?: string
+  source: string
   behavior: Behavior
-  target_path: string
   description: string
-  include?: string[]
+  include: string[]
+  flatten: boolean
+  prefix?: string
+  targets: TargetConfig[]
 }
 
 /**
@@ -24,17 +27,60 @@ export interface Config {
 /**
  * Extracts and normalizes asset registries from a configuration object.
  * Supports both 'asset_registries' and legacy 'dataset_registries' fields.
+ * Normalizes legacy 'target_path' into 'targets' array for backward compatibility.
  */
 export function extractRegistries(config: unknown): Record<string, RegistryConfig> {
   const cfg = config as Config
-  const registries =
+  const raw =
     cfg?.asset_registries || (config as Record<string, unknown>)?.['dataset_registries'] || {}
-  return registries as Record<string, RegistryConfig>
+  const registries = raw as unknown as Record<string, Record<string, unknown>>
+  const result: Record<string, RegistryConfig> = {}
+
+  for (const [name, reg] of Object.entries(registries)) {
+    if (reg && typeof reg === 'object' && !Array.isArray(reg)) {
+      result[name] = normalizeRegistryConfig(name, reg as Record<string, unknown>)
+    } else {
+      // Pass through invalid entries as-is for validation to catch
+      result[name] = reg as unknown as RegistryConfig
+    }
+  }
+
+  return result
+}
+
+/**
+ * Normalize a raw registry config, applying defaults and migrating legacy fields.
+ */
+function normalizeRegistryConfig(name: string, raw: Record<string, unknown>): RegistryConfig {
+  const targets = normalizeTargets(name, raw)
+
+  return {
+    source: raw['source'] != null ? String(raw['source']) : name,
+    behavior: (raw['behavior'] as Behavior) || 'mirror',
+    description: String(raw['description'] || ''),
+    include: Array.isArray(raw['include']) ? (raw['include'] as string[]) : [],
+    flatten: typeof raw['flatten'] === 'boolean' ? raw['flatten'] : false,
+    ...(raw['prefix'] != null && { prefix: String(raw['prefix']) }),
+    targets,
+  }
+}
+
+/**
+ * Build targets array from raw config.
+ * Migrates legacy target_path to targets if targets is absent.
+ */
+function normalizeTargets(name: string, raw: Record<string, unknown>): TargetConfig[] {
+  if (Array.isArray(raw['targets']) && raw['targets'].length > 0) {
+    return raw['targets'] as TargetConfig[]
+  }
+  const legacyPath = raw['target_path'] as string | undefined
+  const path = legacyPath || name
+  return [{ path, mode: 'canonical' as const }]
 }
 
 /**
  * Calculates the final target path for a registry.
- * Uses the registry's target_path if defined, otherwise falls back to the registry name.
+ * Uses the canonical target path from targets array, falls back to registry name.
  */
 export function resolveTarget(
   name: string,
@@ -42,7 +88,8 @@ export function resolveTarget(
   fs: FileSystemService,
   baseTarget?: string,
 ): string {
-  const relativePath = config.target_path || name
+  const canonical = config.targets.find(t => t.mode === 'canonical')
+  const relativePath = canonical ? canonical.path : name
   return baseTarget ? fs.resolve(baseTarget, relativePath) : fs.resolve(relativePath)
 }
 
@@ -58,15 +105,10 @@ export function resolveRegistryPaths(params: {
 }): { source: string; target: string } {
   const { name, config, datasetRoot, fs, baseTarget } = params
 
-  // Source is always relative to the dataset root
-  // Use explicit registry config source if provided, otherwise fall back to registry name
   // Prefer a direct registry folder under datasetRoot when present (useful for
-  // disjoint sources passed via --source). Otherwise fallback to configured
-  // registry 'source' (e.g., '.pair/knowledge').
+  // disjoint sources passed via --source). Otherwise use configured source.
   const directPath = fs.resolve(datasetRoot, name)
-  const source = fs.existsSync(directPath)
-    ? directPath
-    : fs.resolve(datasetRoot, config && config.source ? config.source : name)
+  const source = fs.existsSync(directPath) ? directPath : fs.resolve(datasetRoot, config.source)
 
   const target = resolveTarget(name, config, fs, baseTarget)
 

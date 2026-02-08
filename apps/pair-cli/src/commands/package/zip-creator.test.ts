@@ -8,12 +8,14 @@ import path from 'path'
 import os from 'os'
 
 // Helper to create test registry config
-function testRegistry(source: string, target_path = source): RegistryConfig {
+function testRegistry(source: string, targetPath = source): RegistryConfig {
   return {
     source,
-    target_path,
     behavior: 'mirror',
     description: 'Test registry',
+    include: [],
+    flatten: false,
+    targets: [{ path: targetPath, mode: 'canonical' }],
   }
 }
 

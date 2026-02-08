@@ -22,7 +22,7 @@ describe('dispatchCommand() - real handlers integration', () => {
           reg: {
             source: 'reg',
             behavior: 'mirror',
-            target_path: 'dest',
+            targets: [{ path: 'dest', mode: 'canonical' }],
             description: 'desc',
           },
         },

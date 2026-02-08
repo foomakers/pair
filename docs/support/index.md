@@ -4,6 +4,7 @@ Get help with pair installation, configuration, and usage.
 
 ## Quick Links
 
+- **[How Pair Works](../how-pair-works.md)** - Understand the development process and KB management
 - **[Installation FAQ](installation-faq.md)** - Solutions for common install issues
 - **[Diagnostic Script](../../scripts/diagnose-install.sh)** - Automated environment check
 - **[GitHub Issues](https://github.com/foomakers/pair/issues)** - Report bugs and feature requests

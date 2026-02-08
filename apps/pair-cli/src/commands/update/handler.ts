@@ -12,9 +12,11 @@ import {
   extractRegistries,
   validateAllRegistries,
   resolveTarget,
+  resolveRegistryPaths,
   forEachRegistry,
   doCopyAndUpdateLinks,
-  buildRegistryBackupConfig,
+  buildCopyOptions,
+  distributeToSecondaryTargets,
   handleBackupRollback,
   type RegistryConfig,
 } from '#registry'
@@ -134,10 +136,10 @@ async function runUpdateSequence(
 
 async function performBackup(backupService: BackupService, context: UpdateContext): Promise<void> {
   const { fs, registries, baseTarget, pushLog } = context
-  const backupConfig = buildRegistryBackupConfig(
-    mapRegistriesToBackupConfig(registries, baseTarget, fs),
-    fs,
-  )
+  const backupConfig: Record<string, string> = {}
+  for (const [name, config] of Object.entries(registries)) {
+    backupConfig[name] = resolveTarget(name, config, fs, baseTarget)
+  }
   pushLog('info', 'Creating backup before update...')
   await backupService.backupAllRegistries(backupConfig)
 }
@@ -146,9 +148,16 @@ async function updateRegistries(context: UpdateContext): Promise<void> {
   const { fs, datasetRoot, registries, baseTarget, pushLog } = context
 
   await forEachRegistry(registries, async (registryName, registryConfig) => {
-    const effectiveTarget = resolveTarget(registryName, registryConfig, fs, baseTarget)
+    const resolved = resolveRegistryPaths({
+      name: registryName,
+      config: registryConfig,
+      datasetRoot,
+      fs,
+      baseTarget,
+    })
+    const effectiveTarget = resolved.target
     await ensureDir(fs, dirname(effectiveTarget))
-    const datasetPath = fs.resolve(datasetRoot, registryName)
+    const datasetPath = resolved.source
     const copyOptions = buildCopyOptions(registryConfig)
 
     // Debugging: When running with diagnostics, emit dataset contents to help
@@ -172,6 +181,16 @@ async function updateRegistries(context: UpdateContext): Promise<void> {
       datasetRoot: datasetRoot,
       options: copyOptions,
     })
+
+    if (registryConfig.targets.length > 1) {
+      await distributeToSecondaryTargets({
+        fileService: fs,
+        canonicalPath: effectiveTarget,
+        targets: registryConfig.targets,
+        baseTarget,
+      })
+    }
+
     pushLog('info', `Successfully updated registry '${registryName}'`)
   })
 }
@@ -192,22 +211,6 @@ async function executeRollback(
     },
     pushLog,
   )
-}
-
-/**
- * Helper to map full AssetRegistryConfig to simple path config for backup service
- */
-function mapRegistriesToBackupConfig(
-  registries: Record<string, RegistryConfig>,
-  baseTarget: string,
-  fs: FileSystemService,
-): Record<string, { target_path: string }> {
-  const result: Record<string, { target_path: string }> = {}
-  for (const [name, config] of Object.entries(registries)) {
-    const effectiveTarget = resolveTarget(name, config, fs, baseTarget)
-    result[name] = { target_path: effectiveTarget }
-  }
-  return result
 }
 
 /**
@@ -238,28 +241,4 @@ async function resolveDatasetRoot(
       }
       return config.path
   }
-}
-
-/**
- * Build copy options for registry based on behavior and includes
- */
-function buildCopyOptions(registryConfig: RegistryConfig): Record<string, unknown> {
-  const behavior = registryConfig.behavior || 'mirror'
-  const include = registryConfig.include || []
-
-  const copyOptions: Record<string, unknown> = {
-    defaultBehavior: behavior,
-  }
-
-  // For selective behavior, set folder behaviors for included folders
-  if (include.length > 0 && behavior === 'mirror') {
-    const folderBehavior: Record<string, string> = {}
-    include.forEach((folder: string) => {
-      folderBehavior[folder] = 'mirror'
-    })
-    copyOptions['folderBehavior'] = folderBehavior
-    copyOptions['defaultBehavior'] = 'skip'
-  }
-
-  return copyOptions
 }

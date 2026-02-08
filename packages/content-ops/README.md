@@ -18,18 +18,59 @@ Important helpers exported from this package:
 
 Move/Copy options shape (`SyncOptions`):
 
-{
-defaultBehavior?: 'overwrite' | 'add' | 'mirror',
-folderBehavior?: Record<string, 'overwrite' | 'add' | 'mirror'>
+```typescript
+type SyncOptions = {
+  defaultBehavior: Behavior           // 'overwrite' | 'add' | 'mirror' | 'skip'
+  folderBehavior?: Record<string, Behavior>
+  concurrencyLimit: number            // default: 10
+  retryAttempts: number               // default: 3
+  retryDelay: number                  // default: 100ms
+  include: string[]                   // folders to include (empty = all)
+  flatten: boolean                    // flatten directory hierarchy into hyphen-separated names
+  prefix?: string                     // prepend prefix to top-level directory names
+  targets: TargetConfig[]             // multi-target distribution
 }
+```
 
-Behavior semantics:
+Use `defaultSyncOptions()` to get a pre-filled instance with sensible defaults.
+
+### Behavior semantics
 
 - `overwrite` (default): copied/moved files replace existing targets.
 - `add`: existing files in destination are preserved (skipped).
 - `mirror`: destination folder is synchronized to match the source (extraneous files removed).
+- `skip`: entry is skipped entirely.
 
 Folder behavior rules are resolved by path (exact match or ancestor match). If a folder is declared `mirror`, all its descendants must also be `mirror` (validation will throw otherwise).
+
+### TargetConfig and multi-target distribution
+
+```typescript
+type TargetConfig = { path: string; mode: 'canonical' | 'symlink' | 'copy' }
+```
+
+A registry can declare multiple targets. Exactly one must have `mode: 'canonical'` (the primary copy destination). Additional targets are created as symlinks or copies after the canonical copy completes. Use `validateTargets(targets)` to enforce these constraints.
+
+Windows note: symlink targets are rejected on Windows (`process.platform === 'win32'`) to avoid permission issues.
+
+### Flatten and prefix transforms
+
+When `flatten: true`, directory paths like `navigator/next` become `navigator-next`. When `prefix` is set (e.g., `'pair'`), the top-level directory is prefixed: `navigator-next` → `pair-navigator-next`. Order: flatten first, then prefix.
+
+Naming transform helpers:
+- `flattenPath(dirName)` — replaces `/` with `-`
+- `prefixPath(dirName, prefix)` — prepends prefix to top-level segment
+- `transformPath(dirName, { flatten, prefix })` — applies both
+- `detectCollisions(paths)` — finds duplicates after transforms
+
+After transform-aware copies, markdown links are automatically rewritten to match the new directory structure via `rewriteLinksAfterTransform()`.
+
+### Copy pipeline order
+
+1. Validate source exists
+2. If flatten/prefix active → `copyDirectoryWithTransforms` (collect files, validate no collisions, copy with transforms, rewrite links)
+3. If standard copy → `copyDirHelper` with behavior resolution
+4. If multi-target → `distributeToSecondaryTargets` creates symlinks/copies
 
 ## Package Structure
 
@@ -51,10 +92,12 @@ src/
 │   └── replacement-applier.ts # Link replacement logic
 ├── ops/                     # Core operations
 │   ├── SyncOptions.ts       # Options type definitions
-│   ├── behavior.ts          # Behavior logic
-│   ├── copyPathOps.ts       # Copy operations
+│   ├── behavior.ts          # Behavior logic and target validation
+│   ├── copyPathOps.ts       # Copy operations (including transform-aware copy)
 │   ├── movePathOps.ts       # Move operations
 │   ├── validatePathOps.ts   # Validation operations
+│   ├── naming-transforms.ts # Flatten/prefix path transforms and collision detection
+│   ├── link-rewriter.ts     # Post-transform markdown link rewriting
 │   └── link-batch-processor.ts # Batch link processing
 └── test-utils/              # Testing utilities
     └── in-memory-fs.ts      # In-memory filesystem for tests

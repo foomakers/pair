@@ -16,7 +16,7 @@ describe('handlePackageCommand - real services integration', () => {
             reg1: {
               source: 'source/reg1',
               behavior: 'mirror',
-              target_path: '.pair/reg1',
+              targets: [{ path: '.pair/reg1', mode: 'canonical' }],
               description: 'Registry 1',
             },
           },
@@ -65,7 +65,7 @@ describe('handlePackageCommand - real services integration', () => {
         broken: {
           source: 'non-existent',
           behavior: 'mirror',
-          target_path: 'pkg',
+          targets: [{ path: 'pkg', mode: 'canonical' }],
           description: 'broken',
         },
       },

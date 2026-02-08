@@ -4,26 +4,41 @@
       "source": ".github",
       "behavior": "mirror",
       "include": ["/agents", "/prompts"],
-      "target_path": ".github",
-      "description": "GitHub workflows and configuration files"
+      "description": "GitHub workflows and configuration files",
+      "targets": [{ "path": ".github", "mode": "canonical" }]
     },
     "knowledge": {
       "source": ".pair/knowledge",
       "behavior": "mirror",
-      "target_path": ".pair/knowledge",
-      "description": "Knowledge base and documentation"
+      "description": "Knowledge base and documentation",
+      "targets": [{ "path": ".pair/knowledge", "mode": "canonical" }]
     },
     "adoption": {
       "source": ".pair/adoption",
       "behavior": "add",
-      "target_path": ".pair/adoption",
-      "description": "Adoption guides and onboarding materials"
+      "description": "Adoption guides and onboarding materials",
+      "targets": [{ "path": ".pair/adoption", "mode": "canonical" }]
     },
     "agents": {
       "source": "AGENTS.md",
       "behavior": "mirror",
-      "target_path": "AGENTS.md",
-      "description": "AI agents guidance and session context"
+      "description": "AI agents guidance and session context",
+      "targets": [{ "path": "AGENTS.md", "mode": "canonical" }]
+    },
+    "skills": {
+      "source": ".skills",
+      "behavior": "mirror",
+      "flatten": true,
+      "prefix": "pair",
+      "description": "Agent skills distributed to AI tool directories",
+      "targets": [
+        { "path": ".claude/skills/", "mode": "canonical" },
+        { "path": ".github/skills/", "mode": "symlink" },
+        { "path": ".cursor/skills/", "mode": "symlink" },
+        { "path": ".agent/skills/", "mode": "symlink" },
+        { "path": ".agents/skills/", "mode": "symlink" },
+        { "path": ".windsurf/skills/", "mode": "symlink" }
+      ]
     }
   },
   "default_target_folders": { "pair": ".pair", "github": ".github" }

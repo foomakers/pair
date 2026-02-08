@@ -83,3 +83,29 @@ describe('walkMarkdownFiles - edge cases', () => {
     expect(files).toContain('/docs/level1/other.md')
   })
 })
+
+describe('FileSystemService.symlink (in-memory)', () => {
+  it('creates a symlink entry', async () => {
+    fileService = new InMemoryFileSystemService({}, '/', '/')
+    await fileService.mkdir('/project/canonical', { recursive: true })
+    await fileService.symlink('/project/canonical', '/project/link')
+
+    const symlinks = fileService.getSymlinks()
+    expect(symlinks.get('/project/link')).toBe('/project/canonical')
+  })
+
+  it('throws when path already exists as a file', async () => {
+    fileService = new InMemoryFileSystemService({ '/project/existing': 'content' }, '/', '/')
+    await expect(fileService.symlink('/project/target', '/project/existing')).rejects.toThrow(
+      /already exists/i,
+    )
+  })
+
+  it('throws when symlink path already exists', async () => {
+    fileService = new InMemoryFileSystemService({}, '/', '/')
+    await fileService.symlink('/project/a', '/project/link')
+    await expect(fileService.symlink('/project/b', '/project/link')).rejects.toThrow(
+      /already exists/i,
+    )
+  })
+})

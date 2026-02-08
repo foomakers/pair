@@ -26,7 +26,7 @@ describe('handleUpdateCommand - integration with in-memory services', () => {
             'test-registry': {
               source: 'test-registry',
               behavior: 'mirror',
-              target_path: '.pair/test-registry',
+              targets: [{ path: '.pair/test-registry', mode: 'canonical' }],
               description: 'Test registry',
             },
           },

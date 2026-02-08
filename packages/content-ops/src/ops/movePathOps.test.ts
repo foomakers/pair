@@ -108,6 +108,8 @@ describe('movePathOps - error cases', () => {
       datasetRoot: '/dataset',
       options: {
         defaultBehavior: 'add',
+        flatten: false,
+        targets: [],
       },
     })
 

@@ -16,9 +16,15 @@ export { isValidHttpUrl, validateUrl } from './file-system/url-validator'
 export { extractZip } from './file-system/archive-operations'
 export { detectSourceType, SourceType } from './path-resolution/source-detector'
 
-export { SyncOptions } from './ops/SyncOptions'
-export { Behavior } from './ops/behavior'
-export { copyPathOps } from './ops/copyPathOps'
+export { SyncOptions, defaultSyncOptions } from './ops/SyncOptions'
+export { Behavior, validateTargets, type TargetMode, type TargetConfig } from './ops/behavior'
+export { copyPathOps, copyDirectoryWithTransforms } from './ops/copyPathOps'
+export { flattenPath, prefixPath, transformPath, detectCollisions } from './ops/naming-transforms'
+export {
+  rewriteLinksInFile,
+  rewriteLinksAfterTransform,
+  type PathMappingEntry,
+} from './ops/link-rewriter'
 export { movePathOps } from './ops/movePathOps'
 export { validatePathOps } from './ops/validatePathOps'
 export {

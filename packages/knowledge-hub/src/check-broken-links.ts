@@ -1,12 +1,11 @@
 import { join } from 'path'
-import { readFileSync } from 'fs'
 import { fileSystemService } from '@pair/content-ops'
 import { validatePathOps } from '@pair/content-ops'
 
 const ROOT = join(__dirname, '..')
 const DATASET = join(ROOT, 'dataset')
 const ERRORS_PATH = join(ROOT, 'errors.txt')
-const EXLUSION_LIST: string[] = [
+const EXCLUSION_LIST: string[] = [
   '.pair/adoption/product/backlog/',
   '01-initiatives/2025/core-data-pipeline.md',
   '02-epics/in-progress/01-01-data-ingestion-pipeline.md',
@@ -16,7 +15,7 @@ const EXLUSION_LIST: string[] = [
   'LINK',
 ]
 
-function parseOptions(arg?: string) {
+export function parseOptions(arg?: string) {
   if (!arg) return undefined
   try {
     return JSON.parse(arg)
@@ -24,7 +23,7 @@ function parseOptions(arg?: string) {
     void 0
   }
   try {
-    const content = readFileSync(arg, 'utf-8')
+    const content = fileSystemService.readFileSync(arg)
     return JSON.parse(content)
   } catch (err) {
     throw new Error(`Failed to parse options from arg: ${String(err)}`)
@@ -45,7 +44,7 @@ if (require.main === module) {
   const options = parseOptions(optionsArg)
 
   const cfg: CheckLinksConfig = Object.assign(
-    { datasetRoot, errorsPath, exclusionList: EXLUSION_LIST },
+    { datasetRoot, errorsPath, exclusionList: EXCLUSION_LIST },
     options || {},
   ) as CheckLinksConfig
 

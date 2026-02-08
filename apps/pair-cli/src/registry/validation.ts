@@ -1,4 +1,4 @@
-import { Behavior, FileSystemService } from '@pair/content-ops'
+import { Behavior, FileSystemService, validateTargets, type TargetConfig } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
 
 /**
@@ -73,12 +73,23 @@ export function validateRegistry(name: string, config: unknown): string[] {
 
   const reg = config as Record<string, unknown>
 
+  errors.push(...validateSource(name, reg))
   errors.push(...validateBehavior(name, reg))
-  errors.push(...validatePaths(name, reg))
-  errors.push(...validateIncludes(name, reg))
   errors.push(...validateDescription(name, reg))
+  errors.push(...validateIncludes(name, reg))
+  errors.push(...validateFlattenField(name, reg))
+  errors.push(...validatePrefixField(name, reg))
+  errors.push(...validateTargetConfigs(name, reg))
 
   return errors
+}
+
+function validateSource(name: string, reg: Record<string, unknown>): string[] {
+  const source = reg['source']
+  if (source !== undefined && typeof source !== 'string') {
+    return [`Registry '${name}' source must be a string`]
+  }
+  return []
 }
 
 function validateBehavior(name: string, reg: Record<string, unknown>): string[] {
@@ -91,17 +102,6 @@ function validateBehavior(name: string, reg: Record<string, unknown>): string[] 
     ]
   }
   return []
-}
-
-function validatePaths(name: string, reg: Record<string, unknown>): string[] {
-  const errors: string[] = []
-  if (!reg['target_path'] || typeof reg['target_path'] !== 'string') {
-    errors.push(`Registry '${name}' must have a valid target_path string`)
-  }
-  if (!reg['behavior'] || typeof reg['behavior'] !== 'string') {
-    errors.push(`Registry '${name}' must have a valid behavior string`)
-  }
-  return errors
 }
 
 function validateIncludes(name: string, reg: Record<string, unknown>): string[] {
@@ -123,6 +123,46 @@ function validateDescription(name: string, reg: Record<string, unknown>): string
   if (!reg['description'] || typeof reg['description'] !== 'string') {
     return [`Registry '${name}' must have a valid description string`]
   }
+  return []
+}
+
+function validateFlattenField(name: string, reg: Record<string, unknown>): string[] {
+  const flatten = reg['flatten']
+  if (flatten === undefined) return []
+  if (typeof flatten !== 'boolean') {
+    return [`Registry '${name}' flatten must be a boolean`]
+  }
+  return []
+}
+
+function validatePrefixField(name: string, reg: Record<string, unknown>): string[] {
+  const prefix = reg['prefix']
+  if (prefix === undefined) return []
+  if (typeof prefix !== 'string') {
+    return [`Registry '${name}' prefix must be a string`]
+  }
+  return []
+}
+
+function validateTargetConfigs(name: string, reg: Record<string, unknown>): string[] {
+  const targets = reg['targets']
+
+  if (!Array.isArray(targets) || targets.length === 0) {
+    return [`Registry '${name}' must have at least one target with mode 'canonical'`]
+  }
+
+  for (const t of targets) {
+    if (!t || typeof t !== 'object' || !t.path || !t.mode) {
+      return [`Registry '${name}' targets must have path and mode`]
+    }
+  }
+
+  try {
+    validateTargets(targets as TargetConfig[])
+  } catch (err) {
+    return [`Registry '${name}': ${err instanceof Error ? err.message : String(err)}`]
+  }
+
   return []
 }
 
@@ -171,7 +211,7 @@ export function validateAllRegistries(registries: Record<string, RegistryConfig>
     return { valid: false, errors }
   }
 
-  const targets: Record<string, string> = {}
+  const canonicalPaths: Record<string, string> = {}
   let validRegistryCount = 0
 
   for (const [name, config] of Object.entries(registries)) {
@@ -179,9 +219,10 @@ export function validateAllRegistries(registries: Record<string, RegistryConfig>
     errors.push(...regErrors)
     if (regErrors.length === 0) {
       validRegistryCount++
-    }
-    if (config.target_path) {
-      targets[name] = config.target_path
+      const canonical = config.targets.find(t => t.mode === 'canonical')
+      if (canonical) {
+        canonicalPaths[name] = canonical.path
+      }
     }
   }
 
@@ -191,7 +232,7 @@ export function validateAllRegistries(registries: Record<string, RegistryConfig>
   }
 
   if (errors.length === 0) {
-    const overlapping = detectOverlappingTargets(targets)
+    const overlapping = detectOverlappingTargets(canonicalPaths)
     errors.push(...overlapping)
   }
 

@@ -91,6 +91,8 @@ describe('setupPathOperation - custom options', () => {
     const options: SyncOptions = {
       defaultBehavior: 'add',
       folderBehavior: { folder: 'mirror' },
+      flatten: false,
+      targets: [],
     }
 
     const result = setupPathOperation('source.md', 'target.md', '/dataset', options)
@@ -100,13 +102,13 @@ describe('setupPathOperation - custom options', () => {
   })
 
   it('should return proper paths and options', () => {
-    const options: SyncOptions = { defaultBehavior: 'skip' }
+    const options: SyncOptions = { defaultBehavior: 'skip', flatten: false, targets: [] }
     const result = setupPathOperation('source.md', 'target.md', '/dataset', options)
 
     expect(result.shouldSkip).toBe(false)
     expect(result.srcPath).toBe('/dataset/source.md')
     expect(result.destPath).toBe('/dataset/target.md')
-    expect(result.opts).toBe(options)
+    expect(result.options).toBe(options)
   })
 })
 
@@ -259,7 +261,7 @@ describe('updateMarkdownLinks - options', () => {
   })
 
   it('should use custom concurrency limit', async () => {
-    const options: SyncOptions = { concurrencyLimit: 5 }
+    const options: SyncOptions = { concurrencyLimit: 5, flatten: false, targets: [] }
 
     await updateMarkdownLinks({
       fileService,

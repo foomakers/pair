@@ -12,7 +12,6 @@ interface RegistryEntry {
   registry: {
     source?: string
     behavior: string
-    target_path: string
     description?: string
   }
 }
