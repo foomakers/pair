@@ -78,6 +78,7 @@ This creates the standard `.pair` and `.github` folders with documentation, work
 
 ### Learning Resources
 
+- **[How Pair Works](../how-pair-works.md)** - Understand the full development process and how pair helps AI-assisted teams
 - **[CLI Commands Reference](../cli/commands.md)** - Complete command documentation with all options
 - **[CLI Help Examples](../cli/help-examples.md)** - Copy-paste ready examples for common workflows
 - [Explore CLI Workflows](./02-cli-workflows.md) - Common use cases and patterns

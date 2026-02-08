@@ -109,6 +109,7 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 
 ### Documentation & Getting Started
 
+- **How Pair Works**: [How Pair Works](docs/how-pair-works.md) - Understand the development process and how pair helps AI-assisted teams
 - **Quick Start**: [Quick Start Guide](docs/getting-started/01-quickstart.md) - Get up and running in minutes
 - **Support Resources**: [Support & FAQ](docs/support/index.md) - Installation help, troubleshooting, and support contacts
 - **Development Process**: All guides and standards are available in `.pair/how-to/` and `.pair/tech/knowledge-base/`
