@@ -77,9 +77,10 @@ Sample output:
 ```
 📁 Available asset registries:
 
-  github     🔄🎯 .github         GitHub workflows and configuration files
-  knowledge  🔄 .pair            Knowledge base and documentation
-  adoption   ➕ .pair/product/adopted  Adoption guides and onboarding materials
+  github     🔄🎯 .github              GitHub workflows and configuration files
+  knowledge  🔄 .pair/knowledge         Knowledge base and documentation
+  adoption   ➕ .pair/adoption           Adoption guides and onboarding materials
+  skills     🔄 .claude/skills/ (+2)    Agent skills distributed to AI tool directories
 ```
 
 ### Install using defaults
@@ -207,31 +208,35 @@ The CLI uses a JSON configuration file to define asset registries. Here's the st
 {
   "asset_registries": {
     "registry-name": {
-      "source": "optional/source/path",
+      "source": "source/path",
       "behavior": "mirror|add|overwrite|skip",
-      "target_path": "target/directory",
       "description": "Description of the registry",
-      "include": ["optional", "include", "patterns"]
+      "include": ["optional", "include", "patterns"],
+      "flatten": false,
+      "prefix": "optional-prefix",
+      "targets": [
+        { "path": "target/directory", "mode": "canonical" },
+        { "path": "secondary/directory", "mode": "symlink" }
+      ]
     }
-  },
-  "default_target_folders": {
-    "registry-name": "default/target/path"
-  },
-  "folders_to_include": {
-    "registry-name": ["folder1", "folder2"]
   }
 }
 ```
+
+Each registry declares one or more **targets**. Exactly one target must have `mode: "canonical"` (the primary copy destination). Additional targets can use `mode: "symlink"` or `mode: "copy"` to distribute content to multiple locations after the canonical copy completes.
+
+When `flatten` is `true`, directory hierarchies are collapsed into hyphen-separated names (e.g., `navigator/next` → `navigator-next`). When `prefix` is set, it is prepended to top-level directory names (e.g., `navigator-next` → `pair-navigator-next`).
 
 ### Validation Criteria
 
 The `validate-config` command checks:
 
-- **Asset Registry Structure**: Each registry must have required fields (`behavior`, `target_path`, `description`)
+- **Asset Registry Structure**: Each registry must have required fields (`source`, `behavior`, `description`, `targets`)
 - **Behavior Values**: Must be one of: `mirror`, `add`, `overwrite`, `skip`
-- **Path Resolution**: Target paths must be valid and accessible
-- **Source Availability**: If specified, source paths must exist
-- **Include Patterns**: If specified, must be valid glob patterns
+- **Target Configuration**: Exactly one target with `mode: "canonical"`; no duplicate canonical paths across registries
+- **Symlink Restrictions**: Symlink targets are rejected on Windows
+- **Source Availability**: Source paths must exist in the dataset
+- **Include Patterns**: If specified, must be valid folder paths
 
 ## Usage Examples
 

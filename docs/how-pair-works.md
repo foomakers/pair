@@ -10,7 +10,7 @@ Think of it as onboarding documentation for your AI teammate: instead of explain
 
 ## What Gets Installed
 
-When you run `pair install`, the CLI creates a `.pair/` folder in your project with two main sections:
+When you run `pair install`, the CLI creates a `.pair/` folder and optionally a `.skills/` folder in your project:
 
 ```
 .pair/
@@ -23,9 +23,13 @@ When you run `pair install`, the CLI creates a `.pair/` folder in your project w
   adoption/                     # Your decisions (the "what we chose")
     product/                    # PRD, subdomain definitions
     tech/                       # Architecture, tech stack, infrastructure, ADRs
+
+.skills/                        # Agent skills (agentskills.io standard)
+  navigator/next/SKILL.md       # Example: /next skill for task navigation
+  ...
 ```
 
-The **knowledge/** section is the shared reference material — process guides and technical standards that apply broadly. The **adoption/** section is where **your project's specific decisions** are recorded: which tech stack you chose, what architecture pattern you follow, what your way of working is.
+The **knowledge/** section is the shared reference material — process guides and technical standards that apply broadly. The **adoption/** section is where **your project's specific decisions** are recorded: which tech stack you chose, what architecture pattern you follow, what your way of working is. The **.skills/** directory contains **agent skills** — structured instructions that AI assistants can discover and execute, following the [Agent Skills](https://agentskills.io) open standard.
 
 ## The Development Process — End to End
 
@@ -219,16 +223,19 @@ The CLI supports three KB sources with this precedence:
 
 ### Asset Registries
 
-The CLI uses four asset registries, each with a specific copy behavior:
+The CLI uses five asset registries, each with a specific copy behavior:
 
-| Registry | Behavior | Target | Description |
-|----------|----------|--------|-------------|
+| Registry | Behavior | Target(s) | Description |
+|----------|----------|-----------|-------------|
 | `github` | mirror | `.github` | GitHub workflows and configuration |
 | `knowledge` | mirror | `.pair/knowledge` | Knowledge base and documentation |
 | `adoption` | add | `.pair/adoption` | Adopted decisions (never overwrites) |
 | `agents` | mirror | `AGENTS.md` | AI agent configuration |
+| `skills` | mirror | `.claude/skills/` (canonical), `.github/skills/` + `.cursor/skills/` (symlinks) | Agent skills distributed to AI tool directories |
 
 The `mirror` behavior synchronizes content (overwrites and removes stale files). The `add` behavior only copies files that don't already exist, preserving your project-specific adoption decisions.
+
+The `skills` registry uses **flatten** and **prefix** transforms to convert skill directory hierarchies (e.g., `navigator/next`) into flat, prefixed names (e.g., `pair-navigator-next`) suitable for AI tool skill directories. It also uses **multi-target distribution**: the canonical copy goes to `.claude/skills/`, then symlinks are created for `.github/skills/` and `.cursor/skills/` so all AI tools share the same skill definitions.
 
 ## Further Reading
 
