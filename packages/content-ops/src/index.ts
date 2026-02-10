@@ -19,6 +19,12 @@ export { detectSourceType, SourceType } from './path-resolution/source-detector'
 export { SyncOptions } from './ops/SyncOptions'
 export { Behavior, type TargetMode, type TargetConfig } from './ops/behavior'
 export { copyPathOps } from './ops/copyPathOps'
+export {
+  flattenPath,
+  prefixPath,
+  transformPath,
+  detectCollisions,
+} from './ops/naming-transforms'
 export { movePathOps } from './ops/movePathOps'
 export { validatePathOps } from './ops/validatePathOps'
 export {

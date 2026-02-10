@@ -1,4 +1,4 @@
-import { join } from 'path/posix'
+import { join, relative, dirname } from 'path/posix'
 import { Stats } from 'fs'
 import { logger, createError } from '../observability'
 import { validateSourceExists } from '../file-system/file-validations'
@@ -16,6 +16,7 @@ import {
 } from './path-operation-helpers'
 import { convertToRelative } from '../path-resolution'
 import { isAbsolute } from 'path'
+import { transformPath, detectCollisions } from './naming-transforms'
 
 type CopyPathOpsParams = {
   fileService: FileSystemService
@@ -84,6 +85,13 @@ async function performCopyBasedOnType(
 }
 
 /**
+ * Checks whether flatten or prefix transforms are active
+ */
+function hasNamingTransforms(options?: SyncOptions): boolean {
+  return Boolean(options?.flatten) || Boolean(options?.prefix)
+}
+
+/**
  * Handles directory copy for the main copy operation
  */
 async function handleDirectoryCopyForType(params: {
@@ -99,6 +107,10 @@ async function handleDirectoryCopyForType(params: {
   folderBehavior?: Record<string, Behavior>
   options?: SyncOptions
 }) {
+  if (hasNamingTransforms(params.options)) {
+    await copyDirectoryWithTransforms(params)
+    return
+  }
   const dirCopyParams: HandleDirectoryCopyParams = {
     fileService: params.fileService,
     srcPath: params.srcPath,
@@ -408,6 +420,99 @@ async function copyDirectoryContents(params: {
       originalError: err,
     })
   }
+}
+
+/**
+ * Recursively collects all files under a directory, returning their paths
+ * relative to the given root directory.
+ */
+async function collectFiles(
+  fileService: FileSystemService,
+  dirPath: string,
+  rootPath: string,
+): Promise<string[]> {
+  const result: string[] = []
+  const entries = await fileService.readdir(dirPath)
+  for (const entry of entries) {
+    const entryPath = join(dirPath, entry.name)
+    if (entry.isDirectory()) {
+      const subFiles = await collectFiles(fileService, entryPath, rootPath)
+      result.push(...subFiles)
+    } else {
+      const relPath = relative(rootPath, entryPath)
+      result.push(relPath)
+    }
+  }
+  return result
+}
+
+/**
+ * Copies a directory with flatten/prefix naming transforms applied.
+ * Each file's directory path (relative to source) is transformed, then
+ * the file is copied to the transformed location under the target.
+ */
+async function copyDirectoryWithTransforms(params: {
+  fileService: FileSystemService
+  srcPath: string
+  destPath: string
+  source: string
+  target: string
+  datasetRoot: string
+  options?: SyncOptions
+}) {
+  const { fileService, srcPath, destPath, options } = params
+  const flatten = options?.flatten ?? false
+  const prefix = options?.prefix
+  const transformOpts = prefix ? { flatten, prefix } : { flatten }
+
+  // Collect all files with their relative paths
+  const files = await collectFiles(fileService, srcPath, srcPath)
+
+  // Build a map of original dir → transformed dir for collision detection
+  const dirSet = new Set<string>()
+  for (const filePath of files) {
+    const dir = dirname(filePath)
+    if (dir !== '.') {
+      dirSet.add(dir)
+    }
+  }
+
+  // Transform directory names and detect collisions
+  const transformedDirs = [...dirSet].map(d => transformPath(d, transformOpts))
+  const collisions = detectCollisions(transformedDirs)
+  if (collisions.length > 0) {
+    throw createError({
+      type: 'IO_ERROR',
+      message: `Flatten naming collision detected: ${collisions.join(', ')}. Different source paths resolve to the same target name.`,
+      operation: 'copyDir',
+      path: srcPath,
+    })
+  }
+
+  // Create target directory
+  await fileService.mkdir(destPath, { recursive: true })
+
+  // Copy each file to the transformed location
+  for (const filePath of files) {
+    const dir = dirname(filePath)
+    const fileName = filePath.slice(dir === '.' ? 0 : dir.length + 1)
+
+    let targetDir: string
+    if (dir === '.') {
+      targetDir = destPath
+    } else {
+      const transformedDir = transformPath(dir, transformOpts)
+      targetDir = join(destPath, transformedDir)
+    }
+
+    const srcFile = join(srcPath, filePath)
+    const destFile = join(targetDir, fileName)
+
+    await fileService.mkdir(targetDir, { recursive: true })
+    await copyFileHelper(fileService, srcFile, destFile, 'overwrite')
+  }
+
+  logger.info(`Copied contents of ${srcPath} -> ${destPath} (flatten=${flatten}, prefix=${prefix ?? 'none'})`)
 }
 
 /**

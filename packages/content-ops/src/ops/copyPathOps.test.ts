@@ -122,6 +122,131 @@ describe('copyPathOps - directory operations', () => {
   })
 })
 
+describe('copyPathOps - flatten and prefix', () => {
+  it('should flatten directory hierarchy into hyphen-separated names', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/navigator/next/SKILL.md': '# Next Skill',
+        '/dataset/source/process/implement/SKILL.md': '# Implement Skill',
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true },
+    })
+
+    await TEST_ASSERTIONS.assertFileExists(
+      fileService,
+      '/dataset/target/navigator-next/SKILL.md',
+      '# Next Skill',
+    )
+    await TEST_ASSERTIONS.assertFileExists(
+      fileService,
+      '/dataset/target/process-implement/SKILL.md',
+      '# Implement Skill',
+    )
+  })
+
+  it('should apply prefix to top-level directory names', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/navigator/SKILL.md': '# Nav Skill',
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { prefix: 'pair' },
+    })
+
+    await TEST_ASSERTIONS.assertFileExists(
+      fileService,
+      '/dataset/target/pair-navigator/SKILL.md',
+      '# Nav Skill',
+    )
+  })
+
+  it('should apply both flatten and prefix', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/navigator/next/SKILL.md': '# Next Skill',
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true, prefix: 'pair' },
+    })
+
+    await TEST_ASSERTIONS.assertFileExists(
+      fileService,
+      '/dataset/target/pair-navigator-next/SKILL.md',
+      '# Next Skill',
+    )
+  })
+
+  it('should apply prefix only without flatten (prefix top-level, keep hierarchy)', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/navigator/next/SKILL.md': '# Next Skill',
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { prefix: 'pair' },
+    })
+
+    await TEST_ASSERTIONS.assertFileExists(
+      fileService,
+      '/dataset/target/pair-navigator/next/SKILL.md',
+      '# Next Skill',
+    )
+  })
+
+  it('should detect and throw on flatten collisions', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/a/b/SKILL.md': '# Skill 1',
+        '/dataset/source/a-b/SKILL.md': '# Skill 2',
+      },
+      '/',
+      '/',
+    )
+
+    await expect(
+      copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true },
+      }),
+    ).rejects.toThrow(/collision/i)
+  })
+})
+
 describe('copyPathOps - error cases', () => {
   let fileService: InMemoryFileSystemService
 
