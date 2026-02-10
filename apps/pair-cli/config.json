@@ -35,6 +35,7 @@
         { "path": ".claude/skills/", "mode": "canonical" },
         { "path": ".github/skills/", "mode": "symlink" },
         { "path": ".cursor/skills/", "mode": "symlink" },
+        { "path": ".agent/skills/", "mode": "symlink" },
         { "path": ".agents/skills/", "mode": "symlink" },
         { "path": ".windsurf/skills/", "mode": "symlink" }
       ]

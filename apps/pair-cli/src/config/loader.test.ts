@@ -22,7 +22,7 @@ describe('config loader - skills registry', () => {
     expect(skills!.behavior).toBe('mirror')
     expect(skills!.flatten).toBe(true)
     expect(skills!.prefix).toBe('pair')
-    expect(skills!.targets).toHaveLength(5)
+    expect(skills!.targets).toHaveLength(6)
     expect(skills!.targets![0]!.mode).toBe('canonical')
   })
 
