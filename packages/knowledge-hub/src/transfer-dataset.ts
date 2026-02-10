@@ -5,7 +5,7 @@ import { SyncOptions } from '@pair/content-ops'
 
 const DATASET = join(__dirname, '..', 'dataset')
 
-function parseJson(arg: string): Record<string, unknown> {
+export function parseJson(arg: string): Record<string, unknown> {
   // try parse as JSON string first
   try {
     return JSON.parse(arg)
@@ -17,15 +17,15 @@ function parseJson(arg: string): Record<string, unknown> {
   return JSON.parse(content)
 }
 
-function parseOptions(arg?: string): SyncOptions | undefined {
+export function parseOptions(arg?: string): SyncOptions | undefined {
   if (!arg) return undefined
   try {
-    const raw = parseJson(arg)
+    const { prefix, flatten, targets, ...rest } = parseJson(arg)
     return {
-      ...raw,
-      flatten: typeof raw['flatten'] === 'boolean' ? raw['flatten'] : false,
-      ...(typeof raw['prefix'] === 'string' && { prefix: raw['prefix'] }),
-      targets: Array.isArray(raw['targets']) ? raw['targets'] : [],
+      ...rest,
+      flatten: typeof flatten === 'boolean' ? flatten : false,
+      ...(typeof prefix === 'string' && { prefix }),
+      targets: Array.isArray(targets) ? targets : [],
     } as SyncOptions
   } catch (err) {
     throw new Error(`Failed to parse options from arg: ${String(err)}`)

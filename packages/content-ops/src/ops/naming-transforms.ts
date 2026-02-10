@@ -22,7 +22,7 @@ export function flattenPath(dirName: string): string {
  * Example: 'navigator/next' + 'pair' → 'pair-navigator/next'
  */
 export function prefixPath(dirName: string, prefix: string): string {
-  if (prefix === '') return dirName
+  if (prefix === '' || dirName === '') return dirName
   const slashIndex = dirName.indexOf('/')
   if (slashIndex === -1) {
     return `${prefix}-${dirName}`

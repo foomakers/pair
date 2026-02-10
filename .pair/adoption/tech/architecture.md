@@ -26,6 +26,14 @@
 - **Integrity Validation**: All KB downloads validated using SHA256 checksums for security and corruption detection. See [ADR-003](adr/adr-003-checksum-validation.md).
 - **Streaming Downloads**: Memory-efficient streaming writes with real-time progress tracking. See [ADR-004](adr/adr-004-streaming-downloads.md).
 
+## Skills Distribution
+
+- Skills are stored in `.skills/` within the KB dataset, following the Agent Skills open standard (agentskills.io).
+- Each skill is a `SKILL.md` file in a category/name directory structure (e.g., `.skills/navigator/next/SKILL.md`).
+- Skills are distributed to 6 AI tool directories via flatten/prefix naming transforms and multi-target distribution.
+- Canonical target (`.claude/skills/`) receives physical copies; secondary targets receive symlinks.
+- Windows environments fall back to copy mode (symlinks rejected at validation time). See [ADR-005](adr/adr-005-skills-infrastructure.md).
+
 ---
 
 All architectural implementations must follow these adopted standards. For process and rationale, see [way-of-working.md](../../way-of-working.md).

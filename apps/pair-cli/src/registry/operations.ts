@@ -27,6 +27,8 @@ export async function doCopyAndUpdateLinks(
   const tgtPath = isAbsolute(target) ? target : fsService.resolve(datasetRoot, target)
 
   if (!(await fsService.exists(srcPath))) {
+    const { logger } = await import('@pair/content-ops')
+    logger.warn(`Source path does not exist, skipping copy: ${srcPath}`)
     return {}
   }
 

@@ -64,12 +64,12 @@ function computeNewHref(href: string, originalFileDir: string, newFileDir: strin
  */
 function replaceHrefInNode(
   content: string,
-  link: ParsedLink,
+  link: ParsedLink & { start: number; end: number },
   newHref: string,
   filePath: string,
 ): { content: string; replaced: boolean } {
-  const nodeStart = link.start!
-  const nodeEnd = link.end!
+  const nodeStart = link.start
+  const nodeEnd = link.end
   const nodeText = content.slice(nodeStart, nodeEnd)
   const hrefPos = nodeText.indexOf(link.href)
   if (hrefPos >= 0) {
@@ -107,9 +107,10 @@ export async function rewriteLinksInFile(params: RewriteLinksInFileParams): Prom
   let updatedContent = content
   let rewriteCount = 0
 
-  const sortedLinks = [...links]
-    .filter(l => typeof l.start === 'number' && typeof l.end === 'number')
-    .sort((a, b) => b.start! - a.start!)
+  const hasPosition = (l: ParsedLink): l is ParsedLink & { start: number; end: number } =>
+    typeof l.start === 'number' && typeof l.end === 'number'
+
+  const sortedLinks = [...links].filter(hasPosition).sort((a, b) => b.start - a.start)
 
   for (const link of sortedLinks) {
     const newHref = computeNewHref(link.href, originalFileDir, newFileDir)

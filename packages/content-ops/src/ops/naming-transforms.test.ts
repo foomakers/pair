@@ -43,6 +43,10 @@ describe('prefixPath', () => {
   it('returns path unchanged when prefix is empty', () => {
     expect(prefixPath('navigator', '')).toBe('navigator')
   })
+
+  it('returns empty string unchanged when dirName is empty', () => {
+    expect(prefixPath('', 'pair')).toBe('')
+  })
 })
 
 describe('transformPath', () => {
