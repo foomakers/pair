@@ -65,9 +65,9 @@ describe('transformPath', () => {
   })
 
   it('handles deeply nested with both', () => {
-    expect(
-      transformPath('process/implement/task', { flatten: true, prefix: 'pair' }),
-    ).toBe('pair-process-implement-task')
+    expect(transformPath('process/implement/task', { flatten: true, prefix: 'pair' })).toBe(
+      'pair-process-implement-task',
+    )
   })
 
   it('handles single level with both', () => {

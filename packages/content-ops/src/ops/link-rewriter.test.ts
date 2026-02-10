@@ -74,8 +74,7 @@ describe('rewriteLinksInFile', () => {
   it('warns on unresolvable links but does not fail', async () => {
     const fs = new InMemoryFileSystemService(
       {
-        '/dataset/target/skill/SKILL.md':
-          '# Skill\n[broken](../../nonexistent/file.md)',
+        '/dataset/target/skill/SKILL.md': '# Skill\n[broken](../../nonexistent/file.md)',
       },
       '/',
       '/',

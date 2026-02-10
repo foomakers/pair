@@ -3,6 +3,7 @@ import {
   normalizeKey,
   resolveBehavior,
   validateMirrorConstraints,
+  validateTargets,
   Behavior,
   TargetMode,
   TargetConfig,
@@ -53,5 +54,99 @@ describe('TargetConfig', () => {
     const target: TargetConfig = { path: '.github/skills/', mode: 'symlink' }
     expect(target.path).toBe('.github/skills/')
     expect(target.mode).toBe('symlink')
+  })
+})
+
+describe('validateTargets', () => {
+  // Scenario 1: Single target (any mode) — always valid
+  it('accepts a single target with canonical mode', () => {
+    const targets: TargetConfig[] = [{ path: '.claude/skills/', mode: 'canonical' }]
+    expect(() => validateTargets(targets)).not.toThrow()
+  })
+
+  it('accepts a single target with symlink mode', () => {
+    const targets: TargetConfig[] = [{ path: '.github/skills/', mode: 'symlink' }]
+    expect(() => validateTargets(targets)).not.toThrow()
+  })
+
+  it('accepts a single target with copy mode', () => {
+    const targets: TargetConfig[] = [{ path: '.cursor/skills/', mode: 'copy' }]
+    expect(() => validateTargets(targets)).not.toThrow()
+  })
+
+  // Scenario 2: Multiple targets with exactly 1 canonical — valid
+  it('accepts multiple targets with exactly one canonical', () => {
+    const targets: TargetConfig[] = [
+      { path: '.claude/skills/', mode: 'canonical' },
+      { path: '.github/skills/', mode: 'symlink' },
+      { path: '.cursor/skills/', mode: 'copy' },
+    ]
+    expect(() => validateTargets(targets)).not.toThrow()
+  })
+
+  // Scenario 3: Multiple targets with 0 canonical — error
+  it('rejects multiple targets with no canonical', () => {
+    const targets: TargetConfig[] = [
+      { path: '.github/skills/', mode: 'symlink' },
+      { path: '.cursor/skills/', mode: 'copy' },
+    ]
+    expect(() => validateTargets(targets)).toThrow(/exactly one.*canonical/i)
+  })
+
+  // Scenario 4: Multiple targets with 2+ canonical — error
+  it('rejects multiple targets with more than one canonical', () => {
+    const targets: TargetConfig[] = [
+      { path: '.claude/skills/', mode: 'canonical' },
+      { path: '.cursor/skills/', mode: 'canonical' },
+    ]
+    expect(() => validateTargets(targets)).toThrow(/exactly one.*canonical/i)
+  })
+
+  // Scenario 5: Windows + symlink — error
+  it('rejects symlink targets on Windows', () => {
+    const targets: TargetConfig[] = [
+      { path: '.claude/skills/', mode: 'canonical' },
+      { path: '.github/skills/', mode: 'symlink' },
+    ]
+    expect(() => validateTargets(targets, 'win32')).toThrow(/windows.*symlink/i)
+  })
+
+  it('accepts symlink targets on macOS', () => {
+    const targets: TargetConfig[] = [
+      { path: '.claude/skills/', mode: 'canonical' },
+      { path: '.github/skills/', mode: 'symlink' },
+    ]
+    expect(() => validateTargets(targets, 'darwin')).not.toThrow()
+  })
+
+  it('accepts symlink targets on Linux', () => {
+    const targets: TargetConfig[] = [
+      { path: '.claude/skills/', mode: 'canonical' },
+      { path: '.github/skills/', mode: 'symlink' },
+    ]
+    expect(() => validateTargets(targets, 'linux')).not.toThrow()
+  })
+
+  // Scenario 6: Empty targets — no-op (no error)
+  it('accepts empty targets array', () => {
+    expect(() => validateTargets([])).not.toThrow()
+  })
+
+  // Scenario 7: Circular symlink — error (symlink path equals canonical path)
+  it('rejects circular symlink where symlink target equals canonical path', () => {
+    const targets: TargetConfig[] = [
+      { path: '.claude/skills/', mode: 'canonical' },
+      { path: '.claude/skills/', mode: 'symlink' },
+    ]
+    expect(() => validateTargets(targets)).toThrow(/circular|duplicate/i)
+  })
+
+  // Additional: duplicate paths with different modes
+  it('rejects duplicate target paths', () => {
+    const targets: TargetConfig[] = [
+      { path: '.claude/skills/', mode: 'canonical' },
+      { path: '.claude/skills/', mode: 'copy' },
+    ]
+    expect(() => validateTargets(targets)).toThrow(/duplicate/i)
   })
 })

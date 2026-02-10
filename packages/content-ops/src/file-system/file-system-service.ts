@@ -26,6 +26,7 @@ export interface FileSystemService {
   resolve: (...paths: string[]) => string
   isFile: (path: string) => Promise<boolean>
   isFolder: (path: string) => Promise<boolean>
+  symlink: (target: string, path: string) => Promise<void>
   createZip: (sourcePaths: string[], outputPath: string) => Promise<void>
   extractZip: (zipPath: string, outputDir: string) => Promise<void>
 }
@@ -56,6 +57,7 @@ export const fileSystemService: FileSystemService = {
   rename: (oldPath, newPath) => fs.rename(oldPath, newPath),
   copy: (oldPath, newPath) => fs.copyFile(oldPath, newPath),
   copySync: (oldPath, newPath) => copyFileSync(oldPath, newPath),
+  symlink: (target, path) => fs.symlink(target, path, 'dir'),
   rm: async (path, options) => {
     await fs.rm(path, options)
   },

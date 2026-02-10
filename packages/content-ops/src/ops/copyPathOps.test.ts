@@ -73,7 +73,12 @@ describe('copyPathOps - root file operations', () => {
       source: 'dataset/AGENTS.md',
       target: 'AGENTS.md',
       datasetRoot: '/development/path/pair/apps/pair-cli',
-      options: { defaultBehavior: 'overwrite' as const, folderBehavior: undefined, flatten: false, targets: [] },
+      options: {
+        defaultBehavior: 'overwrite' as const,
+        folderBehavior: undefined,
+        flatten: false,
+        targets: [],
+      },
     }
 
     const result = await copyPathOps(options)
@@ -247,9 +252,7 @@ describe('copyPathOps - flatten and prefix', () => {
     // After flatten+prefix: source/navigator/next/ → target/pair-navigator-next/
     // Original: ../../../ from source/navigator/next/ → /dataset/.pair/knowledge/testing/README.md
     // New location target/pair-navigator-next/ (depth 2): ../../.pair/knowledge/testing/README.md
-    const content = await fileService.readFile(
-      '/dataset/target/pair-navigator-next/SKILL.md',
-    )
+    const content = await fileService.readFile('/dataset/target/pair-navigator-next/SKILL.md')
     expect(content).toContain('../../.pair/knowledge/testing/README.md')
   })
 

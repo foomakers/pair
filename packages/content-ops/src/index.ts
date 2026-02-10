@@ -17,14 +17,9 @@ export { extractZip } from './file-system/archive-operations'
 export { detectSourceType, SourceType } from './path-resolution/source-detector'
 
 export { SyncOptions, defaultSyncOptions } from './ops/SyncOptions'
-export { Behavior, type TargetMode, type TargetConfig } from './ops/behavior'
+export { Behavior, validateTargets, type TargetMode, type TargetConfig } from './ops/behavior'
 export { copyPathOps } from './ops/copyPathOps'
-export {
-  flattenPath,
-  prefixPath,
-  transformPath,
-  detectCollisions,
-} from './ops/naming-transforms'
+export { flattenPath, prefixPath, transformPath, detectCollisions } from './ops/naming-transforms'
 export {
   rewriteLinksInFile,
   rewriteLinksAfterTransform,
