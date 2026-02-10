@@ -164,6 +164,12 @@ export async function distributeToSecondaryTargets(params: {
 }): Promise<void> {
   const { fileService, canonicalPath, targets, baseTarget } = params
 
+  if (!(await fileService.exists(canonicalPath))) {
+    const { logger } = await import('@pair/content-ops')
+    logger.warn(`Canonical path does not exist, skipping secondary distribution: ${canonicalPath}`)
+    return
+  }
+
   for (const target of targets) {
     if (target.mode === 'canonical') continue
 

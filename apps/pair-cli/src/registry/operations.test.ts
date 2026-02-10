@@ -172,4 +172,24 @@ describe('distributeToSecondaryTargets', () => {
     })
     // No error, no-op
   })
+
+  it('skips distribution when canonical path does not exist', async () => {
+    const fs = createTestFs({}, {}, '/project')
+
+    await distributeToSecondaryTargets({
+      fileService: fs,
+      canonicalPath: '/project/.claude/skills',
+      targets: [
+        { path: '.claude/skills/', mode: 'canonical' },
+        { path: '.github/skills/', mode: 'symlink' },
+        { path: '.cursor/skills/', mode: 'copy' },
+      ],
+      baseTarget: '/project',
+    })
+
+    const symlinks = fs.getSymlinks()
+    expect(symlinks.size).toBe(0)
+    expect(await fs.exists('/project/.github/skills')).toBe(false)
+    expect(await fs.exists('/project/.cursor/skills')).toBe(false)
+  })
 })
