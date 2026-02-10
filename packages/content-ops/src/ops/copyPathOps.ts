@@ -527,7 +527,7 @@ function buildPathMapping(
  * Each file's directory path (relative to source) is transformed, then
  * the file is copied to the transformed location under the target.
  */
-async function copyDirectoryWithTransforms(params: {
+export async function copyDirectoryWithTransforms(params: {
   fileService: FileSystemService
   srcPath: string
   destPath: string

@@ -6,6 +6,7 @@ import {
   buildCopyOptions,
   distributeToSecondaryTargets,
 } from './operations'
+import { defaultSyncOptions } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
 
 describe('registry operations', () => {
@@ -25,7 +26,7 @@ describe('registry operations', () => {
       source: 'src',
       target: 'dst',
       datasetRoot: '/dataset',
-      options: { defaultBehavior: 'mirror' },
+      options: { ...defaultSyncOptions(), defaultBehavior: 'mirror' },
     })
 
     expect(await fs.exists('/dataset/dst/file1.md')).toBe(true)

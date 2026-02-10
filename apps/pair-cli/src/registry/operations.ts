@@ -1,5 +1,6 @@
 import {
   copyDirHelper,
+  copyDirectoryWithTransforms,
   copyFileHelper,
   FileSystemService,
   type TargetConfig,
@@ -17,10 +18,10 @@ export async function doCopyAndUpdateLinks(
     source: string
     target: string
     datasetRoot: string
-    options?: Record<string, unknown>
+    options?: SyncOptions
   },
 ): Promise<Record<string, unknown>> {
-  const { source, target, datasetRoot } = copyOptions
+  const { source, target, datasetRoot, options } = copyOptions
 
   const srcPath = isAbsolute(source) ? source : fsService.resolve(datasetRoot, source)
   const tgtPath = isAbsolute(target) ? target : fsService.resolve(datasetRoot, target)
@@ -31,12 +32,13 @@ export async function doCopyAndUpdateLinks(
 
   const stat = await fsService.stat(srcPath)
   if (stat.isDirectory()) {
-    await copyDirHelper({
-      fileService: fsService,
-      oldDir: srcPath,
-      newDir: tgtPath,
-      defaultBehavior: 'overwrite',
+    await copyDirectory(fsService, {
+      srcPath,
+      tgtPath,
+      source,
+      target,
       datasetRoot,
+      ...(options && { options }),
     })
   } else {
     await fsService.mkdir(dirname(tgtPath), { recursive: true })
@@ -44,6 +46,40 @@ export async function doCopyAndUpdateLinks(
   }
 
   return {}
+}
+
+async function copyDirectory(
+  fsService: FileSystemService,
+  ctx: {
+    srcPath: string
+    tgtPath: string
+    source: string
+    target: string
+    datasetRoot: string
+    options?: SyncOptions
+  },
+): Promise<void> {
+  const { srcPath, tgtPath, source, target, datasetRoot, options } = ctx
+  if (options?.flatten || options?.prefix) {
+    await copyDirectoryWithTransforms({
+      fileService: fsService,
+      srcPath,
+      destPath: tgtPath,
+      source,
+      target,
+      datasetRoot,
+      options,
+    })
+  } else {
+    await copyDirHelper({
+      fileService: fsService,
+      oldDir: srcPath,
+      newDir: tgtPath,
+      defaultBehavior: options?.defaultBehavior ?? 'overwrite',
+      ...(options?.folderBehavior && { folderBehavior: options.folderBehavior }),
+      datasetRoot,
+    })
+  }
 }
 
 /**

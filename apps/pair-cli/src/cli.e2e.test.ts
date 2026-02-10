@@ -120,25 +120,25 @@ function createTestConfig() {
       '.github': {
         source: '.github',
         behavior: 'mirror',
-        target_path: '.github',
+        targets: [{ path: '.github', mode: 'canonical' }],
         description: 'GitHub workflows and configs',
       },
       '.pair-knowledge': {
         source: '.pair/knowledge',
         behavior: 'mirror',
-        target_path: '.pair-knowledge',
+        targets: [{ path: '.pair-knowledge', mode: 'canonical' }],
         description: 'Knowledge base content',
       },
       '.pair-adoption': {
         source: '.pair/adoption',
         behavior: 'mirror',
-        target_path: '.pair-adoption',
+        targets: [{ path: '.pair-adoption', mode: 'canonical' }],
         description: 'Adoption and onboarding content',
       },
       'agents.md': {
         source: 'AGENTS.md',
         behavior: 'add',
-        target_path: 'AGENTS.md',
+        targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
         description: 'AI agents guidance and session context',
       },
     },
@@ -192,7 +192,7 @@ describe('pair-cli e2e - validate-config failures basic', () => {
         '.github': {
           source: '.github',
           behavior: 'invalid-behavior', // Invalid behavior
-          target_path: '.github',
+          targets: [{ path: '.github', mode: 'canonical' }],
           // Missing description - this should also be an error
         },
       },
@@ -258,7 +258,7 @@ describe('pair-cli e2e - validate-config failures advanced', () => {
         '.github': {
           source: '.github',
           behavior: 'mirror',
-          target_path: '.github',
+          targets: [{ path: '.github', mode: 'canonical' }],
           description: 'GitHub workflows',
           include: ['valid-string', 123], // Invalid: number in array
         },
@@ -311,25 +311,25 @@ describe('pair-cli e2e - install from local sources', () => {
             source: '.github',
             behavior: 'mirror',
             include: ['/agents', '/prompts'],
-            target_path: '.github',
+            targets: [{ path: '.github', mode: 'canonical' }],
             description: 'GitHub workflows and configuration files',
           },
           knowledge: {
             source: '.pair/knowledge',
             behavior: 'mirror',
-            target_path: '.pair/knowledge',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
             description: 'Knowledge base and documentation',
           },
           adoption: {
             source: '.pair/adoption',
             behavior: 'add',
-            target_path: '.pair/adoption',
+            targets: [{ path: '.pair/adoption', mode: 'canonical' }],
             description: 'Adoption guides and onboarding materials',
           },
           agents: {
             source: 'AGENTS.md',
             behavior: 'add',
-            target_path: 'AGENTS.md',
+            targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
             description: 'AI agents guidance and session context',
           },
         },
@@ -353,25 +353,25 @@ describe('pair-cli e2e - install from local sources', () => {
             source: '.github',
             behavior: 'mirror',
             include: ['/agents', '/prompts'],
-            target_path: '.github',
+            targets: [{ path: '.github', mode: 'canonical' }],
             description: 'GitHub workflows and configuration files',
           },
           knowledge: {
             source: '.pair/knowledge',
             behavior: 'mirror',
-            target_path: '.pair/knowledge',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
             description: 'Knowledge base and documentation',
           },
           adoption: {
             source: '.pair/adoption',
             behavior: 'add',
-            target_path: '.pair/adoption',
+            targets: [{ path: '.pair/adoption', mode: 'canonical' }],
             description: 'Adoption guides and onboarding materials',
           },
           agents: {
             source: 'AGENTS.md',
             behavior: 'add',
-            target_path: 'AGENTS.md',
+            targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
             description: 'AI agents guidance and session context',
           },
         },
@@ -397,25 +397,25 @@ describe('pair-cli e2e - install from local sources', () => {
             source: '.github',
             behavior: 'mirror',
             include: ['/agents', '/prompts'],
-            target_path: '.github',
+            targets: [{ path: '.github', mode: 'canonical' }],
             description: 'GitHub workflows and configuration files',
           },
           knowledge: {
             source: '.pair/knowledge',
             behavior: 'mirror',
-            target_path: '.pair/knowledge',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
             description: 'Knowledge base and documentation',
           },
           adoption: {
             source: '.pair/adoption',
             behavior: 'add',
-            target_path: '.pair/adoption',
+            targets: [{ path: '.pair/adoption', mode: 'canonical' }],
             description: 'Adoption guides and onboarding materials',
           },
           agents: {
             source: 'AGENTS.md',
             behavior: 'add',
-            target_path: 'AGENTS.md',
+            targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
             description: 'AI agents guidance and session context',
           },
         },
@@ -439,25 +439,25 @@ describe('pair-cli e2e - install from local sources', () => {
             source: '.github',
             behavior: 'mirror',
             include: ['/agents', '/prompts'],
-            target_path: '.github',
+            targets: [{ path: '.github', mode: 'canonical' }],
             description: 'GitHub workflows and configuration files',
           },
           knowledge: {
             source: '.pair/knowledge',
             behavior: 'mirror',
-            target_path: '.pair/knowledge',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
             description: 'Knowledge base and documentation',
           },
           adoption: {
             source: '.pair/adoption',
             behavior: 'add',
-            target_path: '.pair/adoption',
+            targets: [{ path: '.pair/adoption', mode: 'canonical' }],
             description: 'Adoption guides and onboarding materials',
           },
           agents: {
             source: 'AGENTS.md',
             behavior: 'add',
-            target_path: 'AGENTS.md',
+            targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
             description: 'AI agents guidance and session context',
           },
         },
@@ -488,25 +488,25 @@ describe('update from local sources', () => {
             source: '.github',
             behavior: 'mirror',
             include: ['/agents', '/prompts'],
-            target_path: '.github',
+            targets: [{ path: '.github', mode: 'canonical' }],
             description: 'GitHub workflows and configuration files',
           },
           knowledge: {
             source: '.pair/knowledge',
             behavior: 'mirror',
-            target_path: '.pair/knowledge',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
             description: 'Knowledge base and documentation',
           },
           adoption: {
             source: '.pair/adoption',
             behavior: 'add',
-            target_path: '.pair/adoption',
+            targets: [{ path: '.pair/adoption', mode: 'canonical' }],
             description: 'Adoption guides and onboarding materials',
           },
           agents: {
             source: 'AGENTS.md',
             behavior: 'add',
-            target_path: 'AGENTS.md',
+            targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
             description: 'AI agents guidance and session context',
           },
         },
@@ -532,25 +532,25 @@ describe('update from local sources', () => {
             source: '.github',
             behavior: 'mirror',
             include: ['/agents', '/prompts'],
-            target_path: '.github',
+            targets: [{ path: '.github', mode: 'canonical' }],
             description: 'GitHub workflows and configuration files',
           },
           knowledge: {
             source: '.pair/knowledge',
             behavior: 'mirror',
-            target_path: '.pair/knowledge',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
             description: 'Knowledge base and documentation',
           },
           adoption: {
             source: '.pair/adoption',
             behavior: 'add',
-            target_path: '.pair/adoption',
+            targets: [{ path: '.pair/adoption', mode: 'canonical' }],
             description: 'Adoption guides and onboarding materials',
           },
           agents: {
             source: 'AGENTS.md',
             behavior: 'add',
-            target_path: 'AGENTS.md',
+            targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
             description: 'AI agents guidance and session context',
           },
         },
@@ -578,25 +578,25 @@ describe('update from local sources', () => {
             source: '.github',
             behavior: 'mirror',
             include: ['/agents', '/prompts'],
-            target_path: '.github',
+            targets: [{ path: '.github', mode: 'canonical' }],
             description: 'GitHub workflows and configuration files',
           },
           knowledge: {
             source: '.pair/knowledge',
             behavior: 'mirror',
-            target_path: '.pair/knowledge',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
             description: 'Knowledge base and documentation',
           },
           adoption: {
             source: '.pair/adoption',
             behavior: 'add',
-            target_path: '.pair/adoption',
+            targets: [{ path: '.pair/adoption', mode: 'canonical' }],
             description: 'Adoption guides and onboarding materials',
           },
           agents: {
             source: 'AGENTS.md',
             behavior: 'add',
-            target_path: 'AGENTS.md',
+            targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
             description: 'AI agents guidance and session context',
           },
         },
@@ -622,25 +622,25 @@ describe('update from local sources', () => {
             source: '.github',
             behavior: 'mirror',
             include: ['/agents', '/prompts'],
-            target_path: '.github',
+            targets: [{ path: '.github', mode: 'canonical' }],
             description: 'GitHub workflows and configuration files',
           },
           knowledge: {
             source: '.pair/knowledge',
             behavior: 'mirror',
-            target_path: '.pair/knowledge',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
             description: 'Knowledge base and documentation',
           },
           adoption: {
             source: '.pair/adoption',
             behavior: 'add',
-            target_path: '.pair/adoption',
+            targets: [{ path: '.pair/adoption', mode: 'canonical' }],
             description: 'Adoption guides and onboarding materials',
           },
           agents: {
             source: 'AGENTS.md',
             behavior: 'add',
-            target_path: 'AGENTS.md',
+            targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
             description: 'AI agents guidance and session context',
           },
         },
@@ -701,7 +701,7 @@ describe('pair-cli e2e - error scenarios', () => {
           github: {
             source: '.github',
             behavior: 'mirror',
-            target_path: '.github',
+            targets: [{ path: '.github', mode: 'canonical' }],
             description: 'GitHub config',
           },
         },
@@ -720,7 +720,7 @@ describe('pair-cli e2e - error scenarios', () => {
           github: {
             source: '.github',
             behavior: 'mirror',
-            target_path: '.github',
+            targets: [{ path: '.github', mode: 'canonical' }],
             description: 'GitHub config',
           },
         },
@@ -748,7 +748,7 @@ describe('pair-cli e2e - package command', () => {
         knowledge: {
           source: '.',
           behavior: 'mirror',
-          target_path: '.',
+          targets: [{ path: '.', mode: 'canonical' }],
           description: 'Knowledge base dataset',
         },
       },
@@ -774,7 +774,7 @@ describe('pair-cli e2e - package command', () => {
         content: {
           source: '.',
           behavior: 'mirror',
-          target_path: '.',
+          targets: [{ path: '.', mode: 'canonical' }],
           description: 'Content',
         },
       },
@@ -835,7 +835,7 @@ describe('pair-cli e2e - disjoint installation (source and target disjoint)', ()
           knowledge: {
             source: '.pair/knowledge',
             behavior: 'mirror',
-            target_path: 'knowledge',
+            targets: [{ path: 'knowledge', mode: 'canonical' }],
             description: 'Core knowledge',
           },
         },
@@ -898,5 +898,137 @@ describe('pair-cli e2e - disjoint installation (source and target disjoint)', ()
     // Verify rollback setup is working even in disjoint paths (implicitly tested by logic running)
     const installedGuide = `${disjointTarget}/knowledge/guide.md`
     expect(fs.existsSync(installedGuide)).toBe(true)
+  })
+})
+
+describe('pair-cli e2e - skills registry pipeline', () => {
+  function createSkillsConfig() {
+    return {
+      asset_registries: {
+        knowledge: {
+          source: '.pair/knowledge',
+          behavior: 'mirror',
+          description: 'Knowledge base content',
+          targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        },
+        skills: {
+          source: '.skills',
+          behavior: 'mirror',
+          flatten: true,
+          prefix: 'pair',
+          description: 'Agent skills distributed to AI tool directories',
+          targets: [
+            { path: '.claude/skills/', mode: 'canonical' },
+            { path: '.github/skills/', mode: 'symlink' },
+            { path: '.cursor/skills/', mode: 'symlink' },
+          ],
+        },
+      },
+    }
+  }
+
+  function createSkillsDatasetFs(cwd: string) {
+    const seed: Record<string, string> = {}
+    const datasetBase = `${cwd}/dataset`
+
+    // Knowledge registry content
+    seed[`${datasetBase}/.pair/knowledge/index.md`] = '# Knowledge Base'
+
+    // Skills registry content — mimics real .skills/ structure
+    seed[`${datasetBase}/.skills/navigator/next/SKILL.md`] =
+      '---\nname: next\ndescription: Project navigator\n---\n# /next'
+    seed[`${datasetBase}/.skills/process/.keep`] = '# placeholder'
+    seed[`${datasetBase}/.skills/capability/.keep`] = '# placeholder'
+
+    seed[`${cwd}/config.json`] = JSON.stringify(createSkillsConfig())
+
+    return new InMemoryFileSystemService(seed, cwd, cwd)
+  }
+
+  it('update distributes skills with flatten + prefix to canonical target', async () => {
+    const cwd = '/test-skills'
+    const fs = createSkillsDatasetFs(cwd)
+
+    await handleUpdateCommand(parseUpdateCommand({ source: `${cwd}/dataset` }), fs)
+
+    // Flatten transforms 'navigator/next' → 'navigator-next', prefix 'pair' → 'pair-navigator-next'
+    expect(fs.existsSync(`${cwd}/.claude/skills/pair-navigator-next/SKILL.md`)).toBe(true)
+    const content = fs.readFileSync(`${cwd}/.claude/skills/pair-navigator-next/SKILL.md`)
+    expect(content).toContain('name: next')
+  })
+
+  it('update creates symlinks for secondary targets', async () => {
+    const cwd = '/test-skills-symlink'
+    const fs = createSkillsDatasetFs(cwd)
+
+    await handleUpdateCommand(parseUpdateCommand({ source: `${cwd}/dataset` }), fs)
+
+    // Secondary targets should be symlinks pointing to the canonical path
+    const symlinks = fs.getSymlinks()
+    const canonicalPath = `${cwd}/.claude/skills`
+    const githubSymlink = `${cwd}/.github/skills`
+    const cursorSymlink = `${cwd}/.cursor/skills`
+
+    expect(symlinks.get(githubSymlink)).toBe(canonicalPath)
+    expect(symlinks.get(cursorSymlink)).toBe(canonicalPath)
+  })
+
+  it('validate-config succeeds with skills registry config', async () => {
+    const cwd = '/test-skills-validate'
+    const fs = new InMemoryFileSystemService({}, cwd, cwd)
+
+    await withTempConfig(fs, createSkillsConfig(), async () => {
+      const { config } = await import('#config').then(m => m.loadConfigWithOverrides(fs))
+      const { validateConfig } = (await import('#config')) as typeof import('#config')
+      const validation = validateConfig(config)
+
+      expect(validation.valid).toBe(true)
+      expect(validation.errors).toHaveLength(0)
+    })
+  })
+
+  it('validate-config fails when skills registry has no canonical target', async () => {
+    const cwd = '/test-skills-no-canonical'
+    const fs = new InMemoryFileSystemService({}, cwd, cwd)
+
+    const badConfig = {
+      asset_registries: {
+        skills: {
+          source: '.skills',
+          behavior: 'mirror',
+          flatten: true,
+          prefix: 'pair',
+          description: 'Skills with no canonical target',
+          targets: [
+            { path: '.github/skills/', mode: 'symlink' },
+            { path: '.cursor/skills/', mode: 'symlink' },
+          ],
+        },
+      },
+    }
+
+    await withTempConfig(fs, badConfig, async () => {
+      const { config } = await import('#config').then(m => m.loadConfigWithOverrides(fs))
+      const { validateConfig } = (await import('#config')) as typeof import('#config')
+      const validation = validateConfig(config)
+
+      expect(validation.valid).toBe(false)
+      expect(validation.errors.some(e => e.includes('canonical'))).toBe(true)
+    })
+  })
+
+  it('install distributes skills to canonical and symlink targets', async () => {
+    const cwd = '/test-skills-install'
+    const fs = createSkillsDatasetFs(cwd)
+
+    await installCommand(fs, ['--source', `${cwd}/dataset`], { useDefaults: true })
+
+    // Canonical target should have flattened+prefixed content
+    expect(fs.existsSync(`${cwd}/.claude/skills/pair-navigator-next/SKILL.md`)).toBe(true)
+
+    // Secondary targets should be symlinks
+    const symlinks = fs.getSymlinks()
+    expect(symlinks.has(`${cwd}/.github/skills`)).toBe(true)
+    expect(symlinks.has(`${cwd}/.cursor/skills`)).toBe(true)
   })
 })

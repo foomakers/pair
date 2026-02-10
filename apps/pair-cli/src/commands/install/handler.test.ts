@@ -11,7 +11,7 @@ describe('handleInstallCommand - real services integration', () => {
       github: {
         source: 'github',
         behavior: 'mirror',
-        target_path: '.github',
+        targets: [{ path: '.github', mode: 'canonical' }],
         description: 'GitHub registry',
       },
     },
@@ -59,7 +59,7 @@ describe('handleInstallCommand - real services integration', () => {
         asset_registries: {
           'my-reg': {
             behavior: 'mirror',
-            target_path: 'dest',
+            targets: [{ path: 'dest', mode: 'canonical' }],
             description: 'Local reg',
           },
         },

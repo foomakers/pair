@@ -12,6 +12,7 @@ import {
   extractRegistries,
   validateAllRegistries,
   resolveTarget,
+  resolveRegistryPaths,
   forEachRegistry,
   doCopyAndUpdateLinks,
   buildCopyOptions,
@@ -147,9 +148,16 @@ async function updateRegistries(context: UpdateContext): Promise<void> {
   const { fs, datasetRoot, registries, baseTarget, pushLog } = context
 
   await forEachRegistry(registries, async (registryName, registryConfig) => {
-    const effectiveTarget = resolveTarget(registryName, registryConfig, fs, baseTarget)
+    const resolved = resolveRegistryPaths({
+      name: registryName,
+      config: registryConfig,
+      datasetRoot,
+      fs,
+      baseTarget,
+    })
+    const effectiveTarget = resolved.target
     await ensureDir(fs, dirname(effectiveTarget))
-    const datasetPath = fs.resolve(datasetRoot, registryName)
+    const datasetPath = resolved.source
     const copyOptions = buildCopyOptions(registryConfig)
 
     // Debugging: When running with diagnostics, emit dataset contents to help
