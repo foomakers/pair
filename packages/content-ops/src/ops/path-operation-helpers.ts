@@ -15,9 +15,8 @@ export function setupPathOperation(
   datasetRoot: string,
   options?: SyncOptions,
 ) {
-  const opts = options || {}
-  const defaultBehavior: Behavior = opts.defaultBehavior || 'overwrite'
-  const folderBehavior = opts.folderBehavior
+  const defaultBehavior: Behavior = options?.defaultBehavior || 'overwrite'
+  const folderBehavior = options?.folderBehavior
   validateMirrorConstraints(folderBehavior, createMirrorConstraintError)
 
   const normSource = source.replace(/\\/g, '/')
@@ -26,7 +25,7 @@ export function setupPathOperation(
   // If source and target are the same, no operation needed
   if (normSource === normTarget) {
     logger.info(`Source and target are the same: ${normSource}. Nothing to do.`)
-    return { shouldSkip: true, normSource, normTarget, opts, defaultBehavior, folderBehavior }
+    return { shouldSkip: true, normSource, normTarget, options, defaultBehavior, folderBehavior }
   }
 
   const srcPath = join(datasetRoot, normSource)
@@ -46,7 +45,7 @@ export function setupPathOperation(
     normTarget,
     srcPath,
     destPath,
-    opts,
+    options,
     defaultBehavior,
     folderBehavior,
   }

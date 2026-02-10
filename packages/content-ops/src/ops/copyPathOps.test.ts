@@ -73,7 +73,7 @@ describe('copyPathOps - root file operations', () => {
       source: 'dataset/AGENTS.md',
       target: 'AGENTS.md',
       datasetRoot: '/development/path/pair/apps/pair-cli',
-      options: { defaultBehavior: 'overwrite' as const, folderBehavior: undefined },
+      options: { defaultBehavior: 'overwrite' as const, folderBehavior: undefined, flatten: false, targets: [] },
     }
 
     const result = await copyPathOps(options)
@@ -138,7 +138,7 @@ describe('copyPathOps - flatten and prefix', () => {
       source: 'source',
       target: 'target',
       datasetRoot: '/dataset',
-      options: { flatten: true },
+      options: { flatten: true, targets: [] },
     })
 
     await TEST_ASSERTIONS.assertFileExists(
@@ -167,7 +167,7 @@ describe('copyPathOps - flatten and prefix', () => {
       source: 'source',
       target: 'target',
       datasetRoot: '/dataset',
-      options: { prefix: 'pair' },
+      options: { flatten: false, prefix: 'pair', targets: [] },
     })
 
     await TEST_ASSERTIONS.assertFileExists(
@@ -191,7 +191,7 @@ describe('copyPathOps - flatten and prefix', () => {
       source: 'source',
       target: 'target',
       datasetRoot: '/dataset',
-      options: { flatten: true, prefix: 'pair' },
+      options: { flatten: true, prefix: 'pair', targets: [] },
     })
 
     await TEST_ASSERTIONS.assertFileExists(
@@ -215,7 +215,7 @@ describe('copyPathOps - flatten and prefix', () => {
       source: 'source',
       target: 'target',
       datasetRoot: '/dataset',
-      options: { prefix: 'pair' },
+      options: { flatten: false, prefix: 'pair', targets: [] },
     })
 
     await TEST_ASSERTIONS.assertFileExists(
@@ -241,7 +241,7 @@ describe('copyPathOps - flatten and prefix', () => {
       source: 'source',
       target: 'target',
       datasetRoot: '/dataset',
-      options: { flatten: true, prefix: 'pair' },
+      options: { flatten: true, prefix: 'pair', targets: [] },
     })
 
     // After flatten+prefix: source/navigator/next/ → target/pair-navigator-next/
@@ -269,7 +269,7 @@ describe('copyPathOps - flatten and prefix', () => {
         source: 'source',
         target: 'target',
         datasetRoot: '/dataset',
-        options: { flatten: true },
+        options: { flatten: true, targets: [] },
       }),
     ).rejects.toThrow(/collision/i)
   })
@@ -303,6 +303,8 @@ describe('copyPathOps - error cases', () => {
       datasetRoot: '/dataset',
       options: {
         defaultBehavior: 'add',
+        flatten: false,
+        targets: [],
       },
     })
 

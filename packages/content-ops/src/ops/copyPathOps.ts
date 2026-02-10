@@ -447,6 +447,81 @@ async function collectFiles(
   return result
 }
 
+type TransformOpts = { flatten: boolean; prefix?: string }
+
+/**
+ * Collects unique subdirectory names from a file list, validates no
+ * flatten collisions exist, and throws if any are found.
+ */
+function validateNoCollisions(
+  files: string[],
+  transformOpts: TransformOpts,
+  srcPath: string,
+): void {
+  const dirSet = new Set<string>()
+  for (const filePath of files) {
+    const dir = dirname(filePath)
+    if (dir !== '.') dirSet.add(dir)
+  }
+  const transformedDirs = [...dirSet].map(d => transformPath(d, transformOpts))
+  const collisions = detectCollisions(transformedDirs)
+  if (collisions.length > 0) {
+    throw createError({
+      type: 'IO_ERROR',
+      message: `Flatten naming collision detected: ${collisions.join(', ')}. Different source paths resolve to the same target name.`,
+      operation: 'copyDir',
+      path: srcPath,
+    })
+  }
+}
+
+/**
+ * Copies a single file to its transformed location and tracks the
+ * directory mapping for later link rewriting.
+ */
+async function copyFileWithTransform(ctx: {
+  fileService: FileSystemService
+  filePath: string
+  srcPath: string
+  destPath: string
+  transformOpts: TransformOpts
+  dirMappingFiles: Map<string, string[]>
+}): Promise<void> {
+  const { fileService, filePath, srcPath, destPath, transformOpts, dirMappingFiles } = ctx
+  const dir = dirname(filePath)
+  const fileName = filePath.slice(dir === '.' ? 0 : dir.length + 1)
+  const targetDir = dir === '.' ? destPath : join(destPath, transformPath(dir, transformOpts))
+
+  await fileService.mkdir(targetDir, { recursive: true })
+  await copyFileHelper(fileService, join(srcPath, filePath), join(targetDir, fileName), 'overwrite')
+
+  if (dir !== '.') {
+    if (!dirMappingFiles.has(dir)) dirMappingFiles.set(dir, [])
+    dirMappingFiles.get(dir)!.push(join(targetDir, fileName))
+  }
+}
+
+/**
+ * Builds PathMappingEntry[] from the directory-to-files map collected during copy.
+ */
+function buildPathMapping(
+  dirMappingFiles: Map<string, string[]>,
+  transformOpts: TransformOpts,
+  sourceRelative: string,
+  targetRelative: string,
+): PathMappingEntry[] {
+  const pathMapping: PathMappingEntry[] = []
+  for (const [originalSubDir, mappedFiles] of dirMappingFiles) {
+    const transformedSubDir = transformPath(originalSubDir, transformOpts)
+    pathMapping.push({
+      originalDir: join(sourceRelative, originalSubDir),
+      newDir: join(targetRelative, transformedSubDir),
+      files: mappedFiles,
+    })
+  }
+  return pathMapping
+}
+
 /**
  * Copies a directory with flatten/prefix naming transforms applied.
  * Each file's directory path (relative to source) is transformed, then
@@ -464,90 +539,41 @@ async function copyDirectoryWithTransforms(params: {
   const { fileService, srcPath, destPath, options } = params
   const flatten = options?.flatten ?? false
   const prefix = options?.prefix
-  const transformOpts = prefix ? { flatten, prefix } : { flatten }
+  const transformOpts: TransformOpts = prefix ? { flatten, prefix } : { flatten }
 
-  // Collect all files with their relative paths
   const files = await collectFiles(fileService, srcPath, srcPath)
+  validateNoCollisions(files, transformOpts, srcPath)
 
-  // Build a map of original dir → transformed dir for collision detection
-  const dirSet = new Set<string>()
-  for (const filePath of files) {
-    const dir = dirname(filePath)
-    if (dir !== '.') {
-      dirSet.add(dir)
-    }
-  }
-
-  // Transform directory names and detect collisions
-  const transformedDirs = [...dirSet].map(d => transformPath(d, transformOpts))
-  const collisions = detectCollisions(transformedDirs)
-  if (collisions.length > 0) {
-    throw createError({
-      type: 'IO_ERROR',
-      message: `Flatten naming collision detected: ${collisions.join(', ')}. Different source paths resolve to the same target name.`,
-      operation: 'copyDir',
-      path: srcPath,
-    })
-  }
-
-  // Create target directory
   await fileService.mkdir(destPath, { recursive: true })
 
-  // Build path mapping for link rewriting (copy → rewrite pipeline order)
-  const pathMapping: PathMappingEntry[] = []
   const dirMappingFiles = new Map<string, string[]>()
-
-  // Copy each file to the transformed location
   for (const filePath of files) {
-    const dir = dirname(filePath)
-    const fileName = filePath.slice(dir === '.' ? 0 : dir.length + 1)
-
-    let targetDir: string
-    if (dir === '.') {
-      targetDir = destPath
-    } else {
-      const transformedDir = transformPath(dir, transformOpts)
-      targetDir = join(destPath, transformedDir)
-    }
-
-    const srcFile = join(srcPath, filePath)
-    const destFile = join(targetDir, fileName)
-
-    await fileService.mkdir(targetDir, { recursive: true })
-    await copyFileHelper(fileService, srcFile, destFile, 'overwrite')
-
-    // Track path mapping for link rewriting
-    if (dir !== '.') {
-      const key = dir
-      if (!dirMappingFiles.has(key)) {
-        dirMappingFiles.set(key, [])
-      }
-      dirMappingFiles.get(key)!.push(destFile)
-    }
+    await copyFileWithTransform({
+      fileService,
+      filePath,
+      srcPath,
+      destPath,
+      transformOpts,
+      dirMappingFiles,
+    })
   }
 
-  // Build path mapping entries
   const sourceRelative = relative(params.datasetRoot, srcPath) || params.source
   const targetRelative = relative(params.datasetRoot, destPath) || params.target
-  for (const [originalSubDir, mappedFiles] of dirMappingFiles) {
-    const transformedSubDir = transformPath(originalSubDir, transformOpts)
-    pathMapping.push({
-      originalDir: join(sourceRelative, originalSubDir),
-      newDir: join(targetRelative, transformedSubDir),
-      files: mappedFiles,
-    })
-  }
+  const pathMapping = buildPathMapping(
+    dirMappingFiles,
+    transformOpts,
+    sourceRelative,
+    targetRelative,
+  )
 
-  // Pipeline order: copy → link rewrite (before any normalization)
   if (pathMapping.length > 0) {
-    await rewriteLinksAfterTransform({
-      fileService,
-      pathMapping,
-      datasetRoot: params.datasetRoot,
-    })
+    await rewriteLinksAfterTransform({ fileService, pathMapping, datasetRoot: params.datasetRoot })
   }
 
-  logger.info(`Copied contents of ${srcPath} -> ${destPath} (flatten=${flatten}, prefix=${prefix ?? 'none'})`)
+  logger.info(
+    `Copied contents of ${srcPath} -> ${destPath} (flatten=${flatten}, prefix=${prefix ?? 'none'})`,
+  )
 }
 
 /**

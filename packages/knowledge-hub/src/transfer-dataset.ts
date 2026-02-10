@@ -1,13 +1,11 @@
 import { join } from 'path'
-import { readFileSync } from 'fs'
 import { fileSystemService } from '@pair/content-ops'
 import { movePathOps, copyPathOps } from '@pair/content-ops'
 import { SyncOptions } from '@pair/content-ops'
 
 const DATASET = join(__dirname, '..', 'dataset')
 
-function parseOptions(arg?: string) {
-  if (!arg) return undefined
+function parseJson(arg: string): Record<string, unknown> {
   // try parse as JSON string first
   try {
     return JSON.parse(arg)
@@ -15,9 +13,20 @@ function parseOptions(arg?: string) {
     void 0
   }
   // else treat as path to JSON file
+  const content = fileSystemService.readFileSync(arg)
+  return JSON.parse(content)
+}
+
+function parseOptions(arg?: string): SyncOptions | undefined {
+  if (!arg) return undefined
   try {
-    const content = readFileSync(arg, 'utf-8')
-    return JSON.parse(content)
+    const raw = parseJson(arg)
+    return {
+      ...raw,
+      flatten: typeof raw['flatten'] === 'boolean' ? raw['flatten'] : false,
+      ...(typeof raw['prefix'] === 'string' && { prefix: raw['prefix'] }),
+      targets: Array.isArray(raw['targets']) ? raw['targets'] : [],
+    } as SyncOptions
   } catch (err) {
     throw new Error(`Failed to parse options from arg: ${String(err)}`)
   }
@@ -64,7 +73,7 @@ if (require.main === module) {
 
   const options = parseOptions(optionsArg)
 
-  runTransferDataset({ source, target, mode: mode as 'copy' | 'move', options })
+  runTransferDataset({ source, target, mode: mode as 'copy' | 'move', ...(options && { options }) })
     .then(() => {
       console.log('Operation completed successfully')
     })

@@ -1,5 +1,4 @@
 import { join } from 'path'
-import { readFileSync } from 'fs'
 import { fileSystemService } from '@pair/content-ops'
 import { validatePathOps } from '@pair/content-ops'
 
@@ -24,7 +23,7 @@ function parseOptions(arg?: string) {
     void 0
   }
   try {
-    const content = readFileSync(arg, 'utf-8')
+    const content = fileSystemService.readFileSync(arg)
     return JSON.parse(content)
   } catch (err) {
     throw new Error(`Failed to parse options from arg: ${String(err)}`)

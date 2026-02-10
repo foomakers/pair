@@ -16,9 +16,16 @@ export type SyncOptions = {
   /** Delay between retry attempts in milliseconds */
   retryDelay?: number
   /** Flatten directory hierarchy into hyphen-separated names */
-  flatten?: boolean
+  flatten: boolean
   /** Prefix to prepend to top-level directory names */
   prefix?: string
-  /** Target configurations for multi-target distribution */
-  targets?: TargetConfig[]
+  /** Target configurations for multi-target distribution (empty array = no targets) */
+  targets: TargetConfig[]
+}
+
+export function defaultSyncOptions(): SyncOptions {
+  return {
+    flatten: false,
+    targets: [],
+  }
 }

@@ -1,41 +1,35 @@
 import { describe, it, expect } from 'vitest'
-import { SyncOptions } from './SyncOptions'
+import { SyncOptions, defaultSyncOptions } from './SyncOptions'
 import { TargetConfig } from './behavior'
 
 describe('SyncOptions', () => {
-  it('supports existing fields without new fields', () => {
+  it('supports existing fields with required new fields', () => {
     const opts: SyncOptions = {
       defaultBehavior: 'overwrite',
       folderBehavior: { docs: 'add' },
       concurrencyLimit: 5,
+      flatten: false,
+      targets: [],
     }
     expect(opts.defaultBehavior).toBe('overwrite')
     expect(opts.concurrencyLimit).toBe(5)
-  })
-
-  it('supports flatten field with default false', () => {
-    const opts: SyncOptions = { flatten: false }
     expect(opts.flatten).toBe(false)
+    expect(opts.targets).toEqual([])
   })
 
   it('supports flatten set to true', () => {
-    const opts: SyncOptions = { flatten: true }
+    const opts: SyncOptions = { flatten: true, targets: [] }
     expect(opts.flatten).toBe(true)
   })
 
-  it('supports prefix field as string', () => {
-    const opts: SyncOptions = { prefix: 'pair' }
+  it('supports optional prefix field', () => {
+    const opts: SyncOptions = { flatten: false, prefix: 'pair', targets: [] }
     expect(opts.prefix).toBe('pair')
   })
 
-  it('supports prefix as undefined (no prefix)', () => {
-    const opts: SyncOptions = {}
+  it('allows omitting prefix (no prefix)', () => {
+    const opts: SyncOptions = { flatten: false, targets: [] }
     expect(opts.prefix).toBeUndefined()
-  })
-
-  it('supports targets field as empty array', () => {
-    const opts: SyncOptions = { targets: [] }
-    expect(opts.targets).toEqual([])
   })
 
   it('supports targets with TargetConfig entries', () => {
@@ -44,9 +38,9 @@ describe('SyncOptions', () => {
       { path: '.github/skills/', mode: 'symlink' },
       { path: '.cursor/skills/', mode: 'copy' },
     ]
-    const opts: SyncOptions = { targets }
+    const opts: SyncOptions = { flatten: false, targets }
     expect(opts.targets).toHaveLength(3)
-    expect(opts.targets![0].mode).toBe('canonical')
+    expect(opts.targets[0].mode).toBe('canonical')
   })
 
   it('supports all fields together', () => {
@@ -62,5 +56,21 @@ describe('SyncOptions', () => {
     expect(opts.prefix).toBe('pair')
     expect(opts.targets).toHaveLength(1)
     expect(opts.defaultBehavior).toBe('mirror')
+  })
+})
+
+describe('defaultSyncOptions', () => {
+  it('returns sensible defaults', () => {
+    const opts = defaultSyncOptions()
+    expect(opts.flatten).toBe(false)
+    expect(opts.prefix).toBeUndefined()
+    expect(opts.targets).toEqual([])
+  })
+
+  it('can be spread with overrides', () => {
+    const opts: SyncOptions = { ...defaultSyncOptions(), flatten: true, prefix: 'pair' }
+    expect(opts.flatten).toBe(true)
+    expect(opts.prefix).toBe('pair')
+    expect(opts.targets).toEqual([])
   })
 })

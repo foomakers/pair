@@ -16,7 +16,7 @@ export { isValidHttpUrl, validateUrl } from './file-system/url-validator'
 export { extractZip } from './file-system/archive-operations'
 export { detectSourceType, SourceType } from './path-resolution/source-detector'
 
-export { SyncOptions } from './ops/SyncOptions'
+export { SyncOptions, defaultSyncOptions } from './ops/SyncOptions'
 export { Behavior, type TargetMode, type TargetConfig } from './ops/behavior'
 export { copyPathOps } from './ops/copyPathOps'
 export {
