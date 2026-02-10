@@ -24,6 +24,21 @@
       "behavior": "mirror",
       "target_path": "AGENTS.md",
       "description": "AI agents guidance and session context"
+    },
+    "skills": {
+      "source": ".skills",
+      "behavior": "mirror",
+      "flatten": true,
+      "prefix": "pair",
+      "target_path": ".claude/skills",
+      "description": "Agent skills distributed to AI tool directories",
+      "targets": [
+        { "path": ".claude/skills/", "mode": "canonical" },
+        { "path": ".github/skills/", "mode": "symlink" },
+        { "path": ".cursor/skills/", "mode": "symlink" },
+        { "path": ".agents/skills/", "mode": "symlink" },
+        { "path": ".windsurf/skills/", "mode": "symlink" }
+      ]
     }
   },
   "default_target_folders": { "pair": ".pair", "github": ".github" }
