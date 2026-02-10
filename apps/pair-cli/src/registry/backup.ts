@@ -3,7 +3,7 @@
  * Orchestrates BackupService for safe registry modifications.
  */
 
-import type { BackupService, FileSystemService } from '@pair/content-ops'
+import type { BackupService } from '@pair/content-ops'
 import { LogEntry } from '../diagnostics'
 
 /**
@@ -25,25 +25,6 @@ export async function handleBackupRollback(
   } catch (rollbackErr) {
     pushLog('error', `Rollback failed: ${String(rollbackErr)}`)
   }
-}
-
-/**
- * Build registry backup configuration map
- * Creates mapping of registry names to their absolute target paths for backup
- */
-export function buildRegistryBackupConfig(
-  assetRegistries: Record<string, unknown>,
-  fsService: FileSystemService,
-): Record<string, string> {
-  const registryConfig: Record<string, string> = {}
-
-  for (const [registryName, config] of Object.entries(assetRegistries)) {
-    const regConfig = config as { target_path?: string }
-    const targetPath = regConfig.target_path || registryName
-    registryConfig[registryName] = fsService.resolve(targetPath)
-  }
-
-  return registryConfig
 }
 
 /**

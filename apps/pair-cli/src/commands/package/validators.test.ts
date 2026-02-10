@@ -17,7 +17,9 @@ describe('validatePackageStructure - path existence', () => {
         knowledge: {
           source: '.pair/knowledge',
           behavior: 'mirror',
-          target_path: '.pair/knowledge',
+          include: [],
+          flatten: false,
+          targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
           description: 'Knowledge base',
         },
       },
@@ -46,13 +48,17 @@ describe('validatePackageStructure - multiple missing paths', () => {
         knowledge: {
           source: '.pair/knowledge',
           behavior: 'mirror',
-          target_path: '.pair/knowledge',
+          include: [],
+          flatten: false,
+          targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
           description: 'Knowledge base',
         },
         adoption: {
           source: '.pair/adoption',
           behavior: 'add',
-          target_path: '.pair/adoption',
+          include: [],
+          flatten: false,
+          targets: [{ path: '.pair/adoption', mode: 'canonical' }],
           description: 'Adoption guides',
         },
       },
@@ -86,7 +92,9 @@ describe('validatePackageStructure - empty directory', () => {
         knowledge: {
           source: '.pair/knowledge',
           behavior: 'mirror',
-          target_path: '.pair/knowledge',
+          include: [],
+          flatten: false,
+          targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
           description: 'Knowledge base',
         },
       },
@@ -115,13 +123,17 @@ describe('validatePackageStructure - all empty dirs', () => {
         knowledge: {
           source: '.pair/knowledge',
           behavior: 'mirror',
-          target_path: '.pair/knowledge',
+          include: [],
+          flatten: false,
+          targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
           description: 'Knowledge base',
         },
         adoption: {
           source: '.pair/adoption',
           behavior: 'add',
-          target_path: '.pair/adoption',
+          include: [],
+          flatten: false,
+          targets: [{ path: '.pair/adoption', mode: 'canonical' }],
           description: 'Adoption guides',
         },
       },
@@ -162,11 +174,13 @@ describe('validatePackageStructure - malformed config', () => {
       asset_registries: {
         knowledge: {
           behavior: 'mirror',
-          target_path: '.pair/knowledge',
+          include: [],
+          flatten: false,
+          targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
           description: 'Knowledge base',
         },
       },
-    } as Config
+    } as unknown as Config
 
     const result = await validatePackageStructure(config, projectRoot, fsService)
 
@@ -189,13 +203,17 @@ describe('validatePackageStructure - valid non-empty', () => {
         knowledge: {
           source: '.pair/knowledge',
           behavior: 'mirror',
-          target_path: '.pair/knowledge',
+          include: [],
+          flatten: false,
+          targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
           description: 'Knowledge base',
         },
         adoption: {
           source: '.pair/adoption',
           behavior: 'add',
-          target_path: '.pair/adoption',
+          include: [],
+          flatten: false,
+          targets: [{ path: '.pair/adoption', mode: 'canonical' }],
           description: 'Adoption guides',
         },
       },
@@ -228,7 +246,9 @@ describe('validatePackageStructure - file registry', () => {
         agents: {
           source: 'AGENTS.md',
           behavior: 'mirror',
-          target_path: 'AGENTS.md',
+          include: [],
+          flatten: false,
+          targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
           description: 'AI agents guidance',
         },
       },
@@ -255,7 +275,9 @@ describe('validatePackageStructure - error detection', () => {
       asset_registries: {
         knowledge: {
           source: '.pair/knowledge',
-          target_path: '.pair-knowledge',
+          include: [],
+          flatten: false,
+          targets: [{ path: '.pair-knowledge', mode: 'canonical' }],
           behavior: 'mirror',
           description: 'KB',
         },
@@ -277,7 +299,9 @@ describe('validatePackageStructure - error detection', () => {
       asset_registries: {
         knowledge: {
           source: '.pair/knowledge',
-          target_path: '.pair-knowledge',
+          include: [],
+          flatten: false,
+          targets: [{ path: '.pair-knowledge', mode: 'canonical' }],
           behavior: 'mirror',
           description: 'KB',
         },

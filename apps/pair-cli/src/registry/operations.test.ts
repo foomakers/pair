@@ -44,24 +44,29 @@ describe('registry operations', () => {
 describe('buildCopyOptions', () => {
   it('returns SyncOptions with defaults for legacy registry', () => {
     const config: RegistryConfig = {
+      source: '.pair',
       behavior: 'mirror',
-      target_path: '.pair',
       description: 'KB',
+      include: [],
+      flatten: false,
+      targets: [{ path: '.pair', mode: 'canonical' }],
     }
     const options = buildCopyOptions(config)
     expect(options.defaultBehavior).toBe('mirror')
     expect(options.flatten).toBe(false)
     expect(options.prefix).toBeUndefined()
-    expect(options.targets).toEqual([])
+    expect(options.targets).toEqual([{ path: '.pair', mode: 'canonical' }])
   })
 
   it('includes flatten and prefix when set', () => {
     const config: RegistryConfig = {
+      source: '.skills',
       behavior: 'mirror',
-      target_path: '.skills',
       description: 'Skills',
+      include: [],
       flatten: true,
       prefix: 'pair',
+      targets: [{ path: '.skills', mode: 'canonical' }],
     }
     const options = buildCopyOptions(config)
     expect(options.flatten).toBe(true)
@@ -70,9 +75,11 @@ describe('buildCopyOptions', () => {
 
   it('includes targets when set', () => {
     const config: RegistryConfig = {
+      source: '.skills',
       behavior: 'mirror',
-      target_path: '.skills',
       description: 'Skills',
+      include: [],
+      flatten: false,
       targets: [
         { path: '.claude/skills/', mode: 'canonical' },
         { path: '.github/skills/', mode: 'symlink' },
@@ -85,10 +92,12 @@ describe('buildCopyOptions', () => {
 
   it('handles include + mirror with folderBehavior override', () => {
     const config: RegistryConfig = {
+      source: '.github',
       behavior: 'mirror',
-      target_path: '.github',
       description: 'GH',
       include: ['/agents', '/workflows'],
+      flatten: false,
+      targets: [{ path: '.github', mode: 'canonical' }],
     }
     const options = buildCopyOptions(config)
     expect(options.defaultBehavior).toBe('skip')

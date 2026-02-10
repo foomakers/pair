@@ -1,10 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import {
-  handleBackupRollback,
-  buildRegistryBackupConfig,
-  createRegistryBackupConfig,
-} from './backup'
-import type { BackupService, FileSystemService } from '@pair/content-ops'
+import { handleBackupRollback, createRegistryBackupConfig } from './backup'
+import type { BackupService } from '@pair/content-ops'
 import type { LogEntry } from '#diagnostics'
 
 describe('registry backup utilities', () => {
@@ -85,73 +81,6 @@ describe('registry backup utilities', () => {
       expect(logs[0]!.level).toBe('error')
       expect(logs[0]!.message).toContain('Rollback failed')
       expect(logs[0]!.message).toContain('rollback failed')
-    })
-  })
-
-  describe('buildRegistryBackupConfig', () => {
-    it('builds config for single registry', () => {
-      const mockFs: FileSystemService = {
-        resolve: vi.fn((...paths: string[]) => paths.join('/')),
-      } as unknown as FileSystemService
-
-      const registries = {
-        github: { target_path: '.github' },
-      }
-
-      const result = buildRegistryBackupConfig(registries, mockFs)
-
-      expect(result).toEqual({ github: '.github' })
-      expect(mockFs.resolve).toHaveBeenCalledWith('.github')
-    })
-
-    it('builds config for multiple registries', () => {
-      const mockFs: FileSystemService = {
-        resolve: vi.fn((...paths: string[]) => paths.join('/')),
-      } as unknown as FileSystemService
-
-      const registries = {
-        github: { target_path: '.github' },
-        knowledge: { target_path: '.pair/knowledge' },
-        adoption: { target_path: '.pair/adoption' },
-      }
-
-      const result = buildRegistryBackupConfig(registries, mockFs)
-
-      expect(result).toEqual({
-        github: '.github',
-        knowledge: '.pair/knowledge',
-        adoption: '.pair/adoption',
-      })
-      expect(mockFs.resolve).toHaveBeenCalledTimes(3)
-    })
-
-    it('uses registry name when target_path is missing', () => {
-      const mockFs: FileSystemService = {
-        resolve: vi.fn((...paths: string[]) => paths.join('/')),
-      } as unknown as FileSystemService
-
-      const registries = {
-        myRegistry: {},
-      }
-
-      const result = buildRegistryBackupConfig(registries, mockFs)
-
-      expect(result).toEqual({ myRegistry: 'myRegistry' })
-      expect(mockFs.resolve).toHaveBeenCalledWith('myRegistry')
-    })
-
-    it('resolves absolute paths correctly', () => {
-      const mockFs: FileSystemService = {
-        resolve: vi.fn((...paths: string[]) => '/resolved/' + paths.join('/')),
-      } as unknown as FileSystemService
-
-      const registries = {
-        github: { target_path: '.github' },
-      }
-
-      const result = buildRegistryBackupConfig(registries, mockFs)
-
-      expect(result).toEqual({ github: '/resolved/.github' })
     })
   })
 

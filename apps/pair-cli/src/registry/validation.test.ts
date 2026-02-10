@@ -43,9 +43,12 @@ describe('registry validation - checkTargetEmptiness', () => {
 describe('registry validation - validateRegistry', () => {
   it('validates a correct registry', () => {
     const config: RegistryConfig = {
+      source: '.pair',
       behavior: 'mirror',
-      target_path: '.pair',
       description: 'Test',
+      include: [],
+      flatten: false,
+      targets: [{ path: '.pair', mode: 'canonical' }],
     }
     const errors = validateRegistry('test', config)
     expect(errors).toHaveLength(0)
@@ -54,20 +57,22 @@ describe('registry validation - validateRegistry', () => {
   it('fails on invalid behavior', () => {
     const config = {
       behavior: 'invalid',
-      target_path: '.pair',
       description: 'Test',
+      include: [],
+      flatten: false,
+      targets: [{ path: '.pair', mode: 'canonical' }],
     }
     const errors = validateRegistry('test', config)
     expect(errors[0]).toContain('invalid behavior')
   })
 
-  it('fails on missing target_path', () => {
+  it('fails on missing targets', () => {
     const config = {
       behavior: 'mirror',
       description: 'Test',
     }
     const errors = validateRegistry('test', config)
-    expect(errors[0]).toContain('valid target_path string')
+    expect(errors[0]).toContain('at least one target')
   })
 })
 
@@ -96,8 +101,22 @@ describe('registry validation - detectOverlappingTargets', () => {
 describe('registry validation - validateAllRegistries', () => {
   it('validates a full set of registries', () => {
     const registries: Record<string, RegistryConfig> = {
-      reg1: { behavior: 'mirror', target_path: 'a', description: 'desc' },
-      reg2: { behavior: 'add', target_path: 'b', description: 'desc' },
+      reg1: {
+        source: 'reg1',
+        behavior: 'mirror',
+        description: 'desc',
+        include: [],
+        flatten: false,
+        targets: [{ path: 'a', mode: 'canonical' }],
+      },
+      reg2: {
+        source: 'reg2',
+        behavior: 'add',
+        description: 'desc',
+        include: [],
+        flatten: false,
+        targets: [{ path: 'b', mode: 'canonical' }],
+      },
     }
     const result = validateAllRegistries(registries)
     expect(result.valid).toBe(true)
@@ -106,8 +125,22 @@ describe('registry validation - validateAllRegistries', () => {
 
   it('detects overlaps in validateAllRegistries', () => {
     const registries: Record<string, RegistryConfig> = {
-      reg1: { behavior: 'mirror', target_path: 'a', description: 'desc' },
-      reg2: { behavior: 'add', target_path: 'a', description: 'desc' },
+      reg1: {
+        source: 'reg1',
+        behavior: 'mirror',
+        description: 'desc',
+        include: [],
+        flatten: false,
+        targets: [{ path: 'a', mode: 'canonical' }],
+      },
+      reg2: {
+        source: 'reg2',
+        behavior: 'add',
+        description: 'desc',
+        include: [],
+        flatten: false,
+        targets: [{ path: 'a', mode: 'canonical' }],
+      },
     }
     const result = validateAllRegistries(registries)
     expect(result.valid).toBe(false)
@@ -117,7 +150,14 @@ describe('registry validation - validateAllRegistries', () => {
   it('fails when no valid registries exist (all invalid)', () => {
     const registries: Record<string, RegistryConfig> = {
       // Registry with missing required fields
-      invalid1: { behavior: '' as unknown as 'mirror', target_path: '', description: '' },
+      invalid1: {
+        source: 'invalid1',
+        behavior: '' as unknown as 'mirror',
+        description: '',
+        include: [],
+        flatten: false,
+        targets: [],
+      },
     }
     const result = validateAllRegistries(registries)
     expect(result.valid).toBe(false)
@@ -135,9 +175,11 @@ describe('registry validation - validateAllRegistries', () => {
 describe('registry validation - targets', () => {
   it('accepts registry with valid targets', () => {
     const config: RegistryConfig = {
+      source: '.claude/skills/',
       behavior: 'mirror',
-      target_path: '.skills',
       description: 'Skills',
+      include: [],
+      flatten: false,
       targets: [
         { path: '.claude/skills/', mode: 'canonical' },
         { path: '.github/skills/', mode: 'symlink' },
@@ -147,11 +189,14 @@ describe('registry validation - targets', () => {
     expect(errors).toHaveLength(0)
   })
 
-  it('accepts registry without targets (backward compatible)', () => {
+  it('accepts registry with single canonical target', () => {
     const config: RegistryConfig = {
+      source: '.pair',
       behavior: 'mirror',
-      target_path: '.pair',
       description: 'KB',
+      include: [],
+      flatten: false,
+      targets: [{ path: '.pair', mode: 'canonical' }],
     }
     const errors = validateRegistry('knowledge', config)
     expect(errors).toHaveLength(0)
@@ -160,19 +205,21 @@ describe('registry validation - targets', () => {
   it('rejects non-array targets', () => {
     const config = {
       behavior: 'mirror',
-      target_path: '.skills',
       description: 'Skills',
+      include: [],
+      flatten: false,
       targets: 'invalid',
     }
     const errors = validateRegistry('skills', config)
-    expect(errors.some(e => e.includes('targets'))).toBe(true)
+    expect(errors.some(e => e.includes('target'))).toBe(true)
   })
 
   it('rejects targets with missing path or mode', () => {
     const config = {
       behavior: 'mirror',
-      target_path: '.skills',
       description: 'Skills',
+      include: [],
+      flatten: false,
       targets: [{ path: '.claude/skills/' }],
     }
     const errors = validateRegistry('skills', config)
@@ -181,9 +228,11 @@ describe('registry validation - targets', () => {
 
   it('rejects multi-target with no canonical via validateTargets', () => {
     const config: RegistryConfig = {
+      source: 'skills',
       behavior: 'mirror',
-      target_path: '.skills',
       description: 'Skills',
+      include: [],
+      flatten: false,
       targets: [
         { path: '.github/skills/', mode: 'symlink' },
         { path: '.cursor/skills/', mode: 'copy' },
@@ -195,11 +244,13 @@ describe('registry validation - targets', () => {
 
   it('accepts registry with flatten and prefix', () => {
     const config: RegistryConfig = {
+      source: '.skills',
       behavior: 'mirror',
-      target_path: '.skills',
       description: 'Skills',
+      include: [],
       flatten: true,
       prefix: 'pair',
+      targets: [{ path: '.skills', mode: 'canonical' }],
     }
     const errors = validateRegistry('skills', config)
     expect(errors).toHaveLength(0)
@@ -208,9 +259,10 @@ describe('registry validation - targets', () => {
   it('rejects non-boolean flatten', () => {
     const config = {
       behavior: 'mirror',
-      target_path: '.skills',
       description: 'Skills',
+      include: [],
       flatten: 'yes',
+      targets: [{ path: '.skills', mode: 'canonical' }],
     }
     const errors = validateRegistry('skills', config)
     expect(errors.some(e => e.includes('flatten'))).toBe(true)
@@ -219,9 +271,11 @@ describe('registry validation - targets', () => {
   it('rejects non-string prefix', () => {
     const config = {
       behavior: 'mirror',
-      target_path: '.skills',
       description: 'Skills',
+      include: [],
+      flatten: false,
       prefix: 123,
+      targets: [{ path: '.skills', mode: 'canonical' }],
     }
     const errors = validateRegistry('skills', config)
     expect(errors.some(e => e.includes('prefix'))).toBe(true)

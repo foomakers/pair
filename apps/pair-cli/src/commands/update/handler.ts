@@ -16,7 +16,6 @@ import {
   doCopyAndUpdateLinks,
   buildCopyOptions,
   distributeToSecondaryTargets,
-  buildRegistryBackupConfig,
   handleBackupRollback,
   type RegistryConfig,
 } from '#registry'
@@ -136,10 +135,10 @@ async function runUpdateSequence(
 
 async function performBackup(backupService: BackupService, context: UpdateContext): Promise<void> {
   const { fs, registries, baseTarget, pushLog } = context
-  const backupConfig = buildRegistryBackupConfig(
-    mapRegistriesToBackupConfig(registries, baseTarget, fs),
-    fs,
-  )
+  const backupConfig: Record<string, string> = {}
+  for (const [name, config] of Object.entries(registries)) {
+    backupConfig[name] = resolveTarget(name, config, fs, baseTarget)
+  }
   pushLog('info', 'Creating backup before update...')
   await backupService.backupAllRegistries(backupConfig)
 }
@@ -175,7 +174,7 @@ async function updateRegistries(context: UpdateContext): Promise<void> {
       options: copyOptions,
     })
 
-    if (registryConfig.targets && registryConfig.targets.length > 0) {
+    if (registryConfig.targets.length > 1) {
       await distributeToSecondaryTargets({
         fileService: fs,
         canonicalPath: effectiveTarget,
@@ -204,22 +203,6 @@ async function executeRollback(
     },
     pushLog,
   )
-}
-
-/**
- * Helper to map full AssetRegistryConfig to simple path config for backup service
- */
-function mapRegistriesToBackupConfig(
-  registries: Record<string, RegistryConfig>,
-  baseTarget: string,
-  fs: FileSystemService,
-): Record<string, { target_path: string }> {
-  const result: Record<string, { target_path: string }> = {}
-  for (const [name, config] of Object.entries(registries)) {
-    const effectiveTarget = resolveTarget(name, config, fs, baseTarget)
-    result[name] = { target_path: effectiveTarget }
-  }
-  return result
 }
 
 /**

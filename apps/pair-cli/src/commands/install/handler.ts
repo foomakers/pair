@@ -110,7 +110,6 @@ async function executeInstall(context: {
   const { fs, datasetRoot, registries, baseTarget, options, pushLog } = context
 
   await forEachRegistry(registries, async (registryName, registryConfig) => {
-    // Resolve source and target paths respecting explicit registry 'source' and 'target_path'
     const resolved = resolveRegistryPaths({
       name: registryName,
       config: registryConfig,
@@ -133,7 +132,7 @@ async function executeInstall(context: {
       options: copyOptions,
     })
 
-    if (registryConfig.targets && registryConfig.targets.length > 0) {
+    if (registryConfig.targets.length > 1) {
       await distributeToSecondaryTargets({
         fileService: fs,
         canonicalPath: effectiveTarget,

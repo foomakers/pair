@@ -4,7 +4,7 @@ import {
   FileSystemService,
   type TargetConfig,
 } from '@pair/content-ops'
-import type { SyncOptions } from '@pair/content-ops'
+import { type SyncOptions, defaultSyncOptions } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
 import { isAbsolute, dirname } from 'path'
 
@@ -84,16 +84,18 @@ export function calculatePaths(
 
 /**
  * Build SyncOptions from a RegistryConfig for use with content-ops copy operations.
- * Backward compatible: existing registries without flatten/prefix/targets get defaults.
  */
 export function buildCopyOptions(registryConfig: RegistryConfig): SyncOptions {
-  const behavior = registryConfig.behavior || 'mirror'
-  const include = registryConfig.include || []
+  const behavior = registryConfig.behavior
+  const include = registryConfig.include
 
+  const defaults = defaultSyncOptions()
   const options: SyncOptions = {
+    ...defaults,
     defaultBehavior: behavior,
-    flatten: registryConfig.flatten ?? false,
-    targets: registryConfig.targets ?? [],
+    include,
+    flatten: registryConfig.flatten,
+    targets: registryConfig.targets,
     ...(registryConfig.prefix && { prefix: registryConfig.prefix }),
   }
 
