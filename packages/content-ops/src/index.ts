@@ -25,6 +25,11 @@ export {
   transformPath,
   detectCollisions,
 } from './ops/naming-transforms'
+export {
+  rewriteLinksInFile,
+  rewriteLinksAfterTransform,
+  type PathMappingEntry,
+} from './ops/link-rewriter'
 export { movePathOps } from './ops/movePathOps'
 export { validatePathOps } from './ops/validatePathOps'
 export {

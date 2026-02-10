@@ -17,6 +17,7 @@ import {
 import { convertToRelative } from '../path-resolution'
 import { isAbsolute } from 'path'
 import { transformPath, detectCollisions } from './naming-transforms'
+import { rewriteLinksAfterTransform, PathMappingEntry } from './link-rewriter'
 
 type CopyPathOpsParams = {
   fileService: FileSystemService
@@ -492,6 +493,10 @@ async function copyDirectoryWithTransforms(params: {
   // Create target directory
   await fileService.mkdir(destPath, { recursive: true })
 
+  // Build path mapping for link rewriting (copy → rewrite pipeline order)
+  const pathMapping: PathMappingEntry[] = []
+  const dirMappingFiles = new Map<string, string[]>()
+
   // Copy each file to the transformed location
   for (const filePath of files) {
     const dir = dirname(filePath)
@@ -510,6 +515,36 @@ async function copyDirectoryWithTransforms(params: {
 
     await fileService.mkdir(targetDir, { recursive: true })
     await copyFileHelper(fileService, srcFile, destFile, 'overwrite')
+
+    // Track path mapping for link rewriting
+    if (dir !== '.') {
+      const key = dir
+      if (!dirMappingFiles.has(key)) {
+        dirMappingFiles.set(key, [])
+      }
+      dirMappingFiles.get(key)!.push(destFile)
+    }
+  }
+
+  // Build path mapping entries
+  const sourceRelative = relative(params.datasetRoot, srcPath) || params.source
+  const targetRelative = relative(params.datasetRoot, destPath) || params.target
+  for (const [originalSubDir, mappedFiles] of dirMappingFiles) {
+    const transformedSubDir = transformPath(originalSubDir, transformOpts)
+    pathMapping.push({
+      originalDir: join(sourceRelative, originalSubDir),
+      newDir: join(targetRelative, transformedSubDir),
+      files: mappedFiles,
+    })
+  }
+
+  // Pipeline order: copy → link rewrite (before any normalization)
+  if (pathMapping.length > 0) {
+    await rewriteLinksAfterTransform({
+      fileService,
+      pathMapping,
+      datasetRoot: params.datasetRoot,
+    })
   }
 
   logger.info(`Copied contents of ${srcPath} -> ${destPath} (flatten=${flatten}, prefix=${prefix ?? 'none'})`)

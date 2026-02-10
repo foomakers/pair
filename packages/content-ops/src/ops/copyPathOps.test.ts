@@ -225,6 +225,34 @@ describe('copyPathOps - flatten and prefix', () => {
     )
   })
 
+  it('should rewrite relative links after flatten+prefix copy (full pipeline)', async () => {
+    // File at source/navigator/next/ (depth 3) links up 3 levels to reach dataset root
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/navigator/next/SKILL.md':
+          '# Next\n[guide](../../../.pair/knowledge/testing/README.md)',
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true, prefix: 'pair' },
+    })
+
+    // After flatten+prefix: source/navigator/next/ → target/pair-navigator-next/
+    // Original: ../../../ from source/navigator/next/ → /dataset/.pair/knowledge/testing/README.md
+    // New location target/pair-navigator-next/ (depth 2): ../../.pair/knowledge/testing/README.md
+    const content = await fileService.readFile(
+      '/dataset/target/pair-navigator-next/SKILL.md',
+    )
+    expect(content).toContain('../../.pair/knowledge/testing/README.md')
+  })
+
   it('should detect and throw on flatten collisions', async () => {
     const fileService = new InMemoryFileSystemService(
       {
