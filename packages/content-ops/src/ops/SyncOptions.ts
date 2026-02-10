@@ -1,4 +1,4 @@
-import { Behavior } from './behavior'
+import { Behavior, TargetConfig } from './behavior'
 
 /**
  * Options for controlling file move/copy operations
@@ -15,4 +15,10 @@ export type SyncOptions = {
   retryAttempts?: number
   /** Delay between retry attempts in milliseconds */
   retryDelay?: number
+  /** Flatten directory hierarchy into hyphen-separated names */
+  flatten?: boolean
+  /** Prefix to prepend to top-level directory names */
+  prefix?: string
+  /** Target configurations for multi-target distribution */
+  targets?: TargetConfig[]
 }

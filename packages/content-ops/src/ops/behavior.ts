@@ -1,5 +1,12 @@
 export type Behavior = 'overwrite' | 'add' | 'mirror' | 'skip'
 
+export type TargetMode = 'canonical' | 'symlink' | 'copy'
+
+export type TargetConfig = {
+  path: string
+  mode: TargetMode
+}
+
 export function normalizeKey(p: string) {
   return p.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
 }

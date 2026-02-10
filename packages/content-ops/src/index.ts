@@ -17,7 +17,7 @@ export { extractZip } from './file-system/archive-operations'
 export { detectSourceType, SourceType } from './path-resolution/source-detector'
 
 export { SyncOptions } from './ops/SyncOptions'
-export { Behavior } from './ops/behavior'
+export { Behavior, type TargetMode, type TargetConfig } from './ops/behavior'
 export { copyPathOps } from './ops/copyPathOps'
 export { movePathOps } from './ops/movePathOps'
 export { validatePathOps } from './ops/validatePathOps'
