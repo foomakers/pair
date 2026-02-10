@@ -18,6 +18,8 @@ import {
   detectOverlappingTargets,
   checkTargetsEmptiness,
   doCopyAndUpdateLinks,
+  buildCopyOptions,
+  distributeToSecondaryTargets,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
@@ -130,6 +132,16 @@ async function executeInstall(context: {
       datasetRoot: datasetRoot,
       options: copyOptions,
     })
+
+    if (registryConfig.targets && registryConfig.targets.length > 0) {
+      await distributeToSecondaryTargets({
+        fileService: fs,
+        canonicalPath: effectiveTarget,
+        targets: registryConfig.targets,
+        baseTarget,
+      })
+    }
+
     pushLog('info', `Successfully installed registry '${registryName}'`)
   })
 
@@ -200,28 +212,4 @@ async function validateAllTargetsBeforeInstall(
   }
 
   return { valid: true }
-}
-
-/**
- * Build copy options for registry based on behavior and includes
- */
-function buildCopyOptions(registryConfig: RegistryConfig): Record<string, unknown> {
-  const behavior = registryConfig.behavior || 'mirror'
-  const include = registryConfig.include || []
-
-  const copyOptions: Record<string, unknown> = {
-    defaultBehavior: behavior,
-  }
-
-  // For selective behavior, set folder behaviors for included folders
-  if (include.length > 0 && behavior === 'mirror') {
-    const folderBehavior: Record<string, string> = {}
-    include.forEach((folder: string) => {
-      folderBehavior[folder] = 'mirror'
-    })
-    copyOptions['folderBehavior'] = folderBehavior
-    copyOptions['defaultBehavior'] = 'skip'
-  }
-
-  return copyOptions
 }

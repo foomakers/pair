@@ -1,4 +1,4 @@
-import { FileSystemService, Behavior } from '@pair/content-ops'
+import { FileSystemService, Behavior, type TargetConfig } from '@pair/content-ops'
 
 /**
  * Unified configuration for an individual asset registry.
@@ -9,6 +9,9 @@ export interface RegistryConfig {
   target_path: string
   description: string
   include?: string[]
+  flatten?: boolean
+  prefix?: string
+  targets?: TargetConfig[]
 }
 
 /**

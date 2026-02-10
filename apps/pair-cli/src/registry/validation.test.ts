@@ -131,3 +131,99 @@ describe('registry validation - validateAllRegistries', () => {
     expect(result.errors[0]).toContain('Config must have asset_registries object')
   })
 })
+
+describe('registry validation - targets', () => {
+  it('accepts registry with valid targets', () => {
+    const config: RegistryConfig = {
+      behavior: 'mirror',
+      target_path: '.skills',
+      description: 'Skills',
+      targets: [
+        { path: '.claude/skills/', mode: 'canonical' },
+        { path: '.github/skills/', mode: 'symlink' },
+      ],
+    }
+    const errors = validateRegistry('skills', config)
+    expect(errors).toHaveLength(0)
+  })
+
+  it('accepts registry without targets (backward compatible)', () => {
+    const config: RegistryConfig = {
+      behavior: 'mirror',
+      target_path: '.pair',
+      description: 'KB',
+    }
+    const errors = validateRegistry('knowledge', config)
+    expect(errors).toHaveLength(0)
+  })
+
+  it('rejects non-array targets', () => {
+    const config = {
+      behavior: 'mirror',
+      target_path: '.skills',
+      description: 'Skills',
+      targets: 'invalid',
+    }
+    const errors = validateRegistry('skills', config)
+    expect(errors.some(e => e.includes('targets'))).toBe(true)
+  })
+
+  it('rejects targets with missing path or mode', () => {
+    const config = {
+      behavior: 'mirror',
+      target_path: '.skills',
+      description: 'Skills',
+      targets: [{ path: '.claude/skills/' }],
+    }
+    const errors = validateRegistry('skills', config)
+    expect(errors.some(e => e.includes('path and mode'))).toBe(true)
+  })
+
+  it('rejects multi-target with no canonical via validateTargets', () => {
+    const config: RegistryConfig = {
+      behavior: 'mirror',
+      target_path: '.skills',
+      description: 'Skills',
+      targets: [
+        { path: '.github/skills/', mode: 'symlink' },
+        { path: '.cursor/skills/', mode: 'copy' },
+      ],
+    }
+    const errors = validateRegistry('skills', config)
+    expect(errors.some(e => e.includes('canonical'))).toBe(true)
+  })
+
+  it('accepts registry with flatten and prefix', () => {
+    const config: RegistryConfig = {
+      behavior: 'mirror',
+      target_path: '.skills',
+      description: 'Skills',
+      flatten: true,
+      prefix: 'pair',
+    }
+    const errors = validateRegistry('skills', config)
+    expect(errors).toHaveLength(0)
+  })
+
+  it('rejects non-boolean flatten', () => {
+    const config = {
+      behavior: 'mirror',
+      target_path: '.skills',
+      description: 'Skills',
+      flatten: 'yes',
+    }
+    const errors = validateRegistry('skills', config)
+    expect(errors.some(e => e.includes('flatten'))).toBe(true)
+  })
+
+  it('rejects non-string prefix', () => {
+    const config = {
+      behavior: 'mirror',
+      target_path: '.skills',
+      description: 'Skills',
+      prefix: 123,
+    }
+    const errors = validateRegistry('skills', config)
+    expect(errors.some(e => e.includes('prefix'))).toBe(true)
+  })
+})

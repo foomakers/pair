@@ -1,4 +1,4 @@
-import { Behavior, FileSystemService } from '@pair/content-ops'
+import { Behavior, FileSystemService, validateTargets, type TargetConfig } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
 
 /**
@@ -77,6 +77,9 @@ export function validateRegistry(name: string, config: unknown): string[] {
   errors.push(...validatePaths(name, reg))
   errors.push(...validateIncludes(name, reg))
   errors.push(...validateDescription(name, reg))
+  errors.push(...validateFlattenField(name, reg))
+  errors.push(...validatePrefixField(name, reg))
+  errors.push(...validateTargetConfigs(name, reg))
 
   return errors
 }
@@ -123,6 +126,47 @@ function validateDescription(name: string, reg: Record<string, unknown>): string
   if (!reg['description'] || typeof reg['description'] !== 'string') {
     return [`Registry '${name}' must have a valid description string`]
   }
+  return []
+}
+
+function validateFlattenField(name: string, reg: Record<string, unknown>): string[] {
+  const flatten = reg['flatten']
+  if (flatten === undefined) return []
+  if (typeof flatten !== 'boolean') {
+    return [`Registry '${name}' flatten must be a boolean`]
+  }
+  return []
+}
+
+function validatePrefixField(name: string, reg: Record<string, unknown>): string[] {
+  const prefix = reg['prefix']
+  if (prefix === undefined) return []
+  if (typeof prefix !== 'string') {
+    return [`Registry '${name}' prefix must be a string`]
+  }
+  return []
+}
+
+function validateTargetConfigs(name: string, reg: Record<string, unknown>): string[] {
+  const targets = reg['targets']
+  if (targets === undefined) return []
+
+  if (!Array.isArray(targets)) {
+    return [`Registry '${name}' targets must be an array`]
+  }
+
+  for (const t of targets) {
+    if (!t || typeof t !== 'object' || !t.path || !t.mode) {
+      return [`Registry '${name}' targets must have path and mode`]
+    }
+  }
+
+  try {
+    validateTargets(targets as TargetConfig[])
+  } catch (err) {
+    return [`Registry '${name}': ${err instanceof Error ? err.message : String(err)}`]
+  }
+
   return []
 }
 
