@@ -9,10 +9,10 @@ In all interactions and commit messages, be extremely coincise and sacrify gramm
 If your agent supports **Agent Skills** (agentskills.io), start every session by running:
 
 ```
-/next
+/pair-navigator-next
 ```
 
-The `/next` skill reads project adoption files and PM tool state to recommend the most relevant action. Follow its suggestion or override with a specific skill.
+The `/pair-navigator-next` skill reads project adoption files and PM tool state to recommend the most relevant action. Follow its suggestion or override with a specific skill.
 
 **No skills installed?** Skip this section and follow the manual Quick Start Process below.
 
@@ -55,7 +55,7 @@ PM Access: MCP github_projects (org: mycompany, repo: myproject)
 
 ## 🎯 Quick Start Process
 
-**With skills**: Run `/next` — it handles steps 1-3 automatically.
+**With skills**: Run `/pair-navigator-next` — it handles steps 1-3 automatically.
 
 **Without skills** (manual flow):
 

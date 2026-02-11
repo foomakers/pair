@@ -390,6 +390,68 @@ describe('copyPathOps - flatten and prefix', () => {
     expect(verify).toContain('/pair-process-implement')
   })
 
+  it('should return skillNameMap from flatten+prefix copy', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/navigator/next/SKILL.md': '---\nname: next\n---\n# /next',
+        '/dataset/source/process/implement/SKILL.md': '---\nname: implement\n---\n# /implement',
+      },
+      '/',
+      '/',
+    )
+
+    const result = await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true, prefix: 'pair', targets: [] },
+    })
+
+    expect(result.skillNameMap).toBeDefined()
+    expect(result.skillNameMap!.get('next')).toBe('pair-navigator-next')
+    expect(result.skillNameMap!.get('implement')).toBe('pair-process-implement')
+  })
+
+  it('should apply external skillNameMap to file copy', async () => {
+    const agentsContent = [
+      '# AGENTS',
+      '```',
+      '/next',
+      '```',
+      'Run `/next` to get started.',
+      'Then `/implement` your task.',
+    ].join('\n')
+
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/project/src/AGENTS.md': agentsContent,
+      },
+      '/',
+      '/',
+    )
+
+    const skillNameMap = new Map([
+      ['next', 'pair-navigator-next'],
+      ['implement', 'pair-process-implement'],
+    ])
+
+    await copyPathOps({
+      fileService,
+      source: 'src/AGENTS.md',
+      target: 'dist/AGENTS.md',
+      datasetRoot: '/project',
+      skillNameMap,
+    })
+
+    const result = await fileService.readFile('/project/dist/AGENTS.md')
+    expect(result).toContain('/pair-navigator-next')
+    expect(result).toContain('`/pair-navigator-next`')
+    expect(result).toContain('/pair-process-implement')
+    expect(result).not.toContain(' /next')
+    expect(result).not.toContain('/implement')
+  })
+
   it('should detect and throw on flatten collisions', async () => {
     const fileService = new InMemoryFileSystemService(
       {

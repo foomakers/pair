@@ -1,9 +1,9 @@
 ---
 name: pair-process-implement
-description: Implements a user story by iterating through its tasks one at a time, following a structured 5-step cycle per task. Composes /verify-quality and /record-decision. Reads adoption files for project-specific decisions. Creates a PR at story completion.
+description: Implements a user story by iterating through its tasks one at a time, following a structured 5-step cycle per task. Composes /pair-capability-verify-quality and /pair-capability-record-decision. Reads adoption files for project-specific decisions. Creates a PR at story completion.
 ---
 
-# /implement — Task Implementation
+# /pair-process-implement — Task Implementation
 
 Implement a user story by processing its tasks sequentially. Each task follows a 5-step cycle: context → branch → implementation → quality → commit. The story-level process has 4 phases (0–3). Creates a single PR when all tasks are done.
 
@@ -11,8 +11,8 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 
 | Skill | Type | Required |
 |-------|------|----------|
-| `/verify-quality` | Capability | Yes — invoked at quality validation phase |
-| `/record-decision` | Capability | Yes — invoked when a decision needs recording |
+| `/pair-capability-verify-quality` | Capability | Yes — invoked at quality validation phase |
+| `/pair-capability-record-decision` | Capability | Yes — invoked when a decision needs recording |
 | `/assess-stack` | Capability | Optional — invoked when a new dependency is detected. If not installed, warn and continue. |
 | `/verify-adoption` | Capability | Optional — invoked before commit to check adoption compliance. If not installed, warn and continue. |
 
@@ -24,7 +24,7 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 
 1. **Check**: Is the user story already loaded in this session?
 2. **Skip**: If yes, confirm story ID and move to Step 0.2.
-3. **Act**: Read the story from the PM tool (per [way-of-working.md](../../../apps/pair-cli/node_modules/@pair/knowledge-hub/dataset/.pair/adoption/tech/way-of-working.md)).
+3. **Act**: Read the story from the PM tool (per [way-of-working.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/way-of-working.md)).
    - Understand business value and acceptance criteria.
    - Verify status is "In Progress" and assigned to the developer.
    - Confirm epic context.
@@ -62,9 +62,9 @@ Ask: _"Ready to proceed with implementation?"_
 1. **Check**: Are adoption files already loaded in this session?
 2. **Skip**: If yes, move to Step 1.2.
 3. **Act**: Read:
-   - [architecture.md](../../../apps/pair-cli/node_modules/@pair/knowledge-hub/dataset/.pair/adoption/tech/architecture.md) — architectural patterns
-   - [tech-stack.md](../../../apps/pair-cli/node_modules/@pair/knowledge-hub/dataset/.pair/adoption/tech/tech-stack.md) — approved libraries and versions
-   - [way-of-working.md](../../../apps/pair-cli/node_modules/@pair/knowledge-hub/dataset/.pair/adoption/tech/way-of-working.md) — development process
+   - [architecture.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/architecture.md) — architectural patterns
+   - [tech-stack.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/tech-stack.md) — approved libraries and versions
+   - [way-of-working.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/way-of-working.md) — development process
 4. **Verify**: Technical context loaded. If adoption files missing, warn and proceed with guideline defaults.
 
 ### Step 1.2: Create or Switch to Feature Branch
@@ -137,19 +137,19 @@ Follow the TDD discipline rules strictly:
 
 ### Step 2.4: Check for New Dependencies
 
-1. **Check**: Did the implementation introduce any new dependency not listed in [tech-stack.md](../../../apps/pair-cli/node_modules/@pair/knowledge-hub/dataset/.pair/adoption/tech/tech-stack.md)?
+1. **Check**: Did the implementation introduce any new dependency not listed in [tech-stack.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/tech-stack.md)?
 2. **Skip**: If no new dependencies, move to Step 2.5.
 3. **Act**: Is `/assess-stack` installed?
    - **Yes**: Compose `/assess-stack` to validate and register the dependency. If `/assess-stack` rejects (incompatible) → **HALT**.
    - **No**: Warn the developer:
-     > New dependency detected: `[package@version]`. `/assess-stack` is not installed — please manually verify against the tech stack and update [tech-stack.md](../../../apps/pair-cli/node_modules/@pair/knowledge-hub/dataset/.pair/adoption/tech/tech-stack.md).
+     > New dependency detected: `[package@version]`. `/assess-stack` is not installed — please manually verify against the tech stack and update [tech-stack.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/tech-stack.md).
 4. **Verify**: Dependency is either validated by `/assess-stack` or acknowledged by developer.
 
 ### Step 2.5: Check for Decisions
 
 1. **Check**: Did the implementation introduce any decision not covered by existing ADRs or ADLs?
 2. **Skip**: If no new decisions needed, move to Step 2.6.
-3. **Act**: Ask the developer if a decision record is needed. If yes, compose `/record-decision` with the appropriate `$type` (`architectural` or `non-architectural`) and `$topic`.
+3. **Act**: Ask the developer if a decision record is needed. If yes, compose `/pair-capability-record-decision` with the appropriate `$type` (`architectural` or `non-architectural`) and `$topic`.
 4. **Verify**: Decision recorded and adoption files updated.
 
 ### Step 2.6: Verify Adoption Compliance
@@ -159,19 +159,19 @@ Follow the TDD discipline rules strictly:
    > `/verify-adoption` is not installed — skipping adoption compliance check. Please manually verify code against adoption files.
    Move to Step 2.7.
 3. **Act**: Compose `/verify-adoption` with `$scope` appropriate to the task.
-   - Non-conformities reported → resolve via `/assess-stack` (tech-stack issues) or `/record-decision` (architectural gaps).
+   - Non-conformities reported → resolve via `/assess-stack` (tech-stack issues) or `/pair-capability-record-decision` (architectural gaps).
 4. **Verify**: Adoption compliance confirmed or all non-conformities resolved.
 
 ### Step 2.7: Verify Quality
 
-1. **Act**: Compose `/verify-quality` with `$scope = all`.
+1. **Act**: Compose `/pair-capability-verify-quality` with `$scope = all`.
 2. **Verify**: All quality gates pass. If any gate fails → **HALT**. Developer must fix before proceeding.
 
 ### Step 2.8: Commit (if commit-per-task)
 
 1. **Check**: Is the commit strategy `commit-per-task`?
 2. **Skip**: If `commit-per-story`, mark task as complete in session state and return to Step 2.1.
-3. **Act**: Stage and commit following the [commit template](../../../apps/pair-cli/node_modules/@pair/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/commit-template.md):
+3. **Act**: Stage and commit following the [commit template](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/commit-template.md):
    ```
    [#<story-id>] <type>: <task-description>
 
@@ -213,13 +213,13 @@ Follow the TDD discipline rules strictly:
 
 1. **Check**: Does a PR already exist for this branch?
 2. **Skip**: If PR exists, update its description and move to output.
-3. **Act**: Create PR following the [PR template](../../../apps/pair-cli/node_modules/@pair/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/pr-template.md):
+3. **Act**: Create PR following the [PR template](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/pr-template.md):
    - **Title**: `[#<story-id>] <type>: <brief description>`
    - **Body**: Fill the PR template sections:
      - Summary: what changed and why (from story statement)
      - Story Context: link to user story issue, AC coverage
      - Changes Made: list of all completed tasks and files affected
-     - Testing: test coverage and validation (from /verify-quality output)
+     - Testing: test coverage and validation (from /pair-capability-verify-quality output)
    - **Link**: Reference the user story issue (`Closes #<story-id>`)
    - **Labels**: Apply appropriate labels
 4. **Verify**: PR created with complete description.
@@ -254,7 +254,7 @@ On HALT: report the blocker clearly, propose resolution, wait for developer.
 
 ## Idempotent Re-invocation
 
-Re-invoking `/implement` on a partially completed story is safe and expected:
+Re-invoking `/pair-process-implement` on a partially completed story is safe and expected:
 
 1. **Branch**: detects existing branch, switches to it.
 2. **Commit strategy**: if commits already exist on branch, infer strategy from history.
@@ -278,5 +278,5 @@ The skill resumes from the first incomplete step — never re-does completed wor
 - Task iteration is sequential — each task completes its full cycle before the next begins.
 - The developer can stop between tasks. Re-invoke to resume (idempotency ensures correct state).
 - Single PR per story regardless of commit strategy.
-- Commit messages follow the [commit template](../../../apps/pair-cli/node_modules/@pair/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/commit-template.md).
-- PR description follows the [PR template](../../../apps/pair-cli/node_modules/@pair/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/pr-template.md).
+- Commit messages follow the [commit template](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/commit-template.md).
+- PR description follows the [PR template](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/pr-template.md).

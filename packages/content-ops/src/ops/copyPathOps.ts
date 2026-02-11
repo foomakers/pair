@@ -19,7 +19,15 @@ import { isAbsolute } from 'path'
 import { transformPath, detectCollisions } from './naming-transforms'
 import { rewriteLinksAfterTransform, PathMappingEntry } from './link-rewriter'
 import { syncFrontmatter } from './frontmatter-transform'
-import { buildSkillNameMap, rewriteSkillReferencesInFiles } from './skill-reference-rewriter'
+import {
+  buildSkillNameMap,
+  rewriteSkillReferencesInFiles,
+  SkillNameMap,
+} from './skill-reference-rewriter'
+
+export type CopyPathOpsResult = {
+  skillNameMap?: SkillNameMap
+}
 
 type CopyPathOpsParams = {
   fileService: FileSystemService
@@ -27,6 +35,9 @@ type CopyPathOpsParams = {
   target: string
   datasetRoot: string
   options?: SyncOptions
+  /** Pre-built skill name map from a previous copy (e.g., skills registry).
+   *  When provided, rewrites skill references in all copied .md files. */
+  skillNameMap?: SkillNameMap
 }
 
 type HandleDirectoryCopyParams = {
@@ -53,6 +64,7 @@ type HandleFileCopyParams = {
   datasetRoot: string
   defaultBehavior: Behavior
   options?: SyncOptions
+  skillNameMap?: SkillNameMap
 }
 
 /**
@@ -72,12 +84,14 @@ async function performCopyBasedOnType(
     defaultBehavior: Behavior
     folderBehavior?: Record<string, Behavior>
     options?: SyncOptions
+    skillNameMap?: SkillNameMap
   },
-) {
+): Promise<CopyPathOpsResult> {
   if (stat.isDirectory()) {
-    await handleDirectoryCopyForType(params)
+    return handleDirectoryCopyForType(params)
   } else if (stat.isFile()) {
     await handleFileCopyForType(params)
+    return {}
   } else {
     throw createError({
       type: 'INVALID_SOURCE_TYPE',
@@ -109,10 +123,10 @@ async function handleDirectoryCopyForType(params: {
   defaultBehavior: Behavior
   folderBehavior?: Record<string, Behavior>
   options?: SyncOptions
-}) {
+  skillNameMap?: SkillNameMap
+}): Promise<CopyPathOpsResult> {
   if (hasNamingTransforms(params.options)) {
-    await copyDirectoryWithTransforms(params)
-    return
+    return copyDirectoryWithTransforms(params)
   }
   const dirCopyParams: HandleDirectoryCopyParams = {
     fileService: params.fileService,
@@ -128,6 +142,7 @@ async function handleDirectoryCopyForType(params: {
     ...(params.options && { options: params.options }),
   }
   await handleDirectoryCopy(dirCopyParams)
+  return {}
 }
 
 /**
@@ -143,6 +158,7 @@ async function handleFileCopyForType(params: {
   datasetRoot: string
   defaultBehavior: Behavior
   options?: SyncOptions
+  skillNameMap?: SkillNameMap
 }) {
   const fileCopyParams: HandleFileCopyParams = {
     fileService: params.fileService,
@@ -154,6 +170,7 @@ async function handleFileCopyForType(params: {
     datasetRoot: params.datasetRoot,
     defaultBehavior: params.defaultBehavior,
     ...(params.options && { options: params.options }),
+    ...(params.skillNameMap && { skillNameMap: params.skillNameMap }),
   }
   await handleFileCopy(fileCopyParams)
 }
@@ -173,8 +190,8 @@ async function handleFileCopyForType(params: {
  * or invalid operations are attempted
  */
 
-export async function copyPathOps(params: CopyPathOpsParams) {
-  const { fileService, source, target, datasetRoot, options } = params
+export async function copyPathOps(params: CopyPathOpsParams): Promise<CopyPathOpsResult> {
+  const { fileService, source, target, datasetRoot, options, skillNameMap } = params
   if (isAbsolute(source) || isAbsolute(target)) {
     throw createError({
       type: 'INVALID_PATH',
@@ -199,7 +216,7 @@ export async function copyPathOps(params: CopyPathOpsParams) {
     }
 
     const stat = await validateSourceExists(fileService, srcPath)
-    await performCopyBasedOnType(stat, {
+    return performCopyBasedOnType(stat, {
       fileService,
       srcPath,
       destPath,
@@ -211,9 +228,8 @@ export async function copyPathOps(params: CopyPathOpsParams) {
       defaultBehavior: defaultBehavior ?? 'overwrite',
       ...(folderBehavior && { folderBehavior }),
       ...(options && { options }),
+      ...(skillNameMap && { skillNameMap }),
     })
-
-    return {}
   }, 'copyPathAndUpdateLinks')
 }
 
@@ -548,7 +564,7 @@ export async function copyDirectoryWithTransforms(params: {
   target: string
   datasetRoot: string
   options?: SyncOptions
-}) {
+}): Promise<CopyPathOpsResult> {
   const { fileService, srcPath, destPath, options } = params
   const flatten = options?.flatten ?? false
   const prefix = options?.prefix
@@ -571,24 +587,46 @@ export async function copyDirectoryWithTransforms(params: {
     })
   }
 
-  const sourceRelative = relative(params.datasetRoot, srcPath) || params.source
-  const targetRelative = relative(params.datasetRoot, destPath) || params.target
+  await rewriteLinksForTransformedDirs(params, dirMappingFiles, transformOpts)
+  const skillNameMap = await applySkillReferenceRewrites(
+    fileService,
+    dirMappingFiles,
+    transformOpts,
+  )
+
+  logger.info(
+    `Copied contents of ${srcPath} -> ${destPath} (flatten=${flatten}, prefix=${prefix ?? 'none'})`,
+  )
+  return skillNameMap.size > 0 ? { skillNameMap } : {}
+}
+
+async function rewriteLinksForTransformedDirs(
+  params: {
+    fileService: FileSystemService
+    datasetRoot: string
+    srcPath: string
+    destPath: string
+    source: string
+    target: string
+  },
+  dirMappingFiles: Map<string, string[]>,
+  transformOpts: TransformOpts,
+): Promise<void> {
+  const sourceRelative = relative(params.datasetRoot, params.srcPath) || params.source
+  const targetRelative = relative(params.datasetRoot, params.destPath) || params.target
   const pathMapping = buildPathMapping(
     dirMappingFiles,
     transformOpts,
     sourceRelative,
     targetRelative,
   )
-
   if (pathMapping.length > 0) {
-    await rewriteLinksAfterTransform({ fileService, pathMapping, datasetRoot: params.datasetRoot })
+    await rewriteLinksAfterTransform({
+      fileService: params.fileService,
+      pathMapping,
+      datasetRoot: params.datasetRoot,
+    })
   }
-
-  await applySkillReferenceRewrites(fileService, dirMappingFiles, transformOpts)
-
-  logger.info(
-    `Copied contents of ${srcPath} -> ${destPath} (flatten=${flatten}, prefix=${prefix ?? 'none'})`,
-  )
 }
 
 /**
@@ -598,9 +636,9 @@ async function applySkillReferenceRewrites(
   fileService: FileSystemService,
   dirMappingFiles: Map<string, string[]>,
   transformOpts: TransformOpts,
-): Promise<void> {
+): Promise<SkillNameMap> {
   const skillNameMap = buildSkillNameMap(dirMappingFiles, transformOpts)
-  if (skillNameMap.size === 0) return
+  if (skillNameMap.size === 0) return skillNameMap
 
   const allMdFiles: string[] = []
   for (const mappedFiles of dirMappingFiles.values()) {
@@ -609,6 +647,7 @@ async function applySkillReferenceRewrites(
     }
   }
   await rewriteSkillReferencesInFiles({ fileService, files: allMdFiles, skillNameMap })
+  return skillNameMap
 }
 
 /**
@@ -625,6 +664,7 @@ async function handleFileCopy(params: HandleFileCopyParams) {
     datasetRoot,
     defaultBehavior,
     options,
+    skillNameMap,
   } = params
 
   const finalDest = await determineFinalDestination(fileService, destPath, source, normTarget)
@@ -656,4 +696,8 @@ async function handleFileCopy(params: HandleFileCopyParams) {
     isDirectory: false,
     options,
   })
+
+  if (skillNameMap && skillNameMap.size > 0 && finalDest.endsWith('.md')) {
+    await rewriteSkillReferencesInFiles({ fileService, files: [finalDest], skillNameMap })
+  }
 }
