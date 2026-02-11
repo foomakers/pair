@@ -744,6 +744,89 @@ it('should preserve encoded query and anchor characters when normalizing', async
   expect(replacements[0].kind).toBe('normalizedRel')
 })
 
+describe('generateNormalizationReplacements - no full normalization', () => {
+  it('should NOT convert cross-folder relative paths to docsFolders-based paths', async function () {
+    // Scenario: a skill file in .skills/ references a file in .pair/ using a correct relative path.
+    // The normalizer should NOT rewrite it to a .pair/-prefix path because that breaks
+    // navigability in IDEs, GitHub, and the link rewriter during distribution.
+    const fs = new InMemoryFileSystemService(
+      {
+        '/dataset/.pair/adoption/tech/way-of-working.md': '# Way of Working',
+        '/dataset/.skills/capability/verify-quality/SKILL.md':
+          'See [wow](../../../.pair/adoption/tech/way-of-working.md).',
+      },
+      '/',
+      '/',
+    )
+
+    const links: ParsedLink[] = [
+      {
+        href: '../../../.pair/adoption/tech/way-of-working.md',
+        text: 'wow',
+        line: 1,
+        start: 4,
+        end: 60,
+      },
+    ]
+
+    const config: LinkProcessingConfig = {
+      docsFolders: ['.pair', '.skills', '.github'],
+      datasetRoot: '/dataset',
+      exclusionList: [],
+    }
+
+    const replacements = await LinkProcessor.generateNormalizationReplacements(
+      links,
+      '/dataset/.skills/capability/verify-quality/SKILL.md',
+      config,
+      fs,
+    )
+
+    // The relative path is already correct and navigable — no replacement should be generated
+    expect(replacements).toHaveLength(0)
+  })
+
+  it('should still normalize redundant relative paths within the same folder', async function () {
+    // Scenario: a file references a sibling with ../same-dir/ prefix — can be simplified
+    const fs = new InMemoryFileSystemService(
+      {
+        '/dataset/.pair/knowledge/how-to/guide.md': '# Guide',
+        '/dataset/.pair/knowledge/how-to/other.md': 'See [guide](../how-to/guide.md).',
+      },
+      '/',
+      '/',
+    )
+
+    const links: ParsedLink[] = [
+      {
+        href: '../how-to/guide.md',
+        text: 'guide',
+        line: 1,
+        start: 4,
+        end: 30,
+      },
+    ]
+
+    const config: LinkProcessingConfig = {
+      docsFolders: ['.pair', '.skills'],
+      datasetRoot: '/dataset',
+      exclusionList: [],
+    }
+
+    const replacements = await LinkProcessor.generateNormalizationReplacements(
+      links,
+      '/dataset/.pair/knowledge/how-to/other.md',
+      config,
+      fs,
+    )
+
+    // ../how-to/guide.md → guide.md (same directory, simpler relative path)
+    expect(replacements).toHaveLength(1)
+    expect(replacements[0].newHref).toBe('guide.md')
+    expect(replacements[0].kind).toBe('normalizedRel')
+  })
+})
+
 describe('LinkProcessor - detectLinkStyle', () => {
   const cwd = '/test'
 

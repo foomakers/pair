@@ -50,9 +50,10 @@ describe('generateNormalizationReplacements - basics', () => {
       fs,
     )
 
-    expect(replacements).toHaveLength(2)
-    expect(replacements[0].newHref).toBe('api/ref.md')
-    expect(replacements[1].newHref).toBe('other.md')
+    // Only normalizedRel (./other.md → other.md) should be generated.
+    // ../api/ref.md is already a correct relative path — no full normalization.
+    expect(replacements).toHaveLength(1)
+    expect(replacements[0].newHref).toBe('other.md')
   })
 })
 

@@ -308,7 +308,8 @@ export class LinkProcessor {
     }
   }
 
-  private static async tryPushMultiFileNormalization(params: {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private static async tryPushMultiFileNormalization(_params: {
     replacements: Replacement[]
     lnk: ParsedLink
     linkPath: string
@@ -317,19 +318,11 @@ export class LinkProcessor {
     fileService: FileSystemService
     normalized: string
   }) {
-    const { replacements, lnk, linkPath, absTarget, config, fileService, normalized } = params
-    const topFolder = normalized.split('/')[0] ?? ''
-    if (!config.docsFolders.includes(topFolder)) return
-    if (!(await fileService.exists(absTarget))) return
-    if (linkPath !== normalized) {
-      this.pushNormalizedReplacement({
-        replacements,
-        lnk,
-        oldHref: linkPath,
-        newHref: normalized,
-        kind: 'normalizedFull',
-      })
-    }
+    // Full normalization (converting relative paths to docsFolders-based paths like
+    // .pair/adoption/tech/...) is intentionally disabled. These non-standard paths are
+    // not navigable in IDEs/GitHub and break the link rewriter during skill distribution.
+    // Relative paths (e.g., ../../../.pair/...) are correct and work everywhere.
+    return
   }
 
   private static isSkippableLink(url: string, config: LinkProcessingConfig) {
