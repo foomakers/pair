@@ -363,9 +363,9 @@ Establish security by design principles that embed security considerations into 
 ## 🔗 Related Practices
 
 - **[Security Guidelines](security-guidelines.md)** - Comprehensive security standards and practices
-- **[Testing Guidelines](.pair/knowledge/guidelines/testing/README.md)** - Security testing integration and methodologies
-- **[Quality Standards](.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md)** - Quality assurance and validation processes
-- **[Code Design Guidelines](.pair/knowledge/guidelines/code-design/README.md)** - Secure coding practices and standards
+- **[Testing Guidelines](../../testing/README.md)** - Security testing integration and methodologies
+- **[Quality Standards](../quality-standards/README.md)** - Quality assurance and validation processes
+- **[Code Design Guidelines](../../code-design/README.md)** - Secure coding practices and standards
 
 ---
 

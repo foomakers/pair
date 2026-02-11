@@ -162,10 +162,10 @@ Do you need infrastructure automation?
 
 ## 🔗 Related Practices
 
-- **[Cloud Providers](.pair/knowledge/guidelines/infrastructure/cloud-providers/README.md)** - Cloud platform selection and implementation
-- **[Container Orchestration](.pair/knowledge/guidelines/infrastructure/container-orchestration/README.md)** - Container infrastructure automation
-- **[Deployment Patterns](.pair/knowledge/guidelines/infrastructure/deployment-patterns/README.md)** - Infrastructure deployment strategies
-- **[Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)** - Infrastructure security practices
+- **[Cloud Providers](../cloud-providers/README.md)** - Cloud platform selection and implementation
+- **[Container Orchestration](../container-orchestration/README.md)** - Container infrastructure automation
+- **[Deployment Patterns](../deployment-patterns/README.md)** - Infrastructure deployment strategies
+- **[Security Guidelines](../../quality-assurance/security/README.md)** - Infrastructure security practices
 
 ## 🎓 Learning Path
 

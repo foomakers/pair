@@ -35,12 +35,12 @@ EPIC BREAKDOWN STATE:
 - **Size for 2-4 sprints** - manageable increments with measurable outcomes
 - **Plan Epic 0 for new projects** - application bootstrap and technical foundation
 - **Follow collaborative validation** - structured feedback loops with developer approval
-- **Document comprehensively** - use [Epic Template](.pair/knowledge/guidelines/collaboration/templates/epic-template.md)
-- **Maintain tool integration** - proper hierarchy linking per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+- **Document comprehensively** - use [Epic Template](../guidelines/collaboration/templates/epic-template.md)
+- **Maintain tool integration** - proper hierarchy linking per [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md)
 
 **CRITICAL**: Before starting epic breakdown:
 
-- **HALT if bootstrap incomplete** - verify [way-of-working.md](.pair/adoption/tech/way-of-working.md) and tool configuration
+- **HALT if bootstrap incomplete** - verify [way-of-working.md](../../adoption/tech/way-of-working.md) and tool configuration
 - **HALT if no Todo initiatives** - initiatives must be ready for breakdown
 - **HALT if tool access unclear** - must understand PM tool hierarchy and linking approach
 - **Do NOT proceed** without clear initiative selection and technical context
@@ -53,9 +53,9 @@ EPIC BREAKDOWN STATE:
 
 1. **Verify Bootstrap Completion**:
 
-   - Confirm [way-of-working.md](.pair/adoption/tech/way-of-working.md) exists with PM tool configuration
+   - Confirm [way-of-working.md](../../adoption/tech/way-of-working.md) exists with PM tool configuration
    - Check foundational documents: PRD, architecture, tech-stack, boundedcontext
-   - Validate PM tool access per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+   - Validate PM tool access per [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md)
 
 2. **Handle Missing Prerequisites**:
 
@@ -90,7 +90,7 @@ EPIC BREAKDOWN STATE:
 
    _This initiative will deliver [key user value]. Should I proceed with epic breakdown for this initiative?"_
 
-**Selection Reference**: [Initiative Guidelines](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md)
+**Selection Reference**: [Initiative Guidelines](../guidelines/collaboration/templates/initiative-template.md)
 
 ### Phase 3: Epic Analysis & Proposal
 
@@ -125,7 +125,7 @@ EPIC BREAKDOWN STATE:
 
    _Does this breakdown structure align with your development approach and initiative objectives?"_
 
-**Epic Sizing Reference**: [Epic Template](.pair/knowledge/guidelines/collaboration/templates/epic-template.md)
+**Epic Sizing Reference**: [Epic Template](../guidelines/collaboration/templates/epic-template.md)
 
 ### Phase 4: Epic Documentation & Creation
 
@@ -133,7 +133,7 @@ EPIC BREAKDOWN STATE:
 
 1. **Document Individual Epics**:
 
-   - Use complete [Epic Template](.pair/knowledge/guidelines/collaboration/templates/epic-template.md) structure
+   - Use complete [Epic Template](../guidelines/collaboration/templates/epic-template.md) structure
    - Start with Epic 0 (if required), then sequential order
    - Include objective, scope, success criteria, technical considerations
    - Define clear user value and business rationale
@@ -151,12 +151,12 @@ EPIC BREAKDOWN STATE:
    _Does this epic definition capture the right scope and value delivery? Any adjustments needed?"_
 
 3. **Create in Project Management Tool**:
-   - Follow tool-specific format per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+   - Follow tool-specific format per [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md)
    - Establish proper hierarchy linking (Initiative → Epic → Future User Stories)
    - Configure epic tracking and progress monitoring
    - Verify epic sequence and dependencies are documented
 
-**Documentation Reference**: [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+**Documentation Reference**: [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md)
 
 ### Phase 5: Completion & State Management
 
@@ -191,8 +191,8 @@ EPIC BREAKDOWN STATE:
 - [ ] Epic 0 assessed for new projects (created if needed)
 - [ ] All epics deliver end-to-end user value in 2-4 sprints
 - [ ] Epic sequence follows logical dependencies (foundation → user value)
-- [ ] Complete [Epic Template](.pair/knowledge/guidelines/collaboration/templates/epic-template.md) used for each epic
-- [ ] Tool hierarchy properly established per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+- [ ] Complete [Epic Template](../guidelines/collaboration/templates/epic-template.md) used for each epic
+- [ ] Tool hierarchy properly established per [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md)
 - [ ] Initiative status updated from 'Todo' to 'In Progress'
 - [ ] Session state maintained throughout process
 
@@ -202,12 +202,12 @@ EPIC BREAKDOWN STATE:
 
 - [Bootstrap Checklist](02-how-to-complete-bootstrap-checklist.md) - Foundation verification
 - [Initiative Creation](03-how-to-create-and-prioritize-initiatives.md) - Input source for epic breakdown
-- [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) - Tool integration and hierarchy linking
+- [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md) - Tool integration and hierarchy linking
 
 ### Implementation Guidelines
 
-- [Epic Template](.pair/knowledge/guidelines/collaboration/templates/epic-template.md) - Complete documentation structure
-- [Initiative Template](.pair/knowledge/guidelines/collaboration/templates/initiative-template.md) - Parent context understanding
+- [Epic Template](../guidelines/collaboration/templates/epic-template.md) - Complete documentation structure
+- [Initiative Template](../guidelines/collaboration/templates/initiative-template.md) - Parent context understanding
 
 ### Next Phase
 

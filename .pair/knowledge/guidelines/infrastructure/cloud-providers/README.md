@@ -233,8 +233,8 @@ Selecting cloud provider strategy?
 
 ## 🔗 Related Practices
 
-- **[Cloud Services](.pair/knowledge/guidelines/infrastructure/cloud-services/README.md)** - Cloud service selection and integration patterns
-- **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure automation and version control
+- **[Cloud Services](../cloud-services/README.md)** - Cloud service selection and integration patterns
+- **[Infrastructure as Code](../infrastructure-as-code/README.md)** - Infrastructure automation and version control
 - **[Cost Optimization](cost-optimization.md)** - Cloud cost optimization strategies and tools
 - **[Multi-Cloud Strategy](multi-cloud.md)** - Multi-cloud architecture and governance
 

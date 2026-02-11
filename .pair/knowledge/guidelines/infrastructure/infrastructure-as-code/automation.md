@@ -223,8 +223,8 @@ Self-healing infrastructure identifica e risolve automaticamente problemi comuni
 
 - **[IaC Best Practices](iac-best-practices.md)** - Infrastructure as Code implementation guidelines
 - **[State Management](state-management.md)** - Infrastructure state management strategies
-- **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Continuous integration and deployment practices
-- **[Operations Monitoring](.pair/knowledge/guidelines/observability/README.md)** - Infrastructure monitoring and observability
+- **[CI/CD Strategy](../cicd-strategy/README.md)** - Continuous integration and deployment practices
+- **[Operations Monitoring](../../observability/README.md)** - Infrastructure monitoring and observability
 
 ---
 

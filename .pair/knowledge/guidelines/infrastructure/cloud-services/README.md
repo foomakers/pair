@@ -541,10 +541,10 @@ class CostOptimizer {
 
 ## 🔗 Related Practices
 
-- **[Cloud Providers](.pair/knowledge/guidelines/infrastructure/cloud-providers/README.md)** - Strategic cloud platform selection and implementation
-- **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure automation and version control
-- **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Continuous integration and deployment practices
-- **[Environments](.pair/knowledge/guidelines/infrastructure/environments/README.md)** - Environment management and consistency strategies
+- **[Cloud Providers](../cloud-providers/README.md)** - Strategic cloud platform selection and implementation
+- **[Infrastructure as Code](../infrastructure-as-code/README.md)** - Infrastructure automation and version control
+- **[CI/CD Strategy](../cicd-strategy/README.md)** - Continuous integration and deployment practices
+- **[Environments](../environments/README.md)** - Environment management and consistency strategies
 
 ## 📈 Cloud Services Maturity Progression
 

@@ -221,27 +221,27 @@ Content Tool Selection:
 
 - **Design Principles**: Content strategy aligns with core design principles for consistent user communication
 
-  - [User-Centered Design](.pair/knowledge/guidelines/user-experience/design-principles/user-centered-design.md) for content that serves user needs
-  - [Consistency Standards](.pair/knowledge/guidelines/user-experience/design-principles/consistency-standards.md) for unified voice and messaging
-  - [Accessibility Integration](.pair/knowledge/guidelines/user-experience/design-principles/accessibility-integration.md) for inclusive content practices
+  - [User-Centered Design](../design-principles/user-centered-design.md) for content that serves user needs
+  - [Consistency Standards](../design-principles/consistency-standards.md) for unified voice and messaging
+  - [Accessibility Integration](../design-principles/accessibility-integration.md) for inclusive content practices
 
 - **Design Systems**: Content strategy provides guidelines for system-wide content patterns and messaging
 
-  - [Component Libraries](.pair/knowledge/guidelines/user-experience/design-systems/component-libraries.md) for content component standardization
-  - [System Architecture](.pair/knowledge/guidelines/user-experience/design-systems/system-architecture.md) for content governance integration
+  - [Component Libraries](../design-systems/component-libraries.md) for content component standardization
+  - [System Architecture](../design-systems/system-architecture.md) for content governance integration
 
 - **User Research**: Research insights inform content strategy decisions and messaging effectiveness
 
-  - [Research Methods](.pair/knowledge/guidelines/user-experience/user-research/research-methods.md) for content testing and validation approaches
+  - [Research Methods](../user-research/research-methods.md) for content testing and validation approaches
 
 - **Interface Design**: Content strategy guides interface copy, labeling, and communication design
-  - Interface design documentation in [.pair/knowledge/guidelines/user-experience/interface-design/README.md](.pair/knowledge/guidelines/user-experience/interface-design/README.md) for content-design integration
+  - Interface design documentation in [.pair/knowledge/guidelines/user-experience/interface-design/README.md](../interface-design/README.md) for content-design integration
 
 ### Related Resources
 
-- **[UX Performance](.pair/knowledge/guidelines/user-experience/ux-performance.md)**: Content performance measurement and optimization strategies
-- **[Brand Alignment](.pair/knowledge/guidelines/user-experience/brand-alignment.md)**: Ensuring content reflects and reinforces brand identity
-- **[Figma Workflows](.pair/knowledge/guidelines/user-experience/figma-workflows.md)**: Content collaboration within design tools
-- **[Asset Collection](.pair/knowledge/guidelines/user-experience/asset-collection.md)**: Content asset management and organization systems
+- **[UX Performance](../ux-performance.md)**: Content performance measurement and optimization strategies
+- **[Brand Alignment](../brand-alignment.md)**: Ensuring content reflects and reinforces brand identity
+- **[Figma Workflows](../figma-workflows.md)**: Content collaboration within design tools
+- **[Asset Collection](../asset-collection.md)**: Content asset management and organization systems
 
 This framework ensures that content strategy creates meaningful, accessible, and effective communication that serves user needs while supporting business objectives and design consistency.

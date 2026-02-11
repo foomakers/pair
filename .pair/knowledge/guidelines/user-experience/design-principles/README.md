@@ -244,15 +244,15 @@ User Research → Problem Definition → Solution Design → Validation → Iter
 
 ## Integration with Other UX Components
 
-- **Design Systems**: Principles inform system architecture and component behavior standards, detailed in [.pair/knowledge/guidelines/user-experience/design-systems/README.md](.pair/knowledge/guidelines/user-experience/design-systems/README.md)
-- **User Research**: Research validates principle effectiveness and informs principle evolution, see [.pair/knowledge/guidelines/user-experience/user-research/README.md](.pair/knowledge/guidelines/user-experience/user-research/README.md)
-- **Interface Design**: Principles guide visual and interaction design decision-making, documented in [.pair/knowledge/guidelines/user-experience/interface-design/README.md](.pair/knowledge/guidelines/user-experience/interface-design/README.md)
-- **Content Strategy**: Principles shape content approach and communication strategies, outlined in [.pair/knowledge/guidelines/user-experience/content-strategy/README.md](.pair/knowledge/guidelines/user-experience/content-strategy/README.md)
+- **Design Systems**: Principles inform system architecture and component behavior standards, detailed in [.pair/knowledge/guidelines/user-experience/design-systems/README.md](../design-systems/README.md)
+- **User Research**: Research validates principle effectiveness and informs principle evolution, see [.pair/knowledge/guidelines/user-experience/user-research/README.md](../user-research/README.md)
+- **Interface Design**: Principles guide visual and interaction design decision-making, documented in [.pair/knowledge/guidelines/user-experience/interface-design/README.md](../interface-design/README.md)
+- **Content Strategy**: Principles shape content approach and communication strategies, outlined in [.pair/knowledge/guidelines/user-experience/content-strategy/README.md](../content-strategy/README.md)
 
 ### Related Resources
 
-- **[UX Performance Guidelines](.pair/knowledge/guidelines/user-experience/ux-performance.md)**: Performance impact of design principle implementation
-- **[Brand Alignment](.pair/knowledge/guidelines/user-experience/brand-alignment.md)**: Aligning design principles with brand strategy
-- **[Figma Workflows](.pair/knowledge/guidelines/user-experience/figma-workflows.md)**: Tool-specific implementation of design principles
+- **[UX Performance Guidelines](../ux-performance.md)**: Performance impact of design principle implementation
+- **[Brand Alignment](../brand-alignment.md)**: Aligning design principles with brand strategy
+- **[Figma Workflows](../figma-workflows.md)**: Tool-specific implementation of design principles
 
 This framework ensures that design principles serve as actionable guidance for creating exceptional user experiences while supporting business objectives and technical constraints.

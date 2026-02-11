@@ -137,19 +137,19 @@ This section covers technology stack selection and standardization:
 
 ## 🔗 Related Practices
 
-- **[Infrastructure](.pair/knowledge/guidelines/infrastructure/README.md)** - Cloud services and deployment platforms for these technologies
-- **[Development Tools](.pair/knowledge/guidelines/technical-standards/development-tools/README.md)** - Tools that support these technology choices
-- **[Integration Standards](.pair/knowledge/guidelines/technical-standards/integration-standards/README.md)** - How these technologies integrate together
-- **[Code Design Framework Patterns](.pair/knowledge/guidelines/code-design/framework-patterns/README.md)** - Implementation patterns for these technologies
+- **[Infrastructure](../../infrastructure/README.md)** - Cloud services and deployment platforms for these technologies
+- **[Development Tools](../development-tools/README.md)** - Tools that support these technology choices
+- **[Integration Standards](../integration-standards/README.md)** - How these technologies integrate together
+- **[Code Design Framework Patterns](../../code-design/framework-patterns/README.md)** - Implementation patterns for these technologies
 
 ## ☁️ Cloud Integration
 
 For cloud deployment and infrastructure automation:
 
-- **[Cloud Providers](.pair/knowledge/guidelines/infrastructure/cloud-providers/README.md)** - Provider selection for tech stack deployment
-- **[Container Orchestration](.pair/knowledge/guidelines/infrastructure/container-orchestration/README.md)** - Containerizing and deploying tech stack components
-- **[Cloud Services](.pair/knowledge/guidelines/infrastructure/cloud-services/README.md)** - Managed database services aligned with backend stack
-- **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - CI/CD pipelines for tech stack deployment
+- **[Cloud Providers](../../infrastructure/cloud-providers/README.md)** - Provider selection for tech stack deployment
+- **[Container Orchestration](../../infrastructure/container-orchestration/README.md)** - Containerizing and deploying tech stack components
+- **[Cloud Services](../../infrastructure/cloud-services/README.md)** - Managed database services aligned with backend stack
+- **[CI/CD Strategy](../../infrastructure/cicd-strategy/README.md)** - CI/CD pipelines for tech stack deployment
 
 ## 🎯 Quick Start
 

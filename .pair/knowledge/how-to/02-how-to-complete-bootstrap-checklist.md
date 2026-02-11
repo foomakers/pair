@@ -48,7 +48,7 @@ BOOTSTRAP COMPLETION STATE:
 
 **Before starting**: Analyze existing project documentation to understand context.
 
-1. **Read PRD** from [`.pair/adoption/product/PRD.md`](.pair/adoption/product/PRD.md)
+1. **Read PRD** from [`.pair/adoption/product/PRD.md`](../../adoption/product/PRD.md)
 2. **Extract key constraints**:
    - Target users and scale expectations
    - Budget and timeline constraints
@@ -81,7 +81,7 @@ BOOTSTRAP COMPLETION STATE:
 
 3. **Handle categorization feedback** and proceed when confirmed
 
-**Project Categories Reference**: [Bootstrap Checklist](.pair/knowledge/assets/bootstrap-checklist.md)
+**Project Categories Reference**: [Bootstrap Checklist](../assets/bootstrap-checklist.md)
 
 ### Phase 2: Checklist Completion
 
@@ -110,8 +110,8 @@ BOOTSTRAP COMPLETION STATE:
 
 **Ask 3-4 focused questions at a time** and wait for responses before proceeding.
 
-**Architecture Guidelines Reference**: [Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md)
-**Technical Standards Reference**: [Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md)
+**Architecture Guidelines Reference**: [Architecture Guidelines](../guidelines/architecture/README.md)
+**Technical Standards Reference**: [Technical Standards](../guidelines/technical-standards/README.md)
 
 ### Phase 3: Standards Document Generation
 
@@ -134,16 +134,16 @@ BOOTSTRAP COMPLETION STATE:
    - Iterate based on feedback
    - Get final approval before saving
 
-3. **Standards Format Requirements**: [Adopted Standards README](.pair/adoption/tech/README.md)
+3. **Standards Format Requirements**: [Adopted Standards README](../../adoption/tech/README.md)
 
-**Infrastructure Guidelines Reference**: [Infrastructure Guidelines](.pair/knowledge/guidelines/infrastructure/README.md)
-**UX Guidelines Reference**: [UX Guidelines](.pair/knowledge/guidelines/user-experience/README.md)
+**Infrastructure Guidelines Reference**: [Infrastructure Guidelines](../guidelines/infrastructure/README.md)
+**UX Guidelines Reference**: [UX Guidelines](../guidelines/user-experience/README.md)
 
 ### Phase 4: Finalization & Storage
 
 **Objective**: Save approved documents and establish update process.
 
-1. **Save all documents** to [`.pair/adoption/tech/`](.pair/adoption/tech) folder
+1. **Save all documents** to [`.pair/adoption/tech/`](../../adoption/tech) folder
 2. **Verify consistency** across all standards documents
 3. **Establish update process** for future iterations and ADR changes
 4. **Update session state** to approved status
@@ -162,7 +162,7 @@ BOOTSTRAP COMPLETION STATE:
 
 **Document Quality Requirements**:
 
-- Follow [adopted standards format](.pair/adoption/tech/README.md) exactly
+- Follow [adopted standards format](../../adoption/tech/README.md) exactly
 - Write concisely and prescriptively in English
 - Include specific versions and configuration details
 - Reference knowledge-base documents for detailed rationale
@@ -195,7 +195,7 @@ BOOTSTRAP COMPLETION STATE:
 - [ ] Bootstrap checklist fully completed with all sections addressed
 - [ ] Project categorization confirmed and documented
 - [ ] All five adopted standards documents generated and approved
-- [ ] Documents stored in correct [`.pair/adoption/tech/`](.pair/adoption/tech) locations
+- [ ] Documents stored in correct [`.pair/adoption/tech/`](../../adoption/tech) locations
 
 **Quality:**
 
@@ -211,24 +211,24 @@ BOOTSTRAP COMPLETION STATE:
 
 **Primary Implementation Assets:**
 
-- [Bootstrap Checklist](.pair/knowledge/assets/bootstrap-checklist.md) - Complete project setup framework
-- [Adopted Standards README](.pair/adoption/tech/README.md) - Format requirements for all documents
+- [Bootstrap Checklist](../assets/bootstrap-checklist.md) - Complete project setup framework
+- [Adopted Standards README](../../adoption/tech/README.md) - Format requirements for all documents
 
 **Guidelines for Implementation:**
 
-- [Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md) - Architectural patterns and decisions
-- [Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md) - Technology selection criteria
-- [Infrastructure Guidelines](.pair/knowledge/guidelines/infrastructure/README.md) - Deployment and operational guidance
-- [UX Guidelines](.pair/knowledge/guidelines/user-experience/README.md) - Design system and user experience standards
-- [Collaboration Guidelines](.pair/knowledge/guidelines/collaboration/README.md) - Development processes and team workflows
+- [Architecture Guidelines](../guidelines/architecture/README.md) - Architectural patterns and decisions
+- [Technical Standards](../guidelines/technical-standards/README.md) - Technology selection criteria
+- [Infrastructure Guidelines](../guidelines/infrastructure/README.md) - Deployment and operational guidance
+- [UX Guidelines](../guidelines/user-experience/README.md) - Design system and user experience standards
+- [Collaboration Guidelines](../guidelines/collaboration/README.md) - Development processes and team workflows
 
 **Target Output Locations:**
 
-- [Architecture Standards](.pair/adoption/tech/architecture.md) - System design decisions
-- [Tech Stack Standards](.pair/adoption/tech/tech-stack.md) - Technology choices and versions
-- [Infrastructure Standards](.pair/adoption/tech/infrastructure.md) - Deployment and operations
-- [UX/UI Standards](.pair/adoption/tech/ux-ui.md) - Design system and patterns
-- [Way of Working](.pair/adoption/tech/way-of-working.md) - Development processes
+- [Architecture Standards](../../adoption/tech/architecture.md) - System design decisions
+- [Tech Stack Standards](../../adoption/tech/tech-stack.md) - Technology choices and versions
+- [Infrastructure Standards](../../adoption/tech/infrastructure.md) - Deployment and operations
+- [UX/UI Standards](../../adoption/tech/ux-ui.md) - Design system and patterns
+- [Way of Working](../../adoption/tech/way-of-working.md) - Development processes
 
 ## Next Steps
 

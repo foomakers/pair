@@ -31,16 +31,16 @@ STORY REFINEMENT STATE:
 
 - **Select highest priority Todo stories** - follow P0 > P1 > P2 priority order
 - **Transform uncertainty into clarity** - resolve all open questions and ambiguities
-- **Apply comprehensive acceptance criteria** - use Given-When-Then format per [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md)
+- **Apply comprehensive acceptance criteria** - use Given-When-Then format per [User Story Template](../guidelines/collaboration/templates/user-story-template.md)
 - **Conduct technical risk analysis** - identify implementation challenges and spikes
 - **Validate sprint readiness** - ensure story fits capacity or split appropriately
 - **Maintain INVEST compliance** - verify all INVEST criteria remain satisfied
-- **Document with refined template** - complete all sections of [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md)
+- **Document with refined template** - complete all sections of [User Story Template](../guidelines/collaboration/templates/user-story-template.md)
 
 **CRITICAL**: Before starting story refinement:
 
 - **HALT if no Todo stories** - must have stories from breakdown phase
-- **HALT if tool access unclear** - verify PM tool configuration per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+- **HALT if tool access unclear** - verify PM tool configuration per [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md)
 - **HALT if template not reviewed** - must understand refined story structure
 - **Do NOT proceed** without clear story selection and template understanding
 
@@ -98,7 +98,7 @@ STORY REFINEMENT STATE:
 
    _Based on your input, I'll create comprehensive Given-When-Then acceptance criteria."_
 
-**Requirements Reference**: [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md)
+**Requirements Reference**: [User Story Template](../guidelines/collaboration/templates/user-story-template.md)
 
 ### Phase 3: Technical Analysis
 
@@ -136,7 +136,7 @@ STORY REFINEMENT STATE:
 
    _Does this technical approach align with project architecture and team capabilities?"_
 
-**Technical Reference**: [Architecture Guidelines](.pair/knowledge/guidelines/architecture/architectural-patterns/README.md)
+**Technical Reference**: [Architecture Guidelines](../guidelines/architecture/architectural-patterns/README.md)
 
 ### Phase 4: Sprint Readiness Validation
 
@@ -172,7 +172,7 @@ STORY REFINEMENT STATE:
 
    _Does this sizing and potential splitting preserve user value appropriately?"_
 
-**Sizing Reference**: [Story Estimation Guidelines](.pair/knowledge/guidelines/collaboration/estimation/README.md)
+**Sizing Reference**: [Story Estimation Guidelines](../guidelines/collaboration/estimation/README.md)
 
 ### Phase 5: Documentation and Tool Updates
 
@@ -180,7 +180,7 @@ STORY REFINEMENT STATE:
 
 1. **Template Documentation**:
 
-   - Complete all sections of [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md)
+   - Complete all sections of [User Story Template](../guidelines/collaboration/templates/user-story-template.md)
    - Include detailed acceptance criteria and technical analysis
    - Document dependencies, risks, and implementation notes
    - Specify Definition of Done checklist items
@@ -203,7 +203,7 @@ STORY REFINEMENT STATE:
 
    _Story refinement complete. All details documented and ready for sprint execution."_
 
-**Template Reference**: [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md)
+**Template Reference**: [User Story Template](../guidelines/collaboration/templates/user-story-template.md)
 
 ## Quality Assurance
 
@@ -214,7 +214,7 @@ STORY REFINEMENT STATE:
 - [ ] Technical approach and risks thoroughly analyzed
 - [ ] Story sized appropriately for sprint or split with value preservation
 - [ ] All uncertainties and open questions resolved
-- [ ] [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) completed
+- [ ] [User Story Template](../guidelines/collaboration/templates/user-story-template.md) completed
 - [ ] Tool updated with refined status and metadata
 - [ ] Story ready for immediate development start
 
@@ -272,14 +272,14 @@ STORY REFINEMENT STATE:
 ### Core Dependencies
 
 - [User Story Breakdown](07-how-to-breakdown-user-stories.md) - Input source for refinement candidates
-- [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) - Tool access and story management
+- [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md) - Tool access and story management
 - [Bootstrap Checklist](02-how-to-complete-bootstrap-checklist.md) - Foundation verification
 
 ### Implementation Guidelines
 
-- [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) - Complete documentation structure
-- [Story Estimation Guidelines](.pair/knowledge/guidelines/collaboration/estimation/README.md) - Sizing and splitting standards
-- [Architecture Guidelines](.pair/knowledge/guidelines/architecture/architectural-patterns/README.md) - Technical analysis framework
+- [User Story Template](../guidelines/collaboration/templates/user-story-template.md) - Complete documentation structure
+- [Story Estimation Guidelines](../guidelines/collaboration/estimation/README.md) - Sizing and splitting standards
+- [Architecture Guidelines](../guidelines/architecture/architectural-patterns/README.md) - Technical analysis framework
 
 ### Next Phase
 

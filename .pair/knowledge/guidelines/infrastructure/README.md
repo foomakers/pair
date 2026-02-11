@@ -169,10 +169,10 @@ Starting infrastructure implementation?
 
 ## 🔗 Related Knowledge Areas
 
-- **[Code Design Guidelines](.pair/knowledge/guidelines/code-design/README.md)** - Application architecture and development practices
-- **[Quality Assurance](.pair/knowledge/guidelines/quality-assurance/README.md)** - Testing strategies and quality frameworks
-- **[Observability](.pair/knowledge/guidelines/observability/README.md)** - Operational practices and monitoring strategies
-- **[Quality Assurance Guidelines](.pair/knowledge/guidelines/quality-assurance/README.md)** - Security practices and compliance frameworks
+- **[Code Design Guidelines](../code-design/README.md)** - Application architecture and development practices
+- **[Quality Assurance](../quality-assurance/README.md)** - Testing strategies and quality frameworks
+- **[Observability](../observability/README.md)** - Operational practices and monitoring strategies
+- **[Quality Assurance Guidelines](../quality-assurance/README.md)** - Security practices and compliance frameworks
 
 ## 📈 Infrastructure Maturity Progression
 
