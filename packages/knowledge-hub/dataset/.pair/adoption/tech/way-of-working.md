@@ -10,5 +10,5 @@ This document defines the **validated development practices and team workflows**
 
 ## Quality Gates
 
-- [Quality gate command, e.g., `pnpm quality-gate`] is the adopted project-level quality gate command.
-- Quality gate includes: [list sub-checks, e.g., type checking, testing, linting, formatting].
+- `pnpm quality-gate` is the adopted project-level quality gate command.
+- Quality gate includes: type checking (`ts:check`), testing (`test`), linting (`lint`), formatting (`prettier:fix`).

@@ -2,14 +2,14 @@
 name: implement
 description: >-
   Implements a user story by iterating through its tasks one at a time, following
-  a structured 5-phase process per task. Composes /verify-quality and
+  a structured 5-step cycle per task. Composes /verify-quality and
   /record-decision. Reads adoption files for project-specific decisions. Creates
   a PR at story completion.
 ---
 
 # /implement — Task Implementation
 
-Implement a user story by processing its tasks sequentially. Each task follows a 5-phase cycle: context → branch → implementation → quality → commit. Creates a single PR when all tasks are done.
+Implement a user story by processing its tasks sequentially. Each task follows a 5-step cycle: context → branch → implementation → quality → commit. The story-level process has 4 phases (0–3). Creates a single PR when all tasks are done.
 
 ## Composed Skills
 
