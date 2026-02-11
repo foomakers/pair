@@ -34,8 +34,8 @@ Record a technical decision as either an ADR (architectural) or ADL (non-archite
 ### Step 2: Detect Existing Decision
 
 1. **Check**: Search for existing decision files matching `$topic`:
-   - If `architectural`: scan [adoption/tech/adr/](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/adr) for files containing `$topic` in filename.
-   - If `non-architectural`: scan [adoption/decision-log/](../../../packages/knowledge-hub/dataset/.pair/adoption/decision-log) for files containing `$topic` in filename.
+   - If `architectural`: scan [adoption/tech/adr/](../../../.pair/adoption/tech/adr) for files containing `$topic` in filename.
+   - If `non-architectural`: scan [adoption/decision-log/](../../../.pair/adoption/decision-log) for files containing `$topic` in filename.
 2. **Skip**: If no existing file found, proceed to Step 3 (create new).
 3. **Act**: If existing file found, ask the developer:
    > Found existing decision: `[filename]`. Do you want to **update** this decision or **create a new one**?
@@ -49,16 +49,16 @@ Record a technical decision as either an ADR (architectural) or ADL (non-archite
 
 **If `architectural` → ADR:**
 
-1. **Check**: Does [adoption/tech/adr/](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/adr) directory exist?
+1. **Check**: Does [adoption/tech/adr/](../../../.pair/adoption/tech/adr) directory exist?
 2. **Act**: If not, create it.
-3. **Act**: Create (or update) the ADR file at [adoption/tech/adr/](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/adr)`YYYY-MM-DD-<topic>.md` following the standalone [ADR template](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/adr-template.md). Fill in all sections: Status, Date, Context, Options Considered, Decision, Consequences, and Adoption Impact.
+3. **Act**: Create (or update) the ADR file at [adoption/tech/adr/](../../../.pair/adoption/tech/adr)`YYYY-MM-DD-<topic>.md` following the standalone [ADR template](../../../.pair/knowledge/guidelines/collaboration/templates/adr-template.md). Fill in all sections: Status, Date, Context, Options Considered, Decision, Consequences, and Adoption Impact.
 4. **Verify**: ADR file exists with complete content following the template structure.
 
 **If `non-architectural` → ADL:**
 
-1. **Check**: Does [adoption/decision-log/](../../../packages/knowledge-hub/dataset/.pair/adoption/decision-log) directory exist?
+1. **Check**: Does [adoption/decision-log/](../../../.pair/adoption/decision-log) directory exist?
 2. **Act**: If not, create it.
-3. **Act**: Create (or update) the ADL file at [adoption/decision-log/](../../../packages/knowledge-hub/dataset/.pair/adoption/decision-log)`YYYY-MM-DD-<topic>.md` following the standalone [ADL template](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/adl-template.md). Fill in all sections: Date, Status, Category, Context, Decision, Alternatives Considered, Consequences, and Adoption Impact.
+3. **Act**: Create (or update) the ADL file at [adoption/decision-log/](../../../.pair/adoption/decision-log)`YYYY-MM-DD-<topic>.md` following the standalone [ADL template](../../../.pair/knowledge/guidelines/collaboration/templates/adl-template.md). Fill in all sections: Date, Status, Category, Context, Decision, Alternatives Considered, Consequences, and Adoption Impact.
 4. **Verify**: ADL file exists with complete content following the template structure.
 
 ### Step 4: Update Adoption Files
@@ -66,9 +66,9 @@ Record a technical decision as either an ADR (architectural) or ADL (non-archite
 This step is **always required** — adoption is the single source of truth.
 
 1. **Check**: Identify which adoption files are affected by this decision:
-   - [tech-stack.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/tech-stack.md) — if the decision involves libraries, frameworks, or tools
-   - [architecture.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/architecture.md) — if the decision involves architectural patterns, boundaries, or infrastructure
-   - [way-of-working.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/way-of-working.md) — if the decision involves process, workflow, or tooling conventions
+   - [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — if the decision involves libraries, frameworks, or tools
+   - [architecture.md](../../../.pair/adoption/tech/architecture.md) — if the decision involves architectural patterns, boundaries, or infrastructure
+   - [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) — if the decision involves process, workflow, or tooling conventions
    - Other adoption files as relevant
 2. **Act**: For each affected adoption file:
    - Read current content.
@@ -114,8 +114,8 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-- If [ADR template](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/adr-template.md) is not found, use the minimal ADR structure: Status, Date, Context, Decision, Consequences, Adoption Impact.
-- If [ADL template](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/adl-template.md) is not found, use the minimal ADL structure: Date, Status, Context, Decision, Consequences, Adoption Impact.
+- If [ADR template](../../../.pair/knowledge/guidelines/collaboration/templates/adr-template.md) is not found, use the minimal ADR structure: Status, Date, Context, Decision, Consequences, Adoption Impact.
+- If [ADL template](../../../.pair/knowledge/guidelines/collaboration/templates/adl-template.md) is not found, use the minimal ADL structure: Date, Status, Context, Decision, Consequences, Adoption Impact.
 - If adoption directories don't exist, create them and warn: "Created adoption directory — this appears to be a new project."
 
 ## Notes

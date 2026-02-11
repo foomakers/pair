@@ -7,7 +7,7 @@
 
 /**
  * Flatten a path by replacing directory separators with hyphens.
- * Example: 'navigator/next' → 'navigator-next'
+ * Example: 'catalog/next' → 'catalog-next'
  */
 export function flattenPath(dirName: string): string {
   const trimmed = dirName.replace(/^\/+/, '').replace(/\/+$/, '')
@@ -18,8 +18,8 @@ export function flattenPath(dirName: string): string {
 /**
  * Prepend a prefix to the top-level directory name with hyphen separator.
  * For nested paths, only the top-level segment is prefixed.
- * Example: 'navigator-next' + 'pair' → 'pair-navigator-next'
- * Example: 'navigator/next' + 'pair' → 'pair-navigator/next'
+ * Example: 'catalog-next' + 'pair' → 'pair-catalog-next'
+ * Example: 'catalog/next' + 'pair' → 'pair-catalog/next'
  */
 export function prefixPath(dirName: string, prefix: string): string {
   if (prefix === '' || dirName === '') return dirName

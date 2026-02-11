@@ -1,9 +1,9 @@
 /**
  * Skill reference rewriter for flatten+prefix transforms.
  *
- * When skills are copied with naming transforms (e.g., navigator/next → pair-navigator-next),
+ * When skills are copied with naming transforms (e.g., catalog/next → pair-catalog-next),
  * cross-references like `/next` or `/verify-quality` in file body text must be updated
- * to their new prefixed names (`/pair-navigator-next`, `/pair-capability-verify-quality`).
+ * to their new prefixed names (`/pair-catalog-next`, `/pair-capability-verify-quality`).
  *
  * Pattern: pure rewrite function + async file orchestrator (same shape as link-rewriter).
  */

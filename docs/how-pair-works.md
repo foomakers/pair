@@ -25,7 +25,7 @@ When you run `pair install`, the CLI creates a `.pair/` folder and optionally a 
     tech/                       # Architecture, tech stack, infrastructure, ADRs
 
 .skills/                        # Agent skills (agentskills.io standard)
-  navigator/next/SKILL.md       # Example: /next skill for task navigation
+  next/SKILL.md                 # Example: /next skill for task navigation
   ...
 ```
 
@@ -235,7 +235,7 @@ The CLI uses five asset registries, each with a specific copy behavior:
 
 The `mirror` behavior synchronizes content (overwrites and removes stale files). The `add` behavior only copies files that don't already exist, preserving your project-specific adoption decisions.
 
-The `skills` registry uses **flatten** and **prefix** transforms to convert skill directory hierarchies (e.g., `navigator/next`) into flat, prefixed names (e.g., `pair-navigator-next`) suitable for AI tool skill directories. It also uses **multi-target distribution**: the canonical copy goes to `.claude/skills/`, then symlinks are created for `.github/skills/` and `.cursor/skills/` so all AI tools share the same skill definitions.
+The `skills` registry uses **flatten** and **prefix** transforms to convert skill directory hierarchies (e.g., `process/implement`) into flat, prefixed names (e.g., `pair-process-implement`) suitable for AI tool skill directories. It also uses **multi-target distribution**: the canonical copy goes to `.claude/skills/`, then symlinks are created for `.github/skills/` and `.cursor/skills/` so all AI tools share the same skill definitions.
 
 ## Further Reading
 

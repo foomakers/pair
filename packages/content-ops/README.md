@@ -62,7 +62,7 @@ Windows note: symlink targets are rejected on Windows (`process.platform === 'wi
 
 ### Flatten and prefix transforms
 
-When `flatten: true`, directory paths like `navigator/next` become `navigator-next`. When `prefix` is set (e.g., `'pair'`), the top-level directory is prefixed: `navigator-next` → `pair-navigator-next`. Order: flatten first, then prefix.
+When `flatten: true`, directory paths like `process/implement` become `process-implement`. When `prefix` is set (e.g., `'pair'`), the top-level directory is prefixed: `process-implement` → `pair-process-implement`. Order: flatten first, then prefix.
 
 Naming transform helpers:
 - `flattenPath(dirName)` — replaces `/` with `-`

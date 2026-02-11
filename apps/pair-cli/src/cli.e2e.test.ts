@@ -935,7 +935,7 @@ describe('pair-cli e2e - skills registry pipeline', () => {
     seed[`${datasetBase}/.pair/knowledge/index.md`] = '# Knowledge Base'
 
     // Skills registry content — mimics real .skills/ structure
-    seed[`${datasetBase}/.skills/navigator/next/SKILL.md`] =
+    seed[`${datasetBase}/.skills/next/SKILL.md`] =
       '---\nname: next\ndescription: Project navigator\n---\n# /next'
 
     seed[`${cwd}/config.json`] = JSON.stringify(createSkillsConfig())
@@ -949,10 +949,10 @@ describe('pair-cli e2e - skills registry pipeline', () => {
 
     await handleUpdateCommand(parseUpdateCommand({ source: `${cwd}/dataset` }), fs)
 
-    // Flatten transforms 'navigator/next' → 'navigator-next', prefix 'pair' → 'pair-navigator-next'
-    expect(fs.existsSync(`${cwd}/.claude/skills/pair-navigator-next/SKILL.md`)).toBe(true)
-    const content = fs.readFileSync(`${cwd}/.claude/skills/pair-navigator-next/SKILL.md`)
-    expect(content).toContain('name: pair-navigator-next')
+    // Flatten is no-op for single-segment 'next', prefix 'pair' → 'pair-next'
+    expect(fs.existsSync(`${cwd}/.claude/skills/pair-next/SKILL.md`)).toBe(true)
+    const content = fs.readFileSync(`${cwd}/.claude/skills/pair-next/SKILL.md`)
+    expect(content).toContain('name: pair-next')
   })
 
   it('update creates symlinks for secondary targets', async () => {
@@ -1022,7 +1022,7 @@ describe('pair-cli e2e - skills registry pipeline', () => {
     await installCommand(fs, ['--source', `${cwd}/dataset`], { useDefaults: true })
 
     // Canonical target should have flattened+prefixed content
-    expect(fs.existsSync(`${cwd}/.claude/skills/pair-navigator-next/SKILL.md`)).toBe(true)
+    expect(fs.existsSync(`${cwd}/.claude/skills/pair-next/SKILL.md`)).toBe(true)
 
     // Secondary targets should be symlinks
     const symlinks = fs.getSymlinks()

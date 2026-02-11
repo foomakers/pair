@@ -3,7 +3,7 @@ import { flattenPath, prefixPath, transformPath, detectCollisions } from './nami
 
 describe('flattenPath', () => {
   it('converts nested path separators to hyphens', () => {
-    expect(flattenPath('navigator/next')).toBe('navigator-next')
+    expect(flattenPath('catalog/next')).toBe('catalog-next')
   })
 
   it('converts deeply nested paths', () => {
@@ -11,15 +11,15 @@ describe('flattenPath', () => {
   })
 
   it('returns single-level path unchanged', () => {
-    expect(flattenPath('navigator')).toBe('navigator')
+    expect(flattenPath('catalog')).toBe('catalog')
   })
 
   it('handles trailing slash', () => {
-    expect(flattenPath('navigator/next/')).toBe('navigator-next')
+    expect(flattenPath('catalog/next/')).toBe('catalog-next')
   })
 
   it('handles leading slash', () => {
-    expect(flattenPath('/navigator/next')).toBe('navigator-next')
+    expect(flattenPath('/catalog/next')).toBe('catalog-next')
   })
 
   it('handles empty string', () => {
@@ -29,19 +29,19 @@ describe('flattenPath', () => {
 
 describe('prefixPath', () => {
   it('prepends prefix with hyphen separator to top-level', () => {
-    expect(prefixPath('navigator-next', 'pair')).toBe('pair-navigator-next')
+    expect(prefixPath('catalog-next', 'pair')).toBe('pair-catalog-next')
   })
 
   it('prepends prefix to single-level path', () => {
-    expect(prefixPath('navigator', 'pair')).toBe('pair-navigator')
+    expect(prefixPath('catalog', 'pair')).toBe('pair-catalog')
   })
 
   it('prepends prefix to nested path (top-level only)', () => {
-    expect(prefixPath('navigator/next', 'pair')).toBe('pair-navigator/next')
+    expect(prefixPath('catalog/next', 'pair')).toBe('pair-catalog/next')
   })
 
   it('returns path unchanged when prefix is empty', () => {
-    expect(prefixPath('navigator', '')).toBe('navigator')
+    expect(prefixPath('catalog', '')).toBe('catalog')
   })
 
   it('returns empty string unchanged when dirName is empty', () => {
@@ -51,20 +51,20 @@ describe('prefixPath', () => {
 
 describe('transformPath', () => {
   it('returns path unchanged with no flatten and no prefix', () => {
-    expect(transformPath('navigator/next', {})).toBe('navigator/next')
+    expect(transformPath('catalog/next', {})).toBe('catalog/next')
   })
 
   it('applies flatten only', () => {
-    expect(transformPath('navigator/next', { flatten: true })).toBe('navigator-next')
+    expect(transformPath('catalog/next', { flatten: true })).toBe('catalog-next')
   })
 
   it('applies prefix only (top-level)', () => {
-    expect(transformPath('navigator/next', { prefix: 'pair' })).toBe('pair-navigator/next')
+    expect(transformPath('catalog/next', { prefix: 'pair' })).toBe('pair-catalog/next')
   })
 
   it('applies both flatten and prefix', () => {
-    expect(transformPath('navigator/next', { flatten: true, prefix: 'pair' })).toBe(
-      'pair-navigator-next',
+    expect(transformPath('catalog/next', { flatten: true, prefix: 'pair' })).toBe(
+      'pair-catalog-next',
     )
   })
 
@@ -75,11 +75,11 @@ describe('transformPath', () => {
   })
 
   it('handles single level with both', () => {
-    expect(transformPath('navigator', { flatten: true, prefix: 'pair' })).toBe('pair-navigator')
+    expect(transformPath('catalog', { flatten: true, prefix: 'pair' })).toBe('pair-catalog')
   })
 
   it('does not apply prefix when prefix is undefined', () => {
-    expect(transformPath('navigator/next', { flatten: true })).toBe('navigator-next')
+    expect(transformPath('catalog/next', { flatten: true })).toBe('catalog-next')
   })
 })
 

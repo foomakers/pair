@@ -150,8 +150,8 @@ describe('syncFrontmatter', () => {
       '',
       '# Body',
     ].join('\n')
-    const result = syncFrontmatter(input, { from: 'next', to: 'pair-navigator-next' })
-    expect(result).toContain('name: pair-navigator-next')
+    const result = syncFrontmatter(input, { from: 'next', to: 'pair-next' })
+    expect(result).toContain('name: pair-next')
     expect(result).toContain('description: The next action to take')
   })
 

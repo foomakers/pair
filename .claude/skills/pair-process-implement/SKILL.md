@@ -24,7 +24,7 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 
 1. **Check**: Is the user story already loaded in this session?
 2. **Skip**: If yes, confirm story ID and move to Step 0.2.
-3. **Act**: Read the story from the PM tool (per [way-of-working.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/way-of-working.md)).
+3. **Act**: Read the story from the PM tool (per [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)).
    - Understand business value and acceptance criteria.
    - Verify status is "In Progress" and assigned to the developer.
    - Confirm epic context.
@@ -62,9 +62,9 @@ Ask: _"Ready to proceed with implementation?"_
 1. **Check**: Are adoption files already loaded in this session?
 2. **Skip**: If yes, move to Step 1.2.
 3. **Act**: Read:
-   - [architecture.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/architecture.md) — architectural patterns
-   - [tech-stack.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/tech-stack.md) — approved libraries and versions
-   - [way-of-working.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/way-of-working.md) — development process
+   - [architecture.md](../../../.pair/adoption/tech/architecture.md) — architectural patterns
+   - [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — approved libraries and versions
+   - [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) — development process
 4. **Verify**: Technical context loaded. If adoption files missing, warn and proceed with guideline defaults.
 
 ### Step 1.2: Create or Switch to Feature Branch
@@ -137,12 +137,12 @@ Follow the TDD discipline rules strictly:
 
 ### Step 2.4: Check for New Dependencies
 
-1. **Check**: Did the implementation introduce any new dependency not listed in [tech-stack.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/tech-stack.md)?
+1. **Check**: Did the implementation introduce any new dependency not listed in [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md)?
 2. **Skip**: If no new dependencies, move to Step 2.5.
 3. **Act**: Is `/assess-stack` installed?
    - **Yes**: Compose `/assess-stack` to validate and register the dependency. If `/assess-stack` rejects (incompatible) → **HALT**.
    - **No**: Warn the developer:
-     > New dependency detected: `[package@version]`. `/assess-stack` is not installed — please manually verify against the tech stack and update [tech-stack.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/tech-stack.md).
+     > New dependency detected: `[package@version]`. `/assess-stack` is not installed — please manually verify against the tech stack and update [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
 4. **Verify**: Dependency is either validated by `/assess-stack` or acknowledged by developer.
 
 ### Step 2.5: Check for Decisions
@@ -171,7 +171,7 @@ Follow the TDD discipline rules strictly:
 
 1. **Check**: Is the commit strategy `commit-per-task`?
 2. **Skip**: If `commit-per-story`, mark task as complete in session state and return to Step 2.1.
-3. **Act**: Stage and commit following the [commit template](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/commit-template.md):
+3. **Act**: Stage and commit following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md):
    ```
    [#<story-id>] <type>: <task-description>
 
@@ -213,7 +213,7 @@ Follow the TDD discipline rules strictly:
 
 1. **Check**: Does a PR already exist for this branch?
 2. **Skip**: If PR exists, update its description and move to output.
-3. **Act**: Create PR following the [PR template](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/pr-template.md):
+3. **Act**: Create PR following the [PR template](../../../.pair/knowledge/guidelines/collaboration/templates/pr-template.md):
    - **Title**: `[#<story-id>] <type>: <brief description>`
    - **Body**: Fill the PR template sections:
      - Summary: what changed and why (from story statement)
@@ -278,5 +278,5 @@ The skill resumes from the first incomplete step — never re-does completed wor
 - Task iteration is sequential — each task completes its full cycle before the next begins.
 - The developer can stop between tasks. Re-invoke to resume (idempotency ensures correct state).
 - Single PR per story regardless of commit strategy.
-- Commit messages follow the [commit template](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/commit-template.md).
-- PR description follows the [PR template](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/collaboration/templates/pr-template.md).
+- Commit messages follow the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md).
+- PR description follows the [PR template](../../../.pair/knowledge/guidelines/collaboration/templates/pr-template.md).

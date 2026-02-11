@@ -228,7 +228,7 @@ Each registry declares one or more **targets**. Exactly one target must have `mo
 
 Targets with `mode: "canonical"` or `mode: "copy"` can optionally include a `transform` property to apply content transformations during distribution. The transform uses marker comments in source files (`<!-- @{prefix}-{command}-start -->` / `<!-- @{prefix}-{command}-end -->`) to control content per target. Currently supported command: `skip` (removes the enclosed section). All markers are universally stripped from distributed files regardless of prefix. The `transform` property is incompatible with `mode: "symlink"`.
 
-When `flatten` is `true`, directory hierarchies are collapsed into hyphen-separated names (e.g., `navigator/next` → `navigator-next`). When `prefix` is set, it is prepended to top-level directory names (e.g., `navigator-next` → `pair-navigator-next`).
+When `flatten` is `true`, directory hierarchies are collapsed into hyphen-separated names (e.g., `process/implement` → `process-implement`). When `prefix` is set, it is prepended to top-level directory names (e.g., `process-implement` → `pair-process-implement`).
 
 ### Validation Criteria
 

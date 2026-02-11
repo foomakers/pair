@@ -1,13 +1,9 @@
 ---
-name: next
-description: >-
-  Determines the most relevant next action for your project by reading adoption
-  files and PM tool state. Suggests which skill to invoke next. Use at the start
-  of a session, when switching tasks, or whenever you need guidance on what to
-  work on.
+name: pair-next
+description: Determines the most relevant next action for your project by reading adoption files and PM tool state. Suggests which skill to invoke next. Use at the start of a session, when switching tasks, or whenever you need guidance on what to work on.
 ---
 
-# /next — Project Navigator
+# /pair-next — Project Navigator
 
 Analyze project state and recommend the single most relevant next skill to invoke.
 
@@ -54,7 +50,7 @@ All adoption files are populated. Query the PM tool to determine backlog state.
 | 7 | Epics exist but no user stories | `/plan-stories` | Story breakdown needed |
 | 8 | Stories exist without acceptance criteria or with `status:draft` | `/refine-story` | Stories need refinement before work |
 | 9 | Refined stories exist but have no task breakdown | `/plan-tasks` | Tasks must be created before implementation |
-| 10 | Tasks in "ready" or "todo" state exist | `/implement` | Work is ready to start |
+| 10 | Tasks in "ready" or "todo" state exist | `/pair-process-implement` | Work is ready to start |
 | 11 | Open pull requests or tasks in "review" state | `/review` | Code review pending |
 
 If no condition matched, all work is complete for the current iteration.
@@ -95,5 +91,5 @@ Then ask: "Shall I run `/skill-name`?"
 ## Notes
 
 - This skill is read-only: it inspects state but never modifies files or PM tool data.
-- When multiple items are actionable (e.g., tasks to implement AND PRs to review), prefer the item closest to delivery (`/review` > `/implement` > `/plan-tasks`).
-- Re-run `/next` after completing any skill to get an updated recommendation.
+- When multiple items are actionable (e.g., tasks to implement AND PRs to review), prefer the item closest to delivery (`/review` > `/pair-process-implement` > `/plan-tasks`).
+- Re-run `/pair-next` after completing any skill to get an updated recommendation.

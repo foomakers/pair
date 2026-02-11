@@ -8,7 +8,7 @@ import { InMemoryFileSystemService } from '../test-utils'
 
 describe('rewriteSkillReferences', () => {
   const map = new Map([
-    ['next', 'pair-navigator-next'],
+    ['next', 'pair-next'],
     ['verify-quality', 'pair-capability-verify-quality'],
     ['record-decision', 'pair-capability-record-decision'],
     ['implement', 'pair-process-implement'],
@@ -24,7 +24,7 @@ describe('rewriteSkillReferences', () => {
 
   it('replaces backtick-wrapped reference', () => {
     const input = '| `/next` | Navigator |'
-    expect(rewriteSkillReferences(input, map)).toBe('| `/pair-navigator-next` | Navigator |')
+    expect(rewriteSkillReferences(input, map)).toBe('| `/pair-next` | Navigator |')
   })
 
   it('replaces in prose with "and" conjunction', () => {
@@ -47,17 +47,17 @@ describe('rewriteSkillReferences', () => {
   })
 
   it('replaces reference at start of line', () => {
-    const input = '/next is the navigator'
-    expect(rewriteSkillReferences(input, map)).toBe('/pair-navigator-next is the navigator')
+    const input = '/next is the catalog'
+    expect(rewriteSkillReferences(input, map)).toBe('/pair-next is the catalog')
   })
 
   it('replaces reference at end of line', () => {
     const input = 'run /next'
-    expect(rewriteSkillReferences(input, map)).toBe('run /pair-navigator-next')
+    expect(rewriteSkillReferences(input, map)).toBe('run /pair-next')
   })
 
   it('does NOT replace name without leading slash', () => {
-    const input = 'name: pair-navigator-next'
+    const input = 'name: pair-next'
     expect(rewriteSkillReferences(input, map)).toBe(input)
   })
 
@@ -84,14 +84,12 @@ describe('rewriteSkillReferences', () => {
 
   it('handles multiple occurrences in same line', () => {
     const input = '/next and /next again'
-    expect(rewriteSkillReferences(input, map)).toBe(
-      '/pair-navigator-next and /pair-navigator-next again',
-    )
+    expect(rewriteSkillReferences(input, map)).toBe('/pair-next and /pair-next again')
   })
 
   it('preserves non-matching slashes', () => {
     const input = '/unknown-skill stays'
-    const smallMap = new Map([['next', 'pair-navigator-next']])
+    const smallMap = new Map([['next', 'pair-next']])
     expect(rewriteSkillReferences(input, smallMap)).toBe(input)
   })
 
@@ -111,30 +109,30 @@ describe('rewriteSkillReferences', () => {
 
   it('replaces reference in parentheses', () => {
     const input = '(see /next for details)'
-    expect(rewriteSkillReferences(input, map)).toBe('(see /pair-navigator-next for details)')
+    expect(rewriteSkillReferences(input, map)).toBe('(see /pair-next for details)')
   })
 
   it('replaces reference followed by comma', () => {
     const input = '/next, /implement, /review'
     expect(rewriteSkillReferences(input, map)).toBe(
-      '/pair-navigator-next, /pair-process-implement, /pair-process-review',
+      '/pair-next, /pair-process-implement, /pair-process-review',
     )
   })
 
   it('replaces reference followed by colon', () => {
     const input = 'run /next:'
-    expect(rewriteSkillReferences(input, map)).toBe('run /pair-navigator-next:')
+    expect(rewriteSkillReferences(input, map)).toBe('run /pair-next:')
   })
 })
 
 describe('buildSkillNameMap', () => {
   it('builds map from dirMappingFiles with flatten+prefix', () => {
     const dirMappingFiles = new Map([
-      ['navigator/next', ['/target/pair-navigator-next/SKILL.md']],
+      ['catalog/next', ['/target/pair-catalog-next/SKILL.md']],
       ['capability/verify-quality', ['/target/pair-capability-verify-quality/SKILL.md']],
     ])
     const result = buildSkillNameMap(dirMappingFiles, { flatten: true, prefix: 'pair' })
-    expect(result.get('next')).toBe('pair-navigator-next')
+    expect(result.get('next')).toBe('pair-catalog-next')
     expect(result.get('verify-quality')).toBe('pair-capability-verify-quality')
   })
 
@@ -146,21 +144,21 @@ describe('buildSkillNameMap', () => {
 
   it('handles multiple entries', () => {
     const dirMappingFiles = new Map([
-      ['navigator/next', ['/t/pair-navigator-next/SKILL.md']],
+      ['catalog/next', ['/t/pair-catalog-next/SKILL.md']],
       ['process/implement', ['/t/pair-process-implement/SKILL.md']],
       ['capability/record-decision', ['/t/pair-capability-record-decision/SKILL.md']],
     ])
     const result = buildSkillNameMap(dirMappingFiles, { flatten: true, prefix: 'pair' })
     expect(result.size).toBe(3)
-    expect(result.get('next')).toBe('pair-navigator-next')
+    expect(result.get('next')).toBe('pair-catalog-next')
     expect(result.get('implement')).toBe('pair-process-implement')
     expect(result.get('record-decision')).toBe('pair-capability-record-decision')
   })
 
   it('works with flatten only (no prefix)', () => {
-    const dirMappingFiles = new Map([['navigator/next', ['/t/navigator-next/SKILL.md']]])
+    const dirMappingFiles = new Map([['catalog/next', ['/t/catalog-next/SKILL.md']]])
     const result = buildSkillNameMap(dirMappingFiles, { flatten: true })
-    expect(result.get('next')).toBe('navigator-next')
+    expect(result.get('next')).toBe('catalog-next')
   })
 })
 
@@ -203,7 +201,7 @@ describe('rewriteSkillReferencesInFiles', () => {
     await rewriteSkillReferencesInFiles({
       fileService,
       files: ['/target/config.json'],
-      skillNameMap: new Map([['next', 'pair-navigator-next']]),
+      skillNameMap: new Map([['next', 'pair-next']]),
     })
 
     const content = await fileService.readFile('/target/config.json')
@@ -220,7 +218,7 @@ describe('rewriteSkillReferencesInFiles', () => {
     await rewriteSkillReferencesInFiles({
       fileService,
       files: ['/target/README.md'],
-      skillNameMap: new Map([['next', 'pair-navigator-next']]),
+      skillNameMap: new Map([['next', 'pair-next']]),
     })
 
     const content = await fileService.readFile('/target/README.md')

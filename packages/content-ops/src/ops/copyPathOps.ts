@@ -621,10 +621,12 @@ async function rewriteLinksForTransformedDirs(
     targetRelative,
   )
   if (pathMapping.length > 0) {
+    const sourceContentRoot = dirname(sourceRelative)
     await rewriteLinksAfterTransform({
       fileService: params.fileService,
       pathMapping,
       datasetRoot: params.datasetRoot,
+      ...(sourceContentRoot !== '.' && { sourceContentRoot }),
     })
   }
 }

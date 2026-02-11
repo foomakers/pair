@@ -7,8 +7,8 @@ description: Checks quality gates against the current codebase. Reads project-sp
 
 Validate the current codebase against quality gates. Two sources of truth:
 
-- **[way-of-working.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/way-of-working.md)** — project-specific quality gate command and process (e.g., `pnpm quality-gate`). This is "what command we run."
-- **[quality-standards](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md)** — universal quality standards (gates, DoD, checklists). This is "what we check."
+- **[way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)** — project-specific quality gate command and process (e.g., `pnpm quality-gate`). This is "what command we run."
+- **[quality-standards](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md)** — universal quality standards (gates, DoD, checklists). This is "what we check."
 
 Only check gates that are not already passing.
 
@@ -24,7 +24,7 @@ Execute each gate in order. For every gate, follow the **check → skip → act 
 
 ### Step 1: Read Adoption Quality Gate Configuration
 
-1. **Check**: Read [way-of-working.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/way-of-working.md) and look for a **Quality Gates** section declaring the project-specific quality gate command (e.g., `pnpm quality-gate`).
+1. **Check**: Read [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) and look for a **Quality Gates** section declaring the project-specific quality gate command (e.g., `pnpm quality-gate`).
 2. **Skip**: If `way-of-working.md` has no Quality Gates section, fall back to `package.json` scripts for detectable gate commands (e.g., `test`, `lint`, `ts:check`).
 3. **Act**: If found, record the command for use in Step 5. Also note any sub-checks listed (e.g., type checking, testing, linting, formatting).
 
@@ -89,12 +89,12 @@ When invoked **independently**:
 ## Graceful Degradation
 
 - If a gate command is not available (e.g., no test script in package.json), skip that gate and report: "Tests: SKIPPED — no test command found."
-- If [quality-standards](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md) directory is not found, warn and run only detectable gates (lint, type check, tests from package.json scripts).
+- If [quality-standards](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md) directory is not found, warn and run only detectable gates (lint, type check, tests from package.json scripts).
 - If no quality-related scripts are found at all, report: "No quality gates detected. Configure quality gate commands in package.json or way-of-working.md."
 
 ## Notes
 
 - This skill is **read-only with side effects limited to running existing commands** — it never modifies source code or configuration.
-- Two sources: [way-of-working.md](../../../packages/knowledge-hub/dataset/.pair/adoption/tech/way-of-working.md) for the project-specific quality gate command (adoption-driven), [quality-standards](../../../packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md) for universal quality standards.
+- Two sources: [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) for the project-specific quality gate command (adoption-driven), [quality-standards](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md) for universal quality standards.
 - Each gate is independent — a failure in one gate does not prevent checking subsequent gates.
 - Re-invoke after fixes to confirm resolution. Already-passing gates are re-verified but complete instantly.

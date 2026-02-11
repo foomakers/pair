@@ -131,7 +131,7 @@ describe('copyPathOps - flatten and prefix', () => {
   it('should flatten directory hierarchy into hyphen-separated names', async () => {
     const fileService = new InMemoryFileSystemService(
       {
-        '/dataset/source/navigator/next/SKILL.md': '# Next Skill',
+        '/dataset/source/catalog/next/SKILL.md': '# Next Skill',
         '/dataset/source/process/implement/SKILL.md': '# Implement Skill',
       },
       '/',
@@ -148,7 +148,7 @@ describe('copyPathOps - flatten and prefix', () => {
 
     await TEST_ASSERTIONS.assertFileExists(
       fileService,
-      '/dataset/target/navigator-next/SKILL.md',
+      '/dataset/target/catalog-next/SKILL.md',
       '# Next Skill',
     )
     await TEST_ASSERTIONS.assertFileExists(
@@ -161,7 +161,7 @@ describe('copyPathOps - flatten and prefix', () => {
   it('should apply prefix to top-level directory names', async () => {
     const fileService = new InMemoryFileSystemService(
       {
-        '/dataset/source/navigator/SKILL.md': '# Nav Skill',
+        '/dataset/source/catalog/SKILL.md': '# Catalog Skill',
       },
       '/',
       '/',
@@ -177,15 +177,15 @@ describe('copyPathOps - flatten and prefix', () => {
 
     await TEST_ASSERTIONS.assertFileExists(
       fileService,
-      '/dataset/target/pair-navigator/SKILL.md',
-      '# Nav Skill',
+      '/dataset/target/pair-catalog/SKILL.md',
+      '# Catalog Skill',
     )
   })
 
   it('should apply both flatten and prefix', async () => {
     const fileService = new InMemoryFileSystemService(
       {
-        '/dataset/source/navigator/next/SKILL.md': '# Next Skill',
+        '/dataset/source/catalog/next/SKILL.md': '# Next Skill',
       },
       '/',
       '/',
@@ -201,7 +201,7 @@ describe('copyPathOps - flatten and prefix', () => {
 
     await TEST_ASSERTIONS.assertFileExists(
       fileService,
-      '/dataset/target/pair-navigator-next/SKILL.md',
+      '/dataset/target/pair-catalog-next/SKILL.md',
       '# Next Skill',
     )
   })
@@ -209,7 +209,7 @@ describe('copyPathOps - flatten and prefix', () => {
   it('should apply prefix only without flatten (prefix top-level, keep hierarchy)', async () => {
     const fileService = new InMemoryFileSystemService(
       {
-        '/dataset/source/navigator/next/SKILL.md': '# Next Skill',
+        '/dataset/source/catalog/next/SKILL.md': '# Next Skill',
       },
       '/',
       '/',
@@ -225,16 +225,16 @@ describe('copyPathOps - flatten and prefix', () => {
 
     await TEST_ASSERTIONS.assertFileExists(
       fileService,
-      '/dataset/target/pair-navigator/next/SKILL.md',
+      '/dataset/target/pair-catalog/next/SKILL.md',
       '# Next Skill',
     )
   })
 
   it('should rewrite relative links after flatten+prefix copy (full pipeline)', async () => {
-    // File at source/navigator/next/ (depth 3) links up 3 levels to reach dataset root
+    // File at source/catalog/next/ (depth 3) links up 3 levels to reach dataset root
     const fileService = new InMemoryFileSystemService(
       {
-        '/dataset/source/navigator/next/SKILL.md':
+        '/dataset/source/catalog/next/SKILL.md':
           '# Next\n[guide](../../../.pair/knowledge/testing/README.md)',
       },
       '/',
@@ -249,11 +249,38 @@ describe('copyPathOps - flatten and prefix', () => {
       options: { flatten: true, prefix: 'pair', targets: [] },
     })
 
-    // After flatten+prefix: source/navigator/next/ → target/pair-navigator-next/
-    // Original: ../../../ from source/navigator/next/ → /dataset/.pair/knowledge/testing/README.md
-    // New location target/pair-navigator-next/ (depth 2): ../../.pair/knowledge/testing/README.md
-    const content = await fileService.readFile('/dataset/target/pair-navigator-next/SKILL.md')
+    // After flatten+prefix: source/catalog/next/ → target/pair-catalog-next/
+    // Original: ../../../ from source/catalog/next/ → /dataset/.pair/knowledge/testing/README.md
+    // New location target/pair-catalog-next/ (depth 2): ../../.pair/knowledge/testing/README.md
+    const content = await fileService.readFile('/dataset/target/pair-catalog-next/SKILL.md')
     expect(content).toContain('../../.pair/knowledge/testing/README.md')
+  })
+
+  it('should re-root links when source content root differs from datasetRoot', async () => {
+    // Simulates real pipeline: source deep in monorepo, target at project root
+    // source = packages/kb/dataset/.skills → content root = packages/kb/dataset/
+    // target = .claude/skills → content root = project root
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/project/packages/kb/dataset/.skills/next/SKILL.md':
+          '# Next\n[PRD](../../.pair/adoption/PRD.md)',
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'packages/kb/dataset/.skills',
+      target: '.claude/skills',
+      datasetRoot: '/project',
+      options: { flatten: true, prefix: 'pair', targets: [] },
+    })
+
+    const content = await fileService.readFile('/project/.claude/skills/pair-next/SKILL.md')
+    // Link should point to .pair/ at project root, NOT to packages/kb/dataset/.pair/
+    expect(content).toContain('../../../.pair/adoption/PRD.md')
+    expect(content).not.toContain('packages/kb/dataset')
   })
 
   it('should sync frontmatter name after flatten+prefix rename', async () => {
@@ -393,7 +420,7 @@ describe('copyPathOps - flatten and prefix', () => {
   it('should return skillNameMap from flatten+prefix copy', async () => {
     const fileService = new InMemoryFileSystemService(
       {
-        '/dataset/source/navigator/next/SKILL.md': '---\nname: next\n---\n# /next',
+        '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
         '/dataset/source/process/implement/SKILL.md': '---\nname: implement\n---\n# /implement',
       },
       '/',
@@ -409,7 +436,7 @@ describe('copyPathOps - flatten and prefix', () => {
     })
 
     expect(result.skillNameMap).toBeDefined()
-    expect(result.skillNameMap!.get('next')).toBe('pair-navigator-next')
+    expect(result.skillNameMap!.get('next')).toBe('pair-catalog-next')
     expect(result.skillNameMap!.get('implement')).toBe('pair-process-implement')
   })
 
@@ -432,7 +459,7 @@ describe('copyPathOps - flatten and prefix', () => {
     )
 
     const skillNameMap = new Map([
-      ['next', 'pair-navigator-next'],
+      ['next', 'pair-next'],
       ['implement', 'pair-process-implement'],
     ])
 
@@ -445,8 +472,8 @@ describe('copyPathOps - flatten and prefix', () => {
     })
 
     const result = await fileService.readFile('/project/dist/AGENTS.md')
-    expect(result).toContain('/pair-navigator-next')
-    expect(result).toContain('`/pair-navigator-next`')
+    expect(result).toContain('/pair-next')
+    expect(result).toContain('`/pair-next`')
     expect(result).toContain('/pair-process-implement')
     expect(result).not.toContain(' /next')
     expect(result).not.toContain('/implement')

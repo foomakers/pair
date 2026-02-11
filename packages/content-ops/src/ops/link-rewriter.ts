@@ -14,6 +14,10 @@ export type RewriteLinksInFileParams = {
   originalDir: string
   newDir: string
   datasetRoot: string
+  /** When source content lives under a subdirectory of datasetRoot (e.g.,
+   *  `packages/kb/dataset`), links resolving under that subtree are re-rooted
+   *  to datasetRoot so they point to the installed copy, not the source. */
+  sourceContentRoot?: string
 }
 
 /**
@@ -32,13 +36,41 @@ export type RewriteLinksAfterTransformParams = {
   fileService: FileSystemService
   pathMapping: PathMappingEntry[]
   datasetRoot: string
+  sourceContentRoot?: string
+}
+
+/**
+ * Re-roots an absolute target path when source content lives under a different
+ * root than the datasetRoot. Links resolving under sourceContentRoot are mapped
+ * to equivalent paths under datasetRoot.
+ */
+function reRootTarget(
+  absoluteTarget: string,
+  datasetRoot: string,
+  sourceContentRoot: string,
+): string {
+  const sourceRoot = posix.join(datasetRoot, sourceContentRoot)
+  if (absoluteTarget.startsWith(sourceRoot + '/') || absoluteTarget === sourceRoot) {
+    const relativeToSourceRoot = posix.relative(sourceRoot, absoluteTarget)
+    return posix.join(datasetRoot, relativeToSourceRoot)
+  }
+  return absoluteTarget
+}
+
+type ComputeNewHrefParams = {
+  href: string
+  originalFileDir: string
+  newFileDir: string
+  datasetRoot?: string
+  sourceContentRoot?: string
 }
 
 /**
  * Computes the new href for a relative link after the file has moved.
  * Returns null if the link should not be rewritten (external, anchor, unchanged).
  */
-function computeNewHref(href: string, originalFileDir: string, newFileDir: string): string | null {
+function computeNewHref(params: ComputeNewHrefParams): string | null {
+  const { href, originalFileDir, newFileDir, datasetRoot, sourceContentRoot } = params
   if (isExternalLink(href) || href.startsWith('#')) return null
 
   const anchorIdx = href.indexOf('#')
@@ -47,7 +79,12 @@ function computeNewHref(href: string, originalFileDir: string, newFileDir: strin
 
   if (pathPart === '') return null // pure anchor link
 
-  const absoluteTarget = posix.resolve(originalFileDir, pathPart)
+  let absoluteTarget = posix.resolve(originalFileDir, pathPart)
+
+  if (datasetRoot && sourceContentRoot) {
+    absoluteTarget = reRootTarget(absoluteTarget, datasetRoot, sourceContentRoot)
+  }
+
   let newRelativePath = posix.relative(newFileDir, absoluteTarget)
 
   if (!newRelativePath.startsWith('.')) {
@@ -94,7 +131,7 @@ function replaceHrefInNode(
  * Unresolvable links produce a warning but do not fail.
  */
 export async function rewriteLinksInFile(params: RewriteLinksInFileParams): Promise<void> {
-  const { fileService, filePath, originalDir, newDir, datasetRoot } = params
+  const { fileService, filePath, originalDir, newDir, datasetRoot, sourceContentRoot } = params
 
   const content = await fileService.readFile(filePath)
   const links = await LinkProcessor.extractLinks(content)
@@ -113,7 +150,13 @@ export async function rewriteLinksInFile(params: RewriteLinksInFileParams): Prom
   const sortedLinks = [...links].filter(hasPosition).sort((a, b) => b.start - a.start)
 
   for (const link of sortedLinks) {
-    const newHref = computeNewHref(link.href, originalFileDir, newFileDir)
+    const newHref = computeNewHref({
+      href: link.href,
+      originalFileDir,
+      newFileDir,
+      datasetRoot,
+      ...(sourceContentRoot && { sourceContentRoot }),
+    })
     if (!newHref) continue
 
     const result = replaceHrefInNode(updatedContent, link, newHref, filePath)
@@ -135,7 +178,7 @@ export async function rewriteLinksInFile(params: RewriteLinksInFileParams): Prom
 export async function rewriteLinksAfterTransform(
   params: RewriteLinksAfterTransformParams,
 ): Promise<void> {
-  const { fileService, pathMapping, datasetRoot } = params
+  const { fileService, pathMapping, datasetRoot, sourceContentRoot } = params
 
   for (const entry of pathMapping) {
     for (const filePath of entry.files) {
@@ -146,6 +189,7 @@ export async function rewriteLinksAfterTransform(
         originalDir: entry.originalDir,
         newDir: entry.newDir,
         datasetRoot,
+        ...(sourceContentRoot && { sourceContentRoot }),
       })
     }
   }

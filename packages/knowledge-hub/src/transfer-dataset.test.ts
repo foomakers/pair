@@ -108,7 +108,7 @@ describe('runTransferDataset', () => {
   })
 
   it('calls copyPathOps in copy mode and returns result', async () => {
-    const skillNameMap = new Map([['next', 'pair-navigator-next']])
+    const skillNameMap = new Map([['next', 'pair-next']])
     mockCopyPathOps.mockResolvedValue({ skillNameMap })
 
     const result = await runTransferDataset(
@@ -128,7 +128,7 @@ describe('runTransferDataset', () => {
 
   it('forwards skillNameMap to copyPathOps', async () => {
     mockCopyPathOps.mockResolvedValue({})
-    const skillNameMap = new Map([['next', 'pair-navigator-next']])
+    const skillNameMap = new Map([['next', 'pair-next']])
 
     await runTransferDataset(
       { source: 'AGENTS.md', target: 'AGENTS.md', mode: 'copy', skillNameMap },
@@ -368,7 +368,7 @@ describe('runTransferPipeline', () => {
 
   it('forwards skillNameMap from first step to subsequent steps', async () => {
     const skillNameMap = new Map([
-      ['next', 'pair-navigator-next'],
+      ['next', 'pair-next'],
       ['implement', 'pair-process-implement'],
     ])
 
@@ -397,7 +397,7 @@ describe('runTransferPipeline', () => {
   })
 
   it('returns accumulated skillNameMap', async () => {
-    const skillNameMap = new Map([['next', 'pair-navigator-next']])
+    const skillNameMap = new Map([['next', 'pair-next']])
     mockCopyPathOps.mockResolvedValueOnce({ skillNameMap })
     mockCopyPathOps.mockResolvedValueOnce({})
 
@@ -422,7 +422,7 @@ describe('runTransferPipeline', () => {
 
   it('applies transform and stripMarkers in different pipeline steps', async () => {
     const skillNameMap = new Map([
-      ['next', 'pair-navigator-next'],
+      ['next', 'pair-next'],
       ['implement', 'pair-process-implement'],
     ])
     const agentsContent = [
