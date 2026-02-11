@@ -185,11 +185,11 @@ Single Column → Multi-Column → Complex Layouts → Enhanced Functionality
 
 | Design Complexity        | Focus Areas                                                                               | Related Resources                                                    | Implementation Timeline |
 | ------------------------ | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ----------------------- |
-| **Simple Interface**     | Visual hierarchy + [Design Principles](.pair/knowledge/guidelines/user-experience/design-principles/typography.md)                | [Design Systems](.pair/knowledge/guidelines/user-experience/design-systems/component-libraries.md)           | 2-4 weeks               |
-| **Complex Dashboard**    | Component architecture + [Design Systems](.pair/knowledge/guidelines/user-experience/design-systems/system-architecture.md)       | [User Research](.pair/knowledge/guidelines/user-experience/user-research/research-methods.md) for validation | 6-10 weeks              |
-| **Multi-Platform**       | Responsive design + [Design Systems](.pair/knowledge/guidelines/user-experience/design-systems/design-tokens.md)                  | [Design Principles](.pair/knowledge/guidelines/user-experience/design-principles/consistency-standards.md)   | 8-12 weeks              |
-| **Accessibility Focus**  | Inclusive design + [Design Principles](.pair/knowledge/guidelines/user-experience/design-principles/accessibility-integration.md) | [Design Principles](.pair/knowledge/guidelines/user-experience/design-principles/color-contrast.md)          | 4-6 weeks               |
-| **Performance Critical** | Optimization + [UX Performance](.pair/knowledge/guidelines/user-experience/ux-performance.md)                                     | [Design Systems](.pair/knowledge/guidelines/user-experience/design-systems/README.md) efficiency patterns    | 3-5 weeks               |
+| **Simple Interface**     | Visual hierarchy + [Design Principles](../design-principles/typography.md)                | [Design Systems](../design-systems/component-libraries.md)           | 2-4 weeks               |
+| **Complex Dashboard**    | Component architecture + [Design Systems](../design-systems/system-architecture.md)       | [User Research](../user-research/research-methods.md) for validation | 6-10 weeks              |
+| **Multi-Platform**       | Responsive design + [Design Systems](../design-systems/design-tokens.md)                  | [Design Principles](../design-principles/consistency-standards.md)   | 8-12 weeks              |
+| **Accessibility Focus**  | Inclusive design + [Design Principles](../design-principles/accessibility-integration.md) | [Design Principles](../design-principles/color-contrast.md)          | 4-6 weeks               |
+| **Performance Critical** | Optimization + [UX Performance](../ux-performance.md)                                     | [Design Systems](../design-systems/README.md) efficiency patterns    | 3-5 weeks               |
 
 ## Interface Design Tool Selection Matrix
 
@@ -203,39 +203,39 @@ Single Column → Multi-Column → Complex Layouts → Enhanced Functionality
 
 **Tool Integration Resources**:
 
-- **Figma Workflows**: See [.pair/knowledge/guidelines/user-experience/figma-workflows.md](.pair/knowledge/guidelines/user-experience/figma-workflows.md) for design tool optimization
-- **Design System Integration**: [Design Systems](.pair/knowledge/guidelines/user-experience/design-systems/component-libraries.md) for component handoff
-- **Asset Management**: [.pair/knowledge/guidelines/user-experience/asset-collection.md](.pair/knowledge/guidelines/user-experience/asset-collection.md) for interface asset organization
+- **Figma Workflows**: See [.pair/knowledge/guidelines/user-experience/figma-workflows.md](../figma-workflows.md) for design tool optimization
+- **Design System Integration**: [Design Systems](../design-systems/component-libraries.md) for component handoff
+- **Asset Management**: [.pair/knowledge/guidelines/user-experience/asset-collection.md](../asset-collection.md) for interface asset organization
 
 ## Integration with Other UX Components
 
 - **Design Principles**: Interface design embodies and applies core design principles in visual and interactive form
 
-  - [User-Centered Design](.pair/knowledge/guidelines/user-experience/design-principles/user-centered-design.md) for user needs prioritization
-  - [Consistency Standards](.pair/knowledge/guidelines/user-experience/design-principles/consistency-standards.md) for cross-platform coherence
-  - [Accessibility Integration](.pair/knowledge/guidelines/user-experience/design-principles/accessibility-integration.md) for inclusive interfaces
-  - [Typography](.pair/knowledge/guidelines/user-experience/design-principles/typography.md) and [Color Contrast](.pair/knowledge/guidelines/user-experience/design-principles/color-contrast.md) for visual hierarchy
+  - [User-Centered Design](../design-principles/user-centered-design.md) for user needs prioritization
+  - [Consistency Standards](../design-principles/consistency-standards.md) for cross-platform coherence
+  - [Accessibility Integration](../design-principles/accessibility-integration.md) for inclusive interfaces
+  - [Typography](../design-principles/typography.md) and [Color Contrast](../design-principles/color-contrast.md) for visual hierarchy
 
 - **Design Systems**: Interface design creates and utilizes design system components and patterns
 
-  - [System Architecture](.pair/knowledge/guidelines/user-experience/design-systems/system-architecture.md) for scalable interface foundations
-  - [Component Libraries](.pair/knowledge/guidelines/user-experience/design-systems/component-libraries.md) for reusable interface elements
-  - [Design Tokens](.pair/knowledge/guidelines/user-experience/design-systems/design-tokens.md) for consistent visual properties
+  - [System Architecture](../design-systems/system-architecture.md) for scalable interface foundations
+  - [Component Libraries](../design-systems/component-libraries.md) for reusable interface elements
+  - [Design Tokens](../design-systems/design-tokens.md) for consistent visual properties
 
 - **User Research**: Research insights directly inform interface design decisions and validation processes
 
-  - [Research Methods](.pair/knowledge/guidelines/user-experience/user-research/research-methods.md) for interface usability testing and optimization
+  - [Research Methods](../user-research/research-methods.md) for interface usability testing and optimization
 
 - **Content Strategy**: Interface design incorporates content strategy principles for effective communication
-  - [Content Guidelines](.pair/knowledge/guidelines/user-experience/content-strategy/content-guidelines.md) for interface copy and messaging
-  - [Information Architecture](.pair/knowledge/guidelines/user-experience/content-strategy/information-architecture.md) for interface structure
-  - [Communication Design](.pair/knowledge/guidelines/user-experience/content-strategy/communication-design.md) for user interface communication
+  - [Content Guidelines](../content-strategy/content-guidelines.md) for interface copy and messaging
+  - [Information Architecture](../content-strategy/information-architecture.md) for interface structure
+  - [Communication Design](../content-strategy/communication-design.md) for user interface communication
 
 ### Related Resources
 
-- **[UX Performance](.pair/knowledge/guidelines/user-experience/ux-performance.md)**: Interface performance optimization and measurement
-- **[Brand Alignment](.pair/knowledge/guidelines/user-experience/brand-alignment.md)**: Ensuring interface design reflects brand identity
-- **[Figma Workflows](.pair/knowledge/guidelines/user-experience/figma-workflows.md)**: Interface design implementation in Figma
-- **[Asset Collection](.pair/knowledge/guidelines/user-experience/asset-collection.md)**: Managing interface design assets and resources
+- **[UX Performance](../ux-performance.md)**: Interface performance optimization and measurement
+- **[Brand Alignment](../brand-alignment.md)**: Ensuring interface design reflects brand identity
+- **[Figma Workflows](../figma-workflows.md)**: Interface design implementation in Figma
+- **[Asset Collection](../asset-collection.md)**: Managing interface design assets and resources
 
 This framework ensures that interface design creates compelling, accessible, and effective user interfaces that serve user needs while supporting business objectives and technical requirements.

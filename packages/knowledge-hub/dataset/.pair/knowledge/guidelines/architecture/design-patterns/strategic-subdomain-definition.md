@@ -285,5 +285,5 @@ All subdomains can be classified into three strategic categories that drive deve
 
 ### Decision Framework
 
-- **[Architecture Decision Records](.pair/knowledge/guidelines/architecture/decision-frameworks/README.md)** - Document subdomain classification decisions
-- **[Code Design Guidelines](.pair/knowledge/guidelines/code-design/README.md)** - Implementation patterns for subdomain boundaries
+- **[Architecture Decision Records](../decision-frameworks/README.md)** - Document subdomain classification decisions
+- **[Code Design Guidelines](../../code-design/README.md)** - Implementation patterns for subdomain boundaries

@@ -32,19 +32,19 @@ TASK CREATION STATE:
 ### Strategic Task Architecture
 
 - **Verify story refinement FIRST** - story must be refined and ready for breakdown
-- **Apply technical standards** - follow [Adoption Guidelines](.pair/adoption/tech) consistently
+- **Apply technical standards** - follow [Adoption Guidelines](../../adoption/tech) consistently
 - **Use bounded context mapping** - each task specifies its implementation domain
 - **Size for implementation clarity** - clear guidance without architectural decisions
 - **Focus on executable steps** - every task produces demonstrable progress
-- **Follow tool integration** - proper hierarchy linking per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+- **Follow tool integration** - proper hierarchy linking per [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md)
 - **Maintain story coverage** - ensure all acceptance criteria addressed by tasks
-- **Document with templates** - use [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md)
+- **Document with templates** - use [Task Template](../guidelines/collaboration/templates/task-template.md)
 
 **CRITICAL**: Before starting task creation:
 
 - **HALT if story not refined** - story must be in 'Refined' state with clear acceptance criteria
 - **HALT if tool access unclear** - must understand PM tool hierarchy and linking
-- **HALT if bounded context unknown** - verify [Bounded Context Documentation](.pair/adoption/tech/boundedcontext)
+- **HALT if bounded context unknown** - verify [Bounded Context Documentation](../../adoption/tech/boundedcontext)
 - **Do NOT proceed** without clear story context and technical setup
 
 ## Implementation Workflow
@@ -55,7 +55,7 @@ TASK CREATION STATE:
 
 1. **Verify Tool Configuration**:
 
-   - Check [way-of-working.md](.pair/adoption/tech/way-of-working.md) for PM tool setup
+   - Check [way-of-working.md](../../adoption/tech/way-of-working.md) for PM tool setup
    - Confirm task creation and hierarchy linking methodology (Story → Task)
 
 2. **Handle Missing Configuration**:
@@ -92,14 +92,14 @@ TASK CREATION STATE:
 
 1. **Review Technical Adoption**:
 
-   - **Architecture**: Check [architecture.md](.pair/adoption/tech/architecture.md) for patterns
-   - **Tech Stack**: Study [tech-stack.md](.pair/adoption/tech/tech-stack.md) for implementation choices
-   - **Infrastructure**: Review [infrastructure.md](.pair/adoption/tech/infrastructure.md) for deployment
-   - **UX/UI**: Examine [ux-ui.md](.pair/adoption/tech/ux-ui.md) for interface standards
+   - **Architecture**: Check [architecture.md](../../adoption/tech/architecture.md) for patterns
+   - **Tech Stack**: Study [tech-stack.md](../../adoption/tech/tech-stack.md) for implementation choices
+   - **Infrastructure**: Review [infrastructure.md](../../adoption/tech/infrastructure.md) for deployment
+   - **UX/UI**: Examine [ux-ui.md](../../adoption/tech/ux-ui.md) for interface standards
 
 2. **Identify Bounded Context**:
 
-   - Map story to [Bounded Context](.pair/adoption/tech/boundedcontext) documentation
+   - Map story to [Bounded Context](../../adoption/tech/boundedcontext) documentation
    - Determine implementation scope and affected modules
    - Identify integration points and dependencies
 
@@ -115,7 +115,7 @@ TASK CREATION STATE:
    Ready to proceed with task identification?"
    ```
 
-**Context Reference**: [Bounded Context Guidelines](.pair/knowledge/guidelines/architecture/README.md)
+**Context Reference**: [Bounded Context Guidelines](../guidelines/architecture/README.md)
 
 ### Phase 4: Task Identification & Decomposition
 
@@ -130,9 +130,9 @@ TASK CREATION STATE:
 
 2. **Apply Technical Layer Analysis**:
 
-   - Reference [Code Design Guidelines](.pair/knowledge/guidelines/code-design/README.md)
-   - Follow [Testing Strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md)
-   - Apply [Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)
+   - Reference [Code Design Guidelines](../guidelines/code-design/README.md)
+   - Follow [Testing Strategy](../guidelines/testing/test-strategy/README.md)
+   - Apply [Security Guidelines](../guidelines/quality-assurance/security/README.md)
 
 3. **Present Task Breakdown**:
 
@@ -147,7 +147,7 @@ TASK CREATION STATE:
    Approved for detailed task definition?"
    ```
 
-**Decomposition Reference**: [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md)
+**Decomposition Reference**: [Task Template](../guidelines/collaboration/templates/task-template.md)
 
 ### Phase 5: Task Definition & Technical Specification
 
@@ -162,9 +162,9 @@ TASK CREATION STATE:
 
 2. **Apply Technical Standards**:
 
-   - **Architecture**: Reference [Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md)
-   - **Implementation**: Link [Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md)
-   - **Quality**: Apply [Definition of Done](.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md)
+   - **Architecture**: Reference [Architecture Guidelines](../guidelines/architecture/README.md)
+   - **Implementation**: Link [Technical Standards](../guidelines/technical-standards/README.md)
+   - **Quality**: Apply [Definition of Done](../guidelines/quality-assurance/quality-standards/definition-of-done.md)
 
 3. **Handle Non-Standard Solutions**:
    ```
@@ -174,7 +174,7 @@ TASK CREATION STATE:
    Should I proceed with standard approach or propose alternative with ADR?"
    ```
 
-**Standards Reference**: [Guidelines Overview](.pair/knowledge/guidelines/README.md)
+**Standards Reference**: [Guidelines Overview](../guidelines/README.md)
 
 ### Phase 6: Documentation & Tool Creation
 
@@ -185,7 +185,7 @@ TASK CREATION STATE:
    Create a task breakdown section with:
 
    - Checkbox list of all tasks with IDs and titles (for status tracking)
-   - Detailed documentation for each task following [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md)
+   - Detailed documentation for each task following [Task Template](../guidelines/collaboration/templates/task-template.md)
 
 2. **Append to Story Body**:
 
@@ -197,11 +197,11 @@ TASK CREATION STATE:
 
 3. **Template Compliance**:
 
-   - Follow [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) structure precisely
+   - Follow [Task Template](../guidelines/collaboration/templates/task-template.md) structure precisely
    - Include: bounded context, technical standards, module specifications
    - Reference specific guideline sections for implementation
 
-**Template Reference**: [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md)
+**Template Reference**: [Task Template](../guidelines/collaboration/templates/task-template.md)
 
 ### Phase 7: Coverage Validation & Completion
 
@@ -319,26 +319,26 @@ TASK CREATION STATE:
 
 ### 🏗️ Architecture & Design
 
-- **[Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md)** - System architecture patterns, bounded contexts, and ADR processes
-- **[Code Design Guidelines](.pair/knowledge/guidelines/code-design/README.md)** - Code organization, design patterns, and implementation standards
+- **[Architecture Guidelines](../guidelines/architecture/README.md)** - System architecture patterns, bounded contexts, and ADR processes
+- **[Code Design Guidelines](../guidelines/code-design/README.md)** - Code organization, design patterns, and implementation standards
 
 ### ⚙️ Technical Implementation
 
-- **[Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md)** - Tech stack, development tools, and feature flag management
-- **[Infrastructure Guidelines](.pair/knowledge/guidelines/infrastructure/README.md)** - Deployment strategies, environment management, and CI/CD
+- **[Technical Standards](../guidelines/technical-standards/README.md)** - Tech stack, development tools, and feature flag management
+- **[Infrastructure Guidelines](../guidelines/infrastructure/README.md)** - Deployment strategies, environment management, and CI/CD
 
 ### 🎨 User Experience & Quality
 
-- **[User Experience Guidelines](.pair/knowledge/guidelines/user-experience/README.md)** - User experience standards and design principles
-- **[Definition of Done](.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md)** - Quality criteria and completion standards
-- **[Testing Strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md)** - Testing frameworks, strategies, and quality gates
+- **[User Experience Guidelines](../guidelines/user-experience/README.md)** - User experience standards and design principles
+- **[Definition of Done](../guidelines/quality-assurance/quality-standards/definition-of-done.md)** - Quality criteria and completion standards
+- **[Testing Strategy](../guidelines/testing/test-strategy/README.md)** - Testing frameworks, strategies, and quality gates
 
 ### 🔒 Security & Performance
 
-- **[Accessibility Guidelines](.pair/knowledge/guidelines/quality-assurance/accessibility/README.md)** - Accessibility standards and compliance requirements
-- **[Performance Guidelines](.pair/knowledge/guidelines/quality-assurance/performance/README.md)** - Performance optimization and monitoring strategies
-- **[Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)** - Security implementation and best practices
-- **[Observability Guidelines](.pair/knowledge/guidelines/observability/README.md)** - Monitoring, logging, and tracing strategies
+- **[Accessibility Guidelines](../guidelines/quality-assurance/accessibility/README.md)** - Accessibility standards and compliance requirements
+- **[Performance Guidelines](../guidelines/quality-assurance/performance/README.md)** - Performance optimization and monitoring strategies
+- **[Security Guidelines](../guidelines/quality-assurance/security/README.md)** - Security implementation and best practices
+- **[Observability Guidelines](../guidelines/observability/README.md)** - Monitoring, logging, and tracing strategies
 
 **Process Dependencies:**
 

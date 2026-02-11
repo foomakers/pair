@@ -662,5 +662,5 @@ describe('CreateOrderUseCase', () => {
 ## Related Patterns
 
 - **[Hexagonal Architecture](hexagonal.md)** - Similar approach with ports/adapters
-- **[Domain-Driven Design](.pair/knowledge/guidelines/architecture/design-patterns/README.md)** - Domain modeling approach
+- **[Domain-Driven Design](../design-patterns/README.md)** - Domain modeling approach
 - **[CQRS](cqrs.md)** - Can be combined for read/write separation

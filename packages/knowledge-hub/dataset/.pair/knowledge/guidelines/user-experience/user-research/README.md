@@ -220,10 +220,10 @@ Strategic Goals → User Insights → Methodology → Evidence
 
 | Research Objective        | Primary Method                                                | Documentation                                        | Timeline  | Integration Points                                                 |
 | ------------------------- | ------------------------------------------------------------- | ---------------------------------------------------- | --------- | ------------------------------------------------------------------ |
-| **Problem Discovery**     | Ethnographic + [Research Methods](research-methods.md)      | User journey analysis + Contextual inquiry protocols | 2-4 weeks | [Design Principles](.pair/knowledge/guidelines/user-experience/design-principles/README.md) validation     |
-| **Concept Validation**    | Prototype testing + [Research Methods](research-methods.md) | Usability testing protocols + A/B testing setup      | 1-2 weeks | [Interface Design](.pair/knowledge/guidelines/user-experience/interface-design/README.md) optimization     |
-| **Design Optimization**   | Usability testing + [Research Methods](research-methods.md) | Task analysis + Performance metrics                  | 1-3 weeks | [Design Systems](.pair/knowledge/guidelines/user-experience/design-systems/README.md) component validation |
-| **Strategy Development**  | Market research + [Research Methods](research-methods.md)   | Competitive analysis + Persona development           | 4-8 weeks | [Content Strategy](.pair/knowledge/guidelines/user-experience/content-strategy/README.md) alignment        |
+| **Problem Discovery**     | Ethnographic + [Research Methods](research-methods.md)      | User journey analysis + Contextual inquiry protocols | 2-4 weeks | [Design Principles](../design-principles/README.md) validation     |
+| **Concept Validation**    | Prototype testing + [Research Methods](research-methods.md) | Usability testing protocols + A/B testing setup      | 1-2 weeks | [Interface Design](../interface-design/README.md) optimization     |
+| **Design Optimization**   | Usability testing + [Research Methods](research-methods.md) | Task analysis + Performance metrics                  | 1-3 weeks | [Design Systems](../design-systems/README.md) component validation |
+| **Strategy Development**  | Market research + [Research Methods](research-methods.md)   | Competitive analysis + Persona development           | 4-8 weeks | [Content Strategy](../content-strategy/README.md) alignment        |
 | **Continuous Monitoring** | Analytics + [Research Methods](research-methods.md)         | Dashboard setup + Feedback collection                | Ongoing   | All UX components integration                                      |
 
 ## Research Method Selection Matrix
@@ -244,15 +244,15 @@ Strategic Goals → User Insights → Methodology → Evidence
 
 ## Integration with Other UX Components
 
-- **Design Principles**: Research validates and informs principle effectiveness and evolution, detailed in [.pair/knowledge/guidelines/user-experience/design-principles/README.md](.pair/knowledge/guidelines/user-experience/design-principles/README.md)
-- **Design Systems**: User research guides component design and system architecture decisions, see [.pair/knowledge/guidelines/user-experience/design-systems/README.md](.pair/knowledge/guidelines/user-experience/design-systems/README.md)
-- **Interface Design**: Research insights directly inform interface design choices and optimization, documented in [.pair/knowledge/guidelines/user-experience/interface-design/README.md](.pair/knowledge/guidelines/user-experience/interface-design/README.md)
-- **Content Strategy**: User research provides foundation for content approach and messaging strategy, outlined in [.pair/knowledge/guidelines/user-experience/content-strategy/README.md](.pair/knowledge/guidelines/user-experience/content-strategy/README.md)
+- **Design Principles**: Research validates and informs principle effectiveness and evolution, detailed in [.pair/knowledge/guidelines/user-experience/design-principles/README.md](../design-principles/README.md)
+- **Design Systems**: User research guides component design and system architecture decisions, see [.pair/knowledge/guidelines/user-experience/design-systems/README.md](../design-systems/README.md)
+- **Interface Design**: Research insights directly inform interface design choices and optimization, documented in [.pair/knowledge/guidelines/user-experience/interface-design/README.md](../interface-design/README.md)
+- **Content Strategy**: User research provides foundation for content approach and messaging strategy, outlined in [.pair/knowledge/guidelines/user-experience/content-strategy/README.md](../content-strategy/README.md)
 
 ### Related Resources
 
-- **[UX Performance](.pair/knowledge/guidelines/user-experience/ux-performance.md)**: Performance impact measurement and optimization
-- **[Brand Alignment](.pair/knowledge/guidelines/user-experience/brand-alignment.md)**: Research methods for brand perception and alignment
-- **[Asset Collection](.pair/knowledge/guidelines/user-experience/asset-collection.md)**: Research asset management and repository organization
+- **[UX Performance](../ux-performance.md)**: Performance impact measurement and optimization
+- **[Brand Alignment](../brand-alignment.md)**: Research methods for brand perception and alignment
+- **[Asset Collection](../asset-collection.md)**: Research asset management and repository organization
 
 This framework ensures that user research provides actionable insights that drive user-centered design decisions and create measurable business value through deep user understanding.

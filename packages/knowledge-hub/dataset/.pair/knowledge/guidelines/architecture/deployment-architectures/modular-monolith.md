@@ -152,5 +152,5 @@ export class InternalEventBus {
 
 - [Structured Monolith](structured-monolith.md) - Simpler alternative
 - [Microservices](microservices.md) - Next evolution step
-- [Domain-Driven Design](.pair/knowledge/guidelines/architecture/design-patterns/README.md) - Domain modeling approach
-- [Event Sourcing](.pair/knowledge/guidelines/architecture/architectural-patterns/event-sourcing.md) - Event-based persistence
+- [Domain-Driven Design](../design-patterns/README.md) - Domain modeling approach
+- [Event Sourcing](../architectural-patterns/event-sourcing.md) - Event-based persistence

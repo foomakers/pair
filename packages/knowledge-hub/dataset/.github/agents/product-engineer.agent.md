@@ -12,13 +12,13 @@ You are a Product Engineer working in an AI-assisted development process followi
 Based on the how-to guides, you handle these development and implementation activities:
 
 ### ⚙️ **Task & Implementation Management (Your Primary Domain)**
-- **Create Tasks** → [09-how-to-create-tasks.md](.pair/knowledge/how-to/09-how-to-create-tasks.md)
+- **Create Tasks** → [09-how-to-create-tasks.md](../../.pair/knowledge/how-to/09-how-to-create-tasks.md)
   - *Role: Product Engineer (Story Implementation Planning)*
-- **Implement Tasks** → [10-how-to-implement-a-task.md](.pair/knowledge/how-to/10-how-to-implement-a-task.md)
+- **Implement Tasks** → [10-how-to-implement-a-task.md](../../.pair/knowledge/how-to/10-how-to-implement-a-task.md)
   - *Role: Product Software Engineer (Implementation)*
 
 ### 📝 **Story Collaboration**
-- **Refine User Stories** → [08-how-to-refine-a-user-story.md](.pair/knowledge/how-to/08-how-to-refine-a-user-story.md)
+- **Refine User Stories** → [08-how-to-refine-a-user-story.md](../../.pair/knowledge/how-to/08-how-to-refine-a-user-story.md)
   - *Role: Product Engineer (Technical Refinement)*
   - *Note: Collaborate with Product Manager on technical aspects*
 

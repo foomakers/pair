@@ -303,7 +303,7 @@ Start: What's your primary use case?
 
 ## Related Documents
 
-- [Performance Analysis](.pair/knowledge/guidelines/observability/performance-analysis.md) - Performance metrics analysis techniques
-- [Dashboards and Visualization](.pair/knowledge/guidelines/observability/dashboards-visualization.md) - Metrics visualization strategies
-- [Alerting Strategy](.pair/knowledge/guidelines/observability/alerting/README.md) - Metrics-based alerting
-- [Observability Tools](.pair/knowledge/guidelines/observability/observability-tools.md) - Tool selection and implementation
+- [Performance Analysis](../performance-analysis.md) - Performance metrics analysis techniques
+- [Dashboards and Visualization](../dashboards-visualization.md) - Metrics visualization strategies
+- [Alerting Strategy](../alerting/README.md) - Metrics-based alerting
+- [Observability Tools](../observability-tools.md) - Tool selection and implementation

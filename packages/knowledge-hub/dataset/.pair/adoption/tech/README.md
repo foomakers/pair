@@ -8,10 +8,10 @@ All adopted documents must:
 
 - Be written in **English**
 - Be **concise**: list only choices and decisions without explanations or rationale
-- Reference the [knowledge-base](.pair/knowledge) for details, explanations, and background information
+- Reference the [knowledge-base](../../knowledge) for details, explanations, and background information
 - Be **self-consistent** with compatible choices across library versions, user device targets, and deployment environments
 - Be **strict and prescriptive** with no ambiguity or open interpretation
-- Address all relevant points from the [bootstrap-checklist](.pair/knowledge/assets/bootstrap-checklist.md)
+- Address all relevant points from the [bootstrap-checklist](../../knowledge/assets/bootstrap-checklist.md)
 
 ## 📁 Document Categories
 
@@ -35,7 +35,7 @@ These documents are **decision records**, not guidelines:
 
 - Contain only **validated choices** proposed by AI and approved by the team
 - Must be **implemented as written** with full compliance required
-- Reference the [knowledge-base](.pair/knowledge) for detailed explanations
+- Reference the [knowledge-base](../../knowledge) for detailed explanations
 - Must reflect the current project state and be kept up to date
 
 ## 🔄 Update Process
@@ -52,21 +52,21 @@ Standards are updated during specific development phases:
 
 Detailed technical guidelines and explanations:
 
-- [architecture/README.md](.pair/knowledge/guidelines/architecture/README.md)
-- [02-code-design-guidelines.md](.pair/knowledge/guidelines/code-design/README.md)
-- [technical-standards/README.md](.pair/knowledge/guidelines/technical-standards/README.md)
-- [infrastructure/README.md](.pair/knowledge/guidelines/infrastructure/README.md)
-- [05-ux-guidelines.md](.pair/knowledge/guidelines/user-experience/README.md)
-- [06-definition-of-done.md](.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md)
-- [07-testing-strategy.md](.pair/knowledge/guidelines/testing/test-strategy/README.md)
-- [08-accessibility-guidelines.md](.pair/knowledge/guidelines/quality-assurance/accessibility/README.md)
-- [09-performance-guidelines.md](.pair/knowledge/guidelines/quality-assurance/performance/README.md)
-- [10-security-guidelines.md](.pair/knowledge/guidelines/quality-assurance/security/README.md)
-- [11-observability-guidelines.md](.pair/knowledge/guidelines/observability/README.md)
-- [README.md](.pair/knowledge/guidelines/README.md) – Knowledge Base Overview
+- [architecture/README.md](../../knowledge/guidelines/architecture/README.md)
+- [02-code-design-guidelines.md](../../knowledge/guidelines/code-design/README.md)
+- [technical-standards/README.md](../../knowledge/guidelines/technical-standards/README.md)
+- [infrastructure/README.md](../../knowledge/guidelines/infrastructure/README.md)
+- [05-ux-guidelines.md](../../knowledge/guidelines/user-experience/README.md)
+- [06-definition-of-done.md](../../knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md)
+- [07-testing-strategy.md](../../knowledge/guidelines/testing/test-strategy/README.md)
+- [08-accessibility-guidelines.md](../../knowledge/guidelines/quality-assurance/accessibility/README.md)
+- [09-performance-guidelines.md](../../knowledge/guidelines/quality-assurance/performance/README.md)
+- [10-security-guidelines.md](../../knowledge/guidelines/quality-assurance/security/README.md)
+- [11-observability-guidelines.md](../../knowledge/guidelines/observability/README.md)
+- [README.md](../../knowledge/guidelines/README.md) – Knowledge Base Overview
 
 ### Additional Resources
 
-- **[Bootstrap Checklist](.pair/knowledge/assets/bootstrap-checklist.md)** – Project Setup & Bootstrap Checklist with all relevant questions the adopted standards must address
+- **[Bootstrap Checklist](../../knowledge/assets/bootstrap-checklist.md)** – Project Setup & Bootstrap Checklist with all relevant questions the adopted standards must address
 - **[ADR](adr)** – Architecture Decision Records for significant changes
-- **[Way of Working](.pair/knowledge/way-of-working.md)** – Development process and collaboration patterns
+- **[Way of Working](../../knowledge/way-of-working.md)** – Development process and collaboration patterns

@@ -254,9 +254,9 @@ Start → Team Size?
 
 ## Cross-References
 
-- **Development**: [code-design/quality-standards/](.pair/knowledge/guidelines/code-design/quality-standards) - Accessibility in code quality
-- **Testing**: [testing/testing-strategy/](.pair/knowledge/guidelines/testing/test-strategy) - Accessibility testing integration
-- **UX Design**: [operations/ux-design/](.pair/knowledge/guidelines/user-experience/README.md) - Inclusive design principles
+- **Development**: [code-design/quality-standards/](../../code-design/quality-standards) - Accessibility in code quality
+- **Testing**: [testing/testing-strategy/](../../testing/test-strategy) - Accessibility testing integration
+- **UX Design**: [operations/ux-design/](../../user-experience/README.md) - Inclusive design principles
 
 ## Scope Boundaries
 

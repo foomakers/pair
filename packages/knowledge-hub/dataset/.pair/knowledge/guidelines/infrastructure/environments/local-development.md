@@ -560,8 +560,8 @@ development_security:
 
 - **[Environment Consistency](environment-consistency.md)** - Maintaining consistency across environments
 - **[Environment Configuration](environment-config.md)** - Configuration management strategies
-- **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Development workflow integration
-- **[Testing Strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md)** - Local testing approaches and frameworks
+- **[CI/CD Strategy](../cicd-strategy/README.md)** - Development workflow integration
+- **[Testing Strategy](../../testing/test-strategy/README.md)** - Local testing approaches and frameworks
 
 ---
 

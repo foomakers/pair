@@ -171,10 +171,10 @@ La gestione dei test data richiede strategie sofisticate per garantire data cons
 
 ## 🔗 Related Practices
 
-- **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure automation and provisioning
+- **[Infrastructure as Code](../infrastructure-as-code/README.md)** - Infrastructure automation and provisioning
 - **[Performance Testing](performance-testing.md)** - Performance testing infrastructure requirements
 - **[Test Databases](test-databases.md)** - Database testing and data management strategies
-- **[Cloud Services](.pair/knowledge/guidelines/infrastructure/cloud-services/README.md)** - Cloud service utilization for testing environments
+- **[Cloud Services](../cloud-services/README.md)** - Cloud service utilization for testing environments
 
 ---
 

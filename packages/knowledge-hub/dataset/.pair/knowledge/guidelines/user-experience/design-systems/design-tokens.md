@@ -265,8 +265,8 @@ Establish design tokens as the foundational layer of design systems, ensuring co
 
 - **[Design Systems](README.md)** - Overall design system strategy and component integration
 - **[Component Libraries](component-libraries.md)** - Component implementation using design tokens
-- **[Consistency Standards](.pair/knowledge/guidelines/user-experience/design-principles/consistency-standards.md)** - Visual consistency through systematic token usage
-- **[Accessibility Guidelines](.pair/knowledge/guidelines/quality-assurance/accessibility/README.md)** - Accessible design through compliant token values
+- **[Consistency Standards](../design-principles/consistency-standards.md)** - Visual consistency through systematic token usage
+- **[Accessibility Guidelines](../../quality-assurance/accessibility/README.md)** - Accessible design through compliant token values
 
 ---
 

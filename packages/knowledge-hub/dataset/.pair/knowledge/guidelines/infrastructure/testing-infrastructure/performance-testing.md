@@ -331,10 +331,10 @@ class PerformanceReportGenerator:
 
 ## 🔗 Related Practices
 
-- **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Continuous integration and deployment practices
-- **[Monitoring and Observability](.pair/knowledge/guidelines/observability/README.md)** - Production monitoring and observability
-- **[Cloud Services](.pair/knowledge/guidelines/infrastructure/cloud-services/README.md)** - Cloud service performance optimization
-- **[Testing Strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md)** - Overall testing methodology and approach
+- **[CI/CD Strategy](../cicd-strategy/README.md)** - Continuous integration and deployment practices
+- **[Monitoring and Observability](../../observability/README.md)** - Production monitoring and observability
+- **[Cloud Services](../cloud-services/README.md)** - Cloud service performance optimization
+- **[Testing Strategy](../../testing/test-strategy/README.md)** - Overall testing methodology and approach
 
 ---
 

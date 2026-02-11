@@ -30,39 +30,39 @@ IMPLEMENTATION STATE:
 
 ### Task-First Implementation
 
-- **Implement ONLY** what is specified in the active task per the [task template](.pair/knowledge/guidelines/collaboration/templates/task-template.md)
+- **Implement ONLY** what is specified in the active task per the [task template](../guidelines/collaboration/templates/task-template.md)
 - **No arbitrary additions** — if something seems missing, HALT and request task updates
-- **Use ONLY specified libraries** — never add libraries not listed in [tech-stack.md](.pair/adoption/tech/tech-stack.md) or the task specification
+- **Use ONLY specified libraries** — never add libraries not listed in [tech-stack.md](../../adoption/tech/tech-stack.md) or the task specification
 - **Validate against task acceptance criteria** before considering complete
 
 ### Technical Alignment
 
-- **Architecture**: Follow [adopted architecture](.pair/adoption/tech/architecture.md)
-- **Technology Stack**: Use ONLY libraries/versions from [tech-stack.md](.pair/adoption/tech/tech-stack.md)
-- **Development Process**: Follow [way-of-working.md](.pair/adoption/tech/way-of-working.md)
-- **Code Design**: Apply [code design guidelines](.pair/knowledge/guidelines/code-design/README.md)
-- **Testing**: Follow [test strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md)
+- **Architecture**: Follow [adopted architecture](../../adoption/tech/architecture.md)
+- **Technology Stack**: Use ONLY libraries/versions from [tech-stack.md](../../adoption/tech/tech-stack.md)
+- **Development Process**: Follow [way-of-working.md](../../adoption/tech/way-of-working.md)
+- **Code Design**: Apply [code design guidelines](../guidelines/code-design/README.md)
+- **Testing**: Follow [test strategy](../guidelines/testing/test-strategy/README.md)
 
 ## Prerequisites & HALT Conditions
 
 ### Critical Blockers (HALT if not met)
 
 - **Clean Git**: No uncommitted changes, on main branch (before starting)
-- **PM Tool Configured**: Must exist in [way-of-working.md](.pair/adoption/tech/way-of-working.md)
+- **PM Tool Configured**: Must exist in [way-of-working.md](../../adoption/tech/way-of-working.md)
 - **Story Analysis Complete**: Phase 0 must be completed before any other work
 - **Story in "In Progress" state** and assigned to the implementing developer
-- **All tasks complete** per [task template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) — every task must have implementation approach, acceptance criteria, and development workflow
+- **All tasks complete** per [task template](../guidelines/collaboration/templates/task-template.md) — every task must have implementation approach, acceptance criteria, and development workflow
 - **Libraries clear** — no ambiguity about which libraries to use
 
 ### Access Requirements
 
-Follow [project management tool guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) for tool-specific access based on the configured tool in [way-of-working.md](.pair/adoption/tech/way-of-working.md).
+Follow [project management tool guidelines](../guidelines/collaboration/project-management-tool/README.md) for tool-specific access based on the configured tool in [way-of-working.md](../../adoption/tech/way-of-working.md).
 
 ## Implementation Methodology
 
 ### Task Type Classification
 
-Based on [task template](.pair/knowledge/guidelines/collaboration/templates/task-template.md):
+Based on [task template](../guidelines/collaboration/templates/task-template.md):
 
 **Development Tasks (TDD Required):** Feature implementation, Bug fix, Refactoring, Testing
 
@@ -70,7 +70,7 @@ Based on [task template](.pair/knowledge/guidelines/collaboration/templates/task
 
 ### TDD Session Management (Development Tasks Only)
 
-Follow [TDD guidelines](.pair/knowledge/guidelines/testing/test-strategy/tdd-test-driven-development.md) with strict Red-Green-Refactor methodology:
+Follow [TDD guidelines](../guidelines/testing/test-strategy/tdd-test-driven-development.md) with strict Red-Green-Refactor methodology:
 
 1. **RED Phase** — Write or modify ONLY test code. Tests MUST fail. No implementation code changes. Session ends when tests are written and failing.
 
@@ -102,7 +102,7 @@ Present analysis to developer and get explicit confirmation before proceeding.
 ### Phase 1: Setup & Context Loading
 
 1. **Load technical context** — architecture, tech stack, way-of-working from adoption files
-2. **Create or switch to feature branch** — per [branch template](.pair/knowledge/guidelines/collaboration/templates/branch-template.md): `<type>/#<story-id>-<brief-description>`
+2. **Create or switch to feature branch** — per [branch template](../guidelines/collaboration/templates/branch-template.md): `<type>/#<story-id>-<brief-description>`
 3. **Choose commit strategy** (for multi-task stories) — per-task commits (recommended, granular) or per-story commit (single commit at end). Single PR per story regardless.
 
 ### Phase 2: Task-by-Task Implementation
@@ -112,15 +112,15 @@ Process tasks **sequentially**. For each task:
 1. **Set active task** — update session state
 2. **Validate task completeness** — HALT if task spec is incomplete
 3. **Execute implementation** — TDD cycle (RED → GREEN → REFACTOR) for development tasks, direct implementation for non-development tasks
-4. **Verify quality** — run quality gates per [quality standards](.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md). HALT on failure.
-5. **Commit** (if per-task strategy) — per [commit template](.pair/knowledge/guidelines/collaboration/templates/commit-template.md)
+4. **Verify quality** — run quality gates per [quality standards](../guidelines/quality-assurance/quality-standards/README.md). HALT on failure.
+5. **Commit** (if per-task strategy) — per [commit template](../guidelines/collaboration/templates/commit-template.md)
 6. **Mark task complete** — update story checklist, progress to next task
 
 ### Phase 3: Commit, Push & PR
 
-1. **Final commit** (if per-story strategy) — per [commit template](.pair/knowledge/guidelines/collaboration/templates/commit-template.md)
+1. **Final commit** (if per-story strategy) — per [commit template](../guidelines/collaboration/templates/commit-template.md)
 2. **Push branch** to remote
-3. **Create PR** — per [PR template](.pair/knowledge/guidelines/collaboration/templates/pr-template.md), linking the user story issue
+3. **Create PR** — per [PR template](../guidelines/collaboration/templates/pr-template.md), linking the user story issue
 4. **Update story status** to "In Review" in PM tool
 
 ## Success Criteria
@@ -131,7 +131,7 @@ Process tasks **sequentially**. For each task:
 - [ ] All tasks marked complete in story checklist
 - [ ] All acceptance criteria validated
 - [ ] Implementation matches task specifications exactly
-- [ ] Quality gates passed per [quality standards](.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md)
+- [ ] Quality gates passed per [quality standards](../guidelines/quality-assurance/quality-standards/README.md)
 - [ ] Code committed and pushed to feature branch
 - [ ] PR created with comprehensive description
 - [ ] Story status updated to "In Review"
@@ -151,23 +151,23 @@ Process tasks **sequentially**. For each task:
 
 ### Templates
 
-- [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) — task specification format
-- [Branch Template](.pair/knowledge/guidelines/collaboration/templates/branch-template.md) — branch naming standards
-- [Commit Template](.pair/knowledge/guidelines/collaboration/templates/commit-template.md) — commit message format
-- [PR Template](.pair/knowledge/guidelines/collaboration/templates/pr-template.md) — pull request structure
+- [Task Template](../guidelines/collaboration/templates/task-template.md) — task specification format
+- [Branch Template](../guidelines/collaboration/templates/branch-template.md) — branch naming standards
+- [Commit Template](../guidelines/collaboration/templates/commit-template.md) — commit message format
+- [PR Template](../guidelines/collaboration/templates/pr-template.md) — pull request structure
 
 ### Adoption & Standards
 
-- [Tech Stack](.pair/adoption/tech/tech-stack.md) — approved libraries and versions
-- [Architecture](.pair/adoption/tech/architecture.md) — system architecture patterns
-- [Way of Working](.pair/adoption/tech/way-of-working.md) — development process
+- [Tech Stack](../../adoption/tech/tech-stack.md) — approved libraries and versions
+- [Architecture](../../adoption/tech/architecture.md) — system architecture patterns
+- [Way of Working](../../adoption/tech/way-of-working.md) — development process
 
 ### Guidelines
 
-- [TDD Guidelines](.pair/knowledge/guidelines/testing/test-strategy/tdd-test-driven-development.md) — test-driven development methodology
-- [Unit Testing](.pair/knowledge/guidelines/testing/unit-testing/README.md) — testing standards
-- [Code Design](.pair/knowledge/guidelines/code-design/README.md) — code design principles
-- [Quality Standards](.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md) — quality gates
+- [TDD Guidelines](../guidelines/testing/test-strategy/tdd-test-driven-development.md) — test-driven development methodology
+- [Unit Testing](../guidelines/testing/unit-testing/README.md) — testing standards
+- [Code Design](../guidelines/code-design/README.md) — code design principles
+- [Quality Standards](../guidelines/quality-assurance/quality-standards/README.md) — quality gates
 
 ### Related Workflows
 

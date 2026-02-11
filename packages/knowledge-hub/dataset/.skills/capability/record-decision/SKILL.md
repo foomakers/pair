@@ -2,10 +2,9 @@
 name: record-decision
 description: >-
   Records an architectural or non-architectural decision. Architectural
-  decisions produce an ADR in adoption/tech/adr/; non-architectural decisions
-  produce an ADL entry in adoption/decision-log/. Both always update the
-  relevant adoption files. Invocable independently or composed by /implement
-  and /review.
+  decisions produce an ADR; non-architectural decisions produce an ADL entry.
+  Both always update the relevant adoption files. Invocable independently or
+  composed by /implement and /review.
 ---
 
 # /record-decision — Decision Recorder
@@ -56,74 +55,24 @@ Record a technical decision as either an ADR (architectural) or ADL (non-archite
 
 1. **Check**: Does `adoption/tech/adr/` directory exist?
 2. **Act**: If not, create it.
-3. **Act**: Create (or update) the ADR file at `adoption/tech/adr/YYYY-MM-DD-<topic>.md` following the ADR template from `architecture/decision-frameworks/adr-process.md`:
-
-```markdown
-# ADR: [Decision Title]
-
-## Status
-
-[Proposed | Accepted | Deprecated | Superseded]
-
-## Context
-
-- [Business requirement or technical challenge]
-- [Current system state and limitations]
-- [Stakeholders and their concerns]
-
-## Decision
-
-- [Chosen solution and justification]
-- [Implementation approach]
-- [Alternative options considered]
-
-## Consequences
-
-### Benefits
-- [Positive outcomes]
-
-### Trade-offs and Limitations
-- [Known limitations]
-- [Technical debt introduced]
-```
-
-4. **Verify**: ADR file exists with complete content.
+3. **Act**: Create (or update) the ADR file at `adoption/tech/adr/YYYY-MM-DD-<topic>.md` following the standalone [ADR template](../../../.pair/knowledge/guidelines/collaboration/templates/adr-template.md). Fill in all sections: Status, Date, Context, Options Considered, Decision, Consequences, and Adoption Impact.
+4. **Verify**: ADR file exists with complete content following the template structure.
 
 **If `non-architectural` → ADL:**
 
 1. **Check**: Does `adoption/decision-log/` directory exist?
 2. **Act**: If not, create it.
-3. **Act**: Create (or update) the ADL file at `adoption/decision-log/YYYY-MM-DD-<topic>.md`:
-
-```markdown
-# Decision: [Decision Title]
-
-## Date
-YYYY-MM-DD
-
-## Status
-[Active | Superseded]
-
-## Context
-[What prompted this decision]
-
-## Decision
-[What was decided and why]
-
-## Consequences
-[Impact on the project — what changes as a result]
-```
-
-4. **Verify**: ADL file exists with complete content.
+3. **Act**: Create (or update) the ADL file at `adoption/decision-log/YYYY-MM-DD-<topic>.md` following the standalone [ADL template](../../../.pair/knowledge/guidelines/collaboration/templates/adl-template.md). Fill in all sections: Date, Status, Category, Context, Decision, Alternatives Considered, Consequences, and Adoption Impact.
+4. **Verify**: ADL file exists with complete content following the template structure.
 
 ### Step 4: Update Adoption Files
 
 This step is **always required** — adoption is the single source of truth.
 
 1. **Check**: Identify which adoption files are affected by this decision:
-   - `adoption/tech/tech-stack.md` — if the decision involves libraries, frameworks, or tools
-   - `adoption/tech/architecture.md` — if the decision involves architectural patterns, boundaries, or infrastructure
-   - `adoption/tech/way-of-working.md` — if the decision involves process, workflow, or tooling conventions
+   - [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — if the decision involves libraries, frameworks, or tools
+   - [architecture.md](../../../.pair/adoption/tech/architecture.md) — if the decision involves architectural patterns, boundaries, or infrastructure
+   - [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) — if the decision involves process, workflow, or tooling conventions
    - Other adoption files as relevant
 2. **Act**: For each affected adoption file:
    - Read current content.
@@ -169,7 +118,8 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-- If `architecture/decision-frameworks/adr-process.md` is not found, use the inline ADR template above.
+- If [ADR template](../../../.pair/knowledge/guidelines/collaboration/templates/adr-template.md) is not found, use the minimal ADR structure: Status, Date, Context, Decision, Consequences, Adoption Impact.
+- If [ADL template](../../../.pair/knowledge/guidelines/collaboration/templates/adl-template.md) is not found, use the minimal ADL structure: Date, Status, Context, Decision, Consequences, Adoption Impact.
 - If adoption directories don't exist, create them and warn: "Created adoption directory — this appears to be a new project."
 
 ## Notes

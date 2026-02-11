@@ -478,10 +478,10 @@ resource "datadog_monitor" "deployment_success_rate" {
 
 ## 🔗 Related Practices
 
-- **[Operations Monitoring](.pair/knowledge/guidelines/observability/README.md)** - General application and infrastructure monitoring
-- **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Continuous integration and deployment practices
+- **[Operations Monitoring](../../observability/README.md)** - General application and infrastructure monitoring
+- **[CI/CD Strategy](../cicd-strategy/README.md)** - Continuous integration and deployment practices
 - **[Deployment Strategies](deployment-strategies.md)** - Deployment patterns and methodologies
-- **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure automation and management
+- **[Infrastructure as Code](../infrastructure-as-code/README.md)** - Infrastructure automation and management
 
 ---
 
@@ -584,10 +584,10 @@ resource "datadog_dashboard" "deployment_monitoring" {
 
 ## 🔗 Related Practices
 
-- **[Operations Monitoring](.pair/knowledge/guidelines/observability/README.md)** - General application and infrastructure monitoring
-- **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Continuous integration and deployment practices
+- **[Operations Monitoring](../../observability/README.md)** - General application and infrastructure monitoring
+- **[CI/CD Strategy](../cicd-strategy/README.md)** - Continuous integration and deployment practices
 - **[Deployment Strategies](deployment-strategies.md)** - Deployment patterns and methodologies
-- **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure automation and management
+- **[Infrastructure as Code](../infrastructure-as-code/README.md)** - Infrastructure automation and management
 
 ---
 

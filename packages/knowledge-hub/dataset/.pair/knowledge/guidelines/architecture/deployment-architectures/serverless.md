@@ -157,7 +157,7 @@ export const handleOrderCreated = async (
 
 ## Related Patterns
 
-- [Event-Driven Architecture](.pair/knowledge/guidelines/architecture/design-patterns/README.md) - Event communication patterns
+- [Event-Driven Architecture](../design-patterns/README.md) - Event communication patterns
 - [Microservices](microservices.md) - Service-based alternative
-- [CQRS](.pair/knowledge/guidelines/architecture/architectural-patterns/cqrs.md) - Command-query separation
-- [Circuit Breaker](.pair/knowledge/guidelines/architecture/README.md) - Resilience patterns
+- [CQRS](../architectural-patterns/cqrs.md) - Command-query separation
+- [Circuit Breaker](../README.md) - Resilience patterns

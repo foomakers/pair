@@ -30,19 +30,19 @@ USER STORY BREAKDOWN STATE:
 ### Strategic Story Architecture
 
 - **Verify epic readiness FIRST** - epic must be completed and ready for breakdown
-- **Apply INVEST criteria** - follow [User Story Guidelines](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md#initial-breakdown-template)
+- **Apply INVEST criteria** - follow [User Story Guidelines](../guidelines/collaboration/templates/user-story-template.md#initial-breakdown-template)
 - **Use vertical slicing** - each story delivers end-to-end user value with UI manifestation
 - **Size for single sprint** - rough estimates with expected uncertainty
 - **Focus on UI-first cutting** - every story produces visible, demonstrable value
-- **Follow tool integration** - proper hierarchy linking per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+- **Follow tool integration** - proper hierarchy linking per [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md)
 - **Maintain epic coverage** - ensure all epic scope addressed by stories
-- **Document with templates** - use [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md#initial-breakdown-template)
+- **Document with templates** - use [User Story Template](../guidelines/collaboration/templates/user-story-template.md#initial-breakdown-template)
 
 **CRITICAL**: Before starting user story breakdown:
 
 - **HALT if epic incomplete** - epic must be fully documented and ready
 - **HALT if tool access unclear** - must understand PM tool hierarchy and linking
-- **HALT if bootstrap incomplete** - verify [way-of-working.md](.pair/adoption/tech/way-of-working.md) configuration
+- **HALT if bootstrap incomplete** - verify [way-of-working.md](../../adoption/tech/way-of-working.md) configuration
 - **Do NOT proceed** without clear epic context and tool setup
 
 ## Implementation Workflow
@@ -53,8 +53,8 @@ USER STORY BREAKDOWN STATE:
 
 1. **Verify Tool Configuration**:
 
-   - Check [way-of-working.md](.pair/adoption/tech/way-of-working.md) for PM tool setup
-   - Validate access per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+   - Check [way-of-working.md](../../adoption/tech/way-of-working.md) for PM tool setup
+   - Validate access per [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md)
    - Confirm hierarchy linking methodology (Epic → User Story)
 
 2. **Handle Missing Configuration**:
@@ -130,7 +130,7 @@ USER STORY BREAKDOWN STATE:
 
    _Does this story identification capture the right user value breakdown and UI manifestations?"_
 
-**Story Patterns Reference**: [Vertical Slicing Guidelines](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md)
+**Story Patterns Reference**: [Vertical Slicing Guidelines](../guidelines/collaboration/templates/user-story-template.md)
 
 ### Phase 4: Story Definition & INVEST Validation
 
@@ -170,7 +170,7 @@ USER STORY BREAKDOWN STATE:
 
    _This breakdown provides rough planning units with expected uncertainty. Approved for documentation?"_
 
-**INVEST Reference**: [INVEST Criteria Guidelines](.pair/knowledge/guidelines/collaboration/methodology/scrum.md)
+**INVEST Reference**: [INVEST Criteria Guidelines](../guidelines/collaboration/methodology/scrum.md)
 
 ### Phase 5: Documentation & Tool Creation
 
@@ -178,7 +178,7 @@ USER STORY BREAKDOWN STATE:
 
 1. **Document Individual Stories**:
 
-   - Use complete [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md#initial-breakdown-template)
+   - Use complete [User Story Template](../guidelines/collaboration/templates/user-story-template.md#initial-breakdown-template)
    - Focus on planning essentials (statement, value, scope, sizing)
    - Include UI value manifestation for demo readiness
    - Document uncertainties for future refinement
@@ -195,12 +195,12 @@ USER STORY BREAKDOWN STATE:
    _Does this story definition provide sufficient planning information while acknowledging expected uncertainties?"_
 
 3. **Create in Project Management Tool**:
-   - Follow tool-specific format per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+   - Follow tool-specific format per [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md)
    - Establish proper hierarchy linking (Epic → User Story)
    - Configure basic tracking (status, priority, sizing)
    - Verify story sequence and dependencies
 
-**Template Reference**: [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md#initial-breakdown-template)
+**Template Reference**: [User Story Template](../guidelines/collaboration/templates/user-story-template.md#initial-breakdown-template)
 
 ### Phase 6: Coverage Validation & Completion
 
@@ -234,8 +234,8 @@ USER STORY BREAKDOWN STATE:
 - [ ] Story identification using patterns and epic context
 - [ ] All stories follow INVEST criteria validation
 - [ ] UI-first cutting applied - every story produces visible value
-- [ ] Complete [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md#initial-breakdown-template) used
-- [ ] Tool hierarchy properly established per [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)
+- [ ] Complete [User Story Template](../guidelines/collaboration/templates/user-story-template.md#initial-breakdown-template) used
+- [ ] Tool hierarchy properly established per [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md)
 - [ ] Epic coverage validated and status updated
 - [ ] Session state maintained throughout process
 
@@ -293,14 +293,14 @@ USER STORY BREAKDOWN STATE:
 ### Core Dependencies
 
 - [Epic Breakdown](06-how-to-breakdown-epics.md) - Input source for user story breakdown
-- [PM Tool Guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) - Tool integration and hierarchy linking
+- [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md) - Tool integration and hierarchy linking
 - [Bootstrap Checklist](02-how-to-complete-bootstrap-checklist.md) - Foundation verification
 
 ### Implementation Guidelines
 
-- [User Story Template](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md#initial-breakdown-template) - Complete documentation structure
-- [INVEST Criteria Guidelines](.pair/knowledge/guidelines/collaboration/methodology/scrum.md) - Story validation framework
-- [Vertical Slicing Guidelines](.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) - Story cutting patterns
+- [User Story Template](../guidelines/collaboration/templates/user-story-template.md#initial-breakdown-template) - Complete documentation structure
+- [INVEST Criteria Guidelines](../guidelines/collaboration/methodology/scrum.md) - Story validation framework
+- [Vertical Slicing Guidelines](../guidelines/collaboration/templates/user-story-template.md) - Story cutting patterns
 
 ### Next Phase
 
