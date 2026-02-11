@@ -19,6 +19,7 @@ import { isAbsolute } from 'path'
 import { transformPath, detectCollisions } from './naming-transforms'
 import { rewriteLinksAfterTransform, PathMappingEntry } from './link-rewriter'
 import { syncFrontmatter } from './frontmatter-transform'
+import { buildSkillNameMap, rewriteSkillReferencesInFiles } from './skill-reference-rewriter'
 
 type CopyPathOpsParams = {
   fileService: FileSystemService
@@ -583,9 +584,31 @@ export async function copyDirectoryWithTransforms(params: {
     await rewriteLinksAfterTransform({ fileService, pathMapping, datasetRoot: params.datasetRoot })
   }
 
+  await applySkillReferenceRewrites(fileService, dirMappingFiles, transformOpts)
+
   logger.info(
     `Copied contents of ${srcPath} -> ${destPath} (flatten=${flatten}, prefix=${prefix ?? 'none'})`,
   )
+}
+
+/**
+ * Collects .md files from dirMappingFiles and rewrites skill references if any renames occurred.
+ */
+async function applySkillReferenceRewrites(
+  fileService: FileSystemService,
+  dirMappingFiles: Map<string, string[]>,
+  transformOpts: TransformOpts,
+): Promise<void> {
+  const skillNameMap = buildSkillNameMap(dirMappingFiles, transformOpts)
+  if (skillNameMap.size === 0) return
+
+  const allMdFiles: string[] = []
+  for (const mappedFiles of dirMappingFiles.values()) {
+    for (const f of mappedFiles) {
+      if (f.endsWith('.md')) allMdFiles.push(f)
+    }
+  }
+  await rewriteSkillReferencesInFiles({ fileService, files: allMdFiles, skillNameMap })
 }
 
 /**

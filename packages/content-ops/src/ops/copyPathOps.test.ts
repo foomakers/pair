@@ -292,8 +292,8 @@ describe('copyPathOps - flatten and prefix', () => {
     // multiline collapsed
     expect(result).toContain('description: Records an architectural or non-architectural decision.')
     expect(result).not.toContain('>-')
-    // body unchanged
-    expect(result).toContain('# /record-decision')
+    // body skill references rewritten
+    expect(result).toContain('# /pair-capability-record-decision')
   })
 
   it('should sync all frontmatter values referencing old dir name, not just name', async () => {
@@ -325,6 +325,69 @@ describe('copyPathOps - flatten and prefix', () => {
     const result = await fileService.readFile('/dataset/target/px-category-my-skill/SKILL.md')
     expect(result).toContain('name: px-category-my-skill')
     expect(result).toContain('config: px-category-my-skill/defaults.yaml')
+  })
+
+  it('should rewrite skill cross-references after flatten+prefix copy', async () => {
+    const implementContent = [
+      '---',
+      'name: implement',
+      'description: >-',
+      '  Composes /verify-quality and',
+      '  /record-decision.',
+      '---',
+      '',
+      '# /implement',
+      '',
+      '| `/verify-quality` | Capability |',
+      '| `/record-decision` | Capability |',
+      'invoke /assess-stack if needed',
+    ].join('\n')
+
+    const verifyContent = [
+      '---',
+      'name: verify-quality',
+      'description: Quality checker.',
+      '---',
+      '',
+      '# /verify-quality',
+      'Composed by /implement and /review.',
+    ].join('\n')
+
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/process/implement/SKILL.md': implementContent,
+        '/dataset/source/capability/verify-quality/SKILL.md': verifyContent,
+        '/dataset/source/capability/record-decision/SKILL.md':
+          '---\nname: record-decision\n---\n# /record-decision',
+        '/dataset/source/capability/assess-stack/SKILL.md':
+          '---\nname: assess-stack\n---\n# /assess-stack',
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true, prefix: 'pair', targets: [] },
+    })
+
+    const impl = await fileService.readFile('/dataset/target/pair-process-implement/SKILL.md')
+    // frontmatter name synced
+    expect(impl).toContain('name: pair-process-implement')
+    // body references rewritten
+    expect(impl).toContain('`/pair-capability-verify-quality`')
+    expect(impl).toContain('`/pair-capability-record-decision`')
+    expect(impl).toContain('/pair-capability-assess-stack')
+    // frontmatter description also rewritten
+    expect(impl).toContain('/pair-capability-verify-quality and')
+
+    const verify = await fileService.readFile(
+      '/dataset/target/pair-capability-verify-quality/SKILL.md',
+    )
+    expect(verify).toContain('/pair-process-implement')
   })
 
   it('should detect and throw on flatten collisions', async () => {

@@ -39,6 +39,11 @@ export {
   type MarkerError,
 } from './ops/content-transform'
 export { syncFrontmatter } from './ops/frontmatter-transform'
+export {
+  rewriteSkillReferences,
+  buildSkillNameMap,
+  type SkillNameMap,
+} from './ops/skill-reference-rewriter'
 export { validatePathOps } from './ops/validatePathOps'
 export {
   processFilesWithLinkReplacements,

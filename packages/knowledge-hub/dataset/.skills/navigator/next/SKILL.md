@@ -21,12 +21,12 @@ Read the following files and classify each as **populated** or **template**:
 
 | File | Template indicator |
 |---|---|
-| `.pair/adoption/product/PRD.md` | Contains `[Product/feature name]` or `[Creation date]` |
-| `.pair/adoption/product/subdomain/README.md` | Contains `[list here core subdomain]` or `[PROJECT_NAME]` |
-| `.pair/adoption/tech/architecture.md` | Contains only placeholder headings with no real content |
-| `.pair/adoption/tech/tech-stack.md` | Contains only placeholder headings with no real content |
-| `.pair/adoption/tech/boundedcontext/README.md` | Contains only placeholder headings with no real content |
-| `.pair/adoption/tech/way-of-working.md` | No PM tool specified or only template text |
+| [.pair/adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md) | Contains `[Product/feature name]` or `[Creation date]` |
+| [.pair/adoption/product/subdomain/README.md](../../../.pair/adoption/product/subdomain/README.md) | Contains `[list here core subdomain]` or `[PROJECT_NAME]` |
+| [.pair/adoption/tech/architecture.md](../../../.pair/adoption/tech/architecture.md) | Contains only placeholder headings with no real content |
+| [.pair/adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) | Contains only placeholder headings with no real content |
+| [.pair/adoption/tech/boundedcontext/README.md](../../../.pair/adoption/tech/boundedcontext/README.md) | Contains only placeholder headings with no real content |
+| [.pair/adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) | No PM tool specified or only template text |
 
 **Template detection rule**: A file is a template if it contains square-bracket placeholders (e.g., `[Product/feature name]`) or if its substantive sections contain no project-specific content.
 
@@ -45,7 +45,7 @@ If any of the above matched, output the suggestion and stop.
 
 All adoption files are populated. Query the PM tool to determine backlog state.
 
-**PM tool discovery**: Read `.pair/adoption/tech/way-of-working.md` to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
+**PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
 
 | # | Condition | Suggestion | Rationale |
 |---|-----------|------------|-----------|
