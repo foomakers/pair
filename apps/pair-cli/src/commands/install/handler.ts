@@ -218,26 +218,40 @@ async function applySkillRefsToNonSkillRegistries(
 ): Promise<void> {
   const { fs, baseTarget, pushLog } = context
 
-  for (const [name, config] of Object.entries(registries)) {
+  for (const [, config] of Object.entries(registries)) {
     if (config.flatten || config.prefix) continue
 
-    const target = resolveTarget(name, config, fs, baseTarget)
-    if (!(await fs.exists(target))) continue
+    for (const targetCfg of config.targets) {
+      if (targetCfg.mode === 'symlink') continue
+      const target = baseTarget
+        ? fs.resolve(baseTarget, targetCfg.path)
+        : fs.resolve(targetCfg.path)
+      await rewriteSkillRefsInTarget(fs, target, skillNameMap, pushLog)
+    }
+  }
+}
 
-    const stat = await fs.stat(target)
-    const files: string[] = stat.isDirectory()
-      ? await walkMarkdownFiles(target, fs)
-      : target.endsWith('.md')
-        ? [target]
-        : []
+async function rewriteSkillRefsInTarget(
+  fs: FileSystemService,
+  target: string,
+  skillNameMap: SkillNameMap,
+  pushLog: (level: LogEntry['level'], message: string) => void,
+): Promise<void> {
+  if (!(await fs.exists(target))) return
 
-    for (const filePath of files) {
-      const content = await fs.readFile(filePath)
-      const rewritten = rewriteSkillReferences(content, skillNameMap)
-      if (rewritten !== content) {
-        await fs.writeFile(filePath, rewritten)
-        pushLog('info', `Skill reference rewriter: updated ${filePath}`)
-      }
+  const stat = await fs.stat(target)
+  const files: string[] = stat.isDirectory()
+    ? await walkMarkdownFiles(target, fs)
+    : target.endsWith('.md')
+      ? [target]
+      : []
+
+  for (const filePath of files) {
+    const content = await fs.readFile(filePath)
+    const rewritten = rewriteSkillReferences(content, skillNameMap)
+    if (rewritten !== content) {
+      await fs.writeFile(filePath, rewritten)
+      pushLog('info', `Skill reference rewriter: updated ${filePath}`)
     }
   }
 }

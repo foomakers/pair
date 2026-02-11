@@ -526,7 +526,75 @@ describe('KB distribution pipeline — bug regression', () => {
   })
 })
 
-describe('Bug 4: skill ref rewrite with agents-before-skills config order', () => {
+describe('Bug 4: skill refs not transformed in secondary (copy) targets', () => {
+  test('CLAUDE.md (copy target of agents registry) gets skill refs rewritten', async () => {
+    const moduleDir = '/project'
+    const datasetSrc = `${moduleDir}/packages/knowledge-hub/dataset`
+
+    const config_json = {
+      asset_registries: {
+        agents: {
+          source: 'AGENTS.md',
+          behavior: 'mirror',
+          description: 'AI agents guidance',
+          targets: [
+            { path: 'AGENTS.md', mode: 'canonical' },
+            { path: 'CLAUDE.md', mode: 'copy', transform: { prefix: 'claude' } },
+          ],
+        },
+        skills: {
+          source: '.skills',
+          behavior: 'mirror',
+          flatten: true,
+          prefix: 'pair',
+          description: 'Agent skills',
+          targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+        },
+      },
+    }
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${moduleDir}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${moduleDir}/config.json`]: JSON.stringify(config_json),
+        [`${datasetSrc}/.skills/process/next/SKILL.md`]: '# /next — Navigator',
+        [`${datasetSrc}/.skills/capability/verify-quality/SKILL.md`]:
+          '# /verify-quality — Quality Gate',
+        [`${datasetSrc}/AGENTS.md`]:
+          '# AGENTS\n\nRun /next to start.\nUse /verify-quality for checks.\n',
+      },
+      moduleDir,
+      moduleDir,
+    )
+
+    const httpClient = new MockHttpClientService()
+    const updateConfig: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleUpdateCommand(updateConfig, fs, { httpClient })
+
+    // Canonical AGENTS.md must have transformed refs
+    const agentsContent = await fs.readFile(`${moduleDir}/AGENTS.md`)
+    expect(agentsContent).toContain('/pair-process-next')
+    expect(agentsContent).not.toMatch(/(?<![a-z-])\/next(?![a-z-])/)
+
+    // Secondary CLAUDE.md must ALSO have transformed refs
+    const claudeContent = await fs.readFile(`${moduleDir}/CLAUDE.md`)
+    expect(claudeContent).toContain('/pair-process-next')
+    expect(claudeContent).toContain('/pair-capability-verify-quality')
+    expect(claudeContent).not.toMatch(/(?<![a-z-])\/next(?![a-z-])/)
+    expect(claudeContent).not.toMatch(/(?<![a-z-])\/verify-quality(?![a-z-])/)
+  })
+})
+
+describe('Bug 5: skill ref rewrite with agents-before-skills config order', () => {
   test('AGENTS.md refs are rewritten even when agents registry precedes skills in config', async () => {
     // Real config order: github, knowledge, adoption, agents, skills
     // agents is processed BEFORE skills in the loop, but the rewrite must
