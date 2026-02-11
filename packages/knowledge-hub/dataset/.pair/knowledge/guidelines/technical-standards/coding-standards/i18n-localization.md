@@ -546,7 +546,7 @@ export class LocaleDetectionService {
 
 ## Related Documentation
 
-- [User Experience Guidelines](.pair/knowledge/guidelines/user-experience/README.md)
-- [Accessibility Standards](.pair/knowledge/guidelines/quality-assurance/accessibility/README.md)
-- [Content Strategy](.pair/knowledge/guidelines/user-experience/content-strategy/README.md)
-- [Testing Strategy](.pair/knowledge/guidelines/testing/README.md)
+- [User Experience Guidelines](../../user-experience/README.md)
+- [Accessibility Standards](../../quality-assurance/accessibility/README.md)
+- [Content Strategy](../../user-experience/content-strategy/README.md)
+- [Testing Strategy](../../testing/README.md)

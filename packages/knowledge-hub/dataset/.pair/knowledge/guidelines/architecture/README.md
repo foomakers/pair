@@ -158,9 +158,9 @@ flowchart TD
 
 ## 🔗 Related Guidelines
 
-- **[Code Design Guidelines](.pair/knowledge/guidelines/code-design/README.md)** - Code patterns implementing these architectural decisions
-- **[Operations Guidelines](.pair/knowledge/guidelines/observability/README.md)** - Infrastructure deployment strategies for these patterns
-- **[Quality Guidelines](.pair/knowledge/guidelines/quality-assurance/README.md)** - Quality criteria ensuring architectural integrity
+- **[Code Design Guidelines](../code-design/README.md)** - Code patterns implementing these architectural decisions
+- **[Operations Guidelines](../observability/README.md)** - Infrastructure deployment strategies for these patterns
+- **[Quality Guidelines](../quality-assurance/README.md)** - Quality criteria ensuring architectural integrity
 
 ## 🎯 Quick Start
 

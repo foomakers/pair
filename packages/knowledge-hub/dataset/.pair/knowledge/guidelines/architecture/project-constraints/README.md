@@ -39,9 +39,9 @@ Define and document the specific architectural constraints that guide all system
 
 ## Cross-References
 
-- **[Deployment Architectures](.pair/knowledge/guidelines/architecture/deployment-architectures/README.md)** - Self-hosted deployment patterns
-- **[Tech Stack](.pair/adoption/tech/tech-stack.md)** - Specific technology choices
-- **[Way of Working](.pair/adoption/tech/way-of-working.md)** - Process constraints and decisions
+- **[Deployment Architectures](../deployment-architectures/README.md)** - Self-hosted deployment patterns
+- **[Tech Stack](../../../../adoption/tech/tech-stack.md)** - Specific technology choices
+- **[Way of Working](../../../../adoption/tech/way-of-working.md)** - Process constraints and decisions
 
 ## Scope Boundaries
 

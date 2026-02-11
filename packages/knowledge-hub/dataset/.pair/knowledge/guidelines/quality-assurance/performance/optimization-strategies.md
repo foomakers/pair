@@ -335,8 +335,8 @@ Provide actionable optimization strategies and techniques that development teams
 
 - **[Performance Fundamentals](performance-fundamentals.md)** - Core performance concepts and principles
 - **[Core Web Vitals](core-web-vitals.md)** - Google Core Web Vitals specific optimization
-- **[Testing Guidelines](.pair/knowledge/guidelines/testing/README.md)** - Performance testing and validation
-- **[Infrastructure Guidelines](.pair/knowledge/guidelines/infrastructure/README.md)** - Infrastructure-level performance optimization
+- **[Testing Guidelines](../../testing/README.md)** - Performance testing and validation
+- **[Infrastructure Guidelines](../../infrastructure/README.md)** - Infrastructure-level performance optimization
 
 ---
 

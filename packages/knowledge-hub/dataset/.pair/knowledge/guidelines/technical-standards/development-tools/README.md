@@ -424,9 +424,9 @@ This section covers development environment and tooling standards:
 
 ## 🔗 Related Practices
 
-- **[Technology Stack](.pair/knowledge/guidelines/technical-standards/technology-stack/README.md)** - Technology choices that these tools support
-- **[Coding Standards](.pair/knowledge/guidelines/technical-standards/coding-standards/README.md)** - Development environment patterns
-- **[Deployment Workflow](.pair/knowledge/guidelines/technical-standards/deployment-workflow/README.md)** - Tools that support build and deployment
+- **[Technology Stack](../technology-stack/README.md)** - Technology choices that these tools support
+- **[Coding Standards](../coding-standards/README.md)** - Development environment patterns
+- **[Deployment Workflow](../deployment-workflow/README.md)** - Tools that support build and deployment
 
 ## 🎯 Quick Start
 

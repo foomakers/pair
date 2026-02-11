@@ -326,8 +326,8 @@ Establish foundational performance knowledge and principles that guide the devel
 
 - **[Core Web Vitals](core-web-vitals.md)** - Specific Google Core Web Vitals optimization
 - **[Optimization Strategies](optimization-strategies.md)** - Practical optimization techniques
-- **[Testing Guidelines](.pair/knowledge/guidelines/testing/README.md)** - Performance testing integration
-- **[Observability Guidelines](.pair/knowledge/guidelines/observability/README.md)** - Performance monitoring and metrics
+- **[Testing Guidelines](../../testing/README.md)** - Performance testing integration
+- **[Observability Guidelines](../../observability/README.md)** - Performance monitoring and metrics
 
 ---
 

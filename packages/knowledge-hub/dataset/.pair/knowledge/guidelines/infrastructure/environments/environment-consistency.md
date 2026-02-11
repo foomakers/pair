@@ -311,10 +311,10 @@ echo "✅ Environment consistency validation completed"
 
 ## 🔗 Related Practices
 
-- **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure standardization and automation
+- **[Infrastructure as Code](../infrastructure-as-code/README.md)** - Infrastructure standardization and automation
 - **[Environment Configuration](environment-config.md)** - Configuration management and templating
-- **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Deployment pipeline consistency
-- **[Monitoring and Observability](.pair/knowledge/guidelines/observability/README.md)** - Environment monitoring and alerting
+- **[CI/CD Strategy](../cicd-strategy/README.md)** - Deployment pipeline consistency
+- **[Monitoring and Observability](../../observability/README.md)** - Environment monitoring and alerting
 
 ---
 

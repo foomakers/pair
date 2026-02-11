@@ -21,9 +21,9 @@ User experience design encompasses the systematic approach to creating intuitive
 
 ### Out of Scope
 
-- Technical implementation details (see [Code Design](.pair/knowledge/guidelines/code-design/README.md))
-- Infrastructure and deployment (see [Infrastructure](.pair/knowledge/guidelines/infrastructure/README.md))
-- Security implementation (see [Quality Assurance/Security](.pair/knowledge/guidelines/quality-assurance/security/README.md))
+- Technical implementation details (see [Code Design](../code-design/README.md))
+- Infrastructure and deployment (see [Infrastructure](../infrastructure/README.md))
+- Security implementation (see [Quality Assurance/Security](../quality-assurance/security/README.md))
 - Business strategy and market positioning
 - Legal compliance and regulatory requirements
 
@@ -236,10 +236,10 @@ Component Library Selection:
 
 ## 🔗 Related Guidelines
 
-- **[Quality Assurance/Accessibility](.pair/knowledge/guidelines/quality-assurance/accessibility/README.md)** - Accessibility standards implementation
-- **[Code Design](.pair/knowledge/guidelines/code-design/README.md)** - Design system technical implementation
-- **[Technical Standards](.pair/knowledge/guidelines/technical-standards/README.md)** - Technology standards supporting UX
-- **[Collaboration](.pair/knowledge/guidelines/collaboration/README.md)** - Team workflows and process integration
+- **[Quality Assurance/Accessibility](../quality-assurance/accessibility/README.md)** - Accessibility standards implementation
+- **[Code Design](../code-design/README.md)** - Design system technical implementation
+- **[Technical Standards](../technical-standards/README.md)** - Technology standards supporting UX
+- **[Collaboration](../collaboration/README.md)** - Team workflows and process integration
 
 ## Best Practices
 

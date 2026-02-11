@@ -498,6 +498,6 @@ export class PrivacyAwareAIService {
 
 - [AI Tools Integration](ai-tools.md)
 - [MCP Integration Standards](mcp-integration.md)
-- [Technical Guidelines](.pair/knowledge/guidelines/technical-standards/README.md)
-- [Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)
-- [Testing Strategy](.pair/knowledge/guidelines/testing/README.md)
+- [Technical Guidelines](../README.md)
+- [Security Guidelines](../../quality-assurance/security/README.md)
+- [Testing Strategy](../../testing/README.md)

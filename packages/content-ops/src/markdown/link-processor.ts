@@ -236,19 +236,6 @@ export class LinkProcessor {
     query: string
     anchor: string
   }) {
-    return this.handleFullNormalization(params)
-  }
-
-  private static async handleFullNormalization(params: {
-    replacements: Replacement[]
-    lnk: ParsedLink
-    linkPath: string
-    absTarget: string
-    config: LinkProcessingConfig
-    fileService: FileSystemService
-    query: string
-    anchor: string
-  }) {
     const { replacements, lnk, linkPath, absTarget, config, fileService, anchor } = params
     const { query } = params
     const relToDocs = convertToRelative(config.datasetRoot, absTarget)
@@ -269,19 +256,12 @@ export class LinkProcessor {
         normalized,
         relToDocs,
       })
-      return
     }
 
-    // handle multi-file path normalization
-    await this.tryPushMultiFileNormalization({
-      replacements,
-      lnk,
-      linkPath,
-      absTarget,
-      config,
-      fileService,
-      normalized,
-    })
+    // Multi-file path normalization (converting relative paths to docsFolders-based
+    // paths like .pair/adoption/tech/...) is intentionally disabled. These non-standard
+    // paths are not navigable in IDEs/GitHub and break the link rewriter during skill
+    // distribution. Relative paths (e.g., ../../../.pair/...) are correct and work everywhere.
   }
 
   private static async tryPushSingleFileNormalization(params: {
@@ -304,30 +284,6 @@ export class LinkProcessor {
         oldHref: linkPath,
         newHref: normalized,
         kind: 'normalizedRel',
-      })
-    }
-  }
-
-  private static async tryPushMultiFileNormalization(params: {
-    replacements: Replacement[]
-    lnk: ParsedLink
-    linkPath: string
-    absTarget: string
-    config: LinkProcessingConfig
-    fileService: FileSystemService
-    normalized: string
-  }) {
-    const { replacements, lnk, linkPath, absTarget, config, fileService, normalized } = params
-    const topFolder = normalized.split('/')[0] ?? ''
-    if (!config.docsFolders.includes(topFolder)) return
-    if (!(await fileService.exists(absTarget))) return
-    if (linkPath !== normalized) {
-      this.pushNormalizedReplacement({
-        replacements,
-        lnk,
-        oldHref: linkPath,
-        newHref: normalized,
-        kind: 'normalizedFull',
       })
     }
   }

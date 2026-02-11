@@ -83,9 +83,9 @@ Start → Team Size?
 
 ## 🔗 Related Practices
 
-- **[Testing](.pair/knowledge/guidelines/testing)** - Testing requirements within quality standards
-- **[Accessibility](.pair/knowledge/guidelines/quality-assurance/accessibility)** - Accessibility compliance as quality requirement
-- **[Security](.pair/knowledge/guidelines/quality-assurance/security)** - Security standards integrated with quality criteria
+- **[Testing](../../testing)** - Testing requirements within quality standards
+- **[Accessibility](../accessibility)** - Accessibility compliance as quality requirement
+- **[Security](../security)** - Security standards integrated with quality criteria
 
 ---
 

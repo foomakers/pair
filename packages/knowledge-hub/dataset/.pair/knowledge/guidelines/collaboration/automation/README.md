@@ -172,7 +172,7 @@ This section covers automation approaches for project management workflows, deve
 
 ## Related Topics
 
-- **[../issue-management/](.pair/knowledge/guidelines/collaboration/issue-management/README.md)** - Automated issue workflows
-- **[../project-tracking/](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)** - Automated tracking and reporting
-- **[../project-management-tool/](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Tool-specific automation setup
-- **[../communication-protocols/](.pair/knowledge/guidelines/collaboration/team/README.md)** - Automated communication workflows
+- **[../issue-management/](../issue-management/README.md)** - Automated issue workflows
+- **[../project-tracking/](../project-tracking/README.md)** - Automated tracking and reporting
+- **[../project-management-tool/](../project-management-tool/README.md)** - Tool-specific automation setup
+- **[../communication-protocols/](../team/README.md)** - Automated communication workflows

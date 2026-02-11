@@ -783,6 +783,6 @@ git reset --hard
 
 - [Development Process](development-process.md)
 - [Quality Assurance](quality-assurance.md)
-- [Code Review Guidelines](.pair/knowledge/guidelines/collaboration/README.md)
-- [Deployment Workflow](.pair/knowledge/guidelines/technical-standards/deployment-workflow/README.md)
-- [Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)
+- [Code Review Guidelines](../../collaboration/README.md)
+- [Deployment Workflow](../deployment-workflow/README.md)
+- [Security Guidelines](../../quality-assurance/security/README.md)

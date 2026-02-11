@@ -299,6 +299,6 @@ Start: What type of project are you estimating?
 
 ## Related Documents
 
-- **[methodology/](.pair/knowledge/guidelines/collaboration/methodology/README.md)** - Integration with Agile, Waterfall, and hybrid methodologies
-- **[project-tracking/](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)** - Tracking estimation accuracy and project progress
-- **[project-management-tool/](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Tool-specific estimation implementations
+- **[methodology/](../methodology/README.md)** - Integration with Agile, Waterfall, and hybrid methodologies
+- **[project-tracking/](../project-tracking/README.md)** - Tracking estimation accuracy and project progress
+- **[project-management-tool/](../project-management-tool/README.md)** - Tool-specific estimation implementations

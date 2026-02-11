@@ -407,5 +407,5 @@ Effective notification strategies ensure that critical information reaches the r
 ## Related Documents
 
 - [Alerting Strategy](strategy.md) - Alert design and optimization principles
-- [Observability Tools](.pair/knowledge/guidelines/observability/observability-tools.md) - Tool selection for notifications
-- [Workflow Integration](.pair/knowledge/guidelines/observability/workflow-integration.md) - Process integration strategies
+- [Observability Tools](../observability-tools.md) - Tool selection for notifications
+- [Workflow Integration](../workflow-integration.md) - Process integration strategies

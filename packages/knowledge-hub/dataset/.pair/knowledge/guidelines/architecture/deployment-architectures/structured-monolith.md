@@ -122,4 +122,4 @@ export class Application {
 
 - [Modular Monolith](modular-monolith.md) - Next evolution step
 - [Microservices](microservices.md) - Distributed alternative
-- [Layered Architecture](.pair/knowledge/guidelines/architecture/architectural-patterns/layer-architecture.md) - Internal organization pattern
+- [Layered Architecture](../architectural-patterns/layer-architecture.md) - Internal organization pattern

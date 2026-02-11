@@ -84,9 +84,9 @@ Consider test maintainability during test design including clear test structure,
 
 ## 🔗 Related Practices
 
-- **[Testing Strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md)** - Strategic foundation for automation implementation
-- **[Unit Testing](.pair/knowledge/guidelines/testing/unit-testing/README.md)** - Unit testing automation practices
-- **[Deployment Workflow](.pair/knowledge/guidelines/technical-standards/deployment-workflow/README.md)** - CI/CD integration patterns
+- **[Testing Strategy](../test-strategy/README.md)** - Strategic foundation for automation implementation
+- **[Unit Testing](../unit-testing/README.md)** - Unit testing automation practices
+- **[Deployment Workflow](../../technical-standards/deployment-workflow/README.md)** - CI/CD integration patterns
 
 ## 🎯 Quick Start
 
