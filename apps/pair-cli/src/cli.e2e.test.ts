@@ -937,8 +937,6 @@ describe('pair-cli e2e - skills registry pipeline', () => {
     // Skills registry content — mimics real .skills/ structure
     seed[`${datasetBase}/.skills/navigator/next/SKILL.md`] =
       '---\nname: next\ndescription: Project navigator\n---\n# /next'
-    seed[`${datasetBase}/.skills/process/.keep`] = '# placeholder'
-    seed[`${datasetBase}/.skills/capability/.keep`] = '# placeholder'
 
     seed[`${cwd}/config.json`] = JSON.stringify(createSkillsConfig())
 
@@ -954,7 +952,7 @@ describe('pair-cli e2e - skills registry pipeline', () => {
     // Flatten transforms 'navigator/next' → 'navigator-next', prefix 'pair' → 'pair-navigator-next'
     expect(fs.existsSync(`${cwd}/.claude/skills/pair-navigator-next/SKILL.md`)).toBe(true)
     const content = fs.readFileSync(`${cwd}/.claude/skills/pair-navigator-next/SKILL.md`)
-    expect(content).toContain('name: next')
+    expect(content).toContain('name: pair-navigator-next')
   })
 
   it('update creates symlinks for secondary targets', async () => {

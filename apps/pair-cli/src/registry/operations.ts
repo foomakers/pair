@@ -224,10 +224,21 @@ export async function distributeToSecondaryTargets(params: {
       await fileService.mkdir(dirname(targetPath), { recursive: true })
       await fileService.writeFile(targetPath, clean)
     } else if (target.mode === 'symlink') {
-      await fileService.mkdir(dirname(targetPath), { recursive: true })
-      await fileService.symlink(canonicalPath, targetPath)
+      await createOrReplaceSymlink(fileService, canonicalPath, targetPath)
     } else if (target.mode === 'copy') {
       await fileService.copy(canonicalPath, targetPath)
     }
   }
+}
+
+async function createOrReplaceSymlink(
+  fileService: FileSystemService,
+  target: string,
+  linkPath: string,
+): Promise<void> {
+  await fileService.mkdir(dirname(linkPath), { recursive: true })
+  if (fileService.existsSync(linkPath)) {
+    await fileService.unlink(linkPath)
+  }
+  await fileService.symlink(target, linkPath)
 }

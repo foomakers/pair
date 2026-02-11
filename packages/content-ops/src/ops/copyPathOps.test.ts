@@ -256,6 +256,77 @@ describe('copyPathOps - flatten and prefix', () => {
     expect(content).toContain('../../.pair/knowledge/testing/README.md')
   })
 
+  it('should sync frontmatter name after flatten+prefix rename', async () => {
+    const skillContent = [
+      '---',
+      'name: record-decision',
+      'description: >-',
+      '  Records an architectural',
+      '  or non-architectural decision.',
+      '---',
+      '',
+      '# /record-decision',
+    ].join('\n')
+
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/capability/record-decision/SKILL.md': skillContent,
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true, prefix: 'pair', targets: [] },
+    })
+
+    const result = await fileService.readFile(
+      '/dataset/target/pair-capability-record-decision/SKILL.md',
+    )
+    // name synced to match new directory name
+    expect(result).toContain('name: pair-capability-record-decision')
+    // multiline collapsed
+    expect(result).toContain('description: Records an architectural or non-architectural decision.')
+    expect(result).not.toContain('>-')
+    // body unchanged
+    expect(result).toContain('# /record-decision')
+  })
+
+  it('should sync all frontmatter values referencing old dir name, not just name', async () => {
+    const skillContent = [
+      '---',
+      'name: my-skill',
+      'config: my-skill/defaults.yaml',
+      '---',
+      '',
+      '# Body',
+    ].join('\n')
+
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/category/my-skill/SKILL.md': skillContent,
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true, prefix: 'px', targets: [] },
+    })
+
+    const result = await fileService.readFile('/dataset/target/px-category-my-skill/SKILL.md')
+    expect(result).toContain('name: px-category-my-skill')
+    expect(result).toContain('config: px-category-my-skill/defaults.yaml')
+  })
+
   it('should detect and throw on flatten collisions', async () => {
     const fileService = new InMemoryFileSystemService(
       {

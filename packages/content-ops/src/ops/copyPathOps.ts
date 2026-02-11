@@ -18,6 +18,7 @@ import { convertToRelative } from '../path-resolution'
 import { isAbsolute } from 'path'
 import { transformPath, detectCollisions } from './naming-transforms'
 import { rewriteLinksAfterTransform, PathMappingEntry } from './link-rewriter'
+import { syncFrontmatter } from './frontmatter-transform'
 
 type CopyPathOpsParams = {
   fileService: FileSystemService
@@ -490,14 +491,25 @@ async function copyFileWithTransform(ctx: {
   const { fileService, filePath, srcPath, destPath, transformOpts, dirMappingFiles } = ctx
   const dir = dirname(filePath)
   const fileName = filePath.slice(dir === '.' ? 0 : dir.length + 1)
-  const targetDir = dir === '.' ? destPath : join(destPath, transformPath(dir, transformOpts))
+  const transformedDir = dir === '.' ? null : transformPath(dir, transformOpts)
+  const targetDir = transformedDir ? join(destPath, transformedDir) : destPath
 
   await fileService.mkdir(targetDir, { recursive: true })
-  await copyFileHelper(fileService, join(srcPath, filePath), join(targetDir, fileName), 'overwrite')
+  const targetFilePath = join(targetDir, fileName)
+  await copyFileHelper(fileService, join(srcPath, filePath), targetFilePath, 'overwrite')
 
-  if (dir !== '.') {
+  if (dir !== '.' && transformedDir) {
+    const leafName = dir.split('/').pop()!
+    if (leafName !== transformedDir) {
+      const content = await fileService.readFile(targetFilePath)
+      const synced = syncFrontmatter(content, { from: leafName, to: transformedDir })
+      if (synced !== content) {
+        await fileService.writeFile(targetFilePath, synced)
+      }
+    }
+
     if (!dirMappingFiles.has(dir)) dirMappingFiles.set(dir, [])
-    dirMappingFiles.get(dir)!.push(join(targetDir, fileName))
+    dirMappingFiles.get(dir)!.push(targetFilePath)
   }
 }
 
