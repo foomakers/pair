@@ -427,6 +427,22 @@ function validateConfig(config: Config): ConfigValidationResult {
     if (registry.include && !Array.isArray(registry.include)) {
       errors.push(`Asset registry '${name}': include must be an array`)
     }
+
+    // Target transform validation (if specified)
+    if (registry.targets && Array.isArray(registry.targets)) {
+      for (const target of registry.targets) {
+        if (target.transform) {
+          if (typeof target.transform !== 'object' || Array.isArray(target.transform)) {
+            errors.push(`Asset registry '${name}': transform must be an object`)
+          } else if (!target.transform.prefix || typeof target.transform.prefix !== 'string') {
+            errors.push(`Asset registry '${name}': transform.prefix must be a non-empty string`)
+          }
+          if (target.mode === 'symlink') {
+            errors.push(`Asset registry '${name}': transform is incompatible with symlink mode`)
+          }
+        }
+      }
+    }
   }
 
   return {

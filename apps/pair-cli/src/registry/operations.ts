@@ -4,6 +4,10 @@ import {
   copyFileHelper,
   FileSystemService,
   type TargetConfig,
+  type TransformConfig,
+  stripAllMarkers,
+  applyTransformCommands,
+  validateMarkers,
 } from '@pair/content-ops'
 import { type SyncOptions, defaultSyncOptions } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
@@ -152,17 +156,52 @@ export function buildCopyOptions(registryConfig: RegistryConfig): SyncOptions {
   return options
 }
 
+function throwOnMarkerErrors(content: string, filePath: string): void {
+  const errors = validateMarkers(content)
+  if (errors.length > 0) {
+    const details = errors.map(e => `  line ${e.line}: ${e.message}`).join('\n')
+    throw new Error(`Invalid markers in '${filePath}':\n${details}`)
+  }
+}
+
+/**
+ * Strips marker comments from a target file. Optionally applies transform commands first.
+ * Validates markers before processing — throws on malformed or unsupported markers.
+ */
+export async function stripMarkersFromTarget(
+  fsService: FileSystemService,
+  targetPath: string,
+  transform?: TransformConfig,
+): Promise<void> {
+  const content = await fsService.readFile(targetPath)
+  throwOnMarkerErrors(content, targetPath)
+  let result = content
+  if (transform) {
+    result = applyTransformCommands(result, transform.prefix)
+  }
+  result = stripAllMarkers(result)
+  await fsService.writeFile(targetPath, result)
+}
+
 /**
  * Distributes content from canonical target to secondary targets (symlinks and copies).
+ * For targets with a transform config, reads from the original source and applies the transform.
  * Called after the primary copy to canonical target is complete.
  */
 export async function distributeToSecondaryTargets(params: {
   fileService: FileSystemService
-  canonicalPath: string
+  sourcePath: string
   targets: TargetConfig[]
   baseTarget: string
 }): Promise<void> {
-  const { fileService, canonicalPath, targets, baseTarget } = params
+  const { fileService, sourcePath, targets, baseTarget } = params
+
+  const canonical = targets.find(t => t.mode === 'canonical')
+  if (!canonical) return
+
+  const canonicalPath = isAbsolute(canonical.path)
+    ? canonical.path
+    : fileService.resolve(baseTarget, canonical.path)
 
   if (!(await fileService.exists(canonicalPath))) {
     const { logger } = await import('@pair/content-ops')
@@ -177,7 +216,14 @@ export async function distributeToSecondaryTargets(params: {
       ? target.path
       : fileService.resolve(baseTarget, target.path)
 
-    if (target.mode === 'symlink') {
+    if (target.transform) {
+      const content = await fileService.readFile(sourcePath)
+      throwOnMarkerErrors(content, sourcePath)
+      const transformed = applyTransformCommands(content, target.transform.prefix)
+      const clean = stripAllMarkers(transformed)
+      await fileService.mkdir(dirname(targetPath), { recursive: true })
+      await fileService.writeFile(targetPath, clean)
+    } else if (target.mode === 'symlink') {
       await fileService.mkdir(dirname(targetPath), { recursive: true })
       await fileService.symlink(canonicalPath, targetPath)
     } else if (target.mode === 'copy') {

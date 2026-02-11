@@ -17,6 +17,7 @@ import {
   doCopyAndUpdateLinks,
   buildCopyOptions,
   distributeToSecondaryTargets,
+  stripMarkersFromTarget,
   handleBackupRollback,
   type RegistryConfig,
 } from '#registry'
@@ -144,54 +145,86 @@ async function performBackup(backupService: BackupService, context: UpdateContex
   await backupService.backupAllRegistries(backupConfig)
 }
 
+async function logDatasetEntries(
+  fs: FileSystemService,
+  datasetPath: string,
+  pushLog: (level: LogEntry['level'], message: string) => void,
+): Promise<void> {
+  if (!process.env['PAIR_DIAG'] && !process.env['DEBUG'] && process.env['NODE_ENV'] !== 'test')
+    return
+  try {
+    const entries = await fs.readdir(datasetPath)
+    pushLog(
+      'debug',
+      `Dataset entries at ${datasetPath}: ${entries.map(e => (e && e.name) || String(e)).join(', ')}`,
+    )
+  } catch (e) {
+    pushLog('debug', `Failed to read dataset path ${datasetPath}: ${String(e)}`)
+  }
+}
+
+async function updateSingleRegistry(ctx: {
+  fs: FileSystemService
+  datasetRoot: string
+  registryName: string
+  registryConfig: RegistryConfig
+  baseTarget: string
+  pushLog: (level: LogEntry['level'], message: string) => void
+}): Promise<void> {
+  const { fs, datasetRoot, registryName, registryConfig, baseTarget, pushLog } = ctx
+  const resolved = resolveRegistryPaths({
+    name: registryName,
+    config: registryConfig,
+    datasetRoot,
+    fs,
+    baseTarget,
+  })
+  const effectiveTarget = resolved.target
+  await ensureDir(fs, dirname(effectiveTarget))
+  const datasetPath = resolved.source
+  const copyOptions = buildCopyOptions(registryConfig)
+
+  await logDatasetEntries(fs, datasetPath, pushLog)
+  pushLog('info', `Updating registry '${registryName}' at '${effectiveTarget}'`)
+  await doCopyAndUpdateLinks(fs, {
+    source: datasetPath,
+    target: effectiveTarget,
+    datasetRoot,
+    options: copyOptions,
+  })
+
+  const canonicalTarget = registryConfig.targets.find(t => t.mode === 'canonical')
+  if (await fs.exists(effectiveTarget)) {
+    const stat = await fs.stat(effectiveTarget)
+    if (!stat.isDirectory()) {
+      await stripMarkersFromTarget(fs, effectiveTarget, canonicalTarget?.transform)
+    }
+  }
+
+  if (registryConfig.targets.length > 1) {
+    await distributeToSecondaryTargets({
+      fileService: fs,
+      sourcePath: datasetPath,
+      targets: registryConfig.targets,
+      baseTarget,
+    })
+  }
+
+  pushLog('info', `Successfully updated registry '${registryName}'`)
+}
+
 async function updateRegistries(context: UpdateContext): Promise<void> {
   const { fs, datasetRoot, registries, baseTarget, pushLog } = context
 
   await forEachRegistry(registries, async (registryName, registryConfig) => {
-    const resolved = resolveRegistryPaths({
-      name: registryName,
-      config: registryConfig,
-      datasetRoot,
+    await updateSingleRegistry({
       fs,
+      datasetRoot,
+      registryName,
+      registryConfig,
       baseTarget,
+      pushLog,
     })
-    const effectiveTarget = resolved.target
-    await ensureDir(fs, dirname(effectiveTarget))
-    const datasetPath = resolved.source
-    const copyOptions = buildCopyOptions(registryConfig)
-
-    // Debugging: When running with diagnostics, emit dataset contents to help
-    // track whether the expected files are present in the dataset before copying.
-    if (process.env['PAIR_DIAG'] || process.env['DEBUG'] || process.env['NODE_ENV'] === 'test') {
-      try {
-        const entries = await fs.readdir(datasetPath)
-        pushLog(
-          'debug',
-          `Dataset entries at ${datasetPath}: ${entries.map(e => (e && e.name) || String(e)).join(', ')}`,
-        )
-      } catch (e) {
-        pushLog('debug', `Failed to read dataset path ${datasetPath}: ${String(e)}`)
-      }
-    }
-
-    pushLog('info', `Updating registry '${registryName}' at '${effectiveTarget}'`)
-    await doCopyAndUpdateLinks(fs, {
-      source: datasetPath,
-      target: effectiveTarget,
-      datasetRoot: datasetRoot,
-      options: copyOptions,
-    })
-
-    if (registryConfig.targets.length > 1) {
-      await distributeToSecondaryTargets({
-        fileService: fs,
-        canonicalPath: effectiveTarget,
-        targets: registryConfig.targets,
-        baseTarget,
-      })
-    }
-
-    pushLog('info', `Successfully updated registry '${registryName}'`)
   })
 }
 

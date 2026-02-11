@@ -149,4 +149,30 @@ describe('validateTargets', () => {
     ]
     expect(() => validateTargets(targets)).toThrow(/duplicate/i)
   })
+
+  // Transform + symlink — error
+  it('rejects transform combined with symlink mode', () => {
+    const targets: TargetConfig[] = [
+      { path: 'AGENTS.md', mode: 'canonical' },
+      { path: 'CLAUDE.md', mode: 'symlink', transform: { prefix: 'claude' } },
+    ]
+    expect(() => validateTargets(targets)).toThrow(/transform.*incompatible.*symlink/i)
+  })
+
+  // Transform + canonical — valid
+  it('accepts transform combined with canonical mode', () => {
+    const targets: TargetConfig[] = [
+      { path: 'AGENTS.md', mode: 'canonical', transform: { prefix: 'claude' } },
+    ]
+    expect(() => validateTargets(targets)).not.toThrow()
+  })
+
+  // Transform + copy — valid
+  it('accepts transform combined with copy mode', () => {
+    const targets: TargetConfig[] = [
+      { path: 'AGENTS.md', mode: 'canonical' },
+      { path: 'CLAUDE.md', mode: 'copy', transform: { prefix: 'claude' } },
+    ]
+    expect(() => validateTargets(targets)).not.toThrow()
+  })
 })

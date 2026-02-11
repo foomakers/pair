@@ -144,6 +144,22 @@ function validatePrefixField(name: string, reg: Record<string, unknown>): string
   return []
 }
 
+function validateTargetElements(name: string, targets: unknown[]): string[] {
+  for (const t of targets) {
+    if (
+      !t ||
+      typeof t !== 'object' ||
+      !(t as Record<string, unknown>)['path'] ||
+      !(t as Record<string, unknown>)['mode']
+    ) {
+      return [`Registry '${name}' targets must have path and mode`]
+    }
+    const transformErrors = validateTransformField(name, t as Record<string, unknown>)
+    if (transformErrors.length > 0) return transformErrors
+  }
+  return []
+}
+
 function validateTargetConfigs(name: string, reg: Record<string, unknown>): string[] {
   const targets = reg['targets']
 
@@ -151,11 +167,8 @@ function validateTargetConfigs(name: string, reg: Record<string, unknown>): stri
     return [`Registry '${name}' must have at least one target with mode 'canonical'`]
   }
 
-  for (const t of targets) {
-    if (!t || typeof t !== 'object' || !t.path || !t.mode) {
-      return [`Registry '${name}' targets must have path and mode`]
-    }
-  }
+  const elementErrors = validateTargetElements(name, targets)
+  if (elementErrors.length > 0) return elementErrors
 
   try {
     validateTargets(targets as TargetConfig[])
@@ -163,6 +176,23 @@ function validateTargetConfigs(name: string, reg: Record<string, unknown>): stri
     return [`Registry '${name}': ${err instanceof Error ? err.message : String(err)}`]
   }
 
+  return []
+}
+
+function validateTransformField(name: string, target: Record<string, unknown>): string[] {
+  const transform = target['transform']
+  if (transform === undefined) return []
+  if (!transform || typeof transform !== 'object' || Array.isArray(transform)) {
+    return [
+      `Registry '${name}' target '${String(target['path'])}': transform must be an object with a prefix string`,
+    ]
+  }
+  const t = transform as Record<string, unknown>
+  if (typeof t['prefix'] !== 'string' || t['prefix'] === '') {
+    return [
+      `Registry '${name}' target '${String(target['path'])}': transform.prefix must be a non-empty string`,
+    ]
+  }
   return []
 }
 

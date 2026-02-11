@@ -5,6 +5,7 @@ import {
   calculatePaths,
   buildCopyOptions,
   distributeToSecondaryTargets,
+  stripMarkersFromTarget,
 } from './operations'
 import { defaultSyncOptions } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
@@ -117,7 +118,7 @@ describe('distributeToSecondaryTargets', () => {
 
     await distributeToSecondaryTargets({
       fileService: fs,
-      canonicalPath: '/project/.claude/skills',
+      sourcePath: '/dataset/.claude/skills',
       targets: [
         { path: '.claude/skills/', mode: 'canonical' },
         { path: '.github/skills/', mode: 'symlink' },
@@ -136,7 +137,7 @@ describe('distributeToSecondaryTargets', () => {
 
     await distributeToSecondaryTargets({
       fileService: fs,
-      canonicalPath: '/project/.claude/skills',
+      sourcePath: '/dataset/.claude/skills',
       targets: [
         { path: '.claude/skills/', mode: 'canonical' },
         { path: '.cursor/skills/', mode: 'copy' },
@@ -153,7 +154,7 @@ describe('distributeToSecondaryTargets', () => {
 
     await distributeToSecondaryTargets({
       fileService: fs,
-      canonicalPath: '/project/.claude/skills',
+      sourcePath: '/dataset/.claude/skills',
       targets: [{ path: '.claude/skills/', mode: 'canonical' }],
       baseTarget: '/project',
     })
@@ -166,7 +167,7 @@ describe('distributeToSecondaryTargets', () => {
     const fs = createTestFs({}, {}, '/project')
     await distributeToSecondaryTargets({
       fileService: fs,
-      canonicalPath: '/project/.claude/skills',
+      sourcePath: '/dataset/.claude/skills',
       targets: [],
       baseTarget: '/project',
     })
@@ -178,7 +179,7 @@ describe('distributeToSecondaryTargets', () => {
 
     await distributeToSecondaryTargets({
       fileService: fs,
-      canonicalPath: '/project/.claude/skills',
+      sourcePath: '/dataset/.claude/skills',
       targets: [
         { path: '.claude/skills/', mode: 'canonical' },
         { path: '.github/skills/', mode: 'symlink' },
@@ -191,5 +192,86 @@ describe('distributeToSecondaryTargets', () => {
     expect(symlinks.size).toBe(0)
     expect(await fs.exists('/project/.github/skills')).toBe(false)
     expect(await fs.exists('/project/.cursor/skills')).toBe(false)
+  })
+
+  it('applies transform for copy targets with transform config', async () => {
+    const sourceContent = [
+      '# AGENTS.md',
+      '',
+      '<!-- @claude-skip-start -->',
+      '## Session Context',
+      'Stateless tracking',
+      '<!-- @claude-skip-end -->',
+      '',
+      '## Quick Rules',
+      'Important rules',
+    ].join('\n')
+
+    const fs = createTestFs({}, {}, '/project')
+    await fs.mkdir('/dataset', { recursive: true })
+    await fs.writeFile('/dataset/AGENTS.md', sourceContent)
+    await fs.writeFile('/project/AGENTS.md', '# clean canonical')
+
+    await distributeToSecondaryTargets({
+      fileService: fs,
+      sourcePath: '/dataset/AGENTS.md',
+      targets: [
+        { path: 'AGENTS.md', mode: 'canonical' },
+        { path: 'CLAUDE.md', mode: 'copy', transform: { prefix: 'claude' } },
+      ],
+      baseTarget: '/project',
+    })
+
+    const claudeContent = await fs.readFile('/project/CLAUDE.md')
+    expect(claudeContent).not.toContain('Session Context')
+    expect(claudeContent).not.toContain('Stateless tracking')
+    expect(claudeContent).toContain('## Quick Rules')
+    expect(claudeContent).not.toContain('<!-- @')
+  })
+})
+
+describe('stripMarkersFromTarget', () => {
+  it('strips all markers from a file', async () => {
+    const content = [
+      '# Title',
+      '<!-- @claude-skip-start -->',
+      'Section',
+      '<!-- @claude-skip-end -->',
+      'End',
+    ].join('\n')
+
+    const fs = createTestFs({}, {}, '/project')
+    await fs.mkdir('/project', { recursive: true })
+    await fs.writeFile('/project/AGENTS.md', content)
+
+    await stripMarkersFromTarget(fs, '/project/AGENTS.md')
+
+    const result = await fs.readFile('/project/AGENTS.md')
+    expect(result).toContain('Section')
+    expect(result).toContain('End')
+    expect(result).not.toContain('<!-- @')
+  })
+
+  it('applies transform commands before stripping when transform provided', async () => {
+    const content = [
+      '# AGENTS.md',
+      '',
+      '<!-- @claude-skip-start -->',
+      '## Skipped',
+      '<!-- @claude-skip-end -->',
+      '',
+      '## Kept',
+    ].join('\n')
+
+    const fs = createTestFs({}, {}, '/project')
+    await fs.mkdir('/project', { recursive: true })
+    await fs.writeFile('/project/AGENTS.md', content)
+
+    await stripMarkersFromTarget(fs, '/project/AGENTS.md', { prefix: 'claude' })
+
+    const result = await fs.readFile('/project/AGENTS.md')
+    expect(result).not.toContain('Skipped')
+    expect(result).toContain('## Kept')
+    expect(result).not.toContain('<!-- @')
   })
 })

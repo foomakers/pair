@@ -48,4 +48,26 @@ describe('registry resolver', () => {
     expect(result.source).toBe('/dataset/reg')
     expect(result.target).toBe(`${cwd}/dest`)
   })
+
+  it('extractRegistries preserves transform property on targets', () => {
+    const config = {
+      asset_registries: {
+        agents: {
+          source: 'AGENTS.md',
+          behavior: 'mirror',
+          description: 'Agents',
+          targets: [
+            { path: 'AGENTS.md', mode: 'canonical' },
+            { path: 'CLAUDE.md', mode: 'copy', transform: { prefix: 'claude' } },
+          ],
+        },
+      },
+    }
+    const registries = extractRegistries(config)
+    const agentsReg = registries['agents']
+    expect(agentsReg).toBeDefined()
+    const claudeTarget = agentsReg!.targets.find(t => t.path === 'CLAUDE.md')
+    expect(claudeTarget).toBeDefined()
+    expect(claudeTarget!.transform).toEqual({ prefix: 'claude' })
+  })
 })

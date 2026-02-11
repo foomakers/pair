@@ -17,7 +17,13 @@ export { extractZip } from './file-system/archive-operations'
 export { detectSourceType, SourceType } from './path-resolution/source-detector'
 
 export { SyncOptions, defaultSyncOptions } from './ops/SyncOptions'
-export { Behavior, validateTargets, type TargetMode, type TargetConfig } from './ops/behavior'
+export {
+  Behavior,
+  validateTargets,
+  type TargetMode,
+  type TargetConfig,
+  type TransformConfig,
+} from './ops/behavior'
 export { copyPathOps, copyDirectoryWithTransforms } from './ops/copyPathOps'
 export { flattenPath, prefixPath, transformPath, detectCollisions } from './ops/naming-transforms'
 export {
@@ -26,6 +32,12 @@ export {
   type PathMappingEntry,
 } from './ops/link-rewriter'
 export { movePathOps } from './ops/movePathOps'
+export {
+  stripAllMarkers,
+  applyTransformCommands,
+  validateMarkers,
+  type MarkerError,
+} from './ops/content-transform'
 export { validatePathOps } from './ops/validatePathOps'
 export {
   processFilesWithLinkReplacements,
