@@ -96,6 +96,41 @@ describe('dispatchCommand() - real handlers integration', () => {
     expect(await fs.exists(outputPath)).toBe(true)
   })
 
+  test('passes baseTarget through to install handler', async () => {
+    const externalRoot = '/external-root'
+    await fs.mkdir(externalRoot, { recursive: true })
+
+    const config: InstallCommandConfig = {
+      command: 'install',
+      kb: true,
+      resolution: 'default',
+      offline: false,
+      target: '.', // relative dot — would resolve to CWD without baseTarget
+    }
+
+    await dispatchCommand(config, fs, { baseTarget: externalRoot })
+    // Output should land in externalRoot, not in CWD (/project)
+    expect(await fs.exists(`${externalRoot}/dest/file.txt`)).toBe(true)
+    expect(await fs.exists(`${cwd}/dest/file.txt`)).toBe(false)
+  })
+
+  test('passes baseTarget through to update handler', async () => {
+    const externalRoot = '/external-root'
+    await fs.mkdir(`${externalRoot}/dest`, { recursive: true })
+    await fs.writeFile(`${externalRoot}/dest/file.txt`, 'old')
+
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      kb: true,
+      resolution: 'default',
+      offline: false,
+      target: '.', // relative dot
+    }
+
+    await dispatchCommand(config, fs, { baseTarget: externalRoot })
+    expect(await fs.readFile(`${externalRoot}/dest/file.txt`)).toBe('content')
+  })
+
   test('dispatches validate-config command', async () => {
     const config: ValidateConfigCommandConfig = {
       command: 'validate-config',

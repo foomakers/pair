@@ -309,5 +309,109 @@ describe('install — KB distribution pipeline bug regression', () => {
       expect(await fs.exists(`${monorepoRoot}/.pair/knowledge/README.md`)).toBe(true)
       expect(await fs.exists(`${packageDir}/.pair/knowledge/README.md`)).toBe(false)
     })
+
+    test('baseTarget overrides config.target "." (pnpm --filter + dot target)', async () => {
+      const packageDir = '/project/apps/pair-cli'
+      const monorepoRoot = '/project'
+      const datasetSrc = `${packageDir}/node_modules/@pair/knowledge-hub/dataset`
+
+      const registryConfig = {
+        asset_registries: {
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            description: 'Knowledge base',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+          },
+        },
+      }
+
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${packageDir}/config.json`]: JSON.stringify(registryConfig),
+          [`${packageDir}/package.json`]: JSON.stringify({
+            name: '@pair/pair-cli',
+            version: '0.1.0',
+          }),
+          [`${packageDir}/node_modules/@pair/knowledge-hub/package.json`]: JSON.stringify({
+            name: '@pair/knowledge-hub',
+          }),
+          [`${datasetSrc}/.pair/knowledge/README.md`]: '# Knowledge Base',
+        },
+        packageDir,
+        packageDir,
+      )
+
+      const config: InstallCommandConfig = {
+        command: 'install',
+        resolution: 'default',
+        kb: true,
+        offline: false,
+        target: '.', // User passed "." on CLI
+      }
+
+      // baseTarget from INIT_CWD must override config.target "."
+      await handleInstallCommand(config, fs, { baseTarget: monorepoRoot })
+
+      expect(await fs.exists(`${monorepoRoot}/.pair/knowledge/README.md`)).toBe(true)
+      expect(await fs.exists(`${packageDir}/.pair/knowledge/README.md`)).toBe(false)
+    })
+  })
+})
+
+describe('install — skill ref rewrite with agents-before-skills order', () => {
+  test('AGENTS.md refs are rewritten even when agents precedes skills in config', async () => {
+    const moduleDir = '/project'
+    const datasetSrc = `${moduleDir}/packages/knowledge-hub/dataset`
+
+    const config_json = {
+      asset_registries: {
+        agents: {
+          source: 'AGENTS.md',
+          behavior: 'mirror',
+          description: 'AI agents guidance',
+          targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+        },
+        skills: {
+          source: '.skills',
+          behavior: 'mirror',
+          flatten: true,
+          prefix: 'pair',
+          description: 'Agent skills',
+          targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+        },
+      },
+    }
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${moduleDir}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${moduleDir}/config.json`]: JSON.stringify(config_json),
+        [`${datasetSrc}/.skills/process/implement/SKILL.md`]: '# /implement — Task Impl',
+        [`${datasetSrc}/.skills/capability/verify-quality/SKILL.md`]:
+          '# /verify-quality — Quality Gate',
+        [`${datasetSrc}/AGENTS.md`]:
+          '# AGENTS\n\nRun /implement to start.\nUse /verify-quality for checks.\n',
+      },
+      moduleDir,
+      moduleDir,
+    )
+
+    const installConfig: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleInstallCommand(installConfig, fs)
+
+    const agentsContent = await fs.readFile(`${moduleDir}/AGENTS.md`)
+    expect(agentsContent).toContain('/pair-process-implement')
+    expect(agentsContent).toContain('/pair-capability-verify-quality')
+    expect(agentsContent).not.toMatch(/(?<![a-z-])\/implement(?![a-z-])/)
   })
 })

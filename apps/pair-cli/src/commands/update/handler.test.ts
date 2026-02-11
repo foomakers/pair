@@ -471,5 +471,123 @@ describe('KB distribution pipeline — bug regression', () => {
       // Must NOT be at the package dir
       expect(await fs.exists(`${packageDir}/.pair/knowledge/README.md`)).toBe(false)
     })
+
+    test('config.target "." resolves to CWD, not to relative process.cwd()', async () => {
+      // Simulates: pnpm --filter pair-cli dev update .
+      // pnpm changes CWD to apps/pair-cli. User passes "." meaning "here" = monorepo root.
+      // But "." resolves relative to process.cwd() which pnpm changed.
+      // Fix: baseTarget from options must take precedence over config.target.
+      const packageDir = '/project/apps/pair-cli'
+      const monorepoRoot = '/project'
+      const datasetSrc = `${packageDir}/node_modules/@pair/knowledge-hub/dataset`
+
+      const registryConfig = {
+        asset_registries: {
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            description: 'Knowledge base',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+          },
+        },
+      }
+
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${packageDir}/config.json`]: JSON.stringify(registryConfig),
+          [`${packageDir}/package.json`]: JSON.stringify({
+            name: '@pair/pair-cli',
+            version: '0.1.0',
+          }),
+          [`${packageDir}/node_modules/@pair/knowledge-hub/package.json`]: JSON.stringify({
+            name: '@pair/knowledge-hub',
+          }),
+          [`${datasetSrc}/.pair/knowledge/README.md`]: '# Knowledge Base',
+        },
+        packageDir,
+        packageDir,
+      )
+
+      const config: UpdateCommandConfig = {
+        command: 'update',
+        resolution: 'default',
+        kb: true,
+        offline: false,
+        target: '.', // User passed "." on CLI
+      }
+
+      // baseTarget from INIT_CWD should override config.target "."
+      await handleUpdateCommand(config, fs, { httpClient, baseTarget: monorepoRoot })
+
+      // Output must be at monorepo root (INIT_CWD), not resolved from "." via process.cwd()
+      expect(await fs.exists(`${monorepoRoot}/.pair/knowledge/README.md`)).toBe(true)
+      expect(await fs.exists(`${packageDir}/.pair/knowledge/README.md`)).toBe(false)
+    })
+  })
+})
+
+describe('Bug 4: skill ref rewrite with agents-before-skills config order', () => {
+  test('AGENTS.md refs are rewritten even when agents registry precedes skills in config', async () => {
+    // Real config order: github, knowledge, adoption, agents, skills
+    // agents is processed BEFORE skills in the loop, but the rewrite must
+    // happen AFTER all registries (including skills) are processed.
+    const moduleDir = '/project'
+    const datasetSrc = `${moduleDir}/packages/knowledge-hub/dataset`
+
+    // Deliberately put agents BEFORE skills (matches real config.json)
+    const config_json = {
+      asset_registries: {
+        agents: {
+          source: 'AGENTS.md',
+          behavior: 'mirror',
+          description: 'AI agents guidance',
+          targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+        },
+        skills: {
+          source: '.skills',
+          behavior: 'mirror',
+          flatten: true,
+          prefix: 'pair',
+          description: 'Agent skills',
+          targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+        },
+      },
+    }
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${moduleDir}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${moduleDir}/config.json`]: JSON.stringify(config_json),
+        [`${datasetSrc}/.skills/process/implement/SKILL.md`]: '# /implement — Task Impl',
+        [`${datasetSrc}/.skills/capability/verify-quality/SKILL.md`]:
+          '# /verify-quality — Quality Gate',
+        [`${datasetSrc}/AGENTS.md`]:
+          '# AGENTS\n\nRun /implement to start.\nUse /verify-quality for checks.\n',
+        // Pre-existing AGENTS.md at target (update scenario)
+        [`${moduleDir}/AGENTS.md`]: '# old agents',
+      },
+      moduleDir,
+      moduleDir,
+    )
+
+    const httpClient = new MockHttpClientService()
+    const updateConfig: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleUpdateCommand(updateConfig, fs, { httpClient })
+
+    const agentsContent = await fs.readFile(`${moduleDir}/AGENTS.md`)
+    // Skill refs MUST be transformed regardless of registry processing order
+    expect(agentsContent).toContain('/pair-process-implement')
+    expect(agentsContent).toContain('/pair-capability-verify-quality')
+    expect(agentsContent).not.toMatch(/(?<![a-z-])\/implement(?![a-z-])/)
+    expect(agentsContent).not.toMatch(/(?<![a-z-])\/verify-quality(?![a-z-])/)
   })
 })

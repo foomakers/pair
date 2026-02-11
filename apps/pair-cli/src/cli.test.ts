@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, afterEach } from 'vitest'
 import { Command } from 'commander'
+import { InMemoryFileSystemService, NodeHttpClientService } from '@pair/content-ops'
 
 describe('CLI command registration', () => {
   it('install command is registered', () => {
@@ -47,7 +48,7 @@ describe('CLI command registration', () => {
     const commands = program.commands
     expect(commands.some(cmd => cmd.name() === 'update-link')).toBe(true)
 
-    const updateLinkCmd = commands.find(cmd => cmd.name() === 'update-link')
+    const updateLinkCmd = program.commands.find(cmd => cmd.name() === 'update-link')
     expect(updateLinkCmd?.description()).toContain('Validate and update links')
   })
 
@@ -152,5 +153,66 @@ describe('CLI command execution - package command availability', () => {
         opt.flags.includes('--config'),
       ),
     ).toBe(true)
+  })
+})
+
+describe('CLI INIT_CWD wiring', () => {
+  const originalInitCwd = process.env['INIT_CWD']
+
+  afterEach(() => {
+    if (originalInitCwd !== undefined) {
+      process.env['INIT_CWD'] = originalInitCwd
+    } else {
+      delete process.env['INIT_CWD']
+    }
+  })
+
+  function createMonorepoFs(monorepoRoot: string, packageDir: string) {
+    const seed: Record<string, string> = {
+      [`${monorepoRoot}/config.json`]: JSON.stringify({
+        asset_registries: {
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+            description: 'KB',
+          },
+        },
+      }),
+      [`${monorepoRoot}/packages/knowledge-hub/package.json`]: JSON.stringify({
+        name: '@pair/knowledge-hub',
+      }),
+      [`${monorepoRoot}/packages/knowledge-hub/dataset/.pair/knowledge/README.md`]: '# KB',
+      [`${monorepoRoot}/package.json`]: JSON.stringify({ name: 'monorepo' }),
+    }
+    return new InMemoryFileSystemService(seed, monorepoRoot, packageDir)
+  }
+
+  it('INIT_CWD directs output to monorepo root, not to pnpm --filter CWD', async () => {
+    const { runCli } = await import('./cli.js')
+    const monorepoRoot = '/test-monorepo'
+    const packageDir = '/test-monorepo/apps/cli'
+    const fs = createMonorepoFs(monorepoRoot, packageDir)
+
+    process.env['INIT_CWD'] = monorepoRoot
+
+    await runCli(['node', 'pair', 'update', '.'], { fs, httpClient: new NodeHttpClientService() })
+
+    expect(fs.existsSync(`${monorepoRoot}/.pair/knowledge/README.md`)).toBe(true)
+    expect(fs.existsSync(`${packageDir}/.pair/knowledge/README.md`)).toBe(false)
+  })
+
+  it('without INIT_CWD, output goes to InMemoryFs CWD (pnpm --filter dir)', async () => {
+    const { runCli } = await import('./cli.js')
+    const monorepoRoot = '/test-monorepo'
+    const packageDir = '/test-monorepo/apps/cli'
+    const fs = createMonorepoFs(monorepoRoot, packageDir)
+
+    delete process.env['INIT_CWD']
+
+    await runCli(['node', 'pair', 'update', '.'], { fs, httpClient: new NodeHttpClientService() })
+
+    // "." resolves via fs.cwd() = packageDir
+    expect(fs.existsSync(`${packageDir}/.pair/knowledge/README.md`)).toBe(true)
   })
 })
