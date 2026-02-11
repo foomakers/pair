@@ -7,7 +7,7 @@ import {
   distributeToSecondaryTargets,
   stripMarkersFromTarget,
 } from './operations'
-import { defaultSyncOptions } from '@pair/content-ops'
+import { defaultSyncOptions, InMemoryFileSystemService } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
 
 describe('registry operations', () => {
@@ -32,6 +32,33 @@ describe('registry operations', () => {
 
     expect(await fs.exists('/dataset/dst/file1.md')).toBe(true)
     expect(await fs.exists('/dataset/dst/file2.md')).toBe(true)
+  })
+
+  it('returns skillNameMap when flatten+prefix produces skill renames', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        '/dataset/.skills/capability/next/SKILL.md':
+          '# /next — Navigator\n\nCompose /verify-quality for checks.',
+        '/dataset/.skills/capability/verify-quality/SKILL.md':
+          '# /verify-quality — Quality Gate Checker',
+      },
+      '/test',
+      '/test',
+    )
+
+    const result = await doCopyAndUpdateLinks(fs, {
+      source: '/dataset/.skills',
+      target: '/test/.claude/skills',
+      datasetRoot: '/dataset',
+      options: { ...defaultSyncOptions(), flatten: true, prefix: 'pair', targets: [] },
+    })
+
+    // doCopyAndUpdateLinks must propagate the skillNameMap from copyDirectoryWithTransforms
+    expect(result).toHaveProperty('skillNameMap')
+    const map = result['skillNameMap'] as Map<string, string>
+    expect(map).toBeInstanceOf(Map)
+    expect(map.get('next')).toBe('pair-capability-next')
+    expect(map.get('verify-quality')).toBe('pair-capability-verify-quality')
   })
 
   it('calculatePaths resolves absolute and relative paths', () => {

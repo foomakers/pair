@@ -205,3 +205,271 @@ describe('handleUpdateCommand - integration with in-memory services', () => {
     delete process.env['PAIR_DIAG']
   })
 })
+
+/**
+ * Bug regression tests: KB distribution pipeline
+ *
+ * These tests cover three interconnected bugs discovered during skills distribution:
+ *
+ * Bug 1 — skillNameMap not propagated across registries:
+ *   Skills registry produces a skillNameMap (e.g., next → pair-capability-next)
+ *   via flatten+prefix. AGENTS.md in the agents registry references skill names
+ *   (e.g., /next) that must be rewritten to their prefixed form (/pair-capability-next).
+ *   Currently, doCopyAndUpdateLinks discards the skillNameMap and registries
+ *   are processed independently with no cross-registry state.
+ *
+ * Bug 2 — link re-root with deep datasetRoot (node_modules):
+ *   When datasetRoot resolves to a path inside node_modules (installed package),
+ *   skill links like ../../.pair/adoption/... should resolve to .pair/ at the
+ *   target project root, not to the node_modules source path.
+ *
+ * Bug 3 — target directory uses CWD which pnpm overrides:
+ *   When running via pnpm --filter, CWD is changed to the package dir.
+ *   The handler should support INIT_CWD (set by npm/pnpm to the original CWD)
+ *   to resolve the target directory correctly in monorepo scenarios.
+ */
+describe('KB distribution pipeline — bug regression', () => {
+  let httpClient: MockHttpClientService
+
+  beforeEach(() => {
+    httpClient = new MockHttpClientService()
+  })
+
+  describe('Bug 1: skillNameMap cross-registry propagation', () => {
+    test('AGENTS.md skill references are transformed using skillNameMap from skills registry', async () => {
+      const moduleDir = '/project'
+      const datasetSrc = `${moduleDir}/packages/knowledge-hub/dataset`
+
+      const skillsAgentsConfig = {
+        asset_registries: {
+          skills: {
+            source: '.skills',
+            behavior: 'mirror',
+            flatten: true,
+            prefix: 'pair',
+            description: 'Agent skills',
+            targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+          },
+          agents: {
+            source: 'AGENTS.md',
+            behavior: 'mirror',
+            description: 'AI agents guidance',
+            targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+          },
+        },
+      }
+
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${moduleDir}/package.json`]: JSON.stringify({
+            name: 'test-project',
+            version: '0.1.0',
+          }),
+          [`${moduleDir}/packages/knowledge-hub/package.json`]: JSON.stringify({
+            name: '@pair/knowledge-hub',
+          }),
+          [`${moduleDir}/config.json`]: JSON.stringify(skillsAgentsConfig),
+          // Skills source — two skills under different categories
+          [`${datasetSrc}/.skills/process/next/SKILL.md`]:
+            '# /next — Navigator\n\nUse /verify-quality to check gates.',
+          [`${datasetSrc}/.skills/capability/verify-quality/SKILL.md`]:
+            '# /verify-quality — Quality Gate',
+          // AGENTS.md source referencing skills by their original short names
+          [`${datasetSrc}/AGENTS.md`]:
+            '# AGENTS\n\nRun /next to get started.\nUse /verify-quality for checks.\n',
+        },
+        moduleDir,
+        moduleDir,
+      )
+
+      const config: UpdateCommandConfig = {
+        command: 'update',
+        resolution: 'default',
+        kb: true,
+        offline: false,
+      }
+
+      await handleUpdateCommand(config, fs, { httpClient })
+
+      // Verify skills were distributed with prefix
+      expect(await fs.exists(`${moduleDir}/.claude/skills/pair-process-next/SKILL.md`)).toBe(true)
+      expect(
+        await fs.exists(`${moduleDir}/.claude/skills/pair-capability-verify-quality/SKILL.md`),
+      ).toBe(true)
+
+      // AGENTS.md must have transformed skill references
+      const agentsContent = await fs.readFile(`${moduleDir}/AGENTS.md`)
+      expect(agentsContent).toContain('/pair-process-next')
+      expect(agentsContent).toContain('/pair-capability-verify-quality')
+      // Original short names must NOT remain (except as substrings of the prefixed names)
+      expect(agentsContent).not.toMatch(/(?<![a-z-])\/next(?![a-z-])/)
+      expect(agentsContent).not.toMatch(/(?<![a-z-])\/verify-quality(?![a-z-])/)
+    })
+  })
+
+  describe('Bug 2: link re-root with deep datasetRoot', () => {
+    test('skill links point to installed .pair/ at target root, not to node_modules source', async () => {
+      // Simulates: datasetRoot is in node_modules (installed KB package)
+      // Skill link ../../.pair/adoption/... should resolve to .pair/ relative to target,
+      // not to the deep node_modules path
+      const moduleDir = '/project/apps/pair-cli'
+      const datasetSrc = `${moduleDir}/node_modules/@pair/knowledge-hub/dataset`
+
+      const skillsConfig = {
+        asset_registries: {
+          skills: {
+            source: '.skills',
+            behavior: 'mirror',
+            flatten: true,
+            prefix: 'pair',
+            description: 'Agent skills',
+            targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+          },
+        },
+      }
+
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${moduleDir}/package.json`]: JSON.stringify({
+            name: '@pair/pair-cli',
+            version: '0.1.0',
+          }),
+          [`${moduleDir}/node_modules/@pair/knowledge-hub/package.json`]: JSON.stringify({
+            name: '@pair/knowledge-hub',
+          }),
+          [`${moduleDir}/config.json`]: JSON.stringify(skillsConfig),
+          // Skill source with relative link to .pair/ adoption file
+          // From .skills/process/implement/SKILL.md, ../../ goes to .skills/, then ../ to dataset root
+          [`${datasetSrc}/.skills/process/implement/SKILL.md`]:
+            '# /implement\n\nRead [way-of-working](../../../.pair/adoption/tech/way-of-working.md) for config.',
+          // The .pair/ content (exists in dataset, would be distributed separately)
+          [`${datasetSrc}/.pair/adoption/tech/way-of-working.md`]: '# Way of Working',
+        },
+        moduleDir,
+        moduleDir,
+      )
+
+      const config: UpdateCommandConfig = {
+        command: 'update',
+        resolution: 'default',
+        kb: true,
+        offline: false,
+      }
+
+      await handleUpdateCommand(config, fs, { httpClient })
+
+      const skillContent = await fs.readFile(
+        `${moduleDir}/.claude/skills/pair-process-implement/SKILL.md`,
+      )
+      // Link must NOT contain node_modules path
+      expect(skillContent).not.toContain('node_modules')
+      // Link must point to .pair/ relative to the target project root
+      // From .claude/skills/pair-process-implement/SKILL.md, 3 levels up reaches moduleDir
+      expect(skillContent).toContain('.pair/adoption/tech/way-of-working.md')
+    })
+  })
+
+  describe('Bug 3: target directory resolution in monorepo', () => {
+    test('output targets CWD, not rootModuleDir, when they differ', async () => {
+      // Simulates: rootModuleDir is the pair-cli package dir, but CWD is the monorepo root
+      // (user runs from monorepo root, pair-cli lives in apps/pair-cli)
+      const moduleDir = '/project/apps/pair-cli'
+      const userCwd = '/project'
+      const datasetSrc = `${moduleDir}/node_modules/@pair/knowledge-hub/dataset`
+
+      const registryConfig = {
+        asset_registries: {
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            description: 'Knowledge base',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+          },
+        },
+      }
+
+      const fs = new InMemoryFileSystemService(
+        {
+          // Config at moduleDir (pair-cli's config.json, loaded by loadBaseConfig from rootModuleDir)
+          [`${moduleDir}/config.json`]: JSON.stringify(registryConfig),
+          [`${moduleDir}/package.json`]: JSON.stringify({
+            name: '@pair/pair-cli',
+            version: '0.1.0',
+          }),
+          [`${moduleDir}/node_modules/@pair/knowledge-hub/package.json`]: JSON.stringify({
+            name: '@pair/knowledge-hub',
+          }),
+          // Source content
+          [`${datasetSrc}/.pair/knowledge/README.md`]: '# Knowledge Base',
+          [`${datasetSrc}/.pair/knowledge/guidelines/testing.md`]: '# Testing Guidelines',
+        },
+        moduleDir,
+        userCwd,
+      )
+
+      const config: UpdateCommandConfig = {
+        command: 'update',
+        resolution: 'default',
+        kb: true,
+        offline: false,
+      }
+
+      await handleUpdateCommand(config, fs, { httpClient })
+
+      // Output must be at CWD (user's working directory), not at rootModuleDir
+      expect(await fs.exists(`${userCwd}/.pair/knowledge/README.md`)).toBe(true)
+      expect(await fs.exists(`${userCwd}/.pair/knowledge/guidelines/testing.md`)).toBe(true)
+    })
+
+    test('baseTarget option overrides CWD for target resolution (pnpm --filter workaround)', async () => {
+      // Simulates pnpm --filter behavior: both CWD and rootModuleDir are the package dir.
+      // The caller (CLI entry point) should read INIT_CWD and pass it as baseTarget.
+      const packageDir = '/project/apps/pair-cli'
+      const monorepoRoot = '/project'
+      const datasetSrc = `${packageDir}/node_modules/@pair/knowledge-hub/dataset`
+
+      const registryConfig = {
+        asset_registries: {
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            description: 'Knowledge base',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+          },
+        },
+      }
+
+      // Both rootModuleDir and CWD are the package dir (pnpm behavior)
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${packageDir}/config.json`]: JSON.stringify(registryConfig),
+          [`${packageDir}/package.json`]: JSON.stringify({
+            name: '@pair/pair-cli',
+            version: '0.1.0',
+          }),
+          [`${packageDir}/node_modules/@pair/knowledge-hub/package.json`]: JSON.stringify({
+            name: '@pair/knowledge-hub',
+          }),
+          [`${datasetSrc}/.pair/knowledge/README.md`]: '# Knowledge Base',
+        },
+        packageDir,
+        packageDir,
+      )
+
+      const config: UpdateCommandConfig = {
+        command: 'update',
+        resolution: 'default',
+        kb: true,
+        offline: false,
+      }
+
+      // Pass baseTarget explicitly (CLI entry point reads INIT_CWD and passes it here)
+      await handleUpdateCommand(config, fs, { httpClient, baseTarget: monorepoRoot })
+
+      // Output must be at baseTarget (monorepo root), not at the package dir
+      expect(await fs.exists(`${monorepoRoot}/.pair/knowledge/README.md`)).toBe(true)
+      // Must NOT be at the package dir
+      expect(await fs.exists(`${packageDir}/.pair/knowledge/README.md`)).toBe(false)
+    })
+  })
+})

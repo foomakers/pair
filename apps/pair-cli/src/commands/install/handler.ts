@@ -25,6 +25,7 @@ import {
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
+import { type SkillNameMap, rewriteSkillReferences, walkMarkdownFiles } from '@pair/content-ops'
 import { installKBFromLocalZip } from '#kb-manager/kb-installer'
 
 /**
@@ -100,6 +101,31 @@ async function validateInstallContext(
   }
 }
 
+async function postCopyOps(ctx: {
+  fs: FileSystemService
+  registryConfig: RegistryConfig
+  effectiveTarget: string
+  datasetPath: string
+  baseTarget: string
+}): Promise<void> {
+  const { fs, registryConfig, effectiveTarget, datasetPath, baseTarget } = ctx
+  const canonicalTarget = registryConfig.targets.find(t => t.mode === 'canonical')
+  if (await fs.exists(effectiveTarget)) {
+    const stat = await fs.stat(effectiveTarget)
+    if (!stat.isDirectory()) {
+      await stripMarkersFromTarget(fs, effectiveTarget, canonicalTarget?.transform)
+    }
+  }
+  if (registryConfig.targets.length > 1) {
+    await distributeToSecondaryTargets({
+      fileService: fs,
+      sourcePath: datasetPath,
+      targets: registryConfig.targets,
+      baseTarget,
+    })
+  }
+}
+
 async function installRegistry(ctx: {
   fs: FileSystemService
   registryName: string
@@ -107,7 +133,7 @@ async function installRegistry(ctx: {
   datasetRoot: string
   baseTarget: string
   pushLog: (level: LogEntry['level'], message: string) => void
-}): Promise<void> {
+}): Promise<SkillNameMap | undefined> {
   const { fs, registryName, registryConfig, datasetRoot, baseTarget, pushLog } = ctx
   const resolved = resolveRegistryPaths({
     name: registryName,
@@ -120,32 +146,23 @@ async function installRegistry(ctx: {
   const effectiveTarget = resolved.target
   await ensureDir(fs, dirname(effectiveTarget))
   const copyOptions = buildCopyOptions(registryConfig)
+
+  // For flatten+prefix registries (skills), use baseTarget as the effective
+  // datasetRoot so that link re-rooting correctly maps source paths to target paths.
+  const effectiveDatasetRoot =
+    registryConfig.flatten || registryConfig.prefix ? baseTarget : datasetRoot
+
   pushLog('info', `Installing '${registryName}' from '${datasetPath}' to '${effectiveTarget}'`)
-  await doCopyAndUpdateLinks(fs, {
+  const result = await doCopyAndUpdateLinks(fs, {
     source: datasetPath,
     target: effectiveTarget,
-    datasetRoot,
+    datasetRoot: effectiveDatasetRoot,
     options: copyOptions,
   })
 
-  const canonicalTarget = registryConfig.targets.find(t => t.mode === 'canonical')
-  if (await fs.exists(effectiveTarget)) {
-    const stat = await fs.stat(effectiveTarget)
-    if (!stat.isDirectory()) {
-      await stripMarkersFromTarget(fs, effectiveTarget, canonicalTarget?.transform)
-    }
-  }
-
-  if (registryConfig.targets.length > 1) {
-    await distributeToSecondaryTargets({
-      fileService: fs,
-      sourcePath: datasetPath,
-      targets: registryConfig.targets,
-      baseTarget,
-    })
-  }
-
+  await postCopyOps({ fs, registryConfig, effectiveTarget, datasetPath, baseTarget })
   pushLog('info', `Successfully installed registry '${registryName}'`)
+  return result['skillNameMap'] as SkillNameMap | undefined
 }
 
 async function executeInstall(context: {
@@ -157,13 +174,71 @@ async function executeInstall(context: {
   pushLog: (level: LogEntry['level'], message: string) => void
 }): Promise<void> {
   const { fs, datasetRoot, registries, baseTarget, options, pushLog } = context
+  const accumulatedSkillNameMap: SkillNameMap = new Map()
 
   await forEachRegistry(registries, async (registryName, registryConfig) => {
-    await installRegistry({ fs, registryName, registryConfig, datasetRoot, baseTarget, pushLog })
+    const skillNameMap = await installRegistry({
+      fs,
+      registryName,
+      registryConfig,
+      datasetRoot,
+      baseTarget,
+      pushLog,
+    })
+    if (skillNameMap) {
+      for (const [k, v] of skillNameMap) accumulatedSkillNameMap.set(k, v)
+    }
   })
+
+  if (accumulatedSkillNameMap.size > 0) {
+    await applySkillRefsToNonSkillRegistries(
+      { fs, baseTarget, pushLog },
+      registries,
+      accumulatedSkillNameMap,
+    )
+  }
 
   if (options?.linkStyle) {
     await applyLinkTransformation(fs, { linkStyle: options.linkStyle }, pushLog, 'install')
+  }
+}
+
+/**
+ * Applies skill reference rewrites to non-skills registries (e.g., AGENTS.md)
+ * using the accumulated skillNameMap from skills registry processing.
+ */
+async function applySkillRefsToNonSkillRegistries(
+  context: {
+    fs: FileSystemService
+    baseTarget: string
+    pushLog: (level: LogEntry['level'], message: string) => void
+  },
+  registries: Record<string, RegistryConfig>,
+  skillNameMap: SkillNameMap,
+): Promise<void> {
+  const { fs, baseTarget, pushLog } = context
+
+  for (const [name, config] of Object.entries(registries)) {
+    if (config.flatten || config.prefix) continue
+
+    const target = resolveTarget(name, config, fs, baseTarget)
+    if (!(await fs.exists(target))) continue
+
+    const stat = await fs.stat(target)
+    const files: string[] = stat.isDirectory()
+      ? await walkMarkdownFiles(target, fs)
+      : target.endsWith('.md')
+        ? [target]
+        : []
+
+    for (const filePath of files) {
+      const content = await fs.readFile(filePath)
+      const rewritten = rewriteSkillReferences(content, skillNameMap)
+      if (rewritten !== content) {
+        await fs.writeFile(filePath, rewritten)
+        pushLog('info', `Skill reference rewriter: updated ${filePath}`)
+      }
+    }
   }
 }
 
