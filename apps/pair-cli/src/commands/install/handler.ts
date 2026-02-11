@@ -20,6 +20,7 @@ import {
   doCopyAndUpdateLinks,
   buildCopyOptions,
   distributeToSecondaryTargets,
+  stripMarkersFromTarget,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
@@ -99,6 +100,54 @@ async function validateInstallContext(
   }
 }
 
+async function installRegistry(ctx: {
+  fs: FileSystemService
+  registryName: string
+  registryConfig: RegistryConfig
+  datasetRoot: string
+  baseTarget: string
+  pushLog: (level: LogEntry['level'], message: string) => void
+}): Promise<void> {
+  const { fs, registryName, registryConfig, datasetRoot, baseTarget, pushLog } = ctx
+  const resolved = resolveRegistryPaths({
+    name: registryName,
+    config: registryConfig,
+    datasetRoot,
+    fs,
+    baseTarget,
+  })
+  const datasetPath = resolved.source
+  const effectiveTarget = resolved.target
+  await ensureDir(fs, dirname(effectiveTarget))
+  const copyOptions = buildCopyOptions(registryConfig)
+  pushLog('info', `Installing '${registryName}' from '${datasetPath}' to '${effectiveTarget}'`)
+  await doCopyAndUpdateLinks(fs, {
+    source: datasetPath,
+    target: effectiveTarget,
+    datasetRoot,
+    options: copyOptions,
+  })
+
+  const canonicalTarget = registryConfig.targets.find(t => t.mode === 'canonical')
+  if (await fs.exists(effectiveTarget)) {
+    const stat = await fs.stat(effectiveTarget)
+    if (!stat.isDirectory()) {
+      await stripMarkersFromTarget(fs, effectiveTarget, canonicalTarget?.transform)
+    }
+  }
+
+  if (registryConfig.targets.length > 1) {
+    await distributeToSecondaryTargets({
+      fileService: fs,
+      sourcePath: datasetPath,
+      targets: registryConfig.targets,
+      baseTarget,
+    })
+  }
+
+  pushLog('info', `Successfully installed registry '${registryName}'`)
+}
+
 async function executeInstall(context: {
   fs: FileSystemService
   datasetRoot: string
@@ -110,38 +159,7 @@ async function executeInstall(context: {
   const { fs, datasetRoot, registries, baseTarget, options, pushLog } = context
 
   await forEachRegistry(registries, async (registryName, registryConfig) => {
-    const resolved = resolveRegistryPaths({
-      name: registryName,
-      config: registryConfig,
-      datasetRoot,
-      fs,
-      baseTarget,
-    })
-    const datasetPath = resolved.source
-    const effectiveTarget = resolved.target
-    await ensureDir(fs, dirname(effectiveTarget))
-    const copyOptions = buildCopyOptions(registryConfig)
-    pushLog(
-      'info',
-      `Installing registry '${registryName}' from '${datasetPath}' to '${effectiveTarget}'`,
-    )
-    await doCopyAndUpdateLinks(fs, {
-      source: datasetPath,
-      target: effectiveTarget,
-      datasetRoot: datasetRoot,
-      options: copyOptions,
-    })
-
-    if (registryConfig.targets.length > 1) {
-      await distributeToSecondaryTargets({
-        fileService: fs,
-        canonicalPath: effectiveTarget,
-        targets: registryConfig.targets,
-        baseTarget,
-      })
-    }
-
-    pushLog('info', `Successfully installed registry '${registryName}'`)
+    await installRegistry({ fs, registryName, registryConfig, datasetRoot, baseTarget, pushLog })
   })
 
   if (options?.linkStyle) {

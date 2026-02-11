@@ -29,12 +29,12 @@ BOUNDED CONTEXT DEFINITION STATE:
 
 ### Strategic Context Architecture
 
-- **Analyze subdomain foundation FIRST** - base contexts on validated [subdomain definitions](.pair/adoption/product/subdomain)
-- **Apply DDD context mapping** - use [Bounded Context Patterns](.pair/knowledge/guidelines/architecture/design-patterns/bounded-contexts.md)
+- **Analyze subdomain foundation FIRST** - base contexts on validated [subdomain definitions](../../adoption/product/subdomain)
+- **Apply DDD context mapping** - use [Bounded Context Patterns](../guidelines/architecture/design-patterns/bounded-contexts.md)
 - **Create catalog before details** - validate complete context landscape first, then define individually
 - **Design for team autonomy** - align contexts with team boundaries and deployment independence
 - **Map integration patterns** - identify all context relationships and anti-corruption layer needs
-- **Follow adoption standards** - document per [Documentation Guidelines](.pair/knowledge/guidelines/README.md)
+- **Follow adoption standards** - document per [Documentation Guidelines](../guidelines/README.md)
 
 **CRITICAL**: Before starting bounded context definition:
 
@@ -51,49 +51,49 @@ BOUNDED CONTEXT DEFINITION STATE:
 
 1. **Analyze Prerequisites**:
 
-   - Subdomain definitions: [`.pair/adoption/product/subdomain/`](.pair/adoption/product/subdomain)
-   - Technical architecture: [`.pair/adoption/tech/architecture.md`](.pair/adoption/tech/architecture.md)
-   - Technology stack: [`.pair/adoption/tech/tech-stack.md`](.pair/adoption/tech/tech-stack.md)
-   - Team structure: [`.pair/adoption/tech/way-of-working.md`](.pair/adoption/tech/way-of-working.md)
+   - Subdomain definitions: [`.pair/adoption/product/subdomain/`](../../adoption/product/subdomain)
+   - Technical architecture: [`.pair/adoption/tech/architecture.md`](../../adoption/tech/architecture.md)
+   - Technology stack: [`.pair/adoption/tech/tech-stack.md`](../../adoption/tech/tech-stack.md)
+   - Team structure: [`.pair/adoption/tech/way-of-working.md`](../../adoption/tech/way-of-working.md)
 
 2. **Extract Context Indicators from Adoption Files**:
 
-   **From PRD** ([`.pair/adoption/product/PRD.md`](.pair/adoption/product/PRD.md)):
+   **From PRD** ([`.pair/adoption/product/PRD.md`](../../adoption/product/PRD.md)):
 
    - User personas and workflows that suggest UI context boundaries
    - Business capabilities that require different data consistency models
    - Success metrics that indicate separate measurement contexts
    - Integration requirements with external systems
 
-   **From Architecture** ([`.pair/adoption/tech/architecture.md`](.pair/adoption/tech/architecture.md)):
+   **From Architecture** ([`.pair/adoption/tech/architecture.md`](../../adoption/tech/architecture.md)):
 
    - Service decomposition patterns (microservices vs modular monolith)
    - Data consistency requirements (strong vs eventual consistency)
    - Performance requirements that drive service boundaries
    - Security boundaries and compliance requirements
 
-   **From Tech Stack** ([`.pair/adoption/tech/tech-stack.md`](.pair/adoption/tech/tech-stack.md)):
+   **From Tech Stack** ([`.pair/adoption/tech/tech-stack.md`](../../adoption/tech/tech-stack.md)):
 
    - Technology constraints that influence service separation
    - Database choices that impact data ownership boundaries
    - Communication protocols available for integration patterns
    - Deployment unit preferences (containers, serverless, etc.)
 
-   **From Infrastructure** ([`.pair/adoption/tech/infrastructure.md`](.pair/adoption/tech/infrastructure.md)):
+   **From Infrastructure** ([`.pair/adoption/tech/infrastructure.md`](../../adoption/tech/infrastructure.md)):
 
    - Deployment boundaries and scaling requirements
    - Network topology that influences service communication
    - Security zones that require context isolation
    - Operational monitoring and observability needs
 
-   **From UX/UI** ([`.pair/adoption/tech/ux-ui.md`](.pair/adoption/tech/ux-ui.md)):
+   **From UX/UI** ([`.pair/adoption/tech/ux-ui.md`](../../adoption/tech/ux-ui.md)):
 
    - User journey boundaries that suggest frontend context separation
    - Design system components that indicate shared UI contexts
    - Device-specific requirements that drive context boundaries
    - Accessibility requirements that influence service design
 
-   **From Way of Working** ([`.pair/adoption/tech/way-of-working.md`](.pair/adoption/tech/way-of-working.md)):
+   **From Way of Working** ([`.pair/adoption/tech/way-of-working.md`](../../adoption/tech/way-of-working.md)):
 
    - Team structure and ownership that drives context boundaries
    - Development velocity requirements for independent deployment
@@ -104,15 +104,15 @@ BOUNDED CONTEXT DEFINITION STATE:
 
    _"I need to verify context definition prerequisites using adoption files:_
 
-   - _**PRD Analysis** ([PRD.md](.pair/adoption/product/PRD.md)): [business capabilities and user workflows identified]_
-   - _**Architecture Decisions** ([architecture.md](.pair/adoption/tech/architecture.md)): [service patterns and consistency models defined]_
-   - _**Technology Stack** ([tech-stack.md](.pair/adoption/tech/tech-stack.md)): [integration capabilities and deployment constraints]_
-   - _**Infrastructure Setup** ([infrastructure.md](.pair/adoption/tech/infrastructure.md)): [deployment boundaries and scaling patterns]_
-   - _**Team Structure** ([way-of-working.md](.pair/adoption/tech/way-of-working.md)): [ownership model and communication patterns]_
+   - _**PRD Analysis** ([PRD.md](../../adoption/product/PRD.md)): [business capabilities and user workflows identified]_
+   - _**Architecture Decisions** ([architecture.md](../../adoption/tech/architecture.md)): [service patterns and consistency models defined]_
+   - _**Technology Stack** ([tech-stack.md](../../adoption/tech/tech-stack.md)): [integration capabilities and deployment constraints]_
+   - _**Infrastructure Setup** ([infrastructure.md](../../adoption/tech/infrastructure.md)): [deployment boundaries and scaling patterns]_
+   - _**Team Structure** ([way-of-working.md](../../adoption/tech/way-of-working.md)): [ownership model and communication patterns]_
 
    _Missing or incomplete: [specific adoption files]. Should we complete [missing decisions] first or proceed with available constraints?"_
 
-**Context Boundary Synthesis**: Combine insights from all adoption files using [Context Identification Criteria](.pair/knowledge/guidelines/architecture/design-patterns/bounded-contexts.md#context-identification)
+**Context Boundary Synthesis**: Combine insights from all adoption files using [Context Identification Criteria](../guidelines/architecture/design-patterns/bounded-contexts.md#context-identification)
 
 **Foundation Reference**: [Subdomain Definition](04-how-to-define-subdomains.md)
 
@@ -124,17 +124,17 @@ BOUNDED CONTEXT DEFINITION STATE:
 
    **Apply Adoption Constraints from Technical Decisions**:
 
-   - **Architecture patterns** from [architecture.md](.pair/adoption/tech/architecture.md): microservices vs modular monolith influences context granularity
-   - **Technology stack** from [tech-stack.md](.pair/adoption/tech/tech-stack.md): database choices determine data ownership boundaries
-   - **Infrastructure constraints** from [infrastructure.md](.pair/adoption/tech/infrastructure.md): deployment units and scaling requirements
-   - **Team boundaries** from [way-of-working.md](.pair/adoption/tech/way-of-working.md): ownership model drives context responsibility
+   - **Architecture patterns** from [architecture.md](../../adoption/tech/architecture.md): microservices vs modular monolith influences context granularity
+   - **Technology stack** from [tech-stack.md](../../adoption/tech/tech-stack.md): database choices determine data ownership boundaries
+   - **Infrastructure constraints** from [infrastructure.md](../../adoption/tech/infrastructure.md): deployment units and scaling requirements
+   - **Team boundaries** from [way-of-working.md](../../adoption/tech/way-of-working.md): ownership model drives context responsibility
 
    **Business Context Analysis**:
 
-   - **PRD capabilities** from [PRD.md](.pair/adoption/product/PRD.md): user journeys and business processes that require isolation
-   - **UX boundaries** from [ux-ui.md](.pair/adoption/tech/ux-ui.md): frontend context separation based on user interface patterns
+   - **PRD capabilities** from [PRD.md](../../adoption/product/PRD.md): user journeys and business processes that require isolation
+   - **UX boundaries** from [ux-ui.md](../../adoption/tech/ux-ui.md): frontend context separation based on user interface patterns
    - **Subdomain groupings** that align with technical and organizational constraints
-   - Use [Context Boundaries criteria](.pair/knowledge/guidelines/architecture/design-patterns/bounded-contexts.md#context-boundaries) to validate technical and business alignment
+   - Use [Context Boundaries criteria](../guidelines/architecture/design-patterns/bounded-contexts.md#context-boundaries) to validate technical and business alignment
 
 2. **Context Catalog Proposal**:
 
@@ -182,7 +182,7 @@ BOUNDED CONTEXT DEFINITION STATE:
    - _Merge/Split: [Boundary adjustments with reasons]_
    - _Reassign: [Subdomain moves with justification]_
 
-   _Updated integration patterns (using [Integration Patterns](.pair/knowledge/guidelines/architecture/design-patterns/bounded-contexts.md#integration-patterns)):_
+   _Updated integration patterns (using [Integration Patterns](../guidelines/architecture/design-patterns/bounded-contexts.md#integration-patterns)):_
 
    - _Partnership: [cooperative contexts] with coordinated evolution_
    - _Customer-Supplier: [upstream] → [downstream] with negotiated interfaces_
@@ -190,7 +190,7 @@ BOUNDED CONTEXT DEFINITION STATE:
 
    _Is this the final context catalog for detailed definition?"_
 
-**Context Mapping Reference**: [Bounded Context Patterns](.pair/knowledge/guidelines/architecture/design-patterns/bounded-contexts.md)
+**Context Mapping Reference**: [Bounded Context Patterns](../guidelines/architecture/design-patterns/bounded-contexts.md)
 
 ### Phase 3: Context Validation & Documentation
 
@@ -208,14 +208,14 @@ BOUNDED CONTEXT DEFINITION STATE:
    **Team Ownership**: [Responsible team and autonomy level]
    **Service Boundaries**: [Internal services and public interfaces]
    **Data Ownership**: [Key aggregates and consistency requirements]
-   **Integration Patterns**: [Dependencies and provided services using specific patterns from [Context Communication](.pair/knowledge/guidelines/architecture/design-patterns/bounded-contexts.md#context-communication)]
-   **Ubiquitous Language**: [Context-specific terminology and dialect per [Language Guidelines](.pair/knowledge/guidelines/architecture/design-patterns/bounded-contexts.md#ubiquitous-language)]
+   **Integration Patterns**: [Dependencies and provided services using specific patterns from [Context Communication](../guidelines/architecture/design-patterns/bounded-contexts.md#context-communication)]
+   **Ubiquitous Language**: [Context-specific terminology and dialect per [Language Guidelines](../guidelines/architecture/design-patterns/bounded-contexts.md#ubiquitous-language)]
    **Quality Attributes**: [Performance, scalability, reliability needs]
    ```
 
 2. **Integration Architecture Validation**:
 
-   _"Complete integration architecture for validation (following [Integration Patterns](.pair/knowledge/guidelines/architecture/design-patterns/bounded-contexts.md#integration-patterns)):_
+   _"Complete integration architecture for validation (following [Integration Patterns](../guidelines/architecture/design-patterns/bounded-contexts.md#integration-patterns)):_
 
    **Synchronous Integrations** ([X] total):
 
@@ -229,7 +229,7 @@ BOUNDED CONTEXT DEFINITION STATE:
 
    - _[Context] ↔ [External]: [ACL Protection strategy] - [risk mitigation]_
 
-   **Context Map** (per [Context Maps Guidelines](.pair/knowledge/guidelines/architecture/design-patterns/bounded-contexts.md#context-maps)):
+   **Context Map** (per [Context Maps Guidelines](../guidelines/architecture/design-patterns/bounded-contexts.md#context-maps)):
 
    - _Upstream/Downstream relationships documented_
    - _Integration patterns specified for each connection_
@@ -243,12 +243,12 @@ BOUNDED CONTEXT DEFINITION STATE:
 
 1. **Document Generation**:
 
-   _"Creating bounded context documentation in [`.pair/adoption/tech/boundedcontext/`](.pair/adoption/tech/boundedcontext):_
+   _"Creating bounded context documentation in [`.pair/adoption/tech/boundedcontext/`](../../adoption/tech/boundedcontext):_
 
    - _Individual files: [context-name].md for each context_
-   - _README.md: Context catalog with integration overview and [Context Map](.pair/knowledge/guidelines/architecture/design-patterns/bounded-contexts.md#context-maps)_
-   - _Format: Following [Documentation Standards](.pair/knowledge/guidelines/README.md)_
-   - _Integration patterns documented per [Implementation Strategies](.pair/knowledge/guidelines/architecture/design-patterns/bounded-contexts.md#implementation-strategies)_
+   - _README.md: Context catalog with integration overview and [Context Map](../guidelines/architecture/design-patterns/bounded-contexts.md#context-maps)_
+   - _Format: Following [Documentation Standards](../guidelines/README.md)_
+   - _Integration patterns documented per [Implementation Strategies](../guidelines/architecture/design-patterns/bounded-contexts.md#implementation-strategies)_
 
    _All files validated and ready for storage. Proceed with generation?"_
 
@@ -283,15 +283,15 @@ BOUNDED CONTEXT DEFINITION STATE:
 ### Core Dependencies
 
 - [Subdomain Definition](04-how-to-define-subdomains.md) - Business context foundation
-- [Technical Architecture](.pair/adoption/tech/architecture.md) - Integration constraints and patterns
-- [Team Structure](.pair/adoption/tech/way-of-working.md) - Organizational boundaries and capabilities
+- [Technical Architecture](../../adoption/tech/architecture.md) - Integration constraints and patterns
+- [Team Structure](../../adoption/tech/way-of-working.md) - Organizational boundaries and capabilities
 
 ### Implementation Guidelines
 
-- [Bounded Context Patterns](.pair/knowledge/guidelines/architecture/design-patterns/bounded-contexts.md) - Context identification and implementation strategies
-- [Domain-Driven Design](.pair/knowledge/guidelines/architecture/design-patterns/domain-driven-design.md) - DDD implementation patterns
-- [Strategic Subdomain Definition](.pair/knowledge/guidelines/architecture/design-patterns/strategic-subdomain-definition.md) - Context boundary strategies
-- [Documentation Standards](.pair/knowledge/guidelines/README.md) - Format and structure requirements
+- [Bounded Context Patterns](../guidelines/architecture/design-patterns/bounded-contexts.md) - Context identification and implementation strategies
+- [Domain-Driven Design](../guidelines/architecture/design-patterns/domain-driven-design.md) - DDD implementation patterns
+- [Strategic Subdomain Definition](../guidelines/architecture/design-patterns/strategic-subdomain-definition.md) - Context boundary strategies
+- [Documentation Standards](../guidelines/README.md) - Format and structure requirements
 
 ### Next Phase
 

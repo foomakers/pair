@@ -257,4 +257,4 @@ export class BFFOrchestrator {
 - [Structured Monolith](structured-monolith.md) - Starting point
 - [Microservices](microservices.md) - Target for some components
 - [Serverless](serverless.md) - Event-driven components
-- [Integration Patterns](.pair/knowledge/guidelines/architecture/design-patterns/README.md) - Communication strategies
+- [Integration Patterns](../design-patterns/README.md) - Communication strategies

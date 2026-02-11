@@ -160,7 +160,7 @@ Do you need enterprise support and budget allows?
 
 ## Related Documents
 
-- [Infrastructure Guidelines](.pair/knowledge/guidelines/infrastructure/README.md) - Infrastructure monitoring requirements
-- [Definition of Done](.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md) - Observability requirements
-- [Testing Strategy](.pair/knowledge/guidelines/testing/README.md) - Test environment monitoring
-- [Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md) - Security monitoring requirements
+- [Infrastructure Guidelines](../infrastructure/README.md) - Infrastructure monitoring requirements
+- [Definition of Done](../quality-assurance/quality-standards/definition-of-done.md) - Observability requirements
+- [Testing Strategy](../testing/README.md) - Test environment monitoring
+- [Security Guidelines](../quality-assurance/security/README.md) - Security monitoring requirements

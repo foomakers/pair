@@ -170,5 +170,5 @@ export class OrderService {
 
 - [Modular Monolith](modular-monolith.md) - Previous evolution step
 - [Serverless](serverless.md) - Function-based alternative
-- [API Gateway](.pair/knowledge/guidelines/architecture/design-patterns/README.md) - Service composition pattern
-- [Circuit Breaker](.pair/knowledge/guidelines/architecture/README.md) - Resilience pattern
+- [API Gateway](../design-patterns/README.md) - Service composition pattern
+- [Circuit Breaker](../README.md) - Resilience pattern

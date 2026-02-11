@@ -364,6 +364,7 @@ pair validate-config --config ./my-config.json
 - Asset registry structure (required fields: `behavior`, `target_path`, `description`)
 - Behavior values (must be: `mirror`, `add`, `overwrite`, `skip`)
 - Target path validity
+- Transform configuration: must be an object with non-empty `prefix` string; incompatible with `symlink` mode
 - Source path existence (if specified)
 - Include pattern validity (if specified)
 

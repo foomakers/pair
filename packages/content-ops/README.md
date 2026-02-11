@@ -46,16 +46,23 @@ Folder behavior rules are resolved by path (exact match or ancestor match). If a
 ### TargetConfig and multi-target distribution
 
 ```typescript
-type TargetConfig = { path: string; mode: 'canonical' | 'symlink' | 'copy' }
+type TransformConfig = { prefix: string }
+type TargetConfig = { path: string; mode: 'canonical' | 'symlink' | 'copy'; transform?: TransformConfig }
 ```
 
 A registry can declare multiple targets. Exactly one must have `mode: 'canonical'` (the primary copy destination). Additional targets are created as symlinks or copies after the canonical copy completes. Use `validateTargets(targets)` to enforce these constraints.
+
+When a target includes a `transform` property, content transformations are applied during distribution. The transform uses marker comments in source files (`<!-- @{prefix}-skip-start -->` / `<!-- @{prefix}-skip-end -->`) to control which sections are included per target. The `transform` property is incompatible with `mode: 'symlink'` (validation will reject this combination).
+
+Content-transform helpers:
+- `stripAllMarkers(content)` -- removes all marker comments (`<!-- @*-*-start -->` / `<!-- @*-*-end -->`) from content, regardless of prefix
+- `applyTransformCommands(content, prefix)` -- applies transform commands for the given prefix (e.g., removes sections enclosed in `<!-- @{prefix}-skip-start -->` / `<!-- @{prefix}-skip-end -->`) and then strips all remaining markers
 
 Windows note: symlink targets are rejected on Windows (`process.platform === 'win32'`) to avoid permission issues.
 
 ### Flatten and prefix transforms
 
-When `flatten: true`, directory paths like `navigator/next` become `navigator-next`. When `prefix` is set (e.g., `'pair'`), the top-level directory is prefixed: `navigator-next` → `pair-navigator-next`. Order: flatten first, then prefix.
+When `flatten: true`, directory paths like `process/implement` become `process-implement`. When `prefix` is set (e.g., `'pair'`), the top-level directory is prefixed: `process-implement` → `pair-process-implement`. Order: flatten first, then prefix.
 
 Naming transform helpers:
 - `flattenPath(dirName)` — replaces `/` with `-`

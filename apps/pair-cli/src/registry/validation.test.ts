@@ -280,4 +280,50 @@ describe('registry validation - targets', () => {
     const errors = validateRegistry('skills', config)
     expect(errors.some(e => e.includes('prefix'))).toBe(true)
   })
+
+  it('accepts target with valid transform', () => {
+    const config: RegistryConfig = {
+      source: 'AGENTS.md',
+      behavior: 'mirror',
+      description: 'Agents',
+      include: [],
+      flatten: false,
+      targets: [
+        { path: 'AGENTS.md', mode: 'canonical' },
+        { path: 'CLAUDE.md', mode: 'copy', transform: { prefix: 'claude' } },
+      ],
+    }
+    const errors = validateRegistry('agents', config)
+    expect(errors).toHaveLength(0)
+  })
+
+  it('rejects target with empty transform prefix', () => {
+    const config = {
+      behavior: 'mirror',
+      description: 'Agents',
+      include: [],
+      flatten: false,
+      targets: [
+        { path: 'AGENTS.md', mode: 'canonical' },
+        { path: 'CLAUDE.md', mode: 'copy', transform: { prefix: '' } },
+      ],
+    }
+    const errors = validateRegistry('agents', config)
+    expect(errors.some(e => e.includes('transform'))).toBe(true)
+  })
+
+  it('rejects target with non-object transform', () => {
+    const config = {
+      behavior: 'mirror',
+      description: 'Agents',
+      include: [],
+      flatten: false,
+      targets: [
+        { path: 'AGENTS.md', mode: 'canonical' },
+        { path: 'CLAUDE.md', mode: 'copy', transform: 'invalid' },
+      ],
+    }
+    const errors = validateRegistry('agents', config)
+    expect(errors.some(e => e.includes('transform'))).toBe(true)
+  })
 })

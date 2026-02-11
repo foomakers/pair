@@ -216,7 +216,8 @@ The CLI uses a JSON configuration file to define asset registries. Here's the st
       "prefix": "optional-prefix",
       "targets": [
         { "path": "target/directory", "mode": "canonical" },
-        { "path": "secondary/directory", "mode": "symlink" }
+        { "path": "secondary/directory", "mode": "symlink" },
+        { "path": "CLAUDE.md", "mode": "copy", "transform": { "prefix": "claude" } }
       ]
     }
   }
@@ -225,7 +226,9 @@ The CLI uses a JSON configuration file to define asset registries. Here's the st
 
 Each registry declares one or more **targets**. Exactly one target must have `mode: "canonical"` (the primary copy destination). Additional targets can use `mode: "symlink"` or `mode: "copy"` to distribute content to multiple locations after the canonical copy completes.
 
-When `flatten` is `true`, directory hierarchies are collapsed into hyphen-separated names (e.g., `navigator/next` → `navigator-next`). When `prefix` is set, it is prepended to top-level directory names (e.g., `navigator-next` → `pair-navigator-next`).
+Targets with `mode: "canonical"` or `mode: "copy"` can optionally include a `transform` property to apply content transformations during distribution. The transform uses marker comments in source files (`<!-- @{prefix}-{command}-start -->` / `<!-- @{prefix}-{command}-end -->`) to control content per target. Currently supported command: `skip` (removes the enclosed section). All markers are universally stripped from distributed files regardless of prefix. The `transform` property is incompatible with `mode: "symlink"`.
+
+When `flatten` is `true`, directory hierarchies are collapsed into hyphen-separated names (e.g., `process/implement` → `process-implement`). When `prefix` is set, it is prepended to top-level directory names (e.g., `process-implement` → `pair-process-implement`).
 
 ### Validation Criteria
 
@@ -235,6 +238,7 @@ The `validate-config` command checks:
 - **Behavior Values**: Must be one of: `mirror`, `add`, `overwrite`, `skip`
 - **Target Configuration**: Exactly one target with `mode: "canonical"`; no duplicate canonical paths across registries
 - **Symlink Restrictions**: Symlink targets are rejected on Windows
+- **Transform Configuration**: Must be an object with a non-empty `prefix` string; incompatible with `symlink` mode
 - **Source Availability**: Source paths must exist in the dataset
 - **Include Patterns**: If specified, must be valid folder paths
 

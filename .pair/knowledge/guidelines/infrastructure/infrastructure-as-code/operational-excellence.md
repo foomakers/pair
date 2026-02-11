@@ -228,8 +228,8 @@ La capacity management deve essere proactive utilizzando historical data e predi
 
 - **[Infrastructure Automation](automation.md)** - Infrastructure automation strategies and implementation
 - **[IaC Best Practices](iac-best-practices.md)** - Infrastructure as Code excellence practices
-- **[Operations Monitoring](.pair/knowledge/guidelines/observability/README.md)** - Comprehensive monitoring strategies
-- **[Incident Management](.pair/knowledge/guidelines/observability/README.md)** - Incident response and management
+- **[Operations Monitoring](../../observability/README.md)** - Comprehensive monitoring strategies
+- **[Incident Management](../../observability/README.md)** - Incident response and management
 
 ---
 

@@ -98,7 +98,7 @@ Observability principles provide the foundational framework for building effecti
 
 ## Related Documents
 
-- [Metrics Strategy](.pair/knowledge/guidelines/observability/metrics/README.md) - Metrics implementation guidance
-- [Structured Logging](.pair/knowledge/guidelines/observability/structured-logging/README.md) - Logging best practices
-- [Distributed Tracing](.pair/knowledge/guidelines/observability/distributed-tracing.md) - Tracing implementation
-- [AI-Enhanced Observability](.pair/knowledge/guidelines/observability/ai-enhanced-observability.md) - Advanced observability techniques
+- [Metrics Strategy](../metrics/README.md) - Metrics implementation guidance
+- [Structured Logging](../structured-logging/README.md) - Logging best practices
+- [Distributed Tracing](../distributed-tracing.md) - Tracing implementation
+- [AI-Enhanced Observability](../ai-enhanced-observability.md) - Advanced observability techniques

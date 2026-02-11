@@ -89,7 +89,7 @@ ls ../guidelines/collaboration/templates/
 
 ### Issue Management
 
-**→ See [../issue-management/](.pair/knowledge/guidelines/collaboration/issue-management/README.md)**
+**→ See [../issue-management/](../issue-management/README.md)**
 
 - Local issue tracking with markdown files
 - Directory-based status management
@@ -98,7 +98,7 @@ ls ../guidelines/collaboration/templates/
 
 ### Project Tracking
 
-**→ See [../project-tracking/](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)**
+**→ See [../project-tracking/](../project-tracking/README.md)**
 
 - Hierarchical directory structure
 - Status tracking via file location
@@ -107,7 +107,7 @@ ls ../guidelines/collaboration/templates/
 
 ### Automation
 
-**→ See [../automation/](.pair/knowledge/guidelines/collaboration/automation/README.md)**
+**→ See [../automation/](../automation/README.md)**
 
 - Shell script automation
 - File operation automation
@@ -125,7 +125,7 @@ ls ../guidelines/collaboration/templates/
 
 ### Communication
 
-**→ See [../communication-protocols/](.pair/knowledge/guidelines/README.md)**
+**→ See [../communication-protocols/](../../README.md)**
 
 - Documentation-based communication
 - Local changelog management
@@ -134,7 +134,7 @@ ls ../guidelines/collaboration/templates/
 
 ### Estimation Integration
 
-**→ See [../estimation/](.pair/knowledge/guidelines/collaboration/estimation/README.md)**
+**→ See [../estimation/](../estimation/README.md)**
 
 - File-based estimation tracking
 - Simple effort recording in metadata
@@ -143,7 +143,7 @@ ls ../guidelines/collaboration/templates/
 
 ### Methodology Integration
 
-**→ See [../methodology/](.pair/knowledge/guidelines/collaboration/methodology/README.md)**
+**→ See [../methodology/](../methodology/README.md)**
 
 - Scrum integration with filesystem structure
 - Kanban workflow with directory states
@@ -580,10 +580,10 @@ Add review tasks to the story file:
 
 ## Related Tools
 
-- **Methodology Selection**: [methodology-selection-guide.md](.pair/knowledge/guidelines/collaboration/methodology/README.md)
-- **Project Tracking**: [project-tracking/README.md](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)
+- **Methodology Selection**: [methodology-selection-guide.md](../methodology/README.md)
+- **Project Tracking**: [project-tracking/README.md](../project-tracking/README.md)
 - **GitHub Integration**: [github-implementation.md](github-implementation.md)
-- **Templates**: [assets/README.md](.pair/knowledge/guidelines/collaboration/templates/README.md)
+- **Templates**: [assets/README.md](../templates/README.md)
 
 ---
 

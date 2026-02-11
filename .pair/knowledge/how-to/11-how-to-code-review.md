@@ -31,37 +31,37 @@ CODE REVIEW STATE:
 
 - **Review ONLY completed PRs** - validate existing pull request with implemented changes
 - **CRITICAL ADR validation** - verify all new technical decisions are properly documented
-- **Follow code review template** per [code-review-template.md](.pair/knowledge/guidelines/collaboration/templates/code-review-template.md)
+- **Follow code review template** per [code-review-template.md](../guidelines/collaboration/templates/code-review-template.md)
 - **Validate story requirements** from the user story being implemented
-- **Apply technical standards** from [adoption guidelines](.pair/adoption/tech) and [quality standards](.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md)
+- **Apply technical standards** from [adoption guidelines](../../adoption/tech) and [quality standards](../guidelines/quality-assurance/quality-standards/README.md)
 
 **CRITICAL**: If new libraries/patterns found without ADR documentation:
 
 - **HALT merge process immediately**
-- **Request ADR creation** following [ADR template](.pair/knowledge/guidelines/architecture/decision-frameworks/adr-process.md)
+- **Request ADR creation** following [ADR template](../guidelines/architecture/decision-frameworks/adr-process.md)
 - **Update adoption documents** to include new decisions
 - **Do NOT proceed** until technical decisions are properly documented
 
 ### Technical Alignment Requirements
 
-- **Architecture**: Follow patterns from [architecture decisions](.pair/adoption/tech/architecture.md)
-- **Technology Stack**: Use ONLY libraries from [tech-stack.md](.pair/adoption/tech/tech-stack.md)
-- **Code Quality**: Apply [code design guidelines](.pair/knowledge/guidelines/code-design/README.md)
-- **Testing**: Follow [testing strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md)
-- **Security**: Validate [security guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)
+- **Architecture**: Follow patterns from [architecture decisions](../../adoption/tech/architecture.md)
+- **Technology Stack**: Use ONLY libraries from [tech-stack.md](../../adoption/tech/tech-stack.md)
+- **Code Quality**: Apply [code design guidelines](../guidelines/code-design/README.md)
+- **Testing**: Follow [testing strategy](../guidelines/testing/test-strategy/README.md)
+- **Security**: Validate [security guidelines](../guidelines/quality-assurance/security/README.md)
 
 ## Prerequisites & Guardrails
 
 ### 🚫 Critical Blockers
 
 - **Active PR Required**: Pull request must exist and be ready for review
-- **PM Tool Configured**: Must exist in [way-of-working.md](.pair/adoption/tech/way-of-working.md)
+- **PM Tool Configured**: Must exist in [way-of-working.md](../../adoption/tech/way-of-working.md)
 - **Story Context Available**: User story must be accessible and understood
 - **PR Analysis Complete**: Phase 0 must be completed before any other work
 
 ### 📋 Access Requirements
 
-Follow [project management tool guidelines](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) for tool-specific access procedures based on the configured tool in [way-of-working.md](.pair/adoption/tech/way-of-working.md).
+Follow [project management tool guidelines](../guidelines/collaboration/project-management-tool/README.md) for tool-specific access procedures based on the configured tool in [way-of-working.md](../../adoption/tech/way-of-working.md).
 
 **Access Rules:**
 
@@ -128,7 +128,7 @@ Scan implementation for introduction of:
 
 **PR Loading Requirements:**
 
-- **Load PR from configured PM tool** per [way-of-working.md](.pair/adoption/tech/way-of-working.md)
+- **Load PR from configured PM tool** per [way-of-working.md](../../adoption/tech/way-of-working.md)
 - **Understand implementation scope** and files changed
 - **Verify PR status**: Must be open and ready for review
 - **Extract story reference**: Link between PR and user story
@@ -173,11 +173,11 @@ Scan implementation for:
 
 **For Each New Technical Decision Found:**
 
-- [ ] **ADR Exists** - Verify ADR document in [architecture.md](.pair/adoption/tech/architecture.md)
+- [ ] **ADR Exists** - Verify ADR document in [architecture.md](../../adoption/tech/architecture.md)
 - [ ] **ADR Quality** - Contains context, options, and rationale
-- [ ] **Adoption Updated** - [tech-stack.md](.pair/adoption/tech/tech-stack.md) includes new dependencies
+- [ ] **Adoption Updated** - [tech-stack.md](../../adoption/tech/tech-stack.md) includes new dependencies
 - [ ] **Version Consistency** - Same versions across all workspaces
-- [ ] **Guidelines Updated** - [Technical guidelines](.pair/knowledge/guidelines) reflect new approaches
+- [ ] **Guidelines Updated** - [Technical guidelines](../guidelines) reflect new approaches
 
 **🚫 BLOCKING ISSUES - IMMEDIATE REVIEW FAILURE:**
 ❌ **Undocumented New Library** - New dependency without ADR or adoption update
@@ -187,16 +187,16 @@ Scan implementation for:
 **Actions for Missing Documentation:**
 
 1. **HALT merge process** - Set PR status to "changes-requested"
-2. **Create ADR task** - Following [ADR template](.pair/knowledge/guidelines/architecture/decision-frameworks/adr-process.md)
+2. **Create ADR task** - Following [ADR template](../guidelines/architecture/decision-frameworks/adr-process.md)
 3. **Update adoption documents** - Include new decisions in adoption files
 4. **Re-review required** - After documentation completed
 
 **Technical Standards Validation:**
 
-- **Code Quality** - Apply [code design guidelines](.pair/knowledge/guidelines/code-design/README.md)
-- **Architecture** - Follow [architecture decisions](.pair/adoption/tech/architecture.md)
-- **Security** - Validate [security guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md)
-- **Testing** - Verify [testing strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md)
+- **Code Quality** - Apply [code design guidelines](../guidelines/code-design/README.md)
+- **Architecture** - Follow [architecture decisions](../../adoption/tech/architecture.md)
+- **Security** - Validate [security guidelines](../guidelines/quality-assurance/security/README.md)
+- **Testing** - Verify [testing strategy](../guidelines/testing/test-strategy/README.md)
 
 ### Phase 2: Story & Requirements Validation
 
@@ -216,7 +216,7 @@ Scan implementation for:
 
 **Quality Assurance:**
 
-- **Testing Coverage** - Adequate test coverage per [testing strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md)
+- **Testing Coverage** - Adequate test coverage per [testing strategy](../guidelines/testing/test-strategy/README.md)
 - **Documentation** - Required documentation completed
 - **Performance** - No performance regressions
 - **Security** - Security requirements satisfied
@@ -233,7 +233,7 @@ Scan implementation for:
 
 **Review Report Generation (MANDATORY):**
 
-- **Use template**: Follow [code-review-template.md](.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) structure exactly
+- **Use template**: Follow [code-review-template.md](../guidelines/collaboration/templates/code-review-template.md) structure exactly
 - **Generate comprehensive report**: Include all sections - summary, technical analysis, security, performance
 - **Post as PR comment**: Add complete review report directly to GitHub PR comments
 - **Include all findings**: Document critical, major, minor issues with specific solutions and code examples
@@ -274,7 +274,7 @@ Scan implementation for:
 **Squash and Merge Process:**
 
 - **Use GitHub squash merge** → Maintains clean history
-- **Apply commit template format** per [commit template](.pair/knowledge/guidelines/collaboration/templates/commit-template.md):
+- **Apply commit template format** per [commit template](../guidelines/collaboration/templates/commit-template.md):
 
 ```
 [US-XXX] feat: story summary
@@ -301,7 +301,7 @@ Closes #T-XXX, #T-YYY
 - [ ] PR context loaded with story/task validation
 - [ ] ADR and adoption documentation validated for all new technical decisions
 - [ ] All technical standards verified against adoption guidelines
-- [ ] **Review report generated** using [code-review-template.md](.pair/knowledge/guidelines/collaboration/templates/code-review-template.md)
+- [ ] **Review report generated** using [code-review-template.md](../guidelines/collaboration/templates/code-review-template.md)
 - [ ] **Report posted as PR comment** in GitHub with comprehensive findings
 - [ ] PR status updated appropriately (pending/changes-requested/approved)
 - [ ] Review decision made (approved/changes-requested/tech-debt)
@@ -317,31 +317,31 @@ Closes #T-XXX, #T-YYY
 
 ### Templates & Guidelines
 
-- [Code Review Template](.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) - Comprehensive review structure and format
-- [ADR Template](.pair/knowledge/guidelines/architecture/decision-frameworks/adr-process.md) - Architecture Decision Record format for technical decisions
-- [Task Template](.pair/knowledge/guidelines/collaboration/templates/task-template.md) - Task creation format for follow-up work
-- [Branch Template](.pair/knowledge/guidelines/collaboration/templates/branch-template.md) - Branch naming standards validation
-- [Commit Template](.pair/knowledge/guidelines/collaboration/templates/commit-template.md) - Squash commit format for merge
+- [Code Review Template](../guidelines/collaboration/templates/code-review-template.md) - Comprehensive review structure and format
+- [ADR Template](../guidelines/architecture/decision-frameworks/adr-process.md) - Architecture Decision Record format for technical decisions
+- [Task Template](../guidelines/collaboration/templates/task-template.md) - Task creation format for follow-up work
+- [Branch Template](../guidelines/collaboration/templates/branch-template.md) - Branch naming standards validation
+- [Commit Template](../guidelines/collaboration/templates/commit-template.md) - Squash commit format for merge
 
 ### Technical Standards
 
-- [Tech Stack](.pair/adoption/tech/tech-stack.md) - Approved libraries and versions validation
-- [Architecture Decisions](.pair/adoption/tech/architecture.md) - System architecture patterns compliance
-- [Way of Working](.pair/adoption/tech/way-of-working.md) - Development process and PM tool configuration
+- [Tech Stack](../../adoption/tech/tech-stack.md) - Approved libraries and versions validation
+- [Architecture Decisions](../../adoption/tech/architecture.md) - System architecture patterns compliance
+- [Way of Working](../../adoption/tech/way-of-working.md) - Development process and PM tool configuration
 
 ### Quality Standards
 
-- [Quality Standards](.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md) - Quality gates and validation criteria
-- [Code Design Guidelines](.pair/knowledge/guidelines/code-design/README.md) - Code quality and design principles
-- [Testing Strategy](.pair/knowledge/guidelines/testing/test-strategy/README.md) - Testing coverage and quality requirements
-- [Security Guidelines](.pair/knowledge/guidelines/quality-assurance/security/README.md) - Security validation requirements
+- [Quality Standards](../guidelines/quality-assurance/quality-standards/README.md) - Quality gates and validation criteria
+- [Code Design Guidelines](../guidelines/code-design/README.md) - Code quality and design principles
+- [Testing Strategy](../guidelines/testing/test-strategy/README.md) - Testing coverage and quality requirements
+- [Security Guidelines](../guidelines/quality-assurance/security/README.md) - Security validation requirements
 
 ### Process Guidelines
 
-- [Project Management Framework](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md) - PM tool usage and integration
-- [Architecture Guidelines](.pair/knowledge/guidelines/architecture/README.md) - Architectural patterns and compliance
-- [Infrastructure Guidelines](.pair/knowledge/guidelines/infrastructure/README.md) - Infrastructure and deployment standards
-- [Performance Guidelines](.pair/knowledge/guidelines/quality-assurance/performance/README.md) - Performance standards and optimization
+- [Project Management Framework](../guidelines/collaboration/project-management-tool/README.md) - PM tool usage and integration
+- [Architecture Guidelines](../guidelines/architecture/README.md) - Architectural patterns and compliance
+- [Infrastructure Guidelines](../guidelines/infrastructure/README.md) - Infrastructure and deployment standards
+- [Performance Guidelines](../guidelines/quality-assurance/performance/README.md) - Performance standards and optimization
 
 ### Related Workflows
 

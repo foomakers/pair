@@ -6,7 +6,7 @@ describe('rewriteLinksInFile', () => {
   it('rewrites relative links when file moves to shallower depth', async () => {
     const fs = new InMemoryFileSystemService(
       {
-        '/dataset/target/pair-navigator-next/SKILL.md':
+        '/dataset/target/pair-catalog-next/SKILL.md':
           '# Skill\n[guide](../../../.pair/knowledge/guidelines/testing/README.md)',
       },
       '/',
@@ -15,13 +15,13 @@ describe('rewriteLinksInFile', () => {
 
     await rewriteLinksInFile({
       fileService: fs,
-      filePath: '/dataset/target/pair-navigator-next/SKILL.md',
-      originalDir: '.skills/navigator/next',
-      newDir: 'target/pair-navigator-next',
+      filePath: '/dataset/target/pair-catalog-next/SKILL.md',
+      originalDir: '.skills/catalog/next',
+      newDir: 'target/pair-catalog-next',
       datasetRoot: '/dataset',
     })
 
-    const content = await fs.readFile('/dataset/target/pair-navigator-next/SKILL.md')
+    const content = await fs.readFile('/dataset/target/pair-catalog-next/SKILL.md')
     expect(content).toContain('../../.pair/knowledge/guidelines/testing/README.md')
   })
 
@@ -38,7 +38,7 @@ describe('rewriteLinksInFile', () => {
     await rewriteLinksInFile({
       fileService: fs,
       filePath: '/dataset/deep/nested/target/skill/SKILL.md',
-      originalDir: '.skills/navigator',
+      originalDir: '.skills/catalog',
       newDir: 'deep/nested/target/skill',
       datasetRoot: '/dataset',
     })
@@ -60,7 +60,7 @@ describe('rewriteLinksInFile', () => {
     await rewriteLinksInFile({
       fileService: fs,
       filePath: '/dataset/target/skill/SKILL.md',
-      originalDir: '.skills/navigator',
+      originalDir: '.skills/catalog',
       newDir: 'target/skill',
       datasetRoot: '/dataset',
     })
@@ -84,7 +84,7 @@ describe('rewriteLinksInFile', () => {
     await rewriteLinksInFile({
       fileService: fs,
       filePath: '/dataset/target/skill/SKILL.md',
-      originalDir: '.skills/navigator',
+      originalDir: '.skills/catalog',
       newDir: 'target/skill',
       datasetRoot: '/dataset',
     })
@@ -93,7 +93,7 @@ describe('rewriteLinksInFile', () => {
   it('rewrites multiple links in a single file without offset corruption', async () => {
     const fs = new InMemoryFileSystemService(
       {
-        '/dataset/target/pair-navigator-next/SKILL.md':
+        '/dataset/target/pair-catalog-next/SKILL.md':
           '# Skill\n[guide](../../../.pair/knowledge/README.md)\nSome text.\n[test](../../../.pair/knowledge/testing/README.md)',
       },
       '/',
@@ -102,13 +102,13 @@ describe('rewriteLinksInFile', () => {
 
     await rewriteLinksInFile({
       fileService: fs,
-      filePath: '/dataset/target/pair-navigator-next/SKILL.md',
-      originalDir: '.skills/navigator/next',
-      newDir: 'target/pair-navigator-next',
+      filePath: '/dataset/target/pair-catalog-next/SKILL.md',
+      originalDir: '.skills/catalog/next',
+      newDir: 'target/pair-catalog-next',
       datasetRoot: '/dataset',
     })
 
-    const content = await fs.readFile('/dataset/target/pair-navigator-next/SKILL.md')
+    const content = await fs.readFile('/dataset/target/pair-catalog-next/SKILL.md')
     expect(content).toContain('../../.pair/knowledge/README.md')
     expect(content).toContain('../../.pair/knowledge/testing/README.md')
     expect(content).not.toContain('../../../')
@@ -117,7 +117,7 @@ describe('rewriteLinksInFile', () => {
   it('preserves anchor fragments in relative links', async () => {
     const fs = new InMemoryFileSystemService(
       {
-        '/dataset/target/pair-navigator-next/SKILL.md':
+        '/dataset/target/pair-catalog-next/SKILL.md':
           '# Skill\n[section](../../../.pair/knowledge/README.md#getting-started)',
       },
       '/',
@@ -126,13 +126,13 @@ describe('rewriteLinksInFile', () => {
 
     await rewriteLinksInFile({
       fileService: fs,
-      filePath: '/dataset/target/pair-navigator-next/SKILL.md',
-      originalDir: '.skills/navigator/next',
-      newDir: 'target/pair-navigator-next',
+      filePath: '/dataset/target/pair-catalog-next/SKILL.md',
+      originalDir: '.skills/catalog/next',
+      newDir: 'target/pair-catalog-next',
       datasetRoot: '/dataset',
     })
 
-    const content = await fs.readFile('/dataset/target/pair-navigator-next/SKILL.md')
+    const content = await fs.readFile('/dataset/target/pair-catalog-next/SKILL.md')
     expect(content).toContain('../../.pair/knowledge/README.md#getting-started')
   })
 
@@ -148,7 +148,7 @@ describe('rewriteLinksInFile', () => {
     await rewriteLinksInFile({
       fileService: fs,
       filePath: '/dataset/target/skill/SKILL.md',
-      originalDir: '.skills/navigator',
+      originalDir: '.skills/catalog',
       newDir: 'target/skill',
       datasetRoot: '/dataset',
     })
@@ -171,7 +171,7 @@ describe('rewriteLinksAfterTransform', () => {
 
     const pathMapping = [
       {
-        originalDir: '.skills/navigator/next',
+        originalDir: '.skills/catalog/next',
         newDir: 'target/pair-nav',
         files: ['/dataset/target/pair-nav/SKILL.md', '/dataset/target/pair-nav/image.png'],
       },
@@ -204,7 +204,7 @@ describe('rewriteLinksAfterTransform', () => {
 
     const pathMapping = [
       {
-        originalDir: '.skills/navigator/next',
+        originalDir: '.skills/catalog/next',
         newDir: 'target/pair-nav-next',
         files: ['/dataset/target/pair-nav-next/SKILL.md'],
       },

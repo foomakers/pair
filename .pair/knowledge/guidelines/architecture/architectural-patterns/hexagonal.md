@@ -397,5 +397,5 @@ describe('PostgresOrderRepository', () => {
 ## Related Patterns
 
 - **[Clean Architecture](clean-architecture.md)** - Similar dependency inversion approach
-- **[Domain-Driven Design](.pair/knowledge/guidelines/architecture/design-patterns/README.md)** - Domain modeling approach
+- **[Domain-Driven Design](../design-patterns/README.md)** - Domain modeling approach
 - **[CQRS](cqrs.md)** - Can be combined for read/write separation

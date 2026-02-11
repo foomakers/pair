@@ -206,9 +206,9 @@ Decision-making frameworks and implementation priorities for project architectur
 ## Cross-References
 
 - **[Team Constraints](team-constraints.md)** - Team-based decision factors
-- **[Technology Constraints](.pair/knowledge/guidelines/architecture/README.md)** - Technology selection criteria
-- **[Tech Stack](.pair/adoption/tech/tech-stack.md)** - Current technology choices
-- **[Architecture Patterns](.pair/knowledge/guidelines/architecture/architectural-patterns/README.md)** - Pattern selection guidance
+- **[Technology Constraints](../README.md)** - Technology selection criteria
+- **[Tech Stack](../../../../adoption/tech/tech-stack.md)** - Current technology choices
+- **[Architecture Patterns](../architectural-patterns/README.md)** - Pattern selection guidance
 
 ## Scope Boundaries
 

@@ -193,7 +193,9 @@ export class BackupService {
         continue
       }
 
-      if (entry.isDirectory()) {
+      if (entry.isSymbolicLink()) {
+        continue
+      } else if (entry.isDirectory()) {
         await this.copyDirectoryRecursive(sourcePath, destPath)
       } else {
         const content = await this.fileService.readFile(sourcePath)

@@ -230,7 +230,7 @@ This project tracking framework ensures systematic progress monitoring, predicti
 
 ### With Issue Management
 
-**→ See [../issue-management/](.pair/knowledge/guidelines/collaboration/issue-management/README.md)**
+**→ See [../issue-management/](../issue-management/README.md)**
 
 - Issue status integration
 - Priority and type tracking
@@ -238,7 +238,7 @@ This project tracking framework ensures systematic progress monitoring, predicti
 
 ### With Estimation
 
-**→ See [../estimation/](.pair/knowledge/guidelines/collaboration/estimation/README.md)**
+**→ See [../estimation/](../estimation/README.md)**
 
 - Effort tracking and comparison
 - Velocity calculation inputs
@@ -254,7 +254,7 @@ This project tracking framework ensures systematic progress monitoring, predicti
 
 ### With Automation
 
-**→ See [../automation/](.pair/knowledge/guidelines/collaboration/automation/README.md)**
+**→ See [../automation/](../automation/README.md)**
 
 - Automated progress updates
 - Status synchronization
@@ -285,6 +285,6 @@ This project tracking framework ensures systematic progress monitoring, predicti
 
 ## Related Topics
 
-- **[../methodology/](.pair/knowledge/guidelines/collaboration/methodology/README.md)** - Methodology-specific tracking approaches
-- **[../project-management-tool/](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Tool setup and configuration
+- **[../methodology/](../methodology/README.md)** - Methodology-specific tracking approaches
+- **[../project-management-tool/](../project-management-tool/README.md)** - Tool setup and configuration
 - **[README.md](README.md)** - Board and backlog management practices

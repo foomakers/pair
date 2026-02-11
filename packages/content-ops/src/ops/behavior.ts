@@ -2,9 +2,14 @@ export type Behavior = 'overwrite' | 'add' | 'mirror' | 'skip'
 
 export type TargetMode = 'canonical' | 'symlink' | 'copy'
 
+export type TransformConfig = {
+  prefix: string
+}
+
 export type TargetConfig = {
   path: string
   mode: TargetMode
+  transform?: TransformConfig
 }
 
 export function normalizeKey(p: string) {
@@ -83,6 +88,7 @@ export function validateTargets(targets: TargetConfig[], platform?: string): voi
   }
 
   checkWindowsSymlink(targets, resolvedPlatform)
+  checkTransformSymlinkConflict(targets)
 }
 
 function checkDuplicatePaths(targets: TargetConfig[]): void {
@@ -110,6 +116,14 @@ function checkWindowsSymlink(targets: TargetConfig[], platform: string): void {
   const hasSymlink = targets.some(t => t.mode === 'symlink')
   if (hasSymlink) {
     throw new Error('Windows does not support symlink targets. Use copy mode instead.')
+  }
+}
+
+function checkTransformSymlinkConflict(targets: TargetConfig[]): void {
+  for (const t of targets) {
+    if (t.transform && t.mode === 'symlink') {
+      throw new Error(`Target '${t.path}': transform is incompatible with symlink mode.`)
+    }
   }
 }
 

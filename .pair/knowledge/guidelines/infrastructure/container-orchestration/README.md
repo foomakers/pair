@@ -374,10 +374,10 @@ This container orchestration guide provides a comprehensive framework for enterp
 
 ## 🔗 Related Practices
 
-- **[Cloud Services](.pair/knowledge/guidelines/infrastructure/cloud-services/README.md)** - Cloud service selection and integration patterns
-- **[Infrastructure as Code](.pair/knowledge/guidelines/infrastructure/infrastructure-as-code/README.md)** - Infrastructure automation and version control
-- **[CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)** - Continuous integration and deployment practices
-- **[Deployment Patterns](.pair/knowledge/guidelines/infrastructure/deployment-patterns/README.md)** - Application deployment strategies and automation
+- **[Cloud Services](../cloud-services/README.md)** - Cloud service selection and integration patterns
+- **[Infrastructure as Code](../infrastructure-as-code/README.md)** - Infrastructure automation and version control
+- **[CI/CD Strategy](../cicd-strategy/README.md)** - Continuous integration and deployment practices
+- **[Deployment Patterns](../deployment-patterns/README.md)** - Application deployment strategies and automation
 
 ## 📈 Container Orchestration Maturity Progression
 

@@ -23,7 +23,10 @@
       "source": "AGENTS.md",
       "behavior": "mirror",
       "description": "AI agents guidance and session context",
-      "targets": [{ "path": "AGENTS.md", "mode": "canonical" }]
+      "targets": [
+        { "path": "AGENTS.md", "mode": "canonical" },
+        { "path": "CLAUDE.md", "mode": "copy", "transform": { "prefix": "claude" } }
+      ]
     },
     "skills": {
       "source": ".skills",

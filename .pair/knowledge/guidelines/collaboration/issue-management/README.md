@@ -132,7 +132,7 @@ The **IssueManagementOrchestrator** provides comprehensive issue handling throug
 
 ### With Project Tracking
 
-**→ See [../project-tracking/](.pair/knowledge/guidelines/collaboration/project-tracking/README.md)**
+**→ See [../project-tracking/](../project-tracking/README.md)**
 
 - Issue hierarchy and relationships
 - Progress tracking and reporting
@@ -140,7 +140,7 @@ The **IssueManagementOrchestrator** provides comprehensive issue handling throug
 
 ### With Automation
 
-**→ See [../automation/](.pair/knowledge/guidelines/collaboration/automation/README.md)**
+**→ See [../automation/](../automation/README.md)**
 
 - Automated issue creation and updates
 - Status synchronization rules
@@ -148,7 +148,7 @@ The **IssueManagementOrchestrator** provides comprehensive issue handling throug
 
 ### With Estimation
 
-**→ See [../estimation/](.pair/knowledge/guidelines/collaboration/estimation/README.md)**
+**→ See [../estimation/](../estimation/README.md)**
 
 - Issue sizing and effort estimation
 - Complexity assessment workflows
@@ -156,6 +156,6 @@ The **IssueManagementOrchestrator** provides comprehensive issue handling throug
 
 ## Related Topics
 
-- **[../project-management-tool/](.pair/knowledge/guidelines/collaboration/project-management-tool/README.md)** - Tool setup and configuration
-- **[../assets/](.pair/knowledge/guidelines/collaboration/templates/README.md)** - Issue templates and resources
-- **[../communication-protocols/](.pair/knowledge/guidelines/collaboration/team/README.md)** - Communication around issues
+- **[../project-management-tool/](../project-management-tool/README.md)** - Tool setup and configuration
+- **[../assets/](../templates/README.md)** - Issue templates and resources
+- **[../communication-protocols/](../team/README.md)** - Communication around issues

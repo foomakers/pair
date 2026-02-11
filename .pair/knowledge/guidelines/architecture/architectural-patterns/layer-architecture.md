@@ -440,4 +440,4 @@ When layered architecture becomes insufficient:
 
 - **[Hexagonal Architecture](hexagonal.md)** - Dependency inversion evolution
 - **[Clean Architecture](clean-architecture.md)** - Advanced layered approach
-- **[Domain-Driven Design](.pair/knowledge/guidelines/architecture/design-patterns/README.md)** - Domain modeling approach
+- **[Domain-Driven Design](../design-patterns/README.md)** - Domain modeling approach

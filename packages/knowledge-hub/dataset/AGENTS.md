@@ -16,6 +16,7 @@ The `/next` skill reads project adoption files and PM tool state to recommend th
 
 **No skills installed?** Skip this section and follow the manual Quick Start Process below.
 
+<!-- @claude-skip-start -->
 ## 🧠 Session Context (Maintain Throughout Conversation)
 
 **CRITICAL**: Establish and maintain these 4 key pieces of information for the entire session:
@@ -52,6 +53,7 @@ PM Access: MCP github_projects (org: mycompany, repo: myproject)
 - **Access details**: Extract MCP commands or URLs from the framework file for your specific tool
 
 **Include this context in ALL subsequent responses** - it ensures consistency and prevents context drift as conversations grow long.
+<!-- @claude-skip-end -->
 
 ## 🎯 Quick Start Process
 
@@ -123,6 +125,7 @@ pnpm lint --filter <package_name>
 - **Code guidelines**: `.pair/tech/knowledge-base/02-code-design-guidelines.md`
 - **Security rules**: `.pair/tech/knowledge-base/10-security-guidelines.md`
 
+<!-- @claude-skip-start -->
 ## 🎭 If unsure about your task
 
 **Use the index**: Load `.pair/how-to/index.json` and match user request keywords to task `tags`
@@ -141,6 +144,7 @@ pnpm lint --filter <package_name>
 - Technical/code language → prefer `product-engineer` or `staff-engineer` tasks
 
 **Still unclear?** Show the 2 highest tag-matching tasks and ask the developer to confirm.
+<!-- @claude-skip-end -->
 
 ## ⚡ Quick Rules
 
@@ -199,6 +203,7 @@ function isLocalPath(str: string): boolean {
 - **Clarity**: Test documents expected behavior
 - **Confidence**: Linting + tests pass before committing
 
+<!-- @claude-skip-start -->
 ## 🔄 Task Selection Algorithm
 
 1. **Exact match**: Developer mentions specific how-to ID/filename → use it
@@ -244,3 +249,4 @@ SESSION STATE:
 ```
 
 _This AGENTS.md follows the task-first approach: establish context, identify what you need to do, then follow the specific guidance files consistently throughout the session._
+<!-- @claude-skip-end -->

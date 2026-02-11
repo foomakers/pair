@@ -38,8 +38,8 @@ Record a technical decision as either an ADR (architectural) or ADL (non-archite
 ### Step 2: Detect Existing Decision
 
 1. **Check**: Search for existing decision files matching `$topic`:
-   - If `architectural`: scan `adoption/tech/adr/` for files containing `$topic` in filename.
-   - If `non-architectural`: scan `adoption/decision-log/` for files containing `$topic` in filename.
+   - If `architectural`: scan [adoption/tech/adr/](../../../.pair/adoption/tech/adr/) for files containing `$topic` in filename.
+   - If `non-architectural`: scan [adoption/decision-log/](../../../.pair/adoption/decision-log/) for files containing `$topic` in filename.
 2. **Skip**: If no existing file found, proceed to Step 3 (create new).
 3. **Act**: If existing file found, ask the developer:
    > Found existing decision: `[filename]`. Do you want to **update** this decision or **create a new one**?
@@ -53,16 +53,16 @@ Record a technical decision as either an ADR (architectural) or ADL (non-archite
 
 **If `architectural` → ADR:**
 
-1. **Check**: Does `adoption/tech/adr/` directory exist?
+1. **Check**: Does [adoption/tech/adr/](../../../.pair/adoption/tech/adr/) directory exist?
 2. **Act**: If not, create it.
-3. **Act**: Create (or update) the ADR file at `adoption/tech/adr/YYYY-MM-DD-<topic>.md` following the standalone [ADR template](../../../.pair/knowledge/guidelines/collaboration/templates/adr-template.md). Fill in all sections: Status, Date, Context, Options Considered, Decision, Consequences, and Adoption Impact.
+3. **Act**: Create (or update) the ADR file at [adoption/tech/adr/](../../../.pair/adoption/tech/adr/)`YYYY-MM-DD-<topic>.md` following the standalone [ADR template](../../../.pair/knowledge/guidelines/collaboration/templates/adr-template.md). Fill in all sections: Status, Date, Context, Options Considered, Decision, Consequences, and Adoption Impact.
 4. **Verify**: ADR file exists with complete content following the template structure.
 
 **If `non-architectural` → ADL:**
 
-1. **Check**: Does `adoption/decision-log/` directory exist?
+1. **Check**: Does [adoption/decision-log/](../../../.pair/adoption/decision-log/) directory exist?
 2. **Act**: If not, create it.
-3. **Act**: Create (or update) the ADL file at `adoption/decision-log/YYYY-MM-DD-<topic>.md` following the standalone [ADL template](../../../.pair/knowledge/guidelines/collaboration/templates/adl-template.md). Fill in all sections: Date, Status, Category, Context, Decision, Alternatives Considered, Consequences, and Adoption Impact.
+3. **Act**: Create (or update) the ADL file at [adoption/decision-log/](../../../.pair/adoption/decision-log/)`YYYY-MM-DD-<topic>.md` following the standalone [ADL template](../../../.pair/knowledge/guidelines/collaboration/templates/adl-template.md). Fill in all sections: Date, Status, Category, Context, Decision, Alternatives Considered, Consequences, and Adoption Impact.
 4. **Verify**: ADL file exists with complete content following the template structure.
 
 ### Step 4: Update Adoption Files
