@@ -9,11 +9,11 @@ Record a technical decision as either an ADR (architectural) or ADL (non-archite
 
 ## Arguments
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `$type` | Yes | Decision type: `architectural` or `non-architectural` |
-| `$topic` | Yes | Short kebab-case topic name (e.g., `streaming-downloads`, `date-library-choice`) |
-| `$summary` | No | One-line summary of the decision (will be asked interactively if omitted) |
+| Argument   | Required | Description                                                                      |
+| ---------- | -------- | -------------------------------------------------------------------------------- |
+| `$type`    | Yes      | Decision type: `architectural` or `non-architectural`                            |
+| `$topic`   | Yes      | Short kebab-case topic name (e.g., `streaming-downloads`, `date-library-choice`) |
+| `$summary` | No       | One-line summary of the decision (will be asked interactively if omitted)        |
 
 ## Core Rule: ADR and ADL Are Mutually Exclusive
 
@@ -28,7 +28,9 @@ Record a technical decision as either an ADR (architectural) or ADL (non-archite
 
 1. **Check**: Is `$type` provided? If yes, use it.
 2. **Act**: If not provided, ask the developer:
+
    > Is this decision **architectural** (affects system structure, patterns, service boundaries, quality attributes) or **non-architectural** (library choice, convention adoption, tooling preference)?
+
 3. **Verify**: Decision type is set to `architectural` or `non-architectural`.
 
 ### Step 2: Detect Existing Decision
@@ -38,7 +40,9 @@ Record a technical decision as either an ADR (architectural) or ADL (non-archite
    - If `non-architectural`: scan [adoption/decision-log/](../../../.pair/adoption/decision-log) for files containing `$topic` in filename.
 2. **Skip**: If no existing file found, proceed to Step 3 (create new).
 3. **Act**: If existing file found, ask the developer:
+
    > Found existing decision: `[filename]`. Do you want to **update** this decision or **create a new one**?
+
    - **Update**: Read existing file, present current content, proceed to Step 4 with update mode.
    - **Create new**: Proceed to Step 3 with create mode (for cases where the topic evolved into a distinct decision).
 4. **Verify**: Mode is set to `create` or `update`.

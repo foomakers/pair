@@ -13,12 +13,12 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 
 ## Arguments
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `$type` | Yes | Issue type: `story` or `task`. Determines which template is used. (Future: `epic`, `initiative` added in [#103](https://github.com/foomakers/pair/issues/103).) |
-| `$content` | Yes | Structured content to fill the template — fields map to template sections. |
-| `$id` | No | Existing issue identifier. If provided → **update**; if absent → **create**. |
-| `$parent` | No | Parent issue identifier for hierarchy linking (e.g., epic → story, story → task). |
+| Argument   | Required | Description                                                                                                                                                     |
+| ---------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$type`    | Yes      | Issue type: `story` or `task`. Determines which template is used. (Future: `epic`, `initiative` added in [#103](https://github.com/foomakers/pair/issues/103).) |
+| `$content` | Yes      | Structured content to fill the template — fields map to template sections.                                                                                      |
+| `$id`      | No       | Existing issue identifier. If provided → **update**; if absent → **create**.                                                                                    |
+| `$parent`  | No       | Parent issue identifier for hierarchy linking (e.g., epic → story, story → task).                                                                               |
 
 ## Algorithm
 
@@ -27,7 +27,9 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 1. **Check**: Is `$type` one of the supported types (`story`, `task`)?
 2. **Skip**: If valid, proceed to Step 2.
 3. **Act**: If unsupported type → **HALT**:
+
    > Unsupported issue type: `$type`. Currently supported: `story`, `task`. Types `epic` and `initiative` are added in [#103](https://github.com/foomakers/pair/issues/103).
+
 4. **Verify**: `$type` is valid.
 
 ### Step 2: Detect PM Tool
@@ -35,7 +37,9 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 1. **Check**: Read [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) and identify the adopted PM tool.
 2. **Skip**: If PM tool is identified, proceed to Step 3.
 3. **Act**: If no PM tool configured → **HALT**:
+
    > No PM tool configured in `way-of-working.md`. Configure via `/setup-pm` or manually set the PM tool in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md).
+
 4. **Verify**: PM tool identified (e.g., `github-projects`, `jira`, `linear`, `filesystem`).
 
 ### Step 3: Load Template
@@ -45,7 +49,9 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
    - `task` → [task-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/task-template.md)
 2. **Skip**: If template file found, proceed to Step 4.
 3. **Act**: If template not found → **HALT**:
+
    > Template not found: `[template path]`. Ensure the knowledge base is installed.
+
 4. **Verify**: Template loaded and parsed.
 
 ### Step 4: Format Issue Body
@@ -65,7 +71,9 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
    - Other tools → use the tool-specific guide if available.
 2. **Skip**: If guide found, proceed to Step 6.
 3. **Act**: If guide not found, warn and proceed with best-effort PM tool interaction:
+
    > PM tool implementation guide not found for `[tool]`. Proceeding with default behavior.
+
 4. **Verify**: Implementation guide loaded (or warning issued).
 
 ### Step 6: Create or Update Issue
@@ -91,7 +99,9 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 1. **Check**: Did the PM tool return an error during Step 6?
 2. **Skip**: If no error, proceed to output.
 3. **Act**: **HALT** with descriptive error:
+
    > PM tool error: `[error description]`. No fallback to alternative tools — resolve the issue with the adopted PM tool and re-invoke.
+
 4. **Verify**: Error reported to developer.
 
 ## Output Format

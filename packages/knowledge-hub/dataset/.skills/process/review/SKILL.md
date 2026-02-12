@@ -15,21 +15,21 @@ Review a pull request through 5 sequential phases. Each phase composes atomic sk
 
 ## Composed Skills
 
-| Skill | Type | Required | Phase | Purpose |
-|-------|------|----------|-------|---------|
-| `/verify-quality` | Capability | Yes | 2 | Quality gate checking |
-| `/verify-done` | Capability | Yes | 4 | Definition of Done checking |
-| `/record-decision` | Capability | Yes | Any | Record missing ADR (HALT condition) |
-| `/assess-debt` | Capability | Yes | 4 | Flag tech debt items |
-| `/verify-adoption` | Capability | Optional | 3 | Full adoption compliance (from #105) |
-| `/assess-stack` | Capability | Optional | 3 | Tech-stack resolution (from #104) |
+| Skill              | Type       | Required | Phase | Purpose                              |
+| ------------------ | ---------- | -------- | ----- | ------------------------------------ |
+| `/verify-quality`  | Capability | Yes      | 2     | Quality gate checking                |
+| `/verify-done`     | Capability | Yes      | 4     | Definition of Done checking          |
+| `/record-decision` | Capability | Yes      | Any   | Record missing ADR (HALT condition)  |
+| `/assess-debt`     | Capability | Yes      | 4     | Flag tech debt items                 |
+| `/verify-adoption` | Capability | Optional | 3     | Full adoption compliance (from #105) |
+| `/assess-stack`    | Capability | Optional | 3     | Tech-stack resolution (from #104)    |
 
 ## Arguments
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `$pr` | Yes | PR number or URL to review |
-| `$story` | No | Story ID for requirements validation. If omitted, extracted from PR description. |
+| Argument | Required | Description                                                                      |
+| -------- | -------- | -------------------------------------------------------------------------------- |
+| `$pr`    | Yes      | PR number or URL to review                                                       |
+| `$story` | No       | Story ID for requirements validation. If omitted, extracted from PR description. |
 
 ## Session State
 
@@ -129,12 +129,12 @@ Ask: _"Proceed with review?"_
 
 This phase uses a **4-level graceful degradation cascade** depending on which optional skills are installed:
 
-| Level | /verify-adoption | /assess-stack | Behavior |
-|-------|-----------------|---------------|----------|
-| 1 | Installed | Installed | Full adoption compliance + automatic tech-stack resolution |
-| 2 | Installed | Not installed | Full compliance detection, manual stack resolution |
-| 3 | Not installed | Installed | Inline tech-stack check only + automatic resolution |
-| 4 | Not installed | Not installed | Warn developer for manual verification |
+| Level | /verify-adoption | /assess-stack | Behavior                                                   |
+| ----- | ---------------- | ------------- | ---------------------------------------------------------- |
+| 1     | Installed        | Installed     | Full adoption compliance + automatic tech-stack resolution |
+| 2     | Installed        | Not installed | Full compliance detection, manual stack resolution         |
+| 3     | Not installed    | Installed     | Inline tech-stack check only + automatic resolution        |
+| 4     | Not installed    | Not installed | Warn developer for manual verification                     |
 
 ### Step 3.1: Determine Degradation Level
 
@@ -145,6 +145,7 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 ### Step 3.2: Run Adoption Check
 
 **Level 1** (/verify-adoption + /assess-stack):
+
 1. Compose `/verify-adoption` with `$scope = all`.
 2. For each non-conformity:
    - **Tech-stack**: compose `/assess-stack` → developer approves (add to stack) or rejects (CHANGES-REQUESTED).
@@ -153,20 +154,25 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 3. Record all results.
 
 **Level 2** (/verify-adoption only):
+
 1. Compose `/verify-adoption` with `$scope = all`.
 2. For tech-stack non-conformities: report as findings for manual resolution.
 3. For other non-conformities: same as Level 1.
 4. Record results.
 
 **Level 3** (/assess-stack only):
+
 1. Inline check: scan PR diff for new dependencies not in [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
 2. For unlisted dependencies: compose `/assess-stack` → developer approves or rejects.
 3. No broader adoption compliance check (security, architecture, etc. — covered partially by Phase 2).
 4. Record results.
 
 **Level 4** (neither installed):
+
 1. Warn:
+
    > `/verify-adoption` and `/assess-stack` are not installed — skipping automated adoption compliance. Please manually verify code against adoption files.
+
 2. Move to Phase 4.
 
 ### Step 3.3: Verify Adoption Results
@@ -212,11 +218,11 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 
 Based on compiled findings:
 
-| Decision | Condition |
-|----------|-----------|
-| **APPROVED** | No critical or major issues. All AC met. Quality gates pass. |
+| Decision              | Condition                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| **APPROVED**          | No critical or major issues. All AC met. Quality gates pass.                              |
 | **CHANGES-REQUESTED** | Critical issues found, missing ADRs, security vulnerabilities, failing tests, AC not met. |
-| **TECH-DEBT** | Only minor issues or debt items. Approve current PR, track debt separately. |
+| **TECH-DEBT**         | Only minor issues or debt items. Approve current PR, track debt separately.               |
 
 ### Step 5.3: Post Review
 

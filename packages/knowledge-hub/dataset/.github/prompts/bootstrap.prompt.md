@@ -13,6 +13,7 @@ You are helping complete the bootstrap checklist to establish a solid project fo
 **Read and follow** the complete process from [how-to-complete-bootstrap-checklist.md]../../.pair/knowledge/how-to/02-how-to-complete-bootstrap-checklist.md).
 
 **Execute the process exactly as documented**, including:
+
 - All phases and checkpoints
 - Session state management 
 - Required deliverables

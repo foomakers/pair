@@ -37,6 +37,7 @@ CODE REVIEW STATE:
 - **Apply technical standards** from [adoption guidelines](../../adoption/tech) and [quality standards](../guidelines/quality-assurance/quality-standards/README.md)
 
 **HALT CONDITION — Missing ADR**: If new libraries/patterns found without ADR documentation:
+
 1. HALT merge process immediately
 2. Request ADR creation following [ADR template](../guidelines/architecture/decision-frameworks/adr-process.md)
 3. Update adoption documents to include new decisions
@@ -96,11 +97,11 @@ Follow [project management tool guidelines](../guidelines/collaboration/project-
 
 **Review Decisions:**
 
-| Decision | Condition | Next Step |
-|----------|-----------|-----------|
-| **APPROVED** | All requirements met, quality gates pass | Squash merge, mark story "Done" |
+| Decision              | Condition                                               | Next Step                                                                |
+| --------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **APPROVED**          | All requirements met, quality gates pass                | Squash merge, mark story "Done"                                          |
 | **CHANGES REQUESTED** | Critical issues, missing ADR, failing tests, AC not met | Return to [10-how-to-implement-a-task.md](10-how-to-implement-a-task.md) |
-| **TECH DEBT** | Only minor issues, tracked as debt | Approve PR, create debt items |
+| **TECH DEBT**         | Only minor issues, tracked as debt                      | Approve PR, create debt items                                            |
 
 ### Phase 4: Completion & Integration
 

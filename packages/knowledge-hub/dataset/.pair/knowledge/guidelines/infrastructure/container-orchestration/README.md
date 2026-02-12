@@ -90,14 +90,14 @@ Selecting container orchestration strategy?
 
 ## 📊 Container Platform Selection Matrix
 
-| Requirement                | Docker Standalone | Docker Compose     | Kubernetes          | Complexity | Use Case               |
-| -------------------------- | ----------------- | ------------------ | ------------------- | ---------- | ---------------------- |
-| **Development**            | ✅ Excellent      | ✅ Excellent       | ⚠️ Complex          | 🟢 Low     | Learning, prototyping  |
-| **Production**             | ⚠️ Limited        | ❌ Not recommended | ✅ Enterprise-grade | 🔴 High    | Enterprise workloads   |
-| **Scaling**                | ❌ Manual         | ⚠️ Limited         | ✅ Automatic        | 🟡 Medium  | Auto-scaling needs     |
-| **Orchestration**          | ❌ None           | ✅ Basic           | ✅ Advanced         | 🔴 High    | Multi-service apps     |
-| **Multi-Environment**      | ⚠️ Manual         | 🔄 Possible        | ✅ Native           | 🟡 Medium  | Consistent deployments |
-| **Operational Complexity** | 🟢 Low            | 🟡 Medium          | 🔴 High             | 🔴 High    | Ops team capability    |
+| Requirement                | Docker Standalone | Docker Compose    | Kubernetes         | Complexity | Use Case               |
+| -------------------------- | ----------------- | ----------------- | ------------------ | ---------- | ---------------------- |
+| **Development**            | ✅ Excellent       | ✅ Excellent       | ⚠️ Complex         | 🟢 Low      | Learning, prototyping  |
+| **Production**             | ⚠️ Limited        | ❌ Not recommended | ✅ Enterprise-grade | 🔴 High     | Enterprise workloads   |
+| **Scaling**                | ❌ Manual          | ⚠️ Limited        | ✅ Automatic        | 🟡 Medium   | Auto-scaling needs     |
+| **Orchestration**          | ❌ None            | ✅ Basic           | ✅ Advanced         | 🔴 High     | Multi-service apps     |
+| **Multi-Environment**      | ⚠️ Manual         | 🔄 Possible        | ✅ Native           | 🟡 Medium   | Consistent deployments |
+| **Operational Complexity** | 🟢 Low             | 🟡 Medium          | 🔴 High             | 🔴 High     | Ops team capability    |
 
 **Legend**: ✅ Excellent | 🔄 Good | ⚠️ Limited | ❌ Not suitable | 🟢 Low | 🟡 Medium | 🔴 High
 | **Security** | ⚠️ Basic | ⚠️ Basic | ✅ Enterprise |

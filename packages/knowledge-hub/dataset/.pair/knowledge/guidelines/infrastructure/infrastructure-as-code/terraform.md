@@ -480,14 +480,17 @@ jobs:
         environment: [development, staging, production]
 
     steps:
+
       - uses: actions/checkout@v4
 
       - name: Setup Terraform
+
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.5.0
 
       - name: Configure AWS credentials
+
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -495,19 +498,23 @@ jobs:
           aws-region: us-east-1
 
       - name: Terraform Init
+
         run: terraform init
         working-directory: terraform/environments/${{ matrix.environment }}
 
       - name: Terraform Plan
+
         run: terraform plan -out=tfplan
         working-directory: terraform/environments/${{ matrix.environment }}
 
       - name: Terraform Apply
+
         if: github.ref == 'refs/heads/main' && matrix.environment != 'production'
         run: terraform apply tfplan
         working-directory: terraform/environments/${{ matrix.environment }}
 
       - name: Terraform Apply (Production)
+
         if: github.ref == 'refs/heads/main' && matrix.environment == 'production'
         run: terraform apply tfplan
         working-directory: terraform/environments/${{ matrix.environment }}

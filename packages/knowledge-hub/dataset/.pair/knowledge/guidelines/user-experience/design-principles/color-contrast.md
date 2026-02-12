@@ -127,13 +127,13 @@ $background: #ffffff; // White
 ### Testing Tools and Methods
 
 **Automated Testing Tools**
-| Tool | Platform | Features | Best For |
-|------|----------|----------|----------|
-| **Colour Contrast Analyser** | Desktop | WCAG validation, color picker | Design validation |
-| **WebAIM Contrast Checker** | Web | Quick ratio checking | Quick validation |
-| **Stark (Figma/Sketch)** | Design Tools | Design integration | Design workflow |
-| **axe DevTools** | Browser Extension | Real-time testing | Development |
-| **Lighthouse** | Browser/CI | Automated auditing | CI/CD integration |
+| Tool                         | Platform          | Features                      | Best For          |
+| ---------------------------- | ----------------- | ----------------------------- | ----------------- |
+| **Colour Contrast Analyser** | Desktop           | WCAG validation, color picker | Design validation |
+| **WebAIM Contrast Checker**  | Web               | Quick ratio checking          | Quick validation  |
+| **Stark (Figma/Sketch)**     | Design Tools      | Design integration            | Design workflow   |
+| **axe DevTools**             | Browser Extension | Real-time testing             | Development       |
+| **Lighthouse**               | Browser/CI        | Automated auditing            | CI/CD integration |
 
 **Manual Testing Procedures**
 

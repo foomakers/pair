@@ -90,14 +90,14 @@ Starting infrastructure implementation?
 
 | Practice Area               | New Projects | Legacy Modernization | Scale Requirements | Multi-Cloud Needs | Container Focus |
 | --------------------------- | ------------ | -------------------- | ------------------ | ----------------- | --------------- |
-| **Cloud Providers**         | ✅ Essential | ✅ Strategic         | ✅ Critical        | ✅ Essential      | 🔄 Supportive   |
-| **Cloud Services**          | ✅ Essential | 🔄 Gradual           | ✅ Critical        | ✅ Essential      | 🔄 Supportive   |
-| **CI/CD Strategy**          | ✅ Essential | ✅ Essential         | ✅ Essential       | ✅ Essential      | ✅ Essential    |
-| **Deployment Patterns**     | 🔄 Growth    | ✅ Essential         | ✅ Critical        | ✅ Essential      | ✅ Essential    |
-| **Infrastructure as Code**  | ✅ Essential | ✅ Essential         | ✅ Essential       | ✅ Essential      | ✅ Essential    |
-| **Container Orchestration** | 🔄 Consider  | 🔄 Strategic         | ✅ Critical        | ✅ Essential      | ✅ Essential    |
-| **Environments**            | ✅ Essential | ✅ Essential         | ✅ Essential       | ✅ Essential      | ✅ Essential    |
-| **Testing Infrastructure**  | 🔄 Growth    | ✅ Essential         | ✅ Critical        | 🔄 Important      | ✅ Essential    |
+| **Cloud Providers**         | ✅ Essential  | ✅ Strategic          | ✅ Critical         | ✅ Essential       | 🔄 Supportive    |
+| **Cloud Services**          | ✅ Essential  | 🔄 Gradual            | ✅ Critical         | ✅ Essential       | 🔄 Supportive    |
+| **CI/CD Strategy**          | ✅ Essential  | ✅ Essential          | ✅ Essential        | ✅ Essential       | ✅ Essential     |
+| **Deployment Patterns**     | 🔄 Growth     | ✅ Essential          | ✅ Critical         | ✅ Essential       | ✅ Essential     |
+| **Infrastructure as Code**  | ✅ Essential  | ✅ Essential          | ✅ Essential        | ✅ Essential       | ✅ Essential     |
+| **Container Orchestration** | 🔄 Consider   | 🔄 Strategic          | ✅ Critical         | ✅ Essential       | ✅ Essential     |
+| **Environments**            | ✅ Essential  | ✅ Essential          | ✅ Essential        | ✅ Essential       | ✅ Essential     |
+| **Testing Infrastructure**  | 🔄 Growth     | ✅ Essential          | ✅ Critical         | 🔄 Important       | ✅ Essential     |
 
 **Legend**: ✅ High Priority | 🔄 Medium Priority | ⚠️ Case-Dependent
 

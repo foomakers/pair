@@ -18,9 +18,9 @@ Only check gates that are not already passing.
 
 ## Arguments
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `$scope` | No | Limit checking to specific gates: `code-quality`, `tests`, `lint`, `all` (default: `all`) |
+| Argument | Required | Description                                                                               |
+| -------- | -------- | ----------------------------------------------------------------------------------------- |
+| `$scope` | No       | Limit checking to specific gates: `code-quality`, `tests`, `lint`, `all` (default: `all`) |
 
 ## Algorithm
 

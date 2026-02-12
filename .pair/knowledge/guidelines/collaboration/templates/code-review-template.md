@@ -122,9 +122,9 @@ Performance Tests: ✅ Within Limits / ⚠️ Degradation Detected
 
 | Metric           | Before | After | Change | Acceptable |
 | ---------------- | ------ | ----- | ------ | ---------- |
-| Response Time    | XXXms  | XXXms | +/-XX% | ✅/❌      |
-| Memory Usage     | XXXMb  | XXXMb | +/-XX% | ✅/❌      |
-| Database Queries | XX     | XX    | +/-XX  | ✅/❌      |
+| Response Time    | XXXms  | XXXms | +/-XX% | ✅/❌        |
+| Memory Usage     | XXXMb  | XXXMb | +/-XX% | ✅/❌        |
+| Database Queries | XX     | XX    | +/-XX  | ✅/❌        |
 
 ## Documentation Review
 

@@ -17,16 +17,16 @@ Enterprise container strategy covering containerization approach, orchestration 
 
 ### Containerization Decision Matrix
 
-| Criterion                  | Docker          | Podman      | containerd | CRI-O      | Recommendation    |
-| -------------------------- | --------------- | ----------- | ---------- | ---------- | ----------------- |
-| **Developer Experience**   | ✅ Excellent    | ✅ Good     | ⚠️ Basic   | ⚠️ Basic   | **Docker**        |
-| **Security Model**         | ⚠️ Daemon-based | ✅ Rootless | ✅ Secure  | ✅ Secure  | **Podman/CRI-O**  |
-| **Enterprise Features**    | ✅ Full         | ✅ Good     | ⚠️ Limited | ⚠️ Limited | **Docker**        |
-| **Kubernetes Integration** | ✅ Native       | ✅ Native   | ✅ Native  | ✅ Native  | **Any**           |
-| **Registry Support**       | ✅ Full         | ✅ Full     | ✅ Full    | ✅ Full    | **Any**           |
-| **Build Performance**      | ✅ Fast         | ✅ Fast     | ⚠️ Manual  | ⚠️ Manual  | **Docker/Podman** |
-| **Resource Usage**         | ⚠️ Medium       | ✅ Light    | ✅ Light   | ✅ Light   | **Podman/CRI-O**  |
-| **Windows Support**        | ✅ Native       | ❌ Limited  | ✅ Good    | ❌ No      | **Docker**        |
+| Criterion                  | Docker          | Podman     | containerd | CRI-O      | Recommendation    |
+| -------------------------- | --------------- | ---------- | ---------- | ---------- | ----------------- |
+| **Developer Experience**   | ✅ Excellent     | ✅ Good     | ⚠️ Basic   | ⚠️ Basic   | **Docker**        |
+| **Security Model**         | ⚠️ Daemon-based | ✅ Rootless | ✅ Secure   | ✅ Secure   | **Podman/CRI-O**  |
+| **Enterprise Features**    | ✅ Full          | ✅ Good     | ⚠️ Limited | ⚠️ Limited | **Docker**        |
+| **Kubernetes Integration** | ✅ Native        | ✅ Native   | ✅ Native   | ✅ Native   | **Any**           |
+| **Registry Support**       | ✅ Full          | ✅ Full     | ✅ Full     | ✅ Full     | **Any**           |
+| **Build Performance**      | ✅ Fast          | ✅ Fast     | ⚠️ Manual  | ⚠️ Manual  | **Docker/Podman** |
+| **Resource Usage**         | ⚠️ Medium       | ✅ Light    | ✅ Light    | ✅ Light    | **Podman/CRI-O**  |
+| **Windows Support**        | ✅ Native        | ❌ Limited  | ✅ Good     | ❌ No       | **Docker**        |
 
 **Recommendation: Hybrid Approach** - Docker for development, CRI-O/containerd for production Kubernetes workloads.
 

@@ -122,14 +122,21 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     ports:
+
       - '3000:3000'
+
     volumes:
+
       - .:/app
       - /app/node_modules
+
     environment:
+
       - NODE_ENV=development
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/myapp
+
     depends_on:
+
       - postgres
       - redis
 
@@ -140,6 +147,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     volumes:
+
       - postgres_data:/var/lib/postgresql/data
 
 volumes:

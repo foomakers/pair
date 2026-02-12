@@ -286,9 +286,11 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 def arima_velocity_forecast(velocity_history, forecast_periods=6):
     """
     Advanced time series forecasting that captures:
+
     - Seasonal patterns (vacation periods, release cycles)
     - Trend changes (team maturity, process improvements)
     - Autocorrelation (how past performance influences future performance)
+
     """
 
     # First, analyze the data for seasonal patterns
@@ -338,6 +340,7 @@ def ml_velocity_forecast(features, velocities, forecast_features):
     Contextual forecasting that considers multiple factors influencing performance:
 
     Quantitative Features:
+
     - Team size and composition
     - Sprint capacity (available person-days)
     - Work complexity distribution
@@ -345,10 +348,12 @@ def ml_velocity_forecast(features, velocities, forecast_features):
     - Historical defect rates
 
     Qualitative Features (encoded):
+
     - Team experience level
     - Technology stack familiarity
     - Organizational stability
     - Process maturity level
+
     """
 
     # Random Forest handles mixed data types well and provides feature importance

@@ -490,31 +490,38 @@ jobs:
       contents: read
 
     steps:
+
       - uses: actions/checkout@v3
+
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
+
         uses: actions/setup-node@v3
         with:
           node-version: '18'
           cache: 'npm'
 
       - name: Install dependencies
+
         run: npm ci
 
       - name: Run SAST Analysis
+
         run: |
           npm run security:sast
         env:
           SARIF_OUTPUT: true
 
       - name: Upload SARIF results
+
         uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: security-results.sarif
 
       - name: Security Quality Gate
+
         run: |
           node scripts/security-gate.js
         env:
@@ -523,6 +530,7 @@ jobs:
           MAX_MEDIUM: 20
 
       - name: Comment PR with Results
+
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v6
         with:
@@ -536,6 +544,7 @@ jobs:
             **Scan Duration**: ${results.duration}ms
 
             ### Vulnerability Summary
+
             - **Critical**: ${results.summary.critical} 🔴
             - **High**: ${results.summary.high} 🟠
             - **Medium**: ${results.summary.medium} 🟡
@@ -544,6 +553,7 @@ jobs:
             ${results.summary.critical > 0 ? '### ❌ Critical Issues Must Be Fixed\n' + results.criticalIssues.map(i => `- ${i.message} (${i.file}:${i.line})`).join('\n') : ''}
 
             ### 📈 Security Metrics
+
             - **Files Scanned**: ${results.metrics.filesScanned}
             - **Lines of Code**: ${results.metrics.linesOfCode}
             - **Security Coverage**: ${results.metrics.coverage}%

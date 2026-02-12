@@ -87,8 +87,8 @@ Framework for managing multilingual content and localization processes.
 
 ## Content Strategy Implementation Decision Matrix
 
-| Content Scope                     | Primary Focus                                                                                             | Required Docs                                             | Implementation Timeline |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------- |
+| Content Scope                     | Primary Focus                                                                                         | Required Docs                                           | Implementation Timeline |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ----------------------- |
 | **New Product Launch**            | [Content Guidelines](content-guidelines.md) + [Information Architecture](information-architecture.md) | [Communication Design](communication-design.md)         | 6-8 weeks               |
 | **Interface Copy Optimization**   | [Communication Design](communication-design.md) + [Content Guidelines](content-guidelines.md)         | [Information Architecture](information-architecture.md) | 2-4 weeks               |
 | **Multi-Language Expansion**      | [Translation Management](translation-management.md) + [Content Guidelines](content-guidelines.md)     | [Communication Design](communication-design.md)         | 8-12 weeks              |

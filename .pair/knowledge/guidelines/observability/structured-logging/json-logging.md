@@ -7,6 +7,7 @@ Define JSON logging format standards and implementation guidelines for structure
 ## Scope
 
 **In Scope:**
+
 - JSON structure standards
 - Field naming conventions
 - Data type specifications
@@ -14,6 +15,7 @@ Define JSON logging format standards and implementation guidelines for structure
 - Tool compatibility
 
 **Out of Scope:**
+
 - Binary logging formats
 - Plain text logging
 - Specific tool configurations
@@ -58,12 +60,14 @@ Define JSON logging format standards and implementation guidelines for structure
 ## Field Naming Conventions
 
 ### General Rules
+
 - Use camelCase for field names
 - Avoid special characters and spaces
 - Use descriptive, concise names
 - Maintain consistency across services
 
 ### Standard Field Names
+
 - `timestamp` - ISO 8601 format
 - `level` - Log level (ERROR, WARN, INFO, DEBUG)
 - `message` - Human-readable description
@@ -75,12 +79,14 @@ Define JSON logging format standards and implementation guidelines for structure
 ## Implementation Guidelines
 
 ### Performance Optimization
+
 - Use efficient JSON serialization
 - Avoid deep nesting (max 3 levels)
 - Minimize field duplication
 - Consider async logging
 
 ### Compatibility
+
 - Ensure ELK stack compatibility
 - Support Fluentd parsing
 - Enable Prometheus metrics extraction

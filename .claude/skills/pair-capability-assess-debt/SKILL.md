@@ -9,9 +9,9 @@ Detect and flag technical debt items with severity levels. This is a **stub impl
 
 ## Arguments
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `$scope` | No | Limit detection to specific categories: `duplication`, `missing-tests`, `outdated-deps`, `architecture`, `documentation`, `all` (default: `all`) |
+| Argument | Required | Description                                                                                                                                      |
+| -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `$scope` | No       | Limit detection to specific categories: `duplication`, `missing-tests`, `outdated-deps`, `architecture`, `documentation`, `all` (default: `all`) |
 
 ## Algorithm
 
@@ -54,11 +54,11 @@ Scan the codebase or PR changes for debt indicators. For each category, follow t
 
 ## Severity Levels
 
-| Level | Description | Action |
-|-------|-------------|--------|
-| **High** | Active risk — affects correctness, security, or maintainability now | Should be addressed in current or next sprint |
-| **Medium** | Growing risk — will worsen if ignored | Plan remediation within 2-3 sprints |
-| **Low** | Minor concern — cosmetic or minor inefficiency | Address opportunistically |
+| Level      | Description                                                         | Action                                        |
+| ---------- | ------------------------------------------------------------------- | --------------------------------------------- |
+| **High**   | Active risk — affects correctness, security, or maintainability now | Should be addressed in current or next sprint |
+| **Medium** | Growing risk — will worsen if ignored                               | Plan remediation within 2-3 sprints           |
+| **Low**    | Minor concern — cosmetic or minor inefficiency                      | Address opportunistically                     |
 
 ## Output Format
 

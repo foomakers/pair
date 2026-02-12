@@ -234,13 +234,13 @@ User Research → Problem Definition → Solution Design → Validation → Iter
 
 ### Decision Matrix for Principle Application
 
-| Project Scope                 | Recommended Principles                                                                              | Implementation Docs                                                                                               | Expected Timeline |
-| ----------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ----------------- |
-| **New Product**               | All principles + [User-Centered Design](user-centered-design.md)                                  | [Consistency Standards](consistency-standards.md) + [Accessibility Integration](accessibility-integration.md) | 8-12 weeks        |
+| Project Scope                 | Recommended Principles                                                                          | Implementation Docs                                                                                           | Expected Timeline |
+| ----------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------- |
+| **New Product**               | All principles + [User-Centered Design](user-centered-design.md)                                | [Consistency Standards](consistency-standards.md) + [Accessibility Integration](accessibility-integration.md) | 8-12 weeks        |
 | **Feature Enhancement**       | [Consistency Standards](consistency-standards.md) + [Typography](typography.md)                 | [Layout Spacing](layout-spacing.md) + [Color Contrast](color-contrast.md)                                     | 4-6 weeks         |
 | **Accessibility Improvement** | [Accessibility Integration](accessibility-integration.md) + [Color Contrast](color-contrast.md) | [Typography](typography.md) + [User-Centered Design](user-centered-design.md)                                 | 2-4 weeks         |
 | **Design System Update**      | [Consistency Standards](consistency-standards.md) + [Layout Spacing](layout-spacing.md)         | [Typography](typography.md) + [Color Contrast](color-contrast.md)                                             | 6-10 weeks        |
-| **Quick Fix/Optimization**    | [Color Contrast](color-contrast.md) + [Typography](typography.md)                               | [Layout Spacing](layout-spacing.md)                                                                             | 1-2 weeks         |
+| **Quick Fix/Optimization**    | [Color Contrast](color-contrast.md) + [Typography](typography.md)                               | [Layout Spacing](layout-spacing.md)                                                                           | 1-2 weeks         |
 
 ## Integration with Other UX Components
 

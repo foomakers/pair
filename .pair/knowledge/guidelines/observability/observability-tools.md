@@ -155,12 +155,12 @@ The observability tool landscape is diverse and rapidly evolving. This guide hel
 
 | Tool                | Metrics | Logs    | Traces  | Cost    | Ease of Use | Enterprise Support | Best For               |
 | ------------------- | ------- | ------- | ------- | ------- | ----------- | ------------------ | ---------------------- |
-| DataDog             | ✅      | ✅      | ✅      | High    | High        | ✅                 | Full-stack visibility  |
-| New Relic           | ✅      | ✅      | ✅      | High    | High        | ✅                 | APM-focused monitoring |
-| Grafana Stack       | ✅      | Partial | ✅      | Low-Med | Medium      | Partial            | Open source preference |
-| ELK Stack           | Limited | ✅      | Limited | Medium  | Medium      | Commercial         | Log-centric approach   |
-| Prometheus/Grafana  | ✅      | No      | No      | Low     | Medium      | Community          | Metrics-focused        |
-| Jaeger + Prometheus | ✅      | No      | ✅      | Low     | Low         | Community          | DIY approach           |
+| DataDog             | ✅       | ✅       | ✅       | High    | High        | ✅                  | Full-stack visibility  |
+| New Relic           | ✅       | ✅       | ✅       | High    | High        | ✅                  | APM-focused monitoring |
+| Grafana Stack       | ✅       | Partial | ✅       | Low-Med | Medium      | Partial            | Open source preference |
+| ELK Stack           | Limited | ✅       | Limited | Medium  | Medium      | Commercial         | Log-centric approach   |
+| Prometheus/Grafana  | ✅       | No      | No      | Low     | Medium      | Community          | Metrics-focused        |
+| Jaeger + Prometheus | ✅       | No      | ✅       | Low     | Low         | Community          | DIY approach           |
 
 ### Decision Tree
 

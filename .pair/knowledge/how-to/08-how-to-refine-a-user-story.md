@@ -11,10 +11,10 @@ Transform User Stories from rough breakdown units into development-ready specifi
 
 This how-to orchestrates the `/pair-process-refine-story` skill.
 
-| Skill | Purpose |
-|-------|---------|
+| Skill           | Purpose                                                                                                                                                         |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/pair-process-refine-story` | Executes the full refinement process: selection, requirements (Given-When-Then), technical analysis, sprint readiness, documentation. Section-level idempotent. |
-| `/pair-capability-write-issue` | Composed by `/pair-process-refine-story` — creates or updates the story issue in the PM tool. |
+| `/pair-capability-write-issue`  | Composed by `/pair-process-refine-story` — creates or updates the story issue in the PM tool.                                                                                |
 
 > **If skills are not installed**, follow the manual workflow below.
 

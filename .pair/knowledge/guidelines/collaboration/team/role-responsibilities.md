@@ -261,12 +261,12 @@ This framework defines three primary high-level roles based on our AI-assisted d
 
 | Decision Type                | Primary Authority                                    | Escalation Path | Timeline |
 | ---------------------------- | ---------------------------------------------------- | --------------- | -------- |
-| **Product Features**         | Product Manager → Senior Management                  | 48-72 hours     |
-| **Technical Implementation** | Product Engineer → Staff Engineer → Product Manager  | 24-48 hours     |
-| **Architecture Decisions**   | Staff Engineer → Senior Management                   | 3-5 days        |
-| **Process Changes**          | Staff Engineer → Product Manager → Senior Management | 1-2 weeks       |
-| **Resource Allocation**      | Product Manager → Senior Management                  | 3-5 days        |
-| **Technology Strategy**      | Staff Engineer → Senior Management                   | 2-4 weeks       |
+| **Product Features**         | Product Manager → Senior Management                  | 48-72 hours     |          |
+| **Technical Implementation** | Product Engineer → Staff Engineer → Product Manager  | 24-48 hours     |          |
+| **Architecture Decisions**   | Staff Engineer → Senior Management                   | 3-5 days        |          |
+| **Process Changes**          | Staff Engineer → Product Manager → Senior Management | 1-2 weeks       |          |
+| **Resource Allocation**      | Product Manager → Senior Management                  | 3-5 days        |          |
+| **Technology Strategy**      | Staff Engineer → Senior Management                   | 2-4 weeks       |          |
 
 ### Collaborative Decision Framework
 

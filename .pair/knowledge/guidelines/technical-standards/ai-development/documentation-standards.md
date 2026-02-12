@@ -53,11 +53,16 @@ graph TD
 ```typescript
 // Example AI service documentation
 /**
+
  * Content Generation Service
+
  *
+
  * Provides AI-powered content generation capabilities using OpenAI's GPT models.
  * Handles text summarization, expansion, and rewriting tasks.
+
  *
+
  * @example
  * ```typescript
  * const service = new ContentGenerationService();
@@ -67,20 +72,27 @@ graph TD
  *   style: "professional"
  * });
  * ```
+
  */
 export class ContentGenerationService {
   /**
+
    * Generates a summary of the provided text
+
    *
+
    * @param options - Configuration for summary generation
    * @param options.text - The text to summarize (max 10,000 chars)
    * @param options.maxLength - Maximum summary length (50-500 chars)
    * @param options.style - Writing style: "professional" | "casual" | "technical"
    * @returns Promise resolving to generated summary and metadata
+
    *
+
    * @throws {ValidationError} When input text exceeds limits
    * @throws {AIServiceError} When the AI service is unavailable
    * @throws {RateLimitError} When rate limits are exceeded
+
    */
   async generateSummary(options: SummaryOptions): Promise<SummaryResult> {
     // Implementation details...
@@ -117,9 +129,11 @@ Provide specific, actionable feedback with line numbers when applicable.
 ```
 
 **Variables**:
+
 - `{{code}}`: The source code to be reviewed (max 5000 chars)
 
 **Expected Output**:
+
 - Structured feedback with categories
 - Specific line references
 - Severity levels (critical, warning, suggestion)
@@ -174,21 +188,29 @@ Document the final decision with:
 
 ```typescript
 /**
+
  * AI Error Handling Strategies
+
  *
+
  * Documents common AI-related errors and their handling approaches
+
  */
 
 // Rate limiting errors
 export class RateLimitHandler {
   /**
+
    * Handles API rate limit exceeded errors
+
    *
+
    * Strategy:
    * 1. Exponential backoff with jitter
    * 2. Request queuing for non-critical operations
    * 3. Graceful degradation to cached responses
    * 4. User notification for critical failures
+
    */
   async handleRateLimit(error: RateLimitError): Promise<void> {
     // Implementation with detailed error recovery
@@ -198,13 +220,17 @@ export class RateLimitHandler {
 // Model response validation
 export class ResponseValidator {
   /**
+
    * Validates AI model responses for expected format and content
+
    *
+
    * Common issues:
    * - Incomplete responses due to token limits
    * - Unexpected format variations
    * - Hallucinated information
    * - Biased or inappropriate content
+
    */
   validateResponse(response: AIResponse): ValidationResult {
     // Validation logic with specific checks
@@ -218,9 +244,13 @@ export class ResponseValidator {
 
 ```typescript
 /**
+
  * AI Performance Metrics
+
  *
+
  * Tracks key performance indicators for AI features
+
  */
 
 interface AIMetrics {
@@ -246,12 +276,16 @@ interface AIMetrics {
 }
 
 /**
+
  * Monitoring Strategy:
+
  *
+
  * 1. Real-time dashboards for critical metrics
  * 2. Automated alerts for anomalies
  * 3. A/B testing for model comparisons
  * 4. User feedback collection and analysis
+
  */
 ```
 
@@ -265,17 +299,23 @@ interface AIMetrics {
 // Use clear, descriptive comments for AI logic
 export class AIService {
   /**
+
    * IMPORTANT: This function processes user data with AI
+
    *
+
    * Privacy considerations:
    * - User data is sent to external AI service
    * - Responses are cached for 1 hour
    * - No personal information should be logged
+
    *
+
    * Performance notes:
    * - Average response time: 2-3 seconds
    * - Implements retry logic with exponential backoff
    * - Falls back to rule-based system on failure
+
    */
   async processUserQuery(query: string): Promise<AIResponse> {
     // Validate input to prevent prompt injection
@@ -303,6 +343,7 @@ export class AIService {
       Generates content based on user prompts using advanced language models.
 
       **Important Considerations:**
+
       - Responses may vary between requests due to AI randomness
       - Content should be reviewed before publication
       - Rate limited to 10 requests per minute per user

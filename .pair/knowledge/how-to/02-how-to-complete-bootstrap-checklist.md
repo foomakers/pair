@@ -70,6 +70,7 @@ BOOTSTRAP COMPLETION STATE:
    - Timeline pressures and market requirements
 
 2. **Present categorization with evidence**:
+
    _"Based on PRD analysis, this project fits **[Type X]** categorization:_
 
    - _Budget/Resources: [specific evidence]_
@@ -90,6 +91,7 @@ BOOTSTRAP COMPLETION STATE:
 **Process**: Work through checklist sections with targeted questions:
 
 1. **Architecture Assessment** - scale, integrations, compliance
+
    _"From your PRD, I see [evidence], but need clarification on:_
 
    - _Expected concurrent users and data volume_
@@ -98,6 +100,7 @@ BOOTSTRAP COMPLETION STATE:
    - _Performance targets and SLAs"_
 
 2. **Technology Stack Analysis** - team skills, preferences, constraints
+
    _"Based on your team info, I understand [composition], but need to verify:_
 
    - _Current team strengths and learning capacity_

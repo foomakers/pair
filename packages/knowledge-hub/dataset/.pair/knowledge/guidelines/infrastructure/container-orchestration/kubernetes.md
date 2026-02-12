@@ -76,6 +76,7 @@ networking:
 etcd:
   external:
     endpoints:
+
       - https://etcd1.company.com:2379
       - https://etcd2.company.com:2379
       - https://etcd3.company.com:2379
@@ -167,17 +168,25 @@ spec:
         runAsGroup: 1001
         fsGroup: 1001
       containers:
+
         - name: web-app
+
           image: registry.company.com/web-app:v1.0.0
           imagePullPolicy: Always
           ports:
+
             - containerPort: 3000
+
               name: http
               protocol: TCP
           env:
+
             - name: NODE_ENV
+
               value: 'production'
+
             - name: DATABASE_URL
+
               valueFrom:
 ## Workload Management
 
@@ -327,7 +336,9 @@ metadata:
   namespace: production
   name: web-app-role
 rules:
+
   - apiGroups: ['']
+
     resources: ['pods', 'services', 'configmaps']
     verbs: ['get', 'list', 'watch']
 
@@ -338,7 +349,9 @@ metadata:
   name: web-app-rolebinding
   namespace: production
 subjects:
+
   - kind: ServiceAccount
+
     name: web-app-sa
 roleRef:
   kind: Role

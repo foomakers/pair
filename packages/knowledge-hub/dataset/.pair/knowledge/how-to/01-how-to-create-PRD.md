@@ -103,6 +103,7 @@ PRD CREATION STATE:
    - Ask for priority on feedback items (critical vs. nice-to-have changes)
 
 2. **Review Request Template:**
+
    _"I've completed the first draft of your PRD. Please review each section and provide feedback on:_
 
    - _Accuracy of information_

@@ -47,16 +47,16 @@ secret-types:
 
 ### Secret Store Decision Matrix
 
-| Criterion                | HashiCorp Vault   | AWS Secrets Manager | Azure Key Vault | GitHub Secrets | Multi-Provider    |
-| ------------------------ | ----------------- | ------------------- | --------------- | -------------- | ----------------- |
-| **Enterprise Features**  | ✅ Full           | ✅ Full             | ✅ Full         | ⚠️ Limited     | ✅ Best-of-breed  |
-| **Cloud Integration**    | ✅ Multi-cloud    | ✅ AWS Native       | ✅ Azure Native | ❌ GitHub Only | ✅ Native Each    |
-| **Cost Efficiency**      | ⚠️ License Cost   | ✅ Pay-per-use      | ✅ Pay-per-use  | ✅ Free        | ⚠️ Variable       |
-| **Scalability**          | ✅ Unlimited      | ✅ High             | ✅ High         | ⚠️ Limited     | ✅ Unlimited      |
-| **Compliance**           | ✅ Full SOC2/FIPS | ✅ SOC2/FIPS        | ✅ SOC2/FIPS    | ✅ SOC2        | ✅ Comprehensive  |
-| **Developer Experience** | ⚠️ Complex        | ✅ Simple           | ✅ Simple       | ✅ Integrated  | ⚠️ Multiple Tools |
-| **Audit Capabilities**   | ✅ Comprehensive  | ✅ CloudTrail       | ✅ Monitor      | ⚠️ Basic       | ✅ Centralized    |
-| **Secret Rotation**      | ✅ Automated      | ✅ Automated        | ✅ Automated    | ❌ Manual      | ✅ Automated      |
+| Criterion                | HashiCorp Vault  | AWS Secrets Manager | Azure Key Vault | GitHub Secrets | Multi-Provider    |
+| ------------------------ | ---------------- | ------------------- | --------------- | -------------- | ----------------- |
+| **Enterprise Features**  | ✅ Full           | ✅ Full              | ✅ Full          | ⚠️ Limited     | ✅ Best-of-breed   |
+| **Cloud Integration**    | ✅ Multi-cloud    | ✅ AWS Native        | ✅ Azure Native  | ❌ GitHub Only  | ✅ Native Each     |
+| **Cost Efficiency**      | ⚠️ License Cost  | ✅ Pay-per-use       | ✅ Pay-per-use   | ✅ Free         | ⚠️ Variable       |
+| **Scalability**          | ✅ Unlimited      | ✅ High              | ✅ High          | ⚠️ Limited     | ✅ Unlimited       |
+| **Compliance**           | ✅ Full SOC2/FIPS | ✅ SOC2/FIPS         | ✅ SOC2/FIPS     | ✅ SOC2         | ✅ Comprehensive   |
+| **Developer Experience** | ⚠️ Complex       | ✅ Simple            | ✅ Simple        | ✅ Integrated   | ⚠️ Multiple Tools |
+| **Audit Capabilities**   | ✅ Comprehensive  | ✅ CloudTrail        | ✅ Monitor       | ⚠️ Basic       | ✅ Centralized     |
+| **Secret Rotation**      | ✅ Automated      | ✅ Automated         | ✅ Automated     | ❌ Manual       | ✅ Automated       |
 
 **Recommendation: Multi-Provider Strategy** - Use specialized solutions per environment with centralized governance and unified access patterns.
 

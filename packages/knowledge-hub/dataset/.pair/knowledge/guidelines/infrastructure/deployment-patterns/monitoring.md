@@ -344,6 +344,7 @@ context_aware_monitoring:
       monitoring_intensity: 'enhanced'
       duration: '60m'
       validation_checks:
+
         - performance_regression
         - business_impact
 ```

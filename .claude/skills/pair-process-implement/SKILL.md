@@ -9,11 +9,11 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 
 ## Composed Skills
 
-| Skill | Type | Required |
-|-------|------|----------|
-| `/pair-capability-verify-quality` | Capability | Yes — invoked at quality validation phase |
-| `/pair-capability-record-decision` | Capability | Yes — invoked when a decision needs recording |
-| `/assess-stack` | Capability | Optional — invoked when a new dependency is detected. If not installed, warn and continue. |
+| Skill              | Type       | Required                                                                                            |
+| ------------------ | ---------- | --------------------------------------------------------------------------------------------------- |
+| `/pair-capability-verify-quality`  | Capability | Yes — invoked at quality validation phase                                                           |
+| `/pair-capability-record-decision` | Capability | Yes — invoked when a decision needs recording                                                       |
+| `/assess-stack`    | Capability | Optional — invoked when a new dependency is detected. If not installed, warn and continue.          |
 | `/verify-adoption` | Capability | Optional — invoked before commit to check adoption compliance. If not installed, warn and continue. |
 
 ## Phase 0: Story & Task Analysis (BLOCKING)
@@ -78,6 +78,7 @@ Ask: _"Ready to proceed with implementation?"_
    git checkout main && git pull origin main
    git checkout -b feature/#<story-id>-<brief-description>
    ```
+
 4. **Verify**: On the correct feature branch.
 
 ### Step 1.3: Choose Commit Strategy
@@ -85,9 +86,11 @@ Ask: _"Ready to proceed with implementation?"_
 1. **Check**: Is this a single-task story?
 2. **Skip**: If single task, set strategy to `commit-per-story` (one task = one commit). Move to Phase 2.
 3. **Act**: Ask the developer:
+
    > **Commit strategy for this story:**
    > 1. **Commit per task** (recommended) — one commit per completed task, granular git history, single PR at end
    > 2. **Commit per story** — all tasks in one commit at the end, single PR
+
 4. **Verify**: Strategy is set. Apply consistently for the entire story.
 
 ## Phase 2: Task-by-Task Implementation
@@ -144,7 +147,9 @@ Follow the TDD discipline rules strictly:
 3. **Act**: Is `/assess-stack` installed?
    - **Yes**: Compose `/assess-stack` to validate and register the dependency. If `/assess-stack` rejects (incompatible) → **HALT**.
    - **No**: Warn the developer:
+
      > New dependency detected: `[package@version]`. `/assess-stack` is not installed — please manually verify against the tech stack and update [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
+
 4. **Verify**: Dependency is either validated by `/assess-stack` or acknowledged by developer.
 
 ### Step 2.5: Check for Decisions
@@ -158,8 +163,10 @@ Follow the TDD discipline rules strictly:
 
 1. **Check**: Is `/verify-adoption` installed?
 2. **Skip**: If not installed, warn:
+
    > `/verify-adoption` is not installed — skipping adoption compliance check. Please manually verify code against adoption files.
    Move to Step 2.7.
+
 3. **Act**: Compose `/verify-adoption` with `$scope` appropriate to the task.
    - Non-conformities reported → resolve via `/assess-stack` (tech-stack issues) or `/pair-capability-record-decision` (architectural gaps).
 4. **Verify**: Adoption compliance confirmed or all non-conformities resolved.
@@ -182,6 +189,7 @@ Follow the TDD discipline rules strictly:
 
    Refs: #<story-id>
    ```
+
 4. **Verify**: Commit created.
 5. **Act**: Update the PM tool — mark ONLY the completed task checkbox (`- [x] **T-N**`) in the **Task Breakdown** section of the story issue body. Do NOT touch other checkboxes (DoD, AC, Quality Assurance sections).
 6. Return to Step 2.1.
@@ -201,6 +209,7 @@ Follow the TDD discipline rules strictly:
 
    Refs: #<story-id>
    ```
+
 4. **Verify**: Commit created with all changes.
 
 ### Step 3.2: Update Story Checkboxes
@@ -219,6 +228,7 @@ Follow the TDD discipline rules strictly:
    ```bash
    git push -u origin feature/#<story-id>-<description>
    ```
+
 4. **Verify**: Branch pushed to remote.
 
 ### Step 3.4: Confirm PR with Developer
@@ -232,6 +242,7 @@ Follow the TDD discipline rules strictly:
    ├── Quality: [All gates passing]
    └── Title:   [#<story-id>] <type>: <brief description>
    ```
+
 2. **Ask**: _"Ready to create the PR?"_
 3. **Verify**: Developer confirms. If not → wait for developer instructions.
 

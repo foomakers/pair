@@ -67,6 +67,7 @@ Modern configuration management requires hierarchical configuration models that 
 ```yaml
 Configuration Hierarchy:
   Global Defaults:
+
     - Common infrastructure configurations
     - Standard security policies and compliance settings
     - Default resource limits and scaling policies
@@ -74,11 +75,13 @@ Configuration Hierarchy:
 
   Environment-Specific:
     development:
+
       - Development database and cache configurations
       - Debug logging and development tool integrations
       - Relaxed security settings for development convenience
 
     production:
+
       - Optimized performance configurations
       - Production security and compliance settings
       - High availability and disaster recovery

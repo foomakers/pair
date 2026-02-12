@@ -287,11 +287,11 @@ class ProductionA11yMonitor {
 
 | Extension    | Real-time | WCAG Coverage | CI/CD Integration | Custom Rules | Team Features |
 | ------------ | --------- | ------------- | ----------------- | ------------ | ------------- |
-| axe DevTools | ✅        | Comprehensive | ✅                | ✅           | Limited       |
-| WAVE         | ✅        | Good          | Limited           | ❌           | ❌            |
-| Lighthouse   | ❌        | Basic         | ✅                | Limited      | ✅            |
-| Stark        | ✅        | Color Focus   | Limited           | ✅           | ✅            |
-| Color Oracle | ✅        | Color Only    | ❌                | ❌           | ❌            |
+| axe DevTools | ✅         | Comprehensive | ✅                 | ✅            | Limited       |
+| WAVE         | ✅         | Good          | Limited           | ❌            | ❌             |
+| Lighthouse   | ❌         | Basic         | ✅                 | Limited      | ✅             |
+| Stark        | ✅         | Color Focus   | Limited           | ✅            | ✅             |
+| Color Oracle | ✅         | Color Only    | ❌                 | ❌            | ❌             |
 
 ### **Cost-Benefit Analysis**
 

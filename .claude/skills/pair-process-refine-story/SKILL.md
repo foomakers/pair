@@ -9,15 +9,15 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
 
 ## Composed Skills
 
-| Skill | Type | Required |
-|-------|------|----------|
+| Skill          | Type       | Required                                                |
+| -------------- | ---------- | ------------------------------------------------------- |
 | `/pair-capability-write-issue` | Capability | Yes — creates or updates the story issue in the PM tool |
 
 ## Arguments
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `$story` | No | Story identifier (e.g., `#42`). If omitted, the skill selects the highest-priority Todo story from the backlog. |
+| Argument | Required | Description                                                                                                     |
+| -------- | -------- | --------------------------------------------------------------------------------------------------------------- |
+| `$story` | No       | Story identifier (e.g., `#42`). If omitted, the skill selects the highest-priority Todo story from the backlog. |
 
 ## Algorithm
 
@@ -30,34 +30,37 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
    - **Sprint need**: stories required for upcoming sprint
    - **Dependency chain**: stories blocking other work
 4. **Act**: Present recommendation and ask developer to confirm:
+
    > Recommend refining Story `#[ID]: [Title]` (Priority: [P0/P1/P2]).
    > Reason: [business value / sprint urgency / unblocks other work].
    > Proceed?
+
 5. **Verify**: Story selected and loaded.
 
 ### Step 1: Detect Refinement State
 
 1. **Check**: Read the current story body and classify each section as **present** or **missing**:
 
-   | Section | Detection |
-   |---------|-----------|
-   | Story Statement | Has `**As a**` / `**I want**` / `**So that**` with non-placeholder content |
-   | Epic Context | Has `**Parent Epic**` with actual link |
-   | Acceptance Criteria (Given-When-Then) | Has `**Given**` / `**When**` / `**Then**` blocks |
-   | Business Rules | Has non-placeholder business rules |
-   | Edge Cases | Has non-placeholder edge case handling |
-   | Technical Analysis | Has `### Implementation Approach` or `### Strategy` with content |
-   | Technical Risks | Has risk table with entries |
-   | Definition of Done | Has DoD checklist with items |
-   | Story Sizing | Has `**Final Story Points**` with value |
-   | Dependencies | Has dependency information |
-   | Validation Strategy | Has testing approach |
+| Section                               | Detection                                                                  |
+| ------------------------------------- | -------------------------------------------------------------------------- |
+| Story Statement                       | Has `**As a**` / `**I want**` / `**So that**` with non-placeholder content |
+| Epic Context                          | Has `**Parent Epic**` with actual link                                     |
+| Acceptance Criteria (Given-When-Then) | Has `**Given**` / `**When**` / `**Then**` blocks                           |
+| Business Rules                        | Has non-placeholder business rules                                         |
+| Edge Cases                            | Has non-placeholder edge case handling                                     |
+| Technical Analysis                    | Has `### Implementation Approach` or `### Strategy` with content           |
+| Technical Risks                       | Has risk table with entries                                                |
+| Definition of Done                    | Has DoD checklist with items                                               |
+| Story Sizing                          | Has `**Final Story Points**` with value                                    |
+| Dependencies                          | Has dependency information                                                 |
+| Validation Strategy                   | Has testing approach                                                       |
 
 2. **Act**: Determine refinement state:
    - **All sections present** → story is already Refined. Offer selective update (Step 6).
    - **Some sections present** → partial refinement. Resume from first missing section (Steps 2–5).
    - **No sections (only Initial Breakdown)** → full refinement needed (Steps 2–5).
 3. **Verify**: Refinement state determined. Report:
+
    > Refinement state: [N/M sections complete]. [Resuming from: Section X | Full refinement | Already refined — offering update].
 
 ### Step 2: Requirements Analysis
@@ -69,11 +72,13 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
    - Identify **business rules** with measurable criteria.
    - Address **edge cases** and error handling conditions.
 2. **Act**: Present the proposed criteria to the developer for validation:
+
    > Proposed acceptance criteria for `#[ID]`:
    > [List Given-When-Then scenarios]
    > [Business rules]
    > [Edge cases]
    > Approve or adjust?
+
 3. **Verify**: Developer approves. Criteria finalized.
 
 ### Step 3: Technical Analysis
@@ -117,11 +122,13 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
 Reached only when Step 1 detects all sections are present.
 
 1. **Act**: Ask the developer which sections to update:
+
    > Story `#[ID]` is already refined. Which sections need updating?
    > 1. Acceptance Criteria
    > 2. Technical Analysis
    > 3. Sprint Sizing
    > 4. All sections
+
 2. **Act**: For selected sections, re-execute the corresponding step (2, 3, or 4).
 3. **Act**: Compose `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]`, and updated `$content`.
 4. **Verify**: Story updated.

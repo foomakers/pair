@@ -218,8 +218,8 @@ Strategic Goals → User Insights → Methodology → Evidence
 
 ### Research Implementation Decision Matrix
 
-| Research Objective        | Primary Method                                                | Documentation                                        | Timeline  | Integration Points                                                 |
-| ------------------------- | ------------------------------------------------------------- | ---------------------------------------------------- | --------- | ------------------------------------------------------------------ |
+| Research Objective        | Primary Method                                              | Documentation                                        | Timeline  | Integration Points                                                 |
+| ------------------------- | ----------------------------------------------------------- | ---------------------------------------------------- | --------- | ------------------------------------------------------------------ |
 | **Problem Discovery**     | Ethnographic + [Research Methods](research-methods.md)      | User journey analysis + Contextual inquiry protocols | 2-4 weeks | [Design Principles](../design-principles/README.md) validation     |
 | **Concept Validation**    | Prototype testing + [Research Methods](research-methods.md) | Usability testing protocols + A/B testing setup      | 1-2 weeks | [Interface Design](../interface-design/README.md) optimization     |
 | **Design Optimization**   | Usability testing + [Research Methods](research-methods.md) | Task analysis + Performance metrics                  | 1-3 weeks | [Design Systems](../design-systems/README.md) component validation |
@@ -228,8 +228,8 @@ Strategic Goals → User Insights → Methodology → Evidence
 
 ## Research Method Selection Matrix
 
-| Research Goal             | Timeline  | Resources  | Recommended Methods                                              | Implementation Guide                                            |
-| ------------------------- | --------- | ---------- | ---------------------------------------------------------------- | --------------------------------------------------------------- |
+| Research Goal             | Timeline  | Resources  | Recommended Methods                                              | Implementation Guide                                          |
+| ------------------------- | --------- | ---------- | ---------------------------------------------------------------- | ------------------------------------------------------------- |
 | **Problem Discovery**     | 2-4 weeks | Medium     | Ethnographic research + In-depth interviews + Analytics analysis | [Research Methods](research-methods.md) - Generative section  |
 | **Concept Validation**    | 1-2 weeks | Low-Medium | Prototype testing + Survey research + Expert review              | [Research Methods](research-methods.md) - Evaluative section  |
 | **Design Optimization**   | 1-3 weeks | Low-Medium | Usability testing + A/B testing + First-click analysis           | [Research Methods](research-methods.md) - Performance section |

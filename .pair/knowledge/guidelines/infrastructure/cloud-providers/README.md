@@ -108,14 +108,14 @@ Selecting cloud provider strategy?
 
 ## 📊 Provider Comparison Selection Matrix
 
-| Criteria                 | AWS          | GCP          | Azure     | Vercel     | Weight |
-| ------------------------ | ------------ | ------------ | --------- | ---------- | ------ |
-| **Service Breadth**      | Excellent    | Good         | Excellent | Limited    | 25%    |
-| **Enterprise Features**  | Excellent    | Good         | Excellent | Limited    | 20%    |
-| **Cost Effectiveness**   | Good         | Excellent    | Good      | Good       | 20%    |
-| **Developer Experience** | Good         | Good         | Good      | Excellent  | 15%    |
-| **AI/ML Capabilities**   | 🔄 Good      | ✅ Excellent | 🔄 Good   | ⚠️ Limited | 10%    |
-| **Global Presence**      | ✅ Excellent | 🔄 Good      | 🔄 Good   | 🔄 Good    | 10%    |
+| Criteria                 | AWS         | GCP         | Azure     | Vercel     | Weight |
+| ------------------------ | ----------- | ----------- | --------- | ---------- | ------ |
+| **Service Breadth**      | Excellent   | Good        | Excellent | Limited    | 25%    |
+| **Enterprise Features**  | Excellent   | Good        | Excellent | Limited    | 20%    |
+| **Cost Effectiveness**   | Good        | Excellent   | Good      | Good       | 20%    |
+| **Developer Experience** | Good        | Good        | Good      | Excellent  | 15%    |
+| **AI/ML Capabilities**   | 🔄 Good      | ✅ Excellent | 🔄 Good    | ⚠️ Limited | 10%    |
+| **Global Presence**      | ✅ Excellent | 🔄 Good      | 🔄 Good    | 🔄 Good     | 10%    |
 
 **Legend**: ✅ Excellent | 🔄 Good | ⚠️ Limited
 

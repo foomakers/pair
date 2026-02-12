@@ -223,13 +223,13 @@ Community → Core Team → Spike → Validation → Release → Knowledge Base
 
 ### Implementation Decision Matrix
 
-| System Maturity        | Architecture Focus                                                                                | Required Docs                                   | Implementation Path                                        |
-| ---------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ---------------------------------------------------------- |
+| System Maturity        | Architecture Focus                                                                            | Required Docs                                 | Implementation Path                                        |
+| ---------------------- | --------------------------------------------------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------- |
 | **Greenfield Project** | [System Architecture](system-architecture.md) + [Design Tokens](design-tokens.md)             | [Component Libraries](component-libraries.md) | Foundation → Tokens → Components (12-16 weeks)             |
 | **Existing Product**   | [Component Libraries](component-libraries.md) + [Design Tokens](design-tokens.md)             | [System Architecture](system-architecture.md) | Audit → Tokens → Migration (8-12 weeks)                    |
 | **Multi-Platform**     | [System Architecture](system-architecture.md) + [Component Libraries](component-libraries.md) | [Design Tokens](design-tokens.md)             | Cross-platform strategy → Implementation (16-24 weeks)     |
 | **Legacy Migration**   | [Design Tokens](design-tokens.md) + [System Architecture](system-architecture.md)             | [Component Libraries](component-libraries.md) | Token extraction → Architecture → Components (20-30 weeks) |
-| **Maintenance Mode**   | [Component Libraries](component-libraries.md)                                                   | [Design Tokens](design-tokens.md)             | Component updates → Token refinement (4-8 weeks)           |
+| **Maintenance Mode**   | [Component Libraries](component-libraries.md)                                                 | [Design Tokens](design-tokens.md)             | Component updates → Token refinement (4-8 weeks)           |
 
 ## Design System Tool Selection Matrix
 

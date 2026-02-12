@@ -86,11 +86,11 @@ Selecting deployment strategy?
 
 | Strategy          | Risk Level | Rollback Speed | Resource Usage | Complexity | Downtime | Best For             |
 | ----------------- | ---------- | -------------- | -------------- | ---------- | -------- | -------------------- |
-| **Blue-Green**    | 🟢 Low     | ⚡ Instant     | 🔴 High (2x)   | 🟡 Medium  | ✅ Zero  | Critical systems     |
-| **Canary**        | 🟢 Low     | ⚡ Fast        | 🟡 Medium      | 🔴 High    | ✅ Zero  | User-facing apps     |
-| **Rolling**       | 🟡 Medium  | 🟡 Medium      | 🟢 Low         | 🟢 Low     | ✅ Zero  | Standard deployments |
-| **Feature Flags** | 🟢 Low     | ⚡ Instant     | 🟢 Low         | 🟡 Medium  | ✅ Zero  | Gradual rollouts     |
-| **Recreate**      | 🔴 High    | 🔴 Slow        | 🟢 Low         | 🟢 Low     | 🔴 Yes   | Development/testing  |
+| **Blue-Green**    | 🟢 Low      | ⚡ Instant      | 🔴 High (2x)    | 🟡 Medium   | ✅ Zero   | Critical systems     |
+| **Canary**        | 🟢 Low      | ⚡ Fast         | 🟡 Medium       | 🔴 High     | ✅ Zero   | User-facing apps     |
+| **Rolling**       | 🟡 Medium   | 🟡 Medium       | 🟢 Low          | 🟢 Low      | ✅ Zero   | Standard deployments |
+| **Feature Flags** | 🟢 Low      | ⚡ Instant      | 🟢 Low          | 🟡 Medium   | ✅ Zero   | Gradual rollouts     |
+| **Recreate**      | 🔴 High     | 🔴 Slow         | 🟢 Low          | 🟢 Low      | 🔴 Yes    | Development/testing  |
 
 **Legend**: 🟢 Excellent | 🟡 Good | 🔴 Challenging
 

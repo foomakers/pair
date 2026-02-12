@@ -110,6 +110,7 @@ git mv .pair/product/backlog/03-user-stories/in-progress/01-01-001-user-auth.md 
 git commit -m "feat: implement user registration endpoint
 
 Addresses #01-01-001
+
 - Add POST /auth/register endpoint
 - Implement password hashing with bcrypt
 - Add email validation and duplicate checking
@@ -229,8 +230,10 @@ jobs:
   update-dashboard:
     runs-on: ubuntu-latest
     steps:
+
       - uses: actions/checkout@v3
       - name: Generate backlog report
+
         run: |
           ./scripts/backlog-report.sh > .pair/product/adopted/current-backlog.md
           git add .pair/product/adopted/current-backlog.md

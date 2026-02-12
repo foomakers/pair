@@ -58,11 +58,11 @@ Observability extends beyond traditional monitoring by providing context-rich da
 
 | Tool               | Metrics | Logs    | Traces  | AI Features | Cost       | Best For               |
 | ------------------ | ------- | ------- | ------- | ----------- | ---------- | ---------------------- |
-| DataDog            | ✅      | ✅      | ✅      | ✅          | High       | Enterprise teams       |
-| New Relic          | ✅      | ✅      | ✅      | ✅          | High       | APM-focused orgs       |
-| Grafana Stack      | ✅      | ✅      | ✅      | Partial     | Low-Medium | Open source preference |
-| ELK Stack          | Partial | ✅      | Partial | Limited     | Medium     | Log-centric approach   |
-| Prometheus/Grafana | ✅      | Limited | Limited | No          | Low        | Metrics-focused        |
+| DataDog            | ✅       | ✅       | ✅       | ✅           | High       | Enterprise teams       |
+| New Relic          | ✅       | ✅       | ✅       | ✅           | High       | APM-focused orgs       |
+| Grafana Stack      | ✅       | ✅       | ✅       | Partial     | Low-Medium | Open source preference |
+| ELK Stack          | Partial | ✅       | Partial | Limited     | Medium     | Log-centric approach   |
+| Prometheus/Grafana | ✅       | Limited | Limited | No          | Low        | Metrics-focused        |
 
 ### Decision Matrix
 

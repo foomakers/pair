@@ -7,12 +7,14 @@ Define log level standards and usage guidelines to ensure consistent log categor
 ## Scope
 
 **In Scope:**
+
 - Log level definitions and use cases
 - Selection criteria and guidelines
 - Performance impact considerations
 - Runtime configuration strategies
 
 **Out of Scope:**
+
 - Tool-specific configurations
 - Log format specifications
 - Storage and retention policies
@@ -22,6 +24,7 @@ Define log level standards and usage guidelines to ensure consistent log categor
 ### ERROR
 **Purpose:** Critical errors that require immediate attention
 **Use Cases:**
+
 - Application crashes or failures
 - Data corruption or loss
 - Security breaches or violations
@@ -42,6 +45,7 @@ Define log level standards and usage guidelines to ensure consistent log categor
 ### WARN
 **Purpose:** Potentially harmful situations that don't stop execution
 **Use Cases:**
+
 - Deprecated API usage
 - Resource constraints approaching limits
 - Configuration issues
@@ -62,6 +66,7 @@ Define log level standards and usage guidelines to ensure consistent log categor
 ### INFO
 **Purpose:** Informational messages highlighting application progress
 **Use Cases:**
+
 - Application startup/shutdown
 - Significant business events
 - Configuration changes
@@ -80,6 +85,7 @@ Define log level standards and usage guidelines to ensure consistent log categor
 ### DEBUG
 **Purpose:** Detailed information for debugging purposes
 **Use Cases:**
+
 - Function entry/exit
 - Variable values
 - Detailed execution flow
@@ -101,6 +107,7 @@ Define log level standards and usage guidelines to ensure consistent log categor
 ### TRACE
 **Purpose:** Very detailed information for complex debugging
 **Use Cases:**
+
 - Step-by-step execution tracking
 - Performance profiling
 - Complex system interaction analysis
@@ -108,17 +115,20 @@ Define log level standards and usage guidelines to ensure consistent log categor
 ## Usage Guidelines
 
 ### Production Environments
+
 - **Default Level:** INFO
 - **Error Handling:** ERROR and WARN always enabled
 - **Performance:** Minimize DEBUG and TRACE
 - **Business Events:** Use INFO for significant events
 
 ### Development Environments
+
 - **Default Level:** DEBUG
 - **Troubleshooting:** Enable TRACE when needed
 - **Testing:** Use appropriate levels for test validation
 
 ### Performance Considerations
+
 - **High Volume:** Avoid DEBUG/TRACE in production
 - **Async Logging:** Use for high-frequency logs
 - **Conditional Logging:** Check level before expensive operations
@@ -126,12 +136,14 @@ Define log level standards and usage guidelines to ensure consistent log categor
 ## Runtime Configuration
 
 ### Dynamic Level Changes
+
 - Support runtime log level modification
 - Service-specific level configuration
 - Feature flag integration
 - Performance impact monitoring
 
 ### Environment-Based Defaults
+
 - Production: INFO level default
 - Staging: DEBUG level default
 - Development: DEBUG or TRACE default

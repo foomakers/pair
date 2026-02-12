@@ -112,13 +112,13 @@ The goal is to create alerting systems that are both sensitive enough to catch r
 
 ## Tool Comparison Matrix
 
-| Tool             | Alerting Features | Integration   | AI Features | Cost        | Best For           |
-| ---------------- | ----------------- | ------------- | ----------- | ----------- | ------------------ |
-| PagerDuty        | ✅ Comprehensive  | ✅ Extensive  | ✅ Advanced | High        | Enterprise teams   |
-| Opsgenie         | ✅ Comprehensive  | ✅ Good       | ✅ Basic    | Medium-High | Mid-size teams     |
-| VictorOps/Splunk | ✅ Good           | ✅ Good       | ✅ Basic    | Medium      | DevOps teams       |
-| Alertmanager     | ✅ Basic          | ✅ Limited    | ❌ None     | Free        | Open source stacks |
-| AWS CloudWatch   | ✅ Basic          | ✅ AWS native | ❌ Limited  | Low-Medium  | AWS-centric        |
+| Tool             | Alerting Features | Integration  | AI Features | Cost        | Best For           |
+| ---------------- | ----------------- | ------------ | ----------- | ----------- | ------------------ |
+| PagerDuty        | ✅ Comprehensive   | ✅ Extensive  | ✅ Advanced  | High        | Enterprise teams   |
+| Opsgenie         | ✅ Comprehensive   | ✅ Good       | ✅ Basic     | Medium-High | Mid-size teams     |
+| VictorOps/Splunk | ✅ Good            | ✅ Good       | ✅ Basic     | Medium      | DevOps teams       |
+| Alertmanager     | ✅ Basic           | ✅ Limited    | ❌ None      | Free        | Open source stacks |
+| AWS CloudWatch   | ✅ Basic           | ✅ AWS native | ❌ Limited   | Low-Medium  | AWS-centric        |
 
 ## Decision Tree for Alert Tools
 

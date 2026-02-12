@@ -14,15 +14,15 @@ Transform a refined user story into specific, actionable implementation tasks. T
 
 ## Composed Skills
 
-| Skill | Type | Required |
-|-------|------|----------|
+| Skill          | Type       | Required                                                   |
+| -------------- | ---------- | ---------------------------------------------------------- |
 | `/write-issue` | Capability | Yes — creates task issues and updates the story issue body |
 
 ## Arguments
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `$story` | No | Story identifier (e.g., `#42`). If omitted, selects the highest-priority Refined story from the backlog. |
+| Argument | Required | Description                                                                                              |
+| -------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| `$story` | No       | Story identifier (e.g., `#42`). If omitted, selects the highest-priority Refined story from the backlog. |
 
 ## Algorithm
 
@@ -35,9 +35,11 @@ Transform a refined user story into specific, actionable implementation tasks. T
    - **Sprint need**: stories required for upcoming sprint
    - **Dependency chain**: stories unblocking other work
 4. **Act**: Present recommendation and ask developer to confirm:
+
    > Recommend task breakdown for Story `#[ID]: [Title]` (Priority: [P0/P1/P2]).
    > Reason: [business value / sprint urgency / unblocks other work].
    > Proceed?
+
 5. **Verify**: Story selected and loaded.
 
 ### Step 1: Detect Existing Tasks
@@ -48,6 +50,7 @@ Transform a refined user story into specific, actionable implementation tasks. T
    - **Partial tasks** (some T-N entries but gaps in AC coverage) → resume from first missing task (Steps 3–6).
    - **All tasks present with full AC coverage** → already complete. Offer selective update (Step 7).
 3. **Verify**: Task state determined. Report:
+
    > Task state: [N existing tasks covering M/K ACs]. [Full breakdown | Resume from T-X | Already complete — offering update].
 
 ### Step 2: Technical Context Analysis
@@ -70,10 +73,12 @@ Transform a refined user story into specific, actionable implementation tasks. T
    - Ensure every AC is covered by at least one task.
 2. **Act**: Identify dependencies between tasks and determine execution order.
 3. **Act**: Present task list to developer:
+
    > Proposed [N] tasks for `#[ID]`:
    > [Numbered list with task title, type, bounded context, estimated hours]
    > AC coverage: [all ACs mapped]
    > Approve or adjust?
+
 4. **Verify**: Developer approves. Task list finalized.
 
 ### Step 4: Task Definition
@@ -115,11 +120,13 @@ For each task (skipping tasks that already exist in the story body):
 Reached only when Step 1 detects all tasks are present with full AC coverage.
 
 1. **Act**: Ask the developer what to update:
+
    > Story `#[ID]` already has a complete task breakdown. What needs updating?
    > 1. Add new tasks (new AC or scope change)
    > 2. Modify existing task definitions
    > 3. Update dependency graph
    > 4. Full re-breakdown
+
 2. **Act**: For selected option, re-execute the corresponding steps.
 3. **Act**: Compose `/write-issue` with `$type: story`, `$id: [story-id]`, and updated content.
 4. **Verify**: Story updated.

@@ -111,17 +111,24 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     ports:
+
       - '3000:3000'
+
     volumes:
+
       - .:/app
       - /app/node_modules
+
     environment:
+
       - NODE_ENV=development
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/myapp_dev
+
     depends_on:
       postgres:
         condition: service_healthy
     networks:
+
       - app-network
 
   postgres:
@@ -131,11 +138,14 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     volumes:
+
       - postgres_data:/var/lib/postgresql/data
+
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 5s
     networks:
+
       - app-network
 
 volumes:
@@ -525,24 +535,28 @@ class PerformanceOptimizer {
 ```yaml
 development_security:
   container_security:
+
     - use_non_root_user: true
     - limit_container_capabilities: true
     - secure_default_configurations: true
     - regular_base_image_updates: true
 
   secret_management:
+
     - no_production_secrets_in_dev: true
     - use_development_specific_secrets: true
     - secure_secret_injection: true
     - regular_secret_rotation: true
 
   network_security:
+
     - isolate_development_networks: true
     - use_development_specific_endpoints: true
     - implement_access_controls: true
     - monitor_network_traffic: true
 
   data_protection:
+
     - use_synthetic_test_data: true
     - anonymize_production_data: true
     - implement_data_retention_policies: true

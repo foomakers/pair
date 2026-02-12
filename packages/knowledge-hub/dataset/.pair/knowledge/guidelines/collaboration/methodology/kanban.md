@@ -87,22 +87,22 @@ Visual workflow management system that optimizes flow and delivery through work-
 **Simple Three-Column Board**
 
 ```
-| To Do | Doing | Done |
-|-------|-------|------|
-| Item 1| Item 4| Item 7|
-| Item 2| Item 5| Item 8|
-| Item 3| Item 6|       |
+| To Do  | Doing  | Done   |
+| ------ | ------ | ------ |
+| Item 1 | Item 4 | Item 7 |
+| Item 2 | Item 5 | Item 8 |
+| Item 3 | Item 6 |        |
 WIP:  ∞    2      ∞
 ```
 
 **Extended Workflow Board**
 
 ```
-| Backlog | Ready | Analysis | Development | Review | Testing | Deploy | Done |
-|---------|-------|----------|-------------|---------|---------|---------|------|
-| Item 1  | Item 4| Item 7   | Item 10     | Item 13 | Item 16 |         |Item 19|
-| Item 2  | Item 5| Item 8   | Item 11     | Item 14 |         |         |Item 20|
-| Item 3  | Item 6| Item 9   | Item 12     | Item 15 |         |         |      |
+| Backlog | Ready  | Analysis | Development | Review  | Testing | Deploy | Done    |
+| ------- | ------ | -------- | ----------- | ------- | ------- | ------ | ------- |
+| Item 1  | Item 4 | Item 7   | Item 10     | Item 13 | Item 16 |        | Item 19 |
+| Item 2  | Item 5 | Item 8   | Item 11     | Item 14 |         |        | Item 20 |
+| Item 3  | Item 6 | Item 9   | Item 12     | Item 15 |         |        |         |
 WIP:   ∞     3       2          3           2         1         1        ∞
 ```
 
@@ -118,12 +118,12 @@ Board Organization by:
 - Customer/Project (Client A, Client B, Internal)
 
 Example:
-| Ready | Dev | Review | Done |
-|-------|-----|--------|------|
-| [Expedite Swim Lane]        |
-| [Feature Swim Lane]         |
-| [Bug Fix Swim Lane]         |
-| [Tech Debt Swim Lane]       |
+| Ready                 | Dev | Review | Done |
+| --------------------- | --- | ------ | ---- |
+| [Expedite Swim Lane]  |     |        |      |
+| [Feature Swim Lane]   |     |        |      |
+| [Bug Fix Swim Lane]   |     |        |      |
+| [Tech Debt Swim Lane] |     |        |      |
 ```
 
 **Card Information**

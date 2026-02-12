@@ -16,10 +16,10 @@ The process is designed to:
 
 | Symbol | Role                     | Description                       |
 | ------ | ------------------------ | --------------------------------- |
-| 🤖🤝👨‍💻 | **LLM + Dev Review**     | LLM proposes, Developer validates |
-| 👨‍💻💡🤖 | **Dev + LLM Suggestion** | Developer leads, LLM supports     |
-| 🤖⚡   | **LLM Agent**            | Full autonomy until completion    |
-| 👨‍💻     | **Dev**                  | Developer-only activity           |
+| 🤖🤝👨‍💻  | **LLM + Dev Review**     | LLM proposes, Developer validates |
+| 👨‍💻💡🤖  | **Dev + LLM Suggestion** | Developer leads, LLM supports     |
+| 🤖⚡     | **LLM Agent**            | Full autonomy until completion    |
+| 👨‍💻    | **Dev**                  | Developer-only activity           |
 
 ---
 
@@ -43,12 +43,12 @@ The process is designed to:
 
 ### Timeline & Card Types
 
-| Level                             | Duration (Sprints) | Value Stream       | Card Type              | Focus                                              |
-| --------------------------------- | ------------------ | ------------------ | ---------------------- | -------------------------------------------------- |
+| Level                            | Duration (Sprints) | Value Stream       | Card Type              | Focus                                              |
+| -------------------------------- | ------------------ | ------------------ | ---------------------- | -------------------------------------------------- |
 | 📘 **Induction**                  | One-time           | Product Foundation | **PRD**                | Product Vision, Market Fit, Technical Architecture |
 | 🚀 **Strategic Initiatives**      | 6-8 sprints        | Business Value     | **Initiative**         | Business Objectives, Value Proposition, Roadmap    |
 | 🧩 **Customer-Facing Iterations** | 2-4 sprints        | User Experience    | **Epic**               | Feature Sets, User Journeys, Integration Points    |
-| 🛠️ **Continuous Value Delivery**  | 1 sprint           | Working Software   | **User Story (&Task)** | Deliverable Features, Code Quality, User Feedback  |
+| 🛠️ **Continuous Value Delivery** | 1 sprint           | Working Software   | **User Story (&Task)** | Deliverable Features, Code Quality, User Feedback  |
 
 ---
 

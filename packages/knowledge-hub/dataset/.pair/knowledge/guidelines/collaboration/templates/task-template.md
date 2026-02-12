@@ -116,10 +116,10 @@ before the footer).
 
 ### AC Coverage
 
-| AC | Tasks |
-|----|-------|
+| AC                   | Tasks    |
+| -------------------- | -------- |
 | AC-1 ([brief label]) | T-1, T-3 |
-| AC-2 ([brief label]) | T-2 |
+| AC-2 ([brief label]) | T-2      |
 | AC-3 ([brief label]) | T-2, T-4 |
 
 ---

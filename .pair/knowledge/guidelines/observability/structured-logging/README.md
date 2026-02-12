@@ -7,6 +7,7 @@ Define structured logging standards, formats, and best practices that enable eff
 ## Scope
 
 **In Scope:**
+
 - Structured logging formats and standards
 - Log level definitions and usage
 - Contextual information strategies
@@ -15,6 +16,7 @@ Define structured logging standards, formats, and best practices that enable eff
 - Performance optimization
 
 **Out of Scope:**
+
 - Log storage infrastructure
 - Specific logging tool configurations
 - Log visualization details
@@ -27,6 +29,7 @@ Structured logging transforms traditional text-based logs into machine-readable,
 ## Directory Contents
 
 ### Files
+
 - `contextual-information.md` - Context enrichment and correlation strategies
 - `json-logging.md` - JSON format standards and implementation
 - `log-levels.md` - Log level definitions and usage guidelines
@@ -36,18 +39,21 @@ Structured logging transforms traditional text-based logs into machine-readable,
 ## Structured Logging Principles
 
 ### Machine Readability
+
 - Consistent format structure
 - Parseable data fields
 - Standardized field names
 - Type-safe data values
 
 ### Human Readability
+
 - Clear message content
 - Logical field organization
 - Readable timestamp formats
 - Contextual information
 
 ### Searchability
+
 - Indexed field structure
 - Query-optimized formats
 - Consistent naming conventions
@@ -56,18 +62,21 @@ Structured logging transforms traditional text-based logs into machine-readable,
 ## Implementation Strategy
 
 ### Format Selection
+
 - JSON for structured data
 - Key-value pairs for simple logs
 - Standardized timestamp formats
 - Consistent field hierarchies
 
 ### Context Enrichment
+
 - Request correlation IDs
 - User and session information
 - Service and environment data
 - Business context integration
 
 ### Performance Optimization
+
 - Asynchronous logging patterns
 - Efficient serialization
 - Log level optimization
@@ -75,12 +84,12 @@ Structured logging transforms traditional text-based logs into machine-readable,
 
 ## Log Format Comparison
 
-| Format | Readability | Parseability | Performance | Storage | Best For |
-|--------|-------------|--------------|-------------|---------|----------|
-| JSON | Medium | High | Medium | Medium | Structured analysis |
-| Key-Value | High | High | High | Low | Simple parsing |
-| Plain Text | High | Low | High | Low | Human debugging |
-| Binary | Low | High | Very High | Very Low | High volume systems |
+| Format     | Readability | Parseability | Performance | Storage  | Best For            |
+| ---------- | ----------- | ------------ | ----------- | -------- | ------------------- |
+| JSON       | Medium      | High         | Medium      | Medium   | Structured analysis |
+| Key-Value  | High        | High         | High        | Low      | Simple parsing      |
+| Plain Text | High        | Low          | High        | Low      | Human debugging     |
+| Binary     | Low         | High         | Very High   | Very Low | High volume systems |
 
 ## Decision Tree for Log Formats
 
@@ -104,18 +113,21 @@ Start: What's your primary use case?
 ## Best Practices
 
 ### Logging Strategy
+
 - Log meaningful events
 - Include sufficient context
 - Avoid logging sensitive data
 - Optimize for analysis needs
 
 ### Performance Considerations
+
 - Asynchronous logging implementation
 - Log level runtime configuration
 - Buffer and batch optimization
 - Resource impact monitoring
 
 ### Security and Privacy
+
 - PII data exclusion
 - Secure log transmission
 - Access control implementation

@@ -495,10 +495,10 @@ console.log(html)
 
 | Tool        | Speed  | Accuracy | WCAG Coverage | CI/CD Ready | Learning Curve |
 | ----------- | ------ | -------- | ------------- | ----------- | -------------- |
-| axe-core    | Fast   | High     | Comprehensive | ✅          | Low            |
-| Pa11y       | Medium | High     | Good          | ✅          | Low            |
-| Lighthouse  | Slow   | Medium   | Basic         | ✅          | Medium         |
-| AI Insights | Medium | High     | Comprehensive | ✅          | Medium         |
+| axe-core    | Fast   | High     | Comprehensive | ✅           | Low            |
+| Pa11y       | Medium | High     | Good          | ✅           | Low            |
+| Lighthouse  | Slow   | Medium   | Basic         | ✅           | Medium         |
+| AI Insights | Medium | High     | Comprehensive | ✅           | Medium         |
 
 ### **Use Case Decision Matrix**
 

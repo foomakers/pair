@@ -158,11 +158,11 @@ USER STORY BREAKDOWN STATE:
 
    _"Complete story breakdown with INVEST validation:_
 
-   | Story  | Title  | UI Value                         | Dependencies | Size | Confidence |
-   | ------ | ------ | -------------------------------- | ------------ | ---- | ---------- |
-   | 01-001 | [Name] | [Visible UI element/interaction] | None         | M(3) | Medium     |
-   | 01-002 | [Name] | [UI feedback/display]            | Story 001    | S(2) | High       |
-   | 01-003 | [Name] | [UI control/screen]              | Story 001    | M(3) | Medium     |
+| Story  | Title  | UI Value                         | Dependencies | Size | Confidence |
+| ------ | ------ | -------------------------------- | ------------ | ---- | ---------- |
+| 01-001 | [Name] | [Visible UI element/interaction] | None         | M(3) | Medium     |
+| 01-002 | [Name] | [UI feedback/display]            | Story 001    | S(2) | High       |
+| 01-003 | [Name] | [UI control/screen]              | Story 001    | M(3) | Medium     |
 
    **INVEST Compliance**: All stories validated for independence, value, estimability
    **UI-First Approach**: Every story produces something demonstrable in sprint review

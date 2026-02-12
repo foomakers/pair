@@ -77,19 +77,19 @@ Complete checklist ordered by priority for each work item:
 
 ## 🎯 Responsibility Matrix
 
-| Criteria                  | Primary Responsibility | Tool Assistance | Guidelines Reference                                                                        |
-| ------------------------- | ---------------------- | --------------- | ------------------------------------------------------------------------------------------- |
+| Criteria                  | Primary Responsibility | Tool Assistance | Guidelines Reference                                                   |
+| ------------------------- | ---------------------- | --------------- | ---------------------------------------------------------------------- |
 | Requirements & Acceptance | Team Review            | High            | [Code Design Guidelines](../../code-design/README.md)                  |
-| Technical Standards       | Team Review            | High            | [Architectural Guidelines](../../architecture/README.md) |
-| ADRs Compliance           | Team Review            | Medium          | [Architectural Guidelines](../../architecture/README.md) |
+| Technical Standards       | Team Review            | High            | [Architectural Guidelines](../../architecture/README.md)               |
+| ADRs Compliance           | Team Review            | Medium          | [Architectural Guidelines](../../architecture/README.md)               |
 | Tech Guidance             | Team Review            | High            | [Technical Guidelines](../../technical-standards/README.md)            |
-| Infrastructure            | DevOps Team            | Medium          | [Infrastructure Guidelines](../../infrastructure/README.md)        |
-| UX Criteria               | UX/Dev Team            | Medium          | [UX Guidelines](../../user-experience/README.md)                         |
-| Accessibility             | UX/Dev Team            | Medium          | [Accessibility Guidelines]../accessibility/accessibility-guidelines.md                      |
-| Security Assessment       | Security Lead          | Medium          | [Security Guidelines]../security/security-guidelines.md                                     |
-| Performance               | Dev Team               | High            | [Performance Guidelines]../performance/performance-guidelines.md                            |
-| Testing Strategy          | Dev Team               | High            | [Testing Strategy](../../testing/test-strategy/README.md)           |
-| Observability             | Dev Team               | High            | [Observability Guidelines](../../observability/README.md)          |
+| Infrastructure            | DevOps Team            | Medium          | [Infrastructure Guidelines](../../infrastructure/README.md)            |
+| UX Criteria               | UX/Dev Team            | Medium          | [UX Guidelines](../../user-experience/README.md)                       |
+| Accessibility             | UX/Dev Team            | Medium          | [Accessibility Guidelines]../accessibility/accessibility-guidelines.md |
+| Security Assessment       | Security Lead          | Medium          | [Security Guidelines]../security/security-guidelines.md                |
+| Performance               | Dev Team               | High            | [Performance Guidelines]../performance/performance-guidelines.md       |
+| Testing Strategy          | Dev Team               | High            | [Testing Strategy](../../testing/test-strategy/README.md)              |
+| Observability             | Dev Team               | High            | [Observability Guidelines](../../observability/README.md)              |
 
 ---
 

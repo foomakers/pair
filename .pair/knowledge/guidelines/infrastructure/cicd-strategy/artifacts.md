@@ -62,16 +62,16 @@ infrastructure:
 
 ### Artifact Decision Matrix
 
-| Criterion               | Container Registry | Package Registry | Object Storage | Hybrid Solution  |
-| ----------------------- | ------------------ | ---------------- | -------------- | ---------------- |
-| **Docker Images**       | ✅ Native          | ❌ No            | ❌ Limited     | ✅ Specialized   |
-| **Binary Packages**     | ❌ Limited         | ✅ Native        | ✅ Good        | ✅ Optimized     |
-| **Source Archives**     | ❌ Limited         | ✅ Good          | ✅ Native      | ✅ Flexible      |
-| **Large Files**         | ❌ Limited         | ❌ Limited       | ✅ Native      | ✅ Optimized     |
-| **Security Scanning**   | ✅ Integrated      | ⚠️ Manual        | ❌ External    | ✅ Comprehensive |
-| **Access Control**      | ✅ RBAC            | ✅ RBAC          | ✅ IAM         | ✅ Unified       |
-| **Cost Efficiency**     | ⚠️ Medium          | ⚠️ Medium        | ✅ Low         | ⚠️ Variable      |
-| **Global Distribution** | ✅ CDN             | ✅ CDN           | ✅ CDN         | ✅ Multi-CDN     |
+| Criterion               | Container Registry | Package Registry | Object Storage | Hybrid Solution |
+| ----------------------- | ------------------ | ---------------- | -------------- | --------------- |
+| **Docker Images**       | ✅ Native           | ❌ No             | ❌ Limited      | ✅ Specialized   |
+| **Binary Packages**     | ❌ Limited          | ✅ Native         | ✅ Good         | ✅ Optimized     |
+| **Source Archives**     | ❌ Limited          | ✅ Good           | ✅ Native       | ✅ Flexible      |
+| **Large Files**         | ❌ Limited          | ❌ Limited        | ✅ Native       | ✅ Optimized     |
+| **Security Scanning**   | ✅ Integrated       | ⚠️ Manual        | ❌ External     | ✅ Comprehensive |
+| **Access Control**      | ✅ RBAC             | ✅ RBAC           | ✅ IAM          | ✅ Unified       |
+| **Cost Efficiency**     | ⚠️ Medium          | ⚠️ Medium        | ✅ Low          | ⚠️ Variable     |
+| **Global Distribution** | ✅ CDN              | ✅ CDN            | ✅ CDN          | ✅ Multi-CDN     |
 
 **Recommendation: Hybrid Solution** - Use specialized registries for each artifact type with unified access control and monitoring.
 

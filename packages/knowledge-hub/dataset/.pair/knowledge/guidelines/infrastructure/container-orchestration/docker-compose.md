@@ -169,16 +169,20 @@ services:
       context: .
       dockerfile: Dockerfile.test
     environment:
+
       - NODE_ENV=test
       - DATABASE_URL=postgresql://postgres:password@postgres-test:5432/myapp_test
       - REDIS_URL=redis://redis-test:6379/1
+
     depends_on:
       postgres-test:
         condition: service_healthy
       redis-test:
         condition: service_healthy
     networks:
+
       - test-network
+
     command: npm run test:ci
 
   postgres-test:
@@ -188,25 +192,31 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     tmpfs:
+
       - /var/lib/postgresql/data:noexec,nosuid,size=1g
+
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres']
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
+
       - test-network
 
   redis-test:
     image: redis:7-alpine
     tmpfs:
+
       - /data:noexec,nosuid,size=100m
+
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 5
     networks:
+
       - test-network
 
   playwright:
@@ -214,16 +224,24 @@ services:
       context: .
       dockerfile: Dockerfile.playwright
     environment:
+
       - NODE_ENV=test
       - BASE_URL=http://app-test:3000
+
     depends_on:
+
       - app-test
+
     volumes:
+
       - ./tests/e2e:/app/tests/e2e
       - ./playwright-report:/app/playwright-report
       - ./test-results:/app/test-results
+
     networks:
+
       - test-network
+
     command: npx playwright test
 
 networks:
@@ -261,16 +279,20 @@ services:
         delay: 5s
         max_attempts: 3
     environment:
+
       - NODE_ENV=staging
       - DATABASE_URL=postgresql://postgres:${DB_PASSWORD}@postgres:5432/myapp_staging
       - REDIS_URL=redis://redis:6379/0
+
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     networks:
+
       - app-network
+
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:3000/health']
       interval: 30s
@@ -285,8 +307,10 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
+
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/postgresql.conf:/etc/postgresql/postgresql.conf
+
     command: postgres -c config_file=/etc/postgresql/postgresql.conf
     deploy:
       resources:
@@ -302,13 +326,16 @@ services:
       timeout: 5s
       retries: 5
     networks:
+
       - app-network
 
   redis:
     image: redis:7-alpine
     volumes:
+
       - redis_data:/data
       - ./docker/redis/redis.conf:/etc/redis/redis.conf
+
     command: redis-server /etc/redis/redis.conf
     deploy:
       resources:
@@ -324,19 +351,26 @@ services:
       timeout: 5s
       retries: 5
     networks:
+
       - app-network
 
   nginx:
     image: nginx:alpine
     ports:
+
       - '80:80'
       - '443:443'
+
     volumes:
+
       - ./docker/nginx/nginx.staging.conf:/etc/nginx/nginx.conf
       - ./docker/nginx/ssl:/etc/nginx/ssl
       - nginx_logs:/var/log/nginx
+
     depends_on:
+
       - app
+
     deploy:
       resources:
         limits:
@@ -346,36 +380,51 @@ services:
           cpus: '0.25'
           memory: 128M
     networks:
+
       - app-network
 
   prometheus:
     image: prom/prometheus:v2.40.0
     ports:
+
       - '9090:9090'
+
     volumes:
+
       - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
+
     command:
+
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
       - '--web.console.libraries=/etc/prometheus/console_libraries'
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--storage.tsdb.retention.time=15d'
       - '--web.enable-lifecycle'
+
     networks:
+
       - app-network
 
   grafana:
     image: grafana/grafana:9.0.0
     ports:
+
       - '3001:3000'
+
     environment:
+
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+
     volumes:
+
       - grafana_data:/var/lib/grafana
       - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
       - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+
     networks:
+
       - app-network
 
 volumes:

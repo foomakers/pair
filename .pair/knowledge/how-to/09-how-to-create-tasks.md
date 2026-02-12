@@ -11,10 +11,10 @@ Transform refined User Stories into specific, actionable development tasks throu
 
 This how-to orchestrates the `/pair-process-plan-tasks` skill.
 
-| Skill | Purpose |
-|-------|---------|
-| `/pair-process-plan-tasks` | Executes the full task breakdown: story analysis, task identification, task definition, documentation. Task-level idempotent. |
-| `/pair-capability-write-issue` | Composed by `/pair-process-plan-tasks` — creates task issues and updates the story body in the PM tool. |
+| Skill          | Purpose                                                                                                                       |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `/pair-process-plan-tasks`  | Executes the full task breakdown: story analysis, task identification, task definition, documentation. Task-level idempotent. |
+| `/pair-capability-write-issue` | Composed by `/pair-process-plan-tasks` — creates task issues and updates the story body in the PM tool.                                    |
 
 > **If skills are not installed**, follow the manual workflow below.
 
@@ -63,6 +63,7 @@ This how-to orchestrates the `/pair-process-plan-tasks` skill.
 ### Phase 5: Task Definition
 
 For each task, follow the [Task Template](../guidelines/collaboration/templates/task-template.md):
+
 - Task info (ID, priority, hours, bounded context)
 - Summary, type, description
 - Acceptance criteria (deliverable, quality, integration, verification)
@@ -72,6 +73,7 @@ For each task, follow the [Task Template](../guidelines/collaboration/templates/
 ### Phase 6: Documentation & Tool Creation
 
 Append Task Breakdown to story body (do not modify existing content):
+
 - Condensed Technical Analysis (strategy, data flow, risks)
 - Task checklist: `- [ ] **T-N**: [Title]`
 - Dependency Graph (ASCII block)
