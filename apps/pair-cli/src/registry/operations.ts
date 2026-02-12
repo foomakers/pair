@@ -233,6 +233,35 @@ export async function distributeToSecondaryTargets(params: {
   }
 }
 
+/**
+ * Post-copy operations for a registry: strips markers from file targets
+ * and distributes content to secondary targets (symlinks, copies).
+ */
+export async function postCopyOps(ctx: {
+  fs: FileSystemService
+  registryConfig: RegistryConfig
+  effectiveTarget: string
+  datasetPath: string
+  baseTarget: string
+}): Promise<void> {
+  const { fs, registryConfig, effectiveTarget, datasetPath, baseTarget } = ctx
+  const canonicalTarget = registryConfig.targets.find(t => t.mode === 'canonical')
+  if (await fs.exists(effectiveTarget)) {
+    const stat = await fs.stat(effectiveTarget)
+    if (!stat.isDirectory()) {
+      await stripMarkersFromTarget(fs, effectiveTarget, canonicalTarget?.transform)
+    }
+  }
+  if (registryConfig.targets.length > 1) {
+    await distributeToSecondaryTargets({
+      fileService: fs,
+      sourcePath: datasetPath,
+      targets: registryConfig.targets,
+      baseTarget,
+    })
+  }
+}
+
 async function createOrReplaceSymlink(
   fileService: FileSystemService,
   target: string,

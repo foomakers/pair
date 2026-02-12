@@ -1,13 +1,7 @@
 import type { InstallCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
 import { dirname } from 'path'
-import {
-  loadConfigWithOverrides,
-  getKnowledgeHubDatasetPath,
-  getKnowledgeHubDatasetPathWithFallback,
-  ensureDir,
-} from '#config'
-
+import { loadConfigWithOverrides, resolveDatasetRoot, ensureDir } from '#config'
 import { createLogger, type LogEntry } from '#diagnostics'
 import {
   extractRegistries,
@@ -19,14 +13,13 @@ import {
   checkTargetsEmptiness,
   doCopyAndUpdateLinks,
   buildCopyOptions,
-  distributeToSecondaryTargets,
-  stripMarkersFromTarget,
+  postCopyOps,
+  applySkillRefsToNonSkillRegistries,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
-import { type SkillNameMap, rewriteSkillReferences, walkMarkdownFiles } from '@pair/content-ops'
-import { installKBFromLocalZip } from '#kb-manager/kb-installer'
+import { type SkillNameMap } from '@pair/content-ops'
 
 /**
  * Install options for handler
@@ -75,7 +68,10 @@ async function setupInstallContext(
   registries: Record<string, RegistryConfig>
   baseTarget: string
 }> {
-  const datasetRoot = await resolveDatasetRoot(fs, config, options)
+  const datasetRoot = await resolveDatasetRoot(fs, config, {
+    cliVersion: options?.cliVersion,
+    httpClient: options?.httpClient,
+  })
   const configOptions: { customConfigPath?: string; projectRoot?: string } = {}
   if (options?.config) configOptions.customConfigPath = options.config
   const configContent = loadConfigWithOverrides(fs, configOptions)
@@ -98,31 +94,6 @@ async function validateInstallContext(
   const targetValidation = await validateAllTargetsBeforeInstall(fs, registries, baseTarget)
   if (!targetValidation.valid) {
     throw new Error(targetValidation.error || 'Target validation failed')
-  }
-}
-
-async function postCopyOps(ctx: {
-  fs: FileSystemService
-  registryConfig: RegistryConfig
-  effectiveTarget: string
-  datasetPath: string
-  baseTarget: string
-}): Promise<void> {
-  const { fs, registryConfig, effectiveTarget, datasetPath, baseTarget } = ctx
-  const canonicalTarget = registryConfig.targets.find(t => t.mode === 'canonical')
-  if (await fs.exists(effectiveTarget)) {
-    const stat = await fs.stat(effectiveTarget)
-    if (!stat.isDirectory()) {
-      await stripMarkersFromTarget(fs, effectiveTarget, canonicalTarget?.transform)
-    }
-  }
-  if (registryConfig.targets.length > 1) {
-    await distributeToSecondaryTargets({
-      fileService: fs,
-      sourcePath: datasetPath,
-      targets: registryConfig.targets,
-      baseTarget,
-    })
   }
 }
 
@@ -204,89 +175,6 @@ async function executeInstall(context: {
 }
 
 /**
- * Applies skill reference rewrites to non-skills registries (e.g., AGENTS.md)
- * using the accumulated skillNameMap from skills registry processing.
- */
-async function applySkillRefsToNonSkillRegistries(
-  context: {
-    fs: FileSystemService
-    baseTarget: string
-    pushLog: (level: LogEntry['level'], message: string) => void
-  },
-  registries: Record<string, RegistryConfig>,
-  skillNameMap: SkillNameMap,
-): Promise<void> {
-  const { fs, baseTarget, pushLog } = context
-
-  for (const [, config] of Object.entries(registries)) {
-    if (config.flatten || config.prefix) continue
-
-    for (const targetCfg of config.targets) {
-      if (targetCfg.mode === 'symlink') continue
-      const target = baseTarget
-        ? fs.resolve(baseTarget, targetCfg.path)
-        : fs.resolve(targetCfg.path)
-      await rewriteSkillRefsInTarget(fs, target, skillNameMap, pushLog)
-    }
-  }
-}
-
-async function rewriteSkillRefsInTarget(
-  fs: FileSystemService,
-  target: string,
-  skillNameMap: SkillNameMap,
-  pushLog: (level: LogEntry['level'], message: string) => void,
-): Promise<void> {
-  if (!(await fs.exists(target))) return
-
-  const stat = await fs.stat(target)
-  const files: string[] = stat.isDirectory()
-    ? await walkMarkdownFiles(target, fs)
-    : target.endsWith('.md')
-      ? [target]
-      : []
-
-  for (const filePath of files) {
-    const content = await fs.readFile(filePath)
-    const rewritten = rewriteSkillReferences(content, skillNameMap)
-    if (rewritten !== content) {
-      await fs.writeFile(filePath, rewritten)
-      pushLog('info', `Skill reference rewriter: updated ${filePath}`)
-    }
-  }
-}
-
-/**
- * Resolve dataset root based on install config resolution strategy
- */
-async function resolveDatasetRoot(
-  fs: FileSystemService,
-  config: InstallCommandConfig,
-  options?: InstallHandlerOptions,
-): Promise<string> {
-  const version = options?.cliVersion || '0.0.0'
-
-  switch (config.resolution) {
-    case 'default':
-      return getKnowledgeHubDatasetPath(fs)
-
-    case 'remote':
-      return getKnowledgeHubDatasetPathWithFallback({
-        fsService: fs,
-        version,
-        ...(options?.httpClient && { httpClient: options.httpClient }),
-        customUrl: config.url,
-      })
-
-    case 'local':
-      if (config.path.endsWith('.zip')) {
-        return installKBFromLocalZip(version, config.path, fs)
-      }
-      return config.path
-  }
-}
-
-/**
  * Validate all targets are empty before installation
  */
 async function validateAllTargetsBeforeInstall(
@@ -301,7 +189,6 @@ async function validateAllTargetsBeforeInstall(
     targets[registryName] = effectiveTarget
   }
 
-  // Check for overlapping targets
   const overlapping = detectOverlappingTargets(targets)
   if (overlapping.length > 0) {
     return {
@@ -310,7 +197,6 @@ async function validateAllTargetsBeforeInstall(
     }
   }
 
-  // Check all targets are empty (for mirror behavior)
   const emptyCheck = await checkTargetsEmptiness(targets, fs)
   if (!emptyCheck.valid && emptyCheck.errors.length > 0) {
     const errorMsg = emptyCheck.errors.map(e => `${e.registry}: ${e.error}`).join('; ')
