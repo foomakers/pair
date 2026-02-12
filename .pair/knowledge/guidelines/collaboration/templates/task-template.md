@@ -96,7 +96,9 @@
 
 ## Task Breakdown Format for Story Body
 
-When appending tasks to a User Story, use this format:
+When appending tasks to a User Story, use this format. The Task Breakdown is
+appended after Technical Analysis (last content section in the story body,
+before the footer).
 
 ```markdown
 ## Task Breakdown
@@ -104,6 +106,21 @@ When appending tasks to a User Story, use this format:
 - [ ] **T-1**: [Task title]
 - [ ] **T-2**: [Task title]
 - [ ] **T-3**: [Task title]
+
+### Dependency Graph
+
+    T-1 ──┬── T-2 ── T-4
+          └── T-3 ── T-5
+                       │
+    T-4 + T-5 ──── T-6
+
+### AC Coverage
+
+| AC | Tasks |
+|----|-------|
+| AC-1 ([brief label]) | T-1, T-3 |
+| AC-2 ([brief label]) | T-2 |
+| AC-3 ([brief label]) | T-2, T-4 |
 
 ---
 

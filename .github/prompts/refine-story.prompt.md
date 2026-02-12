@@ -8,7 +8,7 @@ tools: ['edit', 'execute/runNotebookCell', 'read/getNotebookSummary', 'read/read
 
 You are helping refine a user story with detailed acceptance criteria and technical specifications to make it development-ready.
 
-If a story ID is provided (e.g., `/refine-story: story_id=STORY-123`), focus on that specific story for refinement.
+If a story ID is provided (e.g., `/pair-process-refine-story: story_id=STORY-123`), focus on that specific story for refinement.
 
 ## Process
 

@@ -1,6 +1,6 @@
 ---
 name: pair-capability-record-decision
-description: Records an architectural or non-architectural decision. Architectural decisions produce an ADR; non-architectural decisions produce an ADL entry. Both always update the relevant adoption files. Invocable independently or composed by /pair-process-implement and /review.
+description: Records an architectural or non-architectural decision. Architectural decisions produce an ADR; non-architectural decisions produce an ADL entry. Both always update the relevant adoption files. Invocable independently or composed by /pair-process-implement and /pair-process-review.
 ---
 
 # /pair-capability-record-decision — Decision Recorder
@@ -95,7 +95,7 @@ DECISION RECORDED:
 
 ## Composition Interface
 
-When composed by `/pair-process-implement` or `/review`:
+When composed by `/pair-process-implement` or `/pair-process-review`:
 
 - **Input**: The composing skill detects a decision need and invokes `/pair-capability-record-decision` with `$type` and `$topic`.
 - **Output**: Returns the path to the decision file and list of updated adoption files.

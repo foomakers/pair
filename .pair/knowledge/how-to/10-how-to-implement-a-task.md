@@ -6,7 +6,7 @@ Transform task specifications into working, tested code by implementing **exactl
 
 **Role**: Product Software Engineer (Implementation)
 **Process**: AI implements, Developer reviews
-**Skill**: When `/implement` is available, invoke it — it automates the operational steps of this workflow (branch creation, task iteration, commits, PR creation). This how-to describes the workflow and its HALT conditions.
+**Skill**: When `/pair-process-implement` is available, invoke it — it automates the operational steps of this workflow (branch creation, task iteration, commits, PR creation). This how-to describes the workflow and its HALT conditions.
 
 **CRITICAL FIRST STEP**: Before any implementation work begins, complete Phase 0: Story & Task Analysis to fully understand what needs to be implemented.
 

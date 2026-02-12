@@ -83,6 +83,10 @@
 
 ## Refined User Story Template
 
+> **Section ordering**: Functional sections first, technical sections last.
+> Technical Analysis is positioned at the end as the bridge to Task Breakdown
+> (appended by `/pair-process-plan-tasks`).
+
 ```markdown
 ## Story Statement
 
@@ -133,37 +137,6 @@
 - **System Errors**: [Error conditions and user feedback]
 - **Boundary Conditions**: [Limits and constraint handling]
 - **Exceptional Scenarios**: [Unusual but valid use cases]
-
-## Technical Analysis
-
-### Implementation Approach
-
-**Technical Strategy**: [High-level implementation approach]
-**Key Components**: [Major technical components involved]
-**Data Flow**: [How data moves through the system]
-**Integration Points**: [External systems or APIs involved]
-
-### Technical Requirements
-
-- [Specific technical constraint or requirement]
-- [Performance criteria and benchmarks]
-- [Security considerations and requirements]
-- [Accessibility and usability standards]
-
-### Technical Risks and Mitigation
-
-| Risk               | Impact | Probability | Mitigation Strategy        |
-| ------------------ | ------ | ----------- | -------------------------- |
-| [Technical risk]   | High   | Medium      | [Specific mitigation plan] |
-| [Integration risk] | Medium | Low         | [Risk reduction approach]  |
-
-### Spike Requirements
-
-**Required Spikes**: [Research or proof-of-concept work needed]
-
-- [Spike 1]: [Research question and acceptance criteria]
-- [Spike 2]: [Technical investigation scope]
-  **Estimated Spike Effort**: [Time needed for technical investigation]
 
 ## Definition of Done Checklist
 
@@ -273,6 +246,37 @@
 **Team Concerns**: [Any concerns raised during refinement]
 **Future Considerations**: [Items noted for future development]
 **Documentation Links**: [References to detailed technical specs or design documents]
+
+## Technical Analysis
+
+### Implementation Approach
+
+**Technical Strategy**: [High-level implementation approach]
+**Key Components**: [Major technical components involved]
+**Data Flow**: [How data moves through the system]
+**Integration Points**: [External systems or APIs involved]
+
+### Technical Requirements
+
+- [Specific technical constraint or requirement]
+- [Performance criteria and benchmarks]
+- [Security considerations and requirements]
+- [Accessibility and usability standards]
+
+### Technical Risks and Mitigation
+
+| Risk               | Impact | Probability | Mitigation Strategy        |
+| ------------------ | ------ | ----------- | -------------------------- |
+| [Technical risk]   | High   | Medium      | [Specific mitigation plan] |
+| [Integration risk] | Medium | Low         | [Risk reduction approach]  |
+
+### Spike Requirements
+
+**Required Spikes**: [Research or proof-of-concept work needed]
+
+- [Spike 1]: [Research question and acceptance criteria]
+- [Spike 2]: [Technical investigation scope]
+  **Estimated Spike Effort**: [Time needed for technical investigation]
 
 ---
 

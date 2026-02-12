@@ -48,10 +48,10 @@ All adoption files are populated. Query the PM tool to determine backlog state.
 | 5 | No initiatives or epics exist in PM tool | `/plan-initiatives` | Strategic planning needed |
 | 6 | Initiatives exist but no epics | `/plan-epics` | Epic decomposition needed |
 | 7 | Epics exist but no user stories | `/plan-stories` | Story breakdown needed |
-| 8 | Stories exist without acceptance criteria or with `status:draft` | `/refine-story` | Stories need refinement before work |
-| 9 | Refined stories exist but have no task breakdown | `/plan-tasks` | Tasks must be created before implementation |
+| 8 | Stories exist without acceptance criteria or with `status:draft` | `/pair-process-refine-story` | Stories need refinement before work |
+| 9 | Refined stories exist but have no task breakdown | `/pair-process-plan-tasks` | Tasks must be created before implementation |
 | 10 | Tasks in "ready" or "todo" state exist | `/pair-process-implement` | Work is ready to start |
-| 11 | Open pull requests or tasks in "review" state | `/review` | Code review pending |
+| 11 | Open pull requests or tasks in "review" state | `/pair-process-review` | Code review pending |
 
 If no condition matched, all work is complete for the current iteration.
 
@@ -60,7 +60,7 @@ If no condition matched, all work is complete for the current iteration.
 If no condition matched in Steps 2-3:
 
 > All adoption files are populated and no actionable backlog items detected.
-> Consider: starting a new iteration with `/plan-stories`, or running `/review`
+> Consider: starting a new iteration with `/plan-stories`, or running `/pair-process-review`
 > to check for open items.
 
 ## Output Format
@@ -91,5 +91,5 @@ Then ask: "Shall I run `/skill-name`?"
 ## Notes
 
 - This skill is read-only: it inspects state but never modifies files or PM tool data.
-- When multiple items are actionable (e.g., tasks to implement AND PRs to review), prefer the item closest to delivery (`/review` > `/pair-process-implement` > `/plan-tasks`).
+- When multiple items are actionable (e.g., tasks to implement AND PRs to review), prefer the item closest to delivery (`/pair-process-review` > `/pair-process-implement` > `/pair-process-plan-tasks`).
 - Re-run `/pair-next` after completing any skill to get an updated recommendation.

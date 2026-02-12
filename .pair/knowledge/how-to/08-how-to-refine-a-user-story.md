@@ -5,282 +5,100 @@
 Transform User Stories from rough breakdown units into development-ready specifications through collaborative analysis and detailed requirements gathering. Story refinement converts intentional uncertainty into comprehensive acceptance criteria and technical clarity.
 
 **Role**: Product Engineer & Product Owner/Manager (Requirements Analysis)
-**Process**: 🤖🤝👨‍💻 (AI analyzes & proposes, Developer validates & approves)
+**Process**: AI analyzes & proposes, Developer validates & approves
 
-**CRITICAL FIRST STEP**: Before refinement begins, verify story selection and project management tool access configuration.
+## Skill Composition
 
-## Session State Management
+This how-to orchestrates the `/pair-process-refine-story` skill.
 
-**CRITICAL**: Maintain this context throughout story refinement:
+| Skill | Purpose |
+|-------|---------|
+| `/pair-process-refine-story` | Executes the full refinement process: selection, requirements (Given-When-Then), technical analysis, sprint readiness, documentation. Section-level idempotent. |
+| `/pair-capability-write-issue` | Composed by `/pair-process-refine-story` — creates or updates the story issue in the PM tool. |
 
-```
-STORY REFINEMENT STATE:
-├── Story: [Story ID and Title]
-├── Refinement Status: [selection | analysis | requirements | validation | documentation | completion]
-├── PM Tool: [filesystem | github-projects | jira | linear | other]
-├── PM Access: [tool-specific access method]
-├── Template Used: [user-story-template.md refined section]
-├── Sizing: [original: X pts, refined: Y pts, split: Yes/No]
-├── Ready for Sprint: [Yes/No - all criteria met]
-└── Next Action: [specific next step]
-```
+> **If skills are not installed**, follow the manual workflow below.
 
-## Core Principles
+## Orchestration Flow
 
-### Refinement Excellence Standards
+1. **Verify prerequisites**: PM tool configured per [way-of-working.md](../../adoption/tech/way-of-working.md), stories exist in Todo state from [story breakdown](07-how-to-breakdown-user-stories.md).
+2. **Invoke `/pair-process-refine-story`** with optional `$story` argument. The skill handles:
+   - Story selection (highest-priority Todo, or specified `$story`)
+   - Section-level idempotency detection (resumes from first missing section)
+   - Requirements analysis (Given-When-Then acceptance criteria, business rules, edge cases)
+   - Technical analysis (architecture alignment, risks, spike identification)
+   - Sprint readiness (re-estimation, split if oversized, dependency mapping)
+   - Documentation and PM tool update via `/pair-capability-write-issue`
+3. **Developer validates** each phase when prompted by the skill.
+4. **Repeat** for each story requiring refinement.
 
-- **Select highest priority Todo stories** - follow P0 > P1 > P2 priority order
-- **Transform uncertainty into clarity** - resolve all open questions and ambiguities
-- **Apply comprehensive acceptance criteria** - use Given-When-Then format per [User Story Template](../guidelines/collaboration/templates/user-story-template.md)
-- **Conduct technical risk analysis** - identify implementation challenges and spikes
-- **Validate sprint readiness** - ensure story fits capacity or split appropriately
-- **Maintain INVEST compliance** - verify all INVEST criteria remain satisfied
-- **Document with refined template** - complete all sections of [User Story Template](../guidelines/collaboration/templates/user-story-template.md)
-
-**CRITICAL**: Before starting story refinement:
-
-- **HALT if no Todo stories** - must have stories from breakdown phase
-- **HALT if tool access unclear** - verify PM tool configuration per [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md)
-- **HALT if template not reviewed** - must understand refined story structure
-- **Do NOT proceed** without clear story selection and template understanding
-
-## Implementation Workflow
+## Manual Workflow (without skills)
 
 ### Phase 1: Story Selection
 
-**Objective**: Identify and confirm story ready for refinement.
-
-1. **Apply Story Selection Criteria**:
-
-   - **Priority Order**: P0 > P1 > P2 stories in Todo state
-   - **Sprint Planning Needs**: Stories required for upcoming sprint
-   - **Epic Context**: Related stories that benefit from group refinement
-   - **Dependency Chain**: Stories blocking other development work
-
-2. **Present Story Recommendation**:
-
-   _"Based on backlog analysis, I recommend refining Story '[STORY_ID]: [STORY_NAME]' (Priority: [P0/P1/P2]) because:_
-
-   - _[specific business value and sprint urgency]_
-   - _[current uncertainty areas requiring resolution]_
-   - _[estimated refinement effort and story readiness]_
-
-   _This story addresses [user need] and is needed for [sprint timeline]. Should I proceed with detailed refinement?"_
-
-**Selection Reference**: [User Story Breakdown](07-how-to-breakdown-user-stories.md)
+- Select highest-priority Todo story (P0 > P1 > P2)
+- Consider sprint needs, dependency chains, epic context
+- Present recommendation with rationale; confirm with developer
 
 ### Phase 2: Requirements Analysis
 
-**Objective**: Transform rough scope into detailed, testable acceptance criteria.
-
-1. **Expand Acceptance Criteria**:
-
-   - Convert general requirements into specific Given-When-Then scenarios
-   - Address edge cases and error handling conditions
-   - Define business rules and validation requirements
-   - Specify user experience and interaction details
-
-2. **Apply Requirements Gathering**:
-
-   _"Current story scope: '[current scope description]'. I need to gather detailed requirements:_
-
-   **Core Functionality**:
-
-   - _What specific actions should users be able to perform?_
-   - _What business rules govern these interactions?_
-   - _What validation and error handling is required?_
-
-   **User Experience**:
-
-   - _What should users see and how should they interact?_
-   - _What feedback and confirmation should they receive?_
-   - _What accessibility requirements apply?_
-
-   _Based on your input, I'll create comprehensive Given-When-Then acceptance criteria."_
-
-**Requirements Reference**: [User Story Template](../guidelines/collaboration/templates/user-story-template.md)
+- Expand scope into Given-When-Then acceptance criteria
+- Identify business rules with measurable criteria
+- Address edge cases and error handling
+- Define user experience and interaction details
+- Reference [User Story Template](../guidelines/collaboration/templates/user-story-template.md) for structure
 
 ### Phase 3: Technical Analysis
 
-**Objective**: Assess implementation approach and identify technical risks.
+- Define implementation strategy aligned with [architecture.md](../../adoption/tech/architecture.md)
+- Identify components, integration points, data flow
+- Assess risks and unknowns; propose spikes if needed
+- Reference [tech-stack.md](../../adoption/tech/tech-stack.md) for implementation choices
 
-1. **Implementation Strategy**:
+### Phase 4: Sprint Readiness
 
-   - Define technical approach and architecture alignment
-   - Identify required components and integration points
-   - Assess performance and scalability considerations
-   - Evaluate security and compliance requirements
+- Re-estimate with detailed requirements: XS(1), S(2), M(3), L(5), XL(8)
+- Split if oversized — each split must preserve end-to-end user value and INVEST compliance
+- Map dependencies (prerequisite and dependent stories)
+- Define validation and testing strategy
 
-2. **Risk Assessment**:
+### Phase 5: Documentation & Tool Update
 
-   - Identify technical unknowns requiring spikes
-   - Assess complexity and potential implementation challenges
-   - Evaluate dependencies on other systems or teams
-   - Document mitigation strategies for identified risks
+- Complete all sections of [User Story Template](../guidelines/collaboration/templates/user-story-template.md) (Refined template)
+- Section ordering: functional first, technical last
+- Update story status from Todo to Refined in PM tool
+- Configure sizing, priority, dependency metadata
 
-3. **Present Technical Analysis**:
+## Quality Checklist
 
-   _"Technical analysis for story implementation:_
-
-   **Implementation Approach**:
-
-   - _[High-level technical strategy and components]_
-   - _[Integration points and data flow]_
-   - _[Alignment with current architecture]_
-
-   **Risks and Unknowns**:
-
-   - _[Technical challenges requiring investigation]_
-   - _[Dependencies and coordination needs]_
-   - _[Proposed spikes and research tasks]_
-
-   _Does this technical approach align with project architecture and team capabilities?"_
-
-**Technical Reference**: [Architecture Guidelines](../guidelines/architecture/architectural-patterns/README.md)
-
-### Phase 4: Sprint Readiness Validation
-
-**Objective**: Validate story size and ensure sprint deliverability.
-
-1. **Sizing Validation**:
-
-   - Re-estimate story complexity with detailed requirements
-   - Assess effort against team capacity and sprint duration
-   - Consider risk factors and unknown elements
-   - Factor in testing, review, and integration time
-
-2. **Splitting Analysis**:
-
-   - Identify value-preserving split opportunities if oversized
-   - Ensure each split maintains end-to-end user value
-   - Define dependencies between split stories
-   - Validate split stories follow INVEST principles
-
-3. **Present Sizing Assessment**:
-
-   _"Story sizing analysis with detailed requirements:_
-
-   **Original Estimate**: [X points] → **Refined Estimate**: [Y points]
-   **Sprint Capacity**: [team capacity] → **Story Fit**: [fits/exceeds]
-
-   _[If exceeds capacity]:_
-   **Splitting Recommendation**:
-
-   - _Story A: [core value] - [Z points]_
-   - _Story B: [extended value] - [W points]_
-   - _Split maintains user value and INVEST compliance_
-
-   _Does this sizing and potential splitting preserve user value appropriately?"_
-
-**Sizing Reference**: [Story Estimation Guidelines](../guidelines/collaboration/estimation/README.md)
-
-### Phase 5: Documentation and Tool Updates
-
-**Objective**: Complete comprehensive story documentation and update tracking tools.
-
-1. **Template Documentation**:
-
-   - Complete all sections of [User Story Template](../guidelines/collaboration/templates/user-story-template.md)
-   - Include detailed acceptance criteria and technical analysis
-   - Document dependencies, risks, and implementation notes
-   - Specify Definition of Done checklist items
-
-2. **Tool Integration**:
-
-   - Update story status from Todo to Refined
-   - Configure sizing, priority, and dependency metadata
-   - Link related stories and epic hierarchy
-   - Prepare story for sprint planning selection
-
-3. **Refinement Completion**:
-
-   _"✅ STORY REFINEMENT COMPLETE:_
-
-   - _Story '[STORY_ID]': Comprehensive acceptance criteria and technical analysis documented_
-   - _Tool Status: Updated to 'Refined' with [final sizing] and dependencies configured_
-   - _Sprint Ready: [Yes/No] - all ambiguities resolved_
-   - _Next Phase: Ready for task breakdown and development_
-
-   _Story refinement complete. All details documented and ready for sprint execution."_
-
-**Template Reference**: [User Story Template](../guidelines/collaboration/templates/user-story-template.md)
-
-## Quality Assurance
-
-**Essential Checklist**:
-
-- [ ] Story selected based on priority and sprint planning needs
-- [ ] Acceptance criteria comprehensive and testable (Given-When-Then format)
-- [ ] Technical approach and risks thoroughly analyzed
-- [ ] Story sized appropriately for sprint or split with value preservation
-- [ ] All uncertainties and open questions resolved
+- [ ] Story selected based on priority and sprint needs
+- [ ] Acceptance criteria comprehensive and testable (Given-When-Then)
+- [ ] Technical approach and risks analyzed
+- [ ] Story sized for sprint or split with value preservation
+- [ ] All uncertainties resolved
 - [ ] [User Story Template](../guidelines/collaboration/templates/user-story-template.md) completed
-- [ ] Tool updated with refined status and metadata
-- [ ] Story ready for immediate development start
+- [ ] PM tool updated with Refined status
+- [ ] INVEST criteria verified
 
-## Best Practices
+## HALT Conditions
 
-### Do's ✅
+- **No Todo stories** — must have stories from breakdown phase
+- **PM tool not configured** — complete [bootstrap](02-how-to-complete-bootstrap-checklist.md) first
+- **Template not reviewed** — read [User Story Template](../guidelines/collaboration/templates/user-story-template.md) before starting
 
-- **Always select highest priority Todo stories** - follow P0 > P1 > P2 priority order
-- **Apply comprehensive requirements gathering** - resolve all ambiguities and open questions
-- **Use Given-When-Then format consistently** - ensure all acceptance criteria are testable
-- **Conduct thorough technical analysis** - identify implementation approach and risks
-- **Validate sprint sizing rigorously** - split stories that exceed capacity while preserving value
-- **Complete template documentation fully** - use all sections of refined user story template
-- **Update tool metadata accurately** - maintain proper status and dependency tracking
-- **Focus on development readiness** - eliminate all uncertainties before marking refined
-- **Preserve INVEST compliance** - verify all criteria remain satisfied after refinement
-- **Address edge cases systematically** - include error handling and validation scenarios
-- **Document technical dependencies** - identify coordination needs with other teams or systems
-- **Align with Definition of Done** - ensure story completion criteria are clear and measurable
+## Key Principles
 
-### Don'ts ❌
-
-- **Never refine without story selection** - always propose and confirm specific story choice
-- **Don't leave acceptance criteria vague** - every criterion must be specific and testable
-- **Don't ignore technical complexity** - always assess implementation risks and unknowns
-- **Don't allow oversized stories** - split appropriately to maintain sprint deliverability
-- **Don't skip edge case analysis** - address error conditions and validation requirements
-- **Don't assume implementation details** - collaborate on technical approach and architecture
-- **Don't forget dependency mapping** - identify all coordination requirements
-- **Don't rush refinement quality** - ensure comprehensive coverage before completion
-- **Don't bypass tool updates** - maintain accurate status and metadata
-- **Don't ignore Definition of Done** - align story completion with project standards
-- **Don't split stories arbitrarily** - preserve user value when breaking down oversized work
-- **Don't finalize with open questions** - resolve all uncertainties before marking refined
-
-## Common Pitfalls & Solutions
-
-| Pitfall                                 | Impact                                    | Solution                                                                   |
-| --------------------------------------- | ----------------------------------------- | -------------------------------------------------------------------------- |
-| **Vague acceptance criteria**           | Development ambiguity and scope creep     | Use Given-When-Then format with specific, measurable conditions            |
-| **Missing edge case analysis**          | Production bugs and user frustration      | Systematically review error conditions, validation, and boundary scenarios |
-| **Insufficient technical analysis**     | Implementation blocks and delivery risks  | Conduct thorough technical review with architecture and risk assessment    |
-| **Oversized story scope**               | Sprint capacity exceeded, incomplete work | Validate sizing and split stories while preserving end-to-end user value   |
-| **Incomplete requirements gathering**   | Rework and development delays             | Use structured questioning to gather comprehensive functional requirements |
-| **Poor dependency identification**      | Team coordination issues and blocks       | Map all technical and process dependencies with other work streams         |
-| **Weak Definition of Done alignment**   | Inconsistent completion standards         | Ensure story DoD aligns with project quality and delivery standards        |
-| **Technical risk blindness**            | Implementation surprises and delays       | Identify unknowns requiring spikes and research before development         |
-| **Tool integration gaps**               | Lost traceability and poor coordination   | Maintain accurate status updates and dependency linking in PM tool         |
-| **Context drift during refinement**     | Losing sight of epic objectives           | Maintain session state tracking and original story purpose throughout      |
-| **Premature technical specification**   | Over-engineering and implementation bias  | Focus on requirements and outcomes, allow implementation flexibility       |
-| **Insufficient user experience detail** | Poor usability and user satisfaction      | Define specific interaction patterns, feedback, and accessibility needs    |
+- **Transform uncertainty into clarity** — resolve all open questions
+- **Given-When-Then for all ACs** — every criterion must be specific and testable
+- **INVEST compliance** — Independent, Negotiable, Valuable, Estimable, Small, Testable
+- **Split preserves value** — each split delivers end-to-end user value
+- **Functional first, technical last** — template section ordering
+- **Re-invoke safely** — `/pair-process-refine-story` is section-level idempotent
 
 ## References
 
-### Core Dependencies
-
-- [User Story Breakdown](07-how-to-breakdown-user-stories.md) - Input source for refinement candidates
-- [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md) - Tool access and story management
-- [Bootstrap Checklist](02-how-to-complete-bootstrap-checklist.md) - Foundation verification
-
-### Implementation Guidelines
-
-- [User Story Template](../guidelines/collaboration/templates/user-story-template.md) - Complete documentation structure
-- [Story Estimation Guidelines](../guidelines/collaboration/estimation/README.md) - Sizing and splitting standards
-- [Architecture Guidelines](../guidelines/architecture/architectural-patterns/README.md) - Technical analysis framework
-
-### Next Phase
-
-- [Create Tasks](09-how-to-create-tasks.md) - Transform refined stories into development tasks
+- Input: [Story Breakdown](07-how-to-breakdown-user-stories.md)
+- Template: [User Story Template](../guidelines/collaboration/templates/user-story-template.md)
+- PM Tool: [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md)
+- Architecture: [Architecture Guidelines](../guidelines/architecture/architectural-patterns/README.md)
+- Estimation: [Story Estimation Guidelines](../guidelines/collaboration/estimation/README.md)
+- Next: [Create Tasks](09-how-to-create-tasks.md)

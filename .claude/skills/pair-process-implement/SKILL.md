@@ -26,9 +26,11 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 2. **Skip**: If yes, confirm story ID and move to Step 0.2.
 3. **Act**: Read the story from the PM tool (per [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)).
    - Understand business value and acceptance criteria.
-   - Verify status is "In Progress" and assigned to the developer.
    - Confirm epic context.
-4. **Verify**: Story is fully loaded. If not → **HALT**.
+4. **Act**: Ensure the story is assigned and active in the PM tool:
+   - **Assign** the story to the current developer (if not already assigned).
+   - **Set status to "In Progress"** in the PM tool board/project.
+5. **Verify**: Story is fully loaded, assigned, and In Progress. If not → **HALT**.
 
 ### Step 0.2: Analyze Tasks
 
@@ -180,7 +182,9 @@ Follow the TDD discipline rules strictly:
 
    Refs: #<story-id>
    ```
-4. **Verify**: Commit created. Mark task as ✅ in story. Return to Step 2.1.
+4. **Verify**: Commit created.
+5. **Act**: Update the PM tool — mark ONLY the completed task checkbox (`- [x] **T-N**`) in the **Task Breakdown** section of the story issue body. Do NOT touch other checkboxes (DoD, AC, Quality Assurance sections).
+6. Return to Step 2.1.
 
 ## Phase 3: Final Commit and PR
 
@@ -199,30 +203,54 @@ Follow the TDD discipline rules strictly:
    ```
 4. **Verify**: Commit created with all changes.
 
-### Step 3.2: Push Branch
+### Step 3.2: Update Story Checkboxes
+
+1. **Act**: Update the story issue in the PM tool — check all **Development Completion** and **Quality Assurance** checkboxes that are satisfied by the completed implementation:
+   - **Development Completion**: mark items that correspond to created/modified artifacts (e.g., "SKILL.md created", "how-to thinned", "composition validated").
+   - **Quality Assurance**: mark items verified during validation tasks (e.g., "invocable in Claude Code", "re-invocation works", "degradation cascade tested").
+   - Only check items that are factually verifiable from the work done. Leave unchecked any items that require reviewer confirmation (e.g., "Code reviewed and merged").
+2. **Verify**: Checkboxes updated. Task Breakdown checkboxes should already be ✅ from Step 2.8.
+
+### Step 3.3: Push Branch
 
 1. **Check**: Is the branch already pushed and up to date with remote?
-2. **Skip**: If up to date, move to Step 3.3.
+2. **Skip**: If up to date, move to Step 3.4.
 3. **Act**: Push the branch:
    ```
    git push -u origin feature/#<story-id>-<description>
    ```
 4. **Verify**: Branch pushed to remote.
 
-### Step 3.3: Create or Update PR
+### Step 3.4: Confirm PR with Developer
+
+1. **Act**: Present a summary before creating the PR:
+   ```
+   PR READY:
+   ├── Branch:  [feature/#story-id-description]
+   ├── Tasks:   [N/N completed]
+   ├── Commits: [N commits (or 1 squashed)]
+   ├── Quality: [All gates passing]
+   └── Title:   [#<story-id>] <type>: <brief description>
+   ```
+2. **Ask**: _"Ready to create the PR?"_
+3. **Verify**: Developer confirms. If not → wait for developer instructions.
+
+### Step 3.5: Create or Update PR
 
 1. **Check**: Does a PR already exist for this branch?
 2. **Skip**: If PR exists, update its description and move to output.
-3. **Act**: Create PR following the [PR template](../../../.pair/knowledge/guidelines/collaboration/templates/pr-template.md):
+3. **Act**: Read the [PR template](../../../.pair/knowledge/guidelines/collaboration/templates/pr-template.md) and fill ALL its sections:
    - **Title**: `[#<story-id>] <type>: <brief description>`
-   - **Body**: Fill the PR template sections:
-     - Summary: what changed and why (from story statement)
-     - Story Context: link to user story issue, AC coverage
-     - Changes Made: list of all completed tasks and files affected
-     - Testing: test coverage and validation (from /pair-capability-verify-quality output)
+   - **Body**: Use the PR template structure exactly. Fill each section:
+     - **Summary** (What Changed + Why): from story statement and implementation
+     - **Story Context**: link to user story issue, list AC coverage
+     - **Changes Made**: list all completed tasks, files added/modified/deleted
+     - **Testing**: test coverage, quality gate results (from /pair-capability-verify-quality output)
+   - Omit template sections that do not apply (e.g., Database Changes, API Changes for KB-only PRs) — do not leave unfilled placeholders.
    - **Link**: Reference the user story issue (`Closes #<story-id>`)
    - **Labels**: Apply appropriate labels
-4. **Verify**: PR created with complete description.
+4. **Act**: Mark the PR as **ready for review** — ensure it is not in draft state. If the PM tool supports review request (e.g., GitHub `gh pr ready`), mark it explicitly.
+5. **Verify**: PR created, description follows template, PR is ready for review.
 
 ## Output Format
 

@@ -28,7 +28,7 @@ Each prompt is designed to be **dead simple**:
 ### Iteration (Sprint Planning)
 
 - **`/breakdown-stories`** - Breakdown user stories from epics
-- **`/refine-story`** - Refine user story with acceptance criteria
+- **`/pair-process-refine-story`** - Refine user story with acceptance criteria
 
 ### Execution (Development)
 
@@ -55,7 +55,7 @@ Each prompt is designed to be **dead simple**:
 /code-review
 /create-tasks
 /breakdown-stories
-/refine-story
+/pair-process-refine-story
 ```
 
 **With optional IDs for context:**
@@ -66,7 +66,7 @@ Each prompt is designed to be **dead simple**:
 /create-tasks: story_id=STORY-789
 /implement-task: story_id=STORY-789
 /implement-task: task_id=TASK-101
-/refine-story: story_id=STORY-789
+/pair-process-refine-story: story_id=STORY-789
 /code-review: pr_id=123
 /code-review: story_id=STORY-789
 ```
