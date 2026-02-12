@@ -83,7 +83,7 @@ Execute each criterion group in order. For every criterion, follow the **check �
 
 Present results as:
 
-```
+```text
 DEFINITION OF DONE REPORT:
 ├── Requirements:  [PASS | FAIL — N unmet AC | SKIPPED — no $story]
 ├── Code Standards: [PASS | FAIL — N issues | SKIPPED]

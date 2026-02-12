@@ -84,7 +84,7 @@ This step is **always required** — adoption is the single source of truth.
 
 ## Output Format
 
-```
+```text
 DECISION RECORDED:
 ├── Type:     [Architectural (ADR) | Non-architectural (ADL)]
 ├── File:     [path to decision file]

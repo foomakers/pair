@@ -46,7 +46,7 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 
 Present analysis:
 
-```
+```text
 IMPLEMENTATION STATE:
 ├── Story: [#ID: Title]
 ├── Tasks: [N total — list each with type and status]
@@ -74,7 +74,7 @@ Ask: _"Ready to proceed with implementation?"_
 1. **Check**: Does a branch for this story already exist? (`git branch --list 'feature/#<story-id>-*'`)
 2. **Skip**: If branch exists, switch to it (`git checkout <branch>`) and move to Step 1.3.
 3. **Act**: Create branch from main:
-   ```
+   ```bash
    git checkout main && git pull origin main
    git checkout -b feature/#<story-id>-<brief-description>
    ```
@@ -100,7 +100,7 @@ Process tasks **sequentially**, one at a time. For each task:
    - A task is "completed" if its checklist item is marked ✅ in the story AND (if commit-per-task) the commit exists on the branch.
 2. **Skip**: If all tasks are completed, move to Phase 3.
 3. **Act**: Set the active task. Update session state:
-   ```
+   ```text
    ACTIVE TASK:
    ├── Task: [T-N: Title]
    ├── Type: [Development | Documentation | Configuration | Research]
@@ -174,7 +174,7 @@ Follow the TDD discipline rules strictly:
 1. **Check**: Is the commit strategy `commit-per-task`?
 2. **Skip**: If `commit-per-story`, mark task as complete in session state and return to Step 2.1.
 3. **Act**: Stage and commit following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md):
-   ```
+   ```text
    [#<story-id>] <type>: <task-description>
 
    - <specific changes>
@@ -193,7 +193,7 @@ Follow the TDD discipline rules strictly:
 1. **Check**: Is the commit strategy `commit-per-story`?
 2. **Skip**: If `commit-per-task`, all commits already exist. Move to Step 3.2.
 3. **Act**: Stage all changes and commit:
-   ```
+   ```text
    [#<story-id>] feat: <story-description>
 
    - <summary of all completed tasks>
@@ -216,7 +216,7 @@ Follow the TDD discipline rules strictly:
 1. **Check**: Is the branch already pushed and up to date with remote?
 2. **Skip**: If up to date, move to Step 3.4.
 3. **Act**: Push the branch:
-   ```
+   ```bash
    git push -u origin feature/#<story-id>-<description>
    ```
 4. **Verify**: Branch pushed to remote.
@@ -224,7 +224,7 @@ Follow the TDD discipline rules strictly:
 ### Step 3.4: Confirm PR with Developer
 
 1. **Act**: Present a summary before creating the PR:
-   ```
+   ```text
    PR READY:
    ├── Branch:  [feature/#story-id-description]
    ├── Tasks:   [N/N completed]
@@ -256,7 +256,7 @@ Follow the TDD discipline rules strictly:
 
 At completion:
 
-```
+```text
 IMPLEMENTATION COMPLETE:
 ├── Story:    [#ID: Title]
 ├── Branch:   [feature/#ID-description]

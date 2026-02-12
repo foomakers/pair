@@ -35,7 +35,7 @@ Review a pull request through 5 sequential phases. Each phase composes atomic sk
 
 Maintain throughout the review:
 
-```
+```text
 CODE REVIEW STATE:
 ├── PR: [#PR-NUMBER: Title]
 ├── Phase: [1-validation | 2-technical | 3-adoption | 4-completeness | 5-decision]
@@ -81,7 +81,7 @@ CODE REVIEW STATE:
 
 Present analysis:
 
-```
+```text
 REVIEW READY:
 ├── PR: [#NUMBER: Title]
 ├── Author: [name]
@@ -226,7 +226,7 @@ Based on compiled findings:
 
 ## Output Format
 
-```
+```text
 REVIEW COMPLETE:
 ├── PR:         [#NUMBER: Title]
 ├── Story:      [#ID: Title | N/A]

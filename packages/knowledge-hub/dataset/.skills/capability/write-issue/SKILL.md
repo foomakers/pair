@@ -96,7 +96,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 
 ## Output Format
 
-```
+```text
 ISSUE WRITTEN:
 ├── Mode:     [Created | Updated]
 ├── Type:     [story | task]

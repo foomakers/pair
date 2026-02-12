@@ -14,7 +14,7 @@ module.exports = require('@pair/eslint-config')
 
 Or via CLI:
 
-```
+```bash
 pnpm exec eslint . --config tools/eslint-config/index.js
 ```
 

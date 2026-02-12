@@ -8,7 +8,7 @@ In all interactions and commit messages, be extremely coincise and sacrify gramm
 
 If your agent supports **Agent Skills** (agentskills.io), start every session by running:
 
-```
+```text
 /pair-next
 ```
 

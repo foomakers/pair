@@ -66,7 +66,7 @@ Scan the codebase or PR changes for debt indicators. For each category, follow t
 
 ## Output Format
 
-```
+```text
 TECH DEBT REPORT:
 ├── Items Found: [N]
 ├── High:   [N items]

@@ -126,7 +126,7 @@ Reached only when Step 1 detects all tasks are present with full AC coverage.
 
 ## Output Format
 
-```
+```text
 TASK BREAKDOWN COMPLETE:
 ├── Story:      [#ID: Title]
 ├── Tasks:      [N tasks created]

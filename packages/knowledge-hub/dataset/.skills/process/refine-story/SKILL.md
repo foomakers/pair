@@ -132,7 +132,7 @@ Reached only when Step 1 detects all sections are present.
 
 ## Output Format
 
-```
+```text
 STORY REFINEMENT COMPLETE:
 ├── Story:    [#ID: Title]
 ├── Status:   [Refined | Updated]

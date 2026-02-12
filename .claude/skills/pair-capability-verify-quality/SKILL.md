@@ -62,7 +62,7 @@ If a project-level quality gate command exists (from Step 1):
 
 Present results as:
 
-```
+```text
 QUALITY GATE REPORT:
 ├── Lint:       [PASS | FAIL — N violations]
 ├── Type Check: [PASS | FAIL — N errors]

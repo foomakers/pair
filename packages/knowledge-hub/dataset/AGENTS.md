@@ -8,7 +8,7 @@ In all interactions and commit messages, be extremely coincise and sacrify gramm
 
 If your agent supports **Agent Skills** (agentskills.io), start every session by running:
 
-```
+```text
 /next
 ```
 
@@ -21,7 +21,7 @@ The `/next` skill reads project adoption files and PM tool state to recommend th
 
 **CRITICAL**: Establish and maintain these 4 key pieces of information for the entire session:
 
-```
+```text
 SESSION STATE:
 ├── How-to: [which .pair/how-to/XX-*.md file you're following]
 ├── Role: [product-manager | product-engineer | staff-engineer]
@@ -31,7 +31,7 @@ SESSION STATE:
 
 **Example session state:**
 
-```
+```text
 How-to: 10-how-to-implement-a-task.md
 Role: product-engineer
 PM Tool: GitHub Projects
@@ -220,7 +220,7 @@ function isLocalPath(str: string): boolean {
 
 **Example 1: Implementation task**
 
-```
+```text
 SESSION STATE:
 ├── How-to: 10-how-to-implement-a-task.md
 ├── Role: product-engineer
@@ -230,7 +230,7 @@ SESSION STATE:
 
 **Example 2: Planning task**
 
-```
+```text
 SESSION STATE:
 ├── How-to: 06-how-to-breakdown-epics.md
 ├── Role: product-manager
@@ -240,7 +240,7 @@ SESSION STATE:
 
 **Example 3: Review task**
 
-```
+```text
 SESSION STATE:
 ├── How-to: 11-how-to-code-review.md
 ├── Role: staff-engineer

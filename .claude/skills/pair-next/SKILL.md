@@ -67,7 +67,7 @@ If no condition matched in Steps 2-3:
 
 Present results as:
 
-```
+```text
 PROJECT STATE:
 ├── PRD: [populated | template]
 ├── Bootstrap: [complete | incomplete — N/M adoption files populated]
