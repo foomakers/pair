@@ -4,7 +4,7 @@ Architecture pattern that separates read and write operations into different mod
 
 ## When to Use
 
-**Ideal for:**
+#### Ideal for:
 
 - Different read/write performance requirements
 - Complex query scenarios
@@ -12,7 +12,7 @@ Architecture pattern that separates read and write operations into different mod
 - Separate read/write scaling needs
 - Different consistency requirements
 
-**Avoid when:**
+#### Avoid when:
 
 - Simple CRUD operations
 - Consistent data model sufficient

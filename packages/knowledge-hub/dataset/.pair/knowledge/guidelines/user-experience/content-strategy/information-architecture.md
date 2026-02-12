@@ -31,7 +31,7 @@ Information architecture (IA) is the structural design of shared information env
 
 ### User Mental Models
 
-**Mental Model Research**
+#### Mental Model Research
 
 - User interviews and card sorting
 - Tree testing for navigation validation
@@ -39,9 +39,9 @@ Information architecture (IA) is the structural design of shared information env
 - Mental model mapping exercises
 - Comparative analysis studies
 
-**Mental Model Application**
+#### Mental Model Application
 
-```
+```text
 Mental Model Alignment:
 ├── User Expectations
 │   ├── Familiar patterns and conventions
@@ -59,7 +59,7 @@ Mental Model Alignment:
 
 ### Information Organization Principles
 
-**Organizational Schemes**
+#### Organizational Schemes
 
 - **Alphabetical**: Systematic sorting for reference
 - **Chronological**: Time-based organization
@@ -68,7 +68,7 @@ Mental Model Alignment:
 - **Audience-based**: User type segmentation
 - **Hybrid**: Multiple scheme combination
 
-**Organizational Structures**
+#### Organizational Structures
 
 - **Hierarchical**: Tree-like branching structure
 - **Sequential**: Linear step-by-step flow
@@ -80,7 +80,7 @@ Mental Model Alignment:
 
 ### Taxonomy Development
 
-**Category Creation Process**
+#### Category Creation Process
 
 1. **Content Inventory**: Comprehensive content audit
 2. **Content Analysis**: Pattern and theme identification
@@ -88,7 +88,7 @@ Mental Model Alignment:
 4. **Category Definition**: Clear boundary establishment
 5. **Validation Testing**: User feedback integration
 
-**Taxonomic Principles**
+#### Taxonomic Principles
 
 - **Mutual Exclusivity**: Clear category boundaries
 - **Collective Exhaustiveness**: Complete coverage
@@ -98,7 +98,7 @@ Mental Model Alignment:
 
 ### Content Relationships
 
-**Relationship Types**
+#### Relationship Types
 
 - **Hierarchical**: Parent-child relationships
 - **Sequential**: Step-by-step connections
@@ -106,9 +106,9 @@ Mental Model Alignment:
 - **Equivalent**: Alternative versions
 - **Dependency**: Prerequisite relationships
 
-**Relationship Mapping**
+#### Relationship Mapping
 
-```
+```text
 Content Relationship Example:
 Product Category (Parent)
 ├── Product Type (Child)
@@ -124,7 +124,7 @@ Product Category (Parent)
 
 ### Navigation Hierarchy
 
-**Primary Navigation**
+#### Primary Navigation
 
 - Core site/app sections
 - 5-7 main categories maximum
@@ -132,7 +132,7 @@ Product Category (Parent)
 - Consistent placement and styling
 - Mobile-responsive considerations
 
-**Secondary Navigation**
+#### Secondary Navigation
 
 - Sub-section organization
 - Contextual navigation options
@@ -140,7 +140,7 @@ Product Category (Parent)
 - Related content suggestions
 - Cross-reference linking
 
-**Utility Navigation**
+#### Utility Navigation
 
 - Account and profile access
 - Search functionality
@@ -150,7 +150,7 @@ Product Category (Parent)
 
 ### Navigation Patterns
 
-**Common Navigation Models**
+#### Common Navigation Models
 
 - **Top Navigation Bar**: Horizontal primary menu
 - **Sidebar Navigation**: Vertical menu structure
@@ -158,7 +158,7 @@ Product Category (Parent)
 - **Mega Menus**: Complex multi-column layouts
 - **Progressive Navigation**: Staged information revelation
 
-**Mobile Navigation Considerations**
+#### Mobile Navigation Considerations
 
 - Touch-friendly interaction design
 - Thumb-reach optimization
@@ -170,7 +170,7 @@ Product Category (Parent)
 
 ### User Journey Analysis
 
-**Journey Mapping Components**
+#### Journey Mapping Components
 
 - **User Goals**: Primary and secondary objectives
 - **Touchpoints**: Interaction opportunities
@@ -178,9 +178,9 @@ Product Category (Parent)
 - **Emotions**: User feeling throughout journey
 - **Opportunities**: Improvement possibilities
 
-**Information Needs Mapping**
+#### Information Needs Mapping
 
-```
+```text
 User Journey Information Needs:
 ├── Awareness Stage
 │   ├── Problem identification
@@ -198,7 +198,7 @@ User Journey Information Needs:
 
 ### Task Flow Optimization
 
-**Task Analysis Methods**
+#### Task Analysis Methods
 
 - **Hierarchical Task Analysis**: Task decomposition
 - **Cognitive Walkthroughs**: Step-by-step evaluation
@@ -206,7 +206,7 @@ User Journey Information Needs:
 - **Service Blueprinting**: Behind-scenes process mapping
 - **Journey Analytics**: Data-driven flow analysis
 
-**Flow Optimization Strategies**
+#### Flow Optimization Strategies
 
 - **Path Reduction**: Minimize steps to completion
 - **Information Scenting**: Clear directional cues
@@ -218,7 +218,7 @@ User Journey Information Needs:
 
 ### Search Strategy
 
-**Search Implementation Types**
+#### Search Implementation Types
 
 - **Global Search**: Site-wide content discovery
 - **Scoped Search**: Section-specific searching
@@ -226,7 +226,7 @@ User Journey Information Needs:
 - **Auto-complete Search**: Predictive assistance
 - **Visual Search**: Image-based discovery
 
-**Search Optimization**
+#### Search Optimization
 
 - **Query Understanding**: Intent interpretation
 - **Result Relevance**: Quality ranking algorithms
@@ -236,7 +236,7 @@ User Journey Information Needs:
 
 ### Findability Enhancement
 
-**Content Discoverability**
+#### Content Discoverability
 
 - **Related Content**: Contextual suggestions
 - **Popular Content**: Usage-based recommendations
@@ -244,7 +244,7 @@ User Journey Information Needs:
 - **Personalized Content**: User-specific customization
 - **Content Paths**: Multiple discovery routes
 
-**Wayfinding Support**
+#### Wayfinding Support
 
 - **Breadcrumb Navigation**: Path indication
 - **Site Maps**: Comprehensive structure overview
@@ -256,7 +256,7 @@ User Journey Information Needs:
 
 ### Research Methods
 
-**Card Sorting Studies**
+#### Card Sorting Studies
 
 - **Open Card Sorting**: Category discovery
 - **Closed Card Sorting**: Structure validation
@@ -264,7 +264,7 @@ User Journey Information Needs:
 - **Digital Card Sorting**: Remote research capability
 - **Moderated Card Sorting**: Insight gathering
 
-**Tree Testing Validation**
+#### Tree Testing Validation
 
 - **Findability Testing**: Content location success
 - **Navigation Efficiency**: Path optimization
@@ -274,7 +274,7 @@ User Journey Information Needs:
 
 ### Usability Testing Integration
 
-**IA-Focused Usability Testing**
+#### IA-Focused Usability Testing
 
 - **First-Click Testing**: Initial direction assessment
 - **Information Scent Testing**: Path prediction accuracy
@@ -282,7 +282,7 @@ User Journey Information Needs:
 - **Navigation Efficiency Testing**: Time and error measurement
 - **Cross-Platform Testing**: Consistency validation
 
-**Analytics and Data Analysis**
+#### Analytics and Data Analysis
 
 - **User Flow Analysis**: Actual usage patterns
 - **Search Query Analysis**: Information seeking behavior
@@ -294,7 +294,7 @@ User Journey Information Needs:
 
 ### Inclusive Information Design
 
-**Cognitive Accessibility**
+#### Cognitive Accessibility
 
 - **Simple Language Usage**: Clear communication
 - **Logical Organization**: Predictable structures
@@ -302,7 +302,7 @@ User Journey Information Needs:
 - **Memory Support**: Context maintenance
 - **Error Prevention**: Clear guidance provision
 
-**Assistive Technology Support**
+#### Assistive Technology Support
 
 - **Screen Reader Navigation**: Semantic structure
 - **Keyboard Navigation**: Logical tab order
@@ -312,7 +312,7 @@ User Journey Information Needs:
 
 ### Universal Design Principles
 
-**Flexibility and Adaptability**
+#### Flexibility and Adaptability
 
 - **Multiple Navigation Options**: Choice accommodation
 - **Customizable Interfaces**: User preference support
@@ -324,7 +324,7 @@ User Journey Information Needs:
 
 ### Multi-Device Information Architecture
 
-**Responsive Information Design**
+#### Responsive Information Design
 
 - **Content Prioritization**: Screen size adaptation
 - **Navigation Adaptation**: Touch and click optimization
@@ -332,7 +332,7 @@ User Journey Information Needs:
 - **Performance Consideration**: Loading speed optimization
 - **Context Awareness**: Usage situation adaptation
 
-**Platform-Specific Considerations**
+#### Platform-Specific Considerations
 
 - **Web Platform**: Browser convention adherence
 - **Mobile Platform**: Touch interaction optimization
@@ -342,7 +342,7 @@ User Journey Information Needs:
 
 ### Information Synchronization
 
-**Cross-Platform Consistency**
+#### Cross-Platform Consistency
 
 - **Terminology Standardization**: Universal language usage
 - **Structure Alignment**: Parallel organization systems
@@ -354,7 +354,7 @@ User Journey Information Needs:
 
 ### Maintenance and Evolution
 
-**Regular Assessment**
+#### Regular Assessment
 
 - **Quarterly IA Reviews**: Structure effectiveness evaluation
 - **User Feedback Integration**: Continuous improvement input
@@ -362,7 +362,7 @@ User Journey Information Needs:
 - **Competitive Analysis**: Market trend consideration
 - **Technology Evolution**: Platform capability updates
 
-**Change Management**
+#### Change Management
 
 - **Impact Assessment**: Change effect evaluation
 - **User Communication**: Structure update notification
@@ -372,7 +372,7 @@ User Journey Information Needs:
 
 ### Team Collaboration
 
-**Cross-Functional Coordination**
+#### Cross-Functional Coordination
 
 - **Design Team Integration**: Visual design alignment
 - **Development Team Collaboration**: Technical feasibility

@@ -6,7 +6,7 @@ Comprehensive guide for implementing and managing infrastructure using Terraform
 
 ## 📋 Scope and Coverage
 
-**In Scope:**
+#### In Scope:
 
 - Terraform project architecture and organization strategies
 - Module development and reusability patterns
@@ -15,7 +15,7 @@ Comprehensive guide for implementing and managing infrastructure using Terraform
 - Infrastructure testing and validation methodologies
 - CI/CD integration and automation frameworks
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Cloud provider-specific configurations (see Cloud Services)
 - Application deployment specifics (see Deployment Patterns)
@@ -26,7 +26,7 @@ Comprehensive guide for implementing and managing infrastructure using Terraform
 
 ### Enterprise Project Structure
 
-**Strategic Infrastructure Organization**
+#### Strategic Infrastructure Organization
 
 Modern Terraform implementations require sophisticated project organization that supports scalability, maintainability, and team collaboration across multiple environments and cloud providers.
 
@@ -45,7 +45,7 @@ terraform/
     └── backend.tf       # State management setup
 ```
 
-**Provider Configuration Strategy**
+#### Provider Configuration Strategy
 
 La configurazione dei provider richiede approccio strutturato per supportare multi-cloud e version management:
 
@@ -73,18 +73,18 @@ terraform {
 
 ### Reusable Infrastructure Components
 
-**Module Design Principles**
+#### Module Design Principles
 
 Lo sviluppo di moduli Terraform richiede approccio sistematico che bilancia riusabilità, flessibilità e maintainability:
 
-**Core Module Patterns:**
+#### Core Module Patterns:
 
 - **Single responsibility**: Ogni modulo gestisce una specifica infrastructure capability
 - **Composable architecture**: Moduli progettati per essere combinati in patterns complessi
 - **Configuration flexibility**: Input variables che permettono customization senza duplicazione
 - **Standardized outputs**: Output consistenti per facilitare module chaining
 
-**VPC Module Implementation**
+#### VPC Module Implementation
 
 Il modulo VPC dimostra patterns di design per infrastructure components enterprise-grade:
 
@@ -110,7 +110,7 @@ resource "aws_subnet" "public" {
 }
 ```
 
-**Module Interface Design**
+#### Module Interface Design
 
 L'interfaccia del modulo (variables/outputs) definisce il contratto per l'utilizzo:
 
@@ -123,18 +123,18 @@ L'interfaccia del modulo (variables/outputs) definisce il contratto per l'utiliz
 
 ### Enterprise State Management
 
-**Remote State Architecture**
+#### Remote State Architecture
 
 La gestione dello state Terraform richiede architettura robusta che garantisca consistency, security e collaboration:
 
-**State Management Principles:**
+#### State Management Principles:
 
 - **Centralized storage**: State remoto con backend S3/Azure Storage per team collaboration
 - **Encryption at rest**: Encryption dello state per proteggere sensitive information
 - **State locking**: DynamoDB/Azure Storage locking per prevenire concurrent modifications
 - **Backup strategy**: Versioning e backup automatico dello state per disaster recovery
 
-**Remote State Configuration**
+#### Remote State Configuration
 
 ```hcl
 # State infrastructure setup
@@ -157,7 +157,7 @@ resource "aws_s3_bucket" "terraform_state" {
 
 ### Workspace Management Strategy
 
-**Environment Isolation**
+#### Environment Isolation
 
 I workspace Terraform forniscono isolation per environment diversi utilizzando lo stesso configuration code:
 
@@ -166,7 +166,7 @@ I workspace Terraform forniscono isolation per environment diversi utilizzando l
 - **Variable management**: Environment-specific variables attraverso tfvars files
 - **Workflow automation**: Script per standardizzare workspace operations
 
-**Automated Workspace Operations**
+#### Automated Workspace Operations
 
 Il management dei workspace richiede automazione per garantire consistency e ridurre errori:
 
@@ -188,11 +188,11 @@ plan_environment() {
 
 ### Dynamic Infrastructure Patterns
 
-**Dynamic Resource Creation**
+#### Dynamic Resource Creation
 
 Terraform dynamic blocks enableano configuration flessibili che si adattano a requirements variabili:
 
-**Dynamic Configuration Benefits:**
+#### Dynamic Configuration Benefits:
 
 - **Flexible resource creation**: Creazione di risorse basata su input dinamici
 - **Reduced code duplication**: Single configuration che gestisce multiple scenarios
@@ -219,7 +219,7 @@ resource "aws_security_group" "app" {
 
 ### Conditional Resource Management
 
-**Environment-Specific Resource Creation**
+#### Environment-Specific Resource Creation
 
 La creazione condizionale di risorse permette single codebase per multiple environments con requirements diversi:
 
@@ -241,12 +241,13 @@ resource "aws_lb" "app" {
 
 }
 
-````
+````text
 
 ## Testing and Validation
 
 ### Terraform Validation
 ```bash
+
 #!/bin/bash
 # scripts/validate.sh
 
@@ -271,11 +272,13 @@ echo "Running cost estimation..."
 infracost breakdown --path .
 
 echo "All validations passed!"
+
 ````
 
 ### Automated Testing
 
 ```hcl
+
 # test/vpc_test.go
 package test
 
@@ -304,6 +307,7 @@ func TestVPCModule(t *testing.T) {
     publicSubnets := terraform.OutputList(t, terraformOptions, "public_subnet_ids")
     assert.Len(t, publicSubnets, 2)
 }
+
 ```
 
 ## Cost Optimization
@@ -311,6 +315,7 @@ func TestVPCModule(t *testing.T) {
 ### Resource Tagging for Cost Allocation
 
 ```hcl
+
 locals {
   common_tags = {
     Environment = var.environment
@@ -330,11 +335,13 @@ resource "aws_instance" "app" {
     Type = "application"
   })
 }
+
 ```
 
 ### Environment-Specific Sizing
 
 ```hcl
+
 # locals.tf
 locals {
   environment_config = {
@@ -371,6 +378,7 @@ resource "aws_autoscaling_group" "app" {
     version = "$Latest"
   }
 }
+
 ```
 
 ## Security Best Practices
@@ -378,6 +386,7 @@ resource "aws_autoscaling_group" "app" {
 ### Sensitive Data Management
 
 ```hcl
+
 # Use random passwords
 resource "random_password" "db_password" {
   length  = 32
@@ -405,11 +414,13 @@ data "aws_secretsmanager_secret_version" "db_credentials" {
 locals {
   db_creds = jsondecode(data.aws_secretsmanager_secret_version.db_credentials.secret_string)
 }
+
 ```
 
 ### IAM Policies and Roles
 
 ```hcl
+
 # Least privilege IAM policy
 data "aws_iam_policy_document" "app_policy" {
   statement {
@@ -456,6 +467,7 @@ resource "aws_iam_role_policy" "app_policy" {
   role   = aws_iam_role.app_role.id
   policy = data.aws_iam_policy_document.app_policy.json
 }
+
 ```
 
 ## Automation and CI/CD
@@ -463,6 +475,7 @@ resource "aws_iam_role_policy" "app_policy" {
 ### GitHub Actions Integration
 
 ```yaml
+
 name: Terraform CI/CD
 on:
   push:
@@ -519,6 +532,7 @@ jobs:
         run: terraform apply tfplan
         working-directory: terraform/environments/${{ matrix.environment }}
         environment: production
+
 ```
 
 ## Troubleshooting
@@ -526,6 +540,7 @@ jobs:
 ### Common Issues and Solutions
 
 ```bash
+
 # State corruption recovery
 terraform state list
 terraform state show <resource>
@@ -547,6 +562,7 @@ terraform apply -target=module.vpc
 # Debug logging
 export TF_LOG=DEBUG
 terraform plan
+
 ```
 
 ## Implementation Checklist

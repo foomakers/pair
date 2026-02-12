@@ -28,12 +28,12 @@ Read the following files and classify each as **populated** or **template**:
 
 ### Step 2: Cascade — Fresh Project Detection
 
-| # | Condition                                                 | Suggestion        | Rationale                        |
-| - | --------------------------------------------------------- | ----------------- | -------------------------------- |
-| 1 | PRD.md is template                                        | `/specify-prd`    | Product vision must come first   |
-| 2 | PRD.md populated AND 3+ tech adoption files are templates | `/bootstrap`      | Project needs foundational setup |
-| 3 | subdomain/README.md is template                           | `/map-subdomains` | Domain decomposition needed      |
-| 4 | boundedcontext/README.md is template                      | `/map-contexts`   | Architecture boundaries needed   |
+| #   | Condition                                                 | Suggestion        | Rationale                        |
+| --- | --------------------------------------------------------- | ----------------- | -------------------------------- |
+| 1   | PRD.md is template                                        | `/specify-prd`    | Product vision must come first   |
+| 2   | PRD.md populated AND 3+ tech adoption files are templates | `/bootstrap`      | Project needs foundational setup |
+| 3   | subdomain/README.md is template                           | `/map-subdomains` | Domain decomposition needed      |
+| 4   | boundedcontext/README.md is template                      | `/map-contexts`   | Architecture boundaries needed   |
 
 If any of the above matched, output the suggestion and stop.
 
@@ -43,15 +43,15 @@ All adoption files are populated. Query the PM tool to determine backlog state.
 
 **PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
 
-| #  | Condition                                                        | Suggestion          | Rationale                                   |
-| -- | ---------------------------------------------------------------- | ------------------- | ------------------------------------------- |
-| 5  | No initiatives or epics exist in PM tool                         | `/plan-initiatives` | Strategic planning needed                   |
-| 6  | Initiatives exist but no epics                                   | `/plan-epics`       | Epic decomposition needed                   |
-| 7  | Epics exist but no user stories                                  | `/plan-stories`     | Story breakdown needed                      |
-| 8  | Stories exist without acceptance criteria or with `status:draft` | `/pair-process-refine-story`     | Stories need refinement before work         |
-| 9  | Refined stories exist but have no task breakdown                 | `/pair-process-plan-tasks`       | Tasks must be created before implementation |
-| 10 | Tasks in "ready" or "todo" state exist                           | `/pair-process-implement`        | Work is ready to start                      |
-| 11 | Open pull requests or tasks in "review" state                    | `/pair-process-review`           | Code review pending                         |
+| #   | Condition                                                        | Suggestion          | Rationale                                   |
+| --- | ---------------------------------------------------------------- | ------------------- | ------------------------------------------- |
+| 5   | No initiatives or epics exist in PM tool                         | `/plan-initiatives` | Strategic planning needed                   |
+| 6   | Initiatives exist but no epics                                   | `/plan-epics`       | Epic decomposition needed                   |
+| 7   | Epics exist but no user stories                                  | `/plan-stories`     | Story breakdown needed                      |
+| 8   | Stories exist without acceptance criteria or with `status:draft` | `/pair-process-refine-story`     | Stories need refinement before work         |
+| 9   | Refined stories exist but have no task breakdown                 | `/pair-process-plan-tasks`       | Tasks must be created before implementation |
+| 10  | Tasks in "ready" or "todo" state exist                           | `/pair-process-implement`        | Work is ready to start                      |
+| 11  | Open pull requests or tasks in "review" state                    | `/pair-process-review`           | Code review pending                         |
 
 If no condition matched, all work is complete for the current iteration.
 

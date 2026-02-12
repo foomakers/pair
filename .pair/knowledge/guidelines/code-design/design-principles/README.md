@@ -42,7 +42,7 @@ Establish core design principles that ensure code quality, maintainability, and 
 
 ### Software Design Fundamentals
 
-**[SOLID Principles](solid-principles.md)**
+#### [SOLID Principles](solid-principles.md)
 
 - Single Responsibility: Classes and functions with focused purposes
 - Open/Closed: Extensible design without modification
@@ -50,7 +50,7 @@ Establish core design principles that ensure code quality, maintainability, and 
 - Interface Segregation: Minimal and focused interfaces
 - Dependency Inversion: Abstraction-based dependencies
 
-**[Functional Programming](functional-programming.md)**
+#### [Functional Programming](functional-programming.md)
 
 - Pure functions and predictable behavior
 - Immutability and data integrity
@@ -59,21 +59,21 @@ Establish core design principles that ensure code quality, maintainability, and 
 
 ### Code Quality and Readability
 
-**[Error Handling](error-handling.md)**
+#### [Error Handling](error-handling.md)
 
 - Consistent error handling patterns across the codebase
 - Type-safe error management and recovery strategies
 - Graceful degradation and fallback mechanisms
 - Error communication and debugging support
 
-**[Service Abstraction](service-abstraction.md)**
+#### [Service Abstraction](service-abstraction.md)
 
 - Clear separation between business logic and infrastructure
 - Service layer design and dependency management
 - API design and interface consistency
 - Testing and mocking strategies for isolated unit testing
 
-**[Service Factory](service-factory.md)**
+#### [Service Factory](service-factory.md)
 
 - Dependency injection and service composition patterns
 - Factory patterns for service instantiation
@@ -82,7 +82,7 @@ Establish core design principles that ensure code quality, maintainability, and 
 
 ### Testing and Quality Assurance
 
-**[Mocking Strategy](mocking-strategy.md)**
+#### [Mocking Strategy](mocking-strategy.md)
 
 - Effective mocking patterns for unit and integration testing
 - Test double strategies and implementation approaches
@@ -93,14 +93,14 @@ Establish core design principles that ensure code quality, maintainability, and 
 
 ### Code as Communication
 
-**Clarity and Intent**
+#### Clarity and Intent
 
 - Write code that clearly expresses business intent
 - Use descriptive naming that reveals purpose and behavior
 - Structure code to tell a coherent story
 - Minimize cognitive load for future developers
 
-**Self-Documenting Practices**
+#### Self-Documenting Practices
 
 - Code structure that explains architectural decisions
 - Naming conventions that eliminate need for comments
@@ -109,14 +109,14 @@ Establish core design principles that ensure code quality, maintainability, and 
 
 ### Maintainability and Evolution
 
-**Design for Change**
+#### Design for Change
 
 - Anticipate future requirements without over-engineering
 - Create extension points for new functionality
 - Isolate volatile components from stable ones
 - Use dependency injection for flexible configuration
 
-**Technical Debt Management**
+#### Technical Debt Management
 
 - Recognize and address design debt early
 - Refactor incrementally to improve design quality
@@ -125,14 +125,14 @@ Establish core design principles that ensure code quality, maintainability, and 
 
 ### Quality Through Design
 
-**Reliability and Robustness**
+#### Reliability and Robustness
 
 - Design for failure scenarios and edge cases
 - Implement comprehensive error handling and recovery
 - Use type systems to prevent runtime errors
 - Create predictable and testable interfaces
 
-**Performance and Efficiency**
+#### Performance and Efficiency
 
 - Design for appropriate performance characteristics
 - Avoid premature optimization while maintaining efficiency
@@ -143,14 +143,14 @@ Establish core design principles that ensure code quality, maintainability, and 
 
 ### Principle Application
 
-**Progressive Implementation**
+#### Progressive Implementation
 
 - Start with fundamental principles in new code
 - Refactor existing code incrementally to align with principles
 - Focus on high-impact areas for principle application
 - Use code reviews to reinforce principle adherence
 
-**Context-Appropriate Application**
+#### Context-Appropriate Application
 
 - Apply principles appropriately to problem context
 - Balance principle adherence with practical constraints
@@ -159,14 +159,14 @@ Establish core design principles that ensure code quality, maintainability, and 
 
 ### Team Adoption
 
-**Knowledge Sharing**
+#### Knowledge Sharing
 
 - Regular team discussions on design principle application
 - Code review focus on design quality and principle adherence
 - Pair programming to transfer design knowledge
 - Documentation of team-specific principle interpretations
 
-**Continuous Improvement**
+#### Continuous Improvement
 
 - Regular retrospectives on design quality and effectiveness
 - Metrics tracking for code quality and maintainability
@@ -177,14 +177,14 @@ Establish core design principles that ensure code quality, maintainability, and 
 
 ### Design Review Process
 
-**Architectural Review**
+#### Architectural Review
 
 - Design decision documentation and rationale
 - Principle adherence assessment and feedback
 - Trade-off analysis and alternative consideration
 - Long-term impact assessment and planning
 
-**Code Review Standards**
+#### Code Review Standards
 
 - Principle-focused code review criteria
 - Constructive feedback on design improvements
@@ -193,14 +193,14 @@ Establish core design principles that ensure code quality, maintainability, and 
 
 ### Measurement and Metrics
 
-**Quality Indicators**
+#### Quality Indicators
 
 - Code complexity and maintainability metrics
 - Test coverage and quality assessments
 - Defect rates and production issue analysis
 - Developer productivity and satisfaction measurements
 
-**Continuous Assessment**
+#### Continuous Assessment
 
 - Regular code quality audits and assessments
 - Design principle effectiveness evaluation

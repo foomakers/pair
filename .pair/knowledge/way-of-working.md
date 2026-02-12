@@ -27,7 +27,7 @@ The process is designed to:
 
 ### Hierarchy & Value Streams
 
-```
+```text
 📘 INDUCTION
 └── Product Foundation & Architecture
     │

@@ -6,7 +6,7 @@ Define comprehensive alerting strategies that provide timely, actionable notific
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Alert design principles and best practices
 - Notification strategy and escalation procedures
@@ -15,7 +15,7 @@ Define comprehensive alerting strategies that provide timely, actionable notific
 - Incident response integration
 - Alert fatigue prevention techniques
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Specific tool configuration details
 - Incident response procedures (covered separately)
@@ -39,14 +39,14 @@ The goal is to create alerting systems that are both sensitive enough to catch r
 
 ### Alert Quality Over Quantity
 
-**Actionable Alerts:**
+#### Actionable Alerts:
 
 - Every alert should require action or decision
 - Clear indication of problem severity and impact
 - Specific guidance on investigation or resolution steps
 - Context sufficient for appropriate response
 
-**Signal vs. Noise:**
+#### Signal vs. Noise:
 
 - High signal-to-noise ratio maintenance
 - False positive minimization
@@ -55,21 +55,21 @@ The goal is to create alerting systems that are both sensitive enough to catch r
 
 ### Severity-Based Classification
 
-**Critical Alerts:**
+#### Critical Alerts:
 
 - Service completely unavailable
 - Data loss or corruption risk
 - Security breach detection
 - Revenue-impacting issues
 
-**Warning Alerts:**
+#### Warning Alerts:
 
 - Performance degradation
 - Resource exhaustion approaching
 - Non-critical service issues
 - Potential future problems
 
-**Informational Alerts:**
+#### Informational Alerts:
 
 - System status changes
 - Deployment notifications
@@ -80,14 +80,14 @@ The goal is to create alerting systems that are both sensitive enough to catch r
 
 ### SLO-Based Alerting
 
-**Error Budget Alerts:**
+#### Error Budget Alerts:
 
 - Error budget consumption rate monitoring
 - Burn rate threshold alerts
 - SLO compliance tracking
 - Risk-based alert prioritization
 
-**Multi-Window Alerting:**
+#### Multi-Window Alerting:
 
 - Short-term and long-term burn rate monitoring
 - Fast detection for severe issues
@@ -96,14 +96,14 @@ The goal is to create alerting systems that are both sensitive enough to catch r
 
 ### Contextual Alerting
 
-**Environmental Context:**
+#### Environmental Context:
 
 - Service environment identification (prod, staging, dev)
 - Deployment correlation
 - Feature flag state inclusion
 - Business context integration
 
-**Historical Context:**
+#### Historical Context:
 
 - Trend information inclusion
 - Baseline comparison
@@ -122,7 +122,7 @@ The goal is to create alerting systems that are both sensitive enough to catch r
 
 ## Decision Tree for Alert Tools
 
-```
+```text
 Start: What's your team size and complexity?
 
 ├── Enterprise (100+ engineers)
@@ -143,14 +143,14 @@ Start: What's your team size and complexity?
 
 ### High-Cost Solutions (PagerDuty, Opsgenie)
 
-**Benefits:**
+#### Benefits:
 
 - Advanced escalation workflows
 - AI-powered alert correlation
 - Comprehensive integration ecosystem
 - Enterprise-grade reliability
 
-**Costs:**
+#### Costs:
 
 - High per-user licensing fees
 - Complex feature sets may be underutilized
@@ -159,14 +159,14 @@ Start: What's your team size and complexity?
 
 ### Medium-Cost Solutions (VictorOps, Cloud Native)
 
-**Benefits:**
+#### Benefits:
 
 - Good feature-to-cost ratio
 - Moderate complexity
 - Decent integration options
 - Scalable pricing models
 
-**Costs:**
+#### Costs:
 
 - Limited advanced features
 - Some integration gaps
@@ -175,14 +175,14 @@ Start: What's your team size and complexity?
 
 ### Low-Cost Solutions (Alertmanager, Simple Email/Slack)
 
-**Benefits:**
+#### Benefits:
 
 - Very low or no licensing costs
 - Simple implementation
 - Full control over configuration
 - No vendor dependencies
 
-**Costs:**
+#### Costs:
 
 - Limited escalation capabilities
 - Manual configuration overhead
@@ -193,21 +193,21 @@ Start: What's your team size and complexity?
 
 ### Phased Approach
 
-**Phase 1: Foundation**
+#### Phase 1: Foundation
 
 - Critical service monitoring
 - Basic threshold alerts
 - Primary notification channels
 - Essential escalation paths
 
-**Phase 2: Enhancement**
+#### Phase 2: Enhancement
 
 - SLO-based alerting implementation
 - Alert correlation introduction
 - Multi-channel notification setup
 - Runbook integration
 
-**Phase 3: Optimization**
+#### Phase 3: Optimization
 
 - AI-powered alert intelligence
 - Advanced escalation workflows
@@ -216,14 +216,14 @@ Start: What's your team size and complexity?
 
 ### Best Practices
 
-**Alert Design:**
+#### Alert Design:
 
 - Start with high-level service alerts
 - Add granular alerts gradually
 - Validate alert value continuously
 - Remove or modify ineffective alerts
 
-**Team Integration:**
+#### Team Integration:
 
 - Involve operations teams in alert design
 - Create shared alert ownership
@@ -234,14 +234,14 @@ Start: What's your team size and complexity?
 
 ### Alert Effectiveness
 
-**Quality Metrics:**
+#### Quality Metrics:
 
 - Alert-to-incident ratio
 - False positive rate
 - Time to acknowledgment
 - Alert resolution rate
 
-**Response Metrics:**
+#### Response Metrics:
 
 - Mean time to acknowledgment (MTTA)
 - Mean time to resolution (MTTR)
@@ -250,7 +250,7 @@ Start: What's your team size and complexity?
 
 ### Business Impact
 
-**Operational Improvements:**
+#### Operational Improvements:
 
 - Incident detection speed
 - Problem resolution acceleration

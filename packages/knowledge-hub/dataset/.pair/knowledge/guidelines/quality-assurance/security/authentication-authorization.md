@@ -8,7 +8,7 @@ Establish robust authentication and authorization standards that ensure secure u
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - User authentication mechanisms and multi-factor authentication
 - Authorization frameworks and access control models
@@ -16,7 +16,7 @@ Establish robust authentication and authorization standards that ensure secure u
 - Identity federation and single sign-on (SSO) integration
 - Privileged access management and administrative controls
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Specific identity provider configurations (covered in implementation guides)
 - Physical access controls and facility security

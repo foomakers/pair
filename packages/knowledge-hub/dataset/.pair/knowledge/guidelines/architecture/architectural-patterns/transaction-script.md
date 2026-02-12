@@ -4,7 +4,7 @@ Simple procedural architecture pattern where each business transaction is handle
 
 ## When to Use
 
-**Ideal for:**
+#### Ideal for:
 
 - Simple business logic
 - Few business rules
@@ -13,7 +13,7 @@ Simple procedural architecture pattern where each business transaction is handle
 - Domain logic that's mostly data processing
 - Applications with minimal shared behavior
 
-**Avoid when:**
+#### Avoid when:
 
 - Complex business rules
 - Significant object interactions
@@ -23,7 +23,7 @@ Simple procedural architecture pattern where each business transaction is handle
 
 ## Pattern Structure
 
-```
+```text
 Transaction Scripts
 ├── UserRegistrationScript
 ├── OrderProcessingScript
@@ -65,7 +65,7 @@ Each transaction script follows this pattern:
 
 ### Example Flow
 
-```
+```text
 User Registration:
 Input → Validate → Check Existing → Hash Password → Store User → Send Email → Response
 ```
@@ -102,14 +102,14 @@ Input → Validate → Check Existing → Hash Password → Store User → Send 
 
 ### Migration to Domain Model
 
-**Trigger signals:**
+#### Trigger signals:
 
 - Business logic becomes complex
 - Significant code duplication appears
 - Need for rich object interactions
 - Domain concepts become important
 
-**Migration approach:**
+#### Migration approach:
 
 1. Identify common behavior across scripts
 2. Extract domain objects
@@ -118,7 +118,7 @@ Input → Validate → Check Existing → Hash Password → Store User → Send 
 
 ### Migration to Service Layer
 
-**Trigger signals:**
+#### Trigger signals:
 
 - Multiple presentation layers needed
 - Need for transaction boundaries

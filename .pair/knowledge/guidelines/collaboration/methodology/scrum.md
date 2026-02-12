@@ -8,13 +8,13 @@ Sprint-based iterative development framework that provides structure for complex
 
 ### Scrum Theory
 
-**Empirical Process Control**
+#### Empirical Process Control
 
 - **Transparency**: All aspects of process visible to those responsible for outcome
 - **Inspection**: Regular examination of artifacts and progress toward goals
 - **Adaptation**: Adjustment based on inspection results to minimize deviation
 
-**Scrum Values**
+#### Scrum Values
 
 - **Commitment**: Dedication to achieving team goals and deliverables
 - **Courage**: Willingness to tackle difficult problems and speak up
@@ -24,21 +24,21 @@ Sprint-based iterative development framework that provides structure for complex
 
 ### Scrum Roles
 
-**Product Owner**
+#### Product Owner
 
 - Maximizes value of product and work of Development Team
 - Manages Product Backlog including content, availability, and ordering
 - Ensures Development Team understands items to appropriate level
 - Single person, not committee (may represent stakeholder desires)
 
-**Scrum Master**
+#### Scrum Master
 
 - Facilitates Scrum process and removes impediments
 - Coaches team on Scrum practices and continuous improvement
 - Protects team from external disruptions during sprints
 - Facilitates Scrum events and ensures they are productive
 
-**Development Team**
+#### Development Team
 
 - Cross-functional professionals who deliver product increment
 - Self-organizing team that determines how to accomplish work
@@ -47,9 +47,9 @@ Sprint-based iterative development framework that provides structure for complex
 
 ### Scrum Events
 
-**Sprint**
+#### Sprint
 
-```
+```text
 Duration: 1-4 weeks (2 weeks recommended)
 Purpose: Time-boxed period to create usable, potentially shippable product increment
 Characteristics:
@@ -59,9 +59,9 @@ Characteristics:
 - Scope may be clarified and re-negotiated with Product Owner
 ```
 
-**Sprint Planning**
+#### Sprint Planning
 
-```
+```text
 Duration: Maximum 8 hours for 4-week sprint (proportionally less for shorter sprints)
 Participants: Scrum Team (Product Owner, Scrum Master, Development Team)
 Purpose: Plan work to be performed during Sprint
@@ -75,9 +75,9 @@ Outputs:
 - Sprint Backlog (Product Backlog items + plan for delivering them)
 ```
 
-**Daily Scrum**
+#### Daily Scrum
 
-```
+```text
 Duration: 15 minutes maximum
 Participants: Development Team (others may attend but only observe)
 Purpose: Synchronize activities and create plan for next 24 hours
@@ -93,9 +93,9 @@ Guidelines:
 - Detailed discussions happen after Daily Scrum
 ```
 
-**Sprint Review**
+#### Sprint Review
 
-```
+```text
 Duration: Maximum 4 hours for 4-week sprint
 Participants: Scrum Team + key stakeholders
 Purpose: Inspect Increment and adapt Product Backlog if needed
@@ -110,9 +110,9 @@ Agenda:
 Output: Revised Product Backlog defining probable items for next Sprint
 ```
 
-**Sprint Retrospective**
+#### Sprint Retrospective
 
-```
+```text
 Duration: Maximum 3 hours for 4-week sprint
 Participants: Scrum Team only
 Purpose: Inspect how last Sprint went and create plan for improvements
@@ -131,9 +131,9 @@ Guidelines:
 
 ### Scrum Artifacts
 
-**Product Backlog**
+#### Product Backlog
 
-```
+```text
 Definition: Ordered list of everything known to be needed in product
 Characteristics:
 - Single source of requirements for any changes to be made
@@ -149,9 +149,9 @@ Item Qualities:
 - Test criteria (acceptance criteria)
 ```
 
-**Sprint Backlog**
+#### Sprint Backlog
 
-```
+```text
 Definition: Product Backlog items selected for Sprint + plan for delivering them
 Characteristics:
 - Forecast by Development Team about functionality for next Increment
@@ -166,9 +166,9 @@ Components:
 - Progress tracking (burndown charts, task boards)
 ```
 
-**Increment**
+#### Increment
 
-```
+```text
 Definition: Sum of all Product Backlog items completed during Sprint + value of Increments of all previous Sprints
 Characteristics:
 - Must be in useable condition regardless of whether Product Owner decides to release it
@@ -187,9 +187,9 @@ Quality Standards:
 
 ### Getting Started with Scrum
 
-**Team Formation**
+#### Team Formation
 
-```
+```text
 Week 1-2: Team Setup
 - Identify and train Product Owner
 - Select and train Scrum Master
@@ -198,9 +198,9 @@ Week 1-2: Team Setup
 - Set up physical/virtual workspace and tools
 ```
 
-**Initial Product Backlog**
+#### Initial Product Backlog
 
-```
+```text
 Week 2-3: Backlog Creation
 - Conduct Product Backlog workshop with stakeholders
 - Write initial user stories with acceptance criteria
@@ -209,9 +209,9 @@ Week 2-3: Backlog Creation
 - Refine top priority items for first sprint
 ```
 
-**First Sprint Preparation**
+#### First Sprint Preparation
 
-```
+```text
 Week 3: Sprint Zero Activities
 - Establish Definition of Done
 - Set up development environment and tools
@@ -222,9 +222,9 @@ Week 3: Sprint Zero Activities
 
 ### Scrum Best Practices
 
-**Product Backlog Management**
+#### Product Backlog Management
 
-```
+```text
 Ongoing Backlog Refinement:
 - Spend 10% of Development Team capacity on backlog refinement
 - Break down large stories into smaller, sprint-sized items
@@ -239,9 +239,9 @@ Story Writing Guidelines:
 - Size stories to complete within single sprint
 ```
 
-**Sprint Execution**
+#### Sprint Execution
 
-```
+```text
 Daily Practices:
 - Update task board and burndown chart daily
 - Focus Daily Scrum on progress toward Sprint Goal
@@ -256,9 +256,9 @@ Mid-Sprint Adjustments:
 - Stakeholder communication through Product Owner
 ```
 
-**Quality Assurance**
+#### Quality Assurance
 
-```
+```text
 Definition of Done Criteria:
 - Code written and reviewed
 - Unit tests written and passing
@@ -277,9 +277,9 @@ Continuous Improvement:
 
 ### Scaling Scrum
 
-**Multiple Teams**
+#### Multiple Teams
 
-```
+```text
 Scrum of Scrums:
 - Representatives from each team meet regularly
 - Discuss dependencies and coordination needs
@@ -293,9 +293,9 @@ Shared Services:
 - Integrated tooling and infrastructure
 ```
 
-**Large Product Development**
+#### Large Product Development
 
-```
+```text
 Product Owner Team:
 - Chief Product Owner for overall product vision
 - Area Product Owners for specific components
@@ -313,9 +313,9 @@ Technical Coordination:
 
 ### Team Dynamics
 
-**Challenge: Team members not collaborating effectively**
+#### Challenge: Team members not collaborating effectively
 
-```
+```text
 Solutions:
 - Pair programming and mob programming sessions
 - Cross-functional skill development
@@ -324,9 +324,9 @@ Solutions:
 - Regular team retrospectives focused on collaboration
 ```
 
-**Challenge: Product Owner unavailable or unclear**
+#### Challenge: Product Owner unavailable or unclear
 
-```
+```text
 Solutions:
 - Product Owner training and coaching
 - Regular stakeholder alignment sessions
@@ -337,9 +337,9 @@ Solutions:
 
 ### Process Implementation
 
-**Challenge: Ceremonies feeling like overhead**
+#### Challenge: Ceremonies feeling like overhead
 
-```
+```text
 Solutions:
 - Focus on outcomes rather than ritual compliance
 - Time-box all events strictly
@@ -348,9 +348,9 @@ Solutions:
 - Regular evaluation of event effectiveness
 ```
 
-**Challenge: Maintaining sprint commitments**
+#### Challenge: Maintaining sprint commitments
 
-```
+```text
 Solutions:
 - Improved estimation and planning techniques
 - Better understanding of team capacity
@@ -361,9 +361,9 @@ Solutions:
 
 ### Quality and Technical Issues
 
-**Challenge: Technical debt accumulating**
+#### Challenge: Technical debt accumulating
 
-```
+```text
 Solutions:
 - Include technical debt items in Product Backlog
 - Allocate percentage of sprint capacity to technical work
@@ -372,9 +372,9 @@ Solutions:
 - Stakeholder education on technical debt impact
 ```
 
-**Challenge: Integration and deployment difficulties**
+#### Challenge: Integration and deployment difficulties
 
-```
+```text
 Solutions:
 - Continuous integration and automated testing
 - Definition of Done includes deployment readiness
@@ -387,27 +387,27 @@ Solutions:
 
 ### Team Performance Metrics
 
-**Velocity Tracking**
+#### Velocity Tracking
 
-```
+```text
 Sprint Velocity: Story points completed per sprint
 Rolling Average: Velocity trend over last 6 sprints
 Capacity Planning: Velocity used for future sprint planning
 Predictability: Variance in velocity sprint-to-sprint
 ```
 
-**Quality Metrics**
+#### Quality Metrics
 
-```
+```text
 Defect Rate: Bugs found per story point delivered
 Escaped Defects: Production issues per release
 Definition of Done Compliance: Percentage of stories meeting DoD
 Technical Debt: Time spent on rework and maintenance
 ```
 
-**Process Metrics**
+#### Process Metrics
 
-```
+```text
 Sprint Goal Achievement: Percentage of sprints meeting goal
 Story Completion Rate: Percentage of committed stories completed
 Impediment Resolution Time: Average time to resolve blocking issues
@@ -416,14 +416,14 @@ Team Satisfaction: Regular team happiness and engagement surveys
 
 ### Continuous Improvement
 
-**Retrospective Effectiveness**
+#### Retrospective Effectiveness
 
 - Track improvement items identified vs. implemented
 - Measure impact of implemented improvements
 - Monitor team satisfaction with retrospective process
 - Regular meta-retrospectives on retrospective effectiveness
 
-**Adaptation Tracking**
+#### Adaptation Tracking
 
 - Document process changes and their rationale
 - Measure effectiveness of process adaptations

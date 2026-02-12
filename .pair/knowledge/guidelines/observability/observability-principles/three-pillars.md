@@ -6,7 +6,7 @@ Define the foundational three pillars of observability (metrics, logs, traces) a
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Metrics, logs, and traces definitions and use cases
 - Pillar integration and correlation strategies
@@ -14,7 +14,7 @@ Define the foundational three pillars of observability (metrics, logs, traces) a
 - Implementation best practices
 - Tool selection considerations
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Specific tool configurations
 - Vendor-specific implementations
@@ -26,14 +26,14 @@ Define the foundational three pillars of observability (metrics, logs, traces) a
 ### Metrics
 **Definition:** Numerical measurements that represent system state and behavior over time.
 
-**Characteristics:**
+#### Characteristics:
 
 - Time-series data structure
 - Aggregatable and comparable
 - Efficient storage and querying
 - Real-time alerting capability
 
-**Use Cases:**
+#### Use Cases:
 
 - Performance monitoring
 - Capacity planning
@@ -43,14 +43,14 @@ Define the foundational three pillars of observability (metrics, logs, traces) a
 ### Logs
 **Definition:** Timestamped records of discrete events that occurred within systems.
 
-**Characteristics:**
+#### Characteristics:
 
 - Rich contextual information
 - Event-driven data generation
 - Text-based or structured format
 - Historical investigation capability
 
-**Use Cases:**
+#### Use Cases:
 
 - Debugging and troubleshooting
 - Audit trails and compliance
@@ -60,14 +60,14 @@ Define the foundational three pillars of observability (metrics, logs, traces) a
 ### Traces
 **Definition:** Records of request flows through distributed systems showing service interactions.
 
-**Characteristics:**
+#### Characteristics:
 
 - Request correlation across services
 - Timing and dependency information
 - Service interaction mapping
 - Performance bottleneck identification
 
-**Use Cases:**
+#### Use Cases:
 
 - Distributed system debugging
 - Performance optimization

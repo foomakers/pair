@@ -13,7 +13,7 @@ Transform Product Requirements Documents and strategic initiatives into Domain-D
 
 **CRITICAL**: Maintain this context throughout subdomain definition:
 
-```
+```text
 SUBDOMAIN DEFINITION STATE:
 ├── Project: [Project Name from PRD]
 ├── Definition Status: [foundation | analysis | validation | documentation]

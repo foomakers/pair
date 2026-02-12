@@ -4,7 +4,7 @@
 
 Establishes comprehensive quality standards ensuring consistent, measurable, and maintainable quality across all development phases through systematic processes, clear responsibilities, and continuous improvement mechanisms.
 
-**In Scope:**
+#### In Scope:
 
 - Quality criteria and standards definition
 - Completion and acceptance criteria
@@ -13,7 +13,7 @@ Establishes comprehensive quality standards ensuring consistent, measurable, and
 - Responsibility assignment and accountability
 - Quality improvement methodologies
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Specific technical implementation details
 - Tool-specific configurations
@@ -50,7 +50,7 @@ Establishes comprehensive quality standards ensuring consistent, measurable, and
 
 ### **Decision Tree: Quality Standards Implementation**
 
-```
+```text
 Start → Team Size?
 ├─ Small (1-3) → Compliance Needs?
 │  ├─ Low → Basic Standards (DoD + Checklist)

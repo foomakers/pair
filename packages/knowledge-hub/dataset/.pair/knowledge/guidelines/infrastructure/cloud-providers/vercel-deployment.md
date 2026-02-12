@@ -26,7 +26,7 @@ Comprehensive guide for deploying frontend applications and full-stack projects 
 
 ### 1. JAMstack Architecture
 
-```
+```text
 Global CDN (Vercel Edge Network)
     ↓
 Static Site (Pre-built)
@@ -42,7 +42,7 @@ External APIs/Database
 
 ### 2. Full-Stack Next.js Application
 
-```
+```text
 Vercel Edge Network
     ↓
 Next.js App (SSR/SSG/ISR)
@@ -58,7 +58,7 @@ Database (PlanetScale, Supabase, etc.)
 
 ### 3. Micro-Frontend Architecture
 
-```
+```text
 Main Shell (Vercel)
     ↓
 Feature Modules (Separate Vercel Projects)

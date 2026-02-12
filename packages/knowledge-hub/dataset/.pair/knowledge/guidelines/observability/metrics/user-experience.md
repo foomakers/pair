@@ -6,7 +6,7 @@ Define user-centric metrics that measure and optimize the quality of user intera
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - User experience performance metrics
 - Customer satisfaction indicators
@@ -15,7 +15,7 @@ Define user-centric metrics that measure and optimize the quality of user intera
 - Accessibility metrics
 - User engagement tracking
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Marketing conversion metrics
 - Sales performance tracking

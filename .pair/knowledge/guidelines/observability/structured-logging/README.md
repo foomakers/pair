@@ -6,7 +6,7 @@ Define structured logging standards, formats, and best practices that enable eff
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Structured logging formats and standards
 - Log level definitions and usage
@@ -15,7 +15,7 @@ Define structured logging standards, formats, and best practices that enable eff
 - Log aggregation and analysis
 - Performance optimization
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Log storage infrastructure
 - Specific logging tool configurations
@@ -93,7 +93,7 @@ Structured logging transforms traditional text-based logs into machine-readable,
 
 ## Decision Tree for Log Formats
 
-```
+```text
 Start: What's your primary use case?
 
 ├── Human Debugging Primary

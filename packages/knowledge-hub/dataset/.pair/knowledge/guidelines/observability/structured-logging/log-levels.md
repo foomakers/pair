@@ -6,14 +6,14 @@ Define log level standards and usage guidelines to ensure consistent log categor
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Log level definitions and use cases
 - Selection criteria and guidelines
 - Performance impact considerations
 - Runtime configuration strategies
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Tool-specific configurations
 - Log format specifications
@@ -30,7 +30,8 @@ Define log level standards and usage guidelines to ensure consistent log categor
 - Security breaches or violations
 - External service failures affecting functionality
 
-**Example:**
+#### Example:
+
 ```json
 {
   "level": "ERROR",
@@ -51,7 +52,8 @@ Define log level standards and usage guidelines to ensure consistent log categor
 - Configuration issues
 - Recoverable errors
 
-**Example:**
+#### Example:
+
 ```json
 {
   "level": "WARN",
@@ -72,7 +74,8 @@ Define log level standards and usage guidelines to ensure consistent log categor
 - Configuration changes
 - User actions
 
-**Example:**
+#### Example:
+
 ```json
 {
   "level": "INFO",
@@ -91,7 +94,8 @@ Define log level standards and usage guidelines to ensure consistent log categor
 - Detailed execution flow
 - Development troubleshooting
 
-**Example:**
+#### Example:
+
 ```json
 {
   "level": "DEBUG",

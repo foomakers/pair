@@ -6,7 +6,7 @@ Define strategies for enriching logs with contextual information that enables ef
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Context enrichment strategies and techniques
 - Correlation ID implementation and usage
@@ -15,7 +15,7 @@ Define strategies for enriching logs with contextual information that enables ef
 - Business context integration
 - Performance impact optimization
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Sensitive data handling (covered in separate document)
 - Specific logging tool configurations
@@ -30,7 +30,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 
 ### Technical Context
 
-**Request Context:**
+#### Request Context:
 
 ```json
 {
@@ -48,7 +48,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 }
 ```
 
-**Service Context:**
+#### Service Context:
 
 ```json
 {
@@ -62,7 +62,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 }
 ```
 
-**Performance Context:**
+#### Performance Context:
 
 ```json
 {
@@ -78,7 +78,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 
 ### Business Context
 
-**User Context:**
+#### User Context:
 
 ```json
 {
@@ -92,7 +92,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 }
 ```
 
-**Transaction Context:**
+#### Transaction Context:
 
 ```json
 {
@@ -106,7 +106,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 }
 ```
 
-**Session Context:**
+#### Session Context:
 
 ```json
 {
@@ -124,7 +124,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 
 ### Distributed Tracing Integration
 
-**OpenTelemetry Context:**
+#### OpenTelemetry Context:
 
 ```json
 {
@@ -138,7 +138,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 }
 ```
 
-**Cross-Service Correlation:**
+#### Cross-Service Correlation:
 
 ```json
 {
@@ -153,7 +153,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 
 ### Request Flow Tracking
 
-**API Gateway Context:**
+#### API Gateway Context:
 
 ```json
 {
@@ -167,7 +167,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 }
 ```
 
-**Service-to-Service Calls:**
+#### Service-to-Service Calls:
 
 ```json
 {
@@ -185,7 +185,7 @@ Contextual information transforms isolated log entries into correlated, meaningf
 
 ### HTTP Header Propagation
 
-**Standard Headers:**
+#### Standard Headers:
 
 ```http
 X-Request-ID: req-abc123def456
@@ -195,7 +195,7 @@ X-User-ID: user-12345
 X-Session-ID: sess-xyz789
 ```
 
-**Custom Business Headers:**
+#### Custom Business Headers:
 
 ```http
 X-Tenant-ID: tenant-enterprise-001
@@ -206,7 +206,7 @@ X-Client-Version: mobile-app-2.1.0
 
 ### Message Queue Context
 
-**Message Metadata:**
+#### Message Metadata:
 
 ```json
 {
@@ -222,7 +222,7 @@ X-Client-Version: mobile-app-2.1.0
 }
 ```
 
-**Event Context:**
+#### Event Context:
 
 ```json
 {
@@ -241,7 +241,7 @@ X-Client-Version: mobile-app-2.1.0
 
 ### Context Injection
 
-**Middleware Pattern:**
+#### Middleware Pattern:
 
 ```javascript
 // Example middleware for context injection
@@ -257,7 +257,7 @@ const contextMiddleware = (req, res, next) => {
 }
 ```
 
-**Logger Enhancement:**
+#### Logger Enhancement:
 
 ```javascript
 // Context-aware logger
@@ -274,7 +274,7 @@ const contextualLogger = {
 
 ### Context Storage
 
-**Thread-Local Storage:**
+#### Thread-Local Storage:
 
 ```javascript
 // Node.js AsyncLocalStorage example
@@ -290,7 +290,7 @@ const getContext = () => {
 }
 ```
 
-**Context Provider Pattern:**
+#### Context Provider Pattern:
 
 ```javascript
 // React Context for frontend logging
@@ -312,7 +312,7 @@ const LoggingProvider = ({ children }) => {
 
 ### Automatic Enrichment
 
-**Framework Integration:**
+#### Framework Integration:
 
 ```json
 {
@@ -326,7 +326,7 @@ const LoggingProvider = ({ children }) => {
 }
 ```
 
-**Infrastructure Context:**
+#### Infrastructure Context:
 
 ```json
 {
@@ -343,7 +343,7 @@ const LoggingProvider = ({ children }) => {
 
 ### Dynamic Enrichment
 
-**Runtime Context:**
+#### Runtime Context:
 
 ```json
 {
@@ -360,7 +360,7 @@ const LoggingProvider = ({ children }) => {
 }
 ```
 
-**Feature Flag Context:**
+#### Feature Flag Context:
 
 ```json
 {
@@ -377,7 +377,7 @@ const LoggingProvider = ({ children }) => {
 
 ### Context Filtering
 
-**Level-Based Filtering:**
+#### Level-Based Filtering:
 
 ```javascript
 const contextFilters = {
@@ -388,7 +388,7 @@ const contextFilters = {
 }
 ```
 
-**Conditional Enrichment:**
+#### Conditional Enrichment:
 
 ```javascript
 const enrichContext = (level, baseContext) => {
@@ -406,7 +406,7 @@ const enrichContext = (level, baseContext) => {
 
 ### Lazy Loading
 
-**Expensive Context Calculation:**
+#### Expensive Context Calculation:
 
 ```javascript
 const createContext = () => ({
@@ -421,7 +421,7 @@ const createContext = () => ({
 
 ### Context Caching
 
-**Request-Scoped Caching:**
+#### Request-Scoped Caching:
 
 ```javascript
 const contextCache = new Map()
@@ -438,7 +438,7 @@ const getCachedContext = (key, factory) => {
 
 ### Sensitive Context Handling
 
-**Data Masking:**
+#### Data Masking:
 
 ```json
 {
@@ -451,7 +451,7 @@ const getCachedContext = (key, factory) => {
 }
 ```
 
-**Context Sanitization:**
+#### Context Sanitization:
 
 ```javascript
 const sanitizeContext = context => {
@@ -475,14 +475,14 @@ const sanitizeContext = context => {
 
 ### Context Design
 
-**Consistency Guidelines:**
+#### Consistency Guidelines:
 
 - Use standard field names across services
 - Maintain consistent data types
 - Implement proper field hierarchy
 - Document context schema
 
-**Naming Conventions:**
+#### Naming Conventions:
 
 - Use camelCase for field names
 - Prefix context categories (user.id, request.method)
@@ -491,14 +491,14 @@ const sanitizeContext = context => {
 
 ### Performance Guidelines
 
-**Context Size Management:**
+#### Context Size Management:
 
 - Limit context object size
 - Use references for large objects
 - Implement context pruning
 - Monitor serialization overhead
 
-**Efficient Propagation:**
+#### Efficient Propagation:
 
 - Minimize header count
 - Use compact representations
@@ -507,14 +507,14 @@ const sanitizeContext = context => {
 
 ### Operational Guidelines
 
-**Context Validation:**
+#### Context Validation:
 
 - Validate context structure
 - Handle missing context gracefully
 - Implement fallback mechanisms
 - Monitor context quality
 
-**Evolution Management:**
+#### Evolution Management:
 
 - Version context schemas
 - Implement backward compatibility

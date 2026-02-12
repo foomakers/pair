@@ -10,14 +10,14 @@ Define standardized patterns for system integration, service communication, and 
 
 ### Synchronous Integration
 
-**REST APIs**
+#### REST APIs
 
 - Request-response communication
 - Immediate consistency
 - Direct coupling between services
 - Best for real-time requirements
 
-**GraphQL APIs**
+#### GraphQL APIs
 
 - Flexible query language
 - Single endpoint for multiple data sources
@@ -26,14 +26,14 @@ Define standardized patterns for system integration, service communication, and 
 
 ### Asynchronous Integration
 
-**Event-Driven Architecture**
+#### Event-Driven Architecture
 
 - Loose coupling between services
 - Eventual consistency
 - Scalable and resilient
 - Best for high-volume, distributed systems
 
-**Message Queues**
+#### Message Queues
 
 - Reliable message delivery
 - Load balancing and scaling

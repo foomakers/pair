@@ -4,7 +4,7 @@
 
 This section covers fundamental design patterns for software architecture:
 
-**In Scope:**
+#### In Scope:
 
 - Domain-driven design principles and practices
 - Bounded context definition and management
@@ -14,7 +14,7 @@ This section covers fundamental design patterns for software architecture:
 - Workspace organization strategies
 - Monorepo management patterns
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Implementation-specific code patterns (covered in Code Design)
 - Deployment patterns (covered in Deployment Architectures)
@@ -105,28 +105,28 @@ flowchart TD
 
 ### Selection Criteria
 
-**Choose Domain-Driven Design when:**
+#### Choose Domain-Driven Design when:
 
 - Complex business logic and rules
 - Multiple stakeholders with different vocabularies
 - Long-term project evolution expected
 - Need for business-technology alignment
 
-**Choose Strategic Subdomain Definition when:**
+#### Choose Strategic Subdomain Definition when:
 
 - Starting new DDD implementation
 - Need to prioritize development efforts
 - Multiple business capabilities to organize
 - Resource allocation decisions required
 
-**Choose Bounded Contexts when:**
+#### Choose Bounded Contexts when:
 
 - Multiple teams working on same system
 - Different data models for same entities
 - Independent deployment requirements
 - Scaling different parts independently
 
-**Choose Integration Patterns when:**
+#### Choose Integration Patterns when:
 
 - Microservices architecture
 - Legacy system integration

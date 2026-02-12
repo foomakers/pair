@@ -27,7 +27,7 @@ Provide practical guidance for identifying, designing, and implementing bounded 
 
 ### Monolith with Bounded Contexts
 
-```
+```text
 monolith/
 ├── contexts/
 │   ├── user-management/
@@ -41,7 +41,7 @@ monolith/
 
 ### Microservices with Bounded Contexts
 
-```
+```text
 services/
 ├── user-service/        # User Management Context
 ├── order-service/       # Order Processing Context
@@ -59,7 +59,7 @@ services/
 
 ### Relationship Documentation
 
-```
+```text
 Context A ----> Context B    (A is upstream, B is downstream)
 Context C <---> Context D    (Bidirectional dependency)
 ```
@@ -98,7 +98,7 @@ A context map documents:
 
 ### Example Context Map Structure
 
-```
+```text
 ┌─────────────────┐    Partnership    ┌─────────────────┐
 │   User Context  │ ←─────────────→   │  Order Context  │
 └─────────────────┘                   └─────────────────┘

@@ -6,7 +6,7 @@ Define metrics for tracking feature adoption, usage patterns, and user engagemen
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Feature adoption tracking
 - Usage pattern analysis
@@ -15,7 +15,7 @@ Define metrics for tracking feature adoption, usage patterns, and user engagemen
 - Product performance indicators
 - User journey analysis
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Marketing analytics
 - Sales conversion tracking

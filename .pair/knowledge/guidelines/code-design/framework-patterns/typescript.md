@@ -42,6 +42,7 @@ This approach minimizes disruption while progressively improving code quality.
 Organize types around business domains rather than technical layers. This approach scales better and makes the codebase more intuitive.
 
 ```typescript
+
 // types/user.types.ts - Domain-specific types
 export interface User {
   readonly id: string;
@@ -60,6 +61,7 @@ export interface CreateUserRequest {
 }
 
 export type UserRole = 'admin' | 'user' | 'guest';
+
 ````
 
 **Immutability by Default**: Use `readonly` modifiers to prevent accidental mutations
@@ -71,6 +73,7 @@ export type UserRole = 'admin' | 'user' | 'guest';
 **Branded Types**: Create distinct types from primitives to prevent mixing incompatible values:
 
 ```typescript
+
 type UserId = Brand<string, 'UserId'>
 type Email = Brand<string, 'Email'>
 
@@ -80,14 +83,17 @@ function createEmail(email: string): Email {
   }
   return email as Email
 }
+
 ```
 
 **Template Literal Types**: Use for type-safe string patterns:
 
 ```typescript
-type EventType = 'user' | 'order' | 'payment'
-type Action = 'created' | 'updated' | 'deleted'
+
+| type EventType = 'user' | 'order'   | 'payment' |
+| type Action = 'created' | 'updated' | 'deleted' |
 type EventName = `${EventType}.${Action}`
+
 ```
 
 **Conditional Types**: Create types that adapt based on input types for flexible APIs.
@@ -99,6 +105,7 @@ type EventName = `${EventType}.${Action}`
 TypeScript's strict null checks force explicit handling of potentially undefined values:
 
 ```typescript
+
 // ✅ Good: Explicit null handling
 function getUserDisplayName(user: User | null): string {
   if (user === null) {
@@ -111,6 +118,7 @@ function getUserDisplayName(user: User | null): string {
 function getEmailDomain(user?: User): string {
   return user?.email?.split('@')[1] ?? 'unknown'
 }
+
 ```
 
 **Type Guards**: Create reusable functions to check and narrow types
@@ -122,8 +130,9 @@ function getEmailDomain(user?: User): string {
 With `noUncheckedIndexedAccess`, array access returns `T | undefined`, forcing safer array handling:
 
 ```typescript
-function getFirstUser(users: User[]): User | undefined {
-  const firstUser = users[0] // Type is User | undefined
+
+| function getFirstUser(users: User[]): User | undefined { |
+| const firstUser = users[0] // Type is User | undefined   |
 
   if (firstUser === undefined) {
     return undefined
@@ -131,6 +140,7 @@ function getFirstUser(users: User[]): User | undefined {
 
   return firstUser
 }
+
 ```
 
 ## Generic Programming
@@ -140,6 +150,7 @@ function getFirstUser(users: User[]): User | undefined {
 Use constraints to make generic functions more specific and type-safe:
 
 ```typescript
+
 interface HasId {
   readonly id: string
 }
@@ -147,6 +158,7 @@ interface HasId {
 function updateEntity<T extends HasId>(entities: T[], id: string, updates: Partial<T>): T[] {
   return entities.map(entity => (entity.id === id ? { ...entity, ...updates } : entity))
 }
+
 ```
 
 **Interface Constraints**: Ensure generic types have required properties
@@ -158,6 +170,7 @@ function updateEntity<T extends HasId>(entities: T[], id: string, updates: Parti
 Leverage TypeScript's built-in utility types for common patterns:
 
 ```typescript
+
 // Make specific fields optional
 type Optional<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
 
@@ -168,6 +181,7 @@ type Required<T, K extends keyof T> = T & Required<Pick<T, K>>
 type DeepReadonly<T> = {
   readonly [P in keyof T]: T[P] extends object ? DeepReadonly<T[P]> : T[P]
 }
+
 ```
 
 ## Migration Strategies
@@ -181,6 +195,7 @@ When working with existing JavaScript libraries or legacy code:
 **Adapter Patterns**: Create TypeScript-friendly wrappers around legacy APIs
 
 ```typescript
+
 // Legacy adapter example
 class LegacyUserAdapter {
   static toModernUser(legacyUser: any): User {
@@ -192,6 +207,7 @@ class LegacyUserAdapter {
     }
   }
 }
+
 ```
 
 ### Team Adoption
@@ -207,6 +223,7 @@ class LegacyUserAdapter {
 Leverage TypeScript in tests for better reliability:
 
 ```typescript
+
 function createMockUser(overrides: Partial<User> = {}): User {
   const baseUser: User = {
     id: '1',
@@ -218,6 +235,7 @@ function createMockUser(overrides: Partial<User> = {}): User {
 
   return { ...baseUser, ...overrides }
 }
+
 ```
 
 **Mock Factories**: Create type-safe mock data generators
@@ -231,8 +249,10 @@ function createMockUser(overrides: Partial<User> = {}): User {
 Use type-only imports to avoid runtime overhead:
 
 ```typescript
+
 import type { User, UserRole } from '@/types/user'
 import { createUser } from '@/services/userService'
+
 ```
 
 **Bundle Size**: Type-only imports are removed during compilation
@@ -269,7 +289,7 @@ Design types for optimal TypeScript performance:
 
 TypeScript's type system becomes more powerful when used thoughtfully to model your domain and prevent entire categories of errors, rather than just adding type annotations to existing JavaScript code.
 
-````
+````text
 
 ### 2. Project References for Monorepos
 

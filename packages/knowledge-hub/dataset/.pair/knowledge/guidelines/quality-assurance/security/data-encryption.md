@@ -8,7 +8,7 @@ Comprehensive framework for implementing encryption across all data states - at 
 
 ### **Multi-Layer Encryption Approach**
 
-**Encryption Coverage Requirements**
+#### Encryption Coverage Requirements
 
 - **Data at Rest**: Database encryption, file system encryption, backup encryption
 - **Data in Transit**: TLS/SSL, API encryption, message queue encryption
@@ -28,7 +28,7 @@ Comprehensive framework for implementing encryption across all data states - at 
 
 ### **Database Encryption Implementation**
 
-**PostgreSQL Transparent Data Encryption**
+#### PostgreSQL Transparent Data Encryption
 
 ```sql
 -- Enable database-level encryption
@@ -61,7 +61,7 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-**Application-Level Field Encryption**
+#### Application-Level Field Encryption
 
 ```javascript
 const crypto = require('crypto')
@@ -155,7 +155,7 @@ class UserModel {
 
 ### **File System Encryption**
 
-**Document Storage Encryption**
+#### Document Storage Encryption
 
 ```javascript
 const fs = require('fs').promises
@@ -224,7 +224,7 @@ class FileEncryption {
 
 ### **TLS/SSL Configuration**
 
-**Express.js HTTPS Setup**
+#### Express.js HTTPS Setup
 
 ```javascript
 const https = require('https')
@@ -276,7 +276,7 @@ server.listen(443, () => {
 
 ### **API Response Encryption**
 
-**End-to-End API Encryption**
+#### End-to-End API Encryption
 
 ```javascript
 class APIEncryption {
@@ -338,7 +338,7 @@ class APIEncryption {
 
 ### **Centralized Key Management**
 
-**Key Vault Integration**
+#### Key Vault Integration
 
 ```javascript
 const { KeyVaultSecret } = require('@azure/keyvault-secrets')
@@ -414,7 +414,7 @@ class KeyManagementService {
 
 ### **Key Rotation Strategy**
 
-**Automated Key Rotation Process**
+#### Automated Key Rotation Process
 
 ```bash
 #!/bin/bash

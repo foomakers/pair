@@ -14,7 +14,7 @@ Transform task specifications into working, tested code by implementing **exactl
 
 **CRITICAL**: Maintain this context throughout implementation:
 
-```
+```text
 IMPLEMENTATION STATE:
 ├── Current Story: [STORY-ID: Story Title]
 ├── Active Task: [TASK-ID: Task Title]
@@ -125,7 +125,7 @@ Process tasks **sequentially**. For each task:
 
 ## Success Criteria
 
-**Story Implementation Complete When:**
+#### Story Implementation Complete When:
 
 - [ ] Phase 0 completed successfully
 - [ ] All tasks marked complete in story checklist
@@ -136,7 +136,7 @@ Process tasks **sequentially**. For each task:
 - [ ] PR created with comprehensive description
 - [ ] Story status updated to "In Review"
 
-**Additional for Development Tasks:**
+#### Additional for Development Tasks:
 
 - [ ] All TDD cycles completed (RED → GREEN → REFACTOR)
 - [ ] All tests passing with adequate coverage

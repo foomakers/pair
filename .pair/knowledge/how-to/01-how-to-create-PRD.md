@@ -13,7 +13,7 @@ Transform product ideas into comprehensive Product Requirements Documents throug
 
 **CRITICAL**: Maintain this context throughout PRD creation:
 
-```
+```text
 PRD CREATION STATE:
 ├── Product: [Product/Feature Name]
 ├── PRD Status: [template-analysis | info-gathering | drafting | review | approved]
@@ -77,7 +77,7 @@ PRD CREATION STATE:
    - **Wait for developer response** (confirmation, correction, elaboration)
    - **Update checklist** and move to next missing item
 
-**Example Questions with Hypothesis:**
+#### Example Questions with Hypothesis:
 
 - _"Based on documentation, I assume the primary problem is [specific pain point hypothesis]. Is this accurate?"_
 - _"Given the project context, the primary user persona would be [demographic/role hypothesis] who needs [specific need hypothesis]. Correct?"_
@@ -129,7 +129,7 @@ PRD CREATION STATE:
 - Match quality standard from [PRD example](../assets/PRD_example.md)
 - Use clear, actionable language with specific details and measurable criteria
 
-**Writing Quality Requirements:**
+#### Writing Quality Requirements:
 
 - Follow writing style and detail level from example
 - Use specific numbers, dates, and metrics
@@ -139,7 +139,7 @@ PRD CREATION STATE:
 
 ### Best Practices for AI Assistants
 
-**Do's:**
+#### Do's:
 
 - Always start with documentation analysis to minimize questions
 - Ask one question at a time to avoid overwhelming developer
@@ -149,7 +149,7 @@ PRD CREATION STATE:
 - Focus on actionable language in PRD
 - Include measurable criteria wherever possible
 
-**Don'ts:**
+#### Don'ts:
 
 - Never assume information not explicitly provided
 - Don't ask multiple questions at once
@@ -160,21 +160,21 @@ PRD CREATION STATE:
 
 ### Final Approval Checklist
 
-**Content Quality:**
+#### Content Quality:
 
 - [ ] Success metrics are measurable and time-bound with exact targets
 - [ ] Technical requirements are implementable and clearly articulated
 - [ ] User stories include clear acceptance criteria following example format
 - [ ] Risks have corresponding mitigation strategies with specific actions
 
-**Structure Quality:**
+#### Structure Quality:
 
 - [ ] All sections from template are completed
 - [ ] Information flows logically between sections
 - [ ] Terminology is consistent throughout
 - [ ] Writing tone and style matches example standard
 
-**Completeness:**
+#### Completeness:
 
 - [ ] All checklist items derived from template are addressed
 - [ ] No assumptions made without validation
@@ -186,18 +186,18 @@ PRD CREATION STATE:
 
 ## References
 
-**Primary Templates & Examples:**
+#### Primary Templates & Examples:
 
 - [PRD Template](../assets/PRD_template.md) - Complete structure and sections
 - [PRD Example](../assets/PRD_example.md) - Quality standards and writing style
 
-**Implementation Guidelines:**
+#### Implementation Guidelines:
 
 - [Documentation Standards](../guidelines/README.md) - Writing and formatting guidelines
 - [Collaboration Guidelines](../guidelines/collaboration/README.md) - Question asking and review processes
 - [User Story Template](../guidelines/collaboration/templates/user-story-template.md) - User story format standards
 
-**Target Output:**
+#### Target Output:
 
 - [Final PRD Location](../../adoption/product/PRD.md) - Where completed PRD is saved and maintained
 
@@ -205,17 +205,17 @@ PRD CREATION STATE:
 
 After PRD approval, proceed with project setup and strategic planning:
 
-**Project Foundation (Critical First):**
+#### Project Foundation (Critical First):
 
 - **Complete Bootstrap Checklist** → [02-how-to-complete-bootstrap-checklist.md](02-how-to-complete-bootstrap-checklist.md)
 
-**Strategic Planning:**
+#### Strategic Planning:
 
 - **Create & Prioritize Initiatives** → [03-how-to-create-and-prioritize-initiatives.md](03-how-to-create-and-prioritize-initiatives.md)
 - **Define Project Subdomains** → [04-how-to-define-subdomains.md](04-how-to-define-subdomains.md)
 - **Define Bounded Contexts** → [05-how-to-define-bounded-contexts.md](05-how-to-define-bounded-contexts.md)
 
-**Development Preparation:**
+#### Development Preparation:
 
 - **Breakdown Epics** → [06-how-to-breakdown-epics.md](06-how-to-breakdown-epics.md)
 - **Create User Stories** → [07-how-to-breakdown-user-stories.md](07-how-to-breakdown-user-stories.md)

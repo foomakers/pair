@@ -424,9 +424,9 @@ describe('useUser hook', () => {
 - **Integration Testing**: Test state integration with components in realistic scenarios
 
 Effective state management creates predictable, maintainable applications by choosing appropriate tools for different types of state and organizing them in clear, logical layers.
-| **Offline Support** | Good | Limited | Good |
-| **Bundle Size** | Medium | Small | Large |
-| **Learning Curve** | Medium | Low | High |
+| **Offline Support** | Good   | Limited | Good  |
+| **Bundle Size**     | Medium | Small   | Large |
+| **Learning Curve**  | Medium | Low     | High  |
 
 ## Decision Tree
 
@@ -681,7 +681,7 @@ const UserList: React.FC = () => {
 
 ### Redux Toolkit
 
-**Benefits:**
+#### Benefits:
 
 - Predictable state updates
 - Excellent DevTools (Redux DevTools)
@@ -690,7 +690,7 @@ const UserList: React.FC = () => {
 - Strong TypeScript support
 - Scales well for large applications
 
-**Costs:**
+#### Costs:
 
 - Steeper learning curve
 - More boilerplate than alternatives
@@ -701,7 +701,7 @@ const UserList: React.FC = () => {
 
 ### Zustand
 
-**Benefits:**
+#### Benefits:
 
 - Minimal boilerplate
 - Excellent developer experience
@@ -710,7 +710,7 @@ const UserList: React.FC = () => {
 - Easy to learn and adopt
 - No providers needed
 
-**Costs:**
+#### Costs:
 
 - Limited DevTools
 - Smaller ecosystem
@@ -720,7 +720,7 @@ const UserList: React.FC = () => {
 
 ### Jotai
 
-**Benefits:**
+#### Benefits:
 
 - Atomic approach prevents unnecessary re-renders
 - Excellent performance
@@ -728,7 +728,7 @@ const UserList: React.FC = () => {
 - Composable atoms
 - Small bundle size
 
-**Costs:**
+#### Costs:
 
 - Different mental model (atoms vs stores)
 - Limited DevTools
@@ -738,7 +738,7 @@ const UserList: React.FC = () => {
 
 ### TanStack Query
 
-**Benefits:**
+#### Benefits:
 
 - Excellent caching and synchronization
 - Background updates
@@ -746,7 +746,7 @@ const UserList: React.FC = () => {
 - Offline support
 - Reduces boilerplate for server state
 
-**Costs:**
+#### Costs:
 
 - Learning curve for advanced features
 - Additional dependency

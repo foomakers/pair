@@ -6,7 +6,7 @@ AWS CDK implementation provides comprehensive guidance for building enterprise-g
 
 ## 📋 Scope and Coverage
 
-**In Scope:**
+#### In Scope:
 
 - AWS CDK project architecture and organization strategies
 - TypeScript-based infrastructure development patterns
@@ -15,7 +15,7 @@ AWS CDK implementation provides comprehensive guidance for building enterprise-g
 - Testing strategies for CDK infrastructure code
 - CI/CD integration and automated deployment pipelines
 
-**Out of Scope:**
+#### Out of Scope:
 
 - AWS service-specific configurations (see AWS Deployment)
 - General Infrastructure as Code principles (see IaC Best Practices)
@@ -26,7 +26,7 @@ AWS CDK implementation provides comprehensive guidance for building enterprise-g
 
 ### Enterprise CDK Project Structure
 
-**Scalable CDK Organization**
+#### Scalable CDK Organization
 
 Modern CDK projects require sophisticated organization che supporta team collaboration, environment management, e reusable construct development:
 
@@ -55,7 +55,7 @@ cdk-infrastructure/
     └── prod.json          # Production configuration
 ```
 
-**CDK Development Principles**
+#### CDK Development Principles
 
 Il development CDK segue principi che garantiscono maintainability, testability, e reusability:
 
@@ -66,11 +66,11 @@ Il development CDK segue principi che garantiscono maintainability, testability,
 
 ### Custom Construct Development
 
-**Reusable Infrastructure Components**
+#### Reusable Infrastructure Components
 
 Lo sviluppo di custom constructs enablea reusability e standardization across infrastructure:
 
-**Construct Design Patterns:**
+#### Construct Design Patterns:
 
 - **Single responsibility**: Ogni construct gestisce una specifica infrastructure capability
 - **Configuration flexibility**: Props interfaces che permettono customization senza complexity
@@ -130,11 +130,11 @@ export class WebApplicationConstruct extends Construct {
 
 ### Environment-Specific Configuration
 
-**Configuration Management Strategy**
+#### Configuration Management Strategy
 
 La gestione delle configurazioni environment-specific utilizza typed configuration objects:
 
-**Configuration Framework:**
+#### Configuration Framework:
 
 - **Type-safe configuration**: Interface TypeScript per prevent configuration errors
 - **Environment inheritance**: Base configuration con environment-specific overrides
@@ -169,11 +169,11 @@ class ConfigurationManager {
 
 ### Testing Strategies for CDK
 
-**Infrastructure Testing Framework**
+#### Infrastructure Testing Framework
 
 Il testing dell'infrastructure CDK implementa multiple levels di validation:
 
-**Testing Pyramid:**
+#### Testing Pyramid:
 
 - **Snapshot testing**: Verifica che generated CloudFormation non cambi unexpectedly
 - **Unit testing**: Testing di individual constructs e loro properties
@@ -208,7 +208,7 @@ test('Database has encryption enabled', () => {
 
 ### Security and Compliance
 
-**Security-First CDK Development**
+#### Security-First CDK Development
 
 - **Least privilege IAM**: Automatic creation di IAM roles con minimal required permissions
 - **Encryption by default**: Automatic encryption configuration per all storage resources
@@ -217,7 +217,7 @@ test('Database has encryption enabled', () => {
 
 ### Performance and Cost Optimization
 
-**Resource Optimization Patterns**
+#### Resource Optimization Patterns
 
 - **Right-sizing**: Automatic resource sizing basato su environment requirements
 - **Cost monitoring**: Built-in cost allocation tags e monitoring setup
@@ -228,28 +228,28 @@ test('Database has encryption enabled', () => {
 
 ### CDK Adoption Maturity
 
-**Level 1: Basic CDK Implementation (Weeks 1-6)**
+#### Level 1: Basic CDK Implementation (Weeks 1-6)
 
 - Simple CDK stacks con basic AWS resources
 - Manual deployment processes
 - Basic environment separation
 - Minimal testing implementation
 
-**Level 2: Structured CDK Development (Weeks 7-16)**
+#### Level 2: Structured CDK Development (Weeks 7-16)
 
 - Custom construct development
 - Automated testing e validation
 - CI/CD pipeline integration
 - Environment-specific configuration management
 
-**Level 3: Advanced CDK Practices (Weeks 17-28)**
+#### Level 3: Advanced CDK Practices (Weeks 17-28)
 
 - Sophisticated construct libraries
 - Comprehensive testing strategies
 - Advanced deployment patterns
 - Cost e performance optimization
 
-**Level 4: CDK Excellence (Weeks 29+)**
+#### Level 4: CDK Excellence (Weeks 29+)
 
 - Organization-wide construct libraries
 - Advanced automation e orchestration

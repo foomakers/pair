@@ -4,7 +4,7 @@
 
 Comprehensive security framework ensuring robust protection through defense-in-depth strategies, secure development practices, automated security testing, and continuous threat monitoring across all application layers and operational contexts.
 
-**In Scope:**
+#### In Scope:
 
 - Application security (OWASP Top 10 compliance)
 - Authentication and authorization systems
@@ -13,7 +13,7 @@ Comprehensive security framework ensuring robust protection through defense-in-d
 - API security and rate limiting
 - Incident response and threat detection
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Infrastructure security (covered in infrastructure guidelines)
 - Network security (covered in infrastructure guidelines)
@@ -163,7 +163,7 @@ Security is implemented through a defense-in-depth strategy that provides multip
 
 ### **Decision Tree: Security Tool Selection**
 
-```
+```text
 Start → Organization Size?
 ├─ Small (1-10 devs) → Free tools + cloud services
 │  └─ OWASP ZAP + Snyk + npm audit
@@ -288,7 +288,7 @@ Start → Organization Size?
 
 ### **Decision Tree: Security Tool Selection**
 
-```
+```text
 Start → Application Type?
 ├─ Web Application → Budget?
 │  ├─ Limited → SonarQube + OWASP ZAP + Snyk (free tiers)

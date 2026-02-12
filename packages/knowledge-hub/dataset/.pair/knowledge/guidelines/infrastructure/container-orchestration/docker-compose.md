@@ -17,18 +17,18 @@ Docker Compose implementation for local development, testing environments, and m
 
 ### Complete Application Stack
 
-**Multi-Service Development Architecture**
+#### Multi-Service Development Architecture
 
 Docker Compose orchestrates complex development environments with service dependencies, networking, and data persistence. The development stack includes application services, databases, cache layers, and external service emulators.
 
-**Key Development Environment Features:**
+#### Key Development Environment Features:
 
 - **Hot reload integration**: Real-time code changes with volume mounting
 - **Service dependency management**: Ordered startup with health checks
 - **Development tooling**: Integrated debugging, logging, and monitoring
 - **Data persistence**: Volume management for development data retention
 
-**Standard Development Stack Configuration:**
+#### Standard Development Stack Configuration:
 
 A typical development environment includes the main application, PostgreSQL database, Redis cache, and supporting services. Each service includes health checks and proper networking configuration.
 
@@ -78,11 +78,11 @@ networks:
 
 ### Testing Environment
 
-**Isolated Testing Infrastructure**
+#### Isolated Testing Infrastructure
 
 Testing environments require isolated services and test-specific configurations. The testing stack provides clean state initialization and optimized performance for test execution.
 
-**Testing Environment Characteristics:**
+#### Testing Environment Characteristics:
 
 - **Service isolation**: Separate containers for test execution
 - **Fast startup**: Optimized images and minimal service configurations
@@ -155,11 +155,12 @@ driver: bridge
 ipam:
 config: - subnet: 172.20.0.0/16
 
-````
+````text
 
 ### Testing Environment
 
 ```yaml
+
 # docker-compose.test.yml
 version: '3.8'
 
@@ -247,6 +248,7 @@ services:
 networks:
   test-network:
     driver: bridge
+
 ````
 
 ---
@@ -256,6 +258,7 @@ networks:
 ### Staging Configuration
 
 ```yaml
+
 # docker-compose.staging.yml
 version: '3.8'
 
@@ -438,6 +441,7 @@ networks:
   app-network:
     driver: overlay
     attachable: true
+
 ```
 
 ---
@@ -447,6 +451,7 @@ networks:
 ### Nginx Configuration
 
 ```nginx
+
 # docker/nginx/nginx.conf
 user nginx;
 worker_processes auto;
@@ -549,11 +554,13 @@ http {
         }
     }
 }
+
 ```
 
 ### PostgreSQL Configuration
 
 ```sql
+
 -- docker/postgres/init.sql
 -- Create additional databases and users
 CREATE DATABASE myapp_test;
@@ -583,6 +590,7 @@ GRANT USAGE ON SCHEMA public TO myapp_user;
 GRANT CREATE ON SCHEMA public TO myapp_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO myapp_user;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO myapp_user;
+
 ```
 
 ---
@@ -592,6 +600,7 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO myapp_user;
 ### Hot Reload Development
 
 ```dockerfile
+
 # Dockerfile.dev
 FROM node:18-alpine AS development
 
@@ -623,11 +632,13 @@ EXPOSE 3000 9229
 
 # Development command with debugging
 CMD ["pnpm", "dev:debug"]
+
 ```
 
 ### Package.json Scripts
 
 ```json
+
 {
   "scripts": {
     "dev": "next dev",
@@ -647,6 +658,7 @@ CMD ["pnpm", "dev:debug"]
     "docker:clean": "docker-compose down -v --remove-orphans && docker system prune -f"
   }
 }
+
 ```
 
 ---
@@ -656,6 +668,7 @@ CMD ["pnpm", "dev:debug"]
 ### Development Helper Script
 
 ```bash
+
 #!/bin/bash
 # scripts/docker-compose-helper.sh
 
@@ -765,11 +778,13 @@ case "$COMMAND" in
         echo "  health   Show health status"
         ;;
 esac
+
 ```
 
 ### Environment Variable Management
 
 ```bash
+
 #!/bin/bash
 # scripts/env-manager.sh
 
@@ -856,6 +871,7 @@ case "${2:-load}" in
         echo "  secrets   Generate new secrets"
         ;;
 esac
+
 ```
 
 This comprehensive Docker Compose implementation provides a complete development and testing environment with production-like characteristics for enterprise applications.

@@ -28,7 +28,7 @@ Define deployment strategies for desktop applications that prioritize local cont
 
 ### Pattern 1: Standalone Desktop Application
 
-```
+```text
 Desktop App (Electron/Native)
 ├── Local Database (SQLite)
 ├── File System Storage
@@ -51,7 +51,7 @@ Desktop App (Electron/Native)
 
 ### Pattern 2: Local Server + Desktop Client
 
-```
+```text
 Desktop Client ←→ Local Server (localhost)
                    ├── Local Database
                    ├── File System API
@@ -74,7 +74,7 @@ Desktop Client ←→ Local Server (localhost)
 
 ### Pattern 3: Hybrid Self-Hosted
 
-```
+```text
 Desktop App
 ├── Core Local Functions
 ├── Local Data Storage

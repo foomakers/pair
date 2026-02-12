@@ -6,7 +6,7 @@ Retrieval-Augmented Generation implementation patterns for enhanced LLM capabili
 
 ### Core RAG Pipeline
 
-```
+```text
 Document Sources → Chunking → Embedding → Vector Storage
                      ↓
 Search Query → Embedding → Similarity Search → Context Retrieval

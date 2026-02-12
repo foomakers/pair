@@ -8,7 +8,7 @@ This practice provides comprehensive guidance for creating and managing environm
 
 ## 📋 Scope and Coverage
 
-**In Scope:**
+#### In Scope:
 
 - Environment architecture design and configuration strategies
 - Environment consistency and configuration management patterns
@@ -17,7 +17,7 @@ This practice provides comprehensive guidance for creating and managing environm
 - Environment lifecycle automation and optimization strategies
 - Multi-environment deployment coordination and management
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Application-specific configuration patterns (see Development Guidelines)
 - Infrastructure provisioning implementation details (see Infrastructure as Code)
@@ -94,7 +94,7 @@ Strategic service discovery and networking approaches enabling reliable inter-se
 
 ## 🚀 Quick Start Decision Framework
 
-```
+```text
 Setting up environment management?
 ├─ New project setup?
 │  ├─ Local development focus? → Start with [Local Development](local-development.md)
@@ -127,28 +127,28 @@ Setting up environment management?
 
 ### Environment Architecture Principles
 
-**Environment Parity and Consistency**
+#### Environment Parity and Consistency
 
 - Maintain structural consistency between development, staging, and production environments
 - Implement infrastructure as code for reproducible environment provisioning
 - Establish automated validation frameworks for environment consistency verification
 - Design configuration management systems with drift detection and remediation
 
-**Scalability and Performance Alignment**
+#### Scalability and Performance Alignment
 
 - Design environments to match production performance characteristics and load patterns
 - Implement appropriate resource allocation strategies with elastic scaling capabilities
 - Establish performance testing frameworks with realistic workload simulation
 - Monitor and optimize resource utilization with cost-effectiveness considerations
 
-**Security and Access Control**
+#### Security and Access Control
 
 - Implement environment-appropriate security controls with layered defense strategies
 - Apply least-privilege access principles with role-based access control
 - Design secure secret and credential management with encryption and rotation
 - Establish comprehensive monitoring and audit capabilities for access and changes
 
-**Operational Excellence and Automation**
+#### Operational Excellence and Automation
 
 - Design for automated environment management with self-service capabilities
 - Implement comprehensive monitoring and alerting with proactive issue detection
@@ -157,21 +157,21 @@ Setting up environment management?
 
 ### Environment Strategy Frameworks
 
-**Development Environment Optimization**
+#### Development Environment Optimization
 
 - Optimize for developer productivity and rapid iteration cycles
 - Ensure consistency with downstream environments while maintaining development speed
 - Implement efficient development workflows with automated tool integration
 - Design for environment sharing and collaboration with resource optimization
 
-**Testing Environment Strategy**
+#### Testing Environment Strategy
 
 - Design for comprehensive testing and validation with production-like characteristics
 - Implement automated testing infrastructure with parallel execution capabilities
 - Establish performance and load testing capabilities with realistic data volumes
 - Ensure production-like environment characteristics for accurate testing results
 
-**Production Environment Excellence**
+#### Production Environment Excellence
 
 - Optimize for reliability, performance, and security with enterprise-grade practices
 - Implement comprehensive monitoring and alerting with intelligent automation
@@ -199,14 +199,14 @@ Setting up environment management?
 
 ### Environment Design Excellence
 
-**Consistency and Standardization**
+#### Consistency and Standardization
 
 - Use infrastructure as code for all environment provisioning and management
 - Implement standardized configuration patterns with reusable templates and modules
 - Design for environment template reusability with parameterization and customization
 - Document environment architecture with dependencies and integration requirements
 
-**Security and Compliance Framework**
+#### Security and Compliance Framework
 
 - Implement environment-appropriate security controls with defense-in-depth strategies
 - Use network segmentation and access controls with zero-trust principles
@@ -215,14 +215,14 @@ Setting up environment management?
 
 ### Operations and Management Excellence
 
-**Automation and Efficiency**
+#### Automation and Efficiency
 
 - Automate environment provisioning and configuration with self-healing capabilities
 - Implement environment health monitoring with predictive alerting and remediation
 - Establish automated backup and disaster recovery with tested recovery procedures
 - Design self-service capabilities for development teams with governance controls
 
-**Monitoring and Optimization**
+#### Monitoring and Optimization
 
 - Implement comprehensive environment monitoring with performance and health metrics
 - Monitor resource utilization with cost optimization and rightsizing recommendations

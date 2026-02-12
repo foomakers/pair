@@ -8,7 +8,7 @@ Comprehensive security framework for REST APIs, GraphQL endpoints, and microserv
 
 ### **Multi-Layer Authentication Strategy**
 
-**JWT Token-Based Authentication**
+#### JWT Token-Based Authentication
 
 ```javascript
 // Secure JWT implementation
@@ -55,7 +55,7 @@ class JWTManager {
 }
 ```
 
-**Role-Based Access Control (RBAC)**
+#### Role-Based Access Control (RBAC)
 
 ```javascript
 // RBAC middleware implementation
@@ -99,7 +99,7 @@ function requirePermission(permission) {
 
 ### **API Rate Limiting & Throttling**
 
-**Intelligent Rate Limiting**
+#### Intelligent Rate Limiting
 
 ```javascript
 const redis = require('redis')
@@ -164,7 +164,7 @@ async function rateLimitMiddleware(req, res, next) {
 
 ### **Comprehensive Input Validation**
 
-**Schema-Based Validation**
+#### Schema-Based Validation
 
 ```javascript
 const Joi = require('joi')
@@ -228,7 +228,7 @@ function validateInput(schemaName) {
 }
 ```
 
-**SQL Injection Prevention**
+#### SQL Injection Prevention
 
 ```javascript
 // Always use parameterized queries
@@ -261,7 +261,7 @@ class DatabaseSecurity {
 
 ### **HTTPS and TLS Configuration**
 
-**Express.js Security Headers**
+#### Express.js Security Headers
 
 ```javascript
 const helmet = require('helmet')
@@ -313,7 +313,7 @@ app.use((req, res, next) => {
 
 ### **API Logging & Monitoring**
 
-**Security Event Logging**
+#### Security Event Logging
 
 ```javascript
 const winston = require('winston')
@@ -373,7 +373,7 @@ function securityLogger(req, res, next) {
 
 ### **Automated Security Testing**
 
-**Security Test Suite**
+#### Security Test Suite
 
 ```javascript
 // API security tests
@@ -433,7 +433,7 @@ describe('API Security Tests', () => {
 
 ### **Security Monitoring & Alerting**
 
-**Real-time Security Monitoring**
+#### Real-time Security Monitoring
 
 ```javascript
 // Security monitoring service

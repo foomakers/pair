@@ -8,35 +8,35 @@ Systematic methodology for waste elimination, value stream optimization, and con
 
 ### Lean Thinking Principles
 
-**Identify Value**
+#### Identify Value
 
 - Define value from customer perspective
 - Understand what customers are willing to pay for
 - Distinguish between value-adding and non-value-adding activities
 - Focus on outcomes that matter to end users
 
-**Map the Value Stream**
+#### Map the Value Stream
 
 - Visualize entire process from concept to delivery
 - Identify all steps, handoffs, and decision points
 - Measure time, quality, and cost at each stage
 - Highlight waste and improvement opportunities
 
-**Create Flow**
+#### Create Flow
 
 - Eliminate interruptions and delays
 - Remove batching and queue time
 - Reduce work in progress to minimize cycle time
 - Enable smooth, continuous value delivery
 
-**Establish Pull**
+#### Establish Pull
 
 - Produce only what is needed when needed
 - Let customer demand drive production
 - Avoid overproduction and inventory waste
 - Just-in-time delivery and resource allocation
 
-**Pursue Perfection**
+#### Pursue Perfection
 
 - Continuous improvement toward ideal state
 - Never-ending elimination of waste
@@ -45,9 +45,9 @@ Systematic methodology for waste elimination, value stream optimization, and con
 
 ### Seven Wastes in Software Development
 
-**Overproduction**
+#### Overproduction
 
-```
+```text
 Definition: Creating more than what is immediately needed
 Examples:
 - Building features not requested by customers
@@ -62,9 +62,9 @@ Countermeasures:
 - Scope management and prioritization
 ```
 
-**Waiting**
+#### Waiting
 
-```
+```text
 Definition: Idle time between value-adding activities
 Examples:
 - Waiting for code reviews or approvals
@@ -79,9 +79,9 @@ Countermeasures:
 - Cross-training to reduce dependencies
 ```
 
-**Transportation**
+#### Transportation
 
-```
+```text
 Definition: Unnecessary movement of information or artifacts
 Examples:
 - Excessive handoffs between teams
@@ -96,9 +96,9 @@ Countermeasures:
 - Standardized interfaces and protocols
 ```
 
-**Over-processing**
+#### Over-processing
 
-```
+```text
 Definition: Doing more work than required for customer value
 Examples:
 - Gold-plating features beyond requirements
@@ -113,9 +113,9 @@ Countermeasures:
 - Streamlined approval workflows
 ```
 
-**Inventory**
+#### Inventory
 
-```
+```text
 Definition: Work in progress beyond what flow requires
 Examples:
 - Excessive backlog of unstarted features
@@ -130,9 +130,9 @@ Countermeasures:
 - Continuous delivery to reduce inventory
 ```
 
-**Motion**
+#### Motion
 
-```
+```text
 Definition: Unnecessary movement of people or resources
 Examples:
 - Context switching between multiple projects
@@ -147,9 +147,9 @@ Countermeasures:
 - Optimized development environment setup
 ```
 
-**Defects**
+#### Defects
 
-```
+```text
 Definition: Rework required due to errors or quality issues
 Examples:
 - Bugs requiring fixes after deployment
@@ -168,9 +168,9 @@ Countermeasures:
 
 ### Current State Mapping
 
-**Process Steps Identification**
+#### Process Steps Identification
 
-```
+```text
 Value Stream Mapping Process:
 1. Select Product/Service: Choose specific value stream to map
 2. Customer Requirements: Define what customer values
@@ -192,9 +192,9 @@ Data Collection:
 - Resources: People involved and utilization
 ```
 
-**Value Stream Map Symbols**
+#### Value Stream Map Symbols
 
-```
+```text
 Process Box: [Task Name | Process Time | Lead Time | % Complete/Accurate]
 Inventory: △ (Triangle with quantity and time)
 Information Flow: ⟶ (Straight arrow with frequency)
@@ -213,9 +213,9 @@ Example Process Box:
 
 ### Future State Design
 
-**Improvement Principles**
+#### Improvement Principles
 
-```
+```text
 Flow Improvement Guidelines:
 1. Eliminate waste first, then optimize flow
 2. Reduce batch sizes to improve responsiveness
@@ -234,9 +234,9 @@ Future State Questions:
 - How can we improve quality at the source?
 ```
 
-**Implementation Planning**
+#### Implementation Planning
 
-```
+```text
 Improvement Implementation:
 1. Prioritize improvements by impact and effort
 2. Plan improvements in phases (30/60/90 day cycles)
@@ -257,9 +257,9 @@ Value Stream Metrics:
 
 ### 5S Methodology
 
-**Sort (Seiri)**
+#### Sort (Seiri)
 
-```
+```text
 Purpose: Remove unnecessary items from workspace
 Application in Software Development:
 - Remove unused code, libraries, and dependencies
@@ -274,9 +274,9 @@ Implementation:
 - Red tag campaigns for questionable items
 ```
 
-**Set in Order (Seiton)**
+#### Set in Order (Seiton)
 
-```
+```text
 Purpose: Organize remaining items for easy access
 Application in Software Development:
 - Standardized folder and file naming conventions
@@ -291,9 +291,9 @@ Implementation:
 - Visual workplace with information radiators
 ```
 
-**Shine (Seiso)**
+#### Shine (Seiso)
 
-```
+```text
 Purpose: Clean and maintain the workplace
 Application in Software Development:
 - Regular refactoring to improve code quality
@@ -308,9 +308,9 @@ Implementation:
 - Continuous monitoring and alerting systems
 ```
 
-**Standardize (Seiketsu)**
+#### Standardize (Seiketsu)
 
-```
+```text
 Purpose: Establish standards for maintaining first 3 S's
 Application in Software Development:
 - Coding standards and development guidelines
@@ -325,9 +325,9 @@ Implementation:
 - Standard work instructions and checklists
 ```
 
-**Sustain (Shitsuke)**
+#### Sustain (Shitsuke)
 
-```
+```text
 Purpose: Maintain discipline and continuous improvement
 Application in Software Development:
 - Regular audits and reviews of standards adherence
@@ -344,9 +344,9 @@ Implementation:
 
 ### A3 Problem Solving
 
-**A3 Thinking Process**
+#### A3 Thinking Process
 
-```
+```text
 A3 Structure (fits on single A3 page):
 1. Background: What is the context and importance?
 2. Current Condition: What is happening now?
@@ -368,9 +368,9 @@ Follow-up: Weekly metrics review, monthly process assessment
 
 ### Kaizen (Continuous Improvement)
 
-**Kaizen Event Structure**
+#### Kaizen Event Structure
 
-```
+```text
 Kaizen Event Process:
 Day 1: Current state analysis and problem identification
 Day 2: Root cause analysis and solution brainstorming
@@ -391,9 +391,9 @@ Post-Event Follow-up:
 - Next improvement opportunities identification
 ```
 
-**Daily Kaizen**
+#### Daily Kaizen
 
-```
+```text
 Continuous Improvement Practices:
 - Daily stand-ups with improvement focus
 - Retrospectives with action item tracking
@@ -417,9 +417,9 @@ Implementation Approach:
 
 ### Flow Metrics
 
-**Lead Time**
+#### Lead Time
 
-```
+```text
 Definition: Total time from customer request to delivery
 Measurement: From feature request to production deployment
 Components:
@@ -435,9 +435,9 @@ Improvement Strategies:
 - Automate deployment and testing processes
 ```
 
-**Cycle Time**
+#### Cycle Time
 
-```
+```text
 Definition: Time to complete work once started
 Measurement: From work start to completion
 Purpose: Measure process efficiency and predictability
@@ -451,9 +451,9 @@ Factors Affecting Cycle Time:
 - Process efficiency and waste elimination
 ```
 
-**Throughput**
+#### Throughput
 
-```
+```text
 Definition: Amount of value delivered per time period
 Measurement: Features/stories/value points delivered per sprint/month
 Purpose: Measure team productivity and capacity
@@ -468,9 +468,9 @@ Throughput Improvement:
 
 ### Quality Metrics
 
-**First Pass Yield**
+#### First Pass Yield
 
-```
+```text
 Definition: Percentage of work completed without defects or rework
 Measurement: (Items completed correctly first time / Total items) × 100
 Purpose: Measure process quality and efficiency
@@ -483,9 +483,9 @@ Improvement Strategies:
 - Root cause analysis and elimination
 ```
 
-**Defect Rate**
+#### Defect Rate
 
-```
+```text
 Definition: Number of defects per unit of work delivered
 Measurement: Defects found / Features delivered
 Purpose: Monitor quality trends and improvement
@@ -502,9 +502,9 @@ Quality Improvement:
 
 ### Getting Started
 
-**Assessment Phase (Month 1)**
+#### Assessment Phase (Month 1)
 
-```
+```text
 Current State Analysis:
 1. Value Stream Mapping: Map current development process
 2. Waste Identification: Identify seven wastes in current process
@@ -519,9 +519,9 @@ Tools and Techniques:
 - Document current challenges and pain points
 ```
 
-**Quick Wins Phase (Month 2-3)**
+#### Quick Wins Phase (Month 2-3)
 
-```
+```text
 Initial Improvements:
 1. Eliminate obvious waste and inefficiencies
 2. Implement 5S in development environment
@@ -536,9 +536,9 @@ Focus Areas:
 - Develop improvement skills and mindset
 ```
 
-**Systematic Improvement (Month 4-12)**
+#### Systematic Improvement (Month 4-12)
 
-```
+```text
 Advanced Implementation:
 1. Future state value stream design
 2. Pull system implementation
@@ -555,9 +555,9 @@ Sustainability Practices:
 
 ### Lean for Software Teams
 
-**Product Development**
+#### Product Development
 
-```
+```text
 Lean Product Development Principles:
 - Customer-driven development with rapid feedback
 - Minimum viable product and iterative improvement
@@ -571,9 +571,9 @@ Practices:
 - Data-driven product decisions
 ```
 
-**Software Engineering**
+#### Software Engineering
 
-```
+```text
 Lean Software Engineering:
 - Continuous integration and deployment
 - Test-driven development and automated testing
@@ -587,9 +587,9 @@ Practices:
 - Technical metrics and quality monitoring
 ```
 
-**Operations and Support**
+#### Operations and Support
 
-```
+```text
 Lean Operations:
 - Infrastructure as code and automated provisioning
 - Monitoring and alerting for proactive issue resolution

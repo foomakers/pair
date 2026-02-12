@@ -8,7 +8,7 @@ Establish comprehensive component library practices that enable scalable design 
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Component architecture and design principles for scalable library development
 - Component documentation and usage guidelines for team adoption
@@ -16,7 +16,7 @@ Establish comprehensive component library practices that enable scalable design 
 - Cross-platform component adaptation and consistency frameworks
 - Component testing and quality assurance for reliability and performance
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Specific component implementation code (covered in Level 3 technical guides)
 - Framework-specific component development details

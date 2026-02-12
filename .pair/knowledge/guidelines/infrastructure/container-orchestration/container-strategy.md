@@ -36,18 +36,18 @@ Enterprise container strategy covering containerization approach, orchestration 
 
 ### Application Containerization Framework
 
-**Multi-Stage Build Strategy**
+#### Multi-Stage Build Strategy
 
 Modern containerization adopts multi-stage builds for optimal security and performance. This approach separates build-time dependencies from runtime requirements, resulting in minimal production images.
 
-**Key Design Principles:**
+#### Key Design Principles:
 
 - **Security-first approach**: Non-root user execution and minimal permissions
 - **Layer optimization**: Strategic ordering for efficient caching and rebuilds
 - **Health monitoring**: Built-in health checks for orchestration readiness
 - **Minimal footprint**: Alpine Linux base images for reduced attack surface
 
-**Standard Implementation Pattern:**
+#### Standard Implementation Pattern:
 
 The multi-stage pattern follows three phases: dependencies installation, application build, and runtime preparation. Each stage optimizes for its specific purpose while maintaining security standards.
 
@@ -71,7 +71,7 @@ CMD ["npm", "start"]
 
 ### Container Image Optimization
 
-**Performance and Security Optimization**
+#### Performance and Security Optimization
 
 Container optimization balances performance, security, and maintainability through systematic approaches:
 
@@ -80,13 +80,13 @@ Container optimization balances performance, security, and maintainability throu
 - **User security**: Implement non-root execution patterns
 - **Health validation**: Include meaningful health check mechanisms
 
-**Size Optimization Strategies:**
+#### Size Optimization Strategies:
 
 Effective image optimization reduces deployment time and storage costs while improving security posture. Key strategies include dependency consolidation, layer caching optimization, and runtime-only package inclusion.
 
 ### Image Tagging and Lifecycle Strategy
 
-**Systematic Tagging Framework**
+#### Systematic Tagging Framework
 
 Container tagging strategy ensures deployment traceability and environment consistency:
 

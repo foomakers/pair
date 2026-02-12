@@ -4,7 +4,7 @@
 
 This section covers comprehensive coding conventions, quality standards, and development practices:
 
-**In Scope:**
+#### In Scope:
 
 - Code formatting and style conventions across multiple languages
 - Comprehensive error handling patterns and strategies
@@ -13,7 +13,7 @@ This section covers comprehensive coding conventions, quality standards, and dev
 - Internationalization and localization frameworks
 - Code quality metrics, enforcement, and automation
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Framework-specific patterns (covered in Code Design)
 - Testing strategies (covered in Testing)
@@ -109,14 +109,14 @@ flowchart TD
 
 ### Selection Criteria
 
-**Choose Strict Standards when:**
+#### Choose Strict Standards when:
 
 - Large development teams
 - Critical production systems
 - Compliance requirements
 - Long-term maintenance needs
 
-**Choose Flexible Standards when:**
+#### Choose Flexible Standards when:
 
 - Small teams or prototypes
 - Rapid development cycles

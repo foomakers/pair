@@ -10,7 +10,7 @@ This guide covers implementing project progress tracking using local markdown fi
 
 ### Directory Organization
 
-```
+```text
 project-root/
 ├── .pair/
 │   ├── product/

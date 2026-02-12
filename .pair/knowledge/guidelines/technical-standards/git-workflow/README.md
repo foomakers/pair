@@ -98,7 +98,7 @@ For detailed implementation guidance, refer to the specific standards documents 
 
 #### **Branch Structure**
 
-```
+```text
 main (production)
 ├── feature/user-authentication
 ├── feature/dashboard-ui
@@ -118,7 +118,7 @@ main (production)
 
 #### **Branch Structure**
 
-```
+```text
 main (production releases)
 develop (integration branch)
 ├── feature/new-feature
@@ -139,7 +139,7 @@ develop (integration branch)
 
 #### **Feature Branches**
 
-```
+```text
 feature/user-authentication
 feature/dashboard-redesign
 feature/api-v2-integration
@@ -147,7 +147,7 @@ feature/api-v2-integration
 
 #### **Bug Fix Branches**
 
-```
+```text
 bugfix/login-validation-error
 bugfix/dashboard-loading-issue
 bugfix/api-timeout-handling
@@ -155,7 +155,7 @@ bugfix/api-timeout-handling
 
 #### **Hotfix Branches**
 
-```
+```text
 hotfix/security-vulnerability-fix
 hotfix/critical-performance-issue
 hotfix/production-data-corruption
@@ -163,7 +163,7 @@ hotfix/production-data-corruption
 
 #### **Release Branches**
 
-```
+```text
 release/v2.0.0
 release/v1.5.3
 release/quarterly-update-q1
@@ -182,7 +182,7 @@ release/quarterly-update-q1
 
 ### Conventional Commits Format
 
-```
+```text
 <type>[optional scope]: <description>
 
 [optional body]
@@ -215,7 +215,7 @@ chore(deps): update React to v18.2.0
 
 ### Breaking Changes
 
-```
+```text
 feat(api)!: redesign user authentication endpoints
 
 BREAKING CHANGE: The authentication API has been redesigned to use JWT tokens instead of session cookies. Existing clients will need to update their authentication flow.
@@ -336,7 +336,7 @@ jobs:
 
 #### **Semantic Versioning (SemVer)**
 
-```
+```text
 MAJOR.MINOR.PATCH
 2.1.3
 ├── MAJOR: Breaking changes

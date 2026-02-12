@@ -6,7 +6,7 @@ Infrastructure as Code best practices provide comprehensive guidelines for imple
 
 ## 📋 Scope and Coverage
 
-**In Scope:**
+#### In Scope:
 
 - IaC code organization and structure best practices
 - Version control and collaboration patterns for infrastructure code
@@ -15,7 +15,7 @@ Infrastructure as Code best practices provide comprehensive guidelines for imple
 - Documentation and maintainability practices
 - Performance optimization and resource management guidelines
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Tool-specific implementation details (see Terraform, AWS CDK guides)
 - Cloud provider-specific configurations (see Cloud Services)
@@ -26,7 +26,7 @@ Infrastructure as Code best practices provide comprehensive guidelines for imple
 
 ### Project Structure Framework
 
-**Scalable Code Organization**
+#### Scalable Code Organization
 
 Modern IaC projects require sophisticated organization che supporta team collaboration, environment management, e long-term maintainability:
 
@@ -51,7 +51,7 @@ infrastructure/
     └── troubleshooting.md    # Common issues and solutions
 ```
 
-**Module Design Principles**
+#### Module Design Principles
 
 I moduli IaC seguono principi di design che garantiscono riusabilità e maintainability:
 
@@ -62,18 +62,18 @@ I moduli IaC seguono principi di design che garantiscono riusabilità e maintain
 
 ### Version Control Best Practices
 
-**Git Workflow for Infrastructure**
+#### Git Workflow for Infrastructure
 
 La gestione del version control per IaC richiede strategie specifiche per infrastructure code:
 
-**Branching Strategy:**
+#### Branching Strategy:
 
 - **Environment branches**: Branch dedicati per environment-specific changes
 - **Feature branches**: Isolated development di infrastructure features
 - **Release branches**: Controlled release management per infrastructure deployments
 - **Hotfix branches**: Rapid deployment di critical infrastructure fixes
 
-**Commit Message Standards**
+#### Commit Message Standards
 
 ```bash
 # Commit message format for infrastructure changes
@@ -87,18 +87,18 @@ refactor(modules): optimize networking module for cost efficiency
 
 ### Security-First IaC Development
 
-**Integrated Security Practices**
+#### Integrated Security Practices
 
 La security deve essere integrata nel development workflow piuttosto che essere afterthought:
 
-**Security Integration Points:**
+#### Security Integration Points:
 
 - **Pre-commit hooks**: Automated security scanning prima del commit
 - **Pull request validation**: Security review automatica nei PR workflows
 - **Pipeline security gates**: Security validation nei deployment pipelines
 - **Compliance checking**: Automated compliance validation contro policy frameworks
 
-**Secret Management**
+#### Secret Management
 
 ```yaml
 # Example: Secure secret management in IaC
@@ -122,7 +122,7 @@ resource "aws_rds_instance" "main" {
 
 ### Compliance and Governance
 
-**Policy as Code Implementation**
+#### Policy as Code Implementation
 
 L'implementazione di policy as code garantisce compliance automatica:
 
@@ -135,18 +135,18 @@ L'implementazione di policy as code garantisce compliance automatica:
 
 ### Infrastructure Testing Framework
 
-**Multi-Level Testing Approach**
+#### Multi-Level Testing Approach
 
 Il testing dell'infrastructure code richiede approccio multi-level che valida syntax, logic, e operational behavior:
 
-**Testing Pyramid for IaC:**
+#### Testing Pyramid for IaC:
 
 - **Static analysis**: Syntax validation, linting, security scanning
 - **Unit testing**: Testing di individual modules e components
 - **Integration testing**: Testing di module interactions e dependencies
 - **End-to-end testing**: Complete infrastructure deployment validation
 
-**Automated Testing Pipeline**
+#### Automated Testing Pipeline
 
 ```yaml
 # Infrastructure testing pipeline
@@ -171,7 +171,7 @@ test_pipeline:
 
 ### Performance and Cost Optimization
 
-**Resource Optimization Practices**
+#### Resource Optimization Practices
 
 - **Right-sizing validation**: Automated validation di resource sizing against requirements
 - **Cost estimation**: Pre-deployment cost estimation e budget validation
@@ -182,7 +182,7 @@ test_pipeline:
 
 ### Documentation and Knowledge Management
 
-**Comprehensive Documentation Framework**
+#### Comprehensive Documentation Framework
 
 - **Architectural decision records (ADRs)**: Documentation delle infrastructure design decisions
 - **Runbooks**: Operational procedures per common infrastructure tasks
@@ -191,7 +191,7 @@ test_pipeline:
 
 ### Monitoring and Observability
 
-**Infrastructure Observability**
+#### Infrastructure Observability
 
 - **Infrastructure metrics**: Key metrics per infrastructure health e performance
 - **Change tracking**: Monitoring di infrastructure changes e their impacts
@@ -202,28 +202,28 @@ test_pipeline:
 
 ### IaC Maturity Progression
 
-**Level 1: Basic IaC Implementation (Weeks 1-6)**
+#### Level 1: Basic IaC Implementation (Weeks 1-6)
 
 - Simple Terraform/CloudFormation templates
 - Manual deployment processes
 - Basic version control practices
 - Minimal testing e validation
 
-**Level 2: Structured IaC Development (Weeks 7-16)**
+#### Level 2: Structured IaC Development (Weeks 7-16)
 
 - Modular infrastructure design
 - Automated testing e validation
 - CI/CD pipeline integration
 - Security scanning automation
 
-**Level 3: Advanced IaC Practices (Weeks 17-28)**
+#### Level 3: Advanced IaC Practices (Weeks 17-28)
 
 - Policy as code implementation
 - Advanced testing strategies
 - Multi-environment management
 - Comprehensive monitoring e observability
 
-**Level 4: IaC Excellence (Weeks 29+)**
+#### Level 4: IaC Excellence (Weeks 29+)
 
 - Self-healing infrastructure
 - Advanced automation e orchestration

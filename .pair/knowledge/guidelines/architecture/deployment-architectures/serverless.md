@@ -129,7 +129,7 @@ export const handleOrderCreated = async (
 
 ## Benefits and Trade-offs
 
-**Benefits:**
+#### Benefits:
 
 - **Automatic scaling** - Scale to zero and to millions
 - **Cost efficiency** - Pay per execution, not idle time
@@ -137,7 +137,7 @@ export const handleOrderCreated = async (
 - **Fast deployment** - Quick function updates
 - **Event-driven** - Natural fit for reactive architectures
 
-**Trade-offs:**
+#### Trade-offs:
 
 - **Cold starts** - Initial execution latency
 - **Execution limits** - Time and memory constraints

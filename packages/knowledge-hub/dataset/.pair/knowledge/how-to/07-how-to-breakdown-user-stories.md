@@ -13,7 +13,7 @@ Transform Epics into User Story breakdowns through structured analysis and colla
 
 **CRITICAL**: Maintain this context throughout user story breakdown:
 
-```
+```text
 USER STORY BREAKDOWN STATE:
 ├── Epic: [Epic Name and Priority]
 ├── Breakdown Status: [foundation | selection | identification | definition | documentation | completion]

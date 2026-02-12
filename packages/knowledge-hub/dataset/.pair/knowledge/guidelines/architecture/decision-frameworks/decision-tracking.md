@@ -4,7 +4,7 @@ Systematic approach to tracking, monitoring, and evaluating architectural and te
 
 ## When to Use
 
-**Essential for:**
+#### Essential for:
 
 - Complex systems with multiple stakeholders
 - Distributed teams and decision makers
@@ -13,7 +13,7 @@ Systematic approach to tracking, monitoring, and evaluating architectural and te
 - Organizations embracing continuous improvement
 - Projects with high technical risk
 
-**Consider lighter approaches for:**
+#### Consider lighter approaches for:
 
 - Simple, short-term projects
 - Small teams with direct communication
@@ -42,7 +42,7 @@ Systematic capture and application of lessons learned.
 
 ### Phase 1: Decision Identification
 
-**Key Elements:**
+#### Key Elements:
 
 - **Decision ID**: Unique identifier (e.g., DEC-2024-001)
 - **Title**: Clear, descriptive decision name
@@ -53,7 +53,7 @@ Systematic capture and application of lessons learned.
 
 ### Phase 2: Decision Analysis
 
-**Analysis Framework:**
+#### Analysis Framework:
 
 - **Options**: Alternative approaches considered
 - **Criteria**: Evaluation factors and weights
@@ -63,7 +63,7 @@ Systematic capture and application of lessons learned.
 
 ### Phase 3: Decision Making
 
-**Decision Process:**
+#### Decision Process:
 
 - **Method**: How decision will be made (consensus, delegation, etc.)
 - **Timeline**: Decision deadline and milestones
@@ -73,7 +73,7 @@ Systematic capture and application of lessons learned.
 
 ### Phase 4: Implementation Tracking
 
-**Implementation Elements:**
+#### Implementation Elements:
 
 - **Action Items**: Specific tasks to implement decision
 - **Responsibilities**: Who is accountable for each action
@@ -83,7 +83,7 @@ Systematic capture and application of lessons learned.
 
 ### Phase 5: Impact Evaluation
 
-**Evaluation Activities:**
+#### Evaluation Activities:
 
 - **Outcome Assessment**: Did we achieve intended results?
 - **Unintended Consequences**: What unexpected effects occurred?
@@ -95,7 +95,7 @@ Systematic capture and application of lessons learned.
 
 ### Architecture Decisions
 
-**Focus Areas:**
+#### Focus Areas:
 
 - Technology stack choices
 - Pattern and framework selections
@@ -104,7 +104,7 @@ Systematic capture and application of lessons learned.
 
 ### Infrastructure Decisions
 
-**Focus Areas:**
+#### Focus Areas:
 
 - Platform selections
 - Deployment strategies
@@ -113,7 +113,7 @@ Systematic capture and application of lessons learned.
 
 ### Process Decisions
 
-**Focus Areas:**
+#### Focus Areas:
 
 - Development workflows
 - Quality gates
@@ -122,7 +122,7 @@ Systematic capture and application of lessons learned.
 
 ### Business Decisions
 
-**Focus Areas:**
+#### Focus Areas:
 
 - Feature prioritization
 - User experience choices
@@ -144,7 +144,7 @@ Systematic capture and application of lessons learned.
 
 ### Status Transitions
 
-```
+```text
 Proposed → Analyzing → Deciding → Approved → Implementing → Active
     ↓         ↓          ↓         ↓           ↓           ↓
   Retired ← Retired ← Retired ← Retired ← Retired ← Superseded

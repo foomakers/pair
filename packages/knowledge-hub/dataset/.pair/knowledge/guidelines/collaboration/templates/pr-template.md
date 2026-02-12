@@ -66,7 +66,7 @@
 
 ### Test Results
 
-```
+```text
 Test Suite: ✅ Passing
 Coverage: XX% (target: 80%+)
 Performance Tests: ✅ Passing
@@ -165,7 +165,7 @@ Linting: ✅ Clean
 
 ### Benchmarking Results
 
-```
+```text
 Before: [Performance baseline metrics]
 After:  [Performance after changes]
 Impact: [Improvement/degradation percentage]

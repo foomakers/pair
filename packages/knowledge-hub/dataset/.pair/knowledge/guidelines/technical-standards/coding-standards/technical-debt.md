@@ -12,7 +12,7 @@ Establish systematic approaches for technical debt management that balance featu
 
 #### Technical Debt Types
 
-**1. Code Debt**
+#### 1. Code Debt
 
 ```typescript
 // Example: Duplicated business logic
@@ -39,7 +39,7 @@ function validateContactEmail(email: string): boolean {
 }
 ```
 
-**2. Design Debt**
+#### 2. Design Debt
 
 ```typescript
 // Example: Tight coupling between components
@@ -73,7 +73,7 @@ function UserProfile({ user, subscription, onUpdateUser }: UserProfileProps) {
 }
 ```
 
-**3. Test Debt**
+#### 3. Test Debt
 
 ```typescript
 // Example: Insufficient test coverage
@@ -114,7 +114,7 @@ describe('calculateDiscount', () => {
 })
 ```
 
-**4. Documentation Debt**
+#### 4. Documentation Debt
 
 ```typescript
 // DEBT: Undocumented complex business logic

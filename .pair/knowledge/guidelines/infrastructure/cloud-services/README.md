@@ -8,7 +8,7 @@ This practice provides comprehensive guidance for selecting, integrating, and ma
 
 ## 📋 Scope and Coverage
 
-**In Scope:**
+#### In Scope:
 
 - Cloud database services selection and optimization strategies
 - Cloud storage solutions and data management lifecycle approaches
@@ -17,7 +17,7 @@ This practice provides comprehensive guidance for selecting, integrating, and ma
 - Service integration patterns and best practices for multi-service architectures
 - Cost optimization and governance strategies across cloud services
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Application-level architecture patterns and design (see Architecture Guidelines)
 - Infrastructure as Code implementation specifics (see Infrastructure as Code)
@@ -72,7 +72,7 @@ Strategic DevOps service guidance covering CI/CD pipelines, operational automati
 
 ## 🚀 Quick Start Decision Framework
 
-```
+```text
 Selecting cloud services strategy?
 ├─ Database requirements?
 │  ├─ Relational workload? → [Cloud Databases](cloud-databases.md) - Managed SQL services
@@ -110,21 +110,21 @@ Selecting cloud services strategy?
 
 ### Service Selection Criteria
 
-**Technical Requirements Assessment**
+#### Technical Requirements Assessment
 
 - **Feature completeness and maturity**: Comprehensive evaluation of service capabilities against requirements
 - **Performance characteristics**: Latency, throughput, and scalability requirements assessment
 - **Integration capabilities**: API quality, SDK availability, and ecosystem compatibility
 - **Compliance and security**: Regulatory compliance, security certifications, and data governance
 
-**Operational Considerations**
+#### Operational Considerations
 
 - **Management complexity**: Administrative overhead, maintenance requirements, and operational expertise needed
 - **Monitoring and observability**: Built-in monitoring, alerting, and diagnostic capabilities
 - **Support and documentation**: Quality of support, documentation completeness, and community resources
 - **Service level agreements**: Uptime guarantees, performance commitments, and support response times
 
-**Strategic and Economic Factors**
+#### Strategic and Economic Factors
 
 - **Total cost of ownership**: Direct costs, indirect costs, and opportunity cost analysis
 - **Vendor lock-in risks**: Migration complexity, data portability, and exit strategy considerations
@@ -145,7 +145,7 @@ Opportunity Costs:
 - Time to market delays
 - Risk mitigation and insurance
 
-````
+````text
 
 ## Implementation Best Practices
 
@@ -153,6 +153,7 @@ Opportunity Costs:
 
 #### 1. API Gateway Pattern
 ```typescript
+
 // Centralized API management
 interface ServiceConfig {
   endpoint: string;
@@ -186,11 +187,13 @@ class CloudServiceClient {
     return response.json();
   }
 }
+
 ````
 
 #### 2. Circuit Breaker Pattern
 
 ```typescript
+
 class CircuitBreaker {
   private failures = 0
   private lastFailureTime?: Date
@@ -231,6 +234,7 @@ class CircuitBreaker {
     }
   }
 }
+
 ```
 
 ### Monitoring and Observability
@@ -238,6 +242,7 @@ class CircuitBreaker {
 #### Service Health Monitoring
 
 ```typescript
+
 interface ServiceHealth {
   service: string
   status: 'healthy' | 'degraded' | 'unhealthy'
@@ -296,6 +301,7 @@ class HealthChecker {
     }
   }
 }
+
 ```
 
 ## Security Best Practices
@@ -303,6 +309,7 @@ class HealthChecker {
 ### Service Authentication
 
 ```typescript
+
 // OAuth 2.0 / JWT token management
 class TokenManager {
   private tokens = new Map<string, { token: string; expiry: Date }>()
@@ -340,11 +347,13 @@ class TokenManager {
     return access_token
   }
 }
+
 ```
 
 ### Data Encryption
 
 ```typescript
+
 // Client-side encryption for sensitive data
 import { createCipher, createDecipher } from 'crypto'
 
@@ -385,6 +394,7 @@ class DataEncryption {
     return decrypted
   }
 }
+
 ```
 
 ## Cost Optimization Strategies
@@ -392,6 +402,7 @@ class DataEncryption {
 ### Usage Monitoring
 
 ```typescript
+
 // Cost tracking and optimization
 interface UsageMetrics {
   service: string
@@ -438,6 +449,7 @@ class CostOptimizer {
     return recommendations
   }
 }
+
 ```
 
 ## Implementation Recommendations
@@ -509,14 +521,14 @@ class CostOptimizer {
 
 ### Service Selection Excellence
 
-**Evaluation and Decision Making**
+#### Evaluation and Decision Making
 
 - Use structured evaluation frameworks with quantitative metrics and decision criteria
 - Conduct proof-of-concept implementations for critical services and use cases
 - Include stakeholders from development, operations, and business teams in selection process
 - Document decision rationale and assumptions for future reference and validation
 
-**Cost and Performance Optimization**
+#### Cost and Performance Optimization
 
 - Implement comprehensive cost monitoring and alerting from initial service adoption
 - Use service-specific optimization features and recommendations from cloud providers
@@ -525,14 +537,14 @@ class CostOptimizer {
 
 ### Integration and Operations Excellence
 
-**Architecture and Design Standards**
+#### Architecture and Design Standards
 
 - Implement consistent integration patterns using abstraction layers and standardized APIs
 - Design for failure with circuit breakers, retry mechanisms, and graceful degradation
 - Use cloud-agnostic patterns where possible to avoid vendor lock-in
 - Establish data management strategies that support service integration and migration
 
-**Operational Excellence**
+#### Operational Excellence
 
 - Implement unified monitoring and observability across all cloud services
 - Establish consistent security and compliance frameworks for service access

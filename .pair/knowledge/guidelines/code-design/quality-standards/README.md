@@ -76,4 +76,4 @@ Guidelines for linting, formatting, code metrics, test coverage and automation t
 Start from this README for principles, then open the topic pages for concrete configs, examples and recommended rule sets.
 ```
 
-**[Coverage](coverage.md)**
+#### [Coverage](coverage.md)

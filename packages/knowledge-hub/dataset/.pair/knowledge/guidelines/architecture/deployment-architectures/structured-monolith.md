@@ -79,7 +79,7 @@ export class Application {
 
 ## Benefits and Trade-offs
 
-**Benefits:**
+#### Benefits:
 
 - **Simple deployment** - Single artifact to deploy
 - **Fast development** - No network overhead between modules
@@ -87,7 +87,7 @@ export class Application {
 - **ACID transactions** - Full transactional consistency
 - **Low operational overhead** - Single database, simple monitoring
 
-**Trade-offs:**
+#### Trade-offs:
 
 - **Scaling limitations** - Scale entire application, not individual parts
 - **Technology lock-in** - Single technology stack
@@ -104,14 +104,14 @@ export class Application {
 
 ## Migration Path
 
-**To Modular Monolith:**
+#### To Modular Monolith:
 
 1. Strengthen module boundaries
 2. Extract shared data models
 3. Add module-to-module interfaces
 4. Implement domain events
 
-**To Microservices:**
+#### To Microservices:
 
 1. Start with least coupled module
 2. Extract database tables

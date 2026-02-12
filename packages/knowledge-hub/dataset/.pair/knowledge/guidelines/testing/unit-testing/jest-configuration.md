@@ -102,11 +102,12 @@ CI-specific configuration includes appropriate timeout settings, retry mechanism
 
 Integration with deployment pipelines requires configuration that supports quality gates, coverage requirements, and failure notification mechanisms that enable rapid response to issues. Effective CI configuration balances thorough validation with execution speed requirements that support efficient development cycles.
 
-````
+````text
 
 ### TypeScript Configuration
 
 ```javascript
+
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
@@ -116,6 +117,7 @@ module.exports = {
     '^.+\\.ts$': 'ts-jest',
   },
 }
+
 ````
 
 ## Advanced Configuration
@@ -123,6 +125,7 @@ module.exports = {
 ### Custom Matchers
 
 ```javascript
+
 // setup.js
 expect.extend({
   toBeValidEmail(received) {
@@ -135,11 +138,13 @@ expect.extend({
     }
   },
 })
+
 ```
 
 ### Mock Configuration
 
 ```javascript
+
 // jest.config.js
 module.exports = {
   clearMocks: true,
@@ -152,6 +157,7 @@ module.exports = {
   // Manual mocks directory
   __mocks__: ['<rootDir>/__mocks__'],
 }
+
 ```
 
 ## Performance Optimization
@@ -159,20 +165,24 @@ module.exports = {
 ### Parallel Execution
 
 ```javascript
+
 module.exports = {
   maxWorkers: '50%', // Use 50% of available cores
   cache: true,
   cacheDirectory: '<rootDir>/.jest-cache',
 }
+
 ```
 
 ### Watch Mode Configuration
 
 ```javascript
+
 module.exports = {
   watchman: true,
   watchPathIgnorePatterns: ['node_modules', 'dist', 'coverage'],
 }
+
 ```
 
 ## Integration with Build Tools
@@ -180,6 +190,7 @@ module.exports = {
 ### Package.json Scripts
 
 ```json
+
 {
   "scripts": {
     "test": "jest",
@@ -188,11 +199,13 @@ module.exports = {
     "test:ci": "jest --ci --coverage --watchAll=false"
   }
 }
+
 ```
 
 ### ESLint Integration
 
 ```javascript
+
 // .eslintrc.js
 module.exports = {
   env: {
@@ -200,4 +213,5 @@ module.exports = {
   },
   extends: ['plugin:jest/recommended'],
 }
+
 ```

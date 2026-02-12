@@ -10,7 +10,7 @@ Dynamic Application Security Testing (DAST) that tests running applications to i
 
 DAST complements SAST by testing applications during runtime, simulating real-world attacks against deployed applications to identify vulnerabilities that only manifest when the application is running.
 
-**Key Testing Areas:**
+#### Key Testing Areas:
 
 - **Authentication & Authorization**: Session management, access controls, privilege escalation
 - **Input Validation**: SQL injection, XSS, command injection via live inputs
@@ -19,7 +19,7 @@ DAST complements SAST by testing applications during runtime, simulating real-wo
 
 ### **DAST Tools Integration**
 
-**OWASP ZAP Integration**
+#### OWASP ZAP Integration
 
 ```bash
 # Automated ZAP scanning in CI/CD
@@ -30,7 +30,7 @@ zap-full-scan.py -t $TARGET_URL -J zap-full.json \
   -z "-config authentication.form.loginurl=$LOGIN_URL"
 ```
 
-**Burp Suite Enterprise**
+#### Burp Suite Enterprise
 
 ```yaml
 # CI/CD integration
@@ -45,14 +45,14 @@ burp_scan:
 
 ### **Authentication Testing**
 
-**Session Management Vulnerabilities**
+#### Session Management Vulnerabilities
 
 - Session fixation and hijacking
 - Insufficient session timeout
 - Weak session token generation
 - Cross-site request forgery (CSRF)
 
-**Access Control Testing**
+#### Access Control Testing
 
 - Vertical privilege escalation
 - Horizontal privilege escalation
@@ -61,14 +61,14 @@ burp_scan:
 
 ### **Injection Vulnerabilities**
 
-**SQL Injection Detection**
+#### SQL Injection Detection
 
 - Error-based SQL injection
 - Blind SQL injection (boolean & time-based)
 - NoSQL injection patterns
 - ORM injection vulnerabilities
 
-**Cross-Site Scripting (XSS)**
+#### Cross-Site Scripting (XSS)
 
 - Stored XSS in user inputs
 - Reflected XSS in parameters
@@ -77,7 +77,7 @@ burp_scan:
 
 ### **Configuration Vulnerabilities**
 
-**Server Configuration Issues**
+#### Server Configuration Issues
 
 - Missing security headers (HSTS, CSP, X-Frame-Options)
 - Information disclosure in error messages
@@ -88,7 +88,7 @@ burp_scan:
 
 ### **Automated Scanning Pipeline**
 
-**GitHub Actions DAST Workflow**
+#### GitHub Actions DAST Workflow
 
 ```yaml
 name: DAST Security Scan
@@ -132,9 +132,9 @@ jobs:
 
 ### **Manual Testing Framework**
 
-**Structured Manual Testing**
+#### Structured Manual Testing
 
-**Authentication Testing Checklist**
+#### Authentication Testing Checklist
 
 - [ ] Test for weak password policies
 - [ ] Verify account lockout mechanisms
@@ -142,7 +142,7 @@ jobs:
 - [ ] Test multi-factor authentication bypass
 - [ ] Validate session management security
 
-**Authorization Testing Checklist**
+#### Authorization Testing Checklist
 
 - [ ] Test vertical privilege escalation
 - [ ] Test horizontal privilege escalation
@@ -150,7 +150,7 @@ jobs:
 - [ ] Test for missing function-level access controls
 - [ ] Check for privilege escalation through parameter manipulation
 
-**Input Validation Testing**
+#### Input Validation Testing
 
 - [ ] SQL injection in all input fields
 - [ ] XSS in user-controllable inputs
@@ -162,14 +162,14 @@ jobs:
 
 ### **Security Thresholds**
 
-**Vulnerability Severity Limits**
+#### Vulnerability Severity Limits
 
 - **Critical**: 0 vulnerabilities allowed
 - **High**: Maximum 2 vulnerabilities
 - **Medium**: Maximum 10 vulnerabilities
 - **Low**: Maximum 25 vulnerabilities
 
-**False Positive Management**
+#### False Positive Management
 
 - Maintain verified false positive list
 - Regular review of suppressed findings
@@ -178,7 +178,7 @@ jobs:
 
 ### **Reporting and Remediation**
 
-**DAST Report Structure**
+#### DAST Report Structure
 
 ```json
 {
@@ -208,7 +208,7 @@ jobs:
 }
 ```
 
-**Remediation Priorities**
+#### Remediation Priorities
 
 1. **Critical/High**: Immediate fix required (1-2 days)
 2. **Medium**: Fix within current sprint (1-2 weeks)

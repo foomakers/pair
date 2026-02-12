@@ -8,7 +8,7 @@ Systematic implementation of performance gates that enforce quality standards at
 
 ### **Gate Definition and Thresholds**
 
-**Core Web Vitals Gates**
+#### Core Web Vitals Gates
 
 Performance gates implementation for Core Web Vitals includes First Contentful Paint (FCP), Largest Contentful Paint (LCP), Cumulative Layout Shift (CLS), First Input Delay (FID), Total Blocking Time (TBT), and Speed Index (SI) with environment-specific thresholds and validation criteria.
 
@@ -29,7 +29,7 @@ const PERFORMANCE_GATES = {
 }
 ```
 
-**Resource Budget Gates**
+#### Resource Budget Gates
 
 Resource budget gates include total size limits, JavaScript size constraints, CSS size restrictions, image size limitations, request count thresholds, and third-party resource restrictions with environment-specific budget allocations and violation handling.
 
@@ -43,7 +43,7 @@ Production environment budgets maintain user experience standards: total size ta
 
 ### **Pre-commit Performance Gate**
 
-**Git Hook Implementation**
+#### Git Hook Implementation
 
 Pre-commit performance gates implement automated validation before code commits, including bundle size analysis, performance regression checks, and optimization requirement verification with development workflow integration and immediate feedback.
 
@@ -58,7 +58,7 @@ fi
 echo "✅ Performance gate passed."
 exit 0
 
-```
+```text
 
 **Bundle Size Check Script**
 

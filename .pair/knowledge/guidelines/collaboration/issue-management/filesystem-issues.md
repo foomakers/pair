@@ -10,7 +10,7 @@ This guide covers implementing issue tracking using local markdown files, git wo
 
 ### Directory Organization
 
-```
+```text
 project-root/
 ├── .pair/
 │   ├── product/
@@ -92,12 +92,13 @@ As a new user, I want to register for an account so that I can access the platfo
 - Related to #002 (Database Migration)
 - Blocks #005 (User Profile Management)
 
-````
+````text
 
 ## Workflow Integration
 
 ### Git-Based Backlog Management
 ```bash
+
 # Create new user story
 mkdir -p .pair/product/backlog/03-user-stories/backlog
 cp .pair/assets/user-story-template.md .pair/product/backlog/03-user-stories/backlog/01-01-$(date +%Y%m%d)-story-title.md
@@ -115,11 +116,13 @@ Addresses #01-01-001
 - Implement password hashing with bcrypt
 - Add email validation and duplicate checking
 - Update user registration task completion"
+
 ````
 
 ### Status Management
 
 ```markdown
+
 # Story Status Transitions
 
 Backlog → In Progress → Review → Completed
@@ -133,6 +136,7 @@ Not Started → In Progress → Completed
 # Initiative Status (based on contained epics)
 
 Planning → In Progress → Under Review → Completed
+
 ```
 
 ## Automation Scripts
@@ -140,6 +144,7 @@ Planning → In Progress → Under Review → Completed
 ### Story Management Scripts
 
 ```bash
+
 #!/bin/bash
 # create-story.sh
 EPIC_PREFIX="$1"  # e.g., "01-01"
@@ -154,11 +159,13 @@ cp ".pair/assets/user-story-template.md" \
    ".pair/product/backlog/03-user-stories/backlog/${STORY_ID}-${STORY_TITLE}.md"
 
 echo "Created story #${STORY_ID}: ${STORY_TITLE}"
+
 ```
 
 ### Status Reports
 
 ```bash
+
 #!/bin/bash
 # backlog-report.sh
 echo "## Product Backlog Status Report"
@@ -179,6 +186,7 @@ echo
 
 echo "### Recently Completed Stories:"
 find .pair/product/backlog/03-user-stories/completed/ -name "*.md" -mtime -7 | sed 's/^/- /'
+
 ```
 
 ## Integration Patterns
@@ -186,6 +194,7 @@ find .pair/product/backlog/03-user-stories/completed/ -name "*.md" -mtime -7 | s
 ### Project Management Integration
 
 ```markdown
+
 # .pair/product/adopted/sprint-status.md
 
 # Sprint Status Dashboard
@@ -215,11 +224,13 @@ find .pair/product/backlog/03-user-stories/completed/ -name "*.md" -mtime -7 | s
 - [ ] Complete user registration (#01-01-001)
 - [ ] Implement login system (#01-01-002)
 - [ ] Start password reset flow (#01-01-003)
+
 ```
 
 ### CI/CD Integration
 
 ```yaml
+
 # .github/workflows/backlog-tracking.yml
 name: Backlog Tracking
 on:
@@ -239,6 +250,7 @@ jobs:
           git add .pair/product/adopted/current-backlog.md
           git commit -m "docs: update backlog dashboard" || exit 0
           git push
+
 ```
 
 ## Related Documents

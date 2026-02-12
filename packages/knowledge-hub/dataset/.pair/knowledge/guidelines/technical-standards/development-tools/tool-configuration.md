@@ -24,7 +24,7 @@ const precedenceOrder = ['personal', 'project', 'organization', 'global']
 
 ### Configuration Storage Structure
 
-```
+```text
 .config/
 ├── global/              # Global tool configurations
 │   ├── git/

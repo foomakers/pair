@@ -41,7 +41,7 @@ Strategic framework for implementing and managing multi-cloud environments to op
 
 ## Decision Tree
 
-```
+```text
 Start: Why consider multi-cloud?
 ├── Risk Mitigation
 │   ├── Mission critical applications? → Primary + Backup Cloud
@@ -67,7 +67,7 @@ Start: Why consider multi-cloud?
 
 **Objective**: Establish primary cloud with multi-cloud readiness
 
-**Actions:**
+#### Actions:
 
 - Choose primary cloud provider
 - Implement cloud-agnostic application patterns
@@ -75,7 +75,7 @@ Start: Why consider multi-cloud?
 - Establish monitoring and cost management
 - Design for portability from the start
 
-**Key Patterns:**
+#### Key Patterns:
 
 - Container-based deployments
 - External configuration management
@@ -86,7 +86,7 @@ Start: Why consider multi-cloud?
 
 **Objective**: Add secondary cloud for specific use cases
 
-**Actions:**
+#### Actions:
 
 - Identify secondary cloud use cases
 - Implement backup/disaster recovery
@@ -94,7 +94,7 @@ Start: Why consider multi-cloud?
 - Establish cross-cloud networking
 - Implement unified monitoring
 
-**Considerations:**
+#### Considerations:
 
 - Start with disaster recovery
 - Use managed services where possible
@@ -105,7 +105,7 @@ Start: Why consider multi-cloud?
 
 **Objective**: Optimize multi-cloud operations and governance
 
-**Actions:**
+#### Actions:
 
 - Implement workload optimization
 - Establish cloud governance frameworks
@@ -117,21 +117,21 @@ Start: Why consider multi-cloud?
 
 ### Benefits of Multi-Cloud
 
-**Risk Mitigation**
+#### Risk Mitigation
 
 - Reduced vendor lock-in
 - Improved disaster recovery
 - Better negotiation position
 - Regulatory compliance options
 
-**Performance Optimization**
+#### Performance Optimization
 
 - Best-of-breed service selection
 - Geographic optimization
 - Workload-specific placement
 - Enhanced redundancy
 
-**Cost Benefits**
+#### Cost Benefits
 
 - Competitive pricing leverage
 - Spot market optimization
@@ -140,21 +140,21 @@ Start: Why consider multi-cloud?
 
 ### Costs of Multi-Cloud
 
-**Operational Complexity**
+#### Operational Complexity
 
 - Multiple management interfaces
 - Different APIs and tooling
 - Increased training requirements
 - Complex troubleshooting
 
-**Technical Challenges**
+#### Technical Challenges
 
 - Data synchronization costs
 - Network complexity and costs
 - Security model differences
 - Compliance verification
 
-**Resource Requirements**
+#### Resource Requirements
 
 - Additional staff expertise
 - Tool and license costs
@@ -165,14 +165,14 @@ Start: Why consider multi-cloud?
 
 ### Data Management
 
-**Cross-Cloud Data Strategy**
+#### Cross-Cloud Data Strategy
 
 - Use cloud-agnostic data formats
 - Implement data replication strategies
 - Plan for data sovereignty requirements
 - Consider data gravity in placement decisions
 
-**Patterns:**
+#### Patterns:
 
 - Event-driven data synchronization
 - API-based data access layers
@@ -181,14 +181,14 @@ Start: Why consider multi-cloud?
 
 ### Networking
 
-**Multi-Cloud Connectivity**
+#### Multi-Cloud Connectivity
 
 - Implement hybrid cloud networking
 - Use cloud-agnostic load balancing
 - Plan for cross-cloud latency
 - Implement security at network edges
 
-**Patterns:**
+#### Patterns:
 
 - VPN/ExpressRoute connections
 - Global load balancers
@@ -197,14 +197,14 @@ Start: Why consider multi-cloud?
 
 ### Security
 
-**Unified Security Model**
+#### Unified Security Model
 
 - Implement identity federation
 - Use consistent security policies
 - Plan for compliance across clouds
 - Implement defense in depth
 
-**Patterns:**
+#### Patterns:
 
 - Cloud-agnostic IAM systems
 - Centralized security monitoring
@@ -215,14 +215,14 @@ Start: Why consider multi-cloud?
 
 ### Operational Excellence
 
-**Multi-Cloud Operations**
+#### Multi-Cloud Operations
 
 - Unified monitoring and alerting
 - Consistent deployment processes
 - Centralized cost management
 - Performance optimization across clouds
 
-**Tools and Practices:**
+#### Tools and Practices:
 
 - Infrastructure as code tools (Terraform)
 - Cloud management platforms
@@ -231,14 +231,14 @@ Start: Why consider multi-cloud?
 
 ### Governance Framework
 
-**Multi-Cloud Governance**
+#### Multi-Cloud Governance
 
 - Establish cloud policies and standards
 - Implement cost allocation and chargeback
 - Maintain security and compliance
 - Manage vendor relationships
 
-**Key Components:**
+#### Key Components:
 
 - Cloud center of excellence
 - Cost optimization processes

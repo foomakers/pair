@@ -4,7 +4,7 @@
 
 This comprehensive quality assurance framework ensures systematic quality management through accessibility standards, performance optimization, security protocols, and continuous verification across all development phases and product deliverables.
 
-**In Scope:**
+#### In Scope:
 
 - Quality standards and practices
 - Accessibility compliance (WCAG 2.1/2.2 AA)
@@ -13,7 +13,7 @@ This comprehensive quality assurance framework ensures systematic quality manage
 - Automated and manual verification processes
 - Quality monitoring and reporting
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Product functional requirements
 - Business logic implementation
@@ -133,7 +133,7 @@ Organizations typically progress through quality maturity levels, with each leve
 
 ### **Decision Tree: Quality Approach Selection**
 
-```
+```text
 Start → Project Risk Level?
 ├─ Low Risk → Basic quality practices (Level 1)
 │  └─ Code review + basic testing + essential accessibility

@@ -6,7 +6,7 @@ Deployment strategies define systematic approaches for delivering application up
 
 ## 📋 Scope and Coverage
 
-**In Scope:**
+#### In Scope:
 
 - Progressive deployment strategies and implementation patterns
 - Risk mitigation and rollback mechanisms
@@ -15,7 +15,7 @@ Deployment strategies define systematic approaches for delivering application up
 - Feature flag integration and deployment decoupling
 - Multi-environment deployment workflows and promotion strategies
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Infrastructure provisioning and configuration (see Infrastructure as Code)
 - Application build and packaging (see CI/CD Strategy)
@@ -26,7 +26,7 @@ Deployment strategies define systematic approaches for delivering application up
 
 ### Blue-Green Deployment
 
-**Strategy Overview**
+#### Strategy Overview
 
 Blue-green deployment maintains two identical production environments, enabling instantaneous switchover and immediate rollback capabilities with zero-downtime deployments.
 
@@ -87,6 +87,7 @@ Canary deployment gradually routes traffic to new versions, enabling real-world 
 The canary process follows percentage-based stages: 1%, 5%, 10%, 25%, 50%, and 100% traffic routing. Each stage includes automated validation, metrics analysis, and go/no-go decision points based on predefined success criteria.
 
 ```python
+
 # Simplified canary controller
 class CanaryController:
     def __init__(self, traffic_manager, metrics_collector):
@@ -99,11 +100,12 @@ class CanaryController:
             if not success:
                 await self.rollback()
                 break
+
 ````
 
 ### Rolling Deployment
 
-**Gradual Instance Replacement**
+#### Gradual Instance Replacement
 
 Rolling deployment replaces application instances gradually, maintaining service availability while updating all instances systematically.
 'success_criteria': self.define_success_criteria()
@@ -136,9 +138,9 @@ Rolling deployment replaces application instances gradually, maintaining service
             'minimum_observation_period': timedelta(minutes=10)
         }
 
-````
+````text
 
-**Advanced Canary Configuration**
+#### Advanced Canary Configuration
 
 ```yaml
 canary_deployment:
@@ -188,7 +190,7 @@ canary_deployment:
 
 ### Rolling Deployment
 
-**Gradual Instance Replacement**
+#### Gradual Instance Replacement
 
 Rolling deployment replaces application instances gradually, maintaining service availability while updating all instances systematically.
 
@@ -246,7 +248,7 @@ class RollingDeploymentStrategy {
 
 ### Feature Flag-Driven Deployment
 
-**Deployment Decoupling Strategy**
+#### Deployment Decoupling Strategy
 
 Feature flags enable deployment and release decoupling, allowing code deployment without immediate feature activation and granular feature control.
 
@@ -297,7 +299,7 @@ class FeatureFlagDeploymentManager {
 
 ### Multi-Region Deployment
 
-**Global Deployment Orchestration**
+#### Global Deployment Orchestration
 
 ```yaml
 multi_region_deployment:
@@ -334,7 +336,7 @@ multi_region_deployment:
 
 ### Automated Validation Pipeline
 
-**Comprehensive Validation Framework**
+#### Comprehensive Validation Framework
 
 ```python
 class DeploymentValidationPipeline:
@@ -385,7 +387,7 @@ class DeploymentValidationPipeline:
 
 ### Smoke Testing and Health Checks
 
-**Automated Deployment Verification**
+#### Automated Deployment Verification
 
 ```bash
 #!/bin/bash
@@ -431,14 +433,14 @@ echo "✅ Deployment smoke tests completed successfully"
 
 ### Deployment Safety and Risk Management
 
-**Risk Mitigation Strategies**
+#### Risk Mitigation Strategies
 
 - **Gradual rollout**: Always use progressive deployment strategies for production changes
 - **Automated validation**: Implement comprehensive automated validation at every stage
 - **Fast rollback**: Ensure rollback mechanisms can restore service in under 5 minutes
 - **Monitoring integration**: Integrate real-time monitoring and alerting throughout deployment
 
-**Change Management and Coordination**
+#### Change Management and Coordination
 
 - **Deployment windows**: Establish deployment windows with team availability and low-traffic periods
 - **Change approval**: Implement change approval processes for high-risk deployments
@@ -447,7 +449,7 @@ echo "✅ Deployment smoke tests completed successfully"
 
 ### Deployment Automation and Orchestration
 
-**Infrastructure as Code Integration**
+#### Infrastructure as Code Integration
 
 ```terraform
 # Deployment infrastructure definition

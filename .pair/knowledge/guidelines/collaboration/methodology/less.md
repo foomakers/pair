@@ -68,14 +68,14 @@ Large-Scale Scrum (LeSS) is a framework for scaling agile development that appli
 
 ### LeSS (2-8 Teams)
 
-**Roles:**
+#### Roles:
 
 - **Product Owner** - Single Product Owner for entire product
 - **Scrum Masters** - One Scrum Master per 1-3 teams
 - **Development Teams** - Cross-functional, self-organizing teams
 - **Users/Customers** - Direct stakeholders providing feedback
 
-**Events:**
+#### Events:
 
 - **Sprint Planning One** - All teams participate for "What to build"
 - **Sprint Planning Two** - Teams coordinate "How to build"
@@ -83,7 +83,7 @@ Large-Scale Scrum (LeSS) is a framework for scaling agile development that appli
 - **Sprint Review** - Common Sprint Review with all teams
 - **Sprint Retrospective** - Team-level and overall retrospectives
 
-**Artifacts:**
+#### Artifacts:
 
 - **Product Backlog** - Single prioritized backlog for all teams
 - **Sprint Backlogs** - Each team maintains their Sprint Backlog
@@ -92,14 +92,14 @@ Large-Scale Scrum (LeSS) is a framework for scaling agile development that appli
 
 ### LeSS Huge (8+ Teams)
 
-**Additional Structure:**
+#### Additional Structure:
 
 - **Area Product Owners** - Focus on specific product areas
 - **Requirement Areas** - Major customer-centric feature areas
 - **Area Backlogs** - Focused backlogs for specific areas
 - **Area Sprint Planning** - Coordinated planning within areas
 
-**Scaling Mechanisms:**
+#### Scaling Mechanisms:
 
 - **Communities of Practice** - Cross-team learning and standards
 - **Component Mentors** - Technical expertise sharing
@@ -110,9 +110,9 @@ Large-Scale Scrum (LeSS) is a framework for scaling agile development that appli
 
 ### Organizational Design
 
-**Feature Teams Over Component Teams**
+#### Feature Teams Over Component Teams
 
-```
+```text
 Traditional Component Organization:
 ├── UI Team (3 developers)
 ├── Business Logic Team (4 developers)
@@ -125,7 +125,7 @@ LeSS Feature Team Organization:
 └── Feature Team C (6 developers - full-stack)
 ```
 
-**Team Formation Principles:**
+#### Team Formation Principles:
 
 - **Cross-functional** - All skills needed to deliver features
 - **Co-located** - Preferably in same physical space
@@ -133,9 +133,9 @@ LeSS Feature Team Organization:
 - **Self-organizing** - Teams decide how to work
 - **Customer-focused** - Direct customer interaction
 
-**Organizational Structure:**
+#### Organizational Structure:
 
-```
+```text
 Product Owner
 ├── Feature Team 1 (Scrum Master + 5-9 Developers)
 ├── Feature Team 2 (Scrum Master + 5-9 Developers)
@@ -145,9 +145,9 @@ Product Owner
 
 ### Sprint Planning
 
-**Sprint Planning One (What to Build)**
+#### Sprint Planning One (What to Build)
 
-```
+```text
 Duration: 4 hours (2-week sprint), 8 hours (4-week sprint)
 Participants: All teams, Product Owner, Scrum Masters
 Activities:
@@ -164,9 +164,9 @@ Outcome:
 - Coordination agreements
 ```
 
-**Sprint Planning Two (How to Build)**
+#### Sprint Planning Two (How to Build)
 
-```
+```text
 Duration: 4 hours (2-week sprint), 8 hours (4-week sprint)
 Participants: Individual teams
 Activities:
@@ -185,9 +185,9 @@ Outcome:
 
 ### Daily Coordination
 
-**Daily Scrum (Team Level)**
+#### Daily Scrum (Team Level)
 
-```
+```text
 Duration: 15 minutes
 Participants: Development Team members
 Format:
@@ -203,9 +203,9 @@ Focus:
 - Progress toward Sprint Goal
 ```
 
-**Scrum of Scrums (Optional)**
+#### Scrum of Scrums (Optional)
 
-```
+```text
 Duration: 15-30 minutes
 Participants: Representatives from each team
 Frequency: As needed (not daily by default)
@@ -218,9 +218,9 @@ Focus:
 
 ### Sprint Review
 
-**Common Sprint Review**
+#### Common Sprint Review
 
-```
+```text
 Duration: 2-4 hours
 Participants: All teams, Product Owner, stakeholders
 Activities:
@@ -239,9 +239,9 @@ Focus:
 
 ### Sprint Retrospective
 
-**Team Retrospectives**
+#### Team Retrospectives
 
-```
+```text
 Duration: 1.5-3 hours
 Participants: Individual development teams
 Focus:
@@ -257,9 +257,9 @@ Outcome:
 - Impediment escalation to overall retrospective
 ```
 
-**Overall Retrospective**
+#### Overall Retrospective
 
-```
+```text
 Duration: 2-4 hours
 Participants: Representatives from all teams, managers
 Focus:
@@ -279,9 +279,9 @@ Outcome:
 
 ### Technical Coordination
 
-**Communities of Practice**
+#### Communities of Practice
 
-```
+```text
 Purpose: Share knowledge and maintain standards
 Structure:
 - Cross-team membership by technical specialty
@@ -296,9 +296,9 @@ Examples:
 - UX/Design Community of Practice
 ```
 
-**Component Mentors**
+#### Component Mentors
 
-```
+```text
 Role: Technical expertise for specific components
 Responsibilities:
 - Maintain deep component knowledge
@@ -310,9 +310,9 @@ Selection: Volunteers with relevant expertise
 Time allocation: Part-time role (20-50% time)
 ```
 
-**Travelers**
+#### Travelers
 
-```
+```text
 Purpose: Knowledge sharing and cross-pollination
 Mechanism:
 - Team members temporarily join other teams
@@ -326,9 +326,9 @@ Selection: Volunteer basis with team agreement
 
 ### Process Coordination
 
-**Cross-Team Sprint Planning**
+#### Cross-Team Sprint Planning
 
-```
+```text
 Coordination Points:
 - Shared Sprint Goal alignment
 - Dependency identification and management
@@ -343,9 +343,9 @@ Tools:
 - Cross-team capacity planning
 ```
 
-**Multi-Team Sprint Review**
+#### Multi-Team Sprint Review
 
-```
+```text
 Integration Focus:
 - Demonstrate complete feature workflows
 - Show cross-team integration results
@@ -364,9 +364,9 @@ Preparation:
 
 ### When to Use LeSS vs LeSS Huge
 
-**LeSS (2-8 Teams)**
+#### LeSS (2-8 Teams)
 
-```
+```text
 Characteristics:
 - Single product area focus
 - Manageable complexity
@@ -381,9 +381,9 @@ Recommended For:
 - Integrated delivery every Sprint
 ```
 
-**LeSS Huge (8+ Teams)**
+#### LeSS Huge (8+ Teams)
 
-```
+```text
 Characteristics:
 - Multiple product areas
 - High complexity requiring focus
@@ -401,9 +401,9 @@ Recommended For:
 
 ### Area Definition (LeSS Huge)
 
-**Area Identification Criteria**
+#### Area Identification Criteria
 
-```
+```text
 Customer-Centric Areas:
 - Different customer segments
 - Distinct user journeys
@@ -423,9 +423,9 @@ Organizational Areas:
 - Independent budget allocation
 ```
 
-**Area Backlog Management**
+#### Area Backlog Management
 
-```
+```text
 Area Product Owner Responsibilities:
 - Maintain area-specific backlog
 - Coordinate with overall Product Owner
@@ -444,9 +444,9 @@ Area Sprint Planning:
 
 ### Team Performance Metrics
 
-**Velocity and Throughput**
+#### Velocity and Throughput
 
-```
+```text
 Measurements:
 - Story points completed per Sprint
 - Features delivered per Sprint
@@ -466,9 +466,9 @@ Product-Level Aggregation:
 - Customer value delivery rate
 ```
 
-**Quality Metrics**
+#### Quality Metrics
 
-```
+```text
 Code Quality:
 - Code coverage percentage
 - Technical debt trends
@@ -490,9 +490,9 @@ Process Quality:
 
 ### Coordination Effectiveness
 
-**Cross-Team Collaboration**
+#### Cross-Team Collaboration
 
-```
+```text
 Coordination Metrics:
 - Inter-team dependency resolution time
 - Cross-team knowledge sharing frequency
@@ -506,9 +506,9 @@ Cultural Indicators:
 - Continuous improvement participation
 ```
 
-**Organizational Learning**
+#### Organizational Learning
 
-```
+```text
 Learning Metrics:
 - Skills development progress
 - Practice adoption rates
@@ -526,9 +526,9 @@ Adaptation Indicators:
 
 ### Implementation Challenges
 
-**Organizational Resistance**
+#### Organizational Resistance
 
-```
+```text
 Challenge: Traditional management resistance to change
 Solutions:
 - Start with pilot teams
@@ -545,9 +545,9 @@ Change Management:
 - Celebration of early wins
 ```
 
-**Technical Integration**
+#### Technical Integration
 
-```
+```text
 Challenge: Coordinating work across multiple teams
 Solutions:
 - Continuous integration practices
@@ -564,9 +564,9 @@ Technical Practices:
 - Performance monitoring
 ```
 
-**Scaling Coordination**
+#### Scaling Coordination
 
-```
+```text
 Challenge: Maintaining agility while scaling
 Solutions:
 - Minimize coordination overhead
@@ -585,9 +585,9 @@ Coordination Strategies:
 
 ### Team Formation Issues
 
-**Component Team Legacy**
+#### Component Team Legacy
 
-```
+```text
 Challenge: Existing component team structure
 Transition Strategy:
 1. Identify feature areas and customer journeys
@@ -604,9 +604,9 @@ Skills Development:
 - Community of practice participation
 ```
 
-**Geographic Distribution**
+#### Geographic Distribution
 
-```
+```text
 Challenge: Teams located in different time zones
 Solutions:
 - Minimize distribution where possible
@@ -627,9 +627,9 @@ Remote Coordination:
 
 ### Development Tools
 
-**Version Control and CI/CD**
+#### Version Control and CI/CD
 
-```
+```text
 Git Workflow:
 - Feature branch per team/story
 - Continuous integration on all branches
@@ -645,9 +645,9 @@ CI/CD Pipeline:
 - Performance monitoring
 ```
 
-**Testing Strategy**
+#### Testing Strategy
 
-```
+```text
 Multi-Level Testing:
 - Unit tests at component level
 - Integration tests across components
@@ -665,9 +665,9 @@ Test Automation:
 
 ### Coordination Tools
 
-**Backlog Management**
+#### Backlog Management
 
-```
+```text
 Product Backlog Tools:
 - Single product backlog tool
 - Cross-team visibility
@@ -683,9 +683,9 @@ Sprint Planning Tools:
 - Retrospective management
 ```
 
-**Communication Platforms**
+#### Communication Platforms
 
-```
+```text
 Collaboration Tools:
 - Instant messaging platforms
 - Video conferencing systems

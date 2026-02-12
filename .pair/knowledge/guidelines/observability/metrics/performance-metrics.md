@@ -6,7 +6,7 @@ Define comprehensive performance measurement strategies that enable identificati
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Application performance measurement
 - System response time analysis
@@ -15,7 +15,7 @@ Define comprehensive performance measurement strategies that enable identificati
 - User experience performance
 - Performance optimization indicators
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Infrastructure hardware metrics
 - Network performance measurement

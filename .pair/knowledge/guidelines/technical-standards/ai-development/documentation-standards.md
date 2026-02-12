@@ -31,12 +31,14 @@ This document establishes comprehensive standards for documenting AI-powered fea
 ### Data Flow
 
 ```mermaid
+
 graph TD
     A[User Input] --> B[Input Validation]
     B --> C[Data Preprocessing]
     C --> D[AI Model]
     D --> E[Response Processing]
     E --> F[User Output]
+
 ```
 ````
 
@@ -47,10 +49,11 @@ graph TD
 - **Accuracy**: Model performance metrics
 - **Cost**: Per-request and monthly estimates
 
-````
+````text
 
 #### Implementation Details
 ```typescript
+
 // Example AI service documentation
 /**
 
@@ -98,6 +101,7 @@ export class ContentGenerationService {
     // Implementation details...
   }
 }
+
 ````
 
 ### 2. Prompt Engineering Documentation
@@ -105,6 +109,7 @@ export class ContentGenerationService {
 #### Prompt Templates
 
 ```markdown
+
 ## Prompt Templates
 
 ### Code Review Assistant
@@ -112,6 +117,7 @@ export class ContentGenerationService {
 **Purpose**: Analyze code for potential issues and improvements
 
 **Template**:
+
 ```
 
 You are a senior software engineer reviewing code. Analyze the following code for:
@@ -126,7 +132,7 @@ Code to review:
 
 Provide specific, actionable feedback with line numbers when applicable.
 
-```
+```text
 
 **Variables**:
 
@@ -138,6 +144,7 @@ Provide specific, actionable feedback with line numbers when applicable.
 - Specific line references
 - Severity levels (critical, warning, suggestion)
 - Suggested improvements with examples
+
 ```
 
 #### Prompt Optimization Guidelines
@@ -153,6 +160,7 @@ Provide specific, actionable feedback with line numbers when applicable.
 #### Decision Matrix
 
 ```markdown
+
 ## Model Selection Process
 
 ### Requirements Analysis
@@ -180,6 +188,7 @@ Document the final decision with:
 - Qualitative factors considered
 - Trade-offs accepted
 - Migration strategy if changing models
+
 ```
 
 ### 4. Error Handling Documentation
@@ -187,6 +196,7 @@ Document the final decision with:
 #### AI-Specific Error Patterns
 
 ```typescript
+
 /**
 
  * AI Error Handling Strategies
@@ -236,6 +246,7 @@ export class ResponseValidator {
     // Validation logic with specific checks
   }
 }
+
 ```
 
 ### 5. Performance Monitoring Documentation
@@ -243,6 +254,7 @@ export class ResponseValidator {
 #### Metrics Collection
 
 ```typescript
+
 /**
 
  * AI Performance Metrics
@@ -287,6 +299,7 @@ interface AIMetrics {
  * 4. User feedback collection and analysis
 
  */
+
 ```
 
 ## Documentation Standards
@@ -296,6 +309,7 @@ interface AIMetrics {
 #### AI-Specific Comment Standards
 
 ```typescript
+
 // Use clear, descriptive comments for AI logic
 export class AIService {
   /**
@@ -328,6 +342,7 @@ export class AIService {
     return this.executeWithMonitoring(contextualQuery)
   }
 }
+
 ```
 
 ### 2. API Documentation
@@ -335,6 +350,7 @@ export class AIService {
 #### AI Endpoint Documentation
 
 ```yaml
+
 # OpenAPI specification for AI endpoints
 /ai/content/generate:
   post:
@@ -342,7 +358,7 @@ export class AIService {
     description: |
       Generates content based on user prompts using advanced language models.
 
-      **Important Considerations:**
+#### Important Considerations:
 
       - Responses may vary between requests due to AI randomness
       - Content should be reviewed before publication
@@ -400,6 +416,7 @@ export class AIService {
           application/json:
             schema:
               $ref: '#/components/schemas/RateLimitError'
+
 ```
 
 ### 3. Testing Documentation
@@ -407,6 +424,7 @@ export class AIService {
 #### AI Testing Strategies
 
 ````markdown
+
 ## AI Feature Testing
 
 ### Unit Testing
@@ -455,6 +473,7 @@ describe('AI Content Generation', () => {
   })
 })
 ```
+
 ````
 
 ## Security and Privacy Documentation
@@ -464,6 +483,7 @@ describe('AI Content Generation', () => {
 #### Privacy-First Documentation
 
 ````markdown
+
 ## AI Data Privacy Standards
 
 ### Data Classification
@@ -507,6 +527,7 @@ export class PrivacyAwareAIService {
   }
 }
 ```
+
 ````
 
 ### 2. Security Considerations
@@ -514,6 +535,7 @@ export class PrivacyAwareAIService {
 #### AI-Specific Security Documentation
 
 ```markdown
+
 ## AI Security Framework
 
 ### Prompt Injection Prevention
@@ -533,6 +555,7 @@ export class PrivacyAwareAIService {
 - **Content Screening**: Filter inappropriate or harmful responses
 - **Bias Detection**: Monitor for discriminatory or biased outputs
 - **Fact Checking**: Implement verification for factual claims
+
 ```
 
 ## Related Documentation

@@ -8,7 +8,7 @@ Establish a robust toolkit of research methods that enable teams to understand u
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Qualitative and quantitative research methodology selection and execution
 - Mixed-method research approaches and triangulation strategies
@@ -16,7 +16,7 @@ Establish a robust toolkit of research methods that enable teams to understand u
 - Research planning, participant recruitment, and data analysis procedures
 - Ethical research practices and participant protection protocols
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Specific research tool configuration and technical setup (covered in Level 3 guides)
 - Market research and competitive intelligence (covered in business strategy)
@@ -27,28 +27,28 @@ Establish a robust toolkit of research methods that enable teams to understand u
 
 ### Qualitative Research Methods
 
-**User Interviews: Deep User Understanding**
+#### User Interviews: Deep User Understanding
 
 - **Purpose**: Explore user motivations, behaviors, pain points, and mental models through direct conversation
 - **Best for**: Understanding the "why" behind user behavior, exploring new problem spaces, validating personas
 - **Execution**: Semi-structured interviews with 5-12 participants, 45-90 minutes per session
 - **Analysis**: Thematic analysis, affinity mapping, journey mapping, persona development
 
-**Contextual Inquiry: Observational Research**
+#### Contextual Inquiry: Observational Research
 
 - **Purpose**: Understand user behavior in natural environments and real usage contexts
 - **Best for**: Complex workflows, enterprise software, understanding actual vs. reported behavior
 - **Execution**: Observing users in their work environment while they perform actual tasks
 - **Analysis**: Workflow mapping, environment analysis, task decomposition, friction identification
 
-**Focus Groups: Group Dynamics and Consensus**
+#### Focus Groups: Group Dynamics and Consensus
 
 - **Purpose**: Explore group dynamics, gather diverse perspectives, and understand social influences on product usage
 - **Best for**: Concept validation, feature prioritization, understanding group decision-making processes
 - **Execution**: 6-10 participants, 90-120 minutes, facilitated discussion with structured activities
 - **Analysis**: Sentiment analysis, consensus identification, minority opinion exploration, group influence mapping
 
-**Diary Studies: Longitudinal Behavior Tracking**
+#### Diary Studies: Longitudinal Behavior Tracking
 
 - **Purpose**: Understand user behavior patterns, habit formation, and experience evolution over time
 - **Best for**: Long-term product usage, behavior change initiatives, understanding user adaptation
@@ -57,28 +57,28 @@ Establish a robust toolkit of research methods that enable teams to understand u
 
 ### Quantitative Research Methods
 
-**Surveys: Scalable User Insights**
+#### Surveys: Scalable User Insights
 
 - **Purpose**: Gather statistically significant data about user preferences, satisfaction, and behavior patterns
 - **Best for**: Validation of qualitative findings, trend identification, segmentation analysis
 - **Execution**: 100+ responses, 5-15 minutes completion time, mixed question types
 - **Analysis**: Statistical analysis, correlation identification, segmentation, trend analysis
 
-**Analytics Analysis: Behavioral Data Mining**
+#### Analytics Analysis: Behavioral Data Mining
 
 - **Purpose**: Understand actual user behavior through system usage data and interaction patterns
 - **Best for**: Feature usage analysis, conversion optimization, user journey mapping
 - **Execution**: Continuous data collection with periodic deep-dive analysis sessions
 - **Analysis**: Funnel analysis, cohort analysis, behavioral segmentation, pattern recognition
 
-**A/B Testing: Experimental Validation**
+#### A/B Testing: Experimental Validation
 
 - **Purpose**: Test specific design or feature variations to measure impact on user behavior and business metrics
 - **Best for**: Feature optimization, design validation, conversion improvement, performance measurement
 - **Execution**: Controlled experiments with statistical significance testing and defined success metrics
 - **Analysis**: Statistical significance testing, effect size measurement, confidence interval analysis
 
-**Card Sorting: Information Architecture Validation**
+#### Card Sorting: Information Architecture Validation
 
 - **Purpose**: Understand user mental models for information organization and navigation structure
 - **Best for**: Website/app navigation design, content organization, menu structure optimization
@@ -87,21 +87,21 @@ Establish a robust toolkit of research methods that enable teams to understand u
 
 ### Mixed-Method Approaches
 
-**Triangulation Strategy: Multiple Method Validation**
+#### Triangulation Strategy: Multiple Method Validation
 
 - **Approach**: Combine qualitative and quantitative methods to validate findings and increase confidence
 - **Example**: User interviews + analytics analysis + usability testing for comprehensive feature evaluation
 - **Benefits**: Reduced bias, increased reliability, comprehensive understanding, stakeholder confidence
 - **Implementation**: Sequential or concurrent method execution with cross-method validation
 
-**Sequential Exploratory Design: Qualitative to Quantitative**
+#### Sequential Exploratory Design: Qualitative to Quantitative
 
 - **Approach**: Start with qualitative research to explore and understand, follow with quantitative validation
 - **Example**: User interviews to identify pain points → survey to quantify prevalence → analytics to measure impact
 - **Benefits**: Thorough exploration followed by statistical validation and scalable measurement
 - **Implementation**: Phase-based research with findings from each phase informing the next
 
-**Concurrent Embedded Design: Simultaneous Method Execution**
+#### Concurrent Embedded Design: Simultaneous Method Execution
 
 - **Approach**: Execute multiple methods simultaneously with one method providing context for the other
 - **Example**: Usability testing with concurrent think-aloud protocol and eye-tracking measurement

@@ -31,14 +31,14 @@ Based on the how-to guides, you handle these strategic and planning activities:
 
 ## Process Guidelines
 
-**Before starting any activity:**
+#### Before starting any activity:
 
 1. **Read the specific how-to guide** for the task you're performing
 2. **Follow the exact process** defined in that guide
 3. **Maintain session state** as specified in each how-to
 4. **Use established templates** and validation criteria
 
-**Key Documents to Reference:**
+#### Key Documents to Reference:
 
 - `.pair/adoption/tech/way-of-working.md` - Current PM tool and processes
 - `.pair/adoption/product/PRD.md` - Product context

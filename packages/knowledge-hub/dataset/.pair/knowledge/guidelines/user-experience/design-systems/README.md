@@ -34,7 +34,7 @@ This framework addresses:
 
 **Token Implementation Framework**:
 
-```
+```text
 Semantic Tokens → Component Tokens → Platform Implementation
       ↓                 ↓                      ↓
 Brand Values → Component Variants → Platform-Specific Output
@@ -98,7 +98,7 @@ Brand Values → Component Variants → Platform-Specific Output
 
 **Governance Process**:
 
-```
+```text
 Proposal → Review → Prototype → Testing → Integration → Documentation
     ↓         ↓         ↓          ↓           ↓              ↓
 Community → Core Team → Spike → Validation → Release → Knowledge Base

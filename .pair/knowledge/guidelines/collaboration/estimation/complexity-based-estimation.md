@@ -8,21 +8,21 @@ Relative sizing approach using story points, t-shirt sizes, and complexity indic
 
 ### Relative Sizing Philosophy
 
-**Comparison-Based Estimation**
+#### Comparison-Based Estimation
 
 - Compare new work against previously completed items
 - Focus on relative complexity rather than absolute time
 - Use consistent reference points for calibration
 - Build team consensus through collaborative estimation
 
-**Abstract Units**
+#### Abstract Units
 
 - Use story points or t-shirt sizes instead of hours/days
 - Avoid false precision of time-based estimates
 - Separate complexity from capacity and availability
 - Enable velocity-based forecasting and planning
 
-**Team Velocity Focus**
+#### Team Velocity Focus
 
 - Track team delivery capacity over time
 - Use historical velocity for future planning
@@ -33,9 +33,9 @@ Relative sizing approach using story points, t-shirt sizes, and complexity indic
 
 ### Story Point Scales
 
-**Fibonacci Sequence (Recommended)**
+#### Fibonacci Sequence (Recommended)
 
-```
+```text
 1, 2, 3, 5, 8, 13, 21, 34
 - Reflects increasing uncertainty at larger sizes
 - Prevents false precision in large estimates
@@ -43,9 +43,9 @@ Relative sizing approach using story points, t-shirt sizes, and complexity indic
 - Forces choice between significantly different sizes
 ```
 
-**Powers of 2**
+#### Powers of 2
 
-```
+```text
 1, 2, 4, 8, 16, 32
 - Simple mathematical progression
 - Clear doubling relationship between sizes
@@ -53,9 +53,9 @@ Relative sizing approach using story points, t-shirt sizes, and complexity indic
 - Less granular than Fibonacci for medium sizes
 ```
 
-**Linear Scale**
+#### Linear Scale
 
-```
+```text
 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 - More granular sizing options
 - May encourage false precision
@@ -65,9 +65,9 @@ Relative sizing approach using story points, t-shirt sizes, and complexity indic
 
 ### T-Shirt Sizing
 
-**Basic T-Shirt Scale**
+#### Basic T-Shirt Scale
 
-```
+```text
 XS (Extra Small) - 1 point
 S (Small) - 2 points
 M (Medium) - 5 points
@@ -76,9 +76,9 @@ XL (Extra Large) - 13 points
 XXL (Extra Extra Large) - 21 points
 ```
 
-**Extended T-Shirt Scale**
+#### Extended T-Shirt Scale
 
-```
+```text
 XS, S, M, L, XL, XXL, XXXL
 - More granular than basic scale
 - Intuitive sizing metaphor
@@ -88,21 +88,21 @@ XS, S, M, L, XL, XXL, XXXL
 
 ### Complexity Factors
 
-**Technical Complexity**
+#### Technical Complexity
 
 - Algorithm complexity and performance requirements
 - Integration points and external dependencies
 - Technology novelty and team experience
 - Architecture changes and refactoring needs
 
-**Business Complexity**
+#### Business Complexity
 
 - Number of business rules and edge cases
 - Stakeholder coordination and approval requirements
 - Compliance and regulatory considerations
 - User experience and interface complexity
 
-**Risk and Uncertainty**
+#### Risk and Uncertainty
 
 - Unknown technical challenges
 - External dependencies and third-party integrations
@@ -113,7 +113,7 @@ XS, S, M, L, XL, XXL, XXXL
 
 ### Planning Poker
 
-**Process Overview**
+#### Process Overview
 
 1. **Story Presentation**: Product Owner presents user story
 2. **Clarification**: Team asks questions and discusses requirements
@@ -122,14 +122,14 @@ XS, S, M, L, XL, XXL, XXXL
 5. **Discussion**: Discuss differences, especially outliers
 6. **Re-estimate**: Repeat until consensus achieved
 
-**Best Practices**
+#### Best Practices
 
 - Use timer to limit discussion time (5-10 minutes per story)
 - Focus on highest and lowest estimates for discussion
 - Document assumptions and clarifications
 - Avoid averaging estimates - seek genuine consensus
 
-**Common Variations**
+#### Common Variations
 
 - **Async Planning Poker**: Use digital tools for remote estimation
 - **Modified Delphi**: Multiple rounds with anonymous feedback
@@ -137,7 +137,7 @@ XS, S, M, L, XL, XXL, XXXL
 
 ### Affinity Estimation
 
-**Setup Process**
+#### Setup Process
 
 1. **Story Preparation**: Write stories on cards or sticky notes
 2. **Reference Stories**: Identify well-understood reference stories
@@ -145,7 +145,7 @@ XS, S, M, L, XL, XXL, XXXL
 4. **Size Assignment**: Assign point values to each group
 5. **Validation**: Review and adjust groupings as needed
 
-**Advantages**
+#### Advantages
 
 - Fast estimation for large numbers of stories
 - Good for initial backlog sizing
@@ -154,7 +154,7 @@ XS, S, M, L, XL, XXL, XXXL
 
 ### Bucket Estimation
 
-**Implementation**
+#### Implementation
 
 1. **Create Buckets**: Set up containers for each story point value
 2. **Reference Examples**: Place known stories in appropriate buckets
@@ -162,7 +162,7 @@ XS, S, M, L, XL, XXL, XXXL
 4. **Review and Adjust**: Validate placement and move if needed
 5. **Final Sizing**: Assign final point values based on bucket placement
 
-**Use Cases**
+#### Use Cases
 
 - Large backlog estimation sessions
 - Initial project sizing and planning
@@ -173,23 +173,23 @@ XS, S, M, L, XL, XXL, XXXL
 
 ### Velocity Calculation
 
-**Basic Velocity**
+#### Basic Velocity
 
-```
+```text
 Sprint Velocity = Total Story Points Completed in Sprint
 Team Velocity = Average Sprint Velocity over last 3-6 sprints
 ```
 
-**Adjusted Velocity**
+#### Adjusted Velocity
 
-```
+```text
 Capacity-Adjusted Velocity = Velocity × (Actual Capacity / Planned Capacity)
 - Account for holidays, vacations, and availability changes
 - Adjust for team composition changes
 - Factor in context switching and interrupt work
 ```
 
-**Trend Analysis**
+#### Trend Analysis
 
 - Track velocity trends over time
 - Identify patterns and seasonal variations
@@ -198,14 +198,14 @@ Capacity-Adjusted Velocity = Velocity × (Actual Capacity / Planned Capacity)
 
 ### Forecasting Methods
 
-**Simple Velocity Forecasting**
+#### Simple Velocity Forecasting
 
-```
+```text
 Estimated Completion = Remaining Story Points / Average Velocity
 Confidence Range = ± 20-30% based on velocity variance
 ```
 
-**Monte Carlo Simulation**
+#### Monte Carlo Simulation
 
 ```python
 # Example forecasting simulation
@@ -227,7 +227,7 @@ def monte_carlo_forecast(remaining_points, velocity_history, iterations=1000):
     }
 ```
 
-**Scenario-Based Forecasting**
+#### Scenario-Based Forecasting
 
 - Optimistic scenario (high velocity)
 - Most likely scenario (average velocity)
@@ -238,7 +238,7 @@ def monte_carlo_forecast(remaining_points, velocity_history, iterations=1000):
 
 ### Team Calibration
 
-**Establish Reference Stories**
+#### Establish Reference Stories
 
 1. **Select Representative Stories**: Choose 3-5 well-understood completed stories
 2. **Assign Reference Points**: Distribute across point scale (e.g., 2, 5, 8, 13)
@@ -246,7 +246,7 @@ def monte_carlo_forecast(remaining_points, velocity_history, iterations=1000):
 4. **Team Agreement**: Ensure all team members understand and agree
 5. **Regular Review**: Revisit and update references as team learns
 
-**Calibration Process**
+#### Calibration Process
 
 ```markdown
 Reference Story Examples:
@@ -259,21 +259,21 @@ Reference Story Examples:
 
 ### Estimation Sessions
 
-**Preparation**
+#### Preparation
 
 - Stories should be well-written with clear acceptance criteria
 - Product Owner available for questions and clarification
 - Reference stories and estimation scale visible to team
 - Estimation tools prepared (cards, apps, etc.)
 
-**Session Structure**
+#### Session Structure
 
 1. **Review Process** (5 minutes): Remind team of estimation approach
 2. **Estimate Stories** (30-60 minutes): Work through prioritized backlog
 3. **Capture Decisions** (5 minutes): Document estimates and assumptions
 4. **Review Velocity** (10 minutes): Update velocity tracking if needed
 
-**Quality Checks**
+#### Quality Checks
 
 - Stories larger than 13 points should be broken down
 - Estimates should have team consensus, not averages
@@ -282,21 +282,21 @@ Reference Story Examples:
 
 ### Continuous Improvement
 
-**Velocity Analysis**
+#### Velocity Analysis
 
 - Track actual completion against estimates
 - Identify patterns in over/under estimation
 - Analyze factors that impact velocity
 - Adjust reference stories based on learning
 
-**Estimation Accuracy**
+#### Estimation Accuracy
 
 - Compare initial estimates with final story sizes
 - Track stories that required re-estimation
 - Identify categories of work that are consistently mis-estimated
 - Refine estimation process based on accuracy data
 
-**Team Retrospectives**
+#### Team Retrospectives
 
 - Regular discussion of estimation effectiveness
 - Identify process improvements and adjustments
@@ -307,14 +307,14 @@ Reference Story Examples:
 
 ### Multi-Team Calibration
 
-**Cross-Team Reference Stories**
+#### Cross-Team Reference Stories
 
 - Establish common reference stories across teams
 - Regular calibration sessions between teams
 - Shared story point definitions and examples
 - Normalized velocity tracking for portfolio planning
 
-**Scaling Considerations**
+#### Scaling Considerations
 
 - Account for different team contexts and capabilities
 - Adjust for technology stack and domain differences
@@ -323,7 +323,7 @@ Reference Story Examples:
 
 ### Epic and Initiative Estimation
 
-**Top-Down Estimation**
+#### Top-Down Estimation
 
 1. **Epic Sizing**: Estimate epic as a whole using large point values
 2. **Story Breakdown**: Break epic into individual user stories
@@ -331,7 +331,7 @@ Reference Story Examples:
 4. **Validation**: Compare epic estimate with sum of story estimates
 5. **Adjustment**: Adjust based on integration overhead and risks
 
-**Bottom-Up Aggregation**
+#### Bottom-Up Aggregation
 
 1. **Story Identification**: Identify all stories within epic
 2. **Individual Estimation**: Estimate each story separately

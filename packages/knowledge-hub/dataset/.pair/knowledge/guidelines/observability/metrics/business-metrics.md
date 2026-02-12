@@ -6,7 +6,7 @@ Define business-oriented metrics that correlate technical performance with busin
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Business KPI tracking
 - Revenue correlation metrics
@@ -15,7 +15,7 @@ Define business-oriented metrics that correlate technical performance with busin
 - Customer satisfaction indicators
 - Operational efficiency metrics
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Financial reporting metrics
 - Marketing analytics

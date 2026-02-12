@@ -6,7 +6,7 @@ Infrastructure automation provides systematic approaches for automating infrastr
 
 ## 📋 Scope and Coverage
 
-**In Scope:**
+#### In Scope:
 
 - Infrastructure provisioning automation and orchestration
 - Configuration management and drift detection automation
@@ -15,7 +15,7 @@ Infrastructure automation provides systematic approaches for automating infrastr
 - Self-healing infrastructure and automated remediation
 - Compliance automation and policy enforcement
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Application deployment automation (see Deployment Patterns)
 - Container orchestration automation (see Container Orchestration)
@@ -26,7 +26,7 @@ Infrastructure automation provides systematic approaches for automating infrastr
 
 ### Infrastructure Automation Strategy
 
-**Comprehensive Automation Approach**
+#### Comprehensive Automation Approach
 
 Modern infrastructure automation requires holistic approach che integra provisioning, configuration, monitoring, e remediation in un sistema coeso:
 
@@ -57,7 +57,7 @@ Infrastructure Automation Stack:
     - Health checks and automated remediation
 ```
 
-**Automation Design Principles**
+#### Automation Design Principles
 
 L'architettura di automazione segue principi che garantiscono reliability, maintainability e scalability:
 
@@ -68,11 +68,11 @@ L'architettura di automazione segue principi che garantiscono reliability, maint
 
 ### CI/CD Integration Strategy
 
-**Infrastructure Pipeline Integration**
+#### Infrastructure Pipeline Integration
 
 L'integrazione dell'infrastructure automation nelle pipeline CI/CD garantisce deployment coordinati e validation automatica:
 
-**Pipeline Integration Components:**
+#### Pipeline Integration Components:
 
 - **Code validation**: Syntax checking, linting, e security scanning
 - **Plan generation**: Automated planning per preview degli infrastructure changes
@@ -104,18 +104,18 @@ infrastructure_pipeline:
 
 ### Configuration Management Automation
 
-**Declarative Configuration Management**
+#### Declarative Configuration Management
 
 La gestione automatica delle configurazioni utilizza approcci dichiarativi per mantenere system consistency:
 
-**Configuration Management Benefits:**
+#### Configuration Management Benefits:
 
 - **Consistent environments**: Identical configuration across all environments
 - **Drift prevention**: Automatic detection e correction di configuration drift
 - **Scalable deployment**: Configuration deployment che scala a thousands di servers
 - **Audit capability**: Complete audit trail di configuration changes
 
-**Ansible Automation Example**
+#### Ansible Automation Example
 
 ```yaml
 # Ansible playbook for web server configuration
@@ -145,7 +145,7 @@ La gestione automatica delle configurazioni utilizza approcci dichiarativi per m
 
 ### Event-Driven Automation
 
-**Reactive Infrastructure Management**
+#### Reactive Infrastructure Management
 
 L'automation event-driven risponde automaticamente a cambiamenti nell'infrastructure state:
 
@@ -156,11 +156,11 @@ L'automation event-driven risponde automaticamente a cambiamenti nell'infrastruc
 
 ### Self-Healing Infrastructure
 
-**Automated Remediation Systems**
+#### Automated Remediation Systems
 
 Self-healing infrastructure identifica e risolve automaticamente problemi comuni:
 
-**Self-Healing Capabilities:**
+#### Self-Healing Capabilities:
 
 - **Health monitoring**: Continuous monitoring di infrastructure health indicators
 - **Automated diagnostics**: Root cause analysis automatica per common failures
@@ -171,7 +171,7 @@ Self-healing infrastructure identifica e risolve automaticamente problemi comuni
 
 ### Automation Security and Compliance
 
-**Secure Automation Framework**
+#### Secure Automation Framework
 
 - **Credential management**: Secure storage e rotation di automation credentials
 - **Access control**: Role-based access control per automation systems
@@ -180,7 +180,7 @@ Self-healing infrastructure identifica e risolve automaticamente problemi comuni
 
 ### Testing and Validation
 
-**Infrastructure Testing Automation**
+#### Infrastructure Testing Automation
 
 - **Unit testing**: Testing di individual infrastructure components
 - **Integration testing**: Testing di component interactions e dependencies
@@ -191,28 +191,28 @@ Self-healing infrastructure identifica e risolve automaticamente problemi comuni
 
 ### Automation Maturity Progression
 
-**Level 1: Basic Automation (Weeks 1-8)**
+#### Level 1: Basic Automation (Weeks 1-8)
 
 - Script-based automation per repetitive tasks
 - Basic Infrastructure as Code implementation
 - Manual approval processes per infrastructure changes
 - Simple monitoring e alerting setup
 
-**Level 2: Orchestrated Automation (Weeks 9-20)**
+#### Level 2: Orchestrated Automation (Weeks 9-20)
 
 - CI/CD pipeline integration per infrastructure
 - Configuration management automation implementation
 - Automated testing e validation di infrastructure changes
 - Basic self-healing capabilities per common scenarios
 
-**Level 3: Advanced Automation (Weeks 21-36)**
+#### Level 3: Advanced Automation (Weeks 21-36)
 
 - Event-driven automation e reactive systems
 - Advanced monitoring e predictive automation
 - Comprehensive security automation e compliance
 - Cross-cloud automation e orchestration
 
-**Level 4: Autonomous Infrastructure (Weeks 37+)**
+#### Level 4: Autonomous Infrastructure (Weeks 37+)
 
 - AI-powered automation e decision making
 - Self-optimizing infrastructure systems

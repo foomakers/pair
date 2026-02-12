@@ -70,7 +70,7 @@ Both implementation guides include:
 
 ### Tool Selection Decision Tree
 
-```
+```text
 Start: What is your team context?
 
 ├── Team size < 5 people?
@@ -104,14 +104,14 @@ Start: What is your team context?
 
 #### GitHub Projects
 
-**Benefits:**
+#### Benefits:
 
 - Seamless integration with GitHub development workflow
 - Free for public repositories, affordable for private
 - Easy adoption for teams already using GitHub
 - Good automation and workflow integration
 
-**Costs:**
+#### Costs:
 
 - Limited advanced project management features
 - Basic reporting and analytics capabilities
@@ -122,14 +122,14 @@ Start: What is your team context?
 
 #### Filesystem-based
 
-**Benefits:**
+#### Benefits:
 
 - Complete control and customization
 - No external dependencies or costs
 - High privacy and security
 - Offline accessibility
 
-**Costs:**
+#### Costs:
 
 - No collaboration features
 - Manual maintenance and updates
@@ -140,14 +140,14 @@ Start: What is your team context?
 
 #### Azure DevOps
 
-**Benefits:**
+#### Benefits:
 
 - Comprehensive project management and development tools
 - Excellent integration with Microsoft ecosystem
 - Advanced reporting and analytics
 - Enterprise-grade features and security
 
-**Costs:**
+#### Costs:
 
 - Higher licensing costs for larger teams
 - Complex setup and configuration
@@ -158,14 +158,14 @@ Start: What is your team context?
 
 #### Linear
 
-**Benefits:**
+#### Benefits:
 
 - Modern, fast, and intuitive interface
 - Good integration with development tools
 - Strong focus on developer productivity
 - Excellent mobile support
 
-**Costs:**
+#### Costs:
 
 - Subscription-based pricing
 - Limited customization options
@@ -176,14 +176,14 @@ Start: What is your team context?
 
 #### Jira
 
-**Benefits:**
+#### Benefits:
 
 - Comprehensive project management capabilities
 - Extensive customization and workflow options
 - Strong reporting and analytics
 - Large ecosystem of integrations
 
-**Costs:**
+#### Costs:
 
 - Complex setup and administration
 - High licensing costs for larger teams
@@ -225,7 +225,7 @@ Start: What is your team context?
 
 ### Implementation Guidance
 
-**Quick Start Process:**
+#### Quick Start Process:
 
 1. **Assess Context:** Use decision matrix and tree above
 2. **Select Tool:** Choose based on team size, needs, and ecosystem
@@ -234,7 +234,7 @@ Start: What is your team context?
 5. **Train Team:** Provide adequate training and support
 6. **Iterate and Improve:** Regular assessment and optimization
 
-**Migration Strategies:**
+#### Migration Strategies:
 
 - **Gradual Migration:** Phase transition over multiple sprints
 - **Parallel Operation:** Run old and new systems simultaneously

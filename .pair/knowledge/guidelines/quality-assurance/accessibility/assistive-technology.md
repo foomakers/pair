@@ -8,28 +8,28 @@ Guidelines for ensuring web applications work seamlessly with assistive technolo
 
 ### **Screen Readers**
 
-**NVDA (Windows)**
+#### NVDA (Windows)
 
 - Free, open-source screen reader
 - Wide adoption in accessibility testing
 - Excellent compatibility with modern web standards
 - Virtual cursor navigation model
 
-**JAWS (Windows)**
+#### JAWS (Windows)
 
 - Professional screen reader with extensive enterprise adoption
 - Advanced web navigation features
 - Custom scripting capabilities
 - Industry standard for professional environments
 
-**VoiceOver (macOS/iOS)**
+#### VoiceOver (macOS/iOS)
 
 - Native Apple screen reader
 - Seamless integration with Safari and web content
 - Unique navigation paradigms and gestures
 - Essential for mobile accessibility testing
 
-**TalkBack (Android)**
+#### TalkBack (Android)
 
 - Native Android screen reader
 - Touch-based navigation model
@@ -38,14 +38,14 @@ Guidelines for ensuring web applications work seamlessly with assistive technolo
 
 ### **Voice Control Systems**
 
-**Voice Control (macOS/iOS)**
+#### Voice Control (macOS/iOS)
 
 - Native voice navigation and dictation
 - Number-based element targeting
 - Voice command customization
 - Integration with accessibility API
 
-**Dragon NaturallySpeaking**
+#### Dragon NaturallySpeaking
 
 - Professional speech recognition software
 - Advanced command and control features
@@ -54,14 +54,14 @@ Guidelines for ensuring web applications work seamlessly with assistive technolo
 
 ### **Switch Navigation**
 
-**Hardware Switches**
+#### Hardware Switches
 
 - Single-switch and multi-switch configurations
 - Temporal scanning patterns
 - Custom switch timing and sensitivity
 - Integration with switch-adapted devices
 
-**Eye-Tracking Systems**
+#### Eye-Tracking Systems
 
 - Gaze-based navigation and selection
 - Precision targeting and dwell clicking
@@ -72,7 +72,7 @@ Guidelines for ensuring web applications work seamlessly with assistive technolo
 
 ### **Semantic HTML Foundation**
 
-**Proper Element Usage**
+#### Proper Element Usage
 
 ```html
 <!-- Use semantic elements for their intended purpose -->
@@ -85,7 +85,7 @@ Guidelines for ensuring web applications work seamlessly with assistive technolo
 <!-- ✅ Good: <button type="button" onclick="handleClick()">Action</button> -->
 ```
 
-**Heading Structure**
+#### Heading Structure
 
 ```html
 <h1>Main Page Title</h1>
@@ -97,7 +97,7 @@ Guidelines for ensuring web applications work seamlessly with assistive technolo
 
 ### **ARIA Implementation**
 
-**Landmark Roles**
+#### Landmark Roles
 
 ```html
 <header role="banner">
@@ -116,7 +116,7 @@ Guidelines for ensuring web applications work seamlessly with assistive technolo
 </footer>
 ```
 
-**Interactive Elements**
+#### Interactive Elements
 
 ```html
 <!-- Button states -->
@@ -131,7 +131,7 @@ Guidelines for ensuring web applications work seamlessly with assistive technolo
 
 ### **Focus Management**
 
-**Keyboard Navigation**
+#### Keyboard Navigation
 
 ```typescript
 // Ensure logical tab order
@@ -152,7 +152,7 @@ function closeModal(previousFocus: HTMLElement) {
 }
 ```
 
-**Focus Indicators**
+#### Focus Indicators
 
 ```css
 /* Visible focus indicators */
@@ -175,14 +175,14 @@ input:focus {
 
 ### **Screen Reader Testing**
 
-**Basic Navigation Tests**
+#### Basic Navigation Tests
 
 - Tab through all interactive elements
 - Verify heading structure and navigation
 - Test form completion and error handling
 - Validate dynamic content announcements
 
-**Advanced Interaction Tests**
+#### Advanced Interaction Tests
 
 - Complex widget interactions (date pickers, dropdowns)
 - Table navigation and data relationships
@@ -191,14 +191,14 @@ input:focus {
 
 ### **Voice Control Testing**
 
-**Command Recognition**
+#### Command Recognition
 
 - Test voice commands for common actions
 - Verify element targeting accuracy
 - Validate custom voice shortcuts
 - Test dictation in form fields
 
-**Navigation Efficiency**
+#### Navigation Efficiency
 
 - Measure voice navigation speed
 - Test alternative command phrases
@@ -207,14 +207,14 @@ input:focus {
 
 ### **Switch Navigation Testing**
 
-**Scanning Patterns**
+#### Scanning Patterns
 
 - Test temporal scanning timing
 - Verify scan pattern customization
 - Validate switch activation accuracy
 - Test complex interaction completion
 
-**Efficiency Metrics**
+#### Efficiency Metrics
 
 - Measure task completion time
 - Count required switch activations
@@ -236,7 +236,7 @@ input:focus {
 
 ### **Testing Scenarios**
 
-**Core User Journeys**
+#### Core User Journeys
 
 - Account registration and login
 - Product search and selection
@@ -244,7 +244,7 @@ input:focus {
 - Content consumption and navigation
 - Form completion and submission
 
-**Error Handling Scenarios**
+#### Error Handling Scenarios
 
 - Form validation errors
 - Network connectivity issues
@@ -252,7 +252,7 @@ input:focus {
 - Content loading failures
 - Navigation errors
 
-**Dynamic Content Scenarios**
+#### Dynamic Content Scenarios
 
 - Real-time updates and notifications
 - Progressive content loading
@@ -264,19 +264,19 @@ input:focus {
 
 ### **Performance Indicators**
 
-**Task Completion Rate**
+#### Task Completion Rate
 
 - Percentage of users who successfully complete tasks
 - Target: 90%+ for core user journeys
 - Measurement: User testing with assistive technology users
 
-**Error Recovery Rate**
+#### Error Recovery Rate
 
 - Percentage of users who successfully recover from errors
 - Target: 85%+ for common error scenarios
 - Measurement: Usability testing with error injection
 
-**Navigation Efficiency**
+#### Navigation Efficiency
 
 - Average time to complete common tasks
 - Target: Within 150% of non-AT user completion time
@@ -284,19 +284,19 @@ input:focus {
 
 ### **Technical Compliance**
 
-**ARIA Implementation Coverage**
+#### ARIA Implementation Coverage
 
 - Percentage of interactive elements with proper ARIA
 - Target: 100% for interactive components
 - Measurement: Automated accessibility scanning
 
-**Semantic HTML Usage**
+#### Semantic HTML Usage
 
 - Percentage of content using semantic markup
 - Target: 95%+ semantic element usage
 - Measurement: Markup analysis and validation
 
-**Focus Management Quality**
+#### Focus Management Quality
 
 - Percentage of interactive workflows with proper focus handling
 - Target: 100% for modal dialogs and dynamic content
@@ -306,14 +306,14 @@ input:focus {
 
 ### **User Feedback Integration**
 
-**Assistive Technology User Testing**
+#### Assistive Technology User Testing
 
 - Regular usability sessions with AT users
 - Feedback collection on new features
 - Pain point identification and resolution
 - Preference gathering for interaction patterns
 
-**Community Engagement**
+#### Community Engagement
 
 - Participation in accessibility conferences
 - Collaboration with AT user groups
@@ -322,14 +322,14 @@ input:focus {
 
 ### **Technology Evolution Tracking**
 
-**Assistive Technology Updates**
+#### Assistive Technology Updates
 
 - Monitor AT software release cycles
 - Test compatibility with new AT versions
 - Adapt to new AT features and capabilities
 - Stay current with AT user preferences
 
-**Web Standard Evolution**
+#### Web Standard Evolution
 
 - Track ARIA specification updates
 - Implement new accessibility APIs

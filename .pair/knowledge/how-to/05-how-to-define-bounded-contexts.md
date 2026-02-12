@@ -13,7 +13,7 @@ Transform subdomain analysis and technical architecture into precise bounded con
 
 **CRITICAL**: Maintain this context throughout bounded context definition:
 
-```
+```text
 BOUNDED CONTEXT DEFINITION STATE:
 ├── Project: [Project Name from PRD]
 ├── Definition Status: [foundation | catalog | validation | documentation]

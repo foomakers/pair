@@ -20,13 +20,13 @@ This guide covers GitHub Issues setup and workflows for managing user stories, t
 
 ## Basic Label Creation
 
-**Primary Method (via MCP GitHub Server):**
+#### Primary Method (via MCP GitHub Server):
 
 ```bash
 pair "Create GitHub repository labels for issue types: user story, task, bug, feature, epic"
 ```
 
-**Fallback Method (GitHub CLI):**
+#### Fallback Method (GitHub CLI):
 
 ```bash
 # Create type labels (always needed)
@@ -42,13 +42,13 @@ gh label create "epic" --color "7057ff" --description "Epic"
 
 ### Creating User Stories
 
-**Via MCP GitHub Server:**
+#### Via MCP GitHub Server:
 
 ```bash
 pair "Create a new user story: 'As a user, I want to [functionality] so that [benefit]' with priority P1 and add to project board"
 ```
 
-**Via GitHub CLI:**
+#### Via GitHub CLI:
 
 ```bash
 gh issue create --title "User Story: [Title]" --body "[Description]" --label "user story,P1"
@@ -90,13 +90,13 @@ As a [user type], I want [functionality] so that [benefit].
 
 ### Task Creation from User Stories
 
-**Via MCP GitHub Server:**
+#### Via MCP GitHub Server:
 
 ```bash
 pair "Break down user story #[story_number] into development tasks and create GitHub issues for each task"
 ```
 
-**Manual Task Creation:**
+#### Manual Task Creation:
 
 ```bash
 gh issue create --title "Task: [Title]" --body "[Description]" --label "task,P1" --milestone "[Sprint]"
@@ -145,7 +145,7 @@ GitHub Issues provides multiple approaches for managing status and priority. Cho
 
 **Best For**: Small teams, simple workflows, teams not using GitHub Projects
 
-**Status via Labels:**
+#### Status via Labels:
 
 ```bash
 # Create status labels
@@ -155,7 +155,7 @@ gh label create "in-review" --color "d4c5f9" --description "Under code review"
 gh label create "done" --color "0075ca" --description "Completed work"
 ```
 
-**Priority via Labels:**
+#### Priority via Labels:
 
 ```bash
 # Priority labels (only if using label-based approach)
@@ -164,14 +164,14 @@ gh label create "P1" --color "fbca04" --description "Should-Have priority"
 gh label create "P2" --color "0075ca" --description "Could-Have priority"
 ```
 
-**Advantages:**
+#### Advantages:
 
 - Simple to implement and understand
 - Works with any GitHub plan
 - Visible in issue lists and searches
 - Easy filtering with GitHub's label filters
 
-**Disadvantages:**
+#### Disadvantages:
 
 - Manual label management required
 - Less visual workflow representation
@@ -182,7 +182,7 @@ gh label create "P2" --color "0075ca" --description "Could-Have priority"
 
 **Best For**: Teams using GitHub Projects, visual workflow preference
 
-**Status via Board Columns:**
+#### Status via Board Columns:
 
 ```markdown
 Board Columns:
@@ -194,13 +194,13 @@ Board Columns:
 - **Done** - Completed and accepted work
 ```
 
-**Priority via Board Position:**
+#### Priority via Board Position:
 
 - Higher priority items placed at top of columns
 - Use GitHub Projects sorting and filtering
 - Manual drag-and-drop prioritization
 
-**Example Priority Management:**
+#### Example Priority Management:
 
 ```bash
 # Via GitHub Projects (recommended for visual teams)
@@ -211,14 +211,14 @@ pair "Organize backlog by priority with P0 items at top"
 gh issue edit 123 --add-label "P0"
 ```
 
-**Advantages:**
+#### Advantages:
 
 - Visual workflow representation
 - Drag-and-drop status management
 - Integrated with GitHub Projects
 - Clear workflow visualization
 
-**Disadvantages:**
+#### Disadvantages:
 
 - Requires GitHub Projects setup
 - Status not visible in issue lists
@@ -229,7 +229,7 @@ gh issue edit 123 --add-label "P0"
 
 **Best For**: Teams needing detailed metadata, complex workflows, GitHub Projects users
 
-**Status via Custom Fields:**
+#### Status via Custom Fields:
 
 ```bash
 # Create Status custom field via GitHub Projects
@@ -243,7 +243,7 @@ Options:
 - Blocked (🔴)
 ```
 
-**Priority via Custom Fields:**
+#### Priority via Custom Fields:
 
 ```bash
 # Create Priority custom field
@@ -261,7 +261,7 @@ Type: Number
 Range: 1-10 (10 = highest priority)
 ```
 
-**Additional Custom Fields:**
+#### Additional Custom Fields:
 
 ```bash
 # Story Points for estimation
@@ -280,14 +280,14 @@ Type: Single Select
 Options: Frontend, Backend, DevOps, QA
 ```
 
-**Advantages:**
+#### Advantages:
 
 - Rich metadata and filtering capabilities
 - Professional project management features
 - Automated workflows possible
 - Detailed reporting and analytics
 
-**Disadvantages:**
+#### Disadvantages:
 
 - Requires GitHub Projects (paid feature for organizations)
 - More complex setup and maintenance
@@ -298,7 +298,7 @@ Options: Frontend, Backend, DevOps, QA
 
 **Best For**: Most teams, balanced approach with flexibility
 
-**Recommended Setup:**
+#### Recommended Setup:
 
 ```markdown
 **Labels for Core Information:**
@@ -320,7 +320,7 @@ Options: Frontend, Backend, DevOps, QA
 - Team (if multiple teams)
 ```
 
-**Implementation Strategy:**
+#### Implementation Strategy:
 
 1. Start with labels for essential categorization
 2. Use GitHub Projects board for workflow management
@@ -379,25 +379,25 @@ pair "Set up GitHub Projects automation rules for status transitions and notific
 
 ### Setting Up Hybrid Approach
 
-**Step 1: Create Essential Labels**
+#### Step 1: Create Essential Labels
 
 ```bash
 pair "Create GitHub repository labels for issue types and priorities: user story, task, bug, feature, P0, P1, P2"
 ```
 
-**Step 2: Configure GitHub Projects Board**
+#### Step 2: Configure GitHub Projects Board
 
 ```bash
 pair "Set up GitHub Projects board with columns: Backlog, Todo, In Progress, In Review, Done"
 ```
 
-**Step 3: Add Custom Fields (Optional)**
+#### Step 3: Add Custom Fields (Optional)
 
 ```bash
 pair "Add custom fields to GitHub Projects: Story Points (1,2,3,5,8), Sprint (text), Team (Frontend/Backend)"
 ```
 
-**Step 4: Create Automation Rules**
+#### Step 4: Create Automation Rules
 
 ```bash
 # Example automation
@@ -444,13 +444,13 @@ pair "Filter issues by team and sprint for capacity planning"
 
 ### Legacy Status Updates (when using labels)
 
-**Via MCP GitHub Server:**
+#### Via MCP GitHub Server:
 
 ```bash
 pair "Update GitHub issue #[issue_number] status to 'In Progress' and assign to current developer"
 ```
 
-**Via Labels:**
+#### Via Labels:
 
 ```bash
 # Move to refinement
@@ -465,14 +465,14 @@ gh issue edit [issue_number] --add-label "needs-review"
 
 ### GitHub Projects Status Updates (when using board columns)
 
-**Via MCP GitHub Server:**
+#### Via MCP GitHub Server:
 
 ```bash
 pair "Move GitHub issue #[issue_number] to In Progress column in project board"
 pair "Update issue status to Done and close when work is completed"
 ```
 
-**Manual Board Updates:**
+#### Manual Board Updates:
 
 - Drag and drop issues between columns
 - Use automation rules for status transitions
@@ -482,13 +482,13 @@ pair "Update issue status to Done and close when work is completed"
 
 ### Adding Issues to Projects
 
-**Via MCP GitHub Server:**
+#### Via MCP GitHub Server:
 
 ```bash
 pair "Add GitHub issue #[issue_number] to project board and set status to Todo"
 ```
 
-**Via GitHub CLI:**
+#### Via GitHub CLI:
 
 ```bash
 gh project item-add [project_number] --item [issue_url]

@@ -6,7 +6,7 @@ Define JSON logging format standards and implementation guidelines for structure
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - JSON structure standards
 - Field naming conventions
@@ -14,7 +14,7 @@ Define JSON logging format standards and implementation guidelines for structure
 - Performance optimization
 - Tool compatibility
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Binary logging formats
 - Plain text logging
@@ -24,6 +24,7 @@ Define JSON logging format standards and implementation guidelines for structure
 ## JSON Structure Standards
 
 ### Required Fields
+
 ```json
 {
   "timestamp": "2024-01-15T10:30:00.000Z",
@@ -35,6 +36,7 @@ Define JSON logging format standards and implementation guidelines for structure
 ```
 
 ### Optional Context Fields
+
 ```json
 {
   "traceId": "abc123def456",
@@ -46,6 +48,7 @@ Define JSON logging format standards and implementation guidelines for structure
 ```
 
 ### Error Fields
+
 ```json
 {
   "error": {

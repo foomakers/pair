@@ -49,13 +49,13 @@ Update your project's way-of-working configuration to specify filesystem:
 
 Ensure the required filesystem structure exists:
 
-**Primary Method (via pair Assistant):**
+#### Primary Method (via pair Assistant):
 
 ```bash
 pair "Verify and create filesystem project management directory structure"
 ```
 
-**Manual Method (Fallback):**
+#### Manual Method (Fallback):
 
 ```bash
 # Navigate to project root
@@ -89,7 +89,7 @@ ls ../guidelines/collaboration/templates/
 
 ### Issue Management
 
-**→ See [../issue-management/](../issue-management/README.md)**
+#### → See [../issue-management/](../issue-management/README.md)
 
 - Local issue tracking with markdown files
 - Directory-based status management
@@ -98,7 +98,7 @@ ls ../guidelines/collaboration/templates/
 
 ### Project Tracking
 
-**→ See [../project-tracking/](../project-tracking/README.md)**
+#### → See [../project-tracking/](../project-tracking/README.md)
 
 - Hierarchical directory structure
 - Status tracking via file location
@@ -107,7 +107,7 @@ ls ../guidelines/collaboration/templates/
 
 ### Automation
 
-**→ See [../automation/](../automation/README.md)**
+#### → See [../automation/](../automation/README.md)
 
 - Shell script automation
 - File operation automation
@@ -116,7 +116,7 @@ ls ../guidelines/collaboration/templates/
 
 ### Board Management
 
-**→ See [README.md](README.md)**
+#### → See [README.md](README.md)
 
 - Directory-based board visualization
 - Local backlog management
@@ -125,7 +125,7 @@ ls ../guidelines/collaboration/templates/
 
 ### Communication
 
-**→ See [../communication-protocols/](../../README.md)**
+#### → See [../communication-protocols/](../../README.md)
 
 - Documentation-based communication
 - Local changelog management
@@ -134,7 +134,7 @@ ls ../guidelines/collaboration/templates/
 
 ### Estimation Integration
 
-**→ See [../estimation/](../estimation/README.md)**
+#### → See [../estimation/](../estimation/README.md)
 
 - File-based estimation tracking
 - Simple effort recording in metadata
@@ -143,7 +143,7 @@ ls ../guidelines/collaboration/templates/
 
 ### Methodology Integration
 
-**→ See [../methodology/](../methodology/README.md)**
+#### → See [../methodology/](../methodology/README.md)
 
 - Scrum integration with filesystem structure
 - Kanban workflow with directory states
@@ -156,7 +156,7 @@ ls ../guidelines/collaboration/templates/
 
 The filesystem uses a hierarchical structure that mirrors the project management hierarchy:
 
-```
+```text
 .pair/adoption/product/backlog/
 ├── 01-initiatives/
 │   └── 2025/                    # Year-based organization
@@ -176,19 +176,19 @@ The filesystem uses a hierarchical structure that mirrors the project management
 
 ### Naming Conventions
 
-**Initiative Files:**
+#### Initiative Files:
 
 - Format: `[initiative-name].md`
 - Example: `core-data-pipeline.md`
 - Location: `01-initiatives/[YEAR]/`
 
-**Epic Files:**
+#### Epic Files:
 
 - Format: `[initiative-code]-[epic-code]-[epic-name].md`
 - Example: `01-01-data-ingestion-pipeline.md`
 - Location: `02-epics/[status]/`
 
-**User Story Files:**
+#### User Story Files:
 
 - Format: `[initiative-code]-[epic-code]-[story-code]-[story-name].md`
 - Example: `01-01-001-user-registration.md`
@@ -207,13 +207,13 @@ Status changes are reflected by moving files between directories:
 
 ### Creating Initiatives
 
-**Step 1: Use pair Assistant (Primary Method)**
+#### Step 1: Use pair Assistant (Primary Method)
 
 ```bash
 pair "Create filesystem initiative from PRD analysis"
 ```
 
-**Step 2: Manual Creation (Fallback)**
+#### Step 2: Manual Creation (Fallback)
 
 ```bash
 # Navigate to initiatives directory
@@ -238,13 +238,13 @@ Fill out all sections of the initiative template:
 
 ### Managing Initiative Status
 
-**Update via pair Assistant:**
+#### Update via pair Assistant:
 
 ```bash
 pair "Update initiative status and track epic completion progress"
 ```
 
-**Manual Status Management:**
+#### Manual Status Management:
 
 - Initiatives remain in yearly folders
 - Status is tracked by completion of child epics
@@ -254,13 +254,13 @@ pair "Update initiative status and track epic completion progress"
 
 ### Creating Epics from Initiatives
 
-**Step 1: Use pair Assistant (Primary Method)**
+#### Step 1: Use pair Assistant (Primary Method)
 
 ```bash
 pair "Break down epics from filesystem initiative"
 ```
 
-**Step 2: Manual Epic Creation**
+#### Step 2: Manual Epic Creation
 
 ```bash
 # Navigate to epics directory
@@ -284,15 +284,15 @@ In the epic file, establish clear linkage:
 
 ### Managing Epic Status
 
-**Status Transitions via File Movement:**
+#### Status Transitions via File Movement:
 
-**Via pair Assistant:**
+#### Via pair Assistant:
 
 ```bash
 pair "Move epic to in-progress status and update parent initiative"
 ```
 
-**Via Manual File Operations:**
+#### Via Manual File Operations:
 
 ```bash
 # Move epic from not-started to in-progress
@@ -307,13 +307,13 @@ mv not-started/01-01-data-ingestion-pipeline.md in-progress/
 
 ### Creating User Stories from Epics
 
-**Step 1: Use pair Assistant (Primary Method)**
+#### Step 1: Use pair Assistant (Primary Method)
 
 ```bash
 pair "Break down user stories from filesystem epic"
 ```
 
-**Step 2: Manual User Story Creation**
+#### Step 2: Manual User Story Creation
 
 ```bash
 # Navigate to user stories directory
@@ -336,7 +336,7 @@ Fill out all required sections:
 
 ### Refining User Stories
 
-**Step 1: Refinement Process**
+#### Step 1: Refinement Process
 
 ```bash
 pair "Refine filesystem user story and update status to refined"
@@ -360,7 +360,7 @@ Add refinement details to the user story:
 
 Unlike separate task files, tasks are embedded within user story files:
 
-**Task Breakdown Section:**
+#### Task Breakdown Section:
 
 ```markdown
 ## Task Breakdown
@@ -397,7 +397,7 @@ Create REST API endpoint for user registration with proper validation and securi
 
 ### Task Implementation Workflow
 
-**Step 1: Start Development**
+#### Step 1: Start Development
 
 ```bash
 pair "Start development for filesystem user story - assign and create implementation branch"
@@ -433,7 +433,7 @@ pair "Complete user story development and move to review status"
 
 ### Status Transitions
 
-**File-Based Status System:**
+#### File-Based Status System:
 
 - **not-started/**: Initial state, ready for refinement or development
 - **in-progress/**: Active work, development started
@@ -442,7 +442,7 @@ pair "Complete user story development and move to review status"
 
 ### Bottom-Up Status Propagation
 
-**Automatic Status Logic:**
+#### Automatic Status Logic:
 
 - Parent items (epics/initiatives) are "in-progress" when any child is active
 - Parent items are "completed" only when ALL children are completed
@@ -450,7 +450,7 @@ pair "Complete user story development and move to review status"
 
 ### Status Update Commands
 
-**Via pair Assistant (Primary Method):**
+#### Via pair Assistant (Primary Method):
 
 ```bash
 pair "Update filesystem user story status to in-progress and track epic progress"
@@ -458,7 +458,7 @@ pair "Mark filesystem user story as completed and update parent epic status"
 pair "Move epic to completed status and update initiative progress"
 ```
 
-**Via Manual File Operations (Fallback):**
+#### Via Manual File Operations (Fallback):
 
 ```bash
 # Move user story to different status
@@ -474,7 +474,7 @@ mv under-review/01-01-data-ingestion-pipeline.md completed/
 
 ### Branch Naming and Integration
 
-**Branch Creation:**
+#### Branch Creation:
 
 ```bash
 # Create feature branch with story reference
@@ -484,7 +484,7 @@ git checkout -b "feature/01-01-001-user-registration"
 git checkout -b "feature/01-01-data-ingestion/01-01-001-user-registration"
 ```
 
-**Commit Message Format:**
+#### Commit Message Format:
 
 ```bash
 git commit -m "Implement user registration API endpoint
@@ -501,7 +501,7 @@ Initiative: core-data-pipeline"
 
 ### Development Integration
 
-**Step 1: Start Development**
+#### Step 1: Start Development
 
 ```bash
 pair "Start filesystem user story development - move to in-progress and create branch"

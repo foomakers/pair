@@ -13,7 +13,7 @@ Transform PRD requirements into comprehensive technical standards through system
 
 **CRITICAL**: Maintain this context throughout bootstrap completion:
 
-```
+```text
 BOOTSTRAP COMPLETION STATE:
 ├── Project: [Project Name from PRD]
 ├── Bootstrap Status: [analysis | categorization | checklist | standards | approved]
@@ -173,7 +173,7 @@ BOOTSTRAP COMPLETION STATE:
 
 ### Best Practices for AI Assistants
 
-**Do's:**
+#### Do's:
 
 - Start with comprehensive PRD and ADR analysis
 - Present categorization with specific evidence from analysis
@@ -182,7 +182,7 @@ BOOTSTRAP COMPLETION STATE:
 - Maintain strict consistency across all standards documents
 - Reference appropriate guidelines for implementation details
 
-**Don'ts:**
+#### Don'ts:
 
 - Never skip foundation analysis - context drives all decisions
 - Don't assume project constraints without validation
@@ -193,14 +193,14 @@ BOOTSTRAP COMPLETION STATE:
 
 ### Final Quality Checklist
 
-**Completeness:**
+#### Completeness:
 
 - [ ] Bootstrap checklist fully completed with all sections addressed
 - [ ] Project categorization confirmed and documented
 - [ ] All five adopted standards documents generated and approved
 - [ ] Documents stored in correct [`.pair/adoption/tech/`](../../adoption/tech) locations
 
-**Quality:**
+#### Quality:
 
 - [ ] Internal consistency verified across all documents
 - [ ] Technology choices align with project categorization and constraints
@@ -212,12 +212,12 @@ BOOTSTRAP COMPLETION STATE:
 
 ## References
 
-**Primary Implementation Assets:**
+#### Primary Implementation Assets:
 
 - [Bootstrap Checklist](../assets/bootstrap-checklist.md) - Complete project setup framework
 - [Adopted Standards README](../../adoption/tech/README.md) - Format requirements for all documents
 
-**Guidelines for Implementation:**
+#### Guidelines for Implementation:
 
 - [Architecture Guidelines](../guidelines/architecture/README.md) - Architectural patterns and decisions
 - [Technical Standards](../guidelines/technical-standards/README.md) - Technology selection criteria
@@ -225,7 +225,7 @@ BOOTSTRAP COMPLETION STATE:
 - [UX Guidelines](../guidelines/user-experience/README.md) - Design system and user experience standards
 - [Collaboration Guidelines](../guidelines/collaboration/README.md) - Development processes and team workflows
 
-**Target Output Locations:**
+#### Target Output Locations:
 
 - [Architecture Standards](../../adoption/tech/architecture.md) - System design decisions
 - [Tech Stack Standards](../../adoption/tech/tech-stack.md) - Technology choices and versions
@@ -237,13 +237,13 @@ BOOTSTRAP COMPLETION STATE:
 
 After bootstrap completion, proceed with strategic planning and development:
 
-**Strategic Planning:**
+#### Strategic Planning:
 
 - **Create & Prioritize Initiatives** → [03-how-to-create-and-prioritize-initiatives.md](03-how-to-create-and-prioritize-initiatives.md)
 - **Define Project Subdomains** → [04-how-to-define-subdomains.md](04-how-to-define-subdomains.md)
 - **Define Bounded Contexts** → [05-how-to-define-bounded-contexts.md](05-how-to-define-bounded-contexts.md)
 
-**Development Preparation:**
+#### Development Preparation:
 
 - **Breakdown Epics** → [06-how-to-breakdown-epics.md](06-how-to-breakdown-epics.md)
 - **Create User Stories** → [07-how-to-breakdown-user-stories.md](07-how-to-breakdown-user-stories.md)

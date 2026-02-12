@@ -4,7 +4,7 @@ Architecture pattern that isolates the core business logic from external concern
 
 ## When to Use
 
-**Ideal for:**
+#### Ideal for:
 
 - High testability requirements
 - Multiple external integrations
@@ -12,7 +12,7 @@ Architecture pattern that isolates the core business logic from external concern
 - Need for technology independence
 - Long-term maintainability focus
 
-**Avoid when:**
+#### Avoid when:
 
 - Simple CRUD applications
 - Team unfamiliar with dependency inversion

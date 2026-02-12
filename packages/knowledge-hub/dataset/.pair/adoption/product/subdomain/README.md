@@ -18,8 +18,8 @@ This folder contains the strategic subdomain definitions for the [PROJECT_NAME] 
 
 ## Subdomain Relationship Matrix
 
-| From | To | Relationship Type | Data/Knowledge Flow | Coordination Level |
-| ---- | -- | ----------------- | ------------------- | ------------------ |
+| From | To  | Relationship Type | Data/Knowledge Flow | Coordination Level |
+| ---- | --- | ----------------- | ------------------- | ------------------ |
 
 ---
 

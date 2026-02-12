@@ -14,7 +14,7 @@ Validate implemented code quality and ensure compliance with technical standards
 
 **CRITICAL**: Maintain this context throughout code review:
 
-```
+```text
 CODE REVIEW STATE:
 ├── PR: [#PR-NUMBER: PR Title]
 ├── Status: [pending | changes-requested | approved]
@@ -95,7 +95,7 @@ Follow [project management tool guidelines](../guidelines/collaboration/project-
 2. **Post report as PR comment** with all findings by severity
 3. **Set PR status** based on findings:
 
-**Review Decisions:**
+#### Review Decisions:
 
 | Decision              | Condition                                               | Next Step                                                                |
 | --------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
@@ -105,7 +105,7 @@ Follow [project management tool guidelines](../guidelines/collaboration/project-
 
 ### Phase 4: Completion & Integration
 
-**For Approved Reviews Only:**
+#### For Approved Reviews Only:
 
 1. **Squash merge** per [commit template](../guidelines/collaboration/templates/commit-template.md)
 2. **Update story status** to "Done" in PM tool
@@ -114,7 +114,7 @@ Follow [project management tool guidelines](../guidelines/collaboration/project-
 
 ## Success Criteria
 
-**Review Complete When:**
+#### Review Complete When:
 
 - [ ] Phase 0 completed — PR and story context loaded
 - [ ] ADR and adoption compliance validated for all new technical decisions
@@ -124,7 +124,7 @@ Follow [project management tool guidelines](../guidelines/collaboration/project-
 - [ ] PR status updated (pending/changes-requested/approved)
 - [ ] Review decision made
 
-**For Approved Reviews:**
+#### For Approved Reviews:
 
 - [ ] Squash merge completed
 - [ ] Story marked "Done" in PM tool

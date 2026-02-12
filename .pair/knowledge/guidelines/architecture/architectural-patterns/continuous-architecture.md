@@ -4,7 +4,7 @@ Evolutionary architecture approach that embraces change and enables architecture
 
 ## When to Use
 
-**Ideal for:**
+#### Ideal for:
 
 - Rapidly changing business requirements
 - Uncertain or evolving domains
@@ -13,7 +13,7 @@ Evolutionary architecture approach that embraces change and enables architecture
 - Organizations embracing agile methodologies
 - Systems requiring high adaptability
 
-**Avoid when:**
+#### Avoid when:
 
 - Stable, well-understood domains
 - Highly regulated environments with fixed requirements
@@ -83,7 +83,7 @@ Automated tests that verify architectural characteristics:
 
 ### Evolutionary Patterns
 
-**Key Patterns:**
+#### Key Patterns:
 
 - **Strangler Fig**: Gradually replace legacy systems
 - **Branch by Abstraction**: Evolve interfaces incrementally
@@ -94,7 +94,7 @@ Automated tests that verify architectural characteristics:
 
 ### Architecture Evolution Decision Tree
 
-```
+```text
 New Requirement or Change Request
 ├── Is it a breaking change?
 │   ├── YES: Plan backward compatibility strategy

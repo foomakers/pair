@@ -12,7 +12,7 @@ This framework defines three primary high-level roles based on our AI-assisted d
 
 **Primary Focus**: Product strategy, requirement definition, and backlog management
 
-**Primary Responsibilities:**
+#### Primary Responsibilities:
 
 - Analyze backlog to identify and prioritize the most critical activities
 - Create Product Requirements Documents (PRD) from business needs
@@ -23,7 +23,7 @@ This framework defines three primary high-level roles based on our AI-assisted d
 - Refine user stories to ensure they meet definition of ready
 - Manage product backlog and ensure alignment with business goals
 
-**Key Accountabilities:**
+#### Key Accountabilities:
 
 - Product vision and strategy alignment with business objectives
 - Quality and clarity of requirements and acceptance criteria
@@ -32,7 +32,7 @@ This framework defines three primary high-level roles based on our AI-assisted d
 - User experience and business value delivery optimization
 - Cross-functional team alignment and requirement communication
 
-**Decision Authority:**
+#### Decision Authority:
 
 - Product feature prioritization and roadmap direction
 - Initiative creation and strategic product decisions
@@ -41,7 +41,7 @@ This framework defines three primary high-level roles based on our AI-assisted d
 - Business requirement interpretation and trade-off decisions
 - User story acceptance and rejection criteria
 
-**Workflow Integration:**
+#### Workflow Integration:
 
 - Leads refinement sessions and epic breakdown meetings
 - Makes prioritization decisions based on business value analysis
@@ -53,7 +53,7 @@ This framework defines three primary high-level roles based on our AI-assisted d
 
 **Primary Focus**: Implementation of user stories and technical execution
 
-**Primary Responsibilities:**
+#### Primary Responsibilities:
 
 - Access and thoroughly understand user stories and technical documentation
 - Break down refined user stories into actionable development tasks
@@ -64,7 +64,7 @@ This framework defines three primary high-level roles based on our AI-assisted d
 - Update bounded context documentation when implementation affects system boundaries
 - Ensure code quality and adherence to technical standards
 
-**Key Accountabilities:**
+#### Key Accountabilities:
 
 - Code quality and adherence to technical and coding standards
 - Timely delivery of user story implementations according to acceptance criteria
@@ -73,7 +73,7 @@ This framework defines three primary high-level roles based on our AI-assisted d
 - Implementation decisions that maintain system integrity and architecture
 - Task breakdown accuracy and development effort estimation
 
-**Decision Authority:**
+#### Decision Authority:
 
 - Technical implementation approach for assigned user stories and tasks
 - Code structure and design patterns within defined architecture boundaries
@@ -81,7 +81,7 @@ This framework defines three primary high-level roles based on our AI-assisted d
 - Task breakdown and implementation sequence for user stories
 - Technical trade-offs within the scope of assigned work
 
-**Workflow Integration:**
+#### Workflow Integration:
 
 - Works on refined user stories assigned through backlog prioritization
 - Provides technical feasibility input during refinement sessions
@@ -93,7 +93,7 @@ This framework defines three primary high-level roles based on our AI-assisted d
 
 **Primary Focus**: Technical leadership, architecture validation, and process oversight
 
-**Primary Responsibilities:**
+#### Primary Responsibilities:
 
 - Complete and maintain bootstrap checklist for project setup and evolution
 - Define and validate bounded contexts for system architecture clarity
@@ -104,7 +104,7 @@ This framework defines three primary high-level roles based on our AI-assisted d
 - Ensure technical standards and process compliance across the team
 - Provide technical leadership and mentorship for complex architectural decisions
 
-**Key Accountabilities:**
+#### Key Accountabilities:
 
 - Technical architecture integrity and system design quality
 - Code review quality and technical standard enforcement
@@ -113,7 +113,7 @@ This framework defines three primary high-level roles based on our AI-assisted d
 - Team technical capability development and knowledge transfer
 - Technical risk assessment and mitigation strategy development
 
-**Decision Authority:**
+#### Decision Authority:
 
 - Technical architecture and system design patterns approval
 - Code review standards, processes, and quality gate enforcement
@@ -122,7 +122,7 @@ This framework defines three primary high-level roles based on our AI-assisted d
 - Technical process improvement and development workflow optimization
 - ADR creation and architectural decision documentation
 
-**Workflow Integration:**
+#### Workflow Integration:
 
 - Reviews completed user story implementations for technical quality
 - Validates bounded contexts and architectural decisions during code review
@@ -134,14 +134,14 @@ This framework defines three primary high-level roles based on our AI-assisted d
 
 ### Product Manager ↔ Product Engineer
 
-**Product Manager Responsibilities:**
+#### Product Manager Responsibilities:
 
 - Provide clear, testable requirements and detailed acceptance criteria
 - Prioritize user stories based on business value and strategic alignment
 - Make scope and timeline trade-off decisions during development
 - Communicate user needs, business context, and product vision
 
-**Product Engineer Responsibilities:**
+#### Product Engineer Responsibilities:
 
 - Provide technical feasibility input during story refinement and epic breakdown
 - Communicate implementation challenges, alternatives, and technical constraints
@@ -150,14 +150,14 @@ This framework defines three primary high-level roles based on our AI-assisted d
 
 ### Product Manager ↔ Staff Engineer
 
-**Product Manager Responsibilities:**
+#### Product Manager Responsibilities:
 
 - Collaborate on subdomain definition and product architecture boundaries
 - Provide business context for architectural decisions and technical trade-offs
 - Ensure product requirements align with technical architecture constraints
 - Communicate product strategy changes that may affect system architecture
 
-**Staff Engineer Responsibilities:**
+#### Staff Engineer Responsibilities:
 
 - Validate product requirements against technical architecture feasibility
 - Provide architectural guidance for subdomain and bounded context definition
@@ -166,14 +166,14 @@ This framework defines three primary high-level roles based on our AI-assisted d
 
 ### Product Engineer ↔ Staff Engineer
 
-**Product Engineer Responsibilities:**
+#### Product Engineer Responsibilities:
 
 - Implement user stories according to architectural guidelines and technical standards
 - Communicate implementation decisions that may affect system boundaries
 - Follow established code review processes and incorporate feedback effectively
 - Update technical documentation based on implementation learnings
 
-**Staff Engineer Responsibilities:**
+#### Staff Engineer Responsibilities:
 
 - Provide technical mentorship and architectural guidance during implementation
 - Conduct thorough code reviews ensuring quality and architectural alignment
@@ -274,19 +274,19 @@ This framework defines three primary high-level roles based on our AI-assisted d
 
 When decisions span multiple role boundaries, use collaborative decision-making:
 
-**Product Strategy + Technical Feasibility**
+#### Product Strategy + Technical Feasibility
 
 - **Lead**: Product Manager
 - **Required Input**: Staff Engineer (technical feasibility), Product Engineer (implementation effort)
 - **Process**: Joint analysis, feasibility assessment, collaborative decision
 
-**Technical Architecture + Product Requirements**
+#### Technical Architecture + Product Requirements
 
 - **Lead**: Staff Engineer
 - **Required Input**: Product Manager (business requirements), Product Engineer (implementation perspective)
 - **Process**: Technical review, requirement validation, architectural alignment
 
-**Implementation + User Story Scope**
+#### Implementation + User Story Scope
 
 - **Lead**: Product Engineer
 - **Required Input**: Product Manager (business context), Staff Engineer (technical standards)
@@ -298,21 +298,21 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 
 #### Product Manager Communication
 
-**Upward Communication:**
+#### Upward Communication:
 
 - Strategic product updates and business alignment reporting
 - Initiative progress and milestone achievement status
 - Stakeholder feedback and market opportunity identification
 - Resource needs and strategic priority changes
 
-**Peer Communication:**
+#### Peer Communication:
 
 - Epic and user story refinement collaboration
 - Cross-functional requirement alignment and validation
 - Backlog prioritization rationale and business context sharing
 - Product vision and strategy communication
 
-**Downward Communication:**
+#### Downward Communication:
 
 - Clear product direction and priority communication to development team
 - User story acceptance criteria and business context explanation
@@ -321,21 +321,21 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 
 #### Product Engineer Communication
 
-**Upward Communication:**
+#### Upward Communication:
 
 - Implementation progress and task completion status reporting
 - Technical challenges and implementation feasibility feedback
 - Effort estimation and timeline input for planning activities
 - Architecture impact and technical debt identification
 
-**Peer Communication:**
+#### Peer Communication:
 
 - Code review participation and technical knowledge sharing
 - Implementation approach discussion and collaborative problem-solving
 - Technical documentation updates and architectural decision communication
 - Cross-training and technical skill development support
 
-**Downward Communication:**
+#### Downward Communication:
 
 - Technical implementation approach and solution design explanation
 - Code quality standards and development best practices sharing
@@ -344,21 +344,21 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 
 #### Staff Engineer Communication
 
-**Upward Communication:**
+#### Upward Communication:
 
 - Technical architecture decisions and strategic technology recommendations
 - Code review quality metrics and technical standard compliance reporting
 - Technical risk assessment and mitigation strategy recommendations
 - Team technical capability assessment and development needs identification
 
-**Peer Communication:**
+#### Peer Communication:
 
 - Architectural guidance and technical mentorship provision
 - Code review feedback and technical standard enforcement
 - Technical documentation review and architectural decision validation
 - Cross-functional technical consultation and feasibility assessment
 
-**Downward Communication:**
+#### Downward Communication:
 
 - Technical standards and architectural guidelines communication
 - Code review feedback and improvement recommendations
@@ -371,7 +371,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 
 #### Product Manager Performance Metrics
 
-**Strategic Delivery Metrics:**
+#### Strategic Delivery Metrics:
 
 - **Initiative Success Rate**: Percentage of initiatives achieving defined success criteria
 - **Backlog Health**: Quality of user story refinement and epic breakdown
@@ -379,7 +379,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 - **Product Vision Clarity**: Team understanding and alignment with product direction
 - **Prioritization Effectiveness**: Business value delivery through proper prioritization
 
-**Collaboration Metrics:**
+#### Collaboration Metrics:
 
 - **Cross-functional Alignment**: Effectiveness of communication with engineering and stakeholders
 - **Requirement Quality**: Clarity and completeness of user stories and acceptance criteria
@@ -388,7 +388,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 
 #### Product Engineer Performance Metrics
 
-**Implementation Delivery Metrics:**
+#### Implementation Delivery Metrics:
 
 - **User Story Completion Rate**: Percentage of assigned user stories completed on time
 - **Code Quality Metrics**: Defect rate, code review feedback, technical debt contribution
@@ -396,7 +396,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 - **Implementation Efficiency**: Velocity and throughput of feature development
 - **Technical Documentation**: Quality and maintenance of technical documentation
 
-**Technical Excellence Metrics:**
+#### Technical Excellence Metrics:
 
 - **Code Review Participation**: Quality of code review feedback and collaboration
 - **Technical Problem-Solving**: Ability to resolve technical challenges and implementation issues
@@ -405,7 +405,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 
 #### Staff Engineer Performance Metrics
 
-**Technical Leadership Metrics:**
+#### Technical Leadership Metrics:
 
 - **Architecture Quality**: Effectiveness of architectural decisions and system design
 - **Code Review Quality**: Thoroughness and value of code review feedback and guidance
@@ -413,7 +413,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 - **Bounded Context Accuracy**: Quality and clarity of architectural boundary definitions
 - **Bootstrap Process Effectiveness**: Completeness and quality of project setup and evolution
 
-**Mentorship and Guidance Metrics:**
+#### Mentorship and Guidance Metrics:
 
 - **Team Technical Capability**: Growth in team technical skills and architectural understanding
 - **Knowledge Transfer Effectiveness**: Success of technical mentorship and guidance
@@ -446,7 +446,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 
 **Entry Level**: Associate Product Manager → Product Manager → Senior Product Manager → Principal Product Manager → VP Product
 
-**Core Skill Development:**
+#### Core Skill Development:
 
 - **Strategic Thinking**: Market analysis, competitive intelligence, business strategy development
 - **Stakeholder Management**: Cross-functional collaboration, executive communication, user advocacy
@@ -454,7 +454,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 - **Data Analysis**: Metrics interpretation, user behavior analysis, business impact measurement
 - **Domain Expertise**: Industry knowledge, technical understanding, market trends awareness
 
-**Key Progression Milestones:**
+#### Key Progression Milestones:
 
 - **Junior to Mid**: Successfully lead initiative breakdown and epic prioritization
 - **Mid to Senior**: Demonstrate strategic product vision and cross-functional leadership
@@ -465,7 +465,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 
 **Entry Level**: Junior Developer → Product Engineer → Senior Product Engineer → Staff Product Engineer → Principal Engineer
 
-**Core Skill Development:**
+#### Core Skill Development:
 
 - **Technical Proficiency**: Programming languages, frameworks, development tools mastery
 - **System Design**: Architecture understanding, scalability considerations, technical trade-offs
@@ -473,7 +473,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 - **Collaboration Skills**: Cross-functional communication, mentoring, knowledge sharing
 - **Process Excellence**: Development workflow optimization, quality standards, continuous improvement
 
-**Key Progression Milestones:**
+#### Key Progression Milestones:
 
 - **Junior to Mid**: Independent user story implementation and task breakdown proficiency
 - **Mid to Senior**: Technical leadership in complex features and architectural contributions
@@ -484,7 +484,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 
 **Entry Level**: Senior Engineer → Staff Engineer → Principal Engineer → Distinguished Engineer → Chief Technology Officer
 
-**Core Skill Development:**
+#### Core Skill Development:
 
 - **Technical Leadership**: Architecture design, technology strategy, technical vision development
 - **Mentorship Excellence**: Team development, knowledge transfer, technical guidance
@@ -492,7 +492,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 - **Strategic Thinking**: Technology roadmap, risk assessment, innovation strategy
 - **Organizational Impact**: Cross-team influence, technical culture development, strategic alignment
 
-**Key Progression Milestones:**
+#### Key Progression Milestones:
 
 - **Senior to Staff**: Technical leadership and comprehensive code review proficiency
 - **Staff to Principal**: System architecture ownership and organizational technical influence
@@ -523,14 +523,14 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 
 #### Product Manager Skill Development
 
-**Strategic Skills:**
+#### Strategic Skills:
 
 - Business strategy and market analysis methodology
 - User research and data-driven decision making
 - Financial modeling and business case development
 - Competitive analysis and market positioning
 
-**Collaboration Skills:**
+#### Collaboration Skills:
 
 - Stakeholder management and executive communication
 - Cross-functional team leadership and coordination
@@ -539,14 +539,14 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 
 #### Product Engineer Skill Development
 
-**Technical Skills:**
+#### Technical Skills:
 
 - Advanced programming and software engineering practices
 - System design and architectural pattern understanding
 - Performance optimization and scalability considerations
 - Security principles and implementation best practices
 
-**Product Skills:**
+#### Product Skills:
 
 - User experience understanding and design collaboration
 - Business context comprehension and product lifecycle knowledge
@@ -555,14 +555,14 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 
 #### Staff Engineer Skill Development
 
-**Leadership Skills:**
+#### Leadership Skills:
 
 - Technical mentorship and team development
 - Architectural decision making and strategic technology planning
 - Code review excellence and quality standard development
 - Process improvement and workflow optimization
 
-**Strategic Skills:**
+#### Strategic Skills:
 
 - Technology roadmap development and innovation strategy
 - Risk assessment and technical debt management
@@ -573,14 +573,14 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 
 #### Mentoring Responsibilities
 
-**Senior Team Members:**
+#### Senior Team Members:
 
 - Provide guidance and career advice to junior colleagues
 - Share knowledge and experience through formal and informal channels
 - Support skill development through code reviews and feedback
 - Champion growth opportunities and stretch assignments
 
-**Junior Team Members:**
+#### Junior Team Members:
 
 - Actively seek guidance and feedback from senior colleagues
 - Take ownership of personal development and learning
@@ -605,7 +605,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 **Timeline**: 48-72 hours for business impact assessment and stakeholder alignment
 **Documentation**: Business case analysis, stakeholder feedback, and strategic decision rationale
 
-**Resolution Process:**
+#### Resolution Process:
 
 1. **Stakeholder Analysis**: Identify conflicting requirements and business impact
 2. **Data Gathering**: Collect user feedback, market data, and business metrics
@@ -620,7 +620,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 **Timeline**: 24-48 hours for technical analysis and architectural alignment
 **Documentation**: Technical analysis, architectural decision records, and implementation guidance
 
-**Resolution Process:**
+#### Resolution Process:
 
 1. **Technical Analysis**: Evaluate technical approaches and architectural implications
 2. **Peer Review**: Engage technical team for collaborative technical assessment
@@ -635,7 +635,7 @@ When decisions span multiple role boundaries, use collaborative decision-making:
 **Timeline**: 48-72 hours for integrated analysis and collaborative decision making
 **Documentation**: Integrated analysis with both business and technical perspectives
 
-**Resolution Process:**
+#### Resolution Process:
 
 1. **Joint Analysis**: Combined business and technical impact assessment
 2. **Stakeholder Alignment**: Ensure all perspectives are considered and understood

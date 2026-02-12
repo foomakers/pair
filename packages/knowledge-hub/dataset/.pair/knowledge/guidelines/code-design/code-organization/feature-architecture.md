@@ -15,7 +15,7 @@ Feature-based architecture organizes code around business capabilities rather th
 
 ### Standard Feature Layout
 
-```
+```text
 src/features/user-management/
 ├── components/                # Feature-specific UI components
 │   ├── UserList/

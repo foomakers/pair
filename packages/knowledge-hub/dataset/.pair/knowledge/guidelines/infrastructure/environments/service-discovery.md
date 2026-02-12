@@ -6,7 +6,7 @@ Service discovery infrastructure provides systematic approaches for enabling ser
 
 ## 📋 Scope and Coverage
 
-**In Scope:**
+#### In Scope:
 
 - Service discovery architecture patterns and implementation strategies
 - Service registry and health checking mechanisms
@@ -15,7 +15,7 @@ Service discovery infrastructure provides systematic approaches for enabling ser
 - Multi-environment service discovery coordination
 - Monitoring and observability for service discovery systems
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Application-specific service implementation (see Development Guidelines)
 - Container orchestration specifics (see Container Orchestration)
@@ -26,7 +26,7 @@ Service discovery infrastructure provides systematic approaches for enabling ser
 
 ### Discovery Pattern Framework
 
-**Comprehensive Discovery Strategy**
+#### Comprehensive Discovery Strategy
 
 Modern service discovery richiede architettura che supporta dynamic service registration, health monitoring, e intelligent routing:
 
@@ -57,7 +57,7 @@ Service Discovery Architecture:
     - Discovery system health and diagnostics
 ```
 
-**Discovery Implementation Patterns**
+#### Discovery Implementation Patterns
 
 Il service discovery può essere implementato attraverso diversi patterns, ognuno con specifici trade-offs:
 
@@ -68,11 +68,11 @@ Il service discovery può essere implementato attraverso diversi patterns, ognun
 
 ### Service Registry Management
 
-**Centralized Service Registry**
+#### Centralized Service Registry
 
 Il service registry agisce come central source of truth per service locations e metadata:
 
-**Registry Core Functions:**
+#### Registry Core Functions:
 
 - **Service registration**: Automatic registration durante service startup
 - **Health monitoring**: Continuous health checking e status tracking
@@ -104,11 +104,11 @@ class ServiceDiscoveryManager {
 
 ### Consul-Based Discovery
 
-**HashiCorp Consul Implementation**
+#### HashiCorp Consul Implementation
 
 Consul fornisce robust service discovery con health checking integrato:
 
-**Consul Benefits:**
+#### Consul Benefits:
 
 - **Multi-datacenter support**: Service discovery attraverso multiple datacenters
 - **Health checking**: Built-in health checking con multiple check types
@@ -117,11 +117,11 @@ Consul fornisce robust service discovery con health checking integrato:
 
 ### Kubernetes Native Discovery
 
-**Kubernetes Service Discovery**
+#### Kubernetes Service Discovery
 
 Kubernetes fornisce native service discovery attraverso Services e Endpoints:
 
-**K8s Discovery Features:**
+#### K8s Discovery Features:
 
 - **DNS-based discovery**: Automatic DNS records per Kubernetes services
 - **Service endpoints**: Automatic endpoint management per pod scaling
@@ -147,7 +147,7 @@ spec:
 
 ### Service Mesh Integration
 
-**Advanced Discovery with Service Mesh**
+#### Advanced Discovery with Service Mesh
 
 Il service mesh fornisce sophisticated discovery con security e observability:
 
@@ -160,7 +160,7 @@ Il service mesh fornisce sophisticated discovery con security e observability:
 
 ### Health Check Strategy
 
-**Comprehensive Health Monitoring**
+#### Comprehensive Health Monitoring
 
 - **Multiple check types**: HTTP, TCP, script-based health checks
 - **Check intervals**: Appropriate check frequency basata su service criticality
@@ -169,7 +169,7 @@ Il service mesh fornisce sophisticated discovery con security e observability:
 
 ### Service Naming and Metadata
 
-**Consistent Service Identification**
+#### Consistent Service Identification
 
 - **Naming conventions**: Standardized naming schemes per service identification
 - **Version tagging**: Proper version management per service discovery
@@ -180,28 +180,28 @@ Il service mesh fornisce sophisticated discovery con security e observability:
 
 ### Service Discovery Maturity
 
-**Level 1: Basic Discovery (Weeks 1-4)**
+#### Level 1: Basic Discovery (Weeks 1-4)
 
 - Static service configuration
 - Manual service endpoint management
 - Basic health checking
 - Simple DNS-based discovery
 
-**Level 2: Dynamic Discovery (Weeks 5-12)**
+#### Level 2: Dynamic Discovery (Weeks 5-12)
 
 - Automated service registration
 - Health check automation
 - Load balancing integration
 - Service registry implementation
 
-**Level 3: Advanced Discovery (Weeks 13-24)**
+#### Level 3: Advanced Discovery (Weeks 13-24)
 
 - Service mesh integration
 - Multi-environment discovery
 - Advanced routing capabilities
 - Comprehensive monitoring
 
-**Level 4: Intelligent Discovery (Weeks 25+)**
+#### Level 4: Intelligent Discovery (Weeks 25+)
 
 - AI-powered routing optimization
 - Predictive scaling based on discovery patterns

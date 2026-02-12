@@ -4,7 +4,7 @@
 
 Comprehensive accessibility framework ensuring inclusive digital experiences through WCAG compliance, automated testing, and systematic accessibility validation across all user interfaces and interactions.
 
-**In Scope:**
+#### In Scope:
 
 - WCAG 2.1/2.2 AA/AAA compliance standards
 - Accessibility testing tools and automation
@@ -13,7 +13,7 @@ Comprehensive accessibility framework ensuring inclusive digital experiences thr
 - Keyboard navigation and focus management
 - Accessibility workflow integration
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Content strategy and editorial guidelines
 - Visual design aesthetics (unless accessibility-related)
@@ -90,7 +90,7 @@ Accessibility is not an add-on feature but a fundamental aspect of software desi
 
 ### **Decision Tree: Accessibility Testing Strategy**
 
-```
+```text
 Start → Team Size?
 ├─ Small (1-5 devs) → axe-core + manual testing
 ├─ Medium (5-15 devs) → axe-core + Pa11y + systematic manual testing
@@ -179,7 +179,7 @@ Start → Team Size?
 
 ### **Decision Tree: Accessibility Tool Selection**
 
-```
+```text
 Start → Team Size?
 ├─ Small Team (1-5) → Budget?
 │  ├─ Limited → axe-core + WAVE + Lighthouse

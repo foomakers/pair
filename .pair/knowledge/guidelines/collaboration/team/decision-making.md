@@ -184,7 +184,7 @@ This document outlines the decision-making processes and frameworks for team col
 
 #### Announcement Template
 
-```
+```text
 DECISION: [Brief description]
 CONTEXT: [Background information]
 RATIONALE: [Key reasons for decision]

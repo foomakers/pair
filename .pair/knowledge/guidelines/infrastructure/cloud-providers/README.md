@@ -8,7 +8,7 @@ This practice provides comprehensive guidance for evaluating, selecting, and imp
 
 ## 📋 Scope and Coverage
 
-**In Scope:**
+#### In Scope:
 
 - Cloud provider evaluation frameworks and strategic decision matrices
 - Multi-cloud strategy design and implementation patterns
@@ -17,7 +17,7 @@ This practice provides comprehensive guidance for evaluating, selecting, and imp
 - Migration strategies and vendor lock-in mitigation techniques
 - Cloud governance frameworks and compliance considerations
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Application-level architecture patterns and design (see Architecture Guidelines)
 - Infrastructure as Code implementation specifics (see Infrastructure as Code)
@@ -90,7 +90,7 @@ Advanced Vercel platform optimization focusing on serverless patterns, frontend 
 
 ## 🚀 Quick Start Decision Framework
 
-```
+```text
 Selecting cloud provider strategy?
 ├─ Single application or simple infrastructure?
 │  ├─ Frontend-focused project? → Start with [Vercel Deployment](vercel-deployment.md)
@@ -123,21 +123,21 @@ Selecting cloud provider strategy?
 
 ### Provider Selection Criteria
 
-**Technical Requirements Assessment**
+#### Technical Requirements Assessment
 
 - **Service breadth and maturity**: Comprehensive evaluation of available services and their maturity levels
 - **Integration capabilities**: API quality, SDK availability, and third-party integration support
 - **Performance characteristics**: Global infrastructure, latency, and throughput capabilities
 - **Scalability and reliability**: Auto-scaling capabilities, SLA guarantees, and disaster recovery options
 
-**Business and Operational Considerations**
+#### Business and Operational Considerations
 
 - **Cost structure and optimization**: Pricing models, cost predictability, and optimization opportunities
 - **Vendor relationship and support**: Support quality, enterprise features, and partnership opportunities
 - **Compliance and security**: Regulatory compliance, security certifications, and data sovereignty
 - **Team expertise and learning curve**: Available skills, training requirements, and market talent
 
-**Strategic and Future-Proofing Factors**
+#### Strategic and Future-Proofing Factors
 
 - **Innovation and roadmap**: Technology leadership, innovation pace, and future service development
 - **Ecosystem and partnerships**: Third-party integrations, marketplace offerings, and community support
@@ -146,21 +146,21 @@ Selecting cloud provider strategy?
 
 ### Implementation Strategy Frameworks
 
-**Single-Cloud Adoption Strategy**
+#### Single-Cloud Adoption Strategy
 
 - Start with comprehensive provider evaluation using weighted decision criteria
 - Focus on operational excellence and deep platform expertise development
 - Implement cost optimization and governance frameworks early
 - Plan for potential multi-cloud evolution with portable architecture patterns
 
-**Multi-Cloud Strategy Implementation**
+#### Multi-Cloud Strategy Implementation
 
 - Begin with single-cloud foundation and gradually expand to second provider
 - Use cloud-agnostic tools and abstraction layers for critical workloads
 - Implement comprehensive governance and cost management across providers
 - Design workload placement strategies based on provider strengths and requirements
 
-**Hybrid and Edge Strategy**
+#### Hybrid and Edge Strategy
 
 - Combine cloud services with on-premises infrastructure for regulatory or performance requirements
 - Implement edge computing strategies for global performance and data locality
@@ -201,14 +201,14 @@ Selecting cloud provider strategy?
 
 ### Provider Selection Excellence
 
-**Evaluation and Decision Making**
+#### Evaluation and Decision Making
 
 - Use structured evaluation frameworks with quantitative metrics and weighted criteria
 - Include stakeholders from technical, business, and operations teams in selection process
 - Conduct proof-of-concept implementations for critical use cases and requirements
 - Document decision rationale and assumptions for future reference and validation
 
-**Cost and Value Optimization**
+#### Cost and Value Optimization
 
 - Implement comprehensive total cost of ownership analysis including indirect costs
 - Establish cost monitoring and alerting from initial implementation phase
@@ -217,14 +217,14 @@ Selecting cloud provider strategy?
 
 ### Multi-Cloud Governance
 
-**Architecture and Design Standards**
+#### Architecture and Design Standards
 
 - Implement cloud-agnostic architecture patterns using abstraction layers and standards
 - Use infrastructure as code with cloud-agnostic tools for consistency and portability
 - Design application architectures that minimize vendor-specific dependencies
 - Establish data management strategies that support multi-cloud and hybrid scenarios
 
-**Operational Excellence**
+#### Operational Excellence
 
 - Implement unified monitoring and observability across multiple cloud providers
 - Establish consistent security and compliance frameworks across all cloud environments

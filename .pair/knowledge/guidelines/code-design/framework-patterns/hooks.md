@@ -477,13 +477,14 @@ return (
 );
 }
 
-````
+````text
 
 ## Custom Hook Patterns
 
 ### 1. Data Fetching Hooks
 
 ```typescript
+
 // Generic data fetching hook
 interface UseAsyncState<T> {
   data: T | null;
@@ -607,11 +608,13 @@ function usePaginatedData<T>(
     refetch
   };
 }
+
 ````
 
 ### 2. State Management Hooks
 
 ```typescript
+
 // Local storage hook
 function useLocalStorage<T>(
   key: string,
@@ -661,8 +664,8 @@ function useDebounce<T>(value: T, delay: number): T {
 }
 
 // Previous value hook
-function usePrevious<T>(value: T): T | undefined {
-  const ref = useRef<T | undefined>(undefined)
+| function usePrevious<T>(value: T): T | undefined {           |
+| const ref = useRef<T                 | undefined>(undefined) |
 
   useEffect(() => {
     ref.current = value
@@ -724,11 +727,13 @@ function useCounter(initialValue = 0, options: UseCounterOptions = {}) {
     set,
   }
 }
+
 ```
 
 ### 3. Effect Hooks
 
 ```typescript
+
 // Interval hook
 function useInterval(callback: () => void, delay: number | null) {
   const savedCallback = useRef<() => void>()
@@ -847,11 +852,13 @@ function useEscapeKey(callback: () => void, enabled = true) {
     }
   }, [callback, enabled])
 }
+
 ```
 
 ### 4. Form Hooks
 
 ```typescript
+
 // Form validation hook
 interface ValidationRule<T> {
   required?: boolean
@@ -1029,6 +1036,7 @@ function useForm<T extends Record<string, any>>({
     reset,
   }
 }
+
 ```
 
 ## Performance Optimization
@@ -1036,6 +1044,7 @@ function useForm<T extends Record<string, any>>({
 ### 1. Memoization Hooks
 
 ```typescript
+
 // Expensive computation hook
 function useExpensiveValue<T>(computeValue: () => T, dependencies: React.DependencyList): T {
   return useMemo(computeValue, dependencies)
@@ -1095,6 +1104,7 @@ function useThrottledCallback<T extends (...args: any[]) => any>(callback: T, de
     [callback, delay],
   )
 }
+
 ```
 
 ## Testing Custom Hooks
@@ -1102,6 +1112,7 @@ function useThrottledCallback<T extends (...args: any[]) => any>(callback: T, de
 ### 1. Hook Testing with React Testing Library
 
 ```typescript
+
 import { renderHook, act } from '@testing-library/react'
 import { vi } from 'vitest'
 import { useCounter, useLocalStorage, useAsync } from './hooks'
@@ -1231,11 +1242,13 @@ describe('useAsync', () => {
     expect(mockFn).toHaveBeenCalledTimes(2)
   })
 })
+
 ```
 
 ### 2. Integration Testing with Components
 
 ```typescript
+
 // Testing hooks within component context
 function TestComponent() {
   const { count, increment, decrement } = useCounter(0, { min: 0, max: 5 })
@@ -1275,6 +1288,7 @@ describe('useCounter integration', () => {
     expect(countElement).toHaveTextContent('0') // Should not go below 0
   })
 })
+
 ```
 
 ## Best Practices

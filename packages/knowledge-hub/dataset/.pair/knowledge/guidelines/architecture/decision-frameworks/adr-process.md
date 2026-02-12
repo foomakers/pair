@@ -8,7 +8,7 @@ Define standardized processes for documenting, tracking, and reviewing architect
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Architecture Decision Record (ADR) processes and templates
 - Decision documentation standards and formats
@@ -16,7 +16,7 @@ Define standardized processes for documenting, tracking, and reviewing architect
 - Decision tracking and maintenance
 - Decision communication and stakeholder alignment
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Specific architectural implementations (see [System Design](../README.md))
 - Technical implementation details (see [Technical Standards](../../technical-standards/README.md))
@@ -56,7 +56,7 @@ Document decisions that affect:
 
 ### ADR Storage and Organization
 
-```
+```text
 .pair/
 ├── adoption/
 │   └── tech/
@@ -127,7 +127,7 @@ For infrastructure and technology decisions, use the specialized process defined
 
 ### Decision Context Categories
 
-**Technical Context:**
+#### Technical Context:
 
 - Current system limitations
 - Performance requirements
@@ -135,7 +135,7 @@ For infrastructure and technology decisions, use the specialized process defined
 - Security considerations
 - Integration requirements
 
-**Business Context:**
+#### Business Context:
 
 - Business objectives and constraints
 - Timeline and budget limitations
@@ -143,7 +143,7 @@ For infrastructure and technology decisions, use the specialized process defined
 - Risk tolerance
 - Compliance requirements
 
-**Organizational Context:**
+#### Organizational Context:
 
 - Team structure and capabilities
 - Existing technology investments
@@ -166,7 +166,7 @@ For infrastructure and technology decisions, use the specialized process defined
 
 ### Decision Review Criteria
 
-**Technical Review:**
+#### Technical Review:
 
 - ✅ Technical feasibility assessed
 - ✅ Performance impact evaluated
@@ -174,7 +174,7 @@ For infrastructure and technology decisions, use the specialized process defined
 - ✅ Integration requirements defined
 - ✅ Testing and validation approach outlined
 
-**Business Review:**
+#### Business Review:
 
 - ✅ Business value articulated
 - ✅ Cost and resource impact assessed
@@ -184,14 +184,14 @@ For infrastructure and technology decisions, use the specialized process defined
 
 ### Decision Stakeholders
 
-**Primary Stakeholders:**
+#### Primary Stakeholders:
 
 - **Technical Lead**: Technical feasibility and implementation
 - **Product Manager**: Business alignment and priorities
 - **Team Lead**: Resource allocation and timeline
 - **Security Lead**: Security implications and compliance
 
-**Secondary Stakeholders:**
+#### Secondary Stakeholders:
 
 - **Development Team**: Implementation complexity and effort
 - **QA Team**: Testing requirements and validation
@@ -199,7 +199,7 @@ For infrastructure and technology decisions, use the specialized process defined
 
 ### Decision Communication
 
-**ADR Distribution:**
+#### ADR Distribution:
 
 - Share ADR drafts with all stakeholders before finalization
 - Include ADR references in related user stories and tasks
@@ -249,13 +249,13 @@ This practice supports the **Definition of Done** requirements:
 
 ## 🔗 Related Documents
 
-**Core Architecture References:**
+#### Core Architecture References:
 
 - **[System Design Practice](../README.md)** - Architectural patterns and design principles
 - **[Technical Standards](../../technical-standards/README.md)** - Technology stack decisions and standards
 - **[Infrastructure Guidelines](../../infrastructure/README.md)** - Infrastructure-specific decision processes
 
-**Quality and Process References:**
+#### Quality and Process References:
 
 - **[Standards](../../quality-assurance/quality-standards/README.md)** - Quality criteria for architectural decisions
 - **[Project Management](../../collaboration/project-management-tool/README.md)** - Decision tracking within project workflows

@@ -143,7 +143,7 @@ Research methods and validation strategies for user-centered design.
 
 ### Component Library Decision Tree
 
-```
+```text
 Component Library Selection:
 ├── Team Size
 │   ├── Small Team (< 5) → Tailwind UI, Headless UI
@@ -161,21 +161,21 @@ Component Library Selection:
 
 ### Cost-Benefit Analysis for UX Tools
 
-**High-Investment Tools**
+#### High-Investment Tools
 
 - **Benefits**: Advanced features, enterprise support, comprehensive capabilities
 - **Costs**: Higher licensing, training investment, implementation complexity
 - **ROI Timeline**: 6-12 months for large teams
 - **Best For**: Enterprise teams, complex products, long-term projects
 
-**Mid-Range Tools**
+#### Mid-Range Tools
 
 - **Benefits**: Good feature set, reasonable cost, moderate learning curve
 - **Costs**: Moderate licensing, some training required
 - **ROI Timeline**: 3-6 months
 - **Best For**: Growing teams, established products, balanced requirements
 
-**Budget Tools**
+#### Budget Tools
 
 - **Benefits**: Low cost, quick adoption, basic functionality
 - **Costs**: Limited features, minimal support

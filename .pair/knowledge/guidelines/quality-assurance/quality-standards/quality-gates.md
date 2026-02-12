@@ -147,6 +147,30 @@ Quality gates should be customizable based on:
 - **Urgency**: Critical fixes may have expedited gate processes
 - **Technology Stack**: Different technologies may require specific validations
 
+### **Custom Gate Registry Format**
+
+Projects can define additional quality gates beyond the standard ones (Lint, Type Check, Test) via a **Custom Gate Registry** table in [way-of-working.md](../../../../adoption/tech/way-of-working.md). Custom gates run after the standard gates.
+
+#### Table schema:
+
+| Column      | Description                                                                        |
+| ----------- | ---------------------------------------------------------------------------------- |
+| Order       | Execution sequence among custom gates (standard gates always run first)            |
+| Gate        | Human-readable gate name                                                           |
+| Command     | Shell command to execute (e.g., `pnpm prettier:fix`)                               |
+| Scope Key   | Maps to `/pair-capability-verify-quality` `$scope` argument for selective execution                |
+| Required    | `Yes` = failure → FAIL verdict; `No` (Advisory) = failure → WARNING, not a blocker |
+| Description | Brief explanation of what the gate checks                                          |
+
+#### Enforcement levels:
+
+- **Required** (`Yes`): Gate failure contributes to overall FAIL. The composing skill decides the consequence (e.g., `/pair-process-implement` HALTs, `/pair-process-review` reports as finding).
+- **Advisory** (`No`): Gate failure produces a WARNING. Does not block the pipeline. Useful for auto-fixers (formatting) or informational checks.
+
+**Standard gates** (Lint, Type Check, Test) are built into `/pair-capability-verify-quality` and always Required. Do not duplicate them in the Custom Gate Registry.
+
+**Adding a custom gate**: Add a row to the Custom Gate Registry table in `way-of-working.md`. The gate becomes available on the next `/pair-capability-verify-quality` invocation.
+
 ## 🎯 **SUCCESS CRITERIA**
 
 - **100% Gate Compliance**: All code must pass appropriate quality gates

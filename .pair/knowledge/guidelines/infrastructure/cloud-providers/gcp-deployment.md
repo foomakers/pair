@@ -35,7 +35,7 @@ Comprehensive guide for deploying applications on Google Cloud Platform, leverag
 
 ### 1. Cloud-Native Microservices
 
-```
+```text
 Cloud Load Balancer (Global)
     ↓
 GKE Cluster (Multi-regional)
@@ -49,7 +49,7 @@ Cloud SQL (High Availability)
 
 ### 2. Serverless-First Architecture
 
-```
+```text
 Cloud CDN
     ↓
 Cloud Load Balancing
@@ -65,7 +65,7 @@ Firestore/Cloud SQL
 
 ### 3. AI/ML-Enhanced Applications
 
-```
+```text
 Frontend (Cloud Run/GKE)
     ↓
 AI Platform/Vertex AI
@@ -180,7 +180,7 @@ images:
 
 ### Autopilot vs Standard Mode
 
-**GKE Autopilot:**
+#### GKE Autopilot:
 
 ```yaml
 apiVersion: container.v1
@@ -197,7 +197,7 @@ spec:
 **Benefits:** Fully managed nodes, optimal resource utilization, built-in security
 **Use Cases:** Teams wanting minimal operational overhead
 
-**GKE Standard:**
+#### GKE Standard:
 
 ```yaml
 apiVersion: container.v1

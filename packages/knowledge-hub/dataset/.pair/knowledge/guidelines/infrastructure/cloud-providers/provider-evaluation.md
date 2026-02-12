@@ -43,7 +43,7 @@ Comprehensive framework for evaluating and selecting cloud providers based on te
 
 ## Decision Tree
 
-```
+```text
 Start: What is your primary use case?
 ├── Web Applications & APIs
 │   ├── Simple deployment needed? → Vercel
@@ -67,14 +67,14 @@ Start: What is your primary use case?
 
 ### AWS
 
-**Benefits:**
+#### Benefits:
 
 - Most mature service ecosystem
 - Extensive third-party integrations
 - Strong enterprise support
 - Comprehensive security features
 
-**Costs:**
+#### Costs:
 
 - Higher pricing for many services
 - Complex pricing model
@@ -82,14 +82,14 @@ Start: What is your primary use case?
 
 ### GCP
 
-**Benefits:**
+#### Benefits:
 
 - Competitive pricing
 - Strong AI/ML services
 - Excellent Kubernetes integration
 - Sustained use discounts
 
-**Costs:**
+#### Costs:
 
 - Smaller ecosystem
 - Less enterprise adoption
@@ -97,14 +97,14 @@ Start: What is your primary use case?
 
 ### Azure
 
-**Benefits:**
+#### Benefits:
 
 - Excellent Microsoft integration
 - Strong hybrid cloud capabilities
 - Competitive enterprise pricing
 - Good compliance certifications
 
-**Costs:**
+#### Costs:
 
 - Complex licensing model
 - Learning curve for non-Microsoft shops
@@ -112,14 +112,14 @@ Start: What is your primary use case?
 
 ### Vercel
 
-**Benefits:**
+#### Benefits:
 
 - Excellent developer experience
 - Zero-config deployments
 - Great for frontend applications
 - Built-in performance optimization
 
-**Costs:**
+#### Costs:
 
 - Limited to web applications
 - Higher costs at scale

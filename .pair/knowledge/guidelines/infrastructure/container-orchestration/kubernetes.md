@@ -65,6 +65,7 @@ Enterprise Kubernetes deployment requires multi-master architecture with load ba
 **Standard Production Configuration:**
 
 ```yaml
+
 # kubeadm-config.yaml - Production cluster
 apiVersion: kubeadm.k8s.io/v1beta3
 kind: ClusterConfiguration
@@ -80,15 +81,16 @@ etcd:
       - https://etcd1.company.com:2379
       - https://etcd2.company.com:2379
       - https://etcd3.company.com:2379
+
 ````
 
 ### High Availability Implementation
 
-**Automated Cluster Setup Process**
+#### Automated Cluster Setup Process
 
 Production cluster setup requires systematic approach with dependency validation, security configuration, and service verification. The process includes system preparation, Kubernetes installation, and cluster initialization.
 
-**Setup Process Overview:**
+#### Setup Process Overview:
 
 1. **System preparation**: Update packages, configure container runtime
 2. **Kubernetes installation**: Install kubelet, kubeadm, kubectl components
@@ -96,7 +98,7 @@ Production cluster setup requires systematic approach with dependency validation
 4. **Node joining**: Add additional control and worker nodes
 5. **Network setup**: Deploy CNI and configure network policies
 
-**High Availability Benefits:**
+#### High Availability Benefits:
 
 - **Zero downtime maintenance**: Rolling updates without service interruption
 - **Automatic failover**: Control plane redundancy with load balancing
@@ -104,6 +106,7 @@ Production cluster setup requires systematic approach with dependency validation
 - **Disaster recovery**: Multi-zone deployment with backup strategies
 
 ```bash
+
 # High availability cluster setup
 #!/bin/bash
 # Automated cluster setup script
@@ -121,6 +124,7 @@ init_cluster() {
     echo "🚀 Initializing cluster..."
     kubeadm init --config=kubeadm-config.yaml --upload-certs
 }
+
 ```
 
 ---
@@ -130,6 +134,7 @@ init_cluster() {
 ### Application Deployment Patterns
 
 ````yaml
+
 # production-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -192,11 +197,11 @@ spec:
 
 ### Application Deployment Patterns
 
-**Production-Ready Deployment Configuration**
+#### Production-Ready Deployment Configuration
 
 Enterprise Kubernetes deployments require comprehensive configuration including security contexts, resource limits, health checks, and proper scheduling constraints.
 
-**Key Deployment Components:**
+#### Key Deployment Components:
 
 - **Resource management**: CPU and memory limits with requests for proper scheduling
 - **Health monitoring**: Liveness, readiness, and startup probes for container health
@@ -247,11 +252,11 @@ spec:
 
 ### Auto-scaling Configuration
 
-**Intelligent Application Scaling**
+#### Intelligent Application Scaling
 
 Kubernetes autoscaling enables automatic resource adjustment based on demand through Horizontal Pod Autoscaler (HPA) and Vertical Pod Autoscaler (VPA).
 
-**Autoscaling Benefits:**
+#### Autoscaling Benefits:
 
 - **Demand responsiveness**: Automatic scaling based on CPU, memory, and custom metrics
 - **Resource optimization**: Efficient resource utilization and cost management
@@ -322,6 +327,7 @@ Kubernetes RBAC provides fine-grained access control for cluster resources throu
 - **Principle of least privilege**: Minimal necessary permissions
 
 ```yaml
+
 # rbac-configuration.yaml
 apiVersion: v1
 kind: ServiceAccount
@@ -357,17 +363,18 @@ roleRef:
   kind: Role
   name: web-app-role
   apiGroup: rbac.authorization.k8s.io
-````
 
 ````
+
+````text
 
 ### Network Policies
 
-**Network Segmentation and Security**
+#### Network Segmentation and Security
 
 Network policies provide micro-segmentation within Kubernetes clusters, controlling traffic flow between pods and external resources.
 
-**Network Policy Benefits:**
+#### Network Policy Benefits:
 
 - **Micro-segmentation**: Fine-grained control over network traffic between pods
 - **Security enforcement**: Default-deny policies with explicit allow rules

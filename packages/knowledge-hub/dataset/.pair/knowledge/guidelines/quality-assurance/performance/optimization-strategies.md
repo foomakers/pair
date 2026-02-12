@@ -8,7 +8,7 @@ Provide actionable optimization strategies and techniques that development teams
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Frontend optimization techniques and best practices
 - Backend performance optimization strategies
@@ -16,7 +16,7 @@ Provide actionable optimization strategies and techniques that development teams
 - Network and caching optimization strategies
 - Mobile and responsive performance optimization
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Infrastructure scaling and provisioning (covered in Infrastructure guidelines)
 - Specific tool configurations (covered in Level 3 guides)

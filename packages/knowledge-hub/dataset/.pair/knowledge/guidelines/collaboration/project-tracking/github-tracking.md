@@ -16,7 +16,7 @@ This guide covers GitHub Projects setup for tracking initiatives, epics, user st
 
 ### Recommended Board Configuration
 
-**Status Columns:**
+#### Status Columns:
 
 - `📋 Todo` - Items not yet started
 - `🔍 Refined` - User stories ready for development
@@ -24,7 +24,7 @@ This guide covers GitHub Projects setup for tracking initiatives, epics, user st
 - `👀 Review` - Items in code review
 - `✅ Done` - Completed items
 
-**Column Limits (Optional):**
+#### Column Limits (Optional):
 
 - In Progress: 3-5 items per team member
 - Review: No more than 2x team size
@@ -66,13 +66,13 @@ This guide covers GitHub Projects setup for tracking initiatives, epics, user st
 
 ### Creating Initiatives
 
-**Via MCP GitHub Server:**
+#### Via MCP GitHub Server:
 
 ```bash
 pair "Create a strategic initiative: '[Initiative Name]' with description '[Description]' and priority P1 in GitHub project"
 ```
 
-**Manual Creation:**
+#### Manual Creation:
 
 1. Create GitHub issue with title: "Initiative: [Name]"
 2. Add to project board
@@ -122,7 +122,7 @@ pair "Create a strategic initiative: '[Initiative Name]' with description '[Desc
 
 ### Creating Epics
 
-**Via MCP GitHub Server:**
+#### Via MCP GitHub Server:
 
 ```bash
 pair "Create an epic: '[Epic Name]' under initiative #[initiative_number] with priority P1"
@@ -181,13 +181,13 @@ Related to: #[initiative_number]
 
 ### Project Field Management
 
-**Set Priority via MCP:**
+#### Set Priority via MCP:
 
 ```bash
 pair "Set priority P0 for GitHub issue #[issue_number] in project board"
 ```
 
-**Set Status via Board:**
+#### Set Status via Board:
 
 1. Drag items between columns for status updates
 2. Status automatically syncs with issue state
@@ -195,13 +195,13 @@ pair "Set priority P0 for GitHub issue #[issue_number] in project board"
 
 ### Hierarchy Tracking
 
-**Initiative Progress:**
+#### Initiative Progress:
 
 - Calculated based on completed epics
 - Visual progress bars in project views
 - Automatic status updates
 
-**Epic Progress:**
+#### Epic Progress:
 
 - Based on user story completion
 - Story point aggregation (if using effort field)
@@ -209,14 +209,14 @@ pair "Set priority P0 for GitHub issue #[issue_number] in project board"
 
 ### Velocity Tracking
 
-**Story Points Method:**
+#### Story Points Method:
 
 1. Assign effort field to user stories
 2. Track completion per sprint
 3. Calculate team velocity over time
 4. Use for sprint planning and forecasting
 
-**Throughput Method:**
+#### Throughput Method:
 
 1. Count completed stories per sprint
 2. Track cycle time (start to done)
@@ -293,7 +293,7 @@ gh project item-list [project_number] --format json > project_data.json
 
 ### With Issue Management
 
-**→ See [.pair/knowledge/guidelines/collaboration/issue-management/github-issues.md](../issue-management/github-issues.md)**
+#### → See [.pair/knowledge/guidelines/collaboration/issue-management/github-issues.md](../issue-management/github-issues.md)
 
 - Automatic issue addition to boards
 - Label synchronization with custom fields
@@ -301,7 +301,7 @@ gh project item-list [project_number] --format json > project_data.json
 
 ### With Automation
 
-**→ See [.pair/knowledge/guidelines/collaboration/automation/github-automation.md](../automation/github-automation.md)**
+#### → See [.pair/knowledge/guidelines/collaboration/automation/github-automation.md](../automation/github-automation.md)
 
 - Automated board updates
 - Status synchronization rules

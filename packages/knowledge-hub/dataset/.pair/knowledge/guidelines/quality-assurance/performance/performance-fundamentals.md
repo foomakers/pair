@@ -8,7 +8,7 @@ Establish foundational performance knowledge and principles that guide the devel
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Performance concepts and measurement principles
 - User-centric performance metrics and goals
@@ -16,7 +16,7 @@ Establish foundational performance knowledge and principles that guide the devel
 - Frontend and backend performance fundamentals
 - Network and rendering performance principles
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Specific tool implementations (covered in Level 3 guides)
 - Platform-specific optimization techniques

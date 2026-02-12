@@ -4,7 +4,7 @@
 
 This section covers comprehensive development tooling standards and environment management:
 
-**In Scope:**
+#### In Scope:
 
 - Essential development tools and IDE configurations
 - Workflow automation and productivity optimization tools
@@ -13,7 +13,7 @@ This section covers comprehensive development tooling standards and environment 
 - Tool integration and configuration management
 - Performance monitoring and optimization tools
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Application runtime environments (covered in Infrastructure)
 - Production monitoring tools (covered in Monitoring)
@@ -91,11 +91,12 @@ Configuration Requirements:
 - AI model configuration and policies
 - Code formatting and linting integration
 
-````
+````text
 
 #### **Alternative IDE: VS Code** - Traditional Development
 
 ```yaml
+
 Strategic Role: Fallback option for traditional development workflows
 Key Capabilities:
 
@@ -109,6 +110,7 @@ When to Use:
   - Team members requiring traditional IDE experience
   - Specific extension requirements not available in Cursor
   - Performance-critical debugging scenarios
+
 ````
 
 ### Package Management & Build Tools
@@ -116,6 +118,7 @@ When to Use:
 #### **pnpm** - Dependency Management
 
 ```yaml
+
 Strategic Advantages:
 
   - Disk space efficiency with symlinked node_modules
@@ -128,11 +131,13 @@ Configuration Standards:
   - Workspace configuration for monorepo management
   - Lock file policies and security settings
   - Registry configuration and private package support
+
 ```
 
 #### **Turbo** - Build System Optimization
 
 ```yaml
+
 Strategic Capabilities:
 
   - Intelligent build caching and parallelization
@@ -145,6 +150,7 @@ Integration Requirements:
   - Pipeline configuration for all package types
   - Remote cache setup for team efficiency
   - Development vs. production build optimization
+
 ```
 
 ### Quality Assurance Tools
@@ -152,6 +158,7 @@ Integration Requirements:
 #### **TypeScript** - Type Safety Foundation
 
 ```yaml
+
 Configuration Strategy:
 
   - Strict mode enabled across all packages
@@ -164,11 +171,13 @@ Quality Standards:
   - Zero 'any' types in production code
   - Comprehensive type coverage requirements
   - Automated type checking in CI/CD pipelines
+
 ```
 
 #### **ESLint + Prettier** - Code Quality & Formatting
 
 ```yaml
+
 ESLint Configuration:
 
   - TypeScript-aware linting rules
@@ -181,6 +190,7 @@ Prettier Integration:
   - Automatic formatting on save
   - Consistent code style across team
   - Integration with Git hooks and CI/CD
+
 ```
 
 ## AI-Enhanced Development Tools
@@ -190,6 +200,7 @@ Prettier Integration:
 #### **GitHub Copilot** - Code Completion
 
 ```yaml
+
 Use Cases:
 
   - Inline code suggestions and completion
@@ -203,11 +214,13 @@ Team Policies:
   - Usage guidelines and best practices
   - Code review requirements for AI-generated code
   - Privacy and security considerations
+
 ```
 
 #### **Custom AI Workflows** - Context-Aware Development
 
 ```yaml
+
 Implementation Strategy:
 
   - Project-specific AI prompts and templates
@@ -220,6 +233,7 @@ Quality Assurance:
   - Human review requirements for AI-generated code
   - Automated testing of AI suggestions
   - Security scanning for AI-generated content
+
 ```
 
 ## Development Environment Standards
@@ -229,6 +243,7 @@ Quality Assurance:
 #### **Environment Configuration**
 
 ```yaml
+
 Required Components:
 
   - Node.js (LTS version) with pnpm package manager
@@ -242,11 +257,13 @@ Automated Setup:
   - Docker Compose for local service dependencies
   - Database seeding and test data management
   - Development certificate and SSL configuration
+
 ```
 
 #### **Service Orchestration**
 
 ```yaml
+
 Local Services:
 
   - PostgreSQL database with development data
@@ -260,6 +277,7 @@ Configuration Management:
   - Service discovery and configuration
   - Development vs. production parity
   - Security and access control for local services
+
 ```
 
 ### Team Collaboration Tools
@@ -267,6 +285,7 @@ Configuration Management:
 #### **Configuration Sharing**
 
 ```yaml
+
 Shared Configurations:
 
   - IDE settings and extension recommendations
@@ -280,6 +299,7 @@ Synchronization Strategy:
   - Team-wide setting updates and notifications
   - Documentation for configuration changes
   - Onboarding automation for new team members
+
 ```
 
 ## Tool Selection Decision Framework
@@ -316,6 +336,7 @@ Synchronization Strategy:
 #### **Build Performance Optimization**
 
 ```yaml
+
 Strategies:
 
   - Turbo caching for build acceleration
@@ -329,11 +350,13 @@ Monitoring:
   - Development server performance metrics
   - Resource utilization monitoring
   - Bottleneck identification and resolution
+
 ```
 
 #### **IDE Performance Management**
 
 ```yaml
+
 Optimization Techniques:
 
   - Extension management and performance monitoring
@@ -346,6 +369,7 @@ Performance Standards:
   - Maximum IDE startup time requirements
   - Code completion response time standards
   - File search and navigation performance targets
+
 ```
 
 ## Security & Compliance

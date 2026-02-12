@@ -4,7 +4,7 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ## When to Use
 
-**Essential for:**
+#### Essential for:
 
 - Claude Desktop integration with external tools
 - Custom tool development for AI assistants
@@ -13,7 +13,7 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 - Multi-modal AI assistant capabilities
 - Real-time data access for AI conversations
 
-**Consider alternatives for:**
+#### Consider alternatives for:
 
 - Simple API integrations without AI context
 - One-time data processing tasks
@@ -24,28 +24,28 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 1. Core Components
 
-**MCP Server:**
+#### MCP Server:
 
 - Implements MCP protocol specification
 - Exposes tools, resources, and prompts
 - Handles client connections and requests
 - Manages authentication and authorization
 
-**Transport Layer:**
+#### Transport Layer:
 
 - Stdio transport for local development
 - WebSocket transport for remote connections
 - HTTP transport for web-based integrations
 - Message serialization and routing
 
-**MCP Client:**
+#### MCP Client:
 
 - Claude Desktop or other AI assistants
 - Manages server connections and lifecycle
 - Routes user requests to appropriate servers
 - Handles responses and error conditions
 
-**Tools, Resources, and Prompts:**
+#### Tools, Resources, and Prompts:
 
 - Tools: Executable functions for AI assistants
 - Resources: Read-only data sources and files
@@ -53,14 +53,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 2. Protocol Components
 
-**Server Capabilities:**
+#### Server Capabilities:
 
 - Advertise available tools and resources
 - Define supported operations and limits
 - Specify authentication requirements
 - Declare protocol version compatibility
 
-**Message Types:**
+#### Message Types:
 
 - Tool calls and responses
 - Resource access requests
@@ -71,14 +71,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 1. Simple Tool Server
 
-**Basic Structure:**
+#### Basic Structure:
 
 - Single-purpose server with focused tools
 - Minimal configuration and setup
 - Local stdio transport
 - Direct function implementations
 
-**Use Cases:**
+#### Use Cases:
 
 - File system operations
 - Calculator and utility functions
@@ -87,14 +87,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 2. Resource Server
 
-**Basic Structure:**
+#### Basic Structure:
 
 - Read-only access to data sources
 - File system or database integration
 - Structured data exposure
 - Search and filtering capabilities
 
-**Use Cases:**
+#### Use Cases:
 
 - Documentation access
 - Knowledge base integration
@@ -103,14 +103,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 3. Enterprise Integration Server
 
-**Basic Structure:**
+#### Basic Structure:
 
 - Multi-tool server with business logic
 - Authentication and authorization
 - Rate limiting and monitoring
 - Error handling and logging
 
-**Use Cases:**
+#### Use Cases:
 
 - CRM and business system integration
 - Database operations and reporting
@@ -119,14 +119,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 4. Multi-Modal Server
 
-**Basic Structure:**
+#### Basic Structure:
 
 - Image, audio, and video processing
 - File upload and conversion
 - Media analysis and generation
 - Cross-modal operations
 
-**Use Cases:**
+#### Use Cases:
 
 - Image analysis and processing
 - Document conversion and parsing
@@ -137,21 +137,21 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 1. Server Development
 
-**Project Setup:**
+#### Project Setup:
 
 - Choose appropriate language and framework
 - Install MCP SDK or implement protocol directly
 - Set up development and testing environment
 - Configure transport and communication
 
-**Tool Implementation:**
+#### Tool Implementation:
 
 - Define clear tool schemas and parameters
 - Implement robust error handling
 - Add input validation and sanitization
 - Provide helpful error messages
 
-**Resource Implementation:**
+#### Resource Implementation:
 
 - Design efficient data access patterns
 - Implement caching where appropriate
@@ -160,14 +160,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 2. Configuration Management
 
-**Server Configuration:**
+#### Server Configuration:
 
 - Environment-specific settings
 - Authentication credentials
 - Rate limiting and timeouts
 - Logging and monitoring configuration
 
-**Client Configuration:**
+#### Client Configuration:
 
 - Server connection details
 - Authentication setup
@@ -176,21 +176,21 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 3. Security Considerations
 
-**Authentication:**
+#### Authentication:
 
 - API key management
 - OAuth integration
 - Certificate-based authentication
 - Session management
 
-**Authorization:**
+#### Authorization:
 
 - Role-based access control
 - Resource-level permissions
 - Tool-specific restrictions
 - Audit logging
 
-**Data Protection:**
+#### Data Protection:
 
 - Input sanitization
 - Output filtering
@@ -201,14 +201,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 1. Stdio Transport
 
-**Characteristics:**
+#### Characteristics:
 
 - Local process communication
 - Simple setup and configuration
 - Low latency for local operations
 - No network security concerns
 
-**Use Cases:**
+#### Use Cases:
 
 - Development and testing
 - Local utility tools
@@ -217,14 +217,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 2. WebSocket Transport
 
-**Characteristics:**
+#### Characteristics:
 
 - Real-time bidirectional communication
 - Persistent connection for efficiency
 - Support for remote servers
 - More complex setup and management
 
-**Use Cases:**
+#### Use Cases:
 
 - Remote server integration
 - Real-time data streaming
@@ -233,14 +233,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 3. HTTP Transport
 
-**Characteristics:**
+#### Characteristics:
 
 - Request-response communication
 - RESTful API integration
 - Standard web protocols
 - Stateless operation model
 
-**Use Cases:**
+#### Use Cases:
 
 - Web service integration
 - API gateway patterns
@@ -251,14 +251,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 1. Simple Function Tools
 
-**Characteristics:**
+#### Characteristics:
 
 - Single-purpose functionality
 - Clear input and output schemas
 - Stateless operation
 - Fast execution time
 
-**Examples:**
+#### Examples:
 
 - Mathematical calculations
 - Text formatting and manipulation
@@ -267,14 +267,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 2. Data Access Tools
 
-**Characteristics:**
+#### Characteristics:
 
 - Database or file system access
 - Search and query capabilities
 - Pagination and filtering
 - Structured data response
 
-**Examples:**
+#### Examples:
 
 - Database queries
 - File searches
@@ -283,14 +283,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 3. External Integration Tools
 
-**Characteristics:**
+#### Characteristics:
 
 - Third-party service integration
 - Authentication and API management
 - Rate limiting and retries
 - Complex data transformation
 
-**Examples:**
+#### Examples:
 
 - CRM system integration
 - Social media APIs
@@ -299,14 +299,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 4. Workflow Tools
 
-**Characteristics:**
+#### Characteristics:
 
 - Multi-step operations
 - State management
 - Progress tracking
 - Error recovery
 
-**Examples:**
+#### Examples:
 
 - Document processing pipelines
 - Data import/export workflows
@@ -317,21 +317,21 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 1. Error Types
 
-**Tool Errors:**
+#### Tool Errors:
 
 - Invalid parameters
 - Missing permissions
 - Resource not found
 - External service failures
 
-**Transport Errors:**
+#### Transport Errors:
 
 - Connection failures
 - Timeout errors
 - Protocol violations
 - Authentication failures
 
-**Server Errors:**
+#### Server Errors:
 
 - Internal server errors
 - Resource exhaustion
@@ -340,21 +340,21 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 2. Error Handling Strategies
 
-**Graceful Degradation:**
+#### Graceful Degradation:
 
 - Partial functionality when possible
 - Fallback mechanisms
 - User-friendly error messages
 - Alternative approaches
 
-**Retry Mechanisms:**
+#### Retry Mechanisms:
 
 - Exponential backoff
 - Circuit breaker patterns
 - Idempotent operations
 - State recovery
 
-**Monitoring and Alerting:**
+#### Monitoring and Alerting:
 
 - Error rate tracking
 - Performance monitoring
@@ -365,14 +365,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 1. Response Time Optimization
 
-**Strategies:**
+#### Strategies:
 
 - Caching frequently accessed data
 - Parallel processing where possible
 - Connection pooling
 - Lazy loading and pagination
 
-**Monitoring:**
+#### Monitoring:
 
 - Response time percentiles
 - Throughput measurements
@@ -381,14 +381,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 2. Scalability Patterns
 
-**Horizontal Scaling:**
+#### Horizontal Scaling:
 
 - Stateless server design
 - Load balancing
 - Shared data stores
 - Message queues
 
-**Vertical Scaling:**
+#### Vertical Scaling:
 
 - Resource optimization
 - Memory management
@@ -399,14 +399,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 1. Unit Testing
 
-**Test Coverage:**
+#### Test Coverage:
 
 - Tool function testing
 - Input validation
 - Error condition handling
 - Mock external dependencies
 
-**Test Strategies:**
+#### Test Strategies:
 
 - Automated test suites
 - Property-based testing
@@ -415,14 +415,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 2. Integration Testing
 
-**Test Scenarios:**
+#### Test Scenarios:
 
 - End-to-end tool execution
 - Multiple client connections
 - Error propagation
 - Authentication flows
 
-**Test Environment:**
+#### Test Environment:
 
 - Isolated test servers
 - Mock external services
@@ -433,14 +433,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 1. Deployment Patterns
 
-**Local Deployment:**
+#### Local Deployment:
 
 - Single-user desktop integration
 - Development environment
 - Portable server packages
 - Configuration management
 
-**Remote Deployment:**
+#### Remote Deployment:
 
 - Cloud-based servers
 - Container orchestration
@@ -449,21 +449,21 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 2. Monitoring and Observability
 
-**Key Metrics:**
+#### Key Metrics:
 
 - Request/response rates
 - Error rates and types
 - Response time distribution
 - Resource utilization
 
-**Logging:**
+#### Logging:
 
 - Structured logging
 - Request/response logging
 - Error and exception logging
 - Audit trail maintenance
 
-**Alerting:**
+#### Alerting:
 
 - Performance thresholds
 - Error rate limits
@@ -474,21 +474,21 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 1. Design Principles
 
-**Simplicity:**
+#### Simplicity:
 
 - Focus on specific use cases
 - Minimize complexity
 - Clear and consistent APIs
 - Self-documenting interfaces
 
-**Reliability:**
+#### Reliability:
 
 - Robust error handling
 - Graceful failure modes
 - Consistent behavior
 - Thorough testing
 
-**Security:**
+#### Security:
 
 - Principle of least privilege
 - Input validation
@@ -497,14 +497,14 @@ Architecture patterns and implementation guidelines for developing MCP servers a
 
 ### 2. Development Guidelines
 
-**Code Quality:**
+#### Code Quality:
 
 - Clear naming conventions
 - Comprehensive documentation
 - Code reviews and testing
 - Performance profiling
 
-**Protocol Compliance:**
+#### Protocol Compliance:
 
 - Follow MCP specification
 - Handle all message types

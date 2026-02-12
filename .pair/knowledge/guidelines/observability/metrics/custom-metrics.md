@@ -6,7 +6,7 @@ Define guidelines for creating domain-specific and business-logic metrics that p
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Custom metric design principles
 - Domain-specific measurement strategies
@@ -15,7 +15,7 @@ Define guidelines for creating domain-specific and business-logic metrics that p
 - Naming conventions and standards
 - Performance impact considerations
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Standard infrastructure metrics
 - Generic application metrics

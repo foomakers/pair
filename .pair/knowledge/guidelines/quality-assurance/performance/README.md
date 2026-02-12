@@ -4,7 +4,7 @@
 
 Comprehensive performance optimization framework ensuring optimal user experience through systematic performance measurement, monitoring, and optimization across all system layers and user interactions.
 
-**In Scope:**
+#### In Scope:
 
 - Core Web Vitals optimization (LCP, FID, CLS, FCP)
 - Frontend and backend performance optimization
@@ -13,7 +13,7 @@ Comprehensive performance optimization framework ensuring optimal user experienc
 - Performance budgets and targets
 - Deployment optimization strategies
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Infrastructure scaling (covered in infrastructure guidelines)
 - Database optimization (covered in technical standards)
@@ -97,7 +97,7 @@ Performance optimization requires a systematic approach that considers every lay
 
 ### **Decision Tree: Performance Tool Selection**
 
-```
+```text
 Start → Monitoring Needs?
 ├─ Development Only → Lighthouse + Chrome DevTools
 ├─ Production Monitoring → Budget?
@@ -189,7 +189,7 @@ Start → Monitoring Needs?
 
 ### **Decision Tree: Performance Tool Selection**
 
-```
+```text
 Start → Application Type?
 ├─ Web Application → Budget?
 │  ├─ Limited → Lighthouse + WebPageTest + Core Web Vitals

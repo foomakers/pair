@@ -92,7 +92,7 @@ This framework addresses:
 
 **Question Hierarchy**:
 
-```
+```text
 Business Questions → Research Questions → Method Selection → Data Collection
         ↓                    ↓                 ↓               ↓
 Strategic Goals → User Insights → Methodology → Evidence
@@ -107,28 +107,28 @@ Strategic Goals → User Insights → Methodology → Evidence
 
 ### Research Design Process
 
-**Phase 1: Research Planning (Week 1)**
+#### Phase 1: Research Planning (Week 1)
 
 - Research objective definition and stakeholder alignment
 - Methodology selection and protocol development
 - Participant recruitment strategy and criteria definition
 - Timeline, budget, and resource allocation planning
 
-**Phase 2: Data Collection (Weeks 2-4)**
+#### Phase 2: Data Collection (Weeks 2-4)
 
 - Participant screening and session scheduling
 - Data collection execution with quality monitoring
 - Real-time observation and preliminary insight capture
 - Data security and privacy compliance maintenance
 
-**Phase 3: Analysis and Synthesis (Week 5)**
+#### Phase 3: Analysis and Synthesis (Week 5)
 
 - Qualitative data coding and thematic analysis
 - Quantitative data statistical analysis and interpretation
 - Cross-method triangulation and insight validation
 - Actionable insight development and prioritization
 
-**Phase 4: Communication and Implementation (Week 6)**
+#### Phase 4: Communication and Implementation (Week 6)
 
 - Finding presentation and stakeholder communication
 - Recommendation development and implementation planning

@@ -4,7 +4,7 @@
 
 This section covers code-level design patterns, principles, and organization strategies:
 
-**In Scope:**
+#### In Scope:
 
 - Framework-specific patterns and implementations
 - Design principles and coding standards
@@ -12,7 +12,7 @@ This section covers code-level design patterns, principles, and organization str
 - Quality standards and automation tools
 - Package management and dependency strategies
 
-**Out of Scope:**
+#### Out of Scope:
 
 - System architecture patterns (covered in Architecture)
 - Infrastructure code organization (covered in Infrastructure)
