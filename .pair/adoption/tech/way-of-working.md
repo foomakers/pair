@@ -16,10 +16,10 @@
 
 ### Custom Gate Registry
 
-| Order | Gate          | Command            | Scope Key  | Required | Description                      |
-| ----- | ------------- | ------------------ | ---------- | -------- | -------------------------------- |
-| 1     | Formatting    | `pnpm prettier:fix` | formatting | No       | Prettier auto-fix and verify     |
-| 2     | Markdown Lint | `pnpm mdlint:fix`   | mdlint     | No       | Markdownlint auto-fix and verify |
+| Order | Gate         | Command             | Scope Key | Required | Description                                     |
+| ----- | ------------ | ------------------- | --------- | -------- | ----------------------------------------------- |
+| 1     | Quality Gate | `pnpm quality-gate` | quality   | Yes      | build test and formatting check&fix             |
+| 2     | Smoke tests  | `pnpm smoke-tests`  | testing   | Yes      | smoke test to check all e2e cli release process |
 
 ---
 
