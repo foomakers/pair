@@ -1,0 +1,13 @@
+{
+  "name": "@pair/markdownlint-config",
+  "version": "0.3.0",
+  "private": true,
+  "main": ".markdownlint.jsonc",
+  "bin": {
+    "markdownlint-check": "./bin/markdownlint-check.sh",
+    "markdownlint-fix": "./bin/markdownlint-fix.sh"
+  },
+  "devDependencies": {
+    "markdownlint-cli": "catalog:"
+  }
+}

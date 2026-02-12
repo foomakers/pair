@@ -11,7 +11,7 @@
 
 The Knowledge Hub reorganization has been **successfully completed** with all critical task objectives met. The guidelines folder has been migrated to the 3-level structure, all links are functioning correctly, and the full test suite passes without issues.
 
-### **Final Completion Status**:
+### **Final Completion Status**
 
 - **Phase 1 (Foundation)**: 3/3 ✅ 100%
 - **Phase 2 (Implementation)**: 2/2 ✅ 100%
@@ -46,7 +46,7 @@ The Knowledge Hub reorganization has been **successfully completed** with all cr
 
 ### **Link Validation (Final Check)**
 
-```
+```text
 > @pair/knowledge-hub@0.1.0 check:links
 No previous errors file to delete or delete failed.
 All markdown links are valid.
@@ -59,7 +59,7 @@ Normalized full links: 0
 
 ### **Repository Smoke-Tests**
 
-```
+```text
  Test Files  6 passed (6)
       Tests  60 passed | 2 skipped (62)
    Duration  467ms
@@ -104,7 +104,7 @@ Normalized full links: 0
 
 ### **Guidelines Folder Structure (Post-Migration)**
 
-```
+```text
 /.pair/knowledge/guidelines/
 ├── README.md (theme index)
 ├── architecture/ (theme)

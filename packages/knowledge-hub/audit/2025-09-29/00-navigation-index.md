@@ -13,10 +13,12 @@ This knowledge base provides comprehensive documentation for AI-assisted softwar
 ### 📚 Quick Access - Current Files
 
 **Getting Started:**
+
 - [Getting Started Guide](getting-started.md) - Project onboarding and initial setup
 - [Way of Working](way-of-working.md) - Development methodology and processes
 
 **Complete How-To Guides (13):**
+
 - [01: Create PRD](how-to/01-how-to-create-PRD.md) - Product Requirements Document
 - [02: Bootstrap Checklist](how-to/02-how-to-complete-bootstrap-checklist.md) - Project setup
 - [03: Create Initiatives](how-to/03-how-to-create-and-prioritize-initiatives.md) - Strategic planning
@@ -32,6 +34,7 @@ This knowledge base provides comprehensive documentation for AI-assisted softwar
 - [13: Code Review](how-to/13-how-to-code-review.md) - Review guidelines
 
 **Technical Guidelines (26):**
+
 - [Guidelines Index](guidelines/README.md) - Complete guidelines overview
 - [01: Architecture](guidelines/01-architectural-guidelines.md) - System design patterns
 - [02: Code Design](guidelines/02-code-design-guidelines.md) - Code organization
@@ -47,6 +50,7 @@ This knowledge base provides comprehensive documentation for AI-assisted softwar
 - [12: Collaboration](guidelines/12-collaboration-and-process-guidelines/README.md) - **Process framework**
 
 **Assets & Templates (8):**
+
 - [Bootstrap Checklist](assets/bootstrap-checklist.md) - Setup checklist template
 - [PRD Example](assets/PRD_example.md) - Product requirements example
 - [PRD Template](assets/PRD_template.md) - Product requirements template
@@ -61,34 +65,45 @@ The knowledge base will be reorganized into the following 3-level hierarchy:
 ### Level 1: Theme Folders
 
 #### 🚀 **getting-started/** - Project Onboarding
+
 *Quick start guides and initial setup procedures*
 
 #### 🏗️ **architecture/** - System Design  
+
 *Architectural guidelines, patterns, and bounded contexts*
 
 #### 💻 **development/** - Code & Implementation
+
 *Development practices, testing, and technical standards*
 
 #### 🤝 **collaboration/** - Process & Workflow
+
 *Project management, reviews, and team coordination*
 
 #### ✅ **quality/** - Standards & Assurance
+
 *Quality criteria, accessibility, performance, and security*
 
 #### 🔧 **operations/** - Infrastructure & Monitoring
+
 *Infrastructure setup, observability, and operational practices*
 
 #### 📋 **assets/** - Templates & Resources
+
 *Reusable templates, examples, and reference materials*
 
 ### Level 2: Theme READMEs
+
 Each theme folder contains a `README.md` that:
+
 - Lists practices within the theme (short descriptions)
 - Links to Level 3 practice files
 - Includes minimal assistant context hints (1-2 lines)
 
 ### Level 3: Practice Files  
+
 Individual practice files containing:
+
 - Detailed implementation guidance
 - Tool-specific instructions
 - Examples and templates
@@ -97,6 +112,7 @@ Individual practice files containing:
 ## Migration Progress
 
 **Current Status:** Planning Phase
+
 - [x] Audit completed (`packages/knowledge-hub/audit/2025-09-29/`)
 - [x] Index structure defined (this file)
 - [ ] Mapping JSONs prepared

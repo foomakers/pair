@@ -39,7 +39,9 @@
     "lint": "lint",
     "lint:fix": "lint-fix",
     "prettier:fix": "prettier-fix",
-    "prettier:check": "prettier-check"
+    "prettier:check": "prettier-check",
+    "mdlint:check": "markdownlint-check",
+    "mdlint:fix": "markdownlint-fix"
   },
   "dependencies": {
     "@pair/knowledge-hub": "workspace:*",
@@ -53,6 +55,7 @@
     "@pair/content-ops": "workspace:*",
     "@pair/eslint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
+    "@pair/markdownlint-config": "workspace:*",
     "@types/adm-zip": "catalog:",
     "@types/node": "catalog:",
     "@vitest/coverage-v8": "catalog:",

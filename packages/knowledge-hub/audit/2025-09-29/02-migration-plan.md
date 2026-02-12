@@ -30,7 +30,7 @@ Only `guidelines/` folder (26 files) → reorganized into themed structure
 
 **Target Structure:**
 
-```
+```text
 packages/knowledge-hub/dataset/.pair/knowledge/
 ├── getting-started.md (unchanged)
 ├── way-of-working.md (unchanged)

@@ -55,6 +55,7 @@ A registry can declare multiple targets. Exactly one must have `mode: 'canonical
 When a target includes a `transform` property, content transformations are applied during distribution. The transform uses marker comments in source files (`<!-- @{prefix}-skip-start -->` / `<!-- @{prefix}-skip-end -->`) to control which sections are included per target. The `transform` property is incompatible with `mode: 'symlink'` (validation will reject this combination).
 
 Content-transform helpers:
+
 - `stripAllMarkers(content)` -- removes all marker comments (`<!-- @*-*-start -->` / `<!-- @*-*-end -->`) from content, regardless of prefix
 - `applyTransformCommands(content, prefix)` -- applies transform commands for the given prefix (e.g., removes sections enclosed in `<!-- @{prefix}-skip-start -->` / `<!-- @{prefix}-skip-end -->`) and then strips all remaining markers
 
@@ -65,6 +66,7 @@ Windows note: symlink targets are rejected on Windows (`process.platform === 'wi
 When `flatten: true`, directory paths like `process/implement` become `process-implement`. When `prefix` is set (e.g., `'pair'`), the top-level directory is prefixed: `process-implement` → `pair-process-implement`. Order: flatten first, then prefix.
 
 Naming transform helpers:
+
 - `flattenPath(dirName)` — replaces `/` with `-`
 - `prefixPath(dirName, prefix)` — prepends prefix to top-level segment
 - `transformPath(dirName, { flatten, prefix })` — applies both
@@ -81,7 +83,7 @@ After transform-aware copies, markdown links are automatically rewritten to matc
 
 ## Package Structure
 
-```
+```text
 src/
 ├── index.ts                 # Main exports
 ├── observability.ts         # Logging and monitoring utilities

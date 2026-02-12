@@ -40,11 +40,14 @@
     "test:coverage": "vitest run --coverage",
     "ts:check": "tsc --noEmit",
     "lint": "lint",
-    "lint:fix": "lint-fix"
+    "lint:fix": "lint-fix",
+    "mdlint:check": "markdownlint-check",
+    "mdlint:fix": "markdownlint-fix"
   },
   "devDependencies": {
     "@pair/eslint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
+    "@pair/markdownlint-config": "workspace:*",
     "@types/adm-zip": "^0.5.5",
     "@types/markdown-it": "catalog:",
     "@types/mdast": "catalog:",

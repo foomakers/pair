@@ -29,7 +29,7 @@ SESSION STATE:
 └── PM Access: [MCP command | URL/location for project management queries]
 ```
 
-#### Example session state:
+### Example session state
 
 ```text
 How-to: 10-how-to-implement-a-task.md
@@ -38,14 +38,14 @@ PM Tool: GitHub Projects
 PM Access: MCP github_projects (org: mycompany, repo: myproject)
 ```
 
-### How to establish session context:
+### How to establish session context
 
 1. **Determine how-to**: Use task selection algorithm below
 2. **Identify role**: Check user language/request type, or ask if unclear
 3. **Find PM tool**: Read `.pair/tech/adopted/way-of-working.md` to get the current project management tool
 4. **Get PM access**: Extract tool-specific access instructions from `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md`
 
-#### PM Tool Setup Process:
+#### PM Tool Setup Process
 
 - **Primary source**: `.pair/tech/adopted/way-of-working.md` (contains the adopted PM tool)
 - **Usage instructions**: `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` (contains tool-specific guidance)
@@ -130,7 +130,7 @@ pnpm lint --filter <package_name>
 
 **Use the index**: Load `.pair/how-to/index.json` and match user request keywords to task `tags`
 
-#### Workflow categories:
+### Workflow categories
 
 - **Getting started / new project?** → Induction tasks
 - **Planning roadmap / high-level design?** → Strategic tasks
@@ -138,7 +138,7 @@ pnpm lint --filter <package_name>
 - **Writing code / implementing?** → Execution tasks
 - **Quality checks / reviewing?** → Review tasks
 
-#### Role hints in request:
+#### Role hints in request
 
 - Product Manager language → prefer `role_preference: ["product-manager"]` tasks
 - Technical/code language → prefer `product-engineer` or `staff-engineer` tasks
@@ -218,7 +218,7 @@ function isLocalPath(str: string): boolean {
 
 ## 📝 Session Context Examples
 
-#### Example 1: Implementation task
+### Example 1: Implementation task
 
 ```text
 SESSION STATE:
@@ -228,7 +228,7 @@ SESSION STATE:
 └── PM Access: MCP github_projects --org=mycompany --repo=myproject
 ```
 
-#### Example 2: Planning task
+### Example 2: Planning task
 
 ```text
 SESSION STATE:
@@ -238,7 +238,7 @@ SESSION STATE:
 └── PM Access: https://linear.app/myteam/projects/active
 ```
 
-#### Example 3: Review task
+### Example 3: Review task
 
 ```text
 SESSION STATE:
