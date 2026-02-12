@@ -359,7 +359,68 @@ describe('install — KB distribution pipeline bug regression', () => {
   })
 })
 
-describe('install — skill ref rewrite with agents-before-skills order', () => {
+describe('install — Bug 4: skill refs in secondary (copy) targets', () => {
+  test('CLAUDE.md (copy target) gets skill refs rewritten after install', async () => {
+    const moduleDir = '/project'
+    const datasetSrc = `${moduleDir}/packages/knowledge-hub/dataset`
+
+    const config_json = {
+      asset_registries: {
+        agents: {
+          source: 'AGENTS.md',
+          behavior: 'mirror',
+          description: 'AI agents guidance',
+          targets: [
+            { path: 'AGENTS.md', mode: 'canonical' },
+            { path: 'CLAUDE.md', mode: 'copy', transform: { prefix: 'claude' } },
+          ],
+        },
+        skills: {
+          source: '.skills',
+          behavior: 'mirror',
+          flatten: true,
+          prefix: 'pair',
+          description: 'Agent skills',
+          targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+        },
+      },
+    }
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${moduleDir}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${moduleDir}/config.json`]: JSON.stringify(config_json),
+        [`${datasetSrc}/.skills/process/next/SKILL.md`]: '# /next — Navigator',
+        [`${datasetSrc}/.skills/capability/verify-quality/SKILL.md`]:
+          '# /verify-quality — Quality Gate',
+        [`${datasetSrc}/AGENTS.md`]:
+          '# AGENTS\n\nRun /next to start.\nUse /verify-quality for checks.\n',
+      },
+      moduleDir,
+      moduleDir,
+    )
+
+    const installConfig: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleInstallCommand(installConfig, fs)
+
+    const claudeContent = await fs.readFile(`${moduleDir}/CLAUDE.md`)
+    expect(claudeContent).toContain('/pair-process-next')
+    expect(claudeContent).toContain('/pair-capability-verify-quality')
+    expect(claudeContent).not.toMatch(/(?<![a-z-])\/next(?![a-z-])/)
+    expect(claudeContent).not.toMatch(/(?<![a-z-])\/verify-quality(?![a-z-])/)
+  })
+})
+
+describe('install — Bug 5: skill ref rewrite with agents-before-skills order', () => {
   test('AGENTS.md refs are rewritten even when agents precedes skills in config', async () => {
     const moduleDir = '/project'
     const datasetSrc = `${moduleDir}/packages/knowledge-hub/dataset`
