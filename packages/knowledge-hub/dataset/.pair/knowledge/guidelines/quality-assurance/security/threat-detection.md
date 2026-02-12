@@ -8,7 +8,7 @@ Real-time security monitoring framework that detects, analyzes, and responds to 
 
 ### **Multi-Layer Detection Framework**
 
-**Detection Coverage Areas**
+#### Detection Coverage Areas
 
 - **Network Security**: Intrusion detection, traffic analysis, DDoS protection
 - **Application Security**: Attack pattern recognition, behavioral analysis
@@ -28,7 +28,7 @@ Real-time security monitoring framework that detects, analyzes, and responds to 
 
 ### **Security Information and Event Management (SIEM)**
 
-**Log Aggregation and Analysis**
+#### Log Aggregation and Analysis
 
 Security event monitoring system implementation includes comprehensive log aggregation from multiple sources including application logs, system logs, network traffic, and security device outputs with real-time analysis and threat pattern detection for proactive security monitoring and incident response.
 
@@ -42,7 +42,7 @@ Contextual risk modifiers include administrative user activity scoring higher du
 
 Event storage and indexing includes structured data storage in Elasticsearch for efficient searching and analysis, automated event correlation and pattern recognition, historical trend analysis for threat intelligence enhancement, and comprehensive audit trail maintenance for compliance and forensic investigation requirements.
 
-````
+````text
 
 ### **Behavioral Analysis Engine**
 
@@ -65,6 +65,7 @@ Real-time analysis processing includes continuous behavioral monitoring during a
 **Response Orchestration System**
 
 ```javascript
+
 class ThreatResponseOrchestrator {
   constructor() {
     this.responseActions = {
@@ -179,7 +180,7 @@ Escalation procedures include automatic escalation for unacknowledged critical a
 
 ### **Forensic Data Collection**
 
-**Automated Evidence Gathering**
+#### Automated Evidence Gathering
 
 Forensic data collection automation includes comprehensive system state capture with running process enumeration, network connection analysis, open file inventory, and resource utilization snapshots for complete incident reconstruction and analysis capabilities.
 
@@ -195,7 +196,7 @@ Evidence packaging includes secure archive creation with cryptographic integrity
 
 ### **External Threat Feed Integration**
 
-**Threat Intelligence Processing**
+#### Threat Intelligence Processing
 
 ```javascript
 class ThreatIntelligenceService {

@@ -29,7 +29,7 @@ Consistent naming patterns improve code readability, maintainability, and team c
 - **Components**: PascalCase `UserProfile/`, `LoginForm/`
 - **General folders**: kebab-case `shared-components/`, `test-utils/`
 
-```
+```text
 src/
 ├── components/
 │   ├── UserProfile/           # PascalCase for component folders

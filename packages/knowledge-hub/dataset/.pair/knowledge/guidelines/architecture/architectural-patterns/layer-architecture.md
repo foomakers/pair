@@ -4,7 +4,7 @@ Traditional enterprise architecture pattern organizing code into horizontal laye
 
 ## When to Use
 
-**Ideal for:**
+#### Ideal for:
 
 - Traditional enterprise applications
 - Clear layer responsibilities needed
@@ -12,7 +12,7 @@ Traditional enterprise architecture pattern organizing code into horizontal laye
 - Moderate complexity domains
 - Well-understood business domains
 
-**Avoid when:**
+#### Avoid when:
 
 - High testability requirements
 - Complex external integrations

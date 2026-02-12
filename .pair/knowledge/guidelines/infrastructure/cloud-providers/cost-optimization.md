@@ -43,7 +43,7 @@ Comprehensive framework for optimizing cloud costs while maintaining performance
 
 ## Cost Optimization Decision Tree
 
-```
+```text
 Start: What type of workload?
 ├── Predictable/Steady State
 │   ├── Long-term (>1 year)? → Reserved Instances
@@ -67,21 +67,21 @@ Start: What type of workload?
 
 ### AWS Cost Optimization
 
-**Compute Optimization:**
+#### Compute Optimization:
 
 - EC2 Reserved Instances and Savings Plans
 - Spot Instances for fault-tolerant workloads
 - Lambda for event-driven processing
 - ECS/EKS for container workload optimization
 
-**Storage Optimization:**
+#### Storage Optimization:
 
 - S3 Intelligent Tiering
 - EBS volume optimization and snapshotting
 - Lifecycle policies for data archival
 - CloudFront for content delivery optimization
 
-**Database Optimization:**
+#### Database Optimization:
 
 - RDS Reserved Instances
 - Aurora Serverless for variable workloads
@@ -90,21 +90,21 @@ Start: What type of workload?
 
 ### GCP Cost Optimization
 
-**Compute Optimization:**
+#### Compute Optimization:
 
 - Committed Use Discounts (CUDs)
 - Preemptible VM instances
 - Cloud Functions for serverless computing
 - GKE autopilot for container optimization
 
-**Storage Optimization:**
+#### Storage Optimization:
 
 - Cloud Storage nearline and coldline tiers
 - Persistent disk optimization
 - Cloud CDN for global content delivery
 - Archive storage for long-term retention
 
-**Database Optimization:**
+#### Database Optimization:
 
 - Cloud SQL committed use discounts
 - BigQuery slot reservations
@@ -113,21 +113,21 @@ Start: What type of workload?
 
 ### Azure Cost Optimization
 
-**Compute Optimization:**
+#### Compute Optimization:
 
 - Azure Reserved VM Instances
 - Spot Virtual Machines
 - Azure Functions consumption plan
 - Container Instances for short-lived workloads
 
-**Storage Optimization:**
+#### Storage Optimization:
 
 - Azure Storage access tiers
 - Managed disk optimization
 - Azure CDN for content delivery
 - Blob storage lifecycle management
 
-**Database Optimization:**
+#### Database Optimization:
 
 - SQL Database reserved capacity
 - Cosmos DB provisioned vs. serverless
@@ -136,14 +136,14 @@ Start: What type of workload?
 
 ### Vercel Cost Optimization
 
-**Deployment Optimization:**
+#### Deployment Optimization:
 
 - Function execution optimization
 - Build time minimization
 - Bandwidth usage optimization
 - Team plan vs. pro plan evaluation
 
-**Performance Optimization:**
+#### Performance Optimization:
 
 - Image optimization usage
 - Edge functions strategic use
@@ -154,28 +154,28 @@ Start: What type of workload?
 
 ### Cost Components Analysis
 
-**Compute Costs (40-60% of total)**
+#### Compute Costs (40-60% of total)
 
 - Instance types and sizing
 - Utilization rates and patterns
 - Reserved vs. on-demand pricing
 - Auto-scaling efficiency
 
-**Storage Costs (15-25% of total)**
+#### Storage Costs (15-25% of total)
 
 - Storage types and tiers
 - Data lifecycle management
 - Backup and archival strategies
 - Data transfer costs
 
-**Network Costs (10-20% of total)**
+#### Network Costs (10-20% of total)
 
 - Data transfer between regions
 - CDN and caching strategies
 - Load balancer costs
 - VPN and connectivity costs
 
-**Service Costs (10-25% of total)**
+#### Service Costs (10-25% of total)
 
 - Managed service premiums
 - Monitoring and logging costs
@@ -184,15 +184,15 @@ Start: What type of workload?
 
 ### ROI Calculation Framework
 
-**Cost Savings Calculation:**
+#### Cost Savings Calculation:
 
-```
+```text
 Monthly Savings = Current Costs - Optimized Costs
 Annual ROI = (Annual Savings - Implementation Costs) / Implementation Costs * 100
 Payback Period = Implementation Costs / Monthly Savings
 ```
 
-**Implementation Cost Factors:**
+#### Implementation Cost Factors:
 
 - Staff time for optimization projects
 - Tool and service costs
@@ -203,7 +203,7 @@ Payback Period = Implementation Costs / Monthly Savings
 
 ### Phase 1: Quick Wins (Month 1)
 
-**Immediate Optimizations:**
+#### Immediate Optimizations:
 
 - Identify and shut down unused resources
 - Implement basic auto-scaling
@@ -215,7 +215,7 @@ Payback Period = Implementation Costs / Monthly Savings
 
 ### Phase 2: Strategic Optimizations (Months 2-3)
 
-**Medium-term Optimizations:**
+#### Medium-term Optimizations:
 
 - Implement reserved instance strategy
 - Optimize database configurations
@@ -227,7 +227,7 @@ Payback Period = Implementation Costs / Monthly Savings
 
 ### Phase 3: Architectural Optimizations (Months 4-6)
 
-**Long-term Optimizations:**
+#### Long-term Optimizations:
 
 - Implement serverless architectures
 - Optimize application architectures
@@ -241,14 +241,14 @@ Payback Period = Implementation Costs / Monthly Savings
 
 ### Cost Monitoring Strategy
 
-**Real-time Monitoring:**
+#### Real-time Monitoring:
 
 - Daily cost tracking and alerts
 - Budget threshold notifications
 - Anomaly detection and alerting
 - Resource utilization monitoring
 
-**Regular Reviews:**
+#### Regular Reviews:
 
 - Weekly cost trend analysis
 - Monthly optimization reviews
@@ -257,14 +257,14 @@ Payback Period = Implementation Costs / Monthly Savings
 
 ### Governance Framework
 
-**Cost Allocation:**
+#### Cost Allocation:
 
 - Tag-based cost tracking
 - Department/project chargeback
 - Environment-based cost separation
 - Feature-based cost attribution
 
-**Optimization Processes:**
+#### Optimization Processes:
 
 - Regular right-sizing reviews
 - Automated optimization recommendations
@@ -288,7 +288,7 @@ Payback Period = Implementation Costs / Monthly Savings
 
 ### Custom Automation
 
-**Scripts and Tools:**
+#### Scripts and Tools:
 
 - Resource scheduling automation
 - Cost reporting automation

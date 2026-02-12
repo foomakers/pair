@@ -12,6 +12,7 @@ Robust error handling is essential for building reliable applications. This guid
 Detect and report errors as early as possible to prevent cascading failures.
 
 ```typescript
+
 // ✅ Good: Validate inputs immediately
 function calculateOrderTotal(items: OrderItem[]): number {
   if (!items || items.length === 0) {
@@ -33,11 +34,12 @@ function calculateOrderTotal(items: OrderItem[]): number {
 // ❌ Bad: Silent failures or late detection
 function calculateOrderTotal(items: OrderItem[]): number {
   let total = 0
-  for (const item of items || []) {
-    total += (item.price || 0) * (item.quantity || 1) // Silently uses defaults
+| for (const item of items |  | []) {               |  |                              |
+| total += (item.price     |  | 0) * (item.quantity |  | 1) // Silently uses defaults |
   }
   return total // Could return 0 for invalid input
 }
+
 ```
 ````
 
@@ -657,6 +659,6 @@ describe('UserService', () => {
 
 Proper error handling improves application reliability, developer experience, and user satisfaction.
 
-```
+```text
 
 ```

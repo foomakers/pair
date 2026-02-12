@@ -100,7 +100,7 @@ Examples:
 pnpm --filter @pair/knowledge-hub run transfer:dataset -- foo bar '{"defaultBehavior":"add","folderBehavior":{"" : "add"}}'
 ```
 
-2. Pass options from a file:
+1. Pass options from a file:
 
 ```bash
 pnpm --filter @pair/knowledge-hub run transfer:dataset -- foo bar ./scripts/move-options.json
@@ -112,7 +112,7 @@ When using `mirror`, ensure that any declared `mirror` parent folders have all d
 
 ### Package Structure
 
-```
+```text
 src/
 ├── check-broken-links.ts    # Link validation script
 ├── transfer-dataset.ts      # Dataset transfer/move script
@@ -145,6 +145,7 @@ dataset/                     # Documentation and assets
    ```
 
 4. **Transfer dataset**:
+
    ```bash
    pnpm --filter @pair/knowledge-hub run transfer:dataset -- source target
    ```

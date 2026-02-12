@@ -141,7 +141,7 @@ Example mapping techniques involve collaborative creation of visual representati
 
 ### Example Mapping Session Example
 
-```
+```text
 User Story: As a bank customer, I want to transfer money between my accounts
 
 Rules:
@@ -175,7 +175,7 @@ Edge Cases to Explore:
 
 ### Three Amigos Conversation Example
 
-```
+```text
 Product Owner: "We need customers to be able to update their profile information"
 
 Developer: "What specific fields can they update? And are there any validation rules?"

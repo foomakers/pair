@@ -8,7 +8,7 @@ Comprehensive Static Application Security Testing (SAST) framework that analyzes
 
 ### **Multi-Language SAST Implementation**
 
-**Comprehensive SAST Engine**
+#### Comprehensive SAST Engine
 
 Multi-language SAST implementation includes comprehensive security analysis framework supporting JavaScript, TypeScript, Python, Java, C#, Go, and PHP with integrated vulnerability detection, security rule engine implementation, comprehensive vulnerability database integration, automated report generation, and actionable remediation guidance.
 
@@ -22,7 +22,7 @@ Vulnerability aggregation includes comprehensive result consolidation from multi
 
 Deduplication methodology includes vulnerability type and rule identification, file and line location analysis, similarity detection for related findings, evidence merging for comprehensive coverage, and priority-based ranking for effective remediation planning.
 
-**JavaScript/TypeScript SAST Scanner**
+#### JavaScript/TypeScript SAST Scanner
 
 JavaScript security analysis includes comprehensive Abstract Syntax Tree parsing for deep code analysis, security pattern detection across common vulnerability categories, data flow analysis for input validation tracking, and comprehensive vulnerability reporting with actionable remediation guidance.
 this.ruleCheckers = [
@@ -130,8 +130,8 @@ const vulnerabilities = []
           severity: 'high',
           message: 'Potential XSS vulnerability: unsanitized data in innerHTML',
           file: filePath,
-          line: node.loc?.start.line || 0,
-          column: node.loc?.start.column || 0,
+| line: node.loc?.start.line     |  | 0, |
+| column: node.loc?.start.column |  | 0, |
           code: this.extractCode(code, node),
           remediation: 'Use textContent or sanitize HTML before setting innerHTML',
           cwe: 'CWE-79',
@@ -147,8 +147,8 @@ const vulnerabilities = []
           severity: 'critical',
           message: 'Code injection vulnerability: eval() usage detected',
           file: filePath,
-          line: node.loc?.start.line || 0,
-          column: node.loc?.start.column || 0,
+| line: node.loc?.start.line     |  | 0, |
+| column: node.loc?.start.column |  | 0, |
           code: this.extractCode(code, node),
           remediation: 'Avoid eval(). Use JSON.parse() for JSON or implement safe alternatives',
           cwe: 'CWE-94',
@@ -164,8 +164,8 @@ const vulnerabilities = []
           severity: 'medium',
           message: 'Potential DOM-based XSS: unsanitized DOM manipulation',
           file: filePath,
-          line: node.loc?.start.line || 0,
-          column: node.loc?.start.column || 0,
+| line: node.loc?.start.line     |  | 0, |
+| column: node.loc?.start.column |  | 0, |
           code: this.extractCode(code, node),
           remediation: 'Sanitize user input before DOM manipulation',
           cwe: 'CWE-79',
@@ -255,7 +255,7 @@ if (!node || typeof node !== 'object') return
 }
 }
 
-````
+````text
 
 ## 🛡️ **SECURITY RULE ENGINE**
 
@@ -264,6 +264,7 @@ if (!node || typeof node !== 'object') return
 **OWASP Top 10 Rule Set**
 
 ```javascript
+
 class OWASPTop10RuleSet {
   constructor() {
     this.rules = new Map()
@@ -463,15 +464,17 @@ class OWASPTop10RuleSet {
     return lines[lines.length - 1].length + 1
   }
 }
+
 ````
 
 ## 📊 **SAST INTEGRATION & REPORTING**
 
 ### **CI/CD Integration**
 
-**GitHub Actions SAST Workflow**
+#### GitHub Actions SAST Workflow
 
 ```yaml
+
 name: SAST Security Scan
 
 on:
@@ -490,31 +493,38 @@ jobs:
       contents: read
 
     steps:
+
       - uses: actions/checkout@v3
+
         with:
           fetch-depth: 0
 
       - name: Setup Node.js
+
         uses: actions/setup-node@v3
         with:
           node-version: '18'
           cache: 'npm'
 
       - name: Install dependencies
+
         run: npm ci
 
       - name: Run SAST Analysis
+
         run: |
           npm run security:sast
         env:
           SARIF_OUTPUT: true
 
       - name: Upload SARIF results
+
         uses: github/codeql-action/upload-sarif@v2
         with:
           sarif_file: security-results.sarif
 
       - name: Security Quality Gate
+
         run: |
           node scripts/security-gate.js
         env:
@@ -523,6 +533,7 @@ jobs:
           MAX_MEDIUM: 20
 
       - name: Comment PR with Results
+
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v6
         with:
@@ -536,6 +547,7 @@ jobs:
             **Scan Duration**: ${results.duration}ms
 
             ### Vulnerability Summary
+
             - **Critical**: ${results.summary.critical} 🔴
             - **High**: ${results.summary.high} 🟠
             - **Medium**: ${results.summary.medium} 🟡
@@ -544,6 +556,7 @@ jobs:
             ${results.summary.critical > 0 ? '### ❌ Critical Issues Must Be Fixed\n' + results.criticalIssues.map(i => `- ${i.message} (${i.file}:${i.line})`).join('\n') : ''}
 
             ### 📈 Security Metrics
+
             - **Files Scanned**: ${results.metrics.filesScanned}
             - **Lines of Code**: ${results.metrics.linesOfCode}
             - **Security Coverage**: ${results.metrics.coverage}%
@@ -557,11 +570,13 @@ jobs:
               repo: context.repo.repo,
               body: comment
             });
+
 ```
 
-**SARIF Report Generation**
+#### SARIF Report Generation
 
 ```javascript
+
 class SARIFReportGenerator {
   constructor() {
     this.version = '2.1.0'
@@ -663,6 +678,7 @@ class SARIFReportGenerator {
     return mapping[severity.toLowerCase()] || 'warning'
   }
 }
+
 ```
 
 ---

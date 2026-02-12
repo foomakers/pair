@@ -8,7 +8,7 @@ Establish user-centered design as the foundation for all product decisions, ensu
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - User research methodologies and user understanding frameworks
 - Design process integration with user feedback and validation
@@ -16,7 +16,7 @@ Establish user-centered design as the foundation for all product decisions, ensu
 - Accessibility and inclusive design considerations
 - User journey mapping and experience design strategies
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Specific design tool usage and configuration (covered in Level 3 guides)
 - Detailed implementation of research tools and platforms

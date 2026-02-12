@@ -4,7 +4,7 @@
 
 This section covers systematic approaches to architectural decision-making:
 
-**In Scope:**
+#### In Scope:
 
 - Architecture Decision Record (ADR) processes and templates
 - Decision tracking methodologies and tools
@@ -12,7 +12,7 @@ This section covers systematic approaches to architectural decision-making:
 - Evolution strategy planning and implementation
 - Decision governance and review processes
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Implementation details of specific technologies
 - Project management decision processes (covered in Collaboration)
@@ -77,7 +77,7 @@ flowchart TD
 
 ### Selection Criteria Framework
 
-**For Technology Decisions:**
+#### For Technology Decisions:
 
 - **Technical Fit**: Alignment with requirements and constraints
 - **Team Capability**: Learning curve and existing expertise
@@ -85,7 +85,7 @@ flowchart TD
 - **Longevity**: Vendor stability, roadmap, migration path
 - **Cost**: Licensing, maintenance, operational overhead
 
-**For Architecture Decisions:**
+#### For Architecture Decisions:
 
 - **Business Alignment**: Support for business goals and constraints
 - **Technical Quality**: Performance, scalability, maintainability

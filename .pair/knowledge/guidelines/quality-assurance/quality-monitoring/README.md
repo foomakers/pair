@@ -4,7 +4,7 @@
 
 Comprehensive quality monitoring framework ensuring continuous quality assessment through automated metrics collection, performance gates, and observability integration across all development and operational phases.
 
-**In Scope:**
+#### In Scope:
 
 - Code quality metrics and monitoring
 - Performance quality gates and thresholds
@@ -13,7 +13,7 @@ Comprehensive quality monitoring framework ensuring continuous quality assessmen
 - Quality SLA monitoring and compliance
 - Quality regression detection and prevention
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Business metrics monitoring (covered in observability guidelines)
 - Infrastructure monitoring (covered in infrastructure guidelines)
@@ -60,7 +60,7 @@ Comprehensive quality monitoring framework ensuring continuous quality assessmen
 
 ### **Decision Tree: Quality Monitoring Tool Selection**
 
-```
+```text
 Start → Project Size?
 ├─ Small Project (1-5 devs) → Language?
 │  ├─ JavaScript/TypeScript → ESLint + simple metrics

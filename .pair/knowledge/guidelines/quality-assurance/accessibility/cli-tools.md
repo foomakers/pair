@@ -8,7 +8,7 @@ Command-line interface tools for automated accessibility testing, enabling conti
 
 ### **axe-core CLI**
 
-**Installation and Setup**
+#### Installation and Setup
 
 ```bash
 # Install globally
@@ -21,7 +21,7 @@ npm install --save-dev @axe-core/cli
 yarn add --dev @axe-core/cli
 ```
 
-**Basic Usage**
+#### Basic Usage
 
 ```bash
 # Scan single URL
@@ -37,7 +37,7 @@ axe https://example.com --format json > accessibility-report.json
 axe https://example.com --config ./axe-config.json
 ```
 
-**Advanced Configuration**
+#### Advanced Configuration
 
 ```json
 {
@@ -55,7 +55,7 @@ axe https://example.com --config ./axe-config.json
 
 ### **Pa11y CLI**
 
-**Installation**
+#### Installation
 
 ```bash
 # Install globally
@@ -68,7 +68,7 @@ npm install -g pa11y pa11y-reporter-html
 npm install -g pa11y pa11y-reporter-json
 ```
 
-**Testing Capabilities**
+#### Testing Capabilities
 
 ```bash
 # Basic accessibility scan
@@ -87,7 +87,7 @@ pa11y https://example.com --cookie "session=abc123"
 pa11y https://example.com --reporter html > report.html
 ```
 
-**Batch Testing**
+#### Batch Testing
 
 ```bash
 # Create URL list file
@@ -105,7 +105,7 @@ done < urls.txt
 
 ### **Lighthouse CLI**
 
-**Accessibility-focused Testing**
+#### Accessibility-focused Testing
 
 ```bash
 # Install Lighthouse
@@ -126,7 +126,7 @@ lighthouse https://example.com \
   --emulated-device=iPhone X
 ```
 
-**CI/CD Integration**
+#### CI/CD Integration
 
 ```bash
 # Lighthouse CI configuration
@@ -146,7 +146,7 @@ fi
 
 ### **Accessibility Insights CLI**
 
-**Microsoft Accessibility Insights**
+#### Microsoft Accessibility Insights
 
 ```bash
 # Install accessibility-insights-scan
@@ -172,7 +172,7 @@ accessibility-insights-scan \
 
 ### **Git Hooks Integration**
 
-**Pre-commit Hook**
+#### Pre-commit Hook
 
 ```bash
 #!/bin/bash
@@ -200,7 +200,7 @@ fi
 echo "Accessibility checks passed!"
 ```
 
-**Pre-push Hook**
+#### Pre-push Hook
 
 ```bash
 #!/bin/bash
@@ -222,7 +222,7 @@ echo "Pre-push accessibility checks passed!"
 
 ### **CI/CD Pipeline Integration**
 
-**GitHub Actions Workflow**
+#### GitHub Actions Workflow
 
 ```yaml
 name: Accessibility Testing
@@ -297,7 +297,7 @@ jobs:
             });
 ```
 
-**Jenkins Pipeline**
+#### Jenkins Pipeline
 
 ```groovy
 pipeline {
@@ -345,7 +345,7 @@ pipeline {
 
 ### **Batch Processing Scripts**
 
-**Site-wide Accessibility Audit**
+#### Site-wide Accessibility Audit
 
 ```bash
 #!/bin/bash
@@ -396,7 +396,7 @@ node generate-summary.js "$OUTPUT_DIR" > "$OUTPUT_DIR/summary.html"
 echo "Accessibility audit complete. Reports saved to: $OUTPUT_DIR"
 ```
 
-**Report Generation Script**
+#### Report Generation Script
 
 ```javascript
 // generate-summary.js
@@ -495,14 +495,14 @@ console.log(html)
 
 | Tool        | Speed  | Accuracy | WCAG Coverage | CI/CD Ready | Learning Curve |
 | ----------- | ------ | -------- | ------------- | ----------- | -------------- |
-| axe-core    | Fast   | High     | Comprehensive | ✅          | Low            |
-| Pa11y       | Medium | High     | Good          | ✅          | Low            |
-| Lighthouse  | Slow   | Medium   | Basic         | ✅          | Medium         |
-| AI Insights | Medium | High     | Comprehensive | ✅          | Medium         |
+| axe-core    | Fast   | High     | Comprehensive | ✅           | Low            |
+| Pa11y       | Medium | High     | Good          | ✅           | Low            |
+| Lighthouse  | Slow   | Medium   | Basic         | ✅           | Medium         |
+| AI Insights | Medium | High     | Comprehensive | ✅           | Medium         |
 
 ### **Use Case Decision Matrix**
 
-```
+```text
 Need comprehensive WCAG coverage?
 ├── Yes: axe-core CLI
 └── No: Continue
@@ -522,14 +522,14 @@ Need Microsoft ecosystem integration?
 
 ### **Cost-Benefit Analysis**
 
-**Free Tools**
+#### Free Tools
 
 - axe-core CLI: Best overall value, industry standard
 - Pa11y CLI: Excellent for beginners, straightforward usage
 - Lighthouse CLI: Great for holistic testing
 - Accessibility Insights: Good Microsoft integration
 
-**Investment Recommendations**
+#### Investment Recommendations
 
 - Start with axe-core CLI for comprehensive coverage
 - Add Pa11y for alternative perspective

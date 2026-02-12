@@ -14,7 +14,7 @@ This practice provides comprehensive guidance for implementing Infrastructure as
 
 ## 📋 When to Use This Practice
 
-**Essential for:**
+#### Essential for:
 
 - Multi-environment deployments requiring consistency
 - Teams managing complex infrastructure at scale
@@ -22,7 +22,7 @@ This practice provides comprehensive guidance for implementing Infrastructure as
 - Projects needing rapid infrastructure provisioning and scaling
 - Environments requiring disaster recovery and business continuity
 
-**Consider alternatives for:**
+#### Consider alternatives for:
 
 - Simple, single-resource prototype environments
 - Teams without infrastructure automation capabilities
@@ -45,7 +45,7 @@ This practice provides comprehensive guidance for implementing Infrastructure as
 
 ## 🚀 Quick Start Decision Tree
 
-```
+```text
 Do you need infrastructure automation?
 ├─ Yes → Do you primarily use AWS?
 │  ├─ Yes → Consider [AWS CDK Implementation](aws-cdk-implementation.md)
@@ -63,7 +63,7 @@ Do you need infrastructure automation?
 - Simple deployment automation
 - Basic state management
 
-**Key Capabilities:**
+#### Key Capabilities:
 
 - Infrastructure provisioning through code
 - Version control integration
@@ -77,7 +77,7 @@ Do you need infrastructure automation?
 - Comprehensive testing and validation
 - Policy as code implementation
 
-**Key Capabilities:**
+#### Key Capabilities:
 
 - Automated multi-environment deployments
 - Secure state management with encryption
@@ -91,7 +91,7 @@ Do you need infrastructure automation?
 - Predictive scaling and optimization
 - Enterprise security integration
 
-**Key Capabilities:**
+#### Key Capabilities:
 
 - Intelligent automation and self-healing
 - Comprehensive governance and policy enforcement
@@ -105,7 +105,7 @@ Do you need infrastructure automation?
 - Advanced disaster recovery
 - Innovation-driven automation
 
-**Key Capabilities:**
+#### Key Capabilities:
 
 - Intelligent resource optimization
 - Advanced multi-cloud strategies
@@ -116,21 +116,21 @@ Do you need infrastructure automation?
 
 ### Pattern Selection Guide
 
-**Choose Terraform when:**
+#### Choose Terraform when:
 
 - Multi-cloud or cloud-agnostic requirements
 - Complex infrastructure with multiple providers
 - Large teams requiring modular, reusable components
 - Enterprise governance and compliance needs
 
-**Choose AWS CDK when:**
+#### Choose AWS CDK when:
 
 - AWS-first or AWS-heavy infrastructure
 - Development teams familiar with programming languages
 - Need for advanced abstractions and constructs
 - Integration with AWS native services and patterns
 
-**Choose Custom Solutions when:**
+#### Choose Custom Solutions when:
 
 - Highly specialized infrastructure requirements
 - Integration with proprietary systems

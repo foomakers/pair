@@ -8,28 +8,28 @@ Visual workflow management system that optimizes flow and delivery through work-
 
 ### Kanban Principles
 
-**Start With What You Do Now**
+#### Start With What You Do Now
 
 - Understand current workflow and process
 - Map existing states and handoffs
 - Identify current roles and responsibilities
 - Begin improvement from current state rather than dramatic change
 
-**Agree to Pursue Incremental, Evolutionary Change**
+#### Agree to Pursue Incremental, Evolutionary Change
 
 - Small, continuous improvements rather than revolutionary changes
 - Reduce resistance through gradual adaptation
 - Test changes and adapt based on results
 - Build consensus for change through demonstration of value
 
-**Respect Current Process, Roles & Responsibilities**
+#### Respect Current Process, Roles & Responsibilities
 
 - Work within existing organizational structure initially
 - Preserve what works while improving what doesn't
 - Evolve roles naturally as process improves
 - Minimize disruption while maximizing improvement
 
-**Encourage Acts of Leadership at All Levels**
+#### Encourage Acts of Leadership at All Levels
 
 - Empower team members to identify and implement improvements
 - Support initiative and experimentation
@@ -38,42 +38,42 @@ Visual workflow management system that optimizes flow and delivery through work-
 
 ### Kanban Practices
 
-**Visualize Workflow**
+#### Visualize Workflow
 
 - Make work and workflow visible through visual management
 - Use boards, cards, and swim lanes to represent work states
 - Show work items, priorities, and dependencies
 - Enable quick understanding of current status and bottlenecks
 
-**Limit Work in Progress (WIP)**
+#### Limit Work in Progress (WIP)
 
 - Set explicit limits on work in each workflow state
 - Force completion before starting new work
 - Expose bottlenecks and capacity constraints
 - Improve focus and reduce multitasking waste
 
-**Manage Flow**
+#### Manage Flow
 
 - Monitor and optimize work movement through system
 - Identify and eliminate bottlenecks and wait states
 - Balance capacity across workflow stages
 - Optimize for continuous delivery rather than resource utilization
 
-**Make Process Policies Explicit**
+#### Make Process Policies Explicit
 
 - Define clear criteria for work progression between states
 - Document quality standards and definition of done
 - Establish escalation and exception handling procedures
 - Ensure shared understanding of workflow rules
 
-**Implement Feedback Loops**
+#### Implement Feedback Loops
 
 - Regular reviews of metrics and flow
 - Retrospectives and improvement discussions
 - Customer feedback integration
 - Continuous measurement and adaptation
 
-**Improve Collaboratively, Evolve Experimentally**
+#### Improve Collaboratively, Evolve Experimentally
 
 - Data-driven improvement decisions
 - Scientific approach to change with hypothesis testing
@@ -84,33 +84,33 @@ Visual workflow management system that optimizes flow and delivery through work-
 
 ### Basic Board Structure
 
-**Simple Three-Column Board**
+#### Simple Three-Column Board
 
-```
-| To Do | Doing | Done |
-|-------|-------|------|
-| Item 1| Item 4| Item 7|
-| Item 2| Item 5| Item 8|
-| Item 3| Item 6|       |
+```text
+| To Do  | Doing  | Done   |
+| ------ | ------ | ------ |
+| Item 1 | Item 4 | Item 7 |
+| Item 2 | Item 5 | Item 8 |
+| Item 3 | Item 6 |        |
 WIP:  ∞    2      ∞
 ```
 
-**Extended Workflow Board**
+#### Extended Workflow Board
 
-```
-| Backlog | Ready | Analysis | Development | Review | Testing | Deploy | Done |
-|---------|-------|----------|-------------|---------|---------|---------|------|
-| Item 1  | Item 4| Item 7   | Item 10     | Item 13 | Item 16 |         |Item 19|
-| Item 2  | Item 5| Item 8   | Item 11     | Item 14 |         |         |Item 20|
-| Item 3  | Item 6| Item 9   | Item 12     | Item 15 |         |         |      |
+```text
+| Backlog | Ready  | Analysis | Development | Review  | Testing | Deploy | Done    |
+| ------- | ------ | -------- | ----------- | ------- | ------- | ------ | ------- |
+| Item 1  | Item 4 | Item 7   | Item 10     | Item 13 | Item 16 |        | Item 19 |
+| Item 2  | Item 5 | Item 8   | Item 11     | Item 14 |         |        | Item 20 |
+| Item 3  | Item 6 | Item 9   | Item 12     | Item 15 |         |        |         |
 WIP:   ∞     3       2          3           2         1         1        ∞
 ```
 
 ### Advanced Board Features
 
-**Swim Lanes**
+#### Swim Lanes
 
-```
+```text
 Board Organization by:
 - Priority (Expedite, High, Standard, Low)
 - Work Type (Feature, Bug, Technical Debt)
@@ -118,17 +118,17 @@ Board Organization by:
 - Customer/Project (Client A, Client B, Internal)
 
 Example:
-| Ready | Dev | Review | Done |
-|-------|-----|--------|------|
-| [Expedite Swim Lane]        |
-| [Feature Swim Lane]         |
-| [Bug Fix Swim Lane]         |
-| [Tech Debt Swim Lane]       |
+| Ready                 | Dev | Review | Done |
+| --------------------- | --- | ------ | ---- |
+| [Expedite Swim Lane]  |     |        |      |
+| [Feature Swim Lane]   |     |        |      |
+| [Bug Fix Swim Lane]   |     |        |      |
+| [Tech Debt Swim Lane] |     |        |      |
 ```
 
-**Card Information**
+#### Card Information
 
-```
+```text
 Kanban Card Contents:
 - Title: Brief description of work item
 - ID: Unique identifier for tracking
@@ -145,9 +145,9 @@ Kanban Card Contents:
 
 ### Setting WIP Limits
 
-**Initial WIP Limit Guidelines**
+#### Initial WIP Limit Guidelines
 
-```
+```text
 Column Type | Initial WIP Limit
 ------------|------------------
 Input Queue | 1.5 × team size
@@ -157,9 +157,9 @@ Buffer      | 2-3 items maximum
 Output      | Unlimited (or limited by downstream capacity)
 ```
 
-**WIP Limit Calculation Example**
+#### WIP Limit Calculation Example
 
-```
+```text
 Team: 5 developers
 Board columns: Ready (3) | Development (5) | Review (3) | Testing (2) | Done (∞)
 
@@ -173,9 +173,9 @@ Reasoning:
 
 ### WIP Limit Management
 
-**When WIP Limits Are Reached**
+#### When WIP Limits Are Reached
 
-```
+```text
 Options when column is at WIP limit:
 1. Help complete work in downstream columns
 2. Pull work from upstream if possible
@@ -185,9 +185,9 @@ Options when column is at WIP limit:
 6. DO NOT: Start new work or increase WIP limits
 ```
 
-**WIP Limit Violations**
+#### WIP Limit Violations
 
-```
+```text
 Acceptable violations:
 - Expedite/critical items requiring immediate attention
 - Discovered defects that must be fixed
@@ -205,9 +205,9 @@ Process:
 
 ### Key Kanban Metrics
 
-**Lead Time**
+#### Lead Time
 
-```
+```text
 Definition: Time from when work item enters system until it exits
 Measurement: Entry date to completion date
 Purpose: Customer-facing delivery time
@@ -216,9 +216,9 @@ Improvement: Reduce total time in system
 Example: Story enters "Ready" on Monday, completes on Friday = 5 days lead time
 ```
 
-**Cycle Time**
+#### Cycle Time
 
-```
+```text
 Definition: Time from when work on item begins until work is complete
 Measurement: Start of active work to completion
 Purpose: Team performance and predictability
@@ -227,9 +227,9 @@ Improvement: Reduce time in active work states
 Example: Development starts Tuesday, testing completes Thursday = 3 days cycle time
 ```
 
-**Throughput**
+#### Throughput
 
-```
+```text
 Definition: Number of work items completed per time period
 Measurement: Count of items moved to "Done" per week/month
 Purpose: Team capacity and delivery rate
@@ -238,9 +238,9 @@ Improvement: Increase items completed per period
 Example: Team completes 12 stories per week average
 ```
 
-**Work in Progress**
+#### Work in Progress
 
-```
+```text
 Definition: Number of items being actively worked on
 Measurement: Count of items in active work columns
 Purpose: System load and efficiency
@@ -251,9 +251,9 @@ Example: 8 items currently in Development, Review, and Testing columns
 
 ### Flow Analytics
 
-**Cumulative Flow Diagram (CFD)**
+#### Cumulative Flow Diagram (CFD)
 
-```
+```text
 Chart showing:
 - X-axis: Time (days/weeks)
 - Y-axis: Cumulative count of work items
@@ -268,9 +268,9 @@ Reading CFD:
 - Flat areas = no flow in that state
 ```
 
-**Control Charts**
+#### Control Charts
 
-```
+```text
 Lead Time Control Chart:
 - Plot lead time for each completed item
 - Calculate average and control limits
@@ -288,9 +288,9 @@ Cycle Time Control Chart:
 
 ### Getting Started with Kanban
 
-**Phase 1: Visualization (Week 1-2)**
+#### Phase 1: Visualization (Week 1-2)
 
-```
+```text
 1. Map Current Workflow:
    - Identify all workflow states/stages
    - Document handoffs and dependencies
@@ -309,9 +309,9 @@ Cycle Time Control Chart:
    - Identify initial improvement opportunities
 ```
 
-**Phase 2: WIP Limits (Week 3-4)**
+#### Phase 2: WIP Limits (Week 3-4)
 
-```
+```text
 1. Set Initial WIP Limits:
    - Start with generous limits to avoid resistance
    - Focus on "Doing" column initially
@@ -325,9 +325,9 @@ Cycle Time Control Chart:
    - Celebrate successful limit adherence
 ```
 
-**Phase 3: Flow Optimization (Month 2-3)**
+#### Phase 3: Flow Optimization (Month 2-3)
 
-```
+```text
 1. Expand Board Detail:
    - Add more workflow columns as needed
    - Implement swim lanes for different work types
@@ -343,9 +343,9 @@ Cycle Time Control Chart:
 
 ### Kanban for Different Contexts
 
-**Software Development Team**
+#### Software Development Team
 
-```
+```text
 Board Design:
 Backlog | Ready | Development | Code Review | Testing | Deployment | Done
 
@@ -358,9 +358,9 @@ Policies:
 - Definition of Done includes production deployment
 ```
 
-**Support Team**
+#### Support Team
 
-```
+```text
 Board Design:
 New Tickets | Triage | Investigation | Resolution | Verification | Closed
 
@@ -373,9 +373,9 @@ Policies:
 - Knowledge base updated for recurring issues
 ```
 
-**Marketing Team**
+#### Marketing Team
 
-```
+```text
 Board Design:
 Ideas | Planned | Creation | Review | Approval | Publishing | Live
 
@@ -392,9 +392,9 @@ Policies:
 
 ### Service Level Expectations (SLE)
 
-**SLE Definition**
+#### SLE Definition
 
-```
+```text
 Service Level Expectation: "We will complete 85% of work items in 10 days or less"
 
 Components:
@@ -408,9 +408,9 @@ Measurement:
 - Report SLE performance regularly to stakeholders
 ```
 
-**SLE Management**
+#### SLE Management
 
-```
+```text
 When SLE is not met:
 1. Analyze root causes of longer lead times
 2. Identify process improvements to reduce variation
@@ -426,9 +426,9 @@ When SLE is consistently exceeded:
 
 ### Class of Service
 
-**Service Classes**
+#### Service Classes
 
-```
+```text
 Expedite:
 - Highest priority, bypass normal flow
 - No WIP limit, immediate attention
@@ -456,9 +456,9 @@ Intangible:
 
 ### Continuous Improvement
 
-**Kanban Cadences**
+#### Kanban Cadences
 
-```
+```text
 Daily Standup:
 - Focus on flow and impediments
 - Identify blocked items and aging work
@@ -484,9 +484,9 @@ Quarterly Retrospective:
 - Team development and skills assessment
 ```
 
-**Improvement Kata**
+#### Improvement Kata
 
-```
+```text
 Scientific Improvement Process:
 1. Define Target Condition: What do we want to achieve?
 2. Understand Current Condition: Where are we now?
@@ -508,9 +508,9 @@ Next: Try WIP limit of 4 and focus on bottleneck in Review column
 
 ### Digital Kanban Tools
 
-**Tool Selection Criteria**
+#### Tool Selection Criteria
 
-```
+```text
 Essential Features:
 - Visual board with customizable columns
 - WIP limit enforcement and warnings
@@ -533,9 +533,9 @@ Popular Tools:
 - Lean Kit, Kanbanize, SwiftKanban
 ```
 
-**Physical vs. Digital Boards**
+#### Physical vs. Digital Boards
 
-```
+```text
 Physical Board Advantages:
 - High visibility and team awareness
 - Tactile interaction and engagement

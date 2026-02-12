@@ -10,7 +10,7 @@ Comprehensive guide to understanding, measuring, and optimizing First Contentful
 
 First Contentful Paint measures the time from when the page starts loading to when any part of the page's content is rendered on the screen. Content includes text, images, SVG elements, or non-white canvas elements.
 
-**Key Characteristics:**
+#### Key Characteristics:
 
 - **Visual Feedback**: First visual indicator that the page is loading
 - **User Perception**: Critical for perceived performance
@@ -19,13 +19,13 @@ First Contentful Paint measures the time from when the page starts loading to wh
 
 ### **FCP Scoring Thresholds**
 
-**Google's Core Web Vitals Thresholds:**
+#### Google's Core Web Vitals Thresholds:
 
 - **Good**: ≤ 1.8s (75th percentile of users)
 - **Needs Improvement**: 1.8s - 3.0s
 - **Poor**: > 3.0s
 
-**Performance Targets:**
+#### Performance Targets:
 
 - **Excellent**: < 1.0s
 - **Good**: 1.0s - 1.8s
@@ -243,7 +243,7 @@ auditFCP('https://example.com').then(result => {
 
 ### **Critical Resource Optimization**
 
-**Critical CSS Inlining**
+#### Critical CSS Inlining
 
 ```html
 <!DOCTYPE html>
@@ -300,7 +300,7 @@ auditFCP('https://example.com').then(result => {
 </html>
 ```
 
-**Critical CSS Extraction Tool**
+#### Critical CSS Extraction Tool
 
 ```javascript
 // Node.js script to extract critical CSS
@@ -342,7 +342,7 @@ extractCriticalCSS('https://example.com', './public/css/styles.css')
 
 ### **Font Loading Optimization**
 
-**Font Display Strategies**
+#### Font Display Strategies
 
 ```css
 /* Optimized font declarations */
@@ -369,7 +369,7 @@ body {
 }
 ```
 
-**Font Loading API**
+#### Font Loading API
 
 ```javascript
 class FontLoader {
@@ -454,7 +454,7 @@ new FontLoader()
 
 ### **Image Optimization**
 
-**Next-Gen Image Formats**
+#### Next-Gen Image Formats
 
 ```html
 <!-- Responsive images with modern formats -->
@@ -487,7 +487,7 @@ new FontLoader()
 </picture>
 ```
 
-**Image Loading Strategies**
+#### Image Loading Strategies
 
 ```javascript
 class ImageOptimizer {
@@ -567,7 +567,7 @@ new ImageOptimizer()
 
 ### **JavaScript and CSS Optimization**
 
-**Resource Prioritization**
+#### Resource Prioritization
 
 ```html
 <head>
@@ -594,7 +594,7 @@ new ImageOptimizer()
 </body>
 ```
 
-**Module Loading Strategy**
+#### Module Loading Strategy
 
 ```javascript
 // Critical module loader
@@ -665,7 +665,7 @@ new ModuleLoader()
 
 ### **Continuous Monitoring Setup**
 
-**Performance Monitoring Dashboard**
+#### Performance Monitoring Dashboard
 
 ```javascript
 class FCPMonitor {

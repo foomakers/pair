@@ -214,14 +214,14 @@ export class BFFOrchestrator {
 
 ## Benefits and Trade-offs
 
-**Benefits:**
+#### Benefits:
 
 - **Best of both worlds** - Use optimal pattern per use case
 - **Gradual migration** - Evolve architecture incrementally
 - **Risk mitigation** - Reduce big-bang migration risks
 - **Performance optimization** - Optimize each component individually
 
-**Trade-offs:**
+#### Trade-offs:
 
 - **Increased complexity** - Multiple patterns to understand and maintain
 - **Operational overhead** - Different deployment and monitoring strategies
@@ -239,14 +239,14 @@ export class BFFOrchestrator {
 
 ## Migration Strategies
 
-**Monolith → Hybrid:**
+#### Monolith → Hybrid:
 
 1. **Identify extraction candidates** - High-scale or specialized components
 2. **Extract gradually** - One service at a time
 3. **Maintain compatibility** - Keep existing interfaces working
 4. **Add event backbone** - Enable async communication
 
-**Microservices → Hybrid:**
+#### Microservices → Hybrid:
 
 1. **Identify consolidation candidates** - Chatty or related services
 2. **Add serverless for events** - Event processing and scheduled tasks

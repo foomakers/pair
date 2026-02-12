@@ -21,6 +21,7 @@ catalog:
   globals: 15.0.0
   husky: 8.0.0
   markdown-it: 14.1.0
+  markdownlint-cli: 0.47.0
   mdast: 3.0.0
   prettier: 3.6.2
   remark-parse: 11.0.0

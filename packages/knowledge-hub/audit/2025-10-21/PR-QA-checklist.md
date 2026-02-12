@@ -25,7 +25,7 @@
 
 **Link Check Results**:
 
-```
+```text
 > @pair/knowledge-hub@0.1.0 check:links
 All markdown links are valid.
 Patched links: 0
@@ -42,7 +42,7 @@ Normalized full links: 0
 
 **Test Results**:
 
-```
+```text
  Test Files  6 passed (6)
       Tests  60 passed | 2 skipped (62)
    Duration  608ms

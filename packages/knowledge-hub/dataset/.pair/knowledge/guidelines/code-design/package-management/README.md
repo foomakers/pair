@@ -23,6 +23,7 @@ Guidance for package management in monorepos and multi-package workspaces. Cover
 - `shared-dependencies.md` (how to manage shared deps)
 
 ```markdown
+
 # Package Management
 
 ## Introduction
@@ -49,6 +50,7 @@ Guidance on package managers and workspace configuration for monorepos. Focus on
 ## How to use
 
 Open the topic pages for concrete examples, recommended settings and migration notes.
+
 ```
 ````
 

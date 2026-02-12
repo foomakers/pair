@@ -7,6 +7,7 @@ import {
   findPackageJsonPath,
 } from './discovery'
 import { isKBCached, ensureKBAvailable } from '#kb-manager'
+import { installKBFromLocalZip } from '#kb-manager/kb-installer'
 import { isDiagEnabled } from '#diagnostics'
 
 /**
@@ -127,4 +128,47 @@ export async function getKnowledgeHubDatasetPathWithFallback(options: {
     ensureKBAvailableFn,
     DIAG,
   })
+}
+
+/** Config shape accepted by resolveDatasetRoot — union of install/update config fields. */
+export type DatasetResolvableConfig =
+  | { resolution: 'default' }
+  | { resolution: 'remote'; url: string }
+  | { resolution: 'local'; path: string }
+
+/** Options accepted by resolveDatasetRoot. */
+export interface DatasetResolveOptions {
+  cliVersion?: string | undefined
+  httpClient?: HttpClientService | undefined
+}
+
+/**
+ * Resolves the dataset root path based on a command config's resolution strategy.
+ * Supports default (local monorepo), remote (download with fallback), and local (directory or .zip).
+ */
+export async function resolveDatasetRoot(
+  fs: FileSystemService,
+  config: DatasetResolvableConfig,
+  options?: DatasetResolveOptions,
+): Promise<string> {
+  const version = options?.cliVersion || '0.0.0'
+
+  switch (config.resolution) {
+    case 'default':
+      return getKnowledgeHubDatasetPath(fs)
+
+    case 'remote':
+      return getKnowledgeHubDatasetPathWithFallback({
+        fsService: fs,
+        version,
+        ...(options?.httpClient && { httpClient: options.httpClient }),
+        customUrl: config.url,
+      })
+
+    case 'local':
+      if (config.path.endsWith('.zip')) {
+        return installKBFromLocalZip(version, config.path, fs)
+      }
+      return config.path
+  }
 }

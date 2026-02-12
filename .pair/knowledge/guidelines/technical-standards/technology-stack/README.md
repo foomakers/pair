@@ -4,7 +4,7 @@
 
 This section covers comprehensive technology stack selection, standardization, and management:
 
-**In Scope:**
+#### In Scope:
 
 - Technology stack conventions and standardization frameworks
 - Framework selection criteria and evaluation processes
@@ -13,7 +13,7 @@ This section covers comprehensive technology stack selection, standardization, a
 - Technical decision-making processes and documentation
 - Technology performance evaluation and optimization
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Application-specific implementation details (covered in Code Design)
 - Infrastructure deployment patterns (covered in Infrastructure)
@@ -77,7 +77,7 @@ This folder provides enterprise-grade technology stack standards with comprehens
 
 This section covers technology stack selection and standardization:
 
-**In Scope:**
+#### In Scope:
 
 - Framework selection criteria and evaluation processes
 - Technology decision documentation and tracking
@@ -85,7 +85,7 @@ This section covers technology stack selection and standardization:
 - Convention establishment and governance
 - Technology roadmap planning and evolution
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Implementation patterns using the technologies (covered in Code Design)
 - Infrastructure deployment of technologies (covered in Infrastructure)

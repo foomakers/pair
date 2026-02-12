@@ -13,6 +13,7 @@ You are helping create and prioritize strategic initiatives that translate PRD r
 **Read and follow** the complete process from [how-to-create-and-prioritize-initiatives.md](../../.pair/knowledge/how-to/03-how-to-create-and-prioritize-initiatives.md).
 
 **Execute the process exactly as documented**, including:
+
 - All phases and checkpoints
 - Session state management 
 - Required deliverables

@@ -13,7 +13,7 @@ Transform Product Requirements Documents (PRDs) into strategic initiatives throu
 
 **CRITICAL**: Maintain this context throughout initiative creation:
 
-```
+```text
 INITIATIVE CREATION STATE:
 ├── Project: [Project Name from PRD]
 ├── Creation Status: [foundation | analysis | prioritization | creation | planning]
@@ -197,7 +197,7 @@ INITIATIVE CREATION STATE:
 
 ### Best Practices for AI Assistants
 
-**Do's:**
+#### Do's:
 
 - Start with comprehensive PRD analysis to understand business context
 - Follow [Project Management Framework](../guidelines/collaboration/project-management-tool/README.md) consistently
@@ -206,7 +206,7 @@ INITIATIVE CREATION STATE:
 - Validate assumptions through targeted questions rather than presumptions
 - Consider resource constraints and dependencies in all planning
 
-**Don'ts:**
+#### Don'ts:
 
 - Never create initiatives without thorough PRD analysis first
 - Never bypass tool configuration requirements from way-of-working.md
@@ -229,17 +229,17 @@ INITIATIVE CREATION STATE:
 
 ## References
 
-**Primary Implementation Assets:**
+#### Primary Implementation Assets:
 
 - [Initiative Template](../guidelines/collaboration/templates/initiative-template.md) - Complete structure and fields for initiative documentation
 - [Project Management Framework](../guidelines/collaboration/project-management-tool/README.md) - Tool-specific guidelines and access procedures
 
-**Guidelines for Implementation:**
+#### Guidelines for Implementation:
 
 - [Business Value Assessment](../guidelines/quality-assurance/performance/continuous-improvement.md#business-value-assessment) - Framework for analyzing and prioritizing business impact
 - [Roadmap Planning Guidelines](../guidelines/collaboration/templates/initiative-template.md#quarterly-roadmap) - Timeline and dependency management best practices
 
-**Prerequisite Documentation:**
+#### Prerequisite Documentation:
 
 - [`.pair/product/adopted/PRD.md`](../../adoption/product/PRD.md) - Product Requirements Document with business objectives
 - [`.pair/adoption/tech/way-of-working.md`](../../adoption/tech/way-of-working.md) - Project management tool configuration
@@ -249,12 +249,12 @@ INITIATIVE CREATION STATE:
 
 After initiative creation, proceed with tactical planning:
 
-**Epic Development:**
+#### Epic Development:
 
 - **Define Bounded Contexts** → [05-how-to-define-bounded-contexts.md](05-how-to-define-bounded-contexts.md)
 - **Breakdown Epics** → [06-how-to-breakdown-epics.md](06-how-to-breakdown-epics.md)
 
-**Story Creation:**
+#### Story Creation:
 
 - **Create User Stories** → [07-how-to-breakdown-user-stories.md](07-how-to-breakdown-user-stories.md)
 - **Refine User Stories** → [08-how-to-refine-a-user-story.md](08-how-to-refine-a-user-story.md)

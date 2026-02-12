@@ -48,9 +48,9 @@ The selection of an appropriate project management methodology is a critical dec
 
 ### Project Characteristics Assessment
 
-**Requirements Stability**
+#### Requirements Stability
 
-```
+```text
 High Stability (Waterfall-friendly):
 - Well-defined, documented requirements
 - Minimal expected changes during development
@@ -70,9 +70,9 @@ Low Stability (Agile-friendly):
 - Customer feedback-driven development
 ```
 
-**Project Complexity**
+#### Project Complexity
 
-```
+```text
 Low Complexity:
 - Single team or small project
 - Well-understood technology and domain
@@ -92,9 +92,9 @@ High Complexity:
 - Extensive integration and system impacts
 ```
 
-**Timeline and Budget Constraints**
+#### Timeline and Budget Constraints
 
-```
+```text
 Fixed Constraints (Waterfall/Traditional):
 - Non-negotiable deadlines (regulatory, events)
 - Fixed budget with limited flexibility
@@ -116,9 +116,9 @@ Time-to-Market Critical (Lean/Kanban):
 
 ### Organizational Context
 
-**Culture and Maturity**
+#### Culture and Maturity
 
-```
+```text
 Traditional/Hierarchical Organizations:
 - Formal governance and approval processes
 - Risk-averse decision making culture
@@ -141,9 +141,9 @@ Scaling Organizations:
 → SAFe, LeSS, or scaled agile frameworks
 ```
 
-**Team Characteristics**
+#### Team Characteristics
 
-```
+```text
 Co-located, Experienced Teams:
 - High collaboration and communication
 - Domain and technology expertise
@@ -180,7 +180,7 @@ Large, Multi-disciplinary Teams:
 | **Quality Focus**          | 7         | 8     | 6      | 9    | 8    | 8    | 10%    |
 | **Learning/Innovation**    | 3         | 9     | 7      | 8    | 9    | 6    | 10%    |
 
-**Scoring Guide:**
+#### Scoring Guide:
 
 - 9: Excellent fit for this criterion
 - 7-8: Good fit with minor limitations
@@ -190,9 +190,9 @@ Large, Multi-disciplinary Teams:
 
 ### Methodology Profiles
 
-**Waterfall Profile**
+#### Waterfall Profile
 
-```
+```text
 Best For:
 - Stable, well-defined requirements
 - Regulatory or compliance-driven projects
@@ -213,9 +213,9 @@ Success Factors:
 - Stakeholder commitment and sign-off
 ```
 
-**Scrum Profile**
+#### Scrum Profile
 
-```
+```text
 Best For:
 - Product development with evolving requirements
 - Innovation and exploration projects
@@ -236,9 +236,9 @@ Success Factors:
 - Commitment to continuous improvement
 ```
 
-**Kanban Profile**
+#### Kanban Profile
 
-```
+```text
 Best For:
 - Continuous flow and delivery focus
 - Support and maintenance work
@@ -259,9 +259,9 @@ Success Factors:
 - Clear policies and work standards
 ```
 
-**Lean Profile**
+#### Lean Profile
 
-```
+```text
 Best For:
 - Waste elimination and efficiency focus
 - Process optimization and improvement
@@ -282,9 +282,9 @@ Success Factors:
 - Continuous learning and adaptation
 ```
 
-**LeSS Profile**
+#### LeSS Profile
 
-```
+```text
 Best For:
 - Large product development (2-8+ teams)
 - Scaling Scrum while maintaining simplicity
@@ -307,9 +307,9 @@ Success Factors:
 - Continuous improvement culture
 ```
 
-**SAFe Profile**
+#### SAFe Profile
 
-```
+```text
 Best For:
 - Large-scale enterprise projects
 - Multiple team coordination needs
@@ -334,9 +334,9 @@ Success Factors:
 
 ### Step 1: Project Assessment
 
-**Requirements Analysis**
+#### Requirements Analysis
 
-```
+```text
 Assessment Questions:
 1. How well-defined are the requirements?
    - Completely specified and stable
@@ -357,9 +357,9 @@ Assessment Questions:
    - Optimization over prediction
 ```
 
-**Complexity Analysis**
+#### Complexity Analysis
 
-```
+```text
 Complexity Factors:
 □ Number of teams involved (1, 2-5, 6-20, 20+)
 □ Technology novelty (proven, established, emerging, cutting-edge)
@@ -372,9 +372,9 @@ Complexity Factors:
 
 ### Step 2: Organizational Assessment
 
-**Culture and Readiness**
+#### Culture and Readiness
 
-```
+```text
 Cultural Assessment:
 1. Decision Making Style:
    - Hierarchical and centralized
@@ -401,9 +401,9 @@ Cultural Assessment:
    - Innovation and breakthrough focus
 ```
 
-**Capability Assessment**
+#### Capability Assessment
 
-```
+```text
 Team and Organizational Capabilities:
 □ Project management experience and maturity
 □ Agile and lean methodology experience
@@ -417,9 +417,9 @@ Team and Organizational Capabilities:
 
 ### Step 3: Methodology Selection
 
-**Selection Algorithm**
+#### Selection Algorithm
 
-```
+```text
 Primary Selection Criteria:
 1. Requirements Stability → Agile vs. Traditional approach
 2. Organizational Scale → Team-level vs. Enterprise frameworks
@@ -447,9 +447,9 @@ High Compliance/Governance Needs?
 └─ No → Consider pure Agile approaches (Scrum, LeSS)
 ```
 
-**Scoring and Ranking**
+#### Scoring and Ranking
 
-```
+```text
 Weighted Scoring Process:
 1. Define project-specific criteria weights
 2. Score each methodology against criteria (1-9 scale)
@@ -483,9 +483,9 @@ Total Score: 7.19
 
 ### Step 4: Implementation Planning
 
-**Transition Strategy**
+#### Transition Strategy
 
-```
+```text
 Implementation Approaches:
 1. Big Bang Transition:
    - Complete methodology change at once
@@ -512,9 +512,9 @@ Implementation Approaches:
    - Requires careful design and governance
 ```
 
-**Success Factors**
+#### Success Factors
 
-```
+```text
 Critical Success Elements:
 □ Leadership commitment and support
 □ Clear communication and change management
@@ -530,9 +530,9 @@ Critical Success Elements:
 
 ### Scenario-Based Recommendations
 
-**New Product Development**
+#### New Product Development
 
-```
+```text
 Context: Innovative product with unclear market requirements
 Characteristics:
 - High uncertainty and exploration needed
@@ -553,9 +553,9 @@ Alternative: Kanban for continuous flow
 - Adaptive capacity management
 ```
 
-**Enterprise System Implementation**
+#### Enterprise System Implementation
 
-```
+```text
 Context: Large-scale ERP or infrastructure project
 Characteristics:
 - Multiple teams and stakeholder groups
@@ -576,9 +576,9 @@ Alternative: LeSS for Product-Focused Development
 - Simplified scaling with agile principles
 ```
 
-**Large Product Development**
+#### Large Product Development
 
-```
+```text
 Context: Complex product with multiple development teams
 Characteristics:
 - 2-8+ teams working on same product
@@ -599,9 +599,9 @@ Alternative: SAFe for Enterprise Context
 - Suitable for larger organizational context
 ```
 
-**Maintenance and Support**
+#### Maintenance and Support
 
-```
+```text
 Context: Ongoing support and enhancement work
 Characteristics:
 - Varied work types and priorities
@@ -622,9 +622,9 @@ Alternative: Scrum for Enhancement Work
 - Predictable delivery cadence
 ```
 
-**Regulated Industry Project**
+#### Regulated Industry Project
 
-```
+```text
 Context: Healthcare, finance, or aerospace project
 Characteristics:
 - Strict regulatory and compliance requirements
@@ -645,14 +645,14 @@ Alternative: SAFe with Compliance Focus
 - Built-in quality and documentation
 ```
 
-| **Delivery Cadence** | Continuous | Iterative | Milestone | Continuous | Planned |
-| **Process Overhead** | Low | Medium | High | Low | High |
-| **Documentation** | Minimal | Moderate | Extensive | Minimal | Moderate |
-| **Predictability** | Low | Medium | High | Low | Medium |
+| **Delivery Cadence** | Continuous | Iterative | Milestone | Continuous | Planned  |
+| **Process Overhead** | Low        | Medium    | High      | Low        | High     |
+| **Documentation**    | Minimal    | Moderate  | Extensive | Minimal    | Moderate |
+| **Predictability**   | Low        | Medium    | High      | Low        | Medium   |
 
 ### Methodology Selection Decision Tree
 
-```
+```text
 Start: What are your project characteristics?
 
 ├── Team size > 50 people?
@@ -681,14 +681,14 @@ Start: What are your project characteristics?
 
 #### Kanban Methodology
 
-**Benefits:**
+#### Benefits:
 
 - Low process overhead and immediate implementation
 - High flexibility and adaptability to changing requirements
 - Continuous flow and fast delivery cycles
 - Visual management and transparency
 
-**Costs:**
+#### Costs:
 
 - Limited predictability for long-term planning
 - Requires discipline for work-in-progress limits
@@ -699,14 +699,14 @@ Start: What are your project characteristics?
 
 #### Scrum Methodology
 
-**Benefits:**
+#### Benefits:
 
 - Proven framework with extensive community support
 - Balanced structure and flexibility
 - Regular inspection and adaptation cycles
 - Clear roles and responsibilities
 
-**Costs:**
+#### Costs:
 
 - Requires team training and certification
 - Ceremony overhead (meetings, planning sessions)
@@ -717,14 +717,14 @@ Start: What are your project characteristics?
 
 #### Waterfall Methodology
 
-**Benefits:**
+#### Benefits:
 
 - High predictability and detailed planning
 - Comprehensive documentation and traceability
 - Clear phase gates and approval processes
 - Good for compliance and regulatory requirements
 
-**Costs:**
+#### Costs:
 
 - Low adaptability to changing requirements
 - Late feedback and validation cycles
@@ -735,14 +735,14 @@ Start: What are your project characteristics?
 
 #### Lean Methodology
 
-**Benefits:**
+#### Benefits:
 
 - Focus on waste elimination and efficiency
 - Fast learning cycles and rapid iteration
 - Customer value optimization
 - Minimal process overhead
 
-**Costs:**
+#### Costs:
 
 - Requires cultural change and mindset shift
 - May lack structure for complex projects
@@ -753,14 +753,14 @@ Start: What are your project characteristics?
 
 #### SAFe Methodology
 
-**Benefits:**
+#### Benefits:
 
 - Scales agile practices to enterprise level
 - Coordinates multiple teams and dependencies
 - Portfolio-level planning and alignment
 - Proven patterns for large organizations
 
-**Costs:**
+#### Costs:
 
 - High implementation complexity and cost
 - Extensive training and certification requirements

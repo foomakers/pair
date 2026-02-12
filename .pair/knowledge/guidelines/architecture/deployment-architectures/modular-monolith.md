@@ -94,14 +94,14 @@ export class InternalEventBus {
 
 ## Module Boundaries
 
-**Strong Boundaries:**
+#### Strong Boundaries:
 
 - **Separate databases per module** (logical separation)
 - **No direct database access** across modules
 - **Communication via domain events**
 - **Independent testing** strategies
 
-**Shared Elements:**
+#### Shared Elements:
 
 - **Shared kernel** - Core domain concepts
 - **Infrastructure** - Database connections, logging
@@ -109,7 +109,7 @@ export class InternalEventBus {
 
 ## Benefits and Trade-offs
 
-**Benefits:**
+#### Benefits:
 
 - **Team independence** - Teams can work on separate modules
 - **Clear boundaries** - Domain-driven design principles
@@ -117,7 +117,7 @@ export class InternalEventBus {
 - **Single deployment** - Simplified operations
 - **Transactional consistency** - ACID across modules when needed
 
-**Trade-offs:**
+#### Trade-offs:
 
 - **Module coupling** - Shared database and runtime
 - **Coordination overhead** - Interface changes affect multiple teams
@@ -134,14 +134,14 @@ export class InternalEventBus {
 
 ## Migration Strategies
 
-**From Structured Monolith:**
+#### From Structured Monolith:
 
 1. Extract domain events
 2. Separate module databases
 3. Add module interfaces
 4. Implement event-driven communication
 
-**To Microservices:**
+#### To Microservices:
 
 1. Start with least coupled module
 2. Extract database completely

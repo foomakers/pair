@@ -31,7 +31,7 @@ This framework addresses:
 
 **Information Design Framework**:
 
-```
+```text
 Content Strategy → Information Architecture → Visual Structure → Interface Layout
        ↓                    ↓                     ↓                ↓
 User Goals → Content Hierarchy → Visual Hierarchy → Interface Components
@@ -85,7 +85,7 @@ User Goals → Content Hierarchy → Visual Hierarchy → Interface Components
 
 **Breakpoint Strategy**:
 
-```
+```text
 Mobile (320-768px) → Tablet (768-1024px) → Desktop (1024-1440px) → Large Display (1440px+)
         ↓                    ↓                    ↓                        ↓
 Single Column → Multi-Column → Complex Layouts → Enhanced Functionality

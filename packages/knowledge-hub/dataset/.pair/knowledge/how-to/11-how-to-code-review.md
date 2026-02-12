@@ -14,7 +14,7 @@ Validate implemented code quality and ensure compliance with technical standards
 
 **CRITICAL**: Maintain this context throughout code review:
 
-```
+```text
 CODE REVIEW STATE:
 ├── PR: [#PR-NUMBER: PR Title]
 ├── Status: [pending | changes-requested | approved]
@@ -37,6 +37,7 @@ CODE REVIEW STATE:
 - **Apply technical standards** from [adoption guidelines](../../adoption/tech) and [quality standards](../guidelines/quality-assurance/quality-standards/README.md)
 
 **HALT CONDITION — Missing ADR**: If new libraries/patterns found without ADR documentation:
+
 1. HALT merge process immediately
 2. Request ADR creation following [ADR template](../guidelines/architecture/decision-frameworks/adr-process.md)
 3. Update adoption documents to include new decisions
@@ -94,17 +95,17 @@ Follow [project management tool guidelines](../guidelines/collaboration/project-
 2. **Post report as PR comment** with all findings by severity
 3. **Set PR status** based on findings:
 
-**Review Decisions:**
+#### Review Decisions:
 
-| Decision | Condition | Next Step |
-|----------|-----------|-----------|
-| **APPROVED** | All requirements met, quality gates pass | Squash merge, mark story "Done" |
+| Decision              | Condition                                               | Next Step                                                                |
+| --------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **APPROVED**          | All requirements met, quality gates pass                | Squash merge, mark story "Done"                                          |
 | **CHANGES REQUESTED** | Critical issues, missing ADR, failing tests, AC not met | Return to [10-how-to-implement-a-task.md](10-how-to-implement-a-task.md) |
-| **TECH DEBT** | Only minor issues, tracked as debt | Approve PR, create debt items |
+| **TECH DEBT**         | Only minor issues, tracked as debt                      | Approve PR, create debt items                                            |
 
 ### Phase 4: Completion & Integration
 
-**For Approved Reviews Only:**
+#### For Approved Reviews Only:
 
 1. **Squash merge** per [commit template](../guidelines/collaboration/templates/commit-template.md)
 2. **Update story status** to "Done" in PM tool
@@ -113,7 +114,7 @@ Follow [project management tool guidelines](../guidelines/collaboration/project-
 
 ## Success Criteria
 
-**Review Complete When:**
+#### Review Complete When:
 
 - [ ] Phase 0 completed — PR and story context loaded
 - [ ] ADR and adoption compliance validated for all new technical decisions
@@ -123,7 +124,7 @@ Follow [project management tool guidelines](../guidelines/collaboration/project-
 - [ ] PR status updated (pending/changes-requested/approved)
 - [ ] Review decision made
 
-**For Approved Reviews:**
+#### For Approved Reviews:
 
 - [ ] Squash merge completed
 - [ ] Story marked "Done" in PM tool

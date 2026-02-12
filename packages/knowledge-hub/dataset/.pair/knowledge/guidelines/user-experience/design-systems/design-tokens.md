@@ -8,7 +8,7 @@ Establish design tokens as the foundational layer of design systems, ensuring co
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Design token taxonomy and naming conventions for systematic organization
 - Token value management and maintenance strategies for long-term sustainability
@@ -16,7 +16,7 @@ Establish design tokens as the foundational layer of design systems, ensuring co
 - Design tool integration and developer workflow optimization
 - Token governance and versioning for controlled design system evolution
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Specific design tool configuration and plugin setup (covered in Level 3 technical guides)
 - Framework-specific token implementation details and build processes

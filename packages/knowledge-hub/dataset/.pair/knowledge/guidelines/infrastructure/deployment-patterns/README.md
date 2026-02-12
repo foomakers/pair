@@ -8,7 +8,7 @@ This practice provides comprehensive guidance for implementing sophisticated dep
 
 ## 📋 Scope and Coverage
 
-**In Scope:**
+#### In Scope:
 
 - Advanced deployment strategies and pattern implementation
 - Zero-downtime deployment techniques and rollback procedures
@@ -17,7 +17,7 @@ This practice provides comprehensive guidance for implementing sophisticated dep
 - Multi-environment deployment coordination and automation
 - Deployment monitoring and validation with automated quality gates
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Cloud provider-specific deployment configurations (covered in Cloud Services)
 - Infrastructure provisioning and management (covered in Infrastructure as Code)
@@ -66,7 +66,7 @@ Enterprise-grade deployment security ensuring comprehensive protection throughou
 
 ## � Quick Start Decision Framework
 
-```
+```text
 Selecting deployment strategy?
 ├─ Critical production system?
 │  ├─ Zero-downtime required? → [Blue-green Deployment](deployment-strategies.md#blue-green)
@@ -86,11 +86,11 @@ Selecting deployment strategy?
 
 | Strategy          | Risk Level | Rollback Speed | Resource Usage | Complexity | Downtime | Best For             |
 | ----------------- | ---------- | -------------- | -------------- | ---------- | -------- | -------------------- |
-| **Blue-Green**    | 🟢 Low     | ⚡ Instant     | 🔴 High (2x)   | 🟡 Medium  | ✅ Zero  | Critical systems     |
-| **Canary**        | 🟢 Low     | ⚡ Fast        | 🟡 Medium      | 🔴 High    | ✅ Zero  | User-facing apps     |
-| **Rolling**       | 🟡 Medium  | 🟡 Medium      | 🟢 Low         | 🟢 Low     | ✅ Zero  | Standard deployments |
-| **Feature Flags** | 🟢 Low     | ⚡ Instant     | 🟢 Low         | 🟡 Medium  | ✅ Zero  | Gradual rollouts     |
-| **Recreate**      | 🔴 High    | 🔴 Slow        | 🟢 Low         | 🟢 Low     | 🔴 Yes   | Development/testing  |
+| **Blue-Green**    | 🟢 Low      | ⚡ Instant      | 🔴 High (2x)    | 🟡 Medium   | ✅ Zero   | Critical systems     |
+| **Canary**        | 🟢 Low      | ⚡ Fast         | 🟡 Medium       | 🔴 High     | ✅ Zero   | User-facing apps     |
+| **Rolling**       | 🟡 Medium   | 🟡 Medium       | 🟢 Low          | 🟢 Low      | ✅ Zero   | Standard deployments |
+| **Feature Flags** | 🟢 Low      | ⚡ Instant      | 🟢 Low          | 🟡 Medium   | ✅ Zero   | Gradual rollouts     |
+| **Recreate**      | 🔴 High     | 🔴 Slow         | 🟢 Low          | 🟢 Low      | 🔴 Yes    | Development/testing  |
 
 **Legend**: 🟢 Excellent | 🟡 Good | 🔴 Challenging
 
@@ -98,21 +98,21 @@ Selecting deployment strategy?
 
 ### Deployment Pattern Selection Criteria
 
-**Risk Tolerance and Business Requirements**
+#### Risk Tolerance and Business Requirements
 
 - **Zero-downtime requirements**: Blue-green or canary patterns for mission-critical applications
 - **Gradual rollout needs**: Canary deployments with feature flags for user-facing applications
 - **Resource constraints**: Rolling updates for resource-limited environments
 - **Testing requirements**: Blue-green for comprehensive validation before full rollout
 
-**Technical Infrastructure Considerations**
+#### Technical Infrastructure Considerations
 
 - **Container orchestration**: Kubernetes-native patterns with advanced scheduling and networking
 - **Legacy application support**: Rolling updates or blue-green for traditional applications
 - **Microservices architecture**: Canary deployments with service mesh integration
 - **Monolithic applications**: Blue-green or rolling updates based on complexity and requirements
 
-**Operational and Governance Requirements**
+#### Operational and Governance Requirements
 
 - **Compliance and audit**: Blue-green with comprehensive validation and approval workflows
 - **Rapid iteration**: Feature flags with continuous deployment and experimentation
@@ -121,21 +121,21 @@ Selecting deployment strategy?
 
 ### Advanced Deployment Patterns
 
-**Progressive Delivery Implementation**
+#### Progressive Delivery Implementation
 
 - Feature flag integration with user segmentation and A/B testing capabilities
 - Canary analysis with automated promotion based on metrics and user feedback
 - Ring-based deployment with progressive rollout to different user segments
 - Experimentation frameworks with statistical analysis and automated decision making
 
-**Multi-Service Deployment Coordination**
+#### Multi-Service Deployment Coordination
 
 - Service dependency management with ordered deployment and validation
 - Cross-service transaction management with distributed systems patterns
 - Database migration coordination with zero-downtime schema changes
 - API versioning and backward compatibility with graceful deprecation
 
-**Disaster Recovery and Rollback Excellence**
+#### Disaster Recovery and Rollback Excellence
 
 - Automated rollback triggers based on performance metrics and error rates
 - Database rollback strategies with point-in-time recovery and migration rollback
@@ -162,14 +162,14 @@ Selecting deployment strategy?
 
 ### Deployment Excellence
 
-**Safety and Reliability**
+#### Safety and Reliability
 
 - Implement comprehensive health checks and validation at each deployment stage
 - Use automated rollback triggers based on predefined success criteria and metrics
 - Establish deployment windows and maintenance procedures with stakeholder communication
 - Design for graceful degradation with circuit breakers and fallback mechanisms
 
-**Performance and Efficiency**
+#### Performance and Efficiency
 
 - Optimize deployment speed with parallel processing and resource pre-warming
 - Implement deployment caching and artifact reuse with intelligent dependency management
@@ -178,14 +178,14 @@ Selecting deployment strategy?
 
 ### Operations and Governance
 
-**Monitoring and Observability**
+#### Monitoring and Observability
 
 - Implement deployment-aware monitoring with metrics correlation and anomaly detection
 - Use distributed tracing for deployment impact analysis and performance monitoring
 - Establish deployment dashboards with real-time status and health indicators
 - Design alerting and notification systems with intelligent escalation and automated response
 
-**Security and Compliance**
+#### Security and Compliance
 
 - Integrate security scanning and validation into deployment workflows with automated remediation
 - Implement access controls and audit logging with comprehensive deployment history
@@ -234,15 +234,15 @@ Selecting deployment strategy?
 _This deployment patterns practice enables organizations to achieve world-class deployment capabilities through sophisticated patterns, automation, and operational excellence that supports rapid software delivery while maintaining reliability, security, and user experience quality._
 
     C --> E{Microservices?}
-    E -->|Yes| F[Service-Specific Pipelines]
-    E -->|No| G[Selective Build Pipelines]
+| E --> | Yes | F[Service-Specific Pipelines] |
+| E --> | No  | G[Selective Build Pipelines]  |
 
     D --> H{Deployment Target?}
-    H -->|Cloud| I[Cloud-Native Pipeline]
-    H -->|On-Premise| J[Hybrid Pipeline]
-    H -->|Edge| K[Distributed Pipeline]
+| H --> | Cloud      | I[Cloud-Native Pipeline] |
+| H --> | On-Premise | J[Hybrid Pipeline]       |
+| H --> | Edge       | K[Distributed Pipeline]  |
 
-```
+```text
 
 ### Selection Criteria
 

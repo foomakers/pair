@@ -360,11 +360,12 @@ required
 );
 }
 
-````
+````text
 
 ### 2. Hybrid Server/Client Pattern
 
 ```typescript
+
 // app/users/[id]/page.tsx - Server Component wrapper
 import { UserProfile } from './UserProfile';
 import { getUserById } from '@/lib/database';
@@ -413,6 +414,7 @@ export function UserProfile({ user }: UserProfileProps) {
     </div>
   );
 }
+
 ````
 
 ## Data Fetching Patterns
@@ -420,6 +422,7 @@ export function UserProfile({ user }: UserProfileProps) {
 ### 1. Server-Side Data Fetching
 
 ```typescript
+
 // app/dashboard/page.tsx
 import { DashboardStats } from '@/components/DashboardStats'
 import { RecentActivity } from '@/components/RecentActivity'
@@ -473,11 +476,13 @@ export default function Error({
     </div>
   )
 }
+
 ```
 
 ### 2. Client-Side Data Fetching with SWR
 
 ```typescript
+
 'use client'
 
 import useSWR from 'swr'
@@ -520,11 +525,13 @@ export function UsersList() {
     </div>
   )
 }
+
 ```
 
 ### 3. Streaming with Suspense
 
 ```typescript
+
 // app/dashboard/page.tsx
 import { Suspense } from 'react'
 import { DashboardStats } from './DashboardStats'
@@ -564,6 +571,7 @@ async function RecentActivity() {
   const activities = await getRecentActivity() // Slower query
   return <ActivityList activities={activities} />
 }
+
 ```
 
 ## Routing Patterns
@@ -571,6 +579,7 @@ async function RecentActivity() {
 ### 1. App Router (Next.js 13+)
 
 ```typescript
+
 // File structure:
 // app/
 //   layout.tsx          -> Root layout
@@ -621,11 +630,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </div>
   )
 }
+
 ```
 
 ### 2. Dynamic Routes with Type Safety
 
 ```typescript
+
 // app/users/[id]/page.tsx
 interface UserPageProps {
   params: { id: string }
@@ -676,6 +687,7 @@ export function UserActions({ userId }: { userId: string }) {
     </div>
   )
 }
+
 ```
 
 ## API Routes
@@ -683,6 +695,7 @@ export function UserActions({ userId }: { userId: string }) {
 ### 1. RESTful API Pattern
 
 ```typescript
+
 // app/api/users/route.ts - GET /api/users, POST /api/users
 import { NextRequest, NextResponse } from 'next/server'
 import { getUsersFromDB, createUser } from '@/lib/database'
@@ -691,8 +704,8 @@ import { validateCreateUserRequest } from '@/lib/validation'
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
-    const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '10')
+| const page = parseInt(searchParams.get('page')   |  | '1')  |
+| const limit = parseInt(searchParams.get('limit') |  | '10') |
 
     const users = await getUsersFromDB({ page, limit })
 
@@ -743,11 +756,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     return NextResponse.json({ error: 'Failed to fetch user', success: false }, { status: 500 })
   }
 }
+
 ```
 
 ### 2. Middleware Pattern
 
 ```typescript
+
 // middleware.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { verifyAuth } from '@/lib/auth'
@@ -783,6 +798,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: ['/dashboard/:path*', '/api/:path*'],
 }
+
 ```
 
 ## Performance Optimization
@@ -790,6 +806,7 @@ export const config = {
 ### 1. Code Splitting and Lazy Loading
 
 ```typescript
+
 // Dynamic imports for code splitting
 import dynamic from 'next/dynamic'
 import { Suspense } from 'react'
@@ -821,11 +838,13 @@ export function Dashboard() {
     </div>
   )
 }
+
 ```
 
 ### 2. Image Optimization
 
 ```typescript
+
 import Image from 'next/image'
 
 export function UserAvatar({ user }: { user: User }) {
@@ -863,11 +882,13 @@ export function ProductGallery({ images }: { images: string[] }) {
     </div>
   )
 }
+
 ```
 
 ### 3. Caching Strategies
 
 ```typescript
+
 // app/api/users/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -910,6 +931,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ data: user })
 }
+
 ```
 
 ## State Management Integration
@@ -917,16 +939,17 @@ export async function POST(request: NextRequest) {
 ### 1. Zustand with Next.js
 
 ```typescript
+
 // lib/store.ts
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 
 interface AppStore {
-  user: User | null
-  theme: 'light' | 'dark'
+| user: User     | null   |
+| theme: 'light' | 'dark' |
   sidebarOpen: boolean
-  setUser: (user: User | null) => void
-  setTheme: (theme: 'light' | 'dark') => void
+| setUser: (user: User      | null) => void   |
+| setTheme: (theme: 'light' | 'dark') => void |
   toggleSidebar: () => void
 }
 
@@ -963,6 +986,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>
 }
+
 ```
 
 ## Best Practices
@@ -970,6 +994,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 ### 1. Component Organization
 
 ```typescript
+
 // components/UserCard/index.ts - Barrel export
 export { UserCard } from './UserCard'
 export { UserCardSkeleton } from './UserCardSkeleton'
@@ -986,11 +1011,13 @@ interface UserCardProps {
 export function UserCard({ user, onEdit, onDelete, variant = 'default' }: UserCardProps) {
   // Component implementation
 }
+
 ```
 
 ### 2. Error Handling
 
 ```typescript
+
 // Global error boundary
 // app/global-error.tsx
 'use client'
@@ -1033,11 +1060,13 @@ export default function DashboardError({
     </div>
   )
 }
+
 ```
 
 ### 3. TypeScript Integration
 
 ```typescript
+
 // Global type definitions
 // types/next.d.ts
 import type { NextRequest } from 'next/server'
@@ -1077,6 +1106,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error', success: false }, { status: 500 })
   }
 }
+
 ```
 
 This comprehensive guide covers the essential patterns for building scalable React and Next.js applications with modern best practices.

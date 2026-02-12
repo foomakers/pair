@@ -6,8 +6,9 @@ import {
   buildCopyOptions,
   distributeToSecondaryTargets,
   stripMarkersFromTarget,
+  postCopyOps,
 } from './operations'
-import { defaultSyncOptions } from '@pair/content-ops'
+import { defaultSyncOptions, InMemoryFileSystemService } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
 
 describe('registry operations', () => {
@@ -32,6 +33,33 @@ describe('registry operations', () => {
 
     expect(await fs.exists('/dataset/dst/file1.md')).toBe(true)
     expect(await fs.exists('/dataset/dst/file2.md')).toBe(true)
+  })
+
+  it('returns skillNameMap when flatten+prefix produces skill renames', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        '/dataset/.skills/capability/next/SKILL.md':
+          '# /next — Navigator\n\nCompose /verify-quality for checks.',
+        '/dataset/.skills/capability/verify-quality/SKILL.md':
+          '# /verify-quality — Quality Gate Checker',
+      },
+      '/test',
+      '/test',
+    )
+
+    const result = await doCopyAndUpdateLinks(fs, {
+      source: '/dataset/.skills',
+      target: '/test/.claude/skills',
+      datasetRoot: '/dataset',
+      options: { ...defaultSyncOptions(), flatten: true, prefix: 'pair', targets: [] },
+    })
+
+    // doCopyAndUpdateLinks must propagate the skillNameMap from copyDirectoryWithTransforms
+    expect(result).toHaveProperty('skillNameMap')
+    const map = result['skillNameMap'] as Map<string, string>
+    expect(map).toBeInstanceOf(Map)
+    expect(map.get('next')).toBe('pair-capability-next')
+    expect(map.get('verify-quality')).toBe('pair-capability-verify-quality')
   })
 
   it('calculatePaths resolves absolute and relative paths', () => {
@@ -273,5 +301,122 @@ describe('stripMarkersFromTarget', () => {
     expect(result).not.toContain('Skipped')
     expect(result).toContain('## Kept')
     expect(result).not.toContain('<!-- @')
+  })
+})
+
+describe('postCopyOps', () => {
+  it('strips markers when target is a file', async () => {
+    const fs = createTestFs({}, {}, '/project')
+    await fs.mkdir('/project', { recursive: true })
+    await fs.writeFile(
+      '/project/AGENTS.md',
+      '# Title\n<!-- @claude-skip-start -->\nHidden\n<!-- @claude-skip-end -->\nVisible',
+    )
+
+    const registryConfig: RegistryConfig = {
+      source: 'AGENTS.md',
+      behavior: 'mirror',
+      description: 'Agents',
+      include: [],
+      flatten: false,
+      targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+    }
+
+    await postCopyOps({
+      fs,
+      registryConfig,
+      effectiveTarget: '/project/AGENTS.md',
+      datasetPath: '/dataset/AGENTS.md',
+      baseTarget: '/project',
+    })
+
+    const result = await fs.readFile('/project/AGENTS.md')
+    expect(result).not.toContain('<!-- @')
+    expect(result).toContain('Visible')
+  })
+
+  it('distributes to secondary targets when multiple targets exist', async () => {
+    const fs = createTestFs({}, {}, '/project')
+    await fs.mkdir('/project/.claude/skills', { recursive: true })
+    await fs.writeFile('/project/.claude/skills/SKILL.md', '# Skill')
+
+    const registryConfig: RegistryConfig = {
+      source: '.skills',
+      behavior: 'mirror',
+      description: 'Skills',
+      include: [],
+      flatten: false,
+      targets: [
+        { path: '.claude/skills/', mode: 'canonical' },
+        { path: '.cursor/skills/', mode: 'copy' },
+      ],
+    }
+
+    await postCopyOps({
+      fs,
+      registryConfig,
+      effectiveTarget: '/project/.claude/skills',
+      datasetPath: '/dataset/.skills',
+      baseTarget: '/project',
+    })
+
+    expect(await fs.exists('/project/.cursor/skills/SKILL.md')).toBe(true)
+  })
+
+  it('skips strip when target is a directory', async () => {
+    const fs = createTestFs({}, {}, '/project')
+    await fs.mkdir('/project/.pair/knowledge', { recursive: true })
+    await fs.writeFile(
+      '/project/.pair/knowledge/README.md',
+      '# Title\n<!-- @claude-skip-start -->\nHidden\n<!-- @claude-skip-end -->',
+    )
+
+    const registryConfig: RegistryConfig = {
+      source: '.pair/knowledge',
+      behavior: 'mirror',
+      description: 'KB',
+      include: [],
+      flatten: false,
+      targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+    }
+
+    await postCopyOps({
+      fs,
+      registryConfig,
+      effectiveTarget: '/project/.pair/knowledge',
+      datasetPath: '/dataset/.pair/knowledge',
+      baseTarget: '/project',
+    })
+
+    // Markers should remain — stripMarkers only runs on files, not directories
+    const result = await fs.readFile('/project/.pair/knowledge/README.md')
+    expect(result).toContain('<!-- @claude-skip-start -->')
+  })
+
+  it('no-op when single canonical target', async () => {
+    const fs = createTestFs({}, {}, '/project')
+    await fs.mkdir('/project/.pair', { recursive: true })
+    await fs.writeFile('/project/.pair/README.md', '# Content')
+
+    const registryConfig: RegistryConfig = {
+      source: '.pair',
+      behavior: 'mirror',
+      description: 'KB',
+      include: [],
+      flatten: false,
+      targets: [{ path: '.pair', mode: 'canonical' }],
+    }
+
+    await postCopyOps({
+      fs,
+      registryConfig,
+      effectiveTarget: '/project/.pair',
+      datasetPath: '/dataset/.pair',
+      baseTarget: '/project',
+    })
+
+    // No secondary distribution, directory stays as-is
+    const result = await fs.readFile('/project/.pair/README.md')
+    expect(result).toBe('# Content')
   })
 })

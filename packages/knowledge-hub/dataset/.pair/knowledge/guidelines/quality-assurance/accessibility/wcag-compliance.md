@@ -12,7 +12,7 @@ Understanding WCAG compliance levels is crucial for setting appropriate accessib
 
 Level A represents the most basic level of accessibility. It addresses the most significant barriers to access but still leaves many accessibility issues unresolved. While Level A compliance removes major obstacles, it's generally insufficient for comprehensive accessibility.
 
-**Key characteristics:**
+#### Key characteristics:
 
 - Essential accessibility features required by law
 - Basic usability for assistive technologies
@@ -23,7 +23,7 @@ Level A represents the most basic level of accessibility. It addresses the most 
 
 Level AA is the widely accepted standard for accessibility compliance. Most accessibility legislation, including the Americans with Disabilities Act (ADA) and European accessibility standards, reference Level AA as the requirement. This level provides enhanced accessibility for a broader user base.
 
-**Key characteristics:**
+#### Key characteristics:
 
 - Enhanced accessibility for broader user base
 - Improved usability across diverse abilities
@@ -35,7 +35,7 @@ Level AA is the widely accepted standard for accessibility compliance. Most acce
 
 Level AAA represents the highest level of accessibility but is not recommended as a general requirement for entire websites or applications. Instead, Level AAA criteria should be applied selectively to specific content or features where maximum accessibility is critical.
 
-**Key characteristics:**
+#### Key characteristics:
 
 - Maximum accessibility for specialized needs
 - Comprehensive coverage of edge cases

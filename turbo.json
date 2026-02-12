@@ -32,6 +32,12 @@
     "prettier:fix": {
       "outputs": []
     },
+    "mdlint:check": {
+      "outputs": []
+    },
+    "mdlint:fix": {
+      "outputs": []
+    },
     "clean": {
       "cache": false,
       "outputs": []

@@ -31,7 +31,7 @@ Repository structure defines how code, documentation, and assets are organized w
 
 ### 1. Monorepo Structure
 
-```
+```text
 project-root/
 ├── packages/
 │   ├── ui-components/
@@ -47,14 +47,14 @@ project-root/
 └── scripts/
 ```
 
-**Benefits:**
+#### Benefits:
 
 - Shared tooling and configuration
 - Atomic commits across packages
 - Simplified dependency management
 - Better code reuse
 
-**Use Cases:**
+#### Use Cases:
 
 - Related applications
 - Shared component libraries
@@ -63,7 +63,7 @@ project-root/
 
 ### 2. Multi-Repo Structure
 
-```
+```text
 organization/
 ├── app-frontend/
 ├── app-backend/
@@ -72,14 +72,14 @@ organization/
 └── documentation/
 ```
 
-**Benefits:**
+#### Benefits:
 
 - Independent release cycles
 - Team ownership boundaries
 - Technology diversity
 - Simpler repository management
 
-**Use Cases:**
+#### Use Cases:
 
 - Independent services
 - Different technology stacks
@@ -88,7 +88,7 @@ organization/
 
 ### 3. Domain-Driven Structure
 
-```
+```text
 project/
 ├── src/
 │   ├── user-management/
@@ -103,14 +103,14 @@ project/
 └── tests/
 ```
 
-**Benefits:**
+#### Benefits:
 
 - Clear business boundaries
 - Domain expert collaboration
 - Isolated changes
 - Reduced coupling
 
-**Use Cases:**
+#### Use Cases:
 
 - Complex business domains
 - Large development teams
@@ -121,7 +121,7 @@ project/
 
 ### JavaScript/TypeScript
 
-```
+```text
 project/
 ├── src/
 │   ├── components/
@@ -139,7 +139,7 @@ project/
 
 ### Python
 
-```
+```text
 project/
 ├── src/
 │   └── project_name/
@@ -157,7 +157,7 @@ project/
 
 ### Java
 
-```
+```text
 project/
 ├── src/
 │   ├── main/
@@ -175,7 +175,7 @@ project/
 
 ### Next.js Structure
 
-```
+```text
 nextjs-app/
 ├── app/
 │   ├── (auth)/
@@ -193,7 +193,7 @@ nextjs-app/
 
 ### React Library
 
-```
+```text
 react-lib/
 ├── src/
 │   ├── components/
@@ -213,7 +213,7 @@ react-lib/
 
 ### Node.js API
 
-```
+```text
 api-server/
 ├── src/
 │   ├── controllers/
@@ -232,7 +232,7 @@ api-server/
 
 ### Environment Configuration
 
-```
+```text
 config/
 ├── environments/
 │   ├── development.json
@@ -245,7 +245,7 @@ config/
 
 ### Tool Configuration
 
-```
+```text
 project-root/
 ├── .github/
 │   └── workflows/
@@ -262,7 +262,7 @@ project-root/
 
 ### README-Driven Development
 
-```
+```text
 docs/
 ├── README.md (main entry point)
 ├── CONTRIBUTING.md
@@ -278,7 +278,7 @@ docs/
 
 ### API Documentation
 
-```
+```text
 docs/
 ├── api/
 │   ├── authentication.md
@@ -294,7 +294,7 @@ docs/
 
 ### Test Organization
 
-```
+```text
 tests/
 ├── unit/
 │   ├── components/
@@ -312,7 +312,7 @@ tests/
 
 ### Test Co-location
 
-```
+```text
 src/
 ├── components/
 │   ├── Button/
@@ -331,7 +331,7 @@ src/
 
 ### Static Assets
 
-```
+```text
 public/
 ├── images/
 │   ├── icons/
@@ -344,7 +344,7 @@ public/
 
 ### Build Assets
 
-```
+```text
 dist/
 ├── assets/
 │   ├── css/

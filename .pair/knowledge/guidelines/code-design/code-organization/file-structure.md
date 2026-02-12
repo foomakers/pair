@@ -35,7 +35,7 @@ src/
 ├── types/ # Global types
 └── constants/
 
-```
+```text
 
 ### Co-location Rules
 
@@ -46,7 +46,7 @@ UserProfile.tsx
 UserProfile.test.tsx
 UserProfile.stories.tsx (if using Storybook)
 
-```
+```text
 
 **Types**: Co-locate types when feature-specific:
 ```
@@ -58,7 +58,7 @@ auth/
 │ └── auth.types.ts
 └── services/
 
-```
+```text
 
 **Styles**: Keep styles close to components:
 ```
@@ -69,7 +69,7 @@ Button/
 ├── Button.test.tsx
 └── index.ts
 
-````
+````text
 
 ## File Naming Conventions
 
@@ -90,6 +90,7 @@ Button/
 Use index files to create clean public APIs:
 
 ```typescript
+
 // components/ui/index.ts
 export { Button } from './Button';
 export { Input } from './Input';
@@ -98,6 +99,7 @@ export { Modal } from './Modal';
 // Re-export types
 export type { ButtonProps } from './Button';
 export type { InputProps } from './Input';
+
 ````
 
 ### Index File Rules
@@ -118,6 +120,7 @@ export type { InputProps } from './Input';
 ### Import Rules
 
 ```typescript
+
 // ✅ Good: Relative imports within feature
 import { UserService } from './services/UserService'
 
@@ -126,6 +129,7 @@ import { formatDate } from '@/shared/lib/utils'
 
 // ❌ Bad: Cross-feature imports
 import { AuthService } from '../auth/services/AuthService'
+
 ```
 
 ## Special Files
@@ -134,17 +138,20 @@ import { AuthService } from '../auth/services/AuthService'
 
 Keep configuration close to where it's used:
 
-```
+```text
+
 features/auth/
 ├── components/
 ├── __tests__/
 │   └── auth.config.ts     # Auth-specific test config
 └── auth.constants.ts      # Auth constants
+
 ```
 
 ### Asset Organization
 
-```
+```text
+
 public/
 ├── images/
 │   ├── icons/
@@ -157,13 +164,15 @@ src/assets/
 └── styles/
     ├── globals.css
     └── components/    # Component-specific styles
+
 ```
 
 ## Examples
 
 ### React Component Structure
 
-```
+```text
+
 components/UserProfile/
 ├── UserProfile.tsx           # Main component
 ├── UserProfile.test.tsx      # Unit tests
@@ -175,11 +184,13 @@ components/UserProfile/
 ├── types/
 │   └── UserProfile.types.ts  # Component types
 └── index.ts                  # Public API
+
 ```
 
 ### Service Structure
 
-```
+```text
+
 services/
 ├── api/
 │   ├── userApi.ts
@@ -190,6 +201,7 @@ services/
 │   ├── AuthService.test.ts
 │   └── auth.types.ts
 └── index.ts
+
 ```
 
 ## Best Practices
@@ -205,32 +217,40 @@ services/
 
 ❌ **Technical layering**:
 
-```
+```text
+
 src/
 ├── components/     # All components mixed together
 ├── services/       # All services mixed together
 └── utils/          # All utilities mixed together
+
 ```
 
 ❌ **Deep nesting**:
 
-```
+```text
+
 src/features/auth/components/forms/login/validation/rules/email/
+
 ```
 
 ❌ **Mixed concerns**:
 
-```
+```text
+
 UserProfile.tsx     # Component + business logic + API calls
+
 ```
 
 ❌ **Unclear boundaries**:
 
-```
+```text
+
 // In auth feature importing from user feature
 import { UserService } from '../../user/services/UserService';
-```
 
 ```
+
+```text
 
 ```

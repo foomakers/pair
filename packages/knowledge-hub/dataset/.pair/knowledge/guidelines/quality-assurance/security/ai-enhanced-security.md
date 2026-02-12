@@ -8,7 +8,7 @@ Leverage artificial intelligence and machine learning technologies to enhance se
 
 ### **Machine Learning Security Use Cases**
 
-**AI-Powered Security Enhancement Areas**
+#### AI-Powered Security Enhancement Areas
 
 - **Threat Detection**: Behavioral analysis and anomaly detection
 - **Vulnerability Assessment**: Intelligent code analysis and pattern recognition
@@ -28,7 +28,7 @@ Leverage artificial intelligence and machine learning technologies to enhance se
 
 ### **Behavioral Analysis Engine**
 
-**ML-Based Anomaly Detection**
+#### ML-Based Anomaly Detection
 
 AI Security Analyzer implementation includes machine learning-based anomaly detection using Isolation Forest algorithms for unsupervised security threat identification, comprehensive feature extraction from security events including request patterns, response characteristics, payload analysis, and user behavior metrics.
 
@@ -97,7 +97,7 @@ normalized_features = self.scaler.fit_transform(features)
 
         ### **Intelligent Security Event Correlation**
 
-**Event Correlation Engine**
+#### Event Correlation Engine
 
 Security event correlation includes neural network-based correlation analysis using TensorFlow for deep learning pattern recognition, comprehensive event correlation across temporal patterns, attack signature identification, and automated incident classification for security response optimization.
 
@@ -109,13 +109,14 @@ Event correlation process includes security event aggregation within defined tim
 
 Correlation features include temporal event distribution analysis, IP address diversity evaluation, attack pattern recognition covering authentication failures, authorization violations, input validation errors, geographic spread analysis, and technology stack pattern identification for comprehensive security incident correlation.
 
-````
+````text
 
 ### **Intelligent Security Event Correlation**
 
 **Event Correlation Engine**
 
 ```javascript
+
 const tf = require('@tensorflow/tfjs-node')
 
 class SecurityEventCorrelator {
@@ -233,13 +234,14 @@ class SecurityEventCorrelator {
     return Object.keys(patterns).find(pattern => patterns[pattern]) || 'unknown'
   }
 }
+
 ````
 
 ## 🛡️ **AUTOMATED VULNERABILITY DISCOVERY**
 
 ### **AI-Powered Code Analysis**
 
-**Intelligent Vulnerability Scanner**
+#### Intelligent Vulnerability Scanner
 
 AI-powered vulnerability scanning includes comprehensive code analysis using pre-trained security classification models, multi-dimensional vulnerability pattern detection covering SQL injection, cross-site scripting, and hardcoded secrets, with intelligent semantic analysis for context-aware security vulnerability identification.
 
@@ -320,13 +322,13 @@ Vulnerability assessment includes multi-layered analysis combining structural, p
             'references': self.get_security_references(vulnerability['type'])
         }
 
-````
+````text
 
 ## 📊 **INTELLIGENT SECURITY ANALYTICS**
 
 ### **Predictive Security Modeling**
 
-**Security Risk Prediction Engine**
+#### Security Risk Prediction Engine
 
 ```javascript
 class SecurityRiskPredictor {

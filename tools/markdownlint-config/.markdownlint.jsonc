@@ -1,0 +1,25 @@
+{
+  // Base: all rules enabled
+  "default": true,
+
+  // MD003: Heading style — ATX only (# not underline)
+  "MD003": { "style": "atx" },
+
+  // MD004: Unordered list style — consistent within file
+  "MD004": { "style": "consistent" },
+
+  // MD013: Line length — disabled (prose wraps naturally)
+  "MD013": false,
+
+  // MD024: Allow duplicate headings in different sections (sibling_only)
+  "MD024": { "siblings_only": true },
+
+  // MD033: Allow inline HTML (needed for some KB content)
+  "MD033": false,
+
+  // MD036: Emphasis as heading — disabled (used intentionally in skill files)
+  "MD036": false,
+
+  // MD041: First line should be heading — disabled (YAML frontmatter files)
+  "MD041": false
+}

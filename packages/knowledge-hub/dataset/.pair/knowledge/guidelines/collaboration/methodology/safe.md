@@ -10,7 +10,7 @@ Comprehensive framework for scaling Lean-Agile development across large enterpri
 
 **Principle**: Everyone understands and works toward common objectives
 
-```
+```text
 Alignment Mechanisms:
 - Clear mission, vision, and strategy communication
 - Objectives and Key Results (OKRs) cascaded through organization
@@ -28,7 +28,7 @@ Benefits:
 
 **Principle**: Quality is everyone's responsibility throughout development
 
-```
+```text
 Quality Practices:
 - Definition of Done with quality criteria at all levels
 - Continuous integration and automated testing
@@ -46,7 +46,7 @@ Quality Gates:
 
 **Principle**: Trust through radical transparency of facts, progress, and impediments
 
-```
+```text
 Transparency Mechanisms:
 - Visual management and information radiators
 - Regular demos and stakeholder communication
@@ -64,7 +64,7 @@ Transparency Benefits:
 
 **Principle**: Persistent focus on working systems and business outcomes
 
-```
+```text
 Execution Excellence:
 - Relentless improvement toward business outcomes
 - Commitment to delivery and value realization
@@ -82,9 +82,9 @@ Execution Practices:
 
 ### Essential SAFe
 
-**Team Level - Agile Teams**
+#### Team Level - Agile Teams
 
-```
+```text
 Structure:
 - 5-9 cross-functional team members
 - Product Owner for business guidance
@@ -104,9 +104,9 @@ Artifacts:
 - Team metrics dashboard and improvement items
 ```
 
-**Program Level - Agile Release Train (ART)**
+#### Program Level - Agile Release Train (ART)
 
-```
+```text
 Structure:
 - 50-125 people in 5-12 agile teams
 - Release Train Engineer (RTE) for facilitation
@@ -129,9 +129,9 @@ Artifacts:
 
 ### Large Solution SAFe
 
-**Solution Level - Solution Train**
+#### Solution Level - Solution Train
 
-```
+```text
 Structure:
 - Multiple ARTs (3-20) working on large solution
 - Solution Train Engineer for coordination
@@ -153,9 +153,9 @@ Artifacts:
 
 ### Portfolio SAFe
 
-**Portfolio Level - Lean Portfolio Management**
+#### Portfolio Level - Lean Portfolio Management
 
-```
+```text
 Structure:
 - Lean Portfolio Management function
 - Enterprise Architect for technical strategy
@@ -177,9 +177,9 @@ Artifacts:
 
 ### Full SAFe
 
-**Additional Enterprise Elements**
+#### Additional Enterprise Elements
 
-```
+```text
 Customer Focus:
 - Design thinking and customer journey mapping
 - Customer advisory boards and feedback loops
@@ -197,9 +197,9 @@ Organizational Agility:
 
 ### Program Increment (PI) Planning
 
-**Purpose and Structure**
+#### Purpose and Structure
 
-```
+```text
 PI Planning Overview:
 - Face-to-face planning event every 8-12 weeks
 - 2-day event bringing entire ART together
@@ -219,9 +219,9 @@ Day 2 Agenda:
 - Planning retrospective and improvement planning
 ```
 
-**PI Planning Preparation**
+#### PI Planning Preparation
 
-```
+```text
 Pre-Planning Activities (2-4 weeks before):
 - Backlog refinement and feature readiness
 - Architectural runway preparation
@@ -237,9 +237,9 @@ Success Criteria:
 
 ### System Demo
 
-**Purpose and Cadence**
+#### Purpose and Cadence
 
-```
+```text
 System Demo Structure:
 - Every 2 weeks (end of each iteration)
 - Integrated solution demonstration
@@ -261,9 +261,9 @@ Benefits:
 
 ### Inspect and Adapt (I&A)
 
-**Workshop Structure**
+#### Workshop Structure
 
-```
+```text
 I&A Workshop (4-6 hours at end of each PI):
 Part 1: PI System Demo (45 minutes)
 - Demonstrate full solution increment
@@ -286,9 +286,9 @@ Part 3: Problem-Solving Workshop (2-3 hours)
 
 ### Leadership Roles
 
-**Release Train Engineer (RTE)**
+#### Release Train Engineer (RTE)
 
-```
+```text
 Responsibilities:
 - Facilitate ART events and processes
 - Coach leaders, teams, and Scrum Masters
@@ -308,9 +308,9 @@ Skills Required:
 - Change management and leadership experience
 ```
 
-**Product Manager**
+#### Product Manager
 
-```
+```text
 Responsibilities:
 - Define and communicate program vision
 - Manage program backlog and feature prioritization
@@ -330,9 +330,9 @@ Skills Required:
 - Analytical and data-driven decision making
 ```
 
-**System Architect**
+#### System Architect
 
-```
+```text
 Responsibilities:
 - Define system and solution architecture
 - Establish technical direction and standards
@@ -354,9 +354,9 @@ Skills Required:
 
 ### Team Roles
 
-**Product Owner**
+#### Product Owner
 
-```
+```text
 Team-Level Responsibilities:
 - Manage and prioritize team backlog
 - Define user stories and acceptance criteria
@@ -376,9 +376,9 @@ Skills Development:
 - Communication and stakeholder management
 ```
 
-**Scrum Master**
+#### Scrum Master
 
-```
+```text
 Team Facilitation:
 - Facilitate team events and ceremonies
 - Coach team in Agile and Scrum practices
@@ -402,9 +402,9 @@ Leadership Development:
 
 ### Implementation Roadmap
 
-**Phase 1: Foundation (Months 1-3)**
+#### Phase 1: Foundation (Months 1-3)
 
-```
+```text
 Leadership Preparation:
 - Executive alignment and commitment
 - SAFe training for leadership team
@@ -424,9 +424,9 @@ First PI Planning:
 - Success metrics definition and baseline
 ```
 
-**Phase 2: Stabilization (Months 4-9)**
+#### Phase 2: Stabilization (Months 4-9)
 
-```
+```text
 Practice Maturation:
 - Regular PI Planning rhythm establishment
 - Ceremony facilitation and improvement
@@ -446,9 +446,9 @@ Coordination and Alignment:
 - Governance and decision-making process maturation
 ```
 
-**Phase 3: Optimization (Months 10-18)**
+#### Phase 3: Optimization (Months 10-18)
 
-```
+```text
 Advanced Practices:
 - Lean portfolio management implementation
 - Advanced quality and testing practices
@@ -470,9 +470,9 @@ Continuous Improvement:
 
 ### Success Factors
 
-**Leadership Commitment**
+#### Leadership Commitment
 
-```
+```text
 Critical Leadership Behaviors:
 - Visible and consistent support for transformation
 - Investment in training and coaching resources
@@ -486,9 +486,9 @@ Leadership Development:
 - Continuous learning and improvement mindset
 ```
 
-**Cultural Transformation**
+#### Cultural Transformation
 
-```
+```text
 Cultural Change Elements:
 - Trust and psychological safety establishment
 - Collaboration over competition mindset
@@ -504,9 +504,9 @@ Change Management:
 
 ### Common Implementation Challenges
 
-**Challenge: Scaling Coordination**
+#### Challenge: Scaling Coordination
 
-```
+```text
 Problem: Difficulty coordinating work across multiple teams
 Solutions:
 - Clear dependency identification and management
@@ -521,9 +521,9 @@ Prevention:
 - Build relationships and trust across teams
 ```
 
-**Challenge: Technical Debt and Quality**
+#### Challenge: Technical Debt and Quality
 
-```
+```text
 Problem: Accumulated technical debt impacting delivery speed
 Solutions:
 - Definition of Done with quality criteria
@@ -538,9 +538,9 @@ Prevention:
 - Balance between feature delivery and quality investment
 ```
 
-**Challenge: Cultural Resistance**
+#### Challenge: Cultural Resistance
 
-```
+```text
 Problem: Resistance to change and new ways of working
 Solutions:
 - Clear communication of benefits and rationale

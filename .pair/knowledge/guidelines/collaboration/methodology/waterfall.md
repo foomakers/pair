@@ -10,7 +10,7 @@ Sequential project management approach with distinct phases that must be complet
 
 **Linear Progression**: Each phase must be completed before moving to next
 
-```
+```text
 Phase Dependencies:
 - Clear exit criteria for each phase
 - Formal reviews and approvals required
@@ -28,7 +28,7 @@ Benefits:
 
 **Upfront Design**: Detailed planning before execution begins
 
-```
+```text
 Planning Elements:
 - Complete requirements specification
 - Detailed system architecture and design
@@ -46,7 +46,7 @@ Documentation Focus:
 
 **Structured Governance**: Formal processes for change and progress management
 
-```
+```text
 Control Mechanisms:
 - Phase gate reviews and approvals
 - Change control board for modifications
@@ -64,7 +64,7 @@ Governance Structure:
 
 **Fixed Scope Delivery**: Commitment to predefined scope, schedule, and budget
 
-```
+```text
 Predictability Factors:
 - Fixed requirements and scope definition
 - Detailed estimation and planning
@@ -82,9 +82,9 @@ Success Criteria:
 
 ### Phase 1: Requirements Analysis
 
-**Objectives**
+#### Objectives
 
-```
+```text
 Requirements Gathering Goals:
 - Complete understanding of business needs
 - Detailed functional and non-functional requirements
@@ -99,9 +99,9 @@ Deliverables:
 - Stakeholder Sign-off and Approval
 ```
 
-**Activities and Techniques**
+#### Activities and Techniques
 
-```
+```text
 Requirements Elicitation:
 - Stakeholder interviews and workshops
 - Document analysis and business process review
@@ -121,9 +121,9 @@ Requirements Documentation:
 - Requirements validation and review processes
 ```
 
-**Success Criteria**
+#### Success Criteria
 
-```
+```text
 Phase Completion Criteria:
 - All requirements documented and approved
 - Stakeholder consensus on project scope
@@ -140,9 +140,9 @@ Quality Gates:
 
 ### Phase 2: System Design
 
-**Objectives**
+#### Objectives
 
-```
+```text
 Design Goals:
 - Translate requirements into technical architecture
 - Define system components and interfaces
@@ -157,9 +157,9 @@ Deliverables:
 - Security and Performance Design Requirements
 ```
 
-**Design Activities**
+#### Design Activities
 
-```
+```text
 High-Level Design:
 - System architecture and component design
 - Technology stack selection and rationale
@@ -179,9 +179,9 @@ Design Reviews:
 - Performance and capacity planning validation
 ```
 
-**Design Standards**
+#### Design Standards
 
-```
+```text
 Design Principles:
 - Modularity and component reusability
 - Scalability and performance optimization
@@ -197,9 +197,9 @@ Documentation Standards:
 
 ### Phase 3: Implementation
 
-**Objectives**
+#### Objectives
 
-```
+```text
 Development Goals:
 - Transform design into working software
 - Follow coding standards and best practices
@@ -214,9 +214,9 @@ Deliverables:
 - Unit testing results and documentation
 ```
 
-**Development Activities**
+#### Development Activities
 
-```
+```text
 Coding Practices:
 - Adherence to coding standards and guidelines
 - Code reviews and quality assurance processes
@@ -236,9 +236,9 @@ Quality Assurance:
 - Performance and security code reviews
 ```
 
-**Implementation Management**
+#### Implementation Management
 
-```
+```text
 Project Control:
 - Development progress tracking and reporting
 - Resource allocation and task assignment
@@ -254,9 +254,9 @@ Configuration Management:
 
 ### Phase 4: Testing
 
-**Objectives**
+#### Objectives
 
-```
+```text
 Testing Goals:
 - Verify system meets all requirements
 - Identify and resolve defects and issues
@@ -271,9 +271,9 @@ Deliverables:
 - User Acceptance Testing Sign-off
 ```
 
-**Testing Levels**
+#### Testing Levels
 
-```
+```text
 Unit Testing:
 - Individual component and module testing
 - Code coverage analysis and improvement
@@ -299,9 +299,9 @@ Acceptance Testing:
 - Production readiness assessment
 ```
 
-**Testing Process**
+#### Testing Process
 
-```
+```text
 Test Planning:
 - Test strategy and approach definition
 - Test environment setup and data preparation
@@ -323,9 +323,9 @@ Quality Assurance:
 
 ### Phase 5: Deployment
 
-**Objectives**
+#### Objectives
 
-```
+```text
 Deployment Goals:
 - Successfully deploy system to production
 - Minimize deployment risks and issues
@@ -340,9 +340,9 @@ Deliverables:
 - Project Closure and Lessons Learned Report
 ```
 
-**Deployment Activities**
+#### Deployment Activities
 
-```
+```text
 Deployment Preparation:
 - Production environment setup and configuration
 - Data migration and system integration
@@ -364,9 +364,9 @@ Post-Deployment:
 
 ### Phase 6: Maintenance
 
-**Objectives**
+#### Objectives
 
-```
+```text
 Maintenance Goals:
 - Ensure continued system operation and availability
 - Provide ongoing support and issue resolution
@@ -380,9 +380,9 @@ Deliverables:
 - System Enhancement and Update Plans
 ```
 
-**Maintenance Activities**
+#### Maintenance Activities
 
-```
+```text
 Operational Support:
 - Incident management and resolution
 - System monitoring and health checks
@@ -400,9 +400,9 @@ Continuous Improvement:
 
 ### Document Templates
 
-**Business Requirements Document (BRD)**
+#### Business Requirements Document (BRD)
 
-```
+```text
 BRD Structure:
 1. Executive Summary
    - Project overview and objectives
@@ -425,9 +425,9 @@ BRD Structure:
    - Testing and validation requirements
 ```
 
-**Technical Design Document (TDD)**
+#### Technical Design Document (TDD)
 
-```
+```text
 TDD Structure:
 1. Architecture Overview
    - System architecture and components
@@ -452,9 +452,9 @@ TDD Structure:
 
 ### Change Management
 
-**Change Control Process**
+#### Change Control Process
 
-```
+```text
 Change Request Workflow:
 1. Change Request Submission
    - Formal change request documentation
@@ -481,9 +481,9 @@ Change Request Workflow:
 
 ### Project Management Tools
 
-**Work Breakdown Structure (WBS)**
+#### Work Breakdown Structure (WBS)
 
-```
+```text
 WBS Development:
 - Hierarchical decomposition of project scope
 - Deliverable-oriented breakdown structure
@@ -497,9 +497,9 @@ Benefits:
 - Progress monitoring and control
 ```
 
-**Gantt Charts and Scheduling**
+#### Gantt Charts and Scheduling
 
-```
+```text
 Schedule Development:
 - Task sequencing and dependency identification
 - Duration estimation and resource allocation
@@ -513,9 +513,9 @@ Schedule Management:
 - Stakeholder communication and reporting
 ```
 
-**Risk Management**
+#### Risk Management
 
-```
+```text
 Risk Management Process:
 1. Risk Identification
    - Systematic risk identification techniques
@@ -540,9 +540,9 @@ Risk Management Process:
 
 ### Quality Management
 
-**Quality Assurance (QA)**
+#### Quality Assurance (QA)
 
-```
+```text
 QA Activities:
 - Quality planning and standards definition
 - Process audits and compliance monitoring
@@ -556,9 +556,9 @@ QA Deliverables:
 - Quality Metrics Dashboard
 ```
 
-**Quality Control (QC)**
+#### Quality Control (QC)
 
-```
+```text
 QC Activities:
 - Deliverable reviews and inspections
 - Testing and verification activities
@@ -576,9 +576,9 @@ QC Techniques:
 
 ### Appropriate Contexts
 
-**Stable Requirements**
+#### Stable Requirements
 
-```
+```text
 Waterfall Suitability:
 - Well-understood and stable requirements
 - Minimal expected changes during development
@@ -592,9 +592,9 @@ Examples:
 - Integration projects with defined interfaces
 ```
 
-**Predictable Environment**
+#### Predictable Environment
 
-```
+```text
 Environmental Factors:
 - Mature technology and established practices
 - Experienced team with domain expertise
@@ -610,9 +610,9 @@ Organizational Readiness:
 
 ### Limitations and Risks
 
-**Inflexibility**
+#### Inflexibility
 
-```
+```text
 Waterfall Challenges:
 - Difficulty accommodating requirement changes
 - Late discovery of design or implementation issues
@@ -626,9 +626,9 @@ Mitigation Strategies:
 - Phased delivery approach where possible
 ```
 
-**Risk Factors**
+#### Risk Factors
 
-```
+```text
 High-Risk Scenarios:
 - Innovative or cutting-edge technology projects
 - Unclear or evolving business requirements
@@ -646,9 +646,9 @@ Risk Management:
 
 ### Waterfall with Agile Elements
 
-**Iterative Waterfall**
+#### Iterative Waterfall
 
-```
+```text
 Hybrid Approach:
 - Waterfall phases with internal iterations
 - Prototyping within design phase
@@ -662,9 +662,9 @@ Benefits:
 - Improves stakeholder engagement
 ```
 
-**Phased Delivery**
+#### Phased Delivery
 
-```
+```text
 Implementation Strategy:
 - Break large project into smaller phases
 - Each phase follows waterfall approach

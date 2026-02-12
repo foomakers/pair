@@ -13,7 +13,7 @@ Transform strategic initiatives into comprehensive Epic breakdowns through struc
 
 **CRITICAL**: Maintain this context throughout epub breakdown:
 
-```
+```text
 EPIC BREAKDOWN STATE:
 ├── Initiative: [Initiative Name and Priority]
 ├── Breakdown Status: [foundation | selection | analysis | proposal | documentation | completion]

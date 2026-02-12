@@ -34,7 +34,7 @@ Comprehensive guide for selecting, implementing, and managing cloud database ser
 | **Key-Value**      | DynamoDB       | Firestore      | Cosmos DB                     | Redis Cloud, Upstash  |
 | **Time-Series**    | Timestream     | Cloud Bigtable | Time Series Insights          | InfluxDB Cloud        |
 | **Data Warehouse** | Redshift       | BigQuery       | Synapse Analytics             | Snowflake             |
-| **Search**         | OpenSearch     | -              | Cognitive Search              | Elasticsearch Cloud   |
+| **Search**         | OpenSearch     | -------------- | Cognitive Search              | Elasticsearch Cloud   |
 
 ## Decision Matrix: Database Selection
 
@@ -49,7 +49,7 @@ Comprehensive guide for selecting, implementing, and managing cloud database ser
 
 ## Decision Tree: Database Selection
 
-```
+```text
 Start: What type of data and access patterns?
 ├── Structured Data with Complex Queries
 │   ├── High consistency required? → PostgreSQL/MySQL (RDS/Cloud SQL)

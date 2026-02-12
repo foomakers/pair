@@ -19,25 +19,25 @@ Execute these checks **in order**. Stop at the first match.
 
 Read the following files and classify each as **populated** or **template**:
 
-| File | Template indicator |
-|---|---|
-| [.pair/adoption/product/PRD.md](../../.pair/adoption/product/PRD.md) | Contains `[Product/feature name]` or `[Creation date]` |
-| [.pair/adoption/product/subdomain/README.md](../../.pair/adoption/product/subdomain/README.md) | Contains `[list here core subdomain]` or `[PROJECT_NAME]` |
-| [.pair/adoption/tech/architecture.md](../../.pair/adoption/tech/architecture.md) | Contains only placeholder headings with no real content |
-| [.pair/adoption/tech/tech-stack.md](../../.pair/adoption/tech/tech-stack.md) | Contains only placeholder headings with no real content |
-| [.pair/adoption/tech/boundedcontext/README.md](../../.pair/adoption/tech/boundedcontext/README.md) | Contains only placeholder headings with no real content |
-| [.pair/adoption/tech/way-of-working.md](../../.pair/adoption/tech/way-of-working.md) | No PM tool specified or only template text |
+| File                                                                                               | Template indicator                                        |
+| -------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| [.pair/adoption/product/PRD.md](../../.pair/adoption/product/PRD.md)                               | Contains `[Product/feature name]` or `[Creation date]`    |
+| [.pair/adoption/product/subdomain/README.md](../../.pair/adoption/product/subdomain/README.md)     | Contains `[list here core subdomain]` or `[PROJECT_NAME]` |
+| [.pair/adoption/tech/architecture.md](../../.pair/adoption/tech/architecture.md)                   | Contains only placeholder headings with no real content   |
+| [.pair/adoption/tech/tech-stack.md](../../.pair/adoption/tech/tech-stack.md)                       | Contains only placeholder headings with no real content   |
+| [.pair/adoption/tech/boundedcontext/README.md](../../.pair/adoption/tech/boundedcontext/README.md) | Contains only placeholder headings with no real content   |
+| [.pair/adoption/tech/way-of-working.md](../../.pair/adoption/tech/way-of-working.md)               | No PM tool specified or only template text                |
 
 **Template detection rule**: A file is a template if it contains square-bracket placeholders (e.g., `[Product/feature name]`) or if its substantive sections contain no project-specific content.
 
 ### Step 2: Cascade — Fresh Project Detection
 
-| # | Condition | Suggestion | Rationale |
-|---|-----------|------------|-----------|
-| 1 | PRD.md is template | `/specify-prd` | Product vision must come first |
-| 2 | PRD.md populated AND 3+ tech adoption files are templates | `/bootstrap` | Project needs foundational setup |
-| 3 | subdomain/README.md is template | `/map-subdomains` | Domain decomposition needed |
-| 4 | boundedcontext/README.md is template | `/map-contexts` | Architecture boundaries needed |
+| #   | Condition                                                 | Suggestion        | Rationale                        |
+| --- | --------------------------------------------------------- | ----------------- | -------------------------------- |
+| 1   | PRD.md is template                                        | `/specify-prd`    | Product vision must come first   |
+| 2   | PRD.md populated AND 3+ tech adoption files are templates | `/bootstrap`      | Project needs foundational setup |
+| 3   | subdomain/README.md is template                           | `/map-subdomains` | Domain decomposition needed      |
+| 4   | boundedcontext/README.md is template                      | `/map-contexts`   | Architecture boundaries needed   |
 
 If any of the above matched, output the suggestion and stop.
 
@@ -47,15 +47,15 @@ All adoption files are populated. Query the PM tool to determine backlog state.
 
 **PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
 
-| # | Condition | Suggestion | Rationale |
-|---|-----------|------------|-----------|
-| 5 | No initiatives or epics exist in PM tool | `/plan-initiatives` | Strategic planning needed |
-| 6 | Initiatives exist but no epics | `/plan-epics` | Epic decomposition needed |
-| 7 | Epics exist but no user stories | `/plan-stories` | Story breakdown needed |
-| 8 | Stories exist without acceptance criteria or with `status:draft` | `/refine-story` | Stories need refinement before work |
-| 9 | Refined stories exist but have no task breakdown | `/plan-tasks` | Tasks must be created before implementation |
-| 10 | Tasks in "ready" or "todo" state exist | `/implement` | Work is ready to start |
-| 11 | Open pull requests or tasks in "review" state | `/review` | Code review pending |
+| #   | Condition                                                        | Suggestion          | Rationale                                   |
+| --- | ---------------------------------------------------------------- | ------------------- | ------------------------------------------- |
+| 5   | No initiatives or epics exist in PM tool                         | `/plan-initiatives` | Strategic planning needed                   |
+| 6   | Initiatives exist but no epics                                   | `/plan-epics`       | Epic decomposition needed                   |
+| 7   | Epics exist but no user stories                                  | `/plan-stories`     | Story breakdown needed                      |
+| 8   | Stories exist without acceptance criteria or with `status:draft` | `/refine-story`     | Stories need refinement before work         |
+| 9   | Refined stories exist but have no task breakdown                 | `/plan-tasks`       | Tasks must be created before implementation |
+| 10  | Tasks in "ready" or "todo" state exist                           | `/implement`        | Work is ready to start                      |
+| 11  | Open pull requests or tasks in "review" state                    | `/review`           | Code review pending                         |
 
 If no condition matched, all work is complete for the current iteration.
 
@@ -71,7 +71,7 @@ If no condition matched in Steps 2-3:
 
 Present results as:
 
-```
+```text
 PROJECT STATE:
 ├── PRD: [populated | template]
 ├── Bootstrap: [complete | incomplete — N/M adoption files populated]

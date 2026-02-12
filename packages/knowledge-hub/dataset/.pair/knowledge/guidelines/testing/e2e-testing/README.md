@@ -39,7 +39,7 @@ Effective E2E testing requires careful test design, robust test infrastructure, 
 
 ### Decision Matrix
 
-**Choose Playwright when:**
+#### Choose Playwright when:
 
 - Cross-browser testing is critical
 - Testing multiple devices and viewports
@@ -47,7 +47,7 @@ Effective E2E testing requires careful test design, robust test infrastructure, 
 - Working with modern web applications
 - Performance and parallelization are priorities
 
-**Choose Cypress when:**
+#### Choose Cypress when:
 
 - Developer experience is the priority
 - Team is new to E2E testing
@@ -57,7 +57,7 @@ Effective E2E testing requires careful test design, robust test infrastructure, 
 
 ### Cost-Benefit Analysis
 
-**Playwright Benefits:**
+#### Playwright Benefits:
 
 - True cross-browser support with WebKit, Firefox, and Chromium
 - Fast execution with parallel testing capabilities
@@ -65,13 +65,13 @@ Effective E2E testing requires careful test design, robust test infrastructure, 
 - Excellent mobile testing support
 - Advanced features like network interception and auto-waiting
 
-**Playwright Costs:**
+#### Playwright Costs:
 
 - Steeper learning curve for teams new to testing
 - Larger resource requirements for browser engines
 - Newer ecosystem with fewer third-party integrations
 
-**Cypress Benefits:**
+#### Cypress Benefits:
 
 - Exceptional developer experience with real-time browser preview
 - Easy debugging with time-travel and DOM snapshots
@@ -79,7 +79,7 @@ Effective E2E testing requires careful test design, robust test infrastructure, 
 - Built-in best practices and automatic waiting
 - Rich ecosystem of plugins and integrations
 
-**Cypress Costs:**
+#### Cypress Costs:
 
 - Limited to Chromium-based browsers (with experimental Firefox support)
 - Same-origin limitations for certain testing scenarios

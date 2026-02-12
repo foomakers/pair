@@ -1,12 +1,7 @@
 import type { UpdateCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
 import { dirname } from 'path'
-import {
-  loadConfigWithOverrides,
-  getKnowledgeHubDatasetPath,
-  getKnowledgeHubDatasetPathWithFallback,
-  ensureDir,
-} from '#config'
+import { loadConfigWithOverrides, resolveDatasetRoot, ensureDir } from '#config'
 import { createLogger, type LogEntry } from '#diagnostics'
 import {
   extractRegistries,
@@ -16,15 +11,14 @@ import {
   forEachRegistry,
   doCopyAndUpdateLinks,
   buildCopyOptions,
-  distributeToSecondaryTargets,
-  stripMarkersFromTarget,
+  postCopyOps,
+  applySkillRefsToNonSkillRegistries,
   handleBackupRollback,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
-import { BackupService } from '@pair/content-ops'
-import { installKBFromLocalZip } from '#kb-manager/kb-installer'
+import { BackupService, type SkillNameMap } from '@pair/content-ops'
 
 /**
  * Update options for handler
@@ -83,7 +77,10 @@ async function setupUpdateContext(
   registries: Record<string, RegistryConfig>
   baseTarget: string
 }> {
-  const datasetRoot = await resolveDatasetRoot(fs, config, options)
+  const datasetRoot = await resolveDatasetRoot(fs, config, {
+    cliVersion: options?.cliVersion,
+    httpClient: options?.httpClient,
+  })
   const configOptions: { customConfigPath?: string; projectRoot?: string } = {}
   if (options?.config) configOptions.customConfigPath = options.config
   const configContent = loadConfigWithOverrides(fs, configOptions)
@@ -94,7 +91,7 @@ async function setupUpdateContext(
     throw new Error(validation.errors.join('; ') || 'Invalid registry configuration')
   }
 
-  const baseTarget = config.target || options?.baseTarget || fs.currentWorkingDirectory()
+  const baseTarget = options?.baseTarget || config.target || fs.currentWorkingDirectory()
   return { datasetRoot, registries, baseTarget }
 }
 
@@ -170,7 +167,7 @@ async function updateSingleRegistry(ctx: {
   registryConfig: RegistryConfig
   baseTarget: string
   pushLog: (level: LogEntry['level'], message: string) => void
-}): Promise<void> {
+}): Promise<SkillNameMap | undefined> {
   const { fs, datasetRoot, registryName, registryConfig, baseTarget, pushLog } = ctx
   const resolved = resolveRegistryPaths({
     name: registryName,
@@ -184,40 +181,32 @@ async function updateSingleRegistry(ctx: {
   const datasetPath = resolved.source
   const copyOptions = buildCopyOptions(registryConfig)
 
+  // For flatten+prefix registries (skills), use baseTarget as the effective
+  // datasetRoot so that link re-rooting correctly maps source paths (potentially
+  // deep in node_modules) to installed paths relative to the target root.
+  const effectiveDatasetRoot =
+    registryConfig.flatten || registryConfig.prefix ? baseTarget : datasetRoot
+
   await logDatasetEntries(fs, datasetPath, pushLog)
   pushLog('info', `Updating registry '${registryName}' at '${effectiveTarget}'`)
-  await doCopyAndUpdateLinks(fs, {
+  const result = await doCopyAndUpdateLinks(fs, {
     source: datasetPath,
     target: effectiveTarget,
-    datasetRoot,
+    datasetRoot: effectiveDatasetRoot,
     options: copyOptions,
   })
 
-  const canonicalTarget = registryConfig.targets.find(t => t.mode === 'canonical')
-  if (await fs.exists(effectiveTarget)) {
-    const stat = await fs.stat(effectiveTarget)
-    if (!stat.isDirectory()) {
-      await stripMarkersFromTarget(fs, effectiveTarget, canonicalTarget?.transform)
-    }
-  }
-
-  if (registryConfig.targets.length > 1) {
-    await distributeToSecondaryTargets({
-      fileService: fs,
-      sourcePath: datasetPath,
-      targets: registryConfig.targets,
-      baseTarget,
-    })
-  }
-
+  await postCopyOps({ fs, registryConfig, effectiveTarget, datasetPath, baseTarget })
   pushLog('info', `Successfully updated registry '${registryName}'`)
+  return result['skillNameMap'] as SkillNameMap | undefined
 }
 
 async function updateRegistries(context: UpdateContext): Promise<void> {
   const { fs, datasetRoot, registries, baseTarget, pushLog } = context
+  const accumulatedSkillNameMap: SkillNameMap = new Map()
 
   await forEachRegistry(registries, async (registryName, registryConfig) => {
-    await updateSingleRegistry({
+    const skillNameMap = await updateSingleRegistry({
       fs,
       datasetRoot,
       registryName,
@@ -225,7 +214,18 @@ async function updateRegistries(context: UpdateContext): Promise<void> {
       baseTarget,
       pushLog,
     })
+    if (skillNameMap) {
+      for (const [k, v] of skillNameMap) accumulatedSkillNameMap.set(k, v)
+    }
   })
+
+  if (accumulatedSkillNameMap.size > 0) {
+    await applySkillRefsToNonSkillRegistries(
+      { fs, baseTarget, pushLog },
+      registries,
+      accumulatedSkillNameMap,
+    )
+  }
 }
 
 async function executeRollback(
@@ -244,34 +244,4 @@ async function executeRollback(
     },
     pushLog,
   )
-}
-
-/**
- * Resolve dataset root based on update config resolution strategy
- */
-async function resolveDatasetRoot(
-  fs: FileSystemService,
-  config: UpdateCommandConfig,
-  options?: UpdateHandlerOptions,
-): Promise<string> {
-  const version = options?.cliVersion || '0.0.0'
-
-  switch (config.resolution) {
-    case 'default':
-      return getKnowledgeHubDatasetPath(fs)
-
-    case 'remote':
-      return getKnowledgeHubDatasetPathWithFallback({
-        fsService: fs,
-        version,
-        ...(options?.httpClient && { httpClient: options.httpClient }),
-        customUrl: config.url,
-      })
-
-    case 'local':
-      if (config.path.endsWith('.zip')) {
-        return installKBFromLocalZip(version, config.path, fs)
-      }
-      return config.path
-  }
 }

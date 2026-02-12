@@ -8,7 +8,7 @@ Modern TypeScript/JavaScript projects often require multiple packages, shared to
 
 ### Basic Structure
 
-```
+```text
 my-project/
 ├── apps/                     # Applications (deployable units)
 │   ├── web/                  # Next.js/React web app
@@ -39,7 +39,7 @@ my-project/
 
 **Purpose**: Contains deployable applications - the final products that users interact with.
 
-```
+```text
 apps/
 ├── web/                      # User-facing web application
 │   ├── package.json
@@ -73,7 +73,7 @@ apps/
 
 **Purpose**: Contains reusable libraries and shared code used across apps.
 
-```
+```text
 packages/
 ├── ui/                       # Shared UI component library
 │   ├── package.json
@@ -302,7 +302,7 @@ module.exports = {
 
 ### Development Tools Structure
 
-```
+```text
 tools/
 ├── eslint-config/            # Shared ESLint rules
 │   ├── package.json
@@ -417,7 +417,7 @@ tools/
 
 ### UI Component Library
 
-```
+```text
 packages/ui/
 ├── src/
 │   ├── components/
@@ -436,7 +436,7 @@ packages/ui/
 
 ### Shared Types Package
 
-```
+```text
 packages/types/
 ├── src/
 │   ├── api/

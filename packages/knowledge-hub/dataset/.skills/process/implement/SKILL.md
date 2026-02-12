@@ -13,16 +13,16 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 
 ## Composed Skills
 
-| Skill | Type | Required |
-|-------|------|----------|
-| `/verify-quality` | Capability | Yes — invoked at quality validation phase |
-| `/record-decision` | Capability | Yes — invoked when a decision needs recording |
-| `/assess-stack` | Capability | Optional — invoked when a new dependency is detected. If not installed, warn and continue. |
+| Skill              | Type       | Required                                                                                            |
+| ------------------ | ---------- | --------------------------------------------------------------------------------------------------- |
+| `/verify-quality`  | Capability | Yes — invoked at quality validation phase                                                           |
+| `/record-decision` | Capability | Yes — invoked when a decision needs recording                                                       |
+| `/assess-stack`    | Capability | Optional — invoked when a new dependency is detected. If not installed, warn and continue.          |
 | `/verify-adoption` | Capability | Optional — invoked before commit to check adoption compliance. If not installed, warn and continue. |
 
 ## Phase 0: Story & Task Analysis (BLOCKING)
 
-**No implementation without complete understanding.**
+#### No implementation without complete understanding.
 
 ### Step 0.1: Load Story
 
@@ -50,7 +50,7 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 
 Present analysis:
 
-```
+```text
 IMPLEMENTATION STATE:
 ├── Story: [#ID: Title]
 ├── Tasks: [N total — list each with type and status]
@@ -78,10 +78,12 @@ Ask: _"Ready to proceed with implementation?"_
 1. **Check**: Does a branch for this story already exist? (`git branch --list 'feature/#<story-id>-*'`)
 2. **Skip**: If branch exists, switch to it (`git checkout <branch>`) and move to Step 1.3.
 3. **Act**: Create branch from main:
-   ```
+
+   ```bash
    git checkout main && git pull origin main
    git checkout -b feature/#<story-id>-<brief-description>
    ```
+
 4. **Verify**: On the correct feature branch.
 
 ### Step 1.3: Choose Commit Strategy
@@ -89,9 +91,11 @@ Ask: _"Ready to proceed with implementation?"_
 1. **Check**: Is this a single-task story?
 2. **Skip**: If single task, set strategy to `commit-per-story` (one task = one commit). Move to Phase 2.
 3. **Act**: Ask the developer:
+
    > **Commit strategy for this story:**
    > 1. **Commit per task** (recommended) — one commit per completed task, granular git history, single PR at end
    > 2. **Commit per story** — all tasks in one commit at the end, single PR
+
 4. **Verify**: Strategy is set. Apply consistently for the entire story.
 
 ## Phase 2: Task-by-Task Implementation
@@ -104,7 +108,8 @@ Process tasks **sequentially**, one at a time. For each task:
    - A task is "completed" if its checklist item is marked ✅ in the story AND (if commit-per-task) the commit exists on the branch.
 2. **Skip**: If all tasks are completed, move to Phase 3.
 3. **Act**: Set the active task. Update session state:
-   ```
+
+   ```text
    ACTIVE TASK:
    ├── Task: [T-N: Title]
    ├── Type: [Development | Documentation | Configuration | Research]
@@ -120,11 +125,11 @@ Process tasks **sequentially**, one at a time. For each task:
 
 ### Step 2.3: Execute Implementation
 
-**For Development Tasks (TDD Required):**
+#### For Development Tasks (TDD Required):
 
 Follow the TDD discipline rules strictly:
 
-**TDD Discipline Rules:**
+#### TDD Discipline Rules:
 
 1. **New features → add tests autonomously.** Write unit tests without asking. Every new module file MUST have a corresponding unit test file (1:1 mapping).
 2. **Modifying existing tests → ask developer with evidence.** Show what changes and why, get approval before modifying any existing test.
@@ -135,7 +140,7 @@ Follow the TDD discipline rules strictly:
 4. **Every module file must have a corresponding unit test file.** 1:1 mapping between source modules and test files.
 5. **Avoid mocks — prefer in-memory test doubles.** Use dependency injection with in-memory implementations (e.g., `InMemoryFileSystemService` instead of mocking `fs`).
 
-**For Non-Development Tasks (Direct Implementation):**
+#### For Non-Development Tasks (Direct Implementation):
 
 - **Documentation**: Implement directly following documentation standards.
 - **Configuration**: Apply infrastructure guidelines.
@@ -148,7 +153,9 @@ Follow the TDD discipline rules strictly:
 3. **Act**: Is `/assess-stack` installed?
    - **Yes**: Compose `/assess-stack` to validate and register the dependency. If `/assess-stack` rejects (incompatible) → **HALT**.
    - **No**: Warn the developer:
+
      > New dependency detected: `[package@version]`. `/assess-stack` is not installed — please manually verify against the tech stack and update [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
+
 4. **Verify**: Dependency is either validated by `/assess-stack` or acknowledged by developer.
 
 ### Step 2.5: Check for Decisions
@@ -162,8 +169,10 @@ Follow the TDD discipline rules strictly:
 
 1. **Check**: Is `/verify-adoption` installed?
 2. **Skip**: If not installed, warn:
+
    > `/verify-adoption` is not installed — skipping adoption compliance check. Please manually verify code against adoption files.
    Move to Step 2.7.
+
 3. **Act**: Compose `/verify-adoption` with `$scope` appropriate to the task.
    - Non-conformities reported → resolve via `/assess-stack` (tech-stack issues) or `/record-decision` (architectural gaps).
 4. **Verify**: Adoption compliance confirmed or all non-conformities resolved.
@@ -178,7 +187,8 @@ Follow the TDD discipline rules strictly:
 1. **Check**: Is the commit strategy `commit-per-task`?
 2. **Skip**: If `commit-per-story`, mark task as complete in session state and return to Step 2.1.
 3. **Act**: Stage and commit following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md):
-   ```
+
+   ```text
    [#<story-id>] <type>: <task-description>
 
    - <specific changes>
@@ -186,6 +196,7 @@ Follow the TDD discipline rules strictly:
 
    Refs: #<story-id>
    ```
+
 4. **Verify**: Commit created.
 5. **Act**: Update the PM tool — mark ONLY the completed task checkbox (`- [x] **T-N**`) in the **Task Breakdown** section of the story issue body. Do NOT touch other checkboxes (DoD, AC, Quality Assurance sections).
 6. Return to Step 2.1.
@@ -197,7 +208,8 @@ Follow the TDD discipline rules strictly:
 1. **Check**: Is the commit strategy `commit-per-story`?
 2. **Skip**: If `commit-per-task`, all commits already exist. Move to Step 3.2.
 3. **Act**: Stage all changes and commit:
-   ```
+
+   ```text
    [#<story-id>] feat: <story-description>
 
    - <summary of all completed tasks>
@@ -205,6 +217,7 @@ Follow the TDD discipline rules strictly:
 
    Refs: #<story-id>
    ```
+
 4. **Verify**: Commit created with all changes.
 
 ### Step 3.2: Update Story Checkboxes
@@ -220,15 +233,18 @@ Follow the TDD discipline rules strictly:
 1. **Check**: Is the branch already pushed and up to date with remote?
 2. **Skip**: If up to date, move to Step 3.4.
 3. **Act**: Push the branch:
-   ```
+
+   ```bash
    git push -u origin feature/#<story-id>-<description>
    ```
+
 4. **Verify**: Branch pushed to remote.
 
 ### Step 3.4: Confirm PR with Developer
 
 1. **Act**: Present a summary before creating the PR:
-   ```
+
+   ```text
    PR READY:
    ├── Branch:  [feature/#story-id-description]
    ├── Tasks:   [N/N completed]
@@ -236,6 +252,7 @@ Follow the TDD discipline rules strictly:
    ├── Quality: [All gates passing]
    └── Title:   [#<story-id>] <type>: <brief description>
    ```
+
 2. **Ask**: _"Ready to create the PR?"_
 3. **Verify**: Developer confirms. If not → wait for developer instructions.
 
@@ -260,7 +277,7 @@ Follow the TDD discipline rules strictly:
 
 At completion:
 
-```
+```text
 IMPLEMENTATION COMPLETE:
 ├── Story:    [#ID: Title]
 ├── Branch:   [feature/#ID-description]

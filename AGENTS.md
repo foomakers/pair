@@ -8,7 +8,7 @@ In all interactions and commit messages, be extremely coincise and sacrify gramm
 
 If your agent supports **Agent Skills** (agentskills.io), start every session by running:
 
-```
+```text
 /pair-next
 ```
 
@@ -20,7 +20,7 @@ The `/pair-next` skill reads project adoption files and PM tool state to recomme
 
 **CRITICAL**: Establish and maintain these 4 key pieces of information for the entire session:
 
-```
+```text
 SESSION STATE:
 ├── How-to: [which .pair/how-to/XX-*.md file you're following]
 ├── Role: [product-manager | product-engineer | staff-engineer]
@@ -28,23 +28,23 @@ SESSION STATE:
 └── PM Access: [MCP command | URL/location for project management queries]
 ```
 
-**Example session state:**
+### Example session state
 
-```
+```text
 How-to: 10-how-to-implement-a-task.md
 Role: product-engineer
 PM Tool: GitHub Projects
 PM Access: MCP github_projects (org: mycompany, repo: myproject)
 ```
 
-### How to establish session context:
+### How to establish session context
 
 1. **Determine how-to**: Use task selection algorithm below
 2. **Identify role**: Check user language/request type, or ask if unclear
 3. **Find PM tool**: Read `.pair/tech/adopted/way-of-working.md` to get the current project management tool
 4. **Get PM access**: Extract tool-specific access instructions from `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md`
 
-**PM Tool Setup Process:**
+#### PM Tool Setup Process
 
 - **Primary source**: `.pair/tech/adopted/way-of-working.md` (contains the adopted PM tool)
 - **Usage instructions**: `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` (contains tool-specific guidance)
@@ -71,21 +71,21 @@ PM Access: MCP github_projects (org: mycompany, repo: myproject)
 
 ### Induction (Getting Started)
 
-- **Create PRD** → `01-how-to-create-PRD.md` | Tags: prd, requirements, planning
-- **Setup project** → `02-how-to-complete-bootstrap-checklist.md` | Tags: bootstrap, setup, onboarding
-- **Define subdomains** → `04-how-to-define-subdomains.md` | Tags: subdomain, domain, model
+| - **Create PRD** → `01-how-to-create-PRD.md`                      | Tags: prd, requirements, planning  |
+| - **Setup project** → `02-how-to-complete-bootstrap-checklist.md` | Tags: bootstrap, setup, onboarding |
+| - **Define subdomains** → `04-how-to-define-subdomains.md`        | Tags: subdomain, domain, model     |
 
 ### Strategic (High-level Planning)
 
-- **Plan initiatives** → `03-how-to-create-and-prioritize-initiatives.md` | Tags: initiative, roadmap
-- **Define architecture** → `05-how-to-define-bounded-contexts.md` | Tags: bounded, context, architecture
-- **Break down epics** → `06-how-to-breakdown-epics.md` | Tags: epic, breakdown
+| - **Plan initiatives** → `03-how-to-create-and-prioritize-initiatives.md` | Tags: initiative, roadmap            |
+| - **Define architecture** → `05-how-to-define-bounded-contexts.md`        | Tags: bounded, context, architecture |
+| - **Break down epics** → `06-how-to-breakdown-epics.md`                   | Tags: epic, breakdown                |
 
 ### Iteration (Sprint Planning)
 
-- **Create user stories** → `07-how-to-breakdown-user-stories.md` | Tags: story, requirements
-- **Refine stories** → `08-how-to-refine-a-user-story.md` | Tags: refine, acceptance, criteria
-- **Create tasks** → `09-how-to-create-tasks.md` | Tags: task, breakdown, assign
+| - **Create user stories** → `07-how-to-breakdown-user-stories.md` | Tags: story, requirements          |
+| - **Refine stories** → `08-how-to-refine-a-user-story.md`         | Tags: refine, acceptance, criteria |
+| - **Create tasks** → `09-how-to-create-tasks.md`                  | Tags: task, breakdown, assign      |
 
 ### Execution (Development)
 
@@ -127,7 +127,7 @@ pnpm lint --filter <package_name>
 
 **Use the index**: Load `.pair/how-to/index.json` and match user request keywords to task `tags`
 
-**Workflow categories:**
+### Workflow categories
 
 - **Getting started / new project?** → Induction tasks
 - **Planning roadmap / high-level design?** → Strategic tasks
@@ -135,7 +135,7 @@ pnpm lint --filter <package_name>
 - **Writing code / implementing?** → Execution tasks
 - **Quality checks / reviewing?** → Review tasks
 
-**Role hints in request:**
+#### Role hints in request
 
 - Product Manager language → prefer `role_preference: ["product-manager"]` tasks
 - Technical/code language → prefer `product-engineer` or `staff-engineer` tasks
@@ -213,9 +213,9 @@ function isLocalPath(str: string): boolean {
 
 ## 📝 Session Context Examples
 
-**Example 1: Implementation task**
+### Example 1: Implementation task
 
-```
+```text
 SESSION STATE:
 ├── How-to: 10-how-to-implement-a-task.md
 ├── Role: product-engineer
@@ -223,9 +223,9 @@ SESSION STATE:
 └── PM Access: MCP github_projects --org=mycompany --repo=myproject
 ```
 
-**Example 2: Planning task**
+### Example 2: Planning task
 
-```
+```text
 SESSION STATE:
 ├── How-to: 06-how-to-breakdown-epics.md
 ├── Role: product-manager
@@ -233,9 +233,9 @@ SESSION STATE:
 └── PM Access: https://linear.app/myteam/projects/active
 ```
 
-**Example 3: Review task**
+### Example 3: Review task
 
-```
+```text
 SESSION STATE:
 ├── How-to: 11-how-to-code-review.md
 ├── Role: staff-engineer

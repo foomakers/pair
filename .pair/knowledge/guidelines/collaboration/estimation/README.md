@@ -53,7 +53,7 @@ This framework provides four complementary estimation approaches that can be use
 
 ### Estimation Method Decision Tree
 
-```
+```text
 Start: What type of project are you estimating?
 
 ├── New product/feature with little historical data?
@@ -79,14 +79,14 @@ Start: What type of project are you estimating?
 
 #### AI-Assisted Estimation
 
-**Benefits:**
+#### Benefits:
 
 - Reduces estimation bias and human error
 - Handles complex scenarios with limited data
 - Consistent across different team members
 - Learns from patterns in historical data
 
-**Costs:**
+#### Costs:
 
 - Requires setup and training of AI tools
 - May need historical data for training
@@ -97,14 +97,14 @@ Start: What type of project are you estimating?
 
 #### Complexity-Based Estimation
 
-**Benefits:**
+#### Benefits:
 
 - Focus on relative sizing rather than absolute time
 - Good for agile teams and iterative development
 - Velocity tracking enables predictable planning
 - Less affected by individual developer differences
 
-**Costs:**
+#### Costs:
 
 - Requires team calibration and consensus building
 - May not align with budget/timeline requirements
@@ -115,14 +115,14 @@ Start: What type of project are you estimating?
 
 #### Time-Based Estimation
 
-**Benefits:**
+#### Benefits:
 
 - Direct alignment with schedules and budgets
 - Easy for stakeholders to understand
 - Works well for similar, repetitive work
 - Enables detailed resource planning
 
-**Costs:**
+#### Costs:
 
 - Higher susceptibility to estimation errors
 - Pressure to commit to specific timeframes
@@ -133,14 +133,14 @@ Start: What type of project are you estimating?
 
 #### Forecast-Based Estimation
 
-**Benefits:**
+#### Benefits:
 
 - Data-driven predictions with confidence intervals
 - Improves accuracy over time with more data
 - Identifies trends and patterns in team performance
 - Enables scenario planning and risk assessment
 
-**Costs:**
+#### Costs:
 
 - Requires significant historical data
 - Complex statistical modeling and analysis
@@ -151,14 +151,14 @@ Start: What type of project are you estimating?
 
 ### Implementation Guidance
 
-**Starting Recommendations:**
+#### Starting Recommendations:
 
 1. **New teams:** Begin with AI-Assisted estimation for immediate value
 2. **Agile teams:** Implement Complexity-Based estimation with story points
 3. **Contract work:** Use Time-Based estimation with buffer management
 4. **Mature teams:** Leverage Forecast-Based estimation for precision
 
-**Combination Strategies:**
+#### Combination Strategies:
 
 - Use multiple methods for validation and confidence building
 - Primary method for planning, secondary for validation
@@ -166,13 +166,13 @@ Start: What type of project are you estimating?
 - Evolve approach based on team maturity and project context
 - **Expert teams**: Focus on forecast-based for continuous improvement
 
-**Project Uncertainty**
+#### Project Uncertainty
 
 - **High certainty**: Time-based estimation for predictable work
 - **Medium uncertainty**: Complexity-based with AI assistance
 - **High uncertainty**: AI-assisted with forecast-based validation
 
-**Stakeholder Requirements**
+#### Stakeholder Requirements
 
 - **Management needs**: Forecast-based for roadmap and budget planning
 - **Development teams**: Complexity-based for sprint and velocity tracking
@@ -190,19 +190,19 @@ Start: What type of project are you estimating?
 
 ### Progressive Enhancement
 
-**Phase 1: Foundation**
+#### Phase 1: Foundation
 
 - Establish basic estimation practice with chosen primary method
 - Begin data collection for future forecast-based estimation
 - Train team on estimation techniques and tools
 
-**Phase 2: Integration**
+#### Phase 2: Integration
 
 - Add secondary estimation method for validation
 - Implement AI assistance where applicable
 - Develop estimation accuracy tracking
 
-**Phase 3: Optimization**
+#### Phase 3: Optimization
 
 - Use forecast-based estimation for predictive planning
 - Combine multiple approaches for complex projects
@@ -212,14 +212,14 @@ Start: What type of project are you estimating?
 
 ### Multi-Method Validation
 
-**Triangulation Approach**
+#### Triangulation Approach
 
 1. **Initial Estimate**: Use primary method (e.g., story points)
 2. **Validation Check**: Apply secondary method (e.g., time-based)
 3. **AI Enhancement**: Get AI-assisted estimate for comparison
 4. **Consensus Building**: Discuss discrepancies and converge
 
-**Example Workflow**
+#### Example Workflow
 
 ```markdown
 # Feature: User Dashboard Redesign
@@ -249,14 +249,14 @@ Start: What type of project are you estimating?
 
 ### Methodology Alignment
 
-**Agile/Scrum Integration**
+#### Agile/Scrum Integration
 
 - Use complexity-based for sprint planning
 - Apply time-based for capacity validation
 - Leverage forecast-based for release planning
 - Enhance with AI-assisted for backlog estimation
 
-**Waterfall/Traditional Integration**
+#### Waterfall/Traditional Integration
 
 - Primary focus on time-based estimation
 - Use forecast-based for project timeline prediction
@@ -267,14 +267,14 @@ Start: What type of project are you estimating?
 
 ### Accuracy Tracking
 
-**Key Metrics**
+#### Key Metrics
 
 - **Estimation Error Rate**: |Actual - Estimated| / Estimated
 - **Confidence Calibration**: Accuracy within stated confidence levels
 - **Method Comparison**: Which approaches work best for different work types
 - **Improvement Trends**: Estimation accuracy over time
 
-**Regular Reviews**
+#### Regular Reviews
 
 - Weekly: Sprint estimation accuracy for time-based methods
 - Monthly: Story point velocity stability for complexity-based
@@ -283,14 +283,14 @@ Start: What type of project are you estimating?
 
 ### Continuous Improvement
 
-**Retrospective Integration**
+#### Retrospective Integration
 
 - Include estimation accuracy in sprint retrospectives
 - Identify patterns in estimation errors
 - Adjust techniques based on team feedback
 - Share learnings across teams and projects
 
-**Framework Evolution**
+#### Framework Evolution
 
 - Experiment with new estimation techniques
 - Adapt to changing team composition and skills

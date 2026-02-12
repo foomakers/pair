@@ -4,7 +4,7 @@ Simple architecture pattern for applications dominated by Create, Read, Update, 
 
 ## When to Use
 
-**Ideal for:**
+#### Ideal for:
 
 - Simple data operations
 - Minimal business logic
@@ -12,7 +12,7 @@ Simple architecture pattern for applications dominated by Create, Read, Update, 
 - Small applications (< 10 entities)
 - MVPs and proof of concepts
 
-**Avoid when:**
+#### Avoid when:
 
 - Complex business rules exist
 - Domain logic is significant

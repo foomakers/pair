@@ -8,21 +8,21 @@ Comprehensive guide to browser extensions that enhance accessibility testing cap
 
 ### **axe DevTools**
 
-**Core Capabilities**
+#### Core Capabilities
 
 - Automated accessibility scanning
 - WCAG 2.1 AA/AAA compliance checking
 - Real-time issue identification
 - Guided remediation suggestions
 
-**Integration Benefits**
+#### Integration Benefits
 
 - Zero false positives philosophy
 - Integration with development workflow
 - Detailed issue explanations
 - Remediation code examples
 
-**Usage Patterns**
+#### Usage Patterns
 
 ```javascript
 // axe-core API integration
@@ -44,21 +44,21 @@ axe
 
 ### **WAVE (Web Accessibility Evaluation Tool)**
 
-**Visual Feedback System**
+#### Visual Feedback System
 
 - Inline visual indicators for accessibility issues
 - Color-coded severity levels
 - Interactive issue exploration
 - Page structure visualization
 
-**Comprehensive Analysis**
+#### Comprehensive Analysis
 
 - Structural element identification
 - ARIA implementation validation
 - Color contrast analysis
 - Alternative text evaluation
 
-**Reporting Features**
+#### Reporting Features
 
 - Detailed issue summaries
 - Export capabilities for documentation
@@ -67,14 +67,14 @@ axe
 
 ### **Lighthouse Accessibility Audit**
 
-**Performance Integration**
+#### Performance Integration
 
 - Accessibility scoring within performance context
 - Holistic web quality assessment
 - Performance impact of accessibility features
 - Optimization recommendations
 
-**Automated CI/CD Integration**
+#### Automated CI/CD Integration
 
 ```yaml
 # GitHub Actions integration
@@ -86,7 +86,7 @@ axe
     temporaryPublicStorage: true
 ```
 
-**Scoring Methodology**
+#### Scoring Methodology
 
 - Weighted accessibility scoring
 - Progressive improvement tracking
@@ -95,21 +95,21 @@ axe
 
 ### **Color Contrast Analyzers**
 
-**Colour Contrast Analyser**
+#### Colour Contrast Analyser
 
 - Real-time color contrast checking
 - WCAG AA/AAA compliance validation
 - Color picker integration
 - Simulation of color vision deficiencies
 
-**Stark**
+#### Stark
 
 - Design system integration
 - Batch contrast checking
 - Alternative color suggestions
 - Team collaboration features
 
-**WebAIM Contrast Checker**
+#### WebAIM Contrast Checker
 
 - Quick contrast ratio calculation
 - Color adjustment recommendations
@@ -120,14 +120,14 @@ axe
 
 ### **Keyboard Navigation Testing**
 
-**Tab Order Visualization**
+#### Tab Order Visualization
 
 - Visual tab order indicators
 - Focus path highlighting
 - Skip link validation
 - Focus trap detection
 
-**Keyboard Shortcut Analysis**
+#### Keyboard Shortcut Analysis
 
 - Custom shortcut conflict detection
 - Standard shortcut compliance
@@ -136,14 +136,14 @@ axe
 
 ### **Screen Reader Simulation**
 
-**Screen Reader Testing Extensions**
+#### Screen Reader Testing Extensions
 
 - Text-to-speech simulation
 - Heading structure navigation
 - Landmark region identification
 - ARIA live region testing
 
-**Content Linearization**
+#### Content Linearization
 
 - Visual layout to linear content conversion
 - Reading order validation
@@ -152,14 +152,14 @@ axe
 
 ### **Form Accessibility Testing**
 
-**Form Validation Extensions**
+#### Form Validation Extensions
 
 - Label association verification
 - Error message accessibility
 - Form control identification
 - Input type appropriateness
 
-**Auto-fill Compatibility**
+#### Auto-fill Compatibility
 
 - Form field recognition testing
 - Autocomplete attribute validation
@@ -170,7 +170,7 @@ axe
 
 ### **Development Phase Testing**
 
-**Real-time Feedback Loop**
+#### Real-time Feedback Loop
 
 ```javascript
 // Continuous accessibility monitoring
@@ -205,7 +205,7 @@ class AccessibilityMonitor {
 }
 ```
 
-**Progressive Enhancement Testing**
+#### Progressive Enhancement Testing
 
 - Feature detection validation
 - Graceful degradation verification
@@ -214,7 +214,7 @@ class AccessibilityMonitor {
 
 ### **Quality Assurance Testing**
 
-**Comprehensive Site Scanning**
+#### Comprehensive Site Scanning
 
 ```bash
 # Automated accessibility scanning script
@@ -233,7 +233,7 @@ for url in "${URLS[@]}"; do
 done
 ```
 
-**Cross-browser Consistency**
+#### Cross-browser Consistency
 
 - Extension behavior validation across browsers
 - Browser-specific accessibility feature testing
@@ -242,14 +242,14 @@ done
 
 ### **Pre-deployment Validation**
 
-**Staging Environment Testing**
+#### Staging Environment Testing
 
 - Complete user journey accessibility validation
 - Form submission accessibility testing
 - Dynamic content accessibility verification
 - Error state accessibility testing
 
-**Production Monitoring**
+#### Production Monitoring
 
 ```javascript
 // Production accessibility monitoring
@@ -287,22 +287,22 @@ class ProductionA11yMonitor {
 
 | Extension    | Real-time | WCAG Coverage | CI/CD Integration | Custom Rules | Team Features |
 | ------------ | --------- | ------------- | ----------------- | ------------ | ------------- |
-| axe DevTools | ✅        | Comprehensive | ✅                | ✅           | Limited       |
-| WAVE         | ✅        | Good          | Limited           | ❌           | ❌            |
-| Lighthouse   | ❌        | Basic         | ✅                | Limited      | ✅            |
-| Stark        | ✅        | Color Focus   | Limited           | ✅           | ✅            |
-| Color Oracle | ✅        | Color Only    | ❌                | ❌           | ❌            |
+| axe DevTools | ✅         | Comprehensive | ✅                 | ✅            | Limited       |
+| WAVE         | ✅         | Good          | Limited           | ❌            | ❌             |
+| Lighthouse   | ❌         | Basic         | ✅                 | Limited      | ✅             |
+| Stark        | ✅         | Color Focus   | Limited           | ✅            | ✅             |
+| Color Oracle | ✅         | Color Only    | ❌                 | ❌            | ❌             |
 
 ### **Cost-Benefit Analysis**
 
-**Free Extensions**
+#### Free Extensions
 
 - axe DevTools: Excellent value, comprehensive coverage
 - WAVE: Good for visual learners, immediate feedback
 - Lighthouse: Great for CI/CD integration
 - WebAIM Tools: Reliable, educational value
 
-**Premium Extensions**
+#### Premium Extensions
 
 - Stark: Worth investment for design teams
 - Advanced axe Pro: Valuable for enterprise teams
@@ -310,7 +310,7 @@ class ProductionA11yMonitor {
 
 ### **Selection Decision Tree**
 
-```
+```text
 Do you need real-time feedback during development?
 ├── Yes: axe DevTools + WAVE
 └── No: Continue to next question
@@ -332,14 +332,14 @@ Do you have budget for premium tools?
 
 ### **Extension Management**
 
-**Regular Updates**
+#### Regular Updates
 
 - Monitor extension release cycles
 - Test new features in development environment
 - Validate backward compatibility
 - Update testing procedures accordingly
 
-**Performance Monitoring**
+#### Performance Monitoring
 
 - Track extension impact on browser performance
 - Monitor page load time increases
@@ -348,14 +348,14 @@ Do you have budget for premium tools?
 
 ### **Team Training and Adoption**
 
-**Developer Onboarding**
+#### Developer Onboarding
 
 - Extension installation and configuration
 - Daily workflow integration
 - Issue identification and reporting
 - Remediation technique training
 
-**Quality Assurance Integration**
+#### Quality Assurance Integration
 
 - QA team extension usage protocols
 - Bug reporting with accessibility context

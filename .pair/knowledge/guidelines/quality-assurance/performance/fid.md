@@ -10,7 +10,7 @@ Comprehensive guide to understanding, measuring, and optimizing First Input Dela
 
 First Input Delay measures the time from when a user first interacts with your page (clicks a link, taps a button, or uses a custom JavaScript-powered control) to the time when the browser is actually able to begin processing event handlers in response to that interaction.
 
-**Key Characteristics:**
+#### Key Characteristics:
 
 - **Real User Metric**: FID can only be measured in the field with real user interactions
 - **Interaction-Dependent**: Only triggered by discrete user actions (clicks, taps, key presses)
@@ -19,13 +19,13 @@ First Input Delay measures the time from when a user first interacts with your p
 
 ### **FID Scoring Thresholds**
 
-**Google's Core Web Vitals Thresholds:**
+#### Google's Core Web Vitals Thresholds:
 
 - **Good**: ≤ 100ms (75th percentile of users)
 - **Needs Improvement**: 100ms - 300ms
 - **Poor**: > 300ms
 
-**Performance Targets:**
+#### Performance Targets:
 
 - **Excellent**: < 50ms
 - **Good**: 50ms - 100ms
@@ -36,7 +36,7 @@ First Input Delay measures the time from when a user first interacts with your p
 
 ### **Real User Monitoring (RUM)**
 
-**Web Vitals Library Implementation**
+#### Web Vitals Library Implementation
 
 ```javascript
 import { onFID } from 'web-vitals'
@@ -61,7 +61,7 @@ onFID(
 )
 ```
 
-**Custom FID Measurement**
+#### Custom FID Measurement
 
 ```javascript
 class FIDMeasurement {
@@ -169,7 +169,7 @@ new FIDMeasurement()
 
 Since FID requires real user interaction, use these alternatives for lab testing:
 
-**Total Blocking Time (TBT)**
+#### Total Blocking Time (TBT)
 
 ```javascript
 // Measure TBT as a lab proxy for FID
@@ -196,7 +196,7 @@ function measureTBT() {
 }
 ```
 
-**Max Potential FID**
+#### Max Potential FID
 
 ```javascript
 function measureMaxPotentialFID() {
@@ -220,7 +220,7 @@ function measureMaxPotentialFID() {
 
 ### **JavaScript Execution Optimization**
 
-**Code Splitting and Lazy Loading**
+#### Code Splitting and Lazy Loading
 
 ```javascript
 // Split large bundles to reduce initial parsing time
@@ -245,7 +245,7 @@ if ('requestIdleCallback' in window) {
 }
 ```
 
-**Task Chunking and Yielding**
+#### Task Chunking and Yielding
 
 ```javascript
 // Break up long-running tasks
@@ -284,7 +284,7 @@ function processChunk(chunk) {
 }
 ```
 
-**Web Workers for Heavy Tasks**
+#### Web Workers for Heavy Tasks
 
 ```javascript
 // main.js - Offload heavy computation
@@ -361,7 +361,7 @@ function performHeavyComputation(data) {
 
 ### **Third-Party Script Optimization**
 
-**Async and Defer Loading**
+#### Async and Defer Loading
 
 ```html
 <!-- Defer non-critical scripts -->
@@ -374,7 +374,7 @@ function performHeavyComputation(data) {
 <script src="/js/critical-functionality.js"></script>
 ```
 
-**Dynamic Loading with Performance Budget**
+#### Dynamic Loading with Performance Budget
 
 ```javascript
 class ThirdPartyLoader {
@@ -436,7 +436,7 @@ class ThirdPartyLoader {
 
 ### **Event Handler Optimization**
 
-**Passive Event Listeners**
+#### Passive Event Listeners
 
 ```javascript
 // Use passive listeners for scroll/touch events
@@ -463,7 +463,7 @@ const debouncedResize = debounce(() => {
 window.addEventListener('resize', debouncedResize)
 ```
 
-**Efficient DOM Manipulation**
+#### Efficient DOM Manipulation
 
 ```javascript
 // Batch DOM operations
@@ -511,7 +511,7 @@ class EfficientDOMUpdater {
 
 ### **Real-Time Monitoring Setup**
 
-**Performance Dashboard**
+#### Performance Dashboard
 
 ```javascript
 class FIDMonitor {
@@ -588,7 +588,7 @@ class FIDMonitor {
 
 ### **Performance Budgets and CI Integration**
 
-**Lighthouse CI Configuration**
+#### Lighthouse CI Configuration
 
 ```json
 {
@@ -613,7 +613,7 @@ class FIDMonitor {
 }
 ```
 
-**GitHub Actions Performance Check**
+#### GitHub Actions Performance Check
 
 ```yaml
 name: Performance Budget Check

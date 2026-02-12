@@ -43,6 +43,7 @@ Modern Docker development requires optimized configuration for build performance
 **Quick Development Setup Process:**
 
 ```bash
+
 # Install Docker and enable BuildKit
 curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
@@ -56,24 +57,26 @@ sudo tee /etc/docker/daemon.json > /dev/null <<EOF
   "log-opts": { "max-size": "10m" }
 }
 EOF
+
 ````
 
 ### Multi-Stage Dockerfile Optimization
 
-**Advanced Build Patterns**
+#### Advanced Build Patterns
 
 Multi-stage builds separate build-time and runtime concerns, resulting in optimized production images. The pattern includes dependency installation, application building, and minimal runtime image creation.
 
-**Multi-Stage Build Benefits:**
+#### Multi-Stage Build Benefits:
 
 - **Image size reduction**: Exclude build tools from production images
 - **Security enhancement**: Minimal runtime attack surface
 - **Build performance**: Parallel stage execution and layer caching
 - **Dependency isolation**: Separate development and production dependencies
 
-**Optimized Build Example:**
+#### Optimized Build Example:
 
 ```dockerfile
+
 # Production-optimized multi-stage build
 FROM node:18-alpine AS dependencies
 WORKDIR /app
@@ -93,19 +96,20 @@ COPY --from=builder --chown=appuser /app/dist ./
 USER appuser
 HEALTHCHECK CMD curl -f localhost:3000/health
 CMD ["npm", "start"]
+
 ```
 
 ### Docker Compose for Development
 
-**Development Stack Orchestration**
+#### Development Stack Orchestration
 
 ### Docker Compose for Development
 
-**Development Stack Orchestration**
+#### Development Stack Orchestration
 
 Docker Compose enables comprehensive development environments with service orchestration, networking, and data persistence. The development configuration prioritizes developer experience with hot reload and debugging capabilities.
 
-**Development Stack Benefits:**
+#### Development Stack Benefits:
 
 - **Service orchestration**: Multi-container applications with dependency management
 - **Network isolation**: Secure inter-service communication
@@ -113,6 +117,7 @@ Docker Compose enables comprehensive development environments with service orche
 - **Environment configuration**: Flexible environment variable management
 
 ```yaml
+
 # docker-compose.dev.yml - Development stack
 version: '3.8'
 
@@ -122,14 +127,21 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     ports:
+
       - '3000:3000'
+
     volumes:
+
       - .:/app
       - /app/node_modules
+
     environment:
+
       - NODE_ENV=development
       - DATABASE_URL=postgresql://postgres:password@postgres:5432/myapp
+
     depends_on:
+
       - postgres
       - redis
 
@@ -140,10 +152,12 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     volumes:
+
       - postgres_data:/var/lib/postgresql/data
 
 volumes:
   postgres_data:
+
 ```
 
 ---
@@ -152,11 +166,11 @@ volumes:
 
 ### Build Performance Optimization
 
-**Advanced BuildKit Features**
+#### Advanced BuildKit Features
 
 Modern Docker builds leverage BuildKit for enhanced performance through parallel execution, advanced caching, and optimized layer management. Key optimization strategies include cache mounting, multi-platform builds, and dependency isolation.
 
-**Optimization Techniques:**
+#### Optimization Techniques:
 
 - **Cache mounting**: Persistent caches across builds for dependencies and build artifacts
 - **Multi-stage efficiency**: Optimized stage separation and parallel execution
@@ -164,6 +178,7 @@ Modern Docker builds leverage BuildKit for enhanced performance through parallel
 - **Build context optimization**: Minimal build context with .dockerignore
 
 ```dockerfile
+
 # BuildKit optimized Dockerfile
 FROM node:18-alpine AS base
 RUN --mount=type=cache,target=/var/cache/apk \
@@ -181,15 +196,16 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 USER node
 CMD ["npm", "start"]
+
 ```
 
 ### Image Size Optimization
 
-**Minimal Production Images**
+#### Minimal Production Images
 
 Production images should prioritize security and performance through minimal footprint, distroless bases, and optimized runtime environments.
 
-**Size Optimization Strategies:**
+#### Size Optimization Strategies:
 
 - **Distroless images**: Use minimal base images without package managers
 - **Multi-stage builds**: Separate build and runtime dependencies
@@ -200,11 +216,11 @@ Production images should prioritize security and performance through minimal foo
 
 ### Security Scanning and Validation
 
-**Comprehensive Security Framework**
+#### Comprehensive Security Framework
 
 Docker security requires multi-layered approach including vulnerability scanning, runtime security, and image signing. Modern security practices focus on automated scanning, minimal attack surface, and continuous monitoring.
 
-**Security Implementation Strategies:**
+#### Security Implementation Strategies:
 
 - **Vulnerability scanning**: Automated security scanning with tools like Trivy and Snyk
 - **Runtime security**: Container runtime protection with security policies
@@ -212,20 +228,22 @@ Docker security requires multi-layered approach including vulnerability scanning
 - **Access control**: Principle of least privilege and capability restrictions
 
 ```bash
+
 # Security scanning example
 trivy image --severity HIGH myapp:latest
 cosign sign --key cosign.key myapp:latest
+
 ```
 
 ## Development Workflow Integration
 
 ### Development Environment Setup
 
-**Development-Optimized Configuration**
+#### Development-Optimized Configuration
 
 Development workflows integrate Docker for consistent environments, automated testing, and efficient debugging capabilities.
 
-**Development Integration Benefits:**
+#### Development Integration Benefits:
 
 - **Environment consistency**: Identical development setup across team members
 - **Rapid iteration**: Hot reload and live development capabilities
@@ -236,7 +254,7 @@ Development workflows integrate Docker for consistent environments, automated te
 
 ### Production Readiness
 
-**Enterprise Docker Standards**
+#### Enterprise Docker Standards
 
 - **Security first**: Implement comprehensive security scanning and runtime protection
 - **Performance optimization**: Optimize images for size, startup time, and resource usage

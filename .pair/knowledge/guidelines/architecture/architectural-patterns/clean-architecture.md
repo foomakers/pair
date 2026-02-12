@@ -4,7 +4,7 @@ Advanced architecture pattern emphasizing dependency inversion, separation of co
 
 ## When to Use
 
-**Ideal for:**
+#### Ideal for:
 
 - Complex business domains
 - Long-term maintainability requirements
@@ -12,7 +12,7 @@ Advanced architecture pattern emphasizing dependency inversion, separation of co
 - Need for framework independence
 - High-value business applications
 
-**Avoid when:**
+#### Avoid when:
 
 - Simple CRUD applications
 - Rapid prototyping needs
@@ -21,7 +21,7 @@ Advanced architecture pattern emphasizing dependency inversion, separation of co
 
 ## Architecture Layers
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │             Frameworks & Drivers        │ ← External interfaces
 ├─────────────────────────────────────────┤

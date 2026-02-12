@@ -4,7 +4,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 
 ## 📁 Essential Folders
 
-````
+````text
 .pair/
 ├── adoption/                  # 💼 Product requirements and technical standards
 │   ├── product/              # Product requirements and adoption docs
@@ -114,4 +114,5 @@ Before development, **review and adapt** all documents in the `guidelines/` and 
 - 👨‍💻 **Human Only**: Developer-exclusive activities
 
 Happy AI-Human pairing! 🚀🤖👨‍💻
+
 ````

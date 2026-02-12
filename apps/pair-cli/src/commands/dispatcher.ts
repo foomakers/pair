@@ -2,27 +2,27 @@ import type { CommandConfig } from './index'
 import { commandRegistry } from './index'
 import type { FileSystemService, HttpClientService } from '@pair/content-ops'
 
+interface DispatchContext {
+  httpClient?: HttpClientService
+  cliVersion?: string
+  baseTarget?: string
+}
+
 /**
  * Dispatch CommandConfig to appropriate handler using command registry
  * Type-safe implementation using discriminated union narrowing
- *
- * @param config - Command configuration from parser
- * @param fs - FileSystemService instance for file operations
- * @param httpClient - HttpClientService instance for network operations (optional)
- * @param cliVersion - CLI version string (optional, used for KB cache path)
  */
 export async function dispatchCommand(
   config: CommandConfig,
   fs: FileSystemService,
-  httpClient?: HttpClientService,
-  cliVersion?: string,
+  ctx: DispatchContext = {},
 ): Promise<void> {
-  // TypeScript can properly narrow discriminated unions through switch
+  const opts = resolveOptions(ctx)
   switch (config.command) {
     case 'install':
-      return commandRegistry.install.handle(config, fs, resolveOptions(httpClient, cliVersion))
+      return commandRegistry.install.handle(config, fs, opts)
     case 'update':
-      return commandRegistry.update.handle(config, fs, resolveOptions(httpClient, cliVersion))
+      return commandRegistry.update.handle(config, fs, opts)
     case 'update-link':
       return commandRegistry['update-link'].handle(config, fs)
     case 'package':
@@ -34,9 +34,10 @@ export async function dispatchCommand(
   }
 }
 
-function resolveOptions(httpClient?: HttpClientService, cliVersion?: string) {
+function resolveOptions(ctx: DispatchContext) {
   return {
-    ...(httpClient && { httpClient }),
-    ...(cliVersion && { cliVersion }),
+    ...(ctx.httpClient && { httpClient: ctx.httpClient }),
+    ...(ctx.cliVersion && { cliVersion: ctx.cliVersion }),
+    ...(ctx.baseTarget && { baseTarget: ctx.baseTarget }),
   }
 }

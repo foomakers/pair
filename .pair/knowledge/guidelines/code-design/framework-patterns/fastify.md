@@ -32,6 +32,7 @@ Fastify's plugin system promotes modularity by encapsulating functionality into 
 A centralized configuration approach eliminates scattered environment variable handling throughout the codebase:
 
 ```typescript
+
 // types/fastify.ts - Type definitions for configuration
 export interface AppConfig {
   database: {
@@ -50,8 +51,8 @@ const configPlugin: FastifyPluginAsync = async (fastify) => {
     database: {
       url: process.env.DATABASE_URL || 'postgresql://localhost/mydb',
       pool: {
-        min: parseInt(process.env.DB_POOL_MIN || '2'),
-        max: parseInt(process.env.DB_POOL_MAX || '10')
+| min: parseInt(process.env.DB_POOL_MIN |  | '2'), |
+| max: parseInt(process.env.DB_POOL_MAX |  | '10') |
       }
     }
     // ... other config
@@ -59,6 +60,7 @@ const configPlugin: FastifyPluginAsync = async (fastify) => {
 
   fastify.decorate('config', config);
 };
+
 ````
 
 **Type Safety**: Configuration interfaces ensure compile-time validation of settings
@@ -75,7 +77,8 @@ Organize plugins by business domain rather than technical layers. This approach 
 
 Example structure:
 
-```
+```text
+
 plugins/
   users/
     users.plugin.ts    // Main plugin registration
@@ -86,7 +89,8 @@ plugins/
     orders.plugin.ts
     orders.service.ts
     orders.routes.ts
-```
+
+```text
 
 ## Request Lifecycle Management
 
@@ -95,6 +99,7 @@ plugins/
 Fastify's schema-first approach provides both validation and documentation generation:
 
 ```typescript
+
 // Shared schema definitions
 const UserResponse = Type.Object({
   id: Type.String({ format: 'uuid' }),
@@ -106,6 +111,7 @@ const CreateUserRequest = Type.Object({
   email: Type.String({ format: 'email' }),
   password: Type.String({ minLength: 8 }),
 })
+
 ```
 
 **Automatic Validation**: Invalid requests are rejected before reaching your handlers
@@ -122,6 +128,7 @@ Implement consistent error handling that provides useful information while maint
 **Logging Integration**: Capture detailed error context for debugging while sending clean responses to clients
 
 ```typescript
+
 // Custom error classes for different scenarios
 export class ValidationError extends Error {
   statusCode = 400
@@ -132,6 +139,7 @@ export class NotFoundError extends Error {
   statusCode = 404
   code = 'NOT_FOUND'
 }
+
 ```
 
 ## Performance Optimization Strategies
@@ -292,7 +300,7 @@ request.url.startsWith(route)
 
 export default authPlugin;
 
-````
+````text
 
 ### 2. Feature-Based Plugin Organization
 

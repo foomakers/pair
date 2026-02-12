@@ -8,21 +8,21 @@ Integrated estimation approach combining multiple methodologies (AI-assisted, co
 
 ### Multi-Method Integration
 
-**Complementary Strengths**
+#### Complementary Strengths
 
 - Combine relative sizing with absolute time estimation
 - Balance data-driven forecasting with human expertise
 - Integrate AI insights with team experience and judgment
 - Use multiple validation methods for increased confidence
 
-**Risk Mitigation**
+#### Risk Mitigation
 
 - Reduce dependency on single estimation method
 - Cross-validate estimates using different approaches
 - Identify and address estimation blind spots
 - Provide fallback methods when primary approach fails
 
-**Context Adaptation**
+#### Context Adaptation
 
 - Select appropriate method combinations based on project characteristics
 - Adapt approach based on available data and team maturity
@@ -33,9 +33,9 @@ Integrated estimation approach combining multiple methodologies (AI-assisted, co
 
 ### Primary-Secondary Combination
 
-**Time-Based Primary with Complexity Validation**
+#### Time-Based Primary with Complexity Validation
 
-```
+```text
 Process:
 1. Estimate user story in hours/days (time-based)
 2. Convert to story points using team velocity (complexity)
@@ -47,9 +47,9 @@ Use Case: Fixed deadline projects with agile team
 Benefits: Calendar alignment with velocity tracking
 ```
 
-**Complexity-Based Primary with AI Assistance**
+#### Complexity-Based Primary with AI Assistance
 
-```
+```text
 Process:
 1. Use AI to analyze story complexity and suggest point range
 2. Team estimates story points using planning poker (complexity)
@@ -61,9 +61,9 @@ Use Case: Complex features with limited similar experience
 Benefits: Human judgment enhanced by AI pattern recognition
 ```
 
-**Forecast-Based Primary with Time Validation**
+#### Forecast-Based Primary with Time Validation
 
-```
+```text
 Process:
 1. Use historical data to forecast completion time (forecast)
 2. Break down into time-based task estimates (time)
@@ -77,9 +77,9 @@ Benefits: Statistical accuracy validated by detailed planning
 
 ### Multi-Method Validation
 
-**Three-Method Triangulation**
+#### Three-Method Triangulation
 
-```
+```text
 Story: User Profile Management System
 
 Method 1 - Complexity: 8 story points
@@ -93,7 +93,7 @@ Analysis:
 - Final estimate: 8 points with additional testing attention
 ```
 
-**Consensus Building Process**
+#### Consensus Building Process
 
 1. **Independent Estimation**: Each method applied independently
 2. **Results Comparison**: Compare all estimates and identify outliers
@@ -103,7 +103,7 @@ Analysis:
 
 ### Dynamic Method Selection
 
-**Context-Driven Selection**
+#### Context-Driven Selection
 
 ```python
 def select_estimation_methods(story_context):
@@ -127,7 +127,7 @@ def select_estimation_methods(story_context):
     return methods
 ```
 
-**Adaptive Weighting**
+#### Adaptive Weighting
 
 ```python
 def calculate_weighted_estimate(estimates, context):
@@ -154,9 +154,9 @@ def calculate_weighted_estimate(estimates, context):
 
 ### Sequential Validation Framework
 
-**Step-by-Step Process**
+#### Step-by-Step Process
 
-```
+```text
 1. Primary Estimation:
    - Apply primary method (e.g., complexity-based planning poker)
    - Reach team consensus on initial estimate
@@ -178,9 +178,9 @@ def calculate_weighted_estimate(estimates, context):
    - Document final estimate with confidence level
 ```
 
-**Quality Gates**
+#### Quality Gates
 
-```
+```text
 Estimation Quality Checklist:
 □ Multiple methods applied and compared
 □ Significant discrepancies investigated and resolved
@@ -192,9 +192,9 @@ Estimation Quality Checklist:
 
 ### Parallel Estimation Framework
 
-**Independent Estimation**
+#### Independent Estimation
 
-```
+```text
 Team Structure:
 - Estimation Team A: Uses complexity-based approach
 - Estimation Team B: Uses time-based approach
@@ -208,7 +208,7 @@ Process:
 4. Consensus building on final estimate
 ```
 
-**Ensemble Estimation**
+#### Ensemble Estimation
 
 ```python
 class EnsembleEstimator:
@@ -252,9 +252,9 @@ class EnsembleEstimator:
 
 ### Continuous Calibration Framework
 
-**Method Performance Tracking**
+#### Method Performance Tracking
 
-```
+```text
 Estimation Accuracy by Method:
 - Complexity-based: 78% within 25% of actual
 - Time-based: 65% within 25% of actual
@@ -263,7 +263,7 @@ Estimation Accuracy by Method:
 - Hybrid (best 2): 91% within 25% of actual
 ```
 
-**Adaptive Method Selection**
+#### Adaptive Method Selection
 
 ```python
 def update_method_weights(historical_accuracy):
@@ -288,9 +288,9 @@ def update_method_weights(historical_accuracy):
 
 ### Confidence-Weighted Estimation
 
-**Confidence Assessment**
+#### Confidence Assessment
 
-```
+```text
 Method Confidence Factors:
 - Team Experience: High experience = +20% confidence
 - Story Clarity: Clear requirements = +15% confidence
@@ -299,7 +299,7 @@ Method Confidence Factors:
 - External Dependencies: None = +10% confidence
 ```
 
-**Dynamic Confidence Adjustment**
+#### Dynamic Confidence Adjustment
 
 ```python
 def calculate_method_confidence(method, story_context):
@@ -327,7 +327,7 @@ def calculate_method_confidence(method, story_context):
 
 ### Machine Learning Integration
 
-**Estimation Model Training**
+#### Estimation Model Training
 
 ```python
 import pandas as pd
@@ -372,9 +372,9 @@ class HybridEstimationML:
 
 ### Portfolio-Level Hybrid Estimation
 
-**Epic Estimation Strategy**
+#### Epic Estimation Strategy
 
-```
+```text
 Epic: Customer Dashboard Redesign (20 user stories)
 
 Approach:
@@ -393,7 +393,7 @@ Results:
 - Final Epic Estimate: 83-87 points
 ```
 
-**Portfolio Planning**
+#### Portfolio Planning
 
 ```python
 def estimate_portfolio(epics, team_capacity):
@@ -426,21 +426,21 @@ def estimate_portfolio(epics, team_capacity):
 
 ### Getting Started
 
-**Phase 1: Foundation (Months 1-2)**
+#### Phase 1: Foundation (Months 1-2)
 
 1. Establish primary estimation method (usually complexity-based)
 2. Begin collecting data for forecast-based methods
 3. Introduce simple validation (time-based decomposition)
 4. Train team on hybrid concepts and benefits
 
-**Phase 2: Enhancement (Months 3-4)**
+#### Phase 2: Enhancement (Months 3-4)
 
 1. Add AI-assisted estimation for complex stories
 2. Implement systematic validation processes
 3. Begin tracking estimation accuracy by method
 4. Develop confidence assessment capabilities
 
-**Phase 3: Optimization (Months 5-6)**
+#### Phase 3: Optimization (Months 5-6)
 
 1. Implement dynamic method selection
 2. Develop machine learning models for estimation
@@ -449,21 +449,21 @@ def estimate_portfolio(epics, team_capacity):
 
 ### Best Practices
 
-**Method Selection Guidelines**
+#### Method Selection Guidelines
 
 - Always include team-based consensus method (complexity or time)
 - Add validation methods based on project risk and importance
 - Use AI assistance for novel or complex features
 - Apply forecast methods when sufficient historical data exists
 
-**Quality Assurance**
+#### Quality Assurance
 
 - Document rationale for method selection and weighting
 - Track accuracy by method and continuously improve
 - Regular team retrospectives on estimation effectiveness
 - Cross-validate important estimates using multiple methods
 
-**Stakeholder Communication**
+#### Stakeholder Communication
 
 - Clearly communicate estimation approach and confidence levels
 - Explain benefits of hybrid approach over single methods

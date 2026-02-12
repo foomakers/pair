@@ -18,10 +18,10 @@ Only check criteria that are not already passing.
 
 ## Arguments
 
-| Argument | Required | Description |
-|----------|----------|-------------|
-| `$scope` | No | Limit checking to specific areas: `requirements`, `code-quality`, `testing`, `security`, `performance`, `accessibility`, `deployment`, `documentation`, `all` (default: `all`) |
-| `$story` | No | Story ID to load acceptance criteria from PM tool. If omitted, checks universal DoD only. |
+| Argument | Required | Description                                                                                                                                                                    |
+| -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `$scope` | No       | Limit checking to specific areas: `requirements`, `code-quality`, `testing`, `security`, `performance`, `accessibility`, `deployment`, `documentation`, `all` (default: `all`) |
+| `$story` | No       | Story ID to load acceptance criteria from PM tool. If omitted, checks universal DoD only.                                                                                      |
 
 ## Algorithm
 
@@ -87,7 +87,7 @@ Execute each criterion group in order. For every criterion, follow the **check �
 
 Present results as:
 
-```
+```text
 DEFINITION OF DONE REPORT:
 ├── Requirements:  [PASS | FAIL — N unmet AC | SKIPPED — no $story]
 ├── Code Standards: [PASS | FAIL — N issues | SKIPPED]

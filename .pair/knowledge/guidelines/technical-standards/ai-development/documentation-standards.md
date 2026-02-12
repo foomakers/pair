@@ -31,12 +31,14 @@ This document establishes comprehensive standards for documenting AI-powered fea
 ### Data Flow
 
 ```mermaid
+
 graph TD
     A[User Input] --> B[Input Validation]
     B --> C[Data Preprocessing]
     C --> D[AI Model]
     D --> E[Response Processing]
     E --> F[User Output]
+
 ```
 ````
 
@@ -47,17 +49,23 @@ graph TD
 - **Accuracy**: Model performance metrics
 - **Cost**: Per-request and monthly estimates
 
-````
+````text
 
 #### Implementation Details
 ```typescript
+
 // Example AI service documentation
 /**
+
  * Content Generation Service
+
  *
+
  * Provides AI-powered content generation capabilities using OpenAI's GPT models.
  * Handles text summarization, expansion, and rewriting tasks.
+
  *
+
  * @example
  * ```typescript
  * const service = new ContentGenerationService();
@@ -67,25 +75,33 @@ graph TD
  *   style: "professional"
  * });
  * ```
+
  */
 export class ContentGenerationService {
   /**
+
    * Generates a summary of the provided text
+
    *
+
    * @param options - Configuration for summary generation
    * @param options.text - The text to summarize (max 10,000 chars)
    * @param options.maxLength - Maximum summary length (50-500 chars)
    * @param options.style - Writing style: "professional" | "casual" | "technical"
    * @returns Promise resolving to generated summary and metadata
+
    *
+
    * @throws {ValidationError} When input text exceeds limits
    * @throws {AIServiceError} When the AI service is unavailable
    * @throws {RateLimitError} When rate limits are exceeded
+
    */
   async generateSummary(options: SummaryOptions): Promise<SummaryResult> {
     // Implementation details...
   }
 }
+
 ````
 
 ### 2. Prompt Engineering Documentation
@@ -93,6 +109,7 @@ export class ContentGenerationService {
 #### Prompt Templates
 
 ```markdown
+
 ## Prompt Templates
 
 ### Code Review Assistant
@@ -100,6 +117,7 @@ export class ContentGenerationService {
 **Purpose**: Analyze code for potential issues and improvements
 
 **Template**:
+
 ```
 
 You are a senior software engineer reviewing code. Analyze the following code for:
@@ -114,16 +132,19 @@ Code to review:
 
 Provide specific, actionable feedback with line numbers when applicable.
 
-```
+```text
 
 **Variables**:
+
 - `{{code}}`: The source code to be reviewed (max 5000 chars)
 
 **Expected Output**:
+
 - Structured feedback with categories
 - Specific line references
 - Severity levels (critical, warning, suggestion)
 - Suggested improvements with examples
+
 ```
 
 #### Prompt Optimization Guidelines
@@ -139,6 +160,7 @@ Provide specific, actionable feedback with line numbers when applicable.
 #### Decision Matrix
 
 ```markdown
+
 ## Model Selection Process
 
 ### Requirements Analysis
@@ -166,6 +188,7 @@ Document the final decision with:
 - Qualitative factors considered
 - Trade-offs accepted
 - Migration strategy if changing models
+
 ```
 
 ### 4. Error Handling Documentation
@@ -173,22 +196,31 @@ Document the final decision with:
 #### AI-Specific Error Patterns
 
 ```typescript
+
 /**
+
  * AI Error Handling Strategies
+
  *
+
  * Documents common AI-related errors and their handling approaches
+
  */
 
 // Rate limiting errors
 export class RateLimitHandler {
   /**
+
    * Handles API rate limit exceeded errors
+
    *
+
    * Strategy:
    * 1. Exponential backoff with jitter
    * 2. Request queuing for non-critical operations
    * 3. Graceful degradation to cached responses
    * 4. User notification for critical failures
+
    */
   async handleRateLimit(error: RateLimitError): Promise<void> {
     // Implementation with detailed error recovery
@@ -198,18 +230,23 @@ export class RateLimitHandler {
 // Model response validation
 export class ResponseValidator {
   /**
+
    * Validates AI model responses for expected format and content
+
    *
+
    * Common issues:
    * - Incomplete responses due to token limits
    * - Unexpected format variations
    * - Hallucinated information
    * - Biased or inappropriate content
+
    */
   validateResponse(response: AIResponse): ValidationResult {
     // Validation logic with specific checks
   }
 }
+
 ```
 
 ### 5. Performance Monitoring Documentation
@@ -217,10 +254,15 @@ export class ResponseValidator {
 #### Metrics Collection
 
 ```typescript
+
 /**
+
  * AI Performance Metrics
+
  *
+
  * Tracks key performance indicators for AI features
+
  */
 
 interface AIMetrics {
@@ -246,13 +288,18 @@ interface AIMetrics {
 }
 
 /**
+
  * Monitoring Strategy:
+
  *
+
  * 1. Real-time dashboards for critical metrics
  * 2. Automated alerts for anomalies
  * 3. A/B testing for model comparisons
  * 4. User feedback collection and analysis
+
  */
+
 ```
 
 ## Documentation Standards
@@ -262,20 +309,27 @@ interface AIMetrics {
 #### AI-Specific Comment Standards
 
 ```typescript
+
 // Use clear, descriptive comments for AI logic
 export class AIService {
   /**
+
    * IMPORTANT: This function processes user data with AI
+
    *
+
    * Privacy considerations:
    * - User data is sent to external AI service
    * - Responses are cached for 1 hour
    * - No personal information should be logged
+
    *
+
    * Performance notes:
    * - Average response time: 2-3 seconds
    * - Implements retry logic with exponential backoff
    * - Falls back to rule-based system on failure
+
    */
   async processUserQuery(query: string): Promise<AIResponse> {
     // Validate input to prevent prompt injection
@@ -288,6 +342,7 @@ export class AIService {
     return this.executeWithMonitoring(contextualQuery)
   }
 }
+
 ```
 
 ### 2. API Documentation
@@ -295,6 +350,7 @@ export class AIService {
 #### AI Endpoint Documentation
 
 ```yaml
+
 # OpenAPI specification for AI endpoints
 /ai/content/generate:
   post:
@@ -302,7 +358,8 @@ export class AIService {
     description: |
       Generates content based on user prompts using advanced language models.
 
-      **Important Considerations:**
+#### Important Considerations:
+
       - Responses may vary between requests due to AI randomness
       - Content should be reviewed before publication
       - Rate limited to 10 requests per minute per user
@@ -359,6 +416,7 @@ export class AIService {
           application/json:
             schema:
               $ref: '#/components/schemas/RateLimitError'
+
 ```
 
 ### 3. Testing Documentation
@@ -366,6 +424,7 @@ export class AIService {
 #### AI Testing Strategies
 
 ````markdown
+
 ## AI Feature Testing
 
 ### Unit Testing
@@ -414,6 +473,7 @@ describe('AI Content Generation', () => {
   })
 })
 ```
+
 ````
 
 ## Security and Privacy Documentation
@@ -423,6 +483,7 @@ describe('AI Content Generation', () => {
 #### Privacy-First Documentation
 
 ````markdown
+
 ## AI Data Privacy Standards
 
 ### Data Classification
@@ -466,6 +527,7 @@ export class PrivacyAwareAIService {
   }
 }
 ```
+
 ````
 
 ### 2. Security Considerations
@@ -473,6 +535,7 @@ export class PrivacyAwareAIService {
 #### AI-Specific Security Documentation
 
 ```markdown
+
 ## AI Security Framework
 
 ### Prompt Injection Prevention
@@ -492,6 +555,7 @@ export class PrivacyAwareAIService {
 - **Content Screening**: Filter inappropriate or harmful responses
 - **Bias Detection**: Monitor for discriminatory or biased outputs
 - **Fact Checking**: Implement verification for factual claims
+
 ```
 
 ## Related Documentation

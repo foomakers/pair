@@ -10,7 +10,7 @@ Establish unified versioning standards that enable clear communication of change
 
 ### Version Number Structure
 
-```
+```text
 MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]
 
 Examples:
@@ -464,15 +464,17 @@ function deprecationWarning(req: Request, res: Response, next: NextFunction) {
 **Before (v1.x):**
 
 ```typescript
+
 interface User {
   id: string
   name: string
   email: string
 }
+
 ```
 ````
 
-**After (v2.0):**
+#### After (v2.0):
 
 ```typescript
 interface User {
@@ -502,7 +504,7 @@ Use our migration tool:
 npx @myorg/migrate-v1-to-v2 ./src
 ```
 
-```
+```text
 
 This framework ensures consistent, predictable versioning that supports both automated processes and clear human communication about software changes.
 ```

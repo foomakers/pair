@@ -2,7 +2,7 @@
 
 ## Standard Commit Message Format
 
-```
+```text
 [STORY_CODE] [type]: [concise description]
 
 [optional body explaining the what and why vs. how]
@@ -29,7 +29,7 @@
 
 ### Red Phase (Failing Tests)
 
-```
+```text
 [US-123] test: add failing tests for user authentication
 
 - Add test for valid login credentials
@@ -41,7 +41,7 @@ Refs: #T-456
 
 ### Green Phase (Implementation)
 
-```
+```text
 [US-123] feat: implement user authentication service
 
 - Add user credential validation
@@ -54,7 +54,7 @@ Refs: #T-456
 
 ### Refactor Phase (Code Improvement)
 
-```
+```text
 [US-123] refactor: improve authentication code structure
 
 - Extract validation logic to separate module
@@ -69,7 +69,7 @@ Refs: #T-456
 
 ### Feature Implementation
 
-```
+```text
 [US-789] feat: add real-time notifications system
 
 Implement WebSocket-based notification delivery:
@@ -86,7 +86,7 @@ Refs: #T-234, #T-235
 
 ### Bug Fix
 
-```
+```text
 [US-456] fix: resolve memory leak in data processing
 
 - Fix unclosed database connections in batch processor
@@ -103,7 +103,7 @@ Closes #BUG-123
 
 ### Refactoring
 
-```
+```text
 [US-321] refactor: restructure user management module
 
 - Extract user validation into separate service
@@ -119,7 +119,7 @@ Refs: #T-567
 
 ### Documentation
 
-```
+```text
 [US-654] docs: add API documentation for user endpoints
 
 - Document authentication endpoints
@@ -132,7 +132,7 @@ Refs: #T-890
 
 ### Configuration/Setup
 
-```
+```text
 [US-987] chore: configure production deployment pipeline
 
 - Add Docker configuration for production
@@ -170,21 +170,21 @@ Refs: #T-111
 
 ### User Story References
 
-```
+```text
 Format: [US-###] - User Story number
 Example: [US-123] feat: implement search functionality
 ```
 
 ### Task References
 
-```
+```text
 Format: [T-###] - Task number (in commit body)
 Example: Refs: #T-456, #T-789
 ```
 
 ### Bug References
 
-```
+```text
 Format: [BUG-###] - Bug tracking number
 Example: Closes #BUG-123
 ```
@@ -193,7 +193,7 @@ Example: Closes #BUG-123
 
 ### Documentation Tasks
 
-```
+```text
 [US-456] docs: update user onboarding guide
 
 - Add screenshots for new UI elements
@@ -206,7 +206,7 @@ Refs: #T-789
 
 ### Configuration Changes
 
-```
+```text
 [US-123] chore: update project configuration
 
 - Configure ESLint rules for TypeScript
@@ -219,7 +219,7 @@ Refs: #T-234
 
 ### Infrastructure Setup
 
-```
+```text
 [US-789] build: setup CI/CD pipeline
 
 - Add GitHub Actions workflow configuration
@@ -282,7 +282,7 @@ Commit scope should be appropriately sized:
 
 ### Feature Branch Commits
 
-```
+```text
 # During feature development
 [US-123] test: add failing tests for user search
 [US-123] feat: implement basic search functionality
@@ -294,7 +294,7 @@ Commit scope should be appropriately sized:
 
 When using squash merge, final commit should summarize the feature:
 
-```
+```text
 [US-123] feat: implement advanced user search
 
 Complete implementation of user search functionality including:
@@ -311,7 +311,7 @@ Closes #T-234, #T-235, #T-236
 
 When preserving commit history, ensure each commit follows guidelines:
 
-```
+```text
 # Each commit in the branch should be clean and follow standards
 [US-123] test: add unit tests for search service
 [US-123] feat: implement search backend API
@@ -327,7 +327,7 @@ When preserving commit history, ensure each commit follows guidelines:
 
 ❌ **Bad Examples:**
 
-```
+```text
 fix stuff
 WIP
 asdf
@@ -337,7 +337,7 @@ fix bug
 
 ✅ **Good Examples:**
 
-```
+```text
 [US-123] fix: resolve null pointer in user validation
 [US-456] feat: add email notification service
 [US-789] refactor: extract common validation logic
@@ -347,13 +347,13 @@ fix bug
 
 ❌ **Bad:** Mixed unrelated changes
 
-```
+```text
 [US-123] feat: add user search + fix login bug + update docs
 ```
 
 ✅ **Good:** Separate logical commits
 
-```
+```text
 [US-123] feat: add user search functionality
 [US-124] fix: resolve login validation error
 [US-123] docs: update search API documentation
@@ -363,13 +363,13 @@ fix bug
 
 ❌ **Bad:** No explanation for complex changes
 
-```
+```text
 [US-123] refactor: change user service
 ```
 
 ✅ **Good:** Clear explanation of reasoning
 
-```
+```text
 [US-123] refactor: extract user validation to separate service
 
 - Move validation logic from controller to dedicated service

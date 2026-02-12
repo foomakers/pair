@@ -107,13 +107,13 @@ export class OrderService {
 
 ## Service Communication Patterns
 
-**Synchronous:**
+#### Synchronous:
 
 - **HTTP/REST** - Simple request-response
 - **gRPC** - High-performance RPC
 - **GraphQL** - Flexible query interface
 
-**Asynchronous:**
+#### Asynchronous:
 
 - **Message Queues** - Reliable async communication
 - **Event Streaming** - Real-time event processing
@@ -121,7 +121,7 @@ export class OrderService {
 
 ## Benefits and Trade-offs
 
-**Benefits:**
+#### Benefits:
 
 - **Independent scaling** - Scale services based on demand
 - **Technology diversity** - Choose best tech per service
@@ -129,7 +129,7 @@ export class OrderService {
 - **Fault isolation** - Service failures don't affect entire system
 - **Independent deployment** - Deploy services separately
 
-**Trade-offs:**
+#### Trade-offs:
 
 - **Distributed complexity** - Network latency, failures
 - **Data consistency** - Eventual consistency challenges
@@ -157,7 +157,7 @@ export class OrderService {
 
 ## Migration Strategy
 
-**From Modular Monolith:**
+#### From Modular Monolith:
 
 1. **Identify service boundaries** - Start with least coupled modules
 2. **Extract database** - Create separate database per service

@@ -47,9 +47,9 @@ Each prompt is designed to be **dead simple**:
 
 ## Examples
 
-**Super simple - just type the command:**
+#### Super simple - just type the command:
 
-```
+```text
 /create-prd
 /implement-task
 /code-review
@@ -58,9 +58,9 @@ Each prompt is designed to be **dead simple**:
 /refine-story
 ```
 
-**With optional IDs for context:**
+#### With optional IDs for context:
 
-```
+```text
 /breakdown-epics: initiative_id=INIT-123
 /breakdown-stories: epic_id=EPIC-456
 /create-tasks: story_id=STORY-789

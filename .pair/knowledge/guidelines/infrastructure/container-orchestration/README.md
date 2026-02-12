@@ -8,7 +8,7 @@ This practice provides comprehensive guidance for container orchestration coveri
 
 ## 📋 Scope and Coverage
 
-**In Scope:**
+#### In Scope:
 
 - Container platform evaluation and strategic selection frameworks
 - Container deployment patterns and orchestration strategies
@@ -17,7 +17,7 @@ This practice provides comprehensive guidance for container orchestration coveri
 - Multi-environment container strategies and consistency approaches
 - Container performance optimization and resource management
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Application-specific containerization patterns (see Development Guidelines)
 - Cloud provider-specific container services (see Cloud Services)
@@ -72,7 +72,7 @@ Enterprise-grade Kubernetes implementation covering production cluster setup, wo
 
 ## 🚀 Quick Start Decision Framework
 
-```
+```text
 Selecting container orchestration strategy?
 ├─ Simple development or single-service needs?
 │  ├─ Learning containers? → Start with [Docker Implementation](docker.md)
@@ -90,19 +90,19 @@ Selecting container orchestration strategy?
 
 ## 📊 Container Platform Selection Matrix
 
-| Requirement                | Docker Standalone | Docker Compose     | Kubernetes          | Complexity | Use Case               |
-| -------------------------- | ----------------- | ------------------ | ------------------- | ---------- | ---------------------- |
-| **Development**            | ✅ Excellent      | ✅ Excellent       | ⚠️ Complex          | 🟢 Low     | Learning, prototyping  |
-| **Production**             | ⚠️ Limited        | ❌ Not recommended | ✅ Enterprise-grade | 🔴 High    | Enterprise workloads   |
-| **Scaling**                | ❌ Manual         | ⚠️ Limited         | ✅ Automatic        | 🟡 Medium  | Auto-scaling needs     |
-| **Orchestration**          | ❌ None           | ✅ Basic           | ✅ Advanced         | 🔴 High    | Multi-service apps     |
-| **Multi-Environment**      | ⚠️ Manual         | 🔄 Possible        | ✅ Native           | 🟡 Medium  | Consistent deployments |
-| **Operational Complexity** | 🟢 Low            | 🟡 Medium          | 🔴 High             | 🔴 High    | Ops team capability    |
+| Requirement                | Docker Standalone | Docker Compose    | Kubernetes         | Complexity | Use Case               |
+| -------------------------- | ----------------- | ----------------- | ------------------ | ---------- | ---------------------- |
+| **Development**            | ✅ Excellent       | ✅ Excellent       | ⚠️ Complex         | 🟢 Low      | Learning, prototyping  |
+| **Production**             | ⚠️ Limited        | ❌ Not recommended | ✅ Enterprise-grade | 🔴 High     | Enterprise workloads   |
+| **Scaling**                | ❌ Manual          | ⚠️ Limited        | ✅ Automatic        | 🟡 Medium   | Auto-scaling needs     |
+| **Orchestration**          | ❌ None            | ✅ Basic           | ✅ Advanced         | 🔴 High     | Multi-service apps     |
+| **Multi-Environment**      | ⚠️ Manual         | 🔄 Possible        | ✅ Native           | 🟡 Medium   | Consistent deployments |
+| **Operational Complexity** | 🟢 Low             | 🟡 Medium          | 🔴 High             | 🔴 High     | Ops team capability    |
 
-**Legend**: ✅ Excellent | 🔄 Good | ⚠️ Limited | ❌ Not suitable | 🟢 Low | 🟡 Medium | 🔴 High
-| **Security** | ⚠️ Basic | ⚠️ Basic | ✅ Enterprise |
-| **Monitoring** | ❌ External | ⚠️ Limited | ✅ Built-in |
-| **Learning Curve** | ✅ Easy | ✅ Easy | ❌ Steep |
+| **Legend**: ✅ Excellent | 🔄 Good     | ⚠️ Limited | ❌ Not suitable | 🟢 Low | 🟡 Medium | 🔴 High |
+| **Security**            | ⚠️ Basic   | ⚠️ Basic   | ✅ Enterprise   |       |          |        |
+| **Monitoring**          | ❌ External | ⚠️ Limited | ✅ Built-in     |       |          |        |
+| **Learning Curve**      | ✅ Easy     | ✅ Easy     | ❌ Steep        |       |          |        |
 
 ---
 
@@ -190,7 +190,7 @@ This container orchestration guide provides a comprehensive framework for enterp
 
 ### Container Strategy (`container-strategy.md`)
 
-**Strategic container adoption and platform selection**
+#### Strategic container adoption and platform selection
 
 - Container platform evaluation framework
 - Orchestration technology selection criteria
@@ -199,7 +199,7 @@ This container orchestration guide provides a comprehensive framework for enterp
 
 ### Docker Implementation (`docker.md`)
 
-**Container runtime and development patterns**
+#### Container runtime and development patterns
 
 - Docker configuration and optimization strategies
 - Development workflow integration
@@ -208,7 +208,7 @@ This container orchestration guide provides a comprehensive framework for enterp
 
 ### Kubernetes Management (`kubernetes.md`)
 
-**Enterprise Kubernetes implementation and operations**
+#### Enterprise Kubernetes implementation and operations
 
 - Cluster architecture and configuration strategies
 - Workload deployment and management patterns
@@ -217,7 +217,7 @@ This container orchestration guide provides a comprehensive framework for enterp
 
 ### Docker Compose (`docker-compose.md`)
 
-**Multi-container development and deployment**
+#### Multi-container development and deployment
 
 - Development environment orchestration
 - Service composition and dependency management
@@ -228,21 +228,21 @@ This container orchestration guide provides a comprehensive framework for enterp
 
 ### Platform Selection Criteria
 
-**Technical Requirements**
+#### Technical Requirements
 
 - Workload complexity and orchestration needs
 - Scalability and performance requirements
 - Integration with existing infrastructure
 - Development team expertise and preferences
 
-**Operational Considerations**
+#### Operational Considerations
 
 - Management overhead and operational complexity
 - Monitoring and troubleshooting capabilities
 - Deployment automation and CI/CD integration
 - Disaster recovery and backup requirements
 
-**Business Alignment**
+#### Business Alignment
 
 - Cost implications and budget constraints
 - Timeline and migration complexity
@@ -251,21 +251,21 @@ This container orchestration guide provides a comprehensive framework for enterp
 
 ### Architecture Patterns
 
-**Simple Orchestration**
+#### Simple Orchestration
 
 - Single-node or basic multi-container deployments
 - Development and testing environments
 - Proof-of-concept and prototype applications
 - Small-scale production workloads
 
-**Enterprise Orchestration**
+#### Enterprise Orchestration
 
 - Multi-node cluster management
 - Production-grade scalability and reliability
 - Advanced networking and security requirements
 - Complex application architectures
 
-**Hybrid Orchestration**
+#### Hybrid Orchestration
 
 - Multi-cloud and hybrid deployments
 - Edge computing and distributed architectures
@@ -292,14 +292,14 @@ This container orchestration guide provides a comprehensive framework for enterp
 
 ### Platform Management
 
-**Cluster Operations**
+#### Cluster Operations
 
 - Implement infrastructure as code for cluster management
 - Use automated scaling and resource management
 - Plan for cluster upgrades and maintenance
 - Maintain operational runbooks and procedures
 
-**Security Integration**
+#### Security Integration
 
 - Implement container security scanning and policies
 - Use network segmentation and access controls
@@ -308,14 +308,14 @@ This container orchestration guide provides a comprehensive framework for enterp
 
 ### Development Integration
 
-**Workflow Optimization**
+#### Workflow Optimization
 
 - Integrate container workflows with development processes
 - Implement automated testing and validation
 - Use consistent environments across development lifecycle
 - Plan for efficient image building and distribution
 
-**Configuration Management**
+#### Configuration Management
 
 - Use declarative configuration for reproducibility
 - Implement environment-specific configuration strategies
@@ -342,14 +342,14 @@ This container orchestration guide provides a comprehensive framework for enterp
 
 ### Platform Management Excellence
 
-**Cluster Operations and Governance**
+#### Cluster Operations and Governance
 
 - Implement infrastructure as code for cluster management and reproducible deployments
 - Use automated scaling and resource management with cost optimization
 - Plan for cluster upgrades and maintenance with minimal downtime
 - Maintain operational runbooks and procedures with incident response protocols
 
-**Security and Compliance Framework**
+#### Security and Compliance Framework
 
 - Implement container security scanning and policy enforcement throughout the lifecycle
 - Use network segmentation and access controls with zero-trust principles
@@ -358,14 +358,14 @@ This container orchestration guide provides a comprehensive framework for enterp
 
 ### Development Integration Excellence
 
-**Workflow Optimization and Productivity**
+#### Workflow Optimization and Productivity
 
 - Integrate container workflows with development processes and CI/CD pipelines
 - Implement automated testing and validation with comprehensive quality gates
 - Use consistent environments across development lifecycle with infrastructure parity
 - Plan for efficient image building and distribution with optimization and caching
 
-**Configuration Management and Consistency**
+#### Configuration Management and Consistency
 
 - Use declarative configuration for reproducibility and version control
 - Implement environment-specific configuration strategies with parameter management

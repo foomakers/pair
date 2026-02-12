@@ -98,7 +98,7 @@
 
 ### Testing Feedback
 
-```
+```text
 Current Coverage: XX%
 New Coverage: XX%
 Coverage Change: +/-XX%
@@ -122,9 +122,9 @@ Performance Tests: ✅ Within Limits / ⚠️ Degradation Detected
 
 | Metric           | Before | After | Change | Acceptable |
 | ---------------- | ------ | ----- | ------ | ---------- |
-| Response Time    | XXXms  | XXXms | +/-XX% | ✅/❌      |
-| Memory Usage     | XXXMb  | XXXMb | +/-XX% | ✅/❌      |
-| Database Queries | XX     | XX    | +/-XX  | ✅/❌      |
+| Response Time    | XXXms  | XXXms | +/-XX% | ✅/❌        |
+| Memory Usage     | XXXMb  | XXXMb | +/-XX% | ✅/❌        |
+| Database Queries | XX     | XX    | +/-XX  | ✅/❌        |
 
 ## Documentation Review
 
@@ -149,7 +149,7 @@ Performance Tests: ✅ Within Limits / ⚠️ Degradation Detected
 
 ### Positive Feedback
 
-**What's Done Well:**
+#### What's Done Well:
 
 - [Specific positive observations about code quality, approach, or implementation]
 - [Recognition of good practices, clever solutions, or improvements]
@@ -159,28 +159,28 @@ Performance Tests: ✅ Within Limits / ⚠️ Degradation Detected
 
 #### Critical Issues ⚠️
 
-**Must fix before merge:**
+#### Must fix before merge:
 
 - [ ] **[File:Line]** - [Critical issue description and impact]
 - [ ] **[File:Line]** - [Another critical issue requiring resolution]
 
 #### Major Issues 🔍
 
-**Should fix before merge:**
+#### Should fix before merge:
 
 - [ ] **[File:Line]** - [Major issue description and suggested solution]
 - [ ] **[File:Line]** - [Another major issue with improvement recommendation]
 
 #### Minor Issues 💡
 
-**Consider addressing:**
+#### Consider addressing:
 
 - [ ] **[File:Line]** - [Minor improvement suggestion]
 - [ ] **[File:Line]** - [Code style or best practice recommendation]
 
 #### Questions ❓
 
-**Clarification needed:**
+#### Clarification needed:
 
 - [ ] **[File:Line]** - [Question about implementation approach or decision]
 - [ ] **[File:Line]** - [Request for explanation of complex logic]

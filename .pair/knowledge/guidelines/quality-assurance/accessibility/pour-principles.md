@@ -8,7 +8,7 @@ Comprehensive implementation guide for the four fundamental principles of web ac
 
 ### **Alternative Text for Images**
 
-**Informative Images**
+#### Informative Images
 
 ```html
 <!-- Descriptive alt text for meaningful images -->
@@ -25,7 +25,7 @@ Comprehensive implementation guide for the four fundamental principles of web ac
 </div>
 ```
 
-**Functional Images**
+#### Functional Images
 
 ```html
 <!-- Button images need action descriptions -->
@@ -41,7 +41,7 @@ Comprehensive implementation guide for the four fundamental principles of web ac
 
 ### **Captions and Transcripts**
 
-**Video Content Accessibility**
+#### Video Content Accessibility
 
 ```html
 <video controls>
@@ -55,9 +55,9 @@ Comprehensive implementation guide for the four fundamental principles of web ac
 </video>
 ```
 
-**WebVTT Caption Format**
+#### WebVTT Caption Format
 
-```
+```text
 WEBVTT
 
 00:00:00.000 --> 00:00:05.000
@@ -70,7 +70,7 @@ NOTE
 This is a speaker note for additional context that won't be displayed.
 ```
 
-**Audio Transcription**
+#### Audio Transcription
 
 ```html
 <audio controls>
@@ -89,7 +89,7 @@ This is a speaker note for additional context that won't be displayed.
 
 ### **Color and Contrast**
 
-**Color Contrast Implementation**
+#### Color Contrast Implementation
 
 ```css
 /* WCAG AA compliant color combinations */
@@ -122,7 +122,7 @@ This is a speaker note for additional context that won't be displayed.
 }
 ```
 
-**Color Usage Guidelines**
+#### Color Usage Guidelines
 
 ```html
 <!-- Bad: Using only color to convey information -->
@@ -146,7 +146,7 @@ This is a speaker note for additional context that won't be displayed.
 
 ### **Keyboard Navigation**
 
-**Focus Management**
+#### Focus Management
 
 ```typescript
 class FocusManager {
@@ -187,7 +187,7 @@ class FocusManager {
 }
 ```
 
-**Skip Links Implementation**
+#### Skip Links Implementation
 
 ```html
 <!-- Skip links should be the first focusable elements -->
@@ -208,7 +208,7 @@ class FocusManager {
 </main>
 ```
 
-**Skip Link Styling**
+#### Skip Link Styling
 
 ```css
 .skip-link {
@@ -230,7 +230,7 @@ class FocusManager {
 
 ### **Timing and Motion**
 
-**Pause/Stop Controls**
+#### Pause/Stop Controls
 
 ```html
 <!-- Auto-playing content with controls -->
@@ -249,7 +249,7 @@ class FocusManager {
 </div>
 ```
 
-**Motion Preferences**
+#### Motion Preferences
 
 ```css
 /* Respect user motion preferences */
@@ -280,7 +280,7 @@ class FocusManager {
 }
 ```
 
-**Timeout Management**
+#### Timeout Management
 
 ```javascript
 class TimeoutManager {
@@ -327,7 +327,7 @@ class TimeoutManager {
 
 ### **Language Identification**
 
-**Page Language Declaration**
+#### Page Language Declaration
 
 ```html
 <!DOCTYPE html>
@@ -356,7 +356,7 @@ class TimeoutManager {
 
 ### **Predictable Navigation**
 
-**Consistent Navigation Structure**
+#### Consistent Navigation Structure
 
 ```html
 <!-- Consistent navigation across all pages -->
@@ -371,7 +371,7 @@ class TimeoutManager {
 </nav>
 ```
 
-**Focus Indication**
+#### Focus Indication
 
 ```css
 /* Consistent focus indicators */
@@ -394,7 +394,7 @@ select:focus {
 
 ### **Input Assistance**
 
-**Form Labels and Instructions**
+#### Form Labels and Instructions
 
 ```html
 <form novalidate>
@@ -439,7 +439,7 @@ select:focus {
 </form>
 ```
 
-**Error Handling**
+#### Error Handling
 
 ```javascript
 class FormValidator {
@@ -494,7 +494,7 @@ class FormValidator {
 
 ### **Valid HTML and ARIA**
 
-**Semantic HTML Structure**
+#### Semantic HTML Structure
 
 ```html
 <!DOCTYPE html>
@@ -533,7 +533,7 @@ class FormValidator {
 </html>
 ```
 
-**ARIA Best Practices**
+#### ARIA Best Practices
 
 ```html
 <!-- Custom components with proper ARIA -->
@@ -555,7 +555,7 @@ class FormValidator {
 
 ### **Progressive Enhancement**
 
-**Feature Detection and Fallbacks**
+#### Feature Detection and Fallbacks
 
 ```javascript
 class AccessibleComponent {
@@ -602,7 +602,7 @@ class AccessibleComponent {
 
 ### **Assistive Technology Compatibility**
 
-**Testing with Multiple AT**
+#### Testing with Multiple AT
 
 ```javascript
 // Screen reader detection and optimization

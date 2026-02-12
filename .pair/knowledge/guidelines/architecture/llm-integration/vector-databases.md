@@ -4,7 +4,7 @@ Selection, configuration, and optimization patterns for vector databases in RAG 
 
 ## When to Use
 
-**Essential for:**
+#### Essential for:
 
 - Retrieval-Augmented Generation (RAG) systems
 - Semantic search applications
@@ -13,7 +13,7 @@ Selection, configuration, and optimization patterns for vector databases in RAG 
 - AI-powered content recommendations
 - Multimodal search (text, images, audio)
 
-**Consider alternatives for:**
+#### Consider alternatives for:
 
 - Simple keyword-based search
 - Small document collections (<1000 documents)
@@ -24,19 +24,22 @@ Selection, configuration, and optimization patterns for vector databases in RAG 
 
 ### 1. Database Categories
 
-**Managed Cloud Services:**
+#### Managed Cloud Services:
+
 - **Pinecone**: Fully managed, optimized for production
 - **Weaviate Cloud**: GraphQL-based, hybrid search capabilities
 - **Qdrant Cloud**: High-performance, filtering capabilities
 - **Milvus Cloud**: Open-source foundation, enterprise features
 
-**Self-Hosted Solutions:**
+#### Self-Hosted Solutions:
+
 - **Milvus**: Open-source, highly scalable
 - **Qdrant**: Rust-based, efficient filtering
 - **Weaviate**: GraphQL interface, rich schema
 - **Chroma**: Simple embedding database
 
-**Embedded Options:**
+#### Embedded Options:
+
 - **Chroma**: Lightweight, easy setup
 - **Faiss**: Facebook's similarity search library
 - **LanceDB**: Serverless vector database
@@ -44,19 +47,22 @@ Selection, configuration, and optimization patterns for vector databases in RAG 
 
 ### 2. Selection Criteria
 
-**Performance Requirements:**
+#### Performance Requirements:
+
 - Query latency targets (<50ms for real-time)
 - Throughput requirements (QPS)
 - Vector dimensions (384, 768, 1536, etc.)
 - Index size and memory requirements
 
-**Functional Requirements:**
+#### Functional Requirements:
+
 - Similarity algorithms (cosine, euclidean, dot product)
 - Filtering and metadata search
 - Hybrid search (vector + keyword)
 - Multi-tenancy and isolation
 
-**Operational Requirements:**
+#### Operational Requirements:
+
 - Scalability and clustering
 - Backup and disaster recovery
 - Monitoring and observability
@@ -64,53 +70,59 @@ Selection, configuration, and optimization patterns for vector databases in RAG 
 
 ### 3. Decision Matrix
 
-| Database   | Latency | Scalability | Features | Ease of Use | Cost  | Best For                    |
-| ---------- | ------- | ----------- | -------- | ----------- | ----- | --------------------------- |
-| Pinecone   | Excellent | High       | Good     | Excellent   | High  | Production RAG systems      |
-| Weaviate   | Good    | High        | Excellent| Good        | Medium| Complex schema requirements |
-| Qdrant     | Excellent| High       | Good     | Good        | Medium| High-performance filtering  |
-| Milvus     | Good    | Excellent   | Excellent| Fair        | Low   | Large-scale deployments     |
-| Chroma     | Good    | Medium      | Basic    | Excellent   | Low   | Development and prototyping |
+| Database | Latency   | Scalability | Features  | Ease of Use | Cost   | Best For                    |
+| -------- | --------- | ----------- | --------- | ----------- | ------ | --------------------------- |
+| Pinecone | Excellent | High        | Good      | Excellent   | High   | Production RAG systems      |
+| Weaviate | Good      | High        | Excellent | Good        | Medium | Complex schema requirements |
+| Qdrant   | Excellent | High        | Good      | Good        | Medium | High-performance filtering  |
+| Milvus   | Good      | Excellent   | Excellent | Fair        | Low    | Large-scale deployments     |
+| Chroma   | Good      | Medium      | Basic     | Excellent   | Low    | Development and prototyping |
 
 ## Architecture Patterns
 
 ### 1. Simple RAG Pattern
 
-**Components:**
+#### Components:
+
 - Document loader and chunker
 - Embedding model (OpenAI, Sentence Transformers)
 - Vector database for storage
 - Retrieval and generation pipeline
 
-**Flow:**
-```
+#### Flow:
+
+```text
 Documents → Chunking → Embeddings → Vector Store
 Query → Embedding → Similarity Search → Context → LLM → Response
 ```
 
 ### 2. Advanced RAG Pattern
 
-**Components:**
+#### Components:
+
 - Multi-modal document processing
 - Hybrid search (vector + keyword)
 - Reranking and filtering
 - Context optimization and compression
 
-**Flow:**
-```
+#### Flow:
+
+```text
 Documents → Multi-modal Processing → Embeddings + Metadata → Vector Store
 Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM → Response
 ```
 
 ### 3. Multi-Tenant Pattern
 
-**Components:**
+#### Components:
+
 - Tenant isolation strategies
 - Shared vs. dedicated indexes
 - Access control and security
 - Performance isolation
 
-**Isolation Strategies:**
+#### Isolation Strategies:
+
 - **Database Level**: Separate databases per tenant
 - **Index Level**: Separate indexes with shared infrastructure
 - **Filter Level**: Single index with tenant filtering
@@ -120,13 +132,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 1. Data Preparation
 
-**Document Processing:**
+#### Document Processing:
+
 - Chunk size optimization (200-1000 tokens)
 - Overlap strategies for context preservation
 - Metadata extraction and enrichment
 - Quality filtering and deduplication
 
-**Embedding Strategy:**
+#### Embedding Strategy:
+
 - Model selection (OpenAI, Sentence Transformers, Cohere)
 - Dimension optimization (384, 768, 1536)
 - Batch processing for efficiency
@@ -134,13 +148,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 2. Index Configuration
 
-**Index Types:**
+#### Index Types:
+
 - **HNSW**: Hierarchical navigable small world (default for most)
 - **IVF**: Inverted file index (good for large datasets)
 - **LSH**: Locality-sensitive hashing (approximate search)
 - **Flat**: Exact search (small datasets)
 
-**Performance Tuning:**
+#### Performance Tuning:
+
 - Index parameters (ef_construction, M for HNSW)
 - Memory vs. accuracy trade-offs
 - Query-time parameters (ef, nprobe)
@@ -148,13 +164,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 3. Query Optimization
 
-**Search Strategies:**
+#### Search Strategies:
+
 - Similarity threshold tuning
 - Top-k selection (5-20 typical)
 - Filtering performance optimization
 - Query expansion and refinement
 
-**Hybrid Search:**
+#### Hybrid Search:
+
 - Vector similarity + keyword matching
 - Weighted combination strategies
 - Reranking algorithms
@@ -164,13 +182,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 1. Indexing Performance
 
-**Optimization Strategies:**
+#### Optimization Strategies:
+
 - Batch insertion for efficiency
 - Index rebuilding strategies
 - Parallel processing
 - Memory management
 
-**Monitoring Metrics:**
+#### Monitoring Metrics:
+
 - Insertion throughput
 - Index build time
 - Memory usage
@@ -178,13 +198,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 2. Query Performance
 
-**Optimization Strategies:**
+#### Optimization Strategies:
+
 - Query result caching
 - Index parameter tuning
 - Connection pooling
 - Query batching
 
-**Monitoring Metrics:**
+#### Monitoring Metrics:
+
 - Query latency (p50, p95, p99)
 - Throughput (QPS)
 - Cache hit rates
@@ -192,13 +214,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 3. Scalability Patterns
 
-**Horizontal Scaling:**
+#### Horizontal Scaling:
+
 - Sharding strategies
 - Load balancing
 - Replication for read scaling
 - Cross-region distribution
 
-**Vertical Scaling:**
+#### Vertical Scaling:
+
 - Memory optimization
 - CPU utilization
 - Storage performance
@@ -208,13 +232,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 1. Lifecycle Management
 
-**Data Operations:**
+#### Data Operations:
+
 - Incremental updates and upserts
 - Bulk data loading
 - Data deletion and cleanup
 - Schema evolution
 
-**Versioning Strategies:**
+#### Versioning Strategies:
+
 - Embedding model updates
 - Data source changes
 - Index rebuilding
@@ -222,13 +248,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 2. Backup and Recovery
 
-**Backup Strategies:**
+#### Backup Strategies:
+
 - Full index backups
 - Incremental backups
 - Cross-region replication
 - Point-in-time recovery
 
-**Disaster Recovery:**
+#### Disaster Recovery:
+
 - RTO and RPO requirements
 - Failover procedures
 - Data consistency
@@ -238,13 +266,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 1. Access Control
 
-**Authentication:**
+#### Authentication:
+
 - API key management
 - OAuth integration
 - Service account authentication
 - Certificate-based authentication
 
-**Authorization:**
+#### Authorization:
+
 - Role-based access control
 - Resource-level permissions
 - Tenant isolation
@@ -252,13 +282,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 2. Data Protection
 
-**Encryption:**
+#### Encryption:
+
 - Data in transit (TLS)
 - Data at rest encryption
 - Key management
 - Certificate rotation
 
-**Privacy:**
+#### Privacy:
+
 - Data anonymization
 - PII handling
 - Right to be forgotten
@@ -268,13 +300,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 1. Key Metrics
 
-**Performance Metrics:**
+#### Performance Metrics:
+
 - Query latency and throughput
 - Index build and update times
 - Memory and CPU utilization
 - Storage usage and growth
 
-**Quality Metrics:**
+#### Quality Metrics:
+
 - Search relevance scores
 - Recall and precision
 - User satisfaction metrics
@@ -282,13 +316,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 2. Alerting and Monitoring
 
-**Critical Alerts:**
+#### Critical Alerts:
+
 - High error rates
 - Performance degradation
 - Storage capacity limits
 - Replication lag
 
-**Monitoring Tools:**
+#### Monitoring Tools:
+
 - Database-specific dashboards
 - Custom metrics collection
 - Log aggregation and analysis
@@ -298,13 +334,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 1. Cost Factors
 
-**Primary Costs:**
+#### Primary Costs:
+
 - Vector storage costs
 - Compute for queries and indexing
 - Data transfer and bandwidth
 - Backup and disaster recovery
 
-**Hidden Costs:**
+#### Hidden Costs:
+
 - Embedding generation
 - Data preprocessing
 - Development and maintenance
@@ -312,13 +350,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 2. Optimization Strategies
 
-**Storage Optimization:**
+#### Storage Optimization:
+
 - Dimension reduction techniques
 - Data compression
 - Lifecycle policies
 - Archive strategies
 
-**Compute Optimization:**
+#### Compute Optimization:
+
 - Query optimization
 - Caching strategies
 - Batch processing
@@ -328,13 +368,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 1. Design Principles
 
-**Start Simple:**
+#### Start Simple:
+
 - Begin with basic RAG patterns
 - Add complexity incrementally
 - Measure before optimizing
 - Focus on user needs
 
-**Plan for Scale:**
+#### Plan for Scale:
+
 - Design for future growth
 - Consider multi-tenancy early
 - Plan data migration strategies
@@ -342,13 +384,15 @@ Query → Query Enhancement → Hybrid Search → Reranking → Context → LLM 
 
 ### 2. Development Guidelines
 
-**Testing:**
+#### Testing:
+
 - Unit tests for embeddings
 - Integration tests for search
 - Performance testing
 - Relevance evaluation
 
-**Documentation:**
+#### Documentation:
+
 - Schema documentation
 - Query patterns
 - Performance characteristics

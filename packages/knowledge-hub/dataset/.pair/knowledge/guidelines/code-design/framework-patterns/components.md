@@ -400,11 +400,12 @@ return (
 );
 }
 
-````
+````text
 
 ### 2. Render Props Pattern
 
 ```typescript
+
 // Generic render props component
 interface RenderPropsState<T> {
   data: T | null;
@@ -475,11 +476,13 @@ function UserProfile({ userId }: { userId: string }) {
     </DataFetcher>
   );
 }
+
 ````
 
 ### 3. Higher-Order Components (HOCs)
 
 ```typescript
+
 // Generic HOC for loading states
 interface WithLoadingProps {
   loading?: boolean
@@ -550,6 +553,7 @@ const SafeUserProfile = withErrorBoundary(withLoading(UserProfile), {
     console.error('User profile error:', error, errorInfo)
   },
 })
+
 ```
 
 ## Accessibility Patterns
@@ -557,10 +561,11 @@ const SafeUserProfile = withErrorBoundary(withLoading(UserProfile), {
 ### 1. ARIA and Semantic HTML
 
 ```typescript
+
 // Accessible button component
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger'
-  size?: 'small' | 'medium' | 'large'
+| variant?: 'primary' | 'secondary' | 'danger' |
+| size?: 'small'      | 'medium'    | 'large'  |
   loading?: boolean
   icon?: React.ReactNode
   'aria-label'?: string
@@ -679,11 +684,13 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(function Inp
     </div>
   )
 })
+
 ```
 
 ### 2. Focus Management
 
 ```typescript
+
 // Focus trap hook
 export function useFocusTrap(isActive: boolean) {
   const containerRef = useRef<HTMLElement>(null)
@@ -793,6 +800,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
     document.body,
   )
 }
+
 ```
 
 ## Styling Approaches
@@ -800,6 +808,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
 ### 1. CSS-in-JS with Styled Components
 
 ```typescript
+
 import styled, { css } from 'styled-components'
 
 // Theme-aware styled components
@@ -822,8 +831,8 @@ interface Theme {
 }
 
 interface ButtonStyledProps {
-  $variant: 'primary' | 'secondary' | 'danger'
-  $size: 'small' | 'medium' | 'large'
+| $variant: 'primary' | 'secondary' | 'danger' |
+| $size: 'small'      | 'medium'    | 'large'  |
   $fullWidth?: boolean
 }
 
@@ -901,11 +910,13 @@ const StyledButton = styled.button<ButtonStyledProps>`
       width: 100%;
     `}
 `
+
 ```
 
 ### 2. CSS Modules with TypeScript
 
 ```typescript
+
 // Button.module.css
 .button {
   display: inline-flex;
@@ -965,8 +976,8 @@ export default styles;
 import styles from './Button.module.css';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger';
-  size?: 'small' | 'medium' | 'large';
+| variant?: 'primary' | 'secondary' | 'danger'; |
+| size?: 'small'      | 'medium'    | 'large';  |
   fullWidth?: boolean;
 }
 
@@ -987,6 +998,7 @@ export function Button({
 
   return <button className={classes} {...props} />;
 }
+
 ```
 
 ## Testing Strategies
@@ -994,6 +1006,7 @@ export function Button({
 ### 1. Component Testing with Testing Library
 
 ```typescript
+
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
@@ -1104,11 +1117,13 @@ describe('Tabs', () => {
     expect(firstTab).toHaveFocus()
   })
 })
+
 ```
 
 ### 2. Visual Testing
 
 ```typescript
+
 // Visual regression testing with Storybook
 import type { Meta, StoryObj } from '@storybook/react'
 import { Button } from './Button'
@@ -1178,6 +1193,7 @@ export const AllVariants: Story = {
     </div>
   ),
 }
+
 ```
 
 ## Best Practices

@@ -8,21 +8,21 @@ Traditional time-focused estimation using hours, days, and calendar-based planni
 
 ### Direct Time Mapping
 
-**Calendar Integration**
+#### Calendar Integration
 
 - Direct correlation between estimates and project timelines
 - Integration with scheduling tools and resource management
 - Clear alignment with business deadlines and commitments
 - Straightforward budget calculation and resource allocation
 
-**Granular Planning**
+#### Granular Planning
 
 - Hour-level precision for detailed task planning
 - Day-level estimation for user story and feature work
 - Week-level planning for epic and initiative scheduling
 - Multiple granularity levels for different planning horizons
 
-**Resource Allocation**
+#### Resource Allocation
 
 - Direct mapping of estimated time to team capacity
 - Individual developer assignment and workload management
@@ -33,9 +33,9 @@ Traditional time-focused estimation using hours, days, and calendar-based planni
 
 ### Three-Point Estimation (PERT)
 
-**PERT Formula**
+#### PERT Formula
 
-```
+```text
 Optimistic (O): Best-case scenario, everything goes perfectly
 Most Likely (M): Realistic scenario based on normal conditions
 Pessimistic (P): Worst-case scenario with significant challenges
@@ -44,9 +44,9 @@ Expected Time (E) = (O + 4M + P) / 6
 Standard Deviation (σ) = (P - O) / 6
 ```
 
-**Example Application**
+#### Example Application
 
-```
+```text
 Task: Implement user authentication system
 Optimistic: 3 days (everything works perfectly)
 Most Likely: 6 days (normal development with typical issues)
@@ -56,9 +56,9 @@ Expected Time = (3 + 4×6 + 12) / 6 = 39/6 = 6.5 days
 Standard Deviation = (12 - 3) / 6 = 1.5 days
 ```
 
-**Confidence Intervals**
+#### Confidence Intervals
 
-```
+```text
 68% confidence: E ± σ = 6.5 ± 1.5 = 5 to 8 days
 95% confidence: E ± 2σ = 6.5 ± 3 = 3.5 to 9.5 days
 99% confidence: E ± 3σ = 6.5 ± 4.5 = 2 to 11 days
@@ -66,7 +66,7 @@ Standard Deviation = (12 - 3) / 6 = 1.5 days
 
 ### Bottom-Up Estimation
 
-**Task Decomposition Process**
+#### Task Decomposition Process
 
 1. **Break Down Work**: Decompose user stories into specific tasks
 2. **Estimate Tasks**: Provide time estimates for each individual task
@@ -74,9 +74,9 @@ Standard Deviation = (12 - 3) / 6 = 1.5 days
 4. **Add Buffers**: Include integration, testing, and coordination time
 5. **Validate Total**: Check story estimate against experience and complexity
 
-**Task-Level Guidelines**
+#### Task-Level Guidelines
 
-```
+```text
 Development Tasks:
 - Coding: 2-8 hours per task
 - Unit Testing: 20-30% of coding time
@@ -92,16 +92,16 @@ Quality Tasks:
 
 ### Top-Down Estimation
 
-**Analogical Estimation**
+#### Analogical Estimation
 
 1. **Identify Similar Work**: Find previously completed similar features
 2. **Analyze Differences**: Identify factors that make new work different
 3. **Apply Adjustments**: Adjust historical time based on differences
 4. **Validate Estimate**: Compare with bottom-up estimates if available
 
-**Parametric Estimation**
+#### Parametric Estimation
 
-```
+```text
 Function Point Analysis:
 - Count functional elements (inputs, outputs, files, interfaces)
 - Apply complexity weights (simple, average, complex)
@@ -118,21 +118,21 @@ Estimated Effort: 150 × 8 = 1,200 hours = 6 person-months
 
 ### Buffer Types
 
-**Task-Level Buffers**
+#### Task-Level Buffers
 
 - Technical uncertainty: 20-50% for unknown technologies
 - Integration complexity: 10-30% for cross-system integration
 - Quality requirements: 20-40% for high-quality/critical systems
 - Learning curve: 30-100% for new team members or technologies
 
-**Story-Level Buffers**
+#### Story-Level Buffers
 
 - Coordination overhead: 10-20% for cross-team dependencies
 - Requirements clarification: 10-30% for unclear or evolving requirements
 - Testing and validation: 20-50% depending on quality requirements
 - Deployment and rollout: 5-15% for production deployment activities
 
-**Epic-Level Buffers**
+#### Epic-Level Buffers
 
 - Project management overhead: 10-20% for coordination and communication
 - Risk contingency: 20-40% for high-risk or innovative projects
@@ -141,9 +141,9 @@ Estimated Effort: 150 × 8 = 1,200 hours = 6 person-months
 
 ### Risk-Adjusted Estimation
 
-**Risk Assessment Matrix**
+#### Risk Assessment Matrix
 
-```
+```text
 Risk Level | Probability | Impact | Time Multiplier
 Low        | <20%       | Minor  | 1.1x
 Medium     | 20-50%     | Moderate| 1.3x
@@ -151,7 +151,7 @@ High       | 50-80%     | Major  | 1.6x
 Critical   | >80%       | Severe | 2.0x+
 ```
 
-**Risk Categories**
+#### Risk Categories
 
 - **Technical Risks**: New technologies, complex algorithms, performance requirements
 - **Integration Risks**: Third-party systems, legacy integration, data migration
@@ -162,21 +162,21 @@ Critical   | >80%       | Severe | 2.0x+
 
 ### Estimation Process
 
-**Preparation Phase**
+#### Preparation Phase
 
 1. **Gather Requirements**: Ensure clear and complete user story definition
 2. **Identify Dependencies**: Map out technical and business dependencies
 3. **Assess Team Capacity**: Consider individual skills and availability
 4. **Review Historical Data**: Analyze similar work and team performance
 
-**Estimation Phase**
+#### Estimation Phase
 
 1. **Individual Estimates**: Team members provide independent estimates
 2. **Discussion and Alignment**: Discuss differences and assumptions
 3. **Consensus Building**: Reach agreement on final estimates
 4. **Documentation**: Record estimates, assumptions, and rationale
 
-**Validation Phase**
+#### Validation Phase
 
 1. **Sanity Checks**: Compare with similar historical work
 2. **Capacity Validation**: Ensure estimates fit within sprint capacity
@@ -185,7 +185,7 @@ Critical   | >80%       | Severe | 2.0x+
 
 ### Tracking and Calibration
 
-**Actual vs. Estimated Tracking**
+#### Actual vs. Estimated Tracking
 
 ```markdown
 Story: User Authentication System
@@ -196,14 +196,14 @@ Reasons: Additional security requirements, third-party library issues
 Lessons: Need better security requirement analysis, research library stability
 ```
 
-**Team Calibration**
+#### Team Calibration
 
 - Track individual estimation accuracy over time
 - Identify systematic over- or under-estimation patterns
 - Adjust estimation approach based on historical performance
 - Share learnings across team members and projects
 
-**Estimation Improvement**
+#### Estimation Improvement
 
 - Regular retrospectives on estimation accuracy
 - Root cause analysis for significant variances
@@ -214,14 +214,14 @@ Lessons: Need better security requirement analysis, research library stability
 
 ### Time Tracking Integration
 
-**Development Tools**
+#### Development Tools
 
 - IDE time tracking plugins and extensions
 - Git commit time analysis and activity tracking
 - Task management tool integration (Jira, Asana, etc.)
 - Calendar blocking and time allocation planning
 
-**Reporting and Analytics**
+#### Reporting and Analytics
 
 - Burndown charts with hour-level granularity
 - Velocity tracking in hours per sprint or week
@@ -230,9 +230,9 @@ Lessons: Need better security requirement analysis, research library stability
 
 ### Capacity Planning
 
-**Individual Capacity**
+#### Individual Capacity
 
-```
+```text
 Developer Available Hours per Sprint:
 Total Sprint Hours: 80 hours (2 weeks × 40 hours)
 - Meetings and overhead: 15 hours
@@ -241,9 +241,9 @@ Total Sprint Hours: 80 hours (2 weeks × 40 hours)
 Available Development Time: 52 hours
 ```
 
-**Team Capacity Aggregation**
+#### Team Capacity Aggregation
 
-```
+```text
 5-Person Team Sprint Capacity:
 Developer A: 52 hours (full-time)
 Developer B: 26 hours (part-time, 50%)
@@ -255,7 +255,7 @@ Total Team Capacity: 210 hours per sprint
 
 ### Advanced Estimation Techniques
 
-**Monte Carlo Simulation**
+#### Monte Carlo Simulation
 
 ```python
 import random
@@ -281,9 +281,9 @@ def monte_carlo_time_estimation(optimistic, most_likely, pessimistic, iterations
     }
 ```
 
-**Earned Value Management (EVM)**
+#### Earned Value Management (EVM)
 
-```
+```text
 Planned Value (PV): Budgeted cost of scheduled work
 Earned Value (EV): Budgeted cost of completed work
 Actual Cost (AC): Actual cost of completed work
@@ -297,21 +297,21 @@ Estimate at Completion (EAC) = Budget at Completion / CPI
 
 ### Estimation Guidelines
 
-**Estimation Granularity**
+#### Estimation Granularity
 
 - Tasks: 2-16 hours (half-day to 2-day maximum)
 - User Stories: 1-5 days (avoid stories larger than 1 sprint)
 - Epics: 1-4 sprints (break down if larger)
 - Initiatives: 1-6 months (high-level planning only)
 
-**Quality Assurance**
+#### Quality Assurance
 
 - Multiple estimators for critical or large items
 - Regular calibration sessions with historical data
 - Documentation of assumptions and dependencies
 - Review and approval process for significant estimates
 
-**Communication and Transparency**
+#### Communication and Transparency
 
 - Clear communication of estimate uncertainty and confidence levels
 - Regular updates on actual vs. estimated progress

@@ -6,7 +6,7 @@ SOLID principles are five fundamental design principles that guide the creation 
 
 ## S - Single Responsibility Principle (SRP)
 
-**"A class should have only one reason to change."**
+#### "A class should have only one reason to change."
 
 ### Core Philosophy
 
@@ -70,7 +70,7 @@ class UserService {
 
 ## O - Open/Closed Principle (OCP)
 
-**"Software entities should be open for extension but closed for modification."**
+#### "Software entities should be open for extension but closed for modification."
 
 ### Extension Strategy
 
@@ -117,7 +117,7 @@ class PaymentService {
 
 ## L - Liskov Substitution Principle (LSP)
 
-**"Objects of a supertype should be replaceable with objects of their subtypes."**
+#### "Objects of a supertype should be replaceable with objects of their subtypes."
 
 ### Substitutability Rules
 
@@ -172,7 +172,7 @@ function processDocuments(documents: Document[]) {
 
 ## I - Interface Segregation Principle (ISP)
 
-**"Clients should not be forced to depend on interfaces they do not use."**
+#### "Clients should not be forced to depend on interfaces they do not use."
 
 ### Interface Design Philosophy
 
@@ -231,7 +231,7 @@ class BackupService implements FileReader, FileCompressor {
 
 ## D - Dependency Inversion Principle (DIP)
 
-**"High-level modules should not depend on low-level modules. Both should depend on abstractions."**
+#### "High-level modules should not depend on low-level modules. Both should depend on abstractions."
 
 ### Dependency Direction Strategy
 
@@ -393,7 +393,7 @@ throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
 }
 }
 
-````
+````text
 
 ## O - Open/Closed Principle (OCP)
 
@@ -403,6 +403,7 @@ Classes should be extensible without modifying existing code.
 
 ### ❌ Violating OCP
 ```typescript
+
 class OrderCalculator {
   calculateTotal(order: Order): number {
     let total = 0;
@@ -421,11 +422,13 @@ class OrderCalculator {
     return total;
   }
 }
+
 ````
 
 ### ✅ Following OCP
 
 ```typescript
+
 // Abstract discount strategy
 interface DiscountStrategy {
   calculateDiscount(price: number): number
@@ -474,17 +477,19 @@ class OrderCalculator {
 const calculator = new OrderCalculator()
 const regularOrder = calculator.calculateTotal(order, new RegularCustomerDiscount())
 const premiumOrder = calculator.calculateTotal(order, new PremiumCustomerDiscount())
+
 ```
 
 ## L - Liskov Substitution Principle (LSP)
 
-**"Objects of a superclass should be replaceable with objects of a subclass without altering correctness."**
+#### "Objects of a superclass should be replaceable with objects of a subclass without altering correctness."
 
 Derived classes must be substitutable for their base classes.
 
 ### ❌ Violating LSP
 
 ```typescript
+
 class Bird {
   fly(): void {
     console.log('Flying...')
@@ -508,11 +513,13 @@ class Penguin extends Bird {
 function makeBirdFly(bird: Bird): void {
   bird.fly() // Will throw error for Penguin
 }
+
 ```
 
 ### ✅ Following LSP
 
 ```typescript
+
 // Base interface for all birds
 interface Bird {
   eat(): void
@@ -565,17 +572,19 @@ function makeFlyingBirdFly(bird: FlyingBird): void {
 function makeSwimmingBirdSwim(bird: SwimmingBird): void {
   bird.swim() // Safe for all swimming birds
 }
+
 ```
 
 ## I - Interface Segregation Principle (ISP)
 
-**"Clients should not be forced to depend on interfaces they do not use."**
+#### "Clients should not be forced to depend on interfaces they do not use."
 
 Create specific, focused interfaces rather than large, monolithic ones.
 
 ### ❌ Violating ISP
 
 ```typescript
+
 // Large interface with mixed responsibilities
 interface Worker {
   work(): void
@@ -636,11 +645,13 @@ class RobotWorker implements Worker {
     console.log('Deploying...')
   }
 }
+
 ```
 
 ### ✅ Following ISP
 
 ```typescript
+
 // Segregated interfaces based on specific capabilities
 interface Workable {
   work(): void
@@ -711,17 +722,19 @@ class RobotWorker implements Workable, Codeable, Testable, Deployable {
 // Specialized interfaces for specific worker types
 interface HumanWorker extends Workable, Eatable, Sleepable {}
 interface AutomatedWorker extends Workable, Deployable {}
+
 ```
 
 ## D - Dependency Inversion Principle (DIP)
 
-**"High-level modules should not depend on low-level modules. Both should depend on abstractions."**
+#### "High-level modules should not depend on low-level modules. Both should depend on abstractions."
 
 Depend on abstractions, not concretions.
 
 ### ❌ Violating DIP
 
 ```typescript
+
 // Low-level modules (concrete implementations)
 class MySQLDatabase {
   save(data: any): void {
@@ -745,11 +758,13 @@ class UserService {
     this.emailService.sendEmail(userData.email, 'Welcome!') // Tightly coupled to EmailService
   }
 }
+
 ```
 
 ### ✅ Following DIP
 
 ```typescript
+
 // Abstractions (interfaces)
 interface Database {
   save(data: any): Promise<void>
@@ -801,6 +816,7 @@ class UserService {
 const database = new PostgreSQLDatabase() // Can easily switch implementations
 const notificationService = new EmailService() // Can easily switch implementations
 const userService = new UserService(database, notificationService)
+
 ```
 
 ## Practical Applications in TypeScript
@@ -808,6 +824,7 @@ const userService = new UserService(database, notificationService)
 ### Repository Pattern with SOLID
 
 ```typescript
+
 // Abstraction for data access
 interface Repository<T, ID> {
   findById(id: ID): Promise<T | null>
@@ -849,11 +866,13 @@ class UserRepository extends BaseRepository<User, string> {
     await this.executeQuery('DELETE FROM users WHERE id = ?', [id])
   }
 }
+
 ```
 
 ### Service Layer with Dependency Injection
 
 ```typescript
+
 // Service abstraction
 interface UserService {
   createUser(userData: CreateUserRequest): Promise<User>
@@ -897,6 +916,7 @@ class UserServiceImpl implements UserService {
     return this.userRepository.findById(id)
   }
 }
+
 ```
 
 ## Benefits of SOLID Principles

@@ -10,7 +10,7 @@ This document defines comprehensive version control standards for our developmen
 
 #### Standard Repository Layout
 
-```
+```text
 project-root/
 ├── .git/                          # Git metadata
 ├── .github/                       # GitHub-specific files
@@ -290,7 +290,7 @@ git config --local commit.template .gitmessage
 
 #### Version Format
 
-```
+```text
 MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]
 ```
 
@@ -304,7 +304,7 @@ MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]
 
 #### Examples
 
-```
+```text
 1.0.0          # Initial release
 1.0.1          # Bug fix
 1.1.0          # New feature
@@ -398,7 +398,7 @@ jobs:
 
 #### Conventional Commits
 
-```
+```text
 <type>[optional scope]: <description>
 
 [optional body]

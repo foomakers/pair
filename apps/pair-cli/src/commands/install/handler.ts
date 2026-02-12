@@ -1,13 +1,7 @@
 import type { InstallCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
 import { dirname } from 'path'
-import {
-  loadConfigWithOverrides,
-  getKnowledgeHubDatasetPath,
-  getKnowledgeHubDatasetPathWithFallback,
-  ensureDir,
-} from '#config'
-
+import { loadConfigWithOverrides, resolveDatasetRoot, ensureDir } from '#config'
 import { createLogger, type LogEntry } from '#diagnostics'
 import {
   extractRegistries,
@@ -19,13 +13,13 @@ import {
   checkTargetsEmptiness,
   doCopyAndUpdateLinks,
   buildCopyOptions,
-  distributeToSecondaryTargets,
-  stripMarkersFromTarget,
+  postCopyOps,
+  applySkillRefsToNonSkillRegistries,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
-import { installKBFromLocalZip } from '#kb-manager/kb-installer'
+import { type SkillNameMap } from '@pair/content-ops'
 
 /**
  * Install options for handler
@@ -74,7 +68,10 @@ async function setupInstallContext(
   registries: Record<string, RegistryConfig>
   baseTarget: string
 }> {
-  const datasetRoot = await resolveDatasetRoot(fs, config, options)
+  const datasetRoot = await resolveDatasetRoot(fs, config, {
+    cliVersion: options?.cliVersion,
+    httpClient: options?.httpClient,
+  })
   const configOptions: { customConfigPath?: string; projectRoot?: string } = {}
   if (options?.config) configOptions.customConfigPath = options.config
   const configContent = loadConfigWithOverrides(fs, configOptions)
@@ -85,7 +82,7 @@ async function setupInstallContext(
     throw new Error(validation.errors.join('; ') || 'Invalid registry configuration')
   }
 
-  const baseTarget = config.target || options?.baseTarget || fs.currentWorkingDirectory()
+  const baseTarget = options?.baseTarget || config.target || fs.currentWorkingDirectory()
   return { datasetRoot, registries, baseTarget }
 }
 
@@ -107,7 +104,7 @@ async function installRegistry(ctx: {
   datasetRoot: string
   baseTarget: string
   pushLog: (level: LogEntry['level'], message: string) => void
-}): Promise<void> {
+}): Promise<SkillNameMap | undefined> {
   const { fs, registryName, registryConfig, datasetRoot, baseTarget, pushLog } = ctx
   const resolved = resolveRegistryPaths({
     name: registryName,
@@ -120,32 +117,23 @@ async function installRegistry(ctx: {
   const effectiveTarget = resolved.target
   await ensureDir(fs, dirname(effectiveTarget))
   const copyOptions = buildCopyOptions(registryConfig)
+
+  // For flatten+prefix registries (skills), use baseTarget as the effective
+  // datasetRoot so that link re-rooting correctly maps source paths to target paths.
+  const effectiveDatasetRoot =
+    registryConfig.flatten || registryConfig.prefix ? baseTarget : datasetRoot
+
   pushLog('info', `Installing '${registryName}' from '${datasetPath}' to '${effectiveTarget}'`)
-  await doCopyAndUpdateLinks(fs, {
+  const result = await doCopyAndUpdateLinks(fs, {
     source: datasetPath,
     target: effectiveTarget,
-    datasetRoot,
+    datasetRoot: effectiveDatasetRoot,
     options: copyOptions,
   })
 
-  const canonicalTarget = registryConfig.targets.find(t => t.mode === 'canonical')
-  if (await fs.exists(effectiveTarget)) {
-    const stat = await fs.stat(effectiveTarget)
-    if (!stat.isDirectory()) {
-      await stripMarkersFromTarget(fs, effectiveTarget, canonicalTarget?.transform)
-    }
-  }
-
-  if (registryConfig.targets.length > 1) {
-    await distributeToSecondaryTargets({
-      fileService: fs,
-      sourcePath: datasetPath,
-      targets: registryConfig.targets,
-      baseTarget,
-    })
-  }
-
+  await postCopyOps({ fs, registryConfig, effectiveTarget, datasetPath, baseTarget })
   pushLog('info', `Successfully installed registry '${registryName}'`)
+  return result['skillNameMap'] as SkillNameMap | undefined
 }
 
 async function executeInstall(context: {
@@ -157,43 +145,32 @@ async function executeInstall(context: {
   pushLog: (level: LogEntry['level'], message: string) => void
 }): Promise<void> {
   const { fs, datasetRoot, registries, baseTarget, options, pushLog } = context
+  const accumulatedSkillNameMap: SkillNameMap = new Map()
 
   await forEachRegistry(registries, async (registryName, registryConfig) => {
-    await installRegistry({ fs, registryName, registryConfig, datasetRoot, baseTarget, pushLog })
+    const skillNameMap = await installRegistry({
+      fs,
+      registryName,
+      registryConfig,
+      datasetRoot,
+      baseTarget,
+      pushLog,
+    })
+    if (skillNameMap) {
+      for (const [k, v] of skillNameMap) accumulatedSkillNameMap.set(k, v)
+    }
   })
+
+  if (accumulatedSkillNameMap.size > 0) {
+    await applySkillRefsToNonSkillRegistries(
+      { fs, baseTarget, pushLog },
+      registries,
+      accumulatedSkillNameMap,
+    )
+  }
 
   if (options?.linkStyle) {
     await applyLinkTransformation(fs, { linkStyle: options.linkStyle }, pushLog, 'install')
-  }
-}
-
-/**
- * Resolve dataset root based on install config resolution strategy
- */
-async function resolveDatasetRoot(
-  fs: FileSystemService,
-  config: InstallCommandConfig,
-  options?: InstallHandlerOptions,
-): Promise<string> {
-  const version = options?.cliVersion || '0.0.0'
-
-  switch (config.resolution) {
-    case 'default':
-      return getKnowledgeHubDatasetPath(fs)
-
-    case 'remote':
-      return getKnowledgeHubDatasetPathWithFallback({
-        fsService: fs,
-        version,
-        ...(options?.httpClient && { httpClient: options.httpClient }),
-        customUrl: config.url,
-      })
-
-    case 'local':
-      if (config.path.endsWith('.zip')) {
-        return installKBFromLocalZip(version, config.path, fs)
-      }
-      return config.path
   }
 }
 
@@ -212,7 +189,6 @@ async function validateAllTargetsBeforeInstall(
     targets[registryName] = effectiveTarget
   }
 
-  // Check for overlapping targets
   const overlapping = detectOverlappingTargets(targets)
   if (overlapping.length > 0) {
     return {
@@ -221,7 +197,6 @@ async function validateAllTargetsBeforeInstall(
     }
   }
 
-  // Check all targets are empty (for mirror behavior)
   const emptyCheck = await checkTargetsEmptiness(targets, fs)
   if (!emptyCheck.valid && emptyCheck.errors.length > 0) {
     const errorMsg = emptyCheck.errors.map(e => `${e.registry}: ${e.error}`).join('; ')

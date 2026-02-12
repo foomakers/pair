@@ -31,9 +31,9 @@ Color contrast is a fundamental aspect of accessible and inclusive design that e
 
 ### Contrast Ratio Requirements
 
-**WCAG 2.1 Contrast Levels**
+#### WCAG 2.1 Contrast Levels
 
-```
+```text
 Contrast Ratio Standards:
 ├── Level AA (Standard)
 │   ├── Normal Text: 4.5:1 minimum
@@ -52,9 +52,9 @@ Contrast Ratio Standards:
     └── Logotypes and brand names
 ```
 
-**Calculation Formula**
+#### Calculation Formula
 
-```
+```text
 Contrast Ratio = (Lighter Color + 0.05) / (Darker Color + 0.05)
 
 Where luminance values range from 0 (black) to 1 (white)
@@ -62,7 +62,7 @@ Where luminance values range from 0 (black) to 1 (white)
 
 ### Text Contrast Implementation
 
-**Text Hierarchy Contrast**
+#### Text Hierarchy Contrast
 
 - **Headings**: Maximum contrast for hierarchy clarity
 - **Body Text**: Optimal readability balance
@@ -70,7 +70,7 @@ Where luminance values range from 0 (black) to 1 (white)
 - **Disabled Text**: Clear disabled state indication
 - **Link Text**: Distinguishable from body text
 
-**Text Background Combinations**
+#### Text Background Combinations
 
 ```scss
 // Example accessible color combinations
@@ -89,14 +89,14 @@ $background: #ffffff; // White
 
 ### Visual Impairment Accommodations
 
-**Color Blindness Considerations**
+#### Color Blindness Considerations
 
 - **Deuteranopia**: Red-green color blindness (most common)
 - **Protanopia**: Red color blindness
 - **Tritanopia**: Blue-yellow color blindness
 - **Monochromacy**: Complete color blindness
 
-**Color-Independent Design**
+#### Color-Independent Design
 
 - **Pattern Usage**: Textures and patterns for differentiation
 - **Shape Variation**: Different shapes for categorization
@@ -106,7 +106,7 @@ $background: #ffffff; // White
 
 ### Low Vision Accommodations
 
-**High Contrast Support**
+#### High Contrast Support
 
 - **System Integration**: Operating system high contrast mode
 - **Custom High Contrast**: User-selectable high contrast themes
@@ -114,7 +114,7 @@ $background: #ffffff; // White
 - **Reduced Complexity**: Simplified color schemes
 - **User Controls**: Contrast adjustment options
 
-**Light Sensitivity Considerations**
+#### Light Sensitivity Considerations
 
 - **Dark Mode Support**: Low-light environment optimization
 - **Brightness Controls**: User-adjustable brightness
@@ -127,17 +127,17 @@ $background: #ffffff; // White
 ### Testing Tools and Methods
 
 **Automated Testing Tools**
-| Tool | Platform | Features | Best For |
-|------|----------|----------|----------|
-| **Colour Contrast Analyser** | Desktop | WCAG validation, color picker | Design validation |
-| **WebAIM Contrast Checker** | Web | Quick ratio checking | Quick validation |
-| **Stark (Figma/Sketch)** | Design Tools | Design integration | Design workflow |
-| **axe DevTools** | Browser Extension | Real-time testing | Development |
-| **Lighthouse** | Browser/CI | Automated auditing | CI/CD integration |
+| Tool                         | Platform          | Features                      | Best For          |
+| ---------------------------- | ----------------- | ----------------------------- | ----------------- |
+| **Colour Contrast Analyser** | Desktop           | WCAG validation, color picker | Design validation |
+| **WebAIM Contrast Checker**  | Web               | Quick ratio checking          | Quick validation  |
+| **Stark (Figma/Sketch)**     | Design Tools      | Design integration            | Design workflow   |
+| **axe DevTools**             | Browser Extension | Real-time testing             | Development       |
+| **Lighthouse**               | Browser/CI        | Automated auditing            | CI/CD integration |
 
-**Manual Testing Procedures**
+#### Manual Testing Procedures
 
-```
+```text
 Manual Contrast Testing Process:
 ├── Color Picker Sampling
 │   ├── Sample foreground color
@@ -163,7 +163,7 @@ Manual Contrast Testing Process:
 
 ### Simulation and Testing
 
-**Color Vision Simulation**
+#### Color Vision Simulation
 
 - **Deuteranopia Simulation**: Red-green color blindness testing
 - **Protanopia Simulation**: Red color blindness testing
@@ -171,7 +171,7 @@ Manual Contrast Testing Process:
 - **Monochromacy Simulation**: Grayscale testing
 - **Combined Testing**: Multiple condition simulation
 
-**Environmental Testing**
+#### Environmental Testing
 
 - **Bright Light Conditions**: Outdoor visibility testing
 - **Low Light Conditions**: Indoor/evening usage
@@ -183,9 +183,9 @@ Manual Contrast Testing Process:
 
 ### Palette Development
 
-**Accessible Color Palette Creation**
+#### Accessible Color Palette Creation
 
-```
+```text
 Color Palette Structure:
 ├── Primary Colors
 │   ├── Primary 50 (lightest)
@@ -207,7 +207,7 @@ Color Palette Structure:
     └── Gray 900 (darkest)
 ```
 
-**Contrast Matrix Validation**
+#### Contrast Matrix Validation
 
 - **Background Combinations**: All background color tests
 - **Text Combinations**: All text color validations
@@ -217,7 +217,7 @@ Color Palette Structure:
 
 ### Component-Level Contrast
 
-**Button Contrast Standards**
+#### Button Contrast Standards
 
 ```scss
 // Button contrast examples
@@ -239,7 +239,7 @@ Color Palette Structure:
 }
 ```
 
-**Form Element Contrast**
+#### Form Element Contrast
 
 - **Input Fields**: Border and background contrast
 - **Labels**: Clear text association
@@ -251,9 +251,9 @@ Color Palette Structure:
 
 ### Dark Mode Implementation
 
-**Dark Mode Color Strategy**
+#### Dark Mode Color Strategy
 
-```
+```text
 Dark Mode Principles:
 ├── Reduced Luminance
 │   ├── Dark backgrounds (not pure black)
@@ -272,7 +272,7 @@ Dark Mode Principles:
     └── User preference respect
 ```
 
-**Dark Mode Color Mapping**
+#### Dark Mode Color Mapping
 
 - **Background Colors**: Deep grays instead of pure black
 - **Text Colors**: Off-white instead of pure white
@@ -282,7 +282,7 @@ Dark Mode Principles:
 
 ### Multi-Theme Support
 
-**Theme Switching Considerations**
+#### Theme Switching Considerations
 
 - **Contrast Preservation**: Ratios maintained across themes
 - **Transition Smoothness**: Gradual theme changes
@@ -290,7 +290,7 @@ Dark Mode Principles:
 - **Context Awareness**: Time-based automatic switching
 - **Performance**: Efficient theme rendering
 
-**Theme Testing Requirements**
+#### Theme Testing Requirements
 
 - **Cross-Theme Validation**: All themes tested for contrast
 - **Transition Testing**: Switch animation accessibility
@@ -302,7 +302,7 @@ Dark Mode Principles:
 
 ### User Customization Options
 
-**Contrast Controls**
+#### Contrast Controls
 
 - **Contrast Slider**: User-adjustable contrast levels
 - **High Contrast Toggle**: Enhanced visibility mode
@@ -310,7 +310,7 @@ Dark Mode Principles:
 - **Brightness Control**: Display intensity adjustment
 - **Custom Themes**: User-created color schemes
 
-**Accessibility Preferences**
+#### Accessibility Preferences
 
 ```javascript
 // Example accessibility preference API
@@ -330,7 +330,7 @@ const accessibilitySettings = {
 
 ### Adaptive Contrast
 
-**Environmental Adaptation**
+#### Environmental Adaptation
 
 - **Ambient Light Sensing**: Automatic contrast adjustment
 - **Time-Based Adjustment**: Day/night optimization
@@ -338,7 +338,7 @@ const accessibilitySettings = {
 - **Device Orientation**: Portrait/landscape optimization
 - **Battery Level**: Power-saving contrast modes
 
-**AI-Powered Optimization**
+#### AI-Powered Optimization
 
 - **User Behavior Learning**: Personal preference adaptation
 - **Content Analysis**: Context-appropriate contrast
@@ -350,7 +350,7 @@ const accessibilitySettings = {
 
 ### Efficient Contrast Implementation
 
-**CSS Custom Properties**
+#### CSS Custom Properties
 
 ```css
 :root {
@@ -372,7 +372,7 @@ const accessibilitySettings = {
 }
 ```
 
-**Runtime Contrast Validation**
+#### Runtime Contrast Validation
 
 ```javascript
 // Real-time contrast checking
@@ -389,7 +389,7 @@ function validateContrast(foreground, background) {
 
 ### Performance Optimization
 
-**Contrast Calculation Efficiency**
+#### Contrast Calculation Efficiency
 
 - **Precomputed Values**: Cached contrast ratios
 - **GPU Acceleration**: Hardware-accelerated calculations
@@ -397,7 +397,7 @@ function validateContrast(foreground, background) {
 - **Lazy Evaluation**: On-demand contrast checking
 - **Memoization**: Result caching for repeated calculations
 
-**Bundle Size Optimization**
+#### Bundle Size Optimization
 
 - **Critical Contrast**: Essential contrast values only
 - **Dynamic Loading**: Theme-specific loading

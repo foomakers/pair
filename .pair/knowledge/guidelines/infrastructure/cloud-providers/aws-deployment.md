@@ -34,7 +34,7 @@ Comprehensive guide for deploying applications on Amazon Web Services, covering 
 
 ### 1. Traditional Three-Tier Architecture
 
-```
+```text
 Internet Gateway
     ↓
 Application Load Balancer (Public Subnet)
@@ -50,7 +50,7 @@ RDS Database (Private Subnet)
 
 ### 2. Containerized Microservices
 
-```
+```text
 CloudFront CDN
     ↓
 Application Load Balancer
@@ -66,7 +66,7 @@ RDS/DynamoDB (Multi-AZ)
 
 ### 3. Serverless Architecture
 
-```
+```text
 CloudFront CDN
     ↓
 API Gateway

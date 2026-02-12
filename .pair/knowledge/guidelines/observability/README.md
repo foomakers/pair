@@ -6,7 +6,7 @@ Define comprehensive monitoring, logging, and alerting strategies that provide v
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Monitoring, logging, and alerting strategies at application-level
 - Observability tools and instrumentation
@@ -19,7 +19,7 @@ Define comprehensive monitoring, logging, and alerting strategies that provide v
 - Distributed tracing implementation
 - Structured logging standards
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Infrastructure monitoring and hardware metrics (see Infrastructure Guidelines)
 - Business intelligence and analytics (refer to dedicated BI documentation)
@@ -58,35 +58,35 @@ Observability extends beyond traditional monitoring by providing context-rich da
 
 | Tool               | Metrics | Logs    | Traces  | AI Features | Cost       | Best For               |
 | ------------------ | ------- | ------- | ------- | ----------- | ---------- | ---------------------- |
-| DataDog            | ✅      | ✅      | ✅      | ✅          | High       | Enterprise teams       |
-| New Relic          | ✅      | ✅      | ✅      | ✅          | High       | APM-focused orgs       |
-| Grafana Stack      | ✅      | ✅      | ✅      | Partial     | Low-Medium | Open source preference |
-| ELK Stack          | Partial | ✅      | Partial | Limited     | Medium     | Log-centric approach   |
-| Prometheus/Grafana | ✅      | Limited | Limited | No          | Low        | Metrics-focused        |
+| DataDog            | ✅       | ✅       | ✅       | ✅           | High       | Enterprise teams       |
+| New Relic          | ✅       | ✅       | ✅       | ✅           | High       | APM-focused orgs       |
+| Grafana Stack      | ✅       | ✅       | ✅       | Partial     | Low-Medium | Open source preference |
+| ELK Stack          | Partial | ✅       | Partial | Limited     | Medium     | Log-centric approach   |
+| Prometheus/Grafana | ✅       | Limited | Limited | No          | Low        | Metrics-focused        |
 
 ### Decision Matrix
 
-**Choose DataDog if:**
+#### Choose DataDog if:
 
 - Enterprise-level support needed
 - Comprehensive AI features required
 - Budget allows for premium solution
 - Multi-cloud monitoring needed
 
-**Choose New Relic if:**
+#### Choose New Relic if:
 
 - Application performance monitoring is primary focus
 - Strong alerting capabilities needed
 - Integration with existing APM tools
 
-**Choose Grafana Stack if:**
+#### Choose Grafana Stack if:
 
 - Open source preference
 - Custom dashboard requirements
 - Kubernetes-native deployments
 - Cost optimization important
 
-**Choose ELK Stack if:**
+#### Choose ELK Stack if:
 
 - Log analysis is primary requirement
 - Search capabilities critical
@@ -94,7 +94,7 @@ Observability extends beyond traditional monitoring by providing context-rich da
 
 ## Decision Tree
 
-```
+```text
 Do you need enterprise support and budget allows?
 ├── Yes → Consider DataDog or New Relic
 │   ├── APM-focused? → New Relic
@@ -109,14 +109,14 @@ Do you need enterprise support and budget allows?
 
 ### High-Cost Solutions (DataDog, New Relic)
 
-**Benefits:**
+#### Benefits:
 
 - Comprehensive feature set
 - Enterprise support
 - AI-powered insights
 - Minimal setup time
 
-**Costs:**
+#### Costs:
 
 - High licensing fees
 - Potential vendor lock-in
@@ -124,13 +124,13 @@ Do you need enterprise support and budget allows?
 
 ### Medium-Cost Solutions (Grafana Cloud, Hosted ELK)
 
-**Benefits:**
+#### Benefits:
 
 - Good feature balance
 - Moderate support
 - Some customization
 
-**Costs:**
+#### Costs:
 
 - Monthly hosting fees
 - Limited scalability
@@ -138,13 +138,13 @@ Do you need enterprise support and budget allows?
 
 ### Low-Cost Solutions (Self-hosted Open Source)
 
-**Benefits:**
+#### Benefits:
 
 - Full control and customization
 - No licensing fees
 - Community support
 
-**Costs:**
+#### Costs:
 
 - High operational overhead
 - Setup and maintenance time

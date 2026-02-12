@@ -63,7 +63,7 @@ git remote prune origin
 
 #### Structure
 
-```
+```text
 <type>(<scope>): <description>
 
 [optional body]
@@ -167,7 +167,7 @@ git rebase main
 
 #### PR Title Format
 
-```
+```text
 <type>(<scope>): <description>
 ```
 

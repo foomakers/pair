@@ -8,7 +8,7 @@ Establish security by design principles that embed security considerations into 
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Security requirements integration in project planning
 - Threat modeling during architecture and design phases
@@ -16,7 +16,7 @@ Establish security by design principles that embed security considerations into 
 - Security testing integration in CI/CD pipelines
 - Security architecture review and validation processes
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Specific security tool configurations (covered in implementation guides)
 - Compliance and regulatory requirement details

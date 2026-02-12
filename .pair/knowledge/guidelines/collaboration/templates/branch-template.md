@@ -13,7 +13,7 @@
 
 ### Standard Format
 
-```
+```text
 <type>/<story-id>-<brief-description>
 ```
 
@@ -28,7 +28,7 @@
 
 ### Naming Examples
 
-```
+```text
 feature/US-123-user-authentication
 bug/BUG-456-login-validation-error
 hotfix/HOT-789-payment-processing-fix
@@ -155,7 +155,7 @@ git remote prune origin
 
 #### Git Flow Model
 
-```
+```text
 main
 ├── develop
 │   ├── feature/US-123-authentication
@@ -167,7 +167,7 @@ main
 
 #### GitHub Flow Model
 
-```
+```text
 main
 ├── feature/US-123-authentication
 ├── feature/US-124-user-profile
@@ -178,7 +178,7 @@ main
 
 #### User Story Branches
 
-```
+```text
 feature/US-[story-number]-[brief-description]
 feature/US-123-user-authentication
 feature/US-124-profile-management
@@ -186,7 +186,7 @@ feature/US-124-profile-management
 
 #### Bug Fix Branches
 
-```
+```text
 bug/BUG-[bug-number]-[brief-description]
 bug/BUG-456-login-validation
 bug/BUG-789-payment-error
@@ -194,7 +194,7 @@ bug/BUG-789-payment-error
 
 #### Task Branches
 
-```
+```text
 chore/TASK-[task-number]-[brief-description]
 chore/TASK-321-update-dependencies
 chore/TASK-654-refactor-api-client
@@ -202,7 +202,7 @@ chore/TASK-654-refactor-api-client
 
 #### Hotfix Branches
 
-```
+```text
 hotfix/[severity]-[brief-description]
 hotfix/critical-payment-processing
 hotfix/security-user-data-leak
@@ -222,7 +222,7 @@ git commit -m "docs(auth): update API documentation for auth endpoints"
 
 ### Commit Message Format
 
-```
+```text
 <type>(<scope>): <description>
 
 <optional body>
@@ -372,7 +372,7 @@ git checkout -b hotfix/critical-security-fix
 
 ### Feature Branch Template
 
-```
+```text
 Branch: feature/US-[ID]-[description]
 Purpose: Implement new functionality
 Base: develop (or main for GitHub Flow)
@@ -381,7 +381,7 @@ Lifecycle: Create → Develop → PR → Review → Merge → Delete
 
 ### Bug Fix Branch Template
 
-```
+```text
 Branch: bug/BUG-[ID]-[description]
 Purpose: Fix identified issues
 Base: develop (or main for hotfixes)
@@ -390,7 +390,7 @@ Lifecycle: Create → Fix → Test → PR → Review → Merge → Delete
 
 ### Chore Branch Template
 
-```
+```text
 Branch: chore/TASK-[ID]-[description]
 Purpose: Maintenance, refactoring, tooling
 Base: develop (or main)
@@ -399,7 +399,7 @@ Lifecycle: Create → Work → PR → Review → Merge → Delete
 
 ### Release Branch Template
 
-```
+```text
 Branch: release/v[version]
 Purpose: Release preparation and stabilization
 Base: develop

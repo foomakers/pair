@@ -8,7 +8,7 @@ Create systematic consistency standards that enable users to develop mental mode
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Visual consistency standards and implementation guidelines
 - Interaction pattern standardization and behavior consistency
@@ -16,7 +16,7 @@ Create systematic consistency standards that enable users to develop mental mode
 - Cross-platform and multi-device consistency strategies
 - Brand consistency integration with user experience standards
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Specific design tool configurations and technical implementations (covered in Level 3 guides)
 - Brand guidelines and marketing material standards (covered in brand guidelines)

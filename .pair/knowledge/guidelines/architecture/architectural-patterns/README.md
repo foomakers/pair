@@ -4,7 +4,7 @@
 
 This section covers architectural patterns for application design and structure:
 
-**In Scope:**
+#### In Scope:
 
 - Application architecture patterns and their implementation
 - Pattern selection criteria based on domain complexity
@@ -12,7 +12,7 @@ This section covers architectural patterns for application design and structure:
 - Performance and maintainability trade-offs
 - Pattern evolution and migration strategies
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Deployment architectures (covered in Deployment Architectures)
 - Infrastructure patterns (covered in Infrastructure)
@@ -108,42 +108,42 @@ flowchart TD
 
 ### Selection Criteria
 
-**Choose CRUD when:**
+#### Choose CRUD when:
 
 - Simple data management requirements
 - Rapid prototyping or MVP development
 - Small team with limited architectural experience
 - Direct database operations are sufficient
 
-**Choose Transaction Script when:**
+#### Choose Transaction Script when:
 
 - Procedural business logic
 - Legacy system integration requirements
 - Simple workflow management
 - Straightforward transaction management
 
-**Choose Hexagonal when:**
+#### Choose Hexagonal when:
 
 - External system integration is critical
 - High testability requirements
 - Clear business logic boundaries
 - Port and adapter pattern benefits
 
-**Choose Clean Architecture when:**
+#### Choose Clean Architecture when:
 
 - Complex business rules and policies
 - Long-term maintainability is critical
 - Enterprise-level applications
 - Multiple user interfaces or delivery mechanisms
 
-**Choose CQRS when:**
+#### Choose CQRS when:
 
 - Different read/write performance requirements
 - Complex query patterns
 - Separate scaling needs for reads and writes
 - Multiple data projection needs
 
-**Choose Event Sourcing when:**
+#### Choose Event Sourcing when:
 
 - Audit trail requirements
 - Temporal data analysis needs
@@ -186,14 +186,14 @@ flowchart TD
 
 ### Development Speed vs. Long-term Maintainability
 
-```
+```text
 Fast Development     →     Long-term Maintainability
      CRUD    →    Layered    →    Hexagonal    →    Clean
 ```
 
 ### Complexity vs. Benefits
 
-```
+```text
 Low Complexity/Benefits  →  High Complexity/Benefits
     CRUD → Layered → Hexagonal → Clean → CQRS → Event Sourcing
 ```
@@ -209,42 +209,42 @@ Low Complexity/Benefits  →  High Complexity/Benefits
 
 ### Pattern Selection Criteria
 
-**Choose CRUD when:**
+#### Choose CRUD when:
 
 - Simple CRUD operations dominate
 - Minimal business logic
 - Fast development required
 - Small team or prototype
 
-**Choose Layered when:**
+#### Choose Layered when:
 
 - Traditional enterprise application
 - Clear layer responsibilities
 - Team familiar with pattern
 - Moderate complexity
 
-**Choose Hexagonal when:**
+#### Choose Hexagonal when:
 
 - High testability required
 - Multiple adapters needed
 - Dependency inversion important
 - External integrations complex
 
-**Choose Clean when:**
+#### Choose Clean when:
 
 - Complex business rules
 - Domain expertise critical
 - Long-term maintainability
 - Team experienced with DDD
 
-**Choose CQRS when:**
+#### Choose CQRS when:
 
 - Different read/write models
 - Performance optimization needed
 - Separate query optimization
 - Event-driven architecture
 
-**Choose Event Sourcing when:**
+#### Choose Event Sourcing when:
 
 - Audit trail required
 - Event replay needed

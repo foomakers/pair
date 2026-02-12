@@ -5,6 +5,7 @@ import {
   FileSystemService,
   type TargetConfig,
   type TransformConfig,
+  type CopyPathOpsResult,
   stripAllMarkers,
   applyTransformCommands,
   validateMarkers,
@@ -38,7 +39,7 @@ export async function doCopyAndUpdateLinks(
 
   const stat = await fsService.stat(srcPath)
   if (stat.isDirectory()) {
-    await copyDirectory(fsService, {
+    return await copyDirectory(fsService, {
       srcPath,
       tgtPath,
       source,
@@ -64,10 +65,10 @@ async function copyDirectory(
     datasetRoot: string
     options?: SyncOptions
   },
-): Promise<void> {
+): Promise<CopyPathOpsResult> {
   const { srcPath, tgtPath, source, target, datasetRoot, options } = ctx
   if (options?.flatten || options?.prefix) {
-    await copyDirectoryWithTransforms({
+    return await copyDirectoryWithTransforms({
       fileService: fsService,
       srcPath,
       destPath: tgtPath,
@@ -85,6 +86,7 @@ async function copyDirectory(
       ...(options?.folderBehavior && { folderBehavior: options.folderBehavior }),
       datasetRoot,
     })
+    return {}
   }
 }
 
@@ -228,6 +230,35 @@ export async function distributeToSecondaryTargets(params: {
     } else if (target.mode === 'copy') {
       await fileService.copy(canonicalPath, targetPath)
     }
+  }
+}
+
+/**
+ * Post-copy operations for a registry: strips markers from file targets
+ * and distributes content to secondary targets (symlinks, copies).
+ */
+export async function postCopyOps(ctx: {
+  fs: FileSystemService
+  registryConfig: RegistryConfig
+  effectiveTarget: string
+  datasetPath: string
+  baseTarget: string
+}): Promise<void> {
+  const { fs, registryConfig, effectiveTarget, datasetPath, baseTarget } = ctx
+  const canonicalTarget = registryConfig.targets.find(t => t.mode === 'canonical')
+  if (await fs.exists(effectiveTarget)) {
+    const stat = await fs.stat(effectiveTarget)
+    if (!stat.isDirectory()) {
+      await stripMarkersFromTarget(fs, effectiveTarget, canonicalTarget?.transform)
+    }
+  }
+  if (registryConfig.targets.length > 1) {
+    await distributeToSecondaryTargets({
+      fileService: fs,
+      sourcePath: datasetPath,
+      targets: registryConfig.targets,
+      baseTarget,
+    })
   }
 }
 

@@ -4,7 +4,7 @@ Architecture pattern that persists domain events as the source of truth, enablin
 
 ## When to Use
 
-**Ideal for:**
+#### Ideal for:
 
 - Audit trail requirements
 - Event replay needed
@@ -12,7 +12,7 @@ Architecture pattern that persists domain events as the source of truth, enablin
 - High data integrity needs
 - Complex business workflows
 
-**Avoid when:**
+#### Avoid when:
 
 - Simple data requirements
 - No audit trail needed

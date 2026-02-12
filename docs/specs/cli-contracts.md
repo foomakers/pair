@@ -22,7 +22,7 @@ This document defines the formal contracts for all CLI commands including:
 export interface CommandOptions {
   datasetRoot?: string
   customConfigPath?: string
-  baseTarget?: string
+  baseTarget?: string // Target resolution: INIT_CWD (pnpm) > [target] arg > CWD
   useDefaults?: boolean
   minLogLevel?: 'trace' | 'debug' | 'info' | 'warn' | 'error'
 }

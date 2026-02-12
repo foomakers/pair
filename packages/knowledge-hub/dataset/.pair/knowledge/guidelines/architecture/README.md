@@ -4,7 +4,7 @@
 
 This section covers high-level architectural patterns, decisions, and design strategies:
 
-**In Scope:**
+#### In Scope:
 
 - System architecture patterns and design principles
 - Architectural decision frameworks and documentation
@@ -14,7 +14,7 @@ This section covers high-level architectural patterns, decisions, and design str
 - LLM integration and AI-driven architecture
 - Deployment architecture strategies
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Code-level implementation patterns (covered in Code Design)
 - Infrastructure deployment specifics (covered in Infrastructure)
@@ -105,21 +105,21 @@ flowchart TD
 
 ### Selection Criteria Framework
 
-**Choose Simple Patterns when:**
+#### Choose Simple Patterns when:
 
 - Team has limited architectural experience
 - Time-to-market is critical
 - Domain is well-understood and stable
 - Scale requirements are predictable
 
-**Choose Complex Patterns when:**
+#### Choose Complex Patterns when:
 
 - System scale requires distributed architecture
 - Domain complexity justifies the overhead
 - Team has strong architectural capabilities
 - Long-term evolution is prioritized over speed
 
-**Choose Event-Driven Patterns when:**
+#### Choose Event-Driven Patterns when:
 
 - System has many integration points
 - Audit trails and temporal data are required

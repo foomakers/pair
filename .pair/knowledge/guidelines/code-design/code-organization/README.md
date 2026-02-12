@@ -10,14 +10,14 @@ Define clear organizational patterns that support efficient development, reduce 
 
 ### Project Structure and Layout
 
-**[Workspace Structure](workspace-structure.md)**
+#### [Workspace Structure](workspace-structure.md)
 
 - Monorepo organization with clear separation of concerns
 - Application and package boundaries and responsibilities
 - Shared code and utility organization strategies
 - Cross-project dependency management and versioning
 
-**[File Structure](file-structure.md)**
+#### [File Structure](file-structure.md)
 
 - Feature-based vs. technical layer organization approaches
 - Directory naming and hierarchy conventions
@@ -26,14 +26,14 @@ Define clear organizational patterns that support efficient development, reduce 
 
 ### Naming and Conventions
 
-**[Naming Conventions](naming-conventions.md)**
+#### [Naming Conventions](naming-conventions.md)
 
 - Consistent naming patterns across files, functions, and components
 - File and directory naming standards (kebab-case, camelCase, PascalCase)
 - Variable, function, and class naming conventions
 - Interface and type naming patterns for TypeScript
 
-**[Feature Architecture](feature-architecture.md)**
+#### [Feature Architecture](feature-architecture.md)
 
 - Feature-based architecture principles and implementation
 - Feature module boundaries and public API design

@@ -52,7 +52,7 @@
 - [ ] **Data Consistency**: Transaction boundaries and consistency requirements
 - [ ] **Development Velocity**: Time-to-market vs long-term maintainability
 
-**Decision Framework:**
+#### Decision Framework:
 
 - **Type A Projects**: Default to Modular Monolith (unless learning microservices)
 - **Type B Projects**: Modular Monolith with microservice preparation
@@ -339,30 +339,30 @@
 
 ### Example 1: Type A - Pet Project Portfolio (Updated)
 
-**Project Input:**
+#### Project Input:
 
 - **Context**: Developer portfolio + personal blog
 - **Team**: 1 person (part-time, weekends)
 - **Budget**: €0-20/month
 - **Goal**: Showcase skills, learn modern tech, SEO-friendly
 
-**Architecture Foundation Decisions:**
+#### Architecture Foundation Decisions:
 
 - ✅ **Monolith vs Microservices**: Modular Monolith → _Single Next.js application_
 - ✅ **Architectural Style**: Layered → _Pages/Components/Utils structure_
 - ✅ **Data Strategy**: Static + Headless CMS → _Markdown files + optional Sanity_
 
-**Process Methodology Decisions:**
+#### Process Methodology Decisions:
 
 - ✅ **Iteration Model**: Kanban → _Feature-based development, no sprints_
 - ✅ **Release Strategy**: Continuous deployment → _Vercel auto-deploy on push_
 - ✅ **Quality Gates**: Minimal → _TypeScript + basic testing_
 
-**Project Management Tool:**
+#### Project Management Tool:
 
 - ✅ **Tool**: Filesystem (simple board for personal task tracking)
 
-**Final Tech Stack (Definitive):**
+#### Final Tech Stack (Definitive):
 
 ```yaml
 Architecture: Static Site Generation (SSG) + ISR
@@ -382,30 +382,30 @@ Monitoring: Vercel built-in monitoring
 
 ### Example 2: Type B - SaaS Analytics Platform (Updated)
 
-**Project Input:**
+#### Project Input:
 
 - **Context**: Series A startup, real-time analytics dashboard
 - **Team**: 8 people (3 FE, 3 BE, 1 DevOps, 1 Data Engineer)
 - **Budget**: €200k runway for 12 months
 - **Goal**: 1000 client companies, real-time dashboards, multi-tenancy
 
-**Architecture Foundation Decisions:**
+#### Architecture Foundation Decisions:
 
 - ✅ **Monolith vs Microservices**: Modular Monolith → _Single deployable with service layers_
 - ✅ **Architectural Style**: Event-Driven → _Real-time data processing architecture_
 - ✅ **Data Strategy**: Polyglot Persistence → _PostgreSQL + ClickHouse + Redis_
 
-**Project Management Tool:**
+#### Project Management Tool:
 
 - ✅ **Tool**: GitHub Projects (custom workflows, sprint boards, integration with GitHub and Slack)
 
-**Process Methodology Decisions:**
+#### Process Methodology Decisions:
 
 - ✅ **Iteration Model**: 2-week Sprints → _Balanced planning with fast delivery_
 - ✅ **Release Strategy**: Sprint-based with feature flags → _Risk mitigation_
 - ✅ **Quality Gates**: High → _95% test coverage, performance budgets_
 
-**Final Tech Stack (Definitive):**
+#### Final Tech Stack (Definitive):
 
 ```yaml
 Architecture: Event-driven monolith with microservice readiness
@@ -426,30 +426,30 @@ Testing: Jest 29.x + Cypress 13.x + Artillery (load testing)
 
 ### Example 3: Type C - Enterprise CRM Replacement (Updated)
 
-**Project Input:**
+#### Project Input:
 
 - **Context**: Fortune 500 company, legacy CRM system replacement
 - **Team**: 20 people (6 FE, 8 BE, 3 DevOps, 2 QA, 1 Security)
 - **Budget**: €1M annually for 3 years
 - **Goal**: 5000 concurrent users, 12 system integrations, SOC2 compliance
 
-**Architecture Foundation Decisions:**
+#### Architecture Foundation Decisions:
 
 - ✅ **Monolith vs Microservices**: Domain Microservices → _Customer, Sales, Marketing, Integration services_
 - ✅ **Architectural Style**: Hexagonal + CQRS → _Complex business logic isolation_
 - ✅ **Data Strategy**: Database per Service + Event Sourcing → _Audit requirements_
 
-**Process Methodology Decisions:**
+#### Process Methodology Decisions:
 
 - ✅ **Iteration Model**: 3-week Sprints → _Enterprise coordination needs_
 - ✅ **Release Strategy**: Quarterly releases with monthly patches → _Risk management_
 - ✅ **Quality Gates**: Enterprise → _Security scans, compliance checks, performance testing_
 
-**Project Management Tool:**
+#### Project Management Tool:
 
 - ✅ **Tool**: Jira (enterprise workflows, permissions, integration with CI/CD and Teams, integration with GitHub)
 
-**Final Tech Stack (Definitive):**
+#### Final Tech Stack (Definitive):
 
 ```yaml
 Architecture: Domain-driven microservices with API Gateway

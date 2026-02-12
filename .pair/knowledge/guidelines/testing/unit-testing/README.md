@@ -40,14 +40,14 @@ The guidance provided here emphasizes practical approaches to unit testing that 
 
 ### Decision Matrix
 
-**Choose Jest when:**
+#### Choose Jest when:
 
 - Working with established React or Node.js projects
 - Need extensive third-party plugin ecosystem
 - Team has existing Jest experience
 - Snapshot testing is a priority
 
-**Choose Vitest when:**
+#### Choose Vitest when:
 
 - Using Vite as build tool
 - Performance is critical
@@ -56,27 +56,27 @@ The guidance provided here emphasizes practical approaches to unit testing that 
 
 ### Cost-Benefit Analysis
 
-**Jest Benefits:**
+#### Jest Benefits:
 
 - Mature ecosystem with extensive documentation
 - Built-in mocking and assertion capabilities
 - Wide community support and resources
 - Integrated snapshot testing
 
-**Jest Costs:**
+#### Jest Costs:
 
 - Can be slower than modern alternatives
 - Configuration complexity for non-standard setups
 - Bundle size considerations
 
-**Vitest Benefits:**
+#### Vitest Benefits:
 
 - Native ESM support and faster execution
 - Seamless Vite integration
 - Modern testing features
 - Lightweight and fast
 
-**Vitest Costs:**
+#### Vitest Costs:
 
 - Newer ecosystem with fewer plugins
 - Learning curve for Jest migrants

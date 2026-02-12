@@ -6,7 +6,7 @@ Define comprehensive logging standards and conventions that ensure consistent, e
 
 ## Scope
 
-**In Scope:**
+#### In Scope:
 
 - Logging format standards and conventions
 - Message structure and content guidelines
@@ -15,7 +15,7 @@ Define comprehensive logging standards and conventions that ensure consistent, e
 - Tool integration and compatibility
 - Quality assurance and monitoring
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Specific logging library implementations
 - Infrastructure deployment configurations
@@ -30,7 +30,7 @@ Consistent logging standards are essential for effective system observability, d
 
 ### Structured Logging Requirements
 
-**JSON Format Standard:**
+#### JSON Format Standard:
 
 ```json
 {
@@ -46,7 +46,7 @@ Consistent logging standards are essential for effective system observability, d
 }
 ```
 
-**Required Fields:**
+#### Required Fields:
 
 - `timestamp` - ISO 8601 format with milliseconds
 - `level` - Log level (ERROR, WARN, INFO, DEBUG, TRACE)
@@ -54,7 +54,7 @@ Consistent logging standards are essential for effective system observability, d
 - `service` - Service name identifier
 - `version` - Application version
 
-**Optional Standard Fields:**
+#### Optional Standard Fields:
 
 - `traceId` - Distributed tracing identifier
 - `spanId` - Span identifier for tracing
@@ -65,14 +65,14 @@ Consistent logging standards are essential for effective system observability, d
 
 ### Message Structure Guidelines
 
-**Message Format:**
+#### Message Format:
 
 - Use clear, concise, human-readable messages
 - Include action performed and outcome
 - Provide sufficient context for understanding
 - Avoid technical jargon in user-facing messages
 
-**Good Examples:**
+#### Good Examples:
 
 ```json
 {
@@ -83,7 +83,7 @@ Consistent logging standards are essential for effective system observability, d
 }
 ```
 
-**Poor Examples:**
+#### Poor Examples:
 
 ```json
 {
@@ -98,14 +98,14 @@ Consistent logging standards are essential for effective system observability, d
 
 ### Field Naming Standards
 
-**General Rules:**
+#### General Rules:
 
 - Use camelCase for field names
 - Avoid abbreviations and acronyms
 - Use descriptive, meaningful names
 - Maintain consistency across services
 
-**Standard Field Names:**
+#### Standard Field Names:
 
 ```json
 {
@@ -129,13 +129,13 @@ Consistent logging standards are essential for effective system observability, d
 
 ### Service Identification
 
-**Service Name Format:**
+#### Service Name Format:
 
 - Use kebab-case for service names
 - Include environment suffix when needed
 - Maintain consistency across deployments
 
-**Examples:**
+#### Examples:
 
 ```json
 {
@@ -150,7 +150,7 @@ Consistent logging standards are essential for effective system observability, d
 
 ### What to Log
 
-**Essential Events:**
+#### Essential Events:
 
 - Application startup and shutdown
 - User authentication and authorization events
@@ -159,7 +159,7 @@ Consistent logging standards are essential for effective system observability, d
 - Performance milestones
 - Security-relevant events
 
-**Performance Events:**
+#### Performance Events:
 
 ```json
 {
@@ -174,7 +174,7 @@ Consistent logging standards are essential for effective system observability, d
 }
 ```
 
-**Business Events:**
+#### Business Events:
 
 ```json
 {
@@ -190,7 +190,7 @@ Consistent logging standards are essential for effective system observability, d
 
 ### What Not to Log
 
-**Sensitive Information:**
+#### Sensitive Information:
 
 - Passwords and authentication tokens
 - Credit card numbers and financial data
@@ -198,7 +198,7 @@ Consistent logging standards are essential for effective system observability, d
 - API keys and secrets
 - Personal health information
 
-**Excessive Detail:**
+#### Excessive Detail:
 
 - Raw database query results
 - Large payload contents
@@ -209,7 +209,7 @@ Consistent logging standards are essential for effective system observability, d
 
 ### Error Information Requirements
 
-**Standard Error Structure:**
+#### Standard Error Structure:
 
 ```json
 {
@@ -231,7 +231,7 @@ Consistent logging standards are essential for effective system observability, d
 }
 ```
 
-**Error Classification:**
+#### Error Classification:
 
 ```json
 {
@@ -247,7 +247,7 @@ Consistent logging standards are essential for effective system observability, d
 
 ### Exception Handling
 
-**Try-Catch Logging:**
+#### Try-Catch Logging:
 
 ```javascript
 try {
@@ -276,14 +276,14 @@ try {
 
 ### Logging Efficiency
 
-**Performance Requirements:**
+#### Performance Requirements:
 
 - Logging should not impact application performance by more than 5%
 - Use asynchronous logging for high-volume applications
 - Implement log level checks before expensive operations
 - Optimize serialization and formatting
 
-**Efficient Logging Patterns:**
+#### Efficient Logging Patterns:
 
 ```javascript
 // Check log level before expensive operations
@@ -306,14 +306,14 @@ logger.info('User action performed', {
 
 ### Volume Management
 
-**Log Volume Guidelines:**
+#### Log Volume Guidelines:
 
 - Production: INFO level and above
 - Staging: DEBUG level for testing
 - Development: DEBUG or TRACE level
 - Monitor and alert on excessive log volume
 
-**Sampling Strategies:**
+#### Sampling Strategies:
 
 ```javascript
 // Sample debug logs in production
@@ -330,21 +330,21 @@ if (shouldLogDebug()) {
 
 ### Tool Compatibility
 
-**ELK Stack Integration:**
+#### ELK Stack Integration:
 
 - Use consistent field mappings
 - Implement proper index templates
 - Support Elasticsearch field types
 - Enable Kibana visualization
 
-**Prometheus Integration:**
+#### Prometheus Integration:
 
 - Extract metrics from log data
 - Use consistent label names
 - Support metric aggregation
 - Enable alert rule creation
 
-**OpenTelemetry Integration:**
+#### OpenTelemetry Integration:
 
 - Include trace and span IDs
 - Support context propagation
@@ -353,7 +353,7 @@ if (shouldLogDebug()) {
 
 ### Configuration Management
 
-**Environment-Specific Configuration:**
+#### Environment-Specific Configuration:
 
 ```json
 {
@@ -382,7 +382,7 @@ if (shouldLogDebug()) {
 
 ### Log Quality Metrics
 
-**Quality Indicators:**
+#### Quality Indicators:
 
 - Message clarity and usefulness
 - Appropriate log level usage
@@ -390,7 +390,7 @@ if (shouldLogDebug()) {
 - Performance impact measurement
 - Error information completeness
 
-**Monitoring Metrics:**
+#### Monitoring Metrics:
 
 ```json
 {
@@ -410,14 +410,14 @@ if (shouldLogDebug()) {
 
 ### Validation and Testing
 
-**Automated Validation:**
+#### Automated Validation:
 
 - Schema validation for log entries
 - Format compliance checking
 - Sensitive data detection
 - Performance impact monitoring
 
-**Testing Requirements:**
+#### Testing Requirements:
 
 - Log output testing in unit tests
 - Integration testing for log aggregation
@@ -428,7 +428,7 @@ if (shouldLogDebug()) {
 
 ### Audit Requirements
 
-**Audit Trail Standards:**
+#### Audit Trail Standards:
 
 ```json
 {
@@ -446,14 +446,14 @@ if (shouldLogDebug()) {
 
 ### Retention and Archival
 
-**Retention Policies:**
+#### Retention Policies:
 
 - Production logs: 90 days hot, 365 days warm, 7 years cold
 - Audit logs: 7 years minimum retention
 - Debug logs: 30 days maximum retention
 - Error logs: 180 days retention
 
-**Archival Standards:**
+#### Archival Standards:
 
 - Compress archived logs
 - Maintain searchability
@@ -464,14 +464,14 @@ if (shouldLogDebug()) {
 
 ### Migration Strategy
 
-**Gradual Adoption:**
+#### Gradual Adoption:
 
 1. Implement standards in new services
 2. Migrate critical services first
 3. Update existing services incrementally
 4. Validate compliance continuously
 
-**Backward Compatibility:**
+#### Backward Compatibility:
 
 - Support multiple log formats during transition
 - Implement format conversion utilities
@@ -480,14 +480,14 @@ if (shouldLogDebug()) {
 
 ### Training and Documentation
 
-**Team Enablement:**
+#### Team Enablement:
 
 - Provide logging best practices training
 - Create implementation examples
 - Maintain coding standards documentation
 - Regular compliance reviews
 
-**Documentation Requirements:**
+#### Documentation Requirements:
 
 - Service-specific logging guides
 - Error code documentation

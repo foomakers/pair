@@ -8,7 +8,7 @@ In all interactions and commit messages, be extremely coincise and sacrify gramm
 
 If your agent supports **Agent Skills** (agentskills.io), start every session by running:
 
-```
+```text
 /pair-next
 ```
 
@@ -34,21 +34,21 @@ The `/pair-next` skill reads project adoption files and PM tool state to recomme
 
 ### Induction (Getting Started)
 
-- **Create PRD** → `01-how-to-create-PRD.md` | Tags: prd, requirements, planning
-- **Setup project** → `02-how-to-complete-bootstrap-checklist.md` | Tags: bootstrap, setup, onboarding
-- **Define subdomains** → `04-how-to-define-subdomains.md` | Tags: subdomain, domain, model
+| - **Create PRD** → `01-how-to-create-PRD.md`                      | Tags: prd, requirements, planning  |
+| - **Setup project** → `02-how-to-complete-bootstrap-checklist.md` | Tags: bootstrap, setup, onboarding |
+| - **Define subdomains** → `04-how-to-define-subdomains.md`        | Tags: subdomain, domain, model     |
 
 ### Strategic (High-level Planning)
 
-- **Plan initiatives** → `03-how-to-create-and-prioritize-initiatives.md` | Tags: initiative, roadmap
-- **Define architecture** → `05-how-to-define-bounded-contexts.md` | Tags: bounded, context, architecture
-- **Break down epics** → `06-how-to-breakdown-epics.md` | Tags: epic, breakdown
+| - **Plan initiatives** → `03-how-to-create-and-prioritize-initiatives.md` | Tags: initiative, roadmap            |
+| - **Define architecture** → `05-how-to-define-bounded-contexts.md`        | Tags: bounded, context, architecture |
+| - **Break down epics** → `06-how-to-breakdown-epics.md`                   | Tags: epic, breakdown                |
 
 ### Iteration (Sprint Planning)
 
-- **Create user stories** → `07-how-to-breakdown-user-stories.md` | Tags: story, requirements
-- **Refine stories** → `08-how-to-refine-a-user-story.md` | Tags: refine, acceptance, criteria
-- **Create tasks** → `09-how-to-create-tasks.md` | Tags: task, breakdown, assign
+| - **Create user stories** → `07-how-to-breakdown-user-stories.md` | Tags: story, requirements          |
+| - **Refine stories** → `08-how-to-refine-a-user-story.md`         | Tags: refine, acceptance, criteria |
+| - **Create tasks** → `09-how-to-create-tasks.md`                  | Tags: task, breakdown, assign      |
 
 ### Execution (Development)
 

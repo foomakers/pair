@@ -12,3 +12,11 @@ This document defines the **validated development practices and team workflows**
 
 - `pnpm quality-gate` is the adopted project-level quality gate command.
 - Quality gate includes: type checking (`ts:check`), testing (`test`), linting (`lint`), formatting (`prettier:fix`).
+
+### Custom Gate Registry
+
+Custom gates run **after** the standard gates (Lint, Type Check, Test). Add rows to extend the quality pipeline.
+
+| Order | Gate       | Command             | Scope Key  | Required | Description                  |
+| ----- | ---------- | ------------------- | ---------- | -------- | ---------------------------- |
+| 1     | Formatting | `pnpm prettier:fix` | formatting | No       | Prettier auto-fix and verify |

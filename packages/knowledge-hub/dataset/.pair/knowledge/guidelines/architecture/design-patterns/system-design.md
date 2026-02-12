@@ -28,7 +28,7 @@ System design focuses on the high-level architecture and scalability considerati
 
 ### 1. Requirements Gathering
 
-```
+```text
 Functional Requirements:
 - What the system should do
 - Core features and user interactions
@@ -43,7 +43,7 @@ Non-Functional Requirements:
 
 ### 2. Capacity Estimation
 
-```
+```text
 User Estimation:
 - Daily Active Users (DAU)
 - Peak concurrent users
@@ -62,7 +62,7 @@ Traffic Estimation:
 
 ### 3. High-Level Design
 
-```
+```text
 System Components:
 - Client applications (web, mobile)
 - Load balancers
@@ -81,7 +81,7 @@ Data Flow:
 
 ### 1. Microservices Architecture
 
-```
+```text
 Benefits:
 - Independent deployment
 - Technology diversity
@@ -97,7 +97,7 @@ Challenges:
 
 ### 2. Event-Driven Architecture
 
-```
+```text
 Components:
 - Event producers
 - Event brokers (Kafka, RabbitMQ)
@@ -113,7 +113,7 @@ Benefits:
 
 ### 3. CQRS (Command Query Responsibility Segregation)
 
-```
+```text
 Separation:
 - Command models (writes)
 - Query models (reads)
@@ -130,7 +130,7 @@ Use Cases:
 
 ### Database Choices
 
-```
+```text
 Relational Databases (PostgreSQL, MySQL):
 - ACID compliance
 - Complex queries
@@ -145,7 +145,7 @@ NoSQL Databases:
 
 ### Caching Strategies
 
-```
+```text
 Browser Caching:
 - Static assets
 - API responses with cache headers
@@ -162,7 +162,7 @@ Application Caching:
 
 ### Message Queues
 
-```
+```text
 Use Cases:
 - Asynchronous processing
 - Decoupling services
@@ -180,7 +180,7 @@ Technologies:
 
 ### 1. Load Balancing
 
-```
+```text
 Types:
 - Round Robin
 - Least Connections
@@ -195,7 +195,7 @@ Implementation:
 
 ### 2. Database Scaling
 
-```
+```text
 Read Replicas:
 - Distribute read traffic
 - Async replication
@@ -214,7 +214,7 @@ Federation:
 
 ### 3. Caching Layers
 
-```
+```text
 Multi-Level Caching:
 - Browser cache
 - CDN cache
@@ -233,7 +233,7 @@ Cache Patterns:
 
 ### Key Metrics
 
-```
+```text
 Performance Metrics:
 - Response time (latency)
 - Throughput (requests per second)
@@ -249,7 +249,7 @@ Business Metrics:
 
 ### Monitoring Stack
 
-```
+```text
 Components:
 - Metrics collection (Prometheus)
 - Log aggregation (ELK Stack)

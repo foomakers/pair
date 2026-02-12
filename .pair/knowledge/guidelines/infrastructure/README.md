@@ -8,7 +8,7 @@ This infrastructure knowledge base provides comprehensive guidance for building 
 
 ## 📋 Scope and Coverage
 
-**In Scope:**
+#### In Scope:
 
 - Infrastructure architecture design and technology selection
 - Cloud platform strategies and multi-cloud implementations
@@ -19,7 +19,7 @@ This infrastructure knowledge base provides comprehensive guidance for building 
 - Testing infrastructure and automation frameworks
 - Operational excellence and monitoring strategies
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Application-specific configuration patterns (see Development Guidelines)
 - Business logic and application architecture (see Architecture Patterns)
@@ -70,7 +70,7 @@ Testing infrastructure design including test environments, performance testing p
 
 ## 🚀 Quick Start Decision Framework
 
-```
+```text
 Starting infrastructure implementation?
 ├─ New cloud-native project?
 │  ├─ AWS primary? → Start with [Cloud Providers](cloud-providers/README.md) → [Infrastructure as Code](infrastructure-as-code/README.md)
@@ -90,14 +90,14 @@ Starting infrastructure implementation?
 
 | Practice Area               | New Projects | Legacy Modernization | Scale Requirements | Multi-Cloud Needs | Container Focus |
 | --------------------------- | ------------ | -------------------- | ------------------ | ----------------- | --------------- |
-| **Cloud Providers**         | ✅ Essential | ✅ Strategic         | ✅ Critical        | ✅ Essential      | 🔄 Supportive   |
-| **Cloud Services**          | ✅ Essential | 🔄 Gradual           | ✅ Critical        | ✅ Essential      | 🔄 Supportive   |
-| **CI/CD Strategy**          | ✅ Essential | ✅ Essential         | ✅ Essential       | ✅ Essential      | ✅ Essential    |
-| **Deployment Patterns**     | 🔄 Growth    | ✅ Essential         | ✅ Critical        | ✅ Essential      | ✅ Essential    |
-| **Infrastructure as Code**  | ✅ Essential | ✅ Essential         | ✅ Essential       | ✅ Essential      | ✅ Essential    |
-| **Container Orchestration** | 🔄 Consider  | 🔄 Strategic         | ✅ Critical        | ✅ Essential      | ✅ Essential    |
-| **Environments**            | ✅ Essential | ✅ Essential         | ✅ Essential       | ✅ Essential      | ✅ Essential    |
-| **Testing Infrastructure**  | 🔄 Growth    | ✅ Essential         | ✅ Critical        | 🔄 Important      | ✅ Essential    |
+| **Cloud Providers**         | ✅ Essential  | ✅ Strategic          | ✅ Critical         | ✅ Essential       | 🔄 Supportive    |
+| **Cloud Services**          | ✅ Essential  | 🔄 Gradual            | ✅ Critical         | ✅ Essential       | 🔄 Supportive    |
+| **CI/CD Strategy**          | ✅ Essential  | ✅ Essential          | ✅ Essential        | ✅ Essential       | ✅ Essential     |
+| **Deployment Patterns**     | 🔄 Growth     | ✅ Essential          | ✅ Critical         | ✅ Essential       | ✅ Essential     |
+| **Infrastructure as Code**  | ✅ Essential  | ✅ Essential          | ✅ Essential        | ✅ Essential       | ✅ Essential     |
+| **Container Orchestration** | 🔄 Consider   | 🔄 Strategic          | ✅ Critical         | ✅ Essential       | ✅ Essential     |
+| **Environments**            | ✅ Essential  | ✅ Essential          | ✅ Essential        | ✅ Essential       | ✅ Essential     |
+| **Testing Infrastructure**  | 🔄 Growth     | ✅ Essential          | ✅ Critical         | 🔄 Important       | ✅ Essential     |
 
 **Legend**: ✅ High Priority | 🔄 Medium Priority | ⚠️ Case-Dependent
 
@@ -105,14 +105,14 @@ Starting infrastructure implementation?
 
 ### Reliability and Resilience
 
-**High Availability Design**
+#### High Availability Design
 
 - Multi-zone deployments with automatic failover capabilities
 - Circuit breaker patterns for graceful degradation
 - Comprehensive backup and disaster recovery strategies
 - Health checking and self-healing infrastructure components
 
-**Fault Tolerance Implementation**
+#### Fault Tolerance Implementation
 
 - Redundant system design with no single points of failure
 - Graceful degradation under partial system failures
@@ -121,14 +121,14 @@ Starting infrastructure implementation?
 
 ### Scalability and Performance
 
-**Elastic Scaling Architecture**
+#### Elastic Scaling Architecture
 
 - Horizontal scaling patterns for compute and storage resources
 - Auto-scaling policies based on demand metrics and patterns
 - Load balancing and traffic distribution strategies
 - Resource optimization and rightsizing practices
 
-**Performance Optimization**
+#### Performance Optimization
 
 - Multi-layer caching strategies for reduced latency
 - Content delivery networks for global performance
@@ -137,14 +137,14 @@ Starting infrastructure implementation?
 
 ### Security and Compliance
 
-**Defense in Depth Security**
+#### Defense in Depth Security
 
 - Network segmentation and zero-trust architecture
 - Identity and access management with least-privilege principles
 - Encryption at rest and in transit for all data
 - Security scanning and vulnerability management automation
 
-**Compliance and Governance**
+#### Compliance and Governance
 
 - Policy as code implementation and validation
 - Audit logging and compliance monitoring
@@ -153,14 +153,14 @@ Starting infrastructure implementation?
 
 ### Operational Excellence
 
-**Infrastructure Automation**
+#### Infrastructure Automation
 
 - Infrastructure as Code for all infrastructure resources
 - Automated deployment and configuration management
 - Self-service capabilities for development teams
 - Continuous monitoring and alerting systems
 
-**Cost Optimization**
+#### Cost Optimization
 
 - Resource utilization monitoring and optimization
 - Cost allocation and chargeback mechanisms

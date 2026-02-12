@@ -61,6 +61,10 @@ run_pair() {
     ln -sf "$BIN_PATH" "$PWD/apps/pair-cli/dist/cli.js"
   fi
 
+  # Clear INIT_CWD so the CLI uses process.cwd() (the test workspace),
+  # not the pnpm invoker's CWD leaked from `pnpm smoke-tests`.
+  unset INIT_CWD
+
   # Build command - TEST_BINARY is already set with proper path
   local cmd="$TEST_BINARY $@"
 

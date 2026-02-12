@@ -4,7 +4,7 @@
 
 This section covers comprehensive development tooling standards and environment management:
 
-**In Scope:**
+#### In Scope:
 
 - Essential development tools and IDE configurations
 - Workflow automation and productivity optimization tools
@@ -13,7 +13,7 @@ This section covers comprehensive development tooling standards and environment 
 - Tool integration and configuration management
 - Performance monitoring and optimization tools
 
-**Out of Scope:**
+#### Out of Scope:
 
 - Application runtime environments (covered in Infrastructure)
 - Production monitoring tools (covered in Monitoring)
@@ -91,22 +91,26 @@ Configuration Requirements:
 - AI model configuration and policies
 - Code formatting and linting integration
 
-````
+````text
 
 #### **Alternative IDE: VS Code** - Traditional Development
 
 ```yaml
+
 Strategic Role: Fallback option for traditional development workflows
 Key Capabilities:
+
   - Extensive extension ecosystem
   - Mature debugging and profiling tools
   - Strong TypeScript language support
   - Git integration and workflow tools
 
 When to Use:
+
   - Team members requiring traditional IDE experience
   - Specific extension requirements not available in Cursor
   - Performance-critical debugging scenarios
+
 ````
 
 ### Package Management & Build Tools
@@ -114,31 +118,39 @@ When to Use:
 #### **pnpm** - Dependency Management
 
 ```yaml
+
 Strategic Advantages:
+
   - Disk space efficiency with symlinked node_modules
   - Strict dependency isolation preventing phantom dependencies
   - Superior monorepo support with workspace protocols
   - Faster installation and resolution times
 
 Configuration Standards:
+
   - Workspace configuration for monorepo management
   - Lock file policies and security settings
   - Registry configuration and private package support
+
 ```
 
 #### **Turbo** - Build System Optimization
 
 ```yaml
+
 Strategic Capabilities:
+
   - Intelligent build caching and parallelization
   - Task orchestration across monorepo packages
   - Remote caching for team collaboration
   - Pipeline optimization and dependency management
 
 Integration Requirements:
+
   - Pipeline configuration for all package types
   - Remote cache setup for team efficiency
   - Development vs. production build optimization
+
 ```
 
 ### Quality Assurance Tools
@@ -146,31 +158,39 @@ Integration Requirements:
 #### **TypeScript** - Type Safety Foundation
 
 ```yaml
+
 Configuration Strategy:
+
   - Strict mode enabled across all packages
   - Consistent tsconfig inheritance hierarchy
   - Path mapping for clean imports
   - Build optimization for development and production
 
 Quality Standards:
+
   - Zero 'any' types in production code
   - Comprehensive type coverage requirements
   - Automated type checking in CI/CD pipelines
+
 ```
 
 #### **ESLint + Prettier** - Code Quality & Formatting
 
 ```yaml
+
 ESLint Configuration:
+
   - TypeScript-aware linting rules
   - React and Next.js specific rules
   - Import/export optimization rules
   - Custom rules for project-specific patterns
 
 Prettier Integration:
+
   - Automatic formatting on save
   - Consistent code style across team
   - Integration with Git hooks and CI/CD
+
 ```
 
 ## AI-Enhanced Development Tools
@@ -180,32 +200,40 @@ Prettier Integration:
 #### **GitHub Copilot** - Code Completion
 
 ```yaml
+
 Use Cases:
+
   - Inline code suggestions and completion
   - Test generation and documentation
   - Code refactoring assistance
   - API usage pattern suggestions
 
 Team Policies:
+
   - License management and allocation
   - Usage guidelines and best practices
   - Code review requirements for AI-generated code
   - Privacy and security considerations
+
 ```
 
 #### **Custom AI Workflows** - Context-Aware Development
 
 ```yaml
+
 Implementation Strategy:
+
   - Project-specific AI prompts and templates
   - Codebase context integration
   - Custom AI agents for domain-specific tasks
   - MCP integration for cross-tool communication
 
 Quality Assurance:
+
   - Human review requirements for AI-generated code
   - Automated testing of AI suggestions
   - Security scanning for AI-generated content
+
 ```
 
 ## Development Environment Standards
@@ -215,33 +243,41 @@ Quality Assurance:
 #### **Environment Configuration**
 
 ```yaml
+
 Required Components:
+
   - Node.js (LTS version) with pnpm package manager
   - Docker for local service orchestration
   - Git with conventional commit configuration
   - IDE with required extensions and settings
 
 Automated Setup:
+
   - Environment setup scripts for new developers
   - Docker Compose for local service dependencies
   - Database seeding and test data management
   - Development certificate and SSL configuration
+
 ```
 
 #### **Service Orchestration**
 
 ```yaml
+
 Local Services:
+
   - PostgreSQL database with development data
   - Redis for caching and session management
   - Local API mocking and testing tools
   - File system watchers for development workflows
 
 Configuration Management:
+
   - Environment variable management
   - Service discovery and configuration
   - Development vs. production parity
   - Security and access control for local services
+
 ```
 
 ### Team Collaboration Tools
@@ -249,17 +285,21 @@ Configuration Management:
 #### **Configuration Sharing**
 
 ```yaml
+
 Shared Configurations:
+
   - IDE settings and extension recommendations
   - ESLint and Prettier configurations
   - TypeScript compiler settings
   - Git hooks and conventional commit setup
 
 Synchronization Strategy:
+
   - Version-controlled configuration files
   - Team-wide setting updates and notifications
   - Documentation for configuration changes
   - Onboarding automation for new team members
+
 ```
 
 ## Tool Selection Decision Framework
@@ -296,32 +336,40 @@ Synchronization Strategy:
 #### **Build Performance Optimization**
 
 ```yaml
+
 Strategies:
+
   - Turbo caching for build acceleration
   - Incremental compilation for TypeScript
   - Hot reload optimization for development
   - Bundle analysis and optimization tools
 
 Monitoring:
+
   - Build time tracking and analysis
   - Development server performance metrics
   - Resource utilization monitoring
   - Bottleneck identification and resolution
+
 ```
 
 #### **IDE Performance Management**
 
 ```yaml
+
 Optimization Techniques:
+
   - Extension management and performance monitoring
   - File watching optimization for large codebases
   - Memory usage optimization and garbage collection
   - Indexing optimization for code intelligence
 
 Performance Standards:
+
   - Maximum IDE startup time requirements
   - Code completion response time standards
   - File search and navigation performance targets
+
 ```
 
 ## Security & Compliance
