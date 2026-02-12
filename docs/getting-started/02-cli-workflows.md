@@ -112,6 +112,17 @@ For 20+ complete examples, see [CLI Help Examples](../cli/help-examples.md).
 
 ---
 
+## Monorepo Usage
+
+When pair-cli is a dependency of a package inside a monorepo, use `pnpm --filter` from the monorepo root:
+
+```bash
+# From monorepo root — output lands here, not in apps/pair-cli/
+pnpm --filter pair-cli dev update .
+```
+
+The CLI reads `INIT_CWD` (set by pnpm to the invoking directory) so registry output targets the monorepo root, not the filtered package directory.
+
 ## Working with Temporary Directories
 
 For testing or exploration, use temporary directories:

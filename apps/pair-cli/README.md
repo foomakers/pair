@@ -89,7 +89,7 @@ Sample output:
 pair-cli install
 ```
 
-This will populate the configured target folders (e.g., `.github`, `.pair`, etc.).
+This writes registry output to the current working directory (e.g., `.github`, `.pair`, `.claude/skills/`). When running via `pnpm --filter`, the CLI reads `INIT_CWD` to target the monorepo root.
 
 ### Install to custom location
 

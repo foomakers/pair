@@ -25,7 +25,7 @@ pair install [registry:target ...]
 
 ### Arguments
 
-- `[target]` - Optional target directory path (default: use config defaults)
+- `[target]` - Optional target directory path (default: current working directory)
 - `[registry:target ...]` - Install specific registries to custom targets
 
 ### Options
@@ -43,6 +43,8 @@ pair install [registry:target ...]
 - `--offline` - Skip automatic KB download (requires `--source` with local path)
 
 **Note:** Cannot combine `--source <url>` with `--offline`. The `--offline` flag requires `--source` with a local filesystem path.
+
+**Target Resolution:** Registry output is written relative to the current working directory. When running via `pnpm --filter`, the CLI reads `INIT_CWD` (set by pnpm to the original invoking directory) so output lands at the monorepo root, not inside the filtered package directory.
 
 ### Examples
 
@@ -92,6 +94,7 @@ pair install --offline --source ./local-kb-content
 ### Usage Notes
 
 - **KB Source Resolution:** In monorepo mode, uses `packages/knowledge-hub/dataset` by default. In release mode, auto-downloads from GitHub releases unless `--source` or `--offline` specified.
+- **Target resolution order:** `INIT_CWD` (pnpm) > `[target]` argument > current working directory.
 - **Target validation:** CLI validates target directories before installation and provides clear error messages for common issues.
 - **Overwrites existing files:** Use `update` command instead if you want to merge with existing content.
 
@@ -110,7 +113,7 @@ pair update [registry:target ...]
 
 ### Arguments
 
-- `[target]` - Optional target directory path (default: use config defaults)
+- `[target]` - Optional target directory path (default: current working directory)
 - `[registry:target ...]` - Update specific registries in custom targets
 
 ### Options
@@ -169,6 +172,7 @@ pair update --offline --source ./local-kb-content
 ### Usage Notes
 
 - **KB Source Resolution:** Same as `install` command - monorepo default or GitHub release auto-download.
+- **Target resolution order:** `INIT_CWD` (pnpm) > `[target]` argument > current working directory.
 - **Merge behavior:** Updates merge with existing content based on registry behavior configuration (mirror, add, overwrite, skip).
 - **Link updates:** Automatically updates internal markdown links after file updates.
 
