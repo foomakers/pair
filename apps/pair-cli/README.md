@@ -74,7 +74,7 @@ pair-cli install --list-targets
 
 Sample output:
 
-```
+```text
 📁 Available asset registries:
 
   github     🔄🎯 .github              GitHub workflows and configuration files
@@ -327,7 +327,7 @@ The FAQ covers 80%+ of installation issues including permission errors, Node.js 
 
 The CLI is organized as a monorepo with the following structure:
 
-```
+```text
 apps/pair-cli/           # Main CLI application
 ├── src/
 │   ├── cli.ts          # Main CLI entry point using Commander.js
@@ -367,6 +367,7 @@ packages/
    ```
 
 4. **Lint and format**:
+
    ```bash
    pnpm -w lint
    pnpm -w format
@@ -384,7 +385,7 @@ packages/
 
 **Command Flow (Parser → Dispatcher → Handler)**:
 
-```
+```text
 CLI Options → Parser → CommandConfig → Dispatcher → Handler → Actions
 ```
 
