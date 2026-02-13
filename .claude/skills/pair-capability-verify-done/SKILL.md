@@ -1,9 +1,9 @@
 ---
-name: pair-capability-verify-done
-description: Checks Definition of Done criteria against a PR or work item. Reads universal DoD from quality-standards guidelines and project-specific criteria from adoption files. Already-passing criteria are skipped. Invocable independently or composed by /pair-process-review.
+name: verify-done
+description: "Checks Definition of Done criteria against a PR or work item. Reads universal DoD from quality-standards guidelines and project-specific criteria from adoption files. Already-passing criteria are skipped. Invocable independently or composed by /review."
 ---
 
-# /pair-capability-verify-done — Definition of Done Checker
+# /verify-done — Definition of Done Checker
 
 Validate a work item against Definition of Done criteria. Two sources of truth:
 
@@ -40,7 +40,7 @@ Execute each criterion group in order. For every criterion, follow the **check �
 ### Step 3: Code Standards
 
 1. **Check**: Does the code follow adopted code design guidelines and technical standards?
-2. **Skip**: If already verified (e.g., by a prior /pair-capability-verify-quality run in the same session) — mark PASS.
+2. **Skip**: If already verified (e.g., by a prior /verify-quality run in the same session) — mark PASS.
 3. **Act**: Check code against [code-design guidelines](../../../.pair/knowledge/guidelines/code-design/README.md) and [technical standards](../../../.pair/knowledge/guidelines/technical-standards/README.md). Report non-conformities.
 4. **Verify**: Standards met or non-conformities reported.
 
@@ -54,7 +54,7 @@ Execute each criterion group in order. For every criterion, follow the **check �
 ### Step 5: Testing
 
 1. **Check**: Are tests written per [testing strategy](../../../.pair/knowledge/guidelines/testing/test-strategy/README.md)? Do all tests pass?
-2. **Skip**: If already verified by /pair-capability-verify-quality in the same session — mark PASS.
+2. **Skip**: If already verified by /verify-quality in the same session — mark PASS.
 3. **Act**: Verify test existence for new/modified modules (1:1 mapping). Check test quality (behavior-based, not implementation-based). Report gaps.
 4. **Verify**: Testing criteria met or gaps reported.
 
@@ -98,11 +98,11 @@ RESULT: [ALL CRITERIA MET | N criteria failing | HALT — reason]
 
 ## Composition Interface
 
-When composed by `/pair-process-review`:
+When composed by `/review`:
 
-- **Input**: /pair-process-review invokes `/pair-capability-verify-done` during the completeness phase (Phase 4).
-- **Output**: Returns the DoD report. /pair-process-review incorporates findings into the review output.
-  - HALT conditions (missing ADR) propagate to /pair-process-review.
+- **Input**: /review invokes `/verify-done` during the completeness phase (Phase 4).
+- **Output**: Returns the DoD report. /review incorporates findings into the review output.
+  - HALT conditions (missing ADR) propagate to /review.
   - FAIL criteria become review findings.
   - SKIPPED criteria are noted but do not block.
 
@@ -117,11 +117,11 @@ When invoked **independently**:
 - If adoption files are missing, warn and check only universal DoD criteria.
 - If `$story` is not provided, skip requirements/AC check and evaluate only universal criteria.
 - If specific guideline files are not found (e.g., security guidelines), skip that criterion group and report: "[Area]: SKIPPED — guidelines not found."
-- If /pair-capability-verify-quality already ran in the same session, reuse its results for code standards and testing criteria (avoid duplicate work).
+- If /verify-quality already ran in the same session, reuse its results for code standards and testing criteria (avoid duplicate work).
 
 ## Notes
 
 - This skill is **read-only** — it inspects code and configuration but never modifies files.
 - Criteria evaluation is contextual: only changes in the PR/work item are assessed, not the entire codebase.
 - SKIPPED criteria (no relevant changes) are distinct from PASS (verified and conformant).
-- HALT on missing ADR: if architectural changes lack an ADR, this is escalated to the composing skill. /pair-capability-verify-done itself does not create ADRs — that is /record-decision's responsibility.
+- HALT on missing ADR: if architectural changes lack an ADR, this is escalated to the composing skill. /verify-done itself does not create ADRs — that is /record-decision's responsibility.

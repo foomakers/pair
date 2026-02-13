@@ -1,10 +1,6 @@
 ---
 name: refine-story
-description: >-
-  Refines a user story from Todo to Refined state through structured phases:
-  selection, requirements analysis (Given-When-Then), technical analysis, sprint
-  readiness, and documentation. Section-level idempotency — detects partial
-  refinement and resumes. Composes /write-issue for PM tool updates.
+description: "Refines a user story from Todo to Refined state through structured phases: selection, requirements analysis (Given-When-Then), technical analysis, sprint readiness, and documentation. Section-level idempotency — detects partial refinement and resumes. Composes /write-issue for PM tool updates."
 ---
 
 # /refine-story — Story Refinement
@@ -59,11 +55,11 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
 | Dependencies                          | Has dependency information                                                 |
 | Validation Strategy                   | Has testing approach                                                       |
 
-2. **Act**: Determine refinement state:
+1. **Act**: Determine refinement state:
    - **All sections present** → story is already Refined. Offer selective update (Step 6).
    - **Some sections present** → partial refinement. Resume from first missing section (Steps 2–5).
    - **No sections (only Initial Breakdown)** → full refinement needed (Steps 2–5).
-3. **Verify**: Refinement state determined. Report:
+2. **Verify**: Refinement state determined. Report:
 
    > Refinement state: [N/M sections complete]. [Resuming from: Section X | Full refinement | Already refined — offering update].
 

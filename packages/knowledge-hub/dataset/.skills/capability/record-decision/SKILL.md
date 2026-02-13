@@ -1,10 +1,6 @@
 ---
 name: record-decision
-description: >-
-  Records an architectural or non-architectural decision. Architectural
-  decisions produce an ADR; non-architectural decisions produce an ADL entry.
-  Both always update the relevant adoption files. Invocable independently or
-  composed by /implement and /review.
+description: "Records an architectural or non-architectural decision. Architectural decisions produce an ADR; non-architectural decisions produce an ADL entry. Both always update the relevant adoption files. Invocable independently or composed by /implement and /review."
 ---
 
 # /record-decision — Decision Recorder

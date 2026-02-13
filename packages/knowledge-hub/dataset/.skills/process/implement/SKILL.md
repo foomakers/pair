@@ -1,10 +1,6 @@
 ---
 name: implement
-description: >-
-  Implements a user story by iterating through its tasks one at a time, following
-  a structured 5-step cycle per task. Composes /verify-quality and
-  /record-decision. Reads adoption files for project-specific decisions. Creates
-  a PR at story completion.
+description: "Implements a user story by iterating through its tasks one at a time, following a structured 5-step cycle per task. Composes /verify-quality and /record-decision. Reads adoption files for project-specific decisions. Creates a PR at story completion."
 ---
 
 # /implement — Task Implementation

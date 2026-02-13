@@ -1,9 +1,9 @@
 ---
-name: pair-next
-description: Determines the most relevant next action for your project by reading adoption files and PM tool state. Suggests which skill to invoke next. Use at the start of a session, when switching tasks, or whenever you need guidance on what to work on.
+name: next
+description: "Determines the most relevant next action for your project by reading adoption files and PM tool state. Suggests which skill to invoke next. Use at the start of a session, when switching tasks, or whenever you need guidance on what to work on."
 ---
 
-# /pair-next — Project Navigator
+# /next — Project Navigator
 
 Analyze project state and recommend the single most relevant next skill to invoke.
 
@@ -17,12 +17,12 @@ Read the following files and classify each as **populated** or **template**:
 
 | File                                                                                               | Template indicator                                        |
 | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| [.pair/adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md)                               | Contains `[Product/feature name]` or `[Creation date]`    |
-| [.pair/adoption/product/subdomain/README.md](../../../.pair/adoption/product/subdomain/README.md)     | Contains `[list here core subdomain]` or `[PROJECT_NAME]` |
-| [.pair/adoption/tech/architecture.md](../../../.pair/adoption/tech/architecture.md)                   | Contains only placeholder headings with no real content   |
-| [.pair/adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md)                       | Contains only placeholder headings with no real content   |
-| [.pair/adoption/tech/boundedcontext/README.md](../../../.pair/adoption/tech/boundedcontext/README.md) | Contains only placeholder headings with no real content   |
-| [.pair/adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)               | No PM tool specified or only template text                |
+| [.pair/adoption/product/PRD.md](../../.pair/adoption/product/PRD.md)                               | Contains `[Product/feature name]` or `[Creation date]`    |
+| [.pair/adoption/product/subdomain/README.md](../../.pair/adoption/product/subdomain/README.md)     | Contains `[list here core subdomain]` or `[PROJECT_NAME]` |
+| [.pair/adoption/tech/architecture.md](../../.pair/adoption/tech/architecture.md)                   | Contains only placeholder headings with no real content   |
+| [.pair/adoption/tech/tech-stack.md](../../.pair/adoption/tech/tech-stack.md)                       | Contains only placeholder headings with no real content   |
+| [.pair/adoption/tech/boundedcontext/README.md](../../.pair/adoption/tech/boundedcontext/README.md) | Contains only placeholder headings with no real content   |
+| [.pair/adoption/tech/way-of-working.md](../../.pair/adoption/tech/way-of-working.md)               | No PM tool specified or only template text                |
 
 **Template detection rule**: A file is a template if it contains square-bracket placeholders (e.g., `[Product/feature name]`) or if its substantive sections contain no project-specific content.
 
@@ -41,17 +41,17 @@ If any of the above matched, output the suggestion and stop.
 
 All adoption files are populated. Query the PM tool to determine backlog state.
 
-**PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
+**PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
 
 | #   | Condition                                                        | Suggestion          | Rationale                                   |
 | --- | ---------------------------------------------------------------- | ------------------- | ------------------------------------------- |
 | 5   | No initiatives or epics exist in PM tool                         | `/plan-initiatives` | Strategic planning needed                   |
 | 6   | Initiatives exist but no epics                                   | `/plan-epics`       | Epic decomposition needed                   |
 | 7   | Epics exist but no user stories                                  | `/plan-stories`     | Story breakdown needed                      |
-| 8   | Stories exist without acceptance criteria or with `status:draft` | `/pair-process-refine-story`     | Stories need refinement before work         |
-| 9   | Refined stories exist but have no task breakdown                 | `/pair-process-plan-tasks`       | Tasks must be created before implementation |
-| 10  | Tasks in "ready" or "todo" state exist                           | `/pair-process-implement`        | Work is ready to start                      |
-| 11  | Open pull requests or tasks in "review" state                    | `/pair-process-review`           | Code review pending                         |
+| 8   | Stories exist without acceptance criteria or with `status:draft` | `/refine-story`     | Stories need refinement before work         |
+| 9   | Refined stories exist but have no task breakdown                 | `/plan-tasks`       | Tasks must be created before implementation |
+| 10  | Tasks in "ready" or "todo" state exist                           | `/implement`        | Work is ready to start                      |
+| 11  | Open pull requests or tasks in "review" state                    | `/review`           | Code review pending                         |
 
 If no condition matched, all work is complete for the current iteration.
 
@@ -60,7 +60,7 @@ If no condition matched, all work is complete for the current iteration.
 If no condition matched in Steps 2-3:
 
 > All adoption files are populated and no actionable backlog items detected.
-> Consider: starting a new iteration with `/plan-stories`, or running `/pair-process-review`
+> Consider: starting a new iteration with `/plan-stories`, or running `/review`
 > to check for open items.
 
 ## Output Format
@@ -91,5 +91,5 @@ Then ask: "Shall I run `/skill-name`?"
 ## Notes
 
 - This skill is read-only: it inspects state but never modifies files or PM tool data.
-- When multiple items are actionable (e.g., tasks to implement AND PRs to review), prefer the item closest to delivery (`/pair-process-review` > `/pair-process-implement` > `/pair-process-plan-tasks`).
-- Re-run `/pair-next` after completing any skill to get an updated recommendation.
+- When multiple items are actionable (e.g., tasks to implement AND PRs to review), prefer the item closest to delivery (`/review` > `/implement` > `/plan-tasks`).
+- Re-run `/next` after completing any skill to get an updated recommendation.

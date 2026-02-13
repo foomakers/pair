@@ -1,10 +1,6 @@
 ---
 name: verify-quality
-description: >-
-  Checks quality gates against the current codebase. Reads project-specific
-  quality gate command from way-of-working adoption and universal standards
-  from quality-standards guidelines. Gates already passing are skipped.
-  Invocable independently or composed by /implement and /review.
+description: "Checks quality gates against the current codebase. Reads project-specific quality gate command from way-of-working adoption and universal standards from quality-standards guidelines. Gates already passing are skipped. Invocable independently or composed by /implement and /review."
 ---
 
 # /verify-quality — Quality Gate Checker

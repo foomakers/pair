@@ -1,9 +1,9 @@
 ---
-name: pair-process-plan-tasks
-description: Breaks a refined user story into implementation tasks. Task-level idempotency: detects existing tasks and creates only missing ones. Appends condensed Technical Analysis + Task Breakdown (checklist, Dependency Graph, AC Coverage table, detailed tasks) to the story body. Composes /pair-capability-write-issue to update the story issue body. Tasks are documented inline in the story — no separate task issues are created.
+name: plan-tasks
+description: "Breaks a refined user story into implementation tasks. Task-level idempotency: detects existing tasks and creates only missing ones. Appends condensed Technical Analysis + Task Breakdown (checklist, Dependency Graph, AC Coverage table, detailed tasks) to the story body. Composes /write-issue to update the story issue body. Tasks are documented inline in the story — no separate task issues are created."
 ---
 
-# /pair-process-plan-tasks — Task Breakdown
+# /plan-tasks — Task Breakdown
 
 Transform a refined user story into specific, actionable implementation tasks. Task-level idempotency: detects existing tasks in the story body and creates only missing ones. Appends an integrated Technical Analysis + Task Breakdown section to the story issue body. Tasks live inside the story — no separate task issues are created in the PM tool.
 
@@ -11,7 +11,7 @@ Transform a refined user story into specific, actionable implementation tasks. T
 
 | Skill          | Type       | Required                                                   |
 | -------------- | ---------- | ---------------------------------------------------------- |
-| `/pair-capability-write-issue` | Capability | Yes — updates the story issue body with the Task Breakdown section |
+| `/write-issue` | Capability | Yes — updates the story issue body with the Task Breakdown section |
 
 ## Arguments
 
@@ -55,7 +55,7 @@ Transform a refined user story into specific, actionable implementation tasks. T
 1. **Act**: Analyze the story requirements against adoption files:
    - Read [architecture.md](../../../.pair/adoption/tech/architecture.md) for architectural patterns.
    - Read [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) for implementation choices.
-   - Map story to [bounded contexts](../../../.pair/adoption/tech/boundedcontext).
+   - Map story to [bounded contexts](../../../.pair/adoption/tech/boundedcontext/).
 2. **Act**: Present technical context summary to developer for validation.
 3. **Verify**: Developer approves. Context established.
 
@@ -106,7 +106,7 @@ For each task (skipping tasks that already exist in the story body):
 
 ### Step 6: PM Tool Update
 
-1. **Act**: Compose `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]` to append the Task Breakdown section to the story body. Tasks are documented inline in the story — do NOT create separate task issues.
+1. **Act**: Compose `/write-issue` with `$type: story`, `$id: [story-id]` to append the Task Breakdown section to the story body. Tasks are documented inline in the story — do NOT create separate task issues.
 2. **Verify**: Story body updated with Task Breakdown section.
 
 ### Step 7: Already-Complete Update (optional path)
@@ -122,7 +122,7 @@ Reached only when Step 1 detects all tasks are present with full AC coverage.
    > 4. Full re-breakdown
 
 2. **Act**: For selected option, re-execute the corresponding steps.
-3. **Act**: Compose `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]`, and updated content.
+3. **Act**: Compose `/write-issue` with `$type: story`, `$id: [story-id]`, and updated content.
 4. **Verify**: Story updated.
 
 ## Output Format
@@ -134,20 +134,20 @@ TASK BREAKDOWN COMPLETE:
 ├── Types:      [Development: N, Documentation: N, Configuration: N]
 ├── AC Coverage:[K/K ACs covered]
 ├── PM Tool:    [Story updated with Task Breakdown section]
-└── Next:       /pair-process-implement to start task execution
+└── Next:       /implement to start task execution
 ```
 
 ## HALT Conditions
 
 - **No Refined stories in backlog** (Step 0) — nothing to break down.
-- **Story not found or not Refined** (Step 0) — must be refined first (suggest `/pair-process-refine-story`).
+- **Story not found or not Refined** (Step 0) — must be refined first (suggest `/refine-story`).
 - **PM tool not accessible** — cannot read or update stories.
 - **Developer rejects task list** (Step 3) — must resolve before proceeding.
 - **AC coverage gap** (Step 5) — every AC must be covered by at least one task.
 
 ## Graceful Degradation
 
-- If `/pair-capability-write-issue` is not installed, warn and provide the formatted Task Breakdown section for manual PM tool update.
+- If `/write-issue` is not installed, warn and provide the formatted Task Breakdown section for manual PM tool update.
 - If the PM tool is not accessible, produce the task breakdown content and ask the developer to update manually.
 - If adoption files (architecture, tech-stack, bounded contexts) are not found, skip technical context alignment and warn.
 

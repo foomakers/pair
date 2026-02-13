@@ -1,9 +1,9 @@
 ---
-name: pair-process-refine-story
-description: Refines a user story from Todo to Refined state through structured phases: selection, requirements analysis (Given-When-Then), technical analysis, sprint readiness, and documentation. Section-level idempotency — detects partial refinement and resumes. Composes /pair-capability-write-issue for PM tool updates.
+name: refine-story
+description: "Refines a user story from Todo to Refined state through structured phases: selection, requirements analysis (Given-When-Then), technical analysis, sprint readiness, and documentation. Section-level idempotency — detects partial refinement and resumes. Composes /write-issue for PM tool updates."
 ---
 
-# /pair-process-refine-story — Story Refinement
+# /refine-story — Story Refinement
 
 Transform a user story from rough breakdown (Todo) into a development-ready specification (Refined). Section-level idempotency: each refinement section is checked before acting — partial refinements resume from the first missing section.
 
@@ -11,7 +11,7 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
 
 | Skill          | Type       | Required                                                |
 | -------------- | ---------- | ------------------------------------------------------- |
-| `/pair-capability-write-issue` | Capability | Yes — creates or updates the story issue in the PM tool |
+| `/write-issue` | Capability | Yes — creates or updates the story issue in the PM tool |
 
 ## Arguments
 
@@ -109,8 +109,8 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
 
 1. **Act**: Assemble the complete refined story body using the [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) Refined template:
    - **Functional sections first**: Story Statement → Epic Context → Acceptance Criteria → Definition of Done → Story Sizing → Dependencies → Validation → Notes.
-   - **Technical sections last**: Technical Analysis → (Task Breakdown added later by `/pair-process-plan-tasks`).
-2. **Act**: Compose `/pair-capability-write-issue` with:
+   - **Technical sections last**: Technical Analysis → (Task Breakdown added later by `/plan-tasks`).
+2. **Act**: Compose `/write-issue` with:
    - `$type: story`
    - `$content`: the assembled refined story body
    - `$id`: the story identifier (update mode — story already exists)
@@ -130,7 +130,7 @@ Reached only when Step 1 detects all sections are present.
    > 4. All sections
 
 2. **Act**: For selected sections, re-execute the corresponding step (2, 3, or 4).
-3. **Act**: Compose `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]`, and updated `$content`.
+3. **Act**: Compose `/write-issue` with `$type: story`, `$id: [story-id]`, and updated `$content`.
 4. **Verify**: Story updated.
 
 ## Output Format
@@ -142,7 +142,7 @@ STORY REFINEMENT COMPLETE:
 ├── Sections: [N/N complete]
 ├── Sizing:   [X points — fits sprint: Yes/No]
 ├── PM Tool:  [Issue updated — #ID]
-└── Next:     /pair-process-plan-tasks to create task breakdown
+└── Next:     /plan-tasks to create task breakdown
 ```
 
 ## HALT Conditions
@@ -154,7 +154,7 @@ STORY REFINEMENT COMPLETE:
 
 ## Graceful Degradation
 
-- If `/pair-capability-write-issue` is not installed, warn and provide the formatted story body for manual PM tool update.
+- If `/write-issue` is not installed, warn and provide the formatted story body for manual PM tool update.
 - If the PM tool is not accessible, produce the refined story content and ask the developer to update manually.
 - If adoption files (architecture, tech-stack) are not found, skip technical analysis alignment checks and warn.
 
@@ -162,6 +162,6 @@ STORY REFINEMENT COMPLETE:
 
 - This skill **modifies PM tool state** — it updates story issues.
 - Section-level idempotency: re-invoking on a partially refined story resumes from the first missing section.
-- Template ordering: functional sections first, technical sections last. This positions Technical Analysis as the bridge to Task Breakdown (added by `/pair-process-plan-tasks`).
+- Template ordering: functional sections first, technical sections last. This positions Technical Analysis as the bridge to Task Breakdown (added by `/plan-tasks`).
 - INVEST validation: the refined story must satisfy Independent, Negotiable, Valuable, Estimable, Small, Testable criteria.
-- The `/pair-process-refine-story` skill handles the transition from Initial Breakdown template format to Refined template format.
+- The `/refine-story` skill handles the transition from Initial Breakdown template format to Refined template format.

@@ -1,10 +1,6 @@
 ---
 name: write-issue
-description: >-
-  Creates or updates issues in the adopted PM tool using template-driven
-  formatting. Reads way-of-working for tool choice and type-specific templates
-  for body structure. Invocable independently or composed by /refine-story and
-  /plan-tasks.
+description: "Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Invocable independently or composed by /refine-story and /plan-tasks."
 ---
 
 # /write-issue — PM Tool Issue Writer
