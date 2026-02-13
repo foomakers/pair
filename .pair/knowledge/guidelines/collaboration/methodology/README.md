@@ -847,3 +847,7 @@ Each methodology file includes:
 - **[../project-management-tool/](../project-management-tool/README.md)** - Tool implementations for each methodology
 - **[../estimation/](../estimation/README.md)** - Estimation approaches by methodology
 - **[.pair/knowledge/guidelines/collaboration/team/role-responsibilities.md](../team/role-responsibilities.md)** - Role definitions within methodologies
+
+---
+
+**Skill**: Use `/pair-capability-assess-methodology` to evaluate and adopt a methodology from these guidelines via the resolution cascade.

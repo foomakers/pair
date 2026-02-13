@@ -111,3 +111,7 @@ Testing strategy must demonstrate clear return on investment through quantifiabl
 Sophisticated ROI analysis also considers opportunity costs and risk mitigation value, recognizing that testing strategy prevents costly failures that could otherwise damage organizational reputation and market position. Organizations that effectively measure and communicate testing ROI secure continued investment and organizational support for quality initiatives.
 
 This strategic foundation enables organizations to build comprehensive, sustainable, and business-aligned testing programs that deliver measurable value while supporting long-term growth and competitive success.
+
+---
+
+**Skill**: Use `/assess-testing` to evaluate and adopt a testing strategy from these guidelines via the resolution cascade.

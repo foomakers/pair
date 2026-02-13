@@ -228,3 +228,7 @@ Integration Strategy:
 - 60% automation of routine development tasks
 - Predictive quality and security frameworks
 - Industry-leading AI development practices
+
+---
+
+**Skill**: Use `/assess-ai` to evaluate and adopt AI development tools from these guidelines via the resolution cascade.

@@ -164,3 +164,7 @@ Do you need enterprise support and budget allows?
 - [Definition of Done](../quality-assurance/quality-standards/definition-of-done.md) - Observability requirements
 - [Testing Strategy](../testing/README.md) - Test environment monitoring
 - [Security Guidelines](../quality-assurance/security/README.md) - Security monitoring requirements
+
+---
+
+**Skill**: Use `/assess-observability` to evaluate and adopt an observability strategy from these guidelines via the resolution cascade.

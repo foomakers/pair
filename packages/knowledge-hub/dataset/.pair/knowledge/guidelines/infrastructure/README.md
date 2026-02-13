@@ -206,4 +206,6 @@ Starting infrastructure implementation?
 
 ---
 
+**Skill**: Use `/assess-infrastructure` to evaluate and adopt infrastructure decisions from these guidelines via the resolution cascade. Use `/assess-observability` for the observability section.
+
 _This infrastructure knowledge base enables organizations to build and operate world-class infrastructure that supports rapid software delivery while maintaining security, reliability, and operational excellence at enterprise scale._

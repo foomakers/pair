@@ -170,4 +170,6 @@ flowchart TD
 
 ---
 
+**Skill**: Use `/assess-architecture` to evaluate and adopt an architecture pattern from these guidelines via the resolution cascade.
+
 _Assistant Context: Focus on system architecture, bounded contexts, and ADR processes when discussing architectural decisions._
