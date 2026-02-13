@@ -75,4 +75,3 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - Do **not** install Prettier o ESLint direttamente nei workspace applicativi: la configurazione e gli script devono seguire le istruzioni nei README dei workspace tools.
 
 All technology choices must follow these adopted standards. For process and rationale, see [way-of-working.md](../../way-of-working.md).
-
