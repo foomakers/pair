@@ -103,7 +103,9 @@ Present analysis to developer and get explicit confirmation before proceeding.
 
 1. **Load technical context** — architecture, tech stack, way-of-working from adoption files
 2. **Create or switch to feature branch** — per [branch template](../guidelines/collaboration/templates/branch-template.md): `<type>/#<story-id>-<brief-description>`
-3. **Choose commit strategy** (for multi-task stories) — per-task commits (recommended, granular) or per-story commit (single commit at end). Single PR per story regardless.
+3. **Choose commit strategy** (for multi-task stories):
+   - **Commit per task** (recommended) — develop one task, ask dev, commit, update checkbox + DoD, next task. Single PR at end.
+   - **Commit per story** — develop all tasks continuously, then ask dev, commit all, update all checkboxes + DoD, single PR.
 
 ### Phase 2: Task-by-Task Implementation
 
@@ -113,15 +115,26 @@ Process tasks **sequentially**. For each task:
 2. **Validate task completeness** — HALT if task spec is incomplete
 3. **Execute implementation** — TDD cycle (RED → GREEN → REFACTOR) for development tasks, direct implementation for non-development tasks
 4. **Verify quality** — run quality gates per [quality standards](../guidelines/quality-assurance/quality-standards/README.md). HALT on failure.
-5. **Commit** (if per-task strategy) — per [commit template](../guidelines/collaboration/templates/commit-template.md)
-6. **Mark task complete** — update story checklist, progress to next task
+5. **Ask developer** (commit-per-task only) — present summary, get confirmation BEFORE committing
+6. **Commit** (if per-task strategy) — per [commit template](../guidelines/collaboration/templates/commit-template.md)
+7. **Update story checkboxes** — mark task checkbox + any newly satisfied DoD items
 
-### Phase 3: Commit, Push & PR
+### Phase 3: Commit (if per-story), Push & PR
 
-1. **Final commit** (if per-story strategy) — per [commit template](../guidelines/collaboration/templates/commit-template.md)
-2. **Push branch** to remote
-3. **Create PR** — per [PR template](../guidelines/collaboration/templates/pr-template.md), linking the user story issue
-4. **Update story status** to "In Review" in PM tool
+1. **Ask developer** (commit-per-story only) — present all-tasks summary, get confirmation BEFORE committing
+2. **Final commit** (if per-story strategy) — per [commit template](../guidelines/collaboration/templates/commit-template.md)
+3. **Update story checkboxes** (commit-per-story) — mark all task checkboxes + DoD items
+4. **Push branch** to remote
+5. **Create PR** — per [PR template](../guidelines/collaboration/templates/pr-template.md), linking the user story issue
+
+### Phase 4: Post-Review Merge
+
+After code review approval, re-invoke `/implement` to merge and close:
+
+1. **Verify review approval** — HALT if not approved
+2. **Prepare merge commit message** — show to developer for confirmation
+3. **Merge PR** — using configured merge strategy (squash happens here, not before PR)
+4. **Update story & parents** — story to Done, recursively update epic and initiative if all children Done
 
 ## Success Criteria
 
@@ -134,7 +147,7 @@ Process tasks **sequentially**. For each task:
 - [ ] Quality gates passed per [quality standards](../guidelines/quality-assurance/quality-standards/README.md)
 - [ ] Code committed and pushed to feature branch
 - [ ] PR created with comprehensive description
-- [ ] Story status updated to "In Review"
+- [ ] After review: PR merged, story + parents updated recursively
 
 #### Additional for Development Tasks:
 

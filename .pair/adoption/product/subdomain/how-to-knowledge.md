@@ -1,5 +1,7 @@
 # How To Knowledge (Supporting Subdomain)
 
+> Classification: **Supporting**
+
 **Business Purpose:**
 Capture and apply operational instructions and best practices derived from team experience to enable effective execution of workflows and code generation.
 

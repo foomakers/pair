@@ -1,5 +1,7 @@
 # Knowledge Base Management Context
 
+> Type: **Infrastructure**
+
 ## Subdomains Covered
 
 - RAG Infrastructure
@@ -28,3 +30,17 @@ This context is responsible for storing, retrieving, and publishing operational 
 ## Team Alignment
 
 - Managed by the core development team, with a focus on knowledge enablement and user experience.
+
+## Ubiquitous Language
+
+| Term | Definition |
+| ---- | ---------- |
+| KB dataset | The packaged collection of knowledge files distributed as a release artifact |
+| Content distribution | The pipeline that flattens, prefixes, and symlinks skills to AI tool directories |
+| KB cache | Local versioned storage at `~/.pair/kb/{version}/` for downloaded KB artifacts |
+
+## Quality Attributes
+
+- **Performance:** KB download with resume support; sub-second local cache hits
+- **Scalability:** Version-isolated KB cache prevents cross-version conflicts
+- **Reliability:** SHA256 checksum validation on all downloaded artifacts

@@ -136,7 +136,7 @@ Detect and evaluate unlisted dependencies. Used when `/pair-process-review` find
    > | Language | [name] | [vX.Y] | [reason] |
    > | ... | ... | ... | ... |
 
-4. **Verify**: Developer approves the full stack.
+1. **Verify**: Developer approves the full stack.
 
 #### Implementation Mode (add single entry)
 

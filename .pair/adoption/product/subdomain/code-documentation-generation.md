@@ -1,5 +1,7 @@
 # Code & Documentation Generation (Core Subdomain)
 
+> Classification: **Core**
+
 **Business Purpose:**
 Produce consistent, high-quality code and documentation that aligns with team standards and project context.
 

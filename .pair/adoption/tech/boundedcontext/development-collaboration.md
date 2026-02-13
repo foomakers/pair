@@ -1,5 +1,7 @@
 # Development Collaboration Context
 
+> Type: **Core**
+
 ## Subdomains Covered
 
 - Collaborative Workflow
@@ -27,3 +29,17 @@ This context orchestrates the collaboration between developers and AI assistants
 ## Team Alignment
 
 - Managed by the core development team for maximum autonomy and rapid iteration.
+
+## Ubiquitous Language
+
+| Term | Definition |
+| ---- | ---------- |
+| Workflow | A sequence of collaborative phases (requirements → design → implementation → review) between developer and AI assistant |
+| Adoption | A recorded decision about which practice, tool, or pattern the project follows |
+| Skill | An atomic, invocable unit of operational knowledge that an AI assistant executes |
+
+## Quality Attributes
+
+- **Performance:** Sub-second response for skill invocation and workflow state transitions
+- **Scalability:** Single-team usage; no multi-tenant requirements
+- **Reliability:** Idempotent skill execution — re-invocation produces consistent results
