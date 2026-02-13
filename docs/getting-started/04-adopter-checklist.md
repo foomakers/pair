@@ -43,7 +43,7 @@ pnpm add -g @pair/pair-cli
 
 Expected output includes:
 
-```
+```text
 📁 Available asset registries:
   github     🔄🎯 .github         GitHub workflows and configuration files
   knowledge  🔄 .pair            Knowledge base and documentation

@@ -22,6 +22,7 @@ Define log level standards and usage guidelines to ensure consistent log categor
 ## Log Level Definitions
 
 ### ERROR
+
 **Purpose:** Critical errors that require immediate attention
 **Use Cases:**
 
@@ -44,6 +45,7 @@ Define log level standards and usage guidelines to ensure consistent log categor
 ```
 
 ### WARN
+
 **Purpose:** Potentially harmful situations that don't stop execution
 **Use Cases:**
 
@@ -66,6 +68,7 @@ Define log level standards and usage guidelines to ensure consistent log categor
 ```
 
 ### INFO
+
 **Purpose:** Informational messages highlighting application progress
 **Use Cases:**
 
@@ -86,6 +89,7 @@ Define log level standards and usage guidelines to ensure consistent log categor
 ```
 
 ### DEBUG
+
 **Purpose:** Detailed information for debugging purposes
 **Use Cases:**
 
@@ -109,6 +113,7 @@ Define log level standards and usage guidelines to ensure consistent log categor
 ```
 
 ### TRACE
+
 **Purpose:** Very detailed information for complex debugging
 **Use Cases:**
 

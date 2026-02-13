@@ -1,6 +1,6 @@
 ---
 name: pair-capability-write-issue
-description: Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Invocable independently or composed by /pair-process-refine-story and /pair-process-plan-tasks.
+description: "Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Invocable independently or composed by /pair-process-refine-story and /pair-process-plan-tasks."
 ---
 
 # /pair-capability-write-issue — PM Tool Issue Writer
@@ -34,7 +34,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 2. **Skip**: If PM tool is identified, proceed to Step 3.
 3. **Act**: If no PM tool configured → **HALT**:
 
-   > No PM tool configured in `way-of-working.md`. Configure via `/setup-pm` or manually set the PM tool in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md).
+   > No PM tool configured in `way-of-working.md`. Configure via `/pair-capability-setup-pm` or manually set the PM tool in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md).
 
 4. **Verify**: PM tool identified (e.g., `github-projects`, `jira`, `linear`, `filesystem`).
 
@@ -124,8 +124,8 @@ When composed by `/pair-process-refine-story`:
 
 When composed by `/pair-process-plan-tasks`:
 
-- **Input**: `/pair-process-plan-tasks` invokes `/pair-capability-write-issue` with `$type: task` and `$content` containing the task data. Passes `$parent` for story → task hierarchy linking. Passes `$id` when updating existing tasks.
-- **Output**: Returns the issue identifier. `/pair-process-plan-tasks` records it in the task checklist.
+- **Input**: `/pair-process-plan-tasks` invokes `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]`, and `$content` containing the Task Breakdown section to append. Tasks are documented inline in the story body — no separate task issues are created.
+- **Output**: Returns the story issue identifier. `/pair-process-plan-tasks` confirms the update.
 
 When invoked **independently**:
 

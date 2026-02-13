@@ -12,7 +12,7 @@ Think of it as onboarding documentation for your AI teammate: instead of explain
 
 When you run `pair install`, the CLI creates a `.pair/` folder and optionally a `.skills/` folder in your project:
 
-```
+```text
 .pair/
   knowledge/                    # Reference material (the "how to")
     way-of-working.md           # The development process definition
@@ -65,7 +65,7 @@ The AI reads `how-to/02-how-to-complete-bootstrap-checklist.md` and `assets/boot
 
 **Output**: Five decision documents in `.pair/adoption/tech/`:
 
-```
+```text
 .pair/adoption/tech/
   architecture.md       # "Monolith, REST API, SQLite"
   tech-stack.md         # "TypeScript 5.x, React 19, Vitest 3.x, ..."
@@ -115,7 +115,7 @@ Each story is validated against the **INVEST** framework (Independent, Negotiabl
 
 The AI reads `how-to/08-how-to-refine-a-user-story.md` and adds **acceptance criteria** in Given-When-Then format:
 
-```
+```text
 Given: the user is on the main page
 When:  they click "New Task" and enter the title "Buy milk"
 Then:  the task appears in the list with status "Todo"
@@ -133,7 +133,7 @@ Plus technical analysis: API endpoints, DB schema, UI components, risks.
 
 The AI reads `how-to/09-how-to-create-tasks.md` **and** the adopted standards in `.pair/adoption/tech/`. It generates tasks that **respect the architectural decisions**:
 
-```
+```text
 [ ] Task 1: Create SQLite schema for tasks table
     → Ref: architecture.md (SQLite), tech-stack.md (drizzle-orm)
 
@@ -154,11 +154,13 @@ Every task references specific adoption documents. The AI does not improvise —
 The AI reads `how-to/10-how-to-implement-a-task.md` and follows a strict process:
 
 **Phase 0 — Analysis** (blocking: no code is written without full understanding):
+
 - Reads the user story and all tasks
 - Reads `adoption/tech/architecture.md`, `tech-stack.md`
 - Reads relevant guidelines (code-design, testing)
 
 **Phase 1 — Setup**:
+
 - Creates a feature branch: `feat/US-1-create-task-api`
 
 **Phase 2 — TDD** (mandatory for development tasks):
@@ -170,6 +172,7 @@ The AI reads `how-to/10-how-to-implement-a-task.md` and follows a strict process
 Critical constraint: the AI **never modifies tests and implementation in the same session**. Tests first, then code.
 
 During implementation, the AI continuously consults:
+
 - `guidelines/code-design/design-principles/` for SOLID, pure functions, error handling
 - `guidelines/testing/` for AAA pattern, 80% minimum coverage
 - `guidelines/technical-standards/` for naming, git workflow
@@ -180,11 +183,13 @@ During implementation, the AI continuously consults:
 The AI reads `how-to/11-how-to-code-review.md` and performs a structured review:
 
 **Phase 1 — Technical Standards Validation** (blocking):
+
 - Verifies that libraries used match `tech-stack.md`
 - If a new library is introduced without an ADR → **BLOCKS** and requests ADR creation
 - Verifies adherence to `architecture.md`
 
 **Phase 2 — Requirements Validation**:
+
 - Every acceptance criterion covered?
 - All tasks completed?
 - Business logic correct?

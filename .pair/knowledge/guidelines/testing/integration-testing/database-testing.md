@@ -117,9 +117,9 @@ Entity lifecycle testing examines creation, retrieval, update, and deletion oper
 Query optimization testing validates that repository implementations generate efficient database queries while maintaining result accuracy and consistency. Query testing should examine both simple lookups and complex operations involving joins, aggregations, and filtering to ensure optimal performance characteristics.
 
 Relationship mapping testing examines how repositories handle entity relationships including lazy loading, eager loading, and cascade operations. Relationship testing ensures that data access patterns support application requirements while maintaining referential integrity and performance standards.
-{ name: 'Active User 1', email: 'active1@example.com', isActive: true },
-{ name: 'Active User 2', email: 'active2@example.com', isActive: true },
-{ name: 'Inactive User', email: 'inactive@example.com', isActive: false },
+{ name: 'Active User 1', email: '<active1@example.com>', isActive: true },
+{ name: 'Active User 2', email: '<active2@example.com>', isActive: true },
+{ name: 'Inactive User', email: '<inactive@example.com>', isActive: false },
 ])
 })
 
@@ -135,7 +135,7 @@ where: { isActive: true },
 
 test('should find user by email', async () => {
 const user = await userRepository.findOne({
-where: { email: 'active1@example.com' },
+where: { email: '<active1@example.com>' },
 })
 
 ### Query Testing and Data Retrieval Patterns

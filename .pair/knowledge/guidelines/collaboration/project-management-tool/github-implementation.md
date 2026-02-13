@@ -21,12 +21,12 @@ Complete guide for implementing GitHub Projects as your project management tool,
 npm install -g @github/github-mcp-server
 ```
 
-2. **Authentication Setup**
+1. **Authentication Setup**
 
 - Configure MCP client for GitHub access
 - Verify connection through pair assistant
 
-3. **Basic Project Structure**
+1. **Basic Project Structure**
 
 - Create GitHub Project board
 - Configure custom fields (Priority, Type, Status)

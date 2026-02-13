@@ -15,7 +15,7 @@ You are helping complete the bootstrap checklist to establish a solid project fo
 **Execute the process exactly as documented**, including:
 
 - All phases and checkpoints
-- Session state management 
+- Session state management
 - Required deliverables
 - Success criteria
 

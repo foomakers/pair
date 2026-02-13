@@ -42,7 +42,7 @@ pair-cli --version
 
 Expected output:
 
-```
+```text
 pair-cli vX.Y.Z
 ```
 
@@ -56,7 +56,7 @@ pair-cli install --list-targets
 
 Expected output:
 
-```
+```text
 📁 Available asset registries:
 
   github     🔄🎯 .github         GitHub workflows and configuration files

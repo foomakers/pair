@@ -1,10 +1,6 @@
 ---
 name: implement
-description: >-
-  Implements a user story by iterating through its tasks one at a time, following
-  a structured 5-step cycle per task. Composes /verify-quality and
-  /record-decision. Reads adoption files for project-specific decisions. Creates
-  a PR at story completion.
+description: "Implements a user story by iterating through its tasks one at a time, following a structured 5-step cycle per task. Composes /verify-quality and /record-decision. Reads adoption files for project-specific decisions. Creates a PR at story completion."
 ---
 
 # /implement — Task Implementation
@@ -93,8 +89,8 @@ Ask: _"Ready to proceed with implementation?"_
 3. **Act**: Ask the developer:
 
    > **Commit strategy for this story:**
-   > 1. **Commit per task** (recommended) — one commit per completed task, granular git history, single PR at end
-   > 2. **Commit per story** — all tasks in one commit at the end, single PR
+   > 1. **Commit per task** (recommended) — one commit per completed task, developer confirms after each task, single PR at end
+   > 2. **Commit per story** — all tasks in one commit, continuous flow without inter-task confirmation, single PR
 
 4. **Verify**: Strategy is set. Apply consistently for the entire story.
 
@@ -199,7 +195,20 @@ Follow the TDD discipline rules strictly:
 
 4. **Verify**: Commit created.
 5. **Act**: Update the PM tool — mark ONLY the completed task checkbox (`- [x] **T-N**`) in the **Task Breakdown** section of the story issue body. Do NOT touch other checkboxes (DoD, AC, Quality Assurance sections).
-6. Return to Step 2.1.
+6. **Act**: Present task completion summary and ask for confirmation before proceeding:
+
+   ```text
+   TASK COMPLETE:
+   ├── Task:   T-N — [title]
+   ├── Commit: [commit hash — subject]
+   ├── Files:  [N added, N modified]
+   └── Next:   T-N+1 — [title]
+   ```
+
+   Ask: _"Task T-N complete. Proceed to T-N+1?"_
+
+7. **Verify**: Developer confirms. If not → wait for developer instructions (review, amend, etc.).
+8. Return to Step 2.1.
 
 ## Phase 3: Final Commit and PR
 

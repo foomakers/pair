@@ -21,5 +21,23 @@
   "MD036": false,
 
   // MD041: First line should be heading — disabled (YAML frontmatter files)
-  "MD041": false
+  "MD041": false,
+
+  // MD026: Trailing punctuation in heading — disabled (KB uses "Step 1:", "Prerequisites:" etc.)
+  "MD026": false,
+
+  // MD060: Table column style — disabled (non-aligned tables are the norm in KB)
+  "MD060": false,
+
+  // MD001: Heading increment — disabled (KB guidelines intentionally skip levels, e.g. ## → ####)
+  "MD001": false,
+
+  // MD024: Duplicate headings — disabled (KB uses repeated section names across guideline files)
+  "MD024": false,
+
+  // MD025: Multiple top-level headings — disabled (some docs use multiple # headings for structure)
+  "MD025": false,
+
+  // MD046: Code block style — disabled (KB mixes fenced and indented intentionally)
+  "MD046": false
 }

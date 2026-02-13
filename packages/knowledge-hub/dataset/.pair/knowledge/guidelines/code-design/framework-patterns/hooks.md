@@ -467,10 +467,10 @@ return todos.filter(todo => !todo.completed);
 return (
 <div>
 {memoizedTodos.map(todo => (
-<TodoItem 
-          key={todo.id} 
-          todo={todo} 
-          onToggle={handleToggle} 
+<TodoItem
+          key={todo.id}
+          todo={todo}
+          onToggle={handleToggle}
         />
 ))}
 </div>

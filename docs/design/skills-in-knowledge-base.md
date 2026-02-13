@@ -39,6 +39,7 @@ Introduce Agent Skills (agentskills.io open standard) into the pair Knowledge Ba
 ### How-to ↔ Process Skill Split
 
 How-to KEEPS (orchestration):
+
 - Phase sequence and transitions
 - HALT conditions and prerequisites
 - Developer approval gates
@@ -47,6 +48,7 @@ How-to KEEPS (orchestration):
 - State management structure
 
 How-to LOSES → moves to skills (operational):
+
 - Procedural operations (git, template filling, tool updates)
 - Requirements gathering (questionnaires, question strategies)
 - Technical analysis details (assessment frameworks)
@@ -58,22 +60,26 @@ How-to LOSES → moves to skills (operational):
 ### Guidelines ↔ Capability Skill Split
 
 Symmetric pattern:
+
 - **How-to orchestrates, skill executes** (process axis)
 - **Guideline educates, skill operates** (capability axis)
 
 Guideline KEEPS:
+
 - Educational content (WHY, trade-offs, background)
 - All available options explained
 - Rules and constraints
 - Cross-references
 
 Guideline LOSES → moves to capability skill:
+
 - Decision matrices and frameworks
 - Operational workflows
 - Output format specifications
 - Integration with adoption binding
 
 Guidelines that DON'T lose anything (pure reference):
+
 - code-design/design-principles/ — SOLID, FP, error handling
 - code-design/framework-patterns/ — React/Fastify patterns
 - code-design/code-organization/ — file structure patterns
@@ -99,7 +105,7 @@ Skills are organized along two orthogonal axes that map directly to the existing
 
 Process skills follow the **development lifecycle**. Each maps 1:1 to a how-to file and represents a phase of the development process:
 
-```
+```text
 Induction          Strategic            Iteration         Execution    Review
 ─────────────      ──────────           ──────────        ──────────   ──────
 specify-prd   →    plan-initiatives →   plan-stories  →   implement →  review
@@ -109,6 +115,7 @@ bootstrap     →    map-subdomains  →    refine-story  →
 ```
 
 **Characteristics of process skills:**
+
 - Sequential: they follow the lifecycle order (though not rigidly)
 - Orchestrating: they COMPOSE capability skills to execute phases
 - Stateful: they manage session state across phases
@@ -119,7 +126,7 @@ bootstrap     →    map-subdomains  →    refine-story  →
 
 Capability skills are **cross-cutting** — they can be invoked by any process skill at any lifecycle phase. They map to actionable parts of guidelines:
 
-```
+```text
 Assessment          Workflow             Setup
 (produce choice)    (produce artifact)   (one-time config)
 ──────────────      ──────────────       ──────────────
@@ -136,6 +143,7 @@ estimate
 ```
 
 **Characteristics of capability skills:**
+
 - Atomic: they do ONE thing well, no multi-phase orchestration
 - Reusable: composed by multiple process skills
 - Context-aware: they read adoption to know WHICH approach to use
@@ -145,7 +153,7 @@ estimate
 
 Process skills invoke capability skills at specific points in their workflow:
 
-```
+```text
 PROCESS SKILL (lifecycle phase)
     │
     ├── reads adoption → knows WHICH choices are active
@@ -161,7 +169,8 @@ PROCESS SKILL (lifecycle phase)
 ```
 
 Example — `/review` (process) composing capabilities:
-```
+
+```text
 /review
   Phase 1: Technical Standards Validation
     → /verify-quality              ← capability/workflow
@@ -232,7 +241,7 @@ The same architectural principle applies to both axes:
 
 The navigator skill (`/next`) sits outside both axes. It doesn't execute anything — it reads project state and points to the right process skill:
 
-```
+```text
           /next (navigator)
             │
             ├── reads project state
@@ -301,7 +310,7 @@ Single unified file: `adoption/decision-log.md`
 
 ### Adoption Files Mapping
 
-```
+```text
 architecture.md     ← /assess-architecture
 tech-stack.md       ← /assess-testing, /assess-ai
 infrastructure.md   ← /assess-infrastructure, /assess-observability
@@ -373,7 +382,7 @@ product/subdomain/  ← /map-subdomains
 
 ### Composition Pattern
 
-```
+```text
 /bootstrap
   ├── /assess-architecture      → produces adoption/tech/architecture.md
   ├── /assess-testing           → informs adoption/tech/tech-stack.md
@@ -520,6 +529,7 @@ Execute strict TDD cycle:
 ```
 
 **Key characteristics:**
+
 - Composes `/verify-quality` and `/record-decision`
 - Multiple phases with HALT conditions between them
 - Reads adoption for tech-stack, architecture, way-of-working
@@ -591,6 +601,7 @@ and apply the method to produce structured output.
 ```
 
 **Key characteristics:**
+
 - Resolution cascade: argument > adoption > assessment
 - Dual behavior: can BOTH select method AND execute estimation
 - May write to adoption (only in assessment mode, with approval)
@@ -667,6 +678,7 @@ Report which gate(s) failed. Suggest fixes. Do NOT proceed to PR.
 ```
 
 **Key characteristics:**
+
 - Reads adoption (read-only, never writes)
 - Scoped execution via argument (`$0`)
 - Skips non-adopted gates (accessibility, performance)
@@ -727,6 +739,7 @@ Based on chosen tool, read implementation guide from guidelines:
 ```
 
 **Key characteristics:**
+
 - One-time execution (not repeated each sprint)
 - Uses resolution cascade (same as assessment)
 - Reads implementation guide from guidelines
@@ -803,6 +816,7 @@ If mixed state, present up to 3 options ranked by priority:
 ```
 
 **Key characteristics:**
+
 - Pure read-only (never modifies anything)
 - No arguments
 - Reads entire project state (adoption + PM tool)
@@ -818,7 +832,7 @@ If mixed state, present up to 3 options ranked by priority:
 
 ### Source Structure (in dataset/)
 
-```
+```text
 dataset/.skills/
   process/
     next/SKILL.md
@@ -875,6 +889,7 @@ Each target in a registry has a mode:
 | `symlink` | Directory symlink pointing to canonical |
 
 **Mode inference rules:**
+
 - Default mode = `copy`
 - If symlinks exist + exactly 1 default (unspecified) target → inferred as `canonical`
 - If symlinks exist + 2+ defaults → **error**: "specify canonical"
@@ -948,7 +963,7 @@ registries:
 
 ### Installed Output (flatten: true, prefix: pair)
 
-```
+```text
 .claude/skills/                            ← canonical (real files)
   pair-process-next/SKILL.md
   pair-process-implement/SKILL.md
@@ -964,7 +979,8 @@ registries:
 ```
 
 Team custom skills coexist:
-```
+
+```text
 .claude/skills/
   pair-process-implement/SKILL.md          ← from pair registry
   acme-deploy/SKILL.md                    ← from team registry
@@ -977,6 +993,7 @@ Team custom skills coexist:
 ### AGENTS.md
 
 Simplified from ~230 to ~100 lines:
+
 - Skill-enabled assistants → invoke `/next`
 - Non-skill assistants → manual flow (current logic, simplified)
 - Key references section stays

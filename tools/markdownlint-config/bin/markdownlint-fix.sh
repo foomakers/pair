@@ -1,3 +1,8 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 MARKDOWNLINT_BIN="$SCRIPT_DIR/../node_modules/.bin/markdownlint"
-$MARKDOWNLINT_BIN --config "$SCRIPT_DIR/../.markdownlint.jsonc" --ignore-path "$SCRIPT_DIR/../.markdownlintignore" --fix "**/*.md" "$@"
+# Accept optional path args; default to **/*.md when none provided
+if [ $# -gt 0 ]; then
+  $MARKDOWNLINT_BIN --config "$SCRIPT_DIR/../.markdownlint.jsonc" --ignore-path "$SCRIPT_DIR/../.markdownlintignore" --fix --dot "$@"
+else
+  $MARKDOWNLINT_BIN --config "$SCRIPT_DIR/../.markdownlint.jsonc" --ignore-path "$SCRIPT_DIR/../.markdownlintignore" --fix --dot "**/*.md"
+fi

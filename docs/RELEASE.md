@@ -124,21 +124,21 @@ run: |
   pnpm add -D @foomakers/pair-cli --registry https://npm.pkg.github.com/
 ```
 
-2. Consumer / local development (PAT): when a developer configures a local machine or CI outside of GitHub Actions, they must use a personal access token (PAT) with package read scope. Store it in the consuming repo's secrets or a user-level `.npmrc`. Example `.npmrc` (do not commit this file with the token in plaintext):
+1. Consumer / local development (PAT): when a developer configures a local machine or CI outside of GitHub Actions, they must use a personal access token (PAT) with package read scope. Store it in the consuming repo's secrets or a user-level `.npmrc`. Example `.npmrc` (do not commit this file with the token in plaintext):
 
 ```text
 @foomakers:registry=https://npm.pkg.github.com/
 //npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
 ```
 
-2. Install the package as a dev dependency:
+1. Install the package as a dev dependency:
 
 ```bash
 pnpm add -D @foomakers/pair-cli
 # or npm i @foomakers/pair-cli
 ```
 
-3. Run the CLI via pnpm dlx or npx:
+1. Run the CLI via pnpm dlx or npx:
 
 ```bash
 pnpm dlx pair-cli install
@@ -150,7 +150,7 @@ Additional artifacts produced by the release workflow (optional GitHub Packages 
 - `pair-cli-{version}.tgz` - npm pack tarball produced from the manual release folder (no node_modules). This artifact is used to publish to GitHub Packages so that registry consumers can install the CLI via npm/pnpm.
 - `pair-cli-{version}.tgz.sha256` - SHA256 checksum for the tgz
 
-# Release & Manual Install Guide
+## Release & Manual Install Guide
 
 This document describes the bundled manual-install packaging used by the release pipeline (issue #19).
 
@@ -175,7 +175,7 @@ This script creates a completely self-contained bundled artifact using [ncc](htt
 
 ## Artifact Structure
 
-```
+```text
 pair-cli-manual-vX.Y.Z/
 ├── bundle-cli/           # Self-contained JavaScript bundle
 │   ├── index.js         # Main bundled application
@@ -221,7 +221,7 @@ Before running the packaging script, ensure:
 pnpm exec changeset add
 ```
 
-2. Generate version bumps and changelogs locally (this will update package.json files and create version commits/tags when configured):
+1. Generate version bumps and changelogs locally (this will update package.json files and create version commits/tags when configured):
 
 ```bash
 pnpm exec changeset version
@@ -312,7 +312,7 @@ The release process is now fully automated through GitHub Actions using a **3-ph
 
 ### Complete Release Flow
 
-```
+```text
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │   Developer     │    │   Changeset      │    │   PR Merge      │
 │   creates       │───▶│   PR created     │───▶│   triggers      │
@@ -445,13 +445,13 @@ git add .changeset && git commit -m "test(changeset): test versioning"
 git push origin main
 ```
 
-3. Observe GitHub Actions: ensure the `Version (Changesets)` workflow runs and creates a version PR. Check the Checks UI for the `Version (Changesets) / version` job.
+1. Observe GitHub Actions: ensure the `Version (Changesets)` workflow runs and creates a version PR. Check the Checks UI for the `Version (Changesets) / version` job.
 
-4. Merge the changeset PR: This should trigger the `Tag on Changeset PR Merge` workflow and create a `v{X.Y.Z}` tag.
+2. Merge the changeset PR: This should trigger the `Tag on Changeset PR Merge` workflow and create a `v{X.Y.Z}` tag.
 
-5. Verify `Release` workflow runs (on tag creation) and that artifacts are produced and uploaded. Confirm the Check named `Release / release` completes successfully.
+3. Verify `Release` workflow runs (on tag creation) and that artifacts are produced and uploaded. Confirm the Check named `Release / release` completes successfully.
 
-6. If any check is missing from branch protection, run a workflow to populate the check name and then add it to protection settings.
+4. If any check is missing from branch protection, run a workflow to populate the check name and then add it to protection settings.
 
 Notes on tokens and scopes
 

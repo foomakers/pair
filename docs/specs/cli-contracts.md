@@ -145,7 +145,7 @@ interface ValidateConfigConstraints {
 
 #### V001: Conflicting Options
 
-```
+```text
 Error: Cannot use --list-targets with target arguments
 
 Usage: pair install --list-targets
@@ -158,7 +158,7 @@ Usage: pair install --list-targets
 
 #### V002: Offline Requires Source
 
-```
+```text
 Error: --offline requires --source with local filesystem path
 
 Example:
@@ -172,7 +172,7 @@ Example:
 
 #### V003: Offline Cannot Use URL
 
-```
+```text
 Error: Cannot use --offline with remote URL
 
 --offline requires local filesystem path.
@@ -188,7 +188,7 @@ Example:
 
 #### V004: Invalid Config File
 
-```
+```text
 Error: Config file not found: ./missing-config.json
 
 Ensure:
@@ -202,7 +202,7 @@ Ensure:
 
 #### V005: Malformed Config JSON
 
-```
+```text
 Error: Failed to parse config file: Unexpected token } in JSON at position 125
 
 Config file: ./config.json
@@ -216,7 +216,7 @@ Config file: ./config.json
 
 #### FS001: Path Not Found
 
-```
+```text
 Error: Target path does not exist: /path/to/missing
 
 Ensure:
@@ -231,7 +231,7 @@ Ensure:
 
 #### FS002: Permission Denied
 
-```
+```text
 Error: Permission denied: /protected/path
 
 Suggestions:
@@ -246,7 +246,7 @@ Suggestions:
 
 #### FS003: Not Writable
 
-```
+```text
 Error: Target directory is not writable: /readonly/path
 
 Ensure:
@@ -261,7 +261,7 @@ Ensure:
 
 #### FS004: Disk Full
 
-```
+```text
 Error: Insufficient disk space
 
 Required: 150 MB
@@ -280,7 +280,7 @@ Suggestions:
 
 #### KB001: Missing .pair Directory
 
-```
+```text
 Error: Invalid KB structure - .pair directory not found
 
 Source: /path/to/kb-content
@@ -296,7 +296,7 @@ KB must contain:
 
 #### KB002: Invalid Asset Registry
 
-```
+```text
 Error: Asset registry 'github' has invalid configuration
 
 Issues:

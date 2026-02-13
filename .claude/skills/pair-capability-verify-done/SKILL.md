@@ -1,6 +1,6 @@
 ---
 name: pair-capability-verify-done
-description: Checks Definition of Done criteria against a PR or work item. Reads universal DoD from quality-standards guidelines and project-specific criteria from adoption files. Already-passing criteria are skipped. Invocable independently or composed by /pair-process-review.
+description: "Checks Definition of Done criteria against a PR or work item. Reads universal DoD from quality-standards guidelines and project-specific criteria from adoption files. Already-passing criteria are skipped. Invocable independently or composed by /pair-process-review."
 ---
 
 # /pair-capability-verify-done — Definition of Done Checker

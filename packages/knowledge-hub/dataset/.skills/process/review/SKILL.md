@@ -1,12 +1,6 @@
 ---
 name: review
-description: >-
-  Reviews a pull request through a structured 5-phase process: validation,
-  technical review, adoption compliance, completeness check, and decision.
-  Composes /verify-quality, /verify-done, /record-decision, /assess-debt
-  (required) and /verify-adoption, /assess-stack (optional with graceful
-  degradation). Output follows the code review template. Idempotent — re-invocation
-  resumes from the first incomplete phase.
+description: "Reviews a pull request through a structured 5-phase process: validation, technical review, adoption compliance, completeness check, and decision. Composes /verify-quality, /verify-done, /record-decision, /assess-debt (required) and /verify-adoption, /assess-stack (optional with graceful degradation). Output follows the code review template. Idempotent — re-invocation resumes from incomplete phases."
 ---
 
 # /review — Code Review
