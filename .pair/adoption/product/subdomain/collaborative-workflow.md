@@ -1,5 +1,7 @@
 # Collaborative Workflow (Core Subdomain)
 
+> Classification: **Core**
+
 **Business Purpose:**
 Enable seamless coordination between development teams and AI assistants throughout all phases of product development, from requirements definition to delivery.
 

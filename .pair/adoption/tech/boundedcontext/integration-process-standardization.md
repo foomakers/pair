@@ -1,6 +1,8 @@
 # Integration & Process Standardization Context
 
-## Subdomain Covered
+> Type: **Infrastructure**
+
+## Subdomains Covered
 
 - Integration & Process Standardization
 
@@ -27,3 +29,17 @@ This context manages all integration logic and process standardization for the p
 ## Team Alignment
 
 - Managed by the core development team; may expand as integration needs grow.
+
+## Ubiquitous Language
+
+| Term | Definition |
+| ---- | ---------- |
+| Quality gate | A configured check command (e.g., `pnpm quality-gate`) that must pass before commits |
+| Bridge pattern | The mechanism that links AI tool directories (AGENTS.md, .github/) to the canonical .pair/ KB |
+| Smoke test | End-to-end CLI release process validation (`pnpm smoke-tests`) |
+
+## Quality Attributes
+
+- **Performance:** Quality gate execution under 30 seconds for cached builds
+- **Scalability:** Pipeline supports multiple AI tool targets via symlink distribution
+- **Reliability:** Pre-commit hooks enforce gate compliance; no bypass without explicit override

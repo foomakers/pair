@@ -1,5 +1,7 @@
 # Knowledge & Standards Context
 
+> Type: **Supporting**
+
 ## Subdomains Covered
 
 - How To Knowledge
@@ -27,3 +29,17 @@ This context captures, manages, and disseminates operational instructions, best 
 ## Team Alignment
 
 - Managed by the core development team, ensuring standards and knowledge evolve with project needs.
+
+## Ubiquitous Language
+
+| Term | Definition |
+| ---- | ---------- |
+| Guideline | A reusable standard or best practice documented in the knowledge base |
+| How-to | An orchestration document that composes skills into a phase-driven workflow |
+| Adoption file | A project-specific record of a decision (architecture, tech-stack, way-of-working) |
+
+## Quality Attributes
+
+- **Performance:** No runtime constraints — consumed at development time by AI assistants
+- **Scalability:** Grows with project complexity; file-based storage scales linearly
+- **Reliability:** Content must be self-consistent — no broken internal references

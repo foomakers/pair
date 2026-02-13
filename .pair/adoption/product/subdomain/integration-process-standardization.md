@@ -1,5 +1,7 @@
 # Integration & Process Standardization (Supporting Subdomain)
 
+> Classification: **Supporting**
+
 **Business Purpose:**
 Connect with external tools (e.g., code assistants, project management platforms) and standardize team processes for consistent operations.
 

@@ -1,5 +1,7 @@
 # Adoption & Guidelines (Supporting Subdomain)
 
+> Classification: **Supporting**
+
 **Business Purpose:**
 Manage the adoption of practices, tools, and processes, and define operational and technical guidelines for the team.
 
