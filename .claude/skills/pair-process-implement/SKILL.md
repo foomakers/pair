@@ -5,7 +5,7 @@ description: "Implements a user story by iterating through its tasks one at a ti
 
 # /pair-process-implement — Task Implementation
 
-Implement a user story by processing its tasks sequentially. Each task follows a 5-step cycle: context → branch → implementation → quality → commit. The story-level process has 4 phases (0–3). Creates a single PR when all tasks are done.
+Implement a user story by processing its tasks sequentially. Each task follows a 5-step cycle: context → branch → implementation → quality → commit. The story-level process has 5 phases (0–4): analysis, setup, implementation, PR creation, and post-review merge. Creates a single PR when all tasks are done.
 
 ## Composed Skills
 
@@ -89,8 +89,8 @@ Ask: _"Ready to proceed with implementation?"_
 3. **Act**: Ask the developer:
 
    > **Commit strategy for this story:**
-   > 1. **Commit per task** (recommended) — one commit per completed task, developer confirms after each task, single PR at end
-   > 2. **Commit per story** — all tasks in one commit, continuous flow without inter-task confirmation, single PR
+   > 1. **Commit per task** (recommended) — develop one task, ask dev, commit, update checkbox, next task. Single PR at end.
+   > 2. **Commit per story** — develop all tasks continuously, then ask dev, commit all, update all checkboxes, single PR.
 
 4. **Verify**: Strategy is set. Apply consistently for the entire story.
 
@@ -178,11 +178,25 @@ Follow the TDD discipline rules strictly:
 1. **Act**: Compose `/pair-capability-verify-quality` with `$scope = all`.
 2. **Verify**: All quality gates pass. If any gate fails → **HALT**. Developer must fix before proceeding.
 
-### Step 2.8: Commit (if commit-per-task)
+### Step 2.8: Task Completion
 
 1. **Check**: Is the commit strategy `commit-per-task`?
-2. **Skip**: If `commit-per-story`, mark task as complete in session state and return to Step 2.1.
-3. **Act**: Stage and commit following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md):
+2. **Skip**: If `commit-per-story`, continue to next task — return to Step 2.1. No inter-task confirmation.
+3. **Act** (BLOCKING): Present task summary and **ask developer for confirmation BEFORE committing**:
+
+   ```text
+   TASK DONE:
+   ├── Task:   T-N — [title]
+   ├── Files:  [N added, N modified]
+   └── Next:   T-N+1 — [title] (or "PR" if last task)
+   ```
+
+   Ask: _"Task T-N done. OK to commit or changes needed?"_
+
+   **This confirmation is required for EVERY task.** The purpose of commit-per-task is precisely to give the developer a checkpoint between tasks.
+
+4. **Verify**: Developer confirms. If changes needed → apply changes, re-run quality (Step 2.7), ask again.
+5. **Act**: Stage and commit following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md):
 
    ```text
    [#<story-id>] <type>: <task-description>
@@ -193,32 +207,33 @@ Follow the TDD discipline rules strictly:
    Refs: #<story-id>
    ```
 
-4. **Verify**: Commit created.
-5. **Act** (MANDATORY — EVERY task): Update the PM tool — mark ONLY the completed task checkbox (`- [x] **T-N**`) in the **Task Breakdown** section of the story issue body. Do NOT touch other checkboxes (DoD, AC, Quality Assurance sections). This MUST happen after every single task, not just the first one.
-6. **Act** (MANDATORY — EVERY task, BLOCKING): Present task completion summary and **STOP to ask for developer confirmation** before proceeding to the next task. Do NOT silently continue — the developer must explicitly confirm.
+6. **Verify**: Commit created.
+7. **Act**: Update the PM tool story issue body:
+   - Mark the completed task checkbox (`- [x] **T-N**`) in the **Task Breakdown** section.
+   - Mark any **Definition of Done** checkboxes that are now factually satisfied by this task's work (e.g., "SKILL.md created", "template validated"). Leave unchecked items that require reviewer confirmation (e.g., "Code reviewed and merged").
+8. **Check**: Is this the last task?
+   - **Yes**: Move to Phase 3 (PR).
+   - **No**: Return to Step 2.1.
 
-   ```text
-   TASK COMPLETE:
-   ├── Task:   T-N — [title]
-   ├── Commit: [commit hash — subject]
-   ├── Files:  [N added, N modified]
-   └── Next:   T-N+1 — [title]
-   ```
-
-   Ask: _"Task T-N complete. Proceed to T-N+1?"_
-
-   **This confirmation is required for EVERY task**, not just the first one. The purpose of commit-per-task is precisely to give the developer a checkpoint between tasks.
-
-7. **Verify**: Developer confirms. If not → wait for developer instructions (review, amend, etc.).
-8. Return to Step 2.1.
-
-## Phase 3: Final Commit and PR
+## Phase 3: Commit (if per-story), Push & PR
 
 ### Step 3.1: Final Commit (if commit-per-story)
 
 1. **Check**: Is the commit strategy `commit-per-story`?
 2. **Skip**: If `commit-per-task`, all commits already exist. Move to Step 3.2.
-3. **Act**: Stage all changes and commit:
+3. **Act** (BLOCKING): Present summary and **ask developer for confirmation BEFORE committing**:
+
+   ```text
+   ALL TASKS DONE:
+   ├── Tasks:  [list all T-N with titles]
+   ├── Files:  [N added, N modified]
+   └── Action: Commit all changes
+   ```
+
+   Ask: _"All tasks done. Ready to commit or changes needed?"_
+
+4. **Verify**: Developer confirms. If changes needed → apply changes, re-run quality, ask again.
+5. **Act**: Stage all changes and commit:
 
    ```text
    [#<story-id>] feat: <story-description>
@@ -229,20 +244,15 @@ Follow the TDD discipline rules strictly:
    Refs: #<story-id>
    ```
 
-4. **Verify**: Commit created with all changes.
+6. **Verify**: Commit created with all changes.
+7. **Act**: Update the PM tool story issue body:
+   - Mark ALL task checkboxes (`- [x] **T-N**`) in the **Task Breakdown** section.
+   - Mark all **Definition of Done** checkboxes that are factually satisfied by the implementation. Leave unchecked items that require reviewer confirmation (e.g., "Code reviewed and merged").
 
-### Step 3.2: Update Story Checkboxes
-
-1. **Act**: Update the story issue in the PM tool — check all **Development Completion** and **Quality Assurance** checkboxes that are satisfied by the completed implementation:
-   - **Development Completion**: mark items that correspond to created/modified artifacts (e.g., "SKILL.md created", "how-to thinned", "composition validated").
-   - **Quality Assurance**: mark items verified during validation tasks (e.g., "invocable in Claude Code", "re-invocation works", "degradation cascade tested").
-   - Only check items that are factually verifiable from the work done. Leave unchecked any items that require reviewer confirmation (e.g., "Code reviewed and merged").
-2. **Verify**: Checkboxes updated. Task Breakdown checkboxes should already be ✅ from Step 2.8.
-
-### Step 3.3: Push Branch
+### Step 3.2: Push Branch
 
 1. **Check**: Is the branch already pushed and up to date with remote?
-2. **Skip**: If up to date, move to Step 3.4.
+2. **Skip**: If up to date, move to Step 3.3.
 3. **Act**: Push the branch:
 
    ```bash
@@ -251,7 +261,7 @@ Follow the TDD discipline rules strictly:
 
 4. **Verify**: Branch pushed to remote.
 
-### Step 3.4: Confirm PR with Developer
+### Step 3.3: Confirm PR with Developer
 
 1. **Act**: Present a summary before creating the PR:
 
@@ -259,7 +269,7 @@ Follow the TDD discipline rules strictly:
    PR READY:
    ├── Branch:  [feature/#story-id-description]
    ├── Tasks:   [N/N completed]
-   ├── Commits: [N commits (or 1 squashed)]
+   ├── Commits: [N commits on branch]
    ├── Quality: [All gates passing]
    └── Title:   [#<story-id>] <type>: <brief description>
    ```
@@ -267,7 +277,7 @@ Follow the TDD discipline rules strictly:
 2. **Ask**: _"Ready to create the PR?"_
 3. **Verify**: Developer confirms. If not → wait for developer instructions.
 
-### Step 3.5: Create or Update PR
+### Step 3.4: Create or Update PR
 
 1. **Check**: Does a PR already exist for this branch?
 2. **Skip**: If PR exists, update its description and move to output.
@@ -284,9 +294,54 @@ Follow the TDD discipline rules strictly:
 4. **Act**: Mark the PR as **ready for review** — ensure it is not in draft state. If the PM tool supports review request (e.g., GitHub `gh pr ready`), mark it explicitly.
 5. **Verify**: PR created, description follows template, PR is ready for review.
 
+## Phase 4: Post-Review Merge
+
+After code review approval (typically via `/pair-process-review`), re-invoke `/pair-process-implement` to merge and close.
+
+### Step 4.1: Verify Review Approval
+
+1. **Check**: Is the PR approved by the reviewer?
+2. **Skip**: If not approved → **HALT**. Wait for review completion.
+3. **Verify**: PR has at least one approval.
+
+### Step 4.2: Prepare Merge Commit Message
+
+1. **Check**: Read [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) for merge strategy (squash, merge, rebase).
+2. **Act**: Draft the final commit message:
+   - **If squash**: combine all commits into a single message following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md).
+   - **If merge or rebase**: use the default merge/rebase message.
+3. **Act** (BLOCKING): Present the commit message to the developer for confirmation:
+
+   > **Merge commit message:**
+   >
+   > ```text
+   > [#<story-id>] feat: <story description>
+   >
+   > - <summary of changes>
+   > - Tasks: T-1, T-2, ..., T-N
+   >
+   > Refs: #<story-id>
+   > ```
+   >
+   > Confirm or edit?
+
+4. **Verify**: Developer confirms the commit message.
+
+### Step 4.3: Merge PR
+
+1. **Act**: Merge the PR with the confirmed commit message and the configured merge strategy.
+2. **Verify**: PR merged and closed.
+
+### Step 4.4: Update Story & Parents
+
+1. **Act**: Update user story status to "Done" in the PM tool.
+2. **Act**: Check parent epic — if ALL stories in the epic are Done, update epic status to "Done".
+3. **Act**: Check parent initiative — if ALL epics in the initiative are Done, update initiative status to "Done".
+4. **Verify**: Story and parent hierarchy updated recursively.
+
 ## Output Format
 
-At completion:
+At PR creation (Phase 3):
 
 ```text
 IMPLEMENTATION COMPLETE:
@@ -299,6 +354,18 @@ IMPLEMENTATION COMPLETE:
 └── Quality:  [All gates passing]
 ```
 
+At merge (Phase 4):
+
+```text
+STORY DONE:
+├── Story:      [#ID: Title]
+├── PR:         [#PR-number — merged]
+├── Merge:      [squash | merge | rebase]
+├── Story:      Done
+├── Epic:       [#ID — Done | In Progress (X/Y stories done)]
+└── Initiative: [#ID — Done | In Progress (X/Y epics done)]
+```
+
 ## HALT Conditions
 
 Implementation stops immediately when:
@@ -306,9 +373,10 @@ Implementation stops immediately when:
 - **Story not loaded or incomplete** (Phase 0)
 - **Task specifications incomplete** (Step 2.2)
 - **Quality gate failure** (Step 2.7) — developer must fix
-- **New dependency rejected by /assess-stack** (Step 2.4)
-- **PR template not found** (Step 3.3) — cannot create PR without template
+- **New dependency rejected by /pair-capability-assess-stack** (Step 2.4)
+- **PR template not found** (Step 3.4) — cannot create PR without template
 - **Commit template not found** (Step 2.8 / Step 3.1) — cannot commit without template
+- **PR not approved** (Step 4.1) — cannot merge without review approval
 
 On HALT: report the blocker clearly, propose resolution, wait for developer.
 
@@ -321,6 +389,7 @@ Re-invoking `/pair-process-implement` on a partially completed story is safe and
 3. **Tasks**: scans task checklist and git log to identify completed tasks. Skips them.
 4. **PR**: detects existing PR, updates instead of creating duplicate.
 5. **Quality gates**: re-runs all gates (fast if already passing).
+6. **Merge**: if PR exists and is approved, proceeds directly to Phase 4 (merge).
 
 The skill resumes from the first incomplete step — never re-does completed work.
 
@@ -328,7 +397,7 @@ The skill resumes from the first incomplete step — never re-does completed wor
 
 - **PM tool not accessible**: Ask developer to manually provide story details and task list.
 - **Missing adoption files**: Warn and proceed with guideline defaults.
-- **/assess-stack not installed**: Warn on new dependency, continue without validation.
+- **/pair-capability-assess-stack not installed**: Warn on new dependency, continue without validation.
 - **/verify-adoption not installed**: Warn, skip adoption compliance check.
 - **No quality gate command**: Fall back to individual checks (lint, test, type check).
 
@@ -338,5 +407,7 @@ The skill resumes from the first incomplete step — never re-does completed wor
 - Task iteration is sequential — each task completes its full cycle before the next begins.
 - The developer can stop between tasks. Re-invoke to resume (idempotency ensures correct state).
 - Single PR per story regardless of commit strategy.
+- **Squash happens at merge** (Phase 4), not before PR creation. Individual commits are preserved on the branch during review.
 - Commit messages follow the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md).
 - PR description follows the [PR template](../../../.pair/knowledge/guidelines/collaboration/templates/pr-template.md).
+- **Phase 4 is invoked separately** after code review approval — re-invoke `/pair-process-implement` to merge and update status.
