@@ -56,7 +56,7 @@ We cannot help with:
 
 ### Step 4: Direct Contact
 
-- **Email**: gianluca@carucci.org
+- **Email**: <gianluca@carucci.org>
   - Best for: Security issues, private matters
   - Response time: 5-7 business days
   - Include "pair-cli" in subject line
@@ -124,7 +124,7 @@ When opening a GitHub issue, include this information:
 For security-related issues:
 
 - **DO NOT** open public GitHub issues
-- Email directly: rucka@tiscalinet.it
+- Email directly: <rucka@tiscalinet.it>
 - Include "SECURITY" in subject line
 - Provide full details privately
 
@@ -205,7 +205,7 @@ Before sharing diagnostic output, remove:
 ### Primary Maintainer
 
 - **GitHub**: [@rucka](https://github.com/rucka)
-- **Email**: rucka@tiscalinet.it
+- **Email**: <rucka@tiscalinet.it>
 - **Role**: Lead maintainer, bug fixes, releases
 
 ### Fallback Contacts

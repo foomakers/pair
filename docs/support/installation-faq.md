@@ -349,7 +349,7 @@ npm config list           # npm configuration
 
 **Sample diagnostic output:**
 
-```
+```text
 $ uname -a
 Darwin MacBook-Pro.local 21.6.0 Darwin Kernel Version 21.6.0
 

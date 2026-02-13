@@ -146,7 +146,7 @@ pair update-link --verbose
 
 ### Summary Report
 
-```
+```text
 📊 Link Update Summary:
 
 ✅ Total links processed: 127
@@ -165,7 +165,7 @@ pair update-link --verbose
 
 ### Dry-Run Output
 
-```
+```text
 🔍 DRY RUN MODE - No files will be modified
 
 [... processing summary ...]

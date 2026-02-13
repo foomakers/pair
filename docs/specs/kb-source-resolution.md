@@ -18,7 +18,7 @@ KB source is resolved in the following order (highest to lowest priority):
 
 ### Decision Tree
 
-```
+```text
 ┌─────────────────────────────────────┐
 │  KB Source Resolution Entry Point  │
 └─────────────────────────────────────┘
@@ -216,7 +216,7 @@ async function resolveKbSource(options: { source?: string; offline?: boolean }):
 
 #### E001: Offline Without Source
 
-```
+```text
 Error: --offline requires --source with local filesystem path
 
 Example:
@@ -229,7 +229,7 @@ Example:
 
 #### E002: Offline With Remote URL
 
-```
+```text
 Error: Cannot use --offline with remote URL
 
 --offline requires local filesystem path.
@@ -244,7 +244,7 @@ Example:
 
 #### E003: Source Path Not Found
 
-```
+```text
 Error: KB source path does not exist: /path/to/missing
 
 Please verify:
@@ -259,7 +259,7 @@ Please verify:
 
 #### E004: Invalid Source Format
 
-```
+```text
 Error: Invalid source format: invalid-source
 
 Source must be:
@@ -274,7 +274,7 @@ Source must be:
 
 #### E005: Download Network Error
 
-```
+```text
 Error: Failed to download KB from https://example.com/kb.zip
 
 Network error: Connection timeout after 30s
@@ -292,7 +292,7 @@ Suggestions:
 
 #### E006: Checksum Validation Failed
 
-```
+```text
 Error: KB checksum validation failed
 
 Downloaded file may be corrupted or tampered with.
@@ -309,7 +309,7 @@ Suggestions:
 
 #### E007: Auto-Download in Offline Mode
 
-```
+```text
 Error: Cannot auto-download KB in offline mode
 
 Use --source with local filesystem path:
@@ -326,7 +326,7 @@ Use --source with local filesystem path:
 
 When `requiresDownload: true` for URL sources:
 
-```
+```text
 ┌──────────────────┐
 │ Fetch URL        │
 │ HEAD request     │
