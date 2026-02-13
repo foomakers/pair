@@ -1,17 +1,17 @@
 ---
 name: pair-process-plan-tasks
-description: Breaks a refined user story into implementation tasks. Task-level idempotency: detects existing tasks and creates only missing ones. Appends condensed Technical Analysis + Task Breakdown (checklist, Dependency Graph, AC Coverage table, detailed tasks) to the story body. Composes /pair-capability-write-issue for PM tool updates.
+description: Breaks a refined user story into implementation tasks. Task-level idempotency: detects existing tasks and creates only missing ones. Appends condensed Technical Analysis + Task Breakdown (checklist, Dependency Graph, AC Coverage table, detailed tasks) to the story body. Composes /pair-capability-write-issue to update the story issue body. Tasks are documented inline in the story — no separate task issues are created.
 ---
 
 # /pair-process-plan-tasks — Task Breakdown
 
-Transform a refined user story into specific, actionable implementation tasks. Task-level idempotency: detects existing tasks in the story body and creates only missing ones. Appends an integrated Technical Analysis + Task Breakdown section to the story issue.
+Transform a refined user story into specific, actionable implementation tasks. Task-level idempotency: detects existing tasks in the story body and creates only missing ones. Appends an integrated Technical Analysis + Task Breakdown section to the story issue body. Tasks live inside the story — no separate task issues are created in the PM tool.
 
 ## Composed Skills
 
 | Skill          | Type       | Required                                                   |
 | -------------- | ---------- | ---------------------------------------------------------- |
-| `/pair-capability-write-issue` | Capability | Yes — creates task issues and updates the story issue body |
+| `/pair-capability-write-issue` | Capability | Yes — updates the story issue body with the Task Breakdown section |
 
 ## Arguments
 
@@ -106,9 +106,8 @@ For each task (skipping tasks that already exist in the story body):
 
 ### Step 6: PM Tool Update
 
-1. **Act**: Compose `/pair-capability-write-issue` with `$type: task`, no `$id` (create mode) for each new task.
-2. **Act**: Compose `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]` to append the Task Breakdown section to the story body.
-3. **Verify**: All tasks created in PM tool. Story body updated with Task Breakdown section.
+1. **Act**: Compose `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]` to append the Task Breakdown section to the story body. Tasks are documented inline in the story — do NOT create separate task issues.
+2. **Verify**: Story body updated with Task Breakdown section.
 
 ### Step 7: Already-Complete Update (optional path)
 
@@ -134,7 +133,7 @@ TASK BREAKDOWN COMPLETE:
 ├── Tasks:      [N tasks created]
 ├── Types:      [Development: N, Documentation: N, Configuration: N]
 ├── AC Coverage:[K/K ACs covered]
-├── PM Tool:    [Story updated, N task issues created]
+├── PM Tool:    [Story updated with Task Breakdown section]
 └── Next:       /pair-process-implement to start task execution
 ```
 
@@ -154,8 +153,8 @@ TASK BREAKDOWN COMPLETE:
 
 ## Notes
 
-- This skill **modifies PM tool state** — it creates task issues and updates the story body.
-- Task-level idempotency: re-invoking on a story with partial tasks creates only missing ones.
+- This skill **modifies PM tool state** — it updates the story body with the Task Breakdown section. No separate task issues are created.
+- Task-level idempotency: re-invoking on a story with partial tasks appends only missing ones to the story body.
 - The integrated Technical Analysis + Task Breakdown format positions these as the last content sections in the story body (functional sections first, technical sections last).
 - Condensed TA retains: strategy summary, data flow/pipeline order, key risks. Removes verbose implementation detail that belongs in individual tasks.
 - Task template reference: [task-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/task-template.md).

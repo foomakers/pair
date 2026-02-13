@@ -128,8 +128,8 @@ When composed by `/refine-story`:
 
 When composed by `/plan-tasks`:
 
-- **Input**: `/plan-tasks` invokes `/write-issue` with `$type: task` and `$content` containing the task data. Passes `$parent` for story → task hierarchy linking. Passes `$id` when updating existing tasks.
-- **Output**: Returns the issue identifier. `/plan-tasks` records it in the task checklist.
+- **Input**: `/plan-tasks` invokes `/write-issue` with `$type: story`, `$id: [story-id]`, and `$content` containing the Task Breakdown section to append. Tasks are documented inline in the story body — no separate task issues are created.
+- **Output**: Returns the story issue identifier. `/plan-tasks` confirms the update.
 
 When invoked **independently**:
 
