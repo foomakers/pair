@@ -275,4 +275,6 @@ Each guide provides:
 
 ---
 
+**Skill**: Use `/assess-pm` to evaluate and adopt a PM tool from these guidelines via the resolution cascade. Use `/setup-pm` for tool configuration.
+
 _This framework provides comprehensive guidance for selecting and implementing project management tools that integrate seamlessly with development workflows and team collaboration patterns._

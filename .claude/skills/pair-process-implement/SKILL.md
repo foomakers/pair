@@ -194,8 +194,8 @@ Follow the TDD discipline rules strictly:
    ```
 
 4. **Verify**: Commit created.
-5. **Act**: Update the PM tool — mark ONLY the completed task checkbox (`- [x] **T-N**`) in the **Task Breakdown** section of the story issue body. Do NOT touch other checkboxes (DoD, AC, Quality Assurance sections).
-6. **Act**: Present task completion summary and ask for confirmation before proceeding:
+5. **Act** (MANDATORY — EVERY task): Update the PM tool — mark ONLY the completed task checkbox (`- [x] **T-N**`) in the **Task Breakdown** section of the story issue body. Do NOT touch other checkboxes (DoD, AC, Quality Assurance sections). This MUST happen after every single task, not just the first one.
+6. **Act** (MANDATORY — EVERY task, BLOCKING): Present task completion summary and **STOP to ask for developer confirmation** before proceeding to the next task. Do NOT silently continue — the developer must explicitly confirm.
 
    ```text
    TASK COMPLETE:
@@ -206,6 +206,8 @@ Follow the TDD discipline rules strictly:
    ```
 
    Ask: _"Task T-N complete. Proceed to T-N+1?"_
+
+   **This confirmation is required for EVERY task**, not just the first one. The purpose of commit-per-task is precisely to give the developer a checkpoint between tasks.
 
 7. **Verify**: Developer confirms. If not → wait for developer instructions (review, amend, etc.).
 8. Return to Step 2.1.
