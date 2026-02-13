@@ -117,7 +117,7 @@ ASSESSMENT COMPLETE:
 
 When composed by `/bootstrap`:
 
-- **Input**: `/bootstrap` invokes during Phase 4 (finalization). May pass `$choice`.
+- **Input**: `/bootstrap` invokes during Phase 2 (checklist completion). May pass `$choice`.
 - **Output**: Returns decision summary. If `/setup-pm` was composed, returns its output.
 
 When invoked **independently**:

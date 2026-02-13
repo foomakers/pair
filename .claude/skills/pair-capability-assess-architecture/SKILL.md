@@ -17,7 +17,7 @@ Evaluate and decide on the system architecture pattern. Follows the resolution c
 
 | Skill              | Type       | Required                                          |
 | ------------------ | ---------- | ------------------------------------------------- |
-| `/pair-capability-record-decision` | Capability | Yes — records architecture decision as ADR or ADL |
+| `/pair-capability-record-decision` | Capability | Yes — records architecture decision as ADR |
 
 ## Adoption File
 

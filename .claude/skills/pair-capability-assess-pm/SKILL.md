@@ -117,7 +117,7 @@ ASSESSMENT COMPLETE:
 
 When composed by `/pair-process-bootstrap`:
 
-- **Input**: `/pair-process-bootstrap` invokes during Phase 4 (finalization). May pass `$choice`.
+- **Input**: `/pair-process-bootstrap` invokes during Phase 2 (checklist completion). May pass `$choice`.
 - **Output**: Returns decision summary. If `/pair-capability-setup-pm` was composed, returns its output.
 
 When invoked **independently**:
