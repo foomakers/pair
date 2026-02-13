@@ -1,9 +1,9 @@
 ---
-name: implement
-description: "Implements a user story by iterating through its tasks one at a time, following a structured 5-step cycle per task. Composes /verify-quality and /record-decision. Reads adoption files for project-specific decisions. Creates a PR at story completion."
+name: pair-process-implement
+description: "Implements a user story by iterating through its tasks one at a time, following a structured 5-step cycle per task. Composes /pair-capability-verify-quality and /pair-capability-record-decision. Reads adoption files for project-specific decisions. Creates a PR at story completion."
 ---
 
-# /implement — Task Implementation
+# /pair-process-implement — Task Implementation
 
 Implement a user story by processing its tasks sequentially. Each task follows a 5-step cycle: context → branch → implementation → quality → commit. The story-level process has 4 phases (0–3). Creates a single PR when all tasks are done.
 
@@ -11,8 +11,8 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 
 | Skill              | Type       | Required                                                                                            |
 | ------------------ | ---------- | --------------------------------------------------------------------------------------------------- |
-| `/verify-quality`  | Capability | Yes — invoked at quality validation phase                                                           |
-| `/record-decision` | Capability | Yes — invoked when a decision needs recording                                                       |
+| `/pair-capability-verify-quality`  | Capability | Yes — invoked at quality validation phase                                                           |
+| `/pair-capability-record-decision` | Capability | Yes — invoked when a decision needs recording                                                       |
 | `/assess-stack`    | Capability | Optional — invoked when a new dependency is detected. If not installed, warn and continue.          |
 | `/verify-adoption` | Capability | Optional — invoked before commit to check adoption compliance. If not installed, warn and continue. |
 
@@ -158,7 +158,7 @@ Follow the TDD discipline rules strictly:
 
 1. **Check**: Did the implementation introduce any decision not covered by existing ADRs or ADLs?
 2. **Skip**: If no new decisions needed, move to Step 2.6.
-3. **Act**: Ask the developer if a decision record is needed. If yes, compose `/record-decision` with the appropriate `$type` (`architectural` or `non-architectural`) and `$topic`.
+3. **Act**: Ask the developer if a decision record is needed. If yes, compose `/pair-capability-record-decision` with the appropriate `$type` (`architectural` or `non-architectural`) and `$topic`.
 4. **Verify**: Decision recorded and adoption files updated.
 
 ### Step 2.6: Verify Adoption Compliance
@@ -170,12 +170,12 @@ Follow the TDD discipline rules strictly:
    Move to Step 2.7.
 
 3. **Act**: Compose `/verify-adoption` with `$scope` appropriate to the task.
-   - Non-conformities reported → resolve via `/assess-stack` (tech-stack issues) or `/record-decision` (architectural gaps).
+   - Non-conformities reported → resolve via `/assess-stack` (tech-stack issues) or `/pair-capability-record-decision` (architectural gaps).
 4. **Verify**: Adoption compliance confirmed or all non-conformities resolved.
 
 ### Step 2.7: Verify Quality
 
-1. **Act**: Compose `/verify-quality` with `$scope = all`.
+1. **Act**: Compose `/pair-capability-verify-quality` with `$scope = all`.
 2. **Verify**: All quality gates pass. If any gate fails → **HALT**. Developer must fix before proceeding.
 
 ### Step 2.8: Commit (if commit-per-task)
@@ -262,7 +262,7 @@ Follow the TDD discipline rules strictly:
      - **Summary** (What Changed + Why): from story statement and implementation
      - **Story Context**: link to user story issue, list AC coverage
      - **Changes Made**: list all completed tasks, files added/modified/deleted
-     - **Testing**: test coverage, quality gate results (from /verify-quality output)
+     - **Testing**: test coverage, quality gate results (from /pair-capability-verify-quality output)
    - Omit template sections that do not apply (e.g., Database Changes, API Changes for KB-only PRs) — do not leave unfilled placeholders.
    - **Link**: Reference the user story issue (`Closes #<story-id>`)
    - **Labels**: Apply appropriate labels
@@ -299,7 +299,7 @@ On HALT: report the blocker clearly, propose resolution, wait for developer.
 
 ## Idempotent Re-invocation
 
-Re-invoking `/implement` on a partially completed story is safe and expected:
+Re-invoking `/pair-process-implement` on a partially completed story is safe and expected:
 
 1. **Branch**: detects existing branch, switches to it.
 2. **Commit strategy**: if commits already exist on branch, infer strategy from history.

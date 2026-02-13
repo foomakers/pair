@@ -127,6 +127,7 @@ $background: #ffffff; // White
 ### Testing Tools and Methods
 
 **Automated Testing Tools**
+
 | Tool                         | Platform          | Features                      | Best For          |
 | ---------------------------- | ----------------- | ----------------------------- | ----------------- |
 | **Colour Contrast Analyser** | Desktop           | WCAG validation, color picker | Design validation |

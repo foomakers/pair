@@ -1,9 +1,9 @@
 ---
-name: review
-description: "Reviews a pull request through a structured 5-phase process: validation, technical review, adoption compliance, completeness check, and decision. Composes /verify-quality, /verify-done, /record-decision, /assess-debt (required) and /verify-adoption, /assess-stack (optional with graceful degradation). Output follows the code review template. Idempotent — re-invocation resumes from incomplete phases."
+name: pair-process-review
+description: "Reviews a pull request through a structured 5-phase process: validation, technical review, adoption compliance, completeness check, and decision. Composes /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-record-decision, /pair-capability-assess-debt (required) and /verify-adoption, /assess-stack (optional with graceful degradation). Output follows the code review template. Idempotent — re-invocation resumes from incomplete phases."
 ---
 
-# /review — Code Review
+# /pair-process-review — Code Review
 
 Review a pull request through 5 sequential phases. Each phase composes atomic skills and follows the **check → skip → act → verify** pattern for idempotent re-invocation.
 
@@ -11,10 +11,10 @@ Review a pull request through 5 sequential phases. Each phase composes atomic sk
 
 | Skill              | Type       | Required | Phase | Purpose                              |
 | ------------------ | ---------- | -------- | ----- | ------------------------------------ |
-| `/verify-quality`  | Capability | Yes      | 2     | Quality gate checking                |
-| `/verify-done`     | Capability | Yes      | 4     | Definition of Done checking          |
-| `/record-decision` | Capability | Yes      | Any   | Record missing ADR (HALT condition)  |
-| `/assess-debt`     | Capability | Yes      | 4     | Flag tech debt items                 |
+| `/pair-capability-verify-quality`  | Capability | Yes      | 2     | Quality gate checking                |
+| `/pair-capability-verify-done`     | Capability | Yes      | 4     | Definition of Done checking          |
+| `/pair-capability-record-decision` | Capability | Yes      | Any   | Record missing ADR (HALT condition)  |
+| `/pair-capability-assess-debt`     | Capability | Yes      | 4     | Flag tech debt items                 |
 | `/verify-adoption` | Capability | Optional | 3     | Full adoption compliance (from #105) |
 | `/assess-stack`    | Capability | Optional | 3     | Tech-stack resolution (from #104)    |
 
@@ -91,10 +91,10 @@ Ask: _"Proceed with review?"_
 
 ### Step 2.1: Quality Gates
 
-1. **Check**: Has `/verify-quality` already run on the current PR head commit?
+1. **Check**: Has `/pair-capability-verify-quality` already run on the current PR head commit?
 2. **Skip**: If all gates passing on current commit — record results, move to Step 2.2.
-3. **Act**: Compose `/verify-quality` with `$scope = all`.
-4. **Verify**: Record quality gate results. Failures become review findings (do not HALT — /review reports them).
+3. **Act**: Compose `/pair-capability-verify-quality` with `$scope = all`.
+4. **Verify**: Record quality gate results. Failures become review findings (do not HALT — /pair-process-review reports them).
 
 ### Step 2.2: Code Quality Assessment
 
@@ -115,7 +115,7 @@ Ask: _"Proceed with review?"_
    - [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) updated
    - Version consistency across workspaces
 4. **Verify**: All decisions documented. **Missing ADR → HALT**:
-   - Compose `/record-decision` with `$type = architectural` and `$topic` describing the gap.
+   - Compose `/pair-capability-record-decision` with `$type = architectural` and `$topic` describing the gap.
    - Set review status to CHANGES-REQUESTED until ADR is created.
    - Resume review after ADR is added.
 
@@ -143,7 +143,7 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 1. Compose `/verify-adoption` with `$scope = all`.
 2. For each non-conformity:
    - **Tech-stack**: compose `/assess-stack` → developer approves (add to stack) or rejects (CHANGES-REQUESTED).
-   - **Architecture**: report to developer for resolution. Missing ADR → HALT via `/record-decision`.
+   - **Architecture**: report to developer for resolution. Missing ADR → HALT via `/pair-capability-record-decision`.
    - **Other** (security, coding-standards, infrastructure): report findings.
 3. Record all results.
 
@@ -180,16 +180,16 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 
 ### Step 4.1: Definition of Done
 
-1. **Check**: Has `/verify-done` already run in this session?
+1. **Check**: Has `/pair-capability-verify-done` already run in this session?
 2. **Skip**: If already run on current commit — reuse results, move to Step 4.2.
-3. **Act**: Compose `/verify-done` with `$scope = all` and `$story` (if available).
+3. **Act**: Compose `/pair-capability-verify-done` with `$scope = all` and `$story` (if available).
 4. **Verify**: Record DoD results. Failing criteria become review findings. HALT conditions (missing ADR) propagate.
 
 ### Step 4.2: Tech Debt Assessment
 
-1. **Check**: Has `/assess-debt` already run in this session?
+1. **Check**: Has `/pair-capability-assess-debt` already run in this session?
 2. **Skip**: If already run — reuse results, move to Phase 5.
-3. **Act**: Compose `/assess-debt` with `$scope = all`.
+3. **Act**: Compose `/pair-capability-assess-debt` with `$scope = all`.
 4. **Verify**: Record debt items. High-severity items may influence the review decision.
 
 ## Phase 5: Review Decision
@@ -201,11 +201,11 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
    - **Review Summary**: overall assessment, key changes, business value
    - **Code Review Checklist**: functionality, code quality, technical standards (from Phase 2)
    - **Security Review**: security findings (from Phase 2 + Phase 3)
-   - **Testing Review**: test coverage and quality (from /verify-quality)
-   - **Documentation Review**: documentation completeness (from /verify-done)
+   - **Testing Review**: test coverage and quality (from /pair-capability-verify-quality)
+   - **Documentation Review**: documentation completeness (from /pair-capability-verify-done)
    - **Detailed Review Comments**: issues by severity, positive feedback
    - **Risk Assessment**: technical and business risks
-   - **Tech Debt**: items flagged by /assess-debt
+   - **Tech Debt**: items flagged by /pair-capability-assess-debt
    - **Adoption Compliance**: results from Phase 3 (with degradation level noted)
 
 ### Step 5.2: Make Review Decision
@@ -244,18 +244,18 @@ REVIEW COMPLETE:
 Review stops immediately when:
 
 - **PR not found or not open** (Phase 1)
-- **Missing ADR for new technical decision** (Phase 2, Step 2.3) — compose `/record-decision`, then resume
+- **Missing ADR for new technical decision** (Phase 2, Step 2.3) — compose `/pair-capability-record-decision`, then resume
 - **Unresolved architectural non-conformity** (Phase 3) — must be addressed before decision
 
 On HALT: report the blocker, compose the resolution skill if available, wait for developer.
 
 ## Idempotent Re-invocation
 
-Re-invoking `/review` on a partially reviewed PR is safe:
+Re-invoking `/pair-process-review` on a partially reviewed PR is safe:
 
 1. **PR context**: detects already-loaded PR, skips re-loading.
 2. **Phases**: checks which phases completed (via session state or PR review comments). Resumes from first incomplete phase.
-3. **Skill compositions**: /verify-quality, /verify-done results cached in session. Not re-run if already passing on current commit.
+3. **Skill compositions**: /pair-capability-verify-quality, /pair-capability-verify-done results cached in session. Not re-run if already passing on current commit.
 4. **New commits**: if PR updated since last check, re-validates affected phases only.
 5. **Review report**: updates existing report rather than posting duplicates.
 
@@ -274,5 +274,5 @@ Re-invoking `/review` on a partially reviewed PR is safe:
 - First skill to compose 6 atomic skills (4 required + 2 optional). Proves composition pattern at scale.
 - Review phases are sequential — each phase builds on findings from prior phases.
 - The reviewer can stop between phases. Re-invoke to resume (idempotency ensures correct state).
-- Output follows [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) — the template defines structure, /review fills it with findings.
+- Output follows [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) — the template defines structure, /pair-process-review fills it with findings.
 - HALT on missing ADR is inherited from [how-to-11](../../../.pair/knowledge/how-to/11-how-to-code-review.md) — this is a business rule, not a skill limitation.

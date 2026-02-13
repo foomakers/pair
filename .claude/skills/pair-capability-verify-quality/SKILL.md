@@ -1,9 +1,9 @@
 ---
-name: verify-quality
-description: "Checks quality gates against the current codebase. Reads project-specific quality gate command from way-of-working adoption and universal standards from quality-standards guidelines. Gates already passing are skipped. Invocable independently or composed by /implement and /review."
+name: pair-capability-verify-quality
+description: "Checks quality gates against the current codebase. Reads project-specific quality gate command from way-of-working adoption and universal standards from quality-standards guidelines. Gates already passing are skipped. Invocable independently or composed by /pair-process-implement and /pair-process-review."
 ---
 
-# /verify-quality — Quality Gate Checker
+# /pair-capability-verify-quality — Quality Gate Checker
 
 Validate the current codebase against quality gates. Two sources of truth:
 
@@ -121,12 +121,12 @@ RESULT: [ALL GATES PASS | BLOCKED — N gates failing]
 
 ## Composition Interface
 
-When composed by `/implement` or `/review`:
+When composed by `/pair-process-implement` or `/pair-process-review`:
 
-- **Input**: The composing skill invokes `/verify-quality` after implementation or before commit.
+- **Input**: The composing skill invokes `/pair-capability-verify-quality` after implementation or before commit.
 - **Output**: Returns PASS or FAIL with details. The composing skill decides what to do:
-  - `/implement`: HALT on FAIL — developer must fix before commit.
-  - `/review`: Report FAIL as review finding — does not block review completion.
+  - `/pair-process-implement`: HALT on FAIL — developer must fix before commit.
+  - `/pair-process-review`: Report FAIL as review finding — does not block review completion.
 
 When invoked **independently**:
 

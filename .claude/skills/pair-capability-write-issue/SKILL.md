@@ -1,9 +1,9 @@
 ---
-name: write-issue
-description: "Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Invocable independently or composed by /refine-story and /plan-tasks."
+name: pair-capability-write-issue
+description: "Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Invocable independently or composed by /pair-process-refine-story and /pair-process-plan-tasks."
 ---
 
-# /write-issue — PM Tool Issue Writer
+# /pair-capability-write-issue — PM Tool Issue Writer
 
 Create or update issues in the adopted PM tool. Template-driven: reads the type-specific template, formats the issue body accordingly, and creates or updates via the PM tool API.
 
@@ -117,15 +117,15 @@ ISSUE WRITTEN:
 
 ## Composition Interface
 
-When composed by `/refine-story`:
+When composed by `/pair-process-refine-story`:
 
-- **Input**: `/refine-story` invokes `/write-issue` with `$type: story` and `$content` containing the refined story data. Passes `$id` when updating an existing story.
-- **Output**: Returns the issue identifier. `/refine-story` uses it for status updates and linking.
+- **Input**: `/pair-process-refine-story` invokes `/pair-capability-write-issue` with `$type: story` and `$content` containing the refined story data. Passes `$id` when updating an existing story.
+- **Output**: Returns the issue identifier. `/pair-process-refine-story` uses it for status updates and linking.
 
-When composed by `/plan-tasks`:
+When composed by `/pair-process-plan-tasks`:
 
-- **Input**: `/plan-tasks` invokes `/write-issue` with `$type: story`, `$id: [story-id]`, and `$content` containing the Task Breakdown section to append. Tasks are documented inline in the story body — no separate task issues are created.
-- **Output**: Returns the story issue identifier. `/plan-tasks` confirms the update.
+- **Input**: `/pair-process-plan-tasks` invokes `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]`, and `$content` containing the Task Breakdown section to append. Tasks are documented inline in the story body — no separate task issues are created.
+- **Output**: Returns the story issue identifier. `/pair-process-plan-tasks` confirms the update.
 
 When invoked **independently**:
 

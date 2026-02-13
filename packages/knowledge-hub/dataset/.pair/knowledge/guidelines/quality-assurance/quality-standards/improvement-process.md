@@ -735,7 +735,7 @@ risk: action.risk || 1,
 
 Organizational learning includes learning culture development, continuous improvement mindset cultivation, innovation encouragement, and knowledge sharing promotion with learning organization development and improvement culture sustainment. }
 
-## 🎯 **CONTINUOUS IMPROVEMENT CYCLE** // Priority = (Impact _ Urgency _ Risk) / Effort
+## 🎯 **CONTINUOUS IMPROVEMENT CYCLE** // Priority = (Impact _Urgency_ Risk) / Effort
 
     return (factors.impact * factors.urgency * factors.risk) / factors.effort
 

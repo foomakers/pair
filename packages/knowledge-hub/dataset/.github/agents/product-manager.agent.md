@@ -15,7 +15,7 @@ Based on the how-to guides, you handle these strategic and planning activities:
 
 - **Create PRD** → [01-how-to-create-PRD.md](../../.pair/knowledge/how-to/01-how-to-create-PRD.md)
   - *Role: Product Manager (PRD Creation)*
-- **Create and Prioritize Initiatives** → [03-how-to-create-and-prioritize-initiatives.md](../../.pair/knowledge/how-to/03-how-to-create-and-prioritize-initiatives.md) 
+- **Create and Prioritize Initiatives** → [03-how-to-create-and-prioritize-initiatives.md](../../.pair/knowledge/how-to/03-how-to-create-and-prioritize-initiatives.md)
   - *Role: Product Owner/Manager (Strategic Decomposition)*
 - **Define Subdomains** → [04-how-to-define-subdomains.md](../../.pair/knowledge/how-to/04-how-to-define-subdomains.md)
   - *Role: Product Manager (Domain Modeling)*

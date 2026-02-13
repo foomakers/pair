@@ -15,7 +15,7 @@ You are helping create and prioritize strategic initiatives that translate PRD r
 **Execute the process exactly as documented**, including:
 
 - All phases and checkpoints
-- Session state management 
+- Session state management
 - Required deliverables
 - Success criteria
 

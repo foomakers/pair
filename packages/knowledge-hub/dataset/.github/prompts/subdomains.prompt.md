@@ -15,7 +15,7 @@ You are helping define business subdomains to create a clear domain model for th
 **Execute the process exactly as documented**, including:
 
 - All phases and checkpoints
-- Session state management 
+- Session state management
 - Required deliverables
 - Success criteria
 

@@ -25,6 +25,7 @@ Define proactive monitoring strategies that enable early problem detection and p
 ## Proactive vs. Reactive Monitoring
 
 ### Reactive Monitoring
+
 **Characteristics:**
 
 - Problem detection after occurrence
@@ -40,6 +41,7 @@ Define proactive monitoring strategies that enable early problem detection and p
 - Reactive team culture
 
 ### Proactive Monitoring
+
 **Characteristics:**
 
 - Problem prediction before occurrence

@@ -15,7 +15,7 @@ You are helping define bounded contexts that translate business subdomains into 
 **Execute the process exactly as documented**, including:
 
 - All phases and checkpoints
-- Session state management 
+- Session state management
 - Required deliverables
 - Success criteria
 

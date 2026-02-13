@@ -89,6 +89,7 @@ Define standardized patterns for LLM integration, agent coordination, and AI wor
 ## Decision Framework
 
 ### When to Use LLM Integration
+
 **High Value Scenarios:**
 
 - Complex reasoning and analysis tasks
@@ -104,6 +105,7 @@ Define standardized patterns for LLM integration, agent coordination, and AI wor
 - Cost constraints limit AI service usage
 
 ### Architecture Selection Criteria
+
 **Complexity and Scale:**
 
 - Single vs. multiple AI models and services

@@ -24,6 +24,7 @@ Define the foundational three pillars of observability (metrics, logs, traces) a
 ## The Three Pillars
 
 ### Metrics
+
 **Definition:** Numerical measurements that represent system state and behavior over time.
 
 #### Characteristics:
@@ -41,6 +42,7 @@ Define the foundational three pillars of observability (metrics, logs, traces) a
 - Business KPI measurement
 
 ### Logs
+
 **Definition:** Timestamped records of discrete events that occurred within systems.
 
 #### Characteristics:
@@ -58,6 +60,7 @@ Define the foundational three pillars of observability (metrics, logs, traces) a
 - Business event tracking
 
 ### Traces
+
 **Definition:** Records of request flows through distributed systems showing service interactions.
 
 #### Characteristics:
