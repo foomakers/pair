@@ -30,8 +30,8 @@ Read the following files and classify each as **populated** or **template**:
 
 | #   | Condition                                                 | Suggestion        | Rationale                        |
 | --- | --------------------------------------------------------- | ----------------- | -------------------------------- |
-| 1   | PRD.md is template                                        | `/specify-prd`    | Product vision must come first   |
-| 2   | PRD.md populated AND 3+ tech adoption files are templates | `/bootstrap`      | Project needs foundational setup |
+| 1   | PRD.md is template                                        | `/pair-process-specify-prd`    | Product vision must come first   |
+| 2   | PRD.md populated AND 3+ tech adoption files are templates | `/pair-process-bootstrap`      | Project needs foundational setup |
 | 3   | subdomain/README.md is template                           | `/map-subdomains` | Domain decomposition needed      |
 | 4   | boundedcontext/README.md is template                      | `/map-contexts`   | Architecture boundaries needed   |
 
@@ -86,7 +86,7 @@ Then ask: "Shall I run `/skill-name`?"
 
 - If a suggested skill is not installed, tell the user which skill is needed and where to find it.
 - If the PM tool is not accessible (no MCP connection, no credentials), skip Step 3 and report: "PM tool not accessible — recommendation based on adoption files only."
-- If adoption files cannot be read (not installed yet), suggest `/bootstrap` as the entry point.
+- If adoption files cannot be read (not installed yet), suggest `/pair-process-bootstrap` as the entry point.
 
 ## Notes
 

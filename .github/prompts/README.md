@@ -16,7 +16,7 @@ Each prompt is designed to be **dead simple**:
 ### Induction (Getting Started)
 
 - **`/create-prd`** - Create a Product Requirements Document (PRD)
-- **`/bootstrap`** - Complete project bootstrap checklist
+- **`/pair-process-bootstrap`** - Complete project bootstrap checklist
 - **`/subdomains`** - Define business subdomains
 
 ### Strategic (High-level Planning)

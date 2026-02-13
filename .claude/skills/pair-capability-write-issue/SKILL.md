@@ -34,7 +34,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 2. **Skip**: If PM tool is identified, proceed to Step 3.
 3. **Act**: If no PM tool configured → **HALT**:
 
-   > No PM tool configured in `way-of-working.md`. Configure via `/setup-pm` or manually set the PM tool in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md).
+   > No PM tool configured in `way-of-working.md`. Configure via `/pair-capability-setup-pm` or manually set the PM tool in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md).
 
 4. **Verify**: PM tool identified (e.g., `github-projects`, `jira`, `linear`, `filesystem`).
 
