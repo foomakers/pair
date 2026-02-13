@@ -373,7 +373,7 @@ Implementation stops immediately when:
 - **Story not loaded or incomplete** (Phase 0)
 - **Task specifications incomplete** (Step 2.2)
 - **Quality gate failure** (Step 2.7) — developer must fix
-- **New dependency rejected by /pair-capability-assess-stack** (Step 2.4)
+- **New dependency rejected by /assess-stack** (Step 2.4)
 - **PR template not found** (Step 3.4) — cannot create PR without template
 - **Commit template not found** (Step 2.8 / Step 3.1) — cannot commit without template
 - **PR not approved** (Step 4.1) — cannot merge without review approval
@@ -397,7 +397,7 @@ The skill resumes from the first incomplete step — never re-does completed wor
 
 - **PM tool not accessible**: Ask developer to manually provide story details and task list.
 - **Missing adoption files**: Warn and proceed with guideline defaults.
-- **/pair-capability-assess-stack not installed**: Warn on new dependency, continue without validation.
+- **/assess-stack not installed**: Warn on new dependency, continue without validation.
 - **/verify-adoption not installed**: Warn, skip adoption compliance check.
 - **No quality gate command**: Fall back to individual checks (lint, test, type check).
 

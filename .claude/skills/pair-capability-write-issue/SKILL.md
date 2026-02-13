@@ -1,6 +1,6 @@
 ---
 name: pair-capability-write-issue
-description: "Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Invocable independently or composed by /pair-process-refine-story and /pair-process-plan-tasks."
+description: "Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Invocable independently or composed by /pair-process-refine-story, /pair-process-plan-tasks, /pair-process-plan-initiatives, /pair-process-plan-epics, and /pair-process-plan-stories."
 ---
 
 # /pair-capability-write-issue — PM Tool Issue Writer
@@ -11,7 +11,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 
 | Argument   | Required | Description                                                                                                                                                     |
 | ---------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `$type`    | Yes      | Issue type: `story` or `task`. Determines which template is used. (Future: `epic`, `initiative` added in [#103](https://github.com/foomakers/pair/issues/103).) |
+| `$type`    | Yes      | Issue type: `story`, `task`, `epic`, or `initiative`. Determines which template is used. |
 | `$content` | Yes      | Structured content to fill the template — fields map to template sections.                                                                                      |
 | `$id`      | No       | Existing issue identifier. If provided → **update**; if absent → **create**.                                                                                    |
 | `$parent`  | No       | Parent issue identifier for hierarchy linking (e.g., epic → story, story → task).                                                                               |
@@ -20,11 +20,11 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 
 ### Step 1: Validate Arguments
 
-1. **Check**: Is `$type` one of the supported types (`story`, `task`)?
+1. **Check**: Is `$type` one of the supported types (`story`, `task`, `epic`, `initiative`)?
 2. **Skip**: If valid, proceed to Step 2.
 3. **Act**: If unsupported type → **HALT**:
 
-   > Unsupported issue type: `$type`. Currently supported: `story`, `task`. Types `epic` and `initiative` are added in [#103](https://github.com/foomakers/pair/issues/103).
+   > Unsupported issue type: `$type`. Supported: `story`, `task`, `epic`, `initiative`.
 
 4. **Verify**: `$type` is valid.
 
@@ -43,6 +43,8 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 1. **Check**: Resolve template path based on `$type`:
    - `story` → [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md)
    - `task` → [task-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/task-template.md)
+   - `epic` → [epic-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/epic-template.md)
+   - `initiative` → [initiative-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/initiative-template.md)
 2. **Skip**: If template file found, proceed to Step 4.
 3. **Act**: If template not found → **HALT**:
 
@@ -79,7 +81,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
    - **`$id` present → Update mode**: Verify the issue exists, then update it.
 2. **Act (Create)**:
    - Create issue with the formatted body.
-   - Apply labels based on `$type` (e.g., `user story`, `task`).
+   - Apply labels based on `$type` (e.g., `user story`, `task`, `epic`, `initiative`).
    - If `$parent` is provided, link to parent issue (hierarchy: epic → story → task).
    - Configure project field settings (priority, type, status) per the implementation guide.
    - Record the new issue identifier for return.
@@ -105,7 +107,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 ```text
 ISSUE WRITTEN:
 ├── Mode:     [Created | Updated]
-├── Type:     [story | task]
+├── Type:     [story | task | epic | initiative]
 ├── ID:       [issue identifier — e.g., #42]
 ├── PM Tool:  [adopted tool name]
 ├── Template: [template file used]
@@ -127,6 +129,21 @@ When composed by `/pair-process-plan-tasks`:
 - **Input**: `/pair-process-plan-tasks` invokes `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]`, and `$content` containing the Task Breakdown section to append. Tasks are documented inline in the story body — no separate task issues are created.
 - **Output**: Returns the story issue identifier. `/pair-process-plan-tasks` confirms the update.
 
+When composed by `/pair-process-plan-initiatives`:
+
+- **Input**: `/pair-process-plan-initiatives` invokes `/pair-capability-write-issue` with `$type: initiative` and `$content` containing the initiative data. Passes `$id` when updating an existing initiative.
+- **Output**: Returns the issue identifier. `/pair-process-plan-initiatives` uses it for linking and status tracking.
+
+When composed by `/pair-process-plan-epics`:
+
+- **Input**: `/pair-process-plan-epics` invokes `/pair-capability-write-issue` with `$type: epic`, `$content` containing the epic data, and `$parent` linking to the parent initiative.
+- **Output**: Returns the issue identifier. `/pair-process-plan-epics` uses it for linking stories.
+
+When composed by `/pair-process-plan-stories`:
+
+- **Input**: `/pair-process-plan-stories` invokes `/pair-capability-write-issue` with `$type: story`, `$content` containing the story data, and `$parent` linking to the parent epic.
+- **Output**: Returns the issue identifier. `/pair-process-plan-stories` uses it for status tracking.
+
 When invoked **independently**:
 
 - Interactive: create or update an issue directly in the adopted PM tool.
@@ -143,10 +160,7 @@ When invoked **independently**:
 
 ## Extensibility
 
-This skill currently supports `story` and `task` types. Additional types are planned:
-
-- `epic` and `initiative` types added in [#103](https://github.com/foomakers/pair/issues/103) when strategic planning skills need them.
-- Adding a new type requires: (1) a new template file, (2) a new entry in Step 1 validation, (3) a new entry in Step 3 template resolution.
+This skill supports `story`, `task`, `epic`, and `initiative` types. Adding a new type requires: (1) a new template file in `collaboration/templates/`, (2) a new entry in Step 1 validation, (3) a new entry in Step 3 template resolution, (4) a new entry in the Composition Interface section.
 
 ## Graceful Degradation
 
