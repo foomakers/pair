@@ -1,6 +1,6 @@
 ---
 name: pair-process-review
-description: "Reviews a pull request through a structured 5-phase process: validation, technical review, adoption compliance, completeness check, and decision. Composes /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-record-decision, /pair-capability-assess-debt (required) and /verify-adoption, /assess-stack (optional with graceful degradation). Output follows the code review template. Idempotent — re-invocation resumes from incomplete phases."
+description: "Reviews a pull request through a structured 5-phase process: validation, technical review, adoption compliance, completeness check, and decision. Composes /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-record-decision, /pair-capability-assess-debt (required) and /verify-adoption, /pair-capability-assess-stack (optional with graceful degradation). Output follows the code review template. Idempotent — re-invocation resumes from incomplete phases."
 ---
 
 # /pair-process-review — Code Review
@@ -16,7 +16,7 @@ Review a pull request through 5 sequential phases. Each phase composes atomic sk
 | `/pair-capability-record-decision` | Capability | Yes      | Any   | Record missing ADR (HALT condition)  |
 | `/pair-capability-assess-debt`     | Capability | Yes      | 4     | Flag tech debt items                 |
 | `/verify-adoption` | Capability | Optional | 3     | Full adoption compliance (from #105) |
-| `/assess-stack`    | Capability | Optional | 3     | Tech-stack resolution (from #104)    |
+| `/pair-capability-assess-stack`    | Capability | Optional | 3     | Tech-stack resolution (from #104)    |
 
 ## Arguments
 
@@ -123,7 +123,7 @@ Ask: _"Proceed with review?"_
 
 This phase uses a **4-level graceful degradation cascade** depending on which optional skills are installed:
 
-| Level | /verify-adoption | /assess-stack | Behavior                                                   |
+| Level | /verify-adoption | /pair-capability-assess-stack | Behavior                                                   |
 | ----- | ---------------- | ------------- | ---------------------------------------------------------- |
 | 1     | Installed        | Installed     | Full adoption compliance + automatic tech-stack resolution |
 | 2     | Installed        | Not installed | Full compliance detection, manual stack resolution         |
@@ -132,17 +132,17 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 
 ### Step 3.1: Determine Degradation Level
 
-1. **Check**: Is `/verify-adoption` installed? Is `/assess-stack` installed?
+1. **Check**: Is `/verify-adoption` installed? Is `/pair-capability-assess-stack` installed?
 2. **Act**: Set the degradation level (1–4) based on availability.
 3. **Verify**: Level set. Proceed with the corresponding behavior.
 
 ### Step 3.2: Run Adoption Check
 
-**Level 1** (/verify-adoption + /assess-stack):
+**Level 1** (/verify-adoption + /pair-capability-assess-stack):
 
 1. Compose `/verify-adoption` with `$scope = all`.
 2. For each non-conformity:
-   - **Tech-stack**: compose `/assess-stack` → developer approves (add to stack) or rejects (CHANGES-REQUESTED).
+   - **Tech-stack**: compose `/pair-capability-assess-stack` → developer approves (add to stack) or rejects (CHANGES-REQUESTED).
    - **Architecture**: report to developer for resolution. Missing ADR → HALT via `/pair-capability-record-decision`.
    - **Other** (security, coding-standards, infrastructure): report findings.
 3. Record all results.
@@ -154,10 +154,10 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 3. For other non-conformities: same as Level 1.
 4. Record results.
 
-**Level 3** (/assess-stack only):
+**Level 3** (/pair-capability-assess-stack only):
 
 1. Inline check: scan PR diff for new dependencies not in [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
-2. For unlisted dependencies: compose `/assess-stack` → developer approves or rejects.
+2. For unlisted dependencies: compose `/pair-capability-assess-stack` → developer approves or rejects.
 3. No broader adoption compliance check (security, architecture, etc. — covered partially by Phase 2).
 4. Record results.
 
@@ -165,7 +165,7 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 
 1. Warn:
 
-   > `/verify-adoption` and `/assess-stack` are not installed — skipping automated adoption compliance. Please manually verify code against adoption files.
+   > `/verify-adoption` and `/pair-capability-assess-stack` are not installed — skipping automated adoption compliance. Please manually verify code against adoption files.
 
 2. Move to Phase 4.
 

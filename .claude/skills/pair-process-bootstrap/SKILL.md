@@ -9,13 +9,19 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
 
 ## Composed Skills
 
-| Skill              | Type       | Required                                                                      |
-| ------------------ | ---------- | ----------------------------------------------------------------------------- |
-| `/pair-process-specify-prd`     | Process    | Yes — invoked if PRD is missing or template                                   |
-| `/pair-capability-setup-pm`        | Capability | Yes — invoked in finalization phase for PM tool configuration                 |
-| `/pair-capability-record-decision` | Capability | Yes — invoked for each bootstrap decision (categorization, tech choices, etc) |
-| `/assess-stack`    | Capability | Optional — invoked for tech stack assessment. Graceful degradation if absent. |
-| `/assess-*`        | Capability | Optional — invoked for various assessments. Graceful degradation if absent.   |
+| Skill                   | Type       | Required                                                                      |
+| ----------------------- | ---------- | ----------------------------------------------------------------------------- |
+| `/pair-process-specify-prd`          | Process    | Yes — invoked if PRD is missing or template                                   |
+| `/pair-capability-setup-pm`             | Capability | Yes — invoked in finalization phase for PM tool configuration                 |
+| `/pair-capability-record-decision`      | Capability | Yes — invoked for each bootstrap decision (categorization, tech choices, etc) |
+| `/pair-capability-assess-architecture`  | Capability | Optional — architecture pattern assessment. Graceful degradation if absent.   |
+| `/pair-capability-assess-stack`         | Capability | Optional — tech stack assessment (core sections). Graceful degradation if absent. |
+| `/pair-capability-assess-testing`       | Capability | Optional — testing strategy assessment. Graceful degradation if absent.       |
+| `/pair-capability-assess-infrastructure`| Capability | Optional — infrastructure assessment. Graceful degradation if absent.         |
+| `/pair-capability-assess-observability` | Capability | Optional — observability assessment. Graceful degradation if absent.          |
+| `/pair-capability-assess-methodology`   | Capability | Optional — methodology assessment. Graceful degradation if absent.            |
+| `/pair-capability-assess-pm`            | Capability | Optional — PM tool assessment (delegates to /pair-capability-setup-pm). Graceful degradation if absent. |
+| `/pair-capability-assess-ai`            | Capability | Optional — AI development tools assessment. Graceful degradation if absent.   |
 
 ## Phase 0: PRD Verification (BLOCKING)
 
@@ -42,7 +48,7 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
 
 ### Step 1.1: Check Existing Categorization
 
-1. **Check**: Does [adoption/decision-log/](../../../.pair/adoption/decision-log/) contain a `*-project-categorization.md` file?
+1. **Check**: Does [adoption/decision-log/](../../../.pair/adoption/decision-log) contain a `*-project-categorization.md` file?
 2. **Skip**: If categorization already recorded, read it and move to Phase 2.
 3. **Act**: Proceed to categorization analysis.
 
@@ -76,7 +82,7 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
 
 ### Step 2.1: Check Existing Adoption Files
 
-1. **Check**: Scan [adoption/tech/](../../../.pair/adoption/tech/) for existing files. Classify each as populated or template:
+1. **Check**: Scan [adoption/tech/](../../../.pair/adoption/tech) for existing files. Classify each as populated or template:
    - `architecture.md`
    - `tech-stack.md`
    - `infrastructure.md` (optional — not all project types need it)
@@ -89,15 +95,42 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
 ### Step 2.2: Assessment Phase (Optional)
 
 1. **Check**: Are assess-\* skills installed? Scan installed skills directory for `assess-*` skills.
-2. **Act** (installed): Compose relevant assess-\* skills in sequence:
-   - `/assess-stack` for technology decisions
-   - Other assess-\* skills for architecture, infrastructure, etc.
+2. **Act** (installed): Compose assess-\* skills in recommended sequence. Each skill checks its own adoption file first — already-decided domains are skipped automatically (resolution cascade).
+
+   **Recommended sequence** (respects adoption file dependencies):
+   1. `/pair-capability-assess-architecture` → writes `architecture.md` (needed by stack and infrastructure)
+   2. `/pair-capability-assess-stack` → writes core sections of `tech-stack.md` (needed by testing and AI)
+   3. `/pair-capability-assess-testing` → writes testing section of `tech-stack.md`
+   4. `/pair-capability-assess-ai` → writes AI section of `tech-stack.md`
+   5. `/pair-capability-assess-infrastructure` → writes `infrastructure.md` (needed by observability)
+   6. `/pair-capability-assess-observability` → writes observability section of `infrastructure.md`
+   7. `/pair-capability-assess-methodology` → writes methodology section of `way-of-working.md`
+   8. `/pair-capability-assess-pm` → writes PM section of `way-of-working.md` (delegates to `/pair-capability-setup-pm`)
+
+   **Section ownership** (prevents parallel write conflicts):
+
+   | Adoption File        | Section            | Owner Skill            |
+   | -------------------- | ------------------ | ---------------------- |
+   | `architecture.md`    | Full file          | `/pair-capability-assess-architecture` |
+   | `tech-stack.md`      | Core sections      | `/pair-capability-assess-stack`        |
+   | `tech-stack.md`      | Testing section    | `/pair-capability-assess-testing`      |
+   | `tech-stack.md`      | AI section         | `/pair-capability-assess-ai`           |
+   | `infrastructure.md`  | Core sections      | `/pair-capability-assess-infrastructure` |
+   | `infrastructure.md`  | Observability      | `/pair-capability-assess-observability`|
+   | `way-of-working.md`  | Methodology        | `/pair-capability-assess-methodology`  |
+   | `way-of-working.md`  | PM tool            | `/pair-capability-assess-pm`           |
+   | `way-of-working.md`  | Quality gates      | `/pair-process-bootstrap` (Step 3.2)|
+
+   **Parallel safety**: Skills writing different adoption files can run in parallel. Skills writing different sections of the same file are safe if each respects section ownership. The recommended sequence avoids any conflicts.
+
+   **Partial installation**: If only some assess-\* skills are installed, compose those and skip the rest with a warning. Each assess-\* skill is independent — partial installation is supported.
+
 3. **Act** (not installed): Warn and proceed with manual assessment:
 
    > assess-\* skills are not yet installed. Proceeding with manual assessment.
    > For each technical area, I'll reference the guidelines and ask you to make decisions directly.
 
-4. **Verify**: Assessment data collected (via skills or manually).
+4. **Verify**: Assessment data collected (via skills or manually). All adoption files written by assess-\* skills are consistent.
 
 ### Step 2.3: Gather Information per Section
 
@@ -138,7 +171,7 @@ For each missing adoption file (in order: architecture → tech-stack → infras
    - References to KB guidelines for detailed rationale
 3. **Act**: Present key decisions with rationale for developer review.
 4. **Act**: Iterate on feedback until approved.
-5. **Act**: Save to [adoption/tech/](../../../.pair/adoption/tech/)`<filename>.md`.
+5. **Act**: Save to [adoption/tech/](../../../.pair/adoption/tech)`<filename>.md`.
 6. **Verify**: File written, consistent with other adoption files.
 
 ### Step 3.2: Quality Gate Setup

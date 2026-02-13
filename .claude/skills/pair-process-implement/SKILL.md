@@ -13,7 +13,7 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 | ------------------ | ---------- | --------------------------------------------------------------------------------------------------- |
 | `/pair-capability-verify-quality`  | Capability | Yes — invoked at quality validation phase                                                           |
 | `/pair-capability-record-decision` | Capability | Yes — invoked when a decision needs recording                                                       |
-| `/assess-stack`    | Capability | Optional — invoked when a new dependency is detected. If not installed, warn and continue.          |
+| `/pair-capability-assess-stack`    | Capability | Optional — invoked when a new dependency is detected. If not installed, warn and continue.          |
 | `/verify-adoption` | Capability | Optional — invoked before commit to check adoption compliance. If not installed, warn and continue. |
 
 ## Phase 0: Story & Task Analysis (BLOCKING)
@@ -146,13 +146,13 @@ Follow the TDD discipline rules strictly:
 
 1. **Check**: Did the implementation introduce any new dependency not listed in [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md)?
 2. **Skip**: If no new dependencies, move to Step 2.5.
-3. **Act**: Is `/assess-stack` installed?
-   - **Yes**: Compose `/assess-stack` to validate and register the dependency. If `/assess-stack` rejects (incompatible) → **HALT**.
+3. **Act**: Is `/pair-capability-assess-stack` installed?
+   - **Yes**: Compose `/pair-capability-assess-stack` to validate and register the dependency. If `/pair-capability-assess-stack` rejects (incompatible) → **HALT**.
    - **No**: Warn the developer:
 
-     > New dependency detected: `[package@version]`. `/assess-stack` is not installed — please manually verify against the tech stack and update [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
+     > New dependency detected: `[package@version]`. `/pair-capability-assess-stack` is not installed — please manually verify against the tech stack and update [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
 
-4. **Verify**: Dependency is either validated by `/assess-stack` or acknowledged by developer.
+4. **Verify**: Dependency is either validated by `/pair-capability-assess-stack` or acknowledged by developer.
 
 ### Step 2.5: Check for Decisions
 
@@ -170,7 +170,7 @@ Follow the TDD discipline rules strictly:
    Move to Step 2.7.
 
 3. **Act**: Compose `/verify-adoption` with `$scope` appropriate to the task.
-   - Non-conformities reported → resolve via `/assess-stack` (tech-stack issues) or `/pair-capability-record-decision` (architectural gaps).
+   - Non-conformities reported → resolve via `/pair-capability-assess-stack` (tech-stack issues) or `/pair-capability-record-decision` (architectural gaps).
 4. **Verify**: Adoption compliance confirmed or all non-conformities resolved.
 
 ### Step 2.7: Verify Quality

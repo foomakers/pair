@@ -742,3 +742,7 @@ const databaseFrameworkDecisionMatrix = {
 ```
 
 This comprehensive framework selection guide ensures informed decisions based on objective criteria, project requirements, and team capabilities while providing clear rationale for technology choices.
+
+---
+
+**Skill**: Use `/pair-capability-assess-stack` to evaluate and adopt tech stack choices from these guidelines via the resolution cascade.
