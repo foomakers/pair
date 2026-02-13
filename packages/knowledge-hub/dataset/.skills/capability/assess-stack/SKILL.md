@@ -136,7 +136,7 @@ Detect and evaluate unlisted dependencies. Used when `/review` finds a dependenc
    > | Language | [name] | [vX.Y] | [reason] |
    > | ... | ... | ... | ... |
 
-4. **Verify**: Developer approves the full stack.
+1. **Verify**: Developer approves the full stack.
 
 #### Implementation Mode (add single entry)
 
