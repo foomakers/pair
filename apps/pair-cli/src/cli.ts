@@ -77,6 +77,16 @@ export async function runCli(
     .option('--no-kb', 'Skip knowledge base download')
     // Prevent Commander from calling process.exit() automatically
     .exitOverride()
+    .configureHelp({ sortSubcommands: true })
+
+  program.addHelpText(
+    'beforeAll',
+    `\n  ${chalk.bold(pkg.name)} ${chalk.dim(`v${pkg.version}`)}\n  ${chalk.dim(pkg.description)}\n`,
+  )
+  program.addHelpText(
+    'afterAll',
+    `\n  Run ${chalk.dim('pair <command> --help')} for detailed usage of a specific command.\n`,
+  )
 
   runDiagnostics(fsService)
   setupCommands(program, { fsService, httpClient, version: pkg.version })
@@ -135,12 +145,14 @@ function addCommandOptions(
 }
 
 function buildCommandHelpText(examples: readonly string[], notes: readonly string[]): string {
+  const exLines = examples.map((ex: string) => `  ${chalk.dim('$')} ${ex}`).join('\n')
+  const noteLines = notes.map((note: string) => `  ${chalk.dim('•')} ${note}`).join('\n')
   return `
-Examples:
-${examples.map((ex: string) => `  $ ${ex}`).join('\n')}
+${chalk.bold('Examples:')}
+${exLines}
 
-Usage Notes:
-${notes.map((note: string) => `  • ${note}`).join('\n')}
+${chalk.bold('Usage Notes:')}
+${noteLines}
 `
 }
 

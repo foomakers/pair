@@ -39,7 +39,9 @@
       "#kb-manager/*": ["src/kb-manager/*"],
       "#diagnostics": ["src/diagnostics.ts"],
       "#test-utils": ["src/test-utils/index.ts"],
-      "#test-utils/*": ["src/test-utils/*"]
+      "#test-utils/*": ["src/test-utils/*"],
+      "#ui": ["src/ui/index.ts"],
+      "#ui/*": ["src/ui/*"]
     }
   },
   "references": [

@@ -19,6 +19,7 @@ import {
 import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
 import { BackupService, type SkillNameMap } from '@pair/content-ops'
+import { createCliPresenter, type CliPresenter, type RegistryResult } from '#ui'
 
 /**
  * Update options for handler
@@ -32,6 +33,7 @@ interface UpdateHandlerOptions {
   autoRollback?: boolean
   httpClient?: HttpClientService
   cliVersion?: string
+  presenter?: CliPresenter
 }
 
 type UpdateContext = {
@@ -41,6 +43,7 @@ type UpdateContext = {
   baseTarget: string
   options: UpdateHandlerOptions | undefined
   pushLog: (level: LogEntry['level'], message: string) => void
+  presenter: CliPresenter
 }
 
 /**
@@ -57,11 +60,11 @@ export async function handleUpdateCommand(
     options?.minLogLevel ??
     'info'
   const { pushLog } = createLogger(logLevel as LogEntry['level'])
+  const presenter = options?.presenter ?? createCliPresenter(pushLog)
 
   try {
     const { datasetRoot, registries, baseTarget } = await setupUpdateContext(fs, config, options)
-    await executeUpdate({ fs, datasetRoot, registries, baseTarget, options, pushLog })
-    pushLog('info', 'Update completed successfully')
+    await executeUpdate({ fs, datasetRoot, registries, baseTarget, options, pushLog, presenter })
   } catch (err) {
     pushLog('error', `Update failed: ${String(err)}`)
     throw err
@@ -133,12 +136,12 @@ async function runUpdateSequence(
 }
 
 async function performBackup(backupService: BackupService, context: UpdateContext): Promise<void> {
-  const { fs, registries, baseTarget, pushLog } = context
+  const { fs, registries, baseTarget, presenter } = context
   const backupConfig: Record<string, string> = {}
   for (const [name, config] of Object.entries(registries)) {
     backupConfig[name] = resolveTarget(name, config, fs, baseTarget)
   }
-  pushLog('info', 'Creating backup before update...')
+  presenter.phase('Creating backup...')
   await backupService.backupAllRegistries(backupConfig)
 }
 
@@ -160,15 +163,40 @@ async function logDatasetEntries(
   }
 }
 
-async function updateSingleRegistry(ctx: {
+function resolveEffectiveDatasetRoot(
+  config: RegistryConfig,
+  baseTarget: string,
+  datasetRoot: string,
+): string {
+  return config.flatten || config.prefix ? baseTarget : datasetRoot
+}
+
+interface UpdateRegistryCtx {
   fs: FileSystemService
   datasetRoot: string
   registryName: string
   registryConfig: RegistryConfig
   baseTarget: string
   pushLog: (level: LogEntry['level'], message: string) => void
-}): Promise<SkillNameMap | undefined> {
-  const { fs, datasetRoot, registryName, registryConfig, baseTarget, pushLog } = ctx
+  presenter: CliPresenter
+  index: number
+  total: number
+}
+
+async function updateSingleRegistry(
+  ctx: UpdateRegistryCtx,
+): Promise<{ skillNameMap?: SkillNameMap | undefined; result: RegistryResult }> {
+  const {
+    fs,
+    datasetRoot,
+    registryName,
+    registryConfig,
+    baseTarget,
+    pushLog,
+    presenter,
+    index,
+    total,
+  } = ctx
   const resolved = resolveRegistryPaths({
     name: registryName,
     config: registryConfig,
@@ -176,47 +204,58 @@ async function updateSingleRegistry(ctx: {
     fs,
     baseTarget,
   })
-  const effectiveTarget = resolved.target
+  const { target: effectiveTarget, source: datasetPath } = resolved
   await ensureDir(fs, dirname(effectiveTarget))
-  const datasetPath = resolved.source
-  const copyOptions = buildCopyOptions(registryConfig)
 
-  // For flatten+prefix registries (skills), use baseTarget as the effective
-  // datasetRoot so that link re-rooting correctly maps source paths (potentially
-  // deep in node_modules) to installed paths relative to the target root.
-  const effectiveDatasetRoot =
-    registryConfig.flatten || registryConfig.prefix ? baseTarget : datasetRoot
+  const effectiveDatasetRoot = resolveEffectiveDatasetRoot(registryConfig, baseTarget, datasetRoot)
 
   await logDatasetEntries(fs, datasetPath, pushLog)
-  pushLog('info', `Updating registry '${registryName}' at '${effectiveTarget}'`)
-  const result = await doCopyAndUpdateLinks(fs, {
+  presenter.registryStart({
+    name: registryName,
+    index,
+    total,
+    source: datasetPath,
+    target: effectiveTarget,
+  })
+  const copyResult = await doCopyAndUpdateLinks(fs, {
     source: datasetPath,
     target: effectiveTarget,
     datasetRoot: effectiveDatasetRoot,
-    options: copyOptions,
+    options: buildCopyOptions(registryConfig),
   })
 
   await postCopyOps({ fs, registryConfig, effectiveTarget, datasetPath, baseTarget })
-  pushLog('info', `Successfully updated registry '${registryName}'`)
-  return result['skillNameMap'] as SkillNameMap | undefined
+  presenter.registryDone(registryName)
+  return {
+    skillNameMap: copyResult['skillNameMap'] as SkillNameMap | undefined,
+    result: { name: registryName, target: effectiveTarget, ok: true },
+  }
 }
 
-async function updateRegistries(context: UpdateContext): Promise<void> {
-  const { fs, datasetRoot, registries, baseTarget, pushLog } = context
+async function updateRegistries(context: UpdateContext): Promise<RegistryResult[]> {
+  const { fs, datasetRoot, registries, baseTarget, pushLog, presenter } = context
   const accumulatedSkillNameMap: SkillNameMap = new Map()
+  const total = Object.keys(registries).length
+  const startTime = Date.now()
 
-  await forEachRegistry(registries, async (registryName, registryConfig) => {
-    const skillNameMap = await updateSingleRegistry({
+  presenter.startOperation('update', total)
+
+  const results = await forEachRegistry(registries, async (registryName, registryConfig, index) => {
+    const { skillNameMap, result } = await updateSingleRegistry({
       fs,
       datasetRoot,
       registryName,
       registryConfig,
       baseTarget,
       pushLog,
+      presenter,
+      index,
+      total,
     })
     if (skillNameMap) {
       for (const [k, v] of skillNameMap) accumulatedSkillNameMap.set(k, v)
     }
+    return result
   })
 
   if (accumulatedSkillNameMap.size > 0) {
@@ -226,6 +265,9 @@ async function updateRegistries(context: UpdateContext): Promise<void> {
       accumulatedSkillNameMap,
     )
   }
+
+  presenter.summary(results, 'update', Date.now() - startTime)
+  return results
 }
 
 async function executeRollback(
@@ -234,6 +276,7 @@ async function executeRollback(
   context: UpdateContext,
 ): Promise<void> {
   const { options, pushLog } = context
+  context.presenter.phase('Rolling back...')
   pushLog('warn', 'Update failed, attempting rollback...')
   await handleBackupRollback(
     backupService,

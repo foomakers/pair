@@ -27,7 +27,9 @@
     "#kb-manager/*": "./src/kb-manager/*.ts",
     "#diagnostics": "./src/diagnostics.ts",
     "#test-utils": "./src/test-utils/index.ts",
-    "#test-utils/*": "./src/test-utils/*.ts"
+    "#test-utils/*": "./src/test-utils/*.ts",
+    "#ui": "./src/ui/index.ts",
+    "#ui/*": "./src/ui/*.ts"
   },
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
