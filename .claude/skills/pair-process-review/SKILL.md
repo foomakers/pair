@@ -1,6 +1,6 @@
 ---
 name: pair-process-review
-description: "Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness check, decision, and optional merge with parent cascade. Composes /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-record-decision, /pair-capability-assess-debt (required) and /verify-adoption, /pair-capability-assess-stack (optional with graceful degradation). Output follows the code review template. Idempotent — re-invocation resumes from incomplete phases."
+description: "Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness check, decision, and optional merge with parent cascade. Composes /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-record-decision, /pair-capability-assess-debt (required) and /pair-capability-verify-adoption, /pair-capability-assess-stack (optional with graceful degradation). Output follows the code review template. Idempotent — re-invocation resumes from incomplete phases."
 ---
 
 # /pair-process-review — Code Review
@@ -15,7 +15,7 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 | `/pair-capability-verify-done`     | Capability | Yes      | 4     | Definition of Done checking          |
 | `/pair-capability-record-decision` | Capability | Yes      | Any   | Record missing ADR (HALT condition)  |
 | `/pair-capability-assess-debt`     | Capability | Yes      | 4     | Flag tech debt items                 |
-| `/verify-adoption` | Capability | Optional | 3     | Full adoption compliance (from #105) |
+| `/pair-capability-verify-adoption` | Capability | Optional | 3     | Full adoption compliance (from #105) |
 | `/pair-capability-assess-stack`    | Capability | Optional | 3     | Tech-stack resolution (from #104)    |
 
 ## Arguments
@@ -123,7 +123,7 @@ Ask: _"Proceed with review?"_
 
 This phase uses a **4-level graceful degradation cascade** depending on which optional skills are installed:
 
-| Level | /verify-adoption | /pair-capability-assess-stack | Behavior                                                   |
+| Level | /pair-capability-verify-adoption | /pair-capability-assess-stack | Behavior                                                   |
 | ----- | ---------------- | ------------- | ---------------------------------------------------------- |
 | 1     | Installed        | Installed     | Full adoption compliance + automatic tech-stack resolution |
 | 2     | Installed        | Not installed | Full compliance detection, manual stack resolution         |
@@ -132,24 +132,24 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 
 ### Step 3.1: Determine Degradation Level
 
-1. **Check**: Is `/verify-adoption` installed? Is `/pair-capability-assess-stack` installed?
+1. **Check**: Is `/pair-capability-verify-adoption` installed? Is `/pair-capability-assess-stack` installed?
 2. **Act**: Set the degradation level (1–4) based on availability.
 3. **Verify**: Level set. Proceed with the corresponding behavior.
 
 ### Step 3.2: Run Adoption Check
 
-**Level 1** (/verify-adoption + /pair-capability-assess-stack):
+**Level 1** (/pair-capability-verify-adoption + /pair-capability-assess-stack):
 
-1. Compose `/verify-adoption` with `$scope = all`.
+1. Compose `/pair-capability-verify-adoption` with `$scope = all`.
 2. For each non-conformity:
    - **Tech-stack**: compose `/pair-capability-assess-stack` → developer approves (add to stack) or rejects (CHANGES-REQUESTED).
    - **Architecture**: report to developer for resolution. Missing ADR → HALT via `/pair-capability-record-decision`.
    - **Other** (security, coding-standards, infrastructure): report findings.
 3. Record all results.
 
-**Level 2** (/verify-adoption only):
+**Level 2** (/pair-capability-verify-adoption only):
 
-1. Compose `/verify-adoption` with `$scope = all`.
+1. Compose `/pair-capability-verify-adoption` with `$scope = all`.
 2. For tech-stack non-conformities: report as findings for manual resolution.
 3. For other non-conformities: same as Level 1.
 4. Record results.
@@ -165,7 +165,7 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 
 1. Warn:
 
-   > `/verify-adoption` and `/pair-capability-assess-stack` are not installed — skipping automated adoption compliance. Please manually verify code against adoption files.
+   > `/pair-capability-verify-adoption` and `/pair-capability-assess-stack` are not installed — skipping automated adoption compliance. Please manually verify code against adoption files.
 
 2. Move to Phase 4.
 
@@ -262,15 +262,17 @@ Based on compiled findings:
    Refs: #<story-id>
    ```
 
-2. **Act** (BLOCKING): Present to reviewer for confirmation:
+1. **Act** (BLOCKING): Present to reviewer for confirmation:
 
    > **Merge commit message:**
-   > ```
+   >
+   > ```text
    > [commit message]
    > ```
+   >
    > Confirm or edit?
 
-3. **Verify**: Reviewer confirms message.
+1. **Verify**: Reviewer confirms message.
 
 ### Step 6.3: Merge PR
 
@@ -352,8 +354,8 @@ Re-invoking `/pair-process-review` on a partially reviewed PR is safe:
 ## Graceful Degradation
 
 - **/verify-adoption not installed**: Falls back to inline dependency checking against [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md). Warning logged. See degradation cascade (Phase 3).
-- **/pair-capability-assess-stack not installed**: Unlisted dependencies flagged as warnings for manual verification. Does NOT HALT.
-- **/pair-capability-assess-debt not available**: Skip debt assessment, note in report.
+- **/assess-stack not installed**: Unlisted dependencies flagged as warnings for manual verification. Does NOT HALT.
+- **/assess-debt not available**: Skip debt assessment, note in report.
 - **Story not found**: Review proceeds with PR-only validation (no AC check). Phase 6 skips parent cascade.
 - **Code review template not found**: **HALT** — cannot produce review without template.
 - **PM tool not accessible**: Ask reviewer to manually provide PR details. Phase 6 merge via CLI only.

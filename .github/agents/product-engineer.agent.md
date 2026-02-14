@@ -29,11 +29,11 @@ If your agent supports [Agent Skills](https://agentskills.io), prefer invoking s
 
 | Skill | How-To | Activity |
 |-------|--------|----------|
-| `/plan-tasks` | 09 | Create task breakdown |
-| `/implement` | 10 | Implement tasks |
-| `/refine-story` | 08 | Refine user stories (collaboration) |
+| `/pair-process-plan-tasks` | 09 | Create task breakdown |
+| `/pair-process-implement` | 10 | Implement tasks |
+| `/pair-process-refine-story` | 08 | Refine user stories (collaboration) |
 
-Run `/next` at session start to determine which skill to invoke.
+Run `/pair-next` at session start to determine which skill to invoke.
 
 ## Process Guidelines
 

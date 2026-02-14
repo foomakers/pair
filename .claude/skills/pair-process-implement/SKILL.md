@@ -14,7 +14,7 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 | `/pair-capability-verify-quality`  | Capability | Yes — invoked at quality validation phase                                                           |
 | `/pair-capability-record-decision` | Capability | Yes — invoked when a decision needs recording                                                       |
 | `/pair-capability-assess-stack`    | Capability | Optional — invoked when a new dependency is detected. If not installed, warn and continue.          |
-| `/verify-adoption` | Capability | Optional — invoked before commit to check adoption compliance. If not installed, warn and continue. |
+| `/pair-capability-verify-adoption` | Capability | Optional — invoked before commit to check adoption compliance. If not installed, warn and continue. |
 
 ## Phase 0: Story & Task Analysis (BLOCKING)
 
@@ -170,13 +170,13 @@ Follow the TDD discipline rules strictly:
 
 ### Step 2.6: Verify Adoption Compliance
 
-1. **Check**: Is `/verify-adoption` installed?
+1. **Check**: Is `/pair-capability-verify-adoption` installed?
 2. **Skip**: If not installed, warn:
 
-   > `/verify-adoption` is not installed — skipping adoption compliance check. Please manually verify code against adoption files.
+   > `/pair-capability-verify-adoption` is not installed — skipping adoption compliance check. Please manually verify code against adoption files.
    Move to Step 2.7.
 
-3. **Act**: Compose `/verify-adoption` with `$scope` appropriate to the task.
+3. **Act**: Compose `/pair-capability-verify-adoption` with `$scope` appropriate to the task.
    - Non-conformities reported → resolve via `/pair-capability-assess-stack` (tech-stack issues) or `/pair-capability-record-decision` (architectural gaps).
 4. **Verify**: Adoption compliance confirmed or all non-conformities resolved.
 

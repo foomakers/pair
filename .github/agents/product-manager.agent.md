@@ -34,14 +34,14 @@ If your agent supports [Agent Skills](https://agentskills.io), prefer invoking s
 
 | Skill | How-To | Activity |
 |-------|--------|----------|
-| `/specify-prd` | 01 | Create/update PRD |
-| `/plan-initiatives` | 03 | Create and prioritize initiatives |
-| `/map-subdomains` | 04 | Define subdomains |
-| `/plan-epics` | 06 | Break down epics |
-| `/plan-stories` | 07 | Break down user stories |
-| `/refine-story` | 08 | Refine user stories |
+| `/pair-process-specify-prd` | 01 | Create/update PRD |
+| `/pair-process-plan-initiatives` | 03 | Create and prioritize initiatives |
+| `/pair-process-map-subdomains` | 04 | Define subdomains |
+| `/pair-process-plan-epics` | 06 | Break down epics |
+| `/pair-process-plan-stories` | 07 | Break down user stories |
+| `/pair-process-refine-story` | 08 | Refine user stories |
 
-Run `/next` at session start to determine which skill to invoke.
+Run `/pair-next` at session start to determine which skill to invoke.
 
 ## Process Guidelines
 

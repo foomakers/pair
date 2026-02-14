@@ -32,12 +32,12 @@ If your agent supports [Agent Skills](https://agentskills.io), prefer invoking s
 
 | Skill | How-To | Activity |
 |-------|--------|----------|
-| `/bootstrap` | 02 | Project setup and bootstrap |
-| `/map-contexts` | 05 | Define bounded contexts |
-| `/review` | 11 | Code review |
-| `/map-subdomains` | 04 | Support subdomain definition |
+| `/pair-process-bootstrap` | 02 | Project setup and bootstrap |
+| `/pair-process-map-contexts` | 05 | Define bounded contexts |
+| `/pair-process-review` | 11 | Code review |
+| `/pair-process-map-subdomains` | 04 | Support subdomain definition |
 
-Run `/next` at session start to determine which skill to invoke.
+Run `/pair-next` at session start to determine which skill to invoke.
 
 ## Process Guidelines
 
