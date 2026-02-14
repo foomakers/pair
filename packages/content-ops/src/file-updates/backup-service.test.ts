@@ -6,7 +6,7 @@ import { InMemoryFileSystemService } from '../test-utils/in-memory-fs'
 function createTestFileService(): InMemoryFileSystemService {
   return new InMemoryFileSystemService(
     {
-      '.github/prompts/test.md': '# Test Prompt',
+      '.github/agents/config.md': '# Test Config',
       '.github/agents/test.md': '# Test Agent',
       '.pair/knowledge/guide.md': '# Knowledge Guide',
       '.pair/adoption/readme.md': '# Adoption README',
@@ -34,10 +34,10 @@ describe('BackupService - Backup Path Format', () => {
   it('should backup entire registry folder structure', async () => {
     const backupPath = await backupService.createRegistryBackup('github', '.github')
 
-    const promptBackup = `${backupPath}/prompts/test.md`
+    const configBackup = `${backupPath}/agents/config.md`
     const agentBackup = `${backupPath}/agents/test.md`
 
-    expect(await fileService.readFile(promptBackup)).toBe('# Test Prompt')
+    expect(await fileService.readFile(configBackup)).toBe('# Test Config')
     expect(await fileService.readFile(agentBackup)).toBe('# Test Agent')
   })
 
@@ -83,7 +83,7 @@ describe('BackupService - Registry Restore', () => {
   beforeEach(() => {
     fileService = new InMemoryFileSystemService(
       {
-        '.github/prompts/test.md': '# Test Prompt',
+        '.github/agents/config.md': '# Test Config',
         '.pair/knowledge/guide.md': '# Knowledge Guide',
       },
       '/',
@@ -94,7 +94,7 @@ describe('BackupService - Registry Restore', () => {
 
   async function createAndModifyBackup() {
     const backupPath = await backupService.createRegistryBackup('github', '.github')
-    await fileService.writeFile('.github/prompts/test.md', '# Modified Prompt')
+    await fileService.writeFile('.github/agents/config.md', '# Modified Config')
     return backupPath
   }
 
@@ -102,8 +102,8 @@ describe('BackupService - Registry Restore', () => {
     const backupPath = await createAndModifyBackup()
     await backupService.restoreRegistry(backupPath, '.github')
 
-    const content = await fileService.readFile('.github/prompts/test.md')
-    expect(content).toBe('# Test Prompt')
+    const content = await fileService.readFile('.github/agents/config.md')
+    expect(content).toBe('# Test Config')
   })
 
   it('should restore single-file registry', async () => {
@@ -128,7 +128,7 @@ describe('BackupService - Rollback', () => {
   beforeEach(() => {
     fileService = new InMemoryFileSystemService(
       {
-        '.github/prompts/test.md': '# Original Prompt',
+        '.github/agents/config.md': '# Original Config',
         '.pair/knowledge/guide.md': '# Original Guide',
         'AGENTS.md': '# Original Agents',
       },
@@ -143,7 +143,7 @@ describe('BackupService - Rollback', () => {
     await backupService.createRegistryBackup('knowledge', '.pair/knowledge')
     await backupService.createRegistryBackup('agents', 'AGENTS.md')
 
-    await fileService.writeFile('.github/prompts/test.md', '# Modified Prompt')
+    await fileService.writeFile('.github/agents/config.md', '# Modified Config')
     await fileService.writeFile('.pair/knowledge/guide.md', '# Modified Guide')
     await fileService.writeFile('AGENTS.md', '# Modified Agents')
   }
@@ -152,7 +152,7 @@ describe('BackupService - Rollback', () => {
     await createMultipleBackupsAndModify()
     await backupService.rollback()
 
-    expect(await fileService.readFile('.github/prompts/test.md')).toBe('# Original Prompt')
+    expect(await fileService.readFile('.github/agents/config.md')).toBe('# Original Config')
     expect(await fileService.readFile('.pair/knowledge/guide.md')).toBe('# Original Guide')
     expect(await fileService.readFile('AGENTS.md')).toBe('# Original Agents')
   })
@@ -169,7 +169,7 @@ describe('BackupService - Rollback Cleanup', () => {
   beforeEach(() => {
     fileService = new InMemoryFileSystemService(
       {
-        '.github/prompts/test.md': '# Original Prompt',
+        '.github/agents/config.md': '# Original Config',
         'AGENTS.md': '# Original Agents',
       },
       '/',
@@ -180,7 +180,7 @@ describe('BackupService - Rollback Cleanup', () => {
 
   async function setupBackup() {
     await backupService.createRegistryBackup('github', '.github')
-    await fileService.writeFile('.github/prompts/test.md', '# Modified')
+    await fileService.writeFile('.github/agents/config.md', '# Modified')
     return backupService.getCurrentSession().id
   }
 
@@ -200,7 +200,7 @@ describe('BackupService - Rollback Cleanup', () => {
     await backupService.rollback(undefined, true)
 
     expect(await fileService.exists(backupRoot)).toBe(true)
-    expect(await fileService.exists(`${backupRoot}/.github/prompts/test.md`)).toBe(true)
+    expect(await fileService.exists(`${backupRoot}/.github/agents/config.md`)).toBe(true)
   })
 })
 
@@ -211,7 +211,7 @@ describe('BackupService - Commit Cleanup', () => {
   beforeEach(() => {
     fileService = new InMemoryFileSystemService(
       {
-        '.github/prompts/test.md': '# Test Prompt',
+        '.github/agents/config.md': '# Test Config',
       },
       '/',
       '/',
@@ -245,7 +245,7 @@ describe('BackupService - Session Cleanup', () => {
   beforeEach(() => {
     fileService = new InMemoryFileSystemService(
       {
-        '.github/prompts/test.md': '# Test Prompt',
+        '.github/agents/config.md': '# Test Config',
       },
       '/',
       '/',
@@ -302,7 +302,7 @@ describe('BackupService - Batch Backup', () => {
   })
 
   it('should backup all registries at once with backupAllRegistries', async () => {
-    await fileService.writeFile('.github/prompts/test.md', '# Prompt')
+    await fileService.writeFile('.github/agents/config.md', '# Config')
     await fileService.writeFile('.pair/knowledge/guide.md', '# Guide')
     await fileService.writeFile('AGENTS.md', '# Agents')
 

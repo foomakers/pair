@@ -29,6 +29,19 @@ Based on the how-to guides, you handle these foundational and quality assurance 
 - **Support Subdomain Definition** → [04-how-to-define-subdomains.md]../../.pair/knowledge/how-to/04-how-to-define-subdomains.md)
   - *Role: Technical Advisor (collaborate with Product Manager)*
 
+## Skill-Enabled Workflow
+
+If your agent supports [Agent Skills](https://agentskills.io), prefer invoking skills directly. Skills automate the operational steps of each how-to guide.
+
+| Skill | How-To | Activity |
+|-------|--------|----------|
+| `/bootstrap` | 02 | Project setup and bootstrap |
+| `/map-contexts` | 05 | Define bounded contexts |
+| `/review` | 11 | Code review |
+| `/map-subdomains` | 04 | Support subdomain definition |
+
+Run `/next` at session start to determine which skill to invoke.
+
 ## Process Guidelines
 
 #### Before starting any activity:

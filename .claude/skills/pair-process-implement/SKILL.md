@@ -23,14 +23,20 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 ### Step 0.1: Load Story
 
 1. **Check**: Is the user story already loaded in this session?
-2. **Skip**: If yes, confirm story ID and move to Step 0.2.
+2. **Skip**: If yes, confirm story ID and move to Step 0.1b.
 3. **Act**: Read the story from the PM tool (per [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)).
    - Understand business value and acceptance criteria.
    - Confirm epic context.
-4. **Act**: Ensure the story is assigned and active in the PM tool:
+4. **Verify**: Story is fully loaded. If not → **HALT**.
+
+### Step 0.1b: Activate Story in PM Tool (NEVER SKIP)
+
+1. **Check**: Is the story already assigned to the current developer AND status is "In Progress"?
+2. **Skip**: If BOTH conditions met, move to Step 0.2.
+3. **Act**: Update the PM tool:
    - **Assign** the story to the current developer (if not already assigned).
    - **Set status to "In Progress"** in the PM tool board/project.
-5. **Verify**: Story is fully loaded, assigned, and In Progress. If not → **HALT**.
+4. **Verify**: Story is assigned and In Progress. If PM tool is inaccessible → warn developer and continue.
 
 ### Step 0.2: Analyze Tasks
 
@@ -49,6 +55,7 @@ Present analysis:
 ```text
 IMPLEMENTATION STATE:
 ├── Story: [#ID: Title]
+├── PM Status: [In Progress ✓ | ⚠️ Not updated — reason]
 ├── Tasks: [N total — list each with type and status]
 ├── Task Types: [Development: N, Documentation: N, Configuration: N]
 ├── Dependencies: [prerequisite stories and their status]

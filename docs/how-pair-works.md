@@ -35,6 +35,8 @@ The **knowledge/** section is the shared reference material — process guides a
 
 Pair defines a structured lifecycle with four levels, each with specific how-to guides that the AI follows.
 
+> **With Agent Skills**: When your AI agent supports the [Agent Skills](https://agentskills.io) standard, each step below can be invoked directly as a skill (e.g., `/specify-prd`, `/bootstrap`, `/implement`, `/review`). Run `/next` at session start to get a recommendation. See `.pair/knowledge/skills-guide.md` for the full catalog of 30 skills.
+
 ### Level 1: Induction (one-time setup)
 
 This happens once when starting a new project.
