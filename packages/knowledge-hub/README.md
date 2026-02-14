@@ -119,9 +119,10 @@ src/
 └── test-utils/              # Testing utilities (shared with content-ops)
 
 dataset/                     # Documentation and assets
-├── knowledge/               # Knowledge base content
-├── adoption/                # Adoption guides
-└── ...                      # Other documentation folders
+├── .pair/                   # Project context (adoption, knowledge, guidelines)
+├── .skills/                 # Agent Skills (process + capability)
+├── .github/                 # GitHub-specific agent config
+└── AGENTS.md                # Universal agent entry point
 ```
 
 ### Development Setup

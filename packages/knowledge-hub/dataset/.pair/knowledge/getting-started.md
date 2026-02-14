@@ -25,6 +25,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 ├── knowledge/                # 📚 Knowledge base and process documentation
 │   ├── getting-started.md    # This guide
 │   ├── way-of-working.md     # Main process documentation
+│   ├── skills-guide.md       # Agent Skills catalog and usage guide
 │   ├── assets/               # Templates and checklists
 │   │   ├── bootstrap-checklist.md
 │   │   ├── PRD_example.md
@@ -36,6 +37,7 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 │   │   ├── collaboration/    # Process workflows and project management
 │   │   │   ├── README.md
 │   │   │   ├── automation/   # Automation and CI/CD guidelines
+│   │   │   ├── decision-records.md  # ADR/ADL format and workflow
 │   │   │   ├── estimation/   # Project estimation methodologies
 │   │   │   ├── issue-management/  # Issue tracking and lifecycle
 │   │   │   ├── methodology/  # Agile methodologies (Kanban, Scrum, etc.)
@@ -73,12 +75,13 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 │       ├── 09-how-to-create-tasks.md
 │       ├── 10-how-to-implement-a-task.md
 │       └── 11-how-to-code-review.md
-```markdown
+````
 
 ### 📂 Folder Overview:
 
 - **`way-of-working.md`**: Main process documentation – the starting point to understand the full workflow
 - **`getting-started.md`**: This guide – essential information to get started with the framework
+- **`skills-guide.md`**: Full catalog of 30 Agent Skills (11 process + 19 capability) with composition patterns, adoption file mapping, and usage instructions
 - **`how-to/`**: Step-by-step guides for each development phase and LLM collaboration
   - Process guides (01-11): Operational documentation for each phase
 - **`assets/`**: Templates, checklists, and document examples (e.g., PRD, bootstrap checklist)
@@ -100,7 +103,8 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 
 1. **Read** `way-of-working.md` to understand the development process
 2. **Adapt** technical guidelines in `guidelines/` folder to your technology stack
-3. **Follow** the process guides in `how-to/` folder for each development phase
+3. **Use skills** (if your agent supports them) — run `/next` to get started. See [skills-guide.md](skills-guide.md)
+4. **Follow** the process guides in `how-to/` folder as fallback when skills are not available
 
 ### 🚨 Critical: Technical Guidelines Setup
 
@@ -114,5 +118,3 @@ Before development, **review and adapt** all documents in the `guidelines/` and 
 - 👨‍💻 **Human Only**: Developer-exclusive activities
 
 Happy AI-Human pairing! 🚀🤖👨‍💻
-
-````

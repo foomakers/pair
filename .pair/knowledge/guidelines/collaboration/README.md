@@ -50,6 +50,10 @@ This framework does not cover:
 
 **[Issue Management](issue-management/README.md)** - Issue tracking workflows, lifecycle management, and resolution coordination strategies
 
+### Decision Records
+
+**[Decision Records](decision-records.md)** - ADR (Architecture Decision Records) and ADL (Adoption Decision Log) formats, file naming conventions, and integration with skills
+
 ## Introduction to Collaboration Excellence
 
 ### Purpose

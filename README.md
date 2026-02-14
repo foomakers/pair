@@ -102,6 +102,10 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 │   ├── tech/                      # Technical guidelines and standards
 │   ├── assets/                    # Document templates and examples
 │   └── way-of-working.md         # Process and collaboration guidelines
+├── .skills/                       # Agent Skills (agentskills.io standard)
+│   ├── process/                   # Lifecycle phase skills (11)
+│   ├── capability/                # Atomic operation skills (19)
+│   └── next/                      # Project navigator skill
 ├── turbo.json                     # Turbo configuration
 ├── pnpm-workspace.yaml           # pnpm workspace configuration
 └── package.json                  # Root package configuration
@@ -265,12 +269,16 @@ Notes:
 
 This template is designed to work seamlessly with:
 
-- **Claude** (Anthropic)
+- **Claude Code** (Anthropic)
 - **Cursor** IDE
-- **GitHub Copilot**
-- **VS Code with Copilot**
+- **GitHub Copilot** / VS Code Copilot
+- **OpenAI Codex**
 
-All AI tools can reference the comprehensive documentation in `.pair/how-to/` and technical guidelines in `.pair/tech/` to understand your project's specific requirements and constraints.
+### Agent Skills
+
+Pair includes 30 **Agent Skills** following the [agentskills.io](https://agentskills.io) open standard. Skills provide automated, idempotent workflows for every development lifecycle phase — from PRD creation to code review and merge. Run `/next` to get started.
+
+Skills are installed to `.skills/` and work with any compatible AI assistant. See `.pair/how-to/` for the full process documentation and `.skills/` for skill-level operational detail.
 
 ## 📋 Development Process
 

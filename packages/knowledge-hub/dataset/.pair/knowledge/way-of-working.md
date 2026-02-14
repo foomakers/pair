@@ -56,36 +56,26 @@ The process is designed to:
 
 ### 📘 Induction
 
-1. **🤖🤝👨‍💻 PRD Creation** → Generate Product Requirements Document from user needs & market insights
-2. **🤖🤝👨‍💻 Bootstrap Checklist Completion** → Define technical context and operational framework through comprehensive project assessment
-3. **🤖🤝👨‍💻 Initiative Prioritization** → Identify and rank initiatives by impact
-4. **🤖🤝👨‍💻 Subdomain Analysis** → Map relevant functional subdomains
-5. **🤖🤝👨‍💻 Bounded Context Definition** → Define boundaries to prevent ambiguity
-6. **🤖🤝👨‍💻 AI Context File Generation** → Connect PRD, initiatives, bootstrap decisions, and technical specifications
+1. **🤖🤝👨‍💻 PRD Creation** (`/specify-prd`) → Generate Product Requirements Document from user needs & market insights
+2. **🤖🤝👨‍💻 Bootstrap Checklist Completion** (`/bootstrap`) → Define technical context and operational framework through comprehensive project assessment
+3. **🤖🤝👨‍💻 Initiative Prioritization** (`/plan-initiatives`) → Identify and rank initiatives by impact
+4. **🤖🤝👨‍💻 Subdomain Analysis** (`/map-subdomains`) → Map relevant functional subdomains
+5. **🤖🤝👨‍💻 Bounded Context Definition** (`/map-contexts`) → Define boundaries to prevent ambiguity
 
 ### 🚀 Strategic Initiatives
 
-1. **🤖🤝👨‍💻 Initiative Selection** → Choose next product objective
-2. **🤖🤝👨‍💻 Epic Breakdown** → Divide initiative into value increments
+1. **🤖🤝👨‍💻 Epic Breakdown** (`/plan-epics`) → Divide initiative into value increments
 
 ### 🧩 Customer-Facing Iterations
 
-1. **🤖🤝👨‍💻 User Story Breakdown** → Decompose epics into granular stories
-2. **🤖🤝👨‍💻 Story Refinement** → Complete with description, scope, acceptance criteria, technical notes
-3. **🤖🤝👨‍💻 Sprint Planning** → Define a Sprint GOAL and select and prioritize stories for next sprint accordingly
+1. **🤖🤝👨‍💻 User Story Breakdown** (`/plan-stories`) → Decompose epics into granular stories
+2. **🤖🤝👨‍💻 Story Refinement** (`/refine-story`) → Complete with description, scope, acceptance criteria, technical notes
+3. **🤖🤝👨‍💻 Task Breakdown** (`/plan-tasks`) → Decompose stories into executable tasks
 
 ### 🛠️ Sprint Execution
 
-**👨‍💻💡🤖 Story Kickoff** (create new branch) → followed by:
+1. **🤖⚡ Task Implementation** (`/implement`) → Autonomous completion with TDD, quality gates, and commit-per-task/story strategy
+2. **🤖🤝👨‍💻 Code Review** (`/review`) → Structured review with adoption compliance, merge flow, and parent cascade
+3. **🤖⚡ Status Update** → Automatic story/epic/initiative tracking update (handled by `/implement` and `/review`)
 
-1. **🤖🤝👨‍💻 Task Breakdown** → Decompose story into executable tasks
-2. **🤖⚡ Task Iteration** → Autonomous completion until done
-3. **🤖⚡ Automated Code Review** → AI-driven quality checks
-4. **👨‍💻 Manual Code Review** → Human validation
-5. **👨‍💻💡🤖 Next Card Iteration** → Continue until sprint completion
-6. **🤖🤝👨‍💻 DoD Verification** → Final check with corrections if needed
-7. **👨‍💻💡🤖 Refactoring Suggestions** → Pre-commit improvements (if accepted → dedicated task)
-8. **🤖⚡ Code Smells Detection** → Pre-commit automated analysis
-9. **🤖⚡ Static Analysis** → Automated warnings and suggestions
-10. **🤖⚡ Status Update** → Automatic story tracking update
-11. **🤖⚡ Knowledge Capture** → Extract patterns, solutions, and learnings for future iterations
+> **Skill-enabled workflow**: Run `/next` at session start to determine the most relevant skill. See [skills-guide.md](skills-guide.md) for the full catalog of 30 skills.

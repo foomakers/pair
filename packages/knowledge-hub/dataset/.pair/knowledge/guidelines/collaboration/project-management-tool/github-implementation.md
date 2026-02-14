@@ -214,6 +214,191 @@ gh pr create --project [PROJECT_ID]
 - Reporting and analytics workflows
 - Custom dashboard creation
 
+## Code Review & PR Management
+
+### PR Review States
+
+GitHub supports three review actions. The `/review` skill uses these through a tool-agnostic interface — this section documents the GitHub-specific implementation.
+
+#### Review Actions
+
+| Action             | GitHub API Value    | When to Use                                                |
+| ------------------ | ------------------- | ---------------------------------------------------------- |
+| Approve            | `APPROVE`           | All review checks pass, no blocking issues                 |
+| Request Changes    | `REQUEST_CHANGES`   | Blocking issues found that must be fixed before merge      |
+| Comment            | `COMMENT`           | Non-blocking feedback, questions, or suggestions           |
+
+#### MCP-First Approach
+
+```text
+# Submit a review (preferred — uses MCP GitHub server)
+mcp__github__pull_request_review_write:
+  method: create
+  owner: [org]
+  repo: [repo]
+  pullNumber: [N]
+  event: APPROVE | REQUEST_CHANGES | COMMENT
+  body: "Review summary"
+```
+
+#### CLI Fallback
+
+```bash
+# When MCP is unavailable
+gh pr review [PR_NUMBER] --approve --body "Review summary"
+gh pr review [PR_NUMBER] --request-changes --body "Changes needed: ..."
+gh pr review [PR_NUMBER] --comment --body "Feedback: ..."
+```
+
+#### Pending Review Workflow (Multi-Comment Reviews)
+
+For reviews with line-specific comments, use the pending review pattern:
+
+```text
+# Step 1: Create pending review (no event = pending)
+mcp__github__pull_request_review_write:
+  method: create
+  owner: [org]
+  repo: [repo]
+  pullNumber: [N]
+
+# Step 2: Add line comments to pending review
+mcp__github__add_comment_to_pending_review:
+  owner: [org]
+  repo: [repo]
+  pullNumber: [N]
+  path: "src/file.ts"
+  line: 42
+  body: "Comment on this line"
+  subjectType: LINE
+  side: RIGHT
+
+# Step 3: Submit the pending review
+mcp__github__pull_request_review_write:
+  method: submit_pending
+  owner: [org]
+  repo: [repo]
+  pullNumber: [N]
+  event: REQUEST_CHANGES
+  body: "Overall review summary"
+```
+
+### Merge Strategy
+
+GitHub supports three merge methods. The adopted strategy is configured in [way-of-working.md](../../../adoption/tech/way-of-working.md) under the Merge Strategy section.
+
+#### Merge Methods
+
+| Method | GitHub API Value | Commit History                        | Best For                          |
+| ------ | ---------------- | ------------------------------------- | --------------------------------- |
+| Squash | `squash`         | Single commit on target branch        | Feature branches, clean history   |
+| Merge  | `merge`          | Merge commit preserving all commits   | Long-lived branches, audit trail  |
+| Rebase | `rebase`         | Linear history, no merge commit       | Small PRs, linear history fans    |
+
+#### MCP-First Approach
+
+```text
+# Merge a PR (preferred)
+mcp__github__merge_pull_request:
+  owner: [org]
+  repo: [repo]
+  pullNumber: [N]
+  merge_method: squash | merge | rebase
+  commit_title: "[#story-id] feat: description"
+  commit_message: "Detailed commit message"
+```
+
+#### CLI Fallback
+
+```bash
+# When MCP is unavailable
+gh pr merge [PR_NUMBER] --squash --subject "[#ID] feat: description" --body "Details"
+gh pr merge [PR_NUMBER] --merge
+gh pr merge [PR_NUMBER] --rebase
+```
+
+### Hierarchy Queries
+
+GitHub Projects supports hierarchical work items (Initiative → Epic → Story). Use these patterns to query parent-child relationships.
+
+#### Check Sub-Issues of a Parent
+
+```text
+# Get sub-issues of an epic or initiative (MCP)
+mcp__github__issue_read:
+  method: get_sub_issues
+  owner: [org]
+  repo: [repo]
+  issue_number: [parent_issue_number]
+```
+
+#### CLI Fallback for Hierarchy
+
+```bash
+# List sub-issues of a parent issue
+gh api repos/[org]/[repo]/issues/[number]/sub_issues
+
+# Check if all children of an epic are done
+# Parse the response and check state of each sub-issue
+```
+
+#### Recursive Parent Cascade Logic
+
+When closing a story after merge, evaluate the parent hierarchy:
+
+1. **Get parent epic** — read the story's parent issue reference
+2. **Get all siblings** — query all sub-issues of the parent epic
+3. **Check completion** — if ALL sibling stories have `state: closed`, close the parent epic
+4. **Recurse** — repeat for the epic's parent (initiative)
+
+```text
+# Step 1: Get epic's sub-issues
+mcp__github__issue_read:
+  method: get_sub_issues
+  owner: [org]
+  repo: [repo]
+  issue_number: [epic_number]
+
+# Step 2: Check if all sub-issues are closed
+# If all closed → close the epic
+mcp__github__issue_write:
+  method: update
+  owner: [org]
+  repo: [repo]
+  issue_number: [epic_number]
+  state: closed
+  state_reason: completed
+
+# Step 3: Repeat for initiative (epic's parent)
+```
+
+### Story Status Update
+
+Update issue status in GitHub Projects board after merge.
+
+#### MCP-First Approach
+
+```text
+# Close the story issue
+mcp__github__issue_write:
+  method: update
+  owner: [org]
+  repo: [repo]
+  issue_number: [story_number]
+  state: closed
+  state_reason: completed
+```
+
+#### CLI Fallback
+
+```bash
+# Close issue
+gh issue close [NUMBER] --reason completed
+
+# Update project board status (if automation doesn't handle it)
+gh project item-edit --project-id [ID] --id [ITEM_ID] --field-id [STATUS_FIELD_ID] --single-select-option-id [DONE_OPTION_ID]
+```
+
 ## Related Resources
 
 - **[GitHub Projects Documentation](https://docs.github.com/en/issues/planning-and-tracking-with-projects)**

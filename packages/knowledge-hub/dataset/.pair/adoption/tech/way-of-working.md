@@ -20,3 +20,10 @@ Custom gates run **after** the standard gates (Lint, Type Check, Test). Add rows
 | Order | Gate       | Command             | Scope Key  | Required | Description                  |
 | ----- | ---------- | ------------------- | ---------- | -------- | ---------------------------- |
 | 1     | Formatting | `pnpm prettier:fix` | formatting | No       | Prettier auto-fix and verify |
+
+## Merge Strategy
+
+- **Method**: `squash` — all feature branch commits are squashed into a single commit on merge.
+- **Commit format**: follows the [commit template](../../knowledge/guidelines/collaboration/templates/commit-template.md).
+- **Branch cleanup**: feature branches are deleted after merge.
+- **Merge confirmation**: `prompt` — `/review` asks developer before merging. Set to `silent` to skip confirmation after recording preference via `/record-decision`.

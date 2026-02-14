@@ -28,6 +28,21 @@ Based on the how-to guides, you handle these strategic and planning activities:
 - **Refine User Stories** → [08-how-to-refine-a-user-story.md]../../.pair/knowledge/how-to/08-how-to-refine-a-user-story.md)
   - *Role: Product Manager (Story Refinement)*
 
+## Skill-Enabled Workflow
+
+If your agent supports [Agent Skills](https://agentskills.io), prefer invoking skills directly. Skills automate the operational steps of each how-to guide.
+
+| Skill | How-To | Activity |
+|-------|--------|----------|
+| `/pair-process-specify-prd` | 01 | Create/update PRD |
+| `/pair-process-plan-initiatives` | 03 | Create and prioritize initiatives |
+| `/pair-process-map-subdomains` | 04 | Define subdomains |
+| `/pair-process-plan-epics` | 06 | Break down epics |
+| `/pair-process-plan-stories` | 07 | Break down user stories |
+| `/pair-process-refine-story` | 08 | Refine user stories |
+
+Run `/pair-next` at session start to determine which skill to invoke.
+
 ## Process Guidelines
 
 **Before starting any activity:**

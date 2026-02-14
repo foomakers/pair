@@ -5,7 +5,49 @@ description: "Determines the most relevant next action for your project by readi
 
 # /pair-next — Project Navigator
 
-Analyze project state and recommend the single most relevant next skill to invoke.
+Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 30-skill catalog across all lifecycle phases.
+
+## Skill Catalog (30 skills)
+
+### Process Skills (11)
+
+| Skill              | Lifecycle Phase    | Description                                     |
+| ------------------ | ------------------ | ----------------------------------------------- |
+| `/pair-process-specify-prd`     | Induction          | Create or update Product Requirements Document  |
+| `/pair-process-bootstrap`       | Induction          | Orchestrate full project setup                  |
+| `/pair-process-map-subdomains`  | Strategic          | Define DDD subdomains from PRD                  |
+| `/pair-process-map-contexts`    | Strategic          | Define bounded contexts from subdomains         |
+| `/pair-process-plan-initiatives`| Strategic          | Create strategic initiatives from PRD           |
+| `/pair-process-plan-epics`      | Strategic          | Break initiatives into epics                    |
+| `/pair-process-plan-stories`    | Sprint Planning    | Break epics into user stories                   |
+| `/pair-process-refine-story`    | Sprint Planning    | Refine story with AC and technical analysis     |
+| `/pair-process-plan-tasks`      | Sprint Planning    | Break story into implementation tasks           |
+| `/pair-process-implement`       | Sprint Execution   | Implement story tasks with TDD                  |
+| `/pair-process-review`          | Sprint Execution   | Review PR through structured phases             |
+
+### Capability Skills (19)
+
+| Skill                | Category     | Description                                     |
+| -------------------- | ------------ | ----------------------------------------------- |
+| `/pair-capability-record-decision`   | Decision     | Record ADR or ADL with adoption update          |
+| `/pair-capability-write-issue`       | PM Tool      | Create/update issues in adopted PM tool         |
+| `/pair-capability-setup-pm`          | PM Tool      | Configure project management tool               |
+| `/pair-capability-verify-quality`    | Quality      | Check quality gates against codebase            |
+| `/pair-capability-verify-done`       | Quality      | Check Definition of Done criteria               |
+| `/pair-capability-verify-adoption`   | Quality      | Check code against adoption files per scope     |
+| `/pair-capability-assess-stack`      | Assessment   | Assess tech stack (lifecycle-spanning)           |
+| `/pair-capability-assess-architecture`| Assessment  | Assess architecture pattern                     |
+| `/pair-capability-assess-testing`    | Assessment   | Assess testing strategy                         |
+| `/pair-capability-assess-ai`         | Assessment   | Assess AI development tools                     |
+| `/pair-capability-assess-methodology`| Assessment   | Assess development methodology                  |
+| `/pair-capability-assess-pm`         | Assessment   | Assess project management tool                  |
+| `/pair-capability-assess-infrastructure`| Assessment| Assess infrastructure strategy                  |
+| `/pair-capability-assess-observability`| Assessment | Assess observability strategy                   |
+| `/pair-capability-assess-debt`       | Assessment   | Assess technical debt with prioritization       |
+| `/pair-capability-assess-code-quality`| Assessment  | Assess code quality with metrics                |
+| `/pair-capability-estimate`          | Planning     | Estimate story using adopted methodology        |
+| `/pair-capability-setup-gates`       | Configuration| Configure CI/CD quality gates                   |
+| `/pair-capability-manage-flags`      | Configuration| Manage feature flag lifecycle                   |
 
 ## Algorithm
 
@@ -48,16 +90,25 @@ All adoption files are populated. Query the PM tool to determine backlog state.
 | 5   | No initiatives or epics exist in PM tool                         | `/pair-process-plan-initiatives` | Strategic planning needed                   |
 | 6   | Initiatives exist but no epics                                   | `/pair-process-plan-epics`       | Epic decomposition needed                   |
 | 7   | Epics exist but no user stories                                  | `/pair-process-plan-stories`     | Story breakdown needed                      |
-| 8   | Stories exist without acceptance criteria or with `status:draft` | `/pair-process-refine-story`     | Stories need refinement before work         |
-| 9   | Refined stories exist but have no task breakdown                 | `/pair-process-plan-tasks`       | Tasks must be created before implementation |
-| 10  | Tasks in "ready" or "todo" state exist                           | `/pair-process-implement`        | Work is ready to start                      |
-| 11  | Open pull requests or tasks in "review" state                    | `/pair-process-review`           | Code review pending                         |
+| 8   | Stories exist without acceptance criteria or with `status:draft`  | `/pair-process-refine-story`     | Stories need refinement before work         |
+| 9   | Refined stories exist but have no task breakdown                  | `/pair-process-plan-tasks`       | Tasks must be created before implementation |
+| 10  | Tasks in "ready" or "todo" state exist                            | `/pair-process-implement`        | Work is ready to start                      |
+| 11  | Open pull requests or tasks in "review" state                     | `/pair-process-review`           | Code review pending                         |
 
-If no condition matched, all work is complete for the current iteration.
+### Step 4: Capability Skill Suggestions
 
-### Step 4: Fallback
+If no process skill matched in Steps 2-3, check for capability skill opportunities:
 
-If no condition matched in Steps 2-3:
+| #   | Condition                                                                | Suggestion           | Rationale                                      |
+| --- | ------------------------------------------------------------------------ | -------------------- | ---------------------------------------------- |
+| 12  | Quality gate not configured (no Quality Gates section in way-of-working) | `/pair-capability-setup-gates`       | Quality gates should be established             |
+| 13  | Tech stack has unlisted dependencies detected                            | `/pair-capability-assess-stack`      | Stack registry needs updating                   |
+| 14  | Technical debt flags present (TODO/FIXME/HACK comments detected)         | `/pair-capability-assess-debt`       | Debt should be cataloged and prioritized        |
+| 15  | No estimation methodology adopted in way-of-working                      | `/pair-capability-estimate`          | Estimation process should be established        |
+
+### Step 5: Fallback
+
+If no condition matched in Steps 2-4:
 
 > All adoption files are populated and no actionable backlog items detected.
 > Consider: starting a new iteration with `/pair-process-plan-stories`, or running `/pair-process-review`
@@ -93,3 +144,4 @@ Then ask: "Shall I run `/skill-name`?"
 - This skill is read-only: it inspects state but never modifies files or PM tool data.
 - When multiple items are actionable (e.g., tasks to implement AND PRs to review), prefer the item closest to delivery (`/pair-process-review` > `/pair-process-implement` > `/pair-process-plan-tasks`).
 - Re-run `/pair-next` after completing any skill to get an updated recommendation.
+- **Full catalog coverage**: this navigator can suggest any of the 30 skills based on project state. Process skills are suggested through the cascading checks (Steps 2-3). Capability skills are suggested through targeted checks (Step 4) or as part of process skill composition.

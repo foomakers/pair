@@ -3,7 +3,7 @@
     "github": {
       "source": ".github",
       "behavior": "mirror",
-      "include": ["/agents", "/prompts"],
+      "include": ["/agents"],
       "description": "GitHub workflows and configuration files",
       "targets": [{ "path": ".github", "mode": "canonical" }]
     },

@@ -14,7 +14,7 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 | `/pair-capability-verify-quality`  | Capability | Yes — invoked at quality validation phase                                                           |
 | `/pair-capability-record-decision` | Capability | Yes — invoked when a decision needs recording                                                       |
 | `/pair-capability-assess-stack`    | Capability | Optional — invoked when a new dependency is detected. If not installed, warn and continue.          |
-| `/verify-adoption` | Capability | Optional — invoked before commit to check adoption compliance. If not installed, warn and continue. |
+| `/pair-capability-verify-adoption` | Capability | Optional — invoked before commit to check adoption compliance. If not installed, warn and continue. |
 
 ## Phase 0: Story & Task Analysis (BLOCKING)
 
@@ -23,14 +23,20 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 ### Step 0.1: Load Story
 
 1. **Check**: Is the user story already loaded in this session?
-2. **Skip**: If yes, confirm story ID and move to Step 0.2.
+2. **Skip**: If yes, confirm story ID and move to Step 0.1b.
 3. **Act**: Read the story from the PM tool (per [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)).
    - Understand business value and acceptance criteria.
    - Confirm epic context.
-4. **Act**: Ensure the story is assigned and active in the PM tool:
+4. **Verify**: Story is fully loaded. If not → **HALT**.
+
+### Step 0.1b: Activate Story in PM Tool (NEVER SKIP)
+
+1. **Check**: Is the story already assigned to the current developer AND status is "In Progress"?
+2. **Skip**: If BOTH conditions met, move to Step 0.2.
+3. **Act**: Update the PM tool:
    - **Assign** the story to the current developer (if not already assigned).
    - **Set status to "In Progress"** in the PM tool board/project.
-5. **Verify**: Story is fully loaded, assigned, and In Progress. If not → **HALT**.
+4. **Verify**: Story is assigned and In Progress. If PM tool is inaccessible → warn developer and continue.
 
 ### Step 0.2: Analyze Tasks
 
@@ -49,6 +55,7 @@ Present analysis:
 ```text
 IMPLEMENTATION STATE:
 ├── Story: [#ID: Title]
+├── PM Status: [In Progress ✓ | ⚠️ Not updated — reason]
 ├── Tasks: [N total — list each with type and status]
 ├── Task Types: [Development: N, Documentation: N, Configuration: N]
 ├── Dependencies: [prerequisite stories and their status]
@@ -163,13 +170,13 @@ Follow the TDD discipline rules strictly:
 
 ### Step 2.6: Verify Adoption Compliance
 
-1. **Check**: Is `/verify-adoption` installed?
+1. **Check**: Is `/pair-capability-verify-adoption` installed?
 2. **Skip**: If not installed, warn:
 
-   > `/verify-adoption` is not installed — skipping adoption compliance check. Please manually verify code against adoption files.
+   > `/pair-capability-verify-adoption` is not installed — skipping adoption compliance check. Please manually verify code against adoption files.
    Move to Step 2.7.
 
-3. **Act**: Compose `/verify-adoption` with `$scope` appropriate to the task.
+3. **Act**: Compose `/pair-capability-verify-adoption` with `$scope` appropriate to the task.
    - Non-conformities reported → resolve via `/pair-capability-assess-stack` (tech-stack issues) or `/pair-capability-record-decision` (architectural gaps).
 4. **Verify**: Adoption compliance confirmed or all non-conformities resolved.
 
