@@ -26,3 +26,5 @@ export {
   type ResumeDecision,
   type DownloadContext,
 } from './resume-manager'
+
+export { downloadWithRetry, isRetryableError, type RetryOptions } from './retryable-download'

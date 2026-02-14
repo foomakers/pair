@@ -349,7 +349,8 @@ describe('KB Installer - installKBFromLocalDirectory', () => {
     // Arrange
     const version = '0.2.0'
     const dirPath = './relative/kb'
-    const resolvedDirPath = join(process.cwd(), 'relative', 'kb')
+    // fs.currentWorkingDirectory() returns '/' so resolve('/', './relative/kb') = '/relative/kb'
+    const resolvedDirPath = '/relative/kb'
     const expectedCachePath = join(homedir(), '.pair', 'kb', version)
     const expectedDatasetRoot = join(expectedCachePath, '.pair')
     const fs = new InMemoryFileSystemService(

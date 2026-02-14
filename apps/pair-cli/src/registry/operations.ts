@@ -12,7 +12,7 @@ import {
 } from '@pair/content-ops'
 import { type SyncOptions, defaultSyncOptions } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
-import { isAbsolute, dirname } from 'path'
+import { isAbsolute, dirname, relative } from 'path'
 
 /**
  * Performs the actual copy/mirror operation for a registry.
@@ -271,5 +271,7 @@ async function createOrReplaceSymlink(
   if (fileService.existsSync(linkPath)) {
     await fileService.unlink(linkPath)
   }
-  await fileService.symlink(target, linkPath)
+  // Use relative path so symlinks are portable across machines
+  const relTarget = relative(dirname(linkPath), target)
+  await fileService.symlink(relTarget, linkPath)
 }

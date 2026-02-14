@@ -1,13 +1,10 @@
 import {
   downloadFile as genericDownloadFile,
-  type DownloadOptions as GenericDownloadOptions,
+  downloadWithRetry as genericDownloadWithRetry,
+  type DownloadOptions,
   type DownloadErrorHandler,
-  type ProgressWriter,
-  type HttpClientService,
-  NodeHttpClientService,
+  type RetryOptions,
 } from '@pair/content-ops'
-import type { FileSystemService } from '@pair/content-ops'
-import { fileSystemService } from '@pair/content-ops'
 
 /**
  * KB-specific error handler with helpful messages for knowledge base downloads
@@ -37,12 +34,11 @@ const kbErrorHandler: DownloadErrorHandler = {
   },
 }
 
-interface DownloadOptions {
-  httpClient?: HttpClientService | undefined
-  fs?: FileSystemService | undefined
-  progressWriter?: ProgressWriter | undefined
-  isTTY?: boolean | undefined
-}
+/** Subset of DownloadOptions accepted by KB download wrappers (errorHandler + label are set internally) */
+export type KBDownloadOptions = Pick<
+  DownloadOptions,
+  'httpClient' | 'fs' | 'progressWriter' | 'isTTY'
+>
 
 /**
  * Download KB file with KB-specific error messages
@@ -51,20 +47,32 @@ interface DownloadOptions {
 export async function downloadFile(
   url: string,
   destination: string,
-  options: DownloadOptions = {},
+  options: KBDownloadOptions,
 ): Promise<void> {
-  const httpClient = options.httpClient || new NodeHttpClientService()
-  const fs = options.fs || fileSystemService
-  const { progressWriter, isTTY } = options
-
-  const genericOptions: GenericDownloadOptions = {
-    httpClient,
-    fs,
-    progressWriter,
-    isTTY,
+  const genericOptions: DownloadOptions = {
+    ...options,
     label: 'Downloading KB',
     errorHandler: kbErrorHandler,
   }
 
   return genericDownloadFile(url, destination, genericOptions)
+}
+
+/**
+ * Download KB file with retry on transient network errors.
+ * Uses KB-specific error handler and retries up to 3 times with exponential backoff.
+ */
+export async function downloadWithRetry(
+  url: string,
+  destination: string,
+  options: KBDownloadOptions,
+  retryOptions: RetryOptions = {},
+): Promise<void> {
+  const genericOptions: DownloadOptions = {
+    ...options,
+    label: 'Downloading KB',
+    errorHandler: kbErrorHandler,
+  }
+
+  return genericDownloadWithRetry(url, destination, genericOptions, retryOptions)
 }

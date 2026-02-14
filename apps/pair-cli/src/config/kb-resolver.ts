@@ -1,5 +1,5 @@
-import { join, dirname } from 'path'
-import { FileSystemService, HttpClientService, NodeHttpClientService } from '@pair/content-ops'
+import { join, dirname, resolve } from 'path'
+import { FileSystemService, HttpClientService, validateKBStructure } from '@pair/content-ops'
 import {
   isInRelease,
   findNpmReleasePackage,
@@ -100,7 +100,7 @@ async function downloadKBIfNeeded(options: {
  */
 export async function getKnowledgeHubDatasetPathWithFallback(options: {
   fsService: FileSystemService
-  httpClient?: HttpClientService
+  httpClient: HttpClientService
   version: string
   customUrl?: string
   isKBCachedFn?: typeof isKBCached
@@ -108,7 +108,7 @@ export async function getKnowledgeHubDatasetPathWithFallback(options: {
 }): Promise<string> {
   const {
     fsService,
-    httpClient = new NodeHttpClientService(),
+    httpClient,
     version,
     customUrl,
     isKBCachedFn = isKBCached,
@@ -140,6 +140,27 @@ export type DatasetResolvableConfig =
 export interface DatasetResolveOptions {
   cliVersion?: string | undefined
   httpClient?: HttpClientService | undefined
+  progressWriter?: { write(s: string): void } | undefined
+  isTTY?: boolean | undefined
+}
+
+async function resolveLocalDataset(
+  fs: FileSystemService,
+  path: string,
+  version: string,
+): Promise<string> {
+  const resolved = resolve(fs.currentWorkingDirectory(), path)
+  if (path.endsWith('.zip')) {
+    return installKBFromLocalZip(version, resolved, fs)
+  }
+  if (!fs.existsSync(resolved)) {
+    throw new Error(`KB source path not found: ${resolved}`)
+  }
+  const valid = await validateKBStructure(resolved, fs)
+  if (!valid) {
+    throw new Error(`Invalid KB structure at: ${resolved}`)
+  }
+  return resolved
 }
 
 /**
@@ -157,18 +178,19 @@ export async function resolveDatasetRoot(
     case 'default':
       return getKnowledgeHubDatasetPath(fs)
 
-    case 'remote':
+    case 'remote': {
+      if (!options?.httpClient) {
+        throw new Error('Remote resolution requires httpClient')
+      }
       return getKnowledgeHubDatasetPathWithFallback({
         fsService: fs,
+        httpClient: options.httpClient,
         version,
-        ...(options?.httpClient && { httpClient: options.httpClient }),
         customUrl: config.url,
       })
+    }
 
     case 'local':
-      if (config.path.endsWith('.zip')) {
-        return installKBFromLocalZip(version, config.path, fs)
-      }
-      return config.path
+      return resolveLocalDataset(fs, config.path, version)
   }
 }

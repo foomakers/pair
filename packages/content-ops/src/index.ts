@@ -14,7 +14,19 @@ export {
 } from './file-system/integrity-validator'
 export { isValidHttpUrl, validateUrl } from './file-system/url-validator'
 export { extractZip } from './file-system/archive-operations'
-export { detectSourceType, SourceType } from './path-resolution/source-detector'
+export {
+  validateKBStructure,
+  findKBStructureInSubdirectories,
+  moveDirectoryContents,
+  copyDirectoryContents,
+  normalizeExtractedKB,
+} from './file-system/kb-validation'
+export {
+  detectSourceType,
+  SourceType,
+  isRemoteUrl,
+  isUnsupportedProtocol,
+} from './path-resolution/source-detector'
 
 export { SyncOptions, defaultSyncOptions } from './ops/SyncOptions'
 export {
@@ -89,4 +101,7 @@ export {
   getPartialFileSize,
   cleanupPartialFile,
   shouldResume,
+  downloadWithRetry,
+  isRetryableError,
 } from './http'
+export type { RetryOptions } from './http'

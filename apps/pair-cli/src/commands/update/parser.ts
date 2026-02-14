@@ -1,4 +1,4 @@
-import { detectSourceType, SourceType } from '@pair/content-ops'
+import { isRemoteUrl, isUnsupportedProtocol } from '@pair/content-ops'
 import { validateCommandOptions } from '#config/cli'
 
 /**
@@ -83,9 +83,13 @@ export function parseUpdateCommand(
     }
   }
 
+  // Reject unsupported protocols early
+  if (isUnsupportedProtocol(source)) {
+    throw new Error(`Unsupported source protocol: ${source}`)
+  }
+
   // Remote source
-  const sourceType = detectSourceType(source)
-  if (sourceType === SourceType.REMOTE_URL) {
+  if (isRemoteUrl(source)) {
     return {
       command: 'update',
       resolution: 'remote',

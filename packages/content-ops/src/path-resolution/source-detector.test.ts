@@ -1,52 +1,59 @@
 import { detectSourceType, SourceType } from './source-detector'
-import * as fs from 'fs'
-import * as path from 'path'
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-
-const tmpDir = path.join(__dirname, '../../.tmp/source-detector-test')
-const zipFile = path.join(tmpDir, 'test.zip')
-const dir = path.join(tmpDir, 'testdir')
-
-beforeAll(() => {
-  fs.mkdirSync(tmpDir, { recursive: true })
-  fs.writeFileSync(zipFile, 'dummy')
-  fs.mkdirSync(dir, { recursive: true })
-})
-
-afterAll(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true })
-})
+import { InMemoryFileSystemService } from '../test-utils/in-memory-fs'
+import { describe, it, expect } from 'vitest'
 
 describe('Source Detector', () => {
-  it('detects REMOTE_URL', () => {
-    expect(detectSourceType('https://example.com/kb.zip')).toBe(SourceType.REMOTE_URL)
-    expect(detectSourceType('http://example.com/kb.zip')).toBe(SourceType.REMOTE_URL)
+  const cwd = '/test/project'
+
+  function createFs(files: Record<string, string> = {}) {
+    return new InMemoryFileSystemService(files, cwd, cwd)
+  }
+
+  it('detects REMOTE_URL for https', () => {
+    expect(detectSourceType('https://example.com/kb.zip', createFs())).toBe(SourceType.REMOTE_URL)
   })
 
-  it('rejects unsafe protocols', () => {
-    expect(detectSourceType('file:///tmp/kb.zip')).toBe(SourceType.INVALID)
-    expect(detectSourceType('ftp://example.com/kb.zip')).toBe(SourceType.INVALID)
+  it('detects REMOTE_URL for http', () => {
+    expect(detectSourceType('http://example.com/kb.zip', createFs())).toBe(SourceType.REMOTE_URL)
   })
 
-  it('detects LOCAL_ZIP (absolute)', () => {
-    expect(detectSourceType(zipFile)).toBe(SourceType.LOCAL_ZIP)
+  it('rejects file:// protocol', () => {
+    expect(detectSourceType('file:///tmp/kb.zip', createFs())).toBe(SourceType.INVALID)
   })
 
-  it('detects LOCAL_ZIP (relative)', () => {
-    const rel = path.relative(process.cwd(), zipFile)
-    expect(detectSourceType(rel)).toBe(SourceType.LOCAL_ZIP)
+  it('rejects ftp:// protocol', () => {
+    expect(detectSourceType('ftp://example.com/kb.zip', createFs())).toBe(SourceType.INVALID)
   })
 
-  it('detects LOCAL_DIRECTORY (absolute)', () => {
-    expect(detectSourceType(dir)).toBe(SourceType.LOCAL_DIRECTORY)
+  it('detects LOCAL_ZIP for absolute path', () => {
+    const fs = createFs({ '/data/kb.zip': 'zipdata' })
+    expect(detectSourceType('/data/kb.zip', fs)).toBe(SourceType.LOCAL_ZIP)
   })
 
-  it('detects LOCAL_DIRECTORY (relative)', () => {
-    const rel = path.relative(process.cwd(), dir)
-    expect(detectSourceType(rel)).toBe(SourceType.LOCAL_DIRECTORY)
+  it('detects LOCAL_ZIP for relative path', () => {
+    const fs = createFs({ [`${cwd}/my-kb.zip`]: 'zipdata' })
+    expect(detectSourceType('my-kb.zip', fs)).toBe(SourceType.LOCAL_ZIP)
+  })
+
+  it('detects LOCAL_DIRECTORY for absolute path', () => {
+    const fs = createFs()
+    fs.mkdirSync('/data/kb-dataset')
+    expect(detectSourceType('/data/kb-dataset', fs)).toBe(SourceType.LOCAL_DIRECTORY)
+  })
+
+  it('detects LOCAL_DIRECTORY for relative path', () => {
+    const fs = createFs()
+    fs.mkdirSync(`${cwd}/kb-dataset`)
+    expect(detectSourceType('kb-dataset', fs)).toBe(SourceType.LOCAL_DIRECTORY)
   })
 
   it('returns INVALID for non-existent path', () => {
-    expect(detectSourceType('/not/a/real/path')).toBe(SourceType.INVALID)
+    expect(detectSourceType('/not/a/real/path', createFs())).toBe(SourceType.INVALID)
+  })
+
+  it('requires fs parameter', () => {
+    const fs = createFs()
+    expect(detectSourceType('https://example.com/kb.zip', fs)).toBe(SourceType.REMOTE_URL)
+    expect(detectSourceType('ftp://example.com/kb.zip', fs)).toBe(SourceType.INVALID)
   })
 })

@@ -336,7 +336,10 @@ export class InMemoryFileSystemService implements FileSystemService {
 
   async symlink(target: string, path: string): Promise<void> {
     const resolvedPath = this.resolvePath(path)
-    const resolvedTarget = this.resolvePath(target)
+    // Resolve relative targets from the symlink's parent directory (matching OS behavior)
+    const resolvedTarget = isAbsolute(target)
+      ? this.resolvePath(target)
+      : resolve(dirname(resolvedPath), target)
     if (this.symlinks.has(resolvedPath) || this.files.has(resolvedPath)) {
       throw new Error(`Path already exists: ${path}`)
     }

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { IncomingMessage } from 'http'
 import { downloadFile } from './download-manager'
 import { InMemoryFileSystemService } from '@pair/content-ops'
+import { NodeHttpClientService } from './http-client-service'
 import {
   buildTestResponse,
   toIncomingMessage,
@@ -114,14 +115,20 @@ describe('Download Manager - downloadFile', () => {
   it('should download file successfully', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
     setupBasicDownload()
-    await downloadFile('https://example.com/test.zip', '/tmp/test.zip', { fs })
+    await downloadFile('https://example.com/test.zip', '/tmp/test.zip', {
+      httpClient: new NodeHttpClientService(),
+      fs,
+    })
     expect(fs.existsSync('/tmp/test.zip')).toBe(true)
   })
 
   it('should handle redirect (301)', async () => {
     const fs = new InMemoryFileSystemService({}, '/', '/')
     const tracker = setupRedirect()
-    await downloadFile('https://example.com/test.zip', '/tmp/test.zip', { fs })
+    await downloadFile('https://example.com/test.zip', '/tmp/test.zip', {
+      httpClient: new NodeHttpClientService(),
+      fs,
+    })
     expect(tracker.callCount()).toBe(2)
     expect(fs.existsSync('/tmp/test.zip')).toBe(true)
   })
@@ -131,6 +138,7 @@ describe('Download Manager - downloadFile', () => {
     const progressWriter = { write: vi.fn() }
     setupProgress()
     await downloadFile('https://example.com/test.zip', '/tmp/test.zip', {
+      httpClient: new NodeHttpClientService(),
       fs,
       progressWriter,
       isTTY: true,
@@ -168,7 +176,10 @@ describe('Download Manager - downloadFile', () => {
     })
 
     await expect(async () => {
-      await downloadFile('https://example.com/notfound.zip', '/tmp/nf.zip', { fs })
+      await downloadFile('https://example.com/notfound.zip', '/tmp/nf.zip', {
+        httpClient: new NodeHttpClientService(),
+        fs,
+      })
     }).rejects.toThrow()
   })
 
@@ -194,7 +205,10 @@ describe('Download Manager - downloadFile', () => {
     })
 
     await expect(async () => {
-      await downloadFile('https://example.com/fail.zip', '/tmp/fail.zip', { fs })
+      await downloadFile('https://example.com/fail.zip', '/tmp/fail.zip', {
+        httpClient: new NodeHttpClientService(),
+        fs,
+      })
     }).rejects.toThrow(/network|error/i)
   })
 })

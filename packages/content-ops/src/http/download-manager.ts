@@ -4,9 +4,7 @@
 
 import type { IncomingMessage, ClientRequest, RequestOptions } from 'http'
 import type { FileSystemService } from '../file-system'
-import { fileSystemService } from '../file-system'
 import type { HttpClientService } from './http-client-service'
-import { NodeHttpClientService } from './http-client-service'
 import { ProgressReporter, type ProgressWriter } from './progress-reporter'
 import {
   getPartialFilePath,
@@ -140,8 +138,8 @@ function createProgressReporter(
 }
 
 export interface DownloadOptions {
-  httpClient?: HttpClientService | undefined
-  fs?: FileSystemService | undefined
+  httpClient: HttpClientService
+  fs: FileSystemService
   progressWriter?: ProgressWriter | undefined
   isTTY?: boolean | undefined
   label?: string | undefined
@@ -195,7 +193,7 @@ function executeDownload(params: {
   options: DownloadOptions
 }): Promise<void> {
   const { url, destination, resumeFrom, fs, options } = params
-  const httpClient = options.httpClient || new NodeHttpClientService()
+  const { httpClient } = options
 
   return new Promise((resolve, reject) => {
     const headers: Record<string, string> = resumeFrom > 0 ? { Range: `bytes=${resumeFrom}-` } : {}
@@ -315,9 +313,9 @@ function processDownloadStream(ctx: {
 export async function downloadFile(
   url: string,
   destination: string,
-  options: DownloadOptions = {},
+  options: DownloadOptions,
 ): Promise<void> {
-  const fs = options.fs || fileSystemService
+  const { fs } = options
   const { progressWriter, isTTY, label } = options
   const ctx: DownloadContext = { url, destination, fs, progressWriter, isTTY }
   const { totalBytes, resumeFrom } = await setupResumeContext(ctx)

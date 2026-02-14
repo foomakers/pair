@@ -1,5 +1,5 @@
-import { detectSourceType, SourceType } from '@pair/content-ops'
 import { validateCommandOptions } from '#config/cli'
+import { isRemoteUrl, isUnsupportedProtocol } from '@pair/content-ops'
 
 /**
  * Discriminated union for install command with default resolution
@@ -83,9 +83,13 @@ export function parseInstallCommand(
     }
   }
 
+  // Reject unsupported protocols early
+  if (isUnsupportedProtocol(source)) {
+    throw new Error(`Unsupported source protocol: ${source}`)
+  }
+
   // Remote source
-  const sourceType = detectSourceType(source)
-  if (sourceType === SourceType.REMOTE_URL) {
+  if (isRemoteUrl(source)) {
     return {
       command: 'install',
       resolution: 'remote',
