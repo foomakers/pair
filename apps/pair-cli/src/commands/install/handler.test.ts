@@ -55,6 +55,7 @@ describe('handleInstallCommand - real services integration', () => {
       await fs.mkdir(externalKbPath, { recursive: true })
       await fs.mkdir(`${externalKbPath}/my-reg`, { recursive: true })
       await fs.writeFile(`${externalKbPath}/my-reg/file.txt`, 'local content')
+      await fs.writeFile(`${externalKbPath}/AGENTS.md`, '# KB marker')
 
       const localConfig = {
         asset_registries: {

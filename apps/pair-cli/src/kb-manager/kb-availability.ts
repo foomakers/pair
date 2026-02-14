@@ -1,5 +1,5 @@
-import type { FileSystemService, HttpClientService } from '@pair/content-ops'
-import { fileSystemService, detectSourceType, SourceType } from '@pair/content-ops'
+import type { FileSystemService, HttpClientService, RetryOptions } from '@pair/content-ops'
+import { detectSourceType, SourceType } from '@pair/content-ops'
 import { join } from 'path'
 import { type ProgressWriter } from '@pair/content-ops/http'
 import cacheManager from './cache-manager'
@@ -18,6 +18,7 @@ export interface KBManagerDeps {
   progressWriter?: ProgressWriter
   isTTY?: boolean
   customUrl?: string
+  retryOptions?: RetryOptions
 }
 
 // Internal: use cacheManager directly. Public re-exports live in the kb-manager index.
@@ -36,7 +37,7 @@ function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
 }
 
 export async function ensureKBAvailable(version: string, deps: KBManagerDeps): Promise<string> {
-  const fs = deps.fs || fileSystemService
+  const fs = deps.fs
   const cachePath = getCachedKBPath(version)
   const cached = await isKBCached(version, fs)
 
@@ -53,7 +54,7 @@ export async function ensureKBAvailable(version: string, deps: KBManagerDeps): P
   const installerDeps = buildInstallerDeps(deps)
 
   // Check if source is a local path instead of a remote URL
-  const sourceType = detectSourceType(sourceUrl)
+  const sourceType = detectSourceType(sourceUrl, fs)
   if (sourceType !== SourceType.REMOTE_URL) {
     if (sourceUrl.endsWith('.zip')) {
       // Local ZIP file
@@ -65,5 +66,9 @@ export async function ensureKBAvailable(version: string, deps: KBManagerDeps): P
   }
 
   // Remote URL - use standard download
-  return installKB(version, cachePath, sourceUrl, { fs, ...installerDeps })
+  return installKB(version, cachePath, sourceUrl, {
+    fs,
+    ...installerDeps,
+    ...(deps.retryOptions ? { retryOptions: deps.retryOptions } : {}),
+  })
 }

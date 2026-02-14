@@ -180,9 +180,14 @@ describe('KB Manager - Network failure', () => {
 
     const httpClient = new MockHttpClientService()
     httpClient.setRequestResponses([headResponse])
-    httpClient.setGetError(new Error('ENOTFOUND: network unreachable'))
+    httpClient.setGetError(new Error('ENOTFOUND: network unreachable'), true)
     await expect(
-      ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract }),
+      ensureKBAvailable(testVersion, {
+        httpClient,
+        fs,
+        extract: mockExtract,
+        retryOptions: { maxRetries: 0 },
+      }),
     ).rejects.toThrow(/network/)
   })
 })
@@ -363,6 +368,7 @@ describe('KB manager integration - ensure KB available', () => {
     const result = await import('#config').then(m =>
       m.getKnowledgeHubDatasetPathWithFallback({
         fsService: mockFs as unknown as FileSystemService,
+        httpClient: new MockHttpClientService(),
         version: '0.1.0',
         isKBCachedFn: mockIsKBCached,
         ensureKBAvailableFn: mockEnsureKBAvailable,
@@ -391,6 +397,7 @@ describe('KB manager integration - custom URL', () => {
     const result = await import('#config').then(m =>
       m.getKnowledgeHubDatasetPathWithFallback({
         fsService: mockFs as unknown as FileSystemService,
+        httpClient: new MockHttpClientService(),
         version: '0.1.0',
         isKBCachedFn: mockIsKBCached,
         ensureKBAvailableFn: mockEnsureKBAvailable,

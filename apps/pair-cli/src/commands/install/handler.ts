@@ -20,6 +20,7 @@ import {
 import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
 import { type SkillNameMap } from '@pair/content-ops'
+import { createCliPresenter, type CliPresenter, type RegistryResult } from '#ui'
 
 /**
  * Install options for handler
@@ -31,6 +32,7 @@ interface InstallHandlerOptions {
   minLogLevel?: LogEntry['level']
   httpClient?: HttpClientService
   cliVersion?: string
+  presenter?: CliPresenter
 }
 
 /**
@@ -47,12 +49,12 @@ export async function handleInstallCommand(
     options?.minLogLevel ??
     'info'
   const { pushLog } = createLogger(logLevel as LogEntry['level'])
+  const presenter = options?.presenter ?? createCliPresenter(pushLog)
 
   try {
     const { datasetRoot, registries, baseTarget } = await setupInstallContext(fs, config, options)
     await validateInstallContext(fs, registries, baseTarget)
-    await executeInstall({ fs, datasetRoot, registries, baseTarget, options, pushLog })
-    pushLog('info', 'Installation completed successfully')
+    await executeInstall({ fs, datasetRoot, registries, baseTarget, options, pushLog, presenter })
   } catch (err) {
     pushLog('error', `Installation failed: ${String(err)}`)
     throw err
@@ -104,8 +106,11 @@ async function installRegistry(ctx: {
   datasetRoot: string
   baseTarget: string
   pushLog: (level: LogEntry['level'], message: string) => void
-}): Promise<SkillNameMap | undefined> {
-  const { fs, registryName, registryConfig, datasetRoot, baseTarget, pushLog } = ctx
+  presenter: CliPresenter
+  index: number
+  total: number
+}): Promise<{ skillNameMap?: SkillNameMap | undefined; result: RegistryResult }> {
+  const { fs, registryName, registryConfig, datasetRoot, baseTarget, presenter, index, total } = ctx
   const resolved = resolveRegistryPaths({
     name: registryName,
     config: registryConfig,
@@ -123,8 +128,14 @@ async function installRegistry(ctx: {
   const effectiveDatasetRoot =
     registryConfig.flatten || registryConfig.prefix ? baseTarget : datasetRoot
 
-  pushLog('info', `Installing '${registryName}' from '${datasetPath}' to '${effectiveTarget}'`)
-  const result = await doCopyAndUpdateLinks(fs, {
+  presenter.registryStart({
+    name: registryName,
+    index,
+    total,
+    source: datasetPath,
+    target: effectiveTarget,
+  })
+  const copyResult = await doCopyAndUpdateLinks(fs, {
     source: datasetPath,
     target: effectiveTarget,
     datasetRoot: effectiveDatasetRoot,
@@ -132,46 +143,68 @@ async function installRegistry(ctx: {
   })
 
   await postCopyOps({ fs, registryConfig, effectiveTarget, datasetPath, baseTarget })
-  pushLog('info', `Successfully installed registry '${registryName}'`)
-  return result['skillNameMap'] as SkillNameMap | undefined
+  presenter.registryDone(registryName)
+  return {
+    skillNameMap: copyResult['skillNameMap'] as SkillNameMap | undefined,
+    result: { name: registryName, target: effectiveTarget, ok: true },
+  }
 }
 
-async function executeInstall(context: {
+type InstallContext = {
   fs: FileSystemService
   datasetRoot: string
   registries: Record<string, RegistryConfig>
   baseTarget: string
   options: InstallHandlerOptions | undefined
   pushLog: (level: LogEntry['level'], message: string) => void
-}): Promise<void> {
-  const { fs, datasetRoot, registries, baseTarget, options, pushLog } = context
-  const accumulatedSkillNameMap: SkillNameMap = new Map()
+  presenter: CliPresenter
+}
 
-  await forEachRegistry(registries, async (registryName, registryConfig) => {
-    const skillNameMap = await installRegistry({
+async function installAllRegistries(ctx: InstallContext): Promise<{
+  results: RegistryResult[]
+  skillNameMap: SkillNameMap
+}> {
+  const { fs, datasetRoot, registries, baseTarget, pushLog, presenter } = ctx
+  const accumulated: SkillNameMap = new Map()
+  const total = Object.keys(registries).length
+
+  const results = await forEachRegistry(registries, async (registryName, registryConfig, index) => {
+    const out = await installRegistry({
       fs,
       registryName,
       registryConfig,
       datasetRoot,
       baseTarget,
       pushLog,
+      presenter,
+      index,
+      total,
     })
-    if (skillNameMap) {
-      for (const [k, v] of skillNameMap) accumulatedSkillNameMap.set(k, v)
+    if (out.skillNameMap) {
+      for (const [k, v] of out.skillNameMap) accumulated.set(k, v)
     }
+    return out.result
   })
+  return { results, skillNameMap: accumulated }
+}
 
-  if (accumulatedSkillNameMap.size > 0) {
-    await applySkillRefsToNonSkillRegistries(
-      { fs, baseTarget, pushLog },
-      registries,
-      accumulatedSkillNameMap,
-    )
+async function executeInstall(context: InstallContext): Promise<void> {
+  const { fs, registries, baseTarget, options, pushLog, presenter } = context
+  const total = Object.keys(registries).length
+  const startTime = Date.now()
+
+  presenter.startOperation('install', total)
+
+  const { results, skillNameMap } = await installAllRegistries(context)
+
+  if (skillNameMap.size > 0) {
+    await applySkillRefsToNonSkillRegistries({ fs, baseTarget, pushLog }, registries, skillNameMap)
   }
-
   if (options?.linkStyle) {
     await applyLinkTransformation(fs, { linkStyle: options.linkStyle }, pushLog, 'install')
   }
+
+  presenter.summary(results, 'install', Date.now() - startTime)
 }
 
 /**

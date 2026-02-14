@@ -43,6 +43,5 @@
         { "path": ".windsurf/skills/", "mode": "symlink" }
       ]
     }
-  },
-  "default_target_folders": { "pair": ".pair", "github": ".github" }
+  }
 }

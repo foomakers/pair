@@ -10,30 +10,33 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 # Help function
 usage() {
-  echo "Usage: $0 [--binary <path>] [--kb-source <path>] [--cleanup] [--ci]"
-  echo "  --binary    Path to the 'pair' executable to test."
-  echo "              If omitted, defaults to detected 'apps/pair-cli/dist/cli.js'"
-  echo "  --kb-source Path to a local Knowledge Base directory."
-  echo "              If omitted, defaults to detected 'packages/knowledge-hub/dataset'"
-  echo "  --cleanup   Remove temporary directories after success"
-  echo "  --ci        Run in CI mode (enables cleanup, detailed logs, and selects CI-safe tests)"
+  echo "Usage: $0 [--binary <path>] [--kb-source <path>] [--cleanup] [--ci] [--offline-only]"
+  echo "  --binary       Path to the 'pair' executable to test."
+  echo "                 If omitted, defaults to detected 'apps/pair-cli/dist/cli.js'"
+  echo "  --kb-source    Path to a local Knowledge Base directory."
+  echo "                 If omitted, defaults to detected 'packages/knowledge-hub/dataset'"
+  echo "  --cleanup      Remove temporary directories after success"
+  echo "  --ci           Run in CI mode (enables cleanup, detailed logs, and selects CI-safe tests)"
+  echo "  --offline-only Only run scenarios tagged OFFLINE_SAFE=true (no network required)"
   exit 1
 }
 
 # Parse args
 CLEANUP="false"
 IS_CI="false"
+OFFLINE_ONLY="false"
 
 while [[ "$#" -gt 0 ]]; do
   case $1 in
     --binary) BINARY_PATH="$2"; shift ;;
     --kb-source) KB_SOURCE="$2"; shift ;;
     --cleanup) CLEANUP="true" ;;
-    --ci) 
+    --ci)
       IS_CI="true"
-      CLEANUP="true" 
+      CLEANUP="true"
       export PAIR_DIAG=1
       ;;
+    --offline-only) OFFLINE_ONLY="true" ;;
     --help) usage ;;
     *) echo "Unknown parameter: $1"; usage ;;
   esac
@@ -194,6 +197,15 @@ echo "|----------|--------|" >> "$REPORT_FILE"
 # Run Scenarios
 FAILED_TESTS=()
 
+# Check if a scenario is offline-safe by sourcing its OFFLINE_SAFE variable.
+# Scenarios without the variable are treated as offline-safe (default true).
+is_offline_safe() {
+  local script="$1"
+  local val
+  val=$(grep -m1 '^OFFLINE_SAFE=' "$script" 2>/dev/null | cut -d= -f2)
+  [ "${val:-true}" = "true" ]
+}
+
 run_scenario() {
   local script="$1"
   local name=$(basename "$script")
@@ -222,11 +234,16 @@ if [ "$IS_CI" = "true" ]; then
     "links.sh"
     "lifecycle-kb.sh"
     "validate-config.sh"
+    "source-resolution.sh"
   )
   
   for t in "${CI_TESTS[@]}"; do
     script="$SCENARIOS_DIR/$t"
     if [ -f "$script" ]; then
+        if [ "$OFFLINE_ONLY" = "true" ] && ! is_offline_safe "$script"; then
+          echo "  Skipping (not offline-safe): $t"
+          continue
+        fi
         run_scenario "$script"
     else
         echo -e "\033[0;31m[ERROR]\033[0m CI Test not found: $t"
@@ -247,6 +264,10 @@ else
     [ -e "$script" ] || continue
     # Skip the prelim script we already executed
     if [ "$(basename "$script")" = "00-create-install-package.sh" ]; then
+      continue
+    fi
+    if [ "$OFFLINE_ONLY" = "true" ] && ! is_offline_safe "$script"; then
+      echo "  Skipping (not offline-safe): $(basename "$script")"
       continue
     fi
     run_scenario "$script"

@@ -2,8 +2,7 @@
  * Source type detector for local and remote paths
  */
 
-import * as path from 'path'
-import * as fs from 'fs'
+import type { FileSystemService } from '../file-system'
 
 export enum SourceType {
   REMOTE_URL = 'REMOTE_URL',
@@ -12,23 +11,32 @@ export enum SourceType {
   INVALID = 'INVALID',
 }
 
+/** True when source is an http:// or https:// URL */
+export function isRemoteUrl(source: string): boolean {
+  return /^https?:\/\//i.test(source)
+}
+
+/** True when source uses an unsupported protocol (file://, ftp://) */
+export function isUnsupportedProtocol(source: string): boolean {
+  return /^(file|ftp):\/\//i.test(source)
+}
+
 /**
  * Detect the type of source (remote URL, local ZIP, or local directory)
- * @param source - Source string (URL or file path)
- * @returns SourceType enum value
  */
-export function detectSourceType(source: string): SourceType {
+export function detectSourceType(source: string, fs: FileSystemService): SourceType {
   // Reject unsafe protocols
-  if (/^(file|ftp):\/\//i.test(source)) return SourceType.INVALID
+  if (isUnsupportedProtocol(source)) return SourceType.INVALID
   // Remote URL
-  if (/^https?:\/\//i.test(source)) return SourceType.REMOTE_URL
+  if (isRemoteUrl(source)) return SourceType.REMOTE_URL
+  // Local path resolution
+  const resolved = fs.resolve(fs.currentWorkingDirectory(), source)
   // Local ZIP (absolute or relative)
-  const resolved = path.resolve(process.cwd(), source)
-  if (source.endsWith('.zip') && fs.existsSync(resolved) && fs.statSync(resolved).isFile()) {
+  if (source.endsWith('.zip') && fs.existsSync(resolved)) {
     return SourceType.LOCAL_ZIP
   }
   // Local directory
-  if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
+  if (fs.existsSync(resolved)) {
     return SourceType.LOCAL_DIRECTORY
   }
   return SourceType.INVALID

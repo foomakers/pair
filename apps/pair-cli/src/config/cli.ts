@@ -1,4 +1,4 @@
-import { detectSourceType, SourceType } from '@pair/content-ops'
+import { isRemoteUrl } from '@pair/content-ops'
 
 /**
  * Common CLI options validation.
@@ -18,8 +18,7 @@ export function validateCommandOptions(
     if (!source) {
       throw new Error('Offline mode requires explicit --source with local path')
     }
-    const sourceType = detectSourceType(source)
-    if (sourceType === SourceType.REMOTE_URL) {
+    if (isRemoteUrl(source)) {
       throw new Error('Cannot use --offline with remote URL source')
     }
   }

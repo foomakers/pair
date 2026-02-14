@@ -1,8 +1,14 @@
 import { join } from 'path'
 import { tmpdir } from 'os'
-import type { FileSystemService, HttpClientService } from '@pair/content-ops'
-import { extractZip, cleanupFile, NodeHttpClientService } from '@pair/content-ops'
-import { downloadFile } from './download-manager'
+import type { FileSystemService, HttpClientService, RetryOptions } from '@pair/content-ops'
+import {
+  extractZip,
+  cleanupFile,
+  validateKBStructure,
+  normalizeExtractedKB,
+  copyDirectoryContents,
+} from '@pair/content-ops'
+import { downloadWithRetry } from './download-manager'
 import cacheManager from './cache-manager'
 import checksumManager from './checksum-manager'
 import formatDownloadError from './error-formatter'
@@ -21,27 +27,27 @@ async function doInstallSteps(
   cachePath: string,
   options: {
     fs: FileSystemService
-    httpClient?: HttpClientService
+    httpClient: HttpClientService
     progressWriter?: { write(s: string): void }
     isTTY?: boolean
     extract?: (zipPath: string, targetPath: string) => Promise<void>
+    retryOptions?: RetryOptions
   },
 ): Promise<void> {
-  const {
-    fs,
-    httpClient = new NodeHttpClientService(),
-    progressWriter,
-    isTTY,
-    extract: customExtract,
-  } = options
+  const { fs, httpClient, progressWriter, isTTY, extract: customExtract, retryOptions } = options
   const extract = customExtract || extractZip
 
-  await downloadFile(downloadUrl, zipPath, {
-    httpClient,
-    fs,
-    progressWriter,
-    isTTY,
-  })
+  await downloadWithRetry(
+    downloadUrl,
+    zipPath,
+    {
+      httpClient,
+      fs,
+      progressWriter,
+      isTTY,
+    },
+    retryOptions,
+  )
 
   const check = await checksumManager.validateFileWithRemoteChecksum(
     downloadUrl,
@@ -73,44 +79,20 @@ function shouldPreserveError(err: Error): boolean {
   )
 }
 
-function buildInstallOptions(options: {
+interface InstallOptions {
   fs: FileSystemService
-  httpClient?: HttpClientService
+  httpClient: HttpClientService
   progressWriter?: { write(s: string): void }
   isTTY?: boolean
   extract?: (zipPath: string, targetPath: string) => Promise<void>
-}): {
-  fs: FileSystemService
-  httpClient?: HttpClientService
-  progressWriter?: { write(s: string): void }
-  isTTY?: boolean
-  extract?: (zipPath: string, targetPath: string) => Promise<void>
-} {
-  const result: {
-    fs: FileSystemService
-    httpClient?: HttpClientService
-    progressWriter?: { write(s: string): void }
-    isTTY?: boolean
-    extract?: (zipPath: string, targetPath: string) => Promise<void>
-  } = { fs: options.fs }
-  if (options.httpClient) result.httpClient = options.httpClient
-  if (options.progressWriter) result.progressWriter = options.progressWriter
-  if (options.isTTY) result.isTTY = options.isTTY
-  if (options.extract) result.extract = options.extract
-  return result
+  retryOptions?: RetryOptions
 }
 
 export async function installKB(
   version: string,
   cachePath: string,
   downloadUrl: string,
-  options: {
-    fs: FileSystemService
-    httpClient?: HttpClientService
-    progressWriter?: { write(s: string): void }
-    isTTY?: boolean
-    extract?: (zipPath: string, targetPath: string) => Promise<void>
-  },
+  options: InstallOptions,
 ): Promise<string> {
   const cleanVersion = version.startsWith('v') ? version.slice(1) : version
   const zipPath = join(tmpdir(), `kb-${cleanVersion}.zip`)
@@ -121,8 +103,7 @@ export async function installKB(
   await cacheManager.ensureCacheDirectory(cachePath, fs)
 
   try {
-    const installOptions = buildInstallOptions(options)
-    await doInstallSteps(downloadUrl, zipPath, cachePath, installOptions)
+    await doInstallSteps(downloadUrl, zipPath, cachePath, options)
     announceSuccess(cleanVersion, cachePath)
     // Prefer to return the dataset root when .pair exists inside cache so callers
     // resolve registries like 'knowledge' correctly (datasetRoot/knowledge)
@@ -145,162 +126,6 @@ export async function installKB(
   }
 }
 
-async function copyDirectoryInMemory(
-  fs: FileSystemService,
-  sourceDir: string,
-  targetDir: string,
-): Promise<void> {
-  // Ensure target directory exists
-  await fs.mkdir(targetDir, { recursive: true })
-
-  // Read all entries in the source directory
-  const entries = await fs.readdir(sourceDir)
-
-  // Process each entry
-  for (const entry of entries) {
-    const sourcePath = join(sourceDir, entry.name)
-    const targetPath = join(targetDir, entry.name)
-
-    if (entry.isDirectory()) {
-      // Recursively copy subdirectory
-      await copyDirectoryInMemory(fs, sourcePath, targetPath)
-    } else {
-      // Copy file
-      const content = await fs.readFile(sourcePath)
-      await fs.writeFile(targetPath, content)
-    }
-  }
-}
-
-async function validateKBStructure(cachePath: string, fs: FileSystemService): Promise<boolean> {
-  // Check for .pair directory or AGENTS.md at the root of cachePath
-  const hasPairDir = fs.existsSync(join(cachePath, '.pair'))
-  const hasAgentsMd = fs.existsSync(join(cachePath, 'AGENTS.md'))
-  const hasManifestJson = fs.existsSync(join(cachePath, 'manifest.json'))
-
-  // If we have a .pair dir or AGENTS.md it's valid
-  if (hasPairDir || hasAgentsMd) return true
-
-  // If there's a manifest.json, ensure there are other files present too (manifest alone is not enough)
-  if (hasManifestJson) {
-    try {
-      const entries = await fs.readdir(cachePath)
-      // If there's any non-hidden entry other than manifest.json, consider it valid
-      return entries.some(e => e.name !== 'manifest.json' && !e.name.startsWith('.'))
-    } catch {
-      return false
-    }
-  }
-
-  return false
-}
-
-/**
- * Checks if a directory contains a single subdirectory (common in ZIP extractions)
- * and returns that subdirectory path if it contains valid KB structure
- */
-async function findKBStructureInSubdirectories(
-  cachePath: string,
-  fs: FileSystemService,
-): Promise<string | null> {
-  try {
-    const entries = await fs.readdir(cachePath)
-    // Filter out files and hidden directories
-    const dirs = entries.filter(e => e.isDirectory() && !e.name.startsWith('.'))
-
-    // If there's exactly one directory, check if it has KB structure
-    if (dirs.length === 1) {
-      const subDir = join(cachePath, dirs[0]!.name)
-      if (await validateKBStructure(subDir, fs)) {
-        return subDir
-      }
-    }
-
-    // Check if there's a .zip-temp directory (created by package command)
-    const zipTempDir = entries.find(e => e.isDirectory() && e.name === '.zip-temp')
-    if (zipTempDir) {
-      const subDir = join(cachePath, zipTempDir.name)
-      if (await validateKBStructure(subDir, fs)) {
-        return subDir
-      }
-    }
-  } catch {
-    // If we can't read the directory, return null
-  }
-  return null
-}
-
-/**
- * Moves all contents from source directory to target directory
- */
-async function moveDirectoryContents(
-  sourceDir: string,
-  targetDir: string,
-  fs: FileSystemService,
-): Promise<void> {
-  const entries = await fs.readdir(sourceDir)
-
-  for (const entry of entries) {
-    const sourcePath = join(sourceDir, entry.name)
-    const targetPath = join(targetDir, entry.name)
-
-    // Move the entry (copy then delete for cross-device safety)
-    if (entry.isDirectory()) {
-      await fs.mkdir(targetPath, { recursive: true })
-      await moveDirectoryContents(sourcePath, targetPath, fs)
-      await fs.rm(sourcePath, { recursive: true, force: true })
-    } else {
-      const content = await fs.readFile(sourcePath)
-      await fs.writeFile(targetPath, content)
-      await fs.unlink(sourcePath)
-    }
-  }
-}
-
-// Debug helper: log directory entries when running tests or debug mode
-async function logDirEntriesIfDebug(
-  pathToLog: string,
-  fsService: FileSystemService,
-  label: string,
-) {
-  try {
-    if (process.env['NODE_ENV'] === 'test' || process.env['DEBUG'] || process.env['PAIR_DIAG']) {
-      const entries = await fsService.readdir(pathToLog)
-      const names = entries.map(e => (e && e.name ? e.name : String(e)))
-
-      // Use unified logger for debug output
-      const { logger } = await import('@pair/content-ops')
-      logger.debug(`[debug] ${label} ${pathToLog}`, names)
-    }
-  } catch {
-    // ignore logging failures
-  }
-}
-
-/**
- * Normalize the extracted cache path to ensure KB structure exists at the root.
- * Returns true if the cachePath contains a valid KB after normalization.
- */
-async function normalizeExtractedKB(cachePath: string, fs: FileSystemService): Promise<boolean> {
-  // Initial validation
-  let kbStructureValid = await validateKBStructure(cachePath, fs)
-  if (kbStructureValid) return true
-
-  await logDirEntriesIfDebug(cachePath, fs, 'normalizeExtractedKB entries:')
-
-  // If not valid at root, try to find a single subdirectory that contains the KB
-  const subDirWithKB = await findKBStructureInSubdirectories(cachePath, fs)
-  if (subDirWithKB) {
-    await moveDirectoryContents(subDirWithKB, cachePath, fs)
-    await fs.rm(subDirWithKB, { recursive: true, force: true })
-    return true
-  }
-
-  // Final attempt: re-validate (covers manifest + other files case)
-  kbStructureValid = await validateKBStructure(cachePath, fs)
-  return kbStructureValid
-}
-
 export async function installKBFromLocalDirectory(
   version: string,
   dirPath: string,
@@ -308,8 +133,10 @@ export async function installKBFromLocalDirectory(
 ): Promise<string> {
   const cachePath = cacheManager.getCachedKBPath(version)
 
-  // Resolve relative paths
-  const resolvedDirPath = dirPath.startsWith('/') ? dirPath : join(process.cwd(), dirPath)
+  // Resolve relative paths using injectable cwd
+  const resolvedDirPath = dirPath.startsWith('/')
+    ? dirPath
+    : join(fs.currentWorkingDirectory(), dirPath)
 
   // Validate directory exists
   if (!fs.existsSync(resolvedDirPath)) {
@@ -319,9 +146,7 @@ export async function installKBFromLocalDirectory(
   await cacheManager.ensureCacheDirectory(cachePath, fs)
 
   try {
-    // Copy directory contents recursively
-    // For in-memory filesystem, implement manual copy
-    await copyDirectoryInMemory(fs, resolvedDirPath, cachePath)
+    await copyDirectoryContents(fs, resolvedDirPath, cachePath)
 
     // Validate KB structure
     const kbStructureValid = await validateKBStructure(cachePath, fs)
@@ -363,12 +188,7 @@ async function finalizeZipInstall(
   cachePath: string,
   fs: FileSystemService,
 ): Promise<string> {
-  await logDirEntriesIfDebug(cachePath, fs, 'after extract entries:')
   const ok = await normalizeExtractedKB(cachePath, fs)
-  await logDirEntriesIfDebug(cachePath, fs, 'final entries at')
-  if (await fs.existsSync(join(cachePath, '.pair'))) {
-    await logDirEntriesIfDebug(join(cachePath, '.pair'), fs, '.pair entries:')
-  }
   if (!ok) throw new Error('Invalid KB structure')
 
   announceSuccess(version, cachePath)

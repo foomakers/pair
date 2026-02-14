@@ -29,12 +29,28 @@ Use `process.stdout.isTTY` boolean check to conditionally enable interactive pro
 
 ## Implementation
 
+### Primary Pattern (Explicit TTY Check)
+
 - **Module:** `apps/pair-cli/src/kb-manager/progress-reporter.ts`
 - **Pattern:** Constructor accepts `isTTY` parameter, defaults to `process.stdout.isTTY`
 - **Usage:** `new ProgressReporter(totalBytes, process.stdout.isTTY, process.stdout)`
 
+### Acceptable Variant (Library Auto-Detection)
+
+- **Module:** `apps/pair-cli/src/ui/presenter.ts`
+- **Pattern:** Rely on library auto-detection (e.g., chalk automatically detects TTY via `supports-color`)
+- **Usage:** `createCliPresenter(pushLog)` — chalk internally checks TTY and disables colors in non-TTY
+- **Rationale:** Acceptable when library provides robust TTY detection. Avoids redundant checks.
+- **Trade-off:** Less explicit but functionally equivalent. Library must be well-maintained and tested.
+
+**When to use each:**
+
+- Use **explicit check** when implementing custom UX logic (progress bars, spinners, prompts)
+- Use **library auto-detection** when using well-established libraries (chalk, inquirer, ora) that handle TTY internally
+
 ## References
 
 - Story: #78 (T-78.1, T-78.6)
-- PR: #85
-- Tests: `apps/pair-cli/src/kb-manager/progress-reporter.test.ts`
+- PR: #85 (primary pattern)
+- PR: #133 (library auto-detection variant - CliPresenter)
+- Tests: `apps/pair-cli/src/kb-manager/progress-reporter.test.ts`, `apps/pair-cli/src/ui/presenter.test.ts`

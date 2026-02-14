@@ -104,5 +104,17 @@ describe('parseInstallCommand', () => {
         parseInstallCommand({ source: '' })
       }).toThrow('Source path/URL cannot be empty')
     })
+
+    it('throws on unsupported ftp:// protocol', () => {
+      expect(() => {
+        parseInstallCommand({ source: 'ftp://example.com/kb.zip' })
+      }).toThrow('Unsupported source protocol')
+    })
+
+    it('throws on unsupported file:// protocol', () => {
+      expect(() => {
+        parseInstallCommand({ source: 'file:///tmp/kb.zip' })
+      }).toThrow('Unsupported source protocol')
+    })
   })
 })

@@ -282,6 +282,8 @@ describe('pair-cli e2e - list-targets', () => {
   it('list-targets shows available registries', async () => {
     const cwd = '/test-project'
     const fs = createDevScenarioFs(cwd)
+    // Add KB marker so local source validation passes when source='.'
+    await fs.writeFile(cwd + '/AGENTS.md', 'this is agents.md')
 
     await withTempConfig(fs, createTestConfig(), async () => {
       // Mock the CLI execution by calling the update command with listTargets option
@@ -708,8 +710,9 @@ describe('pair-cli e2e - error scenarios', () => {
       }),
     }
     const fs = new InMemoryFileSystemService(seed, cwd, cwd)
-    await handleUpdateCommand(parseUpdateCommand({ source: '/nonexistent/path' }), fs)
-    // Should fail gracefully when source doesn't exist
+    await expect(
+      handleUpdateCommand(parseUpdateCommand({ source: '/nonexistent/path' }), fs),
+    ).rejects.toThrow('KB source path not found')
   })
 
   it('install from ZIP fails gracefully when ZIP is corrupted', async () => {
@@ -845,6 +848,7 @@ describe('pair-cli e2e - disjoint installation (source and target disjoint)', ()
         version: '1.0.0',
       }),
       // KB Source content in a disjoint directory
+      [`${kbSourceDir}/AGENTS.md`]: '# KB source marker',
       [`${kbSourceDir}/knowledge/index.md`]: '# Knowledge Index',
       [`${kbSourceDir}/knowledge/guide.md`]: 'Follow the [Index](./index.md)',
     }

@@ -19,8 +19,6 @@ export interface RegistryConfig {
  */
 export interface Config {
   asset_registries: Record<string, RegistryConfig>
-  default_target_folders?: Record<string, string>
-  folders_to_include?: Record<string, string[]>
   [key: string]: unknown
 }
 

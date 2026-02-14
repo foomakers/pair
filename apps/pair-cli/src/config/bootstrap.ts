@@ -1,10 +1,4 @@
-import {
-  FileSystemService,
-  HttpClientService,
-  validateUrl,
-  detectSourceType,
-  SourceType,
-} from '@pair/content-ops'
+import { FileSystemService, HttpClientService, isRemoteUrl, validateUrl } from '@pair/content-ops'
 import { getKnowledgeHubDatasetPath, getKnowledgeHubDatasetPathWithFallback } from './kb-resolver'
 import { validateCliOptions } from '#kb-manager/cli-options'
 import { isDiagEnabled } from '#diagnostics'
@@ -99,7 +93,7 @@ function shouldSkipKBDownload(
     return true
   }
 
-  if (customUrl && detectSourceType(customUrl) !== SourceType.REMOTE_URL) {
+  if (customUrl && !isRemoteUrl(customUrl)) {
     if (isDiagEnabled()) console.error(`[diag] Using local path: ${customUrl}`)
     return true
   }
@@ -125,7 +119,7 @@ function checkKnowledgeHubDatasetAccessible(
   fsService: FileSystemService,
   customUrl?: string,
 ): void {
-  if (customUrl && detectSourceType(customUrl) !== SourceType.REMOTE_URL) {
+  if (customUrl && !isRemoteUrl(customUrl)) {
     return
   }
 

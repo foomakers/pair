@@ -63,4 +63,12 @@ describe('parseUpdateCommand', () => {
       }).toThrow('Offline mode requires explicit --source with local path')
     })
   })
+
+  describe('validation', () => {
+    it('throws on unsupported ftp:// protocol', () => {
+      expect(() => {
+        parseUpdateCommand({ source: 'ftp://example.com/kb.zip' })
+      }).toThrow('Unsupported source protocol')
+    })
+  })
 })

@@ -28,6 +28,7 @@ export class MockHttpClientService implements HttpClientService {
   private requestCallIndex = 0
   private getRequestUrls: string[] = []
   private getError: Error | null = null
+  private persistGetError = false
 
   /**
    * Configure mock responses for GET requests
@@ -50,10 +51,12 @@ export class MockHttpClientService implements HttpClientService {
   }
 
   /**
-   * Configure error to be thrown on next GET request
+   * Configure error to be thrown on GET requests.
+   * @param persistent When true, error persists across all calls (useful for retry tests).
    */
-  setGetError(error: Error): void {
+  setGetError(error: Error, persistent = false): void {
     this.getError = error
+    this.persistGetError = persistent
   }
 
   get(
@@ -68,7 +71,7 @@ export class MockHttpClientService implements HttpClientService {
 
     if (this.getError && errCb) {
       const error = this.getError
-      this.getError = null
+      if (!this.persistGetError) this.getError = null
       setImmediate(() => (errCb as (error: Error) => void)(error))
       return this.createMockRequest()
     }
@@ -122,6 +125,7 @@ export class MockHttpClientService implements HttpClientService {
     this.requestCallIndex = 0
     this.getRequestUrls = []
     this.getError = null
+    this.persistGetError = false
   }
 
   /**
