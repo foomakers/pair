@@ -134,16 +134,54 @@ export async function collectLayoutFiles(
   const files: string[] = []
 
   for (const dirPath of paths) {
-    const exists = await fs.exists(dirPath)
-    if (!exists) continue
-
-    const entries = await fs.readdir(dirPath)
-    for (const entry of entries) {
-      files.push(fs.resolve(dirPath, entry.name))
-    }
+    await collectFilesRecursive(dirPath, files, fs)
   }
 
   return files
+}
+
+/**
+ * Recursively collects all files from a directory
+ * @param dirPath - Directory path to scan
+ * @param files - Array to accumulate file paths
+ * @param fs - FileSystemService instance
+ */
+async function collectFilesRecursive(
+  dirPath: string,
+  files: string[],
+  fs: FileSystemService,
+): Promise<void> {
+  const exists = await fs.exists(dirPath)
+  if (!exists) return
+
+  // Try to read as directory; if it fails, treat as file
+  let entries
+  try {
+    entries = await fs.readdir(dirPath)
+  } catch {
+    // Not a directory or readdir failed - treat as file
+    files.push(dirPath)
+    return
+  }
+  for (const entry of entries) {
+    const fullPath = fs.resolve(dirPath, entry.name)
+
+    // Check if entry has type information (Dirent interface)
+    if (typeof entry.isDirectory === 'function' && typeof entry.isFile === 'function') {
+      // Use Dirent methods to check file type
+      if (entry.isDirectory()) {
+        // Recurse into subdirectory
+        await collectFilesRecursive(fullPath, files, fs)
+      } else if (entry.isFile()) {
+        // Add file to list
+        files.push(fullPath)
+      }
+      // Skip symlinks and other special files
+    } else {
+      // Fallback for simple mocks: treat all entries as files (backward compat)
+      files.push(fullPath)
+    }
+  }
 }
 
 /**
