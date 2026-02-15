@@ -234,6 +234,7 @@ if [ "$IS_CI" = "true" ]; then
     "links.sh"
     "lifecycle-kb.sh"
     "validate-config.sh"
+    "kb-validate.sh"
     "source-resolution.sh"
   )
   
