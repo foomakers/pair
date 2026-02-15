@@ -11,6 +11,8 @@ import {
   collectLayoutFiles,
   transformSourceToTarget,
   transformTargetToSource,
+  validateLayoutOption,
+  parseSkipRegistriesOption,
 } from './layout'
 
 // Test fixtures
@@ -877,5 +879,45 @@ describe('transformTargetToSource', () => {
     })
 
     expect(result).toBeNull()
+  })
+})
+
+describe('validateLayoutOption', () => {
+  it('should return undefined when layout is undefined', () => {
+    expect(validateLayoutOption(undefined)).toBeUndefined()
+  })
+
+  it('should return source when layout is source', () => {
+    expect(validateLayoutOption('source')).toBe('source')
+  })
+
+  it('should return target when layout is target', () => {
+    expect(validateLayoutOption('target')).toBe('target')
+  })
+
+  it('should throw on invalid layout value', () => {
+    expect(() => validateLayoutOption('invalid')).toThrow("Invalid layout 'invalid'")
+  })
+})
+
+describe('parseSkipRegistriesOption', () => {
+  it('should return undefined when input is undefined', () => {
+    expect(parseSkipRegistriesOption(undefined)).toBeUndefined()
+  })
+
+  it('should parse comma-separated values', () => {
+    expect(parseSkipRegistriesOption('skills,adoption')).toEqual(['skills', 'adoption'])
+  })
+
+  it('should filter out empty strings', () => {
+    expect(parseSkipRegistriesOption('skills,,adoption,')).toEqual(['skills', 'adoption'])
+  })
+
+  it('should return empty array for empty string', () => {
+    expect(parseSkipRegistriesOption('')).toEqual([])
+  })
+
+  it('should handle single value', () => {
+    expect(parseSkipRegistriesOption('skills')).toEqual(['skills'])
   })
 })
