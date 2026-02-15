@@ -1,3 +1,4 @@
+import chalk from 'chalk'
 import type { StructureValidationResult } from './structure-validator'
 import type { LinkValidationResult } from './link-checker'
 import type { MetadataValidationResult } from './metadata-validator'
@@ -82,10 +83,10 @@ export function createValidationReport(results: {
  */
 function formatStructureSection(structure: StructureValidationResult): string[] {
   const lines: string[] = []
-  lines.push('Structure Validation:')
+  lines.push(chalk.bold('Structure Validation:'))
 
   for (const reg of structure.registries) {
-    const status = reg.valid ? '✓' : '✗'
+    const status = reg.valid ? chalk.green('✓') : chalk.red('✗')
     lines.push(`  ${status} ${reg.registry}`)
     lines.push(...formatIssues(reg.errors, reg.warnings))
   }
@@ -99,7 +100,7 @@ function formatStructureSection(structure: StructureValidationResult): string[] 
  */
 function formatLinkSection(links: LinkValidationResult[]): string[] {
   const lines: string[] = []
-  lines.push('Link Validation:')
+  lines.push(chalk.bold('Link Validation:'))
 
   for (const link of links) {
     if (link.errors.length > 0 || link.warnings.length > 0) {
@@ -117,7 +118,7 @@ function formatLinkSection(links: LinkValidationResult[]): string[] {
  */
 function formatMetadataSection(metadata: MetadataValidationResult[]): string[] {
   const lines: string[] = []
-  lines.push('Metadata Validation:')
+  lines.push(chalk.bold('Metadata Validation:'))
 
   for (const meta of metadata) {
     if (meta.errors.length > 0 || meta.warnings.length > 0) {
@@ -137,11 +138,11 @@ function formatIssues(errors: string[], warnings: string[]): string[] {
   const lines: string[] = []
 
   for (const error of errors) {
-    lines.push(`    ERROR: ${error}`)
+    lines.push(chalk.red(`    ERROR: ${error}`))
   }
 
   for (const warning of warnings) {
-    lines.push(`    WARNING: ${warning}`)
+    lines.push(chalk.yellow(`    WARNING: ${warning}`))
   }
 
   return lines
@@ -153,8 +154,8 @@ function formatIssues(errors: string[], warnings: string[]): string[] {
 export function formatReport(report: ValidationReport): string {
   const lines: string[] = []
 
-  lines.push('KB Validation Report')
-  lines.push('='.repeat(60))
+  lines.push(chalk.bold('KB Validation Report'))
+  lines.push(chalk.dim('='.repeat(60)))
   lines.push('')
 
   if (report.structure) {
@@ -170,14 +171,18 @@ export function formatReport(report: ValidationReport): string {
   }
 
   // Summary
-  lines.push('='.repeat(60))
-  lines.push('Summary:')
-  lines.push(`  Errors:   ${report.summary.totalErrors}`)
-  lines.push(`  Warnings: ${report.summary.totalWarnings}`)
+  lines.push(chalk.dim('='.repeat(60)))
+  lines.push(chalk.bold('Summary:'))
+  const errCount = report.summary.totalErrors
+  const warnCount = report.summary.totalWarnings
+  lines.push(`  Errors:   ${errCount > 0 ? chalk.red(errCount) : chalk.green(errCount)}`)
+  lines.push(`  Warnings: ${warnCount > 0 ? chalk.yellow(warnCount) : chalk.green(warnCount)}`)
   lines.push('')
 
   const statusLine =
-    report.exitCode === ValidationExitCode.Success ? '✓ Validation passed' : '✗ Validation failed'
+    report.exitCode === ValidationExitCode.Success
+      ? chalk.green('✓ Validation passed')
+      : chalk.red('✗ Validation failed')
   lines.push(statusLine)
 
   return lines.join('\n')
