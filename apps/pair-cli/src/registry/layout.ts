@@ -256,6 +256,24 @@ export interface TransformTargetToSourceOptions {
  * @param options - Transformation options
  * @returns Source path or null if target path doesn't match registry
  */
+/**
+ * Validates layout option value
+ */
+export function validateLayoutOption(layout: string | undefined): LayoutMode | undefined {
+  if (layout !== undefined && layout !== 'source' && layout !== 'target') {
+    throw new Error(`Invalid layout '${layout}'. Must be 'source' or 'target'`)
+  }
+  return layout as LayoutMode | undefined
+}
+
+/**
+ * Parses comma-separated skipRegistries option
+ */
+export function parseSkipRegistriesOption(skipRegistries: string | undefined): string[] | undefined {
+  if (skipRegistries === undefined) return undefined
+  return skipRegistries.split(',').filter(s => s.trim().length > 0)
+}
+
 export function transformTargetToSource(options: TransformTargetToSourceOptions): string | null {
   const { targetPath, registry, baseDir, fs } = options
 

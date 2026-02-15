@@ -1,3 +1,5 @@
+import { validateLayoutOption, parseSkipRegistriesOption } from '#registry'
+
 /**
  * Configuration for kb-validate command
  */
@@ -16,25 +18,6 @@ interface ParseKbValidateOptions {
   strict?: boolean
   ignoreConfig?: boolean
   skipRegistries?: string
-}
-
-/**
- * Validates layout option value
- */
-function validateLayoutOption(layout: string | undefined): 'source' | 'target' | undefined {
-  if (layout !== undefined && layout !== 'source' && layout !== 'target') {
-    throw new Error(`Invalid layout '${layout}'. Must be 'source' or 'target'`)
-  }
-  return layout as 'source' | 'target' | undefined
-}
-
-/**
- * Parses comma-separated skipRegistries option
- */
-function parseSkipRegistriesOption(skipRegistries: string | undefined): string[] | undefined {
-  if (skipRegistries === undefined) return undefined
-  const parsed = skipRegistries.split(',').filter(s => s.trim().length > 0)
-  return parsed
 }
 
 /**
