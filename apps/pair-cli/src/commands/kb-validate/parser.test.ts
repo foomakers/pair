@@ -39,4 +39,102 @@ describe('parseKbValidateCommand', () => {
       "Command 'kb-validate' does not accept positional arguments: pos",
     )
   })
+
+  describe('layout flag', () => {
+    it('should parse --layout source', () => {
+      const config = parseKbValidateCommand({ layout: 'source' })
+
+      expect(config).toEqual({
+        command: 'kb-validate',
+        layout: 'source',
+      })
+    })
+
+    it('should parse --layout target', () => {
+      const config = parseKbValidateCommand({ layout: 'target' })
+
+      expect(config).toEqual({
+        command: 'kb-validate',
+        layout: 'target',
+      })
+    })
+
+    it('should throw on invalid layout value', () => {
+      expect(() => parseKbValidateCommand({ layout: 'invalid' })).toThrow(
+        "Invalid layout 'invalid'. Must be 'source' or 'target'",
+      )
+    })
+  })
+
+  describe('strict flag', () => {
+    it('should parse --strict', () => {
+      const config = parseKbValidateCommand({ strict: true })
+
+      expect(config).toEqual({
+        command: 'kb-validate',
+        strict: true,
+      })
+    })
+  })
+
+  describe('ignore-config flag', () => {
+    it('should parse --ignore-config', () => {
+      const config = parseKbValidateCommand({ ignoreConfig: true })
+
+      expect(config).toEqual({
+        command: 'kb-validate',
+        ignoreConfig: true,
+      })
+    })
+  })
+
+  describe('skip-registries flag', () => {
+    it('should parse comma-separated registry names', () => {
+      const config = parseKbValidateCommand({ skipRegistries: 'adoption,agents' })
+
+      expect(config).toEqual({
+        command: 'kb-validate',
+        skipRegistries: ['adoption', 'agents'],
+      })
+    })
+
+    it('should handle single registry', () => {
+      const config = parseKbValidateCommand({ skipRegistries: 'skills' })
+
+      expect(config).toEqual({
+        command: 'kb-validate',
+        skipRegistries: ['skills'],
+      })
+    })
+
+    it('should handle empty string', () => {
+      const config = parseKbValidateCommand({ skipRegistries: '' })
+
+      expect(config).toEqual({
+        command: 'kb-validate',
+        skipRegistries: [],
+      })
+    })
+  })
+
+  describe('combined flags', () => {
+    it('should parse multiple flags together', () => {
+      const config = parseKbValidateCommand({
+        path: './kb',
+        layout: 'source',
+        strict: true,
+        ignoreConfig: false,
+        skipRegistries: 'adoption,skills',
+      })
+
+      expect(config).toEqual({
+        command: 'kb-validate',
+        path: './kb',
+        layout: 'source',
+        strict: true,
+        ignoreConfig: false,
+        skipRegistries: ['adoption', 'skills'],
+      })
+    })
+  })
 })
