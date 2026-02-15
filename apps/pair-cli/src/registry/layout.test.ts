@@ -7,6 +7,9 @@ import {
   resolveLayoutPaths,
   applyPrefixFlatten,
   validateSkipList,
+  collectLayoutFiles,
+  transformSourceToTarget,
+  transformTargetToSource,
 } from './layout'
 
 // Test fixtures
@@ -268,5 +271,629 @@ describe('validateSkipList', () => {
     const result = validateSkipList(registries, [])
 
     expect(result).toEqual([])
+  })
+})
+
+describe('collectLayoutFiles', () => {
+  it('should collect files from source layout', async () => {
+    const mockFsWithFiles: FileSystemService = {
+      ...mockFs,
+      exists: async (path: string) => path === '/kb/.skills',
+      readdir: async () => [{ name: 'bootstrap.md' }, { name: 'implement.md' }] as any,
+    } as FileSystemService
+
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+    ])
+
+    const result = await collectLayoutFiles({
+      registry,
+      layout: 'source',
+      baseDir: '/kb',
+      fs: mockFsWithFiles,
+    })
+
+    expect(result).toEqual(['/kb/.skills/bootstrap.md', '/kb/.skills/implement.md'])
+  })
+
+  it('should collect files from target layout', async () => {
+    const mockFsWithFiles: FileSystemService = {
+      ...mockFs,
+      exists: async (path: string) => ['/kb/.claude/skills', '/kb/.cursor/skills'].includes(path),
+      readdir: async (path: string) =>
+        (path === '/kb/.claude/skills'
+          ? [{ name: 'bootstrap.md' }]
+          : [{ name: 'implement.md' }]) as any,
+    } as FileSystemService
+
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+      { path: '.cursor/skills', mode: 'copy' },
+    ])
+
+    const result = await collectLayoutFiles({
+      registry,
+      layout: 'target',
+      baseDir: '/kb',
+      fs: mockFsWithFiles,
+    })
+
+    expect(result).toEqual(['/kb/.claude/skills/bootstrap.md', '/kb/.cursor/skills/implement.md'])
+  })
+
+  it('should return empty array when directory does not exist', async () => {
+    const mockFsEmpty: FileSystemService = {
+      ...mockFs,
+      exists: async () => false,
+    } as FileSystemService
+
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+    ])
+
+    const result = await collectLayoutFiles({
+      registry,
+      layout: 'source',
+      baseDir: '/kb',
+      fs: mockFsEmpty,
+    })
+
+    expect(result).toEqual([])
+  })
+
+  it('should handle empty directory', async () => {
+    const mockFsEmpty: FileSystemService = {
+      ...mockFs,
+      exists: async () => true,
+      readdir: async () => [] as any,
+    } as FileSystemService
+
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+    ])
+
+    const result = await collectLayoutFiles({
+      registry,
+      layout: 'source',
+      baseDir: '/kb',
+      fs: mockFsEmpty,
+    })
+
+    expect(result).toEqual([])
+  })
+
+  it('should collect files with various extensions', async () => {
+    const mockFsWithFiles: FileSystemService = {
+      ...mockFs,
+      exists: async () => true,
+      readdir: async () =>
+        [
+          { name: 'skill.md' },
+          { name: 'config.json' },
+          { name: 'data.yaml' },
+          { name: 'script.ts' },
+        ] as any,
+    } as FileSystemService
+
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+    ])
+
+    const result = await collectLayoutFiles({
+      registry,
+      layout: 'source',
+      baseDir: '/kb',
+      fs: mockFsWithFiles,
+    })
+
+    expect(result).toEqual([
+      '/kb/.skills/skill.md',
+      '/kb/.skills/config.json',
+      '/kb/.skills/data.yaml',
+      '/kb/.skills/script.ts',
+    ])
+  })
+
+  it('should skip non-existent target directories', async () => {
+    const mockFsPartial: FileSystemService = {
+      ...mockFs,
+      exists: async (path: string) => path === '/kb/.claude/skills',
+      readdir: async () => [{ name: 'bootstrap.md' }] as any,
+    } as FileSystemService
+
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+      { path: '.cursor/skills', mode: 'copy' },
+    ])
+
+    const result = await collectLayoutFiles({
+      registry,
+      layout: 'target',
+      baseDir: '/kb',
+      fs: mockFsPartial,
+    })
+
+    expect(result).toEqual(['/kb/.claude/skills/bootstrap.md'])
+  })
+
+  it('should exclude symlink targets in target layout', async () => {
+    const mockFsWithFiles: FileSystemService = {
+      ...mockFs,
+      exists: async () => true,
+      readdir: async () => [{ name: 'bootstrap.md' }] as any,
+    } as FileSystemService
+
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+      { path: '.github/skills', mode: 'symlink' },
+    ])
+
+    const result = await collectLayoutFiles({
+      registry,
+      layout: 'target',
+      baseDir: '/kb',
+      fs: mockFsWithFiles,
+    })
+
+    expect(result).toEqual(['/kb/.claude/skills/bootstrap.md'])
+  })
+})
+
+describe('transformSourceToTarget', () => {
+  it('should transform source path to single target without prefix/flatten', () => {
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+    ])
+
+    const result = transformSourceToTarget({
+      sourcePath: '/kb/.skills/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toEqual(['/kb/.claude/skills/bootstrap.md'])
+  })
+
+  it('should transform source path to multiple targets', () => {
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+      { path: '.cursor/skills', mode: 'copy' },
+    ])
+
+    const result = transformSourceToTarget({
+      sourcePath: '/kb/.skills/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toEqual(['/kb/.claude/skills/bootstrap.md', '/kb/.cursor/skills/bootstrap.md'])
+  })
+
+  it('should apply prefix and flatten when configured', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'pair', flatten: true },
+    )
+
+    const result = transformSourceToTarget({
+      sourcePath: '/kb/.skills/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toEqual(['/kb/.claude/skills/pair-bootstrap.md'])
+  })
+
+  it('should exclude symlink targets', () => {
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+      { path: '.github/skills', mode: 'symlink' },
+    ])
+
+    const result = transformSourceToTarget({
+      sourcePath: '/kb/.skills/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toEqual(['/kb/.claude/skills/bootstrap.md'])
+  })
+
+  it('should handle files without extension', () => {
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+    ])
+
+    const result = transformSourceToTarget({
+      sourcePath: '/kb/.skills/README',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toEqual(['/kb/.claude/skills/README'])
+  })
+
+  it('should handle files with multiple dots', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'pair', flatten: true },
+    )
+
+    const result = transformSourceToTarget({
+      sourcePath: '/kb/.skills/config.test.ts',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toEqual(['/kb/.claude/skills/pair-config.test.ts'])
+  })
+
+  it('should handle prefix without flatten', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'pair', flatten: false },
+    )
+
+    const result = transformSourceToTarget({
+      sourcePath: '/kb/.skills/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toEqual(['/kb/.claude/skills/bootstrap.md'])
+  })
+
+  it('should handle flatten without prefix', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { flatten: true },
+    )
+
+    const result = transformSourceToTarget({
+      sourcePath: '/kb/.skills/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toEqual(['/kb/.claude/skills/bootstrap.md'])
+  })
+
+  it('should handle multi-part prefix with flatten', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'pair-capability', flatten: true },
+    )
+
+    const result = transformSourceToTarget({
+      sourcePath: '/kb/.skills/verify-quality.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toEqual(['/kb/.claude/skills/pair-capability-verify-quality.md'])
+  })
+
+  it('should handle name already containing hyphen with prefix', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'pair', flatten: true },
+    )
+
+    const result = transformSourceToTarget({
+      sourcePath: '/kb/.skills/process-implement.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toEqual(['/kb/.claude/skills/pair-process-implement.md'])
+  })
+
+  it('should return empty array when all targets are symlinks', () => {
+    const registry = createMockRegistry('.skills', [
+      { path: '.github/skills', mode: 'symlink' },
+      { path: '.vscode/skills', mode: 'symlink' },
+    ])
+
+    const result = transformSourceToTarget({
+      sourcePath: '/kb/.skills/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toEqual([])
+  })
+
+  it('should handle file with no name part (edge case)', () => {
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+    ])
+
+    const result = transformSourceToTarget({
+      sourcePath: '/kb/.skills/.hidden',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toEqual(['/kb/.claude/skills/.hidden'])
+  })
+})
+
+describe('transformTargetToSource', () => {
+  it('should transform target path to source without prefix/flatten', () => {
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+    ])
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.claude/skills/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBe('/kb/.skills/bootstrap.md')
+  })
+
+  it('should remove prefix when flatten is enabled', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'pair', flatten: true },
+    )
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.claude/skills/pair-bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBe('/kb/.skills/bootstrap.md')
+  })
+
+  it('should handle target from different target path', () => {
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+      { path: '.cursor/skills', mode: 'copy' },
+    ])
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.cursor/skills/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBe('/kb/.skills/bootstrap.md')
+  })
+
+  it('should return null for target path not matching any registry target', () => {
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+    ])
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.other/skills/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBeNull()
+  })
+
+  it('should handle files without extension', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'pair', flatten: true },
+    )
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.claude/skills/pair-README',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBe('/kb/.skills/README')
+  })
+
+  it('should handle files with multiple dots', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'pair', flatten: true },
+    )
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.claude/skills/pair-config.test.ts',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBe('/kb/.skills/config.test.ts')
+  })
+
+  it('should preserve name when flatten is false', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'pair', flatten: false },
+    )
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.claude/skills/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBe('/kb/.skills/bootstrap.md')
+  })
+
+  it('should not remove prefix when flatten is disabled', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'pair', flatten: false },
+    )
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.claude/skills/pair-bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBe('/kb/.skills/pair-bootstrap.md')
+  })
+
+  it('should handle multi-part prefix removal', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'pair-capability', flatten: true },
+    )
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.claude/skills/pair-capability-verify-quality.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBe('/kb/.skills/verify-quality.md')
+  })
+
+  it('should handle name with hyphen after prefix removal', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'pair', flatten: true },
+    )
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.claude/skills/pair-process-implement.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBe('/kb/.skills/process-implement.md')
+  })
+
+  it('should handle name without prefix even when prefix configured', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'pair', flatten: true },
+    )
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.claude/skills/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBe('/kb/.skills/bootstrap.md')
+  })
+
+  it('should handle prefix as part of name (not prefix match)', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'test', flatten: true },
+    )
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.claude/skills/testing-guide.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBe('/kb/.skills/testing-guide.md')
+  })
+
+  it('should return null for symlink target path', () => {
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+      { path: '.github/skills', mode: 'symlink' },
+    ])
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.github/skills/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBeNull()
+  })
+
+  it('should handle file with no name part (edge case)', () => {
+    const registry = createMockRegistry(
+      '.skills',
+      [{ path: '.claude/skills', mode: 'canonical' }],
+      { prefix: 'pair', flatten: true },
+    )
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.claude/skills/.hidden',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBe('/kb/.skills/.hidden')
+  })
+
+  it('should return null for partial path match', () => {
+    const registry = createMockRegistry('.skills', [
+      { path: '.claude/skills', mode: 'canonical' },
+    ])
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.claude/skill/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBeNull()
+  })
+
+  it('should handle empty registry targets', () => {
+    const registry = createMockRegistry('.skills', [])
+
+    const result = transformTargetToSource({
+      targetPath: '/kb/.claude/skills/bootstrap.md',
+      registry,
+      baseDir: '/kb',
+      fs: mockFs,
+    })
+
+    expect(result).toBeNull()
   })
 })

@@ -109,3 +109,134 @@ export function validateSkipList(
   const validNames = new Set(Object.keys(registries))
   return skipList.filter(name => !validNames.has(name))
 }
+
+/**
+ * Options for collecting layout files
+ */
+export interface CollectLayoutFilesOptions {
+  registry: RegistryConfig
+  layout: LayoutMode
+  baseDir: string
+  fs: FileSystemService
+}
+
+/**
+ * Collects all files present in the specified layout
+ * @param options - Collection options
+ * @returns List of absolute file paths in the layout
+ */
+export async function collectLayoutFiles(
+  options: CollectLayoutFilesOptions,
+): Promise<string[]> {
+  const { registry, layout, baseDir, fs } = options
+  const paths = resolveLayoutPaths({ name: '', registry, layout, baseDir, fs })
+
+  const files: string[] = []
+
+  for (const dirPath of paths) {
+    const exists = await fs.exists(dirPath)
+    if (!exists) continue
+
+    const entries = await fs.readdir(dirPath)
+    for (const entry of entries) {
+      files.push(fs.resolve(dirPath, entry.name))
+    }
+  }
+
+  return files
+}
+
+/**
+ * Options for transforming source path to target paths
+ */
+export interface TransformSourceToTargetOptions {
+  sourcePath: string
+  registry: RegistryConfig
+  baseDir: string
+  fs: FileSystemService
+}
+
+/**
+ * Transforms a source path to target path(s) applying prefix/flatten
+ * @param options - Transformation options
+ * @returns List of target paths (one per non-symlink target)
+ */
+export function transformSourceToTarget(
+  options: TransformSourceToTargetOptions,
+): string[] {
+  const { sourcePath, registry, baseDir, fs } = options
+
+  // Extract filename from source path
+  const sourceDir = fs.resolve(baseDir, registry.source)
+  const relativePath = sourcePath.replace(sourceDir + '/', '')
+  const baseName = relativePath.split('/').pop() || relativePath
+
+  // Get base filename without extension
+  const lastDotIndex = baseName.lastIndexOf('.')
+  const nameWithoutExt = lastDotIndex > 0 ? baseName.slice(0, lastDotIndex) : baseName
+  const ext = lastDotIndex > 0 ? baseName.slice(lastDotIndex) : ''
+
+  // Apply prefix/flatten transformation
+  const transformedName = applyPrefixFlatten(nameWithoutExt, registry.prefix, registry.flatten)
+  const transformedFile = transformedName + ext
+
+  // Map to all non-symlink target paths
+  const targets = getNonSymlinkTargets(registry)
+  return targets.map(target => fs.resolve(baseDir, target.path, transformedFile))
+}
+
+/**
+ * Options for transforming target path to source path
+ */
+export interface TransformTargetToSourceOptions {
+  targetPath: string
+  registry: RegistryConfig
+  baseDir: string
+  fs: FileSystemService
+}
+
+/**
+ * Transforms a target path to source path removing prefix/flatten
+ * @param options - Transformation options
+ * @returns Source path or null if target path doesn't match registry
+ */
+export function transformTargetToSource(
+  options: TransformTargetToSourceOptions,
+): string | null {
+  const { targetPath, registry, baseDir, fs } = options
+
+  // Check if target path matches any registry target
+  const targets = getNonSymlinkTargets(registry)
+  let matchedTargetPath: string | null = null
+
+  for (const target of targets) {
+    const targetDir = fs.resolve(baseDir, target.path)
+    if (targetPath.startsWith(targetDir + '/')) {
+      matchedTargetPath = targetDir
+      break
+    }
+  }
+
+  if (!matchedTargetPath) return null
+
+  // Extract filename from target path
+  const relativePath = targetPath.replace(matchedTargetPath + '/', '')
+  const baseName = relativePath.split('/').pop() || relativePath
+
+  // Get base filename without extension
+  const lastDotIndex = baseName.lastIndexOf('.')
+  const nameWithoutExt = lastDotIndex > 0 ? baseName.slice(0, lastDotIndex) : baseName
+  const ext = lastDotIndex > 0 ? baseName.slice(lastDotIndex) : ''
+
+  // Remove prefix if flatten is enabled
+  let originalName = nameWithoutExt
+  if (registry.flatten && registry.prefix) {
+    const prefixWithHyphen = registry.prefix + '-'
+    if (nameWithoutExt.startsWith(prefixWithHyphen)) {
+      originalName = nameWithoutExt.slice(prefixWithHyphen.length)
+    }
+  }
+
+  const originalFile = originalName + ext
+  return fs.resolve(baseDir, registry.source, originalFile)
+}
