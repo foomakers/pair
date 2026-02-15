@@ -2,7 +2,7 @@ import type { FileSystemService } from '@pair/content-ops'
 import type { ManifestMetadata } from './metadata'
 import type { RegistryConfig } from '#registry'
 import { rewriteFileLinks } from './link-rewriter'
-import { collectLayoutFiles } from '../../registry/layout'
+import { collectLayoutFiles, resolveLayoutPaths, type LayoutMode } from '../../registry/layout'
 import path from 'path'
 
 interface ZipOptions {
@@ -11,6 +11,7 @@ interface ZipOptions {
   manifest: ManifestMetadata
   outputPath: string
   root?: string
+  layout?: LayoutMode
 }
 
 /**
@@ -51,15 +52,16 @@ async function copyRegistrySources(
   options: ZipOptions,
   fsService: FileSystemService,
 ): Promise<void> {
+  const layout: LayoutMode = options.layout || 'source'
+
   for (const registry of options.registries) {
     if (!registry.source) {
       throw new Error(`Registry missing source field`)
     }
 
-    // Use collectLayoutFiles to get all files from source layout
     const files = await collectLayoutFiles({
       registry,
-      layout: 'source',
+      layout,
       baseDir: options.projectRoot,
       fs: fsService,
     })
@@ -68,12 +70,22 @@ async function copyRegistrySources(
       throw new Error(`Registry source contains no files: ${registry.source}`)
     }
 
+    // Resolve base dir(s) for computing relative paths
+    const layoutPaths = resolveLayoutPaths({
+      name: '',
+      registry,
+      layout,
+      baseDir: options.projectRoot,
+      fs: fsService,
+    })
+
     // Copy each file individually (applying link rewriting for .md files)
     for (const sourceFilePath of files) {
-      const relativePath = path.relative(
-        path.join(options.projectRoot, registry.source),
-        sourceFilePath,
-      )
+      // Find which layout path this file belongs to
+      const basePath = layoutPaths.find(p => sourceFilePath.startsWith(p + '/') || sourceFilePath === p)
+      const baseForRelative = basePath || path.join(options.projectRoot, registry.source)
+
+      const relativePath = path.relative(baseForRelative, sourceFilePath)
       const targetPath = path.join(tempDir, registry.source, relativePath)
 
       await fsService.mkdir(path.dirname(targetPath), { recursive: true })

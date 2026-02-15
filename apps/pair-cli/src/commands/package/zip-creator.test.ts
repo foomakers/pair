@@ -256,6 +256,40 @@ describe('createPackageZip - symlink and structure', () => {
   })
 })
 
+describe('createPackageZip - target layout', () => {
+  beforeEach(setupTest)
+  afterEach(cleanupTest)
+
+  it('packages files from target paths when layout is target', async () => {
+    const projectRoot = '/test-project'
+    const registry: RegistryConfig = {
+      source: '.pair/knowledge',
+      behavior: 'mirror',
+      description: 'Test',
+      include: [],
+      flatten: false,
+      targets: [{ path: '.pair-knowledge', mode: 'canonical' }],
+    }
+
+    // Seed files in target path (not source)
+    await fsService.writeFile(`${projectRoot}/.pair-knowledge/doc.md`, 'target content')
+
+    const manifest: ManifestMetadata = {
+      name: 'target-kb',
+      version: '1.0.0',
+      created_at: '2025-11-30T00:00:00Z',
+      registries: ['knowledge'],
+    }
+
+    await createPackageZip(
+      { projectRoot, registries: [registry], manifest, outputPath, layout: 'target' },
+      fsService,
+    )
+
+    expect(fsService.existsSync(outputPath)).toBe(true)
+  })
+})
+
 describe('createPackageZip - error handling', () => {
   beforeEach(setupTest)
   afterEach(cleanupTest)
