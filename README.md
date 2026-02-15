@@ -218,6 +218,7 @@ The `hasLocalDataset()` function in `config/bootstrap.ts` serves as a guard clau
 - `pair install` - Install knowledge base documentation
 - `pair update` - Update knowledge base to latest version
 - `pair update-link` - Normalize markdown links (relative/absolute)
+- `pair kb validate` - Validate KB structure, links, and metadata
 - `pair kb package` - Package .pair/ folder into distributable ZIP with manifest
 
 See [Pair CLI documentation](apps/pair-cli/README.md) for complete command reference.

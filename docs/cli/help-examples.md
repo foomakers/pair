@@ -156,7 +156,60 @@ pair update --source https://github.com/org/repo/releases/download/v2.0.0/kb.zip
 
 ## Validation Workflows
 
-### 10. Validate Default Configuration
+### 10. Validate KB Structure and Links
+
+```bash
+# Validate KB in current directory
+pair kb validate
+
+# Output:
+# ✅ KB validation passed
+#   Structure: ✓ (3 registries)
+#   Links: ✓ (0 broken)
+#   Metadata: ✓ (15 skills, 8 adoption files)
+```
+
+### 11. Validate with External Link Checking
+
+```bash
+# Validate with strict mode (checks external links via HTTP)
+pair kb validate --strict
+
+# Output:
+# ⚠️  KB validation warnings
+#   Structure: ✓
+#   Links: 2 warnings (external unreachable)
+#   Metadata: ✓
+```
+
+### 12. Validate Source Layout
+
+```bash
+# Validate KB source layout before install
+pair kb validate --layout source
+
+# Useful for validating monorepo dataset before distribution
+```
+
+### 13. Validate Excluding Registries
+
+```bash
+# Skip specific registries during validation
+pair kb validate --skip-registries github,adoption
+
+# Only validates skills registry
+```
+
+### 14. Validate Without Config
+
+```bash
+# Validate only links and metadata, skip structure checks
+pair kb validate --ignore-config
+
+# Useful when config.json is not available
+```
+
+### 15. Validate Default Configuration
 
 ```bash
 # Validate config.json in current directory
@@ -167,7 +220,7 @@ pair validate-config
 # Found 3 asset registries
 ```
 
-### 11. Validate Custom Configuration
+### 16. Validate Custom Configuration
 
 ```bash
 # Validate custom config file
@@ -191,7 +244,7 @@ pair validate-config --config ./broken-config.json
 
 ## Link Management Workflows
 
-### 12. Validate and Fix Links
+### 17. Validate and Fix Links
 
 ```bash
 # Update links in current directory
@@ -204,7 +257,7 @@ pair update-link
 # ⚠️  3 broken links remaining (targets not found)
 ```
 
-### 13. Preview Link Updates (Dry Run)
+### 18. Preview Link Updates (Dry Run)
 
 ```bash
 # Preview changes without writing
@@ -223,7 +276,7 @@ pair update-link --dry-run
 # ✅ 2 links would be fixed
 ```
 
-### 14. Update Links with Verbose Output
+### 19. Update Links with Verbose Output
 
 ```bash
 # Show detailed processing information
@@ -246,7 +299,7 @@ pair update-link --verbose
 
 ## Packaging Workflows
 
-### 15. Package KB for Distribution
+### 20. Package KB for Distribution
 
 ```bash
 # Package current directory with defaults
@@ -259,7 +312,7 @@ pair package
 # ✅ Package created: kb-package.zip (24.5 MB)
 ```
 
-### 16. Package with Custom Output Path
+### 21. Package with Custom Output Path
 
 ```bash
 # Package to specific location with version in filename
@@ -272,7 +325,7 @@ pair package -o dist/kb-v1.2.0.zip
 # ✅ Package created: dist/kb-v1.2.0.zip (24.5 MB)
 ```
 
-### 17. Package with Metadata
+### 22. Package with Metadata
 
 ```bash
 # Package with complete metadata
@@ -291,7 +344,7 @@ pair package \
 # ✅ Package created: dist/company-kb-v1.2.0.zip (24.5 MB)
 ```
 
-### 18. Package Specific Source Directory
+### 23. Package Specific Source Directory
 
 ```bash
 # Package KB from different location
@@ -310,11 +363,34 @@ pair package -s ./kb-content -o kb.zip --log-level debug
 # ✅ Package created: dist/kb.zip (24.5 MB)
 ```
 
+### 24. Package Excluding Registries
+
+```bash
+# Package only skills registry, exclude others
+pair package --skip-registries adoption,github
+
+# Output:
+# 📦 Validating KB structure...
+# ⚠️  Skipping registries: adoption, github
+# ✅ Validation passed (1 registry)
+# 📦 Creating package...
+# ✅ Package created: kb-package.zip (8.2 MB)
+```
+
+### 25. Package with Custom Link Root
+
+```bash
+# Package with custom root for link relativization
+pair package --root .custom/root/ -o custom-kb.zip
+
+# Links will be relativized from .custom/root/ instead of .pair/
+```
+
 ---
 
 ## Advanced Workflows
 
-### 19. Complete CI/CD Pipeline Example
+### 26. Complete CI/CD Pipeline Example
 
 ```bash
 #!/bin/bash

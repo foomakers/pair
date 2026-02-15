@@ -101,8 +101,14 @@ pair update-link
 # List available registries
 pair install --list-targets
 
+# Validate KB structure and links
+pair kb validate
+
 # Validate configuration
 pair validate-config
+
+# Package KB for distribution
+pair package -o dist/kb.zip
 
 # Get help for any command
 pair <command> --help
