@@ -2,12 +2,15 @@ import { describe, it, expect } from 'vitest'
 import { handleKbValidateCommand } from './handler'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 
+const minimalConfig = JSON.stringify({ asset_registries: {} })
+
 describe('handleKbValidateCommand', () => {
   it('should validate KB at current directory by default', async () => {
     const cwd = '/project'
     const fs = new InMemoryFileSystemService(
       {
         [`${cwd}/.pair/knowledge/index.md`]: '# KB',
+        [`${cwd}/config.json`]: minimalConfig,
       },
       cwd,
       cwd,
@@ -22,6 +25,7 @@ describe('handleKbValidateCommand', () => {
     const fs = new InMemoryFileSystemService(
       {
         [`${kbPath}/.pair/knowledge/index.md`]: '# KB',
+        [`${cwd}/config.json`]: minimalConfig,
       },
       cwd,
       cwd,
@@ -55,5 +59,37 @@ describe('handleKbValidateCommand', () => {
     await expect(
       handleKbValidateCommand({ command: 'kb-validate', path: kbPath }, fs),
     ).rejects.toThrow('missing .pair directory')
+  })
+
+  it('should propagate config errors instead of silently returning empty', async () => {
+    const cwd = '/project'
+    // .pair exists but no config.json → loadConfigWithOverrides throws
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/.pair/knowledge/index.md`]: '# KB',
+      },
+      cwd,
+      cwd,
+    )
+
+    await expect(handleKbValidateCommand({ command: 'kb-validate' }, fs)).rejects.toThrow(
+      'Failed to load base config',
+    )
+  })
+
+  it('should skip config loading when ignoreConfig is true', async () => {
+    const cwd = '/project'
+    // No config.json but ignoreConfig=true → should not throw
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/.pair/knowledge/index.md`]: '# KB',
+      },
+      cwd,
+      cwd,
+    )
+
+    await expect(
+      handleKbValidateCommand({ command: 'kb-validate', ignoreConfig: true }, fs),
+    ).resolves.toBeUndefined()
   })
 })

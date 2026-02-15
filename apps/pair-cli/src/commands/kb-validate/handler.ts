@@ -21,13 +21,8 @@ function loadRegistries(
 ): Record<string, RegistryConfig> {
   if (config.ignoreConfig) return {}
 
-  let registries: Record<string, RegistryConfig> = {}
-  try {
-    const result = loadConfigWithOverrides(fs, { projectRoot: kbPath })
-    registries = extractRegistries(result.config)
-  } catch {
-    return {}
-  }
+  const result = loadConfigWithOverrides(fs, { projectRoot: kbPath })
+  let registries = extractRegistries(result.config)
 
   if (config.skipRegistries) {
     const invalid = validateSkipList(registries, config.skipRegistries)
