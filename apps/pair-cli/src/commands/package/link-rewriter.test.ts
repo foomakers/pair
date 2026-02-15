@@ -168,6 +168,8 @@ describe('rewriteDirectoryLinks', () => {
 
     const fs = Object.assign({}, baseFs, {
       resolve: (...paths: string[]) => paths.join('/').replace(/\/+/g, '/'),
+      readFile: baseFs.readFile.bind(baseFs),
+      writeFile: baseFs.writeFile.bind(baseFs),
       readdir: async () => [{ name: 'file1.md' }, { name: 'file2.md' }] as any,
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       stat: async (_path: string) => ({
@@ -201,6 +203,8 @@ describe('rewriteDirectoryLinks', () => {
 
     const fs = Object.assign({}, baseFs, {
       resolve: (...paths: string[]) => paths.join('/').replace(/\/+/g, '/'),
+      readFile: baseFs.readFile.bind(baseFs),
+      writeFile: baseFs.writeFile.bind(baseFs),
       readdir: async () =>
         [{ name: 'file.md' }, { name: 'config.json' }, { name: 'script.ts' }] as any,
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -248,6 +252,8 @@ describe('rewriteDirectoryLinks', () => {
 
     const fs = Object.assign({}, baseFs, {
       resolve: (...paths: string[]) => paths.join('/').replace(/\/+/g, '/'),
+      readFile: baseFs.readFile.bind(baseFs),
+      writeFile: baseFs.writeFile.bind(baseFs),
       readdir: async () => [{ name: 'file.md' }, { name: 'subdir' }] as any,
       stat: async (path: string) => ({
         isDirectory: () => path.includes('subdir'),
@@ -299,6 +305,8 @@ describe('rewriteAbsoluteLinks', () => {
 
     const mockFs = Object.assign({}, baseFs, {
       resolve: (...paths: string[]) => paths.join('/').replace(/\/+/g, '/'),
+      readFile: baseFs.readFile.bind(baseFs),
+      writeFile: baseFs.writeFile.bind(baseFs),
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       exists: async (_path: string) => true,
       readdir: async () => [{ name: 'file1.md' }, { name: 'file2.md' }] as any,
