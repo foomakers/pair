@@ -1,5 +1,6 @@
 import { Behavior, FileSystemService, validateTargets, type TargetConfig } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
+import { getCanonicalTarget } from './layout'
 
 /**
  * Check if a target directory is empty or doesn't exist
@@ -249,7 +250,7 @@ export function validateAllRegistries(registries: Record<string, RegistryConfig>
     errors.push(...regErrors)
     if (regErrors.length === 0) {
       validRegistryCount++
-      const canonical = config.targets.find(t => t.mode === 'canonical')
+      const canonical = getCanonicalTarget(config.targets)
       if (canonical) {
         canonicalPaths[name] = canonical.path
       }

@@ -43,6 +43,28 @@ export function getNonSymlinkTargets(registry: RegistryConfig): TargetConfig[] {
 }
 
 /**
+ * Gets the canonical target from a registry's targets
+ * @param targets - Array of target configurations
+ * @returns The canonical target or undefined if none exists
+ */
+export function getCanonicalTarget(targets: TargetConfig[]): TargetConfig | undefined {
+  return targets.find(t => t.mode === 'canonical')
+}
+
+/**
+ * Resolves the effective dataset root based on registry config.
+ * When flatten or prefix is active, uses baseTarget instead of datasetRoot
+ * so that link re-rooting correctly maps source paths to target paths.
+ */
+export function resolveEffectiveDatasetRoot(
+  config: RegistryConfig,
+  baseTarget: string,
+  datasetRoot: string,
+): string {
+  return config.flatten || config.prefix ? baseTarget : datasetRoot
+}
+
+/**
  * Options for resolving layout paths
  */
 export interface ResolveLayoutPathsOptions {
@@ -125,9 +147,7 @@ export interface CollectLayoutFilesOptions {
  * @param options - Collection options
  * @returns List of absolute file paths in the layout
  */
-export async function collectLayoutFiles(
-  options: CollectLayoutFilesOptions,
-): Promise<string[]> {
+export async function collectLayoutFiles(options: CollectLayoutFilesOptions): Promise<string[]> {
   const { registry, layout, baseDir, fs } = options
   const paths = resolveLayoutPaths({ name: '', registry, layout, baseDir, fs })
 
@@ -199,9 +219,7 @@ export interface TransformSourceToTargetOptions {
  * @param options - Transformation options
  * @returns List of target paths (one per non-symlink target)
  */
-export function transformSourceToTarget(
-  options: TransformSourceToTargetOptions,
-): string[] {
+export function transformSourceToTarget(options: TransformSourceToTargetOptions): string[] {
   const { sourcePath, registry, baseDir, fs } = options
 
   // Extract filename from source path
@@ -238,9 +256,7 @@ export interface TransformTargetToSourceOptions {
  * @param options - Transformation options
  * @returns Source path or null if target path doesn't match registry
  */
-export function transformTargetToSource(
-  options: TransformTargetToSourceOptions,
-): string | null {
+export function transformTargetToSource(options: TransformTargetToSourceOptions): string | null {
   const { targetPath, registry, baseDir, fs } = options
 
   // Check if target path matches any registry target

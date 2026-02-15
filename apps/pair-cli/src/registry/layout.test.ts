@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import fs from 'node:fs'
 import type { TargetConfig, FileSystemService } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
 import {
@@ -279,12 +280,11 @@ describe('collectLayoutFiles', () => {
     const mockFsWithFiles: FileSystemService = {
       ...mockFs,
       exists: async (path: string) => path === '/kb/.skills',
-      readdir: async () => [{ name: 'bootstrap.md' }, { name: 'implement.md' }] as any,
+      readdir: async () =>
+        [{ name: 'bootstrap.md' }, { name: 'implement.md' }] as unknown as fs.Dirent[],
     } as FileSystemService
 
-    const registry = createMockRegistry('.skills', [
-      { path: '.claude/skills', mode: 'canonical' },
-    ])
+    const registry = createMockRegistry('.skills', [{ path: '.claude/skills', mode: 'canonical' }])
 
     const result = await collectLayoutFiles({
       registry,
@@ -303,7 +303,7 @@ describe('collectLayoutFiles', () => {
       readdir: async (path: string) =>
         (path === '/kb/.claude/skills'
           ? [{ name: 'bootstrap.md' }]
-          : [{ name: 'implement.md' }]) as any,
+          : [{ name: 'implement.md' }]) as unknown as fs.Dirent[],
     } as FileSystemService
 
     const registry = createMockRegistry('.skills', [
@@ -327,9 +327,7 @@ describe('collectLayoutFiles', () => {
       exists: async () => false,
     } as FileSystemService
 
-    const registry = createMockRegistry('.skills', [
-      { path: '.claude/skills', mode: 'canonical' },
-    ])
+    const registry = createMockRegistry('.skills', [{ path: '.claude/skills', mode: 'canonical' }])
 
     const result = await collectLayoutFiles({
       registry,
@@ -345,12 +343,10 @@ describe('collectLayoutFiles', () => {
     const mockFsEmpty: FileSystemService = {
       ...mockFs,
       exists: async () => true,
-      readdir: async () => [] as any,
+      readdir: async () => [] as unknown as fs.Dirent[],
     } as FileSystemService
 
-    const registry = createMockRegistry('.skills', [
-      { path: '.claude/skills', mode: 'canonical' },
-    ])
+    const registry = createMockRegistry('.skills', [{ path: '.claude/skills', mode: 'canonical' }])
 
     const result = await collectLayoutFiles({
       registry,
@@ -372,12 +368,10 @@ describe('collectLayoutFiles', () => {
           { name: 'config.json' },
           { name: 'data.yaml' },
           { name: 'script.ts' },
-        ] as any,
+        ] as unknown as fs.Dirent[],
     } as FileSystemService
 
-    const registry = createMockRegistry('.skills', [
-      { path: '.claude/skills', mode: 'canonical' },
-    ])
+    const registry = createMockRegistry('.skills', [{ path: '.claude/skills', mode: 'canonical' }])
 
     const result = await collectLayoutFiles({
       registry,
@@ -398,7 +392,7 @@ describe('collectLayoutFiles', () => {
     const mockFsPartial: FileSystemService = {
       ...mockFs,
       exists: async (path: string) => path === '/kb/.claude/skills',
-      readdir: async () => [{ name: 'bootstrap.md' }] as any,
+      readdir: async () => [{ name: 'bootstrap.md' }] as unknown as fs.Dirent[],
     } as FileSystemService
 
     const registry = createMockRegistry('.skills', [
@@ -420,7 +414,7 @@ describe('collectLayoutFiles', () => {
     const mockFsWithFiles: FileSystemService = {
       ...mockFs,
       exists: async () => true,
-      readdir: async () => [{ name: 'bootstrap.md' }] as any,
+      readdir: async () => [{ name: 'bootstrap.md' }] as unknown as fs.Dirent[],
     } as FileSystemService
 
     const registry = createMockRegistry('.skills', [
@@ -441,9 +435,7 @@ describe('collectLayoutFiles', () => {
 
 describe('transformSourceToTarget', () => {
   it('should transform source path to single target without prefix/flatten', () => {
-    const registry = createMockRegistry('.skills', [
-      { path: '.claude/skills', mode: 'canonical' },
-    ])
+    const registry = createMockRegistry('.skills', [{ path: '.claude/skills', mode: 'canonical' }])
 
     const result = transformSourceToTarget({
       sourcePath: '/kb/.skills/bootstrap.md',
@@ -505,9 +497,7 @@ describe('transformSourceToTarget', () => {
   })
 
   it('should handle files without extension', () => {
-    const registry = createMockRegistry('.skills', [
-      { path: '.claude/skills', mode: 'canonical' },
-    ])
+    const registry = createMockRegistry('.skills', [{ path: '.claude/skills', mode: 'canonical' }])
 
     const result = transformSourceToTarget({
       sourcePath: '/kb/.skills/README',
@@ -621,9 +611,7 @@ describe('transformSourceToTarget', () => {
   })
 
   it('should handle file with no name part (edge case)', () => {
-    const registry = createMockRegistry('.skills', [
-      { path: '.claude/skills', mode: 'canonical' },
-    ])
+    const registry = createMockRegistry('.skills', [{ path: '.claude/skills', mode: 'canonical' }])
 
     const result = transformSourceToTarget({
       sourcePath: '/kb/.skills/.hidden',
@@ -638,9 +626,7 @@ describe('transformSourceToTarget', () => {
 
 describe('transformTargetToSource', () => {
   it('should transform target path to source without prefix/flatten', () => {
-    const registry = createMockRegistry('.skills', [
-      { path: '.claude/skills', mode: 'canonical' },
-    ])
+    const registry = createMockRegistry('.skills', [{ path: '.claude/skills', mode: 'canonical' }])
 
     const result = transformTargetToSource({
       targetPath: '/kb/.claude/skills/bootstrap.md',
@@ -686,9 +672,7 @@ describe('transformTargetToSource', () => {
   })
 
   it('should return null for target path not matching any registry target', () => {
-    const registry = createMockRegistry('.skills', [
-      { path: '.claude/skills', mode: 'canonical' },
-    ])
+    const registry = createMockRegistry('.skills', [{ path: '.claude/skills', mode: 'canonical' }])
 
     const result = transformTargetToSource({
       targetPath: '/kb/.other/skills/bootstrap.md',
@@ -870,9 +854,7 @@ describe('transformTargetToSource', () => {
   })
 
   it('should return null for partial path match', () => {
-    const registry = createMockRegistry('.skills', [
-      { path: '.claude/skills', mode: 'canonical' },
-    ])
+    const registry = createMockRegistry('.skills', [{ path: '.claude/skills', mode: 'canonical' }])
 
     const result = transformTargetToSource({
       targetPath: '/kb/.claude/skill/bootstrap.md',

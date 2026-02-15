@@ -1,6 +1,8 @@
 import { join } from 'path'
 import { FileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
+import { collectLayoutFiles, type LayoutMode } from '../../registry/layout'
+import { extractRegistries } from '#registry'
 
 export interface ValidationResult {
   valid: boolean
@@ -38,7 +40,7 @@ function validateConfigStructure(config: Config): ValidationResult {
 }
 
 /**
- * Validate a single registry entry
+ * Validate a single registry entry using collectLayoutFiles
  */
 async function validateRegistryEntry(
   entry: RegistryEntry,
@@ -60,10 +62,17 @@ async function validateRegistryEntry(
     }
   }
 
-  const stats = await fsService.stat(sourcePath)
-  if (stats.isDirectory()) {
-    const entries = await fsService.readdir(sourcePath)
-    if (entries.length === 0) {
+  // Use collectLayoutFiles to verify registry has content
+  const allRegistries = extractRegistries({ asset_registries: { [registryName]: registry } })
+  const registryConfig = allRegistries[registryName]
+  if (registryConfig) {
+    const files = await collectLayoutFiles({
+      registry: registryConfig,
+      layout: 'source' as LayoutMode,
+      baseDir: projectRoot,
+      fs: fsService,
+    })
+    if (files.length === 0) {
       return { error: `Registry '${registryName}' directory is empty`, isValid: false }
     }
   }

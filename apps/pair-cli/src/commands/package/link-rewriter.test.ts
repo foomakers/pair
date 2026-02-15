@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import fs from 'node:fs'
 import type { FileSystemService } from '@pair/content-ops'
 import InMemoryFileSystemService from '@pair/content-ops/test-utils/in-memory-fs'
 import { rewriteAbsoluteLinks, rewriteFileLinks, rewriteDirectoryLinks } from './link-rewriter'
@@ -170,7 +171,7 @@ describe('rewriteDirectoryLinks', () => {
       resolve: (...paths: string[]) => paths.join('/').replace(/\/+/g, '/'),
       readFile: baseFs.readFile.bind(baseFs),
       writeFile: baseFs.writeFile.bind(baseFs),
-      readdir: async () => [{ name: 'file1.md' }, { name: 'file2.md' }] as any,
+      readdir: async () => [{ name: 'file1.md' }, { name: 'file2.md' }] as unknown as fs.Dirent[],
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       stat: async (_path: string) => ({
         isDirectory: () => false,
@@ -206,7 +207,11 @@ describe('rewriteDirectoryLinks', () => {
       readFile: baseFs.readFile.bind(baseFs),
       writeFile: baseFs.writeFile.bind(baseFs),
       readdir: async () =>
-        [{ name: 'file.md' }, { name: 'config.json' }, { name: 'script.ts' }] as any,
+        [
+          { name: 'file.md' },
+          { name: 'config.json' },
+          { name: 'script.ts' },
+        ] as unknown as fs.Dirent[],
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       stat: async (_path: string) => ({
         isDirectory: () => false,
@@ -228,7 +233,7 @@ describe('rewriteDirectoryLinks', () => {
     const baseFs = new InMemoryFileSystemService({}, '/kb', '/kb')
 
     const fs = Object.assign({}, baseFs, {
-      readdir: async () => [] as any,
+      readdir: async () => [] as unknown as fs.Dirent[],
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       stat: async (_path: string) => ({
         isDirectory: () => true,
@@ -254,7 +259,7 @@ describe('rewriteDirectoryLinks', () => {
       resolve: (...paths: string[]) => paths.join('/').replace(/\/+/g, '/'),
       readFile: baseFs.readFile.bind(baseFs),
       writeFile: baseFs.writeFile.bind(baseFs),
-      readdir: async () => [{ name: 'file.md' }, { name: 'subdir' }] as any,
+      readdir: async () => [{ name: 'file.md' }, { name: 'subdir' }] as unknown as fs.Dirent[],
       stat: async (path: string) => ({
         isDirectory: () => path.includes('subdir'),
         isFile: () => !path.includes('subdir'),
@@ -309,7 +314,7 @@ describe('rewriteAbsoluteLinks', () => {
       writeFile: baseFs.writeFile.bind(baseFs),
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       exists: async (_path: string) => true,
-      readdir: async () => [{ name: 'file1.md' }, { name: 'file2.md' }] as any,
+      readdir: async () => [{ name: 'file1.md' }, { name: 'file2.md' }] as unknown as fs.Dirent[],
       stat: async (path: string) => ({
         isDirectory: () => path === '/kb/dir',
         isFile: () => path !== '/kb/dir',

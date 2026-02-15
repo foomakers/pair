@@ -2,6 +2,7 @@ import type { FileSystemService, SkillNameMap } from '@pair/content-ops'
 import { rewriteSkillReferences, walkMarkdownFiles } from '@pair/content-ops'
 import type { LogEntry } from '#diagnostics'
 import type { RegistryConfig } from './resolver'
+import { getNonSymlinkTargets } from './layout'
 
 /** Minimal context for skill reference rewrite operations. */
 export type SkillRefContext = {
@@ -55,8 +56,7 @@ export async function applySkillRefsToNonSkillRegistries(
   for (const [, config] of Object.entries(registries)) {
     if (config.flatten || config.prefix) continue // skip skills registries themselves
 
-    for (const targetCfg of config.targets) {
-      if (targetCfg.mode === 'symlink') continue
+    for (const targetCfg of getNonSymlinkTargets(config)) {
       const target = baseTarget
         ? fs.resolve(baseTarget, targetCfg.path)
         : fs.resolve(targetCfg.path)
