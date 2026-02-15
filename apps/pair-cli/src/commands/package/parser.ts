@@ -10,6 +10,9 @@ export interface PackageCommandConfig {
   description?: string
   author?: string
   logLevel?: string
+  layout?: 'source' | 'target'
+  skipRegistries?: string[]
+  root?: string
 }
 
 interface ParsePackageOptions {
@@ -21,6 +24,58 @@ interface ParsePackageOptions {
   description?: string
   author?: string
   logLevel?: string
+  layout?: string
+  skipRegistries?: string
+  root?: string
+}
+
+/**
+ * Validates layout option value
+ */
+function validateLayoutOption(layout: string | undefined): 'source' | 'target' | undefined {
+  if (layout !== undefined && layout !== 'source' && layout !== 'target') {
+    throw new Error(`Invalid layout '${layout}'. Must be 'source' or 'target'`)
+  }
+  return layout as 'source' | 'target' | undefined
+}
+
+/**
+ * Parses comma-separated skipRegistries option
+ */
+function parseSkipRegistriesOption(skipRegistries: string | undefined): string[] | undefined {
+  if (skipRegistries === undefined) return undefined
+  const parsed = skipRegistries.split(',').filter(s => s.trim().length > 0)
+  return parsed
+}
+
+/**
+ * Builds metadata config section
+ */
+function buildMetadataConfig(options: ParsePackageOptions): Partial<PackageCommandConfig> {
+  const pkgVersion = options.pkgVersion || options.version
+  return {
+    ...(options.output && { output: options.output }),
+    ...(options.sourceDir && { sourceDir: options.sourceDir }),
+    ...(options.name && { name: options.name }),
+    ...(pkgVersion && { version: pkgVersion }),
+    ...(options.description && { description: options.description }),
+    ...(options.author && { author: options.author }),
+    ...(options.logLevel && { logLevel: options.logLevel }),
+  }
+}
+
+/**
+ * Builds validation config section
+ */
+function buildValidationConfig(options: ParsePackageOptions): Partial<PackageCommandConfig> {
+  const validatedLayout = validateLayoutOption(options.layout)
+  const parsedSkipRegistries = parseSkipRegistriesOption(options.skipRegistries)
+
+  return {
+    ...(validatedLayout && { layout: validatedLayout }),
+    ...(parsedSkipRegistries !== undefined && { skipRegistries: parsedSkipRegistries }),
+    ...(options.root && { root: options.root }),
+  }
 }
 
 /**
@@ -33,18 +88,9 @@ interface ParsePackageOptions {
  * @returns Typed PackageCommandConfig with package metadata
  */
 function buildPackageConfig(options: ParsePackageOptions): Omit<PackageCommandConfig, 'command'> {
-  // Support both --pkg-version (CLI) and version (programmatic) for package version
-  const pkgVersion = options.pkgVersion || options.version
-  const { output, sourceDir, name, description, author, logLevel } = options
-
   return {
-    ...(output && { output }),
-    ...(sourceDir && { sourceDir }),
-    ...(name && { name }),
-    ...(pkgVersion && { version: pkgVersion }),
-    ...(description && { description }),
-    ...(author && { author }),
-    ...(logLevel && { logLevel }),
+    ...buildMetadataConfig(options),
+    ...buildValidationConfig(options),
   }
 }
 

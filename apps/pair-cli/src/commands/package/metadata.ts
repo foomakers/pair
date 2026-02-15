@@ -40,6 +40,9 @@ export const packageCommandMetadata = {
     'pair package -o dist/kb-v1.0.0.zip            # Package with custom output path',
     'pair package -s ./kb-content -o kb.zip        # Package specific source directory',
     'pair package --name "My KB" --version 1.0.0   # Package with metadata',
+    'pair package --layout source                   # Package from source layout',
+    'pair package --skip-registries adoption        # Skip adoption registry',
+    'pair package --root /my/kb                     # Set custom root for link relativization',
     'pair package --log-level debug                 # Package with detailed logging',
   ],
   options: [
@@ -54,6 +57,18 @@ export const packageCommandMetadata = {
     { flags: '--description <description>', description: 'Package description for manifest' },
     { flags: '--author <author>', description: 'Package author for manifest' },
     {
+      flags: '--layout <mode>',
+      description: 'KB layout to package: source or target (default: target)',
+    },
+    {
+      flags: '--skip-registries <names>',
+      description: 'Comma-separated registry names to exclude from packaging',
+    },
+    {
+      flags: '--root <path>',
+      description: 'Root path for link relativization (default: .pair/)',
+    },
+    {
       flags: '-l, --log-level <level>',
       description: 'Set minimum log level (debug|info|warn|error)',
     },
@@ -62,5 +77,7 @@ export const packageCommandMetadata = {
     'Validates KB structure before packaging (.pair directory required)',
     'Creates manifest with package metadata',
     'Output ZIP includes all KB content and assets',
+    'Target layout transforms target→source based on config mappings',
+    'Absolute links transformed to relative paths (relative to --root)',
   ],
 } as const
