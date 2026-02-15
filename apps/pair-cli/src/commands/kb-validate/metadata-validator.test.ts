@@ -106,7 +106,7 @@ author: Pair Team
       expect(results[0]?.errors[0]).toContain('description')
     })
 
-    it('should detect missing version field', async () => {
+    it('should warn about missing version field', async () => {
       fs.writeFile(
         '/kb/.skills/bootstrap.md',
         `---
@@ -125,12 +125,13 @@ author: Pair Team
         fs,
       })
 
-      expect(results[0]?.valid).toBe(false)
-      expect(results[0]?.errors).toHaveLength(1)
-      expect(results[0]?.errors[0]).toContain('version')
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.errors).toHaveLength(0)
+      expect(results[0]?.warnings).toHaveLength(1)
+      expect(results[0]?.warnings[0]).toContain('version')
     })
 
-    it('should detect missing author field', async () => {
+    it('should warn about missing author field', async () => {
       fs.writeFile(
         '/kb/.skills/bootstrap.md',
         `---
@@ -149,12 +150,13 @@ version: 1.0.0
         fs,
       })
 
-      expect(results[0]?.valid).toBe(false)
-      expect(results[0]?.errors).toHaveLength(1)
-      expect(results[0]?.errors[0]).toContain('author')
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.errors).toHaveLength(0)
+      expect(results[0]?.warnings).toHaveLength(1)
+      expect(results[0]?.warnings[0]).toContain('author')
     })
 
-    it('should detect multiple missing fields', async () => {
+    it('should detect missing required and warn about optional fields', async () => {
       fs.writeFile(
         '/kb/.skills/bootstrap.md',
         `---
@@ -172,10 +174,11 @@ name: bootstrap
       })
 
       expect(results[0]?.valid).toBe(false)
-      expect(results[0]?.errors).toHaveLength(3)
+      expect(results[0]?.errors).toHaveLength(1)
       expect(results[0]?.errors).toContain('Missing required frontmatter field: description')
-      expect(results[0]?.errors).toContain('Missing required frontmatter field: version')
-      expect(results[0]?.errors).toContain('Missing required frontmatter field: author')
+      expect(results[0]?.warnings).toHaveLength(2)
+      expect(results[0]?.warnings).toContain('Missing recommended frontmatter field: version')
+      expect(results[0]?.warnings).toContain('Missing recommended frontmatter field: author')
     })
 
     it('should validate multiple skill files', async () => {
@@ -212,6 +215,8 @@ name: invalid
       expect(results[0]?.valid).toBe(true)
       expect(results[1]?.file).toBe('/kb/.skills/invalid.md')
       expect(results[1]?.valid).toBe(false)
+      expect(results[1]?.errors).toHaveLength(1)
+      expect(results[1]?.warnings).toHaveLength(2)
     })
   })
 

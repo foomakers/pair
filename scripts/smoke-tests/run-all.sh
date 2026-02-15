@@ -54,18 +54,26 @@ fi
 # --- Auto-Detection: Binary ---
 if [ -z "$BINARY_PATH" ]; then
   echo "No --binary specified. Attempting auto-detection..."
-  
+
   # Try standard build output
   DEFAULT_DIST="$REPO_ROOT/apps/pair-cli/dist/cli.js"
-  
+
   if [ -f "$DEFAULT_DIST" ]; then
     echo "Found built CLI at: $DEFAULT_DIST"
     BINARY_PATH="node $DEFAULT_DIST"
   else
-    echo "Warning: Built CLI not found at $DEFAULT_DIST"
-    echo "Will attempt packaging preflight later to provide a packaged CLI for the run."
-    # Do not exit here; the packaging preflight (00-create-install-package.sh) will be run later
-    # and may provide a packaged CLI for the test run.
+    echo "Built CLI not found at $DEFAULT_DIST — attempting build..."
+    if (cd "$REPO_ROOT" && pnpm --filter @pair/pair-cli build 2>&1); then
+      if [ -f "$DEFAULT_DIST" ]; then
+        echo "Build succeeded. Using: $DEFAULT_DIST"
+        BINARY_PATH="node $DEFAULT_DIST"
+      else
+        echo "Warning: Build completed but $DEFAULT_DIST still not found."
+        echo "Will attempt packaging preflight later to provide a packaged CLI for the run."
+      fi
+    else
+      echo "Warning: Build failed. Will attempt packaging preflight later."
+    fi
   fi
 fi
 
@@ -118,19 +126,23 @@ echo "Detailed logs will be available in $TMP_DIR"
 
 # Export variables for scenarios
 # Convert relative binary path to absolute path to ensure it works from any working directory
-if [[ "$BINARY_PATH" == node\ * ]]; then
-  # For "node ./path/to/cli.js" format, extract and convert the path
-  binary_rel_path="${BINARY_PATH#node }"
-  if [[ "$binary_rel_path" != /* ]]; then
-    binary_rel_path="$(pwd)/$binary_rel_path"
-  fi
-  export TEST_BINARY="node $binary_rel_path"
-else
-  # For direct binary path, convert to absolute if relative
-  if [[ "$BINARY_PATH" != /* ]]; then
-    export TEST_BINARY="$(pwd)/$BINARY_PATH"
+# Guard: leave TEST_BINARY empty when BINARY_PATH is unset so the packaging
+# preflight (below) or ensure_packaged_cli in utils.sh can still provide one.
+if [ -n "$BINARY_PATH" ]; then
+  if [[ "$BINARY_PATH" == node\ * ]]; then
+    # For "node ./path/to/cli.js" format, extract and convert the path
+    binary_rel_path="${BINARY_PATH#node }"
+    if [[ "$binary_rel_path" != /* ]]; then
+      binary_rel_path="$(pwd)/$binary_rel_path"
+    fi
+    export TEST_BINARY="node $binary_rel_path"
   else
-    export TEST_BINARY="$BINARY_PATH"
+    # For direct binary path, convert to absolute if relative
+    if [[ "$BINARY_PATH" != /* ]]; then
+      export TEST_BINARY="$(pwd)/$BINARY_PATH"
+    else
+      export TEST_BINARY="$BINARY_PATH"
+    fi
   fi
 fi
 export KB_SOURCE_PATH="$KB_SOURCE" # Can be empty
@@ -177,6 +189,19 @@ else
   else
     echo "Packaging script not present: $PACKAGING_SCRIPT"
   fi
+fi
+
+# --- Final guard: TEST_BINARY must be set and must not be a directory ---
+if [ -z "${TEST_BINARY:-}" ]; then
+  echo "Error: No usable CLI binary found. Either:"
+  echo "  1. Build the project: pnpm --filter @pair/pair-cli build"
+  echo "  2. Provide --binary <path>"
+  exit 1
+fi
+if [ -d "$TEST_BINARY" ]; then
+  echo "Error: TEST_BINARY points to a directory ($TEST_BINARY), not a file."
+  echo "This usually means the build step did not produce apps/pair-cli/dist/cli.js."
+  exit 1
 fi
 
 # --- Reporting Setup ---

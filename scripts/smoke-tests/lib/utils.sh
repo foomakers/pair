@@ -34,7 +34,6 @@ setup_workspace() {
 #   run_pair install ...
 #   run_pair package ...
 run_pair() {
-  local cmd_output_file="$TMP_DIR/last_cmd_output.log"
   local cmd_status=0
 
   # If TEST_BINARY not set, attempt to ensure packaged CLI exists for standalone scenario runs
@@ -42,6 +41,10 @@ run_pair() {
     log_info "TEST_BINARY not set; attempting packaging preflight"
     ensure_packaged_cli || true
   fi
+
+  # Evaluate cmd_output_file AFTER ensure_packaged_cli so TMP_DIR is set
+  ensure_tmp_dir
+  local cmd_output_file="$TMP_DIR/last_cmd_output.log"
 
   # Normalize TEST_BINARY to an absolute CLI path when possible so tests that expect
   # a local `apps/pair-cli/dist/cli.js` file still work. If TEST_BINARY looks like
@@ -56,7 +59,8 @@ run_pair() {
 
   # If the binary path exists as a file, create a workspace-local symlink so relative
   # requires like "apps/pair-cli/dist/cli.js" resolve in the test workspace.
-  if [ -n "$BIN_PATH" ] && [ -f "$BIN_PATH" ]; then
+  # GUARD: never create this symlink inside the actual repo tree — only in test workspaces.
+  if [ -n "$BIN_PATH" ] && [ -f "$BIN_PATH" ] && [[ "$PWD" == "${TMP_DIR}"* ]]; then
     mkdir -p "$PWD/apps/pair-cli/dist"
     ln -sf "$BIN_PATH" "$PWD/apps/pair-cli/dist/cli.js"
   fi

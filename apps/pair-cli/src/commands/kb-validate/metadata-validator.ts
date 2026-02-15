@@ -21,9 +21,14 @@ export interface MetadataValidationOptions {
 }
 
 /**
- * Required frontmatter fields for SKILL.md files
+ * Required frontmatter fields for SKILL.md files (per agent skills spec)
  */
-const REQUIRED_SKILL_FRONTMATTER_FIELDS = ['name', 'description', 'version', 'author'] as const
+const REQUIRED_SKILL_FRONTMATTER_FIELDS = ['name', 'description'] as const
+
+/**
+ * Recommended (but optional) frontmatter fields for SKILL.md files
+ */
+const RECOMMENDED_SKILL_FRONTMATTER_FIELDS = ['version', 'author'] as const
 
 /**
  * Validates metadata in skills and adoption files
@@ -77,6 +82,13 @@ async function validateSkillFile(
   for (const field of REQUIRED_SKILL_FRONTMATTER_FIELDS) {
     if (!frontmatter[field]) {
       errors.push(`Missing required frontmatter field: ${field}`)
+    }
+  }
+
+  // Check recommended fields
+  for (const field of RECOMMENDED_SKILL_FRONTMATTER_FIELDS) {
+    if (!frontmatter[field]) {
+      warnings.push(`Missing recommended frontmatter field: ${field}`)
     }
   }
 
