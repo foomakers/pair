@@ -70,7 +70,6 @@ async function copyRegistrySources(
       throw new Error(`Registry source contains no files: ${registry.source}`)
     }
 
-    // Resolve base dir(s) for computing relative paths
     const layoutPaths = resolveLayoutPaths({
       name: '',
       registry,
@@ -79,30 +78,45 @@ async function copyRegistrySources(
       fs: fsService,
     })
 
-    // Copy each file individually (applying link rewriting for .md files)
-    for (const sourceFilePath of files) {
-      // Find which layout path this file belongs to
-      const basePath = layoutPaths.find(p => sourceFilePath.startsWith(p + '/') || sourceFilePath === p)
-      const baseForRelative = basePath || path.join(options.projectRoot, registry.source)
-
-      const relativePath = path.relative(baseForRelative, sourceFilePath)
-      const targetPath = path.join(tempDir, registry.source, relativePath)
-
-      await fsService.mkdir(path.dirname(targetPath), { recursive: true })
-
-      let content = await fsService.readFile(sourceFilePath)
-
-      if (options.root && sourceFilePath.endsWith('.md')) {
-        content = await rewriteFileLinks({
-          filePath: sourceFilePath,
-          root: options.root,
-          fs: fsService,
-        })
-      }
-
-      await fsService.writeFile(targetPath, content)
+    for (const filePath of files) {
+      await copyFileToTemp({
+        filePath,
+        layoutPaths,
+        registry,
+        tempDir,
+        options,
+        fsService,
+      })
     }
   }
+}
+
+interface CopyFileOptions {
+  filePath: string
+  layoutPaths: string[]
+  registry: RegistryConfig
+  tempDir: string
+  options: ZipOptions
+  fsService: FileSystemService
+}
+
+async function copyFileToTemp(opts: CopyFileOptions): Promise<void> {
+  const { filePath, layoutPaths, registry, tempDir, options, fsService } = opts
+  const basePath = layoutPaths.find(p => filePath.startsWith(p + '/') || filePath === p)
+  const baseForRelative = basePath || path.join(options.projectRoot, registry.source)
+
+  const relativePath = path.relative(baseForRelative, filePath)
+  const targetPath = path.join(tempDir, registry.source, relativePath)
+
+  await fsService.mkdir(path.dirname(targetPath), { recursive: true })
+
+  let content = await fsService.readFile(filePath)
+
+  if (options.root && filePath.endsWith('.md')) {
+    content = await rewriteFileLinks({ filePath, root: options.root, fs: fsService })
+  }
+
+  await fsService.writeFile(targetPath, content)
 }
 
 async function cleanupOnError(outputPath: string, fsService: FileSystemService): Promise<void> {

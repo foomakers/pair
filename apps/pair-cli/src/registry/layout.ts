@@ -269,7 +269,9 @@ export function validateLayoutOption(layout: string | undefined): LayoutMode | u
 /**
  * Parses comma-separated skipRegistries option
  */
-export function parseSkipRegistriesOption(skipRegistries: string | undefined): string[] | undefined {
+export function parseSkipRegistriesOption(
+  skipRegistries: string | undefined,
+): string[] | undefined {
   if (skipRegistries === undefined) return undefined
   return skipRegistries.split(',').filter(s => s.trim().length > 0)
 }

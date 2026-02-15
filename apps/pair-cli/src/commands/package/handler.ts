@@ -66,7 +66,14 @@ async function createAndReportZip(params: {
   logger.debug(`   Packaging ${registries.length} registries`)
 
   await createPackageZip(
-    { projectRoot, registries, manifest, outputPath, ...(config.root && { root: config.root }), ...(config.layout && { layout: config.layout }) },
+    {
+      projectRoot,
+      registries,
+      manifest,
+      outputPath,
+      ...(config.root && { root: config.root }),
+      ...(config.layout && { layout: config.layout }),
+    },
     fs,
   )
 
