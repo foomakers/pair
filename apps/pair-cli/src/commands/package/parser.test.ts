@@ -45,4 +45,98 @@ describe('parsePackageCommand', () => {
       "Command 'package' does not accept positional arguments: pos",
     )
   })
+
+  describe('layout flag', () => {
+    it('should parse --layout source', () => {
+      const config = parsePackageCommand({ layout: 'source' })
+
+      expect(config).toEqual({
+        command: 'package',
+        layout: 'source',
+      })
+    })
+
+    it('should parse --layout target', () => {
+      const config = parsePackageCommand({ layout: 'target' })
+
+      expect(config).toEqual({
+        command: 'package',
+        layout: 'target',
+      })
+    })
+
+    it('should throw on invalid layout value', () => {
+      expect(() => parsePackageCommand({ layout: 'invalid' })).toThrow(
+        "Invalid layout 'invalid'. Must be 'source' or 'target'",
+      )
+    })
+  })
+
+  describe('skip-registries flag', () => {
+    it('should parse comma-separated registry names', () => {
+      const config = parsePackageCommand({ skipRegistries: 'adoption,agents' })
+
+      expect(config).toEqual({
+        command: 'package',
+        skipRegistries: ['adoption', 'agents'],
+      })
+    })
+
+    it('should handle single registry', () => {
+      const config = parsePackageCommand({ skipRegistries: 'skills' })
+
+      expect(config).toEqual({
+        command: 'package',
+        skipRegistries: ['skills'],
+      })
+    })
+
+    it('should handle empty string', () => {
+      const config = parsePackageCommand({ skipRegistries: '' })
+
+      expect(config).toEqual({
+        command: 'package',
+        skipRegistries: [],
+      })
+    })
+  })
+
+  describe('root flag', () => {
+    it('should parse --root with absolute path', () => {
+      const config = parsePackageCommand({ root: '/custom/kb' })
+
+      expect(config).toEqual({
+        command: 'package',
+        root: '/custom/kb',
+      })
+    })
+
+    it('should parse --root with relative path', () => {
+      const config = parsePackageCommand({ root: './my-kb' })
+
+      expect(config).toEqual({
+        command: 'package',
+        root: './my-kb',
+      })
+    })
+  })
+
+  describe('combined flags', () => {
+    it('should parse multiple new flags together', () => {
+      const config = parsePackageCommand({
+        layout: 'source',
+        skipRegistries: 'adoption,skills',
+        root: './kb',
+        output: 'dist/kb.zip',
+      })
+
+      expect(config).toEqual({
+        command: 'package',
+        layout: 'source',
+        skipRegistries: ['adoption', 'skills'],
+        root: './kb',
+        output: 'dist/kb.zip',
+      })
+    })
+  })
 })

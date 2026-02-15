@@ -14,6 +14,7 @@ import {
   postCopyOps,
   applySkillRefsToNonSkillRegistries,
   handleBackupRollback,
+  resolveEffectiveDatasetRoot,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
@@ -161,14 +162,6 @@ async function logDatasetEntries(
   } catch (e) {
     pushLog('debug', `Failed to read dataset path ${datasetPath}: ${String(e)}`)
   }
-}
-
-function resolveEffectiveDatasetRoot(
-  config: RegistryConfig,
-  baseTarget: string,
-  datasetRoot: string,
-): string {
-  return config.flatten || config.prefix ? baseTarget : datasetRoot
 }
 
 interface UpdateRegistryCtx {

@@ -4,7 +4,12 @@ import { loadConfigWithOverrides } from '#config'
 import { validatePackageStructure } from './validators'
 import { generateManifestMetadata } from './metadata'
 import { createPackageZip } from './zip-creator'
-import { extractRegistries, type RegistryConfig } from '#registry'
+import {
+  extractRegistries,
+  filterRegistries,
+  validateSkipList,
+  type RegistryConfig,
+} from '#registry'
 import path from 'path'
 import { logger, setLogLevel } from '@pair/content-ops'
 
@@ -55,12 +60,22 @@ async function createAndReportZip(params: {
   outputPath: string
   fs: FileSystemService
 }) {
-  const { projectRoot, registries, manifest, outputPath, fs } = params
+  const { config, projectRoot, registries, manifest, outputPath, fs } = params
 
   logger.debug('🗜️  Creating ZIP archive...')
   logger.debug(`   Packaging ${registries.length} registries`)
 
-  await createPackageZip({ projectRoot, registries, manifest, outputPath }, fs)
+  await createPackageZip(
+    {
+      projectRoot,
+      registries,
+      manifest,
+      outputPath,
+      ...(config.root && { root: config.root }),
+      ...(config.layout && { layout: config.layout }),
+    },
+    fs,
+  )
 
   const stats = await fs.stat(outputPath)
   const sizeKB = (stats.size / 1024).toFixed(2)
@@ -100,7 +115,17 @@ export async function handlePackageCommand(
   const result = await loadAndValidate(config, fs, projectRoot)
 
   logger.debug('📋 Generating manifest metadata...')
-  const registries = Object.values(extractRegistries(result.config))
+  const allRegistries = extractRegistries(result.config)
+
+  // Apply skip-registries filter
+  if (config.skipRegistries) {
+    const invalid = validateSkipList(allRegistries, config.skipRegistries)
+    for (const name of invalid) {
+      logger.warn(`Registry '${name}' not found in config, ignoring`)
+    }
+  }
+  const filtered = filterRegistries(allRegistries, config.skipRegistries)
+  const registries = Object.values(filtered)
   const registryNames = registries.map(r => r.source || '').filter(Boolean)
   const manifest = generateManifestMetadata(registryNames, buildCliParams(config))
 

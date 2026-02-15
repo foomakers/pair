@@ -67,11 +67,18 @@ Move a folder `foo` into `bar/baz` (example usage of the move script):
 pnpm --filter @pair/knowledge-hub run transfer:dataset -- foo bar/baz
 ```
 
-Package the knowledge base (from a repo with .pair/ installed):
+Validate and package the knowledge base (from a repo with .pair/ installed):
 
 ```bash
+# Validate KB structure, links, and metadata
+pair kb validate
+pair kb validate --strict
+pair kb validate --skip-registries adoption
+
+# Package KB for distribution
 pair kb package
 pair kb package --output custom-package.zip
+pair kb package --skip-registries github
 pair kb package --verbose
 ```
 

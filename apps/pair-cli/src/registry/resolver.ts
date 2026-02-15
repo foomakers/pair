@@ -1,4 +1,5 @@
 import { FileSystemService, Behavior, type TargetConfig } from '@pair/content-ops'
+import { getCanonicalTarget } from './layout'
 
 /**
  * Unified configuration for an individual asset registry.
@@ -86,7 +87,7 @@ export function resolveTarget(
   fs: FileSystemService,
   baseTarget?: string,
 ): string {
-  const canonical = config.targets.find(t => t.mode === 'canonical')
+  const canonical = getCanonicalTarget(config.targets)
   const relativePath = canonical ? canonical.path : name
   return baseTarget ? fs.resolve(baseTarget, relativePath) : fs.resolve(relativePath)
 }

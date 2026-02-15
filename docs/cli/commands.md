@@ -266,6 +266,8 @@ pair package [options]
 | `--version <version>`         |                   | Package version for manifest                                                                                      |
 | `--description <description>` |                   | Package description for manifest                                                                                  |
 | `--author <author>`           |                   | Package author for manifest                                                                                       |
+| `--skip-registries <list>`    |                   | Comma-separated registry names to exclude from packaging                                                          |
+| `--root <path>`               |                   | Custom root path for link relativization (default: `.pair/`)                                                      |
 | `--log-level <level>`         | `-l, --log-level` | Set logging level for this command (trace, debug, info, warn, error). Use `--log-level debug` for detailed output |
 
 ### Examples
@@ -311,16 +313,117 @@ pair package \
 pair package --verbose
 ```
 
+**Package excluding specific registries:**
+
+```bash
+pair package --skip-registries adoption,github
+```
+
+**Package with custom link root:**
+
+```bash
+pair package --root .custom/root/
+
 ### Usage Notes
 
 - **Validation:** Validates KB structure before packaging (`.pair` directory required).
 - **Manifest:** Creates `manifest.json` with package metadata and timestamp.
 - **Output structure:** ZIP includes all KB content, assets, and manifest.
+- **Link rewriting:** Transforms absolute links to relative paths for portability.
+- **Skip registries:** Use `--skip-registries` to exclude specific registries from the package.
+- **Custom root:** Use `--root` to specify link relativization base (default `.pair/`).
 - **Size warnings:** Displays warning if package exceeds 100MB.
 - **Exit codes:**
   - `0` - Success
   - `1` - Validation error
   - `2` - Packaging error
+
+---
+
+## kb validate
+
+Validate KB structure, links, and metadata using layout-aware validation.
+
+### Usage
+
+```bash
+pair kb validate [path] [options]
+```
+
+### Arguments
+
+| Argument | Description                                       |
+| -------- | ------------------------------------------------- |
+| `path`   | KB directory path to validate (default: current) |
+
+### Options
+
+| Option                     | Description                                                 |
+| -------------------------- | ----------------------------------------------------------- |
+| `--layout <mode>`          | Layout mode: `source` or `target` (default: `target`)      |
+| `--strict`                 | Enable external link checking via HTTP HEAD (slow)         |
+| `--ignore-config`          | Skip config-based registry structure validation            |
+| `--skip-registries <list>` | Comma-separated registry names to exclude from validation  |
+| `--log-level <level>`      | Set logging level (trace, debug, info, warn, error)        |
+
+### Examples
+
+**Validate current directory:**
+
+```bash
+pair kb validate
+```
+
+**Validate specific KB path:**
+
+```bash
+pair kb validate /path/to/kb
+```
+
+**Validate source layout:**
+
+```bash
+pair kb validate --layout source
+```
+
+**Validate with external link checking:**
+
+```bash
+pair kb validate --strict
+```
+
+**Validate excluding specific registries:**
+
+```bash
+pair kb validate --skip-registries adoption,github
+```
+
+**Validate without config checks:**
+
+```bash
+pair kb validate --ignore-config
+```
+
+**Validate with debug logging:**
+
+```bash
+pair kb validate --log-level debug
+```
+
+### Usage Notes
+
+- **Layout modes:**
+  - `target`: Validates KB at target paths (`.claude/skills`, `.pair/adoption`). Skips symlink targets.
+  - `source`: Validates KB at source paths (`.skills`, `.pair/adoption`).
+- **Structure validation:** Checks registry paths exist and match config (unless `--ignore-config`).
+- **Link validation:** Reports broken internal links and missing files.
+- **Metadata validation:** Validates SKILL.md frontmatter and adoption file structure.
+- **Strict mode:** Performs HTTP HEAD requests on external links (slow, requires network).
+- **Skip registries:** Use `--skip-registries` to exclude specific registries from validation.
+- **Exit codes:**
+  - `0` - All checks pass
+  - `1` - Validation errors found
+  - `2` - Critical structure failure
 
 ---
 

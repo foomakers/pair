@@ -65,7 +65,17 @@ Simulates a real KB release and update flow in an **Offline** environment:
 6.  **Client Update**: The user updates their installation using the v2 package.
 7.  **Verification**: Check that files were updated correctly.
 
-### 5. Configuration Validation (`scenarios/validate-config.sh`)
+### 6. KB Validation (`scenarios/kb-validate.sh`)
+
+Verifies the `pair kb-validate` command:
+
+- **Source Layout**: Validates real KB dataset with `--layout source`.
+- **Target Layout**: Installs KB then validates with `--layout target` (default).
+- **Skip Registries**: Validates with `--skip-registries` to exclude specific registries.
+- **Ignore Config**: Validates with `--ignore-config` to skip structure checks.
+- **Failure Detection**: Verifies validation fails on a workspace with missing registry paths.
+
+### 7. Configuration Validation (`scenarios/validate-config.sh`)
 
 Verifies the `pair validate-config` command:
 

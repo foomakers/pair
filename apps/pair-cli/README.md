@@ -105,13 +105,14 @@ pair-cli update
 
 ## Commands
 
-| Command                 | Description                                       | Reference                                                   |
-| ----------------------- | ------------------------------------------------- | ----------------------------------------------------------- |
-| `install [target]`      | Install documentation and assets to target folder | [CLI Reference](../../docs/cli/commands.md#install)         |
-| `update [target]`       | Update existing documentation and assets          | [CLI Reference](../../docs/cli/commands.md#update)          |
-| `update-link [options]` | Validate and update links in installed KB content | [CLI Reference](../../docs/cli/commands.md#update-link)     |
-| `package [options]`     | Package KB content into distributable ZIP file    | [CLI Reference](../../docs/cli/commands.md#package)         |
-| `validate-config`       | Validate asset registry configuration             | [CLI Reference](../../docs/cli/commands.md#validate-config) |
+| Command                 | Description                                            | Reference                                                   |
+| ----------------------- | ------------------------------------------------------ | ----------------------------------------------------------- |
+| `install [target]`      | Install documentation and assets to target folder      | [CLI Reference](../../docs/cli/commands.md#install)         |
+| `update [target]`       | Update existing documentation and assets               | [CLI Reference](../../docs/cli/commands.md#update)          |
+| `update-link [options]` | Validate and update links in installed KB content      | [CLI Reference](../../docs/cli/commands.md#update-link)     |
+| `kb validate [options]` | Validate KB structure, links, and metadata             | [CLI Reference](../../docs/cli/commands.md#kb-validate)     |
+| `package [options]`     | Package KB content into distributable ZIP file         | [CLI Reference](../../docs/cli/commands.md#package)         |
+| `validate-config`       | Validate asset registry configuration                  | [CLI Reference](../../docs/cli/commands.md#validate-config) |
 
 **Quick Help**: Run `pair-cli <command> --help` for detailed syntax, options, and examples.
 
@@ -262,6 +263,22 @@ pair-cli update github:.github
 pair-cli install --config ./my-config.json
 ```
 
+### Validate KB structure
+
+```bash
+# Validate KB structure, links, and metadata
+pair kb validate
+
+# Validate with external link checking (slow)
+pair kb validate --strict
+
+# Validate source layout
+pair kb validate --layout source
+
+# Skip specific registries
+pair kb validate --skip-registries adoption,github
+```
+
 ### Validate configuration
 
 ```bash
@@ -282,6 +299,12 @@ pair package --output custom/path/output.zip
 # Package with metadata
 pair package --name "My KB" --version "1.0.0" --author "Team Name"
 
+# Package excluding registries
+pair package --skip-registries adoption,github
+
+# Package with custom link root
+pair package --root .custom/root/
+
 # Package with debug-level progress output
 pair package --log-level debug
 ```
@@ -290,6 +313,7 @@ The `package` command:
 
 - Validates `.pair/` structure against `config.json` registries
 - Creates ZIP archive with `manifest.json` metadata
+- Rewrites absolute links to relative paths for portability
 - Displays file size and warns if >100MB
 - Exit codes: 0 (success), 1 (validation error), 2 (packaging error)
 

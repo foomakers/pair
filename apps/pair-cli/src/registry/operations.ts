@@ -13,6 +13,7 @@ import {
 import { type SyncOptions, defaultSyncOptions } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
 import { isAbsolute, dirname, relative } from 'path'
+import { getCanonicalTarget } from './layout'
 
 /**
  * Performs the actual copy/mirror operation for a registry.
@@ -198,7 +199,7 @@ export async function distributeToSecondaryTargets(params: {
 }): Promise<void> {
   const { fileService, sourcePath, targets, baseTarget } = params
 
-  const canonical = targets.find(t => t.mode === 'canonical')
+  const canonical = getCanonicalTarget(targets)
   if (!canonical) return
 
   const canonicalPath = isAbsolute(canonical.path)
@@ -245,7 +246,7 @@ export async function postCopyOps(ctx: {
   baseTarget: string
 }): Promise<void> {
   const { fs, registryConfig, effectiveTarget, datasetPath, baseTarget } = ctx
-  const canonicalTarget = registryConfig.targets.find(t => t.mode === 'canonical')
+  const canonicalTarget = getCanonicalTarget(registryConfig.targets)
   if (await fs.exists(effectiveTarget)) {
     const stat = await fs.stat(effectiveTarget)
     if (!stat.isDirectory()) {

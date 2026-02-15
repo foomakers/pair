@@ -98,6 +98,8 @@ export interface PackageOptions {
   version?: string // --version <version>
   description?: string // --description <description>
   author?: string // --author <author>
+  skipRegistries?: string[] // --skip-registries <list> (comma-separated)
+  root?: string // --root <path> (default: .pair/)
 }
 
 // Validation constraints
@@ -108,6 +110,32 @@ interface PackageConstraints {
   outputDirWritable: true
   // KB structure validation required before packaging
   requiresValidKBStructure: true
+  // root must be relative path within KB
+  rootMustBeRelative: true
+}
+```
+
+### KB Validate Command
+
+```typescript
+export interface KbValidateOptions {
+  path?: string // KB directory path (default: cwd)
+  layout?: 'source' | 'target' // Layout mode (default: target)
+  strict?: boolean // Enable external link checking via HTTP HEAD
+  ignoreConfig?: boolean // Skip config-based registry structure checks
+  skipRegistries?: string[] // --skip-registries <list> (comma-separated)
+}
+
+// Validation constraints
+interface KbValidateConstraints {
+  // path must contain .pair directory
+  requiresPairDirectory: true
+  // layout must be 'source' or 'target'
+  layoutEnum: ['source', 'target']
+  // strict mode performs HTTP HEAD on external links (slow)
+  strictRequiresNetwork: true
+  // skipRegistries names must exist in config
+  skipRegistriesValidated: true
 }
 ```
 
@@ -518,6 +546,16 @@ enum PackageExitCode {
 enum ValidateConfigExitCode {
   SUCCESS = 0, // Config valid
   VALIDATION_ERROR = 1, // Config has errors
+}
+```
+
+#### KB Validate Command
+
+```typescript
+enum KbValidateExitCode {
+  SUCCESS = 0, // KB structure, links, and metadata valid
+  VALIDATION_ERROR = 1, // Structure errors, broken links, or metadata issues
+  STRUCTURE_ERROR = 2, // Critical structure validation failure
 }
 ```
 

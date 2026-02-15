@@ -1,13 +1,23 @@
+import { validateLayoutOption, parseSkipRegistriesOption } from '#registry'
+
 /**
  * Configuration for kb-validate command
  */
 export interface KbValidateCommandConfig {
   command: 'kb-validate'
   path?: string
+  layout?: 'source' | 'target'
+  strict?: boolean
+  ignoreConfig?: boolean
+  skipRegistries?: string[]
 }
 
 interface ParseKbValidateOptions {
   path?: string
+  layout?: string
+  strict?: boolean
+  ignoreConfig?: boolean
+  skipRegistries?: string
 }
 
 /**
@@ -27,10 +37,18 @@ export function parseKbValidateCommand(
       `Command 'kb-validate' does not accept positional arguments: ${args.join(', ')}`,
     )
   }
-  const { path } = options
+
+  const { path, layout, strict, ignoreConfig, skipRegistries } = options
+
+  const validatedLayout = validateLayoutOption(layout)
+  const parsedSkipRegistries = parseSkipRegistriesOption(skipRegistries)
 
   return {
     command: 'kb-validate',
     ...(path && { path }),
+    ...(validatedLayout && { layout: validatedLayout }),
+    ...(strict !== undefined && { strict }),
+    ...(ignoreConfig !== undefined && { ignoreConfig }),
+    ...(parsedSkipRegistries !== undefined && { skipRegistries: parsedSkipRegistries }),
   }
 }

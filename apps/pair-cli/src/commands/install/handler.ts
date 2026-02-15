@@ -15,6 +15,7 @@ import {
   buildCopyOptions,
   postCopyOps,
   applySkillRefsToNonSkillRegistries,
+  resolveEffectiveDatasetRoot,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
@@ -123,10 +124,7 @@ async function installRegistry(ctx: {
   await ensureDir(fs, dirname(effectiveTarget))
   const copyOptions = buildCopyOptions(registryConfig)
 
-  // For flatten+prefix registries (skills), use baseTarget as the effective
-  // datasetRoot so that link re-rooting correctly maps source paths to target paths.
-  const effectiveDatasetRoot =
-    registryConfig.flatten || registryConfig.prefix ? baseTarget : datasetRoot
+  const effectiveDatasetRoot = resolveEffectiveDatasetRoot(registryConfig, baseTarget, datasetRoot)
 
   presenter.registryStart({
     name: registryName,
