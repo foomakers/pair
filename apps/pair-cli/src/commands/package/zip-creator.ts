@@ -57,11 +57,15 @@ async function computeContentChecksum(
   const hash = createHash('sha256')
   const files = await collectAllFiles(tempDir, fsService)
 
-  // Sort files for deterministic order
-  files.sort()
+  // Convert to relative paths and sort for deterministic order
+  // CRITICAL: Must use localeCompare to match verification logic (checksum-check.ts)
+  const relativePaths = files
+    .map(f => path.relative(tempDir, f))
+    .sort((a, b) => a.localeCompare(b))
 
-  for (const file of files) {
-    const content = fsService.readFileSync(file)
+  for (const relativePath of relativePaths) {
+    const absolutePath = path.join(tempDir, relativePath)
+    const content = fsService.readFileSync(absolutePath)
     hash.update(content)
   }
 

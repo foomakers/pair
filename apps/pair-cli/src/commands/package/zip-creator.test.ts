@@ -521,6 +521,49 @@ describe('createPackageZip - content checksum', () => {
     }
   })
 
+  it('checksum calculation matches verification logic (regression test for #76)', async () => {
+    // This test reproduces the issue found in lifecycle-kb.sh smoke test:
+    // Package creation and verification must use consistent checksum calculation
+    const testDir = path.join(os.tmpdir(), `test-checksum-regression-${Date.now()}`)
+    const projectRoot = path.join(testDir, 'project')
+    const outputPath = path.join(testDir, 'test-package.zip')
+
+    try {
+      // Setup - create multiple files in nested structure to test path handling
+      fs.mkdirSync(path.join(projectRoot, '.pair/knowledge/sub'), { recursive: true })
+      fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/doc.md'), 'content 1')
+      fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/sub/nested.md'), 'content 2')
+      fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/README.md'), 'content 3')
+
+      const { fileSystemService } = await import('@pair/content-ops')
+      const realFs = fileSystemService
+
+      const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
+      const manifest: ManifestMetadata = {
+        name: 'regression-test-kb',
+        version: '1.0.0',
+        created_at: '2025-11-30T00:00:00Z',
+        registries: ['knowledge'],
+      }
+
+      // Create package (this embeds contentChecksum in manifest)
+      await createPackageZip({ projectRoot, registries, manifest, outputPath }, realFs)
+      expect(fs.existsSync(outputPath)).toBe(true)
+
+      // Verify package - this must recalculate checksum and match
+      const { verifyPackage } = await import('../kb-verify/verify-package.js')
+      const result = await verifyPackage(outputPath, realFs)
+
+      // This should pass - both creation and verification use localeCompare for consistent sorting
+      expect(result.valid).toBe(true)
+      expect(result.errors).toEqual([])
+    } finally {
+      if (fs.existsSync(testDir)) {
+        fs.rmSync(testDir, { recursive: true, force: true })
+      }
+    }
+  })
+
   it('corrupted package fails verification (smoke test)', async () => {
     const testDir = path.join(os.tmpdir(), `test-corrupt-${Date.now()}`)
     const projectRoot = path.join(testDir, 'project')
