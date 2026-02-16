@@ -14,7 +14,6 @@ import {
 export interface KBManagerDeps {
   httpClient: HttpClientService
   fs: FileSystemService
-  extract?: (zipPath: string, targetPath: string) => Promise<void>
   progressWriter?: ProgressWriter
   isTTY?: boolean
   customUrl?: string
@@ -30,7 +29,6 @@ function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
   const result: InstallerDeps = {
     httpClient: deps.httpClient,
   }
-  if (deps.extract) result.extract = deps.extract
   if (deps.progressWriter) result.progressWriter = deps.progressWriter
   if (typeof deps.isTTY !== 'undefined') result.isTTY = deps.isTTY
 

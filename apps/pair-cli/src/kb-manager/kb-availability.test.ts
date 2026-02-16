@@ -10,8 +10,6 @@ import {
 } from '@pair/content-ops'
 import { ensureKBAvailable } from './kb-availability'
 
-const mockExtract = vi.fn()
-
 describe('KB Manager - ensureKBAvailable - Cache Hit', () => {
   const testVersion = '0.2.0'
   const expectedCachePath = join(homedir(), '.pair', 'kb', testVersion)
@@ -37,11 +35,16 @@ describe('KB Manager - ensureKBAvailable - Cache Hit', () => {
 describe('KB Manager - ensureKBAvailable - Cache Miss', () => {
   it('should download and extract KB when cache miss', async () => {
     vi.clearAllMocks()
-    mockExtract.mockReset().mockResolvedValue(undefined)
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
+
+    // Mock fs.extractZip to simulate extraction
+    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
+      await fs.writeFile(join(targetPath, 'manifest.json'), '{"version":"0.2.0"}')
+      await fs.writeFile(join(targetPath, '.pair/knowledge/test.md'), 'test')
+    })
 
     // Mock HEAD request for content-length
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
@@ -52,20 +55,14 @@ describe('KB Manager - ensureKBAvailable - Cache Miss', () => {
       buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
 
-    mockExtract.mockImplementation(async (_zipPath: string, targetPath: string) => {
-      fs.writeFile(join(targetPath, 'manifest.json'), '{"version":"0.2.0"}')
-      fs.writeFile(join(targetPath, '.pair/knowledge/test.md'), 'test')
-    })
-
     const httpClient = new MockHttpClientService()
     httpClient.setRequestResponses([headResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
-    const result = await ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract })
+    const result = await ensureKBAvailable(testVersion, { httpClient, fs })
 
     // When the installed KB contains a .pair directory installers return the
     // dataset root (cachePath/.pair)
     expect(result).toBe(join(homedir(), '.pair', 'kb', testVersion, '.pair'))
-    expect(mockExtract).toHaveBeenCalled()
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('KB not found, downloading'))
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('KB v0.2.0 installed'))
     expect(fs.existsSync(join(homedir(), '.pair', 'kb', testVersion))).toBe(true)
@@ -78,10 +75,12 @@ describe('KB Manager - ensureKBAvailable - Cache Miss', () => {
 describe('KB Manager - GitHub URL construction', () => {
   it('should construct correct GitHub release URL', async () => {
     vi.clearAllMocks()
-    mockExtract.mockReset().mockResolvedValue(undefined)
 
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
+
+    // Mock fs.extractZip to avoid parsing "fake zip data"
+    vi.spyOn(fs, 'extractZip').mockResolvedValue(undefined)
 
     // Mock HEAD request for content-length
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
@@ -95,16 +94,17 @@ describe('KB Manager - GitHub URL construction', () => {
     const httpClient = new MockHttpClientService()
     httpClient.setRequestResponses([headResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
-    await ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract })
+    await ensureKBAvailable(testVersion, { httpClient, fs })
   })
 })
 
 describe('KB Manager - Version handling', () => {
   it('should strip leading v from version in asset name but keep in tag', async () => {
     vi.clearAllMocks()
-    mockExtract.mockReset().mockResolvedValue(undefined)
 
     const fs = new InMemoryFileSystemService({}, '/', '/')
+    vi.spyOn(fs, 'extractZip').mockResolvedValue(undefined)
+
     const versionWithV = 'v1.2.3'
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
@@ -117,15 +117,14 @@ describe('KB Manager - Version handling', () => {
     const httpClient = new MockHttpClientService()
     httpClient.setRequestResponses([headResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
-    await ensureKBAvailable(versionWithV, { httpClient, fs, extract: mockExtract })
-    await ensureKBAvailable(versionWithV, { httpClient, fs, extract: mockExtract })
+    await ensureKBAvailable(versionWithV, { httpClient, fs })
+    await ensureKBAvailable(versionWithV, { httpClient, fs })
   })
 })
 
 describe('KB Manager - 404 error handling', () => {
   it('should throw error with GitHub URL on 404 not found', async () => {
     vi.clearAllMocks()
-    mockExtract.mockReset()
 
     const testVersion404 = '0.0.404-test'
     const fs = new InMemoryFileSystemService({}, '/', '/')
@@ -139,7 +138,7 @@ describe('KB Manager - 404 error handling', () => {
     httpClient.setRequestResponses([headResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
     await expect(
-      ensureKBAvailable(testVersion404, { httpClient, fs, extract: mockExtract }),
+      ensureKBAvailable(testVersion404, { httpClient, fs }),
     ).rejects.toThrow(/KB v0\.0\.404 not found \(404\).*github\.com/s)
   })
 })
@@ -147,7 +146,6 @@ describe('KB Manager - 404 error handling', () => {
 describe('KB Manager - 403 error handling', () => {
   it('should throw error with GitHub URL on 403 forbidden', async () => {
     vi.clearAllMocks()
-    mockExtract.mockReset()
 
     const testVersion403 = '0.0.403-test'
     const fs = new InMemoryFileSystemService({}, '/', '/')
@@ -163,7 +161,7 @@ describe('KB Manager - 403 error handling', () => {
     httpClient.setRequestResponses([defaultHeadResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
     await expect(
-      ensureKBAvailable(testVersion403, { httpClient, fs, extract: mockExtract }),
+      ensureKBAvailable(testVersion403, { httpClient, fs }),
     ).rejects.toThrow(/Access denied \(403\).*github\.com/s)
   })
 })
@@ -171,7 +169,6 @@ describe('KB Manager - 403 error handling', () => {
 describe('KB Manager - Network failure', () => {
   it('should throw error on network failure', async () => {
     vi.clearAllMocks()
-    mockExtract.mockReset()
 
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
@@ -185,7 +182,6 @@ describe('KB Manager - Network failure', () => {
       ensureKBAvailable(testVersion, {
         httpClient,
         fs,
-        extract: mockExtract,
         retryOptions: { maxRetries: 0 },
       }),
     ).rejects.toThrow(/network/)
@@ -195,7 +191,6 @@ describe('KB Manager - Network failure', () => {
 describe('KB Manager - ZIP cleanup', () => {
   it('should cleanup ZIP file on extraction failure', async () => {
     vi.clearAllMocks()
-    mockExtract.mockReset()
 
     const testVersion = '0.2.0'
     const expectedCachePath = join(homedir(), '.pair', 'kb', testVersion)
@@ -209,23 +204,23 @@ describe('KB Manager - ZIP cleanup', () => {
       buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
 
-    mockExtract.mockRejectedValue(new Error('Corrupted ZIP'))
+    // Mock fs.extractZip to throw error
+    const extractZipSpy = vi.spyOn(fs, 'extractZip').mockRejectedValue(new Error('Corrupted ZIP'))
 
     const httpClient = new MockHttpClientService()
     httpClient.setRequestResponses([headResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
     await expect(
-      ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract }),
+      ensureKBAvailable(testVersion, { httpClient, fs }),
     ).rejects.toThrow(/Corrupted ZIP/)
 
-    expect(mockExtract).toHaveBeenCalledWith(expectedZipPath, expectedCachePath)
+    expect(extractZipSpy).toHaveBeenCalledWith(expectedZipPath, expectedCachePath)
   })
 })
 
 describe('KB Manager - Extraction error', () => {
   it('should throw actionable error on extraction failure', async () => {
     vi.clearAllMocks()
-    mockExtract.mockReset()
 
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
@@ -237,13 +232,14 @@ describe('KB Manager - Extraction error', () => {
       buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
     )
 
-    mockExtract.mockRejectedValue(new Error('Invalid ZIP format'))
+    // Mock fs.extractZip to throw error
+    vi.spyOn(fs, 'extractZip').mockRejectedValue(new Error('Invalid ZIP format'))
 
     const httpClient = new MockHttpClientService()
     httpClient.setRequestResponses([headResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
     await expect(
-      ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract }),
+      ensureKBAvailable(testVersion, { httpClient, fs }),
     ).rejects.toThrow(/Invalid ZIP format/)
   })
 })
@@ -251,11 +247,11 @@ describe('KB Manager - Extraction error', () => {
 describe('KB Manager - Download message', () => {
   it('should display download start message', async () => {
     vi.clearAllMocks()
-    mockExtract.mockReset().mockResolvedValue(undefined)
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
+    vi.spyOn(fs, 'extractZip').mockResolvedValue(undefined)
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
 
@@ -267,7 +263,7 @@ describe('KB Manager - Download message', () => {
     const httpClient = new MockHttpClientService()
     httpClient.setRequestResponses([headResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
-    await ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract })
+    await ensureKBAvailable(testVersion, { httpClient, fs })
 
     expect(consoleLogSpy).toHaveBeenCalledWith(
       expect.stringContaining('KB not found, downloading v0.2.0 from GitHub'),
@@ -280,11 +276,11 @@ describe('KB Manager - Download message', () => {
 describe('KB Manager - Success message', () => {
   it('should display success message after installation', async () => {
     vi.clearAllMocks()
-    mockExtract.mockReset().mockResolvedValue(undefined)
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
+    vi.spyOn(fs, 'extractZip').mockResolvedValue(undefined)
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
 
@@ -296,7 +292,7 @@ describe('KB Manager - Success message', () => {
     const httpClient = new MockHttpClientService()
     httpClient.setRequestResponses([headResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
-    await ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract })
+    await ensureKBAvailable(testVersion, { httpClient, fs })
 
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('✅ KB v0.2.0 installed'))
 
@@ -306,9 +302,9 @@ describe('KB Manager - Success message', () => {
 
 describe('KB Manager - Custom URL with provided URL', () => {
   it('should use custom URL when provided', async () => {
-    mockExtract.mockReset().mockResolvedValue(undefined)
     const customUrl = 'https://custom.example.com/kb.zip'
     const fs = new InMemoryFileSystemService({}, '/', '/')
+    vi.spyOn(fs, 'extractZip').mockResolvedValue(undefined)
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
     const checksumResp = toIncomingMessage(buildTestResponse(404))
@@ -322,7 +318,6 @@ describe('KB Manager - Custom URL with provided URL', () => {
     await ensureKBAvailable('0.2.0', {
       httpClient,
       fs,
-      extract: mockExtract,
       customUrl,
     })
 
@@ -332,8 +327,8 @@ describe('KB Manager - Custom URL with provided URL', () => {
 
 describe('KB Manager - Custom URL with default URL', () => {
   it('should use default GitHub URL when custom URL not provided', async () => {
-    mockExtract.mockReset().mockResolvedValue(undefined)
     const fs = new InMemoryFileSystemService({}, '/', '/')
+    vi.spyOn(fs, 'extractZip').mockResolvedValue(undefined)
 
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
     const checksumResp = toIncomingMessage(buildTestResponse(404))
@@ -347,7 +342,6 @@ describe('KB Manager - Custom URL with default URL', () => {
     await ensureKBAvailable('0.2.0', {
       httpClient,
       fs,
-      extract: mockExtract,
     })
 
     const lastUrl = httpClient.getLastUrl()
