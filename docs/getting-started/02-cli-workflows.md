@@ -80,6 +80,61 @@ pair-cli update-link
 
 See [Link Update Guide](./05-cli-update-link.md) for comprehensive documentation.
 
+### 6. Package Distribution and Verification
+
+Create and verify KB packages for distribution:
+
+```bash
+# Package KB for distribution
+pair package --name "My KB" --version "1.0.0" -o dist/kb-v1.0.0.zip
+
+# Verify package integrity before distribution
+pair kb-verify dist/kb-v1.0.0.zip
+
+# Verify package with JSON output (CI/CD)
+pair kb-verify dist/kb-v1.0.0.zip --json
+```
+
+**Complete Distribution Workflow:**
+
+```bash
+# 1. Validate KB structure
+pair kb validate
+
+# 2. Package KB with metadata
+pair package \
+  --name "Production KB" \
+  --version "2.1.0" \
+  --author "DevOps Team" \
+  -o dist/kb-prod-v2.1.0.zip
+
+# 3. Verify package integrity
+pair kb-verify dist/kb-prod-v2.1.0.zip
+
+# 4. Distribute package (upload to release, internal server, etc.)
+# ... distribution steps ...
+```
+
+**Verification Before Installation:**
+
+```bash
+# Download package
+wget https://releases.example.com/kb-v1.0.0.zip
+
+# Verify integrity before installing
+pair kb-verify kb-v1.0.0.zip
+
+# If verification passes, install
+pair install --source kb-v1.0.0.zip
+```
+
+**Common Scenarios:**
+
+- **Pre-distribution check**: Always run `pair kb-verify` before publishing packages
+- **Post-download validation**: Verify downloaded packages with `kb-verify` before installation
+- **CI/CD integration**: Use `--json` flag for automated verification in pipelines
+- **Security audit**: Checksum verification detects tampering or corruption
+
 ---
 
 ## Quick Command Reference
@@ -109,6 +164,9 @@ pair validate-config
 
 # Package KB for distribution
 pair package -o dist/kb.zip
+
+# Verify KB package integrity
+pair kb-verify kb-package.zip
 
 # Get help for any command
 pair <command> --help

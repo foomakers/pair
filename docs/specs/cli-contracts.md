@@ -154,6 +154,64 @@ interface ValidateConfigConstraints {
 }
 ```
 
+### KB Verify Command
+
+```typescript
+export interface KbVerifyCommandConfig {
+  packagePath: string // Required: path to KB package ZIP file
+  json?: boolean // --json (output as JSON)
+  minLogLevel?: 'trace' | 'debug' | 'info' | 'warn' | 'error'
+}
+
+// Verification report structure
+export interface VerificationReport {
+  valid: boolean // Overall verification result
+  checks: {
+    checksum: ChecksumCheck
+    structure: StructureCheck
+    manifest: ManifestCheck
+  }
+  size: number // Package size in bytes
+  timestamp: string // ISO 8601 timestamp
+}
+
+export interface ChecksumCheck {
+  passed: boolean
+  expected?: string // SHA-256 hash from manifest
+  actual?: string // Calculated SHA-256 hash
+  error?: string // Error message if check failed
+}
+
+export interface StructureCheck {
+  passed: boolean
+  registries?: string[] // Found registry names
+  missingRegistries?: string[] // Expected but not found
+  error?: string
+}
+
+export interface ManifestCheck {
+  passed: boolean
+  name?: string // Package name from manifest
+  version?: string // Package version from manifest
+  requiredFields?: string[] // All required fields present
+  missingFields?: string[] // Required fields not found
+  error?: string
+}
+
+// Validation constraints
+interface KbVerifyConstraints {
+  // packagePath must exist and be readable
+  packagePathMustExist: true
+  packagePathMustBeZIP: true
+  // Package must contain manifest.json
+  requiresManifest: true
+  // Checksum validation before structure checks
+  checksumFirst: true
+  // Exit code 0 if all checks pass, 1 otherwise
+  exitCodeBinary: true
+}
+```
+
 ---
 
 ## Validation Error Catalog
@@ -334,9 +392,87 @@ Issues:
 Config file: config.json
 ```
 
-**Exit Code:** 1  
-**Trigger:** Asset registry validation failure  
+**Exit Code:** 1
+**Trigger:** Asset registry validation failure
 **Resolution:** Fix config.json registry definition
+
+### Package Verification Errors
+
+#### VER001: Package Not Found
+
+```text
+Error: Package file not found: kb-package.zip
+
+Ensure:
+  • Path is correct
+  • File exists and is readable
+```
+
+**Exit Code:** 1
+**Trigger:** packagePath does not exist
+**Resolution:** Verify package file path
+
+#### VER002: Invalid Package Format
+
+```text
+Error: Invalid package format - not a valid ZIP file
+
+Package: corrupted-kb.zip
+
+Expected: Valid ZIP archive containing manifest.json
+```
+
+**Exit Code:** 1
+**Trigger:** Package is not a valid ZIP archive
+**Resolution:** Use valid KB package ZIP file
+
+#### VER003: Checksum Mismatch
+
+```text
+Error: Package verification failed - checksum mismatch
+
+Checksum validation:
+  Expected: 10440ed8ddbad6211ef9063c85529dbefe191eb7757669c9777b35e13a1ad6db
+  Got:      944a04fea544f005b2f1060d5d9d78beb8808d53d609a20bbed148ae84ae1ee2
+
+Package may be corrupted or tampered with.
+```
+
+**Exit Code:** 1
+**Trigger:** Content checksum does not match manifest
+**Resolution:** Re-download or re-create package
+
+#### VER004: Missing Manifest
+
+```text
+Error: Package verification failed - manifest.json not found
+
+Package: kb-package.zip
+
+Required: manifest.json at ZIP root with contentChecksum field
+```
+
+**Exit Code:** 1
+**Trigger:** Package missing manifest.json
+**Resolution:** Use valid KB package with manifest
+
+#### VER005: Missing Registry
+
+```text
+Error: Package verification failed - registry structure invalid
+
+Missing registries:
+  • github (expected at .github/)
+  • knowledge (expected at .pair/)
+
+Found: adoption
+
+Config: config.json defines 3 registries, found 1
+```
+
+**Exit Code:** 1
+**Trigger:** Package structure does not match config.json
+**Resolution:** Ensure package contains all required registries
 
 ---
 
@@ -477,6 +613,69 @@ function validateConfig(config: Config): ConfigValidationResult {
     valid: errors.length === 0,
     errors,
   }
+}
+```
+
+### KB Verify Validation
+
+```typescript
+async function validateKbVerify(config: KbVerifyCommandConfig): Promise<VerificationReport> {
+  const report: VerificationReport = {
+    valid: false,
+    checks: {
+      checksum: { passed: false },
+      structure: { passed: false },
+      manifest: { passed: false },
+    },
+    size: 0,
+    timestamp: new Date().toISOString(),
+  }
+
+  // VER001: Package must exist
+  if (!fs.existsSync(config.packagePath)) {
+    report.checks.checksum.error = `Package file not found: ${config.packagePath}`
+    return report
+  }
+
+  // VER002: Package must be valid ZIP
+  try {
+    const zip = new AdmZip(config.packagePath)
+    report.size = fs.statSync(config.packagePath).size
+  } catch (error) {
+    report.checks.checksum.error = 'Invalid package format - not a valid ZIP file'
+    return report
+  }
+
+  // VER004: Manifest must exist
+  const manifest = await extractManifest(config.packagePath)
+  if (!manifest) {
+    report.checks.manifest.error = 'manifest.json not found in package'
+    return report
+  }
+  report.checks.manifest.passed = true
+  report.checks.manifest.name = manifest.name
+  report.checks.manifest.version = manifest.version
+
+  // VER003: Checksum must match
+  const expectedChecksum = manifest.contentChecksum
+  const actualChecksum = await calculateContentChecksum(config.packagePath)
+
+  if (expectedChecksum !== actualChecksum) {
+    report.checks.checksum.expected = expectedChecksum
+    report.checks.checksum.actual = actualChecksum
+    report.checks.checksum.error = 'Checksum mismatch detected'
+    return report
+  }
+  report.checks.checksum.passed = true
+  report.checks.checksum.expected = expectedChecksum
+  report.checks.checksum.actual = actualChecksum
+
+  // VER005: Structure must match config
+  const structureCheck = await validatePackageStructure(config.packagePath, manifest)
+  report.checks.structure = structureCheck
+
+  report.valid = Object.values(report.checks).every(check => check.passed)
+  return report
 }
 ```
 
