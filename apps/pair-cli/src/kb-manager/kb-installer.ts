@@ -163,7 +163,6 @@ export async function installKBFromLocalDirectory(
   }
 }
 
-
 // Helper: finalize installation, normalize and return dataset root
 async function finalizeZipInstall(
   version: string,

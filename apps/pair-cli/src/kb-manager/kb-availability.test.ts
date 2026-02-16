@@ -10,6 +10,11 @@ import {
 } from '@pair/content-ops'
 import { ensureKBAvailable } from './kb-availability'
 
+// Helper to create valid ZIP data for InMemoryFileSystemService
+function createValidZipData(files: Record<string, string>): string {
+  return JSON.stringify(files)
+}
+
 describe('KB Manager - ensureKBAvailable - Cache Hit', () => {
   const testVersion = '0.2.0'
   const expectedCachePath = join(homedir(), '.pair', 'kb', testVersion)
@@ -40,19 +45,20 @@ describe('KB Manager - ensureKBAvailable - Cache Miss', () => {
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
-    // Mock fs.extractZip to simulate extraction
-    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
-      await fs.writeFile(join(targetPath, 'manifest.json'), '{"version":"0.2.0"}')
-      await fs.writeFile(join(targetPath, '.pair/knowledge/test.md'), 'test')
-    })
+    // Create valid ZIP content for download
+    const zipContent = {
+      'manifest.json': JSON.stringify({ version: '0.2.0' }),
+      '.pair/knowledge/test.md': 'test',
+    }
+    const validZipData = JSON.stringify(zipContent)
 
     // Mock HEAD request for content-length
-    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': validZipData.length.toString() }))
 
-    // Mock checksum (404) and file download (200) - auto-emit end
+    // Mock checksum (404) and file download (200) with valid ZIP data
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+      buildTestResponse(200, { 'content-length': validZipData.length.toString() }, validZipData),
     )
 
     const httpClient = new MockHttpClientService()
@@ -79,8 +85,6 @@ describe('KB Manager - GitHub URL construction', () => {
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
-    // Mock fs.extractZip to avoid parsing "fake zip data"
-    vi.spyOn(fs, 'extractZip').mockResolvedValue(undefined)
 
     // Mock HEAD request for content-length
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
@@ -88,7 +92,7 @@ describe('KB Manager - GitHub URL construction', () => {
     // Mock checksum (404) and file download (200) - auto-emit end
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
     )
 
     const httpClient = new MockHttpClientService()
@@ -111,7 +115,7 @@ describe('KB Manager - Version handling', () => {
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
     )
 
     const httpClient = new MockHttpClientService()
@@ -137,9 +141,9 @@ describe('KB Manager - 404 error handling', () => {
     const httpClient = new MockHttpClientService()
     httpClient.setRequestResponses([headResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
-    await expect(
-      ensureKBAvailable(testVersion404, { httpClient, fs }),
-    ).rejects.toThrow(/KB v0\.0\.404 not found \(404\).*github\.com/s)
+    await expect(ensureKBAvailable(testVersion404, { httpClient, fs })).rejects.toThrow(
+      /KB v0\.0\.404 not found \(404\).*github\.com/s,
+    )
   })
 })
 
@@ -160,9 +164,9 @@ describe('KB Manager - 403 error handling', () => {
     const httpClient = new MockHttpClientService()
     httpClient.setRequestResponses([defaultHeadResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
-    await expect(
-      ensureKBAvailable(testVersion403, { httpClient, fs }),
-    ).rejects.toThrow(/Access denied \(403\).*github\.com/s)
+    await expect(ensureKBAvailable(testVersion403, { httpClient, fs })).rejects.toThrow(
+      /Access denied \(403\).*github\.com/s,
+    )
   })
 })
 
@@ -201,7 +205,7 @@ describe('KB Manager - ZIP cleanup', () => {
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
     )
 
     // Mock fs.extractZip to throw error
@@ -210,9 +214,9 @@ describe('KB Manager - ZIP cleanup', () => {
     const httpClient = new MockHttpClientService()
     httpClient.setRequestResponses([headResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
-    await expect(
-      ensureKBAvailable(testVersion, { httpClient, fs }),
-    ).rejects.toThrow(/Corrupted ZIP/)
+    await expect(ensureKBAvailable(testVersion, { httpClient, fs })).rejects.toThrow(
+      /Corrupted ZIP/,
+    )
 
     expect(extractZipSpy).toHaveBeenCalledWith(expectedZipPath, expectedCachePath)
   })
@@ -229,7 +233,7 @@ describe('KB Manager - Extraction error', () => {
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
     )
 
     // Mock fs.extractZip to throw error
@@ -238,9 +242,9 @@ describe('KB Manager - Extraction error', () => {
     const httpClient = new MockHttpClientService()
     httpClient.setRequestResponses([headResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
-    await expect(
-      ensureKBAvailable(testVersion, { httpClient, fs }),
-    ).rejects.toThrow(/Invalid ZIP format/)
+    await expect(ensureKBAvailable(testVersion, { httpClient, fs })).rejects.toThrow(
+      /Invalid ZIP format/,
+    )
   })
 })
 
@@ -257,7 +261,7 @@ describe('KB Manager - Download message', () => {
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
     )
 
     const httpClient = new MockHttpClientService()
@@ -286,7 +290,7 @@ describe('KB Manager - Success message', () => {
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
     )
 
     const httpClient = new MockHttpClientService()
@@ -309,7 +313,7 @@ describe('KB Manager - Custom URL with provided URL', () => {
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
     )
 
     const httpClient = new MockHttpClientService()
@@ -333,7 +337,7 @@ describe('KB Manager - Custom URL with default URL', () => {
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
     )
 
     const httpClient = new MockHttpClientService()

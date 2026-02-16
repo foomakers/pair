@@ -14,13 +14,14 @@ describe('Download UI', () => {
 
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
-    vi.spyOn(fs, 'extractZip').mockResolvedValue(undefined)
 
     const httpClient = new MockHttpClientService()
 
-    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    // Create valid ZIP data
+    const validZipData = JSON.stringify({ 'manifest.json': '{}' })
+    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': validZipData.length.toString() }))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+      buildTestResponse(200, { 'content-length': validZipData.length.toString() }, validZipData),
     )
     const checksumResp = toIncomingMessage(buildTestResponse(404))
 
@@ -42,13 +43,14 @@ describe('Download UI', () => {
 
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
-    vi.spyOn(fs, 'extractZip').mockResolvedValue(undefined)
 
     const httpClient = new MockHttpClientService()
 
-    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    // Create valid ZIP data
+    const validZipData = JSON.stringify({ 'manifest.json': '{}' })
+    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': validZipData.length.toString() }))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+      buildTestResponse(200, { 'content-length': validZipData.length.toString() }, validZipData),
     )
     const checksumResp = toIncomingMessage(buildTestResponse(404))
 

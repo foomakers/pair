@@ -115,25 +115,27 @@ describe('KB Installer - installKBFromLocalZip', () => {
     const zipPath = '/absolute/path/kb.zip'
     const expectedCachePath = join(homedir(), '.pair', 'kb', version)
     const expectedDatasetRoot = join(expectedCachePath, '.pair')
+
+    // Create valid ZIP content in InMemoryFS format (JSON serialized)
+    const zipContent = {
+      '.pair/knowledge/test.md': 'extracted content',
+      'manifest.json': JSON.stringify({ version: '0.2.0' }),
+    }
+
     const fs = new InMemoryFileSystemService(
       {
-        [zipPath]: 'fake zip content',
-        [join(expectedCachePath, '.pair', 'knowledge', 'test.md')]: 'existing content',
+        [zipPath]: JSON.stringify(zipContent),  // Valid ZIP format for InMemoryFS
       },
       '/',
       '/',
     )
 
-    // Mock fs.extractZip to simulate extraction
-    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
-      await fs.writeFile(join(targetPath, '.pair', 'knowledge', 'test.md'), 'extracted')
-    })
-
-    // Act
+    // Act - uses real fs.extractZip, no mock needed!
     const result = await installKBFromLocalZip(version, zipPath, fs, true)
 
     // Assert
     expect(result).toBe(expectedDatasetRoot)
+    expect(await fs.exists(join(expectedCachePath, '.pair', 'knowledge', 'test.md'))).toBe(true)
   })
 
   it('should install KB from relative path local ZIP', async () => {
@@ -142,25 +144,27 @@ describe('KB Installer - installKBFromLocalZip', () => {
     const zipPath = './downloads/kb.zip'
     const resolvedZipPath = join(process.cwd(), 'downloads', 'kb.zip')
     const expectedCachePath = join(homedir(), '.pair', 'kb', version)
+
+    // Create valid ZIP content
+    const zipContent = {
+      'AGENTS.md': 'extracted content',
+      'manifest.json': JSON.stringify({ version: '0.2.0' }),
+    }
+
     const fs = new InMemoryFileSystemService(
       {
-        [resolvedZipPath]: 'fake zip content',
-        [join(expectedCachePath, 'AGENTS.md')]: 'existing content',
+        [resolvedZipPath]: JSON.stringify(zipContent),
       },
       '/',
       '/',
     )
 
-    // Mock fs.extractZip to simulate extraction
-    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
-      await fs.writeFile(join(targetPath, 'AGENTS.md'), 'extracted')
-    })
-
-    // Act
+    // Act - uses real fs.extractZip
     const result = await installKBFromLocalZip(version, zipPath, fs, true)
 
     // Assert
     expect(result).toBe(expectedCachePath)
+    expect(await fs.exists(join(expectedCachePath, 'AGENTS.md'))).toBe(true)
   })
 
   it('should throw error if ZIP file does not exist', async () => {
@@ -179,19 +183,19 @@ describe('KB Installer - installKBFromLocalZip', () => {
     // Arrange
     const version = '0.2.0'
     const zipPath = '/path/kb.zip'
+
+    // Create empty ZIP (no KB structure files)
+    const zipContent = {}  // Empty ZIP = invalid structure
+
     const fs = new InMemoryFileSystemService(
       {
-        [zipPath]: 'fake zip content',
-        // No .pair/, AGENTS.md, or manifest.json after extraction - invalid structure
+        [zipPath]: JSON.stringify(zipContent),
       },
       '/',
       '/',
     )
 
-    // Mock fs.extractZip to do nothing (no files extracted = invalid structure)
-    vi.spyOn(fs, 'extractZip').mockResolvedValue(undefined)
-
-    // Act & Assert
+    // Act & Assert - real extractZip extracts nothing, validation fails
     await expect(installKBFromLocalZip(version, zipPath, fs, true)).rejects.toThrow(
       'Invalid KB structure',
     )
@@ -204,25 +208,21 @@ describe('KB Installer - installKBFromLocalZip', () => {
     const cachePath = join(homedir(), '.pair', 'kb', version)
     const expectedDatasetRoot = join(cachePath, '.pair')
 
-    // Pre-populate the filesystem with the extracted structure
-    // This simulates what extractZip would do - extracted to cachePath first
+    // Create valid ZIP with .zip-temp root directory structure
+    const zipContent = {
+      '.zip-temp/.pair/knowledge/test.md': 'test content',
+      '.zip-temp/manifest.json': JSON.stringify({ version: '0.2.0' }),
+    }
+
     const fs = new InMemoryFileSystemService(
       {
-        [zipPath]: 'fake zip content',
-        [`${cachePath}/.zip-temp/.pair/knowledge/test.md`]: 'test content',
-        [`${cachePath}/.zip-temp/manifest.json`]: '{}',
+        [zipPath]: JSON.stringify(zipContent),
       },
       '/',
       '/',
     )
 
-    // Mock fs.extractZip to create the .zip-temp structure
-    vi.spyOn(fs, 'extractZip').mockImplementation(async (_zipPath, targetPath) => {
-      await fs.writeFile(join(targetPath, '.zip-temp', '.pair', 'knowledge', 'test.md'), 'test content')
-      await fs.writeFile(join(targetPath, '.zip-temp', 'manifest.json'), '{}')
-    })
-
-    // Act
+    // Act - uses real fs.extractZip
     const result = await installKBFromLocalZip(version, zipPath, fs, true)
 
     // Assert - Should succeed by detecting KB structure in subdirectory and return dataset root
