@@ -31,6 +31,13 @@ export async function dispatchCommand(
       return commandRegistry['validate-config'].handle(config, fs)
     case 'kb-validate':
       return commandRegistry['kb-validate'].handle(config, fs)
+    case 'kb-verify': {
+      const exitCode = await commandRegistry['kb-verify'].handle(config, fs)
+      if (exitCode !== 0) {
+        process.exitCode = exitCode
+      }
+      return
+    }
   }
 }
 

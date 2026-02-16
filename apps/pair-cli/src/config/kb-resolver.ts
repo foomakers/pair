@@ -132,9 +132,9 @@ export async function getKnowledgeHubDatasetPathWithFallback(options: {
 
 /** Config shape accepted by resolveDatasetRoot — union of install/update config fields. */
 export type DatasetResolvableConfig =
-  | { resolution: 'default' }
-  | { resolution: 'remote'; url: string }
-  | { resolution: 'local'; path: string }
+  | { resolution: 'default'; skipVerify?: boolean }
+  | { resolution: 'remote'; url: string; skipVerify?: boolean }
+  | { resolution: 'local'; path: string; skipVerify?: boolean }
 
 /** Options accepted by resolveDatasetRoot. */
 export interface DatasetResolveOptions {
@@ -148,10 +148,11 @@ async function resolveLocalDataset(
   fs: FileSystemService,
   path: string,
   version: string,
+  skipVerify = false,
 ): Promise<string> {
   const resolved = resolve(fs.currentWorkingDirectory(), path)
   if (path.endsWith('.zip')) {
-    return installKBFromLocalZip(version, resolved, fs)
+    return installKBFromLocalZip(version, resolved, fs, skipVerify)
   }
   if (!fs.existsSync(resolved)) {
     throw new Error(`KB source path not found: ${resolved}`)
@@ -191,6 +192,6 @@ export async function resolveDatasetRoot(
     }
 
     case 'local':
-      return resolveLocalDataset(fs, config.path, version)
+      return resolveLocalDataset(fs, config.path, version, config.skipVerify)
   }
 }

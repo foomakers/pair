@@ -199,6 +199,7 @@ export async function installKBFromLocalZip(
   version: string,
   zipPath: string,
   fs: FileSystemService,
+  skipVerify = false,
 ): Promise<string> {
   const extract = extractZip
   const cachePath = cacheManager.getCachedKBPath(version)
@@ -209,6 +210,22 @@ export async function installKBFromLocalZip(
   // Validate ZIP file exists
   if (!fs.existsSync(resolvedZipPath)) {
     throw new Error(`ZIP file not found: ${resolvedZipPath}`)
+  }
+
+  // Verify package integrity (unless skipped)
+  if (!skipVerify) {
+    const { verifyPackage } = await import('../commands/kb-verify/verify-package.js')
+    const result = await verifyPackage(resolvedZipPath, fs)
+    if (!result.valid) {
+      throw new Error(
+        `Package verification failed:\n${result.errors.join('\n')}\n\nUse --skip-verify to bypass verification.`,
+      )
+    }
+    const { logger: log } = await import('@pair/content-ops')
+    log.info('Package verification passed')
+  } else {
+    const { logger: log } = await import('@pair/content-ops')
+    log.warn('Skipping package verification (--skip-verify)')
   }
 
   await cacheManager.ensureCacheDirectory(cachePath, fs)

@@ -19,6 +19,7 @@ export interface KBManagerDeps {
   isTTY?: boolean
   customUrl?: string
   retryOptions?: RetryOptions
+  skipVerify?: boolean
 }
 
 // Internal: use cacheManager directly. Public re-exports live in the kb-manager index.
@@ -58,7 +59,7 @@ export async function ensureKBAvailable(version: string, deps: KBManagerDeps): P
   if (sourceType !== SourceType.REMOTE_URL) {
     if (sourceUrl.endsWith('.zip')) {
       // Local ZIP file
-      return await installKBFromLocalZip(version, sourceUrl, fs)
+      return await installKBFromLocalZip(version, sourceUrl, fs, deps.skipVerify)
     } else {
       // Local directory
       return await installKBFromLocalDirectory(version, sourceUrl, fs)

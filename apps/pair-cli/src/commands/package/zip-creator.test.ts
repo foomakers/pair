@@ -330,3 +330,156 @@ describe('createPackageZip - error handling', () => {
     expect(fsService.existsSync(outputPath)).toBe(false)
   })
 })
+
+describe('createPackageZip - content checksum', () => {
+  it('embeds contentChecksum in manifest.json (integration test)', async () => {
+    // Use real filesystem for this integration test
+    const testDir = path.join(os.tmpdir(), `test-checksum-${Date.now()}`)
+    const projectRoot = path.join(testDir, 'project')
+    const outputPath = path.join(testDir, 'test-package.zip')
+
+    try {
+      // Setup
+      fs.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
+      fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/file.md'), 'test content')
+
+      const { fileSystemService } = await import('@pair/content-ops')
+      const realFs = fileSystemService
+
+      const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
+      const manifest: ManifestMetadata = {
+        name: 'test-kb',
+        version: '1.0.0',
+        created_at: '2025-11-30T00:00:00Z',
+        registries: ['knowledge'],
+      }
+
+      await createPackageZip({ projectRoot, registries, manifest, outputPath }, realFs)
+
+      // Verify ZIP was created
+      expect(fs.existsSync(outputPath)).toBe(true)
+
+      // Extract and verify manifest contains contentChecksum
+      const AdmZip = (await import('adm-zip')).default
+      const zip = new AdmZip(outputPath)
+      const manifestEntry = zip.getEntry('manifest.json')
+      expect(manifestEntry).toBeDefined()
+
+      const manifestContent = manifestEntry!.getData().toString('utf-8')
+      const parsedManifest = JSON.parse(manifestContent)
+
+      expect(parsedManifest.contentChecksum).toBeDefined()
+      expect(typeof parsedManifest.contentChecksum).toBe('string')
+      expect(parsedManifest.contentChecksum).toMatch(/^[a-f0-9]{64}$/)
+    } finally {
+      // Cleanup
+      if (fs.existsSync(testDir)) {
+        fs.rmSync(testDir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  it('produces deterministic checksum for same content (integration test)', async () => {
+    const testDir = path.join(os.tmpdir(), `test-checksum-det-${Date.now()}`)
+    const projectRoot1 = path.join(testDir, 'project1')
+    const projectRoot2 = path.join(testDir, 'project2')
+    const outputPath1 = path.join(testDir, 'package1.zip')
+    const outputPath2 = path.join(testDir, 'package2.zip')
+
+    try {
+      // Setup project 1
+      fs.mkdirSync(path.join(projectRoot1, '.pair/knowledge'), { recursive: true })
+      fs.writeFileSync(path.join(projectRoot1, '.pair/knowledge/file.md'), 'deterministic')
+
+      // Setup project 2 with same content
+      fs.mkdirSync(path.join(projectRoot2, '.pair/knowledge'), { recursive: true })
+      fs.writeFileSync(path.join(projectRoot2, '.pair/knowledge/file.md'), 'deterministic')
+
+      const { fileSystemService } = await import('@pair/content-ops')
+      const realFs = fileSystemService
+
+      const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
+      const manifest: ManifestMetadata = {
+        name: 'test-kb',
+        version: '1.0.0',
+        created_at: '2025-11-30T00:00:00Z',
+        registries: ['knowledge'],
+      }
+
+      // Create both packages
+      await createPackageZip(
+        { projectRoot: projectRoot1, registries, manifest, outputPath: outputPath1 },
+        realFs,
+      )
+      await createPackageZip(
+        { projectRoot: projectRoot2, registries, manifest, outputPath: outputPath2 },
+        realFs,
+      )
+
+      const AdmZip = (await import('adm-zip')).default
+      const zip1 = new AdmZip(outputPath1)
+      const zip2 = new AdmZip(outputPath2)
+
+      const manifest1 = JSON.parse(zip1.getEntry('manifest.json')!.getData().toString('utf-8'))
+      const manifest2 = JSON.parse(zip2.getEntry('manifest.json')!.getData().toString('utf-8'))
+
+      expect(manifest1.contentChecksum).toBe(manifest2.contentChecksum)
+    } finally {
+      if (fs.existsSync(testDir)) {
+        fs.rmSync(testDir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  it('produces different checksum when content changes (integration test)', async () => {
+    const testDir = path.join(os.tmpdir(), `test-checksum-diff-${Date.now()}`)
+    const projectRoot1 = path.join(testDir, 'project1')
+    const projectRoot2 = path.join(testDir, 'project2')
+    const outputPath1 = path.join(testDir, 'package1.zip')
+    const outputPath2 = path.join(testDir, 'package2.zip')
+
+    try {
+      // Setup project 1
+      fs.mkdirSync(path.join(projectRoot1, '.pair/knowledge'), { recursive: true })
+      fs.writeFileSync(path.join(projectRoot1, '.pair/knowledge/file.md'), 'original content')
+
+      // Setup project 2 with different content
+      fs.mkdirSync(path.join(projectRoot2, '.pair/knowledge'), { recursive: true })
+      fs.writeFileSync(path.join(projectRoot2, '.pair/knowledge/file.md'), 'modified content')
+
+      const { fileSystemService } = await import('@pair/content-ops')
+      const realFs = fileSystemService
+
+      const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
+      const manifest: ManifestMetadata = {
+        name: 'test-kb',
+        version: '1.0.0',
+        created_at: '2025-11-30T00:00:00Z',
+        registries: ['knowledge'],
+      }
+
+      // Create both packages
+      await createPackageZip(
+        { projectRoot: projectRoot1, registries, manifest, outputPath: outputPath1 },
+        realFs,
+      )
+      await createPackageZip(
+        { projectRoot: projectRoot2, registries, manifest, outputPath: outputPath2 },
+        realFs,
+      )
+
+      const AdmZip = (await import('adm-zip')).default
+      const zip1 = new AdmZip(outputPath1)
+      const zip2 = new AdmZip(outputPath2)
+
+      const manifest1 = JSON.parse(zip1.getEntry('manifest.json')!.getData().toString('utf-8'))
+      const manifest2 = JSON.parse(zip2.getEntry('manifest.json')!.getData().toString('utf-8'))
+
+      expect(manifest1.contentChecksum).not.toBe(manifest2.contentChecksum)
+    } finally {
+      if (fs.existsSync(testDir)) {
+        fs.rmSync(testDir, { recursive: true, force: true })
+      }
+    }
+  })
+})

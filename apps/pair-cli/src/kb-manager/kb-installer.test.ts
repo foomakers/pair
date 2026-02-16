@@ -127,7 +127,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     )
 
     // Act
-    const result = await installKBFromLocalZip(version, zipPath, fs)
+    const result = await installKBFromLocalZip(version, zipPath, fs, true)
 
     // Assert
     expect(result).toBe(expectedDatasetRoot)
@@ -149,7 +149,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     )
 
     // Act
-    const result = await installKBFromLocalZip(version, zipPath, fs)
+    const result = await installKBFromLocalZip(version, zipPath, fs, true)
 
     // Assert
     expect(result).toBe(expectedCachePath)
@@ -181,7 +181,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     )
 
     // Act & Assert
-    await expect(installKBFromLocalZip(version, zipPath, fs)).rejects.toThrow(
+    await expect(installKBFromLocalZip(version, zipPath, fs, true)).rejects.toThrow(
       'Invalid KB structure',
     )
   })
@@ -206,7 +206,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     )
 
     // Act
-    const result = await installKBFromLocalZip(version, zipPath, fs)
+    const result = await installKBFromLocalZip(version, zipPath, fs, true)
 
     // Assert - Should succeed by detecting KB structure in subdirectory and return dataset root
     expect(result).toBe(expectedDatasetRoot)
@@ -229,7 +229,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     )
 
     // Act & Assert
-    await expect(installKBFromLocalZip(version, zipPath, fs)).rejects.toThrow(
+    await expect(installKBFromLocalZip(version, zipPath, fs, true)).rejects.toThrow(
       'Invalid KB structure',
     )
   })
@@ -254,7 +254,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     )
 
     // Act
-    const result = await installKBFromLocalZip(version, zipPath, fs)
+    const result = await installKBFromLocalZip(version, zipPath, fs, true)
 
     // Assert
     expect(result).toBe(cachePath)
@@ -275,7 +275,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     )
 
     // Act & Assert
-    await expect(installKBFromLocalZip(version, zipPath, fs)).rejects.toThrow(
+    await expect(installKBFromLocalZip(version, zipPath, fs, true)).rejects.toThrow(
       'Invalid KB structure',
     )
   })

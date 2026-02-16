@@ -5,6 +5,7 @@ export interface ManifestMetadata {
   author?: string
   created_at: string
   registries: string[]
+  contentChecksum?: string
 }
 
 export type PartialManifestMetadata = Partial<Omit<ManifestMetadata, 'created_at' | 'registries'>>

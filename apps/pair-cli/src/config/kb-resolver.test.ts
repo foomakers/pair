@@ -156,7 +156,12 @@ describe('resolveDatasetRoot', () => {
       { cliVersion: '2.0.0' },
     )
     expect(result).toBe('/cached/unzipped')
-    expect(kbInstaller.installKBFromLocalZip).toHaveBeenCalledWith('2.0.0', '/tmp/kb.zip', fs)
+    expect(kbInstaller.installKBFromLocalZip).toHaveBeenCalledWith(
+      '2.0.0',
+      '/tmp/kb.zip',
+      fs,
+      false,
+    )
   })
 
   it('uses fallback version 0.0.0 when cliVersion not provided', async () => {
@@ -166,6 +171,11 @@ describe('resolveDatasetRoot', () => {
     const fs = new InMemoryFileSystemService({}, cwd, cwd)
 
     await resolveDatasetRoot(fs, { resolution: 'local', path: '/tmp/kb.zip' })
-    expect(kbInstaller.installKBFromLocalZip).toHaveBeenCalledWith('0.0.0', '/tmp/kb.zip', fs)
+    expect(kbInstaller.installKBFromLocalZip).toHaveBeenCalledWith(
+      '0.0.0',
+      '/tmp/kb.zip',
+      fs,
+      false,
+    )
   })
 })

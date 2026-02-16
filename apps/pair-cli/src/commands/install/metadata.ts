@@ -18,6 +18,10 @@ export const installMetadata = {
       description: 'KB source: URL (http/https), absolute path, or relative path',
     },
     { flags: '--offline', description: 'Prevent network access (requires local --source)' },
+    {
+      flags: '--skip-verify',
+      description: 'Skip package integrity verification (for local ZIP sources only)',
+    },
     { flags: '--list-targets', description: 'List available target folders and descriptions' },
     {
       flags: '--link-style <style>',

@@ -10,6 +10,7 @@ export interface InstallCommandConfigDefault {
   offline: false
   kb: boolean
   target?: string
+  skipVerify?: boolean
 }
 
 /**
@@ -22,6 +23,7 @@ export interface InstallCommandConfigRemote {
   offline: false
   kb: boolean
   target?: string
+  skipVerify?: boolean
 }
 
 /**
@@ -34,6 +36,7 @@ export interface InstallCommandConfigLocal {
   offline: boolean
   kb: boolean
   target?: string
+  skipVerify?: boolean
 }
 
 /**
@@ -48,8 +51,10 @@ interface ParseInstallOptions {
   source?: string
   offline?: boolean
   kb?: boolean
+  skipVerify?: boolean
 }
 
+/* eslint-disable complexity */
 /**
  * Parse install command options into InstallCommandConfig.
  *
@@ -69,7 +74,7 @@ export function parseInstallCommand(
 ): InstallCommandConfig {
   validateCommandOptions('install', options)
 
-  const { source, offline = false, kb = true } = options
+  const { source, offline = false, kb = true, skipVerify = false } = options
   const target = args[0]
 
   // Default resolution (no source)
@@ -80,6 +85,7 @@ export function parseInstallCommand(
       offline: false,
       kb,
       ...(target && { target }),
+      ...(skipVerify && { skipVerify }),
     }
   }
 
@@ -97,6 +103,7 @@ export function parseInstallCommand(
       offline: false,
       kb,
       ...(target && { target }),
+      ...(skipVerify && { skipVerify }),
     }
   }
 
@@ -108,5 +115,6 @@ export function parseInstallCommand(
     offline,
     kb,
     ...(target && { target }),
+    ...(skipVerify && { skipVerify }),
   }
 }
