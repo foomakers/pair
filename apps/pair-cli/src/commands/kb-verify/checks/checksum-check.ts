@@ -1,5 +1,6 @@
 import type { IZipEntry } from 'adm-zip'
 import { createHash } from 'crypto'
+import { comparePathsDeterministic } from '../sort-paths'
 
 export interface ChecksumCheckResult {
   status: 'PASS' | 'FAIL'
@@ -23,7 +24,7 @@ export function verifyChecksum(
   // Get all non-manifest files sorted by entry name for deterministic order
   const contentEntries = zipEntries
     .filter(e => !e.isDirectory && e.entryName !== 'manifest.json')
-    .sort((a, b) => a.entryName.localeCompare(b.entryName))
+    .sort((a, b) => comparePathsDeterministic(a.entryName, b.entryName))
 
   // Hash each file content
   for (const entry of contentEntries) {

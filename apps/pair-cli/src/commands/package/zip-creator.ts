@@ -5,6 +5,7 @@ import { rewriteFileLinks } from './link-rewriter'
 import { collectLayoutFiles, resolveLayoutPaths, type LayoutMode } from '../../registry/layout'
 import { createHash } from 'crypto'
 import path from 'path'
+import { comparePathsDeterministic } from '../kb-verify/sort-paths'
 
 interface ZipOptions {
   projectRoot: string
@@ -58,8 +59,7 @@ async function computeContentChecksum(
   const files = await collectAllFiles(tempDir, fsService)
 
   // Convert to relative paths and sort for deterministic order
-  // CRITICAL: Must use localeCompare to match verification logic (checksum-check.ts)
-  const relativePaths = files.map(f => path.relative(tempDir, f)).sort((a, b) => a.localeCompare(b))
+  const relativePaths = files.map(f => path.relative(tempDir, f)).sort(comparePathsDeterministic)
 
   for (const relativePath of relativePaths) {
     const absolutePath = path.join(tempDir, relativePath)

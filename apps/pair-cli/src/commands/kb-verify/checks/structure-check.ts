@@ -35,10 +35,13 @@ export function verifyStructure(
       }
     })
 
+  // Convert to array once for iteration
+  const zipDirsList = Array.from(zipDirs)
+
   // Check each required registry path
   for (const registryPath of requiredPaths) {
     // Check if directory exists in ZIP (exact match or as subdirectory)
-    const found = Array.from(zipDirs).some(dir => {
+    const found = zipDirsList.some(dir => {
       return (
         dir === registryPath ||
         dir.startsWith(`${registryPath}/`) ||

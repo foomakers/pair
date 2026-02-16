@@ -60,20 +60,12 @@ export async function handleKbVerifyCommand(
     // 2. Structure check
     const structureCheck = verifyStructure(zipEntries, manifest)
 
-    // 3. Checksum check (only if contentChecksum exists)
-    const checksumCheck = manifest.contentChecksum
-      ? verifyChecksum(zipEntries, manifest.contentChecksum)
-      : {
-          status: 'FAIL' as const,
-          expected: '',
-          actual: '',
-          algorithm: 'SHA-256',
-        }
-
+    // 3. Checksum check (requires contentChecksum in manifest)
     if (!manifest.contentChecksum) {
       console.error(`Missing contentChecksum in manifest.json`)
       return 1
     }
+    const checksumCheck = verifyChecksum(zipEntries, manifest.contentChecksum)
 
     // Build report
     const report: VerificationReport = {
