@@ -59,9 +59,7 @@ async function computeContentChecksum(
 
   // Convert to relative paths and sort for deterministic order
   // CRITICAL: Must use localeCompare to match verification logic (checksum-check.ts)
-  const relativePaths = files
-    .map(f => path.relative(tempDir, f))
-    .sort((a, b) => a.localeCompare(b))
+  const relativePaths = files.map(f => path.relative(tempDir, f)).sort((a, b) => a.localeCompare(b))
 
   for (const relativePath of relativePaths) {
     const absolutePath = path.join(tempDir, relativePath)

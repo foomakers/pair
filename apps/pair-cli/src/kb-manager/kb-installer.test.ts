@@ -124,7 +124,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
 
     const fs = new InMemoryFileSystemService(
       {
-        [zipPath]: JSON.stringify(zipContent),  // Valid ZIP format for InMemoryFS
+        [zipPath]: JSON.stringify(zipContent), // Valid ZIP format for InMemoryFS
       },
       '/',
       '/',
@@ -185,7 +185,7 @@ describe('KB Installer - installKBFromLocalZip', () => {
     const zipPath = '/path/kb.zip'
 
     // Create empty ZIP (no KB structure files)
-    const zipContent = {}  // Empty ZIP = invalid structure
+    const zipContent = {} // Empty ZIP = invalid structure
 
     const fs = new InMemoryFileSystemService(
       {

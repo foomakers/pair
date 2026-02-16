@@ -19,7 +19,9 @@ describe('Download UI', () => {
 
     // Create valid ZIP data
     const validZipData = JSON.stringify({ 'manifest.json': '{}' })
-    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': validZipData.length.toString() }))
+    const headResponse = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': validZipData.length.toString() }),
+    )
     const fileResp = toIncomingMessage(
       buildTestResponse(200, { 'content-length': validZipData.length.toString() }, validZipData),
     )
@@ -48,7 +50,9 @@ describe('Download UI', () => {
 
     // Create valid ZIP data
     const validZipData = JSON.stringify({ 'manifest.json': '{}' })
-    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': validZipData.length.toString() }))
+    const headResponse = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': validZipData.length.toString() }),
+    )
     const fileResp = toIncomingMessage(
       buildTestResponse(200, { 'content-length': validZipData.length.toString() }, validZipData),
     )

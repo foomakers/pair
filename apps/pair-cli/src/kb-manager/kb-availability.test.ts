@@ -53,7 +53,9 @@ describe('KB Manager - ensureKBAvailable - Cache Miss', () => {
     const validZipData = JSON.stringify(zipContent)
 
     // Mock HEAD request for content-length
-    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': validZipData.length.toString() }))
+    const headResponse = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': validZipData.length.toString() }),
+    )
 
     // Mock checksum (404) and file download (200) with valid ZIP data
     const checksumResp = toIncomingMessage(buildTestResponse(404))
@@ -85,14 +87,17 @@ describe('KB Manager - GitHub URL construction', () => {
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
 
-
     // Mock HEAD request for content-length
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
 
     // Mock checksum (404) and file download (200) - auto-emit end
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
+      buildTestResponse(
+        200,
+        { 'content-length': '100' },
+        createValidZipData({ 'manifest.json': '{}' }),
+      ),
     )
 
     const httpClient = new MockHttpClientService()
@@ -115,7 +120,11 @@ describe('KB Manager - Version handling', () => {
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
+      buildTestResponse(
+        200,
+        { 'content-length': '100' },
+        createValidZipData({ 'manifest.json': '{}' }),
+      ),
     )
 
     const httpClient = new MockHttpClientService()
@@ -205,7 +214,11 @@ describe('KB Manager - ZIP cleanup', () => {
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
+      buildTestResponse(
+        200,
+        { 'content-length': '100' },
+        createValidZipData({ 'manifest.json': '{}' }),
+      ),
     )
 
     // Mock fs.extractZip to throw error
@@ -233,7 +246,11 @@ describe('KB Manager - Extraction error', () => {
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
+      buildTestResponse(
+        200,
+        { 'content-length': '100' },
+        createValidZipData({ 'manifest.json': '{}' }),
+      ),
     )
 
     // Mock fs.extractZip to throw error
@@ -261,7 +278,11 @@ describe('KB Manager - Download message', () => {
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
+      buildTestResponse(
+        200,
+        { 'content-length': '100' },
+        createValidZipData({ 'manifest.json': '{}' }),
+      ),
     )
 
     const httpClient = new MockHttpClientService()
@@ -290,7 +311,11 @@ describe('KB Manager - Success message', () => {
 
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
+      buildTestResponse(
+        200,
+        { 'content-length': '100' },
+        createValidZipData({ 'manifest.json': '{}' }),
+      ),
     )
 
     const httpClient = new MockHttpClientService()
@@ -313,7 +338,11 @@ describe('KB Manager - Custom URL with provided URL', () => {
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
+      buildTestResponse(
+        200,
+        { 'content-length': '100' },
+        createValidZipData({ 'manifest.json': '{}' }),
+      ),
     )
 
     const httpClient = new MockHttpClientService()
@@ -337,7 +366,11 @@ describe('KB Manager - Custom URL with default URL', () => {
     const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '100' }, createValidZipData({ 'manifest.json': '{}' })),
+      buildTestResponse(
+        200,
+        { 'content-length': '100' },
+        createValidZipData({ 'manifest.json': '{}' }),
+      ),
     )
 
     const httpClient = new MockHttpClientService()
