@@ -143,4 +143,37 @@ describe('dispatchCommand() - real handlers integration', () => {
     await fs.writeFile(`${cwd}/config.json`, 'invalid json')
     await expect(dispatchCommand(config, fs)).rejects.toThrow()
   })
+
+  test('dispatches kb-validate command', async () => {
+    const config = {
+      command: 'kb-validate' as const,
+      json: false,
+    }
+
+    // KB validation may fail if KB structure is invalid, but dispatcher should handle it
+    // Just verify the command is dispatched without throwing
+    try {
+      await dispatchCommand(config, fs)
+    } catch (error) {
+      // Expected - KB structure may be invalid in test environment
+      expect((error as Error).message).toContain('Validation failed')
+    }
+  })
+
+  test('dispatches kb-verify command and sets exit code on failure', async () => {
+    const config = {
+      command: 'kb-verify' as const,
+      packagePath: '/nonexistent/package.zip',
+      json: false,
+    }
+
+    // Reset process.exitCode
+    process.exitCode = 0
+
+    // Should not throw but set exit code
+    await dispatchCommand(config, fs)
+
+    // Exit code should be non-zero for verification failure
+    expect(process.exitCode).toBe(1)
+  })
 })

@@ -12,7 +12,8 @@ CLI for installing, managing, and processing documentation, knowledge base asset
 - **Automatic KB download** from GitHub releases with progress tracking and resume support
 - **Custom KB sources** via `--url` flag for air-gapped or custom installations
 - **Skip KB download** with `--no-kb` flag when KB is already available locally
-- **Integrity verification** with SHA256 checksum validation
+- **Integrity verification** with SHA256 checksum validation for downloads and packages
+- **Package verification** via `kb-verify` command for pre-installation validation
 - **User-friendly errors** with actionable suggestions for common failures
 
 ## Installation
@@ -107,12 +108,13 @@ pair-cli update
 
 | Command                 | Description                                            | Reference                                                   |
 | ----------------------- | ------------------------------------------------------ | ----------------------------------------------------------- |
-| `install [target]`      | Install documentation and assets to target folder      | [CLI Reference](../../docs/cli/commands.md#install)         |
-| `update [target]`       | Update existing documentation and assets               | [CLI Reference](../../docs/cli/commands.md#update)          |
-| `update-link [options]` | Validate and update links in installed KB content      | [CLI Reference](../../docs/cli/commands.md#update-link)     |
-| `kb validate [options]` | Validate KB structure, links, and metadata             | [CLI Reference](../../docs/cli/commands.md#kb-validate)     |
-| `package [options]`     | Package KB content into distributable ZIP file         | [CLI Reference](../../docs/cli/commands.md#package)         |
-| `validate-config`       | Validate asset registry configuration                  | [CLI Reference](../../docs/cli/commands.md#validate-config) |
+| `install [target]`       | Install documentation and assets to target folder      | [CLI Reference](../../docs/cli/commands.md#install)         |
+| `update [target]`        | Update existing documentation and assets               | [CLI Reference](../../docs/cli/commands.md#update)          |
+| `update-link [options]`  | Validate and update links in installed KB content      | [CLI Reference](../../docs/cli/commands.md#update-link)     |
+| `kb validate [options]`  | Validate KB structure, links, and metadata             | [CLI Reference](../../docs/cli/commands.md#kb-validate)     |
+| `kb-verify <package>`    | Verify KB package integrity (checksum, structure)      | [CLI Reference](../../docs/cli/commands.md#kb-verify)       |
+| `package [options]`      | Package KB content into distributable ZIP file         | [CLI Reference](../../docs/cli/commands.md#package)         |
+| `validate-config`        | Validate asset registry configuration                  | [CLI Reference](../../docs/cli/commands.md#validate-config) |
 
 **Quick Help**: Run `pair-cli <command> --help` for detailed syntax, options, and examples.
 
@@ -316,6 +318,36 @@ The `package` command:
 - Rewrites absolute links to relative paths for portability
 - Displays file size and warns if >100MB
 - Exit codes: 0 (success), 1 (validation error), 2 (packaging error)
+
+### Verify KB packages
+
+Verify KB package integrity before installation or distribution:
+
+```bash
+# Verify package with human-readable output
+pair kb-verify kb-package.zip
+
+# Verify with JSON output for CI/CD
+pair kb-verify dist/kb-v1.0.0.zip --json
+
+# Verify before installing
+pair kb-verify downloaded-kb.zip && pair install --source downloaded-kb.zip
+```
+
+The `kb-verify` command performs three checks:
+
+1. **Checksum (SHA-256)**: Validates content integrity, detects tampering or corruption
+2. **Structure**: Confirms registry directories exist per config.json
+3. **Manifest**: Validates required fields and metadata
+
+Exit codes: 0 (all checks pass), 1 (any check fails or error)
+
+**Use cases:**
+
+- Verify packages before distribution to ensure integrity
+- Validate downloaded packages before installation
+- Integrate into CI/CD pipelines with `--json` flag
+- Security audit: detect tampering or corruption
 
 - **Common Options** - Shared flags across commands
 - **Help and Examples** - Built-in usage documentation

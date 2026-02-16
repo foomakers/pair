@@ -8,6 +8,7 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 - [update](#update) - Update existing documentation
 - [update-link](#update-link) - Validate and update links
 - [package](#package) - Package KB content into ZIP
+- [kb-verify](#kb-verify) - Verify KB package integrity
 - [validate-config](#validate-config) - Validate configuration
 
 ---
@@ -36,6 +37,7 @@ pair install [registry:target ...]
 | `--config <file>`      | Use custom configuration file (default: `config.json`) |
 | `--source <url\|path>` | KB source URL or local path (overrides auto-download)  |
 | `--offline`            | Skip KB download, use local source only                |
+| `--skip-verify`        | Skip package integrity verification (for ZIP sources)  |
 
 **KB Source Options:**
 
@@ -337,6 +339,76 @@ pair package --root .custom/root/
   - `0` - Success
   - `1` - Validation error
   - `2` - Packaging error
+
+---
+
+## kb-verify
+
+Verify KB package integrity before installation or distribution. Validates checksum (SHA-256), structure, and manifest.
+
+### Usage
+
+```bash
+pair kb-verify <package-path> [options]
+```
+
+### Arguments
+
+| Argument         | Description                        |
+| ---------------- | ---------------------------------- |
+| `<package-path>` | Path to KB package ZIP file to verify |
+
+### Options
+
+| Option                | Description                                       |
+| --------------------- | ------------------------------------------------- |
+| `--json`              | Output verification report as JSON format         |
+| `--log-level <level>` | Set minimum log level (debug, info, warn, error) |
+
+### Examples
+
+**Verify package with human-readable output:**
+
+```bash
+pair kb-verify kb-package.zip
+```
+
+**Verify with JSON output:**
+
+```bash
+pair kb-verify kb-package.zip --json
+```
+
+**Verify package at specific path:**
+
+```bash
+pair kb-verify dist/kb-v1.0.0.zip
+```
+
+**Verify with debug logging:**
+
+```bash
+pair kb-verify kb-package.zip --log-level debug
+```
+
+### Verification Checks
+
+1. **Checksum (SHA-256):** Validates content integrity, detects tampering or corruption
+2. **Structure:** Confirms registry directories exist per config.json
+3. **Manifest:** Validates required fields and metadata
+
+### Usage Notes
+
+- **Integrity verification:** Detects content tampering, corruption, or incomplete downloads
+- **Pre-installation check:** Run before `pair install --source <package>` to ensure validity
+- **Exit codes:**
+  - `0` - All checks pass
+  - `1` - Any check fails or error occurs
+- **Performance:** Fast operation, typically completes in <1s for packages up to 100MB
+- **Use cases:**
+  - Verify packages before distribution
+  - Validate downloaded packages before installation
+  - Check package integrity after transfer or storage
 
 ---
 

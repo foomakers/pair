@@ -9,6 +9,7 @@ Copy-paste ready examples for common `pair-cli` workflows. All examples include 
 - [Validation Workflows](#validation-workflows)
 - [Link Management Workflows](#link-management-workflows)
 - [Packaging Workflows](#packaging-workflows)
+- [Package Verification Workflows](#package-verification-workflows)
 - [Advanced Workflows](#advanced-workflows)
 
 ---
@@ -388,9 +389,100 @@ pair package --root .custom/root/ -o custom-kb.zip
 
 ---
 
+## Package Verification Workflows
+
+### 26. Verify Package Integrity
+
+```bash
+# Verify package with human-readable output
+pair kb-verify kb-package.zip
+
+# Output:
+# ✅ Package verification passed
+#   Checksum: ✓ (SHA-256 valid)
+#   Structure: ✓ (3 registries found)
+#   Manifest: ✓ (all required fields present)
+#   Size: 24.5 MB
+```
+
+### 27. Verify Package with JSON Output
+
+```bash
+# Verify with JSON output for CI/CD integration
+pair kb-verify dist/kb-v1.2.0.zip --json
+
+# Output:
+# {
+#   "valid": true,
+#   "checks": {
+#     "checksum": { "passed": true, "value": "10440ed8..." },
+#     "structure": { "passed": true, "registries": ["github", "knowledge", "adoption"] },
+#     "manifest": { "passed": true, "name": "Knowledge Base", "version": "1.2.0" }
+#   },
+#   "size": 25690112,
+#   "timestamp": "2026-02-16T19:15:30.123Z"
+# }
+```
+
+### 28. Verify Before Installation
+
+```bash
+# Complete workflow: verify then install
+pair kb-verify downloaded-kb.zip && pair install --source downloaded-kb.zip
+
+# Output:
+# ✅ Package verification passed
+#   Checksum: ✓
+#   Structure: ✓
+#   Manifest: ✓
+# ✅ Using local KB source: downloaded-kb.zip
+# ✅ Installed github → .github (12 files)
+# ✅ Installed knowledge → .pair (156 files)
+```
+
+### 29. Verify with Debug Logging
+
+```bash
+# Verify with detailed debug information
+pair kb-verify kb-package.zip --log-level debug
+
+# Output:
+# [DEBUG] Extracting package manifest...
+# [DEBUG] Reading manifest.json
+# [DEBUG] Calculating content checksum...
+# [DEBUG] Validating registry structure...
+# [DEBUG] Checking registry: github
+# [DEBUG] Checking registry: knowledge
+# [DEBUG] Checking registry: adoption
+# ✅ Package verification passed
+#   Checksum: ✓ (10440ed8...)
+#   Structure: ✓ (3 registries found)
+#   Manifest: ✓ (all required fields present)
+```
+
+### 30. Detect Corrupted Package
+
+```bash
+# Attempt to verify corrupted package
+pair kb-verify corrupted-kb.zip
+
+# Output:
+# ❌ Package verification failed
+#   Checksum: ✗ (mismatch detected)
+#     Expected: 10440ed8ddbad6211ef9063c85529dbefe191eb7757669c9777b35e13a1ad6db
+#     Got:      944a04fea544f005b2f1060d5d9d78beb8808d53d609a20bbed148ae84ae1ee2
+#   Structure: not checked (checksum failed)
+#   Manifest: not checked (checksum failed)
+#
+# Exit code: 1
+# 💡 Package may be corrupted or tampered with - do not install
+```
+
+---
+
 ## Advanced Workflows
 
-### 26. Complete CI/CD Pipeline Example
+### 31. Complete CI/CD Pipeline Example
 
 ```bash
 #!/bin/bash
@@ -416,6 +508,10 @@ pair package \
   --author "CI/CD Pipeline" \
   -o dist/kb-production-v1.2.0.zip || exit 1
 
+# Step 5: Verify package integrity
+echo "Verifying package integrity..."
+pair kb-verify dist/kb-production-v1.2.0.zip || exit 1
+
 echo "✅ Pipeline complete!"
 
 # Expected output:
@@ -430,10 +526,15 @@ echo "✅ Pipeline complete!"
 # ✅ Validated 156 files, 1,243 links
 # Creating distribution package...
 # ✅ Package created: dist/kb-production-v1.2.0.zip (24.5 MB)
+# Verifying package integrity...
+# ✅ Package verification passed
+#   Checksum: ✓
+#   Structure: ✓
+#   Manifest: ✓
 # ✅ Pipeline complete!
 ```
 
-### 20. Air-Gapped Environment Workflow
+### 32. Air-Gapped Environment Workflow
 
 ```bash
 # Step 1: On internet-connected machine
@@ -456,7 +557,7 @@ pair install --offline --source ./kb-content
 # ✅ Installed knowledge → .pair (156 files)
 ```
 
-### 21. Multi-Environment Setup
+### 33. Multi-Environment Setup
 
 ```bash
 # Development environment (use latest from main)

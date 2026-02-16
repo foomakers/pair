@@ -14,11 +14,11 @@ import {
 export interface KBManagerDeps {
   httpClient: HttpClientService
   fs: FileSystemService
-  extract?: (zipPath: string, targetPath: string) => Promise<void>
   progressWriter?: ProgressWriter
   isTTY?: boolean
   customUrl?: string
   retryOptions?: RetryOptions
+  skipVerify?: boolean
 }
 
 // Internal: use cacheManager directly. Public re-exports live in the kb-manager index.
@@ -29,7 +29,6 @@ function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
   const result: InstallerDeps = {
     httpClient: deps.httpClient,
   }
-  if (deps.extract) result.extract = deps.extract
   if (deps.progressWriter) result.progressWriter = deps.progressWriter
   if (typeof deps.isTTY !== 'undefined') result.isTTY = deps.isTTY
 
@@ -58,7 +57,7 @@ export async function ensureKBAvailable(version: string, deps: KBManagerDeps): P
   if (sourceType !== SourceType.REMOTE_URL) {
     if (sourceUrl.endsWith('.zip')) {
       // Local ZIP file
-      return await installKBFromLocalZip(version, sourceUrl, fs)
+      return await installKBFromLocalZip(version, sourceUrl, fs, deps.skipVerify)
     } else {
       // Local directory
       return await installKBFromLocalDirectory(version, sourceUrl, fs)

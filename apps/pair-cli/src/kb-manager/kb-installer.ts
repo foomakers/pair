@@ -2,7 +2,6 @@ import { join } from 'path'
 import { tmpdir } from 'os'
 import type { FileSystemService, HttpClientService, RetryOptions } from '@pair/content-ops'
 import {
-  extractZip,
   cleanupFile,
   validateKBStructure,
   normalizeExtractedKB,
@@ -16,7 +15,6 @@ import { announceDownload, announceSuccess } from './download-ui'
 
 export interface InstallerDeps {
   httpClient: HttpClientService
-  extract?: (zipPath: string, targetPath: string) => Promise<void>
   progressWriter?: { write(s: string): void }
   isTTY?: boolean
 }
@@ -30,12 +28,10 @@ async function doInstallSteps(
     httpClient: HttpClientService
     progressWriter?: { write(s: string): void }
     isTTY?: boolean
-    extract?: (zipPath: string, targetPath: string) => Promise<void>
     retryOptions?: RetryOptions
   },
 ): Promise<void> {
-  const { fs, httpClient, progressWriter, isTTY, extract: customExtract, retryOptions } = options
-  const extract = customExtract || extractZip
+  const { fs, httpClient, progressWriter, isTTY, retryOptions } = options
 
   await downloadWithRetry(
     downloadUrl,
@@ -61,7 +57,7 @@ async function doInstallSteps(
     )
   }
 
-  await extract(zipPath, cachePath)
+  await fs.extractZip(zipPath, cachePath)
   await cleanupFile(zipPath, fs)
 }
 
@@ -84,7 +80,6 @@ interface InstallOptions {
   httpClient: HttpClientService
   progressWriter?: { write(s: string): void }
   isTTY?: boolean
-  extract?: (zipPath: string, targetPath: string) => Promise<void>
   retryOptions?: RetryOptions
 }
 
@@ -168,20 +163,6 @@ export async function installKBFromLocalDirectory(
   }
 }
 
-// Helper: perform extract using the proper extract call for in-memory tests
-async function performExtractForZip(
-  resolvedZipPath: string,
-  cachePath: string,
-  fs: FileSystemService,
-  extractFn: (zipPath: string, targetPath: string, fsArg?: FileSystemService) => Promise<void>,
-): Promise<void> {
-  if (fs && fs.constructor && fs.constructor.name === 'InMemoryFileSystemService') {
-    await extractFn(resolvedZipPath, cachePath, fs)
-  } else {
-    await extractFn(resolvedZipPath, cachePath)
-  }
-}
-
 // Helper: finalize installation, normalize and return dataset root
 async function finalizeZipInstall(
   version: string,
@@ -199,8 +180,8 @@ export async function installKBFromLocalZip(
   version: string,
   zipPath: string,
   fs: FileSystemService,
+  skipVerify = false,
 ): Promise<string> {
-  const extract = extractZip
   const cachePath = cacheManager.getCachedKBPath(version)
 
   // Resolve relative paths
@@ -211,10 +192,25 @@ export async function installKBFromLocalZip(
     throw new Error(`ZIP file not found: ${resolvedZipPath}`)
   }
 
+  // Verify package integrity (unless skipped)
+  const { logger: log } = await import('@pair/content-ops')
+  if (!skipVerify) {
+    const { verifyPackage } = await import('../commands/kb-verify/verify-package.js')
+    const result = await verifyPackage(resolvedZipPath, fs)
+    if (!result.valid) {
+      throw new Error(
+        `Package verification failed:\n${result.errors.join('\n')}\n\nUse --skip-verify to bypass verification.`,
+      )
+    }
+    log.info('Package verification passed')
+  } else {
+    log.warn('Skipping package verification (--skip-verify)')
+  }
+
   await cacheManager.ensureCacheDirectory(cachePath, fs)
 
   try {
-    await performExtractForZip(resolvedZipPath, cachePath, fs, extract)
+    await fs.extractZip(resolvedZipPath, cachePath)
     return await finalizeZipInstall(version, cachePath, fs)
   } catch (error) {
     const err = error as Error

@@ -3,7 +3,9 @@ import type { ManifestMetadata } from './metadata'
 import type { RegistryConfig } from '#registry'
 import { rewriteFileLinks } from './link-rewriter'
 import { collectLayoutFiles, resolveLayoutPaths, type LayoutMode } from '../../registry/layout'
+import { createHash } from 'crypto'
 import path from 'path'
+import { comparePathsDeterministic } from '../kb-verify/sort-paths'
 
 interface ZipOptions {
   projectRoot: string
@@ -27,8 +29,14 @@ export async function createPackageZip(
 
   try {
     await fsService.mkdir(tempDir, { recursive: true })
-    await writeManifest(tempDir, options.manifest, fsService)
+    // Copy content first
     await copyRegistrySources(tempDir, options, fsService)
+    // Compute checksum over content files
+    const contentChecksum = await computeContentChecksum(tempDir, fsService)
+    // Write manifest with checksum
+    const manifestWithChecksum = { ...options.manifest, contentChecksum }
+    await writeManifest(tempDir, manifestWithChecksum, fsService)
+    // Create ZIP
     await fsService.createZip([tempDir], options.outputPath)
   } catch (error) {
     await cleanupOnError(options.outputPath, fsService)
@@ -36,6 +44,51 @@ export async function createPackageZip(
   } finally {
     await cleanupTempDirectory(tempDir, fsService)
   }
+}
+
+/**
+ * Compute SHA-256 checksum over all content files in temp directory
+ * Files are processed in sorted order for deterministic results
+ * Excludes manifest.json which will be added after checksum computation
+ */
+async function computeContentChecksum(
+  tempDir: string,
+  fsService: FileSystemService,
+): Promise<string> {
+  const hash = createHash('sha256')
+  const files = await collectAllFiles(tempDir, fsService)
+
+  // Convert to relative paths and sort for deterministic order
+  const relativePaths = files.map(f => path.relative(tempDir, f)).sort(comparePathsDeterministic)
+
+  for (const relativePath of relativePaths) {
+    const absolutePath = path.join(tempDir, relativePath)
+    const content = fsService.readFileSync(absolutePath)
+    hash.update(content)
+  }
+
+  return hash.digest('hex')
+}
+
+/**
+ * Recursively collect all files in directory
+ */
+async function collectAllFiles(dir: string, fsService: FileSystemService): Promise<string[]> {
+  const files: string[] = []
+  const entries = await fsService.readdir(dir)
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name)
+
+    if (entry.isDirectory()) {
+      const subFiles = await collectAllFiles(fullPath, fsService)
+      files.push(...subFiles)
+    } else if (entry.isFile()) {
+      files.push(fullPath)
+    }
+  }
+
+  return files
 }
 
 async function writeManifest(

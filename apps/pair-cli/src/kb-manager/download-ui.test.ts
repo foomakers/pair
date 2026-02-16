@@ -7,28 +7,30 @@ import {
 } from '@pair/content-ops'
 import { ensureKBAvailable } from './kb-availability'
 
-const mockExtract = vi.fn()
-
 describe('Download UI', () => {
   it('should display download start message', async () => {
     vi.clearAllMocks()
-    mockExtract.mockReset().mockResolvedValue(undefined)
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
+
     const httpClient = new MockHttpClientService()
 
-    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    // Create valid ZIP data
+    const validZipData = JSON.stringify({ 'manifest.json': '{}' })
+    const headResponse = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': validZipData.length.toString() }),
+    )
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+      buildTestResponse(200, { 'content-length': validZipData.length.toString() }, validZipData),
     )
     const checksumResp = toIncomingMessage(buildTestResponse(404))
 
     httpClient.setRequestResponses([headResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
 
-    await ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract })
+    await ensureKBAvailable(testVersion, { httpClient, fs })
 
     expect(consoleLogSpy).toHaveBeenCalledWith(
       expect.stringContaining('KB not found, downloading v0.2.0 from GitHub'),
@@ -39,23 +41,27 @@ describe('Download UI', () => {
 
   it('should display success message after installation', async () => {
     vi.clearAllMocks()
-    mockExtract.mockReset().mockResolvedValue(undefined)
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     const testVersion = '0.2.0'
     const fs = new InMemoryFileSystemService({}, '/', '/')
+
     const httpClient = new MockHttpClientService()
 
-    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '1024' }))
+    // Create valid ZIP data
+    const validZipData = JSON.stringify({ 'manifest.json': '{}' })
+    const headResponse = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': validZipData.length.toString() }),
+    )
     const fileResp = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '1024' }, 'fake zip data'),
+      buildTestResponse(200, { 'content-length': validZipData.length.toString() }, validZipData),
     )
     const checksumResp = toIncomingMessage(buildTestResponse(404))
 
     httpClient.setRequestResponses([headResponse])
     httpClient.setGetResponses([fileResp, checksumResp])
 
-    await ensureKBAvailable(testVersion, { httpClient, fs, extract: mockExtract })
+    await ensureKBAvailable(testVersion, { httpClient, fs })
 
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('✅ KB v0.2.0 installed'))
 
