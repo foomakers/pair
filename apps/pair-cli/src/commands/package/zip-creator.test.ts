@@ -482,4 +482,88 @@ describe('createPackageZip - content checksum', () => {
       }
     }
   })
+
+  it('created package passes verification (smoke test)', async () => {
+    const testDir = path.join(os.tmpdir(), `test-smoke-${Date.now()}`)
+    const projectRoot = path.join(testDir, 'project')
+    const outputPath = path.join(testDir, 'test-package.zip')
+
+    try {
+      // Setup
+      fs.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
+      fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/doc.md'), 'smoke test content')
+
+      const { fileSystemService } = await import('@pair/content-ops')
+      const realFs = fileSystemService
+
+      const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
+      const manifest: ManifestMetadata = {
+        name: 'smoke-test-kb',
+        version: '1.0.0',
+        created_at: '2025-11-30T00:00:00Z',
+        registries: ['knowledge'],
+      }
+
+      // Create package
+      await createPackageZip({ projectRoot, registries, manifest, outputPath }, realFs)
+      expect(fs.existsSync(outputPath)).toBe(true)
+
+      // Verify package passes verification
+      const { verifyPackage } = await import('../kb-verify/verify-package.js')
+      const result = await verifyPackage(outputPath, realFs)
+
+      expect(result.valid).toBe(true)
+      expect(result.errors).toEqual([])
+    } finally {
+      if (fs.existsSync(testDir)) {
+        fs.rmSync(testDir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  it('corrupted package fails verification (smoke test)', async () => {
+    const testDir = path.join(os.tmpdir(), `test-corrupt-${Date.now()}`)
+    const projectRoot = path.join(testDir, 'project')
+    const outputPath = path.join(testDir, 'corrupt-package.zip')
+
+    try {
+      // Setup and create valid package
+      fs.mkdirSync(path.join(projectRoot, '.pair/knowledge'), { recursive: true })
+      fs.writeFileSync(path.join(projectRoot, '.pair/knowledge/doc.md'), 'original content')
+
+      const { fileSystemService } = await import('@pair/content-ops')
+      const realFs = fileSystemService
+
+      const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
+      const manifest: ManifestMetadata = {
+        name: 'corrupt-test-kb',
+        version: '1.0.0',
+        created_at: '2025-11-30T00:00:00Z',
+        registries: ['knowledge'],
+      }
+
+      await createPackageZip({ projectRoot, registries, manifest, outputPath }, realFs)
+
+      // Corrupt the package by replacing checksum in manifest with invalid value
+      const AdmZip = (await import('adm-zip')).default
+      const zip = new AdmZip(outputPath)
+      const manifestEntry = zip.getEntry('manifest.json')
+      const manifestData = JSON.parse(manifestEntry!.getData().toString('utf-8'))
+      manifestData.contentChecksum = 'corrupted_invalid_checksum_value'
+      zip.updateFile('manifest.json', Buffer.from(JSON.stringify(manifestData, null, 2)))
+      zip.writeZip(outputPath)
+
+      // Verify corrupted package fails verification
+      const { verifyPackage } = await import('../kb-verify/verify-package.js')
+      const result = await verifyPackage(outputPath, realFs)
+
+      expect(result.valid).toBe(false)
+      expect(result.errors.length).toBeGreaterThan(0)
+      expect(result.errors.join('\n')).toContain('checksum')
+    } finally {
+      if (fs.existsSync(testDir)) {
+        fs.rmSync(testDir, { recursive: true, force: true })
+      }
+    }
+  })
 })
