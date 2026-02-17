@@ -12,6 +12,7 @@ describe('commandRegistry', () => {
         'update-link',
         'validate-config',
         'kb-validate',
+        'kb-info',
       ]),
     )
 
