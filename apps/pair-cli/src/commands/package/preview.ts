@@ -42,7 +42,7 @@ export function formatPreview(params: PreviewParams): string {
   }
   lines.push('')
 
-  lines.push(`  Files:  ~${fileCount}`)
+  lines.push(`  Files:  ${fileCount}`)
   lines.push(`  Output: ${chalk.cyan(outputPath)}`)
   lines.push('')
   lines.push(chalk.dim('─'.repeat(50)))

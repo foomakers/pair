@@ -70,7 +70,7 @@ describe('formatPreview', () => {
       outputPath: '/dist/package.zip',
     })
 
-    expect(result).toContain('~99')
+    expect(result).toContain('99')
     expect(result).toContain('/dist/package.zip')
   })
 })

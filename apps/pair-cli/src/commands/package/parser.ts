@@ -1,4 +1,5 @@
 import { validateLayoutOption, parseSkipRegistriesOption } from '#registry'
+import { parseTagsInput } from './input-validators'
 
 /**
  * Configuration for package command
@@ -44,17 +45,6 @@ interface ParsePackageOptions {
   license?: string
 }
 
-/**
- * Builds metadata config section
- */
-function parseTags(raw?: string): string[] {
-  if (!raw) return []
-  return raw
-    .split(',')
-    .map(t => t.trim())
-    .filter(Boolean)
-}
-
 function buildCoreMetadata(options: ParsePackageOptions): Partial<PackageCommandConfig> {
   const pkgVersion = options.pkgVersion || options.version
   return {
@@ -74,7 +64,7 @@ function buildInteractiveConfig(
   const defaults = defaultInteractiveFields()
   return {
     interactive: options.interactive ?? defaults.interactive,
-    tags: options.tags ? parseTags(options.tags) : defaults.tags,
+    tags: options.tags ? parseTagsInput(options.tags) : defaults.tags,
     license: options.license ?? defaults.license,
   }
 }

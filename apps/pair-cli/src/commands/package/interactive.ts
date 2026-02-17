@@ -69,7 +69,7 @@ export async function runInteractiveFlow(
 
   try {
     const metadata = await collectMetadata(defaults)
-    const previewInfo = getPreviewInfo(config, projectRoot, fs)
+    const previewInfo = await getPreviewInfo(config, projectRoot, fs)
     console.log(formatPreview({ metadata, ...previewInfo }))
 
     const confirmed = await confirm({ message: 'Create package?', default: true })
@@ -139,22 +139,22 @@ function buildCliFlagsSource(config: PackageCommandConfig): Partial<ResolvedMeta
   if (config.description) flags.description = config.description
   if (config.author) flags.author = config.author
   if (config.tags.length > 0) flags.tags = config.tags
-  if (config.license !== 'MIT') flags.license = config.license
+  flags.license = config.license
   return flags
 }
 
-function getPreviewInfo(
+async function getPreviewInfo(
   config: PackageCommandConfig,
   projectRoot: string,
   fs: FileSystemService,
-): { registries: string[]; fileCount: number; outputPath: string } {
+): Promise<{ registries: string[]; fileCount: number; outputPath: string }> {
   try {
     const result = loadConfigWithOverrides(fs, { projectRoot, skipBaseConfig: !!config.sourceDir })
     const allRegistries = extractRegistries(result.config)
     const registries = Object.values(allRegistries)
       .map(r => r.source || '')
       .filter(Boolean)
-    const fileCount = registries.length * 10 // rough estimate
+    const fileCount = await countRegistryFiles(registries, projectRoot, fs)
 
     const outputPath = config.output
       ? path.resolve(config.output)
@@ -165,6 +165,36 @@ function getPreviewInfo(
     logger.debug('Could not load config for preview, using defaults')
     return { registries: [], fileCount: 0, outputPath: config.output || 'kb-package.zip' }
   }
+}
+
+async function countDirFiles(fs: FileSystemService, dir: string): Promise<number> {
+  let count = 0
+  const entries = await fs.readdir(dir)
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      count += await countDirFiles(fs, full)
+    } else {
+      count++
+    }
+  }
+  return count
+}
+
+function countRegistryFiles(
+  registries: string[],
+  projectRoot: string,
+  fs: FileSystemService,
+): Promise<number> {
+  return registries.reduce(async (accP, reg) => {
+    const acc = await accP
+    try {
+      return acc + (await countDirFiles(fs, path.join(projectRoot, reg)))
+    } catch {
+      logger.debug(`Could not count files in ${reg}`)
+      return acc
+    }
+  }, Promise.resolve(0))
 }
 
 function isExitPromptError(error: unknown): boolean {
