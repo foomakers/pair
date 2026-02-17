@@ -45,6 +45,10 @@ describe('handleKbVerifyCommand', () => {
     const manifest: ManifestMetadata = {
       name: 'test-kb',
       version: '1.0.0',
+      description: 'Test KB',
+      author: 'Tester',
+      tags: [],
+      license: 'MIT',
       created_at: new Date().toISOString(),
       registries: ['knowledge'],
     }
@@ -96,6 +100,10 @@ describe('handleKbVerifyCommand', () => {
     const manifest: ManifestMetadata = {
       name: 'test-kb',
       version: '1.0.0',
+      description: 'Test KB',
+      author: 'Tester',
+      tags: [],
+      license: 'MIT',
       created_at: new Date().toISOString(),
       registries: ['knowledge'],
     }

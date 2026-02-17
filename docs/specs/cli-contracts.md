@@ -100,6 +100,35 @@ export interface PackageOptions {
   author?: string // --author <author>
   skipRegistries?: string[] // --skip-registries <list> (comma-separated)
   root?: string // --root <path> (default: .pair/)
+  interactive: boolean // -i, --interactive (guided prompts, default: false)
+  tags: string[] // --tags <tags> (comma-separated, default: [])
+  license: string // --license <license> (default: MIT)
+}
+
+// Manifest metadata — all fields required, factory defaults via defaultManifestFields()
+export interface ManifestMetadata {
+  name: string
+  version: string
+  description: string
+  author: string
+  tags: string[]
+  license: string
+  created_at: string
+  registries: string[]
+  contentChecksum?: string
+}
+
+// User preferences persisted at ~/.pair/preferences.json
+export interface PreferencesData {
+  packageMetadata: Partial<{
+    name: string
+    version: string
+    description: string
+    author: string
+    tags: string[]
+    license: string
+  }>
+  updatedAt: string
 }
 
 // Validation constraints

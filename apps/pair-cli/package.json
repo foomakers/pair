@@ -46,6 +46,7 @@
     "mdlint:fix": "markdownlint-fix"
   },
   "dependencies": {
+    "@inquirer/prompts": "catalog:",
     "@pair/knowledge-hub": "workspace:*",
     "adm-zip": "catalog:",
     "chalk": "catalog:",

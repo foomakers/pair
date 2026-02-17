@@ -19,6 +19,10 @@ describe('verifyStructure', () => {
     const manifest: ManifestMetadata = {
       name: 'test',
       version: '1.0.0',
+      description: 'Test',
+      author: 'Tester',
+      tags: [],
+      license: 'MIT',
       created_at: '2025-01-01',
       registries: ['knowledge', 'adoption'],
     }
@@ -38,6 +42,10 @@ describe('verifyStructure', () => {
     const manifest: ManifestMetadata = {
       name: 'test',
       version: '1.0.0',
+      description: 'Test',
+      author: 'Tester',
+      tags: [],
+      license: 'MIT',
       created_at: '2025-01-01',
       registries: ['knowledge', 'adoption'],
     }
@@ -54,6 +62,10 @@ describe('verifyStructure', () => {
     const manifest: ManifestMetadata = {
       name: 'test',
       version: '1.0.0',
+      description: 'Test',
+      author: 'Tester',
+      tags: [],
+      license: 'MIT',
       created_at: '2025-01-01',
       registries: ['knowledge'],
     }
@@ -69,6 +81,10 @@ describe('verifyStructure', () => {
     const manifest: ManifestMetadata = {
       name: 'test',
       version: '1.0.0',
+      description: 'Test',
+      author: 'Tester',
+      tags: [],
+      license: 'MIT',
       created_at: '2025-01-01',
       registries: ['knowledge'],
     }

@@ -15,6 +15,16 @@ export interface PackageCommandConfig {
   layout?: 'source' | 'target'
   skipRegistries?: string[]
   root?: string
+  interactive: boolean
+  tags: string[]
+  license: string
+}
+
+function defaultInteractiveFields(): Pick<
+  PackageCommandConfig,
+  'interactive' | 'tags' | 'license'
+> {
+  return { interactive: false, tags: [], license: 'MIT' }
 }
 
 interface ParsePackageOptions {
@@ -29,12 +39,23 @@ interface ParsePackageOptions {
   layout?: string
   skipRegistries?: string
   root?: string
+  interactive?: boolean
+  tags?: string
+  license?: string
 }
 
 /**
  * Builds metadata config section
  */
-function buildMetadataConfig(options: ParsePackageOptions): Partial<PackageCommandConfig> {
+function parseTags(raw?: string): string[] {
+  if (!raw) return []
+  return raw
+    .split(',')
+    .map(t => t.trim())
+    .filter(Boolean)
+}
+
+function buildCoreMetadata(options: ParsePackageOptions): Partial<PackageCommandConfig> {
   const pkgVersion = options.pkgVersion || options.version
   return {
     ...(options.output && { output: options.output }),
@@ -44,6 +65,25 @@ function buildMetadataConfig(options: ParsePackageOptions): Partial<PackageComma
     ...(options.description && { description: options.description }),
     ...(options.author && { author: options.author }),
     ...(options.logLevel && { logLevel: options.logLevel }),
+  }
+}
+
+function buildInteractiveConfig(
+  options: ParsePackageOptions,
+): Pick<PackageCommandConfig, 'interactive' | 'tags' | 'license'> {
+  const defaults = defaultInteractiveFields()
+  return {
+    interactive: options.interactive ?? defaults.interactive,
+    tags: options.tags ? parseTags(options.tags) : defaults.tags,
+    license: options.license ?? defaults.license,
+  }
+}
+
+function buildMetadataConfig(options: ParsePackageOptions): Omit<PackageCommandConfig, 'command'> {
+  return {
+    ...defaultInteractiveFields(),
+    ...buildCoreMetadata(options),
+    ...buildInteractiveConfig(options),
   }
 }
 

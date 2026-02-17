@@ -387,6 +387,59 @@ pair package --root .custom/root/ -o custom-kb.zip
 # Links will be relativized from .custom/root/ instead of .pair/
 ```
 
+### 26a. Interactive Package Creation
+
+```bash
+# Create package with guided prompts
+pair package --interactive
+
+# Output:
+# ? Package name: (my-project)
+# ? Version: (1.0.0)
+# ? Description: (Knowledge base package)
+# ? Author: (John Doe)
+# ? Tags (comma-separated):
+# ? License: (MIT)
+#
+# 📦 Package Preview
+# ──────────────────────────────────────────────────
+#   Metadata
+#     Name:        my-project
+#     Version:     1.0.0
+#     Description: Knowledge base package
+#     Author:      John Doe
+#     Tags:        (none)
+#     License:     MIT
+#
+#   Registries
+#     • knowledge
+#     • adoption
+#
+#   Files:  ~20
+#   Output: /project/dist/kb-package.zip
+# ──────────────────────────────────────────────────
+# ? Create package? (Y/n) Y
+# ✅ Package created: /project/dist/kb-package.zip (24.5 MB)
+```
+
+### 26b. Interactive with Pre-filled Flags
+
+```bash
+# Override smart defaults with explicit flags
+pair package --interactive --name "my-kb" --version 2.0.0
+
+# Name and version prompts will default to "my-kb" and "2.0.0"
+```
+
+### 26c. Package with Tags and License
+
+```bash
+# Non-interactive with tags and license
+pair package --tags "ai,devops,testing" --license Apache-2.0
+
+# Tags and license are included in manifest.json
+```
+
 ---
 
 ## Package Verification Workflows

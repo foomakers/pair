@@ -7,6 +7,9 @@ describe('parsePackageCommand', () => {
 
     expect(config).toEqual({
       command: 'package',
+      interactive: false,
+      tags: [],
+      license: 'MIT',
     })
   })
 
@@ -52,6 +55,9 @@ describe('parsePackageCommand', () => {
 
       expect(config).toEqual({
         command: 'package',
+        interactive: false,
+        tags: [],
+        license: 'MIT',
         layout: 'source',
       })
     })
@@ -61,6 +67,9 @@ describe('parsePackageCommand', () => {
 
       expect(config).toEqual({
         command: 'package',
+        interactive: false,
+        tags: [],
+        license: 'MIT',
         layout: 'target',
       })
     })
@@ -78,6 +87,9 @@ describe('parsePackageCommand', () => {
 
       expect(config).toEqual({
         command: 'package',
+        interactive: false,
+        tags: [],
+        license: 'MIT',
         skipRegistries: ['adoption', 'agents'],
       })
     })
@@ -87,6 +99,9 @@ describe('parsePackageCommand', () => {
 
       expect(config).toEqual({
         command: 'package',
+        interactive: false,
+        tags: [],
+        license: 'MIT',
         skipRegistries: ['skills'],
       })
     })
@@ -96,6 +111,9 @@ describe('parsePackageCommand', () => {
 
       expect(config).toEqual({
         command: 'package',
+        interactive: false,
+        tags: [],
+        license: 'MIT',
         skipRegistries: [],
       })
     })
@@ -107,6 +125,9 @@ describe('parsePackageCommand', () => {
 
       expect(config).toEqual({
         command: 'package',
+        interactive: false,
+        tags: [],
+        license: 'MIT',
         root: '/custom/kb',
       })
     })
@@ -116,8 +137,65 @@ describe('parsePackageCommand', () => {
 
       expect(config).toEqual({
         command: 'package',
+        interactive: false,
+        tags: [],
+        license: 'MIT',
         root: './my-kb',
       })
+    })
+  })
+
+  describe('interactive flag', () => {
+    it('should parse --interactive as boolean', () => {
+      const config = parsePackageCommand({ interactive: true })
+
+      expect(config.interactive).toBe(true)
+    })
+
+    it('defaults to false when not provided', () => {
+      const config = parsePackageCommand({})
+
+      expect(config.interactive).toBe(false)
+    })
+  })
+
+  describe('tags flag', () => {
+    it('should parse comma-separated tags', () => {
+      const config = parsePackageCommand({ tags: 'ai,devops,testing' })
+
+      expect(config.tags).toEqual(['ai', 'devops', 'testing'])
+    })
+
+    it('should trim whitespace from tags', () => {
+      const config = parsePackageCommand({ tags: ' ai , devops , testing ' })
+
+      expect(config.tags).toEqual(['ai', 'devops', 'testing'])
+    })
+
+    it('should filter empty tags', () => {
+      const config = parsePackageCommand({ tags: 'ai,,testing,' })
+
+      expect(config.tags).toEqual(['ai', 'testing'])
+    })
+
+    it('defaults to empty array when not provided', () => {
+      const config = parsePackageCommand({})
+
+      expect(config.tags).toEqual([])
+    })
+  })
+
+  describe('license flag', () => {
+    it('should parse --license', () => {
+      const config = parsePackageCommand({ license: 'Apache-2.0' })
+
+      expect(config.license).toBe('Apache-2.0')
+    })
+
+    it('defaults to MIT when not provided', () => {
+      const config = parsePackageCommand({})
+
+      expect(config.license).toBe('MIT')
     })
   })
 
@@ -132,6 +210,9 @@ describe('parsePackageCommand', () => {
 
       expect(config).toEqual({
         command: 'package',
+        interactive: false,
+        tags: [],
+        license: 'MIT',
         layout: 'source',
         skipRegistries: ['adoption', 'skills'],
         root: './kb',

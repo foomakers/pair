@@ -19,6 +19,20 @@ function testRegistry(source: string, targetPath = source): RegistryConfig {
   }
 }
 
+function testManifest(overrides: Partial<ManifestMetadata> = {}): ManifestMetadata {
+  return {
+    name: 'test-kb',
+    version: '1.0.0',
+    description: 'Test KB',
+    author: 'Tester',
+    tags: [],
+    license: 'MIT',
+    created_at: '2025-11-30T00:00:00Z',
+    registries: [],
+    ...overrides,
+  }
+}
+
 // Shared test setup
 let fsService: InMemoryFileSystemService
 let tempDir: string
@@ -49,12 +63,7 @@ describe('createPackageZip - basic operations', () => {
     await fsService.writeFile(`${projectRoot}/.pair/knowledge/README.md`, 'KB content')
 
     const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
-    const manifest: ManifestMetadata = {
-      name: 'test-kb',
-      version: '1.0.0',
-      created_at: '2025-11-30T00:00:00Z',
-      registries: ['knowledge'],
-    }
+    const manifest = testManifest({ registries: ['knowledge'] })
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
@@ -66,12 +75,7 @@ describe('createPackageZip - basic operations', () => {
     const projectRoot = '/test-project'
     const testOutput = path.join(tempDir, 'nested/deep/package.zip')
     const registries: RegistryConfig[] = []
-    const manifest: ManifestMetadata = {
-      name: 'test',
-      version: '1.0.0',
-      created_at: '2025-11-30T00:00:00Z',
-      registries: [],
-    }
+    const manifest = testManifest({ name: 'test' })
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath: testOutput }, fsService)
 
@@ -88,14 +92,12 @@ describe('createPackageZip - manifest injection', () => {
     await fsService.writeFile(`${projectRoot}/.pair/knowledge/file.md`, 'content')
 
     const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
-    const manifest: ManifestMetadata = {
+    const manifest = testManifest({
       name: 'my-kb',
       version: '2.0.0',
-      description: 'Test KB',
-      author: 'Tester',
       created_at: '2025-11-30T12:00:00Z',
       registries: ['knowledge'],
-    }
+    })
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
@@ -107,14 +109,14 @@ describe('createPackageZip - manifest injection', () => {
     await fsService.writeFile(`${projectRoot}/.pair/adoption/doc.md`, 'adoption')
 
     const registries = [testRegistry('.pair/adoption', '.pair-adoption')]
-    const manifest: ManifestMetadata = {
+    const manifest = testManifest({
       name: 'test-package',
       version: '1.5.0',
       description: 'Test description',
       author: 'Test Author',
       created_at: '2025-11-30T15:30:00Z',
       registries: ['adoption'],
-    }
+    })
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
@@ -133,12 +135,7 @@ describe('createPackageZip - single registry', () => {
     await fsService.writeFile(`${projectRoot}/.pair/knowledge/sub/doc.md`, 'subdoc')
 
     const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
-    const manifest: ManifestMetadata = {
-      name: 'kb',
-      version: '1.0.0',
-      created_at: '2025-11-30T00:00:00Z',
-      registries: ['knowledge'],
-    }
+    const manifest = testManifest({ name: 'kb', registries: ['knowledge'] })
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
@@ -150,12 +147,7 @@ describe('createPackageZip - single registry', () => {
     await fsService.writeFile(`${projectRoot}/AGENTS.md`, '# AI Agents')
 
     const registries = [testRegistry('AGENTS.md', 'AGENTS.md')]
-    const manifest: ManifestMetadata = {
-      name: 'agents-kb',
-      version: '1.0.0',
-      created_at: '2025-11-30T00:00:00Z',
-      registries: ['agents'],
-    }
+    const manifest = testManifest({ name: 'agents-kb', registries: ['agents'] })
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
@@ -178,12 +170,10 @@ describe('createPackageZip - multiple registries', () => {
       testRegistry('.pair/adoption', '.pair-adoption'),
       testRegistry('.github', '.github'),
     ]
-    const manifest: ManifestMetadata = {
+    const manifest = testManifest({
       name: 'full-kb',
-      version: '1.0.0',
-      created_at: '2025-11-30T00:00:00Z',
       registries: ['knowledge', 'adoption', 'github'],
-    }
+    })
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
@@ -196,12 +186,7 @@ describe('createPackageZip - multiple registries', () => {
     await fsService.writeFile(`${projectRoot}/.pair/knowledge/top.md`, 'top file')
 
     const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
-    const manifest: ManifestMetadata = {
-      name: 'structured-kb',
-      version: '1.0.0',
-      created_at: '2025-11-30T00:00:00Z',
-      registries: ['knowledge'],
-    }
+    const manifest = testManifest({ name: 'structured-kb', registries: ['knowledge'] })
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
@@ -217,12 +202,7 @@ describe('createPackageZip - symlink and structure', () => {
     const projectRoot = '/test-project'
     await fsService.writeFile(`${projectRoot}/.pair/knowledge/real.md`, 'real file')
 
-    const manifest: ManifestMetadata = {
-      name: 'kb-no-symlinks',
-      version: '1.0.0',
-      created_at: '2025-11-30T00:00:00Z',
-      registries: ['knowledge'],
-    }
+    const manifest = testManifest({ name: 'kb-no-symlinks', registries: ['knowledge'] })
 
     await expect(
       createPackageZip(
@@ -243,12 +223,10 @@ describe('createPackageZip - symlink and structure', () => {
       testRegistry('.github', '.github'),
       testRegistry('AGENTS.md', 'AGENTS.md'),
     ]
-    const manifest: ManifestMetadata = {
+    const manifest = testManifest({
       name: 'complete-kb',
-      version: '1.0.0',
-      created_at: '2025-11-30T00:00:00Z',
       registries: ['knowledge', 'github', 'agents'],
-    }
+    })
 
     await createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService)
 
@@ -274,12 +252,7 @@ describe('createPackageZip - target layout', () => {
     // Seed files in target path (not source)
     await fsService.writeFile(`${projectRoot}/.pair-knowledge/doc.md`, 'target content')
 
-    const manifest: ManifestMetadata = {
-      name: 'target-kb',
-      version: '1.0.0',
-      created_at: '2025-11-30T00:00:00Z',
-      registries: ['knowledge'],
-    }
+    const manifest = testManifest({ name: 'target-kb', registries: ['knowledge'] })
 
     await createPackageZip(
       { projectRoot, registries: [registry], manifest, outputPath, layout: 'target' },
@@ -297,12 +270,7 @@ describe('createPackageZip - error handling', () => {
   it('throws error if registry source does not exist', async () => {
     const projectRoot = '/test-project'
     const registries = [testRegistry('.pair/missing', '.pair-missing')]
-    const manifest: ManifestMetadata = {
-      name: 'kb',
-      version: '1.0.0',
-      created_at: '2025-11-30T00:00:00Z',
-      registries: ['missing'],
-    }
+    const manifest = testManifest({ name: 'kb', registries: ['missing'] })
 
     await expect(
       createPackageZip({ projectRoot, registries, manifest, outputPath }, fsService),
@@ -311,12 +279,7 @@ describe('createPackageZip - error handling', () => {
 
   it('cleans up partial ZIP on error', async () => {
     const projectRoot = '/test-project'
-    const manifest: ManifestMetadata = {
-      name: 'kb',
-      version: '1.0.0',
-      created_at: '2025-11-30T00:00:00Z',
-      registries: ['bad'],
-    }
+    const manifest = testManifest({ name: 'kb', registries: ['bad'] })
 
     try {
       await createPackageZip(
@@ -347,12 +310,7 @@ describe('createPackageZip - content checksum', () => {
       const realFs = fileSystemService
 
       const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
-      const manifest: ManifestMetadata = {
-        name: 'test-kb',
-        version: '1.0.0',
-        created_at: '2025-11-30T00:00:00Z',
-        registries: ['knowledge'],
-      }
+      const manifest = testManifest({ registries: ['knowledge'] })
 
       await createPackageZip({ projectRoot, registries, manifest, outputPath }, realFs)
 
@@ -399,12 +357,7 @@ describe('createPackageZip - content checksum', () => {
       const realFs = fileSystemService
 
       const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
-      const manifest: ManifestMetadata = {
-        name: 'test-kb',
-        version: '1.0.0',
-        created_at: '2025-11-30T00:00:00Z',
-        registries: ['knowledge'],
-      }
+      const manifest = testManifest({ registries: ['knowledge'] })
 
       // Create both packages
       await createPackageZip(
@@ -451,12 +404,7 @@ describe('createPackageZip - content checksum', () => {
       const realFs = fileSystemService
 
       const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
-      const manifest: ManifestMetadata = {
-        name: 'test-kb',
-        version: '1.0.0',
-        created_at: '2025-11-30T00:00:00Z',
-        registries: ['knowledge'],
-      }
+      const manifest = testManifest({ registries: ['knowledge'] })
 
       // Create both packages
       await createPackageZip(
@@ -497,12 +445,7 @@ describe('createPackageZip - content checksum', () => {
       const realFs = fileSystemService
 
       const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
-      const manifest: ManifestMetadata = {
-        name: 'smoke-test-kb',
-        version: '1.0.0',
-        created_at: '2025-11-30T00:00:00Z',
-        registries: ['knowledge'],
-      }
+      const manifest = testManifest({ name: 'smoke-test-kb', registries: ['knowledge'] })
 
       // Create package
       await createPackageZip({ projectRoot, registries, manifest, outputPath }, realFs)
@@ -539,12 +482,7 @@ describe('createPackageZip - content checksum', () => {
       const realFs = fileSystemService
 
       const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
-      const manifest: ManifestMetadata = {
-        name: 'regression-test-kb',
-        version: '1.0.0',
-        created_at: '2025-11-30T00:00:00Z',
-        registries: ['knowledge'],
-      }
+      const manifest = testManifest({ name: 'regression-test-kb', registries: ['knowledge'] })
 
       // Create package (this embeds contentChecksum in manifest)
       await createPackageZip({ projectRoot, registries, manifest, outputPath }, realFs)
@@ -578,12 +516,7 @@ describe('createPackageZip - content checksum', () => {
       const realFs = fileSystemService
 
       const registries = [testRegistry('.pair/knowledge', '.pair-knowledge')]
-      const manifest: ManifestMetadata = {
-        name: 'corrupt-test-kb',
-        version: '1.0.0',
-        created_at: '2025-11-30T00:00:00Z',
-        registries: ['knowledge'],
-      }
+      const manifest = testManifest({ name: 'corrupt-test-kb', registries: ['knowledge'] })
 
       await createPackageZip({ projectRoot, registries, manifest, outputPath }, realFs)
 

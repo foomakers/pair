@@ -128,12 +128,25 @@ pair kb-verify kb-v1.0.0.zip
 pair install --source kb-v1.0.0.zip
 ```
 
+**Interactive Package Creation:**
+
+```bash
+# Use guided prompts for metadata entry
+pair package --interactive
+
+# Pre-fill some fields, edit others interactively
+pair package --interactive --name "my-kb" --version 2.0.0
+```
+
+Interactive mode resolves smart defaults from `package.json`, `git config`, and saved preferences (`~/.pair/preferences.json`). Each field can be accepted or overridden. A preview is shown before confirmation.
+
 **Common Scenarios:**
 
 - **Pre-distribution check**: Always run `pair kb-verify` before publishing packages
 - **Post-download validation**: Verify downloaded packages with `kb-verify` before installation
 - **CI/CD integration**: Use `--json` flag for automated verification in pipelines
 - **Security audit**: Checksum verification detects tampering or corruption
+- **Interactive packaging**: Use `--interactive` for guided metadata entry with smart defaults
 
 ---
 

@@ -4,6 +4,7 @@ import { loadConfigWithOverrides } from '#config'
 import { validatePackageStructure } from './validators'
 import { generateManifestMetadata } from './metadata'
 import { createPackageZip } from './zip-creator'
+import { runInteractiveFlow } from './interactive'
 import {
   extractRegistries,
   filterRegistries,
@@ -96,6 +97,8 @@ function buildCliParams(config: PackageCommandConfig) {
     ...(config.version && { version: config.version }),
     ...(config.description && { description: config.description }),
     ...(config.author && { author: config.author }),
+    tags: config.tags,
+    license: config.license,
   }
 }
 
@@ -107,6 +110,13 @@ export async function handlePackageCommand(
   config: PackageCommandConfig,
   fs: FileSystemService,
 ): Promise<void> {
+  // Interactive mode: run guided prompts before standard flow
+  if (config.interactive) {
+    const resolved = await runInteractiveFlow(config, fs)
+    if (!resolved) return // user aborted
+    config = resolved
+  }
+
   const projectRoot = config.sourceDir || fs.currentWorkingDirectory()
 
   logger.debug('📦 Starting package creation...')

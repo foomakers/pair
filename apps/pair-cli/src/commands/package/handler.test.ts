@@ -37,6 +37,9 @@ describe('handlePackageCommand - real services integration', () => {
       output: outputPath,
       name: 'test-kb',
       version: '1.2.3',
+      interactive: false,
+      tags: [],
+      license: 'MIT',
     }
 
     await handlePackageCommand(config, fs)
@@ -74,6 +77,9 @@ describe('handlePackageCommand - real services integration', () => {
 
     const config: PackageCommandConfig = {
       command: 'package',
+      interactive: false,
+      tags: [],
+      license: 'MIT',
     }
 
     await expect(handlePackageCommand(config, fs)).rejects.toThrow(/source path does not exist/)
