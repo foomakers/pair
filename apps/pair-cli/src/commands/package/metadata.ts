@@ -1,14 +1,30 @@
 export interface ManifestMetadata {
   name: string
   version: string
-  description?: string
-  author?: string
+  description: string
+  author: string
+  tags: string[]
+  license: string
   created_at: string
   registries: string[]
   contentChecksum?: string
 }
 
 export type PartialManifestMetadata = Partial<Omit<ManifestMetadata, 'created_at' | 'registries'>>
+
+function defaultManifestFields(): Pick<
+  ManifestMetadata,
+  'name' | 'version' | 'description' | 'author' | 'tags' | 'license'
+> {
+  return {
+    name: 'kb-package',
+    version: '1.0.0',
+    description: 'Knowledge base package',
+    author: 'unknown',
+    tags: [],
+    license: 'MIT',
+  }
+}
 
 /**
  * Generate manifest metadata for ZIP package
@@ -19,11 +35,14 @@ export function generateManifestMetadata(
   registries: string[],
   cliParams: PartialManifestMetadata = {},
 ): ManifestMetadata {
+  const defaults = defaultManifestFields()
   return {
-    name: cliParams.name ?? 'kb-package',
-    version: cliParams.version ?? '1.0.0',
-    description: cliParams.description ?? 'Knowledge base package',
-    author: cliParams.author ?? 'unknown',
+    name: cliParams.name ?? defaults.name,
+    version: cliParams.version ?? defaults.version,
+    description: cliParams.description ?? defaults.description,
+    author: cliParams.author ?? defaults.author,
+    tags: cliParams.tags ?? defaults.tags,
+    license: cliParams.license ?? defaults.license,
     created_at: new Date().toISOString(),
     registries,
   }
@@ -45,6 +64,9 @@ export const packageCommandMetadata = {
     'pair package --skip-registries adoption        # Skip adoption registry',
     'pair package --root /my/kb                     # Set custom root for link relativization',
     'pair package --log-level debug                 # Package with detailed logging',
+    'pair package --interactive                      # Create package with guided prompts',
+    'pair package --interactive --name "my-kb"       # Interactive with pre-filled name',
+    'pair package --tags "ai,devops" --license MIT   # Package with tags and license',
   ],
   options: [
     { flags: '-o, --output <path>', description: 'Output ZIP file path (default: kb-package.zip)' },
@@ -72,6 +94,18 @@ export const packageCommandMetadata = {
     {
       flags: '-l, --log-level <level>',
       description: 'Set minimum log level (debug|info|warn|error)',
+    },
+    {
+      flags: '-i, --interactive',
+      description: 'Enter interactive mode with guided prompts for package metadata',
+    },
+    {
+      flags: '--tags <tags>',
+      description: 'Comma-separated tags for the package (e.g., "ai,devops,testing")',
+    },
+    {
+      flags: '--license <license>',
+      description: 'Package license (default: MIT)',
     },
   ],
   notes: [

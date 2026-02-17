@@ -90,6 +90,9 @@ describe('dispatchCommand() - real handlers integration', () => {
     const config: PackageCommandConfig = {
       command: 'package',
       output: outputPath,
+      interactive: false,
+      tags: [],
+      license: 'MIT',
     }
 
     await dispatchCommand(config, fs)

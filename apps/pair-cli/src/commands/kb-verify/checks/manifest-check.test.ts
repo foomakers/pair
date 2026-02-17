@@ -7,6 +7,10 @@ describe('verifyManifest', () => {
     const manifest: ManifestMetadata = {
       name: 'test-package',
       version: '1.0.0',
+      description: 'Test',
+      author: 'Tester',
+      tags: [],
+      license: 'MIT',
       created_at: '2025-01-01',
       registries: ['knowledge', 'adoption'],
     }
@@ -134,14 +138,16 @@ describe('verifyManifest', () => {
     expect(result.errors).toContain('Missing or invalid field: registries (must be an array)')
   })
 
-  it('accepts manifest with optional fields', () => {
+  it('accepts manifest with all fields', () => {
     const manifest: ManifestMetadata = {
       name: 'test-package',
       version: '1.0.0',
-      created_at: '2025-01-01',
-      registries: ['knowledge'],
       description: 'Test description',
       author: 'Test Author',
+      tags: ['ai'],
+      license: 'Apache-2.0',
+      created_at: '2025-01-01',
+      registries: ['knowledge'],
       contentChecksum: 'abc123',
     }
 

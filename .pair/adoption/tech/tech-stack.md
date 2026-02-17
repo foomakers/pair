@@ -34,6 +34,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 
 - commander v11.0.0 is adopted for CLI command parsing and argument management.
 - chalk v4.1.2 is adopted for terminal output colorization.
+- @inquirer/prompts v7.5.0 is adopted for interactive CLI prompts in package creation workflows (TypeScript-native, tree-shakeable individual imports).
 - ts-node v10.9.2 is adopted for TypeScript execution in scripts.
 
 ## Markdown & docs processing

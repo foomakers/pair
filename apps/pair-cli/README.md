@@ -309,6 +309,15 @@ pair package --root .custom/root/
 
 # Package with debug-level progress output
 pair package --log-level debug
+
+# Interactive package creation with guided prompts
+pair package --interactive
+
+# Interactive with pre-filled flags
+pair package --interactive --name "my-kb" --version 2.0.0
+
+# Package with tags and license
+pair package --tags "ai,devops" --license Apache-2.0
 ```
 
 The `package` command:

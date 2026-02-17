@@ -271,6 +271,9 @@ pair package [options]
 | `--skip-registries <list>`    |                   | Comma-separated registry names to exclude from packaging                                                          |
 | `--root <path>`               |                   | Custom root path for link relativization (default: `.pair/`)                                                      |
 | `--log-level <level>`         | `-l, --log-level` | Set logging level for this command (trace, debug, info, warn, error). Use `--log-level debug` for detailed output |
+| `--interactive`               | `-i`              | Enter interactive mode with guided prompts for package metadata                                                   |
+| `--tags <tags>`               |                   | Comma-separated tags for the package (e.g., `"ai,devops,testing"`)                                               |
+| `--license <license>`         |                   | Package license (default: `MIT`)                                                                                  |
 
 ### Examples
 
@@ -325,6 +328,38 @@ pair package --skip-registries adoption,github
 
 ```bash
 pair package --root .custom/root/
+```
+
+**Interactive package creation:**
+
+```bash
+pair package --interactive
+```
+
+**Interactive with pre-filled metadata:**
+
+```bash
+pair package --interactive --name "my-kb" --version 2.0.0
+```
+
+**Package with tags and license:**
+
+```bash
+pair package --tags "ai,devops" --license Apache-2.0
+```
+
+### Interactive Mode
+
+When `--interactive` is passed, the CLI enters a guided flow:
+
+1. **Prompts** for each metadata field (name, version, description, author, tags, license)
+2. **Smart defaults** pre-populate fields from multiple sources with this precedence:
+   CLI flags > `package.json` > `git config` > `~/.pair/preferences.json` > hardcoded defaults
+3. **Validates** input in real-time (name regex, semver version)
+4. **Preview** shows a summary before confirmation
+5. **Preferences** are saved to `~/.pair/preferences.json` for subsequent runs
+
+Interactive mode requires a TTY. Running `--interactive` in a non-TTY context (piped input, CI) exits with an error.
 
 ### Usage Notes
 
