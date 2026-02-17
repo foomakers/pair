@@ -199,6 +199,65 @@ describe('parsePackageCommand', () => {
     })
   })
 
+  describe('org flag', () => {
+    it('should parse --org as boolean', () => {
+      const config = parsePackageCommand({ org: true, orgName: 'Acme' })
+
+      expect(config.org).toBe(true)
+      expect(config.orgName).toBe('Acme')
+    })
+
+    it('should not include org fields when --org is not set', () => {
+      const config = parsePackageCommand({})
+
+      expect(config.org).toBeUndefined()
+      expect(config.orgName).toBeUndefined()
+    })
+
+    it('should parse all org fields', () => {
+      const config = parsePackageCommand({
+        org: true,
+        orgName: 'Acme Corp',
+        team: 'Platform',
+        department: 'Engineering',
+        approver: 'jane.doe',
+        compliance: 'SOC2,ISO27001',
+        distribution: 'private',
+      })
+
+      expect(config.org).toBe(true)
+      expect(config.orgName).toBe('Acme Corp')
+      expect(config.team).toBe('Platform')
+      expect(config.department).toBe('Engineering')
+      expect(config.approver).toBe('jane.doe')
+      expect(config.compliance).toEqual(['SOC2', 'ISO27001'])
+      expect(config.distribution).toBe('private')
+    })
+
+    it('should throw on invalid distribution policy', () => {
+      expect(() =>
+        parsePackageCommand({ org: true, orgName: 'Acme', distribution: 'invalid' }),
+      ).toThrow("Invalid distribution policy 'invalid'. Valid values: open, private, restricted")
+    })
+
+    it('should parse compliance tags with whitespace', () => {
+      const config = parsePackageCommand({
+        org: true,
+        orgName: 'Acme',
+        compliance: ' SOC2 , HIPAA ',
+      })
+
+      expect(config.compliance).toEqual(['SOC2', 'HIPAA'])
+    })
+
+    it('should not set org fields when --org is false', () => {
+      const config = parsePackageCommand({ orgName: 'Acme' })
+
+      expect(config.org).toBeUndefined()
+      expect(config.orgName).toBeUndefined()
+    })
+  })
+
   describe('combined flags', () => {
     it('should parse multiple new flags together', () => {
       const config = parsePackageCommand({

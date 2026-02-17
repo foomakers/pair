@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateManifestMetadata } from './metadata'
+import { generateManifestMetadata, type OrganizationMetadata } from './metadata'
 
 describe('generateManifestMetadata - defaults', () => {
   it('generates metadata with default values', () => {
@@ -83,5 +83,46 @@ describe('generateManifestMetadata - registries handling', () => {
     const result = generateManifestMetadata(['github'])
 
     expect(result.created_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
+  })
+})
+
+describe('generateManifestMetadata - organization metadata', () => {
+  const orgMetadata: OrganizationMetadata = {
+    name: 'Acme Corp',
+    team: 'Platform',
+    department: 'Engineering',
+    approver: 'jane.doe',
+    compliance: ['SOC2', 'ISO27001'],
+    distribution: 'private',
+  }
+
+  it('includes organization when provided', () => {
+    const result = generateManifestMetadata(['github'], { organization: orgMetadata })
+
+    expect(result.organization).toEqual(orgMetadata)
+  })
+
+  it('omits organization when not provided', () => {
+    const result = generateManifestMetadata(['github'], { name: 'test' })
+
+    expect(result.organization).toBeUndefined()
+  })
+
+  it('omits organization by default', () => {
+    const result = generateManifestMetadata(['github'])
+
+    expect(result.organization).toBeUndefined()
+  })
+
+  it('includes org with minimal fields', () => {
+    const minimalOrg: OrganizationMetadata = {
+      name: 'Acme',
+      compliance: [],
+      distribution: 'open',
+    }
+    const result = generateManifestMetadata(['github'], { organization: minimalOrg })
+
+    expect(result.organization).toEqual(minimalOrg)
+    expect(result.organization?.team).toBeUndefined()
   })
 })

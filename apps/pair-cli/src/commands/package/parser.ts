@@ -1,5 +1,10 @@
 import { validateLayoutOption, parseSkipRegistriesOption } from '#registry'
 import { parseTagsInput } from './input-validators'
+import {
+  validateDistributionPolicy,
+  parseComplianceTags,
+  type DistributionPolicy,
+} from './org-validators'
 
 /**
  * Configuration for package command
@@ -19,6 +24,13 @@ export interface PackageCommandConfig {
   interactive: boolean
   tags: string[]
   license: string
+  org?: boolean
+  orgName?: string
+  team?: string
+  department?: string
+  approver?: string
+  compliance?: string[]
+  distribution?: DistributionPolicy
 }
 
 function defaultInteractiveFields(): Pick<
@@ -43,6 +55,13 @@ interface ParsePackageOptions {
   interactive?: boolean
   tags?: string
   license?: string
+  org?: boolean
+  orgName?: string
+  team?: string
+  department?: string
+  approver?: string
+  compliance?: string
+  distribution?: string
 }
 
 function buildCoreMetadata(options: ParsePackageOptions): Partial<PackageCommandConfig> {
@@ -69,11 +88,28 @@ function buildInteractiveConfig(
   }
 }
 
+function buildOrgConfig(options: ParsePackageOptions): Partial<PackageCommandConfig> {
+  if (!options.org) return {}
+
+  return {
+    org: true,
+    ...(options.orgName && { orgName: options.orgName }),
+    ...(options.team && { team: options.team }),
+    ...(options.department && { department: options.department }),
+    ...(options.approver && { approver: options.approver }),
+    ...(options.compliance && { compliance: parseComplianceTags(options.compliance) }),
+    ...(options.distribution && {
+      distribution: validateDistributionPolicy(options.distribution),
+    }),
+  }
+}
+
 function buildMetadataConfig(options: ParsePackageOptions): Omit<PackageCommandConfig, 'command'> {
   return {
     ...defaultInteractiveFields(),
     ...buildCoreMetadata(options),
     ...buildInteractiveConfig(options),
+    ...buildOrgConfig(options),
   }
 }
 
