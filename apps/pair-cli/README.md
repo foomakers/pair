@@ -113,6 +113,7 @@ pair-cli update
 | `update-link [options]`  | Validate and update links in installed KB content      | [CLI Reference](../../docs/cli/commands.md#update-link)     |
 | `kb validate [options]`  | Validate KB structure, links, and metadata             | [CLI Reference](../../docs/cli/commands.md#kb-validate)     |
 | `kb-verify <package>`    | Verify KB package integrity (checksum, structure)      | [CLI Reference](../../docs/cli/commands.md#kb-verify)       |
+| `kb-info <package>`      | Display metadata from a KB package ZIP file            | [CLI Reference](../../docs/cli/commands.md#kb-info)         |
 | `package [options]`      | Package KB content into distributable ZIP file         | [CLI Reference](../../docs/cli/commands.md#package)         |
 | `validate-config`        | Validate asset registry configuration                  | [CLI Reference](../../docs/cli/commands.md#validate-config) |
 
@@ -318,6 +319,9 @@ pair package --interactive --name "my-kb" --version 2.0.0
 
 # Package with tags and license
 pair package --tags "ai,devops" --license Apache-2.0
+
+# Organizational package with compliance tags
+pair package --org --org-name "Acme Corp" --team "Platform" --compliance "SOC2,ISO27001" --distribution private
 ```
 
 The `package` command:
@@ -327,6 +331,20 @@ The `package` command:
 - Rewrites absolute links to relative paths for portability
 - Displays file size and warns if >100MB
 - Exit codes: 0 (success), 1 (validation error), 2 (packaging error)
+
+### Inspect KB packages
+
+Display metadata from a KB package:
+
+```bash
+# Display package info
+pair kb-info my-kb.zip
+
+# Output as JSON
+pair kb-info my-kb.zip --json
+```
+
+Shows package name, version, author, registries, and organizational metadata when present.
 
 ### Verify KB packages
 

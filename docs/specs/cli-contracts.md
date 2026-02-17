@@ -103,6 +103,23 @@ export interface PackageOptions {
   interactive: boolean // -i, --interactive (guided prompts, default: false)
   tags: string[] // --tags <tags> (comma-separated, default: [])
   license: string // --license <license> (default: MIT)
+  org?: boolean // --org (enable organizational packaging)
+  orgName?: string // --org-name <name> (required when --org)
+  team?: string // --team <team>
+  department?: string // --department <department>
+  approver?: string // --approver <approver>
+  compliance?: string[] // --compliance <tags> (comma-separated)
+  distribution?: 'open' | 'private' | 'restricted' // --distribution (default: open)
+}
+
+// Organization metadata embedded in manifest when --org is used
+export interface OrganizationMetadata {
+  name: string // required
+  team?: string
+  department?: string
+  approver?: string
+  compliance: string[] // default: []
+  distribution: 'open' | 'private' | 'restricted' // default: 'open'
 }
 
 // Manifest metadata — all fields required, factory defaults via defaultManifestFields()
@@ -116,6 +133,7 @@ export interface ManifestMetadata {
   created_at: string
   registries: string[]
   contentChecksum?: string
+  organization?: OrganizationMetadata // present when --org used
 }
 
 // User preferences persisted at ~/.pair/preferences.json
@@ -180,6 +198,26 @@ interface ValidateConfigConstraints {
   // config file must exist and be valid JSON
   configMustExist: true
   configMustBeJSON: true
+}
+```
+
+### KB Info Command
+
+```typescript
+export interface KbInfoCommandConfig {
+  packagePath: string // Required: path to KB package ZIP file
+  json?: boolean // --json (output as JSON)
+}
+
+// Validation constraints
+interface KbInfoConstraints {
+  // packagePath must exist and be readable
+  packagePathMustExist: true
+  packagePathMustBeZIP: true
+  // Package must contain manifest.json
+  requiresManifest: true
+  // Exit code 0 on success, 1 on error
+  exitCodeBinary: true
 }
 ```
 

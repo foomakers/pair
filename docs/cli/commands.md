@@ -274,6 +274,13 @@ pair package [options]
 | `--interactive`               | `-i`              | Enter interactive mode with guided prompts for package metadata                                                   |
 | `--tags <tags>`               |                   | Comma-separated tags for the package (e.g., `"ai,devops,testing"`)                                               |
 | `--license <license>`         |                   | Package license (default: `MIT`)                                                                                  |
+| `--org`                       |                   | Enable organizational packaging mode with org metadata                                                            |
+| `--org-name <name>`           |                   | Organization name (required when `--org` is used)                                                                 |
+| `--team <team>`               |                   | Team name within the organization                                                                                 |
+| `--department <department>`   |                   | Department within the organization                                                                                |
+| `--approver <approver>`       |                   | Package approver (free-text)                                                                                      |
+| `--compliance <tags>`         |                   | Comma-separated compliance tags (e.g., `"SOC2,ISO27001,HIPAA"`)                                                  |
+| `--distribution <policy>`     |                   | Distribution policy: `open`, `private`, or `restricted` (default: `open`)                                        |
 
 ### Examples
 
@@ -348,6 +355,22 @@ pair package --interactive --name "my-kb" --version 2.0.0
 pair package --tags "ai,devops" --license Apache-2.0
 ```
 
+**Create an organizational package:**
+
+```bash
+pair package --org --org-name "Acme Corp" --team "Platform" --department "Engineering"
+```
+
+**Organizational package with compliance and distribution:**
+
+```bash
+pair package --org --org-name "Acme Corp" --compliance "SOC2,ISO27001" --distribution private
+```
+
+### Org Template
+
+When `--org` is active, the CLI looks for `.pair/org-template.json` to pre-fill defaults. CLI flags override template values. Precedence: CLI flags > org-template > defaults.
+
 ### Interactive Mode
 
 When `--interactive` is passed, the CLI enters a guided flow:
@@ -370,10 +393,64 @@ Interactive mode requires a TTY. Running `--interactive` in a non-TTY context (p
 - **Skip registries:** Use `--skip-registries` to exclude specific registries from the package.
 - **Custom root:** Use `--root` to specify link relativization base (default `.pair/`).
 - **Size warnings:** Displays warning if package exceeds 100MB.
+- **Org packaging:** Use `--org` with `--org-name` to embed organizational metadata in the manifest. Optional fields: `--team`, `--department`, `--approver`, `--compliance`, `--distribution`.
 - **Exit codes:**
   - `0` - Success
   - `1` - Validation error
   - `2` - Packaging error
+
+---
+
+## kb-info
+
+Display metadata from a KB package ZIP file. Shows package information and organizational metadata when present.
+
+### Usage
+
+```bash
+pair kb-info <package-path> [options]
+```
+
+### Arguments
+
+| Argument         | Description                          |
+| ---------------- | ------------------------------------ |
+| `<package-path>` | Path to KB package ZIP file to inspect |
+
+### Options
+
+| Option                | Description                                       |
+| --------------------- | ------------------------------------------------- |
+| `--json`              | Output package metadata as JSON format            |
+| `--log-level <level>` | Set minimum log level (debug, info, warn, error) |
+
+### Examples
+
+**Display package metadata:**
+
+```bash
+pair kb-info my-kb.zip
+```
+
+**Display as JSON:**
+
+```bash
+pair kb-info my-kb.zip --json
+```
+
+**Inspect organizational package:**
+
+```bash
+pair kb-info org-package.zip
+```
+
+### Usage Notes
+
+- **Read-only:** Only reads `manifest.json` from the ZIP, never extracts full content.
+- **Organization section:** Displayed when `manifest.organization` is present; hidden for standard packages.
+- **Exit codes:**
+  - `0` - Success
+  - `1` - Error (file not found, invalid ZIP, missing manifest)
 
 ---
 
