@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { generateManifestMetadata, type OrganizationMetadata } from './metadata'
+import {
+  generateManifestMetadata,
+  createOrganizationMetadata,
+  type OrganizationMetadata,
+} from './metadata'
 
 describe('generateManifestMetadata - defaults', () => {
   it('generates metadata with default values', () => {
@@ -124,5 +128,37 @@ describe('generateManifestMetadata - organization metadata', () => {
 
     expect(result.organization).toEqual(minimalOrg)
     expect(result.organization?.team).toBeUndefined()
+  })
+})
+
+describe('createOrganizationMetadata', () => {
+  it('provides defaults for compliance and distribution', () => {
+    const org = createOrganizationMetadata({ name: 'Acme' })
+
+    expect(org.name).toBe('Acme')
+    expect(org.compliance).toEqual([])
+    expect(org.distribution).toBe('open')
+  })
+
+  it('allows overriding defaults', () => {
+    const org = createOrganizationMetadata({
+      name: 'Acme',
+      compliance: ['SOC2'],
+      distribution: 'private',
+      team: 'Platform',
+    })
+
+    expect(org.compliance).toEqual(['SOC2'])
+    expect(org.distribution).toBe('private')
+    expect(org.team).toBe('Platform')
+  })
+
+  it('does not include optional fields when not provided', () => {
+    const org = createOrganizationMetadata({ name: 'Acme' })
+
+    expect(Object.keys(org)).toEqual(['name', 'compliance', 'distribution'])
+    expect(org.team).toBeUndefined()
+    expect(org.department).toBeUndefined()
+    expect(org.approver).toBeUndefined()
   })
 })

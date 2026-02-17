@@ -4,6 +4,7 @@ import { InMemoryFileSystemService } from '@pair/content-ops'
 
 describe('loadOrgTemplate', () => {
   const cwd = '/project'
+  const templatePath = '.pair/org-template.json'
 
   it('loads valid template', async () => {
     const fs = new InMemoryFileSystemService(
@@ -18,7 +19,7 @@ describe('loadOrgTemplate', () => {
       cwd,
     )
 
-    const result = await loadOrgTemplate(cwd, fs)
+    const result = await loadOrgTemplate(cwd, fs, templatePath)
 
     expect(result).toEqual({
       name: 'Acme Corp',
@@ -30,7 +31,7 @@ describe('loadOrgTemplate', () => {
   it('returns null when template does not exist', async () => {
     const fs = new InMemoryFileSystemService({}, cwd, cwd)
 
-    const result = await loadOrgTemplate(cwd, fs)
+    const result = await loadOrgTemplate(cwd, fs, templatePath)
 
     expect(result).toBeNull()
   })
@@ -44,9 +45,24 @@ describe('loadOrgTemplate', () => {
       cwd,
     )
 
-    await expect(loadOrgTemplate(cwd, fs)).rejects.toThrow(
+    await expect(loadOrgTemplate(cwd, fs, templatePath)).rejects.toThrow(
       /Failed to parse org template at .pair\/org-template.json/,
     )
+  })
+
+  it('loads template from custom path', async () => {
+    const customPath = 'custom/org.json'
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/custom/org.json`]: JSON.stringify({ name: 'Custom Corp' }),
+      },
+      cwd,
+      cwd,
+    )
+
+    const result = await loadOrgTemplate(cwd, fs, customPath)
+
+    expect(result).toEqual({ name: 'Custom Corp' })
   })
 })
 

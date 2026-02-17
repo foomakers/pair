@@ -7,18 +7,12 @@ export interface KbInfoCommandConfig {
   json: boolean
 }
 
-interface ParseKbInfoOptions {
-  json?: boolean
-}
-
 /**
- * Parse kb-info command arguments
- * @param options - Commander parsed options
- * @param args - Positional arguments (packagePath)
- * @returns Validated command configuration
+ * Parse kb-info command arguments.
+ * Options shape matches Commander.js parsed output (same pattern as kb-verify).
  */
 export function parseKbInfoCommand(
-  options: ParseKbInfoOptions,
+  options: { json?: boolean },
   args: string[] = [],
 ): KbInfoCommandConfig {
   const packagePath = args[0]

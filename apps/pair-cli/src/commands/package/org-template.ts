@@ -1,6 +1,6 @@
 import type { FileSystemService } from '@pair/content-ops'
 import { logger } from '@pair/content-ops'
-import type { OrganizationMetadata } from './metadata'
+import { createOrganizationMetadata } from './metadata'
 import type { DistributionPolicy } from './org-validators'
 import path from 'path'
 
@@ -13,18 +13,17 @@ export interface OrgTemplateData {
   distribution?: DistributionPolicy
 }
 
-const ORG_TEMPLATE_PATH = '.pair/org-template.json'
-
 /**
- * Load org template from .pair/org-template.json.
+ * Load org template from a given path relative to projectRoot.
  * Returns null if file doesn't exist (template is optional).
  * Throws on malformed JSON.
  */
 export async function loadOrgTemplate(
   projectRoot: string,
   fs: FileSystemService,
+  relativePath: string,
 ): Promise<OrgTemplateData | null> {
-  const templatePath = path.join(projectRoot, ORG_TEMPLATE_PATH)
+  const templatePath = path.join(projectRoot, relativePath)
 
   if (!fs.existsSync(templatePath)) {
     return null
@@ -33,11 +32,11 @@ export async function loadOrgTemplate(
   try {
     const content = await fs.readFile(templatePath)
     const parsed = JSON.parse(content) as OrgTemplateData
-    logger.info(`Using org template: ${ORG_TEMPLATE_PATH}`)
+    logger.info(`Using org template: ${relativePath}`)
     return parsed
   } catch (error) {
     throw new Error(
-      `Failed to parse org template at ${ORG_TEMPLATE_PATH}: ${error instanceof Error ? error.message : String(error)}`,
+      `Failed to parse org template at ${relativePath}: ${error instanceof Error ? error.message : String(error)}`,
     )
   }
 }
@@ -55,25 +54,21 @@ function pickFirst<T>(...values: (T | undefined)[]): T | undefined {
   return values.find(v => v !== undefined)
 }
 
-function withOptional<T>(key: string, value: T | undefined): Record<string, T> {
-  return value !== undefined ? { [key]: value } : {}
-}
-
 /**
  * Merge org metadata from CLI flags and template.
- * Precedence: CLI flags > org-template > defaults.
+ * Precedence: CLI flags > org-template > factory defaults.
  */
 export function mergeOrgDefaults(
   cliFlags: OrgCliFlags,
   template: OrgTemplateData | null,
-): OrganizationMetadata {
+): ReturnType<typeof createOrganizationMetadata> {
   const t = template ?? {}
-  return {
+  return createOrganizationMetadata({
     name: pickFirst(cliFlags.orgName, t.name) ?? '',
-    ...withOptional('team', pickFirst(cliFlags.team, t.team)),
-    ...withOptional('department', pickFirst(cliFlags.department, t.department)),
-    ...withOptional('approver', pickFirst(cliFlags.approver, t.approver)),
-    compliance: pickFirst(cliFlags.compliance, t.compliance) ?? [],
-    distribution: pickFirst(cliFlags.distribution, t.distribution) ?? 'open',
-  }
+    team: pickFirst(cliFlags.team, t.team),
+    department: pickFirst(cliFlags.department, t.department),
+    approver: pickFirst(cliFlags.approver, t.approver),
+    compliance: pickFirst(cliFlags.compliance, t.compliance),
+    distribution: pickFirst(cliFlags.distribution, t.distribution),
+  })
 }

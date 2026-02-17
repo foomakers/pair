@@ -92,4 +92,37 @@ run_pair package --source-dir "$INVALID_DIR" --output pkg-fail.zip
 assert_failure || exit 1
 log_succ "Validation correctly failed for invalid source"
 
+# 4. Package with --org flags
+log_info "Test 4: Organizational Package"
+run_pair package \
+  --source-dir "$SRC_DIR" \
+  --output "$OUT_DIR/pkg-org.zip" \
+  --org --org-name "AcmeCorp" --team "Platform" \
+  --compliance "SOC2,ISO27001" --distribution "private"
+assert_success || exit 1
+assert_file "$OUT_DIR/pkg-org.zip"
+
+# Extract and verify org metadata in manifest
+rm -rf "$OUT_DIR/extracted-org"
+mkdir -p "$OUT_DIR/extracted-org"
+unzip -q "$OUT_DIR/pkg-org.zip" -d "$OUT_DIR/extracted-org"
+assert_contains "$OUT_DIR/extracted-org/manifest.json" '"name": "AcmeCorp"'
+assert_contains "$OUT_DIR/extracted-org/manifest.json" '"distribution": "private"'
+assert_contains "$OUT_DIR/extracted-org/manifest.json" '"SOC2"'
+log_succ "Organizational package created with org metadata"
+
+# 5. kb-info on org package
+log_info "Test 5: kb-info on Organizational Package"
+run_pair kb-info "$OUT_DIR/pkg-org.zip"
+assert_success || exit 1
+assert_output_contains "AcmeCorp"
+log_succ "kb-info displays org metadata"
+
+# 6. kb-info --json on org package
+log_info "Test 6: kb-info --json on Organizational Package"
+run_pair kb-info "$OUT_DIR/pkg-org.zip" --json
+assert_success || exit 1
+assert_output_contains '"organization"'
+log_succ "kb-info JSON output includes organization"
+
 echo "=== $TEST_NAME Completed ==="

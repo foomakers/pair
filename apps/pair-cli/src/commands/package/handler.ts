@@ -113,7 +113,7 @@ async function resolveOrgMetadata(
 ): Promise<OrganizationMetadata | undefined> {
   if (!config.org) return undefined
 
-  const template = await loadOrgTemplate(projectRoot, fs)
+  const template = await loadOrgTemplate(projectRoot, fs, '.pair/org-template.json')
   const org = mergeOrgDefaults(
     {
       orgName: config.orgName,

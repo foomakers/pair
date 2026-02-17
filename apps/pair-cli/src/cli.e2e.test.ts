@@ -1407,3 +1407,87 @@ describe('pair-cli e2e - kb-validate', () => {
     })
   })
 })
+
+describe('pair-cli e2e - org packaging', () => {
+  it('parsePackageCommand includes org fields when --org flag present', async () => {
+    const { parsePackageCommand } = await import('./commands/package/parser.js')
+
+    const config = parsePackageCommand({
+      org: true,
+      orgName: 'Acme Corp',
+      team: 'Platform',
+      compliance: 'SOC2,ISO27001',
+      distribution: 'private',
+    })
+
+    expect(config.org).toBe(true)
+    expect(config.orgName).toBe('Acme Corp')
+    expect(config.team).toBe('Platform')
+    expect(config.compliance).toEqual(['SOC2', 'ISO27001'])
+    expect(config.distribution).toBe('private')
+  })
+
+  it('parsePackageCommand omits org fields when --org absent', async () => {
+    const { parsePackageCommand } = await import('./commands/package/parser.js')
+
+    const config = parsePackageCommand({ name: 'test-kb' })
+
+    expect(config.org).toBeUndefined()
+    expect(config.orgName).toBeUndefined()
+  })
+
+  it('org template merges with CLI flags', async () => {
+    const { loadOrgTemplate, mergeOrgDefaults } = await import('./commands/package/org-template.js')
+
+    const cwd = '/e2e-org-template'
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/.pair/org-template.json`]: JSON.stringify({
+          name: 'Template Corp',
+          team: 'Default Team',
+          compliance: ['SOC2'],
+          distribution: 'restricted',
+        }),
+      },
+      cwd,
+      cwd,
+    )
+
+    const template = await loadOrgTemplate(cwd, fs, '.pair/org-template.json')
+    expect(template).not.toBeNull()
+
+    // CLI flags override template
+    const org = mergeOrgDefaults({ orgName: 'CLI Corp', team: 'CLI Team' }, template)
+    expect(org.name).toBe('CLI Corp')
+    expect(org.team).toBe('CLI Team')
+    // Template values used as fallback
+    expect(org.compliance).toEqual(['SOC2'])
+    expect(org.distribution).toBe('restricted')
+  })
+
+  it('createOrganizationMetadata factory provides defaults', async () => {
+    const { createOrganizationMetadata } = await import('./commands/package/metadata.js')
+
+    const org = createOrganizationMetadata({ name: 'Acme' })
+    expect(org.compliance).toEqual([])
+    expect(org.distribution).toBe('open')
+  })
+
+  it('generateManifestMetadata includes organization in manifest', async () => {
+    const { generateManifestMetadata, createOrganizationMetadata } = await import(
+      './commands/package/metadata.js'
+    )
+
+    const org = createOrganizationMetadata({
+      name: 'Acme',
+      team: 'Platform',
+      compliance: ['SOC2'],
+      distribution: 'private',
+    })
+
+    const manifest = generateManifestMetadata(['knowledge'], { organization: org })
+    expect(manifest.organization).toBeDefined()
+    expect(manifest.organization?.name).toBe('Acme')
+    expect(manifest.organization?.distribution).toBe('private')
+  })
+})

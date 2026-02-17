@@ -9,6 +9,31 @@ export interface OrganizationMetadata {
   distribution: DistributionPolicy
 }
 
+/** Input type for the org metadata factory — only name is required */
+export interface OrganizationMetadataInput {
+  name: string
+  team?: string | undefined
+  department?: string | undefined
+  approver?: string | undefined
+  compliance?: string[] | undefined
+  distribution?: DistributionPolicy | undefined
+}
+
+/**
+ * Create OrganizationMetadata with defaults for compliance and distribution.
+ * Only name is required — all other fields fall back to sensible defaults.
+ */
+export function createOrganizationMetadata(input: OrganizationMetadataInput): OrganizationMetadata {
+  return {
+    name: input.name,
+    ...(input.team !== undefined && { team: input.team }),
+    ...(input.department !== undefined && { department: input.department }),
+    ...(input.approver !== undefined && { approver: input.approver }),
+    compliance: input.compliance ?? [],
+    distribution: input.distribution ?? 'open',
+  }
+}
+
 export interface ManifestMetadata {
   name: string
   version: string
