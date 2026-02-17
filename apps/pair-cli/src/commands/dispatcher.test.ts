@@ -9,6 +9,7 @@ import type {
   PackageCommandConfig,
   ValidateConfigCommandConfig,
 } from './index'
+import type { KbInfoCommandConfig } from './kb-info/parser'
 
 describe('dispatchCommand() - real handlers integration', () => {
   let fs: InMemoryFileSystemService
@@ -177,6 +178,20 @@ describe('dispatchCommand() - real handlers integration', () => {
     await dispatchCommand(config, fs)
 
     // Exit code should be non-zero for verification failure
+    expect(process.exitCode).toBe(1)
+  })
+
+  test('dispatches kb-info command and sets exit code on failure', async () => {
+    const config: KbInfoCommandConfig = {
+      command: 'kb-info',
+      packagePath: '/nonexistent/package.zip',
+      json: false,
+    }
+
+    process.exitCode = 0
+
+    await dispatchCommand(config, fs)
+
     expect(process.exitCode).toBe(1)
   })
 })

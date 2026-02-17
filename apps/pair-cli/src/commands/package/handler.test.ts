@@ -62,6 +62,135 @@ describe('handlePackageCommand - real services integration', () => {
     expect(await fs.readFile(`${extractDir}/source/reg1/file.txt`)).toBe('content of reg1')
   })
 
+  test('creates package with org metadata in manifest', async () => {
+    const outputPath = `${cwd}/dist/org-kb.zip`
+    const config: PackageCommandConfig = {
+      command: 'package',
+      output: outputPath,
+      name: 'org-kb',
+      version: '1.0.0',
+      interactive: false,
+      tags: [],
+      license: 'MIT',
+      org: true,
+      orgName: 'Acme Corp',
+      team: 'Platform',
+      department: 'Engineering',
+    }
+
+    await handlePackageCommand(config, fs)
+
+    const extractDir = `${cwd}/extracted`
+    await fs.extractZip(outputPath, extractDir)
+    const manifestStr = await fs.readFile(`${extractDir}/manifest.json`)
+    const manifest = JSON.parse(manifestStr)
+
+    expect(manifest.organization).toBeDefined()
+    expect(manifest.organization.name).toBe('Acme Corp')
+    expect(manifest.organization.team).toBe('Platform')
+    expect(manifest.organization.department).toBe('Engineering')
+    expect(manifest.organization.distribution).toBe('open')
+    expect(manifest.organization.compliance).toEqual([])
+  })
+
+  test('creates package without org metadata when --org not set', async () => {
+    const outputPath = `${cwd}/dist/standard-kb.zip`
+    const config: PackageCommandConfig = {
+      command: 'package',
+      output: outputPath,
+      interactive: false,
+      tags: [],
+      license: 'MIT',
+    }
+
+    await handlePackageCommand(config, fs)
+
+    const extractDir = `${cwd}/extracted`
+    await fs.extractZip(outputPath, extractDir)
+    const manifestStr = await fs.readFile(`${extractDir}/manifest.json`)
+    const manifest = JSON.parse(manifestStr)
+
+    expect(manifest.organization).toBeUndefined()
+  })
+
+  test('uses org template defaults when no CLI flags', async () => {
+    await fs.writeFile(
+      `${cwd}/.pair/org-template.json`,
+      JSON.stringify({
+        name: 'Template Corp',
+        team: 'Default Team',
+        distribution: 'private',
+      }),
+    )
+
+    const outputPath = `${cwd}/dist/template-kb.zip`
+    const config: PackageCommandConfig = {
+      command: 'package',
+      output: outputPath,
+      interactive: false,
+      tags: [],
+      license: 'MIT',
+      org: true,
+    }
+
+    await handlePackageCommand(config, fs)
+
+    const extractDir = `${cwd}/extracted`
+    await fs.extractZip(outputPath, extractDir)
+    const manifestStr = await fs.readFile(`${extractDir}/manifest.json`)
+    const manifest = JSON.parse(manifestStr)
+
+    expect(manifest.organization.name).toBe('Template Corp')
+    expect(manifest.organization.team).toBe('Default Team')
+    expect(manifest.organization.distribution).toBe('private')
+  })
+
+  test('CLI flags override org template values', async () => {
+    await fs.writeFile(
+      `${cwd}/.pair/org-template.json`,
+      JSON.stringify({
+        name: 'Template Corp',
+        team: 'Template Team',
+      }),
+    )
+
+    const outputPath = `${cwd}/dist/override-kb.zip`
+    const config: PackageCommandConfig = {
+      command: 'package',
+      output: outputPath,
+      interactive: false,
+      tags: [],
+      license: 'MIT',
+      org: true,
+      orgName: 'CLI Corp',
+    }
+
+    await handlePackageCommand(config, fs)
+
+    const extractDir = `${cwd}/extracted`
+    await fs.extractZip(outputPath, extractDir)
+    const manifestStr = await fs.readFile(`${extractDir}/manifest.json`)
+    const manifest = JSON.parse(manifestStr)
+
+    expect(manifest.organization.name).toBe('CLI Corp')
+    expect(manifest.organization.team).toBe('Template Team')
+  })
+
+  test('fails when --org used without org-name and no template', async () => {
+    const config: PackageCommandConfig = {
+      command: 'package',
+      output: `${cwd}/dist/fail.zip`,
+      interactive: false,
+      tags: [],
+      license: 'MIT',
+      org: true,
+    }
+
+    await expect(handlePackageCommand(config, fs)).rejects.toThrow(
+      'Organization name cannot be empty',
+    )
+  })
+
   test('fails if registry source does not exist', async () => {
     const invalidConfig = {
       asset_registries: {

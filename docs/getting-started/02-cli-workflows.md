@@ -140,6 +140,26 @@ pair package --interactive --name "my-kb" --version 2.0.0
 
 Interactive mode resolves smart defaults from `package.json`, `git config`, and saved preferences (`~/.pair/preferences.json`). Each field can be accepted or overridden. A preview is shown before confirmation.
 
+**Organizational KB Packaging:**
+
+```bash
+# Create package with org metadata
+pair package --org --org-name "Acme Corp" --team "Platform" --compliance "SOC2,ISO27001" --distribution private
+
+# Use org template for defaults (.pair/org-template.json)
+pair package --org
+```
+
+**Inspect Package Metadata:**
+
+```bash
+# View package info
+pair kb-info dist/kb-v1.0.0.zip
+
+# View as JSON
+pair kb-info dist/kb-v1.0.0.zip --json
+```
+
 **Common Scenarios:**
 
 - **Pre-distribution check**: Always run `pair kb-verify` before publishing packages
@@ -147,6 +167,8 @@ Interactive mode resolves smart defaults from `package.json`, `git config`, and 
 - **CI/CD integration**: Use `--json` flag for automated verification in pipelines
 - **Security audit**: Checksum verification detects tampering or corruption
 - **Interactive packaging**: Use `--interactive` for guided metadata entry with smart defaults
+- **Org packaging**: Use `--org` with `--org-name` for organizational metadata in manifest
+- **Package inspection**: Use `pair kb-info <path>` to view package metadata without extracting
 
 ---
 

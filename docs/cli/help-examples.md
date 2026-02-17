@@ -9,6 +9,7 @@ Copy-paste ready examples for common `pair-cli` workflows. All examples include 
 - [Validation Workflows](#validation-workflows)
 - [Link Management Workflows](#link-management-workflows)
 - [Packaging Workflows](#packaging-workflows)
+- [Package Info Workflows](#package-info-workflows)
 - [Package Verification Workflows](#package-verification-workflows)
 - [Advanced Workflows](#advanced-workflows)
 
@@ -438,6 +439,88 @@ pair package --interactive --name "my-kb" --version 2.0.0
 pair package --tags "ai,devops,testing" --license Apache-2.0
 
 # Tags and license are included in manifest.json
+```
+
+### Organizational Package Creation
+
+```bash
+# Create an org package with all metadata
+pair package --org --org-name "Acme Corp" --team "Platform" --department "Engineering" \
+  --approver "jane.doe" --compliance "SOC2,ISO27001" --distribution private \
+  -o dist/acme-kb.zip
+
+# Output:
+# ✅ Package created: dist/acme-kb.zip
+#    Size: 15.23 KB
+```
+
+### Organizational Package with Template
+
+```bash
+# Create .pair/org-template.json with defaults
+# { "name": "Acme Corp", "team": "Platform", "distribution": "private" }
+
+# Package using template defaults (override team via flag)
+pair package --org --team "Security" -o dist/security-kb.zip
+
+# Output:
+# ℹ Using org template: .pair/org-template.json
+# ✅ Package created: dist/security-kb.zip
+#    Size: 12.45 KB
+```
+
+---
+
+## Package Info Workflows
+
+### Display Package Metadata
+
+```bash
+# Inspect a KB package
+pair kb-info dist/kb-v1.0.0.zip
+
+# Output:
+# Package Information
+# ═══════════════════
+#
+#   Name:         my-kb
+#   Version:      1.0.0
+#   Description:  Knowledge base package
+#   Author:       DevOps Team
+#   License:      MIT
+#   Tags:         ai, devops
+#   Created:      2026-02-17T10:00:00.000Z
+#   Registries:   knowledge, adoption
+```
+
+### Display Org Package Info
+
+```bash
+# Inspect an organizational package
+pair kb-info dist/acme-kb.zip
+
+# Output shows Organization section:
+# Package Information
+# ═══════════════════
+#   ...
+#
+# Organization
+# ────────────
+#   Name:           Acme Corp
+#   Team:           Platform
+#   Department:     Engineering
+#   Approver:       jane.doe
+#   Compliance:     SOC2, ISO27001
+#   Distribution:   private
+```
+
+### Package Info as JSON
+
+```bash
+# Machine-readable output for CI/CD
+pair kb-info dist/kb-v1.0.0.zip --json
+
+# Output: full manifest.json content as formatted JSON
 ```
 
 ---

@@ -1,3 +1,39 @@
+import type { DistributionPolicy } from './org-validators'
+
+export interface OrganizationMetadata {
+  name: string
+  team?: string
+  department?: string
+  approver?: string
+  compliance: string[]
+  distribution: DistributionPolicy
+}
+
+/** Input type for the org metadata factory — only name is required */
+export interface OrganizationMetadataInput {
+  name: string
+  team?: string | undefined
+  department?: string | undefined
+  approver?: string | undefined
+  compliance?: string[] | undefined
+  distribution?: DistributionPolicy | undefined
+}
+
+/**
+ * Create OrganizationMetadata with defaults for compliance and distribution.
+ * Only name is required — all other fields fall back to sensible defaults.
+ */
+export function createOrganizationMetadata(input: OrganizationMetadataInput): OrganizationMetadata {
+  return {
+    name: input.name,
+    ...(input.team !== undefined && { team: input.team }),
+    ...(input.department !== undefined && { department: input.department }),
+    ...(input.approver !== undefined && { approver: input.approver }),
+    compliance: input.compliance ?? [],
+    distribution: input.distribution ?? 'open',
+  }
+}
+
 export interface ManifestMetadata {
   name: string
   version: string
@@ -8,6 +44,7 @@ export interface ManifestMetadata {
   created_at: string
   registries: string[]
   contentChecksum?: string
+  organization?: OrganizationMetadata
 }
 
 export type PartialManifestMetadata = Partial<Omit<ManifestMetadata, 'created_at' | 'registries'>>
@@ -45,6 +82,7 @@ export function generateManifestMetadata(
     license: cliParams.license ?? defaults.license,
     created_at: new Date().toISOString(),
     registries,
+    ...(cliParams.organization && { organization: cliParams.organization }),
   }
 }
 
@@ -67,6 +105,8 @@ export const packageCommandMetadata = {
     'pair package --interactive                      # Create package with guided prompts',
     'pair package --interactive --name "my-kb"       # Interactive with pre-filled name',
     'pair package --tags "ai,devops" --license MIT   # Package with tags and license',
+    'pair package --org --org-name "Acme Corp"       # Organizational package',
+    'pair package --org --org-name "Acme" --team "Platform" --compliance "SOC2,ISO27001"',
   ],
   options: [
     { flags: '-o, --output <path>', description: 'Output ZIP file path (default: kb-package.zip)' },
@@ -106,6 +146,34 @@ export const packageCommandMetadata = {
     {
       flags: '--license <license>',
       description: 'Package license (default: MIT)',
+    },
+    {
+      flags: '--org',
+      description: 'Enable organizational packaging mode with org metadata',
+    },
+    {
+      flags: '--org-name <name>',
+      description: 'Organization name (required when --org is used)',
+    },
+    {
+      flags: '--team <team>',
+      description: 'Team name within the organization',
+    },
+    {
+      flags: '--department <department>',
+      description: 'Department within the organization',
+    },
+    {
+      flags: '--approver <approver>',
+      description: 'Package approver (free-text)',
+    },
+    {
+      flags: '--compliance <tags>',
+      description: 'Comma-separated compliance tags (e.g., "SOC2,ISO27001,HIPAA")',
+    },
+    {
+      flags: '--distribution <policy>',
+      description: 'Distribution policy: open, private, or restricted (default: open)',
     },
   ],
   notes: [

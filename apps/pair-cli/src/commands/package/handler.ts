@@ -1,10 +1,13 @@
 import type { PackageCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
+import type { OrganizationMetadata } from './metadata'
 import { loadConfigWithOverrides } from '#config'
 import { validatePackageStructure } from './validators'
 import { generateManifestMetadata } from './metadata'
 import { createPackageZip } from './zip-creator'
 import { runInteractiveFlow } from './interactive'
+import { loadOrgTemplate, mergeOrgDefaults } from './org-template'
+import { validateOrgName } from './org-validators'
 import {
   extractRegistries,
   filterRegistries,
@@ -13,6 +16,8 @@ import {
 } from '#registry'
 import path from 'path'
 import { logger, setLogLevel } from '@pair/content-ops'
+
+const ORG_TEMPLATE_PATH = '.pair/org-template.json'
 
 async function loadAndValidate(
   config: PackageCommandConfig,
@@ -40,12 +45,6 @@ async function prepareOutput(outputPath: string, fs: FileSystemService) {
 
   if (!fs.existsSync(outputDir)) {
     await fs.mkdir(outputDir, { recursive: true })
-  }
-
-  try {
-    fs.accessSync(outputDir)
-  } catch {
-    throw new Error(`Output directory is not writable: ${outputDir}`)
   }
 
   if (fs.existsSync(outputPath)) {
@@ -91,7 +90,7 @@ async function createAndReportZip(params: {
   }
 }
 
-function buildCliParams(config: PackageCommandConfig) {
+function buildCliParams(config: PackageCommandConfig, organization?: OrganizationMetadata) {
   return {
     ...(config.name && { name: config.name }),
     ...(config.version && { version: config.version }),
@@ -99,7 +98,32 @@ function buildCliParams(config: PackageCommandConfig) {
     ...(config.author && { author: config.author }),
     tags: config.tags,
     license: config.license,
+    ...(organization && { organization }),
   }
+}
+
+async function resolveOrgMetadata(
+  config: PackageCommandConfig,
+  projectRoot: string,
+  fs: FileSystemService,
+): Promise<OrganizationMetadata | undefined> {
+  if (!config.org) return undefined
+
+  const template = await loadOrgTemplate(projectRoot, fs, ORG_TEMPLATE_PATH)
+  const org = mergeOrgDefaults(
+    {
+      orgName: config.orgName,
+      team: config.team,
+      department: config.department,
+      approver: config.approver,
+      compliance: config.compliance,
+      distribution: config.distribution,
+    },
+    template,
+  )
+
+  validateOrgName(org.name)
+  return org
 }
 
 /**
@@ -137,12 +161,14 @@ export async function handlePackageCommand(
   const filtered = filterRegistries(allRegistries, config.skipRegistries)
   const registries = Object.values(filtered)
   const registryNames = registries.map(r => r.source || '').filter(Boolean)
-  const manifest = generateManifestMetadata(registryNames, buildCliParams(config))
+
+  const organization = await resolveOrgMetadata(config, projectRoot, fs)
+  const manifest = generateManifestMetadata(registryNames, buildCliParams(config, organization))
 
   // Resolve output path - if relative, make it relative to current working directory
   const outputPath = config.output
     ? path.resolve(config.output)
-    : path.join(projectRoot, 'dist', `kb-package-${manifest.created_at}.zip`)
+    : path.join(projectRoot, 'dist', `kb-package-${manifest.created_at.replace(/:/g, '-')}.zip`)
 
   logger.debug(`📁 Preparing output directory: ${path.dirname(outputPath)}`)
   await prepareOutput(outputPath, fs)
