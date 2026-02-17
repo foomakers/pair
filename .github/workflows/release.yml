@@ -84,7 +84,7 @@ jobs:
       - name: Create manual release artifacts
         run: |
           chmod +x scripts/workflows/release/package-manual.sh
-          ./scripts/workflows/release/package-manual.sh ${{ steps.normalize_version.outputs.version_no_v }}
+          INCLUDE_DATASET=1 ./scripts/workflows/release/package-manual.sh ${{ steps.normalize_version.outputs.version_no_v }}
 
       - name: Create knowledge base dataset release artifact
         run: |
