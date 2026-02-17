@@ -1,10 +1,13 @@
 import type { PackageCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
+import type { OrganizationMetadata } from './metadata'
 import { loadConfigWithOverrides } from '#config'
 import { validatePackageStructure } from './validators'
 import { generateManifestMetadata } from './metadata'
 import { createPackageZip } from './zip-creator'
 import { runInteractiveFlow } from './interactive'
+import { loadOrgTemplate, mergeOrgDefaults } from './org-template'
+import { validateOrgName } from './org-validators'
 import {
   extractRegistries,
   filterRegistries,
@@ -91,7 +94,7 @@ async function createAndReportZip(params: {
   }
 }
 
-function buildCliParams(config: PackageCommandConfig) {
+function buildCliParams(config: PackageCommandConfig, organization?: OrganizationMetadata) {
   return {
     ...(config.name && { name: config.name }),
     ...(config.version && { version: config.version }),
@@ -99,7 +102,32 @@ function buildCliParams(config: PackageCommandConfig) {
     ...(config.author && { author: config.author }),
     tags: config.tags,
     license: config.license,
+    ...(organization && { organization }),
   }
+}
+
+async function resolveOrgMetadata(
+  config: PackageCommandConfig,
+  projectRoot: string,
+  fs: FileSystemService,
+): Promise<OrganizationMetadata | undefined> {
+  if (!config.org) return undefined
+
+  const template = await loadOrgTemplate(projectRoot, fs)
+  const org = mergeOrgDefaults(
+    {
+      orgName: config.orgName,
+      team: config.team,
+      department: config.department,
+      approver: config.approver,
+      compliance: config.compliance,
+      distribution: config.distribution,
+    },
+    template,
+  )
+
+  validateOrgName(org.name)
+  return org
 }
 
 /**
@@ -137,7 +165,9 @@ export async function handlePackageCommand(
   const filtered = filterRegistries(allRegistries, config.skipRegistries)
   const registries = Object.values(filtered)
   const registryNames = registries.map(r => r.source || '').filter(Boolean)
-  const manifest = generateManifestMetadata(registryNames, buildCliParams(config))
+
+  const organization = await resolveOrgMetadata(config, projectRoot, fs)
+  const manifest = generateManifestMetadata(registryNames, buildCliParams(config, organization))
 
   // Resolve output path - if relative, make it relative to current working directory
   const outputPath = config.output
