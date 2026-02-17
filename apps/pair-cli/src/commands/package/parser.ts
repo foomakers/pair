@@ -11,6 +11,7 @@ import {
  */
 export interface PackageCommandConfig {
   command: 'package'
+  config?: string
   output?: string
   sourceDir?: string
   name?: string
@@ -41,6 +42,7 @@ function defaultInteractiveFields(): Pick<
 }
 
 interface ParsePackageOptions {
+  config?: string
   output?: string
   sourceDir?: string
   name?: string
@@ -67,6 +69,7 @@ interface ParsePackageOptions {
 function buildCoreMetadata(options: ParsePackageOptions): Partial<PackageCommandConfig> {
   const pkgVersion = options.pkgVersion || options.version
   return {
+    ...(options.config && { config: options.config }),
     ...(options.output && { output: options.output }),
     ...(options.sourceDir && { sourceDir: options.sourceDir }),
     ...(options.name && { name: options.name }),

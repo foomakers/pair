@@ -27,7 +27,11 @@ async function loadAndValidate(
   if (config.logLevel) setLogLevel(config.logLevel)
   logger.debug('🔍 Loading configuration...')
   // When sourceDir is provided, skip base config to avoid requiring all default registries
-  const result = loadConfigWithOverrides(fs, { projectRoot, skipBaseConfig: !!config.sourceDir })
+  const result = loadConfigWithOverrides(fs, {
+    projectRoot,
+    skipBaseConfig: !!config.sourceDir,
+    ...(config.config && { customConfigPath: config.config }),
+  })
 
   logger.debug('✓ Validating package structure...')
   const validation = await validatePackageStructure(result.config, projectRoot, fs)

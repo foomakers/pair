@@ -33,7 +33,7 @@
   },
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
-    "postbuild": "chmod +x dist/cli.js",
+    "postbuild": "chmod +x dist/cli.js && node scripts/postbuild.js",
     "dev": "ts-node src/cli.ts",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

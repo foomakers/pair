@@ -130,9 +130,9 @@ node "$PROJECT_ROOT/$PAIR_CLI" package \
   -c "$TEMP_CONFIG" \
   --source-dir "$DATASET_SOURCE" \
   -o "$OUTPUT_ZIP" \
-  --name="knowledge-base" \
-  --version="$VERSION" \
-  --description="Pair knowledge base dataset"
+  --name "knowledge-base" \
+  --pkg-version "$VERSION" \
+  --description "Pair knowledge base dataset"
 
 rm "$TEMP_CONFIG"
 
