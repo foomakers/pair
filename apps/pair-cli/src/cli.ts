@@ -132,7 +132,7 @@ function addCommandOptions(
   options: readonly { flags: string; description: string; defaultValue?: unknown }[],
 ): void {
   for (const opt of options) {
-    if (opt.flags.startsWith('[')) {
+    if (opt.flags.startsWith('[') || opt.flags.startsWith('<')) {
       cmd.argument(opt.flags, opt.description)
     } else {
       if ('defaultValue' in opt) {

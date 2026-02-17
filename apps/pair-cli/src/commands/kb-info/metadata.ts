@@ -11,6 +11,7 @@ export const kbInfoCommandMetadata = {
     'pair kb-info dist/kb-v1.0.0.zip                  # Inspect specific package',
   ],
   options: [
+    { flags: '<package-path>', description: 'Path to the KB package ZIP file' },
     { flags: '--json', description: 'Output package metadata as JSON' },
     {
       flags: '-l, --log-level <level>',
