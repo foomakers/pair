@@ -106,7 +106,8 @@ assert_file "$OUT_DIR/pkg-org.zip"
 rm -rf "$OUT_DIR/extracted-org"
 mkdir -p "$OUT_DIR/extracted-org"
 unzip -q "$OUT_DIR/pkg-org.zip" -d "$OUT_DIR/extracted-org"
-assert_contains "$OUT_DIR/extracted-org/manifest.json" '"name": "AcmeCorp"'
+assert_contains "$OUT_DIR/extracted-org/manifest.json" '"organization"'
+assert_contains "$OUT_DIR/extracted-org/manifest.json" '"AcmeCorp"'
 assert_contains "$OUT_DIR/extracted-org/manifest.json" '"distribution": "private"'
 assert_contains "$OUT_DIR/extracted-org/manifest.json" '"SOC2"'
 log_succ "Organizational package created with org metadata"

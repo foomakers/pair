@@ -8,6 +8,13 @@ interface DispatchContext {
   baseTarget?: string
 }
 
+async function dispatchWithExitCode(handler: () => Promise<number>): Promise<void> {
+  const exitCode = await handler()
+  if (exitCode !== 0) {
+    process.exitCode = exitCode
+  }
+}
+
 /**
  * Dispatch CommandConfig to appropriate handler using command registry
  * Type-safe implementation using discriminated union narrowing
@@ -31,13 +38,10 @@ export async function dispatchCommand(
       return commandRegistry['validate-config'].handle(config, fs)
     case 'kb-validate':
       return commandRegistry['kb-validate'].handle(config, fs)
-    case 'kb-verify': {
-      const exitCode = await commandRegistry['kb-verify'].handle(config, fs)
-      if (exitCode !== 0) {
-        process.exitCode = exitCode
-      }
-      return
-    }
+    case 'kb-verify':
+      return dispatchWithExitCode(() => commandRegistry['kb-verify'].handle(config, fs))
+    case 'kb-info':
+      return dispatchWithExitCode(() => commandRegistry['kb-info'].handle(config, fs))
   }
 }
 

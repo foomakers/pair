@@ -3,6 +3,25 @@ import type { KbInfoCommandConfig } from './parser'
 import type { ManifestMetadata } from '../package/metadata'
 import AdmZip from 'adm-zip'
 import { formatHumanReadable, formatJSON } from './display-formatter'
+import { verifyManifest } from '../kb-verify/checks/manifest-check'
+
+function readManifest(packagePath: string): ManifestMetadata {
+  const zip = new AdmZip(packagePath)
+  const entry = zip.getEntry('manifest.json')
+  if (!entry) throw new Error('Missing manifest.json in package')
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(entry.getData().toString('utf-8'))
+  } catch {
+    throw new Error('Invalid JSON in manifest.json')
+  }
+
+  const check = verifyManifest(parsed)
+  if (check.status === 'FAIL') throw new Error(`Invalid manifest: ${check.errors.join(', ')}`)
+
+  return parsed as ManifestMetadata
+}
 
 /**
  * Handle kb-info command
@@ -20,32 +39,15 @@ export async function handleKbInfoCommand(
       return 1
     }
 
-    let zip: AdmZip
-    try {
-      zip = new AdmZip(config.packagePath)
-    } catch {
-      console.error(`Invalid ZIP archive: ${config.packagePath}`)
-      return 1
-    }
-
-    const manifestEntry = zip.getEntry('manifest.json')
-    if (!manifestEntry) {
-      console.error(`Missing manifest.json in package`)
-      return 1
-    }
-
-    const manifestContent = manifestEntry.getData().toString('utf-8')
     let manifest: ManifestMetadata
     try {
-      manifest = JSON.parse(manifestContent)
-    } catch {
-      console.error(`Invalid JSON in manifest.json`)
+      manifest = readManifest(config.packagePath)
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error))
       return 1
     }
 
-    const output = config.json ? formatJSON(manifest) : formatHumanReadable(manifest)
-    console.log(output)
-
+    console.log(config.json ? formatJSON(manifest) : formatHumanReadable(manifest))
     return 0
   } catch (error) {
     console.error(

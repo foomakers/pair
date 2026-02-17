@@ -57,6 +57,7 @@ function pickFirst<T>(...values: (T | undefined)[]): T | undefined {
 /**
  * Merge org metadata from CLI flags and template.
  * Precedence: CLI flags > org-template > factory defaults.
+ * Note: name defaults to '' when unset — caller must validate via validateOrgName().
  */
 export function mergeOrgDefaults(
   cliFlags: OrgCliFlags,

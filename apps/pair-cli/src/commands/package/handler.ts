@@ -17,6 +17,8 @@ import {
 import path from 'path'
 import { logger, setLogLevel } from '@pair/content-ops'
 
+const ORG_TEMPLATE_PATH = '.pair/org-template.json'
+
 async function loadAndValidate(
   config: PackageCommandConfig,
   fs: FileSystemService,
@@ -43,12 +45,6 @@ async function prepareOutput(outputPath: string, fs: FileSystemService) {
 
   if (!fs.existsSync(outputDir)) {
     await fs.mkdir(outputDir, { recursive: true })
-  }
-
-  try {
-    fs.accessSync(outputDir)
-  } catch {
-    throw new Error(`Output directory is not writable: ${outputDir}`)
   }
 
   if (fs.existsSync(outputPath)) {
@@ -113,7 +109,7 @@ async function resolveOrgMetadata(
 ): Promise<OrganizationMetadata | undefined> {
   if (!config.org) return undefined
 
-  const template = await loadOrgTemplate(projectRoot, fs, '.pair/org-template.json')
+  const template = await loadOrgTemplate(projectRoot, fs, ORG_TEMPLATE_PATH)
   const org = mergeOrgDefaults(
     {
       orgName: config.orgName,
@@ -172,7 +168,7 @@ export async function handlePackageCommand(
   // Resolve output path - if relative, make it relative to current working directory
   const outputPath = config.output
     ? path.resolve(config.output)
-    : path.join(projectRoot, 'dist', `kb-package-${manifest.created_at}.zip`)
+    : path.join(projectRoot, 'dist', `kb-package-${manifest.created_at.replace(/:/g, '-')}.zip`)
 
   logger.debug(`📁 Preparing output directory: ${path.dirname(outputPath)}`)
   await prepareOutput(outputPath, fs)

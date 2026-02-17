@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { fileSystemService } from '@pair/content-ops'
 import { handleKbInfoCommand } from './handler'
 import { createPackageZip } from '../package/zip-creator'
@@ -7,6 +7,7 @@ import type { RegistryConfig } from '#registry'
 import fs from 'fs'
 import path from 'path'
 import os from 'os'
+import AdmZip from 'adm-zip'
 
 function testRegistry(source: string): RegistryConfig {
   return {
@@ -23,15 +24,20 @@ describe('handleKbInfoCommand', () => {
   let testDir: string
   let projectRoot: string
   let packagePath: string
+  let logSpy: ReturnType<typeof vi.spyOn>
+  let errorSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
     testDir = path.join(os.tmpdir(), `test-info-${Date.now()}`)
     projectRoot = path.join(testDir, 'project')
     packagePath = path.join(testDir, 'test.zip')
     fs.mkdirSync(projectRoot, { recursive: true })
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     if (fs.existsSync(testDir)) {
       fs.rmSync(testDir, { recursive: true, force: true })
     }
@@ -63,27 +69,23 @@ describe('handleKbInfoCommand', () => {
     )
   }
 
+  function capturedOutput(): string {
+    return logSpy.mock.calls.map(args => args.join(' ')).join('\n')
+  }
+
   it('displays standard metadata and returns 0', async () => {
     await createTestPackage(baseManifest)
-    let output = ''
-    const origLog = console.log
-    console.log = (msg: string) => {
-      output += msg
-    }
 
-    try {
-      const exitCode = await handleKbInfoCommand(
-        { command: 'kb-info', packagePath, json: false },
-        fileSystemService,
-      )
+    const exitCode = await handleKbInfoCommand(
+      { command: 'kb-info', packagePath, json: false },
+      fileSystemService,
+    )
 
-      expect(exitCode).toBe(0)
-      expect(output).toContain('test-kb')
-      expect(output).toContain('1.0.0')
-      expect(output).toContain('Package Information')
-    } finally {
-      console.log = origLog
-    }
+    expect(exitCode).toBe(0)
+    const output = capturedOutput()
+    expect(output).toContain('test-kb')
+    expect(output).toContain('1.0.0')
+    expect(output).toContain('Package Information')
   })
 
   it('displays org metadata when present', async () => {
@@ -97,65 +99,39 @@ describe('handleKbInfoCommand', () => {
       },
     }
     await createTestPackage(manifest)
-    let output = ''
-    const origLog = console.log
-    console.log = (msg: string) => {
-      output += msg
-    }
 
-    try {
-      const exitCode = await handleKbInfoCommand(
-        { command: 'kb-info', packagePath, json: false },
-        fileSystemService,
-      )
+    const exitCode = await handleKbInfoCommand(
+      { command: 'kb-info', packagePath, json: false },
+      fileSystemService,
+    )
 
-      expect(exitCode).toBe(0)
-      expect(output).toContain('Organization')
-      expect(output).toContain('Acme Corp')
-      expect(output).toContain('Platform')
-    } finally {
-      console.log = origLog
-    }
+    expect(exitCode).toBe(0)
+    const output = capturedOutput()
+    expect(output).toContain('Organization')
+    expect(output).toContain('Acme Corp')
+    expect(output).toContain('Platform')
   })
 
   it('does not show org section for standard packages', async () => {
     await createTestPackage(baseManifest)
-    let output = ''
-    const origLog = console.log
-    console.log = (msg: string) => {
-      output += msg
-    }
 
-    try {
-      await handleKbInfoCommand({ command: 'kb-info', packagePath, json: false }, fileSystemService)
+    await handleKbInfoCommand({ command: 'kb-info', packagePath, json: false }, fileSystemService)
 
-      expect(output).not.toContain('Organization')
-    } finally {
-      console.log = origLog
-    }
+    expect(capturedOutput()).not.toContain('Organization')
   })
 
   it('outputs JSON with --json flag', async () => {
     await createTestPackage(baseManifest)
-    let output = ''
-    const origLog = console.log
-    console.log = (msg: string) => {
-      output += msg
-    }
 
-    try {
-      const exitCode = await handleKbInfoCommand(
-        { command: 'kb-info', packagePath, json: true },
-        fileSystemService,
-      )
+    const exitCode = await handleKbInfoCommand(
+      { command: 'kb-info', packagePath, json: true },
+      fileSystemService,
+    )
 
-      expect(exitCode).toBe(0)
-      const parsed = JSON.parse(output)
-      expect(parsed.name).toBe('test-kb')
-      expect(parsed.version).toBe('1.0.0')
-    } finally {
-      console.log = origLog
-    }
+    expect(exitCode).toBe(0)
+    const parsed = JSON.parse(capturedOutput())
+    expect(parsed.name).toBe('test-kb')
+    expect(parsed.version).toBe('1.0.0')
   })
 
   it('returns 1 for non-existent file', async () => {
@@ -176,5 +152,47 @@ describe('handleKbInfoCommand', () => {
     )
 
     expect(exitCode).toBe(1)
+  })
+
+  it('returns 1 for ZIP with malformed JSON in manifest', async () => {
+    const zip = new AdmZip()
+    zip.addFile('manifest.json', Buffer.from('not valid json{'))
+    zip.writeZip(packagePath)
+
+    const exitCode = await handleKbInfoCommand(
+      { command: 'kb-info', packagePath, json: false },
+      fileSystemService,
+    )
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid JSON'))
+  })
+
+  it('returns 1 for ZIP with no manifest.json', async () => {
+    const zip = new AdmZip()
+    zip.addFile('other.txt', Buffer.from('hello'))
+    zip.writeZip(packagePath)
+
+    const exitCode = await handleKbInfoCommand(
+      { command: 'kb-info', packagePath, json: false },
+      fileSystemService,
+    )
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Missing manifest.json'))
+  })
+
+  it('returns 1 for manifest missing required fields', async () => {
+    const zip = new AdmZip()
+    zip.addFile('manifest.json', Buffer.from(JSON.stringify({ description: 'no name or version' })))
+    zip.writeZip(packagePath)
+
+    const exitCode = await handleKbInfoCommand(
+      { command: 'kb-info', packagePath, json: false },
+      fileSystemService,
+    )
+
+    expect(exitCode).toBe(1)
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid manifest'))
   })
 })
