@@ -1,0 +1,51 @@
+{
+  "name": "@pair/website",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Pair documentation and landing page website",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "ts:check": "tsc --noEmit",
+    "lint": "eslint . --config eslint.config.cjs",
+    "lint:fix": "eslint . --config eslint.config.cjs --fix",
+    "prettier:fix": "prettier-fix",
+    "prettier:check": "prettier-check",
+    "mdlint:check": "markdownlint-check",
+    "mdlint:fix": "markdownlint-fix"
+  },
+  "dependencies": {
+    "@pair/brand": "workspace:*",
+    "@types/mdx": "^2.0.13",
+    "fumadocs-core": "14.7.7",
+    "fumadocs-mdx": "11.10.1",
+    "fumadocs-ui": "14.7.7",
+    "next": "^15.3.3",
+    "posthog-js": "^1.350.0",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@pair/eslint-config": "workspace:*",
+    "@pair/markdownlint-config": "workspace:*",
+    "@pair/prettier-config": "workspace:*",
+    "@pair/ts-config": "workspace:*",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "autoprefixer": "catalog:",
+    "postcss": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "prettier": "@pair/prettier-config"
+}
