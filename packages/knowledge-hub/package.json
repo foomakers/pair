@@ -25,6 +25,7 @@
     "@pair/prettier-config": "workspace:*",
     "@pair/markdownlint-config": "workspace:*",
     "@pair/content-ops": "workspace:*",
+    "@pair/ts-config": "workspace:*",
     "@types/node": "catalog:",
     "vitest": "catalog:",
     "vite-tsconfig-paths": "catalog:",

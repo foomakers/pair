@@ -1,0 +1,14 @@
+{
+  "extends": "@pair/ts-config/ui.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "$components": ["src/components/index.ts"],
+      "$components/*": ["src/components/*"],
+      "$tokens": ["src/tokens/index.ts"],
+      "$tokens/*": ["src/tokens/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx", "dev/**/*.ts", "dev/**/*.tsx"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"]
+}

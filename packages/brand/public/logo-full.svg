@@ -1,0 +1,5 @@
+<svg viewBox="0 0 40 52" xmlns="http://www.w3.org/2000/svg">
+  <rect x="8" y="2" width="10" height="20" rx="5" fill="#0062FF" />
+  <rect x="22" y="2" width="10" height="20" rx="5" fill="#00D1FF" />
+  <text x="20" y="42" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-size="18" font-weight="600" fill="#0A0D14" text-anchor="middle">pair</text>
+</svg>
