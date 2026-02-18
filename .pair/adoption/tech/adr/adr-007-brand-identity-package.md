@@ -13,7 +13,7 @@ Implement the pair brand identity as an importable monorepo package (`@pair/bran
 1. **Package location**: `packages/brand/` in the monorepo (peer to knowledge-hub, content-ops)
 2. **Exports**: Design tokens (TS + CSS), React components (Logo, Card, Button, Callout), Tailwind preset, static SVGs (public/)
 3. **Distribution model**: Consumed via standard `import { PairLogo } from '@pair/brand'` — no build step, no asset copying
-4. **Peer dependencies**: `react` (^19.0.0), `tailwindcss` (^3.4.17) — pinned to catalog versions; package doesn't bundle its own React or Tailwind
+4. **Peer dependencies**: `react` (^19), `tailwindcss` (^3.4.17) — requires React 19; package doesn't bundle its own React or Tailwind
 5. **Zero ad-hoc styling rule**: All components reference `--pair-*` CSS custom properties exclusively
 
 ## Rationale
@@ -57,7 +57,7 @@ Implement the pair brand identity as an importable monorepo package (`@pair/bran
 **Negative:**
 
 - New package increases monorepo surface area (8th workspace)
-- Peer dependencies: consumers must provide React ^19.0.0 and Tailwind ^3.4.17 (aligned to monorepo catalog)
+- Peer dependencies: consumers must provide React ^19 and Tailwind ^3.4.17
 - Components may be too opinionated for Fumadocs (mitigated: primitives are minimal, Fumadocs has its own system)
 - Cannot use brand outside monorepo without publishing (acceptable: brand is internal)
 
@@ -82,7 +82,7 @@ Implement the pair brand identity as an importable monorepo package (`@pair/bran
 - `adoption/tech/tech-stack.md` — updated with: React 19.0.0, Tailwind CSS 3.4.17, PostCSS 8.4.49, autoprefixer 10.4.20, Vite 6.0.7, @testing-library/react, @testing-library/jest-dom, jsdom, Plus Jakarta Sans, JetBrains Mono
 - `adoption/tech/ux-ui.md` — replaced placeholder with full brand identity section: design tokens, component library, typography, color system, tone of voice
 
-> **Peer dependency note:** Peer deps are pinned to catalog versions (`react: ^19.0.0`, `tailwindcss: ^3.4.17`). pnpm does not support `catalog:` in `peerDependencies` — values must be kept in sync with `pnpm-workspace.yaml` manually when the catalog is updated.
+> **Peer dependency note:** pnpm does not support `catalog:` in `peerDependencies`. React is declared as `^19` (any React 19.x); Tailwind is pinned to `^3.4.17` (catalog version). Keep in sync with `pnpm-workspace.yaml` manually when the catalog is updated.
 
 ## References
 
