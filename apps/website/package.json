@@ -31,6 +31,8 @@
   },
   "devDependencies": {
     "@pair/eslint-config": "workspace:*",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
     "@pair/markdownlint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
     "@pair/ts-config": "workspace:*",
@@ -39,6 +41,7 @@
     "@vitejs/plugin-react": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "autoprefixer": "catalog:",
+    "jsdom": "catalog:",
     "postcss": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "catalog:",

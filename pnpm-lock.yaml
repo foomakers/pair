@@ -256,6 +256,12 @@ importers:
       '@pair/ts-config':
         specifier: workspace:*
         version: link:../../tools/ts-config
+      '@testing-library/jest-dom':
+        specifier: 'catalog:'
+        version: 6.6.3
+      '@testing-library/react':
+        specifier: 'catalog:'
+        version: 16.1.0(@testing-library/dom@10.4.1)(@types/react-dom@19.0.6(@types/react@19.0.6))(@types/react@19.0.6)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       '@types/react':
         specifier: 'catalog:'
         version: 19.0.6
@@ -271,6 +277,9 @@ importers:
       autoprefixer:
         specifier: 'catalog:'
         version: 10.4.20(postcss@8.4.49)
+      jsdom:
+        specifier: 'catalog:'
+        version: 25.0.1
       postcss:
         specifier: 'catalog:'
         version: 8.4.49

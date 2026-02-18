@@ -1,4 +1,11 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
+
+export const metadata: Metadata = {
+  title: 'pair — Code is the easy part.',
+  description:
+    'pair enables seamless dev-AI collaboration for any engineering team way of working.',
+}
 
 export default function HomePage() {
   return (

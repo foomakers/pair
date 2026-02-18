@@ -1,6 +1,6 @@
 import type { Config } from 'tailwindcss'
 import { createPreset } from 'fumadocs-ui/tailwind-plugin'
-import brandPreset from '../../packages/brand/src/tailwind-preset'
+import brandPreset from '@pair/brand/tailwind-preset'
 
 export default {
   content: [
