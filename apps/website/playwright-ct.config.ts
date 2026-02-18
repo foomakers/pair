@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url'
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
 export default defineConfig({
-  testMatch: '**/__ct-tests__/**/*.ct.test.tsx',
+  testMatch: '**/*.ct.test.tsx',
   use: {
     ctPort: 3101,
     ctViteConfig: {

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/experimental-ct-react'
-import PrivacyPage from '../app/privacy/page'
+import PrivacyPage from './page'
 
 test('renders Privacy Policy heading', async ({ mount }) => {
   const component = await mount(<PrivacyPage />)

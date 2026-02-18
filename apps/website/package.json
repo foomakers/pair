@@ -9,7 +9,7 @@
     "build": "next build",
     "start": "next start",
     "ct": "playwright test -c playwright-ct.config.ts",
-    "test": "vitest run",
+    "test": "vitest run && playwright test -c playwright-ct.config.ts",
     "test:coverage": "vitest run --coverage",
     "ts:check": "tsc --noEmit",
     "lint": "eslint . --config eslint.config.cjs",

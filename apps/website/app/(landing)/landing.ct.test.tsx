@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/experimental-ct-react'
-import HomePage from '../app/(landing)/page'
+import HomePage from './page'
 
 test('renders pair heading', async ({ mount }) => {
   const component = await mount(<HomePage />)
