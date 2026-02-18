@@ -1,0 +1,26 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Brand gradient background -->
+  <defs>
+    <linearGradient id="brand-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0062FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#00D1FF;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#brand-gradient)"/>
+
+  <!-- Logo mark centered -->
+  <g transform="translate(520, 240)">
+    <!-- Blue pill (Human - left) -->
+    <rect x="0" y="0" width="60" height="150" rx="30" fill="#0062FF" opacity="0.9"/>
+
+    <!-- Teal pill (AI - right) -->
+    <rect x="100" y="0" width="60" height="150" rx="30" fill="#00D1FF" opacity="0.9"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="600" y="480" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-size="72" font-weight="700" fill="#FFFFFF" text-anchor="middle">pair</text>
+
+  <!-- Tagline -->
+  <text x="600" y="540" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-size="28" font-weight="400" fill="#F8FAFC" text-anchor="middle" opacity="0.9">Code is the easy part</text>
+</svg>

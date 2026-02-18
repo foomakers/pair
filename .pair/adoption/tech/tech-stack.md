@@ -29,6 +29,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - vitest is adopted as the testing framework for TypeScript and JavaScript codebases (vitest v3.2.4).
 - @vitest/coverage-v8 v3.2.4 is adopted for coverage reporting.
 - vite-tsconfig-paths v5.1.4 is adopted to enable TypeScript `paths` resolution for Vite and Vitest.
+- @testing-library/react and @testing-library/jest-dom are adopted for React component testing (peer dependencies of UI workspaces).
 
 ## Runtime & CLI tooling
 
@@ -44,12 +45,26 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - remark-parse v11.0.0 and unified v11.0.5 are adopted for the unified ecosystem.
 - @types/markdown-it v14.1.2 is adopted for TypeScript types for markdown-it.
 
+## UI frameworks & libraries
+
+- React is adopted for UI component development (peer dependency: ^18.0.0 || ^19.0.0).
+- Tailwind CSS v3.4.17 is adopted for styling (downgraded from v4.0.0 for Vite compatibility).
+- PostCSS v8.4.49 is adopted for CSS processing with Tailwind CSS.
+- autoprefixer v10.4.20 is adopted for automatic vendor prefix injection.
+- Vite v6.0.7 is adopted as the build tool and dev server for UI packages.
+- @vitejs/plugin-react v4.3.4 is adopted for React Fast Refresh and JSX transformation.
+- Plus Jakarta Sans is adopted as the primary sans-serif typeface (loaded via Google Fonts).
+- JetBrains Mono is adopted as the monospace typeface for code and technical content (loaded via Google Fonts).
+
 ## Linting & formatting
 
 - ESLint and related tooling are adopted for linting and style enforcement:
   - @typescript-eslint/eslint-plugin v8.41.0
   - @typescript-eslint/parser v8.41.0
   - eslint v9.34.0 and @eslint/js v9.34.0
+  - eslint-plugin-react v7.37.2 (for React/JSX linting)
+  - eslint-plugin-react-hooks v5.1.0 (for React Hooks rules)
+  - eslint-plugin-jsx-a11y v6.10.2 (for accessibility linting)
   - globals v15.0.0
   - prettier v3.6.2 (configured via workspace `tools/prettier-config`)
 

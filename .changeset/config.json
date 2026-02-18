@@ -5,6 +5,7 @@
   "fixed": [
     [
       "@pair/pair-cli",
+      "@pair/brand",
       "@pair/content-ops",
       "@pair/knowledge-hub",
       "@pair/eslint-config",

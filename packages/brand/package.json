@@ -1,0 +1,56 @@
+{
+  "name": "@pair/brand",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Brand identity component library for Pair - design tokens, React components, and Tailwind preset",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./tokens.css": "./src/tokens/tokens.css"
+  },
+  "files": [
+    "src",
+    "public"
+  ],
+  "scripts": {
+    "dev": "vite dev",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "ts:check": "tsc --noEmit",
+    "lint": "lint",
+    "lint:fix": "lint-fix",
+    "prettier:fix": "prettier-fix",
+    "prettier:check": "prettier-check",
+    "mdlint:check": "markdownlint-check",
+    "mdlint:fix": "markdownlint-fix"
+  },
+  "peerDependencies": {
+    "react": "^19",
+    "tailwindcss": "^3.4.17"
+  },
+  "devDependencies": {
+    "@pair/eslint-config": "workspace:*",
+    "@pair/prettier-config": "workspace:*",
+    "@pair/markdownlint-config": "workspace:*",
+    "@pair/ts-config": "workspace:*",
+    "@testing-library/react": "catalog:",
+    "@testing-library/jest-dom": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "autoprefixer": "catalog:",
+    "jsdom": "catalog:",
+    "postcss": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  },
+  "prettier": "@pair/prettier-config"
+}

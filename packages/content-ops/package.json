@@ -48,6 +48,7 @@
     "@pair/eslint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
     "@pair/markdownlint-config": "workspace:*",
+    "@pair/ts-config": "workspace:*",
     "@types/adm-zip": "^0.5.5",
     "@types/markdown-it": "catalog:",
     "@types/mdast": "catalog:",

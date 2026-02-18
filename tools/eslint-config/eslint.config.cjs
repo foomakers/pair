@@ -63,6 +63,9 @@ module.exports = [
 
       // Prevent runtime errors that should be compile-time
       'no-throw-literal': 'error',
+
+      // Disable no-undef for TypeScript files - TypeScript handles this better
+      'no-undef': 'off',
     },
   },
   {
@@ -96,6 +99,13 @@ module.exports = [
         beforeAll: 'readonly',
         afterAll: 'readonly',
         vi: 'readonly',
+        // Browser globals for React component tests
+        window: 'readonly',
+        document: 'readonly',
+        HTMLElement: 'readonly',
+        HTMLButtonElement: 'readonly',
+        HTMLDivElement: 'readonly',
+        Element: 'readonly',
       },
     },
     rules: {
