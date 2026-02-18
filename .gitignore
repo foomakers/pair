@@ -20,3 +20,5 @@ release/
 .kilocode/
 docs/performance/benchmark-report.json
 .playwright-mcp
+playwright/.cache/
+test-results/
