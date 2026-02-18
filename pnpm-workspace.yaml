@@ -5,6 +5,7 @@ packages:
 
 catalog:
   '@changesets/cli': 2.29.7
+  '@playwright/experimental-ct-react': ^1.50.0
   '@eslint/js': 9.34.0
   '@inquirer/prompts': 7.5.0
   '@testing-library/jest-dom': 6.6.3

@@ -1,0 +1,105 @@
+{
+  "version": "1.58.2",
+  "viteVersion": "6.4.1",
+  "registerSourceHash": "ea233d95b980072c81eb49458aee55f5d33fdb02",
+  "components": [
+    {
+      "id": "_Users_gianlucacarucci_projects_pair_packages_brand_src_components_Button_Button",
+      "filename": "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Button.ct.test.tsx",
+      "importSource": "./Button",
+      "remoteName": "Button"
+    },
+    {
+      "id": "_Users_gianlucacarucci_projects_pair_packages_brand_src_components_Callout_Callout",
+      "filename": "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Callout.ct.test.tsx",
+      "importSource": "./Callout",
+      "remoteName": "Callout"
+    },
+    {
+      "id": "_Users_gianlucacarucci_projects_pair_packages_brand_src_components_Card_Card",
+      "filename": "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Card.ct.test.tsx",
+      "importSource": "./Card",
+      "remoteName": "Card"
+    },
+    {
+      "id": "_Users_gianlucacarucci_projects_pair_packages_brand_src_components_Logo_PairLogo",
+      "filename": "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Logo.ct.test.tsx",
+      "importSource": "./Logo",
+      "remoteName": "PairLogo"
+    }
+  ],
+  "sources": {
+    "/Users/gianlucacarucci/projects/pair/packages/brand/playwright/index.html": {
+      "timestamp": 1771425430685.3818
+    },
+    "/Users/gianlucacarucci/projects/pair/packages/brand/playwright/index.tsx": {
+      "timestamp": 1771425365410.7542
+    },
+    "/Users/gianlucacarucci/projects/pair/node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/client.js": {
+      "timestamp": 1771345856307.49
+    },
+    "/Users/gianlucacarucci/projects/pair/node_modules/.pnpm/react@19.0.0/node_modules/react/index.js": {
+      "timestamp": 1771345854758.2546
+    },
+    "/Users/gianlucacarucci/projects/pair/packages/brand/src/tokens/tokens.css": {
+      "timestamp": 1771415028407.7488
+    },
+    "/Users/gianlucacarucci/projects/pair/node_modules/.pnpm/@playwright+experimental-ct-react@1.58.2_@types+node@24.3.0_jiti@1.21.7_vite@6.0.7_@typ_64afd5fd5301e77aae5b4e6e183e1fb7/node_modules/@playwright/experimental-ct-react/hooks.mjs": {
+      "timestamp": 1771425409635.9648
+    },
+    "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Card.tsx": {
+      "timestamp": 1771415028405.821
+    },
+    "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Callout.tsx": {
+      "timestamp": 1771415028405.4717
+    },
+    "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Button.tsx": {
+      "timestamp": 1771415028405.1426
+    },
+    "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Logo.tsx": {
+      "timestamp": 1771415028406.2317
+    },
+    "/Users/gianlucacarucci/projects/pair/node_modules/.pnpm/react@19.0.0/node_modules/react/cjs/react.production.js": {
+      "timestamp": 1771349690630.0698
+    },
+    "/Users/gianlucacarucci/projects/pair/node_modules/.pnpm/react@19.0.0/node_modules/react/jsx-runtime.js": {
+      "timestamp": 1771345854758.9946
+    },
+    "/Users/gianlucacarucci/projects/pair/node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/cjs/react-dom-client.production.js": {
+      "timestamp": 1771349690834.1636
+    },
+    "/Users/gianlucacarucci/projects/pair/packages/brand/src/tokens/colors.ts": {
+      "timestamp": 1771415028407.355
+    },
+    "/Users/gianlucacarucci/projects/pair/node_modules/.pnpm/scheduler@0.25.0/node_modules/scheduler/index.js": {
+      "timestamp": 1771345856471.3164
+    },
+    "/Users/gianlucacarucci/projects/pair/node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/index.js": {
+      "timestamp": 1771345856307.8606
+    },
+    "/Users/gianlucacarucci/projects/pair/node_modules/.pnpm/react@19.0.0/node_modules/react/cjs/react-jsx-runtime.production.js": {
+      "timestamp": 1771345854761.6165
+    },
+    "/Users/gianlucacarucci/projects/pair/node_modules/.pnpm/scheduler@0.25.0/node_modules/scheduler/cjs/scheduler.production.js": {
+      "timestamp": 1771349691089.6182
+    },
+    "/Users/gianlucacarucci/projects/pair/node_modules/.pnpm/react-dom@19.0.0_react@19.0.0/node_modules/react-dom/cjs/react-dom.production.js": {
+      "timestamp": 1771349690845.9922
+    }
+  },
+  "deps": {
+    "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Button.tsx": [
+      "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Button.tsx"
+    ],
+    "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Callout.tsx": [
+      "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Callout.tsx"
+    ],
+    "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Card.tsx": [
+      "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Card.tsx"
+    ],
+    "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Logo.tsx": [
+      "/Users/gianlucacarucci/projects/pair/packages/brand/src/components/Logo.tsx",
+      "/Users/gianlucacarucci/projects/pair/packages/brand/src/tokens/colors.ts"
+    ]
+  }
+}
