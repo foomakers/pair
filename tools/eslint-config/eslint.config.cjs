@@ -113,6 +113,6 @@ module.exports = [
     },
   },
   {
-    ignores: ['dist/', 'build/', 'node_modules/', '*.config.js', '*.config.ts'],
+    ignores: ['dist/', 'build/', 'node_modules/', '*.config.js', '*.config.ts', 'playwright/', 'test-results/'],
   },
 ]

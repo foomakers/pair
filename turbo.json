@@ -42,6 +42,10 @@
       "cache": false,
       "outputs": []
     },
+    "ct": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
     "quality-gate": {
       "dependsOn": ["^ts:check", "^test", "^lint"],
       "outputs": []

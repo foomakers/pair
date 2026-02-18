@@ -45,6 +45,17 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - remark-parse v11.0.0 and unified v11.0.5 are adopted for the unified ecosystem.
 - @types/markdown-it v14.1.2 is adopted for TypeScript types for markdown-it.
 
+## Website & documentation
+
+- Next.js v15 (App Router) is adopted as the framework for `apps/website/` (pair docs + landing page).
+- Fumadocs is adopted as the documentation framework for the website:
+  - fumadocs-core v14.7.7
+  - fumadocs-ui v14.7.7
+  - fumadocs-mdx v11.10.1
+- Orama search is adopted for client-side full-text search via the Fumadocs built-in integration (build-time index, browser-only, zero external service).
+- PostHog is adopted for anonymous analytics (`posthog-js ^1.350.0`) in cookieless mode (`persistence: 'memory'`): no cookies, no PII, no consent required. Env vars: `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`.
+- Vercel Hobby plan is adopted as the hosting platform for `apps/website/` (static + client-side only, preview deploys for PRs, production on main).
+
 ## UI frameworks & libraries
 
 - React is adopted for UI component development (peer dependency: ^18.0.0 || ^19.0.0).

@@ -9,14 +9,12 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      $components: resolve(__dirname, 'src/components'),
-      $tokens: resolve(__dirname, 'src/tokens'),
+      '@': resolve(__dirname, '.'),
     },
   },
   test: {
     environment: 'jsdom',
     globals: true,
-    setupFiles: [],
     exclude: ['**/*.ct.test.tsx', '**/node_modules/**'],
   },
 })

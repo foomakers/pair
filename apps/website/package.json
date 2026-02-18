@@ -1,46 +1,43 @@
 {
-  "name": "@pair/brand",
+  "name": "@pair/website",
   "version": "0.4.0",
   "private": true,
-  "description": "Brand identity component library for Pair - design tokens, React components, and Tailwind preset",
+  "description": "Pair documentation and landing page website",
   "type": "module",
-  "exports": {
-    ".": {
-      "types": "./src/index.ts",
-      "import": "./src/index.ts"
-    },
-    "./tokens.css": "./src/tokens/tokens.css",
-    "./tailwind-preset": "./src/tailwind-preset.ts"
-  },
-  "files": [
-    "src",
-    "public"
-  ],
   "scripts": {
-    "dev": "vite dev",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "ct": "playwright test -c playwright-ct.config.ts",
     "test": "vitest run && playwright test -c playwright-ct.config.ts",
     "test:coverage": "vitest run --coverage",
     "ts:check": "tsc --noEmit",
-    "lint": "lint",
-    "lint:fix": "lint-fix",
+    "lint": "eslint . --config eslint.config.cjs",
+    "lint:fix": "eslint . --config eslint.config.cjs --fix",
     "prettier:fix": "prettier-fix",
     "prettier:check": "prettier-check",
     "mdlint:check": "markdownlint-check",
     "mdlint:fix": "markdownlint-fix"
   },
-  "peerDependencies": {
-    "react": "^19",
-    "tailwindcss": "^3.4.17"
+  "dependencies": {
+    "@pair/brand": "workspace:*",
+    "@types/mdx": "^2.0.13",
+    "fumadocs-core": "14.7.7",
+    "fumadocs-mdx": "11.10.1",
+    "fumadocs-ui": "14.7.7",
+    "next": "^15.3.3",
+    "posthog-js": "^1.350.0",
+    "react": "catalog:",
+    "react-dom": "catalog:"
   },
   "devDependencies": {
     "@pair/eslint-config": "workspace:*",
-    "@pair/prettier-config": "workspace:*",
-    "@pair/markdownlint-config": "workspace:*",
-    "@pair/ts-config": "workspace:*",
     "@playwright/experimental-ct-react": "catalog:",
-    "@testing-library/react": "catalog:",
     "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@pair/markdownlint-config": "workspace:*",
+    "@pair/prettier-config": "workspace:*",
+    "@pair/ts-config": "workspace:*",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
@@ -48,12 +45,12 @@
     "autoprefixer": "catalog:",
     "jsdom": "catalog:",
     "postcss": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:",
     "vitest": "catalog:"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "prettier": "@pair/prettier-config"
 }
