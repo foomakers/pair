@@ -6,7 +6,7 @@ import './global.css'
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang='en' suppressHydrationWarning>
       <body>
         <PostHogProvider>
           <RootProvider>{children}</RootProvider>
