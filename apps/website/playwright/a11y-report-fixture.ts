@@ -59,7 +59,9 @@ export function printSummary() {
   console.log(
     `| ${'Component'.padEnd(W.label)} | ${'Tot'.padStart(W.total)} | ${'\u274c'.padStart(W.crit)} | ${'\u26a0\ufe0f'.padStart(W.ser)} | ${'\u2139\ufe0f'.padStart(W.mod)} | ${'\ud83d\udca1'.padStart(W.min)} |`,
   )
-  console.log(`|${'-'.repeat(W.label + 2)}|${'-'.repeat(W.total + 2)}|${'-'.repeat(W.crit + 2)}|${'-'.repeat(W.ser + 2)}|${'-'.repeat(W.mod + 2)}|${'-'.repeat(W.min + 2)}|`)
+  console.log(
+    `|${'-'.repeat(W.label + 2)}|${'-'.repeat(W.total + 2)}|${'-'.repeat(W.crit + 2)}|${'-'.repeat(W.ser + 2)}|${'-'.repeat(W.mod + 2)}|${'-'.repeat(W.min + 2)}|`,
+  )
 
   let totalAll = 0
   let clean = 0
@@ -73,7 +75,9 @@ export function printSummary() {
 
   console.log(line)
   console.log(`\n${clean}/${summary.length} clean | ${totalAll} total violation(s)`)
-  console.log(`Legend: \u274c critical  \u26a0\ufe0f serious  \u2139\ufe0f moderate  \ud83d\udca1 minor\n`)
+  console.log(
+    `Legend: \u274c critical  \u26a0\ufe0f serious  \u2139\ufe0f moderate  \ud83d\udca1 minor\n`,
+  )
 }
 
 export const test = base.extend<{
