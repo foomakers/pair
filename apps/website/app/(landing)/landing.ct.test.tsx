@@ -1,13 +1,17 @@
 import { test, expect } from '@playwright/experimental-ct-react'
 import HomePage from './page'
 
-// AC-1: Hero with claim, pain points, solution
-test('renders hero with claim and pain points', async ({ mount }) => {
+// AC-1: Hero with claim, CTAs, solution
+test('renders hero with claim and CTAs', async ({ mount }) => {
   const component = await mount(<HomePage />)
-  await expect(component.locator('section[aria-label="Hero"]')).toBeVisible()
-  await expect(component).toContainText('Code is the easy part.')
-  await expect(component).toContainText('Who owns the process when AI writes the code?')
-  await expect(component).toContainText('process layer for AI-assisted development')
+  const hero = component.locator('section[aria-label="Hero"]')
+  await expect(hero).toBeVisible()
+  await expect(hero).toContainText('Code is the easy part.')
+  await expect(hero).toContainText('process layer for AI-assisted development')
+  await expect(
+    hero.locator('a[href="https://github.com/foomakers/pair/releases/latest"]'),
+  ).toBeVisible()
+  await expect(hero.locator('a[href="/docs"]')).toBeVisible()
 })
 
 // AC-2: PairLogo presence
@@ -18,7 +22,18 @@ test('renders PairLogo in hero', async ({ mount }) => {
   await expect(logo.locator('svg[aria-label="pair logo"]')).toBeVisible()
 })
 
-// AC-3: "Works with" tool logos
+// AC-3: Pain points in dedicated section
+test('renders pain points in dedicated section', async ({ mount }) => {
+  const component = await mount(<HomePage />)
+  const section = component.locator('section[aria-label="Pain points"]')
+  await expect(section).toBeVisible()
+  await expect(section).toContainText('Who owns the process when AI writes the code?')
+  await expect(section).toContainText('How do you keep quality consistent')
+  await expect(section).toContainText('Where do architectural decisions live')
+  await expect(section).toContainText('How does your team scale AI collaboration')
+})
+
+// AC-4: "Works with" tool logos
 test('renders all 5 tools in "Works with" section', async ({ mount }) => {
   const component = await mount(<HomePage />)
   const section = component.locator('section[aria-label="Works with"]')
@@ -28,7 +43,7 @@ test('renders all 5 tools in "Works with" section', async ({ mount }) => {
   }
 })
 
-// AC-4: 3 audience tracks
+// AC-5: 3 audience tracks
 test('renders 3 audience tracks with CTAs', async ({ mount }) => {
   const component = await mount(<HomePage />)
   const section = component.locator('section[aria-label="Audience tracks"]')
@@ -41,7 +56,7 @@ test('renders 3 audience tracks with CTAs', async ({ mount }) => {
   await expect(section.locator('a[href="/docs/customization/organization"]')).toBeVisible()
 })
 
-// AC-5: "How it works" 4 phases
+// AC-6: "How it works" 4 phases
 test('renders 4 phases in "How it works"', async ({ mount }) => {
   const component = await mount(<HomePage />)
   const section = component.locator('section[aria-label="How it works"]')
@@ -51,7 +66,7 @@ test('renders 4 phases in "How it works"', async ({ mount }) => {
   }
 })
 
-// AC-6: Features section
+// AC-7: Features section
 test('renders 4 features', async ({ mount }) => {
   const component = await mount(<HomePage />)
   const section = component.locator('section[aria-label="Features"]')
@@ -61,7 +76,7 @@ test('renders 4 features', async ({ mount }) => {
   }
 })
 
-// AC-7: Open source section
+// AC-8: Open source section
 test('renders open source section with GitHub link', async ({ mount }) => {
   const component = await mount(<HomePage />)
   const section = component.locator('section[aria-label="Open source"]')
@@ -71,7 +86,7 @@ test('renders open source section with GitHub link', async ({ mount }) => {
   await expect(githubLink).toContainText('foomakers/pair')
 })
 
-// AC-8: Primary and secondary CTAs
+// AC-9: Primary and secondary CTAs
 test('renders primary and secondary CTAs with correct links', async ({ mount }) => {
   const component = await mount(<HomePage />)
   const section = component.locator('section[aria-label="Call to action"]')
@@ -85,20 +100,27 @@ test('renders primary and secondary CTAs with correct links', async ({ mount }) 
   await expect(secondaryCTA).toContainText('Read the docs')
 })
 
-// AC-9: Dark mode — page uses brand background tokens (dark mode via class strategy)
+// AC-10: Dark mode — page uses brand background tokens (dark mode via class strategy)
 test('page renders with brand background tokens', async ({ mount }) => {
   const component = await mount(<HomePage />)
-  // The component root IS the <main> element; verify it renders brand content
   await expect(component).toContainText('Code is the easy part.')
-  // All sections use dark: variants — verified by visual check + brand compliance
 })
 
-// AC-10: Responsive — all sections present
-test('all 7 sections are rendered', async ({ mount }) => {
+// AC-11: Demo placeholder present
+test('renders demo placeholder section', async ({ mount }) => {
+  const component = await mount(<HomePage />)
+  const section = component.locator('section[aria-label="Demo"]')
+  await expect(section).toBeVisible()
+})
+
+// AC-12: All 9 sections are rendered
+test('all 9 sections are rendered', async ({ mount }) => {
   const component = await mount(<HomePage />)
   const sections = [
     'Hero',
+    'Pain points',
     'Works with',
+    'Demo',
     'Audience tracks',
     'How it works',
     'Features',
