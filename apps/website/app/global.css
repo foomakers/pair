@@ -1,3 +1,76 @@
+@import '@pair/brand/tokens.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Landing-specific styles ── */
+
+/* Hero glow */
+.hero-glow {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 98, 255, 0.12) 0%, rgba(0, 209, 255, 0.06) 40%, transparent 70%);
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+:is(.dark) .hero-glow {
+  background: radial-gradient(circle, rgba(0, 98, 255, 0.18) 0%, rgba(0, 209, 255, 0.08) 40%, transparent 70%);
+}
+
+/* Floating animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+/* Fade-in stagger utility */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.6s ease-out both;
+}
+
+/* Gradient line accent */
+.gradient-line {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--pair-blue), var(--pair-teal), transparent);
+}
+
+/* Phase connector line */
+.phase-connector {
+  position: relative;
+}
+
+.phase-connector::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: -1rem;
+  width: 2rem;
+  height: 2px;
+  background: linear-gradient(90deg, var(--pair-blue), var(--pair-teal));
+  transform: translateY(-50%);
+}
+
+/* Asset placeholder */
+.asset-placeholder {
+  border: 2px dashed;
+  border-image: linear-gradient(135deg, var(--pair-blue) 0%, var(--pair-teal) 100%) 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--pair-text-muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+}

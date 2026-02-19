@@ -1,30 +1,40 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
+import { ThemeToggle } from './theme-toggle'
+import { HeroSection } from './hero-section'
+import { PainPointsSection } from './pain-points-section'
+import { WorksWithSection } from './works-with-section'
+import { DemoPlaceholderSection } from './demo-placeholder-section'
+import { AudienceTracksSection } from './audience-tracks-section'
+import { HowItWorksSection } from './how-it-works-section'
+import { FeaturesSection } from './features-section'
+import { OpenSourceSection } from './open-source-section'
+import { CTASection } from './cta-section'
 
 export const metadata: Metadata = {
   title: 'pair — Code is the easy part.',
   description:
-    'pair enables seamless dev-AI collaboration for any engineering team way of working.',
+    'pair enables seamless dev-AI collaboration throughout the product lifecycle. Process layer for AI coding tools.',
+  openGraph: {
+    title: 'pair — Code is the easy part.',
+    description: 'pair enables seamless dev-AI collaboration throughout the product lifecycle.',
+    type: 'website',
+  },
 }
 
 export default function HomePage() {
   return (
-    <main className='flex min-h-screen flex-col items-center justify-center bg-pair-bg-light dark:bg-pair-bg-dark'>
-      <div className='text-center'>
-        <h1 className='text-5xl font-bold font-sans text-pair-text-light dark:text-pair-text-dark'>
-          pair
-        </h1>
-        <p className='mt-4 text-xl text-pair-text-muted-light dark:text-pair-text-muted-dark'>
-          Code is the easy part.
-        </p>
-        <div className='mt-8 flex gap-4 justify-center'>
-          <Link
-            href='/docs'
-            className='rounded-pair bg-pair-blue px-6 py-3 font-semibold text-white transition-all hover:opacity-90'>
-            Documentation
-          </Link>
-        </div>
-      </div>
+    <main className='min-h-screen bg-pair-bg-light text-pair-text-light dark:bg-pair-bg-dark dark:text-pair-text-dark'>
+      <ThemeToggle />
+      <HeroSection />
+      <div className='gradient-line mx-auto max-w-4xl' />
+      <PainPointsSection />
+      <WorksWithSection />
+      <DemoPlaceholderSection />
+      <AudienceTracksSection />
+      <HowItWorksSection />
+      <FeaturesSection />
+      <OpenSourceSection />
+      <CTASection />
     </main>
   )
 }

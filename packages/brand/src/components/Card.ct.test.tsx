@@ -20,3 +20,9 @@ test('custom className', async ({ mount }) => {
   const component = await mount(<Card className='my-custom'>content</Card>)
   await expect(component).toHaveClass(/my-custom/)
 })
+
+test('glow variant', async ({ mount }) => {
+  const component = await mount(<Card variant='glow'>glow</Card>)
+  await expect(component).toHaveClass(/card-glow/)
+  await expect(component).toHaveClass(/gradient-border/)
+})

@@ -59,5 +59,7 @@ jobs:
         run: pnpm build || echo "No build script defined"
       - name: Run lint
         run: pnpm lint || echo "No lint script defined"
+      - name: Install Playwright browsers
+        run: pnpm --filter @pair/brand exec playwright install --with-deps chromium
       - name: Run tests
         run: pnpm test

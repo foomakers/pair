@@ -30,6 +30,8 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - @vitest/coverage-v8 v3.2.4 is adopted for coverage reporting.
 - vite-tsconfig-paths v5.1.4 is adopted to enable TypeScript `paths` resolution for Vite and Vitest.
 - @testing-library/react and @testing-library/jest-dom are adopted for React component testing (peer dependencies of UI workspaces).
+- vitest-axe v1.0.0-pre.5 is adopted for automated accessibility testing in vitest unit tests.
+- @axe-core/playwright v4.11.1 is adopted for automated accessibility testing in Playwright CT.
 
 ## Runtime & CLI tooling
 
@@ -53,6 +55,8 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
   - fumadocs-ui v14.7.7
   - fumadocs-mdx v11.10.1
 - Orama search is adopted for client-side full-text search via the Fumadocs built-in integration (build-time index, browser-only, zero external service).
+- next-themes v0.4.6 is adopted for theme management (light/dark mode toggle) in `apps/website/`.
+- @types/mdx v2.0.13 is adopted for TypeScript type definitions for MDX content in `apps/website/`.
 - PostHog is adopted for anonymous analytics (`posthog-js ^1.350.0`) in cookieless mode (`persistence: 'memory'`): no cookies, no PII, no consent required. Env vars: `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`.
 - Vercel Hobby plan is adopted as the hosting platform for `apps/website/` (static + client-side only, preview deploys for PRs, production on main).
 

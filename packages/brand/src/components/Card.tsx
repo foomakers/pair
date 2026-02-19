@@ -4,13 +4,15 @@ export interface CardProps {
   children: ReactNode
   className?: string
   glass?: boolean
+  variant?: 'default' | 'glow'
 }
 
-export function Card({ children, className = '', glass = false }: CardProps) {
+export function Card({ children, className = '', glass = false, variant = 'default' }: CardProps) {
   const baseClass =
-    'pair-card rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm'
+    'pair-card rounded-2xl border border-pair-border-light dark:border-pair-border-dark p-6 shadow-sm'
   const glassClass = glass ? 'glass-effect' : ''
-  const combinedClass = `${baseClass} ${glassClass} ${className}`.trim()
+  const variantClass = variant === 'glow' ? 'card-glow gradient-border' : ''
+  const combinedClass = `${baseClass} ${glassClass} ${variantClass} ${className}`.trim()
 
   return <div className={combinedClass}>{children}</div>
 }

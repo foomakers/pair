@@ -32,3 +32,18 @@ test('disabled state', async ({ mount }) => {
   const component = await mount(<Button disabled>Disabled</Button>)
   await expect(component).toBeDisabled()
 })
+
+test('anchor rendering with as="a"', async ({ mount }) => {
+  const component = await mount(
+    <Button as='a' href='https://example.com'>
+      Link
+    </Button>,
+  )
+  await expect(component).toContainText('Link')
+  await expect(component).toHaveAttribute('href', 'https://example.com')
+})
+
+test('outline variant', async ({ mount }) => {
+  const component = await mount(<Button variant='outline'>Outline</Button>)
+  await expect(component).toHaveClass(/outline/)
+})

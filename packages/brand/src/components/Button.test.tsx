@@ -52,4 +52,34 @@ describe('Button', () => {
     fireEvent.click(button)
     expect(handleClick).not.toHaveBeenCalled()
   })
+
+  it('renders as anchor when as="a"', () => {
+    const { container } = render(
+      <Button as='a' href='https://example.com'>
+        Link
+      </Button>,
+    )
+    const anchor = container.querySelector('a') as HTMLAnchorElement
+    expect(anchor).not.toBeNull()
+    expect(anchor.tagName).toBe('A')
+    expect(anchor.href).toContain('example.com')
+    expect(container.querySelector('button')).toBeNull()
+  })
+
+  it('renders outline variant', () => {
+    const { container } = render(<Button variant='outline'>Outline</Button>)
+    const button = container.querySelector('button') as HTMLButtonElement
+    expect(button.className).toContain('outline')
+    expect(button.className).toContain('gradient-border')
+  })
+
+  it('propagates href to anchor', () => {
+    const { container } = render(
+      <Button as='a' href='/docs'>
+        Docs
+      </Button>,
+    )
+    const anchor = container.querySelector('a') as HTMLAnchorElement
+    expect(anchor.getAttribute('href')).toBe('/docs')
+  })
 })

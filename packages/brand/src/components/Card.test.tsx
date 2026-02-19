@@ -32,4 +32,18 @@ describe('Card', () => {
     const card = container.firstChild as HTMLElement
     expect(card.className).not.toContain('glass')
   })
+
+  it('applies card-glow and gradient-border classes for glow variant', () => {
+    const { container } = render(<Card variant='glow'>Content</Card>)
+    const card = container.firstChild as HTMLElement
+    expect(card.className).toContain('card-glow')
+    expect(card.className).toContain('gradient-border')
+  })
+
+  it('does not apply glow classes for default variant', () => {
+    const { container } = render(<Card>Content</Card>)
+    const card = container.firstChild as HTMLElement
+    expect(card.className).not.toContain('card-glow')
+    expect(card.className).not.toContain('gradient-border')
+  })
 })

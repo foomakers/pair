@@ -46,6 +46,12 @@
       "dependsOn": ["^build"],
       "outputs": []
     },
+    "a11y:report": {
+      "cache": false
+    },
+    "a11y:report:html": {
+      "cache": false
+    },
     "quality-gate": {
       "dependsOn": ["^ts:check", "^test", "^lint"],
       "outputs": []

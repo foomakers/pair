@@ -39,6 +39,8 @@ describe('App showcase', () => {
     expect(container.textContent).toContain('Primary Button')
     expect(container.textContent).toContain('Secondary Button')
     expect(container.textContent).toContain('Ghost Button')
+    expect(container.textContent).toContain('Outline Button')
+    expect(container.textContent).toContain('Link Button')
     expect(container.textContent).toContain('Disabled')
 
     const buttons = container.querySelectorAll('button')
@@ -46,13 +48,15 @@ describe('App showcase', () => {
     expect(disabledButton?.disabled).toBe(true)
   })
 
-  it('renders card section with standard and glass cards', () => {
+  it('renders card section with standard, glass, and glow cards', () => {
     const { container } = render(<App />)
     expect(container.textContent).toContain('Cards')
     expect(container.textContent).toContain('Standard Card')
     expect(container.textContent).toContain('Basic card with rounded corners, border, and shadow.')
     expect(container.textContent).toContain('Glass Effect Card')
     expect(container.textContent).toContain('Card with glass-effect backdrop blur.')
+    expect(container.textContent).toContain('Glow Card')
+    expect(container.textContent).toContain('Card with glow hover and gradient border.')
   })
 
   it('renders callout section with all types', () => {
@@ -95,6 +99,8 @@ describe('App showcase', () => {
     expect(container.textContent).toContain('.gradient-brand')
     expect(container.textContent).toContain('.glass-effect')
     expect(container.textContent).toContain('.text-gradient')
+    expect(container.textContent).toContain('.gradient-border')
+    expect(container.textContent).toContain('.card-glow')
   })
 
   it('applies gradient-brand class to utility showcase', () => {
@@ -114,5 +120,17 @@ describe('App showcase', () => {
     const textGradient = container.querySelector('.text-gradient')
     expect(textGradient).not.toBeNull()
     expect(textGradient?.textContent).toBe('pair')
+  })
+
+  it('applies gradient-border class to utility showcase', () => {
+    const { container } = render(<App />)
+    const gradientBorder = container.querySelector('.gradient-border')
+    expect(gradientBorder).not.toBeNull()
+  })
+
+  it('applies card-glow class to utility showcase', () => {
+    const { container } = render(<App />)
+    const cardGlow = container.querySelector('.card-glow')
+    expect(cardGlow).not.toBeNull()
   })
 })
