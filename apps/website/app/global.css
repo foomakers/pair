@@ -1,38 +1,9 @@
+@import '@pair/brand/tokens.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ── Brand gradient utilities ── */
-
-.gradient-text {
-  background: linear-gradient(135deg, #0062FF 0%, #00D1FF 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.gradient-border {
-  position: relative;
-  background: transparent;
-}
-
-.gradient-border::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  padding: 1px;
-  border-radius: inherit;
-  background: linear-gradient(135deg, #0062FF 0%, #00D1FF 100%);
-  -webkit-mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  mask:
-    linear-gradient(#fff 0 0) content-box,
-    linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
+/* ── Landing-specific styles ── */
 
 /* Hero glow */
 .hero-glow {
@@ -74,20 +45,6 @@
 .gradient-line {
   height: 2px;
   background: linear-gradient(90deg, transparent, #0062FF, #00D1FF, transparent);
-}
-
-/* Card hover glow */
-.card-glow {
-  transition: box-shadow 0.3s ease, transform 0.3s ease;
-}
-
-.card-glow:hover {
-  box-shadow: 0 0 30px rgba(0, 98, 255, 0.1), 0 0 60px rgba(0, 209, 255, 0.05);
-  transform: translateY(-2px);
-}
-
-:is(.dark) .card-glow:hover {
-  box-shadow: 0 0 30px rgba(0, 98, 255, 0.15), 0 0 60px rgba(0, 209, 255, 0.08);
 }
 
 /* Phase connector line */

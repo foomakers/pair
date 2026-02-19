@@ -95,6 +95,10 @@ function ButtonSection() {
           <Button variant='primary'>Primary Button</Button>
           <Button variant='secondary'>Secondary Button</Button>
           <Button variant='ghost'>Ghost Button</Button>
+          <Button variant='outline'>Outline Button</Button>
+          <Button as='a' href='#'>
+            Link Button
+          </Button>
           <Button variant='primary' disabled>
             Disabled
           </Button>
@@ -107,7 +111,7 @@ function ButtonSection() {
 function CardSection() {
   return (
     <Section title='Cards'>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem' }}>
         <Card>
           <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.5rem' }}>
             Standard Card
@@ -121,6 +125,14 @@ function CardSection() {
             Glass Effect Card
           </h3>
           <p style={{ color: 'var(--pair-text-muted)' }}>Card with glass-effect backdrop blur.</p>
+        </Card>
+        <Card variant='glow'>
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 600, marginBottom: '0.5rem' }}>
+            Glow Card
+          </h3>
+          <p style={{ color: 'var(--pair-text-muted)' }}>
+            Card with glow hover and gradient border.
+          </p>
         </Card>
       </div>
     </Section>
@@ -212,18 +224,30 @@ function TypoBlock({ title, children }: { title: string; children: React.ReactNo
   )
 }
 
+function UtilityCard({
+  className,
+  label,
+  children,
+}: {
+  className: string
+  label: string
+  children?: React.ReactNode
+}) {
+  const swatch = { height: '100px', borderRadius: '8px', marginBottom: '0.5rem' } as const
+  return (
+    <Card>
+      {children ?? <div className={className} style={swatch} />}
+      <p style={{ fontSize: '0.875rem', textAlign: 'center' }}>.{label}</p>
+    </Card>
+  )
+}
+
 function UtilitySection() {
   return (
     <Section title='Utility Classes'>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.5rem' }}>
-        <Card>
-          <div
-            className='gradient-brand'
-            style={{ height: '100px', borderRadius: '8px', marginBottom: '0.5rem' }}
-          />
-          <p style={{ fontSize: '0.875rem', textAlign: 'center' }}>.gradient-brand</p>
-        </Card>
-        <Card>
+        <UtilityCard className='gradient-brand' label='gradient-brand' />
+        <UtilityCard className='glass-effect' label='glass-effect'>
           <div
             style={{
               position: 'relative',
@@ -238,23 +262,29 @@ function UtilitySection() {
             />
             <div
               className='glass-effect'
-              style={{
-                position: 'absolute',
-                inset: '15%',
-                borderRadius: '8px',
-              }}
+              style={{ position: 'absolute', inset: '15%', borderRadius: '8px' }}
             />
           </div>
-          <p style={{ fontSize: '0.875rem', textAlign: 'center' }}>.glass-effect</p>
-        </Card>
-        <Card>
+        </UtilityCard>
+        <UtilityCard className='text-gradient' label='text-gradient'>
           <h3
             className='text-gradient'
             style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>
             pair
           </h3>
-          <p style={{ fontSize: '0.875rem', textAlign: 'center' }}>.text-gradient</p>
-        </Card>
+        </UtilityCard>
+        <UtilityCard className='gradient-border' label='gradient-border' />
+        <UtilityCard className='card-glow' label='card-glow'>
+          <div
+            className='card-glow'
+            style={{
+              height: '100px',
+              borderRadius: '8px',
+              marginBottom: '0.5rem',
+              border: '1px solid var(--pair-border)',
+            }}
+          />
+        </UtilityCard>
       </div>
     </Section>
   )
