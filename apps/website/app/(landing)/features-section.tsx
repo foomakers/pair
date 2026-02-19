@@ -1,22 +1,30 @@
+import type { ReactNode } from 'react'
 import { BoltIcon, BookIcon, SlidersIcon, LinkIcon } from './icons'
 
-const FEATURES = [
+interface Feature {
+  name: string
+  description: string
+  accent: string
+  icon: ReactNode
+}
+
+const FEATURES: Feature[] = [
   {
     name: 'Skills',
     description: 'Reusable, composable process skills that any AI assistant can execute.',
-    accent: 'from-pair-blue to-blue-400',
+    accent: 'from-pair-blue to-pair-teal',
     icon: <BoltIcon className='h-6 w-6' />,
   },
   {
     name: 'Knowledge Base',
     description: 'Guidelines, templates, and standards your AI reads automatically.',
-    accent: 'from-pair-teal to-cyan-400',
+    accent: 'from-pair-teal to-pair-blue',
     icon: <BookIcon className='h-6 w-6' />,
   },
   {
     name: 'Adoption Files',
     description: 'Tech decisions, architecture, and way-of-working — versioned and enforced.',
-    accent: 'from-blue-400 to-pair-teal',
+    accent: 'from-pair-blue to-pair-teal',
     icon: <SlidersIcon className='h-6 w-6' />,
   },
   {

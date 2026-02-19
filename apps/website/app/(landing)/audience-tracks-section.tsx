@@ -1,7 +1,18 @@
+import type { ReactNode } from 'react'
 import { Button } from '@pair/brand'
 import { TerminalIcon, TeamIcon, BuildingIcon } from './icons'
+import { URLS } from './constants'
 
-const AUDIENCE_TRACKS = [
+interface AudienceTrack {
+  audience: string
+  icon: ReactNode
+  pain: string
+  solution: string
+  cta: string
+  href: string
+}
+
+const AUDIENCE_TRACKS: AudienceTrack[] = [
   {
     audience: 'Solo Dev',
     icon: <TerminalIcon className='h-7 w-7' />,
@@ -9,7 +20,7 @@ const AUDIENCE_TRACKS = [
     solution:
       'pair bootstraps your project with guidelines, skills, and quality gates — so AI follows your standards from day one.',
     cta: 'Get started',
-    href: '/docs',
+    href: URLS.DOCS,
   },
   {
     audience: 'Team',
@@ -18,7 +29,7 @@ const AUDIENCE_TRACKS = [
     solution:
       'pair provides a shared knowledge base that every AI assistant reads — same guidelines, same quality, regardless of the tool.',
     cta: 'Set up for your team',
-    href: '/docs/customization/team',
+    href: URLS.DOCS_TEAM,
   },
   {
     audience: 'Organization',
@@ -27,7 +38,7 @@ const AUDIENCE_TRACKS = [
     solution:
       'pair lets you publish and distribute organizational standards as a knowledge base — version, govern, and evolve.',
     cta: 'Enterprise rollout',
-    href: '/docs/customization/organization',
+    href: URLS.DOCS_ORG,
   },
 ]
 

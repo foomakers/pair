@@ -1,20 +1,17 @@
 import type { ReactNode } from 'react'
 import { AnthropicLogo, CursorLogo, CopilotLogo, WindsurfLogo, OpenAILogo } from './tool-logos'
 
-const TOOL_LOGOS: Record<string, ReactNode> = {
-  'Claude Code': <AnthropicLogo className='h-5 w-5' />,
-  Cursor: <CursorLogo className='h-5 w-5' />,
-  'VS Code Copilot': <CopilotLogo className='h-5 w-5' />,
-  Windsurf: <WindsurfLogo className='h-5 w-5' />,
-  Codex: <OpenAILogo className='h-5 w-5' />,
+interface Tool {
+  name: string
+  logo: ReactNode
 }
 
-const TOOLS = [
-  { name: 'Claude Code' },
-  { name: 'Cursor' },
-  { name: 'VS Code Copilot' },
-  { name: 'Windsurf' },
-  { name: 'Codex' },
+const TOOLS: Tool[] = [
+  { name: 'Claude Code', logo: <AnthropicLogo className='h-5 w-5' /> },
+  { name: 'Cursor', logo: <CursorLogo className='h-5 w-5' /> },
+  { name: 'VS Code Copilot', logo: <CopilotLogo className='h-5 w-5' /> },
+  { name: 'Windsurf', logo: <WindsurfLogo className='h-5 w-5' /> },
+  { name: 'Codex', logo: <OpenAILogo className='h-5 w-5' /> },
 ]
 
 export function WorksWithSection() {
@@ -32,7 +29,7 @@ export function WorksWithSection() {
             className='flex items-center gap-2.5 text-pair-text-muted-light transition-colors duration-200 hover:text-pair-text-light dark:text-pair-text-muted-dark dark:hover:text-pair-text-dark'
             role='img'
             aria-label={`${tool.name} logo`}>
-            {TOOL_LOGOS[tool.name]}
+            {tool.logo}
             <span className='font-mono text-sm font-medium'>{tool.name}</span>
           </span>
         ))}

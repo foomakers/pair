@@ -1,4 +1,5 @@
 import { Button } from '@pair/brand'
+import { URLS } from './constants'
 
 export function CTASection() {
   return (
@@ -17,7 +18,7 @@ export function CTASection() {
           <Button
             as='a'
             variant='primary'
-            href='https://github.com/foomakers/pair/releases/latest'
+            href={URLS.GITHUB_RELEASES}
             target='_blank'
             rel='noopener noreferrer'
             className='inline-flex min-h-[48px] items-center justify-center rounded-xl px-8 py-3 text-base shadow-lg shadow-pair-blue/25 hover:shadow-xl hover:shadow-pair-blue/30 hover:-translate-y-0.5'>
@@ -26,7 +27,7 @@ export function CTASection() {
           <Button
             as='a'
             variant='outline'
-            href='/docs'
+            href={URLS.DOCS}
             className='inline-flex min-h-[48px] items-center justify-center rounded-xl px-8 py-3 text-base'>
             Read the docs
           </Button>

@@ -53,6 +53,8 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
   - fumadocs-ui v14.7.7
   - fumadocs-mdx v11.10.1
 - Orama search is adopted for client-side full-text search via the Fumadocs built-in integration (build-time index, browser-only, zero external service).
+- next-themes v0.4.6 is adopted for theme management (light/dark mode toggle) in `apps/website/`.
+- @types/mdx v2.0.13 is adopted for TypeScript type definitions for MDX content in `apps/website/`.
 - PostHog is adopted for anonymous analytics (`posthog-js ^1.350.0`) in cookieless mode (`persistence: 'memory'`): no cookies, no PII, no consent required. Env vars: `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`.
 - Vercel Hobby plan is adopted as the hosting platform for `apps/website/` (static + client-side only, preview deploys for PRs, production on main).
 

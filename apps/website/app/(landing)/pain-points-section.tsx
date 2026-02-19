@@ -1,7 +1,14 @@
+import type { ReactNode } from 'react'
 import { Card } from '@pair/brand'
 import { GridPlusIcon, ShieldCheckIcon, FolderIcon, UsersIcon } from './icons'
 
-const PAIN_POINTS = [
+interface PainPoint {
+  question: string
+  detail: string
+  icon: ReactNode
+}
+
+const PAIN_POINTS: PainPoint[] = [
   {
     question: 'Who owns the process when AI writes the code?',
     detail: 'AI generates code fast — but without process, you ship debt faster.',

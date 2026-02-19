@@ -1,6 +1,14 @@
+import type { ReactNode } from 'react'
 import { RocketIcon, MapIcon, CodeIcon, CheckCircleIcon } from './icons'
 
-const PHASES = [
+interface Phase {
+  step: string
+  name: string
+  description: string
+  icon: ReactNode
+}
+
+const PHASES: Phase[] = [
   {
     step: '01',
     name: 'Bootstrap',

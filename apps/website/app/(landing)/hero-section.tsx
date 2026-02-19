@@ -1,4 +1,5 @@
 import { PairLogo, Button } from '@pair/brand'
+import { URLS } from './constants'
 
 export function HeroSection() {
   return (
@@ -23,7 +24,7 @@ export function HeroSection() {
         <Button
           as='a'
           variant='primary'
-          href='https://github.com/foomakers/pair/releases/latest'
+          href={URLS.GITHUB_RELEASES}
           target='_blank'
           rel='noopener noreferrer'
           className='inline-flex min-h-[48px] items-center justify-center rounded-xl px-10 py-3 text-base shadow-lg shadow-pair-blue/25 hover:shadow-xl hover:shadow-pair-blue/30 hover:-translate-y-0.5'>

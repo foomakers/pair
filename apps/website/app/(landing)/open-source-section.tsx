@@ -1,5 +1,6 @@
 import { Button } from '@pair/brand'
 import { GitHubIcon } from './icons'
+import { URLS } from './constants'
 
 export function OpenSourceSection() {
   return (
@@ -13,7 +14,7 @@ export function OpenSourceSection() {
       <Button
         as='a'
         variant='outline'
-        href='https://github.com/foomakers/pair'
+        href={URLS.GITHUB_REPO}
         target='_blank'
         rel='noopener noreferrer'
         className='inline-flex min-h-[48px] items-center gap-3 rounded-xl px-6 py-3'
