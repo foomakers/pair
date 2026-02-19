@@ -30,6 +30,8 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - @vitest/coverage-v8 v3.2.4 is adopted for coverage reporting.
 - vite-tsconfig-paths v5.1.4 is adopted to enable TypeScript `paths` resolution for Vite and Vitest.
 - @testing-library/react and @testing-library/jest-dom are adopted for React component testing (peer dependencies of UI workspaces).
+- vitest-axe v1.0.0-pre.5 is adopted for automated accessibility testing in vitest unit tests.
+- @axe-core/playwright v4.11.1 is adopted for automated accessibility testing in Playwright CT.
 
 ## Runtime & CLI tooling
 

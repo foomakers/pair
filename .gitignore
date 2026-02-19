@@ -22,3 +22,4 @@ docs/performance/benchmark-report.json
 .playwright-mcp
 **/playwright/.cache/
 **/test-results/
+**/playwright-report/

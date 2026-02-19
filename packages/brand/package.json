@@ -18,8 +18,10 @@
   ],
   "scripts": {
     "dev": "vite dev",
-    "ct": "playwright test -c playwright-ct.config.ts",
-    "test": "vitest run && playwright test -c playwright-ct.config.ts",
+    "ct": "playwright test -c playwright-ct.config.ts --grep-invert @a11y-report",
+    "a11y:report": "playwright test -c playwright-ct.config.ts --grep @a11y-report --reporter=list",
+    "a11y:report:html": "playwright test -c playwright-ct.config.ts --grep @a11y-report --reporter=html && echo '\n\u2192 Report: playwright-report/index.html\n  Open: npx playwright show-report'",
+    "test": "vitest run && playwright test -c playwright-ct.config.ts --grep-invert @a11y-report",
     "test:coverage": "vitest run --coverage",
     "ts:check": "tsc --noEmit",
     "lint": "lint",
@@ -38,6 +40,7 @@
     "@pair/prettier-config": "workspace:*",
     "@pair/markdownlint-config": "workspace:*",
     "@pair/ts-config": "workspace:*",
+    "@axe-core/playwright": "catalog:",
     "@playwright/experimental-ct-react": "catalog:",
     "@testing-library/react": "catalog:",
     "@testing-library/jest-dom": "catalog:",
@@ -53,7 +56,8 @@
     "tailwindcss": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "vitest-axe": "catalog:"
   },
   "prettier": "@pair/prettier-config"
 }

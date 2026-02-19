@@ -1,6 +1,7 @@
 {
   "extends": "@pair/ts-config/ui.json",
   "compilerOptions": {
+    "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
       "$components": ["src/components/index.ts"],
