@@ -146,21 +146,17 @@ function HeroSection() {
       <p className='relative z-10 mt-6 max-w-2xl text-lg text-pair-text-muted-light dark:text-pair-text-muted-dark md:text-xl'>
         <strong className='text-pair-text-light dark:text-pair-text-dark'>pair</strong> is the
         process layer for AI-assisted development. It gives your AI assistant the context,
-        guidelines, and skills to work the way your team works.
+        guidelines, and skills to{' '}
+        <span className='gradient-text font-bold'>work the way your team works.</span>
       </p>
-      <div className='relative z-10 mt-10 flex flex-col gap-4 sm:flex-row'>
+      <div className='relative z-10 mt-10'>
         <a
           href='https://github.com/foomakers/pair/releases/latest'
           target='_blank'
           rel='noopener noreferrer'
-          className='inline-flex min-h-[48px] items-center justify-center rounded-xl bg-pair-blue px-8 py-3 text-base font-semibold text-white shadow-lg shadow-pair-blue/25 transition-all duration-300 hover:shadow-xl hover:shadow-pair-blue/30 hover:-translate-y-0.5'>
+          className='inline-flex min-h-[48px] items-center justify-center rounded-xl bg-pair-blue px-10 py-3 text-base font-semibold text-white shadow-lg shadow-pair-blue/25 transition-all duration-300 hover:shadow-xl hover:shadow-pair-blue/30 hover:-translate-y-0.5'>
           Get pair
         </a>
-        <Link
-          href='/docs'
-          className='gradient-border inline-flex min-h-[48px] items-center justify-center rounded-xl px-8 py-3 text-base font-semibold transition-all duration-300 hover:bg-slate-50 dark:hover:bg-slate-900'>
-          Read the docs
-        </Link>
       </div>
     </section>
   )
@@ -170,8 +166,11 @@ function PainPointsSection() {
   return (
     <section aria-label='Pain points' className='px-6 py-20 md:py-28'>
       <div className='mx-auto max-w-5xl'>
-        <p className='mb-12 text-center font-mono text-sm font-medium uppercase tracking-widest text-pair-text-muted-light dark:text-pair-text-muted-dark'>
-          Sound familiar?
+        <h2 className='mb-4 text-center font-sans text-2xl font-extrabold md:text-3xl'>
+          <span className='gradient-text'>Sound familiar?</span>
+        </h2>
+        <p className='mx-auto mb-12 max-w-md text-center text-pair-text-muted-light dark:text-pair-text-muted-dark'>
+          These are the questions every team hits when AI enters the workflow.
         </p>
         <div className='grid gap-6 md:grid-cols-2'>
           {PAIN_POINTS.map((point, i) => (
@@ -193,22 +192,84 @@ function PainPointsSection() {
   )
 }
 
+function ToolIcon({ name }: { name: string }) {
+  const icons: Record<string, React.ReactNode> = {
+    'Claude Code': (
+      <svg width='24' height='24' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+        <path
+          d='M12 2L3 7v10l9 5 9-5V7l-9-5zm0 2.18L18.36 7.5 12 10.82 5.64 7.5 12 4.18z'
+          fill='currentColor'
+          opacity='0.8'
+        />
+      </svg>
+    ),
+    Cursor: (
+      <svg width='24' height='24' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+        <path d='M5 3l14 9-14 9V3z' fill='currentColor' opacity='0.8' />
+      </svg>
+    ),
+    'VS Code Copilot': (
+      <svg width='24' height='24' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+        <path
+          d='M17 2l-5 5-5-5-4 4 5 5-5 5 4 4 5-5 5 5 4-4-5-5 5-5-4-4z'
+          fill='currentColor'
+          opacity='0.8'
+        />
+      </svg>
+    ),
+    Windsurf: (
+      <svg width='24' height='24' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+        <path
+          d='M3 17c2-3 5-5 9-5s7 2 9 5M3 12c2-3 5-5 9-5s7 2 9 5'
+          stroke='currentColor'
+          strokeWidth='2'
+          strokeLinecap='round'
+          opacity='0.8'
+        />
+      </svg>
+    ),
+    Codex: (
+      <svg width='24' height='24' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
+        <rect
+          x='3'
+          y='3'
+          width='18'
+          height='18'
+          rx='3'
+          stroke='currentColor'
+          strokeWidth='2'
+          opacity='0.8'
+        />
+        <path
+          d='M8 8h8M8 12h5M8 16h6'
+          stroke='currentColor'
+          strokeWidth='2'
+          strokeLinecap='round'
+          opacity='0.8'
+        />
+      </svg>
+    ),
+  }
+  return <>{icons[name] ?? null}</>
+}
+
 function WorksWithSection() {
   return (
     <section
       aria-label='Works with'
       className='border-y border-pair-border-light px-6 py-12 dark:border-pair-border-dark'>
-      <p className='mb-6 text-center text-sm font-medium uppercase tracking-widest text-pair-text-muted-light dark:text-pair-text-muted-dark'>
+      <p className='mb-8 text-center text-sm font-medium uppercase tracking-widest text-pair-text-muted-light dark:text-pair-text-muted-dark'>
         Works with
       </p>
-      <div className='flex flex-wrap items-center justify-center gap-8 md:gap-12'>
+      <div className='flex flex-wrap items-center justify-center gap-10 md:gap-14'>
         {TOOLS.map(tool => (
           <span
             key={tool.name}
-            className='font-mono text-sm font-medium text-pair-text-muted-light transition-colors duration-200 hover:text-pair-text-light dark:text-pair-text-muted-dark dark:hover:text-pair-text-dark'
+            className='flex items-center gap-2 text-pair-text-muted-light transition-colors duration-200 hover:text-pair-text-light dark:text-pair-text-muted-dark dark:hover:text-pair-text-dark'
             role='img'
             aria-label={`${tool.name} logo`}>
-            {tool.name}
+            <ToolIcon name={tool.name} />
+            <span className='font-mono text-sm font-medium'>{tool.name}</span>
           </span>
         ))}
       </div>

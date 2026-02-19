@@ -1,17 +1,17 @@
 import { test, expect } from '@playwright/experimental-ct-react'
 import HomePage from './page'
 
-// AC-1: Hero with claim, CTAs, solution
-test('renders hero with claim and CTAs', async ({ mount }) => {
+// AC-1: Hero with claim, single CTA, solution
+test('renders hero with claim and CTA', async ({ mount }) => {
   const component = await mount(<HomePage />)
   const hero = component.locator('section[aria-label="Hero"]')
   await expect(hero).toBeVisible()
   await expect(hero).toContainText('Code is the easy part.')
   await expect(hero).toContainText('process layer for AI-assisted development')
+  await expect(hero).toContainText('work the way your team works.')
   await expect(
     hero.locator('a[href="https://github.com/foomakers/pair/releases/latest"]'),
   ).toBeVisible()
-  await expect(hero.locator('a[href="/docs"]')).toBeVisible()
 })
 
 // AC-2: PairLogo presence
