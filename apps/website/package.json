@@ -21,12 +21,12 @@
   },
   "dependencies": {
     "@pair/brand": "workspace:*",
-    "@types/mdx": "^2.0.13",
+    "@types/mdx": "catalog:",
     "fumadocs-core": "14.7.7",
     "fumadocs-mdx": "11.10.1",
     "fumadocs-ui": "14.7.7",
     "next": "^15.3.3",
-    "next-themes": "^0.4.6",
+    "next-themes": "catalog:",
     "posthog-js": "^1.350.0",
     "react": "catalog:",
     "react-dom": "catalog:"

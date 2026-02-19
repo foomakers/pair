@@ -33,6 +33,9 @@ catalogs:
     '@types/mdast':
       specifier: 3.0.15
       version: 3.0.15
+    '@types/mdx':
+      specifier: 2.0.13
+      version: 2.0.13
     '@types/node':
       specifier: 24.3.0
       version: 24.3.0
@@ -99,6 +102,9 @@ catalogs:
     mdast:
       specifier: 3.0.0
       version: 3.0.0
+    next-themes:
+      specifier: 0.4.6
+      version: 0.4.6
     postcss:
       specifier: 8.4.49
       version: 8.4.49
@@ -223,7 +229,7 @@ importers:
         specifier: workspace:*
         version: link:../../packages/brand
       '@types/mdx':
-        specifier: ^2.0.13
+        specifier: 'catalog:'
         version: 2.0.13
       fumadocs-core:
         specifier: 14.7.7
@@ -238,7 +244,7 @@ importers:
         specifier: ^15.3.3
         version: 15.5.12(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       next-themes:
-        specifier: ^0.4.6
+        specifier: 'catalog:'
         version: 0.4.6(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       posthog-js:
         specifier: ^1.350.0
