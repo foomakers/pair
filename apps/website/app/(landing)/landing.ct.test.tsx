@@ -100,6 +100,42 @@ test('renders primary and secondary CTAs with correct links', async ({ mount }) 
   await expect(secondaryCTA).toContainText('Read the docs')
 })
 
+// ---------- Button styling ----------
+
+test('primary buttons have bg-pair-blue class', async ({ mount }) => {
+  const component = await mount(<HomePage />)
+  const heroCTA = component.locator('section[aria-label="Hero"] a').filter({ hasText: 'Get pair' })
+  await expect(heroCTA).toHaveClass(/bg-pair-blue/)
+  await expect(heroCTA).toHaveClass(/text-white/)
+
+  const ctaCTA = component
+    .locator('section[aria-label="Call to action"] a')
+    .filter({ hasText: 'Get pair' })
+  await expect(ctaCTA).toHaveClass(/bg-pair-blue/)
+  await expect(ctaCTA).toHaveClass(/text-white/)
+})
+
+test('outline buttons have gradient-border class', async ({ mount }) => {
+  const component = await mount(<HomePage />)
+  const docsCTA = component
+    .locator('section[aria-label="Call to action"] a')
+    .filter({ hasText: 'Read the docs' })
+  await expect(docsCTA).toHaveClass(/gradient-border/)
+
+  const githubCTA = component
+    .locator('section[aria-label="Open source"] a')
+    .filter({ hasText: 'foomakers/pair' })
+  await expect(githubCTA).toHaveClass(/gradient-border/)
+})
+
+test('audience track buttons have gradient-border class', async ({ mount }) => {
+  const component = await mount(<HomePage />)
+  const section = component.locator('section[aria-label="Audience tracks"]')
+  for (const label of ['Get started', 'Set up for your team', 'Enterprise rollout']) {
+    await expect(section.locator('a').filter({ hasText: label })).toHaveClass(/gradient-border/)
+  }
+})
+
 // AC-10: Dark mode — page uses brand background tokens (dark mode via class strategy)
 test('page renders with brand background tokens', async ({ mount }) => {
   const component = await mount(<HomePage />)

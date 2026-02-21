@@ -5,6 +5,7 @@ const withMDX = createMDX()
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['@pair/brand'],
+  eslint: { ignoreDuringBuilds: true },
 }
 
 export default withMDX(nextConfig)

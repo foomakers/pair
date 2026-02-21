@@ -1,5 +1,5 @@
 {
   "root": true,
   "title": "Documentation",
-  "pages": ["index", "getting-started", "concepts"]
+  "pages": ["index", "getting-started", "concepts", "customization"]
 }
