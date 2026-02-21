@@ -1,0 +1,221 @@
+---
+title: CLI Contracts Specification
+description: Technical specification for pair-cli command contracts, TypeScript types, validation rules, and error handling.
+---
+
+Technical specification for `pair-cli` command contracts including TypeScript types, validation rules, error handling, and exit codes.
+
+## Command Option Types
+
+### Base Types
+
+```typescript
+export interface CommandOptions {
+  datasetRoot?: string
+  customConfigPath?: string
+  baseTarget?: string // Target resolution: INIT_CWD (pnpm) > [target] arg > CWD
+  useDefaults?: boolean
+  minLogLevel?: 'trace' | 'debug' | 'info' | 'warn' | 'error'
+}
+
+export interface CliOptions {
+  url?: string // --source <url|path>
+  kb: boolean // --no-kb flag (true=download, false=offline)
+}
+```
+
+### Install Command
+
+```typescript
+export interface InstallOptions extends CommandOptions, CliOptions {
+  listTargets?: boolean
+  config?: string
+  source?: string
+  offline?: boolean // derived from kb: false
+}
+```
+
+### Update Command
+
+```typescript
+export interface UpdateOptions extends CommandOptions, CliOptions {
+  config?: string
+  source?: string
+  offline?: boolean
+}
+```
+
+### Update-Link Command
+
+```typescript
+export interface UpdateLinkOptions extends CommandOptions {
+  url?: string
+  dryRun?: boolean
+  verbose?: boolean
+}
+```
+
+### Package Command
+
+```typescript
+export interface PackageOptions {
+  output?: string
+  sourceDir?: string
+  config?: string
+  verbose?: boolean
+  name?: string
+  version?: string
+  description?: string
+  author?: string
+  skipRegistries?: string[]
+  root?: string // default: .pair/
+  interactive: boolean // default: false
+  tags: string[] // default: []
+  license: string // default: MIT
+  org?: boolean
+  orgName?: string
+  team?: string
+  department?: string
+  approver?: string
+  compliance?: string[]
+  distribution?: 'open' | 'private' | 'restricted'
+}
+
+export interface OrganizationMetadata {
+  name: string
+  team?: string
+  department?: string
+  approver?: string
+  compliance: string[]
+  distribution: 'open' | 'private' | 'restricted'
+}
+
+export interface ManifestMetadata {
+  name: string
+  version: string
+  description: string
+  author: string
+  tags: string[]
+  license: string
+  created_at: string
+  registries: string[]
+  contentChecksum?: string
+  organization?: OrganizationMetadata
+}
+```
+
+### KB Verify Command
+
+```typescript
+export interface KbVerifyCommandConfig {
+  packagePath: string
+  json?: boolean
+  minLogLevel?: 'trace' | 'debug' | 'info' | 'warn' | 'error'
+}
+
+export interface VerificationReport {
+  valid: boolean
+  checks: {
+    checksum: ChecksumCheck
+    structure: StructureCheck
+    manifest: ManifestCheck
+  }
+  size: number
+  timestamp: string
+}
+```
+
+## Validation Error Catalog
+
+### Error Categories
+
+| Category              | Exit Code | Description                                           |
+| --------------------- | --------- | ----------------------------------------------------- |
+| **Option Validation** | 1         | Invalid option combination or missing required option  |
+| **File System**       | 1         | Path not found, permission denied, not writable        |
+| **Network**           | 2         | Download failure, connection timeout, DNS error        |
+| **Checksum**          | 2         | SHA256 validation failure                              |
+| **Configuration**     | 1         | Invalid config.json structure or values                |
+| **KB Structure**      | 1         | Invalid KB directory structure                         |
+
+### Option Validation Errors
+
+| Code | Error | Trigger | Resolution |
+| ---- | ----- | ------- | ---------- |
+| V001 | Conflicting options | `--list-targets` with target args | Use separately |
+| V002 | Offline requires source | `--offline` without `--source` | Provide `--source` |
+| V003 | Offline cannot use URL | `--offline` with HTTP URL | Use local path |
+| V004 | Invalid config file | `--config` points to missing file | Fix path |
+| V005 | Malformed JSON | Invalid JSON in config | Fix syntax |
+
+### File System Errors
+
+| Code | Error | Trigger | Resolution |
+| ---- | ----- | ------- | ---------- |
+| FS001 | Path not found | Target path missing | Create dir or fix path |
+| FS002 | Permission denied | Insufficient permissions | Fix permissions |
+| FS003 | Not writable | Read-only target | Fix write permissions |
+| FS004 | Disk full | Insufficient space | Free space |
+
+### Package Verification Errors
+
+| Code | Error | Trigger | Resolution |
+| ---- | ----- | ------- | ---------- |
+| VER001 | Package not found | File missing | Check path |
+| VER002 | Invalid format | Not valid ZIP | Use valid package |
+| VER003 | Checksum mismatch | Content tampered | Re-download |
+| VER004 | Missing manifest | No manifest.json | Use valid package |
+| VER005 | Missing registry | Structure mismatch | Rebuild package |
+
+## Validation Logic
+
+### Install/Update Option Validation
+
+```typescript
+function validateInstallUpdateOptions(options: InstallOptions | UpdateOptions): void {
+  const offline = options.kb === false
+
+  if (offline && !options.source) {
+    throw new ValidationError('V002', '--offline requires --source with local filesystem path')
+  }
+
+  if (offline && options.source && isUrl(options.source)) {
+    throw new ValidationError('V003', 'Cannot use --offline with remote URL')
+  }
+
+  if (options.config && !fileExists(options.config)) {
+    throw new ValidationError('V004', `Config file not found: ${options.config}`)
+  }
+}
+```
+
+## Exit Code Contract
+
+| Code | Meaning                | Examples                                                 |
+| ---- | ---------------------- | -------------------------------------------------------- |
+| `0`  | Success                | Command completed successfully                           |
+| `1`  | Validation Error       | Invalid options, config errors, KB structure errors      |
+| `2`  | Download/Network Error | Network timeout, checksum mismatch, packaging error      |
+| `3`  | File System Error      | Disk full, permission denied during operation            |
+
+## Test Matrices
+
+### Install/Update Option Validation Matrix
+
+| `--source`    | `--offline` | Monorepo | Expected Result      | Exit Code |
+| ------------- | ----------- | -------- | -------------------- | --------- |
+| -             | -           | Yes      | Use monorepo dataset | 0         |
+| -             | -           | No       | Auto-download        | 0 or 2    |
+| `https://...` | -           | -        | Download from URL    | 0 or 2    |
+| `./local`     | -           | -        | Use local path       | 0 or 1    |
+| `./local`     | Yes         | -        | Use local (offline)  | 0 or 1    |
+| -             | Yes         | -        | ERROR                | 1         |
+| `https://...` | Yes         | -        | ERROR                | 1         |
+
+---
+
+## Related
+
+- [CLI Commands Reference](/docs/reference/cli/commands) — User-facing command documentation
+- [KB Source Resolution Spec](/docs/reference/specs/kb-source-resolution) — KB source resolution algorithm
+- [CLI Help Examples](/docs/reference/cli/examples) — Practical usage examples

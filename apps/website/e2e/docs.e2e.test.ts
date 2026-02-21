@@ -186,3 +186,131 @@ test('smoke: all 10 docs pages return 200 with correct titles', async ({ page })
     await expect(page).toHaveTitle(new RegExp(title))
   }
 })
+
+// ============================================================
+// E2E: Docs — Guides, Reference, and Support sections (#124)
+// ============================================================
+
+test('guides section: navigate and verify content', async ({ page }) => {
+  await page.goto('/docs/guides/cli-workflows')
+  const main = page.locator('main')
+
+  // Guides page renders with expected content
+  await expect(page.locator('main h1')).toContainText('CLI Workflows')
+  await expect(main).toContainText('Common Workflows')
+  await expect(main).toContainText('pair-cli install')
+
+  // Sidebar shows Guides section
+  await expect(page.locator('body')).toContainText('Guides')
+
+  // Navigate to another guide via sidebar
+  await page.locator('a', { hasText: 'Troubleshooting' }).first().click()
+  await expect(page).toHaveURL('/docs/guides/troubleshooting')
+  await expect(page.locator('main h1')).toContainText('Troubleshooting')
+  await expect(main).toContainText('Installation Issues')
+})
+
+test('reference section: navigate CLI, specs, and top-level pages', async ({ page }) => {
+  // CLI commands page
+  await page.goto('/docs/reference/cli/commands')
+  const main = page.locator('main')
+  await expect(page.locator('main h1')).toContainText('CLI Commands')
+  await expect(main).toContainText('install')
+  await expect(main).toContainText('update')
+  await expect(main).toContainText('package')
+
+  // Navigate to examples via sidebar
+  await page
+    .locator('a', { hasText: /^CLI Help Examples$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/reference/cli/examples')
+  await expect(main).toContainText('Installation Workflows')
+
+  // Skills catalog page
+  await page.goto('/docs/reference/skills-catalog')
+  await expect(page.locator('main h1')).toContainText('Skills Catalog')
+  await expect(main).toContainText('Process Skills')
+  await expect(main).toContainText('Capability Skills')
+  await expect(main).toContainText('/pair-process-implement')
+
+  // KB structure page
+  await page.goto('/docs/reference/kb-structure')
+  await expect(page.locator('main h1')).toContainText('KB Structure')
+  await expect(main).toContainText('knowledge/')
+  await expect(main).toContainText('adoption/')
+
+  // Configuration page
+  await page.goto('/docs/reference/configuration')
+  await expect(page.locator('main h1')).toContainText('Configuration')
+  await expect(main).toContainText('config.json')
+  await expect(main).toContainText('mirror')
+
+  // Skill management page
+  await page.goto('/docs/reference/skill-management')
+  await expect(page.locator('main h1')).toContainText('Skill Management')
+  await expect(main).toContainText('Skill Resolution')
+  await expect(main).toContainText('Transformation Pipeline')
+  await expect(main).toContainText('Renaming Conventions')
+})
+
+test('support section: navigate and verify content', async ({ page }) => {
+  await page.goto('/docs/support')
+  const main = page.locator('main')
+
+  // Support index page
+  await expect(page.locator('main h1')).toContainText('Support')
+  await expect(main).toContainText('Support Scope')
+  await expect(main).toContainText('GitHub Issues')
+
+  // Navigate to FAQ via sidebar
+  await page.locator('a', { hasText: 'Installation FAQ' }).first().click()
+  await expect(page).toHaveURL('/docs/support/faq')
+  await expect(page.locator('main h1')).toContainText('Installation FAQ')
+  await expect(main).toContainText('Permission Issues')
+  await expect(main).toContainText('Node Version Issues')
+})
+
+test('smoke: all guides/reference/support pages return 200', async ({ page }) => {
+  const pages = [
+    { url: '/docs/guides/cli-workflows', title: 'CLI Workflows' },
+    { url: '/docs/guides/install-from-url', title: 'Install from URL' },
+    { url: '/docs/guides/customize-kb', title: 'Customize the Knowledge Base' },
+    { url: '/docs/guides/adopter-checklist', title: 'Adopter Checklist' },
+    { url: '/docs/guides/troubleshooting', title: 'Troubleshooting' },
+    { url: '/docs/guides/update-link', title: 'Link Update' },
+    { url: '/docs/reference/cli/commands', title: 'CLI Commands' },
+    { url: '/docs/reference/cli/examples', title: 'CLI Help Examples' },
+    { url: '/docs/reference/specs/cli-contracts', title: 'CLI Contracts' },
+    { url: '/docs/reference/specs/kb-source-resolution', title: 'KB Source Resolution' },
+    { url: '/docs/reference/skills-catalog', title: 'Skills Catalog' },
+    { url: '/docs/reference/skill-management', title: 'Skill Management' },
+    { url: '/docs/reference/kb-structure', title: 'KB Structure' },
+    { url: '/docs/reference/configuration', title: 'Configuration' },
+    { url: '/docs/support', title: 'Support' },
+    { url: '/docs/support/faq', title: 'Installation FAQ' },
+  ]
+  for (const { url, title } of pages) {
+    const response = await page.goto(url)
+    expect(response?.status(), `${url} should return 200`).toBe(200)
+    await expect(page.locator('main h1')).toBeVisible()
+    await expect(page).toHaveTitle(new RegExp(title))
+  }
+})
+
+test('no broken .md links in guides/reference/support sections', async ({ page }) => {
+  const sections = [
+    '/docs/guides/cli-workflows',
+    '/docs/reference/cli/commands',
+    '/docs/reference/skills-catalog',
+    '/docs/support',
+  ]
+  for (const url of sections) {
+    await page.goto(url)
+    const hrefs = await page
+      .locator('main a')
+      .evaluateAll(els => els.map(el => el.getAttribute('href')).filter(Boolean))
+    const brokenMdLinks = hrefs.filter(h => h && h.endsWith('.md'))
+    expect(brokenMdLinks, `${url} should have no .md links`).toHaveLength(0)
+  }
+})

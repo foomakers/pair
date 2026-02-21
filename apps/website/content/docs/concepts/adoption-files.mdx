@@ -66,6 +66,16 @@ Defines your development process:
 
 Your Product Requirements Document — the source of truth for what the project does, who it serves, and what features are prioritized (P0/P1/P2).
 
+## How They Get Created
+
+You don't write adoption files by hand. There are two paths:
+
+**New project** — Run `/pair-next` in your AI assistant. It guides you through the full structured process: PRD creation, bootstrap checklist, architecture assessment, tech stack evaluation, and so on. Each step produces the corresponding adoption file automatically.
+
+**Existing project** — Ask your AI assistant to analyze the codebase and generate adoption files from what already exists. For example: *"Analyze this project and write the adoption files — architecture, tech stack, way of working."* The AI inspects your dependencies, folder structure, CI config, and conventions, then produces adoption files that reflect your current reality. From there, skills stay aligned with your actual stack.
+
+Either way, once adoption files exist, every subsequent AI session reads them and stays consistent.
+
 ## How the AI Uses Them
 
 Every time an AI assistant starts a session, it reads the adoption files to understand your constraints:

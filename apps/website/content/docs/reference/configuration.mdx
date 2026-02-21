@@ -1,0 +1,160 @@
+---
+title: Configuration
+description: Reference for pair-cli's config.json — registry definitions, behavior modes, and target configuration.
+---
+
+pair-cli uses a `config.json` file to define how Knowledge Base content is distributed to your project. This file controls which registries exist, where they install, and how files are synchronized.
+
+## File Location
+
+The config file is located at the root of the KB dataset:
+
+```text
+packages/knowledge-hub/dataset/config.json    # In monorepo (source)
+~/.pair/kb/{version}/config.json              # In cached download
+```
+
+Override with `--config <path>` on any command.
+
+## Structure
+
+```json
+{
+  "registryName": {
+    "source": ".source-dir",
+    "behavior": "mirror",
+    "description": "Human-readable description",
+    "include": ["**/*.md"],
+    "flatten": false,
+    "prefix": "",
+    "targets": [
+      { "path": ".target-dir/", "mode": "canonical" }
+    ]
+  }
+}
+```
+
+## Registry Fields
+
+| Field | Type | Required | Description |
+| ----- | ---- | -------- | ----------- |
+| `source` | `string` | Yes | Source directory within the KB dataset |
+| `behavior` | `string` | Yes | Sync behavior: `mirror`, `add`, `overwrite`, `skip` |
+| `description` | `string` | Yes | Human-readable description shown by `--list-targets` |
+| `include` | `string[]` | No | Glob patterns for files to include (default: all) |
+| `flatten` | `boolean` | No | Flatten directory hierarchy into dash-separated names |
+| `prefix` | `string` | No | Prefix to prepend to flattened directory names |
+| `targets` | `Target[]` | No | Multi-target distribution configuration |
+
+## Behavior Modes
+
+| Mode | Description | Use Case |
+| ---- | ----------- | -------- |
+| `mirror` | Overwrite all files, delete removed files | Knowledge layer (upstream content) |
+| `add` | Add new files only, never overwrite existing | Adoption layer (user decisions) |
+| `overwrite` | Overwrite existing files, add new ones, don't delete | Partial updates |
+| `skip` | Do nothing if target exists | One-time initialization |
+
+### Behavior Summary
+
+- **`mirror`**: Target becomes an exact copy of source. Missing files are deleted. Use for content that should always match upstream.
+- **`add`**: Only creates files that don't exist yet. Never modifies or deletes. Use for user-owned content like adoption files.
+- **`overwrite`**: Updates existing files and adds new ones, but doesn't delete. Use for incremental updates.
+- **`skip`**: Completely skips the registry if target directory exists. Use for one-time setup.
+
+## Target Configuration
+
+Each registry can distribute to multiple targets:
+
+```json
+{
+  "targets": [
+    { "path": ".claude/skills/", "mode": "canonical" },
+    { "path": ".github/skills/", "mode": "symlink" },
+    { "path": ".cursor/skills/", "mode": "symlink" }
+  ]
+}
+```
+
+### Target Modes
+
+| Mode | Description |
+| ---- | ----------- |
+| `canonical` | Physical copy of files (primary target) |
+| `symlink` | Relative symlink to canonical target |
+| `copy` | Independent copy (used when symlinks aren't supported) |
+
+**Notes:**
+- Exactly one target must be `canonical`
+- `symlink` targets create relative symlinks to the canonical copy
+- Windows falls back to `copy` mode (symlinks not reliably supported)
+
+## Transform Configuration
+
+When `flatten: true` and `prefix` is set, directory names are transformed:
+
+```text
+Source:  .skills/capability/verify-quality/SKILL.md
+Flatten: capability/verify-quality → capability-verify-quality
+Prefix:  capability-verify-quality → pair-capability-verify-quality
+Target:  .claude/skills/pair-capability-verify-quality/SKILL.md
+```
+
+The transform also updates:
+- YAML frontmatter values (e.g., `name: verify-quality` → `name: pair-capability-verify-quality`)
+- Markdown links between transformed files
+- Skill cross-references (e.g., `/verify-quality` → `/pair-capability-verify-quality`)
+
+## Example: Skills Registry
+
+```json
+{
+  "skills": {
+    "source": ".skills",
+    "behavior": "mirror",
+    "flatten": true,
+    "prefix": "pair",
+    "description": "Agent skills distributed to AI tool directories",
+    "targets": [
+      { "path": ".claude/skills/", "mode": "canonical" },
+      { "path": ".github/skills/", "mode": "symlink" },
+      { "path": ".cursor/skills/", "mode": "symlink" },
+      { "path": ".agent/skills/", "mode": "symlink" },
+      { "path": ".agents/skills/", "mode": "symlink" },
+      { "path": ".windsurf/skills/", "mode": "symlink" }
+    ]
+  }
+}
+```
+
+## Validation
+
+Validate your config with:
+
+```bash
+pair validate-config
+pair validate-config --config ./custom-config.json
+```
+
+### What Gets Validated
+
+- Required fields present (`behavior`, `source`, `description`)
+- Behavior values are valid (`mirror`, `add`, `overwrite`, `skip`)
+- Target paths are accessible
+- Transform config is valid (non-empty prefix, not combined with symlink mode)
+- Source paths exist (if specified)
+- Include patterns are valid arrays
+
+## Environment Variables
+
+| Variable | Description | Default |
+| -------- | ----------- | ------- |
+| `PAIR_KB_CACHE_DIR` | Override KB cache directory | `~/.pair/kb` |
+| `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL | GitHub latest release |
+| `PAIR_DIAG` | Enable diagnostic logging (`1` to enable) | `0` |
+
+## Related
+
+- [KB Structure Reference](/docs/reference/kb-structure) — Directory layout
+- [CLI Commands Reference](/docs/reference/cli/commands) — `validate-config` command
+- [Skill Management](/docs/reference/skill-management) — How transforms affect skills

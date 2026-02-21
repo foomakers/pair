@@ -1,0 +1,96 @@
+---
+title: Skills Catalog
+description: Complete catalog of all 31 pair skills organized by type — process, capability, and meta.
+---
+
+pair ships with 31 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
+
+> **Last updated:** 2026-02-21. Source: `packages/knowledge-hub/dataset/.skills/`
+
+## Meta Skills
+
+| Skill | Command | Description |
+| ----- | ------- | ----------- |
+| **next** | `/pair-next` | Determines the most relevant next action by reading adoption files and PM tool state. Suggests which skill to invoke. |
+
+## Process Skills
+
+Process skills orchestrate multi-step workflows by composing capability skills.
+
+| Skill | Command | Description | Composes |
+| ----- | ------- | ----------- | -------- |
+| **specify-prd** | `/pair-process-specify-prd` | Creates or updates a Product Requirements Document through structured template analysis and iterative review. | — |
+| **bootstrap** | `/pair-process-bootstrap` | Orchestrates full project setup: PRD verification, project categorization, checklist completion, standards generation, quality gate setup, and PM tool configuration. | `/pair-process-specify-prd`, `/pair-capability-setup-pm`, `/pair-capability-record-decision`, assess-* (optional) |
+| **map-subdomains** | `/pair-process-map-subdomains` | Defines DDD subdomains from PRD and initiatives. Classifies as core/supporting/generic, produces subdomain files. | — |
+| **map-contexts** | `/pair-process-map-contexts` | Defines DDD bounded contexts from subdomain catalog. Maps subdomains to contexts with integration patterns. | — |
+| **plan-initiatives** | `/pair-process-plan-initiatives` | Creates strategic initiatives from PRD analysis. Prioritizes by business impact (P0/P1/P2). | `/pair-capability-write-issue` |
+| **plan-epics** | `/pair-process-plan-epics` | Breaks initiatives into epics through structured analysis and collaborative validation. Includes Epic 0 assessment. | `/pair-capability-write-issue` |
+| **plan-stories** | `/pair-process-plan-stories` | Breaks epics into user stories using vertical slicing and INVEST validation. | `/pair-capability-write-issue` |
+| **refine-story** | `/pair-process-refine-story` | Refines a user story from Todo to Refined state: requirements analysis (Given-When-Then), technical analysis, sprint readiness. | `/pair-capability-write-issue` |
+| **plan-tasks** | `/pair-process-plan-tasks` | Breaks a refined user story into implementation tasks. Appends Technical Analysis + Task Breakdown to the story body. | `/pair-capability-write-issue` |
+| **implement** | `/pair-process-implement` | Implements a user story by iterating through its tasks one at a time following a 5-step cycle per task. Creates a PR at story completion. | `/pair-capability-verify-quality`, `/pair-capability-record-decision` |
+| **review** | `/pair-process-review` | Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness, decision, and optional merge. | `/pair-capability-verify-quality`, `/pair-capability-verify-done`, `/pair-capability-record-decision`, `/pair-capability-assess-debt` (required); `/pair-capability-verify-adoption`, `/pair-capability-assess-stack` (optional) |
+
+## Capability Skills
+
+Capability skills are atomic operations invoked independently or composed by process skills.
+
+### Assessment Capabilities
+
+| Skill | Command | Description |
+| ----- | ------- | ----------- |
+| **assess-ai** | `/pair-capability-assess-ai` | Assess AI development tools using resolution cascade (Argument > Adoption > Assessment). |
+| **assess-architecture** | `/pair-capability-assess-architecture` | Assess architecture pattern using resolution cascade. |
+| **assess-code-quality** | `/pair-capability-assess-code-quality` | Assess code quality using quality score formula from code-metrics guidelines. |
+| **assess-debt** | `/pair-capability-assess-debt` | Assess technical debt. Categorizes debt (code, design, test, documentation, infrastructure), applies prioritization formula. |
+| **assess-infrastructure** | `/pair-capability-assess-infrastructure` | Assess infrastructure strategy: cloud, CI/CD, deployment choices. |
+| **assess-methodology** | `/pair-capability-assess-methodology` | Assess development methodology: Scrum, Kanban, Lean, etc. |
+| **assess-observability** | `/pair-capability-assess-observability` | Assess observability strategy: monitoring, logging, tracing. |
+| **assess-pm** | `/pair-capability-assess-pm` | Assess project management tool choice. Delegates setup to `/pair-capability-setup-pm`. |
+| **assess-stack** | `/pair-capability-assess-stack` | Assess tech stack with version tracking. Lifecycle-spanning: bootstrap (full eval), implementation (add dependency), review (detect unlisted). |
+| **assess-testing** | `/pair-capability-assess-testing` | Assess testing framework and strategy. |
+
+### Verification Capabilities
+
+| Skill | Command | Description |
+| ----- | ------- | ----------- |
+| **verify-adoption** | `/pair-capability-verify-adoption` | Checks code against adoption files for a given scope. Detection-only: returns conformity/non-conformity list. |
+| **verify-done** | `/pair-capability-verify-done` | Checks Definition of Done criteria against a PR or work item. |
+| **verify-quality** | `/pair-capability-verify-quality` | Checks quality gates against the current codebase. |
+
+### Setup and Management Capabilities
+
+| Skill | Command | Description |
+| ----- | ------- | ----------- |
+| **setup-pm** | `/pair-capability-setup-pm` | Configures the project management tool: selection, implementation guide, adoption update. |
+| **setup-gates** | `/pair-capability-setup-gates` | Configures CI/CD quality gates per quality-assurance guidelines. |
+| **manage-flags** | `/pair-capability-manage-flags` | Manages feature flag lifecycle: creation, activation, deactivation, cleanup. |
+
+### Recording and Writing Capabilities
+
+| Skill | Command | Description |
+| ----- | ------- | ----------- |
+| **record-decision** | `/pair-capability-record-decision` | Records an architectural (ADR) or non-architectural (ADL) decision. Updates adoption files. |
+| **write-issue** | `/pair-capability-write-issue` | Creates or updates issues in the adopted PM tool using template-driven formatting. |
+| **estimate** | `/pair-capability-estimate` | Estimates a refined user story using the adopted estimation methodology. |
+
+## Skill Properties
+
+All skills share these properties:
+
+- **Idempotent**: Re-invocation is safe and resumes from the last incomplete step
+- **Composable**: Process skills compose capability skills; capability skills can be invoked independently
+- **Adoption-aware**: Skills read `.pair/adoption/` files for project-specific decisions
+- **Template-driven**: Output follows templates from `.pair/knowledge/guidelines/`
+
+## How to Use Skills
+
+Skills are invoked as slash commands in your AI coding assistant:
+
+```text
+/pair-next                        # What should I do next?
+/pair-process-implement #124      # Implement story #124
+/pair-capability-verify-quality   # Run quality gates
+```
+
+For details on how skills are resolved and transformed, see the [Skill Management Reference](/docs/reference/skill-management).

@@ -1,0 +1,11 @@
+{
+  "title": "Guides",
+  "pages": [
+    "cli-workflows",
+    "install-from-url",
+    "customize-kb",
+    "adopter-checklist",
+    "troubleshooting",
+    "update-link"
+  ]
+}

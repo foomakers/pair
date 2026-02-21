@@ -1,0 +1,106 @@
+---
+title: KB Structure
+description: Reference for the .pair/ directory structure — the Knowledge Base layout and purpose of each directory.
+---
+
+The `.pair/` directory is the root of pair's Knowledge Base. It contains all guidelines, adoption decisions, and project context that AI coding assistants use to understand your project.
+
+## Directory Tree
+
+```text
+.pair/
+├── knowledge/                    # Upstream guidelines (updated by `pair update`)
+│   ├── getting-started.md
+│   ├── skills-guide.md
+│   ├── way-of-working.md
+│   ├── how-to/                   # Step-by-step process guides
+│   │   ├── 01-how-to-create-PRD.md
+│   │   ├── 02-how-to-complete-bootstrap-checklist.md
+│   │   ├── 03-how-to-create-and-prioritize-initiatives.md
+│   │   ├── 04-how-to-define-subdomains.md
+│   │   ├── 05-how-to-define-bounded-contexts.md
+│   │   ├── 06-how-to-breakdown-epics.md
+│   │   ├── 07-how-to-breakdown-user-stories.md
+│   │   ├── 08-how-to-refine-a-user-story.md
+│   │   ├── 09-how-to-create-tasks.md
+│   │   ├── 10-how-to-implement-a-task.md
+│   │   └── 11-how-to-code-review.md
+│   ├── guidelines/               # Technical and process standards
+│   │   ├── collaboration/        # Team process guidelines
+│   │   │   ├── templates/        # Issue, commit, PR, branch templates
+│   │   │   ├── methodology/      # Scrum, Kanban, Lean, etc.
+│   │   │   ├── estimation/       # Story points, T-shirt sizing, etc.
+│   │   │   ├── issue-management/ # GitHub Issues, filesystem-based
+│   │   │   ├── project-management-tool/  # PM tool implementations
+│   │   │   ├── decision-records.md
+│   │   │   └── team/             # Team structure and roles
+│   │   ├── quality-assurance/    # Testing, CI/CD, quality gates
+│   │   ├── technical-standards/  # Feature flags, security
+│   │   └── code-design/          # Code quality, design principles
+│   │       ├── quality-standards/    # Linting, coverage, metrics
+│   │       ├── design-principles/    # SOLID, functional, error handling
+│   │       ├── package-management/   # pnpm, workspaces, shared deps
+│   │       ├── code-organization/    # Naming, file structure
+│   │       └── framework-patterns/   # React, TypeScript, state management
+│   └── assets/                   # Templates and examples
+│       ├── PRD_template.md
+│       ├── PRD_example.md
+│       └── bootstrap-checklist.md
+│
+├── adoption/                     # Project-specific decisions (never overwritten)
+│   ├── decision-log/             # Non-architectural decision log (ADL)
+│   ├── product/                  # Product decisions
+│   │   ├── PRD.md                # Product Requirements Document
+│   │   └── subdomain/            # DDD subdomain definitions
+│   └── tech/                     # Technical decisions
+│       ├── architecture.md       # Architecture pattern
+│       ├── tech-stack.md         # Approved libraries and versions
+│       ├── way-of-working.md     # Development process and quality gates
+│       ├── infrastructure.md     # Cloud, CI/CD, deployment
+│       ├── ux-ui.md              # UI/UX standards
+│       ├── adr/                  # Architecture Decision Records
+│       └── boundedcontext/       # DDD bounded context definitions
+│
+└── product/                      # (alias) Points to adoption/product/
+```
+
+## Directory Purposes
+
+### `knowledge/` — Upstream Guidelines
+
+Contains all opinionated defaults from the pair KB. These files are **updated by `pair update`** and should not be edited directly — your changes would be overwritten.
+
+- **`how-to/`** — Step-by-step guides for each phase of the development lifecycle (PRD creation through code review)
+- **`guidelines/`** — Technical standards organized by domain (collaboration, quality, code design)
+- **`assets/`** — Templates used by skills and how-to guides
+
+### `adoption/` — Your Decisions
+
+Contains project-specific decisions that **override** knowledge-layer defaults. These files are **never overwritten** by `pair update`.
+
+- **`product/PRD.md`** — Your Product Requirements Document
+- **`product/subdomain/`** — DDD subdomain definitions for your domain
+- **`tech/architecture.md`** — Your chosen architecture pattern
+- **`tech/tech-stack.md`** — Your approved libraries with pinned versions
+- **`tech/way-of-working.md`** — Your development process, quality gates, PM tool
+- **`tech/adr/`** — Architecture Decision Records documenting significant choices
+- **`tech/boundedcontext/`** — DDD bounded context definitions
+
+### Precedence Rule
+
+**Adoption always wins over knowledge.** When a skill reads guidelines, it checks adoption files first. If a decision is recorded there, it takes precedence over the corresponding knowledge-layer guideline.
+
+## Update Behavior
+
+| Directory | `pair update` behavior | Safe to edit? |
+| --------- | ---------------------- | ------------- |
+| `knowledge/` | Mirror (overwritten) | No |
+| `adoption/` | Add (new files only) | Yes |
+| `adoption/tech/adr/` | Preserved | Yes |
+| `adoption/decision-log/` | Preserved | Yes |
+
+## Related
+
+- [Customize the Knowledge Base](/docs/guides/customize-kb) — How to override guidelines
+- [Configuration Reference](/docs/reference/configuration) — config.json options
+- [Skills Catalog](/docs/reference/skills-catalog) — All 31 pair skills
