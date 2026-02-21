@@ -23,7 +23,8 @@
     "clean": "pnpm -w -r turbo prune && turbo clean && find . -type d \\( -name node_modules -o -name .turbo -o -name dist -o -name coverage \\) -exec rm -rf {} + 2>/dev/null || true; find . -type d -path './scripts/workflows/release' -prune -o -type d -name release -exec rm -rf {} + 2>/dev/null || true; find . -type f -name \"*tsbuildinfo\" -exec rm -f {} + 2>/dev/null || true",
     "a11y:report": "turbo a11y:report",
     "a11y:report:html": "turbo a11y:report:html",
-    "quality-gate": "turbo ts:check test lint && turbo prettier:fix mdlint:fix",
+    "hygiene:check": "node scripts/code-hygiene-check.js",
+    "quality-gate": "turbo ts:check test lint && turbo prettier:fix mdlint:fix && pnpm hygiene:check",
     "smoke-tests": "./scripts/smoke-tests/run-all.sh --cleanup"
   },
   "devDependencies": {

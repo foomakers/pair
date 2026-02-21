@@ -10,12 +10,15 @@ export default defineConfig({
   use: {
     ctPort: 3101,
     ctViteConfig: {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      plugins: [react() as any],
+      plugins: [react() as never],
       resolve: {
         alias: {
           'next/link': resolve(__dirname, 'playwright/mocks/next-link.tsx'),
           'next/navigation': resolve(__dirname, 'playwright/mocks/next-navigation.ts'),
+          'next-themes': resolve(
+            __dirname,
+            '../../packages/brand/playwright/mocks/next-themes.tsx',
+          ),
         },
       },
     },

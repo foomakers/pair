@@ -93,6 +93,31 @@ describe('App showcase', () => {
     expect(container.textContent).toContain('Code (JetBrains Mono)')
   })
 
+  it('renders icons section with all 16 icons', () => {
+    const { container } = render(<App />)
+    expect(container.textContent).toContain('Icons (16)')
+    expect(container.textContent).toContain('GridPlusIcon')
+    expect(container.textContent).toContain('ShieldCheckIcon')
+    expect(container.textContent).toContain('GitHubIcon')
+    expect(container.textContent).toContain('BoltIcon')
+  })
+
+  it('renders tool logos section with all 5 logos', () => {
+    const { container } = render(<App />)
+    expect(container.textContent).toContain('Tool Logos (5)')
+    expect(container.textContent).toContain('Anthropic')
+    expect(container.textContent).toContain('Cursor')
+    expect(container.textContent).toContain('Copilot')
+    expect(container.textContent).toContain('Windsurf')
+    expect(container.textContent).toContain('OpenAI')
+  })
+
+  it('renders theme toggle section', () => {
+    const { container } = render(<App />)
+    expect(container.textContent).toContain('ThemeToggle')
+    expect(container.textContent).toContain('next-themes')
+  })
+
   it('renders utility classes section', () => {
     const { container } = render(<App />)
     expect(container.textContent).toContain('Utility Classes')

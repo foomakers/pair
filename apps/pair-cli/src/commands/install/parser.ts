@@ -54,7 +54,13 @@ interface ParseInstallOptions {
   skipVerify?: boolean
 }
 
-/* eslint-disable complexity */
+function buildOptionalFields(target?: string, skipVerify?: boolean) {
+  return {
+    ...(target && { target }),
+    ...(skipVerify && { skipVerify }),
+  }
+}
+
 /**
  * Parse install command options into InstallCommandConfig.
  *
@@ -76,25 +82,16 @@ export function parseInstallCommand(
 
   const { source, offline = false, kb = true, skipVerify = false } = options
   const target = args[0]
+  const optional = buildOptionalFields(target, skipVerify)
 
-  // Default resolution (no source)
   if (!source) {
-    return {
-      command: 'install',
-      resolution: 'default',
-      offline: false,
-      kb,
-      ...(target && { target }),
-      ...(skipVerify && { skipVerify }),
-    }
+    return { command: 'install', resolution: 'default', offline: false, kb, ...optional }
   }
 
-  // Reject unsupported protocols early
   if (isUnsupportedProtocol(source)) {
     throw new Error(`Unsupported source protocol: ${source}`)
   }
 
-  // Remote source
   if (isRemoteUrl(source)) {
     return {
       command: 'install',
@@ -102,19 +99,9 @@ export function parseInstallCommand(
       url: source,
       offline: false,
       kb,
-      ...(target && { target }),
-      ...(skipVerify && { skipVerify }),
+      ...optional,
     }
   }
 
-  // Local source (ZIP or directory)
-  return {
-    command: 'install',
-    resolution: 'local',
-    path: source,
-    offline,
-    kb,
-    ...(target && { target }),
-    ...(skipVerify && { skipVerify }),
-  }
+  return { command: 'install', resolution: 'local', path: source, offline, kb, ...optional }
 }

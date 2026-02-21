@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { RocketIcon, MapIcon, CodeIcon, CheckCircleIcon } from './icons'
+import { RocketIcon, MapIcon, CodeIcon, CheckCircleIcon } from '@pair/brand'
 
 interface Phase {
   step: string

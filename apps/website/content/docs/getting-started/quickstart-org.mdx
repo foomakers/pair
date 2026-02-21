@@ -1,0 +1,123 @@
+---
+title: Organization Quickstart
+description: Roll out pair across multiple teams with custom KB packaging, distribution, and organization-wide standards.
+---
+
+Deploy pair across your organization. By the end of this guide, you will have a custom Knowledge Base package that can be distributed to every team, ensuring consistent AI-assisted development practices organization-wide.
+
+## Prerequisites
+
+- Node.js 18 or higher
+- pnpm (or npm) package manager
+- A central repository for your organization's Knowledge Base
+- GitHub (for release distribution)
+- Teams already using AI coding assistants
+
+## Install pair-cli
+
+Install pair-cli in the central KB repository:
+
+```bash
+npm install -g @pair/pair-cli
+```
+
+Verify with `pair-cli --version`.
+
+## Set Up the Central Knowledge Base
+
+Start with the default pair Knowledge Base:
+
+```bash
+pair-cli install
+```
+
+Then customize it for your organization:
+
+### Organization-Specific Guidelines
+
+Add or modify files in `.pair/knowledge/guidelines/` to reflect your organization's standards:
+
+- **Code design** — naming conventions, design patterns, review criteria
+- **Testing strategy** — coverage targets, testing frameworks, test categories
+- **Security** — authentication patterns, data handling, compliance requirements
+- **Architecture** — approved patterns, integration standards, API conventions
+
+### Standard Adoption Templates
+
+Pre-fill `.pair/adoption/` with organization-wide defaults:
+
+- **Tech stack** — approved languages, frameworks, and libraries
+- **Infrastructure** — approved cloud providers, CI/CD pipelines
+- **Way of working** — branching strategy, review process, quality gates
+
+Teams can extend these defaults with project-specific decisions. The `adoption` registry uses **add** behavior — it never overwrites existing decisions, so team customizations are preserved.
+
+## Package Your Custom KB
+
+Once your KB is ready, package it for distribution:
+
+```bash
+pair-cli package
+```
+
+This creates a distributable ZIP with a `manifest.json` containing version, checksums, and a file list. The package includes everything in `.pair/` — your customized guidelines, templates, and adoption defaults.
+
+## Distribute via GitHub Releases
+
+Publish the package as a GitHub Release artifact:
+
+1. Tag a release in your central KB repository
+2. Attach the ZIP artifact from `pair-cli package`
+3. CI can automate this with SHA256 checksum generation
+
+Teams install your custom KB by pointing pair-cli to your release:
+
+```bash
+pair-cli install --source https://github.com/your-org/your-kb/releases/latest/download/kb.zip
+```
+
+## Team Onboarding
+
+When a team adopts pair with your organization's KB:
+
+1. **Install** — `pair-cli install --source <your-kb-url>` downloads and installs the custom KB
+2. **Customize** — the team adds project-specific adoption decisions (tech stack, architecture)
+3. **Develop** — every AI assistant reads the combined KB (org standards + team decisions)
+4. **Update** — `pair-cli update` refreshes the KB when the organization publishes a new version
+
+### Version Coordination
+
+CLI version maps to KB version. When you release a new KB version:
+
+- Teams run `pair-cli update` to get the latest guidelines
+- Organization standards propagate automatically
+- Team-specific adoption files are preserved (never overwritten)
+
+## Asset Registries
+
+The CLI uses five asset registries with specific behaviors:
+
+| Registry | Behavior | Description |
+|----------|----------|-------------|
+| `knowledge` | mirror | Syncs KB content (overwrites stale files) |
+| `adoption` | add | Only adds new files (preserves team decisions) |
+| `github` | mirror | GitHub workflows and configuration |
+| `agents` | mirror | AI agent bridge files (AGENTS.md) |
+| `skills` | mirror | Agent skills distributed to AI tool directories |
+
+The distinction between **mirror** (sync everything) and **add** (preserve existing) is key: organization guidelines update automatically, but team decisions are never overwritten.
+
+## Compliance and Governance
+
+With a centralized KB, your organization gets:
+
+- **Consistent standards** — every team follows the same guidelines
+- **Auditable decisions** — adoption files and ADRs document every architectural choice
+- **Controlled updates** — KB versioning ensures teams use approved standards
+- **Flexible customization** — teams extend (never conflict with) organization defaults
+
+## Next Steps
+
+- Understand how the [Knowledge Base](/docs/concepts/knowledge-base) structure supports customization
+- Learn how [Skills](/docs/concepts/skills) automate the development lifecycle across teams
+- Explore [Agent Integration](/docs/concepts/agent-integration) for multi-tool support

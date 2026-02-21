@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import { Button } from '@pair/brand'
-import { TerminalIcon, TeamIcon, BuildingIcon } from './icons'
+import { Button, TerminalIcon, TeamIcon, BuildingIcon } from '@pair/brand'
 import { URLS } from './constants'
 
 interface AudienceTrack {

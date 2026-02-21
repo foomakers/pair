@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { ThemeToggle } from './theme-toggle'
+import { ThemeToggle } from '@pair/brand'
 import { HeroSection } from './hero-section'
 import { PainPointsSection } from './pain-points-section'
 import { WorksWithSection } from './works-with-section'

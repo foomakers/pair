@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import { Card } from '@pair/brand'
-import { GridPlusIcon, ShieldCheckIcon, FolderIcon, UsersIcon } from './icons'
+import { Card, GridPlusIcon, ShieldCheckIcon, FolderIcon, UsersIcon } from '@pair/brand'
 
 interface PainPoint {
   question: string

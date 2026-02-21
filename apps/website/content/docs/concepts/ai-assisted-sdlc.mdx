@@ -1,0 +1,56 @@
+---
+title: AI-Assisted SDLC
+description: How pair structures collaboration between developers and AI assistants across the full software development lifecycle.
+---
+
+When developers collaborate with AI coding assistants, a fundamental problem emerges: the AI lacks context. It does not know your architecture, your tech stack decisions, your team's standards, or where you are in the development process. Every session starts from zero.
+
+The result is inconsistent code, hallucinated libraries, drifting decisions, and variable quality. The AI is powerful but directionless.
+
+## The pair Approach
+
+pair solves this by providing **structured, persistent context** that AI assistants read at the start of every session. Instead of treating AI as a code autocomplete tool, pair treats it as a **team member that needs onboarding**.
+
+This onboarding takes the form of a [Knowledge Base](/docs/concepts/knowledge-base) — a set of documents installed in your project that cover:
+
+- **How to work** — 11 process guides defining every step from product requirements to code review
+- **What standards to follow** — guidelines for architecture, testing, code design, security
+- **What the team decided** — adoption files recording the chosen tech stack, architecture, and way of working
+
+The AI reads these documents and follows them consistently.
+
+## Structured, Not Ad Hoc
+
+Traditional AI-assisted development is ad hoc: you prompt, the AI responds, and you hope the output aligns with your standards. pair replaces this with a structured lifecycle:
+
+1. **Induction** — one-time project setup: create a PRD, complete the bootstrap checklist, prioritize initiatives
+2. **Strategic Planning** — break initiatives into epics, define the architecture
+3. **Iteration** — break epics into user stories, refine acceptance criteria, create tasks
+4. **Execution** — implement tasks with TDD, review code against standards
+
+Each level has specific [process guides](/docs/concepts/process-lifecycle) that the AI follows. The guides reference your [adoption files](/docs/concepts/adoption-files), so the AI's output is always aligned with your decisions.
+
+## Why It Matters
+
+| Problem | How pair solves it |
+|---------|-------------------|
+| Inconsistent code across sessions | The AI always reads the same adoption files |
+| Hallucinated libraries and patterns | Tech stack adoption lists approved dependencies; review blocks deviations |
+| Decisions not aligned with team | Every task references specific adoption documents |
+| Unstructured process | 11 how-to guides define every step from idea to merge |
+| Variable quality | Definition of Done checklist and automated quality gates |
+| Slow onboarding | New developer (or AI) reads `.pair/` and has full context |
+
+## How It Works in Practice
+
+A developer starts a session and says: *"I need to implement the user login feature."*
+
+The AI reads `.pair/` and knows:
+- The architecture is a monolith with REST API (from `architecture.md`)
+- The tech stack uses TypeScript, React, and Vitest (from `tech-stack.md`)
+- The team uses Kanban with squash merges (from `way-of-working.md`)
+- The implementation guide requires TDD (from `how-to/10-how-to-implement-a-task.md`)
+
+It creates a feature branch, writes tests first, implements the minimum code to pass them, runs quality gates, and creates a PR following the team's template. Every step follows the documented process.
+
+The next day, a different developer (or the same developer in a new session) picks up where things left off. The AI reads the same files and maintains the same standards.

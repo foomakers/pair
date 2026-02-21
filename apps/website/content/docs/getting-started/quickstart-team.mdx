@@ -1,0 +1,110 @@
+---
+title: Team Quickstart
+description: Set up pair for a development team with shared standards, adoption files, and multi-agent support.
+---
+
+Set up pair for your development team. By the end of this guide, every team member's AI assistant will follow the same standards, make consistent decisions, and understand your team's architecture.
+
+## Prerequisites
+
+- Node.js 18 or higher
+- pnpm (or npm) package manager
+- A shared Git repository for your project
+- Team members using AI coding assistants (Claude, Copilot, Cursor, or similar)
+
+## Install pair-cli
+
+Each team member installs pair-cli globally:
+
+```bash
+npm install -g @pair/pair-cli
+```
+
+Or with pnpm:
+
+```bash
+pnpm add -g @pair/pair-cli
+```
+
+Verify with `pair-cli --version`.
+
+## Initialize Your Project
+
+From the project root:
+
+```bash
+pair-cli install
+```
+
+This creates the `.pair/` folder with the Knowledge Base and the agent bridge pattern files. Commit the result to your shared repository so every team member gets the same context.
+
+## Configure Team Standards
+
+After installation, the `.pair/adoption/` folder contains empty templates. Fill these in collaboratively to record your team's decisions:
+
+### Architecture
+
+Edit `.pair/adoption/tech/architecture.md` to document:
+
+- Architecture pattern (monolith, microservices, modular monolith)
+- API style (REST, GraphQL, gRPC)
+- Data storage choices
+
+### Tech Stack
+
+Edit `.pair/adoption/tech/tech-stack.md` to list:
+
+- Language and framework versions
+- Testing framework and coverage targets
+- Linting and formatting tools
+- Package manager
+
+### Way of Working
+
+Edit `.pair/adoption/tech/way-of-working.md` to define:
+
+- Development methodology (Kanban, Scrum)
+- Branching strategy
+- Code review process
+- Quality gate commands
+
+## The Agent Bridge Pattern
+
+pair installs bridge files that connect AI assistants to your Knowledge Base:
+
+```text
+AGENTS.md              # Universal entry point (Claude, Copilot, Cursor)
+.github/copilot/       # GitHub Copilot-specific instructions
+.cursor/               # Cursor-specific rules
+```
+
+All bridge files point to `.pair/` — there is one source of truth. When a team member opens their AI assistant, it reads the bridge file for their tool, which directs it to the Knowledge Base.
+
+This means every AI assistant on the team follows the same standards, regardless of which tool each developer uses.
+
+## Share Adoption Decisions
+
+Once your team records decisions in `.pair/adoption/`, commit them to the repository:
+
+```bash
+git add .pair/adoption/
+git commit -m "chore: record team adoption decisions"
+git push
+```
+
+Every team member who pulls the latest changes gets the updated decisions. Their AI assistant reads the new adoption files and immediately adjusts its behavior.
+
+## How It Works Day-to-Day
+
+1. **Developer starts a session** — the AI reads `.pair/` and understands the project context
+2. **Developer asks for code** — the AI follows the adopted tech stack, architecture, and standards
+3. **Code review** — the AI checks code against adoption files and guidelines
+4. **Decisions change** — the team updates adoption files, commits, and every AI adapts
+
+The Knowledge Base provides consistency: no more explaining your architecture from scratch, no more AI-generated code using unapproved libraries, no more drifting decisions.
+
+## Next Steps
+
+- Learn how [Adoption Files](/docs/concepts/adoption-files) record and enforce team decisions
+- Understand the [Agent Integration](/docs/concepts/agent-integration) bridge pattern in depth
+- Explore the full [process lifecycle](/docs/concepts/process-lifecycle) your team can follow

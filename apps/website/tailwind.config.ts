@@ -8,6 +8,7 @@ export default {
     './components/**/*.{ts,tsx}',
     './content/**/*.mdx',
     './node_modules/fumadocs-ui/dist/**/*.js',
+    '../../packages/brand/src/**/*.{ts,tsx}',
   ],
   darkMode: 'class',
   presets: [createPreset(), brandPreset as Partial<Config>],

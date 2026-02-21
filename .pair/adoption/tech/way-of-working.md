@@ -16,10 +16,11 @@
 
 ### Custom Gate Registry
 
-| Order | Gate         | Command             | Scope Key | Required | Description                                     |
-| ----- | ------------ | ------------------- | --------- | -------- | ----------------------------------------------- |
-| 1     | Quality Gate | `pnpm quality-gate` | quality   | Yes      | build test and formatting check&fix             |
-| 2     | Smoke tests  | `pnpm smoke-tests`  | testing   | Yes      | smoke test to check all e2e cli release process |
+| Order | Gate         | Command                           | Scope Key | Required | Description                                     |
+| ----- | ------------ | --------------------------------- | --------- | -------- | ----------------------------------------------- |
+| 1     | Quality Gate | `pnpm quality-gate`               | quality   | Yes      | build test and formatting check&fix             |
+| 2     | Smoke tests  | `pnpm smoke-tests`                | testing   | Yes      | smoke test to check all e2e cli release process |
+| 3     | E2E tests    | `pnpm --filter @pair/website e2e` | testing   | Yes      | Playwright E2E tests (builds + starts Next.js)  |
 
 ---
 

@@ -1,5 +1,24 @@
 import { useState, useEffect } from 'react'
-import { PairLogo, Card, Button, Callout } from '$components'
+import { PairLogo, Card, Button, Callout, ThemeToggle } from '$components'
+import {
+  GridPlusIcon,
+  ShieldCheckIcon,
+  FolderIcon,
+  UsersIcon,
+  TerminalIcon,
+  TeamIcon,
+  BuildingIcon,
+  RocketIcon,
+  MapIcon,
+  CodeIcon,
+  CheckCircleIcon,
+  BoltIcon,
+  BookIcon,
+  SlidersIcon,
+  LinkIcon,
+  GitHubIcon,
+} from '$components'
+import { AnthropicLogo, CursorLogo, CopilotLogo, WindsurfLogo, OpenAILogo } from '$components'
 import { PAIR_BLUE, PAIR_TEAL, LIGHT_BG, LIGHT_TEXT_MAIN, DARK_BG, DARK_TEXT_MAIN } from '$tokens'
 
 function App() {
@@ -24,6 +43,9 @@ function App() {
         }}>
         <Header isDark={isDark} onToggle={() => setIsDark(!isDark)} />
         <LogoSection />
+        <IconsSection />
+        <ToolLogosSection />
+        <ThemeToggleSection />
         <ButtonSection />
         <CardSection />
         <CalloutSection />
@@ -84,6 +106,112 @@ function LogoVariant({
       <PairLogo variant={variant} />
       <p style={{ marginTop: '0.5rem', fontSize: '0.875rem' }}>{label}</p>
     </div>
+  )
+}
+
+function IconsSection() {
+  const icons = [
+    { name: 'GridPlusIcon', Icon: GridPlusIcon },
+    { name: 'ShieldCheckIcon', Icon: ShieldCheckIcon },
+    { name: 'FolderIcon', Icon: FolderIcon },
+    { name: 'UsersIcon', Icon: UsersIcon },
+    { name: 'TerminalIcon', Icon: TerminalIcon },
+    { name: 'TeamIcon', Icon: TeamIcon },
+    { name: 'BuildingIcon', Icon: BuildingIcon },
+    { name: 'RocketIcon', Icon: RocketIcon },
+    { name: 'MapIcon', Icon: MapIcon },
+    { name: 'CodeIcon', Icon: CodeIcon },
+    { name: 'CheckCircleIcon', Icon: CheckCircleIcon },
+    { name: 'BoltIcon', Icon: BoltIcon },
+    { name: 'BookIcon', Icon: BookIcon },
+    { name: 'SlidersIcon', Icon: SlidersIcon },
+    { name: 'LinkIcon', Icon: LinkIcon },
+    { name: 'GitHubIcon', Icon: GitHubIcon },
+  ]
+  return (
+    <Section title='Icons (16)'>
+      <Card>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+            gap: '1.5rem',
+          }}>
+          {icons.map(({ name, Icon }) => (
+            <div key={name} style={{ textAlign: 'center' }}>
+              <Icon style={{ width: 28, height: 28, margin: '0 auto' }} />
+              <p
+                style={{
+                  fontSize: '0.7rem',
+                  marginTop: '0.4rem',
+                  color: 'var(--pair-text-muted)',
+                }}>
+                {name}
+              </p>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </Section>
+  )
+}
+
+function ToolLogosSection() {
+  const logos = [
+    { name: 'Anthropic', Logo: AnthropicLogo },
+    { name: 'Cursor', Logo: CursorLogo },
+    { name: 'Copilot', Logo: CopilotLogo },
+    { name: 'Windsurf', Logo: WindsurfLogo },
+    { name: 'OpenAI', Logo: OpenAILogo },
+  ]
+  return (
+    <Section title='Tool Logos (5)'>
+      <Card>
+        <div
+          style={{
+            display: 'flex',
+            gap: '3rem',
+            alignItems: 'center',
+            justifyContent: 'space-around',
+            flexWrap: 'wrap',
+          }}>
+          {logos.map(({ name, Logo }) => (
+            <div key={name} style={{ textAlign: 'center' }}>
+              <Logo style={{ width: 32, height: 32, margin: '0 auto' }} />
+              <p
+                style={{
+                  fontSize: '0.75rem',
+                  marginTop: '0.4rem',
+                  color: 'var(--pair-text-muted)',
+                }}>
+                {name}
+              </p>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </Section>
+  )
+}
+
+function ThemeToggleSection() {
+  return (
+    <Section title='ThemeToggle'>
+      <Card>
+        <p style={{ fontSize: '0.875rem', color: 'var(--pair-text-muted)', marginBottom: '1rem' }}>
+          Fixed-position toggle (top-right corner). Uses next-themes useTheme hook.
+        </p>
+        <div
+          style={{
+            position: 'relative',
+            height: '60px',
+            border: '1px dashed var(--pair-border)',
+            borderRadius: '8px',
+          }}>
+          <ThemeToggle />
+        </div>
+      </Card>
+    </Section>
   )
 }
 

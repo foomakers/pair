@@ -15,6 +15,7 @@ export default defineConfig({
     alias: {
       $components: resolve(__dirname, 'src/components'),
       $tokens: resolve(__dirname, 'src/tokens'),
+      'next-themes': resolve(__dirname, 'playwright/mocks/next-themes.tsx'),
     },
   },
   css: {
