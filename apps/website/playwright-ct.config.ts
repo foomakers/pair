@@ -16,7 +16,10 @@ export default defineConfig({
         alias: {
           'next/link': resolve(__dirname, 'playwright/mocks/next-link.tsx'),
           'next/navigation': resolve(__dirname, 'playwright/mocks/next-navigation.ts'),
-          'next-themes': resolve(__dirname, 'playwright/mocks/next-themes.tsx'),
+          'next-themes': resolve(
+            __dirname,
+            '../../packages/brand/playwright/mocks/next-themes.tsx',
+          ),
         },
       },
     },
