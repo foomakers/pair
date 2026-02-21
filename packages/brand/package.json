@@ -17,7 +17,8 @@
     "public"
   ],
   "scripts": {
-    "dev": "vite dev",
+    "dev": "pnpm clean:server && vite dev",
+    "clean:server": "lsof -t -i:5173 | xargs kill 2>/dev/null || true",
     "ct": "playwright test -c playwright-ct.config.ts --grep-invert @a11y-report",
     "a11y:report": "playwright test -c playwright-ct.config.ts --grep @a11y-report --reporter=list",
     "a11y:report:html": "playwright test -c playwright-ct.config.ts --grep @a11y-report --reporter=html && echo '\n→ Report: playwright-report/index.html\n  Open: npx playwright show-report'",
