@@ -24,7 +24,8 @@
     "a11y:report": "turbo a11y:report",
     "a11y:report:html": "turbo a11y:report:html",
     "hygiene:check": "node scripts/code-hygiene-check.js",
-    "quality-gate": "turbo ts:check test lint && turbo prettier:fix mdlint:fix && pnpm hygiene:check",
+    "docs:staleness": "node scripts/docs-staleness-check.js",
+    "quality-gate": "turbo ts:check test lint && turbo prettier:fix mdlint:fix && pnpm hygiene:check && pnpm docs:staleness",
     "smoke-tests": "./scripts/smoke-tests/run-all.sh --cleanup"
   },
   "devDependencies": {
