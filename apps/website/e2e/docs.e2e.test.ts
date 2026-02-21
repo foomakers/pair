@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test'
 // Verifies ACs by navigating through docs as a real user would.
 // ============================================================
 
-test('solo dev journey: overview → quickstart with content verification', async ({ page }) => {
+test('quickstart journey: overview → quickstart with content verification', async ({ page }) => {
   // AC-12: sidebar shows both sections
   await page.goto('/docs/getting-started')
   await expect(page.locator('body')).toContainText('Getting Started')
@@ -18,8 +18,11 @@ test('solo dev journey: overview → quickstart with content verification', asyn
   await expect(page.locator('main')).toContainText('Skills')
   await expect(page.locator('main')).toContainText('Adoption Files')
 
-  // Navigate to Solo Quickstart via sidebar
-  await page.locator('a', { hasText: 'Solo Developer Quickstart' }).first().click()
+  // Navigate to Quickstart via sidebar
+  await page
+    .locator('a', { hasText: /^Quickstart$/ })
+    .first()
+    .click()
   await expect(page).toHaveURL('/docs/getting-started/quickstart')
 
   // AC-2: install + verify + first command steps
@@ -34,7 +37,6 @@ test('solo dev journey: overview → quickstart with content verification', asyn
 
   // AC-3: migrated content preserved, no broken .md links
   await expect(main).toContainText('Manual Install')
-  await expect(main).toContainText('pair-cli install --list-targets')
   await expect(main).toContainText('GitHub Releases')
   const hrefs = await main
     .locator('a')
@@ -44,7 +46,28 @@ test('solo dev journey: overview → quickstart with content verification', asyn
   )
   expect(brokenLinks).toHaveLength(0)
 
-  // AC-6 (partial): no cross-audience refs in solo quickstart
+  // New quickstart: general content (new project, existing project, update, process)
+  await expect(main).toContainText('New Project')
+  await expect(main).toContainText('Existing Project')
+  await expect(main).toContainText('pair-cli update')
+  await expect(main).toContainText('Development Process')
+  await expect(main).toContainText('Choose Your Setup')
+})
+
+test('solo setup journey: quickstart → solo setup with content verification', async ({ page }) => {
+  await page.goto('/docs/getting-started/quickstart-solo')
+
+  // Solo setup page renders with expected content
+  const main = page.locator('main')
+  await expect(page.locator('main h1')).toContainText('Solo Setup')
+  await expect(main).toContainText('Solo Workflow')
+  await expect(main).toContainText('/pair-next')
+  await expect(main).toContainText('pair-cli install --list-targets')
+
+  // Links back to general quickstart
+  await expect(main.locator('a[href="/docs/getting-started/quickstart"]')).toBeVisible()
+
+  // AC-6 (partial): no cross-audience refs in solo setup
   const contentLinks = await page.locator('article a').evaluateAll(els =>
     els
       .filter(el => !el.classList.toString().includes('bg-fd-card'))
@@ -56,16 +79,15 @@ test('solo dev journey: overview → quickstart with content verification', asyn
   ).toHaveLength(0)
 })
 
-test('team journey: overview → team quickstart with content verification', async ({ page }) => {
+test('team journey: overview → team setup with content verification', async ({ page }) => {
   await page.goto('/docs/getting-started')
 
-  // Navigate to Team Quickstart via sidebar
-  await page.locator('a', { hasText: 'Team Quickstart' }).first().click()
+  // Navigate to Team Setup via sidebar
+  await page.locator('a', { hasText: 'Team Setup' }).first().click()
   await expect(page).toHaveURL('/docs/getting-started/quickstart-team')
 
   // AC-4: shared KB, adoption files, bridge pattern
   const main = page.locator('main')
-  await expect(main).toContainText('pair-cli install')
   await expect(main).toContainText('adoption')
   await expect(main).toContainText('Bridge Pattern')
   await expect(main).toContainText('AGENTS.md')
@@ -73,28 +95,15 @@ test('team journey: overview → team quickstart with content verification', asy
   await expect(main).toContainText('tech-stack.md')
   await expect(main).toContainText('way-of-working.md')
 
-  // AC-6 (partial): no cross-audience refs
-  const links = await page.locator('article a').evaluateAll(els =>
-    els
-      .filter(el => !el.classList.toString().includes('bg-fd-card'))
-      .map(el => el.getAttribute('href'))
-      .filter(Boolean),
-  )
-  expect(
-    links.filter(
-      h =>
-        h &&
-        (h.endsWith('/quickstart') || h.includes('/quickstart#')) &&
-        !h.includes('quickstart-'),
-    ),
-  ).toHaveLength(0)
+  // Links to general quickstart instead of duplicating install
+  await expect(main.locator('a[href="/docs/getting-started/quickstart"]')).toBeVisible()
 })
 
-test('org journey: overview → org quickstart with content verification', async ({ page }) => {
+test('org journey: overview → org setup with content verification', async ({ page }) => {
   await page.goto('/docs/getting-started')
 
-  // Navigate to Org Quickstart via sidebar
-  await page.locator('a', { hasText: 'Organization Quickstart' }).first().click()
+  // Navigate to Org Setup via sidebar
+  await page.locator('a', { hasText: 'Organization Setup' }).first().click()
   await expect(page).toHaveURL('/docs/getting-started/quickstart-org')
 
   // AC-5: KB packaging, distribution, compliance
@@ -106,18 +115,8 @@ test('org journey: overview → org quickstart with content verification', async
   await expect(main).toContainText('Compliance')
   await expect(main).toContainText('Asset Registries')
 
-  // AC-6 (partial): no cross-audience refs
-  const links = await page.locator('article a').evaluateAll(els =>
-    els
-      .filter(el => !el.classList.toString().includes('bg-fd-card'))
-      .map(el => el.getAttribute('href'))
-      .filter(Boolean),
-  )
-  expect(
-    links.filter(
-      h => h && (h.includes('/quickstart-team') || (h.endsWith('/quickstart') && !h.includes('-'))),
-    ),
-  ).toHaveLength(0)
+  // Links to general quickstart instead of duplicating install
+  await expect(main.locator('a[href="/docs/getting-started/quickstart"]')).toBeVisible()
 })
 
 test('concepts journey: navigate through concept pages via sidebar', async ({ page }) => {
@@ -165,13 +164,14 @@ test('concepts journey: navigate through concept pages via sidebar', async ({ pa
   await expect(main).toContainText('Code Review')
 })
 
-test('smoke: all 10 docs pages return 200 with correct titles', async ({ page }) => {
+test('smoke: all docs pages return 200 with correct titles', async ({ page }) => {
   // AC-7 + AC-11 + frontmatter
   const pages = [
     { url: '/docs/getting-started', title: 'What is pair?' },
-    { url: '/docs/getting-started/quickstart', title: 'Solo Developer Quickstart' },
-    { url: '/docs/getting-started/quickstart-team', title: 'Team Quickstart' },
-    { url: '/docs/getting-started/quickstart-org', title: 'Organization Quickstart' },
+    { url: '/docs/getting-started/quickstart', title: 'Quickstart' },
+    { url: '/docs/getting-started/quickstart-solo', title: 'Solo Setup' },
+    { url: '/docs/getting-started/quickstart-team', title: 'Team Setup' },
+    { url: '/docs/getting-started/quickstart-org', title: 'Organization Setup' },
     { url: '/docs/concepts/ai-assisted-sdlc', title: 'AI-Assisted SDLC' },
     { url: '/docs/concepts/knowledge-base', title: 'Knowledge Base' },
     { url: '/docs/concepts/skills', title: 'Skills' },

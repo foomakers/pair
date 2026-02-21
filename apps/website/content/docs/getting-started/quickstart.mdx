@@ -1,6 +1,6 @@
 ---
-title: Solo Developer Quickstart
-description: Install pair-cli and set up your project with AI-assisted development context in minutes.
+title: Quickstart
+description: Install pair-cli, set up the Knowledge Base, and start using AI-assisted development — for new and existing projects.
 ---
 
 Get up and running with pair on macOS or Linux. By the end of this guide, your project will have a Knowledge Base that gives your AI assistant full context about your development standards.
@@ -35,7 +35,7 @@ For air-gapped environments:
 2. Extract the `pair-cli-manual-vX.Y.Z.zip` file
 3. Run directly from the extracted folder
 
-## Verify Installation
+### Verify Installation
 
 ```bash
 pair-cli --version
@@ -45,24 +45,6 @@ Expected output:
 
 ```text
 pair-cli vX.Y.Z
-```
-
-## Explore Available Assets
-
-See what pair can install in your project:
-
-```bash
-pair-cli install --list-targets
-```
-
-Expected output:
-
-```text
-Available asset registries:
-
-  github     .github         GitHub workflows and configuration files
-  knowledge  .pair            Knowledge base and documentation
-  adoption   .pair/product/adopted  Adoption guides and onboarding materials
 ```
 
 ## Install the Knowledge Base
@@ -88,18 +70,85 @@ Your project now has:
     tech/             # Architecture, tech stack, infrastructure
 ```
 
-## What Happens Next
+See what pair can install in your project:
 
-When you start a conversation with your AI assistant (Claude, Copilot, Cursor), it reads the `.pair/` folder and understands:
+```bash
+pair-cli install --list-targets
+```
 
-- **How your team works** — process guides define every step from idea to merge
-- **What standards to follow** — guidelines cover architecture, testing, code design, security
-- **What you've decided** — adoption files record your tech stack, architecture, and way of working
+## Start Using pair
 
-The AI generates consistent, standards-aligned code across every session.
+Your AI assistant (Claude, Copilot, Cursor) now reads the `.pair/` folder automatically. The next step is creating your **adoption files** — the project-specific decisions that keep every AI session aligned.
 
-## Next Steps
+You don't write these files manually. The AI generates them interactively, asking the right questions along the way.
 
-- Learn [how pair structures AI-assisted development](/docs/concepts/ai-assisted-sdlc)
-- Understand the [Knowledge Base structure](/docs/concepts/knowledge-base) in depth
-- Explore the [process lifecycle](/docs/concepts/process-lifecycle) — from PRD to code review
+### New Project
+
+Run `/pair-next` in your AI assistant. It detects empty adoption files and walks you through:
+
+1. **PRD creation** — the AI asks about your product vision, users, pain points, and features, then generates `.pair/adoption/product/adopted/PRD.md`
+2. **Bootstrap** — the AI guides you through architecture, tech stack, infrastructure, and way-of-working decisions, generating adoption files in `.pair/adoption/tech/adopted/`
+3. **What comes next** — `/pair-next` continues to suggest the right next step as your project evolves
+
+### Existing Project
+
+For projects with an existing codebase, paste this prompt into your AI assistant:
+
+```text
+Analyze this project's codebase and create the pair adoption files interactively.
+
+Read the project structure, dependencies, configuration, and conventions. Then:
+
+1. **PRD** — Ask me about the product vision, users, pain points, and features.
+   Generate `.pair/adoption/product/adopted/PRD.md` following the PRD template
+   in `.pair/knowledge/assets/PRD_template.md`.
+
+2. **Architecture** — Propose the architecture pattern based on what you find
+   (monolith, microservices, etc.) and ask me to confirm or adjust.
+   Generate `.pair/adoption/tech/adopted/architecture.md`.
+
+3. **Tech Stack** — List detected languages, frameworks, and libraries with
+   versions. Ask me if anything is missing or should change.
+   Generate `.pair/adoption/tech/adopted/tech-stack.md`.
+
+4. **Way of Working** — Detect branching strategy, CI/CD, methodology from
+   config files. Ask me to confirm or adjust.
+   Generate `.pair/adoption/tech/adopted/way-of-working.md`.
+
+After generating all files, suggest I run `/pair-next` to continue.
+```
+
+The AI reads your code, proposes decisions based on what it finds, and asks you to confirm or adjust. Once done, run `/pair-next` to continue with the structured development process.
+
+## Keep Your KB Up to Date
+
+When pair publishes new guidelines, templates, or how-to improvements:
+
+```bash
+pair-cli update
+```
+
+This refreshes the Knowledge Base content (guidelines, how-tos, templates) while **preserving your adoption files** — your decisions are never overwritten.
+
+## The Development Process
+
+pair defines a 9-step development lifecycle organized in four levels:
+
+| Level | Steps | What Happens |
+|-------|-------|--------------|
+| **Induction** | PRD → Bootstrap → Initiatives | One-time setup: define product, architecture, tech stack |
+| **Strategic** | Epics | Break initiatives into feature-level epics |
+| **Iteration** | Stories → Refine → Tasks | Break epics into stories, add acceptance criteria, plan tasks |
+| **Execution** | Implement → Code Review | TDD cycle, quality gates, structured review |
+
+Each step has a **how-to guide** in `.pair/knowledge/how-to/` that the AI follows, and a matching **skill** (e.g., `/pair-process-implement`) that automates it. Run `/pair-next` at any point to find out which step comes next.
+
+[Learn more about the Process Lifecycle](/docs/concepts/process-lifecycle)
+
+## Choose Your Setup
+
+The steps above work for everyone. For environment-specific configuration:
+
+- **[Solo Setup](/docs/getting-started/quickstart-solo)** — Working alone? Minimal setup, no team coordination needed.
+- **[Team Setup](/docs/getting-started/quickstart-team)** — Shared standards, adoption files, and the agent bridge pattern for multi-developer teams.
+- **[Organization Rollout](/docs/getting-started/quickstart-org)** — Custom KB packaging, distribution, and governance across multiple teams.

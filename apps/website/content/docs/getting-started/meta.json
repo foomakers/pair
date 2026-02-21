@@ -1,4 +1,4 @@
 {
   "title": "Getting Started",
-  "pages": ["index", "quickstart", "quickstart-team", "quickstart-org"]
+  "pages": ["index", "quickstart", "quickstart-solo", "quickstart-team", "quickstart-org"]
 }
