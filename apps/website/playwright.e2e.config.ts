@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/experimental-ct-react'
+import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testMatch: '**/*.e2e.test.ts',

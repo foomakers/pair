@@ -42,6 +42,7 @@
     "@pair/ts-config": "workspace:*",
     "@axe-core/playwright": "catalog:",
     "@playwright/experimental-ct-react": "catalog:",
+    "@playwright/test": "catalog:",
     "@testing-library/jest-dom": "catalog:",
     "@testing-library/react": "catalog:",
     "@types/react": "catalog:",

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/experimental-ct-react'
+import { test, expect } from '@playwright/test'
 
 // ============================================================
 // E2E: Docs — User journey tests for Getting Started + Concepts
