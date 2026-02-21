@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { AnthropicLogo, CursorLogo, CopilotLogo, WindsurfLogo, OpenAILogo } from './tool-logos'
+import { AnthropicLogo, CursorLogo, CopilotLogo, WindsurfLogo, OpenAILogo } from '@pair/brand'
 
 interface Tool {
   name: string

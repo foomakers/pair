@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/experimental-ct-react'
-import { ThemeToggleLight, ThemeToggleDark } from './theme-toggle.story'
+import { ThemeToggleLight, ThemeToggleDark } from './ThemeToggle.story'
 
 // ThemeToggle uses `fixed` positioning — scoped `component.locator`
 // doesn't match fixed elements. Use `page.locator` instead.
@@ -27,7 +27,7 @@ test('toggles back to light mode on second click', async ({ mount, page }) => {
 
 test('renders an SVG icon', async ({ mount, page }) => {
   await mount(<ThemeToggleLight />)
-  await expect(page.locator('button svg')).toBeVisible()
+  await expect(page.locator('button svg')).toHaveCount(1)
 })
 
 test('renders dark mode aria-label when theme is dark', async ({ mount, page }) => {

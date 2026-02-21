@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { BoltIcon, BookIcon, SlidersIcon, LinkIcon } from './icons'
+import { BoltIcon, BookIcon, SlidersIcon, LinkIcon } from '@pair/brand'
 
 interface Feature {
   name: string

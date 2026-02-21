@@ -1,5 +1,5 @@
 import { ThemeProvider } from 'next-themes'
-import { ThemeToggle } from './theme-toggle'
+import { ThemeToggle } from './ThemeToggle'
 
 export function ThemeToggleLight() {
   return (

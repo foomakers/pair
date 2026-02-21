@@ -1,5 +1,4 @@
-import { Button } from '@pair/brand'
-import { GitHubIcon } from './icons'
+import { Button, GitHubIcon } from '@pair/brand'
 import { URLS } from './constants'
 
 export function OpenSourceSection() {
