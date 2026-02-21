@@ -1,0 +1,177 @@
+---
+title: KB Source Resolution
+description: Technical specification for the Knowledge Base source resolution algorithm in pair-cli.
+---
+
+Technical specification for the Knowledge Base (KB) source resolution algorithm in `pair-cli`.
+
+## Resolution Algorithm
+
+### Precedence Order
+
+KB source is resolved in the following order (highest to lowest priority):
+
+1. **CLI flag `--source <url|path>`** — Explicit user-provided source
+2. **Monorepo default** — `packages/knowledge-hub/dataset` (when running from monorepo)
+3. **GitHub release auto-download** — Latest release from configured repository
+
+### Decision Tree
+
+```text
+                  KB Source Resolution
+                         |
+                 --source provided?
+                /                  \
+              YES                   NO
+               |                     |
+          --offline?            In monorepo?
+          /        \            /          \
+        YES        NO        YES          NO
+         |          |          |            |
+    Validate    Parse      Use monorepo   Download
+    is local    source     dataset        from GitHub
+    path        type
+```
+
+## Source Type Detection
+
+### URL Detection
+
+```typescript
+function isUrl(source: string): boolean {
+  return source.startsWith('http://') || source.startsWith('https://')
+}
+```
+
+### Local Path Detection
+
+```typescript
+function isLocalPath(source: string): boolean {
+  return (
+    source.startsWith('/') ||          // Absolute Unix path
+    source.startsWith('./') ||         // Relative path
+    source.startsWith('../') ||        // Relative parent path
+    /^[A-Za-z]:[/\\]/.test(source)    // Windows absolute path
+  )
+}
+```
+
+### Monorepo Detection
+
+```typescript
+function isMonorepo(): boolean {
+  const monorepoKbPath = path.resolve(process.cwd(), 'packages/knowledge-hub/dataset')
+  return fs.existsSync(monorepoKbPath)
+}
+```
+
+## Option Validation
+
+### Constraint: `--offline` + `--source` Combination
+
+| `--source` value | `--offline` | Valid? | Action                                     |
+| ---------------- | ----------- | ------ | ------------------------------------------ |
+| Not provided     | No          | Yes    | Auto-download or use monorepo              |
+| Not provided     | Yes         | No     | ERROR: `--offline requires --source`       |
+| HTTP/HTTPS URL   | No          | Yes    | Download from URL                          |
+| HTTP/HTTPS URL   | Yes         | No     | ERROR: Cannot combine URL with `--offline` |
+| Local path       | No          | Yes    | Use local source                           |
+| Local path       | Yes         | Yes    | Use local source (offline mode)            |
+
+## Resolution Implementation
+
+```typescript
+interface KbSource {
+  type: 'url' | 'local' | 'monorepo' | 'github-release'
+  location: string
+  requiresDownload: boolean
+}
+
+async function resolveKbSource(options: {
+  source?: string
+  offline?: boolean
+}): Promise<KbSource> {
+  // Precedence 1: Explicit --source flag
+  if (options.source) {
+    if (isUrl(options.source)) {
+      if (options.offline) {
+        throw new Error('Cannot use --offline with remote URL')
+      }
+      return { type: 'url', location: options.source, requiresDownload: true }
+    } else if (isLocalPath(options.source)) {
+      const resolvedPath = path.resolve(options.source)
+      if (!fs.existsSync(resolvedPath)) {
+        throw new Error(`KB source path does not exist: ${resolvedPath}`)
+      }
+      return { type: 'local', location: resolvedPath, requiresDownload: false }
+    } else {
+      throw new Error(`Invalid source format: ${options.source}`)
+    }
+  }
+
+  // Precedence 2: Monorepo default
+  if (isMonorepo()) {
+    return {
+      type: 'monorepo',
+      location: path.resolve('packages/knowledge-hub/dataset'),
+      requiresDownload: false,
+    }
+  }
+
+  // Precedence 3: GitHub release auto-download
+  if (options.offline) {
+    throw new Error('Cannot auto-download KB in offline mode')
+  }
+  return {
+    type: 'github-release',
+    location: await getLatestReleaseUrl(),
+    requiresDownload: true,
+  }
+}
+```
+
+## Error Catalog
+
+| Code | Error | Exit | Cause | Resolution |
+| ---- | ----- | ---- | ----- | ---------- |
+| E001 | Offline without source | 1 | `--offline` without `--source` | Provide `--source` |
+| E002 | Offline with remote URL | 1 | `--offline` with HTTP URL | Use local path |
+| E003 | Source path not found | 1 | `--source` points to missing path | Verify path |
+| E004 | Invalid source format | 1 | Source is neither URL nor path | Use valid format |
+| E005 | Download network error | 2 | Network failure | Check connectivity |
+| E006 | Checksum validation failed | 2 | SHA256 mismatch | Retry download |
+| E007 | Auto-download in offline | 1 | No source + offline mode | Provide local source |
+
+## Download Process
+
+When `requiresDownload: true` for URL sources:
+
+1. **HEAD request** — Fetch URL metadata
+2. **Fetch checksum** — Download `.sha256` checksum file
+3. **Download KB** — GET request with progress tracking
+4. **Validate SHA256** — Verify integrity (if checksum available)
+5. **Extract to cache** — Store at `~/.pair/kb/{version}/`
+
+### Cache Strategy
+
+**Cache Location:** `~/.pair/kb/{version}/`
+
+Downloaded KBs are cached to avoid redundant downloads. Cache key is derived from the download URL or version string.
+
+## Configuration
+
+### Environment Variables
+
+| Variable              | Description                         | Default               |
+| --------------------- | ----------------------------------- | --------------------- |
+| `PAIR_KB_CACHE_DIR`   | Override KB cache directory          | `~/.pair/kb`          |
+| `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL  | GitHub latest release  |
+| `PAIR_DIAG`           | Enable diagnostic logging            | `0` (disabled)        |
+
+---
+
+## Related
+
+- [CLI Commands Reference](/docs/reference/cli/commands) — Complete command documentation
+- [CLI Contracts Spec](/docs/reference/specs/cli-contracts) — Command contracts and validation
+- [CLI Help Examples](/docs/reference/cli/examples) — Practical usage examples

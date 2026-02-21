@@ -1,0 +1,132 @@
+---
+title: Install from URL or Path
+description: How to install pair's Knowledge Base from a custom URL, local path, or in offline environments.
+---
+
+This guide explains how to install pair's Knowledge Base from sources other than the default GitHub release — including custom URLs, local paths, and fully offline environments.
+
+## Default Behavior
+
+By default, `pair install` auto-downloads the KB from the latest GitHub release. You only need this guide if you need to:
+
+- Use a custom mirror or internal artifact server
+- Install from a local directory or ZIP file
+- Work in an air-gapped or network-restricted environment
+
+## Install from a Remote URL
+
+Provide any HTTP/HTTPS URL pointing to a KB ZIP package:
+
+```bash
+pair install --source https://internal-mirror.company.com/kb-v1.2.0.zip
+```
+
+The CLI downloads the package, validates its integrity (SHA-256 checksum), and installs all registries.
+
+### Custom Mirrors
+
+If your organization hosts KB artifacts on an internal server:
+
+```bash
+# One-time install
+pair install --source https://artifacts.company.com/pair/kb-latest.zip
+
+# Or set a default via environment variable
+export PAIR_KB_DEFAULT_URL=https://artifacts.company.com/pair/kb-latest.zip
+pair install
+```
+
+## Install from a Local Path
+
+Point `--source` to a local directory or ZIP file:
+
+```bash
+# From an absolute path
+pair install --source /path/to/kb-content
+
+# From a relative path
+pair install --source ./local-kb
+
+# From a ZIP file
+pair install --source ./downloads/kb-v1.0.0.zip
+```
+
+### When to Use Local Paths
+
+- **Development**: Install from the monorepo dataset during KB development
+- **Testing**: Validate a KB package before publishing
+- **Distribution**: Install from a USB drive or shared network folder
+
+## Offline Installation
+
+For air-gapped or network-restricted environments, combine `--offline` with `--source`:
+
+```bash
+pair install --offline --source ./kb-content
+```
+
+The `--offline` flag tells the CLI to skip any network requests. It requires `--source` pointing to a local path.
+
+### Step-by-Step Offline Workflow
+
+1. **On an internet-connected machine**, download the KB package:
+
+```bash
+# Download from GitHub releases
+wget https://github.com/foomakers/pair/releases/latest/download/kb.zip
+```
+
+2. **Transfer** the ZIP file to the offline machine (USB, secure file transfer, etc.)
+
+3. **On the offline machine**, extract and install:
+
+```bash
+# Extract the ZIP
+unzip kb.zip -d ./kb-content
+
+# Install in offline mode
+pair install --offline --source ./kb-content
+```
+
+### Constraints
+
+| `--source`      | `--offline` | Valid? | Behavior                   |
+| --------------- | ----------- | ------ | -------------------------- |
+| Not provided    | No          | Yes    | Auto-download from GitHub  |
+| Not provided    | Yes         | No     | Error: requires `--source` |
+| `https://...`   | No          | Yes    | Download from URL          |
+| `https://...`   | Yes         | No     | Error: cannot use URL      |
+| `./local-path`  | No          | Yes    | Use local path             |
+| `./local-path`  | Yes         | Yes    | Use local path (offline)   |
+
+## Verifying Packages
+
+Always verify a KB package before installing from an untrusted source:
+
+```bash
+# Verify integrity
+pair kb-verify ./kb-package.zip
+
+# If verification passes, install
+pair install --source ./kb-package.zip
+```
+
+The verification checks SHA-256 checksum, package structure, and manifest validity.
+
+## Updating from Custom Sources
+
+The `update` command accepts the same `--source` and `--offline` flags:
+
+```bash
+# Update from custom URL
+pair update --source https://mirror.company.com/kb-v2.0.0.zip
+
+# Update from local path (offline)
+pair update --offline --source ./updated-kb
+```
+
+## Related
+
+- [CLI Commands Reference](/docs/reference/cli/commands) — Full `install` and `update` syntax
+- [KB Source Resolution Spec](/docs/reference/specs/kb-source-resolution) — Technical spec for resolution algorithm
+- [Troubleshooting](/docs/guides/troubleshooting) — Common installation issues

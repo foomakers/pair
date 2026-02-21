@@ -1,0 +1,397 @@
+---
+title: CLI Commands
+description: Complete reference for all pair-cli commands with syntax, options, and examples.
+---
+
+Complete reference for all `pair-cli` commands with syntax, options, and examples.
+
+**Quick Navigation:**
+
+- [install](#install) — Install documentation and assets
+- [update](#update) — Update existing documentation
+- [update-link](#update-link) — Validate and update links
+- [package](#package) — Package KB content into ZIP
+- [kb-info](#kb-info) — Display package metadata
+- [kb-verify](#kb-verify) — Verify KB package integrity
+- [kb validate](#kb-validate) — Validate KB structure
+- [validate-config](#validate-config) — Validate configuration
+
+---
+
+## install
+
+Install documentation and assets from KB source to target folder.
+
+### Usage
+
+```bash
+pair install [target]
+pair install [registry:target ...]
+```
+
+### Arguments
+
+- `[target]` — Optional target directory path (default: current working directory)
+- `[registry:target ...]` — Install specific registries to custom targets
+
+### Options
+
+| Option                 | Description                                            |
+| ---------------------- | ------------------------------------------------------ |
+| `--list-targets`       | List all available asset registries with descriptions  |
+| `--config <file>`      | Use custom configuration file (default: `config.json`) |
+| `--source <url\|path>` | KB source URL or local path (overrides auto-download)  |
+| `--offline`            | Skip KB download, use local source only                |
+| `--skip-verify`        | Skip package integrity verification (for ZIP sources)  |
+
+**KB Source Options:**
+
+- `--source <url>` — Download KB from custom HTTP/HTTPS URL or use local path
+- `--offline` — Skip automatic KB download (requires `--source` with local path)
+
+**Note:** Cannot combine `--source <url>` with `--offline`. The `--offline` flag requires `--source` with a local filesystem path.
+
+**Target Resolution:** Registry output is written relative to the current working directory. When running via `pnpm --filter`, the CLI reads `INIT_CWD` (set by pnpm to the original invoking directory) so output lands at the monorepo root, not inside the filtered package directory.
+
+### Examples
+
+```bash
+# List available registries
+pair install --list-targets
+
+# Install with defaults
+pair install
+
+# Install to custom directory
+pair install ./my-custom-path
+
+# Install specific registries
+pair install github:.github knowledge:.pair
+
+# Use custom KB source (remote URL)
+pair install --source https://internal-mirror.company.com/kb.zip
+
+# Use custom KB source (local path)
+pair install --source /absolute/path/to/kb-content
+pair install --source ./relative/path/to/kb-content
+
+# Offline mode (no KB download)
+pair install --offline --source ./local-kb-content
+```
+
+---
+
+## update
+
+Update existing documentation and assets from KB source.
+
+### Usage
+
+```bash
+pair update [target]
+pair update [registry:target ...]
+```
+
+### Arguments
+
+- `[target]` — Optional target directory path (default: current working directory)
+- `[registry:target ...]` — Update specific registries in custom targets
+
+### Options
+
+| Option                 | Description                                            |
+| ---------------------- | ------------------------------------------------------ |
+| `--config <file>`      | Use custom configuration file (default: `config.json`) |
+| `--source <url\|path>` | KB source URL or local path (overrides auto-download)  |
+| `--offline`            | Skip KB download, use local source only                |
+
+### Examples
+
+```bash
+# Update with defaults
+pair update
+
+# Update specific registries
+pair update github:.github knowledge:.pair
+
+# Update from custom KB source
+pair update --source https://internal-mirror.company.com/kb.zip
+
+# Offline update
+pair update --offline --source ./local-kb-content
+```
+
+---
+
+## update-link
+
+Validate and update internal links in installed KB content.
+
+### Usage
+
+```bash
+pair update-link [target]
+```
+
+### Options
+
+| Option                | Description                                                                    |
+| --------------------- | ------------------------------------------------------------------------------ |
+| `--url <url\|path>`   | KB source URL or local filesystem path                                         |
+| `--dry-run`           | Preview changes without writing to files                                       |
+| `--log-level <level>` | Set logging level (trace, debug, info, warn, error)                            |
+
+### Examples
+
+```bash
+# Update links in current directory
+pair update-link
+
+# Preview link updates (dry-run)
+pair update-link --dry-run
+
+# Update links with verbose output
+pair update-link --verbose
+
+# Update links from custom KB source
+pair update-link --url https://github.com/org/repo/releases/download/v1.0/kb.zip
+pair update-link --url ./relative/path/to/kb
+```
+
+For detailed usage, see the [Link Update Guide](/docs/guides/update-link).
+
+---
+
+## package
+
+Package KB content into validated ZIP file for distribution.
+
+### Usage
+
+```bash
+pair package [options]
+```
+
+### Options
+
+| Option                        | Short | Description                                                         |
+| ----------------------------- | ----- | ------------------------------------------------------------------- |
+| `--output <path>`             | `-o`  | Output ZIP file path (default: `kb-package.zip`)                    |
+| `--source-dir <path>`         | `-s`  | Source directory to package (default: current directory)             |
+| `--config <path>`             | `-c`  | Path to config.json file                                            |
+| `--name <name>`               |       | Package name for manifest                                           |
+| `--version <version>`         |       | Package version for manifest                                        |
+| `--description <description>` |       | Package description for manifest                                    |
+| `--author <author>`           |       | Package author for manifest                                         |
+| `--skip-registries <list>`    |       | Comma-separated registry names to exclude                           |
+| `--root <path>`               |       | Custom root path for link relativization (default: `.pair/`)        |
+| `--log-level <level>`         | `-l`  | Set logging level (trace, debug, info, warn, error)                 |
+| `--interactive`               | `-i`  | Enter interactive mode with guided prompts                          |
+| `--tags <tags>`               |       | Comma-separated tags (e.g., `"ai,devops,testing"`)                  |
+| `--license <license>`         |       | Package license (default: `MIT`)                                    |
+| `--org`                       |       | Enable organizational packaging mode                                |
+| `--org-name <name>`           |       | Organization name (required when `--org`)                           |
+| `--team <team>`               |       | Team name within the organization                                   |
+| `--department <department>`   |       | Department within the organization                                  |
+| `--approver <approver>`       |       | Package approver (free-text)                                        |
+| `--compliance <tags>`         |       | Comma-separated compliance tags (e.g., `"SOC2,ISO27001"`)          |
+| `--distribution <policy>`     |       | Distribution policy: `open`, `private`, or `restricted`             |
+
+### Examples
+
+```bash
+# Package current directory
+pair package
+
+# Package with custom output path
+pair package -o dist/kb-v1.0.0.zip
+
+# Package with metadata
+pair package --name "My KB" --version 1.0.0
+
+# Interactive package creation
+pair package --interactive
+
+# Organizational package
+pair package --org --org-name "Acme Corp" --team "Platform" --compliance "SOC2,ISO27001"
+```
+
+### Interactive Mode
+
+When `--interactive` is passed, the CLI enters a guided flow with smart defaults from `package.json`, `git config`, and saved preferences (`~/.pair/preferences.json`). Requires a TTY.
+
+### Org Template
+
+When `--org` is active, the CLI looks for `.pair/org-template.json` to pre-fill defaults. CLI flags override template values.
+
+---
+
+## kb-info
+
+Display metadata from a KB package ZIP file.
+
+### Usage
+
+```bash
+pair kb-info <package-path> [options]
+```
+
+### Options
+
+| Option                | Description                                       |
+| --------------------- | ------------------------------------------------- |
+| `--json`              | Output package metadata as JSON format            |
+| `--log-level <level>` | Set minimum log level (debug, info, warn, error)  |
+
+### Examples
+
+```bash
+# Display package metadata
+pair kb-info my-kb.zip
+
+# Display as JSON
+pair kb-info my-kb.zip --json
+```
+
+---
+
+## kb-verify
+
+Verify KB package integrity before installation or distribution. Validates checksum (SHA-256), structure, and manifest.
+
+### Usage
+
+```bash
+pair kb-verify <package-path> [options]
+```
+
+### Options
+
+| Option                | Description                                       |
+| --------------------- | ------------------------------------------------- |
+| `--json`              | Output verification report as JSON format         |
+| `--log-level <level>` | Set minimum log level (debug, info, warn, error)  |
+
+### Verification Checks
+
+1. **Checksum (SHA-256):** Validates content integrity
+2. **Structure:** Confirms registry directories exist per config.json
+3. **Manifest:** Validates required fields and metadata
+
+### Examples
+
+```bash
+# Verify package
+pair kb-verify kb-package.zip
+
+# Verify with JSON output (for CI/CD)
+pair kb-verify dist/kb-v1.0.0.zip --json
+
+# Verify with debug logging
+pair kb-verify kb-package.zip --log-level debug
+```
+
+---
+
+## kb validate
+
+Validate KB structure, links, and metadata using layout-aware validation.
+
+### Usage
+
+```bash
+pair kb validate [path] [options]
+```
+
+### Options
+
+| Option                     | Description                                                 |
+| -------------------------- | ----------------------------------------------------------- |
+| `--layout <mode>`          | Layout mode: `source` or `target` (default: `target`)      |
+| `--strict`                 | Enable external link checking via HTTP HEAD (slow)          |
+| `--ignore-config`          | Skip config-based registry structure validation             |
+| `--skip-registries <list>` | Comma-separated registry names to exclude from validation   |
+| `--log-level <level>`      | Set logging level (trace, debug, info, warn, error)         |
+
+### Examples
+
+```bash
+# Validate current directory
+pair kb validate
+
+# Validate source layout
+pair kb validate --layout source
+
+# Validate with external link checking
+pair kb validate --strict
+
+# Validate excluding specific registries
+pair kb validate --skip-registries adoption,github
+```
+
+---
+
+## validate-config
+
+Validate asset registry configuration file.
+
+### Usage
+
+```bash
+pair validate-config [options]
+```
+
+### Options
+
+| Option            | Short | Description                                                   |
+| ----------------- | ----- | ------------------------------------------------------------- |
+| `--config <file>` | `-c`  | Path to config.json file to validate (default: `config.json`) |
+
+### What Gets Validated
+
+- Asset registry structure (required fields: `behavior`, `target_path`, `description`)
+- Behavior values (must be: `mirror`, `add`, `overwrite`, `skip`)
+- Target path validity
+- Transform configuration
+- Source path existence (if specified)
+
+### Examples
+
+```bash
+# Validate default config.json
+pair validate-config
+
+# Validate custom config file
+pair validate-config --config ./my-config.json
+```
+
+---
+
+## Global Options
+
+Options available for all commands:
+
+| Option                | Description                                            |
+| --------------------- | ------------------------------------------------------ |
+| `--help`              | Display help for command                               |
+| `--version`           | Display CLI version                                    |
+| `--log-level <level>` | Set global logging level (trace, debug, info, warn, error) |
+
+---
+
+## Exit Codes
+
+| Code | Meaning                                         |
+| ---- | ----------------------------------------------- |
+| `0`  | Success                                         |
+| `1`  | Validation error or command failure              |
+| `2`  | Download/packaging error                         |
+| `3`  | File system error (disk full, permission denied) |
+
+---
+
+## Related
+
+- [CLI Help Examples](/docs/reference/cli/examples) — Copy-paste ready command examples
+- [KB Source Resolution Spec](/docs/reference/specs/kb-source-resolution) — Technical specification for KB source resolution
+- [CLI Contracts Spec](/docs/reference/specs/cli-contracts) — Technical contracts and validation rules

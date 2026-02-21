@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test'
 // Verifies ACs by navigating through docs as a real user would.
 // ============================================================
 
-test('solo dev journey: overview → quickstart with content verification', async ({ page }) => {
+test('quickstart journey: overview → quickstart with content verification', async ({ page }) => {
   // AC-12: sidebar shows both sections
   await page.goto('/docs/getting-started')
   await expect(page.locator('body')).toContainText('Getting Started')
@@ -18,8 +18,11 @@ test('solo dev journey: overview → quickstart with content verification', asyn
   await expect(page.locator('main')).toContainText('Skills')
   await expect(page.locator('main')).toContainText('Adoption Files')
 
-  // Navigate to Solo Quickstart via sidebar
-  await page.locator('a', { hasText: 'Solo Developer Quickstart' }).first().click()
+  // Navigate to Quickstart via sidebar
+  await page
+    .locator('a', { hasText: /^Quickstart$/ })
+    .first()
+    .click()
   await expect(page).toHaveURL('/docs/getting-started/quickstart')
 
   // AC-2: install + verify + first command steps
@@ -34,7 +37,6 @@ test('solo dev journey: overview → quickstart with content verification', asyn
 
   // AC-3: migrated content preserved, no broken .md links
   await expect(main).toContainText('Manual Install')
-  await expect(main).toContainText('pair-cli install --list-targets')
   await expect(main).toContainText('GitHub Releases')
   const hrefs = await main
     .locator('a')
@@ -44,7 +46,30 @@ test('solo dev journey: overview → quickstart with content verification', asyn
   )
   expect(brokenLinks).toHaveLength(0)
 
-  // AC-6 (partial): no cross-audience refs in solo quickstart
+  // New quickstart: general content (new project, existing project, update, process)
+  await expect(main).toContainText('New Project')
+  await expect(main).toContainText('Existing Project')
+  await expect(main).toContainText('pair-cli update')
+  await expect(main).toContainText('Development Process')
+  await expect(main).toContainText('Choose Your Setup')
+})
+
+test('solo setup journey: quickstart → solo setup with content verification', async ({ page }) => {
+  await page.goto('/docs/getting-started/quickstart-solo')
+
+  // Solo setup page renders with expected content
+  const main = page.locator('main')
+  await expect(page.locator('main h1')).toContainText('Solo Setup')
+  await expect(main).toContainText('Solo Workflow')
+  await expect(main).toContainText('/pair-next')
+  await expect(main).toContainText('pair-cli install --list-targets')
+
+  // Links back to general quickstart
+  await expect(
+    main.locator('a[href="/docs/getting-started/quickstart"]').first(),
+  ).toBeVisible()
+
+  // AC-6 (partial): no cross-audience refs in solo setup
   const contentLinks = await page.locator('article a').evaluateAll(els =>
     els
       .filter(el => !el.classList.toString().includes('bg-fd-card'))
@@ -56,16 +81,15 @@ test('solo dev journey: overview → quickstart with content verification', asyn
   ).toHaveLength(0)
 })
 
-test('team journey: overview → team quickstart with content verification', async ({ page }) => {
+test('team journey: overview → team setup with content verification', async ({ page }) => {
   await page.goto('/docs/getting-started')
 
-  // Navigate to Team Quickstart via sidebar
-  await page.locator('a', { hasText: 'Team Quickstart' }).first().click()
+  // Navigate to Team Setup via sidebar
+  await page.locator('a', { hasText: 'Team Setup' }).first().click()
   await expect(page).toHaveURL('/docs/getting-started/quickstart-team')
 
   // AC-4: shared KB, adoption files, bridge pattern
   const main = page.locator('main')
-  await expect(main).toContainText('pair-cli install')
   await expect(main).toContainText('adoption')
   await expect(main).toContainText('Bridge Pattern')
   await expect(main).toContainText('AGENTS.md')
@@ -73,28 +97,17 @@ test('team journey: overview → team quickstart with content verification', asy
   await expect(main).toContainText('tech-stack.md')
   await expect(main).toContainText('way-of-working.md')
 
-  // AC-6 (partial): no cross-audience refs
-  const links = await page.locator('article a').evaluateAll(els =>
-    els
-      .filter(el => !el.classList.toString().includes('bg-fd-card'))
-      .map(el => el.getAttribute('href'))
-      .filter(Boolean),
-  )
-  expect(
-    links.filter(
-      h =>
-        h &&
-        (h.endsWith('/quickstart') || h.includes('/quickstart#')) &&
-        !h.includes('quickstart-'),
-    ),
-  ).toHaveLength(0)
+  // Links to general quickstart instead of duplicating install
+  await expect(
+    main.locator('a[href="/docs/getting-started/quickstart"]').first(),
+  ).toBeVisible()
 })
 
-test('org journey: overview → org quickstart with content verification', async ({ page }) => {
+test('org journey: overview → org setup with content verification', async ({ page }) => {
   await page.goto('/docs/getting-started')
 
-  // Navigate to Org Quickstart via sidebar
-  await page.locator('a', { hasText: 'Organization Quickstart' }).first().click()
+  // Navigate to Org Setup via sidebar
+  await page.locator('a', { hasText: 'Organization Setup' }).first().click()
   await expect(page).toHaveURL('/docs/getting-started/quickstart-org')
 
   // AC-5: KB packaging, distribution, compliance
@@ -106,18 +119,10 @@ test('org journey: overview → org quickstart with content verification', async
   await expect(main).toContainText('Compliance')
   await expect(main).toContainText('Asset Registries')
 
-  // AC-6 (partial): no cross-audience refs
-  const links = await page.locator('article a').evaluateAll(els =>
-    els
-      .filter(el => !el.classList.toString().includes('bg-fd-card'))
-      .map(el => el.getAttribute('href'))
-      .filter(Boolean),
-  )
-  expect(
-    links.filter(
-      h => h && (h.includes('/quickstart-team') || (h.endsWith('/quickstart') && !h.includes('-'))),
-    ),
-  ).toHaveLength(0)
+  // Links to general quickstart instead of duplicating install
+  await expect(
+    main.locator('a[href="/docs/getting-started/quickstart"]').first(),
+  ).toBeVisible()
 })
 
 test('concepts journey: navigate through concept pages via sidebar', async ({ page }) => {
@@ -165,13 +170,14 @@ test('concepts journey: navigate through concept pages via sidebar', async ({ pa
   await expect(main).toContainText('Code Review')
 })
 
-test('smoke: all 10 docs pages return 200 with correct titles', async ({ page }) => {
+test('smoke: all docs pages return 200 with correct titles', async ({ page }) => {
   // AC-7 + AC-11 + frontmatter
   const pages = [
     { url: '/docs/getting-started', title: 'What is pair?' },
-    { url: '/docs/getting-started/quickstart', title: 'Solo Developer Quickstart' },
-    { url: '/docs/getting-started/quickstart-team', title: 'Team Quickstart' },
-    { url: '/docs/getting-started/quickstart-org', title: 'Organization Quickstart' },
+    { url: '/docs/getting-started/quickstart', title: 'Quickstart' },
+    { url: '/docs/getting-started/quickstart-solo', title: 'Solo Setup' },
+    { url: '/docs/getting-started/quickstart-team', title: 'Team Setup' },
+    { url: '/docs/getting-started/quickstart-org', title: 'Organization Setup' },
     { url: '/docs/concepts/ai-assisted-sdlc', title: 'AI-Assisted SDLC' },
     { url: '/docs/concepts/knowledge-base', title: 'Knowledge Base' },
     { url: '/docs/concepts/skills', title: 'Skills' },
@@ -184,5 +190,133 @@ test('smoke: all 10 docs pages return 200 with correct titles', async ({ page })
     expect(response?.status(), `${url} should return 200`).toBe(200)
     await expect(page.locator('main h1')).toBeVisible()
     await expect(page).toHaveTitle(new RegExp(title))
+  }
+})
+
+// ============================================================
+// E2E: Docs — Guides, Reference, and Support sections (#124)
+// ============================================================
+
+test('guides section: navigate and verify content', async ({ page }) => {
+  await page.goto('/docs/guides/cli-workflows')
+  const main = page.locator('main')
+
+  // Guides page renders with expected content
+  await expect(page.locator('main h1')).toContainText('CLI Workflows')
+  await expect(main).toContainText('Common Workflows')
+  await expect(main).toContainText('pair-cli install')
+
+  // Sidebar shows Guides section
+  await expect(page.locator('body')).toContainText('Guides')
+
+  // Navigate to another guide via sidebar
+  await page.locator('a', { hasText: 'Troubleshooting' }).first().click()
+  await expect(page).toHaveURL('/docs/guides/troubleshooting')
+  await expect(page.locator('main h1')).toContainText('Troubleshooting')
+  await expect(main).toContainText('Installation Issues')
+})
+
+test('reference section: navigate CLI, specs, and top-level pages', async ({ page }) => {
+  // CLI commands page
+  await page.goto('/docs/reference/cli/commands')
+  const main = page.locator('main')
+  await expect(page.locator('main h1')).toContainText('CLI Commands')
+  await expect(main).toContainText('install')
+  await expect(main).toContainText('update')
+  await expect(main).toContainText('package')
+
+  // Navigate to examples via sidebar
+  await page
+    .locator('a', { hasText: /^CLI Help Examples$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/reference/cli/examples')
+  await expect(main).toContainText('Installation Workflows')
+
+  // Skills catalog page
+  await page.goto('/docs/reference/skills-catalog')
+  await expect(page.locator('main h1')).toContainText('Skills Catalog')
+  await expect(main).toContainText('Process Skills')
+  await expect(main).toContainText('Capability Skills')
+  await expect(main).toContainText('/pair-process-implement')
+
+  // KB structure page
+  await page.goto('/docs/reference/kb-structure')
+  await expect(page.locator('main h1')).toContainText('KB Structure')
+  await expect(main).toContainText('knowledge/')
+  await expect(main).toContainText('adoption/')
+
+  // Configuration page
+  await page.goto('/docs/reference/configuration')
+  await expect(page.locator('main h1')).toContainText('Configuration')
+  await expect(main).toContainText('config.json')
+  await expect(main).toContainText('mirror')
+
+  // Skill management page
+  await page.goto('/docs/reference/skill-management')
+  await expect(page.locator('main h1')).toContainText('Skill Management')
+  await expect(main).toContainText('Skill Resolution')
+  await expect(main).toContainText('Transformation Pipeline')
+  await expect(main).toContainText('Renaming Conventions')
+})
+
+test('support section: navigate and verify content', async ({ page }) => {
+  await page.goto('/docs/support')
+  const main = page.locator('main')
+
+  // Support index page
+  await expect(page.locator('main h1')).toContainText('Support')
+  await expect(main).toContainText('Support Scope')
+  await expect(main).toContainText('GitHub Issues')
+
+  // Navigate to FAQ via sidebar
+  await page.locator('a', { hasText: 'Installation FAQ' }).first().click()
+  await expect(page).toHaveURL('/docs/support/faq')
+  await expect(page.locator('main h1')).toContainText('Installation FAQ')
+  await expect(main).toContainText('Permission Issues')
+  await expect(main).toContainText('Node Version Issues')
+})
+
+test('smoke: all guides/reference/support pages return 200', async ({ page }) => {
+  const pages = [
+    { url: '/docs/guides/cli-workflows', title: 'CLI Workflows' },
+    { url: '/docs/guides/install-from-url', title: 'Install from URL' },
+    { url: '/docs/guides/customize-kb', title: 'Customize the Knowledge Base' },
+    { url: '/docs/guides/adopter-checklist', title: 'Adopter Checklist' },
+    { url: '/docs/guides/troubleshooting', title: 'Troubleshooting' },
+    { url: '/docs/guides/update-link', title: 'Link Update' },
+    { url: '/docs/reference/cli/commands', title: 'CLI Commands' },
+    { url: '/docs/reference/cli/examples', title: 'CLI Help Examples' },
+    { url: '/docs/reference/specs/cli-contracts', title: 'CLI Contracts' },
+    { url: '/docs/reference/specs/kb-source-resolution', title: 'KB Source Resolution' },
+    { url: '/docs/reference/skills-catalog', title: 'Skills Catalog' },
+    { url: '/docs/reference/skill-management', title: 'Skill Management' },
+    { url: '/docs/reference/kb-structure', title: 'KB Structure' },
+    { url: '/docs/reference/configuration', title: 'Configuration' },
+    { url: '/docs/support', title: 'Support' },
+    { url: '/docs/support/faq', title: 'Installation FAQ' },
+  ]
+  for (const { url, title } of pages) {
+    const response = await page.goto(url)
+    expect(response?.status(), `${url} should return 200`).toBe(200)
+    await expect(page.locator('main h1')).toBeVisible()
+    await expect(page).toHaveTitle(new RegExp(title))
+  }
+})
+
+test('no broken .md links in guides/reference/support sections', async ({ page }) => {
+  const sections = [
+    '/docs/guides/cli-workflows',
+    '/docs/reference/cli/commands',
+    '/docs/reference/skills-catalog',
+    '/docs/support',
+  ]
+  for (const url of sections) {
+    await page.goto(url)
+    const hrefs = await page
+      .locator('main a')
+      .evaluateAll(els => els.map(el => el.getAttribute('href')).filter(Boolean))
+    const brokenMdLinks = hrefs.filter(h => h && h.endsWith('.md'))
+    expect(brokenMdLinks, `${url} should have no .md links`).toHaveLength(0)
   }
 })

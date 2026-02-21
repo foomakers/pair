@@ -1,5 +1,14 @@
 {
   "root": true,
   "title": "Documentation",
-  "pages": ["index", "getting-started", "concepts", "customization"]
+  "pages": [
+    "index",
+    "getting-started",
+    "concepts",
+    "customization",
+    "---",
+    "guides",
+    "reference",
+    "support"
+  ]
 }

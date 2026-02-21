@@ -1,0 +1,297 @@
+---
+title: CLI Help Examples
+description: Copy-paste ready examples for common pair-cli workflows with expected output.
+---
+
+Copy-paste ready examples for common `pair-cli` workflows. All examples include expected output as comments.
+
+## Installation Workflows
+
+### 1. First-time Setup
+
+```bash
+# Step 1: Discover available registries
+pair install --list-targets
+
+# Output:
+# Available asset registries:
+#   github     .github         GitHub workflows and configuration files
+#   knowledge  .pair            Knowledge base and documentation
+#   adoption   .pair/product/adopted  Adoption guides and onboarding materials
+
+# Step 2: Install with defaults
+pair install
+```
+
+### 2. Install to Custom Directory
+
+```bash
+pair install ./custom-docs
+```
+
+### 3. Install Specific Registries Only
+
+```bash
+# Install only GitHub workflows
+pair install github:.github
+
+# Install multiple specific registries
+pair install github:.github knowledge:.pair
+```
+
+### 4. Install from Custom KB Source (Remote)
+
+```bash
+pair install --source https://internal-mirror.company.com/kb-v1.2.0.zip
+```
+
+### 5. Install from Local KB Source
+
+```bash
+# Use absolute path to local KB
+pair install --source /home/user/kb-content
+
+# Use relative path to local KB
+pair install --source ./local-kb
+```
+
+### 6. Offline Installation (Air-Gapped Environment)
+
+```bash
+# Offline mode requires --source with local path
+pair install --offline --source ./kb-content
+
+# Error if --offline without --source
+pair install --offline
+# Error: --offline requires --source with local filesystem path
+```
+
+## Update Workflows
+
+### 7. Update Existing Installation
+
+```bash
+pair update
+```
+
+### 8. Update Specific Registry
+
+```bash
+pair update knowledge:.pair
+```
+
+### 9. Update from Custom Source
+
+```bash
+pair update --source https://github.com/org/repo/releases/download/v2.0.0/kb.zip
+```
+
+## Validation Workflows
+
+### 10. Validate KB Structure and Links
+
+```bash
+pair kb validate
+```
+
+### 11. Validate with External Link Checking
+
+```bash
+pair kb validate --strict
+```
+
+### 12. Validate Source Layout
+
+```bash
+pair kb validate --layout source
+```
+
+### 13. Validate Excluding Registries
+
+```bash
+pair kb validate --skip-registries github,adoption
+```
+
+### 14. Validate Without Config
+
+```bash
+pair kb validate --ignore-config
+```
+
+### 15. Validate Default Configuration
+
+```bash
+pair validate-config
+
+# Output:
+# Configuration is valid!
+# Found 3 asset registries
+```
+
+### 16. Validate Custom Configuration
+
+```bash
+pair validate-config --config ./custom-config.json
+```
+
+## Link Management Workflows
+
+### 17. Validate and Fix Links
+
+```bash
+pair update-link
+```
+
+### 18. Preview Link Updates (Dry Run)
+
+```bash
+pair update-link --dry-run
+```
+
+### 19. Update Links with Verbose Output
+
+```bash
+pair update-link --verbose
+```
+
+## Packaging Workflows
+
+### 20. Package KB for Distribution
+
+```bash
+pair package
+```
+
+### 21. Package with Custom Output Path
+
+```bash
+pair package -o dist/kb-v1.2.0.zip
+```
+
+### 22. Package with Metadata
+
+```bash
+pair package \
+  --name "Company Knowledge Base" \
+  --version "1.2.0" \
+  --description "Internal documentation and guides" \
+  --author "DevOps Team" \
+  -o dist/company-kb-v1.2.0.zip
+```
+
+### 23. Package Specific Source Directory
+
+```bash
+pair package -s ./kb-content -o kb.zip --log-level debug
+```
+
+### 24. Package Excluding Registries
+
+```bash
+pair package --skip-registries adoption,github
+```
+
+### 25. Interactive Package Creation
+
+```bash
+pair package --interactive
+```
+
+### 26. Organizational Package
+
+```bash
+pair package --org --org-name "Acme Corp" --team "Platform" --department "Engineering" \
+  --compliance "SOC2,ISO27001" --distribution private \
+  -o dist/acme-kb.zip
+```
+
+## Package Info and Verification
+
+### 27. Display Package Metadata
+
+```bash
+pair kb-info dist/kb-v1.0.0.zip
+```
+
+### 28. Verify Package Integrity
+
+```bash
+pair kb-verify kb-package.zip
+
+# Output:
+# Package verification passed
+#   Checksum: valid (SHA-256)
+#   Structure: valid (3 registries found)
+#   Manifest: valid (all required fields present)
+```
+
+### 29. Verify with JSON Output
+
+```bash
+pair kb-verify dist/kb-v1.2.0.zip --json
+```
+
+### 30. Verify Before Installation
+
+```bash
+# Complete workflow: verify then install
+pair kb-verify downloaded-kb.zip && pair install --source downloaded-kb.zip
+```
+
+## Advanced Workflows
+
+### 31. Complete CI/CD Pipeline
+
+```bash
+#!/bin/bash
+# CI/CD script for KB installation and validation
+
+# Step 1: Validate configuration
+pair validate-config || exit 1
+
+# Step 2: Install KB from specific release
+pair install --source https://github.com/org/repo/releases/download/v1.2.0/kb.zip || exit 1
+
+# Step 3: Validate and fix links
+pair update-link || exit 1
+
+# Step 4: Package for distribution
+pair package --name "Production KB" --version "1.2.0" -o dist/kb-production-v1.2.0.zip || exit 1
+
+# Step 5: Verify package integrity
+pair kb-verify dist/kb-production-v1.2.0.zip || exit 1
+```
+
+### 32. Air-Gapped Environment Workflow
+
+```bash
+# Step 1: On internet-connected machine
+wget https://github.com/org/repo/releases/download/v1.2.0/kb.zip
+
+# Step 2: Transfer kb.zip to air-gapped machine (USB, etc.)
+
+# Step 3: On air-gapped machine
+unzip kb.zip -d ./kb-content
+pair install --offline --source ./kb-content
+```
+
+### 33. Multi-Environment Setup
+
+```bash
+# Development environment (use latest from main)
+pair install --source https://github.com/org/repo/archive/main.zip
+
+# Staging environment (use release candidate)
+pair install --source https://github.com/org/repo/releases/download/v1.3.0-rc.1/kb.zip
+
+# Production environment (use stable release)
+pair install --source https://github.com/org/repo/releases/download/v1.2.0/kb.zip
+```
+
+---
+
+## Related
+
+- [CLI Commands Reference](/docs/reference/cli/commands) — Complete command documentation
+- [CLI Workflows Guide](/docs/guides/cli-workflows) — Common workflows
+- [KB Source Resolution Spec](/docs/reference/specs/kb-source-resolution) — Technical specification

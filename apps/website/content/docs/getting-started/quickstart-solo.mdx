@@ -1,0 +1,49 @@
+---
+title: Solo Setup
+description: Configure pair for solo development — minimal setup, no team coordination needed.
+---
+
+Working alone? After completing the [general quickstart](/docs/getting-started/quickstart), you're mostly done. This page covers solo-specific details.
+
+## What You Get
+
+When you start a conversation with your AI assistant (Claude, Copilot, Cursor), it reads the `.pair/` folder and understands:
+
+- **How to work** — process guides define every step from idea to merge
+- **What standards to follow** — guidelines cover architecture, testing, code design, security
+- **What you've decided** — adoption files record your tech stack, architecture, and way of working
+
+The AI generates consistent, standards-aligned code across every session — no need to re-explain your project context.
+
+## Solo Workflow
+
+As a solo developer, the full process lifecycle is available but lightweight:
+
+1. **Start each session** with `/pair-next` — the AI determines what to work on
+2. **Skip team ceremonies** — no sprint planning or standups needed, just follow the how-to guides
+3. **Use skills directly** — run `/pair-process-implement` to start coding a story, `/pair-process-review` to self-review your PR
+4. **Adoption files are yours** — change decisions anytime by updating files in `.pair/adoption/`
+
+## Explore Available Assets
+
+See what pair installed:
+
+```bash
+pair-cli install --list-targets
+```
+
+Expected output:
+
+```text
+Available asset registries:
+
+  github     .github         GitHub workflows and configuration files
+  knowledge  .pair            Knowledge base and documentation
+  adoption   .pair/product/adopted  Adoption guides and onboarding materials
+```
+
+## Next Steps
+
+- Learn [how pair structures AI-assisted development](/docs/concepts/ai-assisted-sdlc)
+- Understand the [Knowledge Base structure](/docs/concepts/knowledge-base) in depth
+- Explore the [process lifecycle](/docs/concepts/process-lifecycle) — from PRD to code review

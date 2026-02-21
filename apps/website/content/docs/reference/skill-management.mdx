@@ -1,0 +1,205 @@
+---
+title: Skill Management
+description: How pair resolves, transforms, and renames skills — path resolution, the transformation pipeline, and naming conventions.
+---
+
+pair skills are SKILL.md files that live in the Knowledge Base and get distributed to AI tool directories. This page explains the three mechanisms that make this work: **resolution**, **transformation**, and **renaming**.
+
+## Skill Resolution
+
+### The Problem
+
+Skills are authored in a category-based directory structure (`capability/verify-quality/SKILL.md`) but AI tools expect them in a flat target directory (`.claude/skills/`). The CLI needs to locate the right source files and map them to the right targets.
+
+### How It Works
+
+Resolution is **registry-based**, not runtime file scanning. The `config.json` declares the source directory, target directories, and transform rules:
+
+```json
+{
+  "skills": {
+    "source": ".skills",
+    "targets": [
+      { "path": ".claude/skills/", "mode": "canonical" },
+      { "path": ".github/skills/", "mode": "symlink" }
+    ]
+  }
+}
+```
+
+### Source Types
+
+Skills come from three sources:
+
+| Source | Location | Example |
+| ------ | -------- | ------- |
+| **Installed KB** | KB dataset `.skills/` directory | `.skills/capability/verify-quality/SKILL.md` |
+| **Local override** | Project `.pair/` directory | Custom skills added by the team |
+| **Composed** | Referenced inside another SKILL.md | `/pair-capability-verify-quality` invoked by `/pair-process-implement` |
+
+### Resolution Order
+
+1. CLI reads `config.json` to find the skills registry entry
+2. Scans the source directory (`.skills/`) for all `SKILL.md` files
+3. Applies naming transforms (flatten + prefix)
+4. Copies to canonical target (`.claude/skills/`)
+5. Creates symlinks for secondary targets (`.github/skills/`, `.cursor/skills/`, etc.)
+
+## Transformation Pipeline
+
+### The Problem
+
+A raw `SKILL.md` file contains relative links, short skill names, and category-based paths. After installation, these need to work in a flat directory structure where all skills are siblings.
+
+### Pipeline Stages
+
+The pipeline runs during `pair install` and `pair update`:
+
+**Stage 1: Copy with naming transforms**
+```text
+Source:  .skills/capability/verify-quality/SKILL.md
+Target:  .claude/skills/pair-capability-verify-quality/SKILL.md
+```
+
+**Stage 2: Frontmatter sync**
+```yaml
+# Before (source)
+name: verify-quality
+
+# After (installed)
+name: pair-capability-verify-quality
+```
+
+**Stage 3: Link rewriting**
+```markdown
+<!-- Before: relative link in category structure -->
+See [record-decision](../../capability/record-decision/SKILL.md)
+
+<!-- After: sibling link in flat structure -->
+See [record-decision](../pair-capability-record-decision/SKILL.md)
+```
+
+**Stage 4: Skill reference rewriting**
+```markdown
+<!-- Before -->
+Composes /verify-quality and /record-decision.
+
+<!-- After -->
+Composes /pair-capability-verify-quality and /pair-capability-record-decision.
+```
+
+**Stage 5: Multi-target distribution**
+```text
+.claude/skills/pair-capability-verify-quality/  (canonical — physical copy)
+.github/skills/pair-capability-verify-quality/  (symlink → .claude/skills/...)
+.cursor/skills/pair-capability-verify-quality/  (symlink → .claude/skills/...)
+```
+
+**Stage 6: Cross-registry propagation**
+
+After all registries are installed, skill references in non-skills files (like AGENTS.md) are also rewritten:
+```markdown
+<!-- AGENTS.md before -->
+Run /next to get started.
+
+<!-- AGENTS.md after -->
+Run /pair-next to get started.
+```
+
+### Concrete Example
+
+Here's a full before/after for the `implement` skill:
+
+**Before (source):**
+```text
+Path: .skills/process/implement/SKILL.md
+Frontmatter: name: implement
+Body: Composes /verify-quality and /record-decision.
+Link: See [verify-quality](../../capability/verify-quality/SKILL.md)
+```
+
+**After (installed):**
+```text
+Path: .claude/skills/pair-process-implement/SKILL.md
+Frontmatter: name: pair-process-implement
+Body: Composes /pair-capability-verify-quality and /pair-capability-record-decision.
+Link: See [verify-quality](../pair-capability-verify-quality/SKILL.md)
+```
+
+## Renaming Conventions
+
+### The Problem
+
+AI tools invoke skills by directory name (e.g., `/implement`). Without namespacing, skill names could collide with other tools' commands. Prefixing with `pair-` and the category creates unique, discoverable names.
+
+### Naming Rules
+
+The transform is deterministic: **`{prefix}-{category}-{skill-name}`**
+
+With the default config (`prefix: "pair"`, `flatten: true`):
+
+| Source Path | Installed Directory | Slash Command |
+| ----------- | ------------------- | ------------- |
+| `next/` (top-level) | `pair-next/` | `/pair-next` |
+| `process/implement/` | `pair-process-implement/` | `/pair-process-implement` |
+| `process/review/` | `pair-process-review/` | `/pair-process-review` |
+| `capability/verify-quality/` | `pair-capability-verify-quality/` | `/pair-capability-verify-quality` |
+| `capability/record-decision/` | `pair-capability-record-decision/` | `/pair-capability-record-decision` |
+
+### Three Namespace Prefixes
+
+| Prefix | Count | Purpose |
+| ------ | ----- | ------- |
+| `pair-` | 1 | Top-level skills (only `next`) |
+| `pair-process-` | 11 | Workflow orchestration skills |
+| `pair-capability-` | 19 | Atomic operation skills |
+
+### Transform Functions
+
+The naming transform applies two functions in order:
+
+1. **Flatten**: Replace `/` with `-`
+   - `capability/verify-quality` → `capability-verify-quality`
+
+2. **Prefix**: Prepend the prefix with `-` separator
+   - `capability-verify-quality` → `pair-capability-verify-quality`
+
+```typescript
+// Flatten: replaces '/' with '-'
+function flattenPath(dirName: string): string {
+  return dirName.replace(/\//g, '-')
+}
+
+// Prefix: prepends prefix with '-' separator
+function prefixPath(dirName: string, prefix: string): string {
+  return `${prefix}-${dirName}`
+}
+```
+
+### Reference Rewriting Rules
+
+Skill references (slash commands in markdown) are rewritten using boundary-aware matching:
+
+- Only references with a leading `/` are rewritten (e.g., `/next` but not `next`)
+- Longest matches are processed first to avoid partial replacements
+- Boundaries include: start/end of line, whitespace, backticks, quotes, parentheses, pipes
+
+**Examples:**
+
+| Input | Output |
+| ----- | ------ |
+| `` `/next` `` | `` `/pair-next` `` |
+| `Composes /verify-quality and /record-decision.` | `Composes /pair-capability-verify-quality and /pair-capability-record-decision.` |
+| `invoke /implement immediately` | `invoke /pair-process-implement immediately` |
+| `name: pair-next` (no leading slash) | `name: pair-next` (unchanged) |
+| `path/next/page` (mid-path) | `path/next/page` (unchanged) |
+
+## Windows Compatibility
+
+On Windows, symlink targets fall back to `copy` mode because symlinks are not reliably supported. This means secondary targets (`.github/skills/`, `.cursor/skills/`) get independent copies instead of symlinks.
+
+## Related
+
+- [Skills Catalog](/docs/reference/skills-catalog) — All 31 pair skills
+- [Configuration Reference](/docs/reference/configuration) — config.json registry settings
+- [KB Structure Reference](/docs/reference/kb-structure) — Directory layout
