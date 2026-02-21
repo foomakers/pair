@@ -55,7 +55,6 @@ module.exports = [
 
       // TypeScript-specific rules that enforce our guidelines
       '@typescript-eslint/no-explicit-any': 'error',
-      '@typescript-eslint/no-unused-vars': 'error',
 
       // Functional programming preferences
       'prefer-const': 'error',
@@ -110,6 +109,12 @@ module.exports = [
     },
     rules: {
       'max-lines-per-function': 'off',
+    },
+  },
+  {
+    files: ['**/*.cjs', '**/scripts/**/*.js'],
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
     },
   },
   {

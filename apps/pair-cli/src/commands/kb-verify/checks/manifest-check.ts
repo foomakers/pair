@@ -5,7 +5,8 @@ export interface ManifestCheckResult {
   errors: string[]
 }
 
-/* eslint-disable complexity */
+const REQUIRED_STRING_FIELDS: (keyof ManifestMetadata)[] = ['name', 'version', 'created_at']
+
 /**
  * Validate manifest required fields
  * @param manifestContent - Parsed manifest object
@@ -15,31 +16,20 @@ export function verifyManifest(manifestContent: unknown): ManifestCheckResult {
   const errors: string[] = []
 
   if (!manifestContent || typeof manifestContent !== 'object') {
-    errors.push('Manifest is not a valid object')
-    return { status: 'FAIL', errors }
+    return { status: 'FAIL', errors: ['Manifest is not a valid object'] }
   }
 
   const manifest = manifestContent as Partial<ManifestMetadata>
 
-  // Check required fields
-  if (!manifest.name || typeof manifest.name !== 'string') {
-    errors.push('Missing or invalid field: name')
-  }
-
-  if (!manifest.version || typeof manifest.version !== 'string') {
-    errors.push('Missing or invalid field: version')
-  }
-
-  if (!manifest.created_at || typeof manifest.created_at !== 'string') {
-    errors.push('Missing or invalid field: created_at')
+  for (const field of REQUIRED_STRING_FIELDS) {
+    if (!manifest[field] || typeof manifest[field] !== 'string') {
+      errors.push(`Missing or invalid field: ${field}`)
+    }
   }
 
   if (!manifest.registries || !Array.isArray(manifest.registries)) {
     errors.push('Missing or invalid field: registries (must be an array)')
   }
 
-  return {
-    status: errors.length === 0 ? 'PASS' : 'FAIL',
-    errors,
-  }
+  return { status: errors.length === 0 ? 'PASS' : 'FAIL', errors }
 }

@@ -172,7 +172,6 @@ describe('rewriteDirectoryLinks', () => {
       readFile: baseFs.readFile.bind(baseFs),
       writeFile: baseFs.writeFile.bind(baseFs),
       readdir: async () => [{ name: 'file1.md' }, { name: 'file2.md' }] as unknown as fs.Dirent[],
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       stat: async (_path: string) => ({
         isDirectory: () => false,
         isFile: () => true,
@@ -212,7 +211,6 @@ describe('rewriteDirectoryLinks', () => {
           { name: 'config.json' },
           { name: 'script.ts' },
         ] as unknown as fs.Dirent[],
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       stat: async (_path: string) => ({
         isDirectory: () => false,
         isFile: () => true,
@@ -234,7 +232,6 @@ describe('rewriteDirectoryLinks', () => {
 
     const fs = Object.assign({}, baseFs, {
       readdir: async () => [] as unknown as fs.Dirent[],
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       stat: async (_path: string) => ({
         isDirectory: () => true,
         isFile: () => false,
@@ -312,7 +309,6 @@ describe('rewriteAbsoluteLinks', () => {
       resolve: (...paths: string[]) => paths.join('/').replace(/\/+/g, '/'),
       readFile: baseFs.readFile.bind(baseFs),
       writeFile: baseFs.writeFile.bind(baseFs),
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       exists: async (_path: string) => true,
       readdir: async () => [{ name: 'file1.md' }, { name: 'file2.md' }] as unknown as fs.Dirent[],
       stat: async (path: string) => ({

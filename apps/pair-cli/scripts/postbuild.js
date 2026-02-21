@@ -6,7 +6,6 @@
  * Solution: Copy package.json to dist/ with imports rewritten for .js files
  */
 
-/* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require('fs')
 const path = require('path')
 
