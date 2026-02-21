@@ -65,7 +65,9 @@ test('solo setup journey: quickstart → solo setup with content verification', 
   await expect(main).toContainText('pair-cli install --list-targets')
 
   // Links back to general quickstart
-  await expect(main.locator('a[href="/docs/getting-started/quickstart"]')).toBeVisible()
+  await expect(
+    main.locator('a[href="/docs/getting-started/quickstart"]').first(),
+  ).toBeVisible()
 
   // AC-6 (partial): no cross-audience refs in solo setup
   const contentLinks = await page.locator('article a').evaluateAll(els =>
@@ -96,7 +98,9 @@ test('team journey: overview → team setup with content verification', async ({
   await expect(main).toContainText('way-of-working.md')
 
   // Links to general quickstart instead of duplicating install
-  await expect(main.locator('a[href="/docs/getting-started/quickstart"]')).toBeVisible()
+  await expect(
+    main.locator('a[href="/docs/getting-started/quickstart"]').first(),
+  ).toBeVisible()
 })
 
 test('org journey: overview → org setup with content verification', async ({ page }) => {
@@ -116,7 +120,9 @@ test('org journey: overview → org setup with content verification', async ({ p
   await expect(main).toContainText('Asset Registries')
 
   // Links to general quickstart instead of duplicating install
-  await expect(main.locator('a[href="/docs/getting-started/quickstart"]')).toBeVisible()
+  await expect(
+    main.locator('a[href="/docs/getting-started/quickstart"]').first(),
+  ).toBeVisible()
 })
 
 test('concepts journey: navigate through concept pages via sidebar', async ({ page }) => {

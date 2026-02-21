@@ -56,11 +56,14 @@ test('full flow: landing → quickstart → concept page via Next link', async (
     .click()
   // Navigate to Getting Started
   await page.locator('a', { hasText: 'Getting Started' }).first().click()
-  // Click into Solo Quickstart
-  await page.locator('a', { hasText: 'Solo Developer Quickstart' }).first().click()
+  // Click into Quickstart
+  await page
+    .locator('a', { hasText: /^Quickstart$/ })
+    .first()
+    .click()
   await expect(page).toHaveURL('/docs/getting-started/quickstart')
-  await expect(page.locator('h1')).toContainText('Solo Developer Quickstart')
-  // Use prev/next to go to Team Quickstart
-  await page.locator('a', { hasText: 'Team Quickstart' }).last().click()
-  await expect(page).toHaveURL('/docs/getting-started/quickstart-team')
+  await expect(page.locator('h1')).toContainText('Quickstart')
+  // Use prev/next to go to Solo Setup
+  await page.locator('a', { hasText: 'Solo Setup' }).last().click()
+  await expect(page).toHaveURL('/docs/getting-started/quickstart-solo')
 })
