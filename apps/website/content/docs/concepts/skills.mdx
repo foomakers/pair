@@ -1,0 +1,87 @@
+---
+title: Skills
+description: How Agent Skills work in pair — the open standard for structured AI assistant instructions, skill categories, and composition.
+---
+
+Skills are structured instructions that AI assistants discover and execute. They follow the [Agent Skills](https://agentskills.io) open standard, supported by Claude Code, Cursor, VS Code Copilot, and OpenAI Codex.
+
+Where the [Knowledge Base](/docs/concepts/knowledge-base) provides context, skills provide **actions**. A skill tells the AI exactly how to perform a specific task — from creating a PRD to reviewing a pull request.
+
+## How Skills Work
+
+Each skill is a `SKILL.md` file that defines:
+
+- **What the skill does** — purpose and scope
+- **When to use it** — trigger conditions
+- **How to execute it** — step-by-step instructions the AI follows
+- **What it composes** — other skills it calls during execution
+
+When a developer invokes a skill (e.g., `/implement`), the AI reads the `SKILL.md` file and follows its instructions precisely. The skill references adoption files, guidelines, and templates from the Knowledge Base, ensuring consistent execution.
+
+## Skill Categories
+
+pair organizes skills into two categories:
+
+### Process Skills
+
+Process skills guide the AI through lifecycle phases. They follow a defined sequence and often compose capability skills:
+
+| Skill | Purpose |
+|-------|---------|
+| `/specify-prd` | Create or update a Product Requirements Document |
+| `/bootstrap` | Orchestrate full project setup |
+| `/plan-initiatives` | Create prioritized strategic initiatives |
+| `/plan-epics` | Break initiatives into epics |
+| `/plan-stories` | Break epics into user stories |
+| `/refine-story` | Add acceptance criteria and technical analysis |
+| `/plan-tasks` | Create implementation tasks |
+| `/implement` | Implement a story task-by-task |
+| `/review` | Perform structured code review |
+
+### Capability Skills
+
+Capability skills perform specific, reusable operations. They are invoked independently or composed by process skills:
+
+| Skill | Purpose |
+|-------|---------|
+| `/verify-quality` | Run quality gates against the codebase |
+| `/record-decision` | Record architectural or non-architectural decisions |
+| `/assess-stack` | Evaluate and register new dependencies |
+| `/verify-adoption` | Check code against adoption file compliance |
+| `/verify-done` | Check Definition of Done criteria |
+| `/write-issue` | Create or update issues in the PM tool |
+| `/estimate` | Estimate story size |
+
+## Composition
+
+Skills compose other skills to build complex workflows. For example, `/implement` composes:
+
+- `/verify-quality` — after each task, to check quality gates
+- `/record-decision` — when a new architectural decision is made
+- `/assess-stack` — when a new dependency is introduced
+- `/verify-adoption` — before committing, to check compliance
+
+And `/review` composes:
+
+- `/verify-quality` — to check quality gates on the PR
+- `/verify-done` — to check Definition of Done criteria
+- `/assess-debt` — to evaluate technical debt
+- `/record-decision` — if a decision needs recording
+
+This composition means complex processes are built from simple, tested parts. Each capability skill works the same whether invoked directly or composed by a process skill.
+
+## The `/next` Entry Point
+
+At the start of any session, running `/next` reads the project's adoption files and PM tool state to recommend the most relevant action. It tells you which skill to invoke based on where your project is in the lifecycle.
+
+## Distribution
+
+Skills are stored in `.skills/` within the KB and distributed to AI tool directories:
+
+```text
+.claude/skills/pair-process-implement/SKILL.md    # Claude Code (canonical)
+.github/skills/pair-process-implement/SKILL.md    # GitHub Copilot (symlink)
+.cursor/skills/pair-process-implement/SKILL.md    # Cursor (symlink)
+```
+
+The canonical copy goes to `.claude/skills/`. Secondary targets receive symlinks, so all AI tools share the same skill definitions. The directory structure uses a flatten/prefix naming convention: `process/implement` becomes `pair-process-implement`.

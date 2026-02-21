@@ -1,0 +1,85 @@
+---
+title: Agent Integration
+description: How pair connects with AI coding assistants through the bridge pattern, supporting multiple agents with a single source of truth.
+---
+
+pair works with any AI coding assistant that can read project files. It uses a **bridge pattern** to connect different AI tools to a single source of truth — the [Knowledge Base](/docs/concepts/knowledge-base) in `.pair/`.
+
+## The Bridge Pattern
+
+Each AI tool has its own configuration format for project-level instructions. pair installs bridge files for each supported tool:
+
+```text
+AGENTS.md                      # Universal entry point
+.github/copilot/               # GitHub Copilot instructions
+.cursor/                       # Cursor rules
+```
+
+All bridge files point to `.pair/`. There is one source of truth: the Knowledge Base and adoption files. The bridge files simply tell each AI tool where to find it.
+
+### AGENTS.md
+
+The universal bridge file. It sits at the repository root and contains:
+
+- Quick start instructions (which how-to file to read for the current task)
+- Essential commands (build, test, lint)
+- Key references (adoption files, guidelines, templates)
+- Quick rules (testing requirements, adoption checks, commit conventions)
+
+Claude Code and other agents that support `AGENTS.md` read this file automatically when they enter a repository.
+
+### Tool-Specific Bridges
+
+Each AI tool has its own discovery mechanism:
+
+- **GitHub Copilot** reads `.github/copilot/` for custom instructions
+- **Cursor** reads `.cursor/rules/` for project-specific rules
+- **Claude Code** reads `AGENTS.md` and `.claude/` for skills and instructions
+
+The bridge files are maintained by pair's `agents` asset registry and update when you run `pair-cli update`.
+
+## Multi-Agent Support
+
+A team can have developers using different AI tools. The bridge pattern ensures they all follow the same standards:
+
+1. Developer A uses Claude Code → reads `AGENTS.md` → follows `.pair/` guidelines
+2. Developer B uses Cursor → reads `.cursor/rules/` → follows `.pair/` guidelines
+3. Developer C uses Copilot → reads `.github/copilot/` → follows `.pair/` guidelines
+
+Same Knowledge Base, same adoption files, same standards. The AI tool is an implementation detail.
+
+## Skills Distribution
+
+[Skills](/docs/concepts/skills) are distributed to multiple AI tool directories simultaneously:
+
+```text
+.claude/skills/pair-process-implement/SKILL.md     # Canonical copy
+.github/skills/pair-process-implement/SKILL.md     # Symlink
+.cursor/skills/pair-process-implement/SKILL.md     # Symlink
+```
+
+The canonical copy lives in `.claude/skills/`. Secondary targets (`.github/skills/`, `.cursor/skills/`) receive symlinks, ensuring all tools share the exact same skill definitions without duplication.
+
+On Windows, where symlinks require elevated permissions, pair falls back to full copies.
+
+## How Agents Discover Context
+
+When an AI assistant starts a session in a pair-enabled project:
+
+1. **Bridge file** — the AI reads its tool-specific bridge file (or `AGENTS.md`)
+2. **Task matching** — the bridge directs it to the relevant how-to guide for the current task
+3. **Adoption loading** — the AI reads adoption files to understand project constraints
+4. **Guideline loading** — the AI reads relevant guidelines for the task at hand
+5. **Execution** — the AI follows the how-to guide, constrained by adoption files and guidelines
+
+This discovery happens automatically at session start. The developer does not need to manually point the AI to documentation.
+
+## Adding New Agent Support
+
+The bridge pattern is extensible. To support a new AI tool:
+
+1. Create a bridge file in the tool's expected location
+2. Point it to `.pair/` for the Knowledge Base
+3. Add it to the `agents` asset registry for automatic updates
+
+The Knowledge Base and adoption files remain unchanged — only a new bridge file is needed.

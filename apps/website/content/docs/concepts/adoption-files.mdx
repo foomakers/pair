@@ -1,0 +1,105 @@
+---
+title: Adoption Files
+description: How adoption files record your project-specific decisions and keep AI assistants aligned with your team's standards.
+---
+
+Adoption files are your project-specific decisions, recorded in `.pair/adoption/`. They tell AI assistants what your team chose — which tech stack, architecture pattern, way of working, and product requirements define your project.
+
+While the [Knowledge Base](/docs/concepts/knowledge-base) provides general guidelines and process guides, adoption files provide the **constraints**. Together, they ensure the AI generates code that follows both industry best practices and your team's specific decisions.
+
+## Structure
+
+```text
+.pair/adoption/
+  product/                      # Product decisions
+    adopted/
+      PRD.md                    # Product Requirements Document
+    subdomain/                  # Domain-Driven Design subdomains
+
+  tech/                         # Technical decisions
+    adopted/
+      architecture.md           # Architecture pattern and style
+      tech-stack.md             # Languages, frameworks, libraries
+      infrastructure.md         # Hosting, CI/CD, deployment
+      way-of-working.md         # Process, methodology, quality gates
+      ux-ui.md                  # Design system, component library
+    adr/                        # Architectural Decision Records
+```
+
+## What Each File Records
+
+### architecture.md
+
+Documents your chosen architecture pattern, API style, and data storage approach:
+
+```text
+- Monolith with REST API
+- SQLite for data storage
+- All components self-hosted
+```
+
+### tech-stack.md
+
+Lists every approved technology with exact versions:
+
+```text
+- TypeScript v5.x
+- React ^19.0.0
+- Vitest v3.x for testing
+- pnpm v10 for package management
+```
+
+When the AI generates code, it only uses libraries listed here. During code review, unlisted dependencies are flagged.
+
+### way-of-working.md
+
+Defines your development process:
+
+```text
+- Kanban workflow
+- Feature branches with squash merges
+- Quality gate: pnpm quality-gate
+- Code review required before merge
+```
+
+### PRD.md
+
+Your Product Requirements Document — the source of truth for what the project does, who it serves, and what features are prioritized (P0/P1/P2).
+
+## How the AI Uses Them
+
+Every time an AI assistant starts a session, it reads the adoption files to understand your constraints:
+
+1. **Generating code** — uses only approved libraries and follows the architecture pattern
+2. **Creating tasks** — references adoption files in each task specification
+3. **Code review** — checks that new code conforms to recorded decisions
+4. **Making decisions** — when a new choice arises, records it as an ADR
+
+If a developer asks the AI to add a feature and the implementation requires a library not in `tech-stack.md`, the AI flags it and creates an Architectural Decision Record (ADR) to document the choice.
+
+## Architectural Decision Records
+
+When significant technical decisions are made, they are recorded as ADRs in `.pair/adoption/tech/adr/`:
+
+```text
+adr/
+  adr-001-tty-detection-pattern.md
+  adr-002-http-range-resume.md
+  adr-003-checksum-validation.md
+```
+
+Each ADR documents:
+- **Context** — what problem needed solving
+- **Decision** — what was chosen and why
+- **Consequences** — tradeoffs and implications
+
+ADRs provide an audit trail of your project's technical evolution.
+
+## Protection
+
+Adoption files are protected by design. When pair updates the Knowledge Base (`pair-cli update`):
+
+- **Knowledge files** update — guidelines, process guides, templates refresh
+- **Adoption files stay** — your decisions are never overwritten
+
+This is enforced by the asset registry system: the `adoption` registry uses **add** behavior, meaning it only creates files that don't already exist. Your team's decisions are permanent until you explicitly change them.

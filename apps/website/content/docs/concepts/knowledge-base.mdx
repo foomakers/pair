@@ -1,0 +1,89 @@
+---
+title: Knowledge Base
+description: What a pair Knowledge Base is, how it is structured, and how it provides persistent context to AI assistants.
+---
+
+The Knowledge Base (KB) is the core of pair. It is a structured set of documents that gets installed into your project's `.pair/` folder, providing persistent context to AI coding assistants.
+
+Think of it as onboarding documentation for your AI teammate: instead of explaining your standards from scratch every session, you give it a comprehensive manual that it reads and follows.
+
+## Structure
+
+When you run `pair-cli install`, the CLI creates a `.pair/` folder with two main sections:
+
+```text
+.pair/
+  knowledge/                    # Reference material (the "how to")
+    way-of-working.md           # Development process definition
+    getting-started.md          # Onboarding guide
+    how-to/                     # 11 step-by-step process guides
+    guidelines/                 # Technical standards
+      architecture/             # Architecture patterns
+      code-design/              # Code design principles
+      testing/                  # Testing strategy
+      security/                 # Security rules
+    assets/                     # Templates (PRD, checklist, PR, commit)
+
+  adoption/                     # Your decisions (the "what we chose")
+    product/                    # PRD, subdomain definitions
+    tech/                       # Architecture, tech stack, infrastructure
+      architecture.md
+      tech-stack.md
+      infrastructure.md
+      way-of-working.md
+```
+
+### Knowledge vs. Adoption
+
+This two-part structure is intentional:
+
+**Knowledge** (`knowledge/`) contains reference material that applies broadly — process guides, technical standards, templates. This content is maintained centrally and updates when you upgrade pair. It tells the AI *how* to work.
+
+**Adoption** (`adoption/`) contains your project-specific decisions — which tech stack you chose, what architecture pattern you follow, what your way of working is. This content is yours. pair never overwrites it. It tells the AI *what you decided*.
+
+When the AI generates code, it reads both: the guidelines tell it the standards, and the adoption files tell it your specific choices within those standards.
+
+## How It Provides Context
+
+AI coding assistants (Claude, Copilot, Cursor) discover the Knowledge Base through **bridge files**:
+
+```text
+AGENTS.md              # Points the AI to .pair/
+.github/copilot/       # GitHub Copilot configuration
+.cursor/               # Cursor rules
+```
+
+When a developer starts a session, the AI reads the bridge file for its tool, which directs it to `.pair/`. From there, it loads the relevant guidelines and adoption files for the current task.
+
+This means the AI has full context about:
+- Your development process (how-to guides)
+- Your coding standards (guidelines)
+- Your technical decisions (adoption files)
+- Your templates and conventions (assets)
+
+## KB Lifecycle
+
+The Knowledge Base follows a managed lifecycle:
+
+1. **Install** — `pair-cli install` downloads the KB and installs it into your project
+2. **Customize** — you fill in adoption files with your project decisions
+3. **Update** — `pair-cli update` refreshes the KB when a new version is available
+4. **Package** — `pair-cli package` creates a distributable ZIP for organization-wide distribution
+
+### What Updates and What Stays
+
+When you run `pair-cli update`:
+- **Knowledge files update** — process guides, guidelines, and templates refresh to the latest version
+- **Adoption files are preserved** — your decisions are never overwritten
+
+This is enforced by the asset registry system: the `knowledge` registry uses **mirror** behavior (sync everything), while the `adoption` registry uses **add** behavior (only add files that don't exist yet).
+
+## Why a File-Based Approach
+
+pair uses plain Markdown files rather than a database or API because:
+
+- **Version controlled** — your KB is committed to Git alongside your code
+- **Transparent** — every guideline and decision is readable by humans and AI alike
+- **Portable** — works with any AI tool that can read project files
+- **Diffable** — changes to standards or decisions show up in code review
+- **Offline** — no external service required

@@ -1,0 +1,105 @@
+---
+title: Solo Developer Quickstart
+description: Install pair-cli and set up your project with AI-assisted development context in minutes.
+---
+
+Get up and running with pair on macOS or Linux. By the end of this guide, your project will have a Knowledge Base that gives your AI assistant full context about your development standards.
+
+## Prerequisites
+
+- Node.js 18 or higher
+- pnpm (or npm) package manager
+- Terminal access
+
+## Install pair-cli
+
+### Option 1: Package Manager (Recommended)
+
+Install pair-cli globally:
+
+```bash
+npm install -g @pair/pair-cli
+```
+
+Or with pnpm:
+
+```bash
+pnpm add -g @pair/pair-cli
+```
+
+### Option 2: Manual Install (Offline)
+
+For air-gapped environments:
+
+1. Download the latest release from [GitHub Releases](https://github.com/foomakers/pair/releases)
+2. Extract the `pair-cli-manual-vX.Y.Z.zip` file
+3. Run directly from the extracted folder
+
+## Verify Installation
+
+```bash
+pair-cli --version
+```
+
+Expected output:
+
+```text
+pair-cli vX.Y.Z
+```
+
+## Explore Available Assets
+
+See what pair can install in your project:
+
+```bash
+pair-cli install --list-targets
+```
+
+Expected output:
+
+```text
+Available asset registries:
+
+  github     .github         GitHub workflows and configuration files
+  knowledge  .pair            Knowledge base and documentation
+  adoption   .pair/product/adopted  Adoption guides and onboarding materials
+```
+
+## Install the Knowledge Base
+
+Navigate to your project root and run:
+
+```bash
+pair-cli install
+```
+
+This creates the `.pair/` folder with documentation, guidelines, how-to guides, and adoption templates. It also sets up `.github/` workflows and the agent bridge pattern (`AGENTS.md`).
+
+Your project now has:
+
+```text
+.pair/
+  knowledge/          # Reference material: process guides, standards
+    how-to/           # 11 step-by-step guides (PRD → code review)
+    guidelines/       # Technical standards (architecture, testing, code design)
+    assets/           # Templates (PRD, checklist, commit, PR)
+  adoption/           # Your decisions (filled in as you make them)
+    product/          # PRD, subdomain definitions
+    tech/             # Architecture, tech stack, infrastructure
+```
+
+## What Happens Next
+
+When you start a conversation with your AI assistant (Claude, Copilot, Cursor), it reads the `.pair/` folder and understands:
+
+- **How your team works** — process guides define every step from idea to merge
+- **What standards to follow** — guidelines cover architecture, testing, code design, security
+- **What you've decided** — adoption files record your tech stack, architecture, and way of working
+
+The AI generates consistent, standards-aligned code across every session.
+
+## Next Steps
+
+- Learn [how pair structures AI-assisted development](/docs/concepts/ai-assisted-sdlc)
+- Understand the [Knowledge Base structure](/docs/concepts/knowledge-base) in depth
+- Explore the [process lifecycle](/docs/concepts/process-lifecycle) — from PRD to code review
