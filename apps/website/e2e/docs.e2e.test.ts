@@ -144,7 +144,7 @@ test('concepts journey: navigate through concept pages via sidebar', async ({ pa
 
   // AC-9: Agent Skills standard, categories, composition
   await expect(main).toContainText('Agent Skills')
-  await expect(main.locator('a[href="https://agentskills.io"]')).toBeVisible()
+  await expect(main.locator('a[href="https://agentskills.io"]').first()).toBeVisible()
   await expect(main).toContainText('Process Skills')
   await expect(main).toContainText('Capability Skills')
   await expect(main).toContainText('Composition')
@@ -488,7 +488,7 @@ test('integrations journey: index → Claude Code → Copilot with content verif
   await expect(page.locator('main h1')).toContainText('AI Coding Tools')
   await expect(main).toContainText('Bridge Pattern')
   await expect(main).toContainText('Agent Skills')
-  await expect(main.locator('a[href="https://agentskills.io"]')).toBeVisible()
+  await expect(main.locator('a[href="https://agentskills.io"]').first()).toBeVisible()
 
   // All 5 tools listed
   await expect(main).toContainText('Claude Code')
@@ -507,7 +507,7 @@ test('integrations journey: index → Claude Code → Copilot with content verif
     .click()
   await expect(page).toHaveURL('/docs/integrations/claude-code')
 
-  // 4-section template verified
+  // 5-section template verified
   await expect(main).toContainText('Prerequisites')
   await expect(main).toContainText('Configure Agent File')
   await expect(main).toContainText('Use Skills')
