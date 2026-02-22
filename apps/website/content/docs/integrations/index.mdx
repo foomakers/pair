@@ -1,0 +1,124 @@
+---
+title: AI Coding Tools
+description: Set up pair to work with your AI coding assistant — Claude Code, Cursor, GitHub Copilot, Windsurf, or Codex.
+---
+
+pair works with any AI coding assistant that can read project files. Each tool has its own configuration format, but they all connect to the same source of truth: your `.pair/` directory.
+
+## The Bridge Pattern
+
+pair installs **bridge files** that let each AI tool discover your Knowledge Base and adoption files in its native way:
+
+```text
+AGENTS.md              → Claude Code, Codex, and any AGENTS.md-compatible tool
+CLAUDE.md              → Claude Code
+.github/agents/        → GitHub Copilot
+.cursor/rules/         → Cursor
+.windsurf/rules/       → Windsurf
+.agents/skills/        → Codex
+.agent/skills/         → generic Agent Skills discovery path
+```
+
+All bridge files point to `.pair/`. One source of truth, multiple entry points. When you update your adoption files or install new skills, every AI tool picks up the changes automatically.
+
+## Agent Skills Open Standard
+
+pair skills follow the [Agent Skills](https://agentskills.io) open standard — not a proprietary format. Any AI tool that supports Agent Skills can discover and invoke pair's process and capability skills. This means you're not locked into a single assistant: your team can use different tools while following the same standards.
+
+### Coexistence with Other Skills
+
+pair skills coexist with custom skills or skills from other tools. The `prefix` in `config.json` (default: `"pair"`) namespaces all installed skills — e.g., `pair-process-implement`, `pair-capability-verify-quality`. Your own skills or skills from other sources use different prefixes (or no prefix), so there are no naming clashes:
+
+```text
+.claude/skills/
+├── pair-process-implement/       ← pair skill (prefix: "pair")
+├── pair-capability-verify-quality/
+├── acme-deploy-staging/          ← another tool (prefix: "acme")
+└── my-custom-skill/              ← your own skill (no prefix)
+```
+
+## Supported Tools
+
+| Tool | Bridge File | Skill Invocation |
+|------|------------|-----------------|
+| [Claude Code](/docs/integrations/claude-code) | `AGENTS.md` + `CLAUDE.md` | `/skill-name` slash commands |
+| [Codex](/docs/integrations/codex) | `AGENTS.md` + `.agents/skills/` | `/skill-name` slash commands |
+| [Cursor](/docs/integrations/cursor) | `.cursor/rules/` | Skill file discovery |
+| [GitHub Copilot](/docs/integrations/github-copilot) | `.github/agents/` | Agent mode |
+| [Windsurf](/docs/integrations/windsurf) | `.windsurf/rules/` | Skill file discovery |
+
+Pick your tool and follow the setup guide. The process takes a few minutes.
+
+### Other AGENTS.md-Compatible Tools
+
+`AGENTS.md` is a convention adopted by a growing number of AI tools. Any tool that reads `AGENTS.md` at the repository root works with pair out of the box — no dedicated bridge needed. pair also distributes skills to `.agent/skills/` as a generic discovery path. If your tool supports the [Agent Skills](https://agentskills.io) standard and reads from this location, it will find pair's skills automatically.
+
+## Skill Distribution & config.json
+
+pair distributes skills to **all AI tools simultaneously** from a single source. The distribution is controlled by `config.json` in the KB:
+
+### How It Works
+
+```text
+KB source (.skills/)
+    ↓ flatten + prefix transforms
+.claude/skills/              (canonical — physical copies)
+    ↓ symlinks
+.github/skills/              → .claude/skills/
+.cursor/skills/              → .claude/skills/
+.windsurf/skills/            → .claude/skills/
+.agent/skills/               → .claude/skills/
+.agents/skills/              → .claude/skills/
+```
+
+1. **Canonical target** (`.claude/skills/`) receives physical copies of all skills
+2. **Secondary targets** receive relative symlinks pointing to the canonical copy
+3. On Windows, symlinks fall back to full copies automatically
+
+### Distribution Modes
+
+| Mode | Behavior | Used For |
+|------|----------|----------|
+| `canonical` | Physical copy, source of truth | `.claude/skills/` |
+| `symlink` | Relative symlink to canonical | `.github/skills/`, `.cursor/skills/`, etc. |
+| `copy` | Independent copy with optional transforms | `CLAUDE.md` (transformed from `AGENTS.md`) |
+
+### Transform Pipeline
+
+Skills in the KB use a category structure. pair transforms them during installation:
+
+```text
+Source:      .skills/process/implement/SKILL.md
+Flatten:     process/implement → process-implement
+Prefix:      process-implement → pair-process-implement
+Installed:   .claude/skills/pair-process-implement/SKILL.md
+Symlinked:   .github/skills/pair-process-implement/ → .claude/...
+```
+
+The transform also rewrites internal references — skill-to-skill links and slash command names are updated to match the flattened/prefixed names.
+
+### Customizing Distribution
+
+The `config.json` `skills` registry controls everything:
+
+```json
+"skills": {
+  "source": ".skills",
+  "flatten": true,
+  "prefix": "pair",
+  "targets": [
+    { "path": ".claude/skills/", "mode": "canonical" },
+    { "path": ".github/skills/", "mode": "symlink" },
+    { "path": ".cursor/skills/", "mode": "symlink" },
+    { "path": ".windsurf/skills/", "mode": "symlink" }
+  ]
+}
+```
+
+By default, pair distributes skills to all major AI tools (Claude Code, Cursor, GitHub Copilot, Windsurf, Codex). To support only specific tools in your project, add or remove targets from the `skills.targets` array. The same applies to the `agents` registry for bridge files. This keeps your repository clean — only the tool directories your team actually uses.
+
+## Related
+
+- [Agent Integration concept](/docs/concepts/agent-integration) — how the bridge pattern works in depth
+- [Skills concept](/docs/concepts/skills) — what skills are and how they work
+- [PM Tools](/docs/pm-tools) — project management tool integrations

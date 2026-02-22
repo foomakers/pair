@@ -1,0 +1,113 @@
+---
+title: GitHub Copilot
+description: Set up pair with GitHub Copilot — configure .github/agents, copilot-instructions.md, and follow the bridge pattern.
+---
+
+## Prerequisites
+
+- [GitHub Copilot](https://github.com/features/copilot) with agent mode enabled
+- VS Code or compatible editor with Copilot extension
+- A pair-enabled project (`pair-cli init` completed, `.pair/` directory exists)
+- Node.js 18+
+
+## Configure Agent File
+
+GitHub Copilot in agent mode reads project instructions from `.github/` at the repository root. pair generates these bridge files during `pair-cli init`.
+
+### .github/agents/
+
+pair creates role-specific agent files that define different working modes:
+
+```text
+your-project/
+├── .github/
+│   ├── agents/
+│   │   ├── product-manager.agent.md    ← planning & strategy
+│   │   ├── staff-engineer.agent.md     ← architecture & review
+│   │   └── product-engineer.agent.md   ← implementation & tasks
+│   ├── copilot-instructions.md         ← general Copilot context
+│   └── skills/                         ← symlinks to .claude/skills/
+├── .pair/
+│   ├── knowledge/
+│   └── adoption/
+└── ...
+```
+
+Each agent file includes:
+- A YAML header with `description` and `tools` access list
+- Core responsibilities mapped to specific how-to guides
+- Skills that the agent can invoke
+- Success criteria for the role
+
+### copilot-instructions.md
+
+General project instructions that Copilot reads for all interactions. Contains the same quick-start context as `AGENTS.md` — essential commands, key references, and coding conventions.
+
+### The Bridge Pattern
+
+`.github/agents/` and `copilot-instructions.md` point to `.pair/` — the single source of truth:
+
+```text
+.github/agents/          ──→ .pair/knowledge/how-to/  (process guides)
+copilot-instructions.md  ──→ .pair/adoption/          (your decisions)
+                         ──→ .pair/knowledge/         (guidelines)
+```
+
+## Use Skills
+
+Skills are available in `.github/skills/` as symlinks to the canonical copies in `.claude/skills/`. In agent mode, reference a skill by pointing Copilot to the SKILL.md file:
+
+```text
+@workspace Follow .github/skills/pair-process-implement/SKILL.md to implement story #42
+```
+
+### Agent Modes
+
+The three agent files provide different working contexts:
+
+| Agent | Use When |
+|-------|----------|
+| `product-manager` | Planning initiatives, creating stories, refining requirements |
+| `staff-engineer` | Architecture decisions, code review, project setup |
+| `product-engineer` | Implementing tasks, writing code, creating PRs |
+
+### Common Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `pair-next` | Determine next action based on project state |
+| `pair-process-implement` | Implement a story task by task |
+| `pair-process-review` | Structured code review |
+| `pair-process-refine-story` | Refine a story with acceptance criteria |
+
+For the full catalog, see [Skills Catalog](/docs/reference/skills-catalog).
+
+## Workflow Tips
+
+### Choosing the Right Agent
+
+Start with `product-engineer` for most development work. Switch to `product-manager` when planning or refining stories, and `staff-engineer` for architecture decisions or code review.
+
+### Multi-Agent Teams
+
+The `.github/agents/` structure is already in your repository. Team members using Copilot get role-specific context automatically. Members using other AI tools (Claude Code, Cursor) get equivalent context through their own bridge files.
+
+### Skills as Symlinks
+
+Skills in `.github/skills/` are symlinks to `.claude/skills/`, keeping all tools in sync. `pair-cli update` refreshes everything at once.
+
+## Verify It Works
+
+Open VS Code with Copilot agent mode in your pair-enabled project. Select the `product-engineer` agent and ask:
+
+```text
+Read the pair adoption files and tell me what project I'm working on
+```
+
+**Expected output**: Copilot reads `.github/agents/product-engineer.agent.md`, follows the references to `.pair/adoption/`, and describes your project context. If it doesn't find the agent files, check that `pair-cli init` completed successfully.
+
+## Related
+
+- [Agent Integration concept](/docs/concepts/agent-integration)
+- [Skills Catalog](/docs/reference/skills-catalog)
+- [CLI Reference](/docs/reference/cli/commands)

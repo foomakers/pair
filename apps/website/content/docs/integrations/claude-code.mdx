@@ -1,0 +1,172 @@
+---
+title: Claude Code
+description: Set up pair with Claude Code — configure AGENTS.md, CLAUDE.md, the .claude/ directory, invoke skills, and customize distribution.
+---
+
+## Prerequisites
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- A pair-enabled project (`pair-cli init` completed, `.pair/` directory exists)
+- Node.js 18+
+
+## Configure Agent File
+
+Claude Code reads two files at the repository root plus the `.claude/` directory:
+
+### Project Structure
+
+```text
+your-project/
+├── AGENTS.md                    ← universal bridge file (all AI tools read this)
+├── CLAUDE.md                    ← Claude Code-specific (generated from AGENTS.md)
+├── .claude/
+│   ├── settings.local.json      ← permissions and allowed tools
+│   └── skills/                  ← canonical skill directory
+│       ├── pair-next/
+│       ├── pair-process-implement/
+│       ├── pair-capability-verify-quality/
+│       └── ...                  ← 30+ skills
+├── .pair/
+│   ├── knowledge/               ← upstream guidelines (don't edit)
+│   └── adoption/                ← your project decisions
+└── ...
+```
+
+### AGENTS.md
+
+The universal bridge file. pair generates it during `pair-cli init`. It contains:
+
+- Task selection algorithm (which how-to guide to follow)
+- Essential commands (`pnpm install`, `pnpm test`, `pnpm lint`)
+- Key references to adoption files and guidelines
+- Quick rules (testing, commits, adoption checks)
+
+Claude Code reads `AGENTS.md` automatically when entering a repository. No manual configuration needed.
+
+### CLAUDE.md — Generated from AGENTS.md
+
+`CLAUDE.md` is **not written manually** — pair generates it automatically from `AGENTS.md` using the transform pipeline defined in `config.json`. The `agents` registry controls this:
+
+```json
+"agents": {
+  "source": "AGENTS.md",
+  "behavior": "mirror",
+  "targets": [
+    { "path": "AGENTS.md", "mode": "canonical" },
+    { "path": "CLAUDE.md", "mode": "copy", "transform": { "prefix": "claude" } }
+  ]
+}
+```
+
+The `transform: { "prefix": "claude" }` applies **marker-based rewrites** — the KB source `AGENTS.md` can include or exclude sections for specific targets using markers:
+
+```markdown
+<!-- +claude: Claude Code-specific section -->
+### Claude Code Tips
+Use `/pair-next` at session start. Skills are slash commands.
+<!-- +claude -->
+
+<!-- -claude: Exclude from CLAUDE.md -->
+### Generic section
+This content appears in AGENTS.md but not in CLAUDE.md.
+<!-- -claude -->
+```
+
+After transformation, all markers are stripped from the output. This lets a **single source file** produce tool-specific variants without duplication.
+
+### The .claude/ Directory
+
+The `.claude/` directory is Claude Code's native configuration location:
+
+- **`.claude/skills/`** — the **canonical** copy of all pair skills. Other AI tool directories (`.github/skills/`, `.cursor/skills/`, etc.) are symlinks pointing here.
+- **`.claude/settings.local.json`** — Claude Code permissions (allowed Bash commands, MCP tools, additional directories).
+
+### The Bridge Pattern
+
+All files point to `.pair/` — the single source of truth:
+
+```text
+AGENTS.md    ──→ .pair/knowledge/     (guidelines, how-to guides)
+CLAUDE.md    ──→ .pair/adoption/      (your decisions)
+.claude/skills/ ──→ .pair/ (skills reference adoption + knowledge)
+```
+
+When you update adoption files or install new skills, Claude Code picks up the changes at the next session start.
+
+## Use Skills
+
+Skills are invoked as slash commands in Claude Code:
+
+```bash
+/pair-next                    # what should I work on?
+/pair-process-implement #42   # implement story #42
+/pair-process-review          # review current PR
+```
+
+### Common Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/pair-next` | Determine next action based on project state |
+| `/pair-process-specify-prd` | Create or update Product Requirements Document |
+| `/pair-process-plan-initiatives` | Plan strategic initiatives from PRD |
+| `/pair-process-plan-epics` | Break initiatives into epics |
+| `/pair-process-plan-stories` | Break epics into user stories |
+| `/pair-process-refine-story` | Refine a story with acceptance criteria |
+| `/pair-process-plan-tasks` | Break a story into implementation tasks |
+| `/pair-process-implement` | Implement a story task by task |
+| `/pair-process-review` | Structured code review |
+
+For the full catalog, see [Skills Catalog](/docs/reference/skills-catalog).
+
+### Skill Discovery
+
+Claude Code discovers skills in `.claude/skills/`. pair installs skills there during `pair-cli init` or `pair-cli update`. Each skill is a `SKILL.md` file that Claude Code reads when you invoke the corresponding slash command.
+
+Skills are installed through the **transform pipeline** — the KB source uses a category structure (`.skills/process/implement/`) which gets flattened and prefixed:
+
+```text
+KB source:    .skills/process/implement/SKILL.md
+Flatten:      process/implement → process-implement
+Prefix:       process-implement → pair-process-implement
+Installed:    .claude/skills/pair-process-implement/SKILL.md
+```
+
+This happens automatically during `pair-cli init` and `pair-cli update`.
+
+## Workflow Tips
+
+### Start Every Session with `/pair-next`
+
+This reads your adoption files and PM tool state, then recommends the most relevant action. It keeps sessions focused and prevents context loss between conversations.
+
+### Commit Strategy
+
+pair supports two strategies configured in your `way-of-working.md`:
+
+- **Commit per task** — one commit per task, with checkpoints between tasks
+- **Commit per story** — continuous flow, single commit at story end
+
+Both strategies produce a single PR per story. The choice affects how granular your Git history is during development.
+
+### Session Context
+
+Claude Code maintains context within a session but starts fresh in new sessions. `AGENTS.md` and `CLAUDE.md` ensure it recovers project context automatically. For long-running work, the `/pair-process-implement` skill tracks progress in the PM tool so you can resume across sessions.
+
+## Verify It Works
+
+Open Claude Code in your pair-enabled project and run:
+
+```bash
+/pair-next
+```
+
+**Expected output**: Claude Code reads your adoption files and suggests the next action (e.g., "Story #42 is refined and ready — run `/pair-process-implement #42`"). If it can't find `.pair/`, check that `pair-cli init` completed successfully.
+
+## Related
+
+- [Agent Integration concept](/docs/concepts/agent-integration)
+- [Skills Catalog](/docs/reference/skills-catalog)
+- [CLI Reference](/docs/reference/cli/commands)
+- [Configuration Reference](/docs/reference/configuration) — full `config.json` documentation
+- [Skill Management](/docs/reference/skill-management) — transform pipeline details

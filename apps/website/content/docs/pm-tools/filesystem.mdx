@@ -1,0 +1,127 @@
+---
+title: Filesystem
+description: Configure pair to manage work items as Markdown files in your repository — zero external dependencies.
+---
+
+## Configuration
+
+Add these lines to `.pair/adoption/tech/way-of-working.md`:
+
+```markdown
+- Filesystem is adopted for project management, using markdown files and folder organization.
+  The backlog is managed in `.pair/adoption/product/backlog/` directory structure.
+  See `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` for usage.
+```
+
+### Prerequisites
+
+- A pair-enabled project (`pair-cli init` completed)
+- No external tools, accounts, or API keys needed
+
+This is the **zero-dependency option** — everything lives in your repository as version-controlled Markdown files. Ideal for solo developers, offline work, or projects that don't need a separate PM tool.
+
+## Mapping Model
+
+pair maps its work hierarchy to directories and files:
+
+```text
+pair                    Filesystem
+────                    ──────────
+Initiative          →   Markdown file in 01-initiatives/
+Epic                →   Markdown file in 02-epics/<status>/
+User Story          →   Markdown file in 03-user-stories/<status>/
+Task                →   Checklist item in story file
+```
+
+### Directory Structure
+
+```text
+.pair/adoption/product/backlog/
+├── 01-initiatives/
+│   └── 2025/
+│       ├── initiative-auth-system.md
+│       └── initiative-api-v2.md
+├── 02-epics/
+│   ├── not-started/
+│   ├── in-progress/
+│   │   └── epic-user-registration.md
+│   ├── under-review/
+│   └── completed/
+└── 03-user-stories/
+    ├── not-started/
+    │   └── story-signup-form.md
+    ├── in-progress/
+    ├── under-review/
+    └── completed/
+```
+
+### How It Works
+
+- **Initiatives** are Markdown files organized by year
+- **Epics and stories** are Markdown files organized by status folder
+- **Tasks** are checkbox items inside the story file — not separate files
+- **Status tracking** is managed by moving files between status directories
+- **Everything is version-controlled** — Git history shows exactly what changed and when
+
+### Status Transitions
+
+| pair Action | Filesystem Effect |
+|------------|------------------|
+| Start implementing a story | Move file to `in-progress/` |
+| Complete a task | Mark checkbox in story file |
+| Create PR | File stays in `in-progress/` |
+| Merge PR | Move file to `completed/` |
+| All stories in epic done | Move epic file to `completed/` |
+
+### Templates
+
+Each work item type uses the standard pair templates:
+
+| Template | Location |
+|----------|----------|
+| Initiative | `.pair/knowledge/guidelines/collaboration/templates/initiative-template.md` |
+| Epic | `.pair/knowledge/guidelines/collaboration/templates/epic-template.md` |
+| User Story | `.pair/knowledge/guidelines/collaboration/templates/user-story-template.md` |
+
+## First-Run Example
+
+After configuring `way-of-working.md`, run a process skill:
+
+```bash
+/pair-process-plan-stories #epic-user-registration
+```
+
+**Expected output:**
+
+```text
+STORIES CREATED:
+├── story-signup-form.md        → 03-user-stories/not-started/
+├── story-login-flow.md         → 03-user-stories/not-started/
+├── story-password-reset.md     → 03-user-stories/not-started/
+└── Epic: 3 stories created in not-started/
+```
+
+pair creates Markdown files using the story template, places them in `not-started/`, and adds task checklists to each file.
+
+### Verifying the Setup
+
+1. Check that `.pair/adoption/product/backlog/` directory structure exists
+2. Verify story files appear in `03-user-stories/not-started/`
+3. Each file should follow the user story template with filled-in sections
+4. `git status` shows the new files ready to commit
+
+### When to Upgrade
+
+Consider switching to [GitHub Projects](/docs/pm-tools/github-projects) or [Linear](/docs/pm-tools/linear) when:
+
+- Multiple team members need to see the board simultaneously
+- You want automated status tracking without manual file moves
+- You need reporting and velocity metrics
+
+Switching is painless — update `way-of-working.md` and pair starts using the new tool. Your Knowledge Base and adoption files stay the same.
+
+## Related
+
+- [PM Tools overview](/docs/pm-tools) — choosing the right tool
+- [GitHub Projects](/docs/pm-tools/github-projects) — GitHub-native option
+- [Linear](/docs/pm-tools/linear) — dedicated PM tool option

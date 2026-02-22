@@ -1,0 +1,115 @@
+---
+title: GitHub Projects
+description: Configure pair to manage work items with GitHub Projects — setup, mapping model, and first-run walkthrough.
+---
+
+## Configuration
+
+Add these lines to `.pair/adoption/tech/way-of-working.md`:
+
+```markdown
+- GitHub Projects is adopted for project management, using Kanban as the workflow methodology.
+  The project is <your-project-name> under the GitHub organization <your-org>.
+  See `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` for usage.
+  Use #github MCP to access GitHub Projects, boards, and issues.
+```
+
+### Prerequisites
+
+- GitHub account with repository access
+- GitHub MCP Server configured for your AI assistant (provides API access to GitHub Projects)
+- A GitHub Projects board created for your repository
+
+### API Access: MCP + gh CLI Fallback
+
+pair uses the **GitHub MCP Server** as the primary way to interact with GitHub Projects. MCP provides structured tool calls for:
+
+- Creating and updating issues from process skills
+- Managing project board status transitions via GraphQL
+- Querying issue state for `/pair-next` recommendations
+
+When the MCP server is not available (e.g., in CI environments or tools without MCP support), pair falls back to the **`gh` CLI** for the same operations. The `gh` CLI provides equivalent functionality via `gh issue`, `gh api graphql`, and `gh pr` commands.
+
+```text
+Primary:   GitHub MCP Server (structured tool calls)
+Fallback:  gh CLI (gh issue create, gh api graphql, gh pr create)
+```
+
+Install the GitHub MCP Server following your AI tool's MCP setup guide. If using `gh` as fallback, ensure it is authenticated (`gh auth login`).
+
+## Mapping Model
+
+pair maps its work hierarchy to GitHub concepts:
+
+```text
+pair                    GitHub Projects
+────                    ───────────────
+Initiative          →   Issue (label: "initiative")
+Epic                →   Issue (label: "epic")
+User Story          →   Issue (label: "user story")
+Task                →   Checklist item in story issue body
+```
+
+### How It Works
+
+- **Initiatives, epics, and stories** are all GitHub Issues, differentiated by labels
+- **Tasks** are checkbox items (`- [ ] **T-1**: description`) in the story issue body — not separate issues
+- **Status tracking** uses GitHub Projects board columns (Todo, In Progress, Done)
+- **Hierarchy** is maintained through issue references and sub-issue relationships
+
+### Status Transitions
+
+pair updates status via GitHub Projects GraphQL API:
+
+| pair Action | GitHub Projects Effect |
+|------------|----------------------|
+| Start implementing a story | Issue moved to "In Progress" column |
+| Complete a task | Checkbox marked in issue body |
+| Create PR | PR linked to issue via `Closes #N` |
+| Merge PR | Issue auto-closed, moved to "Done" |
+| All stories in epic done | Epic issue moved to "Done" |
+
+### Labels
+
+pair uses these labels to identify work item types:
+
+| Label | Purpose |
+|-------|---------|
+| `initiative` | Strategic initiative |
+| `epic` | Feature epic |
+| `user story` | Deliverable user story |
+| `P0` / `P1` / `P2` | Priority levels |
+
+## First-Run Example
+
+After configuring `way-of-working.md`, run a process skill:
+
+```bash
+/pair-process-plan-stories #42    # break epic #42 into stories
+```
+
+**Expected output:**
+
+```text
+STORIES CREATED:
+├── #101: As a user, I want to sign up so that I can access the platform
+├── #102: As a user, I want to log in so that I can see my dashboard
+├── #103: As a user, I want to reset my password so that I can recover access
+└── Epic #42: 3 stories created, all set to "Todo"
+```
+
+pair creates GitHub Issues with the `user story` label, adds them to your project board in the "Todo" column, and links them to the parent epic.
+
+### Verifying the Setup
+
+Check that everything worked:
+
+1. Open your GitHub repository's Projects tab
+2. Verify the new issues appear on the board in "Todo"
+3. Each issue should have the `user story` label and reference the epic
+
+## Related
+
+- [PM Tools overview](/docs/pm-tools) — choosing the right tool
+- [Filesystem](/docs/pm-tools/filesystem) — zero-dependency alternative
+- [Linear](/docs/pm-tools/linear) — dedicated PM tool option

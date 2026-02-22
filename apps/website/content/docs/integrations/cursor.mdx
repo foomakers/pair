@@ -1,0 +1,91 @@
+---
+title: Cursor
+description: Set up pair with Cursor — configure .cursor/rules, discover skills, and follow the bridge pattern.
+---
+
+## Prerequisites
+
+- [Cursor](https://cursor.com) installed
+- A pair-enabled project (`pair-cli init` completed, `.pair/` directory exists)
+- Node.js 18+
+
+## Configure Agent File
+
+Cursor reads project-level rules from `.cursor/rules/` at the repository root. pair generates these bridge files during `pair-cli init`.
+
+### .cursor/rules/
+
+pair creates rule files in `.cursor/rules/` that point Cursor to your `.pair/` directory:
+
+```text
+your-project/
+├── .cursor/
+│   ├── rules/             ← Cursor reads these automatically
+│   └── skills/            ← symlinks to .claude/skills/
+├── .pair/
+│   ├── knowledge/
+│   └── adoption/
+└── ...
+```
+
+The rules file contains the same information as `AGENTS.md` — task selection, essential commands, key references, and quick rules — formatted for Cursor's conventions.
+
+### The Bridge Pattern
+
+`.cursor/rules/` points to `.pair/` — the single source of truth. When you update adoption files or install new skills, Cursor picks up the changes at the next session start.
+
+```text
+.cursor/rules/  ──→ .pair/knowledge/   (guidelines)
+                ──→ .pair/adoption/    (your decisions)
+```
+
+## Use Skills
+
+Skills are available in `.cursor/skills/` as symlinks to the canonical copies in `.claude/skills/`. Cursor discovers these files and can follow the structured instructions when you reference them.
+
+To invoke a skill, ask Cursor to follow the skill instructions:
+
+```text
+Follow the instructions in .cursor/skills/pair-process-implement/SKILL.md to implement story #42
+```
+
+### Common Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `pair-next` | Determine next action based on project state |
+| `pair-process-implement` | Implement a story task by task |
+| `pair-process-review` | Structured code review |
+| `pair-process-refine-story` | Refine a story with acceptance criteria |
+
+For the full catalog, see [Skills Catalog](/docs/reference/skills-catalog).
+
+## Workflow Tips
+
+### Cursor Rules and Adoption Files
+
+Cursor rules provide the entry point, but the real context lives in `.pair/adoption/`. When Cursor reads the rules, it discovers your architecture decisions, tech stack, and development process — keeping responses aligned with your project.
+
+### Multi-Agent Teams
+
+If your team uses both Cursor and Claude Code (or other tools), the bridge pattern ensures everyone follows the same standards. The `.pair/` directory is the single source of truth; `.cursor/rules/` is just one entry point.
+
+### Skills as Symlinks
+
+Skills in `.cursor/skills/` are symlinks to `.claude/skills/`. This means `pair-cli update` updates all tools simultaneously — no manual sync needed. On Windows, pair falls back to full copies if symlinks aren't available.
+
+## Verify It Works
+
+Open Cursor in your pair-enabled project and ask:
+
+```text
+Read the pair rules in .cursor/rules/ and tell me what project I'm working on
+```
+
+**Expected output**: Cursor reads the rules, follows the references to `.pair/adoption/`, and describes your project context (tech stack, architecture, current work items). If it can't find the rules, check that `pair-cli init` completed successfully.
+
+## Related
+
+- [Agent Integration concept](/docs/concepts/agent-integration)
+- [Skills Catalog](/docs/reference/skills-catalog)
+- [CLI Reference](/docs/reference/cli/commands)

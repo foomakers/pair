@@ -1,0 +1,101 @@
+---
+title: Linear
+description: Configure pair to manage work items with Linear — setup, mapping model, and first-run walkthrough.
+---
+
+## Configuration
+
+Add these lines to `.pair/adoption/tech/way-of-working.md`:
+
+```markdown
+- Linear is adopted for project management.
+  Team: <your-team-key>. Project: <your-project-name>.
+  See `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` for usage.
+```
+
+### Prerequisites
+
+- Linear account with a team and project created
+- Linear API key (Settings > API > Personal API Keys)
+- Linear MCP Server configured for your AI assistant
+
+### Linear MCP Server
+
+pair's AI assistants use the Linear MCP Server to interact with Linear programmatically. This enables creating issues, updating statuses, and querying project state for `/pair-next` recommendations.
+
+Configure the MCP server with your Linear API key following your AI tool's MCP setup guide.
+
+## Mapping Model
+
+pair maps its work hierarchy to Linear concepts:
+
+```text
+pair                    Linear
+────                    ──────
+Initiative          →   Project (or label-based grouping)
+Epic                →   Issue (parent)
+User Story          →   Sub-issue
+Task                →   Checklist item in story issue body
+```
+
+### How It Works
+
+- **Initiatives** map to Linear Projects or are tracked via labels, depending on team preference
+- **Epics** are top-level Linear Issues
+- **User Stories** are sub-issues under their parent epic
+- **Tasks** are checkbox items in the story issue description — not separate issues
+- **Status tracking** uses Linear's workflow states (Backlog, Todo, In Progress, Done)
+
+### Status Transitions
+
+| pair Action | Linear Effect |
+|------------|--------------|
+| Start implementing a story | Issue status → "In Progress" |
+| Complete a task | Checkbox marked in issue description |
+| Create PR | PR linked to issue via branch naming |
+| Merge PR | Issue status → "Done" |
+| All stories in epic done | Parent issue status → "Done" |
+
+### Labels and Properties
+
+pair uses Linear's built-in features:
+
+| Linear Feature | pair Usage |
+|---------------|-----------|
+| Priority (Urgent/High/Medium/Low) | Maps to P0/P1/P2 |
+| Labels | Work item type identification |
+| Projects | Initiative grouping |
+| Cycles | Sprint tracking (if using Scrum) |
+
+## First-Run Example
+
+After configuring `way-of-working.md`, run a process skill:
+
+```bash
+/pair-process-plan-stories #42    # break epic #42 into stories
+```
+
+**Expected output:**
+
+```text
+STORIES CREATED:
+├── LIN-101: As a user, I want to sign up so that I can access the platform
+├── LIN-102: As a user, I want to log in so that I can see my dashboard
+├── LIN-103: As a user, I want to reset my password so that I can recover access
+└── Epic LIN-42: 3 stories created, all set to "Backlog"
+```
+
+pair creates Linear sub-issues under the epic, sets priority, and assigns them to your team.
+
+### Verifying the Setup
+
+1. Open your Linear team's board
+2. Verify new issues appear in "Backlog"
+3. Each sub-issue should reference its parent epic
+4. Priority and labels should match pair's configuration
+
+## Related
+
+- [PM Tools overview](/docs/pm-tools) — choosing the right tool
+- [Filesystem](/docs/pm-tools/filesystem) — zero-dependency alternative
+- [GitHub Projects](/docs/pm-tools/github-projects) — GitHub-native option
