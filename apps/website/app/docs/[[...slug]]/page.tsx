@@ -3,6 +3,7 @@ import { source } from '@/lib/source'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import defaultMdxComponents from 'fumadocs-ui/mdx'
+import { PairLogo } from '@pair/brand'
 
 interface PageProps {
   params: Promise<{ slug?: string[] }>
@@ -21,7 +22,7 @@ export default async function Page(props: PageProps) {
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription>{page.data.description}</DocsDescription>
       <DocsBody>
-        <MDX components={{ ...defaultMdxComponents }} />
+        <MDX components={{ ...defaultMdxComponents, PairLogo }} />
       </DocsBody>
     </DocsPage>
   )
