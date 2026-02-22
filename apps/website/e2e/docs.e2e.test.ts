@@ -65,9 +65,7 @@ test('solo setup journey: quickstart → solo setup with content verification', 
   await expect(main).toContainText('pair-cli install --list-targets')
 
   // Links back to general quickstart
-  await expect(
-    main.locator('a[href="/docs/getting-started/quickstart"]').first(),
-  ).toBeVisible()
+  await expect(main.locator('a[href="/docs/getting-started/quickstart"]').first()).toBeVisible()
 
   // AC-6 (partial): no cross-audience refs in solo setup
   const contentLinks = await page.locator('article a').evaluateAll(els =>
@@ -98,9 +96,7 @@ test('team journey: overview → team setup with content verification', async ({
   await expect(main).toContainText('way-of-working.md')
 
   // Links to general quickstart instead of duplicating install
-  await expect(
-    main.locator('a[href="/docs/getting-started/quickstart"]').first(),
-  ).toBeVisible()
+  await expect(main.locator('a[href="/docs/getting-started/quickstart"]').first()).toBeVisible()
 })
 
 test('org journey: overview → org setup with content verification', async ({ page }) => {
@@ -120,9 +116,7 @@ test('org journey: overview → org setup with content verification', async ({ p
   await expect(main).toContainText('Asset Registries')
 
   // Links to general quickstart instead of duplicating install
-  await expect(
-    main.locator('a[href="/docs/getting-started/quickstart"]').first(),
-  ).toBeVisible()
+  await expect(main.locator('a[href="/docs/getting-started/quickstart"]').first()).toBeVisible()
 })
 
 test('concepts journey: navigate through concept pages via sidebar', async ({ page }) => {
@@ -155,19 +149,10 @@ test('concepts journey: navigate through concept pages via sidebar', async ({ pa
   await expect(main).toContainText('Capability Skills')
   await expect(main).toContainText('Composition')
 
-  // Navigate to Process Lifecycle via sidebar
-  await page.locator('a', { hasText: 'Process Lifecycle' }).first().click()
-  await expect(page).toHaveURL('/docs/concepts/process-lifecycle')
-
-  // AC-10: 4 levels and key steps
-  await expect(main).toContainText('Induction')
-  await expect(main).toContainText('Strategic Planning')
-  await expect(main).toContainText('Iteration')
-  await expect(main).toContainText('Execution')
-  await expect(main).toContainText('Create the PRD')
-  await expect(main).toContainText('Bootstrap Checklist')
-  await expect(main).toContainText('Implement')
-  await expect(main).toContainText('Code Review')
+  // Navigate to Agent Integration via sidebar
+  await page.locator('a', { hasText: 'Agent Integration' }).first().click()
+  await expect(page).toHaveURL('/docs/concepts/agent-integration')
+  await expect(page.locator('main h1')).toContainText('Agent Integration')
 })
 
 test('smoke: all docs pages return 200 with correct titles', async ({ page }) => {
@@ -182,7 +167,6 @@ test('smoke: all docs pages return 200 with correct titles', async ({ page }) =>
     { url: '/docs/concepts/knowledge-base', title: 'Knowledge Base' },
     { url: '/docs/concepts/skills', title: 'Skills' },
     { url: '/docs/concepts/adoption-files', title: 'Adoption Files' },
-    { url: '/docs/concepts/process-lifecycle', title: 'Process Lifecycle' },
     { url: '/docs/concepts/agent-integration', title: 'Agent Integration' },
   ]
   for (const { url, title } of pages) {
@@ -269,7 +253,17 @@ test('support section: navigate and verify content', async ({ page }) => {
   await expect(main).toContainText('Support Scope')
   await expect(main).toContainText('GitHub Issues')
 
-  // Navigate to FAQ via sidebar
+  // Navigate to general FAQ via sidebar
+  await page.locator('a', { hasText: /^FAQ$/ }).first().click()
+  await expect(page).toHaveURL('/docs/support/general-faq')
+  await expect(page.locator('main h1')).toContainText('FAQ')
+  await expect(main).toContainText('Getting Started')
+  await expect(main).toContainText('Process & Skills')
+  await expect(main).toContainText('Languages & Tech Stack')
+  await expect(main).toContainText('Project Management')
+  await expect(main).toContainText('Customization')
+
+  // Navigate to Installation FAQ via sidebar
   await page.locator('a', { hasText: 'Installation FAQ' }).first().click()
   await expect(page).toHaveURL('/docs/support/faq')
   await expect(page.locator('main h1')).toContainText('Installation FAQ')
@@ -290,10 +284,12 @@ test('smoke: all guides/reference/support pages return 200', async ({ page }) =>
     { url: '/docs/reference/specs/cli-contracts', title: 'CLI Contracts' },
     { url: '/docs/reference/specs/kb-source-resolution', title: 'KB Source Resolution' },
     { url: '/docs/reference/skills-catalog', title: 'Skills Catalog' },
+    { url: '/docs/reference/guidelines-catalog', title: 'Guidelines' },
     { url: '/docs/reference/skill-management', title: 'Skill Management' },
     { url: '/docs/reference/kb-structure', title: 'KB Structure' },
     { url: '/docs/reference/configuration', title: 'Configuration' },
     { url: '/docs/support', title: 'Support' },
+    { url: '/docs/support/general-faq', title: 'FAQ' },
     { url: '/docs/support/faq', title: 'Installation FAQ' },
   ]
   for (const { url, title } of pages) {
@@ -318,5 +314,163 @@ test('no broken .md links in guides/reference/support sections', async ({ page }
       .evaluateAll(els => els.map(el => el.getAttribute('href')).filter(Boolean))
     const brokenMdLinks = hrefs.filter(h => h && h.endsWith('.md'))
     expect(brokenMdLinks, `${url} should have no .md links`).toHaveLength(0)
+  }
+})
+
+// ============================================================
+// E2E: Docs — Developer Journey section + Guidelines Catalog (#125)
+// ============================================================
+
+test('developer journey: navigate through section pages', async ({ page }) => {
+  // Index page (Process Lifecycle, moved from concepts)
+  await page.goto('/docs/developer-journey')
+  const main = page.locator('main')
+  await expect(page.locator('main h1')).toContainText('Process Lifecycle')
+  await expect(main).toContainText('/pair-next')
+  await expect(main).toContainText('Process Skills (recommended)')
+  await expect(main).toContainText('How-to Guides')
+  await expect(main).toContainText('The Four Levels')
+  await expect(main).toContainText('Entry Points')
+
+  // Sidebar shows Developer Journey section
+  await expect(page.locator('body')).toContainText('Developer Journey')
+
+  // Navigate to Induction
+  await page
+    .locator('a', { hasText: /^Induction: Project Setup$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/developer-journey/induction')
+  await expect(main).toContainText('/pair-process-specify-prd')
+  await expect(main).toContainText('/pair-process-bootstrap')
+  await expect(main).toContainText('/pair-process-plan-initiatives')
+
+  // Navigate to Execution
+  await page
+    .locator('a', { hasText: /^Execution/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/developer-journey/execution')
+  await expect(main).toContainText('/pair-process-implement')
+  await expect(main).toContainText('/pair-process-review')
+  await expect(main).toContainText('TDD Discipline')
+
+  // Links to reference catalogs
+  await expect(main.locator('a[href="/docs/reference/skills-catalog"]').first()).toBeVisible()
+  await expect(main.locator('a[href="/docs/reference/guidelines-catalog"]').first()).toBeVisible()
+})
+
+test('smoke: all developer journey pages return 200', async ({ page }) => {
+  const pages = [
+    { url: '/docs/developer-journey', title: 'Process Lifecycle' },
+    { url: '/docs/developer-journey/induction', title: 'Induction' },
+    { url: '/docs/developer-journey/strategic-planning', title: 'Strategic Planning' },
+    { url: '/docs/developer-journey/iteration', title: 'Iteration' },
+    { url: '/docs/developer-journey/execution', title: 'Execution' },
+  ]
+  for (const { url, title } of pages) {
+    const response = await page.goto(url)
+    expect(response?.status(), `${url} should return 200`).toBe(200)
+    await expect(page.locator('main h1')).toBeVisible()
+    await expect(page).toHaveTitle(new RegExp(title))
+  }
+})
+
+test('guidelines catalog: categories and how-to listing', async ({ page }) => {
+  await page.goto('/docs/reference/guidelines-catalog')
+  const main = page.locator('main')
+
+  // Page renders with expected structure
+  await expect(page.locator('main h1')).toContainText('Guidelines')
+  await expect(main).toContainText('How-To Guides')
+  await expect(main).toContainText('Guideline Categories')
+
+  // 9 guideline categories present
+  await expect(main).toContainText('Architecture')
+  await expect(main).toContainText('Code Design')
+  await expect(main).toContainText('Collaboration')
+  await expect(main).toContainText('Infrastructure')
+  await expect(main).toContainText('Observability')
+  await expect(main).toContainText('Quality Assurance')
+  await expect(main).toContainText('Technical Standards')
+  await expect(main).toContainText('Testing')
+  await expect(main).toContainText('User Experience')
+
+  // How-to guides listed with skill references
+  await expect(main).toContainText('Create a PRD')
+  await expect(main).toContainText('/pair-process-specify-prd')
+  await expect(main).toContainText('Code Review')
+  await expect(main).toContainText('/pair-process-review')
+})
+
+// ============================================================
+// E2E: Docs — Customization section (#125)
+// ============================================================
+
+test('customization journey: index → adopt → team → organization', async ({ page }) => {
+  // AC-1: index page with adopt→customize→publish progression
+  await page.goto('/docs/customization')
+  const main = page.locator('main')
+  await expect(page.locator('main h1')).toContainText('Adapt pair to Your Context')
+  await expect(main).toContainText('Adopt')
+  await expect(main).toContainText('Customize')
+  await expect(main).toContainText('Publish')
+
+  // AC-5: sidebar shows customization section with correct ordering
+  await expect(page.locator('body')).toContainText('Customization')
+
+  // Navigate to Adopt via content link
+  await main.locator('a[href="/docs/customization/adopt"]').first().click()
+  await expect(page).toHaveURL('/docs/customization/adopt')
+
+  // AC-2: adopt page — solo dev consumer guide
+  await expect(page.locator('main h1')).toContainText('Adopt a Knowledge Base')
+  await expect(main).toContainText('Browse Available Knowledge Bases')
+  await expect(main).toContainText('pair-cli install')
+  await expect(main).toContainText('Verify the Installation')
+  await expect(main).toContainText('What You Get')
+
+  // Navigate to Team via sidebar
+  await page
+    .locator('a', { hasText: /^Customize for Your Team$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/customization/team')
+
+  // AC-3: team page — team lead adapter guide
+  await expect(page.locator('main h1')).toContainText('Customize for Your Team')
+  await expect(main).toContainText('Layered Architecture')
+  await expect(main).toContainText('Override the Tech Stack')
+  await expect(main).toContainText('Stay Updated')
+  await expect(main).toContainText('pair-cli update')
+
+  // Navigate to Organization via sidebar
+  await page
+    .locator('a', { hasText: /^Publish a Knowledge Base$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/customization/organization')
+
+  // AC-4: organization page — org architect producer guide
+  await expect(page.locator('main h1')).toContainText('Publish a Knowledge Base')
+  await expect(main).toContainText('Create the KB Structure')
+  await expect(main).toContainText('pair-cli package')
+  await expect(main).toContainText('Distribute')
+  await expect(main).toContainText('Version and Maintain')
+})
+
+test('smoke: all customization pages return 200 with correct titles', async ({ page }) => {
+  const pages = [
+    { url: '/docs/customization', title: 'Adapt pair to Your Context' },
+    { url: '/docs/customization/adopt', title: 'Adopt a Knowledge Base' },
+    { url: '/docs/customization/team', title: 'Customize for Your Team' },
+    { url: '/docs/customization/templates', title: 'Customize Templates' },
+    { url: '/docs/customization/organization', title: 'Publish a Knowledge Base' },
+  ]
+  for (const { url, title } of pages) {
+    const response = await page.goto(url)
+    expect(response?.status(), `${url} should return 200`).toBe(200)
+    await expect(page.locator('main h1')).toBeVisible()
+    await expect(page).toHaveTitle(new RegExp(title))
   }
 })

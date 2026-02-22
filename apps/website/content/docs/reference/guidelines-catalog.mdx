@@ -1,0 +1,162 @@
+---
+title: Guidelines & How-To Catalog
+description: Complete catalog of all pair Knowledge Base guidelines (9 categories) and how-to guides (11 sequential steps).
+---
+
+The pair Knowledge Base ships with opinionated guidelines organized into 9 categories and 11 sequential how-to guides covering the full AI-assisted development lifecycle. Guidelines live in `.pair/knowledge/guidelines/`, how-to guides in `.pair/knowledge/how-to/`.
+
+> **Last updated:** 2026-02-22. Source: `packages/knowledge-hub/dataset/.pair/knowledge/`
+
+## How-To Guides
+
+11 sequential guides that walk you through the complete development process — from product requirements to code review. Each guide can be followed manually or invoked as a skill (recommended). See the [Developer Journey](/docs/developer-journey) for the full step-by-step walkthrough.
+
+| # | Guide | Tags | Skill (preferred) |
+| --- | --- | --- | --- |
+| 01 | **Create a PRD** | prd, requirements, planning | `/pair-process-specify-prd` |
+| 02 | **Complete Bootstrap Checklist** | bootstrap, setup, onboarding | `/pair-process-bootstrap` |
+| 03 | **Create & Prioritize Initiatives** | initiative, roadmap, P0/P1/P2 | `/pair-process-plan-initiatives` |
+| 04 | **Define Subdomains** | subdomain, domain, DDD | `/pair-process-map-subdomains` |
+| 05 | **Define Bounded Contexts** | bounded context, architecture, DDD | `/pair-process-map-contexts` |
+| 06 | **Break Down Epics** | epic, breakdown, 2-4 sprints | `/pair-process-plan-epics` |
+| 07 | **Break Down User Stories** | story, vertical slicing, INVEST | `/pair-process-plan-stories` |
+| 08 | **Refine a User Story** | refine, Given-When-Then, technical analysis | `/pair-process-refine-story` |
+| 09 | **Create Tasks** | task, breakdown, dependency mapping | `/pair-process-plan-tasks` |
+| 10 | **Implement a Task** | implement, TDD, code | `/pair-process-implement` |
+| 11 | **Code Review** | review, quality gates, ADR | `/pair-process-review` |
+
+### How-To Flow
+
+```text
+01 PRD → 02 Bootstrap → 03 Initiatives → (04 Subdomains → 05 Contexts) → 06 Epics → 07 Stories → 08 Refine → 09 Tasks → 10 Implement → 11 Review
+```
+
+Steps 04-05 (DDD) are optional — skip them if your project doesn't need domain modeling.
+
+## Guideline Categories
+
+9 categories covering every aspect of software development. Each category contains multiple guideline files organized by topic.
+
+### Architecture
+
+Patterns, decisions, and constraints for system design.
+
+| Topic | What it covers |
+| --- | --- |
+| **Architectural Patterns** | Clean architecture, hexagonal, CQRS, event sourcing, layered, CRUD, transaction script |
+| **Decision Frameworks** | ADR process, decision tracking |
+| **Design Patterns** | DDD patterns, bounded contexts, aggregates |
+| **Deployment Architectures** | Service topologies, scaling patterns |
+| **LLM Integration** | AI/LLM integration patterns |
+| **Project Constraints** | Budget, timeline, compliance constraints |
+
+### Code Design
+
+Code organization, principles, and quality standards.
+
+| Topic | What it covers |
+| --- | --- |
+| **Code Organization** | File structure, module boundaries, naming conventions |
+| **Design Principles** | SOLID, DRY, KISS, composition over inheritance |
+| **Framework Patterns** | Framework-specific patterns and best practices |
+| **Package Management** | Dependency management, monorepo patterns |
+| **Quality Standards** | Code metrics, complexity thresholds, maintainability |
+
+### Collaboration
+
+Process, methodology, and team coordination.
+
+| Topic | What it covers |
+| --- | --- |
+| **Methodology** | Scrum, Kanban, Lean, hybrid approaches |
+| **Estimation** | Story points, T-shirt sizing, estimation techniques |
+| **Issue Management** | Issue tracking, triage, prioritization |
+| **Project Tracking** | Velocity, burndown, sprint metrics |
+| **Project Management Tools** | GitHub Projects, Linear, Jira configuration |
+| **Team** | Team structure, roles, communication patterns |
+| **Templates** | Branch, commit, PR, epic, story, task, initiative, subdomain, bounded context, code review |
+
+### Infrastructure
+
+Cloud, CI/CD, deployment, and operations.
+
+| Topic | What it covers |
+| --- | --- |
+| **CI/CD Strategy** | Pipeline design, build optimization, release automation |
+| **Cloud Providers** | AWS, GCP, Azure patterns |
+| **Cloud Services** | Managed services, serverless, containers |
+| **Container Orchestration** | Docker, Kubernetes, scaling |
+| **Deployment Patterns** | Blue-green, canary, rolling updates |
+| **Environments** | Dev, staging, production configuration |
+| **Infrastructure as Code** | Terraform, CloudFormation, Pulumi |
+| **Testing Infrastructure** | Test environments, fixtures, data management |
+
+### Observability
+
+Monitoring, logging, and alerting.
+
+| Topic | What it covers |
+| --- | --- |
+| **Alerting** | Alert rules, escalation, on-call |
+| **Metrics** | Application metrics, SLIs/SLOs/SLAs |
+| **Observability Principles** | Three pillars: logs, metrics, traces |
+| **Structured Logging** | Log formats, correlation IDs, log levels |
+
+### Quality Assurance
+
+Security, accessibility, and performance standards.
+
+| Topic | What it covers |
+| --- | --- |
+| **Accessibility** | WCAG compliance, screen reader support, keyboard navigation |
+| **Performance** | Load times, Core Web Vitals, optimization |
+| **Quality Monitoring** | Quality dashboards, trend analysis |
+| **Quality Standards** | Definition of Done, quality gates, acceptance criteria |
+| **Security** | OWASP top 10, authentication, authorization, input validation |
+
+### Technical Standards
+
+Coding standards, git workflow, and tooling.
+
+| Topic | What it covers |
+| --- | --- |
+| **AI Development** | AI tool configuration, prompt patterns, agent integration |
+| **Coding Standards** | Language-specific conventions, linting rules |
+| **Deployment Workflow** | Release process, versioning, changelog |
+| **Development Tools** | IDE setup, debugging, profiling |
+| **Git Workflow** | Branching strategy, commit conventions, merge policies |
+| **Integration Standards** | API design, event contracts, data formats |
+| **Technology Stack** | Language selection, framework evaluation, version policies |
+
+### Testing
+
+Strategies, frameworks, and testing patterns.
+
+| Topic | What it covers |
+| --- | --- |
+| **Test Strategy** | Testing pyramid, TDD, coverage targets |
+| **Unit Testing** | Isolation, mocking, assertions |
+| **Integration Testing** | Service integration, database testing |
+| **E2E Testing** | User journey testing, browser automation |
+| **Accessibility Testing** | Automated a11y checks, manual testing |
+| **Performance Testing** | Load testing, benchmarking, profiling |
+| **Test Automation** | CI integration, parallel execution, reporting |
+
+### User Experience
+
+Design systems, research, and content strategy.
+
+| Topic | What it covers |
+| --- | --- |
+| **Content Strategy** | Writing guidelines, tone, information architecture |
+| **Design Principles** | Visual hierarchy, consistency, feedback |
+| **Design Systems** | Component libraries, tokens, theming |
+| **Interface Design** | Layout patterns, responsive design, navigation |
+| **User Research** | Personas, journey mapping, usability testing |
+
+## Related
+
+- [Skills Catalog](/docs/reference/skills-catalog) — all 31 pair skills with commands and composition
+- [Developer Journey](/docs/developer-journey) — step-by-step walkthrough of the full process
+- [KB Structure](/docs/reference/kb-structure) — directory layout and file purposes
+- [Customize for Your Team](/docs/customization/team) — override guidelines via adoption files

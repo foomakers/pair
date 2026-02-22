@@ -1,0 +1,119 @@
+---
+title: Process Lifecycle
+description: The four-level, nine-step development lifecycle that pair defines — from product requirements to code review.
+---
+
+pair defines a structured development lifecycle with **four levels** and **nine steps**. Each level builds on the previous, taking a project from initial idea to production-ready code.
+
+The lifecycle is not rigid — you enter at whatever level matches your project's current state. But every step has a specific how-to guide and a matching skill that the AI follows, ensuring consistency and completeness.
+
+## Let /pair-next Guide You
+
+You don't need to memorize this sequence. Run `/pair-next` at any point and pair reads your project state — open issues, story statuses, task progress — to suggest the right next step. This is the recommended way to navigate the process.
+
+```text
+/pair-next
+```
+
+**When to use it:** at the start of every session, after completing a step, when switching context, or when you're not sure what to work on next.
+
+## The Four Levels
+
+```text
+Level 1: Induction (one-time)
+  Step 1  Create PRD ─────────────── /pair-process-specify-prd
+  Step 2  Bootstrap Project ──────── /pair-process-bootstrap
+  Step 3  Plan Initiatives ────────── /pair-process-plan-initiatives
+
+Level 2: Strategic Planning (per initiative)
+  Step 4  Break Down Epics ────────── /pair-process-plan-epics
+
+Level 3: Iteration (per epic)
+  Step 5  Break Down Stories ──────── /pair-process-plan-stories
+  Step 6  Refine Stories ──────────── /pair-process-refine-story
+  Step 7  Create Tasks ────────────── /pair-process-plan-tasks
+
+Level 4: Execution (per story)
+  Step 8  Implement ───────────────── /pair-process-implement
+  Step 9  Code Review ─────────────── /pair-process-review
+```
+
+You can follow this flow in two ways:
+
+1. **Process Skills (recommended)** — invoke a slash command and the AI handles the structured process for you. See the [Skills Catalog](/docs/reference/skills-catalog) for all 31 skills.
+2. **How-to Guides** — follow the manual step-by-step instructions from the Knowledge Base. See the [Guidelines & How-To Catalog](/docs/reference/guidelines-catalog) for all 11 guides.
+
+Skills compose capability skills internally, enforce adoption compliance, and update your PM tool automatically. The how-to guides give you the same process with full manual control.
+
+The detailed walkthrough for each level is in the pages that follow.
+
+## Product Lifecycle
+
+```text
+INDUCTION
+└── Product Foundation & Architecture
+    │
+    ├── STRATEGIC INITIATIVES
+    │   └── Business Value & Market Position
+    │       │
+    │       ├── CUSTOMER-FACING ITERATIONS
+    │       │   └── User Experience & Feature Delivery
+    │       │       │
+    │       │       └── CONTINUOUS VALUE DELIVERY
+    │       │           └── Working Software & Feedback Loops
+```
+
+| Level | Duration | Value Stream | Card Type | Focus |
+|-------|----------|--------------|-----------|-------|
+| Induction | One-time | Product Foundation | PRD | Product Vision, Market Fit, Technical Architecture |
+| Strategic | 6-8 sprints | Business Value | Initiative | Business Objectives, Value Proposition, Roadmap |
+| Iteration | 2-4 sprints | User Experience | Epic | Feature Sets, User Journeys, Integration Points |
+| Execution | 1 sprint | Working Software | Story + Task | Deliverable Features, Code Quality, User Feedback |
+
+## Card Hierarchy
+
+```text
+Initiative (Strategic Level)
+├── Epic 1 (Feature Level)
+│   ├── User Story 1.1
+│   │   ├── Task 1.1.1
+│   │   ├── Task 1.1.2
+│   │   └── Task 1.1.3
+│   └── User Story 1.2
+│       ├── Task 1.2.1
+│       └── Task 1.2.2
+└── Epic 2 (Feature Level)
+    └── User Story 2.1
+        └── Task 2.1.1
+```
+
+## Entry Points
+
+You don't have to start at Step 1. Pick your entry point based on where you are:
+
+| You're starting... | Start at | Skill |
+| --- | --- | --- |
+| A brand new project | Step 1 (PRD) | `/pair-process-specify-prd` |
+| Adopting pair on an existing project | Step 2 (Bootstrap) | `/pair-process-bootstrap` |
+| A new initiative or roadmap cycle | Step 3 (Initiatives) | `/pair-process-plan-initiatives` |
+| A sprint planning session | Step 5 (Stories) | `/pair-process-plan-stories` |
+| Picking up a story to develop | Step 8 (Implement) | `/pair-process-implement` |
+| Reviewing someone's PR | Step 9 (Review) | `/pair-process-review` |
+
+Or just run `/pair-next` — it figures out where you are and what to do next.
+
+## What's Next
+
+Follow the journey step by step:
+
+- [Induction](/docs/developer-journey/induction) — one-time project setup (Steps 1-3)
+- [Strategic Planning](/docs/developer-journey/strategic-planning) — break initiatives into epics (Step 4)
+- [Iteration](/docs/developer-journey/iteration) — prepare stories and tasks for development (Steps 5-7)
+- [Execution](/docs/developer-journey/execution) — implement and review (Steps 8-9)
+
+Feeling lost? Check the [FAQ](/docs/support/general-faq) — it answers common questions about process, languages, tools, and customization.
+
+## Reference
+
+- [Skills Catalog](/docs/reference/skills-catalog) — all 31 skills with commands and composition
+- [Guidelines & How-To Catalog](/docs/reference/guidelines-catalog) — all 9 guideline categories and 11 how-to guides

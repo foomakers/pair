@@ -1,0 +1,110 @@
+---
+title: Adopt a Knowledge Base
+description: Step-by-step guide to discovering, installing, and verifying a published Knowledge Base for your project.
+---
+
+This guide walks you through adopting an existing Knowledge Base — from finding one to verifying it works in your project. By the end, your AI assistant will have structured context for every session.
+
+## Prerequisites
+
+- Node.js 18+ installed
+- pair-cli installed globally ([Quickstart](/docs/getting-started/quickstart))
+- A project directory (new or existing)
+
+## Browse Available Knowledge Bases
+
+There is no centralized KB registry yet. To find published KBs:
+
+**npm search:**
+
+```bash
+npm search pair-kb
+```
+
+**GitHub search:**
+
+Search for repositories with the `pair-kb` topic or containing a `.pair/knowledge/` directory structure.
+
+**The pair KB itself** is the canonical example — it ships with the CLI and covers the full software development lifecycle. If you're unsure which KB to start with, use the default.
+
+## Install a KB
+
+Navigate to your project directory and run:
+
+```bash
+pair-cli install
+```
+
+This downloads the default pair KB and installs it into your project's `.pair/` directory. The CLI creates the full directory structure:
+
+```text
+.pair/
+├── knowledge/          # Upstream guidelines (updated by pair update)
+│   ├── guidelines/     # Development standards
+│   └── how-to/         # Step-by-step process guides
+├── adoption/           # Your project-specific decisions
+│   ├── product/        # PRD, subdomains, bounded contexts
+│   └── tech/           # Architecture, tech stack, way-of-working
+└── ...
+```
+
+To install from a specific source:
+
+```bash
+# From a GitHub release
+pair-cli install --source github --url https://github.com/org/my-kb/releases/latest
+
+# From a local path (useful for development)
+pair-cli install --source local --url /path/to/kb
+```
+
+See [CLI Commands](/docs/reference/cli/commands) for the full `install` reference and [Install from URL](/docs/guides/install-from-url) for advanced source options.
+
+## Verify the Installation
+
+After installation, check that the KB is active:
+
+```bash
+# Verify KB structure is valid
+pair-cli kb validate
+```
+
+You should see the knowledge and adoption directories populated. The key indicator is `.pair/knowledge/guidelines/` containing guideline files.
+
+Check that your AI assistant can see the KB by starting a new session — if AGENTS.md or CLAUDE.md links to `.pair/`, the assistant will pick up the context automatically.
+
+## What You Get
+
+An installed KB provides three layers of value:
+
+### Guidelines
+
+Development standards covering code design, testing strategy, security, architecture, collaboration, and more. Your AI assistant reads these to produce code that follows your standards — not generic suggestions.
+
+### Adoption Files
+
+Project-specific decisions: which tech stack, architecture pattern, methodology, and quality gates you chose. These files override guideline defaults and ensure every AI session stays aligned with your choices.
+
+You don't write adoption files manually. Run `/pair-next` and the AI walks you through the full process — from PRD to architecture to tech stack — generating each file along the way.
+
+### Skills
+
+Structured instructions that AI assistants discover and execute, following the [Agent Skills](https://agentskills.io) open standard. Skills automate the product lifecycle — from PRD creation to code review — with composable process and capability skills.
+
+See [Skills](/docs/concepts/skills) for how skills work and [Skills Catalog](/docs/reference/skills-catalog) for the full list.
+
+## Keep Your KB Updated
+
+As the upstream KB evolves, pull updates without losing your project-specific decisions:
+
+```bash
+pair-cli update
+```
+
+The update replaces `.pair/knowledge/` (upstream content) but preserves `.pair/adoption/` (your decisions). See [Customize the Knowledge Base](/docs/guides/customize-kb) for details on how the layered architecture protects your customizations.
+
+## Next Steps
+
+- **Ready to customize?** [Customize for Your Team](/docs/customization/team) — adjust guidelines and quality gates for your team context.
+- **Need the full reference?** [KB Structure](/docs/reference/kb-structure) — directory layout and file purposes.
+- **Want to start the process?** Run `/pair-next` in your AI assistant to begin the guided setup.
