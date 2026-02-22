@@ -1,0 +1,81 @@
+---
+title: "Strategic Planning: Epics"
+description: "Break initiatives into delivery-sized epics — the bridge between strategy and sprint work."
+---
+
+Strategic planning happens once per initiative. You take a high-level objective and decompose it into epics that can be delivered in 2-4 sprints each.
+
+## Step 4: Break Down Epics
+
+Decompose an initiative into manageable delivery chunks.
+
+| | |
+| --- | --- |
+| **Skill (recommended)** | `/pair-process-plan-epics` |
+| **How-to guide** | [06 — How to Break Down Epics](/docs/reference/guidelines-catalog) |
+| **Input** | Initiative issue from your PM tool |
+| **Output** | Issues in your PM tool (type: epic) linked to the parent initiative |
+
+The AI analyzes the initiative scope and proposes epics sized for 2-4 sprints. Each epic is:
+
+- **Self-contained** — delivers a coherent set of features
+- **Independently releasable** — can go to production without waiting for other epics
+- **Sized for a team** — enough work for 2-4 sprints, not more
+
+### Epic 0: Foundation Work
+
+For new projects, the skill includes an **Epic 0 assessment** — infrastructure, tooling, and foundation work that must happen before feature development:
+
+- Repository setup, CI/CD pipeline
+- Core libraries and shared components
+- Development environment and quality gates
+- Authentication/authorization foundation (if needed)
+
+Epic 0 is created only when the assessment identifies essential setup work.
+
+## Optional: Domain Modeling (DDD)
+
+If your project benefits from domain-driven design, add two intermediate steps between initiatives and epics:
+
+### Define Subdomains
+
+| | |
+| --- | --- |
+| **Skill** | `/pair-process-map-subdomains` |
+| **How-to guide** | [04 — How to Define Subdomains](/docs/reference/guidelines-catalog) |
+
+Classifies problem areas as:
+- **Core** — your competitive advantage, build in-house
+- **Supporting** — necessary but not differentiating, build or buy
+- **Generic** — commodity, buy or use open source
+
+### Define Bounded Contexts
+
+| | |
+| --- | --- |
+| **Skill** | `/pair-process-map-contexts` |
+| **How-to guide** | [05 — How to Define Bounded Contexts](/docs/reference/guidelines-catalog) |
+
+Establishes service boundaries and integration patterns between contexts (synchronous, asynchronous, shared kernel).
+
+Skip DDD if your project is a simple CRUD app or doesn't need service decomposition.
+
+## What You Have After Strategic Planning
+
+```text
+PM Tool:
+├── Initiative (P0): User Management
+│   ├── Epic 0: Foundation & Infrastructure
+│   ├── Epic 1: Authentication & Registration
+│   ├── Epic 2: Profile & Preferences
+│   └── Epic 3: Admin Dashboard
+└── Initiative (P1): ...
+    ├── Epic 4: ...
+    └── Epic 5: ...
+```
+
+Each epic is ready for iteration — the next level breaks them into sprint-sized stories.
+
+## Next
+
+[Iteration](/docs/developer-journey/iteration) — break epics into stories, refine them, and create tasks.

@@ -1,4 +1,12 @@
 {
   "title": "Reference",
-  "pages": ["cli", "specs", "skills-catalog", "skill-management", "kb-structure", "configuration"]
+  "pages": [
+    "cli",
+    "specs",
+    "skills-catalog",
+    "guidelines-catalog",
+    "skill-management",
+    "kb-structure",
+    "configuration"
+  ]
 }

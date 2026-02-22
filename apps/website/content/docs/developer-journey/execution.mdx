@@ -1,0 +1,125 @@
+---
+title: "Execution: Implement & Review"
+description: "The daily development loop — implement stories through TDD task cycles, then review and merge."
+---
+
+Execution is the daily development loop. You pick up a refined story, implement it task by task, create a PR, and get it reviewed and merged.
+
+## Step 8: Implement
+
+Develop a user story by working through its tasks sequentially.
+
+| | |
+| --- | --- |
+| **Skill (recommended)** | `/pair-process-implement` |
+| **How-to guide** | [10 — How to Implement a Task](/docs/reference/guidelines-catalog) |
+| **Input** | Story issue with tasks (status: Refined) |
+| **Output** | Feature branch, commits, pull request |
+
+### The Implementation Cycle
+
+For each task, the skill follows a strict 5-step cycle:
+
+```text
+1. Context ──── Load adoption files and technical decisions
+       │
+2. Branch ───── Create or switch to the feature branch
+       │
+3. Implement ── Write code (TDD for dev tasks, direct for docs/config)
+       │
+4. Quality ──── Run quality gates (lint, test, type check)
+       │
+5. Commit ───── Commit and update task checkbox in the story
+```
+
+### TDD Discipline (Development Tasks)
+
+The AI follows strict TDD — tests and implementation never change in the same session:
+
+1. **RED** — write a failing test that defines the expected behavior
+2. **GREEN** — write the minimal code to make the test pass
+3. **REFACTOR** — improve structure without changing behavior
+
+Every new module file must have a corresponding unit test file (1:1 mapping). Mocks are avoided in favor of in-memory test doubles.
+
+### Commit Strategies
+
+| Strategy | When | Flow |
+| --- | --- | --- |
+| **Commit per task** | Multi-task stories (recommended) | Implement → confirm with dev → commit → next task |
+| **Commit per story** | Single-task stories or continuous flow | Implement all → confirm with dev → commit all |
+
+With commit-per-task, the developer gets a checkpoint between every task — the AI presents a summary and waits for confirmation before committing.
+
+### PR Creation
+
+After all tasks are complete, the skill:
+1. Pushes the feature branch
+2. Creates a PR following the team's [PR template](/docs/reference/guidelines-catalog)
+3. Links the PR to the story issue
+4. Marks the PR as ready for review
+
+## Step 9: Code Review
+
+Review a pull request through a structured 6-phase process.
+
+| | |
+| --- | --- |
+| **Skill (recommended)** | `/pair-process-review` |
+| **How-to guide** | [11 — How to Code Review](/docs/reference/guidelines-catalog) |
+| **Input** | Pull request |
+| **Output** | Review decision: approve, request changes, or reject |
+
+### The Review Phases
+
+```text
+Phase 1 ── Validation ────── PR structure, linked story, template compliance
+       │
+Phase 2 ── Technical ─────── Code quality, architecture match, security
+       │
+Phase 3 ── Adoption ──────── Libraries match tech-stack.md, patterns match architecture.md
+       │
+Phase 4 ── Completeness ──── All AC covered, all tasks done, DoD met
+       │
+Phase 5 ── Decision ──────── APPROVED, CHANGES REQUESTED, or REJECT
+       │
+Phase 6 ── Merge ─────────── Merge PR, update story/epic/initiative status
+```
+
+### ADR Enforcement
+
+If the review detects a new library not listed in `tech-stack.md` or an architecture pattern not recorded in `architecture.md`, it **blocks** and requests an Architecture Decision Record before approval. This ensures every technical choice is deliberate and documented.
+
+### Parent Cascade
+
+After merge, the skill updates the status hierarchy:
+- Story → **Done**
+- If all stories in the epic are Done → Epic → **Done**
+- If all epics in the initiative are Done → Initiative → **Done**
+
+## The Complete Loop
+
+```text
+/pair-next → suggests story to implement
+    │
+/pair-process-implement #story-id
+    │
+    ├── Task 1: RED → GREEN → REFACTOR → commit
+    ├── Task 2: RED → GREEN → REFACTOR → commit
+    └── Task N: ... → commit → PR created
+    │
+/pair-process-review #pr-number
+    │
+    ├── Approved → merge → status cascade
+    └── Changes requested → fix → re-review
+    │
+/pair-next → suggests next story
+```
+
+This loop repeats for every story. `/pair-next` always knows what comes next.
+
+## Reference
+
+- [Skills Catalog](/docs/reference/skills-catalog) — all 31 skills with commands and composition
+- [Guidelines & How-To Catalog](/docs/reference/guidelines-catalog) — all 9 guideline categories and 11 how-to guides
+- [Adopt a Knowledge Base](/docs/customization/adopt) — set up pair if you haven't already

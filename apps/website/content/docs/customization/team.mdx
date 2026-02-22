@@ -1,10 +1,152 @@
 ---
-title: Team Customization
-description: Configure pair for your team — shared knowledge base, adoption files, and agent bridge patterns.
+title: Customize for Your Team
+description: Adjust an adopted Knowledge Base for your team — override guidelines, set quality gates, and preserve customizations across updates.
 ---
 
-# Team Customization
+You've adopted a Knowledge Base and it works. Now you want to adjust it — different testing framework, stricter quality gates, team-specific conventions. This guide shows how to customize without losing the ability to pull upstream updates.
 
-This section is coming soon as part of [Story #125](https://github.com/foomakers/pair/issues/125).
+## When to Customize
 
-In the meantime, check out the [Team Quickstart](/docs/getting-started/quickstart-team) to get your team set up with pair.
+Customize when the default KB doesn't match your team's context:
+
+- Your tech stack differs from the KB defaults (e.g., Jest instead of Vitest)
+- Your team follows a different methodology (e.g., Scrum with 2-week sprints)
+- You need stricter or different quality gates
+- Your architecture pattern isn't covered by the KB defaults
+
+If you just need to use the KB as-is, see [Adopt a Knowledge Base](/docs/customization/adopt).
+
+## How the Layered Architecture Works
+
+The `.pair/` directory has two layers:
+
+| Layer | Directory | Updated by | Your changes |
+| --- | --- | --- | --- |
+| Knowledge | `.pair/knowledge/` | `pair-cli update` | Overwritten — don't edit |
+| Adoption | `.pair/adoption/` | You | Preserved — never overwritten |
+
+**Adoption always wins.** When both layers have an opinion on the same topic, the AI reads adoption files first. This means you can override any guideline by recording a decision in the adoption layer.
+
+## Customize Guidelines
+
+### Override the Tech Stack
+
+Edit `.pair/adoption/tech/tech-stack.md` to declare your team's choices:
+
+```markdown
+## Testing
+
+- jest is adopted as the testing framework (jest v29.x).
+- @testing-library/react is adopted for component testing.
+```
+
+The AI will now use Jest in all generated code, ignoring the KB's default recommendation.
+
+### Change the Architecture Pattern
+
+Edit `.pair/adoption/tech/architecture.md`:
+
+```markdown
+- Microservices architecture is adopted for backend services.
+- Each service owns its database (database-per-service pattern).
+```
+
+### Set Your Methodology
+
+Edit `.pair/adoption/tech/way-of-working.md`:
+
+```markdown
+- Scrum is adopted with 2-week sprints.
+- GitHub Projects is adopted for project management.
+- pnpm quality-gate is the adopted quality gate command.
+```
+
+## Adjust Quality Gates
+
+Quality gates run before every commit. Customize them in `.pair/adoption/tech/way-of-working.md`:
+
+```markdown
+## Quality Gates
+
+- `npm run quality` is the adopted project-level quality gate command.
+- Quality gate includes: type checking, testing, linting, formatting.
+
+### Custom Gate Registry
+
+| Order | Gate | Command | Required |
+| --- | --- | --- | --- |
+| 1 | Quality Gate | `npm run quality` | Yes |
+| 2 | Security Scan | `npm audit` | Yes |
+```
+
+## Record Significant Decisions
+
+For decisions that need rationale and context — "why did we choose this?" — record an Architecture Decision Record:
+
+```bash
+# Using pair skills (recommended)
+/pair-capability-record-decision
+```
+
+Or create a file manually in `.pair/adoption/tech/adr/` following the [ADR template](https://adr.github.io/).
+
+ADRs help future team members (and AI assistants) understand not just what you decided, but why.
+
+## Stay Updated
+
+Pull upstream KB changes without losing your customizations:
+
+```bash
+pair-cli update
+```
+
+What happens during update:
+
+1. `.pair/knowledge/` is replaced with the latest upstream content
+2. `.pair/adoption/` is untouched — all your decisions survive
+3. New guidelines appear automatically; removed guidelines disappear
+4. Your adoption overrides continue to take precedence
+
+See [CLI Commands](/docs/reference/cli/commands) for the full `update` reference.
+
+### Handling Conflicts
+
+Occasionally an upstream update changes something your adoption files reference. When this happens:
+
+1. The AI assistant will notice the inconsistency during the next session
+2. Review the updated guidelines in `.pair/knowledge/`
+3. Update your adoption files if needed to stay aligned
+
+## Add Project-Specific Content
+
+Create files in `.pair/adoption/` for guidelines that don't exist in the upstream KB:
+
+```markdown
+<!-- .pair/adoption/tech/api-conventions.md -->
+
+# API Conventions
+
+- All REST endpoints use kebab-case paths
+- Response format follows JSON:API specification
+- Pagination uses cursor-based approach
+```
+
+The AI assistant reads all files in `.pair/adoption/` — custom files are treated the same as overrides.
+
+## Verify Your Customizations
+
+After customizing, verify everything is consistent:
+
+```bash
+# Validate KB structure
+pair-cli kb validate
+
+# Check internal links
+pair-cli update-link --dry-run
+```
+
+## Next Steps
+
+- **Want to distribute your customized KB?** [Publish a Knowledge Base](/docs/customization/organization) — package and distribute for other teams.
+- **Need the directory reference?** [KB Structure](/docs/reference/kb-structure) — every directory and file explained.
+- **Quick override guide?** [Customize the Knowledge Base](/docs/guides/customize-kb) — concise override patterns.

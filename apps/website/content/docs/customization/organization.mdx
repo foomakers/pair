@@ -1,10 +1,221 @@
 ---
-title: Organization Customization
-description: Roll out pair across your organization — custom KB packaging, distribution, and compliance.
+title: Publish a Knowledge Base
+description: Create, structure, package, and distribute a Knowledge Base for your organization.
 ---
 
-# Organization Customization
+You've customized pair for your team. Now you want to codify those practices into a distributable Knowledge Base — so every team in your organization starts from the same foundation. This guide covers the full workflow from creation to distribution.
 
-This section is coming soon as part of [Story #125](https://github.com/foomakers/pair/issues/125).
+## Plan Your KB
 
-In the meantime, check out the [Organization Quickstart](/docs/getting-started/quickstart-org) to get started with enterprise rollout.
+Before writing content, decide what your KB will cover:
+
+**Scope**: Will it cover the full SDLC (like the pair KB) or focus on a specific concern (e.g., security standards, API design)?
+
+**Audience**: Who will adopt this KB? A single team, a department, or the whole organization?
+
+**Baseline**: Are you starting from scratch, or forking an existing KB? Forking the pair KB gives you a working structure to modify.
+
+## Create the KB Structure
+
+A Knowledge Base follows the `.pair/` directory convention:
+
+```text
+.pair/
+├── knowledge/
+│   ├── guidelines/           # Development standards
+│   │   ├── code-design/      # Code conventions
+│   │   ├── architecture/     # Architecture patterns
+│   │   ├── quality-assurance/ # Testing and quality
+│   │   ├── security/         # Security standards
+│   │   └── collaboration/    # Process and templates
+│   └── how-to/               # Step-by-step process guides
+│       ├── index.json        # Task-to-guide mapping
+│       └── *.md              # Individual how-to files
+├── adoption/
+│   ├── product/              # Product context templates
+│   │   └── adopted/          # PRD, subdomains, contexts
+│   └── tech/                 # Technical decision templates
+│       └── adopted/          # Architecture, stack, way-of-working
+└── skills/                   # Agent skills (optional)
+    └── <category>/<name>/
+        └── SKILL.md
+```
+
+### Starting from scratch
+
+Create the directory structure manually:
+
+```bash
+mkdir -p .pair/knowledge/guidelines .pair/knowledge/how-to
+mkdir -p .pair/adoption/product/adopted .pair/adoption/tech/adopted
+```
+
+### Forking an existing KB
+
+Install the pair KB and modify it:
+
+```bash
+pair-cli install
+# Now edit .pair/knowledge/ with your organization's standards
+```
+
+See [KB Structure Reference](/docs/reference/kb-structure) for the full directory layout and what each file does.
+
+## Author Guidelines
+
+Guidelines are the core of your KB. Each guideline file should be:
+
+- **Opinionated**: State what is adopted, not what could be adopted
+- **Actionable**: AI assistants read these to make decisions — be specific
+- **Self-contained**: Each file should work independently
+
+### Writing style
+
+Use the adoption declaration pattern:
+
+```markdown
+# Testing Strategy
+
+- vitest is adopted as the testing framework (vitest v3.x).
+- Unit test files must be co-located with source files.
+- Coverage threshold is 80% for lines and branches.
+```
+
+The pattern `[tool] is adopted for [purpose]` tells the AI assistant this is a decision, not a suggestion.
+
+### Adoption file templates
+
+Include empty adoption files that adopters will fill in:
+
+```markdown
+<!-- .pair/adoption/tech/adopted/tech-stack.md -->
+
+# Tech Stack
+
+<!-- Record your project's technology choices here.
+     Use the format: "[tool] is adopted for [purpose] ([tool] v[version])." -->
+```
+
+These templates guide adopters through customization without requiring them to understand the full structure.
+
+## Author Skills (Optional)
+
+If your KB includes AI agent skills, follow the [Agent Skills](https://agentskills.io) open standard:
+
+```text
+.pair/skills/
+└── category/
+    └── skill-name/
+        └── SKILL.md
+```
+
+Each `SKILL.md` contains structured instructions the AI discovers and executes. See [Skill Management](/docs/reference/skill-management) for the format and naming conventions.
+
+## Package for Distribution
+
+Package your KB for distribution:
+
+```bash
+pair-cli package
+```
+
+This creates a distributable archive containing your KB's knowledge, adoption templates, and skills. The package includes metadata (name, version, description) for registry listing.
+
+For organizational metadata:
+
+```bash
+pair-cli package --org "your-org-name"
+```
+
+See [CLI Commands](/docs/reference/cli/commands) for the full `package` reference.
+
+## Verify Your Package
+
+Before distributing, validate the package:
+
+```bash
+# Validate KB structure and internal consistency
+pair-cli kb validate
+
+# Inspect package metadata
+pair-cli kb info
+```
+
+Validation checks:
+
+- Required directories exist
+- Guideline files are well-formed
+- Internal links resolve
+- Adoption templates have correct structure
+- Skills follow the Agent Skills standard (if present)
+
+See [CLI Commands](/docs/reference/cli/commands) for the full `kb validate` and `kb info` reference.
+
+## Distribute
+
+### Via npm
+
+Publish your KB as an npm package:
+
+```bash
+npm publish
+```
+
+Adopters install with:
+
+```bash
+pair-cli install --source npm --url @your-org/your-kb
+```
+
+### Via GitHub Releases
+
+Create a GitHub release with the packaged archive:
+
+```bash
+# Tag and release
+git tag v1.0.0
+git push origin v1.0.0
+# Create release on GitHub with the package artifact
+```
+
+Adopters install with:
+
+```bash
+pair-cli install --source github --url https://github.com/your-org/your-kb/releases/latest
+```
+
+### Via Internal Mirrors
+
+For organizations that restrict external package sources, host the package on an internal registry or file share. Adopters use the `--url` flag to point to the internal location.
+
+See [Install from URL](/docs/guides/install-from-url) for all source options.
+
+## Version and Maintain
+
+### Versioning strategy
+
+Use [semantic versioning](https://semver.org/):
+
+- **Patch** (1.0.x): Typo fixes, clarifications, non-breaking guideline updates
+- **Minor** (1.x.0): New guidelines, new skills, new adoption templates
+- **Major** (x.0.0): Breaking changes to directory structure, removed guidelines, renamed files
+
+### Update workflow for consumers
+
+When you publish a new version, adopters pull it with:
+
+```bash
+pair-cli update
+```
+
+Their adoption files (`.pair/adoption/`) are preserved. Only the knowledge layer (`.pair/knowledge/`) is replaced. This means your updates reach every team without overwriting their project-specific decisions.
+
+### Changelog
+
+Maintain a changelog in your KB repository. Document what changed in each version so adopters can decide when to update and review breaking changes before applying them.
+
+## Next Steps
+
+- **Start from the beginning?** [Adopt a Knowledge Base](/docs/customization/adopt) — the adopter's perspective.
+- **CLI reference?** [CLI Commands](/docs/reference/cli/commands) — all commands for packaging and distribution.
+- **Directory reference?** [KB Structure](/docs/reference/kb-structure) — full directory layout.

@@ -1,0 +1,124 @@
+---
+title: "Iteration: Stories & Tasks"
+description: "Prepare work for development sprints — break epics into stories, refine acceptance criteria, and create implementation tasks."
+---
+
+Iteration happens per epic. You take a feature-level epic and break it into sprint-ready work items: user stories with acceptance criteria and implementation tasks.
+
+## Step 5: Break Down User Stories
+
+Slice an epic into vertical user stories that each deliver end-to-end value.
+
+| | |
+| --- | --- |
+| **Skill (recommended)** | `/pair-process-plan-stories` |
+| **How-to guide** | [07 — How to Break Down User Stories](/docs/reference/guidelines-catalog) |
+| **Input** | Epic issue from your PM tool |
+| **Output** | Issues in your PM tool (type: story) validated against INVEST criteria |
+
+The AI applies **vertical slicing** — each story delivers a thin slice of functionality from UI to database, rather than a horizontal layer. Stories are validated against the INVEST framework:
+
+- **I**ndependent — can be developed without waiting for other stories
+- **N**egotiable — details are open for discussion
+- **V**aluable — delivers something useful to the user
+- **E**stimable — small enough to estimate confidently
+- **S**mall — fits in a single sprint
+- **T**estable — has clear pass/fail criteria
+
+## Step 6: Refine a User Story
+
+Transform a rough story into a development-ready specification.
+
+| | |
+| --- | --- |
+| **Skill (recommended)** | `/pair-process-refine-story` |
+| **How-to guide** | [08 — How to Refine a User Story](/docs/reference/guidelines-catalog) |
+| **Input** | Story issue (status: Todo) |
+| **Output** | Story updated with acceptance criteria, technical analysis, and sizing (status: Refined) |
+
+Refinement adds three things to a story:
+
+### Acceptance Criteria (Given-When-Then)
+
+```text
+Given the user is on the login page
+When they enter valid credentials and click "Sign in"
+Then they are redirected to the dashboard
+And their session is active for 24 hours
+```
+
+Every AC is testable — either it passes or it doesn't.
+
+### Technical Analysis
+
+- Implementation approach (files to create/modify)
+- Integration points (APIs, services, databases)
+- Technical risks and mitigations
+- Dependencies on other stories or external systems
+
+### Story Sizing
+
+Story points using the team's estimation methodology. The AI proposes a size based on complexity and the team validates.
+
+## Step 7: Create Tasks
+
+Break a refined story into concrete implementation tasks.
+
+| | |
+| --- | --- |
+| **Skill (recommended)** | `/pair-process-plan-tasks` |
+| **How-to guide** | [09 — How to Create Tasks](/docs/reference/guidelines-catalog) |
+| **Input** | Refined story issue |
+| **Output** | Task Breakdown section appended to the story body |
+
+Tasks are documented **inline in the story body** — not as separate issues. Each task includes:
+
+- Implementation approach and files to touch
+- Acceptance criteria mapped to the parent story's AC
+- Dependency graph showing task ordering
+- TDD approach (for development tasks)
+
+### Task Types
+
+| Type | Approach | Example |
+| --- | --- | --- |
+| Development | TDD: write test → implement → refactor | "Implement login API endpoint" |
+| Documentation | Direct implementation | "Write API documentation" |
+| Configuration | Follow infrastructure guidelines | "Configure CI pipeline" |
+
+### AC Coverage Table
+
+Every acceptance criterion maps to at least one task:
+
+```text
+| AC   | Tasks   |
+| AC-1 | T-1     |
+| AC-2 | T-2     |
+| AC-3 | T-2, T-3|
+```
+
+No orphan ACs, no orphan tasks.
+
+## What You Have After Iteration
+
+```text
+PM Tool:
+├── Epic 1: Authentication & Registration
+│   ├── Story: User can register with email (Refined, 3 pts)
+│   │   ├── T-1: Registration API endpoint
+│   │   ├── T-2: Registration form UI
+│   │   ├── T-3: Email verification flow
+│   │   └── T-4: E2E tests
+│   ├── Story: User can log in (Refined, 2 pts)
+│   │   ├── T-1: Login API endpoint
+│   │   ├── T-2: Login form UI
+│   │   └── T-3: Session management
+│   └── Story: User can reset password (Refined, 3 pts)
+│       └── ...
+```
+
+Every story is development-ready: clear AC, technical approach, sized, with tasks.
+
+## Next
+
+[Execution](/docs/developer-journey/execution) — implement stories and review code.

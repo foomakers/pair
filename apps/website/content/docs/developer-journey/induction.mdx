@@ -1,0 +1,94 @@
+---
+title: "Induction: Project Setup"
+description: "One-time project setup — create the PRD, bootstrap technical decisions, and plan strategic initiatives."
+---
+
+Induction happens once when starting a new project. By the end of these three steps, your project has a product vision, technical decisions, and a prioritized roadmap.
+
+## Step 1: Create the PRD
+
+Define what you're building, who it's for, and what success looks like.
+
+| | |
+| --- | --- |
+| **Skill (recommended)** | `/pair-process-specify-prd` |
+| **How-to guide** | [01 — How to Create a PRD](/docs/reference/guidelines-catalog) |
+| **Input** | Product idea, target audience, problem statement |
+| **Output** | `.pair/adoption/product/adopted/PRD.md` |
+
+The AI follows a 4-phase process:
+
+1. **Template analysis** — studies the 13-section PRD template
+2. **Hypothesis-driven questions** — asks structured questions about users, pain points, features, and KPIs
+3. **Document generation** — produces the PRD following the template
+4. **Iterative review** — submits for your review and refines based on feedback
+
+The PRD becomes the source of truth for every subsequent step. All planning and implementation traces back to it.
+
+## Step 2: Bootstrap the Project
+
+Generate technical standards, configure quality gates, and set up your PM tool.
+
+| | |
+| --- | --- |
+| **Skill (recommended)** | `/pair-process-bootstrap` |
+| **How-to guide** | [02 — How to Complete Bootstrap Checklist](/docs/reference/guidelines-catalog) |
+| **Input** | PRD (from Step 1) |
+| **Output** | Adoption files in `.pair/adoption/tech/adopted/` |
+
+The AI guides you through five decision areas:
+
+- **Project categorization** — Pet/PoC, Startup, or Enterprise (determines rigor level)
+- **Architecture pattern** — monolith, microservices, serverless, etc.
+- **Tech stack** — language, framework, testing, database, with version pinning
+- **Infrastructure** — deployment, CI/CD, hosting
+- **Way of working** — methodology (Scrum/Kanban), branching strategy, quality gates
+
+Each decision produces an adoption file. Bootstrap composes several capability skills internally (`/pair-capability-assess-architecture`, `/pair-capability-assess-stack`, etc.) — you don't need to invoke them individually.
+
+**For existing projects**: Start here instead of Step 1. Ask the AI assistant to analyze your codebase and produce adoption files from what it finds, rather than writing them from scratch.
+
+## Step 3: Plan Initiatives
+
+Extract strategic objectives from the PRD and prioritize them.
+
+| | |
+| --- | --- |
+| **Skill (recommended)** | `/pair-process-plan-initiatives` |
+| **How-to guide** | [03 — How to Create & Prioritize Initiatives](/docs/reference/guidelines-catalog) |
+| **Input** | PRD (from Step 1) |
+| **Output** | Issues in your PM tool (type: initiative) with P0/P1/P2 priority |
+
+Initiatives are the highest-level work items — each represents a strategic objective spanning 6-8 sprints:
+
+- **P0 (Must-Have)** — core value proposition, without these the product doesn't ship
+- **P1 (Important)** — significant business value, planned for early delivery
+- **P2 (Nice-to-Have)** — desirable but deferrable
+
+The AI extracts objectives directly from your PRD sections (goals, features, success metrics) and proposes the prioritization. You validate and adjust.
+
+## What You Have After Induction
+
+```text
+.pair/
+├── adoption/
+│   ├── product/adopted/
+│   │   └── PRD.md                 ← Product vision and requirements
+│   └── tech/adopted/
+│       ├── architecture.md        ← Architecture decisions
+│       ├── tech-stack.md          ← Technology choices with versions
+│       ├── way-of-working.md      ← Methodology and quality gates
+│       └── infrastructure.md      ← Deployment and CI/CD
+
+PM Tool:
+├── Initiative (P0): ...
+├── Initiative (P0): ...
+├── Initiative (P1): ...
+└── Initiative (P2): ...
+```
+
+Every AI session from this point forward reads these files. Decisions never drift.
+
+## Next
+
+[Strategic Planning](/docs/developer-journey/strategic-planning) — break initiatives into epics.

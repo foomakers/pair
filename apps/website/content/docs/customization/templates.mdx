@@ -1,0 +1,137 @@
+---
+title: Customize Templates
+description: Override pair's built-in templates for commits, PRs, stories, epics, and other workflow artifacts.
+---
+
+pair ships with 12 templates that control the structure of workflow artifacts — from commit messages to user stories. This guide shows how to customize them for your team.
+
+## Where Templates Live
+
+Templates are part of the Knowledge Base:
+
+```text
+.pair/knowledge/guidelines/collaboration/templates/
+├── adr-template.md              # Architecture Decision Records
+├── adl-template.md              # Architecture Decision Log entries
+├── bounded-context-template.md  # DDD bounded context definitions
+├── branch-template.md           # Git branch naming conventions
+├── code-review-template.md      # Code review checklists
+├── commit-template.md           # Commit message format
+├── epic-template.md             # Epic issue structure
+├── initiative-template.md       # Initiative issue structure
+├── pr-template.md               # Pull request description
+├── subdomain-template.md        # DDD subdomain definitions
+├── task-template.md             # Task breakdown structure
+└── user-story-template.md       # User story issue structure
+```
+
+The AI reads these templates when creating the corresponding artifacts. When you run `/pair-process-implement`, it uses the commit and PR templates. When you run `/pair-process-plan-stories`, it uses the user story template. And so on.
+
+## Template Categories
+
+### Development Workflow
+
+| Template | Used by | Controls |
+| --- | --- | --- |
+| **commit-template.md** | `/pair-process-implement` | Commit message format: `[#story-id] type: description` |
+| **pr-template.md** | `/pair-process-implement` | PR description structure: summary, changes, testing, risks |
+| **branch-template.md** | `/pair-process-implement` | Branch naming: `feature/#story-id-description` |
+| **code-review-template.md** | `/pair-process-review` | Review checklist: technical, adoption, completeness, decision |
+
+### Planning Artifacts
+
+| Template | Used by | Controls |
+| --- | --- | --- |
+| **initiative-template.md** | `/pair-process-plan-initiatives` | Initiative issue body: objectives, success metrics, priority |
+| **epic-template.md** | `/pair-process-plan-epics` | Epic issue body: scope, stories, acceptance criteria |
+| **user-story-template.md** | `/pair-process-plan-stories`, `/pair-process-refine-story` | Story issue body: statement, AC (Given-When-Then), technical analysis, tasks |
+| **task-template.md** | `/pair-process-plan-tasks` | Task structure: approach, AC mapping, implementation steps |
+
+### Architecture Decisions
+
+| Template | Used by | Controls |
+| --- | --- | --- |
+| **adr-template.md** | `/pair-capability-record-decision` | ADR structure: context, decision, consequences |
+| **adl-template.md** | `/pair-capability-record-decision` | Decision log entry: date, topic, outcome |
+
+### Domain Modeling
+
+| Template | Used by | Controls |
+| --- | --- | --- |
+| **subdomain-template.md** | `/pair-process-map-subdomains` | Subdomain definition: classification, boundaries |
+| **bounded-context-template.md** | `/pair-process-map-contexts` | Context definition: responsibilities, integration patterns |
+
+## How to Customize a Template
+
+Templates live in `.pair/knowledge/` — the upstream layer that gets overwritten on `pair-cli update`. To customize safely, create an override in the adoption layer.
+
+### Step 1: Copy the Template
+
+```bash
+# Create the override directory
+mkdir -p .pair/adoption/tech/templates/
+
+# Copy the template you want to customize
+cp .pair/knowledge/guidelines/collaboration/templates/commit-template.md \
+   .pair/adoption/tech/templates/commit-template.md
+```
+
+### Step 2: Edit Your Copy
+
+Modify the template in `.pair/adoption/tech/templates/` to match your team's conventions. For example, to change the commit format:
+
+```markdown
+# Commit Message Template
+
+## Standard Commit Message Format
+
+[JIRA-XXX] type(scope): description
+
+body explaining the change
+
+Refs: JIRA-XXX
+```
+
+### Step 3: Tell the AI
+
+Record the override in your way-of-working so the AI knows to use your template:
+
+```markdown
+<!-- .pair/adoption/tech/way-of-working.md -->
+
+## Templates
+
+- Custom commit template: `.pair/adoption/tech/templates/commit-template.md`
+- Custom PR template: `.pair/adoption/tech/templates/pr-template.md`
+```
+
+The AI reads adoption files first, so it will pick up your custom templates automatically.
+
+## Common Customizations
+
+### Commit Messages
+
+Change the story code format (e.g., JIRA keys instead of `#issue-id`), add required fields (e.g., ticket link), or enforce a different convention (e.g., Conventional Commits with scopes).
+
+### PR Descriptions
+
+Add sections your team requires (e.g., security review, database migration notes), remove sections that don't apply, or match your organization's PR template.
+
+### Story Structure
+
+Add fields for your workflow (e.g., design mockup links, dependency tracking), change the AC format, or add team-specific sections (e.g., accessibility checklist).
+
+## Safe Customization Pattern
+
+| Location | On `pair-cli update` | Safe? |
+| --- | --- | --- |
+| `.pair/knowledge/guidelines/collaboration/templates/` | Overwritten | No |
+| `.pair/adoption/tech/templates/` | Preserved | Yes |
+
+Never edit templates in `.pair/knowledge/` — your changes will be lost on the next update. Always customize via `.pair/adoption/`.
+
+## Related
+
+- [Customize for Your Team](/docs/customization/team) — override guidelines and quality gates
+- [Guidelines & How-To Catalog](/docs/reference/guidelines-catalog) — all guideline categories including templates
+- [KB Structure Reference](/docs/reference/kb-structure) — directory layout and file purposes

@@ -1,28 +1,15 @@
 ---
 title: Customize the Knowledge Base
-description: How to customize pair's Knowledge Base — override guidelines, add project-specific content, and tailor the KB to your team.
+description: Quick recipe to override a KB guideline using adoption files — identify, override, verify.
 ---
 
-pair's Knowledge Base ships with opinionated defaults for development methodology, coding standards, and quality gates. This guide shows how to customize it for your project without losing the ability to receive upstream updates.
+Need to change a single KB default? This is the quick recipe. For the full customization journey — from adopting a KB to publishing your own — see the [Customization](/docs/customization) section.
 
-## How Customization Works
+## Override a Guideline in 3 Steps
 
-The KB uses a layered architecture:
+### Step 1: Identify What to Change
 
-1. **Knowledge layer** (`.pair/knowledge/`) — upstream guidelines from the pair KB. Updated by `pair update`.
-2. **Adoption layer** (`.pair/adoption/`) — your project-specific decisions. Never overwritten by updates.
-
-Adoption files always take precedence over knowledge files. This means you can override any guideline by recording a decision in the adoption layer.
-
-You don't need to write adoption files manually. Run `/pair-next` to follow the structured process — the AI generates each file for you. For existing projects, ask the AI assistant to analyze your codebase and produce adoption files that reflect your current stack and conventions.
-
-## Override a Guideline
-
-To change an opinionated default (e.g., testing framework, architecture pattern):
-
-### Step 1: Identify the Guideline
-
-Browse the knowledge layer to find what you want to change:
+Browse the knowledge layer to find the guideline:
 
 ```bash
 # List all guideline categories
@@ -34,14 +21,7 @@ ls .pair/knowledge/guidelines/quality-assurance/
 
 ### Step 2: Record Your Decision
 
-Create or update the corresponding adoption file. For example, to change the testing framework:
-
-```bash
-# Edit the tech stack adoption file
-# Change "vitest" to your preferred framework
-```
-
-In `.pair/adoption/tech/tech-stack.md`, update the relevant section:
+Create or update the corresponding adoption file. For example, to change the testing framework, edit `.pair/adoption/tech/tech-stack.md`:
 
 ```markdown
 ## Testing
@@ -49,90 +29,35 @@ In `.pair/adoption/tech/tech-stack.md`, update the relevant section:
 - jest is adopted as the testing framework (jest v29.x).
 ```
 
-### Step 3: Record an ADR (Optional)
+Adoption files always override knowledge files — no need to touch `.pair/knowledge/`.
 
-For significant decisions, create an Architecture Decision Record:
+### Step 3: Verify
 
 ```bash
-# If using pair skills
-/pair-capability-record-decision
+pair-cli kb validate
+pair-cli update-link --dry-run
 ```
 
-Or manually create a file in `.pair/adoption/tech/adr/` following the ADR template.
+## Quick Reference: Which File to Edit
 
-## Common Customizations
+| You want to change... | Edit this adoption file |
+| --- | --- |
+| Testing framework, language, library | `.pair/adoption/tech/tech-stack.md` |
+| Architecture pattern | `.pair/adoption/tech/architecture.md` |
+| Methodology, quality gates | `.pair/adoption/tech/way-of-working.md` |
+| Add a new guideline | Create a new file in `.pair/adoption/` |
+| Record a significant decision | Create an ADR in `.pair/adoption/tech/adr/` |
 
-### Change Development Methodology
+## What's Safe to Edit
 
-Edit `.pair/adoption/tech/way-of-working.md`:
-
-```markdown
-- Scrum is adopted as the workflow methodology with 2-week sprints.
-```
-
-### Change Architecture Pattern
-
-Edit `.pair/adoption/tech/architecture.md`:
-
-```markdown
-- Microservices architecture is adopted for backend services.
-```
-
-### Add Project-Specific Guidelines
-
-Create files in `.pair/adoption/` to add guidelines that don't exist in the upstream KB:
-
-```markdown
-<!-- .pair/adoption/tech/api-conventions.md -->
-
-# API Conventions
-
-- All REST endpoints use kebab-case paths
-- Response format follows JSON:API specification
-- Pagination uses cursor-based approach
-```
-
-### Customize Quality Gates
-
-Edit `.pair/adoption/tech/way-of-working.md` to change the quality gate command or add custom gates:
-
-```markdown
-## Quality Gates
-
-- `npm run quality` is the adopted project-level quality gate command.
-- Quality gate includes: type checking, testing, linting.
-```
-
-## What Gets Updated vs. Preserved
-
-When you run `pair update`:
-
-| Directory | Behavior | Your changes |
+| Directory | On `pair-cli update` | Safe to edit? |
 | --- | --- | --- |
-| `.pair/knowledge/` | Updated (mirror) | Overwritten — don't edit |
-| `.pair/adoption/` | Preserved (add) | Safe — never overwritten |
-| `.pair/adoption/tech/adr/` | Preserved | Safe — your ADRs stay |
+| `.pair/knowledge/` | Overwritten | No — don't edit |
+| `.pair/adoption/` | Preserved | Yes — your decisions stay |
 
-### Safe Customization Pattern
+## Going Deeper
 
-1. **Never edit** files in `.pair/knowledge/` — they will be overwritten on next update
-2. **Always customize** via `.pair/adoption/` — these files persist across updates
-3. **Record decisions** as ADRs for significant architectural choices
-
-## Verify Your Customizations
-
-After customizing, verify that adoption files are consistent:
-
-```bash
-# Validate KB structure
-pair kb validate
-
-# Check links are valid
-pair update-link --dry-run
-```
-
-## Related
-
-- [KB Structure Reference](/docs/reference/kb-structure) — Directory layout and file purposes
+- [Customize for Your Team](/docs/customization/team) — full guide to adapting guidelines, quality gates, and way-of-working
+- [Publish a Knowledge Base](/docs/customization/organization) — package and distribute a KB for your organization
+- [KB Structure Reference](/docs/reference/kb-structure) — directory layout and file purposes
 - [Configuration Reference](/docs/reference/configuration) — config.json options
-- [CLI Workflows](/docs/guides/cli-workflows) — Common workflows
