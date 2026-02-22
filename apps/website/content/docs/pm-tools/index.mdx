@@ -1,0 +1,61 @@
+---
+title: Project Management Tools
+description: How pair integrates with project management tools to manage stories, tasks, and initiatives automatically.
+---
+
+pair manages work items for you. When you run process skills like `/pair-process-implement` or `/pair-process-plan-stories`, pair reads your `way-of-working.md` adoption file to determine which PM tool to use, then creates and updates issues, stories, and tasks automatically.
+
+## How It Works
+
+1. **You choose a PM tool** during project bootstrap (or change it later in `way-of-working.md`)
+2. **pair reads the config** every time a process skill runs
+3. **pair creates and updates work items** — initiatives, epics, stories, tasks — in the configured tool
+4. **Status flows automatically** — completing a task updates the story, completing all stories updates the epic, and so on
+
+You focus on the work. pair keeps the board in sync.
+
+## Supported Options
+
+| Tool | Best For | External Service |
+|------|----------|-----------------|
+| [Filesystem](/docs/pm-tools/filesystem) | Solo devs, offline work, simple projects | No |
+| [GitHub Projects](/docs/pm-tools/github-projects) | Teams already on GitHub, open source projects | Yes (free) |
+| [Linear](/docs/pm-tools/linear) | Teams wanting a polished PM experience | Yes (paid) |
+
+### Choosing a Tool
+
+- **Starting solo or want zero dependencies?** Use [Filesystem](/docs/pm-tools/filesystem) — everything lives in your repo as Markdown files.
+- **Team on GitHub?** Use [GitHub Projects](/docs/pm-tools/github-projects) — issues, labels, and project boards you already know.
+- **Want a dedicated PM tool?** Use [Linear](/docs/pm-tools/linear) — clean UI, fast workflows, great API.
+
+You can switch between tools at any time by updating `way-of-working.md`. Your adoption files and Knowledge Base stay the same.
+
+## The Mapping Model
+
+pair uses a consistent hierarchy regardless of tool:
+
+```text
+Initiative (strategic goal)
+└── Epic (feature set)
+    └── User Story (deliverable increment)
+        └── Task (implementation step)
+```
+
+Each PM tool maps this hierarchy to its own concepts:
+
+| pair Concept | Filesystem | GitHub Projects | Linear |
+|-------------|-----------|----------------|--------|
+| Initiative | Markdown file | Issue + label | Project |
+| Epic | Markdown file | Issue + label | Issue (parent) |
+| User Story | Markdown file | Issue + label | Issue (sub-issue) |
+| Task | Checklist in story | Checklist in issue body | Checklist in issue |
+
+## Configuration
+
+All PM tool configuration lives in one place: `.pair/adoption/tech/way-of-working.md`. Each tool guide shows the exact configuration lines to add.
+
+## Related
+
+- [AI Coding Tools](/docs/integrations) — set up your AI assistant
+- [Developer Journey](/docs/developer-journey) — the full development lifecycle
+- [Adoption Files concept](/docs/concepts/adoption-files) — how adoption files work

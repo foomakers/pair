@@ -1,0 +1,98 @@
+---
+title: Codex
+description: Set up pair with OpenAI Codex — configure AGENTS.md, discover skills, and follow the bridge pattern.
+---
+
+## Prerequisites
+
+- [OpenAI Codex CLI](https://github.com/openai/codex) installed and authenticated
+- A pair-enabled project (`pair-cli init` completed, `.pair/` directory exists)
+- Node.js 18+
+
+## Configure Agent File
+
+Codex reads `AGENTS.md` at the repository root — the same universal bridge file used by Claude Code. pair generates it during `pair-cli init`.
+
+### AGENTS.md
+
+Codex automatically discovers and reads `AGENTS.md` when entering a repository. The file contains:
+
+- Task selection algorithm (which how-to guide to follow)
+- Essential commands (`pnpm install`, `pnpm test`, `pnpm lint`)
+- Key references to adoption files and guidelines
+- Quick rules (testing, commits, adoption checks)
+
+```text
+your-project/
+├── AGENTS.md              ← Codex reads this automatically
+├── .agents/
+│   └── skills/            ← skill symlinks (→ .claude/skills/)
+├── .pair/
+│   ├── knowledge/         ← upstream guidelines (don't edit)
+│   └── adoption/          ← your project decisions
+└── ...
+```
+
+No additional configuration needed — Codex and Claude Code share the same entry point. Skills are distributed to `.agents/skills/` as symlinks pointing to the canonical `.claude/skills/` directory.
+
+### The Bridge Pattern
+
+`AGENTS.md` points to `.pair/` — the single source of truth:
+
+```text
+AGENTS.md ──→ .pair/knowledge/   (guidelines)
+          ──→ .pair/adoption/    (your decisions)
+```
+
+## Use Skills
+
+Skills are invoked as slash commands in Codex, the same way as in Claude Code:
+
+```bash
+/pair-next                    # what should I work on?
+/pair-process-implement #42   # implement story #42
+/pair-process-review          # review current PR
+```
+
+Codex discovers skills in `.agents/skills/` (symlinked to the canonical `.claude/skills/`). Since Codex supports the [Agent Skills](https://agentskills.io) open standard, it can read and execute pair's SKILL.md files directly.
+
+### Common Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/pair-next` | Determine next action based on project state |
+| `/pair-process-implement` | Implement a story task by task |
+| `/pair-process-review` | Structured code review |
+| `/pair-process-refine-story` | Refine a story with acceptance criteria |
+
+For the full catalog, see [Skills Catalog](/docs/reference/skills-catalog).
+
+## Workflow Tips
+
+### Sandboxed Execution
+
+Codex runs in a sandboxed environment by default. pair's skills work within these constraints — they read files, make code changes, and create commits through standard Git operations. No special permissions needed beyond filesystem and Git access.
+
+### Shared Entry Point with Claude Code
+
+Since both Codex and Claude Code read `AGENTS.md`, teams can switch between tools without any configuration changes. The project context, adoption files, and skills remain identical.
+
+### Multi-Agent Teams
+
+Codex reads `AGENTS.md` while Cursor reads `.cursor/rules/` and Copilot reads `.github/agents/` — all pointing to the same `.pair/` directory. The AI tool is an implementation detail; the standards are consistent.
+
+## Verify It Works
+
+Open Codex in your pair-enabled project and run:
+
+```bash
+/pair-next
+```
+
+**Expected output**: Codex reads `AGENTS.md`, follows the references to your adoption files, and suggests the next action. If it can't find `AGENTS.md`, check that `pair-cli init` completed successfully.
+
+## Related
+
+- [Agent Integration concept](/docs/concepts/agent-integration)
+- [Skills Catalog](/docs/reference/skills-catalog)
+- [CLI Reference](/docs/reference/cli/commands)

@@ -474,3 +474,123 @@ test('smoke: all customization pages return 200 with correct titles', async ({ p
     await expect(page).toHaveTitle(new RegExp(title))
   }
 })
+
+// ============================================================
+// E2E: Docs — Integrations + PM Tools sections (#126)
+// ============================================================
+
+test('integrations journey: index → Claude Code → Copilot with content verification', async ({
+  page,
+}) => {
+  // Integrations index page
+  await page.goto('/docs/integrations')
+  const main = page.locator('main')
+  await expect(page.locator('main h1')).toContainText('AI Coding Tools')
+  await expect(main).toContainText('Bridge Pattern')
+  await expect(main).toContainText('Agent Skills')
+  await expect(main.locator('a[href="https://agentskills.io"]')).toBeVisible()
+
+  // All 5 tools listed
+  await expect(main).toContainText('Claude Code')
+  await expect(main).toContainText('Cursor')
+  await expect(main).toContainText('GitHub Copilot')
+  await expect(main).toContainText('Windsurf')
+  await expect(main).toContainText('Codex')
+
+  // Sidebar shows Integrations section
+  await expect(page.locator('body')).toContainText('Integrations')
+
+  // Navigate to Claude Code guide
+  await page
+    .locator('a', { hasText: /^Claude Code$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/integrations/claude-code')
+
+  // 4-section template verified
+  await expect(main).toContainText('Prerequisites')
+  await expect(main).toContainText('Configure Agent File')
+  await expect(main).toContainText('Use Skills')
+  await expect(main).toContainText('Workflow Tips')
+  await expect(main).toContainText('Verify It Works')
+  await expect(main).toContainText('AGENTS.md')
+  await expect(main).toContainText('CLAUDE.md')
+  await expect(main).toContainText('/pair-next')
+
+  // Navigate to GitHub Copilot guide via sidebar
+  await page
+    .locator('a', { hasText: /^GitHub Copilot$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/integrations/github-copilot')
+  await expect(main).toContainText('Prerequisites')
+  await expect(main).toContainText('.github/agents/')
+  await expect(main).toContainText('product-manager')
+  await expect(main).toContainText('staff-engineer')
+  await expect(main).toContainText('product-engineer')
+})
+
+test('pm tools journey: index → GitHub Projects → Filesystem with content verification', async ({
+  page,
+}) => {
+  // PM Tools index page
+  await page.goto('/docs/pm-tools')
+  const main = page.locator('main')
+  await expect(page.locator('main h1')).toContainText('Project Management Tools')
+  await expect(main).toContainText('way-of-working.md')
+  await expect(main).toContainText('Mapping Model')
+
+  // All 3 options listed
+  await expect(main).toContainText('Filesystem')
+  await expect(main).toContainText('GitHub Projects')
+  await expect(main).toContainText('Linear')
+
+  // Sidebar shows PM Tools section
+  await expect(page.locator('body')).toContainText('PM Tools')
+
+  // Navigate to GitHub Projects guide
+  await page
+    .locator('a', { hasText: /^GitHub Projects$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/pm-tools/github-projects')
+
+  // 3-section template verified
+  await expect(main).toContainText('Configuration')
+  await expect(main).toContainText('Mapping Model')
+  await expect(main).toContainText('First-Run Example')
+  await expect(main).toContainText('way-of-working.md')
+  await expect(main).toContainText('initiative')
+  await expect(main).toContainText('user story')
+
+  // Navigate to Filesystem guide via sidebar
+  await page
+    .locator('a', { hasText: /^Filesystem$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/pm-tools/filesystem')
+  await expect(main).toContainText('Configuration')
+  await expect(main).toContainText('zero-dependency')
+  await expect(main).toContainText('backlog/')
+})
+
+test('smoke: all integrations + pm-tools pages return 200', async ({ page }) => {
+  const pages = [
+    { url: '/docs/integrations', title: 'AI Coding Tools' },
+    { url: '/docs/integrations/claude-code', title: 'Claude Code' },
+    { url: '/docs/integrations/codex', title: 'Codex' },
+    { url: '/docs/integrations/cursor', title: 'Cursor' },
+    { url: '/docs/integrations/github-copilot', title: 'GitHub Copilot' },
+    { url: '/docs/integrations/windsurf', title: 'Windsurf' },
+    { url: '/docs/pm-tools', title: 'Project Management Tools' },
+    { url: '/docs/pm-tools/filesystem', title: 'Filesystem' },
+    { url: '/docs/pm-tools/github-projects', title: 'GitHub Projects' },
+    { url: '/docs/pm-tools/linear', title: 'Linear' },
+  ]
+  for (const { url, title } of pages) {
+    const response = await page.goto(url)
+    expect(response?.status(), `${url} should return 200`).toBe(200)
+    await expect(page.locator('main h1')).toBeVisible()
+    await expect(page).toHaveTitle(new RegExp(title))
+  }
+})

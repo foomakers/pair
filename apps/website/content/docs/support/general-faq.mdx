@@ -25,9 +25,9 @@ Both. For existing projects, start at Step 2 (Bootstrap) — ask the AI to analy
 
 ### Which AI coding assistants work with pair?
 
-pair works with any AI assistant that reads project files. The Knowledge Base and adoption files are plain Markdown. Skills follow the [Agent Skills](https://agentskills.io) open standard supported by Claude Code, Cursor, VS Code Copilot, and OpenAI Codex. pair also provides bridge patterns (AGENTS.md, .github/) so each tool discovers the context in its native way.
+pair works with any AI assistant that reads project files. The Knowledge Base and adoption files are plain Markdown. Skills follow the [Agent Skills](https://agentskills.io) open standard supported by Claude Code, Cursor, VS Code Copilot, and OpenAI Codex. pair provides bridge patterns (AGENTS.md, .github/, .cursor/) so each tool discovers the context in its native way.
 
-[Agent Integration](/docs/concepts/agent-integration)
+[Integration guides](/docs/integrations) · [Agent Integration concept](/docs/concepts/agent-integration)
 
 ## Knowledge Base & Adoption
 
@@ -113,25 +113,21 @@ Yes. Record each language in your `tech-stack.md` adoption file with its purpose
 
 ### Do I need a project management tool to use pair?
 
-No. pair works without any external PM tool — issues, stories, and tasks can live as files in your repository. During bootstrap, you choose your PM tool (or filesystem-based tracking). The AI adapts to whatever you pick.
+No. pair works without any external PM tool — use the [Filesystem](/docs/pm-tools/filesystem) option and stories, tasks, and initiatives live as Markdown files in your repository. During bootstrap, you choose your PM tool. The AI adapts to whatever you pick.
 
-[Induction: Project Setup](/docs/developer-journey/induction)
+[PM Tools](/docs/pm-tools)
 
-### I use Jira / Linear / Trello — can I use it with pair?
+### Which PM tools does pair support?
 
-pair currently has built-in support for GitHub Projects. Support for additional PM tools is planned. If your tool isn't supported yet, you can use the filesystem-based fallback or contribute an integration.
+pair supports three options: [Filesystem](/docs/pm-tools/filesystem) (zero dependencies, everything in your repo), [GitHub Projects](/docs/pm-tools/github-projects) (free, great for teams on GitHub), and [Linear](/docs/pm-tools/linear) (dedicated PM tool with a polished UI). You can switch between them at any time by updating `way-of-working.md`.
 
-{/* TODO: Update when additional PM tools are supported (Epic #66) */}
-
-[Support](/docs/support)
+[PM Tools](/docs/pm-tools)
 
 ### What do I do if pair doesn't support my PM tool?
 
-Use the filesystem-based option during bootstrap — stories and tasks are tracked as Markdown files in your repository instead of external issues. You still get the full process (planning, implementation, review), just without PM tool synchronization. As new integrations ship, you can switch without losing your adoption files.
+Use the [Filesystem](/docs/pm-tools/filesystem) option — stories and tasks are tracked as Markdown files in your repository instead of external issues. You still get the full process (planning, implementation, review), just without PM tool synchronization. As new integrations ship, you can switch without losing your adoption files.
 
-{/* TODO: Update when PM tool integration guide is available */}
-
-[Induction: Project Setup](/docs/developer-journey/induction)
+[PM Tools](/docs/pm-tools)
 
 ## Customization
 
