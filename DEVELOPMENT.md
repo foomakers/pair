@@ -47,10 +47,14 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 | Package | Description |
 |---------|-------------|
 | `@pair/pair-cli` | CLI tool for KB installation, update, packaging, and validation ([README](apps/pair-cli/README.md)) |
+| `@pair/website` | Documentation site — Fumadocs, Next.js 15, Orama search ([README](apps/website/README.md)) |
 | `@pair/knowledge-hub` | Knowledge Base dataset (guidelines, how-to, templates) ([README](packages/knowledge-hub/README.md)) |
-| `@pair/content-ops` | File operations, markdown link processing, backup service ([README](packages/content-ops/README.md)) |
-| `@pair/website` | Documentation site (Fumadocs, Next.js 15, Orama search) |
-| `@pair/brand` | Brand identity assets (logo, colors, fonts) ([BRAND.md](packages/brand/BRAND.md)) |
+| `@pair/content-ops` | File operations, markdown link processing ([README](packages/content-ops/README.md)) |
+| `@pair/brand` | Brand identity — design tokens, React components, Tailwind preset ([BRAND.md](packages/brand/BRAND.md)) |
+| `@pair/eslint-config` | Shared ESLint configuration ([README](tools/eslint-config/README.md)) |
+| `@pair/prettier-config` | Shared Prettier configuration ([README](tools/prettier-config/README.md)) |
+| `@pair/ts-config` | Shared TypeScript presets ([README](tools/ts-config/README.md)) |
+| `@pair/markdownlint-config` | Shared markdownlint configuration ([README](tools/markdownlint-config/README.md)) |
 
 ## Available Scripts
 

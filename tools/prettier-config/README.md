@@ -1,60 +1,37 @@
 # @pair/prettier-config
 
-Shared Prettier configuration for the pair monorepo.
+Shared Prettier configuration for the pair monorepo. All packages use these rules by default unless they provide their own config.
 
 ## Usage
 
-**Default Behavior:** All packages use the standard shared Prettier rules unless a package provides its own config file. Customization is optional.
-
-### 1. Configuration
-
-To use this config, add to your `package.json`:
+Add to your package's `package.json`:
 
 ```json
 "prettier": "@pair/prettier-config"
 ```
 
-Or import directly:
+Scripts (via bin wrappers):
 
-```js
-module.exports = require('@pair/prettier-config/.prettierrc.json')
+```json
+"scripts": {
+  "prettier:check": "prettier-check",
+  "prettier:fix": "prettier-fix"
+}
 ```
 
-### 2. CLI Commands
+### Extending in a Package
 
-To check code style:
-
-```sh
-pnpm prettier-check
-```
-
-To automatically format code:
-
-```sh
-pnpm prettier-fix
-```
-
-### 3. Ignored Files
-
-Files and folders to ignore are defined in `.prettierignore`.
-
-## Extending the Shared Config in Your Package
-
-To extend the shared Prettier config in a package, create a `.prettierrc.js` file in your package root:
+Create a `.prettierrc.js` in your package root:
 
 ```js
 module.exports = {
   ...require('@pair/prettier-config/.prettierrc.json'),
-  // Add or override options specific to your package
-  // Example:
-  // printWidth: 120,
+  // package-specific overrides
 }
 ```
 
-Alternatively, you can reference the config directly in your `package.json`:
+## Files
 
-```json
-"prettier": "@pair/prettier-config"
-```
-
-See [Code Design Guidelines](.pair/knowledge/02-code-design-guidelines.md#prettier-configuration) for more details.
+- `.prettierrc.json` — formatting rules
+- `bin/` — wrapper scripts (`prettier-check`, `prettier-fix`)
+- `.prettierignore` — ignored patterns
