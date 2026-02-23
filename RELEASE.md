@@ -1,6 +1,6 @@
 # Release Notes
 
-## Version 0.3.0 (Upcoming)
+## Version 0.4.0
 
 ### New Features
 
@@ -55,8 +55,8 @@ pair kb package --verbose
 
 **Documentation:**
 
-- [CLI Reference](../apps/pair-cli/README.md#kb-package-options)
-- [Release Scripts](../scripts/workflows/release/README.md)
+- [CLI Reference](apps/pair-cli/README.md)
+- [Release Scripts](scripts/package-manual.sh)
 
 #### Link Update & Validation Command
 
@@ -102,8 +102,8 @@ pair update-link --verbose
 
 **Documentation:**
 
-- [Link Update Guide](./getting-started/05-cli-update-link.md) - Comprehensive usage guide
-- [CLI Workflows](./getting-started/02-cli-workflows.md) - Updated with link update patterns
+- [Link Update Guide](https://pair.foomakers.com/docs/guides/update-link) - Comprehensive usage guide
+- [CLI Workflows](https://pair.foomakers.com/docs/guides/cli-workflows) - Updated with link update patterns
 
 ---
 

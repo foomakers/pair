@@ -22,7 +22,7 @@ pnpm install
 
 This is a **pnpm monorepo** using **Turbo** for task orchestration and build caching.
 
-```
+```text
 ├── apps/
 │   ├── pair-cli/              # CLI tool (@pair/pair-cli)
 │   └── website/               # Docs site (@pair/website) — Fumadocs + Next.js
@@ -144,7 +144,7 @@ See [apps/pair-cli/README.md](apps/pair-cli/README.md) for complete reference.
 
 The CLI uses a discriminated union pattern for type-safe command parsing:
 
-```
+```text
 apps/pair-cli/src/commands/
 ├── {command}/
 │   ├── parser.ts         # Pure parser + CommandConfig type
