@@ -15,6 +15,7 @@ import {
   applySkillRefsToNonSkillRegistries,
   handleBackupRollback,
   resolveEffectiveDatasetRoot,
+  writeProjectLlmsTxt,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
@@ -130,6 +131,8 @@ async function runUpdateSequence(
   if (options?.linkStyle) {
     await applyLinkTransformation(fs, { linkStyle: options.linkStyle }, pushLog, 'update')
   }
+
+  await writeProjectLlmsTxt(fs, context.baseTarget, pushLog)
 
   if (!options?.persistBackup && shouldBackup) {
     await backupService.commit(false)
