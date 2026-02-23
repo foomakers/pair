@@ -23,6 +23,21 @@ This installs the pair Knowledge Base into your project. Your AI assistant reads
 - **Adoption Files** — project-specific decisions (architecture, tech stack, way of working)
 - **AI-friendly index** — `.pair/llms.txt` for machine-readable KB discovery ([llmstxt.org](https://llmstxt.org))
 
+## Built with pair
+
+pair is developed using pair itself. The entire SDLC — from PRD to code review — is driven by AI assistants reading the same Knowledge Base that ships to users.
+
+Resources managed by pair in this repo:
+
+| Directory | What it contains |
+|-----------|-----------------|
+| `.pair/knowledge/` | 11 how-to guides, 9 guideline areas (code design, testing, security, collaboration, ...), templates for commits, PRs, stories, ADRs |
+| `.pair/adoption/tech/` | Architecture, tech stack, infrastructure, way of working, 7 ADRs |
+| `.pair/adoption/product/` | PRD, subdomain model |
+| `.pair/adoption/decision-log/` | Non-architectural decision records |
+| `.claude/skills/` | 31 Agent Skills — process workflows (implement, review, refine) and capabilities (quality gates, estimation, debt assessment) |
+| `AGENTS.md` | Universal agent entry point linking to `.pair/` |
+
 ## Documentation
 
 Visit the [pair documentation site](https://pair.foomakers.com/docs) for guides, reference, and tutorials.
