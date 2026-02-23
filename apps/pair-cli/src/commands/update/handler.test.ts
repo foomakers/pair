@@ -526,6 +526,53 @@ describe('KB distribution pipeline — bug regression', () => {
   })
 })
 
+describe('update — llms.txt generation', () => {
+  test('generates .pair/llms.txt after update with adopted content', async () => {
+    const cwd = '/project'
+    const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            adoption: {
+              source: '.pair/tech/adopted',
+              behavior: 'mirror',
+              description: 'Tech adoption files',
+              targets: [{ path: '.pair/tech/adopted', mode: 'canonical' }],
+            },
+          },
+        }),
+        [`${datasetSrc}/.pair/tech/adopted/tech-stack.md`]: '# Tech Stack\n\nStack content.',
+        // Pre-existing file (update scenario)
+        [`${cwd}/.pair/tech/adopted/tech-stack.md`]: '# Old Stack',
+      },
+      cwd,
+      cwd,
+    )
+
+    const httpClient = new MockHttpClientService()
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleUpdateCommand(config, fs, { httpClient })
+
+    expect(await fs.exists(`${cwd}/.pair/llms.txt`)).toBe(true)
+    const llmsTxt = await fs.readFile(`${cwd}/.pair/llms.txt`)
+    expect(llmsTxt).toMatch(/^# pair/)
+    expect(llmsTxt).toContain('## Adoption — Tech')
+    expect(llmsTxt).toContain('[Tech Stack]')
+  })
+})
+
 describe('Bug 4: skill refs not transformed in secondary (copy) targets', () => {
   test('CLAUDE.md (copy target of agents registry) gets skill refs rewritten', async () => {
     const moduleDir = '/project'

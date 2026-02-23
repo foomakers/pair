@@ -574,6 +574,39 @@ test('pm tools journey: index → GitHub Projects → Filesystem with content ve
   await expect(main).toContainText('backlog/')
 })
 
+// ============================================================
+// E2E: llms.txt routes (#127)
+// ============================================================
+
+test('llms.txt returns text/plain with llmstxt.org format', async ({ page }) => {
+  const response = await page.request.get('/llms.txt')
+  expect(response.status()).toBe(200)
+  expect(response.headers()['content-type']).toContain('text/plain')
+
+  const body = await response.text()
+  expect(body).toMatch(/^# pair\n/)
+  expect(body).toContain('> AI-assisted software development')
+  // Contains at least one section with links
+  expect(body).toMatch(/## .+\n\n- \[.+\]\(https:\/\/pair\.foomakers\.com\/docs\//)
+})
+
+test('llms-full.txt returns text/plain with full content', async ({ page }) => {
+  const response = await page.request.get('/llms-full.txt')
+  expect(response.status()).toBe(200)
+  expect(response.headers()['content-type']).toContain('text/plain')
+
+  const body = await response.text()
+  expect(body).toMatch(/^# pair\n/)
+  expect(body).toContain('> AI-assisted software development')
+  // Full version contains page content (not just links)
+  expect(body).toContain('Source: https://pair.foomakers.com/docs/')
+  expect(body).toContain('---')
+  // Full version should be larger than index
+  const indexResponse = await page.request.get('/llms.txt')
+  const indexBody = await indexResponse.text()
+  expect(body.length).toBeGreaterThan(indexBody.length)
+})
+
 test('smoke: all integrations + pm-tools pages return 200', async ({ page }) => {
   const pages = [
     { url: '/docs/integrations', title: 'AI Coding Tools' },

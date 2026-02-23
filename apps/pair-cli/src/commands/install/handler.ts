@@ -16,6 +16,7 @@ import {
   postCopyOps,
   applySkillRefsToNonSkillRegistries,
   resolveEffectiveDatasetRoot,
+  writeProjectLlmsTxt,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
@@ -201,6 +202,8 @@ async function executeInstall(context: InstallContext): Promise<void> {
   if (options?.linkStyle) {
     await applyLinkTransformation(fs, { linkStyle: options.linkStyle }, pushLog, 'install')
   }
+
+  await writeProjectLlmsTxt(fs, baseTarget, pushLog)
 
   presenter.summary(results, 'install', Date.now() - startTime)
 }

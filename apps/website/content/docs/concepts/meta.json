@@ -1,4 +1,11 @@
 {
   "title": "Concepts",
-  "pages": ["ai-assisted-sdlc", "knowledge-base", "skills", "adoption-files", "agent-integration"]
+  "pages": [
+    "ai-assisted-sdlc",
+    "knowledge-base",
+    "skills",
+    "adoption-files",
+    "agent-integration",
+    "llms-txt"
+  ]
 }

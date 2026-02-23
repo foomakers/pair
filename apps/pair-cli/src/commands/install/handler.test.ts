@@ -421,6 +421,52 @@ describe('install — Bug 4: skill refs in secondary (copy) targets', () => {
   })
 })
 
+describe('install — llms.txt generation', () => {
+  test('generates .pair/llms.txt after install with adopted content', async () => {
+    const moduleDir = '/project'
+    const datasetSrc = `${moduleDir}/packages/knowledge-hub/dataset`
+
+    const registryConfig = {
+      asset_registries: {
+        adoption: {
+          source: '.pair/tech/adopted',
+          behavior: 'mirror',
+          description: 'Tech adoption files',
+          targets: [{ path: '.pair/tech/adopted', mode: 'canonical' }],
+        },
+      },
+    }
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${moduleDir}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${moduleDir}/config.json`]: JSON.stringify(registryConfig),
+        [`${datasetSrc}/.pair/tech/adopted/architecture.md`]: '# Architecture\n\nArch content.',
+      },
+      moduleDir,
+      moduleDir,
+    )
+
+    const config: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleInstallCommand(config, fs)
+
+    expect(await fs.exists(`${moduleDir}/.pair/llms.txt`)).toBe(true)
+    const llmsTxt = await fs.readFile(`${moduleDir}/.pair/llms.txt`)
+    expect(llmsTxt).toMatch(/^# pair/)
+    expect(llmsTxt).toContain('## Adoption — Tech')
+    expect(llmsTxt).toContain('[Architecture]')
+  })
+})
+
 describe('install — Bug 5: skill ref rewrite with agents-before-skills order', () => {
   test('AGENTS.md refs are rewritten even when agents precedes skills in config', async () => {
     const moduleDir = '/project'
