@@ -450,8 +450,66 @@ function LandingPage() {
 }
 ```
 
+## For Developers
+
+### Package Exports
+
+| Export | Import | Content |
+|--------|--------|---------|
+| Main | `@pair/brand` | React components (`PairLogo`, `Card`, `Button`, `Callout`) + design token constants |
+| CSS Tokens | `@pair/brand/tokens.css` | CSS custom properties (`--pair-blue`, `--pair-bg`, etc.) |
+| Tailwind Preset | `@pair/brand/tailwind-preset` | Tailwind theme extension (colors, fonts, transitions) |
+
+### Setup in a Consumer Package
+
+1. Add dependency: `"@pair/brand": "workspace:*"` in `package.json`
+2. Import CSS tokens in your root layout:
+
+   ```tsx
+   import '@pair/brand/tokens.css'
+   ```
+
+3. Add Tailwind preset in `tailwind.config.ts`:
+
+   ```typescript
+   import brandPreset from '@pair/brand/tailwind-preset'
+   export default { presets: [brandPreset], content: ['./src/**/*.{ts,tsx}'] }
+   ```
+
+4. Load fonts (consumer responsibility — not bundled):
+
+   ```html
+   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+   ```
+
+### Development
+
+```bash
+pnpm --filter @pair/brand dev          # vite dev server (port 5173)
+pnpm --filter @pair/brand test         # vitest + playwright CT
+pnpm --filter @pair/brand a11y:report  # accessibility audit
+pnpm --filter @pair/brand lint         # eslint
+```
+
+### Package Structure
+
+```text
+src/
+├── index.ts              # Main exports (components + tokens)
+├── tokens/
+│   └── tokens.css        # CSS custom properties (light/dark)
+├── tailwind-preset.ts    # Tailwind theme preset
+└── components/           # React components
+    ├── PairLogo.tsx
+    ├── Card.tsx
+    ├── Button.tsx
+    └── Callout.tsx
+```
+
+Peer dependencies: `react ^19`, `next-themes ^0.4`, `tailwindcss ^3.4`.
+
 ---
 
 **Package**: `@pair/brand` v0.4.0
-**Last Updated**: 2026-02-17
+**Last Updated**: 2026-02-23
 **Maintained By**: foomakers

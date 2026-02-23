@@ -226,7 +226,7 @@ This document provides comprehensive guidelines for setting up and maintaining c
 
 ```bash
 # Install nvm and Node.js
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
 nvm install --lts && nvm use --lts
 
 # Install pnpm

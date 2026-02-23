@@ -13,8 +13,8 @@
     "lint:fix": "turbo lint:fix",
     "prettier:check": "turbo prettier:check",
     "prettier:fix": "turbo prettier:fix",
-    "mdlint:check": "turbo mdlint:check && ./tools/markdownlint-config/bin/markdownlint-check.sh 'docs/**/*.md'",
-    "mdlint:fix": "turbo mdlint:fix && ./tools/markdownlint-config/bin/markdownlint-fix.sh 'docs/**/*.md'",
+    "mdlint:check": "turbo mdlint:check && ./tools/markdownlint-config/bin/markdownlint-check.sh '*.md'",
+    "mdlint:fix": "turbo mdlint:fix && ./tools/markdownlint-config/bin/markdownlint-fix.sh '*.md'",
     "sync-deps": "pnpm --recursive update",
     "deps:outdated": "pnpm --recursive outdated",
     "catalog:update": "pnpm update",
@@ -25,7 +25,7 @@
     "a11y:report:html": "turbo a11y:report:html",
     "hygiene:check": "node scripts/code-hygiene-check.js",
     "docs:staleness": "node scripts/docs-staleness-check.js",
-    "quality-gate": "turbo ts:check test lint && turbo prettier:fix mdlint:fix && pnpm hygiene:check && pnpm docs:staleness",
+    "quality-gate": "turbo ts:check test lint && turbo prettier:fix mdlint:fix && ./tools/markdownlint-config/bin/markdownlint-fix.sh '*.md' && pnpm hygiene:check && pnpm docs:staleness",
     "smoke-tests": "./scripts/smoke-tests/run-all.sh --cleanup"
   },
   "devDependencies": {

@@ -1,58 +1,49 @@
 # @pair/eslint-config
 
-ESLint configuration for the pair monorepo. See the catalog section in `pnpm-workspace.yaml` for downloaded package versions.
+Shared ESLint configuration for the pair monorepo. All packages use these rules by default unless they provide their own config.
 
 ## Usage
 
-**Default Behavior:** All packages use the standard shared ESLint rules unless a package provides its own config file. Customization is optional.
+Reference in your package's `package.json` scripts (via the `lint` / `lint-fix` bin wrappers):
 
-Reference this config in your package's `.eslintrc.js` or via CLI:
+```json
+"scripts": {
+  "lint": "lint",
+  "lint:fix": "lint-fix"
+}
+```
+
+Or extend directly in a custom config:
 
 ```js
 module.exports = require('@pair/eslint-config')
 ```
 
-Or via CLI:
+### Available Configs
 
-```bash
-pnpm exec eslint . --config tools/eslint-config/index.js
-```
+| Config | Import | Use Case |
+|--------|--------|----------|
+| Base | `@pair/eslint-config` | TypeScript packages |
+| React | `@pair/eslint-config/react` | React packages |
+| React + a11y | `@pair/eslint-config/react-a11y` | React with accessibility rules |
 
-## Ignore
+### Extending in a Package
 
-See `.eslintignore` for ignored files.
-
-## Extending the Shared Config in Your Package
-
-To extend the shared ESLint config in a package, create a `.eslintrc.js` file in your package root:
+Create an `eslint.config.cjs` in your package root:
 
 ```js
 module.exports = {
   extends: [require.resolve('@pair/eslint-config')],
   rules: {
-    // Add or override rules specific to your package
-    // Example:
-    // '@typescript-eslint/no-explicit-any': 'off',
+    // package-specific overrides
   },
 }
 ```
 
-You can also extend React or accessibility configs if available:
+## Files
 
-```js
-module.exports = {
-  extends: [require.resolve('@pair/eslint-config/react')],
-  // ...
-}
-```
-
-For accessibility:
-
-```js
-module.exports = {
-  extends: [require.resolve('@pair/eslint-config/react-a11y')],
-  // ...
-}
-```
-
-See [Code Design Guidelines](../...pair/knowledge/02-code-design-guidelines.md#eslint-configuration) for more details.
+- `index.js` — base config (TypeScript + general rules)
+- `react.js` — React plugin rules
+- `react-a11y.js` — React + jsx-a11y rules
+- `bin/` — wrapper scripts (`lint`, `lint-fix`, `eslint`)
+- `.eslintignore` — ignored patterns

@@ -127,7 +127,7 @@ async function main() {
     },
   }
 
-  const reportPath = path.join(__dirname, '../../docs/performance/benchmark-report.json')
+  const reportPath = path.join(__dirname, '../../reports/performance/benchmark-report.json')
   fs.writeFileSync(reportPath, JSON.stringify(report, null, 2))
 
   console.log('\n✅ Benchmark complete!')

@@ -63,4 +63,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: benchmark-report
-          path: docs/performance/benchmark-report.json
+          path: reports/performance/benchmark-report.json
