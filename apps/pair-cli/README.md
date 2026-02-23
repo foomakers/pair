@@ -1,6 +1,8 @@
 # pair-cli
 
-CLI for installing, managing, and processing pair knowledge base assets. User-facing docs live on the [documentation site](https://pair.foomakers.com/docs/reference/cli/commands).
+CLI for installing, managing, and processing pair knowledge base assets.
+
+Full command reference, usage examples, and configuration docs are on the [documentation site](https://pair.foomakers.com/docs/reference/cli/commands). To browse docs locally: `pnpm --filter @pair/website dev` → [localhost:3000/docs/reference/cli/commands](http://localhost:3000/docs/reference/cli/commands).
 
 ## For Developers
 
