@@ -65,7 +65,7 @@ For environments without internet access or when you need a self-contained versi
 
 ## Quick Start
 
-Get started quickly: [Quick Start Guide](../../docs/getting-started/01-quickstart.md)
+Get started quickly: [Quick Start Guide](https://pair.foomakers.com/docs/getting-started/quickstart)
 
 ### List available asset registries
 
@@ -108,18 +108,18 @@ pair-cli update
 
 | Command                 | Description                                            | Reference                                                   |
 | ----------------------- | ------------------------------------------------------ | ----------------------------------------------------------- |
-| `install [target]`       | Install documentation and assets to target folder      | [CLI Reference](../../docs/cli/commands.md#install)         |
-| `update [target]`        | Update existing documentation and assets               | [CLI Reference](../../docs/cli/commands.md#update)          |
-| `update-link [options]`  | Validate and update links in installed KB content      | [CLI Reference](../../docs/cli/commands.md#update-link)     |
-| `kb validate [options]`  | Validate KB structure, links, and metadata             | [CLI Reference](../../docs/cli/commands.md#kb-validate)     |
-| `kb-verify <package>`    | Verify KB package integrity (checksum, structure)      | [CLI Reference](../../docs/cli/commands.md#kb-verify)       |
-| `kb-info <package>`      | Display metadata from a KB package ZIP file            | [CLI Reference](../../docs/cli/commands.md#kb-info)         |
-| `package [options]`      | Package KB content into distributable ZIP file         | [CLI Reference](../../docs/cli/commands.md#package)         |
-| `validate-config`        | Validate asset registry configuration                  | [CLI Reference](../../docs/cli/commands.md#validate-config) |
+| `install [target]`       | Install documentation and assets to target folder      | [CLI Reference](https://pair.foomakers.com/docs/reference/cli/commands#install)         |
+| `update [target]`        | Update existing documentation and assets               | [CLI Reference](https://pair.foomakers.com/docs/reference/cli/commands#update)          |
+| `update-link [options]`  | Validate and update links in installed KB content      | [CLI Reference](https://pair.foomakers.com/docs/reference/cli/commands#update-link)     |
+| `kb validate [options]`  | Validate KB structure, links, and metadata             | [CLI Reference](https://pair.foomakers.com/docs/reference/cli/commands#kb-validate)     |
+| `kb-verify <package>`    | Verify KB package integrity (checksum, structure)      | [CLI Reference](https://pair.foomakers.com/docs/reference/cli/commands#kb-verify)       |
+| `kb-info <package>`      | Display metadata from a KB package ZIP file            | [CLI Reference](https://pair.foomakers.com/docs/reference/cli/commands#kb-info)         |
+| `package [options]`      | Package KB content into distributable ZIP file         | [CLI Reference](https://pair.foomakers.com/docs/reference/cli/commands#package)         |
+| `validate-config`        | Validate asset registry configuration                  | [CLI Reference](https://pair.foomakers.com/docs/reference/cli/commands#validate-config) |
 
 **Quick Help**: Run `pair-cli <command> --help` for detailed syntax, options, and examples.
 
-**Full Documentation**: See [CLI Commands Reference](../../docs/cli/commands.md) for complete usage guide with examples.
+**Full Documentation**: See [CLI Commands Reference](https://pair.foomakers.com/docs/reference/cli/commands) for complete usage guide with examples.
 
 ## KB Installation Features
 
@@ -379,7 +379,7 @@ Exit codes: 0 (all checks pass), 1 (any check fails or error)
 - **Common Options** - Shared flags across commands
 - **Help and Examples** - Built-in usage documentation
 
-For detailed usage of the link update command, see [CLI Update Link Guide](../../docs/getting-started/05-cli-update-link.md).
+For detailed usage of the link update command, see [CLI Update Link Guide](https://pair.foomakers.com/docs/guides/update-link).
 
 ## Troubleshooting
 
@@ -391,8 +391,8 @@ For detailed usage of the link update command, see [CLI Update Link Guide](../..
 
 Having installation or setup issues? We have comprehensive support resources:
 
-- **[Installation FAQ](../../docs/support/installation-faq.md)** - Solutions for common install problems (permissions, Node version conflicts, pnpm issues, offline installs)
-- **[Support Resources](../../docs/support/index.md)** - Complete support guide with escalation paths and contact information
+- **[Installation FAQ](https://pair.foomakers.com/docs/support/faq)** - Solutions for common install problems (permissions, Node version conflicts, pnpm issues, offline installs)
+- **[Support Resources](https://pair.foomakers.com/docs/support)** - Complete support guide with escalation paths and contact information
 - **[Diagnostic Script](../../scripts/diagnose-install.sh)** - Automated environment diagnostics (`bash scripts/diagnose-install.sh`)
 
 **Quick diagnostic check:**
