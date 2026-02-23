@@ -72,6 +72,23 @@ After`
     expect(stripJsx('A <div>block</div> here')).toBe('A <div>block</div> here')
   })
 
+  it('strips nested same-type JSX components', () => {
+    const input = `Before
+
+<Card>
+  <Card>
+    Inner content
+  </Card>
+</Card>
+
+After`
+    const result = stripJsx(input)
+    expect(result).toContain('Before')
+    expect(result).toContain('After')
+    expect(result).not.toContain('Card')
+    expect(result).not.toContain('Inner content')
+  })
+
   it('collapses multiple blank lines after stripping', () => {
     const input = `Line 1
 
@@ -183,6 +200,31 @@ draft: true
 Draft content.`,
     )
 
+    const pages = getLlmPages(tmpDir)
+    expect(pages).toHaveLength(1)
+    expect(pages[0].title).toBe('Published')
+  })
+
+  it('excludes draft pages when draft is boolean true', () => {
+    writeFile(
+      'published.mdx',
+      `---
+title: Published
+---
+
+Content.`,
+    )
+    writeFile(
+      'draft-bool.mdx',
+      `---
+title: Draft Boolean
+draft: true
+---
+
+Draft content.`,
+    )
+
+    // Simulate a parser that returns boolean true (future gray-matter compat)
     const pages = getLlmPages(tmpDir)
     expect(pages).toHaveLength(1)
     expect(pages[0].title).toBe('Published')

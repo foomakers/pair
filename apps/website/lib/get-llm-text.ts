@@ -8,7 +8,7 @@ export interface LlmPage {
 }
 
 interface Frontmatter {
-  [key: string]: string
+  [key: string]: string | boolean
 }
 
 interface ParsedMdx {
@@ -34,12 +34,18 @@ export function parseFrontmatter(raw: string): ParsedMdx {
 
 export function stripJsx(content: string): string {
   let result = content
-  // Remove JSX blocks: <Component ...>...</Component> (including multiline)
-  result = result.replace(/<[A-Z][a-zA-Z]*[^>]*>[\s\S]*?<\/[A-Z][a-zA-Z]*>/g, '')
-  // Remove self-closing JSX tags: <Component ... />
-  result = result.replace(/<[A-Z][^>]*\/>/g, '')
-  // Remove remaining JSX opening/closing tags
-  result = result.replace(/<\/?[A-Z][a-zA-Z]*[^>]*>/g, '')
+  // Iterative stripping handles nested same-type components:
+  // inner components are removed first, making outer ones matchable next pass
+  let prev = ''
+  while (prev !== result) {
+    prev = result
+    // Remove JSX blocks: <Component ...>...</Component> (including multiline)
+    result = result.replace(/<[A-Z][a-zA-Z]*[^>]*>[\s\S]*?<\/[A-Z][a-zA-Z]*>/g, '')
+    // Remove self-closing JSX tags: <Component ... />
+    result = result.replace(/<[A-Z][^>]*\/>/g, '')
+    // Remove remaining JSX opening/closing tags
+    result = result.replace(/<\/?[A-Z][a-zA-Z]*[^>]*>/g, '')
+  }
   // Collapse multiple blank lines
   result = result.replace(/\n{3,}/g, '\n\n')
   return result.trim()
@@ -81,9 +87,11 @@ export function getLlmPages(contentDir?: string): LlmPage[] {
     const raw = fs.readFileSync(file, 'utf-8')
     const { data, content } = parseFrontmatter(raw)
 
-    if (data['draft'] === 'true') continue
+    const draft = data['draft']
+    if (draft === true || draft === 'true') continue
 
-    const title = data['title'] || path.basename(file, '.mdx')
+    const rawTitle = data['title']
+    const title = typeof rawTitle === 'string' ? rawTitle : path.basename(file, '.mdx')
     const url = getUrlFromFilePath(file, dir)
     const cleanContent = stripJsx(content)
 
