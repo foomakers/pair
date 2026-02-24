@@ -24,6 +24,16 @@ function onlyStrings(arr: unknown[]): string[] {
 
 const pkg = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'))
 
+const PAIR_BLUE = '#0062FF'
+const PAIR_TEAL = '#00D1FF'
+
+function pairLogo(): string {
+  const blue = chalk.hex(PAIR_BLUE)('██')
+  const teal = chalk.hex(PAIR_TEAL)('██')
+  const name = chalk.bold.white('pair')
+  return `${blue} ${teal}  ${name}`
+}
+
 setLogLevel(MIN_LOG_LEVEL)
 
 export interface CliDependencies {
@@ -81,7 +91,7 @@ export async function runCli(
 
   program.addHelpText(
     'beforeAll',
-    `\n  ${chalk.bold(pkg.name)} ${chalk.dim(`v${pkg.version}`)}\n  ${chalk.dim(pkg.description)}\n`,
+    `\n  ${pairLogo()} ${chalk.dim(`v${pkg.version}`)}\n  ${chalk.hex(PAIR_BLUE)('Code is the easy part.')}\n`,
   )
   program.addHelpText(
     'afterAll',
@@ -196,8 +206,12 @@ function setupCommands(prog: Command, deps: CommandDeps): void {
   })
 
   prog.action(() => {
-    logger.info('Welcome to Pair CLI! Use --help to see available commands.')
-    logger.info('💡 Tip: Use "pair install --list-targets" to see available asset registries')
+    console.log(`\n  ${pairLogo()} ${chalk.dim(`v${pkg.version}`)}`)
+    console.log(`  ${chalk.hex(PAIR_BLUE)('Code is the easy part.')}\n`)
+    console.log(`  ${chalk.dim('Run')} pair --help ${chalk.dim('to see available commands.')}`)
+    console.log(
+      `  ${chalk.dim('Run')} pair install --list-targets ${chalk.dim('to see asset registries.')}\n`,
+    )
   })
 }
 
