@@ -57,9 +57,6 @@ function kebabToCamel(str: string): string {
 /**
  * Normalize option keys from kebab-case to camelCase
  * Commander stores options with dashes (e.g., 'source-dir') but parsers expect camelCase (e.g., 'sourceDir')
- *
- * Special handling for quoted values: if a value contains spaces and was quoted,
- * we need to preserve it as a single value.
  */
 function normalizeOptionKeys(options: Record<string, unknown>): Record<string, unknown> {
   const normalized: Record<string, unknown> = {}
@@ -132,7 +129,6 @@ export async function main() {
     // but centralize colors and exit logic here.
     logger.error(`Error: ${errMessage}`)
 
-    process.exitCode = 1
     process.exit(1)
   }
 }

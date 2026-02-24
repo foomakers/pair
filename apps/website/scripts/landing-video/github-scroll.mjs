@@ -197,6 +197,8 @@ if (files.length > 0) {
     .map(f => ({ f, t: statSync(join(__dirname, f)).mtimeMs }))
     .sort((a, b) => b.t - a.t)[0].f
   renameSync(join(__dirname, latest), OUTPUT)
+} else {
+  console.warn('Warning: no Playwright video file found — github-scroll.webm not created')
 }
 
 console.log(`==> GitHub scroll recorded: ${OUTPUT}`)

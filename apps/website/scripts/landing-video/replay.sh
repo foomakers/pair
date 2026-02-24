@@ -37,29 +37,12 @@ print_block() {
   done <<< "$1"
 }
 
-green() { printf '\033[38;2;0;209;255m%s\033[0m' "$1"; }
-blue()  { printf '\033[38;2;0;98;255m%s\033[0m' "$1"; }
+teal()  { printf '\033[38;2;0;209;255m%s\033[0m' "$1"; }
 bold()  { printf '\033[1m%s\033[0m' "$1"; }
 dim()   { printf '\033[2m%s\033[0m' "$1"; }
-white() { printf '\033[38;2;230;237;243m%s\033[0m' "$1"; }
 
 scene_label() {
   printf '\n\033[1;48;2;0;98;255;38;2;255;255;255m  %s  \033[0m\n\n' "$1"
-}
-
-center_text() {
-  local text="$1"
-  local len=${#text}
-  local pad=$(( (COLS - len) / 2 ))
-  printf '%*s%s\n' "$pad" '' "$text"
-}
-
-hline() {
-  local char="${1:-─}"
-  local color="${2:-\033[38;2;60;60;60m}"
-  printf "${color}"
-  printf '%*s' "$COLS" '' | tr ' ' "${char}"
-  printf '\033[0m\n'
 }
 
 # Cursor positioning
@@ -104,8 +87,8 @@ part1() {
 
   echo ""
   echo "PROJECT STATE:"
-  echo "├── PRD: $(green "populated")"
-  echo "├── Bootstrap: $(green "complete")"
+  echo "├── PRD: $(teal "populated")"
+  echo "├── Bootstrap: $(teal "complete")"
   echo "├── PM Tool: GitHub Projects"
   echo "└── Backlog: 3 stories refined, 1 ready"
   echo ""
@@ -151,9 +134,9 @@ part1() {
   echo ""
   echo "STORY REFINEMENT COMPLETE:"
   echo "├── Story:    #42: Add user authentication"
-  echo "├── Status:   $(green "Refined")"
+  echo "├── Status:   $(teal "Refined")"
   echo "├── Sections: 8/8 complete"
-  echo "├── PM Tool:  $(green "Issue updated — #42 ✓")"
+  echo "├── PM Tool:  $(teal "Issue updated — #42 ✓")"
   echo "└── Next:     /pair-process-plan-tasks"
   pause 1.5
 
@@ -165,7 +148,6 @@ part1() {
 # Part 2: Cursor — Sidebar + AI Chat + Closing
 # ═══════════════════════════════════════════════════════════════════
 
-SIDEBAR_W=24
 SEP_COL=25
 CHAT_COL=27
 
@@ -298,7 +280,7 @@ part2() {
   )
   for t in "${tests[@]}"; do
     cursor_to $r "$CHAT_COL"
-    printf " $(green "✓") %s" "$t"
+    printf " $(teal "✓") %s" "$t"
     r=$((r + 1))
     sleep 0.2
   done
@@ -307,7 +289,7 @@ part2() {
 
   # ── Summary ──
   cursor_to $r "$CHAT_COL"
-  printf "$(green "✓") $(bold "PR #58 created — all gates passing")"
+  printf "$(teal "✓") $(bold "PR #58 created — all gates passing")"
   pause 1.5
 }
 

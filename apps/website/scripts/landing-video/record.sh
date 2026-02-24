@@ -17,6 +17,9 @@
 set -e
 cd "$(dirname "$0")"
 
+# Shared ffmpeg encoding options for 1280x720 H.264
+FFMPEG_OPTS="-movflags faststart -pix_fmt yuv420p -vf scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=#0a0d14 -c:v libx264 -preset slow -crf 23"
+
 record_terminal() {
   local part="$1"
   local cast="replay-part${part}.cast"
@@ -41,15 +44,8 @@ record_terminal() {
     "$cast" "$gif"
 
   echo "==> Converting to MP4..."
-  ffmpeg -y \
-    -i "$gif" \
-    -movflags faststart \
-    -pix_fmt yuv420p \
-    -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=#0a0d14" \
-    -c:v libx264 \
-    -preset slow \
-    -crf 23 \
-    "$mp4"
+  # shellcheck disable=SC2086
+  ffmpeg -y -i "$gif" $FFMPEG_OPTS "$mp4"
 
   echo "==> Part ${part} saved: $mp4"
   ls -lh "$mp4"
@@ -60,15 +56,8 @@ record_github() {
   node github-scroll.mjs
 
   echo "==> Converting webm to mp4..."
-  ffmpeg -y \
-    -i github-scroll.webm \
-    -movflags faststart \
-    -pix_fmt yuv420p \
-    -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=#0a0d14" \
-    -c:v libx264 \
-    -preset slow \
-    -crf 23 \
-    github-scroll.mp4
+  # shellcheck disable=SC2086
+  ffmpeg -y -i github-scroll.webm $FFMPEG_OPTS github-scroll.mp4
 
   echo "==> GitHub scroll saved: github-scroll.mp4"
   ls -lh github-scroll.mp4
@@ -79,15 +68,8 @@ record_login_closing() {
   node login-closing.mjs
 
   echo "==> Converting webm to mp4..."
-  ffmpeg -y \
-    -i login-closing.webm \
-    -movflags faststart \
-    -pix_fmt yuv420p \
-    -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=#0a0d14" \
-    -c:v libx264 \
-    -preset slow \
-    -crf 23 \
-    login-closing.mp4
+  # shellcheck disable=SC2086
+  ffmpeg -y -i login-closing.webm $FFMPEG_OPTS login-closing.mp4
 
   echo "==> Login closing saved: login-closing.mp4"
   ls -lh login-closing.mp4
