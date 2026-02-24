@@ -1,0 +1,112 @@
+---
+title: Release Process
+description: How pair releases work — changesets, automated versioning, tagging, and artifact publishing.
+---
+
+Releases are fully automated via GitHub Actions and [Changesets](https://github.com/changesets/changesets). This guide covers how to create a release and what happens behind the scenes.
+
+## Overview
+
+The release pipeline has three phases:
+
+```text
+Developer               version.yml           tag.yml              release.yml
+    │                       │                    │                       │
+    │  changeset + PR       │                    │                       │
+    │──────────────────────▶│                    │                       │
+    │                       │  version bump      │                       │
+    │                       │  + version PR      │                       │
+    │                       │──────────────────▶ │                       │
+    │                       │                    │  merge → tag vX.Y.Z   │
+    │                       │                    │─────────────────────▶ │
+    │                       │                    │                       │  build + package
+    │                       │                    │                       │  + publish release
+```
+
+**Build once, verify, publish.** Changesets manages versions, CI builds artifacts, GitHub Releases distributes them.
+
+## Creating a release
+
+### 1. Create a changeset
+
+When your PR includes changes to a published package, create a changeset:
+
+```bash
+pnpm exec changeset add
+```
+
+This opens an interactive prompt:
+1. Select the affected package(s).
+2. Choose the bump type: **patch** (bug fix), **minor** (new feature), or **major** (breaking change).
+3. Write a brief description of the change.
+
+A `.changeset/*.md` file is created. Commit it with your PR.
+
+### 2. Merge your PR to main
+
+When your PR merges, the **Version workflow** (`version.yml`) detects the changeset and automatically:
+- Bumps `package.json` versions.
+- Updates `CHANGELOG.md`.
+- Creates a **version PR** with these changes.
+
+### 3. Merge the version PR
+
+Merging the version PR triggers the **Tag workflow** (`tag-on-changeset-merge.yml`) which creates a `v{X.Y.Z}` git tag.
+
+### 4. Tag triggers release
+
+The tag push triggers the **Release workflow** (`release.yml`) which:
+1. Runs `pnpm quality-gate`.
+2. Builds all packages (`pnpm build`).
+3. Packages the CLI bundle (`scripts/package-manual.sh`).
+4. Creates a GitHub Release with all artifacts.
+
+## Workflows
+
+| Workflow | File | Trigger | Purpose |
+|----------|------|---------|---------|
+| Version | `version.yml` | Push to `main` with `.changeset/**` | Bump versions, create version PR |
+| Tag | `tag-on-changeset-merge.yml` | Version PR merged | Create `vX.Y.Z` tag |
+| Release | `release.yml` | Tag `v*` pushed | Build, package, publish |
+
+## Release artifacts
+
+### CLI
+
+| Artifact | Description |
+|----------|-------------|
+| `pair-cli-manual-{version}.zip` | Self-contained CLI bundle (ncc, no node_modules) |
+| `pair-cli-manual-{version}.zip.sha256` | SHA256 checksum |
+| `pair-cli-{version}.tgz` | npm package for GitHub Packages |
+| `pair-cli-{version}.tgz.sha256` | TGZ checksum |
+
+### Knowledge Base
+
+| Artifact | Description |
+|----------|-------------|
+| `knowledge-base-{version}.zip` | KB dataset with manifest |
+| `knowledge-base-{version}.zip.sha256` | SHA256 checksum |
+
+The CLI auto-downloads the KB on first run from GitHub Releases and caches it at `~/.pair/kb/{version}/`.
+
+## Manual dispatch
+
+Workflows can be triggered manually:
+
+```bash
+gh workflow run "Version (Changesets)" --ref main
+gh workflow run "Release" --ref main -f version="v1.0.0"
+```
+
+## Rollback
+
+If a release needs to be reverted:
+
+1. Delete the GitHub Release and tag from the GitHub UI.
+2. Revert the version commit from the changeset PR merge.
+3. Create a new changeset with the fix.
+4. The pipeline re-runs automatically (new version PR → tag → release).
+
+---
+
+*Last verified: 2026-02-24*
