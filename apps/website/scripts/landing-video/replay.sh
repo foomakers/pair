@@ -20,11 +20,11 @@ ROWS=30
 # --- Helpers ---
 
 type_text() {
-  # Simulate typing at ~30ms per character (no prompt prefix)
   local text="$1"
+  local speed="${2:-0.03}"
   for ((i = 0; i < ${#text}; i++)); do
     printf '%s' "${text:$i:1}"
-    sleep 0.03
+    sleep "$speed"
   done
 }
 
@@ -54,7 +54,6 @@ center_text() {
   printf '%*s%s\n' "$pad" '' "$text"
 }
 
-# Draw a horizontal line across the terminal
 hline() {
   local char="${1:-─}"
   local color="${2:-\033[38;2;60;60;60m}"
@@ -63,32 +62,41 @@ hline() {
   printf '\033[0m\n'
 }
 
+# Cursor positioning
+cursor_to() { printf '\033[%d;%dH' "$1" "$2"; }
+
 # ═══════════════════════════════════════════════════════════════════
-# Part 1: Claude Code — Discover + Refine
+# Part 1: Claude Code — Discover + Refine (fixed header)
 # ═══════════════════════════════════════════════════════════════════
 
 part1() {
   clear
 
-  # ── Claude Code title bar ──
-  # Dark bar with Claude Code branding + project path
-  printf '\033[48;2;24;24;27m'  # dark bg
-  printf '\033[38;2;204;120;50m ◆ \033[0m'  # orange diamond (Claude branding)
+  # ── Draw header on rows 1–2 (stays fixed) ──
+  cursor_to 1 1
+  printf '\033[48;2;24;24;27m'
+  printf '\033[38;2;204;120;50m ◆ \033[0m'
   printf '\033[48;2;24;24;27m'
   printf '\033[1;38;2;230;237;243m Claude Code \033[0m'
   printf '\033[48;2;24;24;27m'
   printf '\033[38;2;100;100;110m ~/projects/myapp \033[0m'
   printf '\033[48;2;24;24;27m'
   printf '%*s' $((COLS - 38)) ''
-  printf '\033[0m\n'
-  hline "─" "\033[38;2;60;60;60m"
-  echo ""
+  printf '\033[0m'
+
+  cursor_to 2 1
+  printf '\033[38;2;60;60;60m'
+  printf '%*s' "$COLS" '' | tr ' ' '─'
+  printf '\033[0m'
+
+  # Lock header: scroll region = rows 3–30
+  printf '\033[3;%dr' "$ROWS"
+  printf '\033[3;1H'
   pause 0.3
 
   # Scene 1: /pair-next
   scene_label "1 · Discover"
 
-  # Claude Code prompt: ❯ with typing
   printf '\033[1;38;2;204;120;50m❯ \033[0m'
   type_text "/pair-next"
   echo ""
@@ -148,134 +156,174 @@ part1() {
   echo "├── PM Tool:  $(green "Issue updated — #42 ✓")"
   echo "└── Next:     /pair-process-plan-tasks"
   pause 1.5
+
+  # Reset scroll region
+  printf '\033[r'
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# Part 2: Cursor — Implement + Closing
+# Part 2: Cursor — Sidebar + AI Chat + Closing
 # ═══════════════════════════════════════════════════════════════════
 
-part2() {
-  clear
+SIDEBAR_W=24
+SEP_COL=25
+CHAT_COL=27
 
-  # ── Cursor title bar + tab bar ──
-  # Top bar: window controls + Cursor name
+draw_cursor_chrome() {
+  # Row 1: Title bar with traffic lights
+  cursor_to 1 1
   printf '\033[48;2;30;30;30m'
   printf '\033[38;2;255;95;86m ● \033[38;2;255;189;46m● \033[38;2;39;201;63m● \033[0m'
   printf '\033[48;2;30;30;30m'
   printf '\033[1;38;2;200;200;200m  Cursor \033[0m'
   printf '\033[48;2;30;30;30m'
-  printf '\033[38;2;100;100;110m — myapp\033[0m'
+  printf '\033[38;2;100;100;110m— myapp\033[0m'
   printf '\033[48;2;30;30;30m'
-  printf '%*s' $((COLS - 30)) ''
-  printf '\033[0m\n'
+  printf '%*s' $((COLS - 28)) ''
+  printf '\033[0m'
 
-  # Tab bar: active file tab
-  printf '\033[48;2;24;24;27m'
-  printf '\033[38;2;60;60;65m │ \033[0m'
-  printf '\033[48;2;36;36;40m'  # active tab bg
-  printf '\033[38;2;0;209;255m ⬡ \033[0m'  # TS icon
-  printf '\033[48;2;36;36;40m'
-  printf '\033[1;38;2;220;220;220mauth.ts\033[0m'
-  printf '\033[48;2;36;36;40m \033[0m'
-  printf '\033[48;2;24;24;27m'
-  printf '\033[38;2;80;80;85m  ⬡ auth.test.ts  │  ⬡ login.ts \033[0m'
-  printf '\033[48;2;24;24;27m'
-  printf '%*s' $((COLS - 55)) ''
-  printf '\033[0m\n'
+  # Row 2: Separator
+  cursor_to 2 1
+  printf '\033[38;2;60;60;60m'
+  printf '%*s' "$COLS" '' | tr ' ' '─'
+  printf '\033[0m'
 
-  # Separator between editor and terminal
-  hline "─" "\033[38;2;60;60;60m"
+  # Sidebar: file tree (rows 3–29, cols 1–24)
+  local -a tree=(
+    "\033[1;38;2;140;140;150mEXPLORER\033[0m"
+    ""
+    "\033[38;2;200;200;210m▼ myapp\033[0m"
+    "\033[38;2;140;140;150m  ▼ src\033[0m"
+    "\033[38;2;140;140;150m    ▼ middleware\033[0m"
+    "\033[1;38;2;0;209;255m      auth.ts\033[0m"
+    "\033[38;2;140;140;150m      auth.test.ts\033[0m"
+    "\033[38;2;140;140;150m    ▼ routes\033[0m"
+    "\033[38;2;140;140;150m      login.ts\033[0m"
+    "\033[38;2;140;140;150m    ▼ services\033[0m"
+    "\033[38;2;140;140;150m      password.ts\033[0m"
+    "\033[38;2;140;140;150m  package.json\033[0m"
+    "\033[38;2;140;140;150m  tsconfig.json\033[0m"
+  )
+  for i in "${!tree[@]}"; do
+    cursor_to $((3 + i)) 1
+    printf " ${tree[$i]}"
+  done
 
-  # Terminal panel header
-  printf '\033[48;2;24;24;27m'
-  printf '\033[38;2;100;100;110m  TERMINAL \033[0m'
-  printf '\033[48;2;24;24;27m'
-  printf '\033[38;2;60;60;65m  PROBLEMS  OUTPUT  DEBUG CONSOLE \033[0m'
-  printf '\033[48;2;24;24;27m'
-  printf '%*s' $((COLS - 52)) ''
-  printf '\033[0m\n'
+  # Vertical separator (col 25, rows 3–29)
+  for ((r = 3; r <= ROWS - 1; r++)); do
+    cursor_to "$r" "$SEP_COL"
+    printf '\033[38;2;60;60;60m│\033[0m'
+  done
 
-  hline "─" "\033[38;2;60;60;60m"
-  echo ""
-  pause 0.3
+  # Chat panel header
+  cursor_to 3 "$CHAT_COL"
+  printf '\033[1;38;2;180;180;190mAI Chat\033[0m'
+  cursor_to 4 "$CHAT_COL"
+  printf '\033[38;2;60;60;60m'
+  printf '%*s' $((COLS - CHAT_COL)) '' | tr ' ' '─'
+  printf '\033[0m'
 
-  # Scene 3: /pair-process-implement
-  scene_label "3 · Implement"
+  # Status bar (row 30)
+  cursor_to "$ROWS" 1
+  printf '\033[48;2;30;30;30m'
+  printf '\033[38;2;100;100;110m main \033[38;2;39;201;63m✓\033[0m'
+  printf '\033[48;2;30;30;30m'
+  printf '\033[38;2;80;80;85m  Ln 1  Col 1  UTF-8  TypeScript\033[0m'
+  printf '\033[48;2;30;30;30m'
+  printf '%*s' $((COLS - 45)) ''
+  printf '\033[0m'
+}
 
-  # Cursor terminal prompt
-  printf '\033[38;2;100;100;110mmyapp \033[38;2;39;201;63m❯ \033[0m'
+part2() {
+  clear
+  draw_cursor_chrome
+  pause 0.5
+
+  local r=6  # first content row in chat area
+
+  # ── User message ──
+  cursor_to $r "$CHAT_COL"
+  printf '\033[2;38;2;140;140;150mYou\033[0m'
+  r=$((r + 1))
+  cursor_to $r "$CHAT_COL"
   type_text "/pair-process-implement #42"
-  echo ""
+  r=$((r + 2))
+  pause 0.5
+
+  # ── AI response ──
+  cursor_to $r "$CHAT_COL"
+  printf '\033[1;38;2;180;130;255m⬡ Cursor\033[0m'
+  r=$((r + 1))
+  cursor_to $r "$CHAT_COL"
+  type_text "Implementing T-1: Create auth middleware (TDD)" 0.015
+  r=$((r + 2))
   pause 0.3
 
-  echo ""
-  echo "ACTIVE TASK:"
-  echo "├── Task: T-1: Create auth middleware"
-  echo "├── Type: Development"
-  echo "├── Mode: TDD"
-  echo "└── Phase: Starting"
-  echo ""
+  # ── Code generation — file label ──
+  cursor_to $r "$CHAT_COL"
+  printf '\033[2;38;2;0;209;255m  src/middleware/auth.ts\033[0m'
+  r=$((r + 1))
+  pause 0.2
+
+  # ── Streaming code block ──
+  local -a code=(
+    "export function verifyToken("
+    "  token: string"
+    "): AuthPayload {"
+    "  const payload = jwt.verify(token, SECRET)"
+    "  return payload as AuthPayload"
+    "}"
+  )
+  for line in "${code[@]}"; do
+    cursor_to $r $((CHAT_COL + 2))
+    printf '\033[38;2;180;220;255m'
+    type_text "$line" 0.012
+    printf '\033[0m'
+    r=$((r + 1))
+  done
+  r=$((r + 1))
   pause 0.5
 
-  dim "Writing src/middleware/auth.test.ts..."
-  echo ""
-  dim "Writing src/middleware/auth.ts..."
-  echo ""
-  pause 0.5
+  # ── Test results ──
+  cursor_to $r "$CHAT_COL"
+  printf '\033[2mRunning tests...\033[0m'
+  r=$((r + 1))
+  pause 0.4
 
-  echo ""
-  printf '\033[2m  // src/middleware/auth.ts\033[0m\n'
-  print_block "  export function verifyToken(token: string): AuthPayload {
-    return jwt.verify(token, SECRET) as AuthPayload
-  }"
-  pause 0.8
+  local -a tests=(
+    "returns payload for valid token"
+    "throws on expired token"
+    "throws on invalid signature"
+    "middleware sets req.user on valid token"
+  )
+  for t in "${tests[@]}"; do
+    cursor_to $r "$CHAT_COL"
+    printf " $(green "✓") %s" "$t"
+    r=$((r + 1))
+    sleep 0.2
+  done
+  r=$((r + 1))
+  pause 0.3
 
-  echo ""
-  dim "Running tests..."
-  echo ""
-  pause 0.5
-
-  echo " $(green "✓") returns payload for valid token          (2ms)"
-  echo " $(green "✓") throws on expired token                  (1ms)"
-  echo " $(green "✓") throws on invalid signature              (1ms)"
-  echo " $(green "✓") middleware sets req.user on valid token   (3ms)"
-  echo ""
-  echo "Tests: $(green "4 passed") | 0 failed"
-  pause 0.8
-
-  echo ""
-  echo "[#42] feat: add JWT auth middleware"
-  echo ""
-  dim "Co-Authored-By: Claude <noreply@anthropic.com>"
-  echo ""
-  pause 0.5
-
-  echo ""
-  echo "IMPLEMENTATION COMPLETE:"
-  echo "├── Story:    #42: Add user authentication"
-  echo "├── Tasks:    $(green "3/3 completed")"
-  echo "├── PR:       #58 — ready for review"
-  echo "└── Quality:  $(green "All gates passing")"
+  # ── Summary ──
+  cursor_to $r "$CHAT_COL"
+  printf "$(green "✓") $(bold "PR #58 created — all gates passing")"
   pause 1.5
 
   # ── Scene 4: Closing — centered tagline + logo pills ──
   clear
   pause 0.3
 
-  # Position vertically: ~1/3 down the screen
   for ((i = 0; i < ROWS / 3; i++)); do echo ""; done
 
-  # Tagline — centered, pair blue, bold
   printf '\033[1;38;2;0;98;255m'
   center_text "Code is the easy part."
   printf '\033[0m'
-
   pause 1.5
 
   echo ""
   echo ""
 
-  # Logo pills (blue ██ + teal ██) + wordmark
   local logo="\033[38;2;0;98;255m██\033[0m \033[38;2;0;209;255m██\033[0m  \033[1;38;2;255;255;255mpair\033[0m"
   local logo_plain="██ ██  pair"
   local logo_len=${#logo_plain}
