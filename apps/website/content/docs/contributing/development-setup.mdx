@@ -1,0 +1,146 @@
+---
+title: Development Setup
+description: Set up the pair development environment from scratch — prerequisites, install, dev commands, testing, and quality gates.
+---
+
+Step-by-step instructions to get the pair monorepo running locally.
+
+## Prerequisites
+
+| Tool | Version | Install |
+|------|---------|---------|
+| **Node.js** | 18+ (LTS recommended) | [nodejs.org](https://nodejs.org) |
+| **pnpm** | 10.15.0+ | `npm install -g pnpm@10.15.0` |
+| **Git** | 2.x+ | [git-scm.com](https://git-scm.com) |
+
+## Clone and install
+
+```bash
+git clone https://github.com/foomakers/pair.git
+cd pair
+pnpm install
+```
+
+`pnpm install` also sets up Husky git hooks automatically.
+
+## Running the dev server
+
+Use `pnpm --filter` to run commands in a specific package:
+
+```bash
+# Documentation site
+pnpm --filter @pair/website dev
+
+# CLI tool
+pnpm --filter @pair/pair-cli dev
+```
+
+## Running tests
+
+Tests use **Vitest**, orchestrated by **Turborepo**:
+
+```bash
+# All tests across the monorepo
+pnpm test
+
+# Single package
+pnpm --filter @pair/pair-cli test
+pnpm --filter @pair/content-ops test
+
+# Single test by name
+pnpm vitest run -t "test name"
+
+# With coverage
+pnpm test:coverage
+
+# Playwright E2E tests (builds + starts Next.js)
+pnpm --filter @pair/website e2e
+
+# CLI smoke tests (e2e release process)
+pnpm smoke-tests
+```
+
+### Testing conventions
+
+- **In-memory test doubles** over mocks (e.g., `InMemoryFileSystemService` instead of mocking `fs`).
+- **1:1 mapping** between source modules and test files.
+- **TDD discipline**: RED (failing test) → GREEN (minimal implementation) → REFACTOR.
+
+## Quality gate
+
+Before committing, always run:
+
+```bash
+pnpm quality-gate
+```
+
+This runs (in order): `ts:check`, `test`, `lint`, `prettier:fix`, `mdlint:fix`, `hygiene:check`, `docs:staleness`.
+
+### Gate registry
+
+| Order | Gate | Command | Required |
+|-------|------|---------|----------|
+| 1 | Quality Gate | `pnpm quality-gate` | Yes |
+| 2 | Smoke Tests | `pnpm smoke-tests` | Yes |
+| 3 | E2E Tests | `pnpm --filter @pair/website e2e` | Yes |
+
+## Git hooks (Husky)
+
+Husky is configured to run checks automatically:
+
+- **Pre-commit** — Linting and formatting checks.
+- **Pre-push** — Tests run before pushing.
+
+### Troubleshooting hooks
+
+| Problem | Solution |
+|---------|----------|
+| Hooks not running | Run `pnpm install` after cloning. Verify `.husky/` exists. |
+| Permission errors | `chmod +x .husky/*` |
+| Pre-commit fails | Run hook commands manually (`pnpm lint`, `pnpm test`) to debug. |
+
+## Common commands
+
+```bash
+pnpm install              # Install all dependencies
+pnpm quality-gate         # Full quality check
+pnpm build                # Build all packages
+pnpm test                 # Run all tests
+pnpm lint                 # Lint all packages
+pnpm lint:fix             # Auto-fix linting issues
+pnpm ts:check             # Type-check all TypeScript
+pnpm prettier:check       # Check formatting
+pnpm prettier:fix         # Auto-format code
+pnpm clean                # Clean build artifacts and caches
+```
+
+## Dependency management
+
+Shared dependency versions are managed via the **pnpm catalog** in `pnpm-workspace.yaml`:
+
+```bash
+pnpm sync-deps            # Update all dependencies recursively
+pnpm deps:outdated        # Show outdated packages
+pnpm catalog:update       # Update pnpm catalog
+pnpm catalog:check        # Show catalog contents
+```
+
+When adding a new shared dependency, add it to the catalog first.
+
+## Changesets
+
+We use `@changesets/cli` for version management. When your change affects a published package, create a changeset:
+
+```bash
+pnpm exec changeset add
+```
+
+Select the affected package(s) and bump type (patch/minor/major). Commit the `.changeset/*.md` file with your PR.
+
+See the [Release Process](/docs/contributing/release-process) for the full workflow.
+
+## Platform notes
+
+- **macOS / Linux** — Fully supported. All commands work as documented.
+- **Windows** — Use WSL2 or Git Bash. Native Windows may have issues with symlinks (skills distribution falls back to copy mode).
+

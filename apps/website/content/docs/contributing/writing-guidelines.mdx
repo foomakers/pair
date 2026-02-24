@@ -1,0 +1,179 @@
+---
+title: Writing Guidelines
+description: How to add Knowledge Base content — guideline structure, templates, cross-references, and validation.
+---
+
+The pair Knowledge Base is a curated set of guidelines, templates, how-tos, and assets that AI assistants use to understand your project. This guide explains how to contribute new KB content.
+
+## KB structure overview
+
+The KB dataset lives in `packages/knowledge-hub/dataset/.pair/` and has two top-level areas:
+
+```text
+.pair/
+├── adoption/                  # Project-specific decisions
+│   ├── product/               # PRD, subdomains, bounded contexts
+│   └── tech/                  # Architecture, tech stack, way of working
+│       └── adr/               # Architecture Decision Records
+│
+└── knowledge/                 # Universal content (from KB)
+    ├── guidelines/            # Category-organized guidelines
+    ├── how-to/                # Step-by-step task guides
+    ├── assets/                # Templates, checklists
+    ├── skills-guide.md        # Full skills catalog
+    └── way-of-working.md      # Default way of working template
+```
+
+**Adoption** files contain decisions specific to a project (generated through the pair workflow). **Knowledge** files contain universal content shared across all projects.
+
+When contributing to the KB, you work in the **knowledge** area.
+
+## Guideline categories
+
+Guidelines are organized by domain in `knowledge/guidelines/`:
+
+```text
+knowledge/guidelines/
+├── README.md                      # Guidelines overview
+├── architecture/                  # Architecture patterns
+├── code-design/                   # Code design principles
+├── collaboration/                 # Process, templates, PM
+│   └── templates/                 # Commit, PR, story templates
+├── infrastructure/                # CI/CD, deployment
+├── observability/                 # Monitoring, logging
+├── quality-assurance/             # Quality gates, metrics
+├── technical-standards/           # Coding standards
+├── testing/                       # Testing strategy
+└── user-experience/               # UX guidelines
+```
+
+## Adding a new guideline file
+
+### 1. Choose the category
+
+Pick the most appropriate category directory. If no existing category fits, consider whether a new category is warranted (prefer extending existing ones).
+
+### 2. Create the file
+
+```bash
+# Example: adding a new guideline to code-design
+touch packages/knowledge-hub/dataset/.pair/knowledge/guidelines/code-design/new-guideline.md
+```
+
+### 3. Write the content
+
+Follow this structure:
+
+```markdown
+# Guideline Title
+
+Brief description of what this guideline covers and why it matters.
+
+## Principles
+
+- Key principle 1
+- Key principle 2
+
+## Guidelines
+
+### Specific Topic
+
+Detailed guidance with examples...
+
+## References
+
+- Links to related guidelines or external resources
+```
+
+Key conventions:
+
+- **Heading level** — Start with `# H1` for the guideline title.
+- **Actionable** — Write guidelines as actionable instructions, not abstract principles.
+- **Examples** — Include code examples where applicable.
+- **Cross-references** — Use relative paths to link to related files within `.pair/`.
+
+### 4. Update the category README
+
+If the category has a `README.md`, add your guideline to the file list.
+
+## Working with templates
+
+Templates live in `knowledge/guidelines/collaboration/templates/`:
+
+| Template | Purpose |
+|----------|---------|
+| `commit-template.md` | Commit message format |
+| `pr-template.md` | Pull request description structure |
+| `user-story-template.md` | User story format |
+| `epic-template.md` | Epic format |
+| `initiative-template.md` | Initiative format |
+| `task-template.md` | Task format |
+| `adr-template.md` | Architecture Decision Record |
+| `adl-template.md` | Architecture Decision Log entry |
+| `code-review-template.md` | Code review checklist |
+
+When adding a new template, place it in the `templates/` directory and document its purpose and usage.
+
+## Cross-referencing conventions
+
+Within `.pair/` files, use **relative paths**:
+
+```markdown
+<!-- Good: relative path within .pair/ -->
+See [architecture guidelines](../architecture/README.md).
+See [commit template](collaboration/templates/commit-template.md).
+
+<!-- Bad: absolute or external paths -->
+See [architecture guidelines](/packages/knowledge-hub/dataset/.pair/...).
+```
+
+Cross-references help AI agents navigate between related guidelines without duplicating content.
+
+## How-to guides
+
+How-to files live in `knowledge/how-to/` and are numbered for ordering:
+
+```text
+knowledge/how-to/
+├── 01-how-to-create-PRD.md
+├── 02-how-to-complete-bootstrap-checklist.md
+├── 03-how-to-create-and-prioritize-initiatives.md
+├── ...
+└── 11-how-to-code-review.md
+```
+
+Each how-to corresponds to a development lifecycle phase and references one or more skills.
+
+## Validation
+
+Before submitting KB changes, run the quality gate:
+
+```bash
+pnpm quality-gate
+```
+
+This includes **markdownlint** which checks markdown formatting, heading structure, and link syntax.
+
+For targeted validation:
+
+```bash
+# Markdown lint only
+pnpm mdlint:fix
+
+# Build the website to verify content renders
+pnpm --filter @pair/website build
+```
+
+## Best practices
+
+- **No duplication** — If content exists elsewhere, link to it rather than copying.
+- **Adoption vs Knowledge** — Never put project-specific decisions in the knowledge area. Those belong in `adoption/`.
+- **Diataxis framework** — Guidelines follow the "explanation" type; how-tos follow the "how-to" type.
+- **Keep it concise** — AI agents have context limits. Prefer dense, actionable content over verbose explanations.
+- **Test with an AI** — After adding content, ask your AI assistant to use it. Does it find the right file? Does it follow the guidance correctly?
+
+## Resources
+
+- [KB Structure Reference](/docs/reference/kb-structure) — Full `.pair/` directory documentation.
+- [Guidelines Catalog](/docs/reference/guidelines-catalog) — Browse all existing guidelines.
+

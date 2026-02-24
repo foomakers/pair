@@ -1,4 +1,4 @@
 {
   "title": "PM Tools",
-  "pages": ["index", "filesystem", "github-projects", "linear"]
+  "pages": ["filesystem", "github-projects", "linear"]
 }

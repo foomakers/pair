@@ -1,4 +1,4 @@
 {
   "title": "Integrations",
-  "pages": ["index", "claude-code", "codex", "cursor", "github-copilot", "windsurf"]
+  "pages": ["claude-code", "codex", "cursor", "github-copilot", "windsurf"]
 }

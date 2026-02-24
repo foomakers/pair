@@ -372,9 +372,78 @@ mcp__github__issue_write:
 # Step 3: Repeat for initiative (epic's parent)
 ```
 
-### Story Status Update
+### Project Board Status Transitions
 
-Update issue status in GitHub Projects board after merge.
+Update the project board status field for intermediate transitions (Todo → Refined, Refined → In Progress) and final transitions (→ Done).
+
+**Important**: The project board status field is separate from the issue state (open/closed). Updating the issue body text `**Status**: Refined` is **not** the same as updating the board field. Always update the board field via GraphQL mutation.
+
+#### Step 1: Discover Project and Field IDs
+
+```bash
+# Find project ID, status field ID, and option IDs
+gh api graphql -f query='{
+  organization(login: "[ORG]") {
+    projectV2(number: [PROJECT_NUMBER]) {
+      id
+      fields(first: 20) {
+        nodes {
+          ... on ProjectV2SingleSelectField {
+            id name
+            options { id name }
+          }
+        }
+      }
+    }
+  }
+}'
+```
+
+#### Step 2: Find the Item ID for the Issue
+
+```bash
+# Paginate project items to find the issue
+gh api graphql -f query='{
+  organization(login: "[ORG]") {
+    projectV2(number: [PROJECT_NUMBER]) {
+      items(first: 50) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id
+          content { ... on Issue { number } }
+        }
+      }
+    }
+  }
+}'
+# Use pageInfo.endCursor for pagination if needed
+```
+
+#### Step 3: Update the Status Field
+
+```bash
+# Transition to any status (e.g., Refined, In Progress, Done)
+gh api graphql -f query='mutation {
+  updateProjectV2ItemFieldValue(input: {
+    projectId: "[PROJECT_ID]"
+    itemId: "[ITEM_ID]"
+    fieldId: "[STATUS_FIELD_ID]"
+    value: { singleSelectOptionId: "[TARGET_STATUS_OPTION_ID]" }
+  }) { projectV2Item { id } }
+}'
+```
+
+#### Common Transitions
+
+| Transition | When | Triggered by |
+|-----------|------|-------------|
+| Todo → Refined | Story refinement complete | `/pair-process-refine-story` via `/pair-capability-write-issue $status: Refined` |
+| Refined → In Progress | Implementation starts | `/pair-process-implement` via `/pair-capability-write-issue $status: In Progress` |
+| In Progress → Done | PR merged + issue closed | `/pair-process-review` merge step |
+
+### Issue Close (Post-Merge)
+
+Close the issue after merge. The board status transition to Done should happen via the mutation above; closing the issue updates only the issue state.
 
 #### MCP-First Approach
 
@@ -394,9 +463,6 @@ mcp__github__issue_write:
 ```bash
 # Close issue
 gh issue close [NUMBER] --reason completed
-
-# Update project board status (if automation doesn't handle it)
-gh project item-edit --project-id [ID] --id [ITEM_ID] --field-id [STATUS_FIELD_ID] --single-select-option-id [DONE_OPTION_ID]
 ```
 
 ## Related Resources

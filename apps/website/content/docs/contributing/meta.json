@@ -1,0 +1,10 @@
+{
+  "title": "Contributing",
+  "pages": [
+    "development-setup",
+    "architecture",
+    "writing-skills",
+    "writing-guidelines",
+    "release-process"
+  ]
+}

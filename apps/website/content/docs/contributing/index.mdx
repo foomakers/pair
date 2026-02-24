@@ -1,0 +1,53 @@
+---
+title: How to Contribute
+description: How to contribute to pair — code, documentation, skills, and bug reports.
+---
+
+Thank you for your interest in contributing to pair! This guide covers everything you need to get started as a contributor.
+
+## Ways to contribute
+
+There are several ways you can help improve pair:
+
+- **Code** — Fix bugs, add features, or improve existing functionality across the monorepo.
+- **Documentation** — Improve docs, fix typos, add examples, or write guides.
+- **Skills** — Create new Agent Skills that extend the AI-assisted development workflow.
+- **Knowledge Base** — Add or improve guidelines, templates, and how-to files.
+- **Bug reports** — Open an [issue](https://github.com/foomakers/pair/issues) with reproduction steps.
+- **Feature requests** — Propose ideas via [GitHub Discussions](https://github.com/foomakers/pair/discussions).
+
+## Getting started
+
+<Cards>
+  <Card title="Development Setup" href="/docs/contributing/development-setup">
+    Clone the repo, install dependencies, run tests, and set up your local environment.
+  </Card>
+  <Card title="Architecture" href="/docs/contributing/architecture">
+    Understand the monorepo structure, key packages, and data flow.
+  </Card>
+  <Card title="Writing Skills" href="/docs/contributing/writing-skills">
+    Create new Agent Skills following the open standard.
+  </Card>
+  <Card title="Writing Guidelines" href="/docs/contributing/writing-guidelines">
+    Add Knowledge Base content — guidelines, templates, and how-tos.
+  </Card>
+  <Card title="Release Process" href="/docs/contributing/release-process">
+    How versioning, changesets, and automated releases work.
+  </Card>
+</Cards>
+
+## Pull request process
+
+1. **Fork and branch** — Create a feature branch from `main` (e.g., `feature/#123-description`).
+2. **Make changes** — Follow the [development setup](/docs/contributing/development-setup) guide.
+3. **Run quality gate** — Execute `pnpm quality-gate` before pushing.
+4. **Open a PR** — Reference the related issue. Fill in the PR template.
+5. **Review** — A maintainer will review your PR. Address any feedback.
+6. **Merge** — Once approved, the PR is squash-merged into `main`.
+
+## Expectations
+
+- **Response time** — We aim to review PRs within a few business days. Larger PRs may take longer.
+- **Code quality** — All contributions must pass the quality gate (linting, tests, type checking, formatting).
+- **Be respectful** — Treat all contributors with kindness and professionalism.
+- **Small PRs** — Prefer focused, small PRs over large ones. They are easier to review and merge.
