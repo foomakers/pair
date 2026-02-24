@@ -1,0 +1,298 @@
+---
+title: Enterprise Adoption
+description: Create an org-level Knowledge Base, structure it for multiple teams, distribute via npm, set governance policies, and onboard the first team.
+---
+
+A strategic walkthrough for enterprise architects planning org-wide pair adoption. You'll design a multi-team KB structure, publish it for distribution, and onboard your first team — all in about 60 minutes.
+
+## Prerequisites
+
+Before starting, make sure you have:
+
+- Completed the [Team Setup](/docs/tutorials/team-setup) tutorial (or equivalent team-level pair experience)
+- An **npm registry** — public npmjs.com or a private registry (GitHub Packages, Artifactory, Verdaccio)
+- An **organization** on GitHub (or equivalent) with at least two teams
+- **Admin access** to create repositories, npm packages, and GitHub Projects at the org level
+- **pair-cli** installed (`pair-cli --version` should return a version)
+- An **AI coding assistant** that supports Agent Skills
+
+## What you'll learn
+
+By the end of this tutorial you'll understand how to:
+
+- Create an org-level Knowledge Base repository
+- Structure guidelines for shared + team-specific layers
+- Define adoption file templates that guide team customization
+- Publish the KB as an npm package
+- Set governance policies (who can modify what, approval workflows)
+- Onboard a team using the published KB
+
+## Estimated time
+
+~60 minutes.
+
+## Step-by-step instructions
+
+### 1. Plan your KB structure
+
+Before writing anything, decide on the scope:
+
+| Decision | Options | Recommendation |
+|----------|---------|----------------|
+| **Scope** | Full SDLC / Specific concern | Start with full SDLC — narrow later |
+| **Layers** | Single KB / Base + overlays | Base + overlays for org → team customization |
+| **Distribution** | npm / GitHub Releases / internal | npm for version management and easy updates |
+
+The recommended approach is a **base KB** with team overlays:
+
+```text
+@your-org/pair-kb          ← org-wide base (shared standards)
+├── team-alpha overrides   ← via adoption files in team-alpha's repo
+└── team-beta overrides    ← via adoption files in team-beta's repo
+```
+
+Teams install the base KB and customize it through adoption files — the same layered architecture from the [team setup tutorial](/docs/tutorials/team-setup), but with a shared, versioned base.
+
+### 2. Create the org KB repository
+
+Create a new repository for your organization's Knowledge Base:
+
+```bash
+mkdir your-org-kb && cd your-org-kb
+git init
+```
+
+Install pair to get the default KB as a starting point:
+
+```bash
+pair-cli install
+```
+
+This gives you the full `.pair/` structure to modify. The default KB serves as a scaffold — replace the content with your organization's standards.
+
+### 3. Customize org-wide guidelines
+
+Edit the knowledge layer (`.pair/knowledge/`) with your organization's standards. Focus on the guidelines that should be universal across all teams:
+
+**Code design** (`.pair/knowledge/guidelines/code-design/`):
+```markdown
+# Code Design Standards
+
+- TypeScript strict mode is required for all projects.
+- All public APIs must have JSDoc documentation.
+- Maximum cyclomatic complexity is 10 per function.
+```
+
+**Security** (`.pair/knowledge/guidelines/security/`):
+```markdown
+# Security Standards
+
+- All secrets must be stored in environment variables, never in code.
+- Dependencies must be audited weekly with `npm audit`.
+- OWASP Top 10 compliance is required for all web applications.
+```
+
+**Architecture** (`.pair/knowledge/guidelines/architecture/`):
+```markdown
+# Architecture Standards
+
+- All services must expose health check endpoints.
+- Inter-service communication uses async messaging (events) by default.
+- Database-per-service pattern is adopted for data isolation.
+```
+
+<Callout type="info">
+  Use the adoption declaration pattern: `[thing] is adopted/required for [purpose]`. This tells AI assistants the statement is a decision, not a suggestion.
+</Callout>
+
+### 4. Create adoption file templates
+
+Teams need empty but structured adoption templates. These guide them through customization without requiring knowledge of the full directory layout.
+
+Create template files in `.pair/adoption/tech/`:
+
+```markdown
+<!-- .pair/adoption/tech/tech-stack.md -->
+
+# Tech Stack
+
+<!-- Record your team's technology choices here.
+     Format: "[tool] is adopted for [purpose] ([tool] vX.Y)."
+
+     Sections to cover:
+     - Language and framework
+     - Testing framework
+     - CI/CD pipeline
+     - Package manager
+     - Database (if applicable)
+-->
+```
+
+```markdown
+<!-- .pair/adoption/tech/way-of-working.md -->
+
+# Way of Working
+
+<!-- Record your team's process choices here.
+
+     Sections to cover:
+     - Methodology (Scrum, Kanban, Lean)
+     - PM tool and configuration
+     - Quality gate command
+     - Commit strategy (per-task or per-story)
+     - Code review process
+-->
+```
+
+These templates serve as guided forms — teams fill them in during their bootstrap process.
+
+### 5. Define governance policies
+
+Create a governance document that defines who can modify what:
+
+```markdown
+<!-- .pair/knowledge/guidelines/collaboration/governance.md -->
+
+# Knowledge Base Governance
+
+## Change Authority
+
+| Layer | Who can modify | Approval required |
+|-------|---------------|-------------------|
+| `.pair/knowledge/` (org KB) | KB maintainers | PR review by 2 maintainers |
+| `.pair/adoption/` (team overrides) | Team members | Team lead approval |
+| `.pair/adoption/tech/adr/` (ADRs) | Team members | Architect review |
+
+## Update Cadence
+
+- Org KB: monthly review cycle, semver releases
+- Team adoption: updated as needed, no formal cadence
+- ADRs: created when decisions are made, immutable after acceptance
+
+## Breaking Changes
+
+Major version bumps (X.0.0) require:
+1. Changelog entry explaining the breaking change
+2. Migration guide for affected teams
+3. 2-week notice period before enforcement
+```
+
+### 6. Package the KB
+
+Prepare your KB for distribution. Add a `package.json`:
+
+```json
+{
+  "name": "@your-org/pair-kb",
+  "version": "1.0.0",
+  "description": "Organization Knowledge Base for pair",
+  "files": [".pair/"],
+  "license": "UNLICENSED"
+}
+```
+
+Then package with pair-cli:
+
+```bash
+pair-cli package
+```
+
+This creates a distributable archive validated against the KB structure requirements.
+
+### 7. Publish to npm
+
+Publish the package to your npm registry:
+
+```bash
+npm publish
+```
+
+For scoped packages on a private registry:
+
+```bash
+npm publish --registry https://npm.your-org.com
+```
+
+<Callout type="warn">
+  If using GitHub Packages, configure `.npmrc` in your KB repo:
+  ```text
+  @your-org:registry=https://npm.pkg.github.com
+  ```
+  And ensure the publishing token has `write:packages` scope.
+</Callout>
+
+### 8. Onboard the first team
+
+Have the first team install your published KB in their project:
+
+```bash
+pair-cli install --source npm --url @your-org/pair-kb
+```
+
+Then run the team setup workflow:
+
+1. **Bootstrap**: `/pair-process-bootstrap` — the AI uses your org KB as the base, team fills in adoption files
+2. **Customize**: Edit adoption files to override org defaults where needed
+3. **Commit**: Push `.pair/` to the team's repository
+4. **Verify**: Run `/pair-next` and confirm the assistant reads both org guidelines and team overrides
+
+The team gets your organization's standards as the foundation. Their adoption files layer on top — customizations without divergence.
+
+### 9. Set up the update workflow
+
+When you publish a new KB version, teams pull updates:
+
+```bash
+pair-cli update
+```
+
+What happens:
+1. `.pair/knowledge/` is replaced with the latest org KB content
+2. `.pair/adoption/` is untouched — team decisions survive
+3. New guidelines appear automatically
+4. Removed guidelines disappear
+
+<Callout type="info">
+  Use semantic versioning for your KB. Patch versions (1.0.x) for fixes and clarifications, minor (1.x.0) for new guidelines, major (x.0.0) for breaking changes that require team action.
+</Callout>
+
+### 10. Scale to additional teams
+
+For each new team:
+
+1. **Install**: `pair-cli install --source npm --url @your-org/pair-kb`
+2. **Bootstrap**: Run `/pair-process-bootstrap` for team-specific configuration
+3. **Customize**: Fill adoption templates with team choices
+4. **Verify**: Confirm the layered override works correctly
+
+Each team gets the same org foundation with their own customization layer. The AI assistant reads both layers — org standards plus team decisions — producing code that is simultaneously org-compliant and team-appropriate.
+
+## Troubleshooting
+
+<Callout type="warn">
+  **npm publish fails with 403**: Check that your token has `write:packages` scope and the package name matches your org scope. For GitHub Packages, the repo must be owned by the same org as the package scope.
+</Callout>
+
+<Callout type="warn">
+  **Teams override org standards they shouldn't**: Governance is advisory — pair doesn't enforce it technically. Use code review and the `/pair-process-review` skill to catch non-compliant overrides. Consider adding org-level quality gates that verify adoption file compliance.
+</Callout>
+
+<Callout type="warn">
+  **KB update breaks team workflows**: Always publish a changelog with each version. For major versions, provide a migration guide and a notice period. Teams can pin to a specific version until they're ready to upgrade.
+</Callout>
+
+## What you've learned
+
+- **Base + overlay architecture** — org KB provides shared standards, teams customize through adoption files
+- **npm distribution** — publish versioned KBs that teams install and update independently
+- **Governance policies** — define who can change what, with approval workflows
+- **Adoption templates** — guide teams through customization with structured templates
+- **Update workflow** — `pair-cli update` replaces knowledge, preserves adoption — no manual merge
+- **Scalable onboarding** — every new team gets the same foundation in one command
+
+## Next steps
+
+- **[Publish a Knowledge Base](/docs/customization/organization)** — Detailed reference for all packaging and distribution options
+- **[KB Structure Reference](/docs/reference/kb-structure)** — Full directory layout and file purposes
+- **[Contributing](/docs/contributing)** — Contribute improvements back to the pair project
+- **[Guides](/docs/guides)** — Goal-oriented guides for specific tasks
