@@ -3,8 +3,8 @@
 #
 # Prerequisites:
 #   brew install ffmpeg
-#   3 segment files from record.sh:
-#     replay-part1.mp4, github-scroll.mp4, replay-part2.mp4
+#   4 segment files from record.sh:
+#     replay-part1.mp4, github-scroll.mp4, replay-part2.mp4, login-closing.mp4
 #
 # Usage:
 #   bash apps/website/scripts/landing-video/postprod.sh
@@ -16,20 +16,21 @@ OUT="../../public/demo.mp4"
 POSTER="../../public/demo-poster.png"
 
 # Verify all segments exist
-for seg in replay-part1.mp4 github-scroll.mp4 replay-part2.mp4; do
+for seg in replay-part1.mp4 github-scroll.mp4 replay-part2.mp4 login-closing.mp4; do
   if [ ! -f "$seg" ]; then
     echo "Error: $seg not found. Run record.sh first."
     exit 1
   fi
 done
 
-echo "==> Concatenating 3 segments..."
+echo "==> Concatenating 4 segments..."
 
 # Create concat list
 cat > concat-list.txt <<'LIST'
 file 'replay-part1.mp4'
 file 'github-scroll.mp4'
 file 'replay-part2.mp4'
+file 'login-closing.mp4'
 LIST
 
 ffmpeg -y \

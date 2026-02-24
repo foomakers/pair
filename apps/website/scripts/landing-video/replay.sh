@@ -309,29 +309,6 @@ part2() {
   cursor_to $r "$CHAT_COL"
   printf "$(green "✓") $(bold "PR #58 created — all gates passing")"
   pause 1.5
-
-  # ── Scene 4: Closing — centered tagline + logo pills ──
-  clear
-  pause 0.3
-
-  for ((i = 0; i < ROWS / 3; i++)); do echo ""; done
-
-  printf '\033[1;38;2;0;98;255m'
-  center_text "Code is the easy part."
-  printf '\033[0m'
-  pause 1.5
-
-  echo ""
-  echo ""
-
-  local logo="\033[38;2;0;98;255m██\033[0m \033[38;2;0;209;255m██\033[0m  \033[1;38;2;255;255;255mpair\033[0m"
-  local logo_plain="██ ██  pair"
-  local logo_len=${#logo_plain}
-  local logo_pad=$(( (COLS - logo_len) / 2 ))
-  printf '%*s' "$logo_pad" ''
-  printf "${logo}\n"
-
-  pause 2.0
 }
 
 # --- Main ---
