@@ -19,14 +19,13 @@ ROWS=30
 
 # --- Helpers ---
 
-type_cmd() {
+type_text() {
+  # Simulate typing at ~30ms per character (no prompt prefix)
   local text="$1"
-  printf '\033[1;34m$ \033[0m'
   for ((i = 0; i < ${#text}; i++)); do
     printf '%s' "${text:$i:1}"
     sleep 0.03
   done
-  echo
 }
 
 pause() { sleep "${1:-0.5}"; }
@@ -42,6 +41,7 @@ green() { printf '\033[38;2;0;209;255m%s\033[0m' "$1"; }
 blue()  { printf '\033[38;2;0;98;255m%s\033[0m' "$1"; }
 bold()  { printf '\033[1m%s\033[0m' "$1"; }
 dim()   { printf '\033[2m%s\033[0m' "$1"; }
+white() { printf '\033[38;2;230;237;243m%s\033[0m' "$1"; }
 
 scene_label() {
   printf '\n\033[1;48;2;0;98;255;38;2;255;255;255m  %s  \033[0m\n\n' "$1"
@@ -54,15 +54,44 @@ center_text() {
   printf '%*s%s\n' "$pad" '' "$text"
 }
 
-# --- Part 1: Claude Code — Discover + Refine ---
+# Draw a horizontal line across the terminal
+hline() {
+  local char="${1:-─}"
+  local color="${2:-\033[38;2;60;60;60m}"
+  printf "${color}"
+  printf '%*s' "$COLS" '' | tr ' ' "${char}"
+  printf '\033[0m\n'
+}
+
+# ═══════════════════════════════════════════════════════════════════
+# Part 1: Claude Code — Discover + Refine
+# ═══════════════════════════════════════════════════════════════════
 
 part1() {
   clear
+
+  # ── Claude Code title bar ──
+  # Dark bar with Claude Code branding + project path
+  printf '\033[48;2;24;24;27m'  # dark bg
+  printf '\033[38;2;204;120;50m ◆ \033[0m'  # orange diamond (Claude branding)
+  printf '\033[48;2;24;24;27m'
+  printf '\033[1;38;2;230;237;243m Claude Code \033[0m'
+  printf '\033[48;2;24;24;27m'
+  printf '\033[38;2;100;100;110m ~/projects/myapp \033[0m'
+  printf '\033[48;2;24;24;27m'
+  printf '%*s' $((COLS - 38)) ''
+  printf '\033[0m\n'
+  hline "─" "\033[38;2;60;60;60m"
+  echo ""
   pause 0.3
 
   # Scene 1: /pair-next
   scene_label "1 · Discover"
-  type_cmd "/pair-next"
+
+  # Claude Code prompt: ❯ with typing
+  printf '\033[1;38;2;204;120;50m❯ \033[0m'
+  type_text "/pair-next"
+  echo ""
   pause 0.5
 
   echo ""
@@ -80,7 +109,10 @@ part1() {
 
   # Scene 2: /pair-process-refine-story
   scene_label "2 · Refine"
-  type_cmd "/pair-process-refine-story #42"
+
+  printf '\033[1;38;2;204;120;50m❯ \033[0m'
+  type_text "/pair-process-refine-story #42"
+  echo ""
   pause 0.3
 
   dim "Reading story #42..."
@@ -102,12 +134,10 @@ part1() {
   pause 0.5
 
   echo ""
-  echo "Accept these acceptance criteria? (y/n)"
+  printf '\033[38;2;204;120;50m?\033[0m Accept these acceptance criteria? '
+  printf '\033[2m(y/n)\033[0m '
   pause 0.3
-
-  printf '\033[1;34m> \033[0m'
-  sleep 0.03
-  printf 'y\n'
+  printf '\033[1;38;2;0;209;255my\033[0m\n'
   pause 0.8
 
   echo ""
@@ -120,23 +150,62 @@ part1() {
   pause 1.5
 }
 
-# --- Part 2: Cursor — Implement + Closing ---
+# ═══════════════════════════════════════════════════════════════════
+# Part 2: Cursor — Implement + Closing
+# ═══════════════════════════════════════════════════════════════════
 
 part2() {
   clear
 
-  # Cursor-style header bar
-  printf '\033[48;2;30;30;30m\033[38;2;150;150;150m'
-  printf '  ▸ pair  ›  src/middleware/auth.ts'
-  printf '%*s' $((COLS - 48)) ''
-  printf 'Cursor  '
+  # ── Cursor title bar + tab bar ──
+  # Top bar: window controls + Cursor name
+  printf '\033[48;2;30;30;30m'
+  printf '\033[38;2;255;95;86m ● \033[38;2;255;189;46m● \033[38;2;39;201;63m● \033[0m'
+  printf '\033[48;2;30;30;30m'
+  printf '\033[1;38;2;200;200;200m  Cursor \033[0m'
+  printf '\033[48;2;30;30;30m'
+  printf '\033[38;2;100;100;110m — myapp\033[0m'
+  printf '\033[48;2;30;30;30m'
+  printf '%*s' $((COLS - 30)) ''
   printf '\033[0m\n'
+
+  # Tab bar: active file tab
+  printf '\033[48;2;24;24;27m'
+  printf '\033[38;2;60;60;65m │ \033[0m'
+  printf '\033[48;2;36;36;40m'  # active tab bg
+  printf '\033[38;2;0;209;255m ⬡ \033[0m'  # TS icon
+  printf '\033[48;2;36;36;40m'
+  printf '\033[1;38;2;220;220;220mauth.ts\033[0m'
+  printf '\033[48;2;36;36;40m \033[0m'
+  printf '\033[48;2;24;24;27m'
+  printf '\033[38;2;80;80;85m  ⬡ auth.test.ts  │  ⬡ login.ts \033[0m'
+  printf '\033[48;2;24;24;27m'
+  printf '%*s' $((COLS - 55)) ''
+  printf '\033[0m\n'
+
+  # Separator between editor and terminal
+  hline "─" "\033[38;2;60;60;60m"
+
+  # Terminal panel header
+  printf '\033[48;2;24;24;27m'
+  printf '\033[38;2;100;100;110m  TERMINAL \033[0m'
+  printf '\033[48;2;24;24;27m'
+  printf '\033[38;2;60;60;65m  PROBLEMS  OUTPUT  DEBUG CONSOLE \033[0m'
+  printf '\033[48;2;24;24;27m'
+  printf '%*s' $((COLS - 52)) ''
+  printf '\033[0m\n'
+
+  hline "─" "\033[38;2;60;60;60m"
   echo ""
   pause 0.3
 
   # Scene 3: /pair-process-implement
   scene_label "3 · Implement"
-  type_cmd "/pair-process-implement #42"
+
+  # Cursor terminal prompt
+  printf '\033[38;2;100;100;110mmyapp \033[38;2;39;201;63m❯ \033[0m'
+  type_text "/pair-process-implement #42"
+  echo ""
   pause 0.3
 
   echo ""
@@ -189,7 +258,7 @@ part2() {
   echo "└── Quality:  $(green "All gates passing")"
   pause 1.5
 
-  # Scene 4: Closing — centered tagline + logo pills
+  # ── Scene 4: Closing — centered tagline + logo pills ──
   clear
   pause 0.3
 
