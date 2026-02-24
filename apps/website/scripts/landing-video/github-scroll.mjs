@@ -25,7 +25,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const OUTPUT = join(__dirname, 'github-scroll.webm')
 const VIEWPORT = { width: 1280, height: 720 }
 const SCROLL_DURATION_MS = 4000
-const SCROLL_STEP_PX = 3
+const SCROLL_STEP_PX = 5
 const SCROLL_INTERVAL_MS = 16 // ~60fps
 // ────────────────────────────────────────────────────────────────────
 

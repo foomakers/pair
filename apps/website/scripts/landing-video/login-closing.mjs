@@ -161,7 +161,7 @@ const html = `<!DOCTYPE html>
       align-items: center;
       gap: 12px;
       opacity: 0;
-      transition: opacity 1s ease 0.5s;
+      transition: opacity 2.5s ease 1s;
     }
     .logo.visible { opacity: 1; }
     .pill {
@@ -274,8 +274,8 @@ await page.waitForTimeout(500)
 // Submit — triggers transition to closing
 await page.locator('#login-btn').click()
 
-// Wait for closing animations to finish (800ms delay + 600ms fade-out + 1s fade-in + 1s logo)
-await page.waitForTimeout(4500)
+// Wait for closing animations to finish (800ms delay + 600ms fade-out + 1s fade-in + 1s logo delay + 2.5s logo fade)
+await page.waitForTimeout(6500)
 
 await context.close()
 await browser.close()
