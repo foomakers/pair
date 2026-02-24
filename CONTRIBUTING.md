@@ -2,6 +2,8 @@
 
 Thank you for your interest in contributing to Pair!
 
+> **Full contributing docs**: [pair.foomakers.com/docs/contributing](https://pair.foomakers.com/docs/contributing) — development setup, architecture, writing skills, writing guidelines, and release process.
+
 ## Code Style
 
 - All code must follow the ESLint and Prettier rules defined in the monorepo.
