@@ -1,13 +1,21 @@
 # Demo Video Scenario
 
-Terminal session screenplay for the pair demo video (~25s total).
+Terminal session screenplay for the pair landing page demo video (~25s total).
+Two AI tool sessions (Claude Code + Cursor) with a GitHub issue scroll interlude.
+
 Recording settings: 120 columns x 30 rows, dark background (#0a0d14), white text.
 
 ---
 
-## Scene 1: /pair-next (0s - 3s)
+## Scene 1: Claude Code — Discover + Refine (0s - 8s)
+
+Simulates a Claude Code terminal session. The developer asks what to do next,
+the agent recommends refining a story, and the developer accepts.
 
 ```text
+[SCENE LABEL — blue badge]
+  1 · Discover
+
 [PROMPT — typed at 30ms/char]
 $ /pair-next
 
@@ -20,22 +28,17 @@ PROJECT STATE:
 └── Backlog: 3 stories refined, 1 ready
 
 RECOMMENDATION: /pair-process-refine-story #42
-REASON: Story #42 "Add user authentication" is refined and ready for implementation
+REASON: Story #42 "Add user authentication" is refined and ready
 
 Shall I run /pair-process-refine-story #42?
-```
 
-**Timing**: prompt typed ~0.4s, pause 0.5s, output instant, hold 1.5s
+[SCENE LABEL — blue badge]
+  2 · Refine
 
----
-
-## Scene 2: /pair-process-refine-story (3s - 12s)
-
-```text
 [PROMPT — typed at 30ms/char]
 $ /pair-process-refine-story #42
 
-[AGENT OUTPUT — 0.3s pause, scrolling over 1.5s]
+[AGENT OUTPUT — scrolling over 1.5s]
 
 Reading story #42...
 Analyzing requirements against adoption files...
@@ -50,38 +53,58 @@ Proposed acceptance criteria:
    When credentials are invalid
    Then a 401 error with message is returned
 
-3. Given a session token is included in a request
-   When the token has expired
-   Then a 401 error is returned and the user must re-authenticate
-
-[AGENT QUESTION — 0.5s pause]
+[AGENT QUESTION]
 Accept these acceptance criteria? (y/n)
 
-[USER INPUT — typed at 30ms/char]
+[USER INPUT]
 y
 
-[AGENT OUTPUT — 0.8s pause, then instant block]
+[AGENT OUTPUT — instant block]
 
 STORY REFINEMENT COMPLETE:
 ├── Story:    #42: Add user authentication
 ├── Status:   Refined
 ├── Sections: 8/8 complete
-├── Sizing:   M(3) — fits sprint: Yes
-├── PM Tool:  Issue updated — #42
+├── PM Tool:  Issue updated — #42 ✓
 └── Next:     /pair-process-plan-tasks
 ```
 
-**Timing**: prompt ~1s, scrolling output 1.5s, question pause 0.5s, "y" typed 0.1s, pause 0.8s, final block instant, hold 1s
+**Timing**: ~8s total. Prompt typing + output blocks + user "y" confirmation.
 
 ---
 
-## Scene 3: /pair-process-implement (12s - 22s)
+## Scene 2: GitHub Issue Scroll (8s - 13s)
+
+Recorded via Playwright. Browser navigates to a real GitHub issue and scrolls
+through the body to show sections written by the agent (acceptance criteria,
+task breakdown, technical analysis).
+
+**Visual**: dark GitHub theme, smooth vertical scroll, ~5s duration.
+
+**Purpose**: proves the agent wrote real, structured content on GitHub — not
+just terminal output.
+
+**Recording**: `apps/website/scripts/landing-video/github-scroll.ts` (Playwright script)
+outputs `github-scroll.mp4`. Concatenated by `postprod.sh`.
+
+---
+
+## Scene 3: Cursor — Implement (13s - 21s)
+
+Simulates a Cursor-style editor session. The developer implements a task —
+the agent writes code and tests, then commits.
 
 ```text
+[SCENE LABEL — blue badge]
+  3 · Implement
+
+[HEADER — simulated Cursor top bar]
+  ▸ pair  ›  src/middleware/auth.ts        Cursor
+
 [PROMPT — typed at 30ms/char]
 $ /pair-process-implement #42
 
-[AGENT OUTPUT — 0.3s pause, scrolling over 1s]
+[AGENT OUTPUT — scrolling]
 
 ACTIVE TASK:
 ├── Task: T-1: Create auth middleware
@@ -92,7 +115,7 @@ ACTIVE TASK:
 Writing src/middleware/auth.test.ts...
 Writing src/middleware/auth.ts...
 
-[SCROLLING CODE SNIPPET — 1.5s]
+[CODE SNIPPET — scrolling]
   export function verifyToken(token: string): AuthPayload {
     return jwt.verify(token, SECRET) as AuthPayload
   }
@@ -106,46 +129,41 @@ Running tests...
 
 Tests: 4 passed | 0 failed
 
-[COMMIT OUTPUT — 0.5s pause]
+[COMMIT OUTPUT]
 [#42] feat: add JWT auth middleware
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 
 IMPLEMENTATION COMPLETE:
 ├── Story:    #42: Add user authentication
-├── Branch:   feature/#42-user-auth
 ├── Tasks:    3/3 completed
-├── Commits:  3 commits on branch
 ├── PR:       #58 — ready for review
 └── Quality:  All gates passing
 ```
 
-**Timing**: prompt ~0.8s, task block 1s, code scroll 1.5s, test output 1s, commit 1s, final block instant, hold 1.5s
+**Timing**: ~8s total. Cursor header visible throughout scene.
 
 ---
 
-## Scene 4: Closing (22s - 25s)
+## Scene 4: Closing (21s - 25s)
+
+Full-screen branded closing. Clear screen, centered tagline, then logo.
 
 ```text
-[PROMPT — typed at 30ms/char]
-$ tree .pair/ -L 2
+[CLEAR SCREEN — black #0a0d14]
 
-[OUTPUT — instant]
-.pair/
-├── adoption/
-│   ├── product/
-│   └── tech/
-├── knowledge/
-│   ├── guidelines/
-│   └── skills/
-└── product/
-    └── adopted/
+[CENTERED — fade in, pair blue #0062FF, large text]
 
-[OVERLAY — fade in over terminal at t=23s]
-"Code is the easy part."
+             Code is the easy part.
+
+[PAUSE 1.5s]
+
+[CENTERED — below tagline, white, pair logo ASCII art + "pair" text]
+
+               ◆ pair
+
+[HOLD 1.5s — loop point]
 ```
 
-**Timing**: prompt ~0.5s, tree output instant, hold 0.5s, overlay fade-in 1s, hold 1s
+**Timing**: clear 0.2s, tagline appears, hold 1.5s, logo appears, hold 1.5s.
 
 ---
 
@@ -153,6 +171,9 @@ $ tree .pair/ -L 2
 
 - **Total duration**: ~25s
 - **Terminal font**: JetBrains Mono 14pt
-- **Terminal theme**: dark bg #0a0d14, text #f8fafc, green #00D1FF for success markers
-- **ANSI colors**: use pair brand blue (#0062FF) for prompts, teal (#00D1FF) for checkmarks
-- **Loop point**: scene 4 closing frame fades to black, loops back to scene 1 prompt
+- **Terminal theme**: dark bg #0a0d14, text #f8fafc, teal #00D1FF for checkmarks
+- **ANSI colors**: pair blue (#0062FF) for prompts/labels, pair teal (#00D1FF) for success
+- **Cursor simulation**: text-based header bar (tab + breadcrumb), same dark terminal below
+- **GitHub scroll**: Playwright recording, dark theme, smooth scroll
+- **Loop point**: scene 4 end → scene 1 start (black frame transition)
+- **Concatenation order**: replay-part1.mp4 + github-scroll.mp4 + replay-part2.mp4 (postprod.sh)

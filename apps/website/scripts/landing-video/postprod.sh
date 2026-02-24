@@ -1,31 +1,41 @@
 #!/usr/bin/env bash
-# Post-production: compress video, extract poster
+# Post-production: concatenate segments, compress, extract poster
 #
 # Prerequisites:
 #   brew install ffmpeg
-#   demo-raw.mp4 must exist (from record.sh)
+#   3 segment files from record.sh:
+#     replay-part1.mp4, github-scroll.mp4, replay-part2.mp4
 #
 # Usage:
 #   bash apps/website/scripts/landing-video/postprod.sh
-#
-# Note: overlay text (step labels, closing tagline) is baked into replay.sh
-# via ANSI output — no drawtext filter needed.
 
 set -e
 cd "$(dirname "$0")"
 
-RAW="demo-raw.mp4"
 OUT="../../public/demo.mp4"
 POSTER="../../public/demo-poster.png"
 
-if [ ! -f "$RAW" ]; then
-  echo "Error: $RAW not found. Run record.sh first."
-  exit 1
-fi
+# Verify all segments exist
+for seg in replay-part1.mp4 github-scroll.mp4 replay-part2.mp4; do
+  if [ ! -f "$seg" ]; then
+    echo "Error: $seg not found. Run record.sh first."
+    exit 1
+  fi
+done
 
-echo "==> Compressing to H.264 ≤5MB..."
+echo "==> Concatenating 3 segments..."
 
-ffmpeg -y -i "$RAW" \
+# Create concat list
+cat > concat-list.txt <<'LIST'
+file 'replay-part1.mp4'
+file 'github-scroll.mp4'
+file 'replay-part2.mp4'
+LIST
+
+ffmpeg -y \
+  -f concat \
+  -safe 0 \
+  -i concat-list.txt \
   -c:v libx264 \
   -preset slow \
   -crf 28 \
@@ -33,6 +43,8 @@ ffmpeg -y -i "$RAW" \
   -pix_fmt yuv420p \
   -an \
   "$OUT"
+
+rm -f concat-list.txt
 
 echo "==> Final video saved: $OUT"
 ls -lh "$OUT"
@@ -50,8 +62,7 @@ if [ "$SIZE" -gt "$MAX" ]; then
   ls -lh "$OUT"
 fi
 
-echo "==> Extracting poster frame from last 3 seconds..."
-# Get video duration and extract frame near the end (closing scene)
+echo "==> Extracting poster frame from closing scene..."
 DURATION=$(ffprobe -v quiet -show_entries format=duration -of csv=p=0 "$OUT" | cut -d. -f1)
 POSTER_TIME=$((DURATION - 2))
 if [ "$POSTER_TIME" -lt 0 ]; then POSTER_TIME=0; fi

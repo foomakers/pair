@@ -1,46 +1,91 @@
 #!/usr/bin/env bash
-# Record demo terminal session using asciinema + convert to MP4
+# Record all demo video segments
 #
 # Prerequisites:
 #   brew install asciinema agg ffmpeg
+#   npx playwright install chromium
 #
 # Usage:
 #   bash apps/website/scripts/landing-video/record.sh
+#
+# Produces 3 segments (concatenated by postprod.sh):
+#   replay-part1.mp4  — Claude Code session (Discover + Refine)
+#   github-scroll.mp4 — GitHub issue scroll
+#   replay-part2.mp4  — Cursor session (Implement + Closing)
 
 set -e
 cd "$(dirname "$0")"
 
-echo "==> Setting terminal size to 120x30..."
-printf '\e[8;30;120t'
-sleep 1
+record_terminal() {
+  local part="$1"
+  local cast="replay-part${part}.cast"
+  local gif="replay-part${part}.gif"
+  local mp4="replay-part${part}.mp4"
 
-echo "==> Recording with asciinema..."
-asciinema rec \
-  --command="bash replay.sh" \
-  --cols=120 \
-  --rows=30 \
-  --overwrite \
-  demo.cast
+  echo "==> Recording Part ${part} with asciinema..."
+  PART="$part" asciinema rec \
+    --command="bash replay.sh" \
+    --cols=120 \
+    --rows=30 \
+    --overwrite \
+    "$cast"
 
-echo "==> Converting to GIF with agg..."
-agg \
-  --cols 120 \
-  --rows 30 \
-  --font-family "JetBrains Mono" \
-  --font-size 16 \
-  --theme asciinema \
-  demo.cast demo.gif
+  echo "==> Converting to GIF with agg..."
+  agg \
+    --cols 120 \
+    --rows 30 \
+    --font-family "JetBrains Mono" \
+    --font-size 16 \
+    --theme asciinema \
+    "$cast" "$gif"
 
-echo "==> Converting GIF to MP4 with FFmpeg..."
-ffmpeg -y \
-  -i demo.gif \
-  -movflags faststart \
-  -pix_fmt yuv420p \
-  -vf "scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=#0a0d14" \
-  -c:v libx264 \
-  -preset slow \
-  -crf 23 \
-  demo-raw.mp4
+  echo "==> Converting to MP4..."
+  ffmpeg -y \
+    -i "$gif" \
+    -movflags faststart \
+    -pix_fmt yuv420p \
+    -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=#0a0d14" \
+    -c:v libx264 \
+    -preset slow \
+    -crf 23 \
+    "$mp4"
 
-echo "==> Raw recording saved: demo-raw.mp4"
-ls -lh demo-raw.mp4
+  echo "==> Part ${part} saved: $mp4"
+  ls -lh "$mp4"
+}
+
+record_github() {
+  echo "==> Recording GitHub issue scroll with Playwright..."
+  npx tsx github-scroll.ts
+
+  echo "==> Converting webm to mp4..."
+  ffmpeg -y \
+    -i github-scroll.webm \
+    -movflags faststart \
+    -pix_fmt yuv420p \
+    -vf "scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2:color=#0a0d14" \
+    -c:v libx264 \
+    -preset slow \
+    -crf 23 \
+    github-scroll.mp4
+
+  echo "==> GitHub scroll saved: github-scroll.mp4"
+  ls -lh github-scroll.mp4
+}
+
+# --- Main ---
+
+echo "=== Step 1/3: Claude Code session ==="
+record_terminal 1
+
+echo ""
+echo "=== Step 2/3: GitHub issue scroll ==="
+record_github
+
+echo ""
+echo "=== Step 3/3: Cursor session ==="
+record_terminal 2
+
+echo ""
+echo "==> All segments recorded. Run postprod.sh to concatenate and compress."
+ls -lh replay-part1.mp4 github-scroll.mp4 replay-part2.mp4
