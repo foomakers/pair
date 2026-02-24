@@ -43,23 +43,63 @@ By the end of this tutorial you'll have:
 
 ### 1. Install pair-cli
 
-Install the CLI globally:
+#### Option A: Global install (recommended)
 
 ```bash
 pnpm add -g @pair/pair-cli
 ```
 
-Verify the installation:
+Then run it anywhere:
+
+```bash
+pair-cli --version
+```
+
+<Callout type="warn">
+  If the command is not found, make sure pnpm's global bin directory is in your PATH. Run `pnpm bin -g` to check the location.
+</Callout>
+
+#### Option B: Dev dependency (JavaScript/TypeScript projects)
+
+Add pair-cli to your project so it's pinned to a specific version and available to every developer via `package.json`:
+
+```bash
+pnpm add -D @pair/pair-cli
+```
+
+Then run it via `npx` or `pnpm`:
+
+```bash
+npx pair-cli --version
+# or
+pnpm pair-cli --version
+```
+
+All `pair-cli` commands in this tutorial work the same way — just prefix them with `npx` or `pnpm`.
+
+#### Option C: Manual download (non-JavaScript projects)
+
+If your project uses Python, Go, Rust, or any language without a Node.js toolchain, download the CLI directly:
+
+1. Download `pair-cli-manual-vX.Y.Z.zip` from [GitHub Releases](https://github.com/foomakers/pair/releases)
+2. Extract the archive
+3. Run the CLI from the extracted folder:
+
+```bash
+./path/to/pair-cli --version
+```
+
+<Callout type="info">
+  The manual download still requires **Node.js 18+** to run — pair-cli is a Node.js application. You don't need npm/pnpm as a package manager though.
+</Callout>
+
+Verify the installation (any option):
 
 ```bash
 pair-cli --version
 ```
 
 You should see a version number like `0.4.0`.
-
-<Callout type="warn">
-  If the command is not found, make sure pnpm's global bin directory is in your PATH. Run `pnpm bin -g` to check the location.
-</Callout>
 
 ### 2. Create and initialize your project
 
