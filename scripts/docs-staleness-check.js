@@ -78,6 +78,40 @@ for (const cmd of commandDirs) {
   }
 }
 
+// --- Check 4: Tutorial CLI command references ---
+
+const TUTORIALS_DIR = path.join(ROOT, 'apps/website/content/docs/tutorials')
+const CLI_BUILTINS = new Set(['--version', '--help'])
+
+if (fs.existsSync(TUTORIALS_DIR)) {
+  const tutorialFiles = fs
+    .readdirSync(TUTORIALS_DIR)
+    .filter((f) => f.endsWith('.mdx'))
+
+  const referencedCommands = new Set()
+  for (const file of tutorialFiles) {
+    const content = fs.readFileSync(path.join(TUTORIALS_DIR, file), 'utf-8')
+    // Match pair-cli <command> in code blocks (``` or backtick-inline)
+    const matches = [...content.matchAll(/pair-cli\s+([a-z][a-z0-9-]*)/g)]
+    for (const m of matches) {
+      referencedCommands.add(m[1])
+    }
+  }
+
+  // Filter to likely commands: must exist as a command dir or be a known builtin
+  // Ignore English prose words that follow "pair-cli" in non-code context
+  const proseWords = new Set(['as', 'is', 'on', 'to', 'installed', 'and', 'or', 'in', 'for', 'the'])
+  for (const cmd of referencedCommands) {
+    if (CLI_BUILTINS.has(`--${cmd}`)) continue
+    if (proseWords.has(cmd)) continue
+    if (!commandDirs.includes(cmd)) {
+      errors.push(
+        `Tutorial references "pair-cli ${cmd}" but no matching command dir in commands/`,
+      )
+    }
+  }
+}
+
 // --- Output ---
 
 console.log('Docs Staleness Check')

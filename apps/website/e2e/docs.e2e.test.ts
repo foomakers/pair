@@ -723,6 +723,126 @@ test('smoke: all contributing pages return 200 with correct titles', async ({ pa
 })
 
 // ============================================================
+// E2E: Docs — Tutorials section (#130)
+// ============================================================
+
+test('tutorials journey: index → first-project → existing-project via sidebar', async ({
+  page,
+}) => {
+  // Tutorials index page
+  await page.goto('/docs/tutorials')
+  const main = page.locator('main')
+  await expect(page.locator('main h1')).toContainText('Tutorials')
+  await expect(main).toContainText('Pick your tutorial')
+  await expect(main).toContainText('Your First Project')
+  await expect(main).toContainText('Existing Project')
+  await expect(main).toContainText('Team Setup')
+  await expect(main).toContainText('Enterprise Adoption')
+  await expect(main).toContainText('How tutorials differ from other docs')
+
+  // Sidebar shows Tutorials section
+  await expect(page.locator('body')).toContainText('Tutorials')
+
+  // Navigate to First Project via sidebar
+  await page
+    .locator('a', { hasText: /^Your First Project$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/tutorials/first-project')
+  await expect(page.locator('main h1')).toContainText('Your First Project')
+  await expect(main).toContainText('Prerequisites')
+  await expect(main).toContainText('pair-cli install')
+  await expect(main).toContainText('/pair-next')
+  await expect(main).toContainText('/pair-process-specify-prd')
+  await expect(main).toContainText('/pair-process-bootstrap')
+
+  // Navigate to Existing Project via sidebar
+  await page
+    .locator('a', { hasText: /Existing Project/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/tutorials/existing-project')
+  await expect(page.locator('main h1')).toContainText('Adopting pair on an Existing Project')
+  await expect(main).toContainText('Reverse-engineer')
+  await expect(main).toContainText('Phase 1: Codebase Analysis')
+  await expect(main).toContainText('Phase 2: Present findings')
+  await expect(main).toContainText('Phase 3: Ask me to confirm')
+})
+
+test('smoke: all tutorials pages return 200 with correct titles', async ({ page }) => {
+  const pages = [
+    { url: '/docs/tutorials', title: 'Tutorials' },
+    { url: '/docs/tutorials/first-project', title: 'Your First Project' },
+    { url: '/docs/tutorials/existing-project', title: 'Adopting pair on an Existing Project' },
+    { url: '/docs/tutorials/team-setup', title: 'Team Setup' },
+    { url: '/docs/tutorials/enterprise-adoption', title: 'Enterprise Adoption' },
+  ]
+  for (const { url, title } of pages) {
+    const response = await page.goto(url)
+    expect(response?.status(), `${url} should return 200`).toBe(200)
+    await expect(page.locator('main h1')).toBeVisible()
+    await expect(page).toHaveTitle(new RegExp(title))
+  }
+})
+
+// ============================================================
+// E2E: Search — Orama client-side search
+// ============================================================
+
+test('search: open dialog, type query, verify results appear', async ({ page }) => {
+  await page.goto('/docs')
+
+  // Open search dialog via keyboard shortcut
+  await page.keyboard.press('Meta+k')
+  const dialog = page.locator('[role="dialog"]')
+  await expect(dialog).toBeVisible()
+
+  // Type a search query
+  const searchInput = dialog.locator('input')
+  await searchInput.fill('quickstart')
+
+  // Wait for results to appear — results are <button> elements in a scrollable container
+  const results = dialog.locator('.border-t > button')
+  await expect(results.first()).toBeVisible({ timeout: 10000 })
+
+  // Verify multiple results returned
+  const count = await results.count()
+  expect(count).toBeGreaterThan(0)
+})
+
+test('search: results update when query changes', async ({ page }) => {
+  await page.goto('/docs')
+
+  // Open search dialog
+  await page.keyboard.press('Meta+k')
+  const dialog = page.locator('[role="dialog"]')
+  const searchInput = dialog.locator('input')
+
+  // Search for "tutorial"
+  await searchInput.fill('tutorial')
+  const results = dialog.locator('.border-t > button')
+  await expect(results.first()).toBeVisible({ timeout: 10000 })
+
+  // Verify tutorial-related results
+  const allText = await dialog.innerText()
+  expect(allText.toLowerCase()).toContain('tutorial')
+})
+
+test('search: empty query shows no results', async ({ page }) => {
+  await page.goto('/docs')
+
+  // Open search dialog
+  await page.keyboard.press('Meta+k')
+  const dialog = page.locator('[role="dialog"]')
+  const searchInput = dialog.locator('input')
+
+  // Verify input is empty and no result buttons
+  await expect(searchInput).toHaveValue('')
+  const resultButtons = dialog.locator('.border-t > button')
+  await expect(resultButtons).toHaveCount(0)
+})
+
+// ============================================================
 // E2E: Navigation integrity — no circular prev/next links
 // ============================================================
 
@@ -778,6 +898,11 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/support',
     '/docs/support/general-faq',
     '/docs/support/faq',
+    '/docs/tutorials',
+    '/docs/tutorials/first-project',
+    '/docs/tutorials/existing-project',
+    '/docs/tutorials/team-setup',
+    '/docs/tutorials/enterprise-adoption',
     '/docs/contributing',
     '/docs/contributing/development-setup',
     '/docs/contributing/architecture',

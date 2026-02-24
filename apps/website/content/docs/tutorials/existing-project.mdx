@@ -1,0 +1,250 @@
+---
+title: Adopting pair on an Existing Project
+description: Add pair to a project with existing code — reverse-engineer PRD and adoption files from your codebase, then refine them with AI assistance.
+---
+
+A walkthrough for developers who want to add pair to a project that already has code, dependencies, CI/CD, and conventions in place. Instead of starting from scratch, the AI analyzes your codebase and proposes adoption files that you review and refine — in about 30 minutes.
+
+## Prerequisites
+
+Before starting, make sure you have:
+
+- An **existing project** with code, a `package.json` (or equivalent), and Git history
+- **Node.js** v18 or later
+- **pair-cli** installed ([installation options](/docs/tutorials/first-project#1-install-pair-cli))
+- A **terminal** in your project root
+- An **AI coding assistant** that supports Agent Skills — [Claude Code](https://claude.ai/), [GitHub Copilot](https://github.com/features/copilot), [Cursor](https://cursor.sh/), or similar
+
+## What you'll build
+
+By the end of this tutorial you'll have:
+
+- A `.pair/` directory with the full Knowledge Base
+- A PRD reverse-engineered from your codebase and refined with your input
+- Adoption files (architecture, tech stack, way of working) that match your project's actual state
+- A project ready to use pair's full skill set — planning, implementation, and review
+
+## Estimated time
+
+~30 minutes.
+
+## Step-by-step instructions
+
+<Callout type="info">
+  **At any step**, you can run `/pair-next` instead of a specific skill. pair reads your project state and suggests the right action — so you never need to remember which skill comes next.
+</Callout>
+
+### 1. Install the Knowledge Base
+
+From your project root:
+
+```bash
+pair-cli install
+```
+
+This creates the `.pair/` directory with guidelines, how-tos, templates, and empty adoption files. It also installs bridge files (`AGENTS.md`, `.claude/`, `.github/copilot/`, `.cursor/`) so every AI assistant finds the same context.
+
+<Callout type="info">
+  If you installed pair-cli as a dev dependency instead of globally, use `npx pair-cli install`. See [installation options](/docs/tutorials/first-project#1-install-pair-cli) for details.
+</Callout>
+
+### 2. Start your AI assistant
+
+Open the project in your AI coding assistant. If you're using Claude Code:
+
+```bash
+claude
+```
+
+The assistant detects `.pair/` and loads the Knowledge Base.
+
+### 3. Reverse-engineer the project context
+
+This is the key step. Paste the following prompt into your AI assistant — it analyzes your codebase and produces a **draft** of all adoption files:
+
+```text
+Analyze this project's codebase and reverse-engineer the pair adoption files.
+
+Read the project structure, dependencies, configuration files, CI/CD pipelines,
+Git history, and code conventions. Then produce a structured analysis:
+
+## Phase 1: Codebase Analysis (do this silently)
+
+Examine:
+- package.json / requirements.txt / go.mod / Cargo.toml (dependencies, scripts)
+- Config files (tsconfig, eslint, prettier, .editorconfig, Dockerfile, etc.)
+- CI/CD (.github/workflows/, .gitlab-ci.yml, Jenkinsfile, etc.)
+- Git history (branching patterns, commit message conventions, recent activity)
+- Directory structure (architecture patterns, module organization)
+- Test setup (framework, coverage config, test file patterns)
+- README and existing documentation
+
+## Phase 2: Present findings (show me this)
+
+Present what you found in this format:
+
+### Product Context (for PRD)
+- What does this project do? (inferred from README, code, and structure)
+- Who are the users? (inferred from UI, API, docs)
+- What problem does it solve?
+- Current state: features, maturity, active areas of development
+
+### Architecture
+- Pattern: monolith / microservices / modular monolith / serverless
+- Key components and their relationships
+- Data storage and external services
+- API style (REST, GraphQL, gRPC, etc.)
+
+### Tech Stack
+- Language(s) and versions
+- Frameworks and libraries (with detected versions)
+- Testing framework and tools
+- Build tools and bundlers
+- CI/CD pipeline
+
+### Way of Working
+- Branching strategy (inferred from Git history)
+- Commit message convention (inferred from recent commits)
+- Code review process (inferred from PR templates, branch protection)
+- Quality gates (linting, testing, type checking commands)
+- Methodology clues (issue templates, project boards, sprint patterns)
+
+## Phase 3: Ask me to confirm
+
+After presenting findings, ask me:
+1. Is the product description accurate? What would you change?
+2. Are there architectural decisions not visible in the code?
+3. Any tech stack choices that are planned but not yet in the code?
+4. Does the way-of-working analysis match how your team actually works?
+
+Wait for my answers before generating any files.
+```
+
+The AI will read your entire project and present a structured analysis. **Review it carefully** — the AI is good at detecting what's in the code, but it can't know your intentions, planned changes, or team agreements that aren't documented.
+
+### 4. Refine and correct the analysis
+
+The AI will ask you to confirm or correct its findings. This is your chance to:
+
+- **Correct assumptions** — "We're migrating from Express to Fastify" or "The test coverage target is 80%, not what's currently measured"
+- **Add missing context** — "We also use Redis for caching but it's in a separate repo" or "Our API is public and needs OpenAPI docs"
+- **Clarify intentions** — "We're planning to add GraphQL, but it's not in the code yet" or "The monolith will be split into services next quarter"
+- **Specify team practices** — "We use Kanban, not Scrum" or "PRs require 2 approvals"
+
+Take your time here — these answers shape every future AI session.
+
+### 5. Generate the PRD
+
+Once the analysis is confirmed, run the PRD skill (`/pair-next` would suggest this):
+
+```text
+/pair-process-specify-prd
+```
+
+The skill uses the analysis from step 3-4 as context. Instead of asking you everything from scratch, it **pre-fills** what the AI already knows and only asks about gaps — product vision, success metrics, scope boundaries, and constraints that aren't visible in the code.
+
+Review the generated PRD in `.pair/adoption/product/adopted/PRD.md`. Edit anything that doesn't match your product reality.
+
+### 6. Bootstrap the adoption files
+
+Now run bootstrap (`/pair-next` knows PRD is done and suggests this):
+
+```text
+/pair-process-bootstrap
+```
+
+Bootstrap reads the analysis from step 3-4 and the PRD from step 5. For each adoption area, it **proposes decisions based on what it found** and asks you to confirm:
+
+- **Architecture** — "I detected a modular monolith with Express. Confirm?" → generates `.pair/adoption/tech/architecture.md`
+- **Tech Stack** — "I found TypeScript 5.3, React 18, Vitest 1.x, pnpm. Anything to add?" → generates `.pair/adoption/tech/tech-stack.md`
+- **Way of Working** — "I see GitHub Actions CI, conventional commits, main branch protection. Confirm your methodology?" → generates `.pair/adoption/tech/way-of-working.md`
+
+Each file captures your project's actual state — not generic defaults.
+
+### 7. Review the generated files
+
+After bootstrap, check all generated adoption files:
+
+```text
+.pair/adoption/
+├── product/adopted/
+│   └── PRD.md              ← your product context
+└── tech/adopted/
+    ├── architecture.md      ← architecture pattern
+    ├── tech-stack.md        ← languages, frameworks, versions
+    └── way-of-working.md   ← methodology, quality gates, PM tool
+```
+
+Open each file and verify it matches reality. Edit directly if anything is off — these are your files, and the AI will respect whatever you write.
+
+<Callout type="info">
+  Adoption files use the declaration pattern: `[tool] is adopted for [purpose]`. This tells the AI a statement is a decision, not a suggestion. Make sure your edits follow this pattern.
+</Callout>
+
+### 8. Commit the pair setup
+
+Stage and commit everything:
+
+```bash
+git add .pair/ AGENTS.md .claude/ .github/ .cursor/
+git commit -m "chore: add pair KB + adoption files from existing codebase"
+git push
+```
+
+From now on, every AI assistant session reads your adoption files and produces code aligned with your actual project — no more re-explaining your stack, conventions, or architecture.
+
+### 9. Continue with the pair workflow
+
+Run `/pair-next` to see what's next:
+
+```text
+/pair-next
+```
+
+pair reads your PRD and adoption files and suggests the next action. Typical next steps for an existing project:
+
+- **Plan initiatives** — if you have a roadmap to break down
+- **Create stories** — if you already know what to build next
+- **Implement** — if you have a specific task ready to go
+
+The full SDLC workflow is now available: planning, refinement, implementation, and review — all grounded in your project's actual context.
+
+## What about non-JavaScript projects?
+
+The reverse-engineering prompt works with any language. The AI reads whatever files are in your project — `requirements.txt` (Python), `go.mod` (Go), `Cargo.toml` (Rust), `pom.xml` (Java), etc.
+
+For installing pair-cli on non-JS projects, see [installation Option C](/docs/tutorials/first-project#1-install-pair-cli) (manual download).
+
+## Troubleshooting
+
+<Callout type="warn">
+  **AI misidentifies the architecture**: This is common for projects with mixed patterns. Correct the analysis in step 4 — be specific about which pattern applies to which component.
+</Callout>
+
+<Callout type="warn">
+  **AI misses dependencies**: If key dependencies are in sub-packages, Docker images, or external services, mention them explicitly in step 4. The AI can only see what's in the current repository.
+</Callout>
+
+<Callout type="warn">
+  **PRD feels too generic**: The reverse-engineered PRD is a starting point. Re-run `/pair-process-specify-prd` to refine specific sections. The skill is idempotent — it updates existing content without losing what's already there.
+</Callout>
+
+<Callout type="warn">
+  **Tech stack versions are outdated**: The AI reads `package-lock.json` / lock files for actual installed versions, but these may lag behind your target versions. Correct in step 4 or edit `tech-stack.md` directly.
+</Callout>
+
+## What you've learned
+
+- **Reverse engineering** extracts project context from code, config, and Git history — not from scratch
+- **Two-phase approach**: AI proposes → you review → AI generates files. Nothing is committed without your confirmation
+- **PRD from existing code** captures what you've already built, plus your product vision going forward
+- **Bootstrap pre-fills** adoption files from detected patterns — you confirm or correct, not write from zero
+- **Adoption files reflect reality** — your actual stack, architecture, and conventions, not generic defaults
+- **`/pair-next` adapts** to existing projects — it suggests actions based on what's already in place
+
+## Next steps
+
+- **[Concepts](/docs/concepts)** — Understand how the Knowledge Base, Skills, and Adoption Files work together
+- **[Customization](/docs/customization)** — Adjust guidelines and quality gates for your specific needs
+- **[Your First Project tutorial](/docs/tutorials/first-project)** — Starting a new project from scratch? Follow this tutorial instead
+- **[Team Setup tutorial](/docs/tutorials/team-setup)** — Ready to share pair with your team?

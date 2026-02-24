@@ -9,7 +9,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang='en' suppressHydrationWarning>
       <body>
         <PostHogProvider>
-          <RootProvider>{children}</RootProvider>
+          <RootProvider search={{ options: { type: 'static' } }}>{children}</RootProvider>
           <WebVitals />
         </PostHogProvider>
       </body>

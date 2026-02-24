@@ -92,33 +92,11 @@ Run `/pair-next` in your AI assistant. It detects empty adoption files and walks
 
 ### Existing Project
 
-For projects with an existing codebase, paste this prompt into your AI assistant:
+For projects with an existing codebase, the AI reverse-engineers your project context — reading dependencies, config files, Git history, and code structure — then proposes adoption files for you to review and refine.
 
-```text
-Analyze this project's codebase and create the pair adoption files interactively.
+The quick version: run `pair-cli install`, then paste a reverse-engineering prompt into your AI assistant. It analyzes the codebase, presents findings, and asks you to confirm before generating any files.
 
-Read the project structure, dependencies, configuration, and conventions. Then:
-
-1. **PRD** — Ask me about the product vision, users, pain points, and features.
-   Generate `.pair/adoption/product/adopted/PRD.md` following the PRD template
-   in `.pair/knowledge/assets/PRD_template.md`.
-
-2. **Architecture** — Propose the architecture pattern based on what you find
-   (monolith, microservices, etc.) and ask me to confirm or adjust.
-   Generate `.pair/adoption/tech/adopted/architecture.md`.
-
-3. **Tech Stack** — List detected languages, frameworks, and libraries with
-   versions. Ask me if anything is missing or should change.
-   Generate `.pair/adoption/tech/adopted/tech-stack.md`.
-
-4. **Way of Working** — Detect branching strategy, CI/CD, methodology from
-   config files. Ask me to confirm or adjust.
-   Generate `.pair/adoption/tech/adopted/way-of-working.md`.
-
-After generating all files, suggest I run `/pair-next` to continue.
-```
-
-The AI reads your code, proposes decisions based on what it finds, and asks you to confirm or adjust. Once done, run `/pair-next` to continue with the structured development process.
+For the full guided walkthrough with the complete prompt and step-by-step refinement process, see the **[Existing Project tutorial](/docs/tutorials/existing-project)** (~30 min).
 
 ## Keep Your KB Up to Date
 
@@ -152,5 +130,7 @@ The steps above work for everyone. For environment-specific configuration:
 - **[Solo Setup](/docs/getting-started/quickstart-solo)** — Working alone? Minimal setup, no team coordination needed.
 - **[Team Setup](/docs/getting-started/quickstart-team)** — Shared standards, adoption files, and the agent bridge pattern for multi-developer teams.
 - **[Organization Rollout](/docs/getting-started/quickstart-org)** — Custom KB packaging, distribution, and governance across multiple teams.
+
+Want a guided, end-to-end walkthrough? Pick a [tutorial](/docs/tutorials) that matches your context — solo developer (~30 min), team lead (~45 min), or enterprise architect (~60 min).
 
 Feeling lost? Check the [FAQ](/docs/support/general-faq) — it covers the most common questions about process, languages, tools, and customization.

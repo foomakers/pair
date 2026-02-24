@@ -1,0 +1,213 @@
+---
+title: Team Setup
+description: Install a shared Knowledge Base, customize guidelines, configure PM tool integration, and establish the team's way-of-working.
+---
+
+A walkthrough for team leads adopting pair across a development team. You'll go from a solo setup to a fully configured team environment in about 45 minutes.
+
+## Prerequisites
+
+Before starting, make sure you have:
+
+- Completed the [Your First Project](/docs/tutorials/first-project) tutorial (or equivalent pair experience)
+- A **project repository** with Git initialized and pushed to GitHub
+- **GitHub access** with permission to create Projects, labels, and issues
+- A **team of 2+ developers** (or at least one teammate to onboard at the end)
+- **pair-cli** installed (`pair-cli --version` should return a version)
+- An **AI coding assistant** that supports Agent Skills
+
+## What you'll build
+
+By the end of this tutorial you'll have:
+
+- A shared Knowledge Base installed in your team's repository
+- Customized guidelines that match your team's tech stack and conventions
+- PM tool integration (GitHub Projects) with boards, labels, and workflows
+- A way-of-working adoption file defining your team's methodology
+- At least one team member onboarded and working with the same context
+
+## Estimated time
+
+~45 minutes.
+
+## Step-by-step instructions
+
+<Callout type="info">
+  **At any step**, you can run `/pair-next` instead of a specific skill. pair reads your project state and suggests the right action — so you never need to remember which skill comes next.
+</Callout>
+
+### 1. Install the Knowledge Base
+
+If you haven't already, install pair in your project:
+
+```bash
+pair-cli install
+```
+
+<Callout type="info">
+  If you installed pair-cli as a dev dependency instead of globally, use `npx pair-cli install` (or `pnpm pair-cli install`). See [installation options](/docs/tutorials/first-project#1-install-pair-cli) for details.
+</Callout>
+
+This creates the `.pair/` directory with the default Knowledge Base, bridge files (`AGENTS.md`, `.claude/`, `.github/copilot/`), and empty adoption templates.
+
+### 2. Run bootstrap for your team context
+
+Start your AI assistant and run (`/pair-next` would suggest this on a fresh project):
+
+```text
+/pair-process-bootstrap
+```
+
+During bootstrap, make team-relevant choices:
+
+- **Team size**: specify your actual team size
+- **Methodology**: choose Scrum, Kanban, or Lean depending on your team's style
+- **PM tool**: select GitHub Projects (the default) or your team's preferred tool
+- **Quality gates**: define what checks run before every commit
+
+Bootstrap records all decisions in `.pair/adoption/tech/`.
+
+### 3. Customize the tech stack
+
+Edit `.pair/adoption/tech/tech-stack.md` to match your team's actual technology choices. For example, if your team uses Jest instead of Vitest:
+
+```markdown
+## Testing
+
+- jest is adopted as the testing framework (jest v29.x).
+- @testing-library/react is adopted for component testing.
+```
+
+The adoption declaration pattern (`[tool] is adopted for [purpose]`) tells every AI assistant this is a decision, not a suggestion.
+
+See [Customize for Your Team](/docs/customization/team) for the full customization guide.
+
+### 4. Customize code design guidelines
+
+Review `.pair/adoption/tech/` and add files for team conventions that differ from the KB defaults:
+
+```markdown
+<!-- .pair/adoption/tech/api-conventions.md -->
+
+# API Conventions
+
+- All REST endpoints use kebab-case paths.
+- Response format follows the JSON:API specification.
+- Authentication uses Bearer JWT tokens in the Authorization header.
+```
+
+The AI reads every file in `.pair/adoption/` — custom files are treated the same as overrides.
+
+### 5. Configure the PM tool integration
+
+If you chose GitHub Projects during bootstrap, verify the setup (`/pair-next` may suggest this if PM tool is unconfigured):
+
+```text
+/pair-capability-setup-pm
+```
+
+This skill:
+
+1. Creates a GitHub Project board (or connects to an existing one)
+2. Configures status fields (Todo → Refined → In Progress → Done)
+3. Sets up labels for story types, priorities, and epics
+4. Records the PM tool configuration in your way-of-working
+
+<Callout type="warn">
+  Make sure your GitHub token has the `project`, `repo`, and `admin:org` scopes if you're using organization-level Projects.
+</Callout>
+
+### 6. Set quality gates
+
+Edit `.pair/adoption/tech/way-of-working.md` to define your team's quality gate:
+
+```markdown
+## Quality Gates
+
+- `pnpm quality-gate` is the adopted project-level quality gate command.
+- Quality gate includes: type checking, testing, linting, formatting.
+
+### Custom Gate Registry
+
+| Order | Gate         | Command              | Required |
+| ----- | ------------ | -------------------- | -------- |
+| 1     | Quality Gate | `pnpm quality-gate`  | Yes      |
+| 2     | Security     | `pnpm audit`         | No       |
+```
+
+Every developer and every AI assistant will run these checks before committing.
+
+### 7. Record key decisions
+
+For significant decisions that need rationale, create Architecture Decision Records (`/pair-next` may suggest this when decisions are pending):
+
+```text
+/pair-capability-record-decision
+```
+
+This is especially important for choices your team debated — "why TypeScript over Go?", "why PostgreSQL over MongoDB?". ADRs live in `.pair/adoption/tech/adr/` and give future team members (and AI assistants) the context behind each choice.
+
+### 8. Commit the pair setup
+
+Stage and commit the full `.pair/` directory:
+
+```bash
+git add .pair/ AGENTS.md .claude/ .github/ .cursor/
+git commit -m "chore: pair KB + team adoption files"
+git push
+```
+
+<Callout type="info">
+  The `.pair/` directory, bridge files, and adoption files should all be committed to version control. This ensures every team member and every AI assistant session starts with the same context.
+</Callout>
+
+### 9. Onboard a team member
+
+Have a teammate clone the repository and open it in their AI assistant. They should:
+
+1. **Open the project** — the bridge files are already committed, so their assistant finds `.pair/` automatically
+2. **Run `/pair-next`** — pair reads the adoption files and knows the project context
+3. **Start working** — the assistant uses your team's tech stack, architecture, and conventions
+
+No manual onboarding needed. The Knowledge Base and adoption files *are* the onboarding.
+
+### 10. Verify the team workflow
+
+Have the onboarded teammate create a small change and go through the full cycle:
+
+1. **Pick a story** from GitHub Projects
+2. **Run `/pair-process-implement`** — the assistant creates a branch, follows TDD, runs quality gates
+3. **Review the PR** — run `/pair-process-review` on the resulting pull request
+4. **Merge** — confirm the squash-merge follows your commit template
+
+If everything works end-to-end, your team setup is complete.
+
+## Troubleshooting
+
+<Callout type="warn">
+  **PM tool authentication fails**: Verify your GitHub token scopes. The AI assistant needs `repo`, `project`, and possibly `admin:org` permissions. Run `gh auth status` to check.
+</Callout>
+
+<Callout type="warn">
+  **KB version conflicts after update**: If `pair-cli update` introduces guidelines that conflict with your adoption files, the AI will notice the inconsistency. Review the updated guidelines in `.pair/knowledge/` and adjust your adoption files if needed.
+</Callout>
+
+<Callout type="warn">
+  **Multiple AI assistants produce different code**: Ensure all bridge files are committed. Each assistant has its own bridge (`.claude/`, `.github/copilot/`, `.cursor/`) that points to the same `.pair/` directory. If any bridge file is missing, that assistant won't find the Knowledge Base.
+</Callout>
+
+## What you've learned
+
+- **Bootstrap** configures pair for your team's specific context in one step
+- **Adoption files** override KB defaults — your customizations survive upstream updates
+- **Quality gates** ensure consistent standards across every developer and AI session
+- **PM tool integration** connects pair's planning skills to your issue tracker
+- **Bridge files** make every AI assistant read the same context — no per-tool configuration
+- **Onboarding** is automatic — commit the `.pair/` directory and teammates are ready
+
+## Next steps
+
+- **[Customize for Your Team](/docs/customization/team)** — Deep dive into all customization options
+- **[Publish a Knowledge Base](/docs/customization/organization)** — Package your team's KB for distribution
+- **[Enterprise Adoption tutorial](/docs/tutorials/enterprise-adoption)** — Rolling out pair across an organization
+- **[Guides](/docs/guides)** — Goal-oriented guides for specific tasks
