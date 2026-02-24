@@ -56,7 +56,7 @@ record_terminal() {
 
 record_github() {
   echo "==> Recording GitHub issue scroll with Playwright..."
-  npx tsx github-scroll.ts
+  node github-scroll.mjs
 
   echo "==> Converting webm to mp4..."
   ffmpeg -y \
