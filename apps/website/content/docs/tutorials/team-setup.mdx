@@ -32,6 +32,10 @@ By the end of this tutorial you'll have:
 
 ## Step-by-step instructions
 
+<Callout type="info">
+  **At any step**, you can run `/pair-next` instead of a specific skill. pair reads your project state and suggests the right action — so you never need to remember which skill comes next.
+</Callout>
+
 ### 1. Install the Knowledge Base
 
 If you haven't already, install pair in your project:
@@ -44,7 +48,7 @@ This creates the `.pair/` directory with the default Knowledge Base, bridge file
 
 ### 2. Run bootstrap for your team context
 
-Start your AI assistant and run:
+Start your AI assistant and run (`/pair-next` would suggest this on a fresh project):
 
 ```text
 /pair-process-bootstrap
@@ -92,7 +96,7 @@ The AI reads every file in `.pair/adoption/` — custom files are treated the sa
 
 ### 5. Configure the PM tool integration
 
-If you chose GitHub Projects during bootstrap, verify the setup:
+If you chose GitHub Projects during bootstrap, verify the setup (`/pair-next` may suggest this if PM tool is unconfigured):
 
 ```text
 /pair-capability-setup-pm
@@ -131,7 +135,7 @@ Every developer and every AI assistant will run these checks before committing.
 
 ### 7. Record key decisions
 
-For significant decisions that need rationale, create Architecture Decision Records:
+For significant decisions that need rationale, create Architecture Decision Records (`/pair-next` may suggest this when decisions are pending):
 
 ```text
 /pair-capability-record-decision

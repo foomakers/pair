@@ -33,6 +33,10 @@ By the end of this tutorial you'll understand how to:
 
 ## Step-by-step instructions
 
+<Callout type="info">
+  **At any step**, you can run `/pair-next` instead of a specific skill. pair reads your project state and suggests the right action — so you never need to remember which skill comes next.
+</Callout>
+
 ### 1. Plan your KB structure
 
 Before writing anything, decide on the scope:
@@ -231,7 +235,7 @@ pair-cli install --source npm --url @your-org/pair-kb
 
 Then run the team setup workflow:
 
-1. **Bootstrap**: `/pair-process-bootstrap` — the AI uses your org KB as the base, team fills in adoption files
+1. **Bootstrap**: Run `/pair-next` (or `/pair-process-bootstrap` directly) — the AI uses your org KB as the base, team fills in adoption files
 2. **Customize**: Edit adoption files to override org defaults where needed
 3. **Commit**: Push `.pair/` to the team's repository
 4. **Verify**: Run `/pair-next` and confirm the assistant reads both org guidelines and team overrides
@@ -261,9 +265,9 @@ What happens:
 For each new team:
 
 1. **Install**: `pair-cli install --source npm --url @your-org/pair-kb`
-2. **Bootstrap**: Run `/pair-process-bootstrap` for team-specific configuration
+2. **Bootstrap**: Run `/pair-next` (or `/pair-process-bootstrap` directly) for team-specific configuration
 3. **Customize**: Fill adoption templates with team choices
-4. **Verify**: Confirm the layered override works correctly
+4. **Verify**: Run `/pair-next` — confirm the assistant reads both org guidelines and team overrides
 
 Each team gets the same org foundation with their own customization layer. The AI assistant reads both layers — org standards plus team decisions — producing code that is simultaneously org-compliant and team-appropriate.
 

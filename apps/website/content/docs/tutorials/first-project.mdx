@@ -1,6 +1,6 @@
 ---
 title: Your First Project
-description: Install pair, bootstrap a project, create a PRD, generate your first initiative/epic/story, and run your first skill — all in one session.
+description: Install pair, bootstrap a project, create a PRD, generate your first initiative/epic/story, implement, and review — all in one session.
 ---
 
 A complete walkthrough for solo developers. You'll go from zero to a fully scaffolded project with AI-assisted planning in about 30 minutes.
@@ -36,6 +36,10 @@ By the end of this tutorial you'll have:
 ~30 minutes (depending on how detailed you make your PRD).
 
 ## Step-by-step instructions
+
+<Callout type="info">
+  **At any step**, you can run `/pair-next` instead of a specific skill. pair reads your project state and suggests the right action — so you never need to remember which skill comes next.
+</Callout>
 
 ### 1. Install pair-cli
 
@@ -105,7 +109,7 @@ Since this is a fresh project with no PRD and no adoption files, pair will recom
 
 ### 6. Create your PRD
 
-Follow pair's recommendation and run:
+Follow pair's recommendation (or run `/pair-next` — it will suggest this same action):
 
 ```text
 /pair-process-specify-prd
@@ -127,7 +131,7 @@ Answer each question. pair writes the PRD to `.pair/adoption/product/adopted/PRD
 
 ### 7. Bootstrap the project
 
-Now run the full bootstrap:
+Run the full bootstrap (or `/pair-next` — it knows PRD is done and bootstrap is next):
 
 ```text
 /pair-process-bootstrap
@@ -144,7 +148,7 @@ Each decision is recorded in `.pair/adoption/tech/` as an adoption file. The AI 
 
 ### 8. Generate initiatives
 
-With the PRD in place, break it down into strategic initiatives:
+With the PRD in place, break it down into strategic initiatives (`/pair-next` would suggest this):
 
 ```text
 /pair-process-plan-initiatives
@@ -154,7 +158,7 @@ pair analyzes your PRD and creates prioritized initiatives (P0 = must-have, P1 =
 
 ### 9. Break down into epics
 
-Pick a P0 initiative and break it into epics:
+Pick a P0 initiative and break it into epics (`/pair-next` guides you here):
 
 ```text
 /pair-process-plan-epics
@@ -164,7 +168,7 @@ pair suggests an epic structure including "Epic 0" — the foundational setup wo
 
 ### 10. Create user stories
 
-Break an epic into user stories:
+Break an epic into user stories (`/pair-next` suggests this when epics exist):
 
 ```text
 /pair-process-plan-stories
@@ -174,7 +178,7 @@ pair applies vertical slicing and INVEST validation to create stories that are i
 
 ### 11. Refine and start developing
 
-You now have a complete planning hierarchy: PRD → Initiatives → Epics → Stories.
+You now have a complete planning hierarchy: PRD → Initiatives → Epics → Stories. From here, `/pair-next` continues guiding you through refinement and implementation.
 
 To refine a story with acceptance criteria and task breakdown:
 
@@ -187,6 +191,16 @@ To implement a refined story with TDD:
 ```text
 /pair-process-implement
 ```
+
+### 12. Review your code
+
+After implementation creates a PR, run a structured code review (`/pair-next` suggests this when a PR is open):
+
+```text
+/pair-process-review
+```
+
+The review skill checks adoption compliance, quality gates, Definition of Done, and produces a structured review following your team's review template.
 
 ## What you've learned
 
