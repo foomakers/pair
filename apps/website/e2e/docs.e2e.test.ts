@@ -721,3 +721,94 @@ test('smoke: all contributing pages return 200 with correct titles', async ({ pa
     await expect(page).toHaveTitle(new RegExp(title))
   }
 })
+
+// ============================================================
+// E2E: Navigation integrity — no circular prev/next links
+// ============================================================
+
+test('no circular prev/next footer links on any docs page', async ({ page }) => {
+  const allPages = [
+    '/docs',
+    '/docs/getting-started',
+    '/docs/getting-started/quickstart',
+    '/docs/getting-started/quickstart-solo',
+    '/docs/getting-started/quickstart-team',
+    '/docs/getting-started/quickstart-org',
+    '/docs/developer-journey',
+    '/docs/developer-journey/induction',
+    '/docs/developer-journey/strategic-planning',
+    '/docs/developer-journey/iteration',
+    '/docs/developer-journey/execution',
+    '/docs/concepts/ai-assisted-sdlc',
+    '/docs/concepts/knowledge-base',
+    '/docs/concepts/skills',
+    '/docs/concepts/adoption-files',
+    '/docs/concepts/agent-integration',
+    '/docs/concepts/llms-txt',
+    '/docs/customization',
+    '/docs/customization/adopt',
+    '/docs/customization/team',
+    '/docs/customization/templates',
+    '/docs/customization/organization',
+    '/docs/integrations',
+    '/docs/integrations/claude-code',
+    '/docs/integrations/codex',
+    '/docs/integrations/cursor',
+    '/docs/integrations/github-copilot',
+    '/docs/integrations/windsurf',
+    '/docs/pm-tools',
+    '/docs/pm-tools/filesystem',
+    '/docs/pm-tools/github-projects',
+    '/docs/pm-tools/linear',
+    '/docs/guides/cli-workflows',
+    '/docs/guides/install-from-url',
+    '/docs/guides/customize-kb',
+    '/docs/guides/adopter-checklist',
+    '/docs/guides/troubleshooting',
+    '/docs/guides/update-link',
+    '/docs/reference/cli/commands',
+    '/docs/reference/cli/examples',
+    '/docs/reference/specs/cli-contracts',
+    '/docs/reference/specs/kb-source-resolution',
+    '/docs/reference/skills-catalog',
+    '/docs/reference/guidelines-catalog',
+    '/docs/reference/skill-management',
+    '/docs/reference/kb-structure',
+    '/docs/reference/configuration',
+    '/docs/support',
+    '/docs/support/general-faq',
+    '/docs/support/faq',
+    '/docs/contributing',
+    '/docs/contributing/development-setup',
+    '/docs/contributing/architecture',
+    '/docs/contributing/writing-skills',
+    '/docs/contributing/writing-guidelines',
+    '/docs/contributing/release-process',
+  ]
+
+  const circular: string[] = []
+
+  for (const url of allPages) {
+    await page.goto(url)
+
+    // Check "Next" footer link
+    const nextLink = page.locator('a:has-text("Next")').first()
+    if ((await nextLink.count()) > 0) {
+      const href = await nextLink.getAttribute('href')
+      if (href && new URL(href, 'http://localhost').pathname === url) {
+        circular.push(`${url} → next points to itself`)
+      }
+    }
+
+    // Check "Previous" footer link
+    const prevLink = page.locator('a:has-text("Previous")').first()
+    if ((await prevLink.count()) > 0) {
+      const href = await prevLink.getAttribute('href')
+      if (href && new URL(href, 'http://localhost').pathname === url) {
+        circular.push(`${url} → prev points to itself`)
+      }
+    }
+  }
+
+  expect(circular, `Circular navigation links found:\n${circular.join('\n')}`).toHaveLength(0)
+})
