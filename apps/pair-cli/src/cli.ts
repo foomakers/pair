@@ -206,8 +206,6 @@ function setupCommands(prog: Command, deps: CommandDeps): void {
   })
 
   prog.action(() => {
-    console.log(`\n  ${pairLogo()} ${chalk.dim(`v${pkg.version}`)}`)
-    console.log(`  ${chalk.hex(PAIR_BLUE)('Code is the easy part.')}\n`)
     console.log(`  ${chalk.dim('Run')} pair --help ${chalk.dim('to see available commands.')}`)
     console.log(
       `  ${chalk.dim('Run')} pair install --list-targets ${chalk.dim('to see asset registries.')}\n`,
