@@ -175,7 +175,7 @@ const context = await browser.newContext({
 
 const page = await context.newPage()
 await page.goto(`file://${htmlPath}`, { waitUntil: 'load' })
-await page.waitForTimeout(800)
+await page.waitForTimeout(2000) // hold on title + issue number before scrolling
 
 // Smooth scroll
 const steps = Math.floor(SCROLL_DURATION_MS / SCROLL_INTERVAL_MS)
