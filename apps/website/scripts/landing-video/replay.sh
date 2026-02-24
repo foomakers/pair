@@ -35,11 +35,17 @@ blue()  { printf '\033[38;2;0;98;255m%s\033[0m' "$1"; }  # pair blue
 bold()  { printf '\033[1m%s\033[0m' "$1"; }
 dim()   { printf '\033[2m%s\033[0m' "$1"; }
 
+scene_label() {
+  # Display a scene label in pair brand gradient style
+  printf '\n\033[1;48;2;0;98;255;38;2;255;255;255m  %s  \033[0m\n\n' "$1"
+}
+
 # --- Scene 1: /pair-next (0s - 3s) ---
 
 clear
 pause 0.3
 
+scene_label "1 · Discover"
 type_cmd "/pair-next"
 pause 0.5
 
@@ -58,7 +64,7 @@ pause 1.5
 
 # --- Scene 2: /pair-process-refine-story (3s - 12s) ---
 
-echo ""
+scene_label "2 · Refine"
 type_cmd "/pair-process-refine-story #42"
 pause 0.3
 
@@ -106,7 +112,7 @@ pause 1.0
 
 # --- Scene 3: /pair-process-implement (12s - 22s) ---
 
-echo ""
+scene_label "3 · Implement"
 type_cmd "/pair-process-implement #42"
 pause 0.3
 
@@ -180,6 +186,10 @@ print_block ".pair/
     └── adopted/"
 echo ""
 
-# Hold for overlay (motion graphics added in post-production)
-# The closing "Code is the easy part." text is added as FFmpeg overlay
+# Closing tagline
+pause 0.5
+echo ""
+echo ""
+printf '\033[1;38;2;0;98;255m                        Code is the easy part.\033[0m\n'
+echo ""
 pause 3
