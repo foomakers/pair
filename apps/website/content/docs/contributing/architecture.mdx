@@ -1,0 +1,107 @@
+---
+title: Architecture
+description: Monorepo structure, key packages, data flow, and build system overview for pair contributors.
+---
+
+An overview of how the pair codebase is organized, how the packages relate to each other, and how data flows from the Knowledge Base to your AI assistant.
+
+## Monorepo layout
+
+pair is a **pnpm workspace monorepo** using **Turborepo** for task orchestration and build caching.
+
+```text
+pair/
+├── apps/
+│   ├── pair-cli/              # CLI tool (@pair/pair-cli)
+│   └── website/               # Docs site (@pair/website)
+├── packages/
+│   ├── knowledge-hub/         # KB dataset (@pair/knowledge-hub)
+│   ├── content-ops/           # File ops + link processing (@pair/content-ops)
+│   └── brand/                 # Brand assets + components (@pair/brand)
+├── tools/
+│   ├── eslint-config/         # Shared ESLint config
+│   ├── prettier-config/       # Shared Prettier config
+│   ├── markdownlint-config/   # Shared markdownlint config
+│   └── ts-config/             # Shared TypeScript config
+├── .pair/                     # AI-specific files (adoption + knowledge)
+├── .claude/skills/            # Agent Skills (agentskills.io standard)
+├── turbo.json                 # Turbo pipeline config
+└── pnpm-workspace.yaml        # pnpm workspace config
+```
+
+## Key packages
+
+| Package | Scope | Description |
+|---------|-------|-------------|
+| `@pair/pair-cli` | `apps/pair-cli` | CLI tool for KB installation, update, packaging, and validation. Entry point for developers using pair. |
+| `@pair/website` | `apps/website` | Documentation site built with Fumadocs (Next.js 15) + Orama search. Hosted on Vercel. |
+| `@pair/knowledge-hub` | `packages/knowledge-hub` | The Knowledge Base dataset — guidelines, how-tos, templates, and skills. Distributed as a GitHub release artifact. |
+| `@pair/content-ops` | `packages/content-ops` | File operations and markdown link processing library. Used by the CLI for KB manipulation. |
+| `@pair/brand` | `packages/brand` | Brand identity — design tokens, React components, and Tailwind preset. |
+
+### Shared tooling
+
+The `tools/` directory contains workspace-internal configuration packages:
+
+- **eslint-config** — Shared ESLint rules for all packages.
+- **prettier-config** — Shared Prettier formatting.
+- **markdownlint-config** — Shared markdown linting for KB content.
+- **ts-config** — Shared TypeScript presets (base, library, app).
+
+## Data flow
+
+```text
+Contributor                 CI / Release                 Developer
+    │                           │                           │
+    │  writes KB content        │                           │
+    │  in knowledge-hub/        │                           │
+    │──────────────────────────▶│                           │
+    │                           │  builds + packages KB     │
+    │                           │  as GitHub Release        │
+    │                           │──────────────────────────▶│
+    │                           │                           │  pair install
+    │                           │                           │  downloads KB
+    │                           │                           │  creates .pair/
+    │                           │                           │
+    │                           │                           │  AI agent reads
+    │                           │                           │  .pair/ + .claude/skills/
+    │                           │                           │  follows guidelines
+```
+
+1. **Contributors** add or update KB content in `packages/knowledge-hub/dataset/`.
+2. **CI** packages the KB into a versioned ZIP and publishes it as a GitHub Release artifact.
+3. **Developers** run `pair install` — the CLI downloads the KB and creates the `.pair/` directory.
+4. **AI agents** read `.pair/` for guidelines, adoption files, and how-tos. Skills are distributed to `.claude/skills/` (and other tool directories).
+
+## The .pair/ directory
+
+The `.pair/` directory is the interface between pair and AI assistants. It contains two top-level areas:
+
+- **`adoption/`** — Project-specific decisions (architecture, tech stack, way of working). These are generated through the pair workflow and reflect your team's choices.
+- **`knowledge/`** — Universal content (guidelines, how-tos, templates, skills guide). This comes from the Knowledge Base and is shared across all projects.
+
+For the full `.pair/` structure and file descriptions, see the [KB Structure Reference](/docs/reference/kb-structure).
+
+## Build system
+
+**Turborepo** manages the build pipeline:
+
+- Tasks are defined in `turbo.json` with dependency relationships.
+- Build results are cached — unchanged packages skip rebuilding.
+- `pnpm quality-gate` runs the full validation pipeline (type check → test → lint → format → markdown lint).
+
+Key Turbo tasks: `build`, `test`, `lint`, `ts:check`, `dev`.
+
+```bash
+# Run a task across all packages
+pnpm build
+
+# Run a task for a specific package
+pnpm --filter @pair/pair-cli build
+```
+
+For build commands and development workflow, see the [Development Setup](/docs/contributing/development-setup) guide.
+
+---
+
+*Last verified: 2026-02-24*
