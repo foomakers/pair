@@ -10,7 +10,7 @@
  * Output: github-scroll.webm in this directory
  */
 
-import { chromium } from 'playwright'
+import { chromium } from '@playwright/test'
 import { readdirSync, statSync, renameSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
