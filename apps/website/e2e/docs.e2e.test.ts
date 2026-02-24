@@ -638,7 +638,7 @@ test('contributing journey: index → development-setup → architecture → wri
   // Contributing index page
   await page.goto('/docs/contributing')
   const main = page.locator('main')
-  await expect(page.locator('main h1')).toContainText('Contributing')
+  await expect(page.locator('main h1')).toContainText('How to Contribute')
   await expect(main).toContainText('Ways to contribute')
   await expect(main).toContainText('Pull request process')
   await expect(main).toContainText('Expectations')
@@ -707,7 +707,7 @@ test('contributing journey: index → development-setup → architecture → wri
 
 test('smoke: all contributing pages return 200 with correct titles', async ({ page }) => {
   const pages = [
-    { url: '/docs/contributing', title: 'Contributing' },
+    { url: '/docs/contributing', title: 'How to Contribute' },
     { url: '/docs/contributing/development-setup', title: 'Development Setup' },
     { url: '/docs/contributing/architecture', title: 'Architecture' },
     { url: '/docs/contributing/writing-skills', title: 'Writing Skills' },
