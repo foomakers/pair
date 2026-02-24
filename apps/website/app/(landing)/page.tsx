@@ -3,7 +3,7 @@ import { ThemeToggle } from '@pair/brand'
 import { HeroSection } from './hero-section'
 import { PainPointsSection } from './pain-points-section'
 import { WorksWithSection } from './works-with-section'
-import { DemoPlaceholderSection } from './demo-placeholder-section'
+import { DemoSection } from './demo-section'
 import { AudienceTracksSection } from './audience-tracks-section'
 import { HowItWorksSection } from './how-it-works-section'
 import { FeaturesSection } from './features-section'
@@ -29,7 +29,7 @@ export default function HomePage() {
       <div className='gradient-line mx-auto max-w-4xl' />
       <PainPointsSection />
       <WorksWithSection />
-      <DemoPlaceholderSection />
+      <DemoSection />
       <AudienceTracksSection />
       <HowItWorksSection />
       <FeaturesSection />

@@ -63,14 +63,12 @@
   transform: translateY(-50%);
 }
 
-/* Asset placeholder */
-.asset-placeholder {
-  border: 2px dashed;
-  border-image: linear-gradient(135deg, var(--pair-blue) 0%, var(--pair-teal) 100%) 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--pair-text-muted);
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.75rem;
+/* Demo video — reduced-motion fallback */
+@media (prefers-reduced-motion: reduce) {
+  .demo-video {
+    display: none;
+  }
+  .demo-poster {
+    display: block;
+  }
 }
