@@ -55,6 +55,12 @@ record_terminal() {
 }
 
 record_github() {
+  # Ensure GitHub auth state exists (private repo needs login)
+  if [ ! -f .auth-state.json ]; then
+    echo "==> GitHub auth needed (private repo). Opening browser for login..."
+    node github-scroll.mjs --login
+  fi
+
   echo "==> Recording GitHub issue scroll with Playwright..."
   node github-scroll.mjs
 

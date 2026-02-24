@@ -28,3 +28,4 @@ apps/website/scripts/landing-video/*.gif
 apps/website/scripts/landing-video/*.mp4
 apps/website/scripts/landing-video/*.webm
 apps/website/scripts/landing-video/concat-list.txt
+apps/website/scripts/landing-video/.auth-state.json
