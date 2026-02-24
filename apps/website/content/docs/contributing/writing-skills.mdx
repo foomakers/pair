@@ -1,0 +1,185 @@
+---
+title: Writing Skills
+description: How to create Agent Skills for pair — directory structure, SKILL.md anatomy, composition, and testing.
+---
+
+Agent Skills are structured instructions that AI coding assistants discover and execute. They follow the [Agent Skills](https://agentskills.io) open standard, supported by Claude Code, Cursor, VS Code Copilot, and OpenAI Codex.
+
+This guide walks you through creating a new skill for the pair Knowledge Base.
+
+## Skill types
+
+| Type | Count | Purpose |
+|------|-------|---------|
+| **Process** | 11 | Lifecycle phases — orchestrate capability skills (e.g., `/implement`, `/review`) |
+| **Capability** | 19 | Atomic units — perform a single focused operation (e.g., `/verify-quality`, `/record-decision`) |
+
+Process skills **compose** capability skills. Capability skills are independently invocable.
+
+## Directory structure
+
+Skills live in the Knowledge Base dataset and get distributed to AI tool directories on install:
+
+```text
+packages/knowledge-hub/dataset/.pair/knowledge/
+├── skills-guide.md          # Full skill catalog
+
+# After pair install, skills are distributed to:
+.claude/skills/
+├── pair-process-implement/
+│   └── SKILL.md
+├── pair-capability-verify-quality/
+│   └── SKILL.md
+└── ...
+```
+
+Each skill lives in its own directory named `<type>-<name>` (e.g., `pair-process-implement`, `pair-capability-record-decision`).
+
+## SKILL.md anatomy
+
+Every skill is a single `SKILL.md` file with YAML frontmatter and markdown content:
+
+```markdown
+---
+name: pair-capability-example
+description: "Brief description of what this skill does."
+---
+
+# /pair-capability-example — Descriptive Title
+
+One-line summary of the skill's purpose.
+
+## Composed Skills
+
+| Skill | Type | Required |
+|-------|------|----------|
+| `/pair-capability-other` | Capability | Yes — when invoked |
+
+## Arguments
+
+| Argument | Required | Description |
+|----------|----------|-------------|
+| `$scope` | Yes | The scope to operate on |
+
+## Algorithm
+
+### Step 1: First Step
+
+1. **Check**: Is the precondition met?
+2. **Skip**: If yes, move to Step 2.
+3. **Act**: Perform the action.
+4. **Verify**: Confirm the result.
+
+### Step 2: Second Step
+...
+
+## Output Format
+
+Description of what the skill outputs.
+
+## HALT Conditions
+
+When the skill stops and why.
+
+## Idempotent Re-invocation
+
+How re-running the skill behaves safely.
+
+## Graceful Degradation
+
+What happens when dependencies are missing.
+```
+
+### Frontmatter fields
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `name` | Yes | Skill identifier, matches directory name |
+| `description` | Yes | Brief description (used by AI tools for discovery) |
+
+## Composition model
+
+Process skills orchestrate capability skills through a **compose** relationship:
+
+```text
+/pair-process-implement
+├── composes /pair-capability-verify-quality (required)
+├── composes /pair-capability-record-decision (required)
+├── composes /pair-capability-assess-stack (optional)
+└── composes /pair-capability-verify-adoption (optional)
+```
+
+Key composition rules:
+
+- **Required compositions** — The skill halts if the composed skill is not installed.
+- **Optional compositions** — The skill warns and continues if the composed skill is not installed (graceful degradation).
+- **Arguments** — Composed skills receive arguments (e.g., `$scope`, `$type`) from the parent skill.
+
+## Algorithm conventions
+
+Skills use a consistent step pattern:
+
+1. **Check** — Evaluate a precondition.
+2. **Skip** — If the condition is already met, skip to the next step.
+3. **Act** — Perform the action.
+4. **Verify** — Confirm the result before proceeding.
+
+This pattern ensures **idempotency** — re-running a skill skips already-completed steps.
+
+### HALT conditions
+
+Skills define explicit HALT conditions — situations where the skill stops and waits for developer input rather than proceeding with incomplete information.
+
+## Writing a new skill
+
+### 1. Choose the skill type
+
+- **Process** if it orchestrates multiple steps across the development lifecycle.
+- **Capability** if it performs a single, focused operation.
+
+### 2. Create the directory
+
+```bash
+# In the KB dataset
+mkdir -p packages/knowledge-hub/dataset/.pair/knowledge/skills/<skill-name>/
+```
+
+### 3. Write the SKILL.md
+
+Follow the anatomy above. Key principles:
+
+- **Be explicit** — AI agents follow instructions literally. Ambiguity leads to incorrect behavior.
+- **Use the Check/Skip/Act/Verify pattern** — Ensures idempotency.
+- **Define HALT conditions** — Better to stop and ask than to proceed incorrectly.
+- **Document composition** — List all composed skills with required/optional status.
+- **Include graceful degradation** — What happens when optional dependencies are missing.
+
+### 4. Update the skills guide
+
+Add your skill to `packages/knowledge-hub/dataset/.pair/knowledge/skills-guide.md` in the appropriate section (Process or Capability).
+
+### 5. Test the skill
+
+1. Install the KB locally: run `pair install` or copy the SKILL.md to `.claude/skills/<skill-name>/`.
+2. Invoke the skill via the slash command (e.g., `/pair-capability-example`).
+3. Verify the skill follows its algorithm correctly.
+4. Test idempotency — re-invoke and confirm it skips completed steps.
+5. Test graceful degradation — remove optional composed skills and verify the warning behavior.
+
+## Naming conventions
+
+| Convention | Example |
+|-----------|---------|
+| Process skills | `pair-process-<name>` (e.g., `pair-process-implement`) |
+| Capability skills | `pair-capability-<name>` (e.g., `pair-capability-verify-quality`) |
+| Assessment skills | `pair-capability-assess-<topic>` (e.g., `pair-capability-assess-stack`) |
+
+## Resources
+
+- [Agent Skills specification](https://agentskills.io) — The open standard.
+- [Skills Catalog](/docs/reference/skills-catalog) — Full list of all 30 pair skills.
+- [Skills concept](/docs/concepts/skills) — How skills fit into the pair ecosystem.
+
+---
+
+*Last verified: 2026-02-24*
