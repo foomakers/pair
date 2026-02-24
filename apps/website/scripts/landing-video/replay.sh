@@ -189,7 +189,7 @@ part2() {
   echo "└── Quality:  $(green "All gates passing")"
   pause 1.5
 
-  # Scene 4: Closing — centered tagline + logo
+  # Scene 4: Closing — centered tagline + logo pills
   clear
   pause 0.3
 
@@ -206,10 +206,13 @@ part2() {
   echo ""
   echo ""
 
-  # Logo + name — centered, white bold
-  printf '\033[1;38;2;255;255;255m'
-  center_text "◆  pair"
-  printf '\033[0m'
+  # Logo pills (blue ██ + teal ██) + wordmark
+  local logo="\033[38;2;0;98;255m██\033[0m \033[38;2;0;209;255m██\033[0m  \033[1;38;2;255;255;255mpair\033[0m"
+  local logo_plain="██ ██  pair"
+  local logo_len=${#logo_plain}
+  local logo_pad=$(( (COLS - logo_len) / 2 ))
+  printf '%*s' "$logo_pad" ''
+  printf "${logo}\n"
 
   pause 2.0
 }
