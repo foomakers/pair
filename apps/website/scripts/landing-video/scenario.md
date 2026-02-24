@@ -7,7 +7,7 @@ Recording settings: 120 columns x 30 rows, dark background (#0a0d14), white text
 
 ## Scene 1: /pair-next (0s - 3s)
 
-```
+```text
 [PROMPT — typed at 30ms/char]
 $ /pair-next
 
@@ -31,7 +31,7 @@ Shall I run /pair-process-refine-story #42?
 
 ## Scene 2: /pair-process-refine-story (3s - 12s)
 
-```
+```text
 [PROMPT — typed at 30ms/char]
 $ /pair-process-refine-story #42
 
@@ -77,7 +77,7 @@ STORY REFINEMENT COMPLETE:
 
 ## Scene 3: /pair-process-implement (12s - 22s)
 
-```
+```text
 [PROMPT — typed at 30ms/char]
 $ /pair-process-implement #42
 
@@ -126,7 +126,7 @@ IMPLEMENTATION COMPLETE:
 
 ## Scene 4: Closing (22s - 25s)
 
-```
+```text
 [PROMPT — typed at 30ms/char]
 $ tree .pair/ -L 2
 

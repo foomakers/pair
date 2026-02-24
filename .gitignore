@@ -23,6 +23,6 @@ docs/performance/benchmark-report.json
 **/playwright/.cache/
 **/test-results/
 **/playwright-report/
-scripts/landing-video/demo.cast
-scripts/landing-video/demo.gif
-scripts/landing-video/demo-raw.mp4
+apps/website/scripts/landing-video/demo.cast
+apps/website/scripts/landing-video/demo.gif
+apps/website/scripts/landing-video/demo-raw.mp4

@@ -3,17 +3,17 @@
 #
 # Prerequisites:
 #   brew install ffmpeg
-#   scripts/demo/demo-raw.mp4 must exist (from record.sh)
+#   demo-raw.mp4 must exist (from record.sh)
 #
 # Usage:
-#   bash scripts/demo/postprod.sh
+#   bash apps/website/scripts/landing-video/postprod.sh
 
 set -e
 cd "$(dirname "$0")"
 
 RAW="demo-raw.mp4"
-OUT="../../apps/website/public/demo.mp4"
-POSTER="../../apps/website/public/demo-poster.png"
+OUT="../../public/demo.mp4"
+POSTER="../../public/demo-poster.png"
 
 if [ ! -f "$RAW" ]; then
   echo "Error: $RAW not found. Run record.sh first."

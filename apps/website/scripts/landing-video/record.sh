@@ -5,7 +5,7 @@
 #   brew install asciinema agg ffmpeg
 #
 # Usage:
-#   bash scripts/demo/record.sh
+#   bash apps/website/scripts/landing-video/record.sh
 
 set -e
 cd "$(dirname "$0")"
