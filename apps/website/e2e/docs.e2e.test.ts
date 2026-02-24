@@ -627,3 +627,97 @@ test('smoke: all integrations + pm-tools pages return 200', async ({ page }) => 
     await expect(page).toHaveTitle(new RegExp(title))
   }
 })
+
+// ============================================================
+// E2E: Docs — Contributing section (#129)
+// ============================================================
+
+test('contributing journey: index → development-setup → architecture → writing-skills → writing-guidelines → release-process', async ({
+  page,
+}) => {
+  // Contributing index page
+  await page.goto('/docs/contributing')
+  const main = page.locator('main')
+  await expect(page.locator('main h1')).toContainText('Contributing')
+  await expect(main).toContainText('Ways to contribute')
+  await expect(main).toContainText('Pull request process')
+  await expect(main).toContainText('Expectations')
+
+  // Sidebar shows Contributing section
+  await expect(page.locator('body')).toContainText('Contributing')
+
+  // Navigate to Development Setup via sidebar
+  await page
+    .locator('a', { hasText: /^Development Setup$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/contributing/development-setup')
+  await expect(page.locator('main h1')).toContainText('Development Setup')
+  await expect(main).toContainText('Prerequisites')
+  await expect(main).toContainText('pnpm install')
+  await expect(main).toContainText('pnpm quality-gate')
+  await expect(main).toContainText('Husky')
+
+  // Navigate to Architecture via sidebar
+  await page
+    .locator('a', { hasText: /^Architecture$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/contributing/architecture')
+  await expect(page.locator('main h1')).toContainText('Architecture')
+  await expect(main).toContainText('Monorepo layout')
+  await expect(main).toContainText('@pair/pair-cli')
+  await expect(main).toContainText('@pair/knowledge-hub')
+  await expect(main).toContainText('Data flow')
+
+  // Navigate to Writing Skills via sidebar
+  await page
+    .locator('a', { hasText: /^Writing Skills$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/contributing/writing-skills')
+  await expect(page.locator('main h1')).toContainText('Writing Skills')
+  await expect(main).toContainText('Agent Skills')
+  await expect(main).toContainText('SKILL.md anatomy')
+  await expect(main).toContainText('Composition model')
+  await expect(main.locator('a[href="https://agentskills.io"]').first()).toBeVisible()
+
+  // Navigate to Writing Guidelines via sidebar
+  await page
+    .locator('a', { hasText: /^Writing Guidelines$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/contributing/writing-guidelines')
+  await expect(page.locator('main h1')).toContainText('Writing Guidelines')
+  await expect(main).toContainText('KB structure overview')
+  await expect(main).toContainText('Guideline categories')
+  await expect(main).toContainText('Cross-referencing conventions')
+
+  // Navigate to Release Process via sidebar
+  await page
+    .locator('a', { hasText: /^Release Process$/ })
+    .first()
+    .click()
+  await expect(page).toHaveURL('/docs/contributing/release-process')
+  await expect(page.locator('main h1')).toContainText('Release Process')
+  await expect(main).toContainText('Changesets')
+  await expect(main).toContainText('version.yml')
+  await expect(main).toContainText('Release artifacts')
+})
+
+test('smoke: all contributing pages return 200 with correct titles', async ({ page }) => {
+  const pages = [
+    { url: '/docs/contributing', title: 'Contributing' },
+    { url: '/docs/contributing/development-setup', title: 'Development Setup' },
+    { url: '/docs/contributing/architecture', title: 'Architecture' },
+    { url: '/docs/contributing/writing-skills', title: 'Writing Skills' },
+    { url: '/docs/contributing/writing-guidelines', title: 'Writing Guidelines' },
+    { url: '/docs/contributing/release-process', title: 'Release Process' },
+  ]
+  for (const { url, title } of pages) {
+    const response = await page.goto(url)
+    expect(response?.status(), `${url} should return 200`).toBe(200)
+    await expect(page.locator('main h1')).toBeVisible()
+    await expect(page).toHaveTitle(new RegExp(title))
+  }
+})
