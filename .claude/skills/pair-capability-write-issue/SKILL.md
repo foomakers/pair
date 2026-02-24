@@ -15,6 +15,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 | `$content` | Yes      | Structured content to fill the template — fields map to template sections.                                                                                      |
 | `$id`      | No       | Existing issue identifier. If provided → **update**; if absent → **create**.                                                                                    |
 | `$parent`  | No       | Parent issue identifier for hierarchy linking (e.g., epic → story, story → task).                                                                               |
+| `$status`  | No       | Target status for the project board field (e.g., `Refined`, `In Progress`, `Done`). If provided, updates the project board status field per the implementation guide. |
 
 ## Algorithm
 
@@ -90,7 +91,8 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
    - If not found → **HALT**: `Issue #$id not found.`
    - Update the issue body with the formatted content.
    - Preserve existing labels and hierarchy links unless explicitly changed.
-4. **Verify**: Issue created or updated successfully.
+   - If `$status` is provided, update the project board status field per the implementation guide (e.g., GraphQL mutation for GitHub Projects). This is the **board field**, not the body text.
+4. **Verify**: Issue created or updated successfully. If `$status` was provided, confirm the board field reflects the new status.
 
 ### Step 7: Handle Errors
 
@@ -121,8 +123,8 @@ ISSUE WRITTEN:
 
 When composed by `/pair-process-refine-story`:
 
-- **Input**: `/pair-process-refine-story` invokes `/pair-capability-write-issue` with `$type: story` and `$content` containing the refined story data. Passes `$id` when updating an existing story.
-- **Output**: Returns the issue identifier. `/pair-process-refine-story` uses it for status updates and linking.
+- **Input**: `/pair-process-refine-story` invokes `/pair-capability-write-issue` with `$type: story`, `$content` containing the refined story data, `$id` when updating an existing story, and `$status: Refined` to transition the board field.
+- **Output**: Returns the issue identifier. `/pair-process-refine-story` uses it for linking.
 
 When composed by `/pair-process-plan-tasks`:
 

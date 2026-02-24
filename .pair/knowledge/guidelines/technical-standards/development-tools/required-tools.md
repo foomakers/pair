@@ -53,7 +53,7 @@ git config --global push.autoSetupRemote true
 # nvm (Unix/macOS) or nvm-windows (Windows)
 
 # Install nvm
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
 
 # Install latest LTS Node.js
 nvm install --lts
@@ -340,7 +340,7 @@ fi
 # Install Node.js via nvm
 if ! command -v nvm &> /dev/null; then
     echo "Installing nvm..."
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
     source ~/.bashrc
 fi
 

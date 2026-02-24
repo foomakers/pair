@@ -78,6 +78,7 @@ pnpm lint --filter <package_name>
 
 ## 📚 Key References
 
+- **AI-friendly index**: `.pair/llms.txt` (llmstxt.org — machine-readable knowledge base index)
 - **Project context**: `.pair/product/adopted/PRD.md`
 - **PM tool adoption**: `.pair/tech/adopted/way-of-working.md` (determines which PM tool to use)
 - **PM tool usage**: `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` (tool-specific instructions)
@@ -142,3 +143,4 @@ function isLocalPath(str: string): boolean {
 - **Regression prevention**: Test stays in codebase to catch future breaks
 - **Clarity**: Test documents expected behavior
 - **Confidence**: Linting + tests pass before committing
+
