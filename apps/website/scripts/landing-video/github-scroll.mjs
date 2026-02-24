@@ -24,8 +24,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // ── Config ──────────────────────────────────────────────────────────
 const OUTPUT = join(__dirname, 'github-scroll.webm')
 const VIEWPORT = { width: 1280, height: 720 }
-const SCROLL_DURATION_MS = 4000
-const SCROLL_STEP_PX = 5
+const SCROLL_DURATION_MS = 3000
+const SCROLL_STEP_PX = 8
 const SCROLL_INTERVAL_MS = 16 // ~60fps
 // ────────────────────────────────────────────────────────────────────
 
@@ -183,8 +183,6 @@ for (let i = 0; i < steps; i++) {
   await page.mouse.wheel(0, SCROLL_STEP_PX)
   await page.waitForTimeout(SCROLL_INTERVAL_MS)
 }
-
-await page.waitForTimeout(800)
 
 await context.close()
 await browser.close()
