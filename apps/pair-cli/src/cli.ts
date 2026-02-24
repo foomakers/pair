@@ -220,6 +220,9 @@ function attachPreActionHook(
   ctx: { fsService: FileSystemService; httpClient: HttpClientService; version: string },
 ): void {
   prog.hook('preAction', async thisCommand => {
+    console.log(`\n  ${pairLogo()} ${chalk.dim(`v${ctx.version}`)}`)
+    console.log(`  ${chalk.hex(PAIR_BLUE)('Code is the easy part.')}\n`)
+
     // Skip bootstrap for package command - it doesn't need KB
     const cmdName = thisCommand.name()
     if (cmdName === 'package') return
