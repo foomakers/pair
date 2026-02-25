@@ -132,6 +132,7 @@ if [ $DEPLOY_EXIT -ne 0 ]; then
   exit $DEPLOY_EXIT
 fi
 
+# Extract deploy URL from Vercel CLI output (format may vary across versions)
 DEPLOY_URL=$(echo "$DEPLOY_OUTPUT" | grep -oE 'https://[^ ]+\.vercel\.app' | tail -1)
 
 if [ -z "$DEPLOY_URL" ]; then

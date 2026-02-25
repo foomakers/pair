@@ -157,7 +157,7 @@ pnpm lint --filter <package_name>
 - **No secrets in code** - ask for secure access instructions if needed
 - **Context consistency** - if switching how-to mid-session, explicitly update your session context
 - **Bug fix workflow** - NEVER modify code to fix a bug before creating a test that reproduces it. Test-first debugging ensures the fix actually addresses the problem.
-- **Record decisions** - architectural/project decisions MUST be recorded as ADR or ADL. Use `/record-decision` skill or write to `.pair/tech/adopted/adr/` (architectural) / `.pair/tech/adopted/adl/` (non-architectural).
+- **Record decisions** - architectural/project decisions MUST be recorded as ADR or ADL. Use `/pair-capability-record-decision` skill or write to `.pair/tech/adopted/adr/` (architectural) / `.pair/tech/adopted/adl/` (non-architectural).
 - **Follow templates** - PRs, code reviews, commits, branches, tasks, user stories MUST follow templates in `.pair/knowledge/guidelines/collaboration/templates/` unless adoption files specify otherwise. Key templates: `pr-template.md`, `code-review-template.md`, `commit-template.md`, `branch-template.md`, `task-template.md`, `user-story-template.md`.
 
 ## 🐛 Bug Resolution Workflow
