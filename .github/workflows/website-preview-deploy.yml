@@ -34,6 +34,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Vercel CLI rejects deploys when the commit author email is not in the
+      # Vercel account's verified emails. Amend locally (never pushed) to set
+      # the org email so the deploy succeeds.
       - name: Set git author for Vercel
         run: |
           git config user.email "foomakers42@gmail.com"
