@@ -1,6 +1,8 @@
 ---
 name: pair-process-map-contexts
 description: "Defines DDD bounded contexts from subdomain catalog. Maps subdomains to contexts with integration patterns, produces files in adoption/tech/boundedcontext/ using bounded-context-template.md. Idempotent: detects existing files, creates only missing ones."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-process-map-contexts — Bounded Context Definition

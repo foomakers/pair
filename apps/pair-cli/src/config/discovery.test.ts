@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
-import {
-  getPackageJsonPath,
-  findPackageJsonPath,
-  isInRelease,
-  findManualPairCliPackage,
-  findNpmReleasePackage,
-} from './discovery'
+import { getPackageJsonPath, findPackageJsonPath } from './discovery'
 
 describe('registry discovery', () => {
   const cwd = '/project'
@@ -42,12 +36,12 @@ describe('registry discovery', () => {
     expect(() => findPackageJsonPath(fs, cwd)).toThrow(/Unable to find/)
   })
 
-  it('isInRelease returns true when no dev package.json found', async () => {
+  it('getPackageJsonPath returns null when no dev package.json found', async () => {
     const fs = new InMemoryFileSystemService({}, cwd, cwd)
-    expect(isInRelease(fs, cwd)).toBe(true)
+    expect(getPackageJsonPath(fs, cwd)).toBeNull()
   })
 
-  it('isInRelease returns false when dev package.json found', async () => {
+  it('getPackageJsonPath returns non-null when dev package.json found', async () => {
     const fs = new InMemoryFileSystemService(
       {
         [`${cwd}/packages/knowledge-hub/package.json`]: '{"name":"kh"}',
@@ -55,34 +49,6 @@ describe('registry discovery', () => {
       cwd,
       cwd,
     )
-    expect(isInRelease(fs, cwd)).toBe(false)
-  })
-
-  it('findNpmReleasePackage finds root with bundle-cli', async () => {
-    const fs = new InMemoryFileSystemService(
-      {
-        [`${cwd}/package.json`]: '{"name":"@foomakers/pair-cli"}',
-        [`${cwd}/bundle-cli/dataset/README.md`]: 'data',
-      },
-      cwd,
-      cwd,
-    )
-
-    const result = findNpmReleasePackage(fs, cwd)
-    expect(result).toBe(cwd)
-  })
-
-  it('findManualPairCliPackage uses BFS to find manual bundle', async () => {
-    const fs = new InMemoryFileSystemService(
-      {
-        [`${cwd}/pair-cli/package.json`]: '{"name":"@pair/pair-cli"}',
-        [`${cwd}/pair-cli/bundle-cli/dataset/README.md`]: 'data',
-      },
-      cwd,
-      cwd,
-    )
-
-    const result = findManualPairCliPackage(fs, cwd)
-    expect(result).toBe(`${cwd}/pair-cli`)
+    expect(getPackageJsonPath(fs, cwd)).not.toBeNull()
   })
 })

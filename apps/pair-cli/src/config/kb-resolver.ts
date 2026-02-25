@@ -1,11 +1,6 @@
 import { join, dirname, resolve } from 'path'
 import { FileSystemService, HttpClientService, validateKBStructure } from '@pair/content-ops'
-import {
-  isInRelease,
-  findNpmReleasePackage,
-  findManualPairCliPackage,
-  findPackageJsonPath,
-} from './discovery'
+import { findPackageJsonPath } from './discovery'
 import { isKBCached, ensureKBAvailable } from '#kb-manager'
 import { installKBFromLocalZip } from '#kb-manager/kb-installer'
 import { isDiagEnabled } from '#diagnostics'
@@ -18,22 +13,9 @@ export function getKnowledgeHubDatasetPath(fsService: FileSystemService): string
   const DIAG = isDiagEnabled()
 
   if (DIAG) console.error(`[diag] getKnowledgeHubDatasetPath currentDir=${currentDir}`)
-  if (DIAG) console.error(`[diag] isInRelease=${isInRelease(fsService, currentDir)}`)
 
-  if (isInRelease(fsService, currentDir)) {
-    const npmPackage = findNpmReleasePackage(fsService, currentDir)
-
-    if (npmPackage) {
-      return join(npmPackage, 'bundle-cli', 'dataset')
-    }
-    const manualPackage = findManualPairCliPackage(fsService, currentDir)
-    if (manualPackage) {
-      return join(manualPackage, 'bundle-cli', 'dataset')
-    }
-    throw new Error(`Release bundle not found inside: ${currentDir}`)
-  }
-
-  // In monorepo/development, find via node_modules or monorepo packages
+  // In monorepo/development, find via node_modules or monorepo packages.
+  // In release context this throws, tryMonorepoDatasetPath catches → download kicks in.
   const pkgPath = findPackageJsonPath(fsService, currentDir)
   const datasetPath = join(dirname(pkgPath), 'dataset')
   if (DIAG)
@@ -45,18 +27,18 @@ export function getKnowledgeHubDatasetPath(fsService: FileSystemService): string
   return datasetPath
 }
 
-async function tryLocalDatasetPath(
+async function tryMonorepoDatasetPath(
   fsService: FileSystemService,
   DIAG: boolean,
 ): Promise<string | null> {
   try {
     const localDatasetPath = getKnowledgeHubDatasetPath(fsService)
     if (fsService.existsSync(localDatasetPath)) {
-      if (DIAG) console.error(`[diag] Using local dataset: ${localDatasetPath}`)
+      if (DIAG) console.error(`[diag] Using monorepo dataset: ${localDatasetPath}`)
       return localDatasetPath
     }
   } catch (err) {
-    if (DIAG) console.error(`[diag] Local dataset not found: ${String(err)}`)
+    if (DIAG) console.error(`[diag] Monorepo dataset not found: ${String(err)}`)
   }
   return null
 }
@@ -92,7 +74,7 @@ async function downloadKBIfNeeded(options: {
     fs: fsService,
     ...(customUrl && { customUrl }),
   })
-  return join(kbPath, 'dataset')
+  return kbPath
 }
 
 /**
@@ -116,7 +98,7 @@ export async function getKnowledgeHubDatasetPathWithFallback(options: {
   } = options
   const DIAG = isDiagEnabled()
 
-  const localPath = await tryLocalDatasetPath(fsService, DIAG)
+  const localPath = await tryMonorepoDatasetPath(fsService, DIAG)
   if (localPath) return localPath
 
   return downloadKBIfNeeded({
@@ -164,6 +146,26 @@ async function resolveLocalDataset(
   return resolved
 }
 
+async function resolveDefaultDataset(
+  fs: FileSystemService,
+  version: string,
+  httpClient?: HttpClientService,
+): Promise<string> {
+  if (httpClient) {
+    return getKnowledgeHubDatasetPathWithFallback({
+      fsService: fs,
+      httpClient,
+      version,
+    })
+  }
+  const localPath = await tryMonorepoDatasetPath(fs, isDiagEnabled())
+  if (localPath) return localPath
+  throw new Error(
+    'Knowledge base dataset not found locally and no network client available. ' +
+      'Use --source <path> to provide a local KB directory or .zip file.',
+  )
+}
+
 /**
  * Resolves the dataset root path based on a command config's resolution strategy.
  * Supports default (local monorepo), remote (download with fallback), and local (directory or .zip).
@@ -177,7 +179,7 @@ export async function resolveDatasetRoot(
 
   switch (config.resolution) {
     case 'default':
-      return getKnowledgeHubDatasetPath(fs)
+      return resolveDefaultDataset(fs, version, options?.httpClient)
 
     case 'remote': {
       if (!options?.httpClient) {

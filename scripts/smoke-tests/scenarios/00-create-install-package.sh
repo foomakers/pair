@@ -19,8 +19,12 @@ if [ -z "${TMP_DIR:-}" ]; then
   mkdir -p "$TMP_DIR"
 fi
 
-# Choose a deterministic-ish version unless provided
-VERSION="${VERSION:-vmanual-smoke-$(date +%s)}"
+# Use the real CLI version so auto-download from GitHub releases works.
+# Fall back to a timestamp-based version only if package.json is missing.
+if [ -z "${VERSION:-}" ]; then
+  REAL_VERSION=$(node -e "console.log(require('$REPO_ROOT/apps/pair-cli/package.json').version)" 2>/dev/null || echo "")
+  VERSION="${REAL_VERSION:-vmanual-smoke-$(date +%s)}"
+fi
 PACKAGE_SCRIPT="$REPO_ROOT/scripts/workflows/release/package-manual.sh"
 
 log_info "Preflight: running package script in --dry-run mode for version $VERSION"
@@ -32,8 +36,7 @@ if ! "$PACKAGE_SCRIPT" --dry-run "$VERSION"; then
 fi
 
 log_info "Packaging real artifact for version $VERSION"
-# Include the local knowledge-hub dataset inside the bundle to avoid network fetches during smoke tests
-if ! INCLUDE_DATASET=1 "$PACKAGE_SCRIPT" "$VERSION"; then
+if ! "$PACKAGE_SCRIPT" "$VERSION"; then
   log_fail "package-manual.sh failed"
   exit 1
 fi

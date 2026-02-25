@@ -1,6 +1,8 @@
 ---
 name: setup-pm
 description: "Configures the project management tool by guiding selection from supported options, applying the implementation guide, updating way-of-working adoption, and recording the decision via /record-decision. Idempotent — detects existing configuration."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /setup-pm — PM Tool Configuration

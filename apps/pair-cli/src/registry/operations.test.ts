@@ -420,3 +420,39 @@ describe('postCopyOps', () => {
     expect(result).toBe('# Content')
   })
 })
+
+/**
+ * BUG #03: doCopyAndUpdateLinks silently skips missing source
+ *
+ * When a registry source path does not exist, doCopyAndUpdateLinks used to log a
+ * warning and return {} — the caller had no way to know the registry was skipped.
+ * Now it returns { skipped: true, reason: string } so the caller can decide.
+ */
+describe('BUG #03: doCopyAndUpdateLinks must signal missing source', () => {
+  it('returns skipped=true when source path does not exist', async () => {
+    const fs = createTestFs({}, {}, '/test')
+
+    const result = await doCopyAndUpdateLinks(fs, {
+      source: 'nonexistent-registry',
+      target: 'dst',
+      datasetRoot: '/dataset',
+    })
+
+    expect(result).toHaveProperty('skipped', true)
+    expect(result).toHaveProperty('reason')
+    expect(String(result['reason'])).toContain('nonexistent-registry')
+  })
+
+  it('returns skipped result with the missing absolute path', async () => {
+    const fs = createTestFs({}, {}, '/test')
+
+    const result = await doCopyAndUpdateLinks(fs, {
+      source: '/absolute/missing/path',
+      target: '/test/dst',
+      datasetRoot: '/dataset',
+    })
+
+    expect(result).toHaveProperty('skipped', true)
+    expect(String(result['reason'])).toContain('/absolute/missing/path')
+  })
+})

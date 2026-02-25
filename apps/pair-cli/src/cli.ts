@@ -107,6 +107,9 @@ export async function runCli(
 export async function main() {
   try {
     await runCli(process.argv)
+    // exitOverride() prevents Commander from calling process.exit() automatically.
+    // Force exit so open handles (e.g. HTTP sockets from KB download) don't hang.
+    process.exit(0)
   } catch (err: unknown) {
     // Handling Commander specific errors (like --help or invalid command)
     // that should not result in a red "failed" message if they are just info requests.
@@ -201,7 +204,14 @@ function setupCommands(prog: Command, deps: CommandDeps): void {
     registerCommandFromMetadata(prog, name as keyof typeof commandRegistry, deps)
   })
 
-  prog.action(() => {
+  prog.action((...actionArgs: unknown[]) => {
+    const cmd = actionArgs[actionArgs.length - 1] as Command
+    const unknownArgs = cmd.args
+    if (unknownArgs.length > 0) {
+      throw new Error(
+        `Unknown command: ${unknownArgs[0]}\n\n  Run pair --help to see available commands.`,
+      )
+    }
     console.log(`  ${chalk.dim('Run')} pair --help ${chalk.dim('to see available commands.')}`)
     console.log(
       `  ${chalk.dim('Run')} pair install --list-targets ${chalk.dim('to see asset registries.')}\n`,
@@ -213,12 +223,19 @@ function attachPreActionHook(
   prog: Command,
   ctx: { fsService: FileSystemService; httpClient: HttpClientService; version: string },
 ): void {
-  prog.hook('preAction', async thisCommand => {
-    console.log(`\n  ${pairLogo()} ${chalk.dim(`v${ctx.version}`)}`)
-    console.log(`  ${chalk.hex(PAIR_BLUE)('Code is the easy part.')}\n`)
+  prog.hook('preAction', async (thisCommand, actionCommand) => {
+    // Suppress banner when --json is active (machine-readable output)
+    const subOpts = actionCommand.opts<{ json?: boolean }>()
+    if (!subOpts.json) {
+      console.log(`\n  ${pairLogo()} ${chalk.dim(`v${ctx.version}`)}`)
+      console.log(`  ${chalk.hex(PAIR_BLUE)('Code is the easy part.')}\n`)
+    }
+
+    // Skip bootstrap for root command (no subcommand matched)
+    if (thisCommand === prog) return
 
     // Skip bootstrap for package command - it doesn't need KB
-    const cmdName = thisCommand.name()
+    const cmdName = actionCommand.name()
     if (cmdName === 'package') return
 
     // Apply global log level or legacy --verbose alias if provided

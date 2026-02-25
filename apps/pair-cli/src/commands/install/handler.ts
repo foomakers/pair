@@ -1,6 +1,7 @@
 import type { InstallCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
-import { dirname } from 'path'
+import { dirname, join } from 'path'
+import chalk from 'chalk'
 import { loadConfigWithOverrides, resolveDatasetRoot, ensureDir } from '#config'
 import { createLogger, type LogEntry } from '#diagnostics'
 import {
@@ -10,7 +11,6 @@ import {
   resolveRegistryPaths,
   forEachRegistry,
   detectOverlappingTargets,
-  checkTargetsEmptiness,
   doCopyAndUpdateLinks,
   buildCopyOptions,
   postCopyOps,
@@ -54,7 +54,15 @@ export async function handleInstallCommand(
   const presenter = options?.presenter ?? createCliPresenter(pushLog)
 
   try {
-    const { datasetRoot, registries, baseTarget } = await setupInstallContext(fs, config, options)
+    if (config.resolution === 'list-targets') {
+      return listTargets(fs, options)
+    }
+    const { datasetRoot, registries, baseTarget } = await setupInstallContext(
+      fs,
+      config as InstallableConfig,
+      options,
+    )
+    validateDatasetContent(fs, datasetRoot, registries)
     await validateInstallContext(fs, registries, baseTarget)
     await executeInstall({ fs, datasetRoot, registries, baseTarget, options, pushLog, presenter })
   } catch (err) {
@@ -63,9 +71,34 @@ export async function handleInstallCommand(
   }
 }
 
+async function listTargets(
+  fs: FileSystemService,
+  options: InstallHandlerOptions | undefined,
+): Promise<void> {
+  const configOptions: { customConfigPath?: string; projectRoot?: string } = {}
+  if (options?.config) configOptions.customConfigPath = options.config
+  const configContent = loadConfigWithOverrides(fs, configOptions)
+  const registries = extractRegistries(configContent.config)
+
+  console.log(`\n  ${chalk.bold('Asset Registries')}\n`)
+  for (const [name, reg] of Object.entries(registries)) {
+    const target = reg.targets?.[0]
+    const targetPath = target ? (target as { path: string }).path : '(none)'
+    const behavior = (reg as { behavior?: string }).behavior ?? 'unknown'
+    const description = (reg as { description?: string }).description ?? ''
+    console.log(`  ${chalk.cyan(name)}`)
+    console.log(`    target:   ${targetPath}`)
+    console.log(`    behavior: ${behavior}`)
+    if (description) console.log(`    ${chalk.dim(description)}`)
+    console.log()
+  }
+}
+
+type InstallableConfig = Exclude<InstallCommandConfig, { resolution: 'list-targets' }>
+
 async function setupInstallContext(
   fs: FileSystemService,
-  config: InstallCommandConfig,
+  config: InstallableConfig,
   options?: InstallHandlerOptions,
 ): Promise<{
   datasetRoot: string
@@ -90,18 +123,46 @@ async function setupInstallContext(
   return { datasetRoot, registries, baseTarget }
 }
 
+function validateDatasetContent(
+  fs: FileSystemService,
+  datasetRoot: string,
+  registries: Record<string, RegistryConfig>,
+): void {
+  // Match resolveRegistryPaths logic: check direct name path first, then config.source
+  const hasContent = Object.entries(registries).some(
+    ([name, reg]) =>
+      fs.existsSync(join(datasetRoot, name)) || fs.existsSync(join(datasetRoot, reg.source)),
+  )
+  if (!hasContent) {
+    const sources = Object.values(registries)
+      .map(r => r.source)
+      .join(', ')
+    throw new Error(`Dataset root has no content for configured registries (expected: ${sources})`)
+  }
+}
+
 async function validateInstallContext(
   fs: FileSystemService,
   registries: Record<string, RegistryConfig>,
   baseTarget: string,
 ): Promise<void> {
-  const targetValidation = await validateAllTargetsBeforeInstall(fs, registries, baseTarget)
-  if (!targetValidation.valid) {
-    throw new Error(targetValidation.error || 'Target validation failed')
+  const targets: Record<string, string> = {}
+  for (const [name, config] of Object.entries(registries)) {
+    const target = resolveTarget(name, config, fs, baseTarget)
+    targets[name] = target
+    if (fs.existsSync(target)) {
+      throw new Error(
+        `Target '${target}' already exists. Project already installed. Use 'pair update' to update.`,
+      )
+    }
+  }
+  const overlapping = detectOverlappingTargets(targets)
+  if (overlapping.length > 0) {
+    throw new Error(`Overlapping registry targets detected: ${overlapping.join('; ')}`)
   }
 }
 
-async function installRegistry(ctx: {
+type RegistryInstallCtx = {
   fs: FileSystemService
   registryName: string
   registryConfig: RegistryConfig
@@ -111,8 +172,10 @@ async function installRegistry(ctx: {
   presenter: CliPresenter
   index: number
   total: number
-}): Promise<{ skillNameMap?: SkillNameMap | undefined; result: RegistryResult }> {
-  const { fs, registryName, registryConfig, datasetRoot, baseTarget, presenter, index, total } = ctx
+}
+
+function resolveRegistryIO(ctx: RegistryInstallCtx) {
+  const { registryName, registryConfig, datasetRoot, fs, baseTarget } = ctx
   const resolved = resolveRegistryPaths({
     name: registryName,
     config: registryConfig,
@@ -120,12 +183,21 @@ async function installRegistry(ctx: {
     fs,
     baseTarget,
   })
-  const datasetPath = resolved.source
-  const effectiveTarget = resolved.target
-  await ensureDir(fs, dirname(effectiveTarget))
-  const copyOptions = buildCopyOptions(registryConfig)
-
   const effectiveDatasetRoot = resolveEffectiveDatasetRoot(registryConfig, baseTarget, datasetRoot)
+  return { source: resolved.source, target: resolved.target, effectiveDatasetRoot }
+}
+
+async function installRegistry(ctx: RegistryInstallCtx): Promise<{
+  skillNameMap?: SkillNameMap | undefined
+  result: RegistryResult
+}> {
+  const { fs, registryName, registryConfig, baseTarget, pushLog, presenter, index, total } = ctx
+  const {
+    source: datasetPath,
+    target: effectiveTarget,
+    effectiveDatasetRoot,
+  } = resolveRegistryIO(ctx)
+  await ensureDir(fs, dirname(effectiveTarget))
 
   presenter.registryStart({
     name: registryName,
@@ -138,8 +210,13 @@ async function installRegistry(ctx: {
     source: datasetPath,
     target: effectiveTarget,
     datasetRoot: effectiveDatasetRoot,
-    options: copyOptions,
+    options: buildCopyOptions(registryConfig),
   })
+
+  if (copyResult['skipped']) {
+    pushLog('warn', `Registry '${registryName}' skipped: source not found at ${datasetPath}`)
+    return { result: { name: registryName, target: effectiveTarget, ok: false } }
+  }
 
   await postCopyOps({ fs, registryConfig, effectiveTarget, datasetPath, baseTarget })
   presenter.registryDone(registryName)
@@ -206,36 +283,4 @@ async function executeInstall(context: InstallContext): Promise<void> {
   await writeProjectLlmsTxt(fs, baseTarget, pushLog)
 
   presenter.summary(results, 'install', Date.now() - startTime)
-}
-
-/**
- * Validate all targets are empty before installation
- */
-async function validateAllTargetsBeforeInstall(
-  fs: FileSystemService,
-  registries: Record<string, RegistryConfig>,
-  baseTarget: string,
-): Promise<{ valid: boolean; error?: string }> {
-  const targets: Record<string, string> = {}
-
-  for (const [registryName, registryConfig] of Object.entries(registries)) {
-    const effectiveTarget = resolveTarget(registryName, registryConfig, fs, baseTarget)
-    targets[registryName] = effectiveTarget
-  }
-
-  const overlapping = detectOverlappingTargets(targets)
-  if (overlapping.length > 0) {
-    return {
-      valid: false,
-      error: `Overlapping registry targets detected: ${overlapping.join('; ')}`,
-    }
-  }
-
-  const emptyCheck = await checkTargetsEmptiness(targets, fs)
-  if (!emptyCheck.valid && emptyCheck.errors.length > 0) {
-    const errorMsg = emptyCheck.errors.map(e => `${e.registry}: ${e.error}`).join('; ')
-    return { valid: false, error: errorMsg }
-  }
-
-  return { valid: true }
 }

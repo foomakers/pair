@@ -35,7 +35,7 @@ assert_success || exit 1
 assert_file "pkg-default.zip"
 
 # Verify zip content (simple check)
-if unzip -l pkg-default.zip | grep -q "manifest.json"; then
+if unzip -l pkg-default.zip | grep "manifest.json" > /dev/null 2>&1; then
   log_succ "Zip contains manifest.json"
 else
   log_fail "Zip missing manifest.json"

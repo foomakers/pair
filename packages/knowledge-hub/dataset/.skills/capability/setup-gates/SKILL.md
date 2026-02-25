@@ -1,6 +1,8 @@
 ---
 name: setup-gates
 description: "Configures CI/CD quality gates per quality-assurance guidelines, producing pipeline configuration for the adopted tech stack. Reads existing gate config from way-of-working. Idempotent: detects existing configuration, confirms rather than re-configuring."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /setup-gates — Quality Gate Configuration

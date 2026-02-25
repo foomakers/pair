@@ -1,6 +1,8 @@
 ---
 name: pair-process-plan-stories
 description: "Breaks epics into user stories using vertical slicing and INVEST validation. Composes /pair-capability-write-issue with $type: story. Idempotent: detects existing stories, creates only missing ones."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-process-plan-stories — User Story Breakdown

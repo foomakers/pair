@@ -1,5 +1,6 @@
 import type { ValidateConfigCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
+import chalk from 'chalk'
 import { loadConfigWithOverrides } from '#config'
 import { extractRegistries, validateAllRegistries, type RegistryConfig } from '#registry'
 
@@ -43,4 +44,7 @@ export async function handleValidateConfigCommand(
     const errorMessages = validation.errors.join('\n  - ')
     throw new Error(`Configuration validation failed:\n  - ${errorMessages}`)
   }
+
+  const regCount = Object.keys(registries).length
+  console.log(chalk.green(`✓ Configuration valid (${regCount} registries)`))
 }

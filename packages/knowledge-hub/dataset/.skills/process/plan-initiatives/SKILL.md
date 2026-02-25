@@ -1,6 +1,8 @@
 ---
 name: plan-initiatives
 description: "Creates strategic initiatives from PRD analysis. Prioritizes by business impact (P0/P1/P2), composes /write-issue with $type: initiative. Idempotent: detects existing initiatives, creates only missing ones."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /plan-initiatives — Strategic Initiative Creation

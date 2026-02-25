@@ -40,6 +40,9 @@ export function verifyStructure(
 
   // Check each required registry path
   for (const registryPath of requiredPaths) {
+    // Root registry "." always passes — it means the ZIP root IS the registry
+    if (registryPath === '.') continue
+
     // Check if directory exists in ZIP (exact match or as subdirectory)
     const found = zipDirsList.some(dir => {
       return (

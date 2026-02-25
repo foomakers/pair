@@ -118,7 +118,9 @@ Requires: `ncc` (`@vercel/ncc`), `dts-bundle-generator`, `zip`, `sha256sum`/`sha
 
 The release produces a `.tgz` for publishing to GitHub Packages.
 
-### CI authentication (recommended)
+### CI authentication (publishing)
+
+Publishing requires `write:packages` scope. The workflow uses `GITHUB_TOKEN` automatically:
 
 ```yaml
 env:
@@ -128,12 +130,13 @@ run: |
   echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
 ```
 
-### Consumer authentication (PAT)
+### Consumer installation
 
-```text
-# ~/.npmrc (do not commit with token in plaintext)
+The repository is **public** — no authentication token is required to install packages. Consumers only need registry configuration:
+
+```ini
+# ~/.npmrc
 @foomakers:registry=https://npm.pkg.github.com/
-//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
 ```
 
 ## Repository Configuration

@@ -1,6 +1,8 @@
 ---
 name: bootstrap
 description: "Orchestrates full project setup: PRD verification, project categorization, checklist completion, standards generation, quality gate setup, and PM tool configuration. Composes /specify-prd, /setup-pm, /record-decision, and assess-* (optional). Idempotent — detects completed phases and resumes."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /bootstrap — Project Bootstrap

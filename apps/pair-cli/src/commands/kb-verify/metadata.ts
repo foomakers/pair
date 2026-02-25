@@ -11,6 +11,7 @@ export const kbVerifyCommandMetadata = {
     'pair kb-verify dist/kb-v1.0.0.zip               # Verify package at specific path',
   ],
   options: [
+    { flags: '<package-path>', description: 'Path to the KB package ZIP file' },
     { flags: '--json', description: 'Output verification report as JSON' },
     {
       flags: '-l, --log-level <level>',

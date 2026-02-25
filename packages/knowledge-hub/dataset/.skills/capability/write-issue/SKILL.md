@@ -1,6 +1,8 @@
 ---
 name: write-issue
 description: "Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Invocable independently or composed by /refine-story, /plan-tasks, /plan-initiatives, /plan-epics, and /plan-stories."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /write-issue — PM Tool Issue Writer

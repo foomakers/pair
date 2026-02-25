@@ -1,6 +1,6 @@
 {
   "name": "@pair/website",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Pair documentation and landing page website",
   "type": "module",
@@ -15,6 +15,7 @@
     "a11y:report:html": "playwright test -c playwright-ct.config.ts --grep @a11y-report --reporter=html && echo '\n→ Report: playwright-report/index.html\n  Open: npx playwright show-report'",
     "test": "vitest run && pnpm ct",
     "test:coverage": "vitest run --coverage",
+    "postinstall": "fumadocs-mdx",
     "ts:check": "tsc --noEmit",
     "lint": "eslint . --config eslint.config.cjs",
     "lint:fix": "eslint . --config eslint.config.cjs --fix",

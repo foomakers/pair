@@ -26,7 +26,7 @@ assert_success || exit 1
 log_info "Test 2: Validate target layout after install"
 TEST_DIR=$(setup_workspace "kb-validate-target")
 cd "$TEST_DIR"
-KB_SOURCE_PATH="$KB_SOURCE_PATH" run_pair install
+run_pair install --source "$KB_SOURCE_PATH"
 assert_success || exit 1
 run_pair kb-validate --layout target --ignore-config
 assert_success || exit 1

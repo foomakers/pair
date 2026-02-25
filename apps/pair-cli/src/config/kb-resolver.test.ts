@@ -6,6 +6,68 @@ import {
   resolveDatasetRoot,
 } from './kb-resolver'
 
+describe('Release context always downloads KB (no bundled dataset)', () => {
+  it('default resolution in release context triggers download', async () => {
+    // Simulate release package: no monorepo packages, no bundle-cli/dataset
+    const moduleDir = '/opt/pair-cli'
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/package.json`]: JSON.stringify({
+          name: '@foomakers/pair-cli',
+          version: '0.4.1',
+        }),
+      },
+      moduleDir,
+      moduleDir,
+    )
+
+    const httpClient = new MockHttpClientService()
+    const mockEnsure = vi.fn().mockResolvedValue('/cached/kb/0.4.1')
+
+    // In release context, getKnowledgeHubDatasetPath throws (no monorepo),
+    // so tryLocalDatasetPath returns null, and download kicks in.
+    const result = await getKnowledgeHubDatasetPathWithFallback({
+      fsService: fs,
+      httpClient,
+      version: '0.4.1',
+      ensureKBAvailableFn: mockEnsure,
+      isKBCachedFn: async () => false,
+    })
+
+    expect(result).toBeDefined()
+    expect(mockEnsure).toHaveBeenCalled()
+  })
+
+  it('default resolution never returns bundle-cli/dataset path', async () => {
+    const moduleDir = '/opt/pair-cli'
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/package.json`]: JSON.stringify({
+          name: '@foomakers/pair-cli',
+          version: '0.4.1',
+        }),
+        [`${moduleDir}/bundle-cli/index.js`]: 'module.exports = {}',
+      },
+      moduleDir,
+      moduleDir,
+    )
+
+    const httpClient = new MockHttpClientService()
+    const mockEnsure = vi.fn().mockResolvedValue('/cached/kb/0.4.1')
+
+    const result = await getKnowledgeHubDatasetPathWithFallback({
+      fsService: fs,
+      httpClient,
+      version: '0.4.1',
+      ensureKBAvailableFn: mockEnsure,
+      isKBCachedFn: async () => false,
+    })
+
+    expect(result).not.toContain('bundle-cli/dataset')
+    expect(mockEnsure).toHaveBeenCalled()
+  })
+})
+
 describe('kb-resolver', () => {
   const cwd = '/project'
 
@@ -53,7 +115,7 @@ describe('kb-resolver', () => {
       isKBCachedFn: async () => false,
     })
 
-    expect(result).toBe('/cached/path/dataset')
+    expect(result).toBe('/cached/path')
     expect(mockEnsure).toHaveBeenCalled()
   })
 })
@@ -177,5 +239,22 @@ describe('resolveDatasetRoot', () => {
       fs,
       false,
     )
+  })
+
+  it('default resolution without httpClient throws descriptive error when local missing', async () => {
+    // Simulate release context: no monorepo packages, no bundle-cli, no httpClient
+    const moduleDir = '/opt/pair-cli'
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/package.json`]: JSON.stringify({
+          name: '@foomakers/pair-cli',
+          version: '0.4.1',
+        }),
+      },
+      moduleDir,
+      moduleDir,
+    )
+
+    await expect(resolveDatasetRoot(fs, { resolution: 'default' })).rejects.toThrow('Use --source')
   })
 })

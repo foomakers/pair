@@ -8,6 +8,10 @@
 [![Release](https://github.com/foomakers/pair/actions/workflows/release.yml/badge.svg)](https://github.com/foomakers/pair/actions/workflows/release.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+<a href="https://pair.foomakers.com">
+  <img alt="pair demo" src="apps/website/public/demo.gif" width="100%">
+</a>
+
 ## Quick Start
 
 ```bash
@@ -19,7 +23,7 @@ This installs the pair Knowledge Base into your project. Your AI assistant reads
 ## What You Get
 
 - **Knowledge Base** — guidelines, how-to guides, and templates for every SDLC phase
-- **Agent Skills** — 30 idempotent workflows following the [agentskills.io](https://agentskills.io) open standard
+- **Agent Skills** — 33 idempotent workflows following the [agentskills.io](https://agentskills.io) open standard
 - **Adoption Files** — project-specific decisions (architecture, tech stack, way of working)
 - **AI-friendly index** — `.pair/llms.txt` for machine-readable KB discovery ([llmstxt.org](https://llmstxt.org))
 
@@ -35,7 +39,7 @@ Resources managed by pair in this repo:
 | `.pair/adoption/tech/` | Architecture, tech stack, infrastructure, way of working, 7 ADRs |
 | `.pair/adoption/product/` | PRD, subdomain model |
 | `.pair/adoption/decision-log/` | Non-architectural decision records |
-| `.claude/skills/` | 31 Agent Skills — process workflows (implement, review, refine) and capabilities (quality gates, estimation, debt assessment) |
+| `.claude/skills/` | 33 Agent Skills — process workflows (implement, review, refine) and capabilities (quality gates, estimation, manual testing, debt assessment) |
 | `AGENTS.md` | Universal agent entry point linking to `.pair/` |
 
 ## Documentation

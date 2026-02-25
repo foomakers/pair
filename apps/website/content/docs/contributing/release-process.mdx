@@ -98,6 +98,24 @@ gh workflow run "Version (Changesets)" --ref main
 gh workflow run "Release" --ref main -f version="v1.0.0"
 ```
 
+## Post-release validation
+
+After a release is published, run the manual test suite to validate all artifacts:
+
+```text
+/pair-capability-execute-manual-tests
+```
+
+This executes the test cases in `qa/release-validation/` against the live release — website, CLI binaries, KB dataset, and registry packages. The report is written to `.tmp/manual-test-reports/`.
+
+If no test suite exists yet, create one first:
+
+```text
+/pair-capability-design-manual-tests
+```
+
+See the [Release Testing tutorial](/docs/tutorials/release-testing) for a full walkthrough.
+
 ## Rollback
 
 If a release needs to be reverted:

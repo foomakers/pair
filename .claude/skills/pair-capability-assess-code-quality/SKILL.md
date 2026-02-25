@@ -1,6 +1,8 @@
 ---
 name: pair-capability-assess-code-quality
 description: "Assesses code quality using resolution cascade (Argument > Adoption > Assessment). Applies quality score formula from code-metrics guidelines. Produces quality report with complexity, size, coverage, and maintainability metrics. Idempotent: detects existing report, checks staleness. Invocable independently or composed by /pair-process-review."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-capability-assess-code-quality — Code Quality Assessment

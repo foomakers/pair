@@ -304,6 +304,15 @@ Systematic manual verification processes ensuring human judgment, usability vali
 - **Regression Testing** - Manual verification of automated test gaps
 - **User Feedback Integration** - Real user input in verification process
 
+### **Relationship with Manual Testing Guidelines**
+
+This framework defines **who** verifies, **when** in the SDLC, and **which areas** require human judgment. For the operational mechanics of **how** to design, structure, and execute repeatable manual test cases (test case format, critical path grouping, AI-assisted execution, report generation), see [manual-testing.md](manual-testing.md).
+
+The two are complementary:
+
+- **Manual Verification** (this file) → organizational framework: roles, gates, review checklists, process phases
+- **Manual Testing** → execution mechanics: test case design, variable-driven templates, critical path prioritization, suite maintenance
+
 ## 📈 **SUCCESS METRICS**
 
 - **Issue Detection Rate**: Manual verification finds 90%+ of usability issues

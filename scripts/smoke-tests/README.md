@@ -20,7 +20,7 @@ The tests cover the following functional areas, mapped to the official documenta
 
 This scenario performs the _initial_ packaging preflight and **is executed first** by the runner to guarantee a packaged CLI is available for the offline/lifecycle scenarios. It:
 
-- Runs the release packaging flow with `INCLUDE_DATASET=1` (to allow offline lifecycle testing),
+- Runs the release packaging flow (no bundled dataset — KB is auto-downloaded at runtime),
 - Extracts and copies the produced artifact into `$TMP_DIR/artifacts/pair-cli-manual-<version>` so the artifact is self-contained for the duration of the test run,
 - Writes the absolute path of the packaged CLI wrapper into `$TMP_DIR/packaged-cli` (the runner and `ensure_packaged_cli` will use this), and
 - Runs `scenarios/lifecycle-kb.sh` once using the packaged CLI as a sanity check.

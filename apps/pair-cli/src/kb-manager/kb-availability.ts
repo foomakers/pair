@@ -1,6 +1,6 @@
 import type { FileSystemService, HttpClientService, RetryOptions } from '@pair/content-ops'
 import { detectSourceType, SourceType } from '@pair/content-ops'
-import { join } from 'path'
+
 import { type ProgressWriter } from '@pair/content-ops/http'
 import cacheManager from './cache-manager'
 import urlUtils from './url-utils'
@@ -41,12 +41,7 @@ export async function ensureKBAvailable(version: string, deps: KBManagerDeps): P
   const cached = await isKBCached(version, fs)
 
   if (cached) {
-    // Prefer returning dataset root when .pair exists so callers can resolve
-    // registry paths like `dataset`/`knowledge` correctly.
-    const datasetRoot = fs.existsSync(join(cachePath, '.pair'))
-      ? join(cachePath, '.pair')
-      : cachePath
-    return datasetRoot
+    return cachePath
   }
 
   const sourceUrl = deps.customUrl || urlUtils.buildGithubReleaseUrl(version)

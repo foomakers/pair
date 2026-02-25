@@ -1,6 +1,8 @@
 ---
 name: map-subdomains
 description: "Defines DDD subdomains from PRD and initiatives. Classifies as core/supporting/generic, produces subdomain files in adoption/product/subdomain/ using subdomain-template.md. Idempotent: detects existing files, creates only missing ones."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /map-subdomains — Subdomain Definition

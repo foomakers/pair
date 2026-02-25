@@ -198,21 +198,7 @@ if [ -f "$PKG_DIR/dist/cli.js" ]; then
   else
     (cd "$PKG_DIR" && npx @vercel/ncc build "dist/cli.js" -o "$RELEASE_DIR/bundle-cli" --source-map) || { echo "ncc bundling failed"; exit 1; }
   fi
-  
-  # Optionally include the knowledge-hub dataset in the bundle (useful for smoke tests).
-  # Controlled via INCLUDE_DATASET=1 environment variable so CI or local smoke scenarios can opt-in.
-  if [ "${INCLUDE_DATASET:-}" = "1" ]; then
-    if [ -d "$ROOT_DIR/packages/knowledge-hub/dataset" ]; then
-      if [ "$DRY_RUN" = true ]; then
-        echo "[dry-run] would copy dataset to $RELEASE_DIR/bundle-cli/"
-      else
-        cp -R "$ROOT_DIR/packages/knowledge-hub/dataset" "$RELEASE_DIR/bundle-cli/" || { echo "Failed to copy dataset"; exit 1; }
-      fi
-    else
-      echo "Warning: INCLUDE_DATASET=1 set, but local dataset not found at $ROOT_DIR/packages/knowledge-hub/dataset"
-    fi
-  fi
-  
+
   # Remove unnecessary package.json from bundle-cli (created by ncc)
   if [ "$DRY_RUN" = true ]; then
     echo "[dry-run] would remove $RELEASE_DIR/bundle-cli/package.json if present"

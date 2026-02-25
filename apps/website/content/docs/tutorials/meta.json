@@ -1,4 +1,10 @@
 {
   "title": "Tutorials",
-  "pages": ["first-project", "existing-project", "team-setup", "enterprise-adoption"]
+  "pages": [
+    "first-project",
+    "existing-project",
+    "team-setup",
+    "enterprise-adoption",
+    "release-testing"
+  ]
 }

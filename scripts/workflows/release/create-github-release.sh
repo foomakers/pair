@@ -151,6 +151,29 @@ find_asset() {
   return 1
 }
 
+# Track upload failures
+UPLOAD_FAILURES=0
+MAX_RETRIES=3
+
+# Helper: upload a single file with retry and exponential backoff
+upload_file_with_retry() {
+  local file="$1"
+  local attempt=1
+  while [ $attempt -le $MAX_RETRIES ]; do
+    if gh release upload "$VERSION" "$file" --clobber; then
+      return 0
+    fi
+    echo "  Upload attempt $attempt/$MAX_RETRIES failed for $(basename "$file")"
+    if [ $attempt -lt $MAX_RETRIES ]; then
+      local wait=$((attempt * 5))
+      echo "  Retrying in ${wait}s..."
+      sleep $wait
+    fi
+    attempt=$((attempt + 1))
+  done
+  return 1
+}
+
 # Helper: upload an asset if found (tries normalized then raw). Prints clear diagnostics.
 upload_asset() {
   local base="$1"
@@ -162,12 +185,16 @@ upload_asset() {
       echo "[DRY RUN] Would upload: $file"
     else
       echo "Uploading: $file"
-      gh release upload "$VERSION" "$file" --clobber
+      if ! upload_file_with_retry "$file"; then
+        echo "Error: Failed to upload $file after $MAX_RETRIES attempts"
+        UPLOAD_FAILURES=$((UPLOAD_FAILURES + 1))
+      fi
     fi
     return 0
   else
     # show both candidate names for easier debugging
     echo "Warning: Asset not found. Tried: release/${base}-${VERSION_NO_V}${ext} and release/${base}-${VERSION}${ext}"
+    UPLOAD_FAILURES=$((UPLOAD_FAILURES + 1))
     return 1
   fi
 }
@@ -185,12 +212,51 @@ upload_asset "pair-cli" ".meta.json" || true
 upload_asset "knowledge-base" ".zip" || true
 upload_asset "knowledge-base" ".zip.sha256" || true
 
+# --- Post-upload verification ---
+# Verify all expected assets are present in the release
+EXPECTED_ASSETS=(
+  "pair-cli-manual-${VERSION_NO_V}.zip"
+  "pair-cli-manual-${VERSION_NO_V}.zip.sha256"
+  "pair-cli-${VERSION_NO_V}.tgz"
+  "pair-cli-${VERSION_NO_V}.tgz.sha256"
+  "pair-cli-${VERSION_NO_V}.meta.json"
+  "knowledge-base-${VERSION_NO_V}.zip"
+  "knowledge-base-${VERSION_NO_V}.zip.sha256"
+)
+
 if [ "$DRY_RUN" = true ]; then
+  echo ""
+  echo "[DRY RUN] Would verify ${#EXPECTED_ASSETS[@]} expected assets in release."
+  if [ "$UPLOAD_FAILURES" -gt 0 ]; then
+    echo "[DRY RUN] WARNING: $UPLOAD_FAILURES asset(s) failed to upload or were not found locally."
+    exit 1
+  fi
   echo "[DRY RUN] All assets would be uploaded successfully."
   echo "[DRY RUN] Release URL would be: https://github.com/foomakers/pair/releases/tag/$VERSION"
 else
-  echo "All assets uploaded successfully."
-  # Get release URL
+  echo ""
+  echo "Verifying release assets..."
+  ACTUAL_ASSETS=$(gh release view "$VERSION" --json assets --jq '.assets[].name')
+  MISSING_ASSETS=()
+
+  for expected in "${EXPECTED_ASSETS[@]}"; do
+    if ! echo "$ACTUAL_ASSETS" | grep -qF "$expected"; then
+      MISSING_ASSETS+=("$expected")
+    fi
+  done
+
+  if [ ${#MISSING_ASSETS[@]} -gt 0 ]; then
+    echo "ERROR: ${#MISSING_ASSETS[@]} expected asset(s) missing from release $VERSION:"
+    for m in "${MISSING_ASSETS[@]}"; do
+      echo "  - $m"
+    done
+    echo ""
+    echo "Assets actually present:"
+    echo "$ACTUAL_ASSETS" | sed 's/^/  /'
+    exit 1
+  fi
+
+  echo "All ${#EXPECTED_ASSETS[@]} expected assets verified in release."
   RELEASE_URL=$(gh release view "$VERSION" --json url --jq .url)
   echo "Release URL: $RELEASE_URL"
 fi

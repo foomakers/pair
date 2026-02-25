@@ -1,6 +1,8 @@
 ---
 name: pair-capability-assess-ai
 description: "Assess AI development tools using resolution cascade (Argument > Adoption > Assessment). Reads AI development guidelines, proposes AI tool choices with versions, writes AI section of tech-stack.md, composes /pair-capability-record-decision. Idempotent."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-capability-assess-ai — AI Development Assessment

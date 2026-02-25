@@ -1,6 +1,8 @@
 ---
 name: pair-process-plan-initiatives
 description: "Creates strategic initiatives from PRD analysis. Prioritizes by business impact (P0/P1/P2), composes /pair-capability-write-issue with $type: initiative. Idempotent: detects existing initiatives, creates only missing ones."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-process-plan-initiatives — Strategic Initiative Creation

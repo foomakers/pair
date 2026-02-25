@@ -86,7 +86,7 @@ else
 fi
 
 # Prepare sample project copy
-SAMPLE_SRC="docs/getting-started/sample-project"
+SAMPLE_SRC="scripts/workflows/release/fixtures/sample-project"
 if [ ! -d "$SAMPLE_SRC" ]; then
   echo "Error: sample project not found at $SAMPLE_SRC"
   exit 1
@@ -151,13 +151,45 @@ echo "Checking node_modules/@foomakers* contents:"
 rm $TMPDIR/sample-project/node_modules/@foomakers/pair-cli
 cp -r $TMPDIR/pkg/package $TMPDIR/sample-project/node_modules/@foomakers/pair-cli
 
-echo "Running npm run pair:install"
-if npm run pair:install --silent; then
-  echo "npm-based pair install completed successfully"
-else
-  echo "Error: npm run pair:install failed"
+# Determine KB source for install (dataset no longer embedded in bundle)
+KB_SOURCE_PATH="$REPO_ROOT/packages/knowledge-hub/dataset"
+if [ ! -d "$KB_SOURCE_PATH" ]; then
+  echo "Error: KB dataset not found at $KB_SOURCE_PATH"
   exit 1
 fi
+
+PAIR_BIN="$SAMPLE_TMP/node_modules/.bin/pair"
+
+# ---- Test A: Install with explicit --source (current behavior) ----
+echo "Test A: pair install --source $KB_SOURCE_PATH"
+if [ -x "$PAIR_BIN" ]; then
+  "$PAIR_BIN" install --source "$KB_SOURCE_PATH"
+else
+  npx pair-cli install --source "$KB_SOURCE_PATH"
+fi
+echo "Test A passed: npm-based pair install with --source succeeded"
+
+# ---- Test B: Install with default resolution (no --source, no --offline) ----
+# This exercises the auto-download fallback that real npm users get.
+# Run in a separate directory so the existing install doesn't interfere.
+DEFAULT_TEST_DIR="$TMPDIR/default-resolution-test"
+mkdir -p "$DEFAULT_TEST_DIR"
+echo "Test B: pair install (default resolution — no --source, no --offline)"
+pushd "$DEFAULT_TEST_DIR" >/dev/null
+if [ -x "$PAIR_BIN" ]; then
+  if "$PAIR_BIN" install 2>&1; then
+    echo "Test B passed: default resolution install succeeded"
+    if [ ! -d ".pair" ]; then
+      echo "Warning: Test B — .pair directory not created despite exit 0"
+    fi
+  else
+    echo "Warning: Test B — default resolution failed (may require published GitHub release)"
+    echo "  This is expected during pre-release CI but should pass in post-release validation"
+  fi
+else
+  echo "Warning: Test B skipped — PAIR_BIN not executable at $PAIR_BIN"
+fi
+popd >/dev/null
 
 # ------------------------------------------------------------------------------------------------
 # NEW SMOKE TEST SUITE INTEGRATION

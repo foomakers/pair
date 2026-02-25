@@ -62,10 +62,10 @@ Complete checklist ordered by priority for each work item:
 - [ ] Tests written per [Testing Strategy](../../testing/test-strategy/README.md)
 - [ ] All automated tests passing per [Testing Strategy](../../testing/test-strategy/README.md)
 - [ ] Code review completed and approved
-- [ ] Security considerations identified, practices followed, and scanning passed per [Security Guidelines]../security/security-guidelines.md
-- [ ] Performance benchmarks met per [Performance Guidelines]../performance/performance-guidelines.md
+- [ ] Security considerations identified, practices followed, and scanning passed per [Security Guidelines](../security/security-guidelines.md)
+- [ ] Performance benchmarks met per [Performance Guidelines](../performance/README.md)
 - [ ] Quality gates passed per [Technical Guidelines](../../technical-standards/README.md)
-- [ ] Accessibility criteria met per [Accessibility Guidelines]../accessibility/accessibility-guidelines.md
+- [ ] Accessibility criteria met per [Accessibility Guidelines](../accessibility/README.md)
 - [ ] UX criteria met per [UX Guidelines](../../user-experience/README.md)
 - [ ] Feature under feature flag (if applicable)
 - [ ] IaaS implemented per [Infrastructure Guidelines](../../infrastructure/README.md)
@@ -85,9 +85,9 @@ Complete checklist ordered by priority for each work item:
 | Tech Guidance             | Team Review            | High            | [Technical Guidelines](../../technical-standards/README.md)            |
 | Infrastructure            | DevOps Team            | Medium          | [Infrastructure Guidelines](../../infrastructure/README.md)            |
 | UX Criteria               | UX/Dev Team            | Medium          | [UX Guidelines](../../user-experience/README.md)                       |
-| Accessibility             | UX/Dev Team            | Medium          | [Accessibility Guidelines]../accessibility/accessibility-guidelines.md |
-| Security Assessment       | Security Lead          | Medium          | [Security Guidelines]../security/security-guidelines.md                |
-| Performance               | Dev Team               | High            | [Performance Guidelines]../performance/performance-guidelines.md       |
+| Accessibility             | UX/Dev Team            | Medium          | [Accessibility Guidelines](../accessibility/README.md) |
+| Security Assessment       | Security Lead          | Medium          | [Security Guidelines](../security/security-guidelines.md)                |
+| Performance               | Dev Team               | High            | [Performance Guidelines](../performance/README.md)       |
 | Testing Strategy          | Dev Team               | High            | [Testing Strategy](../../testing/test-strategy/README.md)              |
 | Observability             | Dev Team               | High            | [Observability Guidelines](../../observability/README.md)              |
 
@@ -169,21 +169,21 @@ All work items must satisfy these criteria before being considered complete. Ref
 
 ### 🔒 Security Assessment
 
-- **Vulnerability Scanning** → No high/critical vulnerabilities (see [Security Guidelines]../security/security-guidelines.md)
+- **Vulnerability Scanning** → No high/critical vulnerabilities (see [Security Guidelines](../security/security-guidelines.md))
 - **Security Review** → Manual security assessment completed
 - **Data Protection** → Proper handling of sensitive data and user information
 
 ### ♿ Accessibility Assessment
 
-- **WCAG 2.1 AA Compliance** → Standards met per [Accessibility Guidelines]../accessibility/accessibility-guidelines.md
+- **WCAG 2.1 AA Compliance** → Standards met per [Accessibility Guidelines](../accessibility/README.md)
 - **Assistive Technology** → Tested with screen readers and keyboard navigation
 - **Accessibility Testing** → Automated and manual accessibility validation
 
 ### ⚡ Performance Assessment
 
-- **Performance Benchmarks** → Thresholds met per [Performance Guidelines]../performance/performance-guidelines.md
+- **Performance Benchmarks** → Thresholds met per [Performance Guidelines](../performance/README.md)
 - **Load Testing** → Performance tested under expected conditions
-- **Optimization** → Standards met per [Performance Guidelines]../performance/performance-guidelines.md
+- **Optimization** → Standards met per [Performance Guidelines](../performance/README.md)
 
 ### 🧪 Testing Requirements
 
@@ -211,9 +211,9 @@ Automated quality gates integrated in CI/CD pipeline:
 
 ### ⚡ Performance
 
-- **Bundle Size** → Within limits defined in [Performance Guidelines]../performance/performance-guidelines.md
-- **Response Time** → Standards met per [Performance Guidelines]../performance/performance-guidelines.md
-- **Lighthouse** → Standards met per [Performance Guidelines]../performance/performance-guidelines.md and [Accessibility Guidelines]../accessibility/accessibility-guidelines.md
+- **Bundle Size** → Within limits defined in [Performance Guidelines](../performance/README.md)
+- **Response Time** → Standards met per [Performance Guidelines](../performance/README.md)
+- **Lighthouse** → Standards met per [Performance Guidelines](../performance/README.md) and [Accessibility Guidelines](../accessibility/README.md)
 
 ---
 
@@ -263,8 +263,8 @@ Refer to [Observability Guidelines](../../observability/README.md) for detailed 
 ### Manual Reviews
 
 1. **Code Review** → Peer review focusing on maintainability
-2. **Security Review** → Manual assessment per [Security Guidelines]../security/security-guidelines.md
-3. **Accessibility Testing** → Manual validation per [Accessibility Guidelines]../accessibility/accessibility-guidelines.md
+2. **Security Review** → Manual assessment per [Security Guidelines](../security/security-guidelines.md)
+3. **Accessibility Testing** → Manual validation per [Accessibility Guidelines](../accessibility/README.md)
 4. **UX Review** → Design team approval for user-facing changes
 
 ---

@@ -1,6 +1,8 @@
 ---
 name: assess-testing
 description: "Assess testing strategy using resolution cascade (Argument > Adoption > Assessment). Reads testing guidelines, proposes framework and strategy, writes testing section of tech-stack.md, composes /record-decision. Idempotent."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /assess-testing — Testing Strategy Assessment

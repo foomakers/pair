@@ -11,17 +11,19 @@ import {
 
 function createNpmDeployFs(cwd: string): InMemoryFileSystemService {
   // Simulate npm install: pair-cli extracted to node_modules/@foomakers/pair-cli/
-  // Dataset is at node_modules/@foomakers/pair-cli/bundle-cli/dataset/ (what the code looks for)
+  // Dataset is NOT bundled — it is auto-downloaded to a KB cache path at runtime.
+  // We simulate the cached KB path so tests can resolve the dataset without network.
   const seed: Record<string, string> = {}
   const moduleFolder = cwd + '/node_modules/@foomakers/pair-cli'
+  const kbCachePath = cwd + '/.pair-kb-cache/0.1.1'
 
-  // Dataset content in the @foomakers/pair-cli package location
-  seed[moduleFolder + '/bundle-cli/dataset/AGENTS.md'] = 'this is agents.md'
-  seed[moduleFolder + '/bundle-cli/dataset/.github/workflows/ci.yml'] = 'name: CI\non: push'
-  seed[moduleFolder + '/bundle-cli/dataset/.pair/knowledge/index.md'] = '# Knowledge Base'
-  seed[moduleFolder + '/bundle-cli/dataset/.pair/adoption/onboarding.md'] = '# Onboarding Guide'
+  // Dataset content in the KB cache location (simulates auto-download result)
+  seed[kbCachePath + '/dataset/AGENTS.md'] = 'this is agents.md'
+  seed[kbCachePath + '/dataset/.github/workflows/ci.yml'] = 'name: CI\non: push'
+  seed[kbCachePath + '/dataset/.pair/knowledge/index.md'] = '# Knowledge Base'
+  seed[kbCachePath + '/dataset/.pair/adoption/onboarding.md'] = '# Onboarding Guide'
 
-  // Package.json for pair-cli (scoped package)
+  // Package.json for pair-cli (scoped package) — no bundle-cli/dataset
   seed[moduleFolder + '/package.json'] = JSON.stringify({
     name: '@foomakers/pair-cli',
     version: '0.1.1',
@@ -40,25 +42,24 @@ function createNpmDeployFs(cwd: string): InMemoryFileSystemService {
 }
 
 function createManualDeployFs(cwd: string): InMemoryFileSystemService {
-  // Simulate manual installation: pair-cli binary in /usr/local/bin/bundle-cli/
-  // Dataset is in ./dataset relative to bundle-cli
+  // Simulate manual installation: pair-cli binary standalone.
+  // Dataset is NOT bundled — it is auto-downloaded to a KB cache path at runtime.
   const seed: Record<string, string> = {}
   const moduleFolder = cwd + '/libs/pair-cli'
-  // Add package.json for @pair/pair-cli package
+  const kbCachePath = cwd + '/.pair-kb-cache/0.1.0'
+
+  // Add package.json for @pair/pair-cli package — no bundle-cli/dataset
   seed[cwd + '/libs/pair-cli/package.json'] = JSON.stringify({
     name: '@pair/pair-cli',
     version: '0.1.0',
     description: 'Pair CLI manual installation',
   })
 
-  // Dataset content in the release bundle location (./dataset relative to bundle-cli)
-  seed[moduleFolder + '/bundle-cli/dataset/AGENTS.md'] = 'this is agents.md'
-  seed[moduleFolder + '/bundle-cli/dataset/.github/workflows/ci.yml'] = 'name: CI\non: push'
-  seed[moduleFolder + '/bundle-cli/dataset/.pair/knowledge/index.md'] = '# Knowledge Base'
-  seed[moduleFolder + '/bundle-cli/dataset/.pair/adoption/onboarding.md'] = '# Onboarding Guide'
-
-  // No node_modules/@pair/knowledge-hub in manual install
-  // The binary is standalone
+  // Dataset content in the KB cache location (simulates auto-download result)
+  seed[kbCachePath + '/dataset/AGENTS.md'] = 'this is agents.md'
+  seed[kbCachePath + '/dataset/.github/workflows/ci.yml'] = 'name: CI\non: push'
+  seed[kbCachePath + '/dataset/.pair/knowledge/index.md'] = '# Knowledge Base'
+  seed[kbCachePath + '/dataset/.pair/adoption/onboarding.md'] = '# Onboarding Guide'
 
   return new InMemoryFileSystemService(seed, moduleFolder, cwd)
 }
@@ -481,6 +482,8 @@ describe('update from local sources', () => {
 
       // Create filesystem with extracted ZIP content (simulated as directory)
       const seed: Record<string, string> = {}
+      // Pre-existing target (update scenario — project already installed)
+      seed[`${cwd}/.github/old.yml`] = '# pre-existing'
       seed[`${cwd}/${zipPath}/AGENTS.md`] = 'this is agents.md'
       seed[`${cwd}/${zipPath}/.github/workflows/ci.yml`] = 'name: CI\non: push'
       seed[`${cwd}/${zipPath}/.pair/knowledge/index.md`] = '# Knowledge Base'
@@ -525,6 +528,8 @@ describe('update from local sources', () => {
       const zipPath = './dataset'
 
       const seed: Record<string, string> = {}
+      // Pre-existing target (update scenario — project already installed)
+      seed[`${cwd}/.github/old.yml`] = '# pre-existing'
       seed['/test-relative-zip/dataset/AGENTS.md'] = 'this is agents.md'
       seed['/test-relative-zip/dataset/.github/workflows/ci.yml'] = 'name: CI\non: push'
       seed['/test-relative-zip/dataset/.pair/knowledge/index.md'] = '# Knowledge Base'
@@ -571,6 +576,8 @@ describe('update from local sources', () => {
       const dirPath = 'dataset'
 
       const seed: Record<string, string> = {}
+      // Pre-existing target (update scenario — project already installed)
+      seed[`${cwd}/.github/old.yml`] = '# pre-existing'
       seed[`${cwd}/${dirPath}/AGENTS.md`] = 'this is agents.md'
       seed[`${cwd}/${dirPath}/.github/workflows/ci.yml`] = 'name: CI\non: push'
       seed[`${cwd}/${dirPath}/.pair/knowledge/index.md`] = '# Knowledge Base'
@@ -615,6 +622,8 @@ describe('update from local sources', () => {
       const dirPath = './dataset'
 
       const seed: Record<string, string> = {}
+      // Pre-existing target (update scenario — project already installed)
+      seed[`${cwd}/.github/old.yml`] = '# pre-existing'
       seed['/test-relative-dir/dataset/AGENTS.md'] = 'this is agents.md'
       seed['/test-relative-dir/dataset/.github/workflows/ci.yml'] = 'name: CI\non: push'
       seed['/test-relative-dir/dataset/.pair/knowledge/index.md'] = '# Knowledge Base'
@@ -1026,9 +1035,14 @@ describe('pair-cli e2e - skills registry pipeline', () => {
     }
   }
 
-  function createSkillsDatasetFs(cwd: string) {
+  function createSkillsDatasetFs(cwd: string, opts?: { withTargets?: boolean }) {
     const seed: Record<string, string> = {}
     const datasetBase = `${cwd}/dataset`
+
+    // Pre-existing targets (update scenario — project already installed)
+    if (opts?.withTargets) {
+      seed[`${cwd}/.pair/knowledge/old.md`] = '# old'
+    }
 
     // Knowledge registry content
     seed[`${datasetBase}/.pair/knowledge/index.md`] = '# Knowledge Base'
@@ -1044,7 +1058,7 @@ describe('pair-cli e2e - skills registry pipeline', () => {
 
   it('update distributes skills with flatten + prefix to canonical target', async () => {
     const cwd = '/test-skills'
-    const fs = createSkillsDatasetFs(cwd)
+    const fs = createSkillsDatasetFs(cwd, { withTargets: true })
 
     await handleUpdateCommand(parseUpdateCommand({ source: `${cwd}/dataset` }), fs)
 
@@ -1056,7 +1070,7 @@ describe('pair-cli e2e - skills registry pipeline', () => {
 
   it('update creates symlinks for secondary targets', async () => {
     const cwd = '/test-skills-symlink'
-    const fs = createSkillsDatasetFs(cwd)
+    const fs = createSkillsDatasetFs(cwd, { withTargets: true })
 
     await handleUpdateCommand(parseUpdateCommand({ source: `${cwd}/dataset` }), fs)
 

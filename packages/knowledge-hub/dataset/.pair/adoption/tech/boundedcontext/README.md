@@ -14,7 +14,7 @@ This approach is ideal for small teams, where maximizing collaboration and minim
 
 - **Subdomains:** [LIST OF RELATED SUBDOMAINS]
 - **Description:** [DESCRIPTION OF THE BOUNDED CONTEXT].
-- [See details](LINK)
+- See details: _link to context file once created_
 
 - This structure ensures that changes in one area (e.g., workflow or standards) are consistently reflected across related activities.
 

@@ -75,6 +75,29 @@ describe('verifyStructure', () => {
     expect(result.status).toBe('PASS')
   })
 
+  it('handles root registry "." (KB-only packages)', () => {
+    const entries: IZipEntry[] = [
+      mockZipEntry('knowledge/', true),
+      mockZipEntry('knowledge/file.md'),
+    ]
+
+    const manifest: ManifestMetadata = {
+      name: 'knowledge-base',
+      version: '0.4.1',
+      description: 'KB package',
+      author: 'Tester',
+      tags: [],
+      license: 'MIT',
+      created_at: '2025-01-01',
+      registries: ['.'],
+    }
+
+    const result = verifyStructure(entries, manifest)
+
+    expect(result.status).toBe('PASS')
+    expect(result.missingPaths).toEqual([])
+  })
+
   it('matches registry paths with subdirectories', () => {
     const entries: IZipEntry[] = [mockZipEntry('.pair/knowledge/', true)]
 

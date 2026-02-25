@@ -82,17 +82,17 @@ function writeToInMemoryFs(
       }
     })
 
-    response.on('end', () => {
+    response.on('end', async () => {
       try {
         const newData = Buffer.concat(chunks)
 
         // If resuming, append to existing data
         if (resumeFrom > 0 && fs.existsSync(destination)) {
           const existingData = fs.readFileSync(destination)
-          const combined = Buffer.concat([Buffer.from(existingData), newData])
-          fs.writeFile(destination, combined.toString())
+          const combined = Buffer.concat([Buffer.from(existingData, 'latin1'), newData])
+          await fs.writeFileBinary(destination, combined)
         } else {
-          fs.writeFile(destination, newData.toString())
+          await fs.writeFileBinary(destination, newData)
         }
         resolve()
       } catch (error) {

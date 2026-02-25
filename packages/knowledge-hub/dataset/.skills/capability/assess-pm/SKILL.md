@@ -1,6 +1,8 @@
 ---
 name: assess-pm
 description: "Assess project management tool using resolution cascade (Argument > Adoption > Assessment). Reads PM tool guidelines, proposes tool choice, writes way-of-working.md PM section, composes /record-decision. Delegates setup to /setup-pm. Idempotent."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /assess-pm — PM Tool Assessment

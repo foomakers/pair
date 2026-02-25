@@ -1,6 +1,8 @@
 ---
 name: pair-capability-assess-pm
 description: "Assess project management tool using resolution cascade (Argument > Adoption > Assessment). Reads PM tool guidelines, proposes tool choice, writes way-of-working.md PM section, composes /pair-capability-record-decision. Delegates setup to /pair-capability-setup-pm. Idempotent."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-capability-assess-pm — PM Tool Assessment

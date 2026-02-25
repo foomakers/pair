@@ -1,6 +1,8 @@
 ---
 name: pair-process-implement
 description: "Implements a user story by iterating through its tasks one at a time, following a structured 5-step cycle per task. Composes /pair-capability-verify-quality and /pair-capability-record-decision. Reads adoption files for project-specific decisions. Creates a PR at story completion."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-process-implement — Task Implementation

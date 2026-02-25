@@ -14,6 +14,7 @@ cd "$(dirname "$0")"
 
 OUT="../../public/demo.mp4"
 POSTER="../../public/demo-poster.png"
+GIF="../../public/demo.gif"
 
 # Verify all segments exist
 for seg in replay-part1.mp4 github-scroll.mp4 replay-part2.mp4 login-closing.mp4; do
@@ -76,6 +77,26 @@ ffmpeg -y -ss "$POSTER_TIME" -i "$OUT" \
 echo "==> Poster saved: $POSTER"
 ls -lh "$POSTER"
 
+echo "==> Generating GIF for README..."
+# Two-pass: generate palette for quality, then apply it
+# Scale to 640px width, 10fps for small file size
+ffmpeg -y -i "$OUT" \
+  -vf "fps=10,scale=640:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer" \
+  "$GIF"
+
+GIF_SIZE=$(stat -f%z "$GIF" 2>/dev/null || stat -c%s "$GIF" 2>/dev/null)
+GIF_MAX=$((10 * 1024 * 1024))
+if [ "$GIF_SIZE" -gt "$GIF_MAX" ]; then
+  echo "Warning: GIF ${GIF_SIZE} exceeds 10MB. Re-encoding at lower fps..."
+  ffmpeg -y -i "$OUT" \
+    -vf "fps=6,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=64[p];[s1][p]paletteuse=dither=bayer" \
+    "$GIF"
+fi
+
+echo "==> GIF saved: $GIF"
+ls -lh "$GIF"
+
 echo "==> Done! Verify:"
 echo "    open $OUT"
 echo "    open $POSTER"
+echo "    open $GIF"

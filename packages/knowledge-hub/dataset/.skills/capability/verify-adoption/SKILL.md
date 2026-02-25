@@ -1,6 +1,8 @@
 ---
 name: verify-adoption
 description: "Checks code and configuration against project adoption files for a given scope. Detection-only: returns conformity/non-conformity list per area without resolving issues. Caller decides resolution. Invocable independently or composed by /review and /implement."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /verify-adoption — Adoption Compliance Checker
@@ -19,7 +21,7 @@ Check code, configuration, or a PR against the project's adoption files. Detecti
 | ------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | `tech-stack`       | [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md)                                             |
 | `architecture`     | [adoption/tech/architecture.md](../../../.pair/adoption/tech/architecture.md) + [adoption/tech/adr/](../../../.pair/adoption/tech/adr/) |
-| `security`         | Security-related sections in adoption files + [security guidelines](../../../.pair/knowledge/guidelines/security/security-guidelines.md) |
+| `security`         | Security-related sections in adoption files + [security guidelines](../../../.pair/knowledge/guidelines/quality-assurance/security/security-guidelines.md) |
 | `coding-standards` | Code design adoption + [code-design guidelines](../../../.pair/knowledge/guidelines/code-design/README.md)           |
 | `infrastructure`   | [adoption/tech/infrastructure.md](../../../.pair/adoption/tech/infrastructure.md)                                     |
 | `all`              | All of the above                                                                                                     |
@@ -66,7 +68,7 @@ _Skip if `architecture` not in resolved scope._
 
 _Skip if `security` not in resolved scope._
 
-1. **Check**: Do security-related adoption files or [security guidelines](../../../.pair/knowledge/guidelines/security/security-guidelines.md) exist?
+1. **Check**: Do security-related adoption files or [security guidelines](../../../.pair/knowledge/guidelines/quality-assurance/security/security-guidelines.md) exist?
 2. **Skip**: If no security guidelines found → report `security: NOT CONFIGURED` and move to next area.
 3. **Act**: Check code for:
    - Hardcoded secrets or credentials

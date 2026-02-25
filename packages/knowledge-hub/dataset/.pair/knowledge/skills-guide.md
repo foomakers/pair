@@ -15,9 +15,9 @@ Run `/next` at the start of every session. It reads project adoption files and P
 | Type | Count | Purpose |
 |------|-------|---------|
 | **Process** | 11 | Lifecycle phases — orchestrate capability skills |
-| **Capability** | 19 | Atomic units — perform a single focused operation |
+| **Capability** | 20 | Atomic units — perform a single focused operation |
 
-Process skills compose capability skills. Capability skills are independently invocable.
+Process skills compose capability skills. Capability skills are independently invocable. Total: 32 (11 process + 20 capability + 1 navigator).
 
 ## Full Catalog
 
@@ -71,6 +71,13 @@ Process skills compose capability skills. Capability skills are independently in
 | `/setup-gates` | CI/CD quality gate configuration |
 | `/setup-pm` | PM tool configuration |
 
+#### Testing Skills (2)
+
+| Skill | Scope |
+|-------|-------|
+| `/design-manual-tests` | Manual test suite generation from project analysis |
+| `/execute-manual-tests` | Manual test suite execution + report generation |
+
 #### Code Quality Skills (2)
 
 | Skill | Scope |
@@ -97,6 +104,8 @@ Process skills compose capability skills. Capability skills are independently in
 ├── capability/           # Atomic operation skills
 │   ├── assess-*/         # 8 assessment skills
 │   ├── verify-*/         # 3 verification skills
+│   ├── design-manual-tests/
+│   ├── execute-manual-tests/
 │   ├── record-decision/
 │   ├── write-issue/
 │   ├── estimate/

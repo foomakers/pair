@@ -1,6 +1,8 @@
 ---
 name: plan-epics
 description: "Breaks initiatives into epics through structured analysis and collaborative validation. Composes /write-issue with $type: epic. Idempotent: detects existing epics, creates only missing ones. Includes Epic 0 assessment for new projects."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /plan-epics — Epic Breakdown

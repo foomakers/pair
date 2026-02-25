@@ -57,4 +57,21 @@ assert_success || exit 1
 # Note: Target directory name depends on config, checking for success is sufficient
 log_succ "Specific registry install completed"
 
+# 5. Default resolution (no --source, no --offline)
+# Only run when network is available (not in offline-only mode)
+if [ "${OFFLINE_SAFE:-}" != "true" ] && [ "${OFFLINE_ONLY:-}" != "true" ]; then
+  log_info "Test 5: Install with default resolution (no --source)"
+  DEFAULT_TEST_DIR=$(setup_workspace "install-basic-default")
+  cd "$DEFAULT_TEST_DIR"
+  run_pair install
+  if [ $? -eq 0 ]; then
+    assert_dir ".pair"
+    log_succ "Default resolution install succeeded"
+  else
+    log_warn "Default resolution install failed (may require network + published release)"
+  fi
+else
+  log_info "Test 5: Skipped (offline mode)"
+fi
+
 echo "=== $TEST_NAME Completed ==="

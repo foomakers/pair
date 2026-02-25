@@ -1,6 +1,8 @@
 ---
 name: pair-process-specify-prd
 description: "Creates or updates a Product Requirements Document through structured template analysis, hypothesis-driven information gathering, and iterative review. Idempotent — detects existing PRD and offers selective section update."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-process-specify-prd — PRD Creation

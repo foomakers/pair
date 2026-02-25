@@ -1,6 +1,8 @@
 ---
 name: pair-capability-assess-methodology
 description: "Assess development methodology using resolution cascade (Argument > Adoption > Assessment). Reads methodology guidelines, proposes Scrum/Kanban/Lean/etc., writes way-of-working.md methodology section, composes /pair-capability-record-decision. Idempotent."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-capability-assess-methodology — Methodology Assessment

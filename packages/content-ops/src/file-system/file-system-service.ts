@@ -11,6 +11,7 @@ export interface FileSystemService {
   readFileSync: (file: string) => string
   existsSync: (file: string) => boolean
   writeFile: (file: string, content: string) => Promise<void>
+  writeFileBinary: (file: string, content: Buffer) => Promise<void>
   exists: (path: string) => Promise<boolean>
   unlink: (path: string) => Promise<void>
   mkdir: (path: string, options?: { recursive?: boolean }) => Promise<void>
@@ -41,6 +42,7 @@ export const fileSystemService: FileSystemService = {
   existsSync: file => existsSync(file),
   readFileSync: file => readFileSync(file, 'utf-8'),
   writeFile: (file, content) => fs.writeFile(file, content, 'utf-8'),
+  writeFileBinary: (file, content) => fs.writeFile(file, content),
   exists: async path => {
     try {
       await fs.stat(path)

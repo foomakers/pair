@@ -10,11 +10,15 @@ echo "=== Running $TEST_NAME ==="
 # Setup: create a valid KB directory source
 MOCK_KB=$(setup_workspace "mock-kb-source-resolution")
 mkdir -p "$MOCK_KB/.pair/knowledge"
+mkdir -p "$MOCK_KB/.pair/adoption"
 mkdir -p "$MOCK_KB/.github"
+mkdir -p "$MOCK_KB/.skills/capability/stub"
 echo "# AGENTS" > "$MOCK_KB/AGENTS.md"
 echo '{"version":"0.0.0"}' > "$MOCK_KB/manifest.json"
 echo "# Mock Knowledge" > "$MOCK_KB/.pair/knowledge/index.md"
+echo "# Mock Adoption" > "$MOCK_KB/.pair/adoption/index.md"
 echo "# Mock GitHub" > "$MOCK_KB/.github/README.md"
+echo "# /stub" > "$MOCK_KB/.skills/capability/stub/SKILL.md"
 
 # -------------------------------------------------------------------
 # Test 1: Install from local directory (absolute path)

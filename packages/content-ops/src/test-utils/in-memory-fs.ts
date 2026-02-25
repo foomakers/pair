@@ -80,6 +80,11 @@ export class InMemoryFileSystemService implements FileSystemService {
     }
   }
 
+  async writeFileBinary(path: string, content: Buffer): Promise<void> {
+    // Store binary data using latin1 encoding to preserve byte values
+    await this.writeFile(path, content.toString('latin1'))
+  }
+
   async unlink(path: string): Promise<void> {
     const resolvedPath = this.resolvePath(path)
     if (!this.files.has(resolvedPath)) {

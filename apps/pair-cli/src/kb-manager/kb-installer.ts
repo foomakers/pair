@@ -100,12 +100,7 @@ export async function installKB(
   try {
     await doInstallSteps(downloadUrl, zipPath, cachePath, options)
     announceSuccess(cleanVersion, cachePath)
-    // Prefer to return the dataset root when .pair exists inside cache so callers
-    // resolve registries like 'knowledge' correctly (datasetRoot/knowledge)
-    const datasetRoot = fs.existsSync(join(cachePath, '.pair'))
-      ? join(cachePath, '.pair')
-      : cachePath
-    return datasetRoot
+    return cachePath
   } catch (error) {
     await cleanupFile(zipPath, fs)
     const err = error as Error
@@ -150,12 +145,7 @@ export async function installKBFromLocalDirectory(
     }
 
     announceSuccess(version, cachePath)
-    // If the extracted/copy result contains a .pair directory, return that as the
-    // dataset root so callers resolve registries correctly
-    const datasetRoot = fs.existsSync(join(cachePath, '.pair'))
-      ? join(cachePath, '.pair')
-      : cachePath
-    return datasetRoot
+    return cachePath
   } catch (error) {
     const err = error as Error
     if (shouldPreserveError(err)) throw err
@@ -173,7 +163,7 @@ async function finalizeZipInstall(
   if (!ok) throw new Error('Invalid KB structure')
 
   announceSuccess(version, cachePath)
-  return fs.existsSync(join(cachePath, '.pair')) ? join(cachePath, '.pair') : cachePath
+  return cachePath
 }
 
 export async function installKBFromLocalZip(

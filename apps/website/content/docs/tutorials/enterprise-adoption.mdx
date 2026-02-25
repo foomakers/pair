@@ -221,12 +221,12 @@ For scoped packages on a private registry:
 npm publish --registry https://npm.your-org.com
 ```
 
-<Callout type="warn">
-  If using GitHub Packages, configure `.npmrc` in your KB repo:
+<Callout type="info">
+  If using GitHub Packages with a **public** repository, consumers only need registry configuration in `.npmrc`:
   ```text
   @your-org:registry=https://npm.pkg.github.com
   ```
-  And ensure the publishing token has `write:packages` scope.
+  No authentication token is required for installation. Publishing requires a token with `write:packages` scope.
 </Callout>
 
 ### 8. Onboard the first team

@@ -1,6 +1,8 @@
 ---
 name: pair-capability-write-issue
 description: "Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Invocable independently or composed by /pair-process-refine-story, /pair-process-plan-tasks, /pair-process-plan-initiatives, /pair-process-plan-epics, and /pair-process-plan-stories."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-capability-write-issue — PM Tool Issue Writer

@@ -18,6 +18,8 @@ export const metadata: Metadata = {
     title: 'pair — Code is the easy part.',
     description: 'pair enables seamless dev-AI collaboration throughout the product lifecycle.',
     type: 'website',
+    images: [{ url: '/social-preview.png', width: 1280, height: 640 }],
+    siteName: 'pair',
   },
 }
 

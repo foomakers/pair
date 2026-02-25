@@ -94,15 +94,25 @@ async function validateFileLinks(params: {
 }
 
 /**
+ * Strip fenced code blocks from markdown content to avoid false-positive link matches
+ * inside code examples (e.g. regex with pipes, JS callbacks parsed as links).
+ */
+function stripFencedCodeBlocks(content: string): string {
+  // Match ``` or ```` (with optional language) to closing fence of same length
+  return content.replace(/^(`{3,})[^\n]*\n[\s\S]*?^\1\s*$/gm, '')
+}
+
+/**
  * Extracts markdown links from content
- * Matches [text](url) format
+ * Matches [text](url) format, ignoring content inside fenced code blocks
  */
 function extractLinks(content: string): string[] {
+  const stripped = stripFencedCodeBlocks(content)
   const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g
   const links: string[] = []
 
   let match
-  while ((match = linkRegex.exec(content)) !== null) {
+  while ((match = linkRegex.exec(stripped)) !== null) {
     const url = match[2]
     if (url) {
       links.push(url)

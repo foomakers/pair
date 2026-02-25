@@ -9,9 +9,17 @@ describe('url-utils', () => {
     expect(normalized.tag).toBe('v1.2.3')
   })
 
-  it('buildGithubReleaseUrl builds expected URL', () => {
-    const v = '0.2.0'
-    const url = urlUtils.buildGithubReleaseUrl(v)
-    expect(url).toContain('/releases/download/v0.2.0/knowledge-base-0.2.0.zip')
+  it('buildGithubReleaseUrl builds expected URL for v0.2.0', () => {
+    const url = urlUtils.buildGithubReleaseUrl('0.2.0')
+    expect(url).toBe(
+      'https://github.com/foomakers/pair/releases/download/v0.2.0/knowledge-base-0.2.0.zip',
+    )
+  })
+
+  it('buildGithubReleaseUrl builds expected URL for v0.4.1', () => {
+    const url = urlUtils.buildGithubReleaseUrl('0.4.1')
+    expect(url).toBe(
+      'https://github.com/foomakers/pair/releases/download/v0.4.1/knowledge-base-0.4.1.zip',
+    )
   })
 })

@@ -1,6 +1,8 @@
 ---
 name: pair-process-review
 description: "Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness check, decision, and optional merge with parent cascade. Composes /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-record-decision, /pair-capability-assess-debt (required) and /pair-capability-verify-adoption, /pair-capability-assess-stack (optional with graceful degradation). Output follows the code review template. Idempotent — re-invocation resumes from incomplete phases."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-process-review — Code Review
@@ -15,8 +17,9 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 | `/pair-capability-verify-done`     | Capability | Yes      | 4     | Definition of Done checking          |
 | `/pair-capability-record-decision` | Capability | Yes      | Any   | Record missing ADR (HALT condition)  |
 | `/pair-capability-assess-debt`     | Capability | Yes      | 4     | Flag tech debt items                 |
-| `/pair-capability-verify-adoption` | Capability | Optional | 3     | Full adoption compliance (from #105) |
-| `/pair-capability-assess-stack`    | Capability | Optional | 3     | Tech-stack resolution (from #104)    |
+| `/pair-capability-verify-adoption`       | Capability | Optional | 3     | Full adoption compliance (from #105)           |
+| `/pair-capability-assess-stack`          | Capability | Optional | 3     | Tech-stack resolution (from #104)              |
+| `/pair-capability-execute-manual-tests`  | Capability | Optional | 6     | Post-merge release validation (manual tests)   |
 
 ## Arguments
 
@@ -301,6 +304,16 @@ Based on compiled findings:
    - CLI: `git push origin --delete <branch>`.
 2. **Verify**: Feature branch deleted.
 
+### Step 6.6: Post-Merge Manual Test Validation (Optional)
+
+1. **Check**: Is `/pair-capability-execute-manual-tests` installed? Does the project have a manual test suite (`qa/` directory)?
+2. **Skip**: If skill not installed or no test suite found → skip. Log: "Manual test validation skipped — no suite or skill not installed."
+3. **Act**: Compose `/pair-capability-execute-manual-tests` with `$scope = all`, `$priority = P0` (blockers only for fast validation).
+4. **Verify**: If PASS → note in review output. If FAIL → do NOT revert the merge. Instead:
+   - Create a GitHub issue for each Critical/Major failure.
+   - Append manual test results as addendum to the review report (PR comment).
+   - Warn: "Post-merge manual tests found failures. Issues created."
+
 ## Output Format
 
 At review decision (Phase 5):
@@ -322,12 +335,13 @@ At merge (Phase 6):
 
 ```text
 STORY DONE:
-├── Story:      [#ID: Title]
-├── PR:         [#PR-number — merged]
-├── Merge:      [squash | merge | rebase]
-├── Story:      Done
-├── Epic:       [#ID — Done | In Progress (X/Y stories done)]
-└── Initiative: [#ID — Done | In Progress (X/Y epics done)]
+├── Story:        [#ID: Title]
+├── PR:           [#PR-number — merged]
+├── Merge:        [squash | merge | rebase]
+├── Story:        Done
+├── Epic:         [#ID — Done | In Progress (X/Y stories done)]
+├── Initiative:   [#ID — Done | In Progress (X/Y epics done)]
+└── Manual Tests: [PASS | FAIL — N issues created | SKIPPED — no suite]
 ```
 
 ## HALT Conditions
@@ -360,11 +374,13 @@ Re-invoking `/pair-process-review` on a partially reviewed PR is safe:
 - **Code review template not found**: **HALT** — cannot produce review without template.
 - **PM tool not accessible**: Ask reviewer to manually provide PR details. Phase 6 merge via CLI only.
 - **Merge fails** (conflicts, branch protection): Report the failure, ask reviewer to resolve. Do not force-push or bypass protections.
+- **/execute-manual-tests not installed**: Skip Step 6.6. Log "Manual test validation skipped — skill not installed." Does NOT block merge.
+- **No manual test suite**: Skip Step 6.6. Log "No manual test suite found." Does NOT block merge.
 
 ## Notes
 
 - This skill **reads code, posts review comments, and optionally merges PRs** — it does not modify source code.
-- First skill to compose 6 atomic skills (4 required + 2 optional). Proves composition pattern at scale.
+- First skill to compose 7 atomic skills (4 required + 3 optional). Proves composition pattern at scale.
 - Review phases are sequential — each phase builds on findings from prior phases.
 - The reviewer can stop between phases. Re-invoke to resume (idempotency ensures correct state).
 - Output follows [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) — the template defines structure, /pair-process-review fills it with findings.

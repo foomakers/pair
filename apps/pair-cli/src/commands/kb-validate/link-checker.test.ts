@@ -252,6 +252,40 @@ describe('validateLinks', () => {
     })
   })
 
+  describe('fenced code blocks', () => {
+    it('should ignore links inside fenced code blocks (CP311 false positives)', async () => {
+      const content = [
+        'Real [link](./valid.md) here.',
+        '',
+        '```javascript',
+        'window.webVitals[`on${metric}`](data => {',
+        '  this.recordMetric({ value: data.value })',
+        '})',
+        '```',
+        '',
+        '```markdown',
+        '[Core Data Pipeline](01-initiatives/2025/core-data-pipeline.md)',
+        '```',
+        '',
+        '```javascript',
+        '/req\\.user\\.role\\s*[!=]=?\\s*[\'"](admin|root)[\'"]/g,',
+        '```',
+      ].join('\n')
+
+      fs.writeFile('/kb/README.md', content)
+      fs.writeFile('/kb/valid.md', '# Valid')
+
+      const results = await validateLinks({
+        baseDir: '/kb',
+        files: ['/kb/README.md'],
+        fs,
+      })
+
+      expect(results[0]?.valid).toBe(true)
+      expect(results[0]?.errors).toHaveLength(0)
+    })
+  })
+
   describe('edge cases', () => {
     it('should handle files with no links', async () => {
       fs.writeFile('/kb/README.md', 'No links here')

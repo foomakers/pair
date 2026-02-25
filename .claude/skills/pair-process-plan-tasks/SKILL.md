@@ -1,6 +1,8 @@
 ---
 name: pair-process-plan-tasks
 description: "Breaks a refined user story into implementation tasks. Task-level idempotency: detects existing tasks and creates only missing ones. Appends condensed Technical Analysis + Task Breakdown (checklist, Dependency Graph, AC Coverage table, detailed tasks) to the story body. Composes /pair-capability-write-issue to update the story issue body. Tasks are documented inline in the story — no separate task issues are created."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-process-plan-tasks — Task Breakdown

@@ -1,6 +1,8 @@
 ---
 name: estimate
 description: "Estimates a refined user story using the adopted estimation methodology. Reads estimation framework from guidelines and methodology from way-of-working. Idempotent: detects existing estimate, confirms rather than re-estimating. Invocable independently or composed by /refine-story."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /estimate — Story Estimation

@@ -1,0 +1,204 @@
+---
+title: Release Testing
+description: Design a manual test suite for your project, execute it against a release, and interpret the validation report — all with AI-assisted skills.
+---
+
+A complete walkthrough for validating releases with pair's manual testing skills. You'll go from zero test cases to a full release validation report in about 30 minutes.
+
+## Prerequisites
+
+Before starting, make sure you have:
+
+- **pair-cli** installed and a `.pair/` Knowledge Base in your project
+- A **published release** (GitHub Release, npm package, or deployed website) to validate
+- An **AI coding assistant** that supports Agent Skills
+- **Playwright** (optional) for browser-based tests — or `curl` as a fallback
+
+<Callout type="info">
+  This tutorial uses two skills: `/pair-capability-design-manual-tests` (generates test cases) and `/pair-capability-execute-manual-tests` (runs them). Both are included in the standard Knowledge Base.
+</Callout>
+
+## What you'll build
+
+By the end of this tutorial you'll have:
+
+- A `qa/release-validation/` directory with critical path test files
+- Test cases covering your project's website, CLI, dataset, and registry
+- A release validation report with PASS/FAIL per test case
+- Understanding of how to maintain and extend the suite across releases
+
+## Estimated time
+
+~30 minutes (first run — subsequent releases reuse the existing suite).
+
+## Step-by-step instructions
+
+### 1. Design the test suite
+
+Invoke the design skill. It analyzes your project's artifacts, deployment targets, and user-facing surfaces to generate test cases automatically.
+
+```text
+/pair-capability-design-manual-tests
+```
+
+The skill will:
+
+1. **Discover your project surfaces** — reads your PRD, adoption files, CLI commands, website routes, and registry configuration.
+2. **Present a summary** — shows what it found and asks for confirmation.
+3. **Generate critical paths** — groups tests by category (website, CLI artifacts, CLI functional, dataset, registry).
+4. **Write files** — creates `CP*.md` files and a `README.md` in `qa/release-validation/`.
+
+<Callout type="info">
+  If a test suite already exists, the skill offers three choices: **regenerate** (overwrite), **extend** (add new tests for new features), or **abort**.
+</Callout>
+
+#### What gets generated
+
+```text
+qa/release-validation/
+├── README.md                           # Variables, execution order, tool strategy
+├── CP1-website-critical-path.md        # Landing page, navigation, meta tags, responsive
+├── CP2-cli-artifact-critical-path.md   # Checksums, extraction, binary execution
+├── CP3-cli-install-update.md           # Install, update, flags, error handling
+├── CP4-kb-dataset.md                   # KB structure, validation, content integrity
+├── CP5-website-docs-completeness.md    # All doc pages return 200
+├── CP6-website-search-navigation.md    # Search, responsive nav, 404
+└── CP7-registry-publish.md             # Package visibility, install from registry
+```
+
+Each test case follows this format:
+
+```markdown
+## MT-CP101: Landing page loads
+
+**Priority**: P0
+**Preconditions**: Website deployed to production
+**Category**: Website
+
+### Steps
+
+1. Navigate to `$BASE_URL`
+2. Check HTTP status
+
+### Expected Result
+
+- HTTP 200
+- Page title contains "pair"
+```
+
+Tests use variables (`$VERSION`, `$BASE_URL`, `$WORKDIR`) so they work across releases without modification.
+
+### 2. Review and customize
+
+Before executing, review the generated test cases:
+
+- **Add project-specific tests** — your app may have unique flows not covered by the default heuristics.
+- **Adjust priorities** — P0 tests block release sign-off. Make sure only true blockers are P0.
+- **Remove irrelevant CPs** — if your project doesn't have a website, delete CP1/CP5/CP6.
+
+### 3. Execute the test suite
+
+Invoke the execution skill:
+
+```text
+/pair-capability-execute-manual-tests
+```
+
+The skill will:
+
+1. **Locate the suite** — finds `qa/release-validation/` automatically.
+2. **Resolve variables** — derives `$VERSION` from the release, `$BASE_URL` from deployment config, creates an isolated `$WORKDIR`.
+3. **Present variables** — asks for confirmation before executing.
+4. **Run each test** — iterates through all CPs in order, using Playwright for browser tests, Bash for CLI tests, and HTTP checks for status verification.
+5. **Generate a report** — writes a structured report to `.tmp/manual-test-reports/`.
+
+#### Scoping a run
+
+You can limit execution to specific critical paths or priorities:
+
+```text
+# Run only website tests
+/pair-capability-execute-manual-tests $scope=CP1,CP5,CP6
+
+# Run only release blockers (P0)
+/pair-capability-execute-manual-tests $priority=P0
+```
+
+### 4. Interpret the report
+
+The report is written to `.tmp/manual-test-reports/release-validation-{VERSION}-{DATE}.md` and includes:
+
+**Summary table** — per-CP pass/fail counts:
+
+```text
+| Test Group             | Total | Pass | Fail | Skip | Blocked |
+|------------------------|-------|------|------|------|---------|
+| CP1 — Website          | 13    | 13   | 0    | 0    | 0       |
+| CP2 — CLI Artifacts    | 12    | 12   | 0    | 0    | 0       |
+| Total                  | 25    | 25   | 0    | 0    | 0       |
+```
+
+**Failure details** — for each failed test:
+- Actual result vs expected
+- Evidence (command output, HTTP status, screenshots)
+- Severity classification (Critical, Major, Minor)
+
+**Sign-off criteria** — checklist for release approval:
+- All P0 tests pass
+- No Critical/Major failures unresolved
+- Report reviewed
+
+### 5. Act on failures
+
+For each failure, decide:
+
+| Severity | Action |
+|----------|--------|
+| **Critical** | Fix before release — blocks sign-off |
+| **Major** | Fix or document workaround — tracked as issue |
+| **Minor** | Create issue for next release — does not block |
+
+The report includes suggested issue titles for each failure. Create them in your PM tool to track resolution.
+
+### 6. Maintain the suite
+
+Before each release, check if the suite needs updates:
+
+- **New feature added?** → Run `/pair-capability-design-manual-tests` with extend mode
+- **Page or route changed?** → Update the relevant CP file
+- **New CLI command?** → Add tests to CP3 or create a new CP
+- **Test case drift?** → Update expected results to match current behavior (after confirming the new behavior is correct)
+
+## How it fits in the release workflow
+
+```text
+Developer workflow:
+    │
+    │  Code + PR + Review
+    │─────────────────────▶  merge to main
+    │                        │
+    │                        ▼
+    │                    Automated CI
+    │                    (quality-gate, build, E2E)
+    │                        │
+    │                        ▼
+    │                    Release published
+    │                        │
+    │                        ▼
+    │                    /execute-manual-tests
+    │                    (post-release validation)
+    │                        │
+    │                   PASS ─┤─ FAIL
+    │                    │    │    │
+    │                    ▼    │    ▼
+    │                  Done   │  Create issues
+    │                         │  for failures
+```
+
+The `/pair-process-review` skill can optionally invoke `/pair-capability-execute-manual-tests` as Phase 6 (post-merge validation) with `$scope=P0` for fast blocker-only checks.
+
+## Next steps
+
+- Read the [Skills Catalog](/docs/reference/skills-catalog) for the full list of pair skills
+- Check [Release Process](/docs/contributing/release-process) for how releases are automated
+- Explore [CLI Workflows](/docs/guides/cli-workflows) for other CLI commands

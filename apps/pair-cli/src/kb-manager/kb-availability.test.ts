@@ -32,8 +32,8 @@ describe('KB Manager - ensureKBAvailable - Cache Hit', () => {
     const httpClient = new MockHttpClientService()
     const result = await ensureKBAvailable(testVersion, { httpClient, fs })
 
-    // When the cache contains a .pair directory, prefer returning the dataset root
-    expect(result).toBe(join(expectedCachePath, '.pair'))
+    // Cache hit returns the cache path directly (no subfolder logic)
+    expect(result).toBe(expectedCachePath)
   })
 })
 
@@ -68,9 +68,8 @@ describe('KB Manager - ensureKBAvailable - Cache Miss', () => {
     httpClient.setGetResponses([fileResp, checksumResp])
     const result = await ensureKBAvailable(testVersion, { httpClient, fs })
 
-    // When the installed KB contains a .pair directory installers return the
-    // dataset root (cachePath/.pair)
-    expect(result).toBe(join(homedir(), '.pair', 'kb', testVersion, '.pair'))
+    // Installers always return cachePath (never cachePath/.pair)
+    expect(result).toBe(join(homedir(), '.pair', 'kb', testVersion))
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('KB not found, downloading'))
     expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('KB v0.2.0 installed'))
     expect(fs.existsSync(join(homedir(), '.pair', 'kb', testVersion))).toBe(true)
@@ -406,7 +405,7 @@ describe('KB manager integration - ensure KB available', () => {
       }),
     )
 
-    expect(result).toBe('/home/user/.pair/kb/0.1.0/dataset')
+    expect(result).toBe('/home/user/.pair/kb/0.1.0')
   })
 })
 
@@ -436,7 +435,7 @@ describe('KB manager integration - custom URL', () => {
       }),
     )
 
-    expect(result).toBe('/home/user/.pair/kb/0.1.0/dataset')
+    expect(result).toBe('/home/user/.pair/kb/0.1.0')
   })
 })
 

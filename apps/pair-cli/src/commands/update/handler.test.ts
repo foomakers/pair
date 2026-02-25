@@ -207,6 +207,58 @@ describe('handleUpdateCommand - integration with in-memory services', () => {
 })
 
 /**
+ * BUG 4: update precondition — targets must exist
+ *
+ * `update` = subsequent update of an already-installed project. If no
+ * canonical registry targets exist, it means the project was never installed.
+ * The command should reject with a message suggesting `pair install` first.
+ * Currently it creates targets from scratch (behaves like install).
+ */
+describe('BUG 4: update precondition — targets must exist', () => {
+  test('T4.2 — rejects when no registry targets exist (project not installed)', async () => {
+    const cwd = '/project'
+    const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            'test-registry': {
+              source: 'test-registry',
+              behavior: 'mirror',
+              targets: [{ path: '.pair/test-registry', mode: 'canonical' }],
+              description: 'Test registry',
+            },
+          },
+        }),
+        // Source files exist in dataset
+        [`${datasetSrc}/test-registry/file1.md`]: '# Content',
+        // NO target at .pair/test-registry/ — project not installed
+      },
+      cwd,
+      cwd,
+    )
+
+    const httpClient = new MockHttpClientService()
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    // Should reject because no targets exist (project not installed)
+    await expect(handleUpdateCommand(config, fs, { httpClient })).rejects.toThrow(
+      /not.*installed|install.*first/i,
+    )
+  })
+})
+
+/**
  * Bug regression tests: KB distribution pipeline
  *
  * These tests cover three interconnected bugs discovered during skills distribution:
@@ -277,6 +329,8 @@ describe('KB distribution pipeline — bug regression', () => {
           // AGENTS.md source referencing skills by their original short names
           [`${datasetSrc}/AGENTS.md`]:
             '# AGENTS\n\nRun /next to get started.\nUse /verify-quality for checks.\n',
+          // Pre-existing target (update scenario — project already installed)
+          [`${moduleDir}/AGENTS.md`]: '# old agents',
         },
         moduleDir,
         moduleDir,
@@ -344,6 +398,8 @@ describe('KB distribution pipeline — bug regression', () => {
             '# /implement\n\nRead [way-of-working](../../../.pair/adoption/tech/way-of-working.md) for config.',
           // The .pair/ content (exists in dataset, would be distributed separately)
           [`${datasetSrc}/.pair/adoption/tech/way-of-working.md`]: '# Way of Working',
+          // Pre-existing target (update scenario — project already installed)
+          [`${moduleDir}/.claude/skills/old/SKILL.md`]: '# old',
         },
         moduleDir,
         moduleDir,
@@ -402,6 +458,8 @@ describe('KB distribution pipeline — bug regression', () => {
           // Source content
           [`${datasetSrc}/.pair/knowledge/README.md`]: '# Knowledge Base',
           [`${datasetSrc}/.pair/knowledge/guidelines/testing.md`]: '# Testing Guidelines',
+          // Pre-existing target (update scenario — project already installed)
+          [`${userCwd}/.pair/knowledge/old.md`]: '# old',
         },
         moduleDir,
         userCwd,
@@ -451,6 +509,8 @@ describe('KB distribution pipeline — bug regression', () => {
             name: '@pair/knowledge-hub',
           }),
           [`${datasetSrc}/.pair/knowledge/README.md`]: '# Knowledge Base',
+          // Pre-existing target at monorepoRoot (update scenario — project already installed)
+          [`${monorepoRoot}/.pair/knowledge/old.md`]: '# old',
         },
         packageDir,
         packageDir,
@@ -503,6 +563,8 @@ describe('KB distribution pipeline — bug regression', () => {
             name: '@pair/knowledge-hub',
           }),
           [`${datasetSrc}/.pair/knowledge/README.md`]: '# Knowledge Base',
+          // Pre-existing target at monorepoRoot (update scenario — project already installed)
+          [`${monorepoRoot}/.pair/knowledge/old.md`]: '# old',
         },
         packageDir,
         packageDir,
@@ -523,6 +585,83 @@ describe('KB distribution pipeline — bug regression', () => {
       expect(await fs.exists(`${monorepoRoot}/.pair/knowledge/README.md`)).toBe(true)
       expect(await fs.exists(`${packageDir}/.pair/knowledge/README.md`)).toBe(false)
     })
+  })
+})
+
+/**
+ * BUG #04: --persist-backup creates empty directory
+ *
+ * In production, the backup was empty because Bug #02 caused incomplete installs
+ * (missing registries). This test verifies that backup captures ALL registry files
+ * when the project is fully installed.
+ */
+describe('BUG #04: --persist-backup captures actual file content', () => {
+  test('backup contains files from all installed registries', async () => {
+    const cwd = '/project'
+    const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: {
+              source: '.pair/knowledge',
+              behavior: 'mirror',
+              targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+              description: 'KB',
+            },
+            agents: {
+              source: 'AGENTS.md',
+              behavior: 'mirror',
+              targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+              description: 'Agents',
+            },
+          },
+        }),
+        // Dataset source (new content for update)
+        [`${datasetSrc}/.pair/knowledge/guide.md`]: '# New Guide',
+        [`${datasetSrc}/AGENTS.md`]: '# New Agents',
+        // Pre-existing targets (old content to be backed up)
+        [`${cwd}/.pair/knowledge/guide.md`]: '# Old Guide',
+        [`${cwd}/AGENTS.md`]: '# Old Agents',
+      },
+      cwd,
+      cwd,
+    )
+
+    const httpClient = new MockHttpClientService()
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleUpdateCommand(config, fs, { httpClient, persistBackup: true })
+
+    // Verify backup directory exists and is NOT empty
+    const backupsDir = `${cwd}/.pair/backups`
+    const sessions = await fs.readdir(backupsDir)
+    expect(sessions.length).toBeGreaterThan(0)
+
+    const sessionDir = sessions[0]!.name
+
+    // Both registries must be backed up
+    const kbBackup = `${backupsDir}/${sessionDir}/.pair/knowledge/guide.md`
+    const agentsBackup = `${backupsDir}/${sessionDir}/AGENTS.md`
+
+    expect(await fs.exists(kbBackup)).toBe(true)
+    expect(await fs.readFile(kbBackup)).toBe('# Old Guide')
+    expect(await fs.exists(agentsBackup)).toBe(true)
+    expect(await fs.readFile(agentsBackup)).toBe('# Old Agents')
+
+    // Verify update happened
+    expect(await fs.readFile(`${cwd}/.pair/knowledge/guide.md`)).toBe('# New Guide')
+    expect(await fs.readFile(`${cwd}/AGENTS.md`)).toBe('# New Agents')
   })
 })
 
@@ -612,6 +751,8 @@ describe('Bug 4: skill refs not transformed in secondary (copy) targets', () => 
           '# /verify-quality — Quality Gate',
         [`${datasetSrc}/AGENTS.md`]:
           '# AGENTS\n\nRun /next to start.\nUse /verify-quality for checks.\n',
+        // Pre-existing target (update scenario — project already installed)
+        [`${moduleDir}/AGENTS.md`]: '# old agents',
       },
       moduleDir,
       moduleDir,

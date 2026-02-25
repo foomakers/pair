@@ -1,6 +1,8 @@
 ---
 name: pair-capability-assess-observability
 description: "Assess observability strategy using resolution cascade (Argument > Adoption > Assessment). Reads observability guidelines, proposes monitoring/logging/tracing choices, writes infrastructure.md observability section, composes /pair-capability-record-decision. Idempotent."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-capability-assess-observability — Observability Assessment

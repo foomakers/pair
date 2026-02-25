@@ -1,6 +1,8 @@
 ---
 name: assess-stack
 description: "Assess tech stack using resolution cascade (Argument > Adoption > Assessment). Lifecycle-spanning: bootstrap (full eval), implementation (add dependency), review (detect unlisted). Version tracking. Composes /record-decision. Idempotent."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /assess-stack — Tech Stack Assessment

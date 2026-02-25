@@ -1,6 +1,8 @@
 ---
 name: pair-capability-assess-stack
 description: "Assess tech stack using resolution cascade (Argument > Adoption > Assessment). Lifecycle-spanning: bootstrap (full eval), implementation (add dependency), review (detect unlisted). Version tracking. Composes /pair-capability-record-decision. Idempotent."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-capability-assess-stack — Tech Stack Assessment

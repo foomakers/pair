@@ -285,7 +285,7 @@ mcp__github__pull_request_review_write:
 
 ### Merge Strategy
 
-GitHub supports three merge methods. The adopted strategy is configured in [way-of-working.md](../../../adoption/tech/way-of-working.md) under the Merge Strategy section.
+GitHub supports three merge methods. The adopted strategy is configured in [way-of-working.md](../../../../adoption/tech/way-of-working.md) under the Merge Strategy section.
 
 #### Merge Methods
 

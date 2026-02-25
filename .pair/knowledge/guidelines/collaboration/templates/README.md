@@ -222,6 +222,8 @@ Templates work with popular project management tools:
 | `pr-template.md`          | Development    | Code review       | Medium     |
 | `code-review-template.md` | Quality        | Review process    | Medium     |
 | `team-template.md`        | Collaboration  | Team formation    | Medium     |
+| `manual-test-case-template.md`   | Quality | Manual test design   | Low     |
+| `manual-test-report-template.md` | Quality | Test execution report | Low     |
 
 ### Template Relationships
 
@@ -305,6 +307,8 @@ The **TemplateOrchestrator** provides comprehensive template management through 
 - Testing templates with comprehensive coverage and validation frameworks
 - Quality gate templates with consistent criteria and approval processes
 - Documentation review templates with accuracy validation and completeness verification
+- **[Manual Test Case Template](manual-test-case-template.md)** - Structured format for manual test case design with version-agnostic variables and priority classification
+- **[Manual Test Report Template](manual-test-report-template.md)** - Standardized report for manual test execution results with sign-off criteria
 
 #### Process Improvement
 

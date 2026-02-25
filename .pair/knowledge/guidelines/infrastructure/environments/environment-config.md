@@ -580,7 +580,7 @@ class ConfigurationTestSuite:
 - **[Infrastructure as Code](../infrastructure-as-code/README.md)** - Infrastructure configuration and automation
 - **[Environment Consistency](./environment-consistency.md)** - Environment standardization and parity
 - **[CI/CD Strategy](../cicd-strategy/README.md)** - Configuration deployment automation
-- **[Security Guidelines](../../security/README.md)** - Configuration security and compliance
+- **[Security Guidelines](../../quality-assurance/security/security-guidelines.md)** - Configuration security and compliance
 
 ---
 

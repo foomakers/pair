@@ -467,6 +467,165 @@ describe('install — llms.txt generation', () => {
   })
 })
 
+/**
+ * BUG 2: dataset root validation
+ *
+ * When resolveDatasetRoot returns a path that exists but has no content
+ * (empty dataset directory), the handler iterates registries and silently
+ * produces 0 files installed (each registry's source path doesn't exist,
+ * it logs a warning and skips). The handler should reject upfront if the
+ * resolved dataset root has no usable content.
+ */
+describe('BUG 2: dataset root validation', () => {
+  test('T2.1 — rejects when resolved dataset root has no content', async () => {
+    const cwd = '/test-project'
+
+    const testConfig = {
+      asset_registries: {
+        github: {
+          source: 'github',
+          behavior: 'mirror',
+          targets: [{ path: '.github', mode: 'canonical' }],
+          description: 'GitHub registry',
+        },
+      },
+    }
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(testConfig),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test-pkg', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        // dataset/ directory exists but is EMPTY — no github/ subdir, no content
+        [`${cwd}/packages/knowledge-hub/dataset/.gitkeep`]: '',
+      },
+      cwd,
+      cwd,
+    )
+
+    const config: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    // Should reject because dataset root has no usable content for registries
+    await expect(handleInstallCommand(config, fs)).rejects.toThrow(/dataset/i)
+  })
+})
+
+/**
+ * BUG 4: install precondition — targets must not exist
+ *
+ * `install` = first-time installation. If canonical registry targets already
+ * exist, it means the project was already installed. The command should reject
+ * with a message suggesting `pair update` instead. Currently it silently
+ * overwrites (mirror) or skips (add) existing targets.
+ */
+describe('BUG 4: install precondition — targets must not exist', () => {
+  test('T4.1 — rejects when canonical registry targets already exist', async () => {
+    const cwd = '/test-project'
+
+    const testConfig = {
+      asset_registries: {
+        github: {
+          source: 'github',
+          behavior: 'mirror',
+          targets: [{ path: '.github', mode: 'canonical' }],
+          description: 'GitHub registry',
+        },
+      },
+    }
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(testConfig),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test-pkg', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${cwd}/packages/knowledge-hub/dataset/github/workflow.yml`]: 'content: val',
+        // Pre-existing target — project already installed
+        [`${cwd}/.github/workflow.yml`]: 'existing: content',
+      },
+      cwd,
+      cwd,
+    )
+
+    const config: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    // Should reject because targets already exist (project already installed)
+    await expect(handleInstallCommand(config, fs)).rejects.toThrow(/already.*install|use.*update/i)
+  })
+})
+
+/**
+ * BUG #03: install must report skipped registries (source missing)
+ *
+ * When a registry source does not exist, the install should complete but
+ * mark the registry as failed (ok: false) so the summary clearly shows
+ * which registries were skipped. Previously this was silently swallowed.
+ */
+describe('BUG #03: install reports skipped registries', () => {
+  test('completes without throw when a registry source is missing', async () => {
+    const cwd = '/project'
+    const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+
+    const testConfig = {
+      asset_registries: {
+        knowledge: {
+          source: '.pair/knowledge',
+          behavior: 'mirror',
+          targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+          description: 'KB',
+        },
+        github: {
+          source: '.github',
+          behavior: 'mirror',
+          targets: [{ path: '.github', mode: 'canonical' }],
+          description: 'GH',
+        },
+      },
+    }
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify(testConfig),
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        // Only knowledge exists — github source is MISSING
+        [`${datasetSrc}/.pair/knowledge/test.md`]: '# Test',
+      },
+      cwd,
+      cwd,
+    )
+
+    const config: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    // Should NOT throw — completes with skipped registries reported in summary
+    await handleInstallCommand(config, fs)
+
+    // Knowledge was installed, github was skipped
+    expect(await fs.exists(`${cwd}/.pair/knowledge/test.md`)).toBe(true)
+    expect(await fs.exists(`${cwd}/.github`)).toBe(false)
+  })
+})
+
 describe('install — Bug 5: skill ref rewrite with agents-before-skills order', () => {
   test('AGENTS.md refs are rewritten even when agents precedes skills in config', async () => {
     const moduleDir = '/project'

@@ -256,11 +256,14 @@ if [ "$IS_CI" = "true" ]; then
     "install-basic.sh"
     "package.sh"
     "00-create-install-package.sh"
+    "bundle-content.sh"
     "links.sh"
     "lifecycle-kb.sh"
     "validate-config.sh"
     "kb-validate.sh"
     "source-resolution.sh"
+    "install-preconditions.sh"
+    "default-resolution.sh"
   )
   
   for t in "${CI_TESTS[@]}"; do

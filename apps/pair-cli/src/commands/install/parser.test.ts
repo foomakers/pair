@@ -98,6 +98,17 @@ describe('parseInstallCommand', () => {
     })
   })
 
+  describe('list-targets', () => {
+    it('creates list-targets config when --list-targets flag is set', () => {
+      const config = parseInstallCommand({ listTargets: true })
+
+      expect(config).toEqual({
+        command: 'install',
+        resolution: 'list-targets',
+      })
+    })
+  })
+
   describe('validation', () => {
     it('throws error when source is empty string', () => {
       expect(() => {

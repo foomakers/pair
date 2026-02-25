@@ -66,6 +66,7 @@ export async function handleUpdateCommand(
 
   try {
     const { datasetRoot, registries, baseTarget } = await setupUpdateContext(fs, config, options)
+    validateUpdateContext(fs, registries, baseTarget)
     await executeUpdate({ fs, datasetRoot, registries, baseTarget, options, pushLog, presenter })
   } catch (err) {
     pushLog('error', `Update failed: ${String(err)}`)
@@ -98,6 +99,20 @@ async function setupUpdateContext(
 
   const baseTarget = options?.baseTarget || config.target || fs.currentWorkingDirectory()
   return { datasetRoot, registries, baseTarget }
+}
+
+function validateUpdateContext(
+  fs: FileSystemService,
+  registries: Record<string, RegistryConfig>,
+  baseTarget: string,
+): void {
+  const hasTarget = Object.entries(registries).some(([name, config]) => {
+    const target = resolveTarget(name, config, fs, baseTarget)
+    return fs.existsSync(target)
+  })
+  if (!hasTarget) {
+    throw new Error("No installed targets found. Project not installed. Use 'pair install' first.")
+  }
 }
 
 async function executeUpdate(context: UpdateContext): Promise<void> {

@@ -73,13 +73,13 @@ Selecting deployment strategy?
 │  ├─ Risk mitigation focus? → [Canary Deployment](deployment-strategies.md#canary)
 │  └─ Resource constraints? → [Rolling Updates](deployment-strategies.md#rolling)
 ├─ Modern containerized application?
-│  ├─ Kubernetes environment? → [Container Deployment](container-deployment.md) → [Deployment Strategies](deployment-strategies.md)
-│  ├─ Service mesh adoption? → [Container Deployment](container-deployment.md) → [Environment Management](environment-management.md)
-│  └─ Simple container deployment? → [Container Deployment](container-deployment.md) → [CI/CD Pipelines](ci-cd-pipelines.md)
+│  ├─ Kubernetes environment? → [Container Orchestration](../container-orchestration/README.md) → [Deployment Strategies](deployment-strategies.md)
+│  ├─ Service mesh adoption? → [Container Orchestration](../container-orchestration/README.md) → [Environments](../environments/README.md)
+│  └─ Simple container deployment? → [Container Orchestration](../container-orchestration/README.md) → [CI/CD Strategy](../cicd-strategy/README.md)
 └─ Specific deployment challenges?
-   ├─ Multi-environment complexity? → [Environment Management](environment-management.md) + [Release Management](release-management.md)
-   ├─ Pipeline optimization? → [CI/CD Pipelines](ci-cd-pipelines.md) + [Deployment Strategies](deployment-strategies.md)
-   └─ Release coordination? → [Release Management](release-management.md) + [Environment Management](environment-management.md)
+   ├─ Multi-environment complexity? → [Environments](../environments/README.md) + [Deployment Strategies](deployment-strategies.md)
+   ├─ Pipeline optimization? → [CI/CD Strategy](../cicd-strategy/README.md) + [Deployment Strategies](deployment-strategies.md)
+   └─ Release coordination? → [Deployment Strategies](deployment-strategies.md) + [Environments](../environments/README.md)
 ```
 
 ## 📊 Deployment Strategy Selection Matrix
@@ -232,15 +232,6 @@ Selecting deployment strategy?
 ---
 
 _This deployment patterns practice enables organizations to achieve world-class deployment capabilities through sophisticated patterns, automation, and operational excellence that supports rapid software delivery while maintaining reliability, security, and user experience quality._
-
-    C --> E{Microservices?}
-| E --> | Yes | F[Service-Specific Pipelines] |
-| E --> | No  | G[Selective Build Pipelines]  |
-
-    D --> H{Deployment Target?}
-| H --> | Cloud      | I[Cloud-Native Pipeline] |
-| H --> | On-Premise | J[Hybrid Pipeline]       |
-| H --> | Edge       | K[Distributed Pipeline]  |
 
 ```text
 

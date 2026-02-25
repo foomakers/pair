@@ -1,5 +1,6 @@
 import type { KbValidateCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
+import { logger } from '@pair/content-ops'
 import { loadConfigWithOverrides } from '#config'
 import {
   extractRegistries,
@@ -27,14 +28,14 @@ function loadRegistries(
   if (config.skipRegistries) {
     const invalid = validateSkipList(registries, config.skipRegistries)
     for (const name of invalid) {
-      console.warn(`Warning: registry '${name}' not found in config, ignoring`)
+      logger.warn(`Registry '${name}' not found in config, ignoring`)
     }
   }
 
   registries = filterRegistries(registries, config.skipRegistries)
 
   if (Object.keys(registries).length === 0) {
-    console.warn('Warning: no registries to validate')
+    logger.warn('No registries to validate')
   }
 
   return registries

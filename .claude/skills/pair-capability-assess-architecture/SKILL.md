@@ -1,6 +1,8 @@
 ---
 name: pair-capability-assess-architecture
 description: "Assess architecture pattern using resolution cascade (Argument > Adoption > Assessment). Reads architecture guidelines, proposes pattern, writes adoption file, composes /pair-capability-record-decision. Idempotent."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-capability-assess-architecture — Architecture Assessment

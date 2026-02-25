@@ -1,6 +1,8 @@
 ---
 name: verify-done
 description: "Checks Definition of Done criteria against a PR or work item. Reads universal DoD from quality-standards guidelines and project-specific criteria from adoption files. Already-passing criteria are skipped. Invocable independently or composed by /review."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /verify-done — Definition of Done Checker
@@ -62,7 +64,7 @@ Execute each criterion group in order. For every criterion, follow the **check �
 
 1. **Check**: Are security considerations identified and practices followed?
 2. **Skip**: If no security-relevant changes in the PR — mark PASS.
-3. **Act**: Check against [security guidelines](../../../.pair/knowledge/guidelines/security/security-guidelines.md). Look for: hardcoded secrets, injection vulnerabilities, improper data handling, missing input validation.
+3. **Act**: Check against [security guidelines](../../../.pair/knowledge/guidelines/quality-assurance/security/security-guidelines.md). Look for: hardcoded secrets, injection vulnerabilities, improper data handling, missing input validation.
 4. **Verify**: Secure or issues reported.
 
 ### Step 7: Performance
@@ -79,6 +81,13 @@ Execute each criterion group in order. For every criterion, follow the **check �
 3. **Act**: Check for: updated READMEs, inline documentation for complex logic, updated adoption files if decisions changed.
 4. **Verify**: Documentation current or gaps reported.
 
+### Step 9: Manual Test Validation (Optional)
+
+1. **Check**: Does the project have a manual test suite (look for `qa/` directory with `CP*.md` files at project root)?
+2. **Skip**: If no manual test suite exists — mark SKIPPED. If `$scope` excludes `manual-testing` — mark SKIPPED.
+3. **Act**: Check if a manual test report exists for the current version in `.tmp/manual-test-reports/` with overall result PASS. Do NOT execute tests — only check for an existing report.
+4. **Verify**: Report exists and PASS → mark PASS. Report exists and FAIL → mark FAIL with summary of failures. No report → mark SKIPPED with note: "No manual test report found for this version. Run `/execute-manual-tests` to generate one."
+
 ## Output Format
 
 Present results as:
@@ -90,8 +99,9 @@ DEFINITION OF DONE REPORT:
 ├── Architecture:  [PASS | FAIL — N gaps | HALT — missing ADR | SKIPPED]
 ├── Testing:       [PASS | FAIL — N gaps | SKIPPED]
 ├── Security:      [PASS | FAIL — N issues | SKIPPED]
-├── Performance:   [PASS | FAIL — N issues | SKIPPED]
-└── Documentation: [PASS | FAIL — N gaps | SKIPPED]
+├── Performance:      [PASS | FAIL — N issues | SKIPPED]
+├── Documentation:    [PASS | FAIL — N gaps | SKIPPED]
+└── Manual Testing:   [PASS | FAIL — N failures | SKIPPED — no suite or no report]
 
 RESULT: [ALL CRITERIA MET | N criteria failing | HALT — reason]
 ```
@@ -118,6 +128,8 @@ When invoked **independently**:
 - If `$story` is not provided, skip requirements/AC check and evaluate only universal criteria.
 - If specific guideline files are not found (e.g., security guidelines), skip that criterion group and report: "[Area]: SKIPPED — guidelines not found."
 - If /verify-quality already ran in the same session, reuse its results for code standards and testing criteria (avoid duplicate work).
+- If no manual test suite exists (`qa/` directory not found), Step 9 is SKIPPED — this is expected for projects without a manual test suite.
+- If a manual test report exists but is for a different version, mark SKIPPED with note about version mismatch.
 
 ## Notes
 

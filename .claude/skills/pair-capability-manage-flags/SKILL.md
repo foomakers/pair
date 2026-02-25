@@ -1,6 +1,8 @@
 ---
 name: pair-capability-manage-flags
 description: "Manages feature flag lifecycle: creation, activation, deactivation, and cleanup. Follows feature-flags guidelines. Idempotent: detects existing flags, shows current state, offers lifecycle actions rather than re-creating."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-capability-manage-flags — Feature Flag Lifecycle Manager

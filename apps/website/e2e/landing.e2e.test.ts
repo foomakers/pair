@@ -5,6 +5,13 @@ import { test, expect } from '@playwright/test'
 // Verifies real user journeys from the landing page into docs.
 // ============================================================
 
+test('landing page has og:image meta tag (CP109)', async ({ page }) => {
+  await page.goto('/')
+  const ogImage = await page.getAttribute('meta[property="og:image"]', 'content')
+  expect(ogImage).toBeTruthy()
+  expect(ogImage).toContain('social-preview.png')
+})
+
 test('click "Read the docs" navigates to docs', async ({ page }) => {
   await page.goto('/')
   await page

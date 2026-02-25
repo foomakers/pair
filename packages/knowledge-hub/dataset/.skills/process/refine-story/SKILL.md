@@ -1,6 +1,8 @@
 ---
 name: refine-story
 description: "Refines a user story from Todo to Refined state through structured phases: selection, requirements analysis (Given-When-Then), technical analysis, sprint readiness, and documentation. Section-level idempotency — detects partial refinement and resumes. Composes /write-issue for PM tool updates."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /refine-story — Story Refinement

@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { Command } from 'commander'
 import { InMemoryFileSystemService, NodeHttpClientService } from '@pair/content-ops'
 
@@ -156,6 +156,65 @@ describe('CLI command execution - package command availability', () => {
   })
 })
 
+describe('CLI unknown command handling (CP314)', () => {
+  it('unknown command rejects with error', async () => {
+    const { runCli } = await import('./cli.js')
+    const fs = new InMemoryFileSystemService({}, '/tmp', '/tmp')
+
+    await expect(
+      runCli(['node', 'pair', 'nonexistent-command'], {
+        fs,
+        httpClient: new NodeHttpClientService(),
+      }),
+    ).rejects.toThrow('Unknown command: nonexistent-command')
+  })
+})
+
+describe('CLI banner suppression with --json (CP406/CP408)', () => {
+  let logSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('banner printed for normal command', async () => {
+    const { runCli } = await import('./cli.js')
+    const fs = new InMemoryFileSystemService({}, '/tmp', '/tmp')
+
+    // validate-config will throw (no config) but preAction runs first
+    await runCli(['node', 'pair', 'validate-config'], {
+      fs,
+      httpClient: new NodeHttpClientService(),
+    }).catch(() => {})
+
+    const bannerPrinted = logSpy.mock.calls.some(
+      ([arg]) => typeof arg === 'string' && arg.includes('pair'),
+    )
+    expect(bannerPrinted).toBe(true)
+  })
+
+  it('banner suppressed when --json flag is set', async () => {
+    const { runCli } = await import('./cli.js')
+    const fs = new InMemoryFileSystemService({}, '/tmp', '/tmp')
+
+    // kb-info --json will fail (no file) but preAction runs first
+    await runCli(['node', 'pair', 'kb-info', '/nonexistent.zip', '--json'], {
+      fs,
+      httpClient: new NodeHttpClientService(),
+    }).catch(() => {})
+
+    const bannerPrinted = logSpy.mock.calls.some(
+      ([arg]) => typeof arg === 'string' && arg.includes('Code is the easy part'),
+    )
+    expect(bannerPrinted).toBe(false)
+  })
+})
+
 describe('CLI INIT_CWD wiring', () => {
   const originalInitCwd = process.env['INIT_CWD']
 
@@ -184,6 +243,9 @@ describe('CLI INIT_CWD wiring', () => {
       }),
       [`${monorepoRoot}/packages/knowledge-hub/dataset/.pair/knowledge/README.md`]: '# KB',
       [`${monorepoRoot}/package.json`]: JSON.stringify({ name: 'monorepo' }),
+      // Pre-existing targets (update scenario — project already installed)
+      [`${monorepoRoot}/.pair/knowledge/old.md`]: '# old',
+      [`${packageDir}/.pair/knowledge/old.md`]: '# old',
     }
     return new InMemoryFileSystemService(seed, monorepoRoot, packageDir)
   }

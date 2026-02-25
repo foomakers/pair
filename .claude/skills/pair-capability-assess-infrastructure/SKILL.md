@@ -1,6 +1,8 @@
 ---
 name: pair-capability-assess-infrastructure
 description: "Assess infrastructure strategy using resolution cascade (Argument > Adoption > Assessment). Reads infrastructure guidelines, proposes cloud/CI/CD/deployment choices, writes infrastructure.md adoption, composes /pair-capability-record-decision. Idempotent."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /pair-capability-assess-infrastructure — Infrastructure Assessment

@@ -1,6 +1,6 @@
 {
   "name": "pair",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "pair is a suite of resources and workflows designed to guide and enable collaboration between development teams and AI assistants throughout all phases of the product lifecycle. It provides tools for defining epics, stories, guidelines, and adoptions, integrating with major code assistants and project management tools to ensure structured processes, consistency, and quality in delivery.",
   "private": true,
   "scripts": {
@@ -26,6 +26,7 @@
     "hygiene:check": "node scripts/code-hygiene-check.js",
     "docs:staleness": "node scripts/docs-staleness-check.js",
     "quality-gate": "turbo ts:check test lint && turbo prettier:fix mdlint:fix && ./tools/markdownlint-config/bin/markdownlint-fix.sh '*.md' && pnpm hygiene:check && pnpm docs:staleness",
+    "e2e": "pnpm --filter @pair/website e2e",
     "smoke-tests": "./scripts/smoke-tests/run-all.sh --cleanup"
   },
   "devDependencies": {

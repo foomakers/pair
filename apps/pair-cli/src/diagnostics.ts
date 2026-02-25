@@ -1,5 +1,5 @@
 import { FileSystemService, LogLevel } from '@pair/content-ops'
-import { isInRelease, getKnowledgeHubDatasetPath } from './config'
+import { getKnowledgeHubDatasetPath } from './config'
 
 /**
  * Global default minimum logging level.
@@ -25,10 +25,6 @@ export function runDiagnostics(fsService: FileSystemService): void {
     console.error(`[diag] __dirname=${fsService.rootModuleDirectory()}`)
     console.error(`[diag] process cwd=${fsService.currentWorkingDirectory()}`)
     console.error(`[diag] argv=${process.argv.join(' ')}`)
-
-    console.error(
-      `[diag] isInRelease(__dirname)=${isInRelease(fsService, fsService.rootModuleDirectory())}`,
-    )
 
     try {
       const resolved = getKnowledgeHubDatasetPath(fsService)

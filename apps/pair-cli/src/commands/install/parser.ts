@@ -40,18 +40,28 @@ export interface InstallCommandConfigLocal {
 }
 
 /**
+ * Discriminated union for install command with --list-targets
+ */
+export interface InstallCommandConfigListTargets {
+  command: 'install'
+  resolution: 'list-targets'
+}
+
+/**
  * Union type for all install command configurations
  */
 export type InstallCommandConfig =
   | InstallCommandConfigDefault
   | InstallCommandConfigRemote
   | InstallCommandConfigLocal
+  | InstallCommandConfigListTargets
 
 interface ParseInstallOptions {
   source?: string
   offline?: boolean
   kb?: boolean
   skipVerify?: boolean
+  listTargets?: boolean
 }
 
 function buildOptionalFields(target?: string, skipVerify?: boolean) {
@@ -79,6 +89,10 @@ export function parseInstallCommand(
   args: string[] = [],
 ): InstallCommandConfig {
   validateCommandOptions('install', options)
+
+  if (options.listTargets) {
+    return { command: 'install', resolution: 'list-targets' }
+  }
 
   const { source, offline = false, kb = true, skipVerify = false } = options
   const target = args[0]

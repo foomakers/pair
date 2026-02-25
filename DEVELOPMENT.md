@@ -189,36 +189,19 @@ pnpm exec changeset version    # Generate version bumps + changelogs
 - Cache stored in `node_modules/.cache/turbo`
 - `turbo clean` to clear cache if needed
 
-## GitHub Packages (Private Registry)
+## GitHub Packages
 
-`@foomakers/pair-cli` is published on GitHub Packages. To install:
+`@foomakers/pair-cli` is published on GitHub Packages. The repository is **public**, so no authentication is required to install.
 
-**User-level `~/.npmrc`:**
-
-```ini
-//npm.pkg.github.com/:_authToken=PERSONAL_TOKEN
-@foomakers:registry=https://npm.pkg.github.com/
-```
-
-**Project-level `.npmrc` (with env var):**
+**`.npmrc` (user-level or project-level):**
 
 ```ini
 @foomakers:registry=https://npm.pkg.github.com/
-//npm.pkg.github.com/:_authToken=${NPM_TOKEN}
 ```
 
-**CI (GitHub Actions):**
+**CI (GitHub Actions) — publishing only:**
 
-```yaml
-- name: Setup npm auth
-  run: |
-    echo "@foomakers:registry=https://npm.pkg.github.com/" >> ~/.npmrc
-    echo "//npm.pkg.github.com/:_authToken=${{ secrets.NPM_TOKEN }}" >> ~/.npmrc
-  env:
-    NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-```
-
-Required token scopes: `read:packages` (+ `repo` for private repo packages).
+Publishing still requires authentication with `write:packages` scope. The workflow uses `GITHUB_TOKEN` automatically.
 
 ## Environment Variables
 

@@ -1,6 +1,8 @@
 ---
 name: assess-debt
 description: "Assesses technical debt using resolution cascade (Argument > Adoption > Assessment). Categorizes debt (code, design, test, documentation, infrastructure), applies prioritization formula (impact x effort), proposes remediation priority. Idempotent: detects existing assessment. Invocable independently or composed by /review."
+version: 0.4.1
+author: Foomakers
 ---
 
 # /assess-debt — Technical Debt Assessment
