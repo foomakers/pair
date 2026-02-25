@@ -145,3 +145,4 @@ function isLocalPath(str: string): boolean {
 - **Regression prevention**: Test stays in codebase to catch future breaks
 - **Clarity**: Test documents expected behavior
 - **Confidence**: Linting + tests pass before committing
+
