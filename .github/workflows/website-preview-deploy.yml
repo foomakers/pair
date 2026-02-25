@@ -38,8 +38,14 @@ jobs:
         id: deploy
         run: |
           chmod +x scripts/workflows/release/deploy-website.sh
+          set +e
           OUTPUT=$(./scripts/workflows/release/deploy-website.sh 2>&1)
+          EXIT_CODE=$?
+          set -e
           echo "$OUTPUT"
+          if [ $EXIT_CODE -ne 0 ]; then
+            exit $EXIT_CODE
+          fi
           PREVIEW_URL=$(echo "$OUTPUT" | grep '^URL:' | sed 's/^URL: //')
           echo "url=$PREVIEW_URL" >> $GITHUB_OUTPUT
         env:
