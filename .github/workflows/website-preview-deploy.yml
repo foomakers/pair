@@ -48,7 +48,7 @@ jobs:
           DEPLOY_ID=$(gh api repos/${{ github.repository }}/deployments \
             --input - <<'JSON' | jq -r '.id'
           {
-            "ref": "${{ github.sha }}",
+            "ref": "${{ github.event.pull_request.head.sha || github.sha }}",
             "environment": "Website Preview",
             "auto_merge": false,
             "required_contexts": []
