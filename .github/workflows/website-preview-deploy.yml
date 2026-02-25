@@ -15,7 +15,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -66,13 +65,3 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "[${{ steps.deploy.outputs.url }}](${{ steps.deploy.outputs.url }})" >> $GITHUB_STEP_SUMMARY
 
-      - name: Comment preview URL on PR
-        if: github.event_name == 'pull_request' && steps.deploy.outputs.url != ''
-        run: |
-          gh pr comment ${{ github.event.pull_request.number }} \
-            --body "**Website Preview:** ${{ steps.deploy.outputs.url }}" \
-            --edit-last || \
-          gh pr comment ${{ github.event.pull_request.number }} \
-            --body "**Website Preview:** ${{ steps.deploy.outputs.url }}"
-        env:
-          GH_TOKEN: ${{ github.token }}
