@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      deployments: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -39,6 +40,22 @@ jobs:
           git config user.name "foomakers"
           git commit --amend --no-edit --reset-author --no-verify
 
+      - name: Create GitHub deployment
+        id: deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          DEPLOY_ID=$(gh api repos/${{ github.repository }}/deployments \
+            -f ref=${{ github.sha }} \
+            -f environment="Website Preview" \
+            -f auto_merge=false \
+            -F required_contexts='[]' \
+            --jq '.id')
+          echo "id=$DEPLOY_ID" >> $GITHUB_OUTPUT
+
+          gh api repos/${{ github.repository }}/deployments/${DEPLOY_ID}/statuses \
+            -f state=in_progress
+
       - name: Deploy preview to Vercel
         id: deploy
         run: |
@@ -58,10 +75,16 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Write job summary with preview URL
-        if: steps.deploy.outputs.url != ''
+      - name: Update deployment status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          echo "### 🌐 Website Preview" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "[${{ steps.deploy.outputs.url }}](${{ steps.deploy.outputs.url }})" >> $GITHUB_STEP_SUMMARY
-
+          if [ -n "${{ steps.deploy.outputs.url }}" ]; then
+            gh api repos/${{ github.repository }}/deployments/${{ steps.deployment.outputs.id }}/statuses \
+              -f state=success \
+              -f environment_url="${{ steps.deploy.outputs.url }}"
+          else
+            gh api repos/${{ github.repository }}/deployments/${{ steps.deployment.outputs.id }}/statuses \
+              -f state=failure
+          fi
