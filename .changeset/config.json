@@ -10,7 +10,6 @@
       "@pair/knowledge-hub",
       "@pair/eslint-config",
       "@pair/prettier-config",
-      "@pair/website",
       "@pair/ts-config"
     ]
   ],

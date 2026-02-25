@@ -1,6 +1,5 @@
 ---
 '@pair/pair-cli': patch
-'@pair/website': patch
 '@pair/brand': patch
 '@pair/knowledge-hub': patch
 '@pair/eslint-config': patch
