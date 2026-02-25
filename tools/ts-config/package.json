@@ -1,6 +1,6 @@
 {
   "name": "@pair/ts-config",
-  "version": "0.1.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Shared TypeScript configuration presets for Pair monorepo",
   "files": [
