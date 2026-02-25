@@ -171,7 +171,7 @@ jobs:
         run: |
           git config user.email "foomakers42@gmail.com"
           git config user.name "foomakers"
-          git commit --amend --no-edit --reset-author
+          git commit --amend --no-edit --reset-author --no-verify
 
       - name: Deploy to Vercel (production)
         run: |
