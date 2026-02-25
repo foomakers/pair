@@ -120,11 +120,22 @@ if [ "$PROD" = true ]; then
 fi
 
 echo "Deploying to Vercel ($VERCEL_CMD)..."
-DEPLOY_OUTPUT=$($VERCEL_CMD ${VERCEL_ARGS} 2>&1)
+set +e
+DEPLOY_OUTPUT=$($VERCEL_CMD ${VERCEL_ARGS} --yes 2>&1)
+DEPLOY_EXIT=$?
+set -e
+
+if [ $DEPLOY_EXIT -ne 0 ]; then
+  echo "Error: Deploy failed (exit code $DEPLOY_EXIT)"
+  echo "Output:"
+  echo "$DEPLOY_OUTPUT"
+  exit $DEPLOY_EXIT
+fi
+
 DEPLOY_URL=$(echo "$DEPLOY_OUTPUT" | grep -oE 'https://[^ ]+\.vercel\.app' | tail -1)
 
 if [ -z "$DEPLOY_URL" ]; then
-  echo "Error: Deploy failed — no URL returned"
+  echo "Error: Deploy succeeded but no URL found in output"
   echo "Output:"
   echo "$DEPLOY_OUTPUT"
   exit 1
