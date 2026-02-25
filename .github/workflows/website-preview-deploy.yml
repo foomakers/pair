@@ -1,0 +1,59 @@
+name: Website Preview Deploy
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+    paths:
+      - 'apps/website/**'
+      - 'packages/brand/**'
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '10.15.0'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Deploy preview to Vercel
+        id: deploy
+        run: |
+          chmod +x scripts/workflows/release/deploy-website.sh
+          OUTPUT=$(./scripts/workflows/release/deploy-website.sh 2>&1)
+          echo "$OUTPUT"
+          PREVIEW_URL=$(echo "$OUTPUT" | grep '^URL:' | sed 's/^URL: //')
+          echo "url=$PREVIEW_URL" >> $GITHUB_OUTPUT
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Comment preview URL on PR
+        if: github.event_name == 'pull_request' && steps.deploy.outputs.url != ''
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "**Website Preview:** ${{ steps.deploy.outputs.url }}" \
+            --edit-last || \
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "**Website Preview:** ${{ steps.deploy.outputs.url }}"
+        env:
+          GH_TOKEN: ${{ github.token }}

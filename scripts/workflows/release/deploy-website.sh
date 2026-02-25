@@ -7,11 +7,11 @@ set -euo pipefail
 #   --prod: Deploy to production (default: preview)
 #   --dry-run: Show what would be done without deploying
 # Environment:
-#   VERCEL_TOKEN: Vercel access token (required unless --dry-run)
-#   VERCEL_ORG_ID: Vercel org/team ID (required unless --dry-run)
-#   VERCEL_PROJECT_ID: Vercel project ID (required unless --dry-run)
+#   VERCEL_TOKEN: Vercel access token (required in CI; optional locally if authenticated via `vercel login`)
+#   VERCEL_ORG_ID: Vercel org/team ID (required in CI; read from .vercel/project.json locally)
+#   VERCEL_PROJECT_ID: Vercel project ID (required in CI; read from .vercel/project.json locally)
 # Outputs:
-#   Deploy URL (stdout last line)
+#   Deploy URL printed as "URL: <url>"
 
 DRY_RUN=false
 PROD=false
@@ -43,56 +43,90 @@ echo "=== Website Deploy ==="
 echo "Mode: $([ "$PROD" = true ] && echo 'production' || echo 'preview')"
 echo "Dry run: $DRY_RUN"
 
-# Validate environment
-if [ "$DRY_RUN" = false ]; then
-  if [ -z "${VERCEL_TOKEN:-}" ]; then
-    echo "Error: VERCEL_TOKEN is required"
-    echo "Set it via: export VERCEL_TOKEN=<your-token>"
-    exit 1
-  fi
-  if [ -z "${VERCEL_ORG_ID:-}" ]; then
-    echo "Error: VERCEL_ORG_ID is required"
-    exit 1
-  fi
-  if [ -z "${VERCEL_PROJECT_ID:-}" ]; then
-    echo "Error: VERCEL_PROJECT_ID is required"
-    exit 1
-  fi
-fi
-
-# Validate website build exists or can be built
+# Validate website directory exists
 if [ ! -d "apps/website" ]; then
   echo "Error: apps/website directory not found. Run from repo root."
   exit 1
 fi
 
+# Determine auth mode: token (CI) or session (local)
+AUTH_MODE="session"
+if [ -n "${VERCEL_TOKEN:-}" ]; then
+  AUTH_MODE="token"
+fi
+
+# In session mode, try to read project config from .vercel/project.json
+if [ "$AUTH_MODE" = "session" ] && [ "$DRY_RUN" = false ]; then
+  if [ -f ".vercel/project.json" ]; then
+    # Export org/project IDs from local config if not already set
+    if [ -z "${VERCEL_ORG_ID:-}" ]; then
+      VERCEL_ORG_ID=$(node -e "console.log(JSON.parse(require('fs').readFileSync('.vercel/project.json','utf8')).orgId)")
+      export VERCEL_ORG_ID
+    fi
+    if [ -z "${VERCEL_PROJECT_ID:-}" ]; then
+      VERCEL_PROJECT_ID=$(node -e "console.log(JSON.parse(require('fs').readFileSync('.vercel/project.json','utf8')).projectId)")
+      export VERCEL_PROJECT_ID
+    fi
+    echo "Auth: session (local .vercel/project.json)"
+  else
+    echo "Error: No VERCEL_TOKEN and no .vercel/project.json found."
+    echo "Run 'vercel login && vercel link' or set VERCEL_TOKEN env var."
+    exit 1
+  fi
+elif [ "$AUTH_MODE" = "token" ]; then
+  # Token mode: validate required env vars
+  if [ -z "${VERCEL_ORG_ID:-}" ]; then
+    echo "Error: VERCEL_ORG_ID is required in token mode"
+    exit 1
+  fi
+  if [ -z "${VERCEL_PROJECT_ID:-}" ]; then
+    echo "Error: VERCEL_PROJECT_ID is required in token mode"
+    exit 1
+  fi
+  echo "Auth: token"
+fi
+
 if [ "$DRY_RUN" = true ]; then
   echo "[DRY RUN] Would deploy apps/website to Vercel"
+  echo "[DRY RUN] Auth mode: $AUTH_MODE"
   echo "[DRY RUN] VERCEL_ORG_ID: ${VERCEL_ORG_ID:-<not set>}"
   echo "[DRY RUN] VERCEL_PROJECT_ID: ${VERCEL_PROJECT_ID:-<not set>}"
   echo "[DRY RUN] VERCEL_TOKEN: ${VERCEL_TOKEN:+<set>}${VERCEL_TOKEN:-<not set>}"
   if [ "$PROD" = true ]; then
-    echo "[DRY RUN] Command: npx vercel deploy --prod --token=***"
+    echo "[DRY RUN] Command: vercel deploy --prod --archive=tgz"
     echo "[DRY RUN] Production URL: https://pair-website.vercel.app (placeholder)"
   else
-    echo "[DRY RUN] Command: npx vercel deploy --token=***"
+    echo "[DRY RUN] Command: vercel deploy --archive=tgz"
     echo "[DRY RUN] Preview URL: https://pair-website-<hash>.vercel.app (placeholder)"
   fi
   exit 0
 fi
 
-# Build vercel CLI args
+# Resolve vercel CLI: prefer global install, fallback to npx
+if command -v vercel >/dev/null 2>&1; then
+  VERCEL_CMD="vercel"
+else
+  VERCEL_CMD="npx vercel"
+fi
+
+# Build CLI args
 # --archive=tgz: required for monorepos with >15000 files
-VERCEL_ARGS="deploy --archive=tgz --token=${VERCEL_TOKEN}"
+VERCEL_ARGS="deploy --archive=tgz"
+if [ "$AUTH_MODE" = "token" ]; then
+  VERCEL_ARGS="${VERCEL_ARGS} --token=${VERCEL_TOKEN}"
+fi
 if [ "$PROD" = true ]; then
   VERCEL_ARGS="${VERCEL_ARGS} --prod"
 fi
 
-echo "Deploying to Vercel..."
-DEPLOY_URL=$(npx vercel ${VERCEL_ARGS} 2>&1 | tail -1)
+echo "Deploying to Vercel ($VERCEL_CMD)..."
+DEPLOY_OUTPUT=$($VERCEL_CMD ${VERCEL_ARGS} 2>&1)
+DEPLOY_URL=$(echo "$DEPLOY_OUTPUT" | grep -oE 'https://[^ ]+\.vercel\.app' | tail -1)
 
 if [ -z "$DEPLOY_URL" ]; then
   echo "Error: Deploy failed — no URL returned"
+  echo "Output:"
+  echo "$DEPLOY_OUTPUT"
   exit 1
 fi
 
