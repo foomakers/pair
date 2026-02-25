@@ -30,3 +30,4 @@ apps/website/scripts/landing-video/*.webm
 apps/website/scripts/landing-video/concat-list.txt
 apps/website/scripts/landing-video/_issue-preview.html
 apps/website/scripts/landing-video/_login-closing.html
+.vercel

@@ -58,7 +58,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - next-themes v0.4.6 is adopted for theme management (light/dark mode toggle) in `apps/website/`.
 - @types/mdx v2.0.13 is adopted for TypeScript type definitions for MDX content in `apps/website/`.
 - PostHog is adopted for anonymous analytics (`posthog-js ^1.350.0`) in cookieless mode (`persistence: 'memory'`): no cookies, no PII, no consent required. Env vars: `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST`.
-- Vercel Hobby plan is adopted as the hosting platform for `apps/website/` (static + client-side only, preview deploys for PRs, production on main).
+- Vercel Hobby plan is adopted as the hosting platform for `apps/website/` (static + client-side only). Deployed via Vercel CLI from GitHub Actions (bypasses Hobby plan private org-repo restriction). Production deploy is release-gated: runs only on tag `v*` as a job in `release.yml` (after CLI/KB artifacts). Preview deploys on PRs via `website-preview-deploy.yml` (path-filtered to `apps/website/**` + `packages/brand/**`).
 
 ## UI frameworks & libraries
 
