@@ -77,6 +77,9 @@ jobs:
           # Run changesets version (this updates package.json files and removes changeset files)
           pnpm changeset version
 
+          # Sync version into markdown/MDX files that hardcode it
+          node scripts/sync-version-in-docs.js "$OLD_CLI_VERSION"
+
           # Get new CLI version after changesets
           CLI_VERSION=$(node -e "console.log(require('./apps/pair-cli/package.json').version)")
           echo "New CLI version: $CLI_VERSION"
