@@ -17,6 +17,7 @@ export function PostHogProvider({ children }: { children: ReactNode }) {
       capture_pageview: true,
       capture_pageleave: true,
       autocapture: false,
+      capture_performance: { web_vitals: true },
     })
   }, [])
 
