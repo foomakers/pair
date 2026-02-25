@@ -46,11 +46,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           DEPLOY_ID=$(gh api repos/${{ github.repository }}/deployments \
-            -f ref=${{ github.sha }} \
-            -f environment="Website Preview" \
-            -f auto_merge=false \
-            -F required_contexts='[]' \
-            --jq '.id')
+            --input - <<'JSON' | jq -r '.id'
+          {
+            "ref": "${{ github.sha }}",
+            "environment": "Website Preview",
+            "auto_merge": false,
+            "required_contexts": []
+          }
+          JSON
+          )
           echo "id=$DEPLOY_ID" >> $GITHUB_OUTPUT
 
           gh api repos/${{ github.repository }}/deployments/${DEPLOY_ID}/statuses \
