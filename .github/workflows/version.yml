@@ -94,8 +94,8 @@ jobs:
             # Stage all changes (updated package.json files and removed changeset files)
             git add .
 
-            # Create the version commit
-            git commit -m "chore: release v$CLI_VERSION" -m "Version packages and remove changesets"
+            # Create the version commit (skip hooks — quality gate runs in dedicated workflows)
+            HUSKY=0 git commit -m "chore: release v$CLI_VERSION" -m "Version packages and remove changesets"
 
             # Set environment variable for PR creation
             echo "CLI_VERSION=$CLI_VERSION" >> $GITHUB_ENV
@@ -116,8 +116,8 @@ jobs:
           BRANCH_NAME="changeset-release/v${{ env.CLI_VERSION }}-${{ github.run_number }}"
           git checkout -b "$BRANCH_NAME"
 
-          # Push the new branch
-          git push origin "$BRANCH_NAME"
+          # Push the new branch (skip hooks — quality gate runs in dedicated workflows)
+          HUSKY=0 git push origin "$BRANCH_NAME"
 
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
 
