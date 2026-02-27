@@ -172,7 +172,7 @@ if [ ! -d "$KB_SOURCE_PATH" ]; then
 fi
 
 # Build arguments for run-all.sh
-ARGS=(--binary "$BIN_PATH")
+ARGS=(--binary "$BIN_PATH" --ci --offline-only)
 if [ -n "$KB_SOURCE_PATH" ]; then
   ARGS+=(--kb-source "$KB_SOURCE_PATH")
 fi

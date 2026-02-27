@@ -218,7 +218,7 @@ else
   fi
 
   # Build arguments for run-all.sh
-  ARGS=(--binary "$INSTALLED_BIN")
+  ARGS=(--binary "$INSTALLED_BIN" --ci --offline-only)
   if [ -n "$KB_SOURCE_PATH" ]; then
     ARGS+=(--kb-source "$KB_SOURCE_PATH")
   fi

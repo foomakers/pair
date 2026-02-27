@@ -16,8 +16,9 @@
 
 ### Steps
 
-1. `mkdir -p $WORKDIR/project-auto && cd $WORKDIR/project-auto`
-2. `$CLI install`
+1. `rm -rf ~/.pair/kb/` (clear KB cache to ensure clean state)
+2. `mkdir -p $WORKDIR/project-auto && cd $WORKDIR/project-auto`
+3. `$CLI install`
 
 ### Expected Result
 
@@ -26,11 +27,40 @@
 - `.pair/knowledge/` directory created and non-empty
 - `AGENTS.md` created at project root
 - `.pair/adoption/` directory created
+- KB cached at `~/.pair/kb/$VERSION/`
 
 ### Notes
 
 - This tests the automatic KB download from GitHub release — the most common first-time user flow
+- Cache MUST be cleared first — stale/incomplete cache data can cause false failures
 - Network required; if offline, test skips with BLOCKED
+
+---
+
+## MT-CP301b: Install with cached KB (cache hit)
+
+**Priority**: P0
+**Preconditions**: MT-CP301 passes (KB cached at `~/.pair/kb/$VERSION/`)
+**Category**: CLI Functional
+
+### Steps
+
+1. Verify `~/.pair/kb/$VERSION/` exists (cached by MT-CP301)
+2. `mkdir -p $WORKDIR/project-cached && cd $WORKDIR/project-cached`
+3. `$CLI install`
+
+### Expected Result
+
+- Exit code 0
+- CLI uses cached KB (output does NOT mention download)
+- `.pair/knowledge/` directory created and non-empty
+- `AGENTS.md` created at project root
+- `.pair/adoption/` directory created
+
+### Notes
+
+- This tests the cache-hit path: KB already downloaded by MT-CP301, CLI should reuse it without network
+- Complements MT-CP301 (cache miss) to cover both download paths
 
 ---
 
