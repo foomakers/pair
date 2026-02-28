@@ -1,4 +1,4 @@
-import { isRemoteUrl } from '@pair/content-ops'
+import { isGitUrl, isRemoteUrl } from '@pair/content-ops'
 
 /**
  * Common CLI options validation.
@@ -17,6 +17,9 @@ export function validateCommandOptions(
   if (offline) {
     if (!source) {
       throw new Error('Offline mode requires explicit --source with local path')
+    }
+    if (isGitUrl(source)) {
+      throw new Error('Cannot use --offline with git repository source')
     }
     if (isRemoteUrl(source)) {
       throw new Error('Cannot use --offline with remote URL source')

@@ -1,8 +1,11 @@
 import { join, dirname, resolve } from 'path'
+import { rmSync } from 'fs'
 import { FileSystemService, HttpClientService, validateKBStructure } from '@pair/content-ops'
 import { findPackageJsonPath } from './discovery'
 import { isKBCached, ensureKBAvailable } from '#kb-manager'
 import { installKBFromLocalZip } from '#kb-manager/kb-installer'
+import { cloneGitRepo, gitCacheKey } from '#kb-manager/git-clone'
+import cacheManager from '#kb-manager/cache-manager'
 import { isDiagEnabled } from '#diagnostics'
 
 /**
@@ -116,6 +119,7 @@ export async function getKnowledgeHubDatasetPathWithFallback(options: {
 export type DatasetResolvableConfig =
   | { resolution: 'default'; skipVerify?: boolean }
   | { resolution: 'remote'; url: string; skipVerify?: boolean }
+  | { resolution: 'git'; url: string }
   | { resolution: 'local'; path: string; skipVerify?: boolean }
 
 /** Options accepted by resolveDatasetRoot. */
@@ -124,6 +128,14 @@ export interface DatasetResolveOptions {
   httpClient?: HttpClientService | undefined
   progressWriter?: { write(s: string): void } | undefined
   isTTY?: boolean | undefined
+}
+
+async function resolveGitDataset(fs: FileSystemService, url: string): Promise<string> {
+  const cachePath = cacheManager.getCachedKBPath(gitCacheKey(url))
+  await cacheManager.ensureCacheDirectory(cachePath, fs)
+  cloneGitRepo(url, cachePath)
+  rmSync(join(cachePath, '.git'), { recursive: true, force: true })
+  return cachePath
 }
 
 async function resolveLocalDataset(
@@ -192,6 +204,9 @@ export async function resolveDatasetRoot(
         customUrl: config.url,
       })
     }
+
+    case 'git':
+      return resolveGitDataset(fs, config.url)
 
     case 'local':
       return resolveLocalDataset(fs, config.path, version, config.skipVerify)

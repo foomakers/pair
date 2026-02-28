@@ -143,6 +143,12 @@ Copy the template from `.pair/knowledge/guidelines/collaboration/templates/` to 
 
 [Customize Templates](/docs/customization/templates)
 
+### Can I use pair-cli just to manage skills and assistant files — without the full Knowledge Base?
+
+Yes. pair-cli works with any directory containing AGENTS.md and a `config.json`. Create a Git repository with your skills, write a config.json that defines the registries and targets, and distribute it with `pair install --source <git-url>`. No Knowledge Base required.
+
+[Managing AI Artifacts tutorial](/docs/tutorials/managing-ai-artifacts)
+
 ### Can I create and distribute my own Knowledge Base?
 
 Yes. Create a KB from scratch or fork an existing one, structure it following the `.pair/` convention, package it with `pair-cli package`, and distribute via npm or GitHub.

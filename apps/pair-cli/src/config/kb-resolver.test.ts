@@ -241,6 +241,50 @@ describe('resolveDatasetRoot', () => {
     )
   })
 
+  it('git resolution uses gitCacheKey (not cliVersion) for cache path', async () => {
+    const gitClone = await import('#kb-manager/git-clone')
+    const cache = await import('#kb-manager/cache-manager')
+
+    vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation(() => {})
+    vi.spyOn(gitClone, 'gitCacheKey').mockReturnValue('git-abc123')
+    vi.spyOn(cache.default, 'getCachedKBPath').mockReturnValue('/home/.pair/kb/git-abc123')
+    vi.spyOn(cache.default, 'ensureCacheDirectory').mockResolvedValue()
+
+    const fs = new InMemoryFileSystemService({}, '/project', '/project')
+    fs.mkdirSync('/home/.pair/kb/git-abc123/.git')
+
+    const result = await resolveDatasetRoot(
+      fs,
+      { resolution: 'git', url: 'https://github.com/acme/repo.git#v1.0.0' },
+      { cliVersion: '1.0.0' },
+    )
+
+    expect(result).toBe('/home/.pair/kb/git-abc123')
+    expect(gitClone.gitCacheKey).toHaveBeenCalledWith('https://github.com/acme/repo.git#v1.0.0')
+    expect(cache.default.getCachedKBPath).toHaveBeenCalledWith('git-abc123')
+  })
+
+  it('git resolution propagates clone errors', async () => {
+    const gitClone = await import('#kb-manager/git-clone')
+    const cache = await import('#kb-manager/cache-manager')
+
+    vi.spyOn(gitClone, 'cloneGitRepo').mockImplementation(() => {
+      throw new Error('Git clone failed: auth error')
+    })
+    vi.spyOn(cache.default, 'getCachedKBPath').mockReturnValue('/home/.pair/kb/1.0.0')
+    vi.spyOn(cache.default, 'ensureCacheDirectory').mockResolvedValue()
+
+    const fs = new InMemoryFileSystemService({}, '/project', '/project')
+
+    await expect(
+      resolveDatasetRoot(
+        fs,
+        { resolution: 'git', url: 'git@github.com:acme/repo.git' },
+        { cliVersion: '1.0.0' },
+      ),
+    ).rejects.toThrow('Git clone failed')
+  })
+
   it('default resolution without httpClient throws descriptive error when local missing', async () => {
     // Simulate release context: no monorepo packages, no bundle-cli, no httpClient
     const moduleDir = '/opt/pair-cli'

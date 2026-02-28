@@ -31,6 +31,39 @@ describe('parseUpdateCommand', () => {
     })
   })
 
+  describe('git source', () => {
+    it('creates UpdateCommandConfig with git HTTPS URL', () => {
+      const config = parseUpdateCommand({
+        source: 'https://github.com/org/repo.git',
+      })
+
+      expect(config).toEqual({
+        command: 'update',
+        kb: true,
+        resolution: 'git',
+        url: 'https://github.com/org/repo.git',
+        offline: false,
+      })
+    })
+
+    it('handles git@ SSH URL', () => {
+      const config = parseUpdateCommand({
+        source: 'git@github.com:org/repo.git',
+      })
+
+      expect(config.resolution).toBe('git')
+    })
+
+    it('throws error when offline with git source', () => {
+      expect(() => {
+        parseUpdateCommand({
+          source: 'git@github.com:org/repo.git',
+          offline: true,
+        })
+      }).toThrow('Cannot use --offline with git repository source')
+    })
+  })
+
   describe('local source', () => {
     it('creates UpdateCommandConfig with local path', () => {
       const config = parseUpdateCommand({

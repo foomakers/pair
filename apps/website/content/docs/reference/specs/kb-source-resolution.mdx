@@ -31,9 +31,33 @@ KB source is resolved in the following order (highest to lowest priority):
     Validate    Parse      Use monorepo   Download
     is local    source     dataset        from GitHub
     path        type
+                  |
+          ┌──────┼──────┐
+         Git   Remote  Local
+          |      URL    path
+        Clone    |       |
+        repo   Download  Use
+        to     from URL  directly
+        temp
 ```
 
 ## Source Type Detection
+
+### Git URL Detection
+
+```typescript
+function isGitUrl(source: string): boolean {
+  const base = source.replace(/#.*$/, '')
+  return (
+    /^git:\/\//.test(base) ||
+    /^git@[\w.-]+:/.test(base) ||
+    /^ssh:\/\/git@/.test(base) ||
+    (/^https?:\/\//.test(base) && base.endsWith('.git'))
+  )
+}
+```
+
+Checked **before** `isRemoteUrl` — HTTPS `.git` URLs would otherwise match remote URL detection.
 
 ### URL Detection
 
@@ -75,8 +99,24 @@ function isMonorepo(): boolean {
 | Not provided     | Yes         | No     | ERROR: `--offline requires --source`       |
 | HTTP/HTTPS URL   | No          | Yes    | Download from URL                          |
 | HTTP/HTTPS URL   | Yes         | No     | ERROR: Cannot combine URL with `--offline` |
+| Git repo URL     | No          | Yes    | Clone repo, install from clone             |
+| Git repo URL     | Yes         | No     | ERROR: Cannot combine git with `--offline` |
 | Local path       | No          | Yes    | Use local source                           |
 | Local path       | Yes         | Yes    | Use local source (offline mode)            |
+
+## Git Clone Process
+
+When the source is a Git URL:
+
+1. **Parse ref** — split `url#ref` into repo URL and optional branch/tag
+2. **Inject token** — if `PAIR_GIT_TOKEN` is set and URL is HTTPS, rewrite URL with token
+3. **Shallow clone** — `git clone --depth 1 [--branch ref] <url> <tempDir>`
+4. **Install from clone** — copy dataset from temp dir to `~/.pair/kb/{version}/`
+5. **Cleanup** — remove temp clone directory
+
+Auth strategy:
+- **Default**: git inherits system auth (SSH keys, credential manager, `gh auth`)
+- **Override**: `PAIR_GIT_TOKEN` env var injects token into HTTPS URLs
 
 ## Resolution Implementation
 
@@ -141,6 +181,7 @@ async function resolveKbSource(options: {
 | E005 | Download network error | 2 | Network failure | Check connectivity |
 | E006 | Checksum validation failed | 2 | SHA256 mismatch | Retry download |
 | E007 | Auto-download in offline | 1 | No source + offline mode | Provide local source |
+| E008 | Git clone failed | 2 | Clone error (auth, network, missing git) | Check git config, set `PAIR_GIT_TOKEN`, or use SSH |
 
 ## Download Process
 
@@ -166,6 +207,7 @@ Downloaded KBs are cached to avoid redundant downloads. Cache key is derived fro
 | --------------------- | ----------------------------------- | --------------------- |
 | `PAIR_KB_CACHE_DIR`   | Override KB cache directory          | `~/.pair/kb`          |
 | `PAIR_KB_DEFAULT_URL` | Override default GitHub release URL  | GitHub latest release  |
+| `PAIR_GIT_TOKEN`      | Token injected into HTTPS git clone URLs for private repos | Not set      |
 | `PAIR_DIAG`           | Enable diagnostic logging            | `0` (disabled)        |
 
 ---

@@ -381,3 +381,45 @@
 ### Notes
 
 - Symmetric with MT-CP317. `update` precondition: targets must exist.
+
+---
+
+## MT-CP319: Install from Git repository source
+
+**Priority**: P1
+**Preconditions**: `$CLI` functional, internet available, `git` installed
+**Category**: CLI Functional
+
+### Steps
+
+1. Save the CLI `config.json` and change skills source to match the repo layout:
+   ```bash
+   CLI_DIR=$(dirname $(dirname $CLI))   # pair-cli package root
+   cp $CLI_DIR/config.json $WORKDIR/config.json.bak
+   node -e "
+     const fs=require('fs'), p='$CLI_DIR/config.json';
+     const c=JSON.parse(fs.readFileSync(p,'utf-8'));
+     c.asset_registries.skills.source='.claude/skills';
+     fs.writeFileSync(p,JSON.stringify(c,null,2)+'\n');
+   "
+   ```
+2. `rm -rf ~/.pair/kb/git-*` (clear git KB cache entries)
+3. `mkdir -p $WORKDIR/project-git && cd $WORKDIR/project-git`
+4. `$CLI install --source https://github.com/foomakers/pair.git#main`
+5. Verify cache uses hash-based path: `ls ~/.pair/kb/ | grep '^git-'`
+6. Verify `.git` removed from cache: `ls ~/.pair/kb/git-*/.git` (should fail)
+7. Restore original config: `cp $WORKDIR/config.json.bak $CLI_DIR/config.json`
+
+### Expected Result
+
+- Exit code 0 (all 5 registries succeed including skills)
+- Cache directory is `~/.pair/kb/git-<hash>/` (not version-based)
+- No `.git` directory inside cache
+- Same file structure as MT-CP302
+- Original `config.json` restored after test
+
+### Notes
+
+- The default `config.json` has `skills.source: ".skills"` but the pair repo uses `.claude/skills/` — step 1 remaps this temporarily
+- Git cache key is a SHA-256 hash of the full URL (including `#ref`), independent of CLI version
+- Different URLs/refs produce different cache entries (no collisions)

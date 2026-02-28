@@ -40,4 +40,19 @@ describe('cli config - validation', () => {
       validateCommandOptions('install', { source: 'https://example.com/kb.zip', offline: true })
     }).toThrow('Cannot use --offline with remote URL source')
   })
+
+  it('validateCommandOptions throws when offline with git URL', () => {
+    expect(() => {
+      validateCommandOptions('install', { source: 'git@github.com:org/repo.git', offline: true })
+    }).toThrow('Cannot use --offline with git repository source')
+  })
+
+  it('validateCommandOptions throws when offline with HTTPS .git URL', () => {
+    expect(() => {
+      validateCommandOptions('install', {
+        source: 'https://github.com/org/repo.git',
+        offline: true,
+      })
+    }).toThrow('Cannot use --offline with git repository source')
+  })
 })

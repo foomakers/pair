@@ -1,6 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { parseInstallCommand } from './parser'
-import type { InstallCommandConfigRemote, InstallCommandConfigLocal } from './parser'
+import type {
+  InstallCommandConfigRemote,
+  InstallCommandConfigGit,
+  InstallCommandConfigLocal,
+} from './parser'
 
 describe('parseInstallCommand', () => {
   describe('default resolution', () => {
@@ -38,6 +42,50 @@ describe('parseInstallCommand', () => {
 
       expect(config.resolution).toBe('remote')
       expect((config as InstallCommandConfigRemote).url).toBe('http://example.com/kb.zip')
+    })
+  })
+
+  describe('git source', () => {
+    it('creates InstallCommandConfig with git HTTPS URL', () => {
+      const config = parseInstallCommand({
+        source: 'https://github.com/org/repo.git',
+      })
+
+      expect(config).toEqual({
+        command: 'install',
+        kb: true,
+        resolution: 'git',
+        url: 'https://github.com/org/repo.git',
+        offline: false,
+        skipVerify: false,
+      })
+    })
+
+    it('handles git@ SSH URL', () => {
+      const config = parseInstallCommand({
+        source: 'git@github.com:org/repo.git',
+      })
+
+      expect(config.resolution).toBe('git')
+      expect((config as InstallCommandConfigGit).url).toBe('git@github.com:org/repo.git')
+    })
+
+    it('handles git URL with #ref', () => {
+      const config = parseInstallCommand({
+        source: 'https://github.com/org/repo.git#v1.0.0',
+      })
+
+      expect(config.resolution).toBe('git')
+      expect((config as InstallCommandConfigGit).url).toBe('https://github.com/org/repo.git#v1.0.0')
+    })
+
+    it('throws error when offline with git source', () => {
+      expect(() => {
+        parseInstallCommand({
+          source: 'git@github.com:org/repo.git',
+          offline: true,
+        })
+      }).toThrow('Cannot use --offline with git repository source')
     })
   })
 

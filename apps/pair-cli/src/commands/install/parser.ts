@@ -1,5 +1,5 @@
 import { validateCommandOptions } from '#config/cli'
-import { isRemoteUrl, isUnsupportedProtocol } from '@pair/content-ops'
+import { isGitUrl, isRemoteUrl, isUnsupportedProtocol } from '@pair/content-ops'
 
 /**
  * Discriminated union for install command with default resolution
@@ -40,6 +40,19 @@ export interface InstallCommandConfigLocal {
 }
 
 /**
+ * Discriminated union for install command with git source
+ */
+export interface InstallCommandConfigGit {
+  command: 'install'
+  resolution: 'git'
+  url: string
+  offline: false
+  kb: boolean
+  target?: string
+  skipVerify: boolean
+}
+
+/**
  * Discriminated union for install command with --list-targets
  */
 export interface InstallCommandConfigListTargets {
@@ -53,6 +66,7 @@ export interface InstallCommandConfigListTargets {
 export type InstallCommandConfig =
   | InstallCommandConfigDefault
   | InstallCommandConfigRemote
+  | InstallCommandConfigGit
   | InstallCommandConfigLocal
   | InstallCommandConfigListTargets
 
@@ -71,41 +85,26 @@ function buildOptionalFields(target?: string, skipVerify?: boolean) {
   }
 }
 
-/**
- * Parse install command options into InstallCommandConfig.
- *
- * Determines resolution strategy based on source parameter:
- * - No source: default resolution (uses monorepo dataset or release ZIP)
- * - Remote URL (http/https): remote resolution
- * - Local path (absolute/relative): local resolution
- *
- * @param options - Raw CLI options from Commander.js
- * @param args - Positional arguments from Commander.js
- * @returns Typed InstallCommandConfig with discriminated union for resolution
- * @throws Error if options validation fails
- */
-export function parseInstallCommand(
-  options: ParseInstallOptions,
-  args: string[] = [],
+function resolveInstallSourceConfig(
+  source: string,
+  fields: { kb: boolean; skipVerify: boolean; offline: boolean; target?: string },
 ): InstallCommandConfig {
-  validateCommandOptions('install', options)
-
-  if (options.listTargets) {
-    return { command: 'install', resolution: 'list-targets' }
-  }
-
-  const { source, offline = false, kb = true, skipVerify = false } = options
-  const target = args[0]
-  const optional = buildOptionalFields(target, skipVerify)
-
-  if (!source) {
-    return { command: 'install', resolution: 'default', offline: false, kb, ...optional }
-  }
-
   if (isUnsupportedProtocol(source)) {
     throw new Error(`Unsupported source protocol: ${source}`)
   }
-
+  const { kb, skipVerify, offline, target } = fields
+  const optional = buildOptionalFields(target, skipVerify)
+  if (isGitUrl(source)) {
+    return {
+      command: 'install',
+      resolution: 'git',
+      url: source,
+      offline: false,
+      kb,
+      skipVerify,
+      ...(target && { target }),
+    }
+  }
   if (isRemoteUrl(source)) {
     return {
       command: 'install',
@@ -116,6 +115,36 @@ export function parseInstallCommand(
       ...optional,
     }
   }
-
   return { command: 'install', resolution: 'local', path: source, offline, kb, ...optional }
+}
+
+/**
+ * Parse install command options into InstallCommandConfig.
+ *
+ * Determines resolution strategy based on source parameter:
+ * - No source: default resolution (uses monorepo dataset or release ZIP)
+ * - Git URL (git@, *.git, ssh://git@): git clone resolution
+ * - Remote URL (http/https): remote resolution
+ * - Local path (absolute/relative): local resolution
+ */
+export function parseInstallCommand(
+  options: ParseInstallOptions,
+  args: string[] = [],
+): InstallCommandConfig {
+  validateCommandOptions('install', options)
+  if (options.listTargets) {
+    return { command: 'install', resolution: 'list-targets' }
+  }
+  const { source, offline = false, kb = true, skipVerify = false } = options
+  const target = args[0]
+  if (!source) {
+    return {
+      command: 'install',
+      resolution: 'default',
+      offline: false,
+      kb,
+      ...buildOptionalFields(target, skipVerify),
+    }
+  }
+  return resolveInstallSourceConfig(source, { kb, skipVerify, offline, ...(target && { target }) })
 }

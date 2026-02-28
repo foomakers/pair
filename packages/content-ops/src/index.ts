@@ -24,6 +24,7 @@ export {
 export {
   detectSourceType,
   SourceType,
+  isGitUrl,
   isRemoteUrl,
   isUnsupportedProtocol,
 } from './path-resolution/source-detector'

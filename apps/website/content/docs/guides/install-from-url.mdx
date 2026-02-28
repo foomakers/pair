@@ -36,6 +36,47 @@ export PAIR_KB_DEFAULT_URL=https://artifacts.company.com/pair/kb-latest.zip
 pair install
 ```
 
+## Install from a Git Repository
+
+Point `--source` to any Git repository URL. pair-cli clones the repo (shallow, depth 1) and installs the KB from the cloned content.
+
+```bash
+# HTTPS (public repo)
+pair install --source https://github.com/acme/kb-artifacts.git
+
+# SSH
+pair install --source git@github.com:acme/kb-artifacts.git
+
+# Pin to a tag or branch with #ref
+pair install --source https://github.com/acme/kb-artifacts.git#v1.0.0
+pair install --source git@github.com:acme/kb-artifacts.git#main
+```
+
+### Private Repositories
+
+For **SSH URLs** (`git@…`), git uses your SSH keys automatically — no extra configuration.
+
+For **HTTPS URLs** to private repos, set `PAIR_GIT_TOKEN`:
+
+```bash
+export PAIR_GIT_TOKEN=ghp_your_personal_access_token
+pair install --source https://github.com/acme/private-kb.git#v2.0.0
+```
+
+In CI/CD, inject the token as a secret:
+
+```yaml
+env:
+  PAIR_GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
+run: pair install --source https://github.com/acme/kb-artifacts.git#v1.0.0
+```
+
+The `update` command works the same way:
+
+```bash
+pair update --source https://github.com/acme/kb-artifacts.git#v2.0.0
+```
+
 ## Install from a Local Path
 
 Point `--source` to a local directory or ZIP file:
@@ -90,14 +131,16 @@ pair install --offline --source ./kb-content
 
 ### Constraints
 
-| `--source`      | `--offline` | Valid? | Behavior                   |
-| --------------- | ----------- | ------ | -------------------------- |
-| Not provided    | No          | Yes    | Auto-download from GitHub  |
-| Not provided    | Yes         | No     | Error: requires `--source` |
-| `https://...`   | No          | Yes    | Download from URL          |
-| `https://...`   | Yes         | No     | Error: cannot use URL      |
-| `./local-path`  | No          | Yes    | Use local path             |
-| `./local-path`  | Yes         | Yes    | Use local path (offline)   |
+| `--source`         | `--offline` | Valid? | Behavior                    |
+| ------------------ | ----------- | ------ | --------------------------- |
+| Not provided       | No          | Yes    | Auto-download from GitHub   |
+| Not provided       | Yes         | No     | Error: requires `--source`  |
+| `https://...`      | No          | Yes    | Download from URL           |
+| `https://...`      | Yes         | No     | Error: cannot use URL       |
+| `*.git` / `git@…`  | No          | Yes    | Clone git repo              |
+| `*.git` / `git@…`  | Yes         | No     | Error: cannot use git       |
+| `./local-path`     | No          | Yes    | Use local path              |
+| `./local-path`     | Yes         | Yes    | Use local path (offline)    |
 
 ## Verifying Packages
 

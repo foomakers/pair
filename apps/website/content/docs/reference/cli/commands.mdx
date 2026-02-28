@@ -40,16 +40,17 @@ pair install [registry:target ...]
 | ---------------------- | ------------------------------------------------------ |
 | `--list-targets`       | List all available asset registries with descriptions  |
 | `--config <file>`      | Use custom configuration file (default: `config.json`) |
-| `--source <url\|path>` | KB source URL or local path (overrides auto-download)  |
+| `--source <url\|path\|git>` | KB source: URL, local path, or git repo (overrides auto-download) |
 | `--offline`            | Skip KB download, use local source only                |
 | `--skip-verify`        | Skip package integrity verification (for ZIP sources)  |
 
 **KB Source Options:**
 
 - `--source <url>` — Download KB from custom HTTP/HTTPS URL or use local path
+- `--source <git-url>` — Clone KB from a git repository (`*.git`, `git@…`, `ssh://git@…`, append `#ref` to pin version)
 - `--offline` — Skip automatic KB download (requires `--source` with local path)
 
-**Note:** Cannot combine `--source <url>` with `--offline`. The `--offline` flag requires `--source` with a local filesystem path.
+**Note:** Cannot combine `--source <url>` or `--source <git-url>` with `--offline`. The `--offline` flag requires `--source` with a local filesystem path.
 
 **Target Resolution:** Registry output is written relative to the current working directory. When running via `pnpm --filter`, the CLI reads `INIT_CWD` (set by pnpm to the original invoking directory) so output lands at the monorepo root, not inside the filtered package directory.
 
@@ -70,6 +71,10 @@ pair install github:.github knowledge:.pair
 
 # Use custom KB source (remote URL)
 pair install --source https://internal-mirror.company.com/kb.zip
+
+# Use custom KB source (git repository)
+pair install --source https://github.com/acme/kb-artifacts.git
+pair install --source git@github.com:acme/kb-artifacts.git#v1.0.0
 
 # Use custom KB source (local path)
 pair install --source /absolute/path/to/kb-content
@@ -101,9 +106,9 @@ pair update [registry:target ...]
 
 | Option                 | Description                                            |
 | ---------------------- | ------------------------------------------------------ |
-| `--config <file>`      | Use custom configuration file (default: `config.json`) |
-| `--source <url\|path>` | KB source URL or local path (overrides auto-download)  |
-| `--offline`            | Skip KB download, use local source only                |
+| `--config <file>`          | Use custom configuration file (default: `config.json`) |
+| `--source <url\|path\|git>` | KB source: URL, local path, or git repo (overrides auto-download) |
+| `--offline`                | Skip KB download, use local source only                |
 
 ### Examples
 
@@ -116,6 +121,9 @@ pair update github:.github knowledge:.pair
 
 # Update from custom KB source
 pair update --source https://internal-mirror.company.com/kb.zip
+
+# Update from git repository
+pair update --source https://github.com/acme/kb-artifacts.git#v2.0.0
 
 # Offline update
 pair update --offline --source ./local-kb-content
