@@ -91,6 +91,7 @@ describe('dispatchCommand() - real handlers integration', () => {
     const config: PackageCommandConfig = {
       command: 'package',
       output: outputPath,
+      layout: 'source',
       interactive: false,
       tags: [],
       license: 'MIT',

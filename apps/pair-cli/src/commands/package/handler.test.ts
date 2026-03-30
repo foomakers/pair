@@ -37,6 +37,7 @@ describe('handlePackageCommand - real services integration', () => {
       output: outputPath,
       name: 'test-kb',
       version: '1.2.3',
+      layout: 'source',
       interactive: false,
       tags: [],
       license: 'MIT',
@@ -69,6 +70,7 @@ describe('handlePackageCommand - real services integration', () => {
       output: outputPath,
       name: 'org-kb',
       version: '1.0.0',
+      layout: 'source',
       interactive: false,
       tags: [],
       license: 'MIT',
@@ -98,6 +100,7 @@ describe('handlePackageCommand - real services integration', () => {
     const config: PackageCommandConfig = {
       command: 'package',
       output: outputPath,
+      layout: 'source',
       interactive: false,
       tags: [],
       license: 'MIT',
@@ -127,6 +130,7 @@ describe('handlePackageCommand - real services integration', () => {
     const config: PackageCommandConfig = {
       command: 'package',
       output: outputPath,
+      layout: 'source',
       interactive: false,
       tags: [],
       license: 'MIT',
@@ -158,6 +162,7 @@ describe('handlePackageCommand - real services integration', () => {
     const config: PackageCommandConfig = {
       command: 'package',
       output: outputPath,
+      layout: 'source',
       interactive: false,
       tags: [],
       license: 'MIT',
@@ -180,6 +185,7 @@ describe('handlePackageCommand - real services integration', () => {
     const config: PackageCommandConfig = {
       command: 'package',
       output: `${cwd}/dist/fail.zip`,
+      layout: 'source',
       interactive: false,
       tags: [],
       license: 'MIT',
@@ -206,6 +212,7 @@ describe('handlePackageCommand - real services integration', () => {
 
     const config: PackageCommandConfig = {
       command: 'package',
+      layout: 'source',
       interactive: false,
       tags: [],
       license: 'MIT',

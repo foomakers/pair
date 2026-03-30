@@ -25,7 +25,7 @@ describe('validatePackageStructure - path existence', () => {
       },
     }
 
-    const result = await validatePackageStructure(config, projectRoot, fsService)
+    const result = await validatePackageStructure(config, projectRoot, fsService, 'source')
 
     expect(result.valid).toBe(false)
     expect(result.errors).toContain(
@@ -64,7 +64,7 @@ describe('validatePackageStructure - multiple missing paths', () => {
       },
     }
 
-    const result = await validatePackageStructure(config, projectRoot, fsService)
+    const result = await validatePackageStructure(config, projectRoot, fsService, 'source')
 
     expect(result.valid).toBe(false)
     expect(result.errors).toHaveLength(3)
@@ -102,7 +102,7 @@ describe('validatePackageStructure - empty directory', () => {
 
     await fsService.mkdir(`${projectRoot}/.pair/knowledge`, { recursive: true })
 
-    const result = await validatePackageStructure(config, projectRoot, fsService)
+    const result = await validatePackageStructure(config, projectRoot, fsService, 'source')
 
     expect(result.valid).toBe(false)
     expect(result.errors).toContain("Registry 'knowledge' directory is empty")
@@ -142,7 +142,7 @@ describe('validatePackageStructure - all empty dirs', () => {
     await fsService.mkdir(`${projectRoot}/.pair/knowledge`, { recursive: true })
     await fsService.mkdir(`${projectRoot}/.pair/adoption`, { recursive: true })
 
-    const result = await validatePackageStructure(config, projectRoot, fsService)
+    const result = await validatePackageStructure(config, projectRoot, fsService, 'source')
 
     expect(result.valid).toBe(false)
     expect(result.errors).toHaveLength(3)
@@ -163,7 +163,7 @@ describe('validatePackageStructure - malformed config', () => {
   it('should fail when config has no asset_registries', async () => {
     const config = {} as Config
 
-    const result = await validatePackageStructure(config, projectRoot, fsService)
+    const result = await validatePackageStructure(config, projectRoot, fsService, 'source')
 
     expect(result.valid).toBe(false)
     expect(result.errors).toContain('Config must have asset_registries')
@@ -182,7 +182,7 @@ describe('validatePackageStructure - malformed config', () => {
       },
     } as unknown as Config
 
-    const result = await validatePackageStructure(config, projectRoot, fsService)
+    const result = await validatePackageStructure(config, projectRoot, fsService, 'source')
 
     expect(result.valid).toBe(false)
     expect(result.errors).toContain("Registry 'knowledge' missing required field: source")
@@ -225,7 +225,7 @@ describe('validatePackageStructure - valid non-empty', () => {
     await fsService.mkdir(`${projectRoot}/.pair/adoption`, { recursive: true })
     await fsService.writeFile(`${projectRoot}/.pair/adoption/guide.md`, 'guide content')
 
-    const result = await validatePackageStructure(config, projectRoot, fsService)
+    const result = await validatePackageStructure(config, projectRoot, fsService, 'source')
 
     expect(result.valid).toBe(true)
     expect(result.errors).toHaveLength(0)
@@ -256,7 +256,39 @@ describe('validatePackageStructure - file registry', () => {
 
     await fsService.writeFile(`${projectRoot}/AGENTS.md`, '# Agents guide')
 
-    const result = await validatePackageStructure(config, projectRoot, fsService)
+    const result = await validatePackageStructure(config, projectRoot, fsService, 'source')
+
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+  })
+})
+
+describe('validatePackageStructure - layout target', () => {
+  let fsService: InMemoryFileSystemService
+  const projectRoot = '/test/project'
+
+  beforeEach(() => {
+    fsService = new InMemoryFileSystemService({}, '/', projectRoot)
+  })
+
+  it('should validate using targets when layout is target (no root .skills required)', async () => {
+    const config: Config = {
+      asset_registries: {
+        skills: {
+          source: '.skills',
+          behavior: 'mirror',
+          include: [],
+          flatten: false,
+          targets: [{ path: '.claude/skills', mode: 'canonical' }],
+          description: 'Skills registry',
+        },
+      },
+    }
+
+    await fsService.mkdir(`${projectRoot}/.claude/skills/foo`, { recursive: true })
+    await fsService.writeFile(`${projectRoot}/.claude/skills/foo/SKILL.md`, '# skill')
+
+    const result = await validatePackageStructure(config, projectRoot, fsService, 'target')
 
     expect(result.valid).toBe(true)
     expect(result.errors).toHaveLength(0)
@@ -284,7 +316,7 @@ describe('validatePackageStructure - error detection', () => {
       },
     }
 
-    const result = await validatePackageStructure(config, '/test-project', fsService)
+    const result = await validatePackageStructure(config, '/test-project', fsService, 'source')
 
     expect(result.valid).toBe(false)
     expect(result.errors[0]).toContain('source path does not exist')
@@ -308,7 +340,7 @@ describe('validatePackageStructure - error detection', () => {
       },
     }
 
-    const result = await validatePackageStructure(config, projectRoot, fsService)
+    const result = await validatePackageStructure(config, projectRoot, fsService, 'source')
 
     expect(result.valid).toBe(false)
     expect(result.errors[0]).toContain('directory is empty')

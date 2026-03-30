@@ -1,7 +1,6 @@
-import { join } from 'path'
 import { FileSystemService } from '@pair/content-ops'
 import type { Config } from '#registry'
-import { collectLayoutFiles, type LayoutMode } from '../../registry/layout'
+import { collectLayoutFiles, resolveLayoutPaths, type LayoutMode } from '../../registry/layout'
 import { extractRegistries } from '#registry'
 
 export interface ValidationResult {
@@ -46,6 +45,7 @@ async function validateRegistryEntry(
   entry: RegistryEntry,
   projectRoot: string,
   fsService: FileSystemService,
+  layout: LayoutMode,
 ): Promise<{ error?: string; isValid: boolean }> {
   const { name: registryName, registry } = entry
 
@@ -53,22 +53,29 @@ async function validateRegistryEntry(
     return { error: `Registry '${registryName}' missing required field: source`, isValid: false }
   }
 
-  const sourcePath = join(projectRoot, registry.source)
-
-  if (!fsService.existsSync(sourcePath)) {
-    return {
-      error: `Registry '${registryName}' source path does not exist: ${sourcePath}`,
-      isValid: false,
-    }
-  }
-
-  // Use collectLayoutFiles to verify registry has content
   const allRegistries = extractRegistries({ asset_registries: { [registryName]: registry } })
   const registryConfig = allRegistries[registryName]
   if (registryConfig) {
+    const expectedPaths = resolveLayoutPaths({
+      name: registryName,
+      registry: registryConfig,
+      layout,
+      baseDir: projectRoot,
+      fs: fsService,
+    })
+
+    const missing = expectedPaths.filter(p => !fsService.existsSync(p))
+    if (missing.length === expectedPaths.length) {
+      const kind = layout === 'source' ? 'source' : 'target'
+      return {
+        error: `Registry '${registryName}' ${kind} path does not exist: ${missing[0]}`,
+        isValid: false,
+      }
+    }
+
     const files = await collectLayoutFiles({
       registry: registryConfig,
-      layout: 'source' as LayoutMode,
+      layout,
       baseDir: projectRoot,
       fs: fsService,
     })
@@ -88,6 +95,7 @@ export async function validatePackageStructure(
   config: Config,
   projectRoot: string,
   fsService: FileSystemService,
+  layout: LayoutMode = 'target',
 ): Promise<ValidationResult> {
   const errors: string[] = []
 
@@ -100,7 +108,7 @@ export async function validatePackageStructure(
   let validRegistryCount = 0
 
   for (const [name, registry] of registryEntries) {
-    const result = await validateRegistryEntry({ name, registry }, projectRoot, fsService)
+    const result = await validateRegistryEntry({ name, registry }, projectRoot, fsService, layout)
 
     if (result.error) {
       errors.push(result.error)

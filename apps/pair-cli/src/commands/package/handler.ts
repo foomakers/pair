@@ -34,7 +34,12 @@ async function loadAndValidate(
   })
 
   logger.debug('✓ Validating package structure...')
-  const validation = await validatePackageStructure(result.config, projectRoot, fs)
+  const validation = await validatePackageStructure(
+    result.config,
+    projectRoot,
+    fs,
+    config.layout ?? 'target',
+  )
   if (!validation.valid) {
     const message = `Validation failed:\n${validation.errors.join('\n')}`
     console.error('❌', message)
