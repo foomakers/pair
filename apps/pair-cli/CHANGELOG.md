@@ -1,5 +1,12 @@
 # @pair/pair-cli
 
+## 0.4.2
+
+### Patch Changes
+
+- a698478: Fix package validation to respect `--layout` target resolution.
+  - @pair/knowledge-hub@0.4.2
+
 ## 0.4.1
 
 ### Patch Changes
