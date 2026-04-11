@@ -81,7 +81,7 @@ fi
 # Publish
 echo ""
 echo "Publishing $PKG_NAME@$PKG_VERSION to $REGISTRY..."
-if npm publish "$TGZ_PATH" --access public --registry "$REGISTRY" $DRY_RUN; then
+if npm publish "$TGZ_PATH" --access public --registry "$REGISTRY" ${DRY_RUN:+"$DRY_RUN"}; then
   echo "Published successfully."
 else
   EXIT_CODE=$?

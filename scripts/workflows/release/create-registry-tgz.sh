@@ -93,8 +93,8 @@ fi
 # Change to artifact directory for npm operations
 cd "$ART_DIR"
 
-# Ensure the package.json inside the extracted artifact is scoped for GitHub Packages
-echo "Patching package.json for GitHub Packages registry and setting package name/version..."
+# Ensure the package.json inside the extracted artifact is scoped for npmjs.org
+echo "Patching package.json for npmjs.org registry and setting package name/version..."
 # Use a small Node script to robustly patch or create package.json; ensure name is @foomakers/pair-cli and version matches the normalized VERSION
 VERSION_ENV="$VERSION" VERSION="$VERSION" node <<'NODE'
 const fs = require('fs');
@@ -105,7 +105,7 @@ if (fs.existsSync(p)) {
   o.name = '@foomakers/pair-cli';
   o.version = version;
   // ensure package is publishable
-  o.private = !!o.private ? o.private : false;
+  o.private = false;
   o.publishConfig = o.publishConfig || {};
   o.publishConfig.registry = 'https://registry.npmjs.org/';
   o.publishConfig.access = 'public';

@@ -114,36 +114,36 @@ scripts/package-manual.sh <version>
 
 Requires: `ncc` (`@vercel/ncc`), `dts-bundle-generator`, `zip`, `sha256sum`/`shasum`.
 
-## GitHub Packages
+## npmjs.org
 
-The release produces a `.tgz` for publishing to GitHub Packages.
+The release produces a `.tgz` for publishing to npmjs.org. The package is public — no authentication required for consumers.
 
 ### CI authentication (publishing)
 
-Publishing requires `write:packages` scope. The workflow uses `GITHUB_TOKEN` automatically:
+Publishing uses an `NPM_TOKEN` secret (granular access token from npmjs.org):
 
 ```yaml
 env:
-  NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-run: |
-  echo "@foomakers:registry=https://npm.pkg.github.com/" > ~/.npmrc
-  echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
+  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+run: ./scripts/publish-npm.sh "$TGZ"
 ```
 
 ### Consumer installation
 
-The repository is **public** — no authentication token is required to install packages. Consumers only need registry configuration:
+No `.npmrc` or token needed — the package is public on the default npm registry:
 
-```ini
-# ~/.npmrc
-@foomakers:registry=https://npm.pkg.github.com/
+```bash
+npx @foomakers/pair-cli install
+# or
+npm install -g @foomakers/pair-cli
 ```
 
 ## Repository Configuration
 
 ### Token and permissions
 
-- **`GITHUB_TOKEN`** (default): sufficient for creating tags, releases, and publishing to GitHub Packages.
+- **`GITHUB_TOKEN`** (default): sufficient for creating tags, releases, and uploading release assets.
+- **`NPM_TOKEN`**: required for publishing to npmjs.org. Granular access token scoped to `@foomakers`.
 - **`GH_RELEASE_TOKEN`** (optional PAT): only needed if org policy prevents `GITHUB_TOKEN` from creating tags/releases. Add as repository secret with `repo` scope.
 - Workflow permissions: "Read and write permissions" required.
 
