@@ -17,7 +17,7 @@ pair-cli --version   # Current pair-cli version (if installed)
 
 # Check installation location
 which pair-cli       # Should show installation path
-npm list -g @pair/pair-cli  # Global npm installation check
+npm list -g @foomakers/pair-cli  # Global npm installation check
 ```
 
 ## Permission Issues
@@ -31,22 +31,22 @@ npm list -g @pair/pair-cli  # Global npm installation check
 npm config set prefix ~/.npm-global
 echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.profile
 source ~/.profile
-npm install -g @pair/pair-cli
+npm install -g @foomakers/pair-cli
 
 # Option 2: Use pnpm (avoids permission issues)
 npm install -g pnpm
-pnpm add -g @pair/pair-cli
+pnpm add -g @foomakers/pair-cli
 
 # Option 3: Fix npm permissions (if you prefer npm)
 sudo chown -R $(whoami) $(npm config get prefix)/{lib/node_modules,bin,share}
-npm install -g @pair/pair-cli
+npm install -g @foomakers/pair-cli
 ```
 
 **On Windows:**
 
 ```cmd
 # Run PowerShell as Administrator, then:
-npm install -g @pair/pair-cli
+npm install -g @foomakers/pair-cli
 ```
 
 ### Problem: Can't write to `/usr/local/lib/node_modules`
@@ -59,7 +59,7 @@ echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.profile
 source ~/.profile
 
 # Now install
-npm install -g @pair/pair-cli
+npm install -g @foomakers/pair-cli
 ```
 
 ## Node Version Issues
@@ -87,7 +87,7 @@ nvm alias default 18
 
 # Verify
 node --version
-npm install -g @pair/pair-cli
+npm install -g @foomakers/pair-cli
 ```
 
 **Fix with Volta (alternative):**
@@ -103,17 +103,17 @@ volta install npm
 
 # Verify and install
 node --version
-npm install -g @pair/pair-cli
+npm install -g @foomakers/pair-cli
 ```
 
 ### Problem: Multiple Node versions causing conflicts
 
 ```bash
 # Clean up and start fresh
-npm uninstall -g @pair/pair-cli
+npm uninstall -g @foomakers/pair-cli
 nvm use 18  # or your preferred version
 npm cache clean --force
-npm install -g @pair/pair-cli
+npm install -g @foomakers/pair-cli
 ```
 
 ## pnpm Issues
@@ -143,10 +143,10 @@ pnpm store prune
 pnpm cache clear
 
 # Remove existing installation
-pnpm remove -g @pair/pair-cli
+pnpm remove -g @foomakers/pair-cli
 
 # Reinstall fresh
-pnpm add -g @pair/pair-cli
+pnpm add -g @foomakers/pair-cli
 ```
 
 ### Problem: `ERR_PNPM_STORE_BROKEN` or store corruption
@@ -160,7 +160,7 @@ rm -rf ~/.pnpm-state
 
 # Reinstall pnpm and pair-cli
 npm install -g pnpm
-pnpm add -g @pair/pair-cli
+pnpm add -g @foomakers/pair-cli
 ```
 
 ## Native Build Failures
@@ -174,8 +174,8 @@ pnpm add -g @pair/pair-cli
 xcode-select --install
 
 # Clear and reinstall
-npm uninstall -g @pair/pair-cli
-npm install -g @pair/pair-cli
+npm uninstall -g @foomakers/pair-cli
+npm install -g @foomakers/pair-cli
 ```
 
 **On Linux (Ubuntu/Debian):**
@@ -186,8 +186,8 @@ sudo apt update
 sudo apt install build-essential python3-distutils
 
 # Clear and reinstall
-npm uninstall -g @pair/pair-cli
-npm install -g @pair/pair-cli
+npm uninstall -g @foomakers/pair-cli
+npm install -g @foomakers/pair-cli
 ```
 
 **On Linux (CentOS/RHEL/Fedora):**
@@ -199,8 +199,8 @@ sudo yum groupinstall "Development Tools"
 sudo dnf groupinstall "Development Tools"
 
 # Clear and reinstall
-npm uninstall -g @pair/pair-cli
-npm install -g @pair/pair-cli
+npm uninstall -g @foomakers/pair-cli
+npm install -g @foomakers/pair-cli
 ```
 
 **On Windows:**
@@ -248,7 +248,7 @@ npm config set registry https://registry.npmjs.org/
 npm config set proxy http://username:password@proxy.company.com:8080
 
 # Install through proxy
-npm install -g @pair/pair-cli
+npm install -g @foomakers/pair-cli
 ```
 
 ## Corrupted Installs
@@ -259,8 +259,8 @@ npm install -g @pair/pair-cli
 
 ```bash
 # Check if installed
-npm list -g @pair/pair-cli
-pnpm list -g @pair/pair-cli
+npm list -g @foomakers/pair-cli
+pnpm list -g @foomakers/pair-cli
 
 # Check PATH
 echo $PATH
@@ -282,9 +282,9 @@ source ~/.profile
 
 ```bash
 # 1. Remove completely
-npm uninstall -g @pair/pair-cli
+npm uninstall -g @foomakers/pair-cli
 # or
-pnpm remove -g @pair/pair-cli
+pnpm remove -g @foomakers/pair-cli
 
 # 2. Clear caches
 npm cache clean --force
@@ -296,7 +296,7 @@ rm -rf ~/.npm/_global/node_modules/@pair
 # or similar path for your system
 
 # 4. Reinstall fresh
-npm install -g @pair/pair-cli
+npm install -g @foomakers/pair-cli
 ```
 
 ### Problem: Version conflicts or "command not found" after update
@@ -313,7 +313,7 @@ find ~/.pnpm -name "*pair-cli*" 2>/dev/null
 # (Review the list first, then remove manually)
 
 # 3. Clean install
-npm install -g @pair/pair-cli
+npm install -g @foomakers/pair-cli
 
 # 4. Verify
 pair-cli --version
@@ -334,7 +334,7 @@ pnpm --version             # pnpm version (if installed)
 # pair-cli specific
 pair-cli --version         # pair-cli version
 which pair-cli             # Installation location
-npm list -g @pair/pair-cli # Installation details
+npm list -g @foomakers/pair-cli # Installation details
 
 # Environment
 echo $PATH                 # PATH variable
