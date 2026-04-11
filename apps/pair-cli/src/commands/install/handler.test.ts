@@ -4,6 +4,99 @@ import type { InstallCommandConfig } from './parser'
 import { createTestFs } from '#test-utils'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 
+/**
+ * #186: config override via options.config
+ *
+ * Verifies that handleInstallCommand uses a custom config when
+ * options.config is provided, and falls back to base config otherwise.
+ */
+describe('#186: config override via options.config', () => {
+  const cwd = '/test-project'
+  const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+
+  let fs: ReturnType<typeof createTestFs>
+
+  beforeEach(() => {
+    fs = createTestFs(
+      {
+        asset_registries: {
+          github: {
+            source: 'github',
+            behavior: 'mirror',
+            targets: [{ path: '.github', mode: 'canonical' }],
+            description: 'GitHub registry',
+          },
+        },
+      },
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test-pkg', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${datasetSrc}/github/workflow.yml`]: 'content: val',
+        [`${datasetSrc}/custom-reg/data.md`]: '# Custom Install Data',
+      },
+      cwd,
+    )
+  })
+
+  test('uses custom config registries when options.config is provided', async () => {
+    const customConfig = {
+      asset_registries: {
+        'custom-reg': {
+          source: 'custom-reg',
+          behavior: 'mirror',
+          targets: [{ path: '.custom-target', mode: 'canonical' }],
+          description: 'Custom registry',
+        },
+      },
+    }
+    await fs.writeFile(`${cwd}/custom-config.json`, JSON.stringify(customConfig))
+
+    const config: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleInstallCommand(config, fs, {
+      config: `${cwd}/custom-config.json`,
+    })
+
+    expect(await fs.exists(`${cwd}/.custom-target/data.md`)).toBe(true)
+    expect(await fs.readFile(`${cwd}/.custom-target/data.md`)).toBe('# Custom Install Data')
+  })
+
+  test('uses base config when options.config is not provided', async () => {
+    const config: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleInstallCommand(config, fs)
+
+    expect(await fs.exists(`${cwd}/.github/workflow.yml`)).toBe(true)
+  })
+
+  test('throws when options.config points to non-existent file', async () => {
+    const config: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await expect(
+      handleInstallCommand(config, fs, {
+        config: `${cwd}/nonexistent.json`,
+      }),
+    ).rejects.toThrow(/Failed to load custom config/)
+  })
+})
+
 describe('handleInstallCommand - real services integration', () => {
   const cwd = '/test-project'
 

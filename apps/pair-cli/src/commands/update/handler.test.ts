@@ -207,6 +207,108 @@ describe('handleUpdateCommand - integration with in-memory services', () => {
 })
 
 /**
+ * #186: config override via options.config
+ *
+ * Verifies that handleUpdateCommand uses a custom config when
+ * options.config is provided, and falls back to base config otherwise.
+ */
+describe('#186: config override via options.config', () => {
+  let fs: InMemoryFileSystemService
+  let httpClient: MockHttpClientService
+
+  const cwd = '/project'
+  const datasetSrc = '/project/packages/knowledge-hub/dataset'
+
+  beforeEach(() => {
+    fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            'test-registry': {
+              source: 'test-registry',
+              behavior: 'mirror',
+              targets: [{ path: '.pair/test-registry', mode: 'canonical' }],
+              description: 'Base registry',
+            },
+          },
+        }),
+        [`${datasetSrc}/test-registry/file.md`]: '# Base Content',
+        [`${datasetSrc}/custom-registry/data.md`]: '# Custom Data',
+        [`${cwd}/.pair/test-registry/file.md`]: '# Old Base',
+      },
+      cwd,
+      cwd,
+    )
+    httpClient = new MockHttpClientService()
+  })
+
+  test('uses custom config registries when options.config is provided', async () => {
+    const customConfig = {
+      asset_registries: {
+        'custom-registry': {
+          source: 'custom-registry',
+          behavior: 'mirror',
+          targets: [{ path: '.pair/custom-target', mode: 'canonical' }],
+          description: 'Custom registry',
+        },
+      },
+    }
+    await fs.writeFile(`${cwd}/custom-config.json`, JSON.stringify(customConfig))
+    // Pre-existing target (update precondition)
+    await fs.mkdir(`${cwd}/.pair/custom-target`, { recursive: true })
+    await fs.writeFile(`${cwd}/.pair/custom-target/data.md`, '# Old Custom')
+
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleUpdateCommand(config, fs, {
+      httpClient,
+      config: `${cwd}/custom-config.json`,
+    })
+
+    expect(await fs.readFile(`${cwd}/.pair/custom-target/data.md`)).toBe('# Custom Data')
+  })
+
+  test('uses base config when options.config is not provided', async () => {
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleUpdateCommand(config, fs, { httpClient })
+
+    expect(await fs.readFile(`${cwd}/.pair/test-registry/file.md`)).toBe('# Base Content')
+  })
+
+  test('throws when options.config points to non-existent file', async () => {
+    // Pre-existing target so we don't fail on the precondition check
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await expect(
+      handleUpdateCommand(config, fs, {
+        httpClient,
+        config: `${cwd}/nonexistent.json`,
+      }),
+    ).rejects.toThrow(/Failed to load custom config/)
+  })
+})
+
+/**
  * BUG 4: update precondition — targets must exist
  *
  * `update` = subsequent update of an already-installed project. If no
