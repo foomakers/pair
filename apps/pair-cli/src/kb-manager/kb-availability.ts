@@ -38,25 +38,42 @@ function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
 export async function ensureKBAvailable(version: string, deps: KBManagerDeps): Promise<string> {
   const fs = deps.fs
   const cachePath = getCachedKBPath(version)
-  const cached = await isKBCached(version, fs)
 
-  if (cached) {
-    return cachePath
+  if (!deps.customUrl) {
+    const cached = await isKBCached(version, fs)
+    if (cached) {
+      return cachePath
+    }
   }
 
+  const hadCache = deps.customUrl ? await cacheManager.backupCachedKB(version, fs) : false
+
+  try {
+    const result = await installFromSource(version, cachePath, deps)
+    if (hadCache) await cacheManager.removeBackupKB(version, fs)
+    return result
+  } catch (err) {
+    if (hadCache) await cacheManager.restoreCachedKB(version, fs)
+    throw err
+  }
+}
+
+async function installFromSource(
+  version: string,
+  cachePath: string,
+  deps: KBManagerDeps,
+): Promise<string> {
   const sourceUrl = deps.customUrl || urlUtils.buildGithubReleaseUrl(version)
   const installerDeps = buildInstallerDeps(deps)
+  const fs = deps.fs
 
   // Check if source is a local path instead of a remote URL
   const sourceType = detectSourceType(sourceUrl, fs)
   if (sourceType !== SourceType.REMOTE_URL) {
     if (sourceUrl.endsWith('.zip')) {
-      // Local ZIP file
-      return await installKBFromLocalZip(version, sourceUrl, fs, deps.skipVerify)
-    } else {
-      // Local directory
-      return await installKBFromLocalDirectory(version, sourceUrl, fs)
+      return installKBFromLocalZip(version, sourceUrl, fs, deps.skipVerify)
     }
+    return installKBFromLocalDirectory(version, sourceUrl, fs)
   }
 
   // Remote URL - use standard download
