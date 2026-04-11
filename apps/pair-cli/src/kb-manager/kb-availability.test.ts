@@ -460,6 +460,90 @@ describe('KB manager integration - local directory paths via customUrl', () => {
   })
 })
 
+describe('KB Manager - Cache bypass when customUrl provided', () => {
+  const testVersion = '0.2.0'
+  const expectedCachePath = join(homedir(), '.pair', 'kb', testVersion)
+
+  it('should download from remote customUrl even when cache exists (AC-1)', async () => {
+    vi.clearAllMocks()
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    // Pre-seed cache so isKBCached returns true
+    const fs = new InMemoryFileSystemService(
+      {
+        [expectedCachePath + '/manifest.json']: '{"version": "0.2.0"}',
+        [expectedCachePath + '/.pair/knowledge/test.md']: 'old content',
+      },
+      '/',
+      '/',
+    )
+
+    const customUrl = 'https://custom.example.com/new-kb.zip'
+    const zipContent = {
+      'manifest.json': JSON.stringify({ version: '0.2.0' }),
+      '.pair/knowledge/test.md': 'new content',
+    }
+    const validZipData = JSON.stringify(zipContent)
+
+    const headResponse = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': validZipData.length.toString() }),
+    )
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': validZipData.length.toString() }, validZipData),
+    )
+
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
+
+    const result = await ensureKBAvailable(testVersion, { httpClient, fs, customUrl })
+
+    // Should have downloaded (httpClient was called), not just returned cache
+    expect(httpClient.getUrls()[0]).toBe(customUrl)
+    expect(result).toBe(expectedCachePath)
+
+    consoleLogSpy.mockRestore()
+  })
+
+  it('should download from different customUrl even when cache exists (AC-2)', async () => {
+    vi.clearAllMocks()
+    const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    // Pre-seed cache from a "previous" source
+    const fs = new InMemoryFileSystemService(
+      {
+        [expectedCachePath + '/manifest.json']: '{"version": "0.2.0"}',
+      },
+      '/',
+      '/',
+    )
+
+    const differentUrl = 'https://other-source.example.com/kb-v2.zip'
+    const zipContent = { 'manifest.json': JSON.stringify({ version: '0.2.0' }) }
+    const validZipData = JSON.stringify(zipContent)
+
+    const headResponse = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': validZipData.length.toString() }),
+    )
+    const checksumResp = toIncomingMessage(buildTestResponse(404))
+    const fileResp = toIncomingMessage(
+      buildTestResponse(200, { 'content-length': validZipData.length.toString() }, validZipData),
+    )
+
+    const httpClient = new MockHttpClientService()
+    httpClient.setRequestResponses([headResponse])
+    httpClient.setGetResponses([fileResp, checksumResp])
+
+    const result = await ensureKBAvailable(testVersion, { httpClient, fs, customUrl: differentUrl })
+
+    expect(httpClient.getUrls()[0]).toBe(differentUrl)
+    expect(result).toBe(expectedCachePath)
+
+    consoleLogSpy.mockRestore()
+  })
+})
+
 // Helper functions
 function createMockFsWithoutLocal() {
   return {
