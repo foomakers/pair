@@ -564,9 +564,7 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
     )
 
     const failingUrl = 'https://failing.example.com/kb.zip'
-    const headResponse = toIncomingMessage(
-      buildTestResponse(200, { 'content-length': '0' }),
-    )
+    const headResponse = toIncomingMessage(buildTestResponse(200, { 'content-length': '0' }))
     const checksumResp = toIncomingMessage(buildTestResponse(404))
     const fileResp = toIncomingMessage(buildTestResponse(404))
 

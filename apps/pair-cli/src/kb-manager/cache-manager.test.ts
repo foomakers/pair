@@ -25,11 +25,7 @@ describe('cache-manager', () => {
 
   it('clearCachedKB removes existing cache directory', async () => {
     const cachePath = join(homedir(), '.pair', 'kb', '0.2.0')
-    const fs = new InMemoryFileSystemService(
-      { [cachePath + '/manifest.json']: '{}' },
-      '/',
-      '/',
-    )
+    const fs = new InMemoryFileSystemService({ [cachePath + '/manifest.json']: '{}' }, '/', '/')
     expect(fs.existsSync(cachePath)).toBe(true)
     await cacheManager.clearCachedKB('0.2.0', fs)
     expect(fs.existsSync(cachePath)).toBe(false)
