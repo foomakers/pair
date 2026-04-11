@@ -37,25 +37,21 @@ Execute in sequence. For every step, follow the **check → skip → act → ver
 
 ### Step 2: Resolve Variables
 
-1. **Check**: Are all required variables resolvable (`$VERSION`, `$BASE_URL`, `$WORKDIR`, `$RELEASE_URL`, `$REGISTRY`)?
+1. **Check**: Are all variables declared in the suite `README.md` Variables table resolvable?
 2. **Skip**: Variables already provided via arguments.
-3. **Act**: For each unresolved variable:
+3. **Act**: For each unresolved variable, follow the "How to resolve" column in the suite README. Common patterns:
    - `$VERSION`: extract from artifact (`--version` flag) or release tag.
    - `$BASE_URL`: read from deployment config, adoption files, or ask the user.
    - `$WORKDIR`: create isolated temp directory: `mktemp -d /tmp/manual-test.XXXXX`.
    - `$RELEASE_URL`: derive from `$VERSION` and repo URL.
-   - `$REGISTRY`: read from adoption files or default.
-   - **Additional variables**: resolve any extra variables declared in the suite `README.md` Variables table (e.g. auth tokens, config files). Follow the "How to resolve" column for each.
+   - **Project-specific variables**: resolve per the suite README instructions (e.g., auth tokens, registry URLs, API keys).
 4. **Verify**: All variables resolved. Present to user for confirmation:
 
 ```text
 VARIABLES RESOLVED:
-├── VERSION:     [value]
-├── BASE_URL:    [value]
-├── WORKDIR:     [value]
-├── RELEASE_URL: [value]
-├── REGISTRY:    [value]
-└── [additional]: [per suite README]
+├── [var1]:      [value]
+├── [var2]:      [value]
+└── [varN]:      [value]
 ```
 
 Ask: _"Proceed with these values?"_

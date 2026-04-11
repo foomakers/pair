@@ -16,7 +16,7 @@ Each test case follows the [manual-test-case-template](../../../.pair/knowledge/
 | Argument | Required | Description |
 | --- | --- | --- |
 | `$output` | No | Directory where suite files are written. Default: `qa/release-validation/` at project root. |
-| `$scope` | No | Artifact categories to cover: `website`, `cli`, `dataset`, `registry`, `all` (default: `all`). Comma-separated for multiple. |
+| `$scope` | No | Artifact categories to cover. Auto-discovered from the project (e.g., `website`, `api`, `cli`, `dataset`, `mobile`). Use `all` (default) or comma-separated category names. |
 
 ## Algorithm
 
@@ -37,29 +37,34 @@ Execute in sequence. For every step, follow the **check → skip → act → ver
 Analyze the project to build an inventory of testable surfaces. For each category, read the relevant sources:
 
 1. **Check**: Which artifact categories are in `$scope`?
-2. **Act**: For each category in scope, discover:
+2. **Act**: Discover categories dynamically from the project. Scan for:
+   - **Deployable artifacts**: websites, APIs, CLI tools, mobile apps, desktop apps, libraries
+   - **Data/content artifacts**: datasets, configuration bundles, documentation packages
+   - **Distribution channels**: package registries, app stores, CDNs, container registries
 
-| Category | Discovery Sources | What to Extract |
-| --- | --- | --- |
-| **Website** | Deployment config, `package.json` scripts, adoption files, sitemap, route files | Base URL, page routes, interactive features (search, forms), responsive breakpoints, meta tags, accessibility targets |
-| **CLI** | `package.json` `bin` field, Commander command definitions, `--help` output | Command names, flags, positional args, exit code expectations, output formats |
-| **Dataset** | KB config files, registry definitions, adoption files | Registries, install strategies (mirror/add), validation commands, expected directory structure |
-| **Registry** | `package.json` `publishConfig`, workflow files, adoption files | Package scope, registry URL, publish mechanism, expected metadata |
+   Common discovery sources:
 
-1. **Act**: For each category, also read:
-   - **PRD** (`.pair/product/adopted/PRD.md`) — for user-facing requirements and acceptance criteria
-   - **Architecture** (`.pair/adoption/tech/architecture.md`) — for deployment topology
-   - **Way of working** (`.pair/adoption/tech/way-of-working.md`) — for release process, quality gates
-   - **Tech stack** (`.pair/adoption/tech/tech-stack.md`) — for framework specifics (e.g., Next.js → check SSR, static pages)
+   | Signal | Where to Look | What It Reveals |
+   | --- | --- | --- |
+   | Web framework | `package.json` dependencies, framework config files | Website/API category |
+   | `bin` field | `package.json` | CLI category |
+   | `publishConfig` | `package.json`, workflow files | Registry/distribution category |
+   | Release artifacts | CI/CD workflows, release scripts | Artifact categories (ZIP, TGZ, Docker, etc.) |
+   | Deployment config | Vercel, Docker, Kubernetes, serverless configs | Deployment targets |
 
-2. **Verify**: Surface inventory built. Present to user:
+3. **Act**: For each discovered category, also read adoption files if available:
+   - **PRD** — for user-facing requirements and acceptance criteria
+   - **Architecture** — for deployment topology
+   - **Way of working** — for release process, quality gates
+   - **Tech stack** — for framework specifics
+
+4. **Verify**: Surface inventory built. Present to user:
 
 ```text
 DISCOVERED SURFACES:
-├── Website: [N pages, N interactive features, N responsive breakpoints]
-├── CLI: [N commands, N flags]
-├── Dataset: [N registries, N validation rules]
-└── Registry: [N packages, N distribution channels]
+├── [Category 1]: [N artifacts, N features]
+├── [Category 2]: [N artifacts, N features]
+└── [Category N]: [N artifacts, N features]
 ```
 
 Ask: _"Proceed with these surfaces? Add or remove anything?"_
@@ -68,21 +73,30 @@ Ask: _"Proceed with these surfaces? Add or remove anything?"_
 
 For each category, design critical paths ordered by release risk.
 
-1. **Act**: Apply the following heuristic to group tests:
+1. **Act**: Group tests into critical paths (CPs) based on discovered categories. Apply these heuristics:
 
-| CP Pattern | Category | Priority | Covers |
-| --- | --- | --- | --- |
-| CP1 | Website Critical Path | P0 | Landing loads, core navigation, responsive, meta tags, favicon, key CTAs |
-| CP2 | CLI Artifact Critical Path | P0 | Checksum verification, extraction, binary execution, version output |
-| CP3 | CLI Functional Path | P0-P1 | Install, update, key commands, error handling, idempotency |
-| CP4 | Dataset Validation | P1 | KB structure, validation commands, content integrity |
-| CP5 | Website Docs Completeness | P1 | All doc pages return 200, sidebar matches routes |
-| CP6 | Website Search & Navigation | P1-P2 | Search functionality, responsive navigation, 404 handling |
-| CP7 | Registry Publish | P2 | Package visibility, install from registry, functional after install |
+   **Grouping rules:**
+   - One CP per major artifact category (e.g., website, CLI, API, dataset)
+   - Split large categories into sub-CPs by concern (e.g., artifact integrity vs functional tests)
+   - Merge small categories (< 3 tests) into the nearest related CP
 
-- **Skip** CPs for categories not in `$scope`.
-- **Merge** if a category has very few tests (< 3) — combine into the nearest related CP.
-- **Split** if a category has many tests (> 20) — break into sub-CPs (e.g., CP3a, CP3b).
+   **Priority assignment:**
+   - **P0**: Release blockers — artifacts exist, checksum valid, core functionality works
+   - **P1**: Important — secondary features, documentation completeness, edge cases
+   - **P2**: Nice-to-have — cosmetic, search, non-critical integrations
+
+   **Naming convention:** `CP{N}-{category-slug}.md` (e.g., `CP1-website-critical-path.md`, `CP2-api-endpoints.md`)
+
+   **Example** (a project with website + CLI + registry):
+
+   | CP | Category | Priority | Covers |
+   | --- | --- | --- | --- |
+   | CP1 | Website Critical Path | P0 | Landing loads, navigation, responsive, meta |
+   | CP2 | CLI Artifact Integrity | P0 | Download, checksum, extraction, version output |
+   | CP3 | CLI Functional | P0-P1 | Core commands, error handling, idempotency |
+   | CP4 | Registry Publish | P1 | Package visibility, install from registry |
+
+   Adapt the number, naming, and content of CPs to match the actual project — do not use this example as a fixed template.
 
 1. **Verify**: CP plan built. Present CP outline with estimated test counts before generating files.
 
@@ -94,7 +108,7 @@ For each CP, generate individual test cases.
    - Assign ID: `MT-CP{N}{NN}` (e.g., `MT-CP101`, `MT-CP201`)
    - Set priority: P0 (blocks release) / P1 (important) / P2 (nice-to-have)
    - Define preconditions (reference earlier test IDs where needed)
-   - Write concrete, observable steps using variables (`$VERSION`, `$BASE_URL`, `$WORKDIR`, `$RELEASE_URL`, `$REGISTRY`)
+   - Write concrete, observable steps using variables (e.g., `$VERSION`, `$BASE_URL`, `$WORKDIR`, `$RELEASE_URL` — define project-specific variables in the suite README)
    - Write objective expected results (HTTP status, exit code, file existence, string match — no subjective criteria)
    - Add notes for edge cases, platform differences, related tests
 
