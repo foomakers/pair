@@ -107,7 +107,8 @@ if (fs.existsSync(p)) {
   // ensure package is publishable
   o.private = !!o.private ? o.private : false;
   o.publishConfig = o.publishConfig || {};
-  o.publishConfig.registry = 'https://npm.pkg.github.com/';
+  o.publishConfig.registry = 'https://registry.npmjs.org/';
+  o.publishConfig.access = 'public';
   fs.writeFileSync(p, JSON.stringify(o, null, 2));
   console.log('Patched package.json for registry publish:', o.name, o.version);
 } else {
@@ -118,7 +119,7 @@ if (fs.existsSync(p)) {
     bin: { 'pair-cli': './bin/pair-cli' },
     files: ['bundle-cli', 'bin', 'README.md', 'config.json', 'LICENSE', 'docs'],
     private: false,
-    publishConfig: { registry: 'https://npm.pkg.github.com/' }
+    publishConfig: { registry: 'https://registry.npmjs.org/', access: 'public' }
   };
   fs.writeFileSync(p, JSON.stringify(o, null, 2));
   console.log('Created package.json for registry publish:', o.name, o.version);
