@@ -261,6 +261,142 @@ describe('createPackageZip - target layout', () => {
 
     expect(fsService.existsSync(outputPath)).toBe(true)
   })
+
+  it('rewrites relative links to match source-layout depth', async () => {
+    const projectRoot = '/test-project'
+    const registry: RegistryConfig = {
+      source: '.skills',
+      behavior: 'mirror',
+      description: 'Skills registry',
+      include: [],
+      flatten: false,
+      targets: [{ path: '.claude/skills', mode: 'canonical' }],
+    }
+
+    // Target layout: .claude/skills/pair-test/SKILL.md (3 levels deep)
+    // Link uses 3 levels of ../ (correct for target depth)
+    await fsService.writeFile(
+      `${projectRoot}/.claude/skills/pair-test/SKILL.md`,
+      '# Test Skill\n\n[Tech Stack](../../../.pair/adoption/tech/tech-stack.md)\n',
+    )
+
+    const manifest = testManifest({ name: 'test-kb', registries: ['skills'] })
+
+    await createPackageZip(
+      { projectRoot, registries: [registry], manifest, outputPath, layout: 'target' },
+      fsService,
+    )
+
+    // Source layout: .skills/pair-test/SKILL.md (2 levels deep)
+    // Link should be rewritten to 2 levels of ../
+    const zipContent = JSON.parse(fsService.readFileSync(outputPath))
+    const skillContent = zipContent['.skills/pair-test/SKILL.md']
+    expect(skillContent).toBeDefined()
+    expect(skillContent).toContain('[Tech Stack](../../.pair/adoption/tech/tech-stack.md)')
+    expect(skillContent).not.toContain('../../../.pair/adoption/tech/tech-stack.md')
+  })
+
+  it('does NOT rewrite relative links when layout is source (regression)', async () => {
+    const projectRoot = '/test-project'
+    const registry: RegistryConfig = {
+      source: '.skills',
+      behavior: 'mirror',
+      description: 'Skills registry',
+      include: [],
+      flatten: false,
+      targets: [{ path: '.claude/skills', mode: 'canonical' }],
+    }
+
+    // Source layout: file is at source depth, links already correct
+    await fsService.writeFile(
+      `${projectRoot}/.skills/pair-test/SKILL.md`,
+      '# Test\n\n[Tech Stack](../../.pair/adoption/tech/tech-stack.md)\n',
+    )
+
+    const manifest = testManifest({ name: 'test-kb', registries: ['skills'] })
+
+    await createPackageZip(
+      { projectRoot, registries: [registry], manifest, outputPath, layout: 'source' },
+      fsService,
+    )
+
+    const zipContent = JSON.parse(fsService.readFileSync(outputPath))
+    const skillContent = zipContent['.skills/pair-test/SKILL.md']
+    expect(skillContent).toContain('[Tech Stack](../../.pair/adoption/tech/tech-stack.md)')
+  })
+
+  it('preserves external links and anchors in target-layout packaging', async () => {
+    const projectRoot = '/test-project'
+    const registry: RegistryConfig = {
+      source: '.skills',
+      behavior: 'mirror',
+      description: 'Skills registry',
+      include: [],
+      flatten: false,
+      targets: [{ path: '.claude/skills', mode: 'canonical' }],
+    }
+
+    const content = [
+      '# Test Skill',
+      '',
+      '[External](https://example.com/docs)',
+      '[Anchor](#section-one)',
+      '[Relative](../../../.pair/adoption/tech/tech-stack.md)',
+      '[Another](../../../.pair/knowledge/guidelines/code.md)',
+      '',
+    ].join('\n')
+
+    await fsService.writeFile(`${projectRoot}/.claude/skills/pair-test/SKILL.md`, content)
+
+    const manifest = testManifest({ name: 'test-kb', registries: ['skills'] })
+
+    await createPackageZip(
+      { projectRoot, registries: [registry], manifest, outputPath, layout: 'target' },
+      fsService,
+    )
+
+    const zipContent = JSON.parse(fsService.readFileSync(outputPath))
+    const skillContent = zipContent['.skills/pair-test/SKILL.md']
+
+    // External and anchor links unchanged
+    expect(skillContent).toContain('[External](https://example.com/docs)')
+    expect(skillContent).toContain('[Anchor](#section-one)')
+    // Relative links adjusted
+    expect(skillContent).toContain('../../.pair/adoption/tech/tech-stack.md')
+    expect(skillContent).toContain('../../.pair/knowledge/guidelines/code.md')
+    // No 3-level links remain
+    expect(skillContent).not.toContain('../../../')
+  })
+
+  it('handles same-depth source and target (no-op rewriting)', async () => {
+    const projectRoot = '/test-project'
+    const registry: RegistryConfig = {
+      source: 'docs',
+      behavior: 'mirror',
+      description: 'Docs',
+      include: [],
+      flatten: false,
+      targets: [{ path: 'docs-target', mode: 'canonical' }],
+    }
+
+    // Both source (docs/) and target (docs-target/) are 1 level deep — no depth change
+    await fsService.writeFile(
+      `${projectRoot}/docs-target/guide.md`,
+      '# Guide\n\n[Ref](../README.md)\n',
+    )
+
+    const manifest = testManifest({ name: 'test-kb', registries: ['docs'] })
+
+    await createPackageZip(
+      { projectRoot, registries: [registry], manifest, outputPath, layout: 'target' },
+      fsService,
+    )
+
+    const zipContent = JSON.parse(fsService.readFileSync(outputPath))
+    const docContent = zipContent['docs/guide.md']
+    // Link stays at 1 level since source and target are same depth
+    expect(docContent).toContain('[Ref](../README.md)')
+  })
 })
 
 describe('createPackageZip - error handling', () => {
@@ -493,6 +629,86 @@ describe('createPackageZip - content checksum', () => {
       const result = await verifyPackage(outputPath, realFs)
 
       // This should pass - both creation and verification use localeCompare for consistent sorting
+      expect(result.valid).toBe(true)
+      expect(result.errors).toEqual([])
+    } finally {
+      if (fs.existsSync(testDir)) {
+        fs.rmSync(testDir, { recursive: true, force: true })
+      }
+    }
+  })
+
+  it('target-layout package with rewritten links passes verification (round-trip)', async () => {
+    const testDir = path.join(os.tmpdir(), `test-target-roundtrip-${Date.now()}`)
+    const projectRoot = path.join(testDir, 'project')
+    const outputPath = path.join(testDir, 'target-package.zip')
+
+    try {
+      // Setup target-layout structure with skills registry
+      const skillsTargetDir = path.join(projectRoot, '.claude/skills/pair-test')
+      fs.mkdirSync(skillsTargetDir, { recursive: true })
+
+      // Create .pair structure for link targets to exist
+      const adoptionDir = path.join(projectRoot, '.pair/adoption/tech')
+      fs.mkdirSync(adoptionDir, { recursive: true })
+      fs.writeFileSync(path.join(adoptionDir, 'tech-stack.md'), '# Tech Stack')
+
+      // Skill file with target-depth links (3 levels: .claude/skills/pair-test)
+      fs.writeFileSync(
+        path.join(skillsTargetDir, 'SKILL.md'),
+        [
+          '# Test Skill',
+          '',
+          '[Tech Stack](../../../.pair/adoption/tech/tech-stack.md)',
+          '[External](https://example.com)',
+          '[Anchor](#overview)',
+          '',
+        ].join('\n'),
+      )
+
+      const { fileSystemService } = await import('@pair/content-ops')
+      const realFs = fileSystemService
+
+      const registries: RegistryConfig[] = [
+        {
+          source: '.skills',
+          behavior: 'mirror',
+          description: 'Skills',
+          include: [],
+          flatten: false,
+          targets: [{ path: '.claude/skills', mode: 'canonical' }],
+        },
+      ]
+      const manifest = testManifest({
+        name: 'target-roundtrip-kb',
+        registries: ['.skills'],
+      })
+
+      // Package from target layout
+      await createPackageZip(
+        { projectRoot, registries, manifest, outputPath, layout: 'target' },
+        realFs,
+      )
+
+      expect(fs.existsSync(outputPath)).toBe(true)
+
+      // Extract and verify link depth was adjusted
+      const AdmZip = (await import('adm-zip')).default
+      const zip = new AdmZip(outputPath)
+      const skillEntry = zip.getEntry('.skills/pair-test/SKILL.md')
+      expect(skillEntry).toBeDefined()
+
+      const skillContent = skillEntry!.getData().toString('utf-8')
+      // Source layout depth: .skills/pair-test/ = 2 levels, so links use ../../
+      expect(skillContent).toContain('../../.pair/adoption/tech/tech-stack.md')
+      expect(skillContent).not.toContain('../../../.pair/adoption/tech/tech-stack.md')
+      // External and anchor links preserved
+      expect(skillContent).toContain('https://example.com')
+      expect(skillContent).toContain('#overview')
+
+      // Verify package passes checksum verification
+      const { verifyPackage } = await import('../kb-verify/verify-package.js')
+      const result = await verifyPackage(outputPath, realFs)
       expect(result.valid).toBe(true)
       expect(result.errors).toEqual([])
     } finally {

@@ -1,4 +1,5 @@
 import type { FileSystemService } from '@pair/content-ops'
+import { rewriteLinksInFile } from '@pair/content-ops'
 import type { ManifestMetadata } from './metadata'
 import type { RegistryConfig } from '#registry'
 import { rewriteFileLinks } from './link-rewriter'
@@ -155,6 +156,7 @@ interface CopyFileOptions {
 
 async function copyFileToTemp(opts: CopyFileOptions): Promise<void> {
   const { filePath, layoutPaths, registry, tempDir, options, fsService } = opts
+  const layout: LayoutMode = options.layout || 'source'
   const basePath = layoutPaths.find(p => filePath.startsWith(p + '/') || filePath === p)
   const baseForRelative = basePath || path.join(options.projectRoot, registry.source)
 
@@ -170,6 +172,21 @@ async function copyFileToTemp(opts: CopyFileOptions): Promise<void> {
   }
 
   await fsService.writeFile(targetPath, content)
+
+  // Adjust relative link depth when packaging from target layout to source layout
+  if (layout === 'target' && filePath.endsWith('.md')) {
+    const originalDir = path.relative(options.projectRoot, path.dirname(filePath))
+    const newDir = path.dirname(path.join(registry.source, relativePath))
+    if (originalDir !== newDir) {
+      await rewriteLinksInFile({
+        fileService: fsService,
+        filePath: targetPath,
+        originalDir,
+        newDir,
+        datasetRoot: options.projectRoot,
+      })
+    }
+  }
 }
 
 async function cleanupOnError(outputPath: string, fsService: FileSystemService): Promise<void> {

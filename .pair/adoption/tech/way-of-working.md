@@ -10,6 +10,13 @@
 - **Commit History Policy:**: All feature branches must be squashed into a single commit during the PR merge, unless otherwise specified by the story or epic. See [commit template](../../knowledge/guidelines/collaboration/templates/commit-template.md) for details. Unless specified, prefer commit per task (mark the commit title with the task number other than the user story number) where complete all tasks of the story without confirmation and update the body of the story at each commit without confirmation. At the end of the story raise a draft PR following the PR template.
 - Ensure use proper template for commit messages and PRs, see [commit template](../../knowledge/guidelines/collaboration/templates/commit-template.md) and [PR template](../../knowledge/guidelines/collaboration/templates/pr-template.md) for details.
 
+## Manual Testing
+
+- Manual test suites live in `qa/` at the repository root.
+- `qa/release-validation/` contains critical path test cases (CP1–CP8) for release validation.
+- Test cases follow the template in `.pair/knowledge/guidelines/collaboration/templates/manual-test-case-template.md`.
+- When a bug fix or feature changes behavior covered by an existing CP, the corresponding test case MUST be updated.
+
 ## Quality Gates
 
 - `pnpm quality-gate` is the adopted project-level quality gate command.

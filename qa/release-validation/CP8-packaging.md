@@ -103,7 +103,37 @@
 
 ---
 
-## MT-CP806: Source and target packages differ
+## MT-CP806: Target-layout package rewrites relative link depth
+
+**Priority**: P1
+**Preconditions**: MT-CP301 passes (KB installed in `$WORKDIR/project-auto`)
+**Category**: Packaging
+**Regression**: #187
+
+### Steps
+
+1. `cd $WORKDIR/project-auto`
+2. Find a skill file with relative links: `grep -r '\.\./\.\./\.\.' .claude/skills/ --include='*.md' -l | head -1` → `$SKILL_FILE`
+3. Note the link depth: `grep -oP '\(\K[^)]+' $SKILL_FILE | grep '^\.\.' | head -3`
+4. `$CLI package --layout target -o $WORKDIR/pkg-link-test.zip`
+5. `mkdir -p $WORKDIR/pkg-link-extract && cd $WORKDIR/pkg-link-extract && unzip $WORKDIR/pkg-link-test.zip`
+6. Find the same skill in extracted package: `find .skills/ -name "$(basename $SKILL_FILE)"` → `$PKG_SKILL`
+7. Compare link depth: `grep -oP '\(\K[^)]+' $PKG_SKILL | grep '^\.\.' | head -3`
+
+### Expected Result
+
+- Links in `$PKG_SKILL` have one fewer `../` level than `$SKILL_FILE` (target `.claude/skills/x/` = 3 deep, source `.skills/x/` = 2 deep)
+- External links (https://...) and anchors (#...) are unchanged
+- `$CLI kb-validate --layout source` passes in `$WORKDIR/pkg-link-extract`
+
+### Notes
+
+- This validates the fix for #187 (off-by-one link depth in target-layout packaging)
+- The depth delta depends on the specific registry: `.claude/skills/` → `.skills/` = -1 level
+
+---
+
+## MT-CP807: Source and target packages differ
 
 **Priority**: P2
 **Preconditions**: MT-CP801 and MT-CP802 pass

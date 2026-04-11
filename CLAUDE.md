@@ -86,6 +86,7 @@ pnpm lint --filter <package_name>
 - **Testing strategy**: `.pair/tech/knowledge-base/07-testing-strategy.md`
 - **Code guidelines**: `.pair/tech/knowledge-base/02-code-design-guidelines.md`
 - **Security rules**: `.pair/tech/knowledge-base/10-security-guidelines.md`
+- **Manual test suites**: `qa/release-validation/` (critical path test cases CP1–CP8)
 
 ## ⚡ Quick Rules
 
