@@ -261,6 +261,40 @@ describe('createPackageZip - target layout', () => {
 
     expect(fsService.existsSync(outputPath)).toBe(true)
   })
+
+  it('rewrites relative links to match source-layout depth', async () => {
+    const projectRoot = '/test-project'
+    const registry: RegistryConfig = {
+      source: '.skills',
+      behavior: 'mirror',
+      description: 'Skills registry',
+      include: [],
+      flatten: false,
+      targets: [{ path: '.claude/skills', mode: 'canonical' }],
+    }
+
+    // Target layout: .claude/skills/pair-test/SKILL.md (3 levels deep)
+    // Link uses 3 levels of ../ (correct for target depth)
+    await fsService.writeFile(
+      `${projectRoot}/.claude/skills/pair-test/SKILL.md`,
+      '# Test Skill\n\n[Tech Stack](../../../.pair/adoption/tech/tech-stack.md)\n',
+    )
+
+    const manifest = testManifest({ name: 'test-kb', registries: ['skills'] })
+
+    await createPackageZip(
+      { projectRoot, registries: [registry], manifest, outputPath, layout: 'target' },
+      fsService,
+    )
+
+    // Source layout: .skills/pair-test/SKILL.md (2 levels deep)
+    // Link should be rewritten to 2 levels of ../
+    const zipContent = JSON.parse(fsService.readFileSync(outputPath))
+    const skillContent = zipContent['.skills/pair-test/SKILL.md']
+    expect(skillContent).toBeDefined()
+    expect(skillContent).toContain('[Tech Stack](../../.pair/adoption/tech/tech-stack.md)')
+    expect(skillContent).not.toContain('../../../.pair/adoption/tech/tech-stack.md')
+  })
 })
 
 describe('createPackageZip - error handling', () => {
