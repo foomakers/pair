@@ -38,10 +38,14 @@ function buildInstallerDeps(deps: KBManagerDeps): InstallerDeps {
 export async function ensureKBAvailable(version: string, deps: KBManagerDeps): Promise<string> {
   const fs = deps.fs
   const cachePath = getCachedKBPath(version)
-  const cached = await isKBCached(version, fs)
 
-  if (cached) {
-    return cachePath
+  if (deps.customUrl) {
+    await cacheManager.clearCachedKB(version, fs)
+  } else {
+    const cached = await isKBCached(version, fs)
+    if (cached) {
+      return cachePath
+    }
   }
 
   const sourceUrl = deps.customUrl || urlUtils.buildGithubReleaseUrl(version)

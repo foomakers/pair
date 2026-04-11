@@ -23,8 +23,19 @@ export async function ensureCacheDirectory(
   await fs.mkdir(cachePath, { recursive: true })
 }
 
+export async function clearCachedKB(
+  version: string,
+  fs: FileSystemService,
+): Promise<void> {
+  const cachePath = getCachedKBPath(version)
+  if (fs.existsSync(cachePath)) {
+    await fs.rm(cachePath, { recursive: true })
+  }
+}
+
 export default {
   getCachedKBPath,
   isKBCached,
   ensureCacheDirectory,
+  clearCachedKB,
 }
