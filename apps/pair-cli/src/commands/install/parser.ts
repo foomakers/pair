@@ -76,6 +76,7 @@ interface ParseInstallOptions {
   kb?: boolean
   skipVerify?: boolean
   listTargets?: boolean
+  config?: string
 }
 
 function buildOptionalFields(target?: string, skipVerify?: boolean) {
