@@ -23,10 +23,30 @@ export async function ensureCacheDirectory(
   await fs.mkdir(cachePath, { recursive: true })
 }
 
-export async function clearCachedKB(version: string, fs: FileSystemService): Promise<void> {
+const BACKUP_SUFFIX = '.bak'
+
+export async function backupCachedKB(version: string, fs: FileSystemService): Promise<boolean> {
   const cachePath = getCachedKBPath(version)
   if (fs.existsSync(cachePath)) {
-    await fs.rm(cachePath, { recursive: true })
+    await fs.rename(cachePath, cachePath + BACKUP_SUFFIX)
+    return true
+  }
+  return false
+}
+
+export async function restoreCachedKB(version: string, fs: FileSystemService): Promise<void> {
+  const cachePath = getCachedKBPath(version)
+  const backupPath = cachePath + BACKUP_SUFFIX
+  if (fs.existsSync(backupPath)) {
+    await fs.rename(backupPath, cachePath)
+  }
+}
+
+export async function removeBackupKB(version: string, fs: FileSystemService): Promise<void> {
+  const cachePath = getCachedKBPath(version)
+  const backupPath = cachePath + BACKUP_SUFFIX
+  if (fs.existsSync(backupPath)) {
+    await fs.rm(backupPath, { recursive: true })
   }
 }
 
@@ -34,5 +54,7 @@ export default {
   getCachedKBPath,
   isKBCached,
   ensureCacheDirectory,
-  clearCachedKB,
+  backupCachedKB,
+  restoreCachedKB,
+  removeBackupKB,
 }

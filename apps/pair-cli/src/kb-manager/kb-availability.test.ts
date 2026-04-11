@@ -465,7 +465,6 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
   const expectedCachePath = join(homedir(), '.pair', 'kb', testVersion)
 
   it('should download from remote customUrl even when cache exists (AC-1)', async () => {
-    vi.clearAllMocks()
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     // Pre-seed cache so isKBCached returns true
@@ -551,9 +550,7 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
     expect(httpClient.getUrls()).toHaveLength(0)
   })
 
-  it('should preserve cache when remote customUrl download fails (AC-5)', async () => {
-    vi.clearAllMocks()
-
+  it('should restore cache when remote customUrl download fails (AC-5)', async () => {
     const fs = new InMemoryFileSystemService(
       {
         [expectedCachePath + '/manifest.json']: '{"version": "0.2.0"}',
@@ -576,13 +573,12 @@ describe('KB Manager - Cache bypass when customUrl provided', () => {
       ensureKBAvailable(testVersion, { httpClient, fs, customUrl: failingUrl }),
     ).rejects.toThrow()
 
-    // Note: clearCachedKB runs before download attempt, so cache IS removed.
-    // This is acceptable per story notes: "existing installers download to temp
-    // zip then extract. If extraction fails, cleanup runs."
+    // Cache is restored from backup after failed download (atomic replacement)
+    expect(fs.existsSync(expectedCachePath)).toBe(true)
+    expect(fs.existsSync(expectedCachePath + '.bak')).toBe(false)
   })
 
   it('should download from different customUrl even when cache exists (AC-2)', async () => {
-    vi.clearAllMocks()
     const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     // Pre-seed cache from a "previous" source
