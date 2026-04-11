@@ -61,6 +61,7 @@ interface ParseUpdateOptions {
   source?: string
   offline?: boolean
   kb?: boolean
+  config?: string
 }
 
 function resolveSourceConfig(

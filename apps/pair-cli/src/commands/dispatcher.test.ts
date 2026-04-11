@@ -11,6 +11,84 @@ import type {
 } from './index'
 import type { KbInfoCommandConfig } from './kb-info/parser'
 
+/**
+ * #186: config forwarding from dispatch context to handlers
+ *
+ * Verifies that the dispatcher forwards the `config` field from the
+ * dispatch context to handler options for both update and install commands.
+ */
+describe('#186 — config forwarding through dispatch context', () => {
+  let fs: InMemoryFileSystemService
+  const cwd = '/project'
+
+  beforeEach(() => {
+    fs = createTestFs(
+      {
+        asset_registries: {
+          reg: {
+            source: 'reg',
+            behavior: 'mirror',
+            targets: [{ path: 'dest', mode: 'canonical' }],
+            description: 'base target',
+          },
+        },
+      },
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${cwd}/packages/knowledge-hub/dataset/reg/file.txt`]: 'content',
+        // Custom config overrides target path
+        [`${cwd}/custom.json`]: JSON.stringify({
+          asset_registries: {
+            reg: {
+              source: 'reg',
+              behavior: 'mirror',
+              targets: [{ path: 'custom-dest', mode: 'canonical' }],
+              description: 'custom target',
+            },
+          },
+        }),
+      },
+      cwd,
+    )
+    vi.restoreAllMocks()
+  })
+
+  test('forwards config to update handler — output uses custom registry target', async () => {
+    // Pre-existing targets (update precondition)
+    await fs.mkdir(`${cwd}/dest`, { recursive: true })
+    await fs.writeFile(`${cwd}/dest/file.txt`, 'old')
+    await fs.mkdir(`${cwd}/custom-dest`, { recursive: true })
+    await fs.writeFile(`${cwd}/custom-dest/file.txt`, 'old')
+
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await dispatchCommand(config, fs, { config: `${cwd}/custom.json` })
+
+    expect(await fs.readFile(`${cwd}/custom-dest/file.txt`)).toBe('content')
+  })
+
+  test('forwards config to install handler — output uses custom registry target', async () => {
+    const config: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await dispatchCommand(config, fs, { config: `${cwd}/custom.json` })
+
+    expect(await fs.exists(`${cwd}/custom-dest/file.txt`)).toBe(true)
+  })
+})
+
 describe('dispatchCommand() - real handlers integration', () => {
   let fs: InMemoryFileSystemService
   const cwd = '/project'

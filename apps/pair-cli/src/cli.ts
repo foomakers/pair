@@ -191,10 +191,12 @@ function registerCommandFromMetadata(
     const config = cmdConfig.parse(normalizedOptions, positionalArgs)
 
     const initCwd = process.env['INIT_CWD']
+    const configPath = normalizedOptions['config'] as string | undefined
     await dispatchCommand(config, fsService, {
       httpClient,
       cliVersion: version,
       ...(initCwd && { baseTarget: initCwd }),
+      ...(configPath && { config: configPath }),
     })
   })
 }

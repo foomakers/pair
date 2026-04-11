@@ -6,6 +6,7 @@ interface DispatchContext {
   httpClient?: HttpClientService
   cliVersion?: string
   baseTarget?: string
+  config?: string
 }
 
 async function dispatchWithExitCode(handler: () => Promise<number>): Promise<void> {
@@ -50,5 +51,6 @@ function resolveOptions(ctx: DispatchContext) {
     ...(ctx.httpClient && { httpClient: ctx.httpClient }),
     ...(ctx.cliVersion && { cliVersion: ctx.cliVersion }),
     ...(ctx.baseTarget && { baseTarget: ctx.baseTarget }),
+    ...(ctx.config && { config: ctx.config }),
   }
 }
