@@ -31,7 +31,7 @@ Execute in sequence. For every step, follow the **check → skip → act → ver
 
 1. **Check**: Does `$suite` point to a directory containing test case files (`CP*.md`)?
 2. **Skip**: If no suite found and no `$suite` argument → **HALT**: "No manual test suite found. Run `/pair-capability-design-manual-tests` to generate one from your project's artifacts, then re-invoke `/pair-capability-execute-manual-tests`."
-3. **Check**: If `$suite` directory exists but contains zero `CP*.md` files → **HALT**: "Suite directory exists but contains no critical path files. Run `/design-manual-tests --output {$suite}` to populate it."
+3. **Check**: If `$suite` directory exists but contains zero `CP*.md` files → **HALT**: "Suite directory exists but contains no critical path files. Run `/pair-capability-design-manual-tests --output {$suite}` to populate it."
 4. **Act**: Read the suite `README.md` for variable definitions and execution order. List all `CP*.md` files.
 5. **Verify**: Suite loaded. Report: N critical paths found, N total test cases.
 
@@ -134,7 +134,7 @@ MANUAL TEST EXECUTION:
 
 ## Composition Interface
 
-When composed by `/review` (Phase 6, post-merge):
+When composed by `/pair-process-review` (Phase 6, post-merge):
 
 - **Input**: /pair-process-review invokes `/pair-capability-execute-manual-tests` after merge as optional post-release validation.
 - **Output**: Returns the overall result (PASS/FAIL) and report path.
@@ -146,7 +146,7 @@ When composed by `/pair-capability-verify-done` (Step 5.5, optional):
 
 - **Input**: /pair-capability-verify-done checks if a manual test report exists for the current version with PASS result.
 - **Output**: Returns PASS (report exists and passing) or SKIPPED (no suite or no report).
-- **Note**: /pair-capability-verify-done does NOT invoke /execute-manual-tests — it only checks for an existing report.
+- **Note**: /pair-capability-verify-done does NOT invoke /pair-capability-execute-manual-tests — it only checks for an existing report.
 
 When invoked **independently**:
 

@@ -184,6 +184,7 @@ pair package [options]
 
 | Option                        | Short | Description                                                         |
 | ----------------------------- | ----- | ------------------------------------------------------------------- |
+| `--layout <mode>`             |       | Layout mode: `source` or `target` (default: `target`)              |
 | `--output <path>`             | `-o`  | Output ZIP file path (default: `kb-package.zip`)                    |
 | `--source-dir <path>`         | `-s`  | Source directory to package (default: current directory)             |
 | `--config <path>`             | `-c`  | Path to config.json file                                            |
@@ -208,8 +209,11 @@ pair package [options]
 ### Examples
 
 ```bash
-# Package current directory
+# Package current directory (target layout — default)
 pair package
+
+# Package from source layout
+pair package --layout source
 
 # Package with custom output path
 pair package -o dist/kb-v1.0.0.zip
