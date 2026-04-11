@@ -4,15 +4,7 @@ Post-release manual tests that validate the pair website, CLI artifacts, and pub
 
 ## Prerequisites
 
-The `gh` CLI token must include `read:packages` scope (required by CP7 — GitHub Packages registry tests). Verify and fix:
-
-```bash
-# Check current scopes
-gh auth status   # look for 'read:packages' in Token scopes
-
-# Add if missing (one-time, persists across sessions)
-gh auth refresh -h github.com -s read:packages
-```
+No special auth scopes needed — the package is public on npmjs.org.
 
 ## Variables
 
@@ -24,8 +16,6 @@ All test cases use these variables — resolve them before execution:
 | `$BASE_URL` | Production website URL (e.g. `https://pair.foomakers.com`) |
 | `$RELEASE_URL` | `https://github.com/foomakers/pair/releases/tag/v$VERSION` |
 | `$WORKDIR` | Temp directory **outside** the repo: `mktemp -d /tmp/pair-release-test.XXXXX` |
-| `$REGISTRY` | `https://npm.pkg.github.com/` |
-| `$NPM_TOKEN` | `gh auth token` (reuses authenticated `gh` CLI session; requires `read:packages` scope — see Prerequisites) |
 
 ## Critical Paths
 
@@ -39,7 +29,8 @@ Execute in order. P0 blocks release sign-off.
 | CP4 | [CP4-kb-dataset.md](CP4-kb-dataset.md) | P1 | KB ZIP artifact, manifest, verify, info |
 | CP5 | [CP5-website-docs-completeness.md](CP5-website-docs-completeness.md) | P1 | All doc pages return 200, version consistency, internal links |
 | CP6 | [CP6-website-search-navigation.md](CP6-website-search-navigation.md) | P1 | Orama search, sidebar, prev/next, llms.txt, privacy |
-| CP7 | [CP7-registry-publish.md](CP7-registry-publish.md) | P2 | GitHub Packages visibility, install from registry |
+| CP7 | [CP7-registry-publish.md](CP7-registry-publish.md) | P0 | npmjs.org visibility, install from public registry |
+| CP8 | [CP8-packaging.md](CP8-packaging.md) | P1 | `pair package` with source/target layouts, metadata, validation |
 
 ## Execution by AI Assistant
 
@@ -64,7 +55,6 @@ This suite is designed to be executed by an AI coding assistant (Claude Code, Cu
 
 1. **Resolve variables first**: before executing any test, resolve all `$VARIABLES` and state them explicitly
 2. **Create $WORKDIR once**: `mktemp -d /tmp/pair-release-test.XXXXX` — reuse for all CP2/CP3/CP4 tests
-3. **Create `$WORKDIR/.npmrc` once** for all CP7 tests: extract token via `gh auth token`, write scoped `.npmrc` with `@foomakers:registry` + auth. Reused by all registry tests.
 3. **One CP at a time**: complete all tests in a CP before moving to the next; report partial results if context limit approaches
 4. **Capture evidence inline**: for failures, capture command output or screenshot immediately — don't defer
 5. **Final cleanup**: remove `$WORKDIR` only after report is generated
@@ -81,8 +71,6 @@ This suite is designed to be executed by an AI coding assistant (Claude Code, Cu
 ### Workflow
 
 ```text
-0. Verify gh auth scopes include read:packages (see Prerequisites)
-0.5. Create $WORKDIR/.npmrc with scoped registry auth (uses $NPM_TOKEN from gh auth token)
 1. Resolve $VERSION, $BASE_URL, $RELEASE_URL, create $WORKDIR
 2. Execute CP1 → CP2 → CP3 → ... → CP7
 3. For each test: record PASS/FAIL/SKIP with evidence
@@ -104,7 +92,7 @@ Consult before each release. If any condition is true, update the corresponding 
 - [ ] New integration page → update CP5
 - [ ] Deploy target changed → update CP1
 - [ ] New distribution channel (brew, npx global, etc.) → add to CP2 or new CP
-- [ ] GitHub Packages config changed → update CP7
+- [ ] npmjs.org publish config changed → update CP7
 - [ ] Landing page sections changed → update CP1
 
 When updating, increment the test count in this README and add a changelog entry at the bottom of the affected CP file.

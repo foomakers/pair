@@ -453,3 +453,30 @@
 - The default `config.json` has `skills.source: ".skills"` but the pair repo uses `.claude/skills/` — step 1 remaps this temporarily
 - Git cache key is a SHA-256 hash of the full URL (including `#ref`), independent of CLI version
 - Different URLs/refs produce different cache entries (no collisions)
+
+---
+
+## MT-CP320: npx @foomakers/pair-cli install from npmjs.org (no prior config)
+
+**Priority**: P0
+**Preconditions**: Package published to npmjs.org, internet available, no `.npmrc` for `@foomakers` scope
+**Category**: CLI Functional
+
+### Steps
+
+1. `mkdir -p $WORKDIR/project-npx && cd $WORKDIR/project-npx`
+2. Verify no `.npmrc` exists in `$WORKDIR/project-npx/` or parent dirs that configures `@foomakers` scope
+3. `npx @foomakers/pair-cli install`
+
+### Expected Result
+
+- Exit code 0
+- CLI downloaded from npmjs.org (no 404, no auth error)
+- `.pair/knowledge/` directory created and non-empty
+- `AGENTS.md` created at project root
+
+### Notes
+
+- This is the primary adoption path — validates that a user with zero configuration can install pair
+- If 404: package not published to npmjs.org. If 401: registry still pointing to GitHub Packages
+- Complements MT-CP301 (tests auto-download KB) by validating the npm registry path

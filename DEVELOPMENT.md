@@ -189,19 +189,17 @@ pnpm exec changeset version    # Generate version bumps + changelogs
 - Cache stored in `node_modules/.cache/turbo`
 - `turbo clean` to clear cache if needed
 
-## GitHub Packages
+## npmjs.org
 
-`@foomakers/pair-cli` is published on GitHub Packages. The repository is **public**, so no authentication is required to install.
+`@foomakers/pair-cli` is published on npmjs.org as a public package. No `.npmrc` or token needed to install:
 
-**`.npmrc` (user-level or project-level):**
-
-```ini
-@foomakers:registry=https://npm.pkg.github.com/
+```bash
+npx @foomakers/pair-cli install
 ```
 
 **CI (GitHub Actions) — publishing only:**
 
-Publishing still requires authentication with `write:packages` scope. The workflow uses `GITHUB_TOKEN` automatically.
+Publishing requires `NPM_TOKEN` secret (granular access token from npmjs.org scoped to `@foomakers`).
 
 ## Environment Variables
 

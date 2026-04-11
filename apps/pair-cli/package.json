@@ -14,7 +14,8 @@
     "config.json"
   ],
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com/"
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
   },
   "author": "Gianluca Carucci <gianluca@carucci.org>",
   "private": false,

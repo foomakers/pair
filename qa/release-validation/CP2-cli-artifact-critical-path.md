@@ -204,7 +204,7 @@
 - `name` == `@foomakers/pair-cli`
 - `version` == `$VERSION`
 - `private` == `false`
-- `publishConfig.registry` == `https://npm.pkg.github.com/`
+- `publishConfig.registry` == `https://registry.npmjs.org/`
 
 ---
 

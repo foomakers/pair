@@ -151,8 +151,8 @@ fi
 
 # Check npm global installation
 if command -v npm >/dev/null 2>&1; then
-    NPM_PAIR_INFO=$(npm list -g @pair/pair-cli 2>/dev/null || echo "not installed via npm")
-    if echo "$NPM_PAIR_INFO" | grep -q "@pair/pair-cli"; then
+    NPM_PAIR_INFO=$(npm list -g @foomakers/pair-cli 2>/dev/null || echo "not installed via npm")
+    if echo "$NPM_PAIR_INFO" | grep -q "@foomakers/pair-cli"; then
         print_status "ok" "npm global installation detected"
         print_status "info" "npm install info: $NPM_PAIR_INFO"
     else
@@ -162,8 +162,8 @@ fi
 
 # Check pnpm global installation
 if command -v pnpm >/dev/null 2>&1; then
-    PNPM_PAIR_INFO=$(pnpm list -g @pair/pair-cli 2>/dev/null || echo "not installed via pnpm")
-    if echo "$PNPM_PAIR_INFO" | grep -q "@pair/pair-cli"; then
+    PNPM_PAIR_INFO=$(pnpm list -g @foomakers/pair-cli 2>/dev/null || echo "not installed via pnpm")
+    if echo "$PNPM_PAIR_INFO" | grep -q "@foomakers/pair-cli"; then
         print_status "ok" "pnpm global installation detected"
     else
         print_status "info" "not installed via pnpm globally"
@@ -245,8 +245,8 @@ else
     echo "❌ pair-cli is not installed or not in PATH."
     echo ""
     echo "📖 Installation options:"
-    echo "   1. npm install -g @pair/pair-cli"
-    echo "   2. pnpm add -g @pair/pair-cli"
+    echo "   1. npm install -g @foomakers/pair-cli"
+    echo "   2. pnpm add -g @foomakers/pair-cli"
     echo "   3. Download manual install from GitHub releases"
     echo ""
     echo "🔧 If installation fails:"
