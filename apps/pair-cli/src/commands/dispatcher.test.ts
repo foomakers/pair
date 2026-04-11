@@ -14,10 +14,8 @@ import type { KbInfoCommandConfig } from './kb-info/parser'
 /**
  * #186: config forwarding from dispatch context to handlers
  *
- * The dispatcher's resolveOptions strips the `config` field, so handlers
- * never receive the custom config path. These tests use `test.fails` to
- * document the bug — they pass (as "expected failures") before the fix
- * and must be changed to `test` after T-1 wires config through.
+ * Verifies that the dispatcher forwards the `config` field from the
+ * dispatch context to handler options for both update and install commands.
  */
 describe('#186 — config forwarding through dispatch context', () => {
   let fs: InMemoryFileSystemService
@@ -58,7 +56,7 @@ describe('#186 — config forwarding through dispatch context', () => {
     vi.restoreAllMocks()
   })
 
-  test.fails('forwards config to update handler — output uses custom registry target', async () => {
+  test('forwards config to update handler — output uses custom registry target', async () => {
     // Pre-existing targets (update precondition)
     await fs.mkdir(`${cwd}/dest`, { recursive: true })
     await fs.writeFile(`${cwd}/dest/file.txt`, 'old')
@@ -72,30 +70,23 @@ describe('#186 — config forwarding through dispatch context', () => {
       offline: false,
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await dispatchCommand(config, fs, { config: `${cwd}/custom.json` } as any)
+    await dispatchCommand(config, fs, { config: `${cwd}/custom.json` })
 
-    // Bug: config not forwarded → handler uses base config → updates dest, not custom-dest
     expect(await fs.readFile(`${cwd}/custom-dest/file.txt`)).toBe('content')
   })
 
-  test.fails(
-    'forwards config to install handler — output uses custom registry target',
-    async () => {
-      const config: InstallCommandConfig = {
-        command: 'install',
-        resolution: 'default',
-        kb: true,
-        offline: false,
-      }
+  test('forwards config to install handler — output uses custom registry target', async () => {
+    const config: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await dispatchCommand(config, fs, { config: `${cwd}/custom.json` } as any)
+    await dispatchCommand(config, fs, { config: `${cwd}/custom.json` })
 
-      // Bug: config not forwarded → handler uses base config → installs to dest, not custom-dest
-      expect(await fs.exists(`${cwd}/custom-dest/file.txt`)).toBe(true)
-    },
-  )
+    expect(await fs.exists(`${cwd}/custom-dest/file.txt`)).toBe(true)
+  })
 })
 
 describe('dispatchCommand() - real handlers integration', () => {
