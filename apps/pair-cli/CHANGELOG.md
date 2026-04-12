@@ -1,5 +1,14 @@
 # @pair/pair-cli
 
+## 0.5.1
+
+### Patch Changes
+
+- 6a0dc4c: fix: normalize include paths in buildCopyOptions to match resolveBehavior keys
+
+  Include filter on mirror registries (e.g., `.github` with `include: ["/agents"]`) silently skipped all included directories during install. Keys in `folderBehavior` now include the registry source prefix and strip leading slashes to match `resolveBehavior` lookup.
+  - @pair/knowledge-hub@0.5.1
+
 ## 0.5.0
 
 ### Minor Changes
