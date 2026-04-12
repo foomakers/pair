@@ -132,8 +132,8 @@ describe('buildCopyOptions', () => {
     const options = buildCopyOptions(config)
     expect(options.defaultBehavior).toBe('skip')
     expect(options.folderBehavior).toEqual({
-      '/agents': 'mirror',
-      '/workflows': 'mirror',
+      '.github/agents': 'mirror',
+      '.github/workflows': 'mirror',
     })
   })
 })

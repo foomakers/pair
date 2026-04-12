@@ -144,8 +144,12 @@ export function buildCopyOptions(registryConfig: RegistryConfig): SyncOptions {
 
   if (include.length > 0 && behavior === 'mirror') {
     const folderBehavior: Record<string, string> = {}
+    const normalizedSource = registryConfig.source.replace(/^\/+/, '').replace(/\/+$/, '')
     include.forEach((folder: string) => {
-      folderBehavior[folder] = 'mirror'
+      // Prefix with registry source so keys match paths relative to datasetRoot
+      const stripped = folder.replace(/^\/+/, '').replace(/\/+$/, '')
+      const key = normalizedSource ? `${normalizedSource}/${stripped}` : stripped
+      folderBehavior[key] = 'mirror'
     })
     options.folderBehavior = folderBehavior as Record<
       string,
