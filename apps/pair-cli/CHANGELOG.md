@@ -1,18 +1,5 @@
 # @pair/pair-cli
 
-## 0.5.0
-
-### Minor Changes
-
-- 2344c17: feat: publish @foomakers/pair-cli to npmjs.org (#181)
-  fix: wire --config through dispatch path for update and install (#186)
-  fix: depth-aware link rewriting in target-layout packaging (#187)
-  fix: bypass cache when --source/customUrl is provided (#189)
-
-### Patch Changes
-
-- @pair/knowledge-hub@0.5.0
-
 ## 0.4.2
 
 ### Patch Changes
