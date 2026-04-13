@@ -1,6 +1,6 @@
 {
   "name": "@pair/website",
-  "version": "0.5.0",
+  "version": "0.4.3",
   "private": true,
   "description": "Pair documentation and landing page website",
   "type": "module",
@@ -12,7 +12,7 @@
     "ct": "playwright test -c playwright-ct.config.ts --grep-invert @a11y-report",
     "e2e": "pnpm clean:server && playwright test -c playwright.e2e.config.ts",
     "a11y:report": "playwright test -c playwright-ct.config.ts --grep @a11y-report --reporter=list",
-    "a11y:report:html": "playwright test -c playwright-ct.config.ts --grep @a11y-report --reporter=html && echo '\n→ Report: playwright-report/index.html\n  Open: npx playwright show-report'",
+    "a11y:report:html": "playwright test -c playwright-ct.config.ts --grep @a11y-report --reporter=html && echo '\n\u2192 Report: playwright-report/index.html\n  Open: npx playwright show-report'",
     "test": "vitest run && pnpm ct",
     "test:coverage": "vitest run --coverage",
     "postinstall": "fumadocs-mdx",

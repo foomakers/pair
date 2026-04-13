@@ -1,6 +1,6 @@
 # @pair/pair-cli
 
-## 0.5.0
+## 0.4.3
 
 ### Minor Changes
 
@@ -12,7 +12,7 @@
 
 ### Patch Changes
 
-- @pair/knowledge-hub@0.5.0
+- @pair/knowledge-hub@0.4.3
 
 ## 0.4.2
 
