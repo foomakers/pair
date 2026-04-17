@@ -32,6 +32,10 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - @testing-library/react and @testing-library/jest-dom are adopted for React component testing (peer dependencies of UI workspaces).
 - vitest-axe v1.0.0-pre.5 is adopted for automated accessibility testing in vitest unit tests.
 - @axe-core/playwright v4.11.1 is adopted for automated accessibility testing in Playwright CT.
+- jsdom v25.0.1 is adopted as the DOM environment for vitest unit tests in React/UI workspaces (`apps/website/`, `packages/brand/`).
+- Playwright is adopted for E2E and component testing:
+  - @playwright/test ^1.50.0 for E2E tests (`apps/website/e2e/`)
+  - @playwright/experimental-ct-react ^1.50.0 for component tests (`packages/brand/src/**/*.ct.test.tsx`)
 
 ## Runtime & CLI tooling
 
@@ -39,6 +43,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - chalk v4.1.2 is adopted for terminal output colorization.
 - @inquirer/prompts v7.5.0 is adopted for interactive CLI prompts in package creation workflows (TypeScript-native, tree-shakeable individual imports).
 - ts-node v10.9.2 is adopted for TypeScript execution in scripts.
+- dotenv v17.2.1 is adopted for loading environment variables from `.env` files in CLI workflows and release scripts (`apps/pair-cli/`, `scripts/workflows/release/`).
 
 ## Markdown & docs processing
 
@@ -82,6 +87,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
   - eslint-plugin-jsx-a11y v6.10.2 (for accessibility linting)
   - globals v15.0.0
   - prettier v3.6.2 (configured via workspace `tools/prettier-config`)
+  - markdownlint-cli v0.47.0 (configured via workspace `tools/markdownlint-config`, wired into `pnpm quality-gate` via `mdlint:check` / `mdlint:fix`)
 
 ## Git hooks
 
