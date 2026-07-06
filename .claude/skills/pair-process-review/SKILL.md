@@ -1,6 +1,6 @@
 ---
 name: pair-process-review
-description: "Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness check, decision, and optional merge with parent cascade. Composes /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-record-decision, /pair-capability-assess-debt (required) and /pair-capability-verify-adoption, /pair-capability-assess-stack (optional with graceful degradation). Output follows the code review template. Idempotent — re-invocation resumes from incomplete phases."
+description: "Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness check, decision, and optional merge with parent cascade. Composes /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-record-decision, /pair-capability-assess-debt, /pair-capability-write-issue (required — new debt becomes a tracked tech-debt item, PR never blocked) and /pair-capability-verify-adoption, /pair-capability-assess-stack (optional with graceful degradation). Output follows the code review template. Idempotent — re-invocation resumes from incomplete phases."
 version: 0.4.1
 author: Foomakers
 ---
@@ -17,6 +17,7 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 | `/pair-capability-verify-done`     | Capability | Yes      | 4     | Definition of Done checking          |
 | `/pair-capability-record-decision` | Capability | Yes      | Any   | Record missing ADR (HALT condition)  |
 | `/pair-capability-assess-debt`     | Capability | Yes      | 4     | Flag tech debt items                 |
+| `/pair-capability-write-issue`     | Capability | Yes      | 4     | Create `tech-debt` item for new debt (never blocks PR) |
 | `/pair-capability-verify-adoption`       | Capability | Optional | 3     | Full adoption compliance (from #105)           |
 | `/pair-capability-assess-stack`          | Capability | Optional | 3     | Tech-stack resolution (from #104)              |
 | `/pair-capability-execute-manual-tests`  | Capability | Optional | 6     | Post-merge release validation (manual tests)   |
@@ -39,7 +40,7 @@ CODE REVIEW STATE:
 ├── Story: [#ID: Title]
 ├── Review Type: [feature | bug | refactor | docs | config]
 ├── Issues: [critical: N | major: N | minor: N]
-├── Debt Items: [N flagged]
+├── Debt Items: [N flagged | N new → N created]
 └── Decision: [pending | APPROVED | CHANGES-REQUESTED | TECH-DEBT]
 ```
 
@@ -191,9 +192,16 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 ### Step 4.2: Tech Debt Assessment
 
 1. **Check**: Has `/pair-capability-assess-debt` already run in this session?
-2. **Skip**: If already run — reuse results, move to Phase 5.
-3. **Act**: Compose `/pair-capability-assess-debt` with `$scope = all`.
-4. **Verify**: Record debt items. High-severity items may influence the review decision.
+2. **Skip**: If already run — reuse results, move to Step 4.3.
+3. **Act**: Compose `/pair-capability-assess-debt` with `$scope = all` (default `$mode: assess`), scoped to the PR diff.
+4. **Verify**: Record debt items, distinguishing items **introduced by this PR** from pre-existing debt surfaced incidentally.
+
+### Step 4.3: Debt Item Creation (new debt only)
+
+1. **Check**: Are there items introduced by this PR from Step 4.2? Has an item already been created for a given finding earlier in this review session (idempotent — do not recreate)?
+2. **Skip**: If no new items, or all already created — move to Phase 5.
+3. **Act**: For each remaining new item, compose `/pair-capability-write-issue` with `$type: task`, `$content.labels: [tech-debt]`, priority from Severity → Priority (High→P1, Medium→P2, Low→P3). Record the returned issue id against the finding.
+4. **Verify**: Item created. **The PR is NOT blocked by this** — debt never blocks PRs (R7.2). Severity only ever routes to the TECH-DEBT decision (Step 5.2), never to CHANGES-REQUESTED.
 
 ## Phase 5: Review Decision
 
@@ -328,7 +336,7 @@ REVIEW COMPLETE:
 ├── Quality:    [PASS | FAIL — N gates]
 ├── DoD:        [N/N criteria met]
 ├── Adoption:   [Level N — summary]
-├── Debt:       [N items flagged]
+├── Debt:       [N items flagged, N new → N created — PR never blocked by debt (R7.2)]
 └── Report:     [Posted as PR comment]
 ```
 
@@ -365,12 +373,14 @@ Re-invoking `/pair-process-review` on a partially reviewed PR is safe:
 4. **New commits**: if PR updated since last check, re-validates affected phases only.
 5. **Review report**: updates existing report rather than posting duplicates.
 6. **Merge**: detects already-merged PR. Skips Phase 6 if already merged. Resumes parent cascade if merge succeeded but status updates are incomplete.
+7. **Debt items**: `tech-debt` items already created for a finding in this session are not recreated on re-invocation (tracked by finding, per Step 4.3).
 
 ## Graceful Degradation
 
 - **/verify-adoption not installed**: Falls back to inline dependency checking against [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md). Warning logged. See degradation cascade (Phase 3).
 - **/assess-stack not installed**: Unlisted dependencies flagged as warnings for manual verification. Does NOT HALT.
 - **/assess-debt not available**: Skip debt assessment, note in report.
+- **/write-issue not available**: Skip Step 4.3 item creation — report new debt findings inline in the review report instead. Does NOT block the PR.
 - **Story not found**: Review proceeds with PR-only validation (no AC check). Phase 6 skips parent cascade.
 - **Code review template not found**: **HALT** — cannot produce review without template.
 - **PM tool not accessible**: Ask reviewer to manually provide PR details. Phase 6 merge via CLI only.
@@ -380,8 +390,9 @@ Re-invoking `/pair-process-review` on a partially reviewed PR is safe:
 
 ## Notes
 
-- This skill **reads code, posts review comments, and optionally merges PRs** — it does not modify source code.
-- First skill to compose 7 atomic skills (4 required + 3 optional). Proves composition pattern at scale.
+- This skill **reads code, posts review comments, and optionally merges PRs** — it does not modify source code. It does create `tech-debt` items (Step 4.3), which is a PM-tool write, not a source-code write.
+- First skill to compose 8 atomic skills (5 required + 3 optional). Proves composition pattern at scale.
+- **Debt never blocks (R7.2)**: this holds regardless of severity — the only decision debt influences is APPROVED vs. TECH-DEBT, never CHANGES-REQUESTED. See [assess-debt](../../../.skills/capability/assess-debt/SKILL.md) for the same rule stated from the composed side.
 - Review phases are sequential — each phase builds on findings from prior phases.
 - The reviewer can stop between phases. Re-invoke to resume (idempotency ensures correct state).
 - Output follows [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) — the template defines structure, /pair-process-review fills it with findings.
