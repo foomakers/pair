@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { copyFileHelper, copyDirHelper } from './file-operations'
+import { copyFileHelper, copyDirHelper, isPathExcluded } from './file-operations'
 import { InMemoryFileSystemService } from '../test-utils/in-memory-fs'
 
 let fileService: InMemoryFileSystemService
@@ -137,5 +137,60 @@ describe('copyDirHelper - error cases', () => {
         datasetRoot: '/',
       }),
     ).rejects.toThrow()
+  })
+})
+
+describe('isPathExcluded', () => {
+  it('returns false when no excludePaths are provided', () => {
+    expect(isPathExcluded('/target/.pair/working')).toBe(false)
+  })
+
+  it('matches an exact path', () => {
+    expect(isPathExcluded('/target/.pair/working', ['/target/.pair/working'])).toBe(true)
+  })
+
+  it('matches a nested path', () => {
+    expect(
+      isPathExcluded('/target/.pair/working/checkpoints/a.md', ['/target/.pair/working']),
+    ).toBe(true)
+  })
+
+  it('does not match a sibling path sharing the same string prefix', () => {
+    expect(isPathExcluded('/target/.pair/working-notes', ['/target/.pair/working'])).toBe(false)
+  })
+
+  it('does not match an unrelated path', () => {
+    expect(isPathExcluded('/target/.pair/knowledge', ['/target/.pair/working'])).toBe(false)
+  })
+})
+
+describe('copyDirHelper - excludePaths (hard exclusion, D14)', () => {
+  beforeEach(() => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/source/dir/file1.txt': 'file1 content',
+        // Source accidentally also contains a "working" folder (e.g. a KB config
+        // mirroring an ancestor directory) — must never reach the target.
+        '/source/dir/working/checkpoint.md': 'from source',
+      },
+      '/',
+      '/',
+    )
+  })
+
+  it('never enters an excluded subtree, leaving pre-existing target content untouched', async () => {
+    await fileService.writeFile('/target/dir/working/checkpoint.md', 'DO NOT TOUCH')
+
+    await copyDirHelper({
+      fileService,
+      oldDir: '/source/dir',
+      newDir: '/target/dir',
+      defaultBehavior: 'overwrite',
+      datasetRoot: '/',
+      excludePaths: ['/target/dir/working'],
+    })
+
+    expect(await fileService.readFile('/target/dir/working/checkpoint.md')).toBe('DO NOT TOUCH')
+    expect(await fileService.readFile('/target/dir/file1.txt')).toBe('file1 content')
   })
 })

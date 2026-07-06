@@ -17,6 +17,8 @@ import {
   reconcileSkillNameRegistry,
   resolveEffectiveDatasetRoot,
   writeProjectLlmsTxt,
+  resolveWorkingPathOverride,
+  resolveWorkingPath,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
@@ -57,14 +59,23 @@ export async function handleInstallCommand(
     if (config.resolution === 'list-targets') {
       return listTargets(fs, options)
     }
-    const { datasetRoot, registries, baseTarget } = await setupInstallContext(
+    const { datasetRoot, registries, baseTarget, workingPath } = await setupInstallContext(
       fs,
       config as InstallableConfig,
       options,
     )
     validateDatasetContent(fs, datasetRoot, registries)
     await validateInstallContext(fs, registries, baseTarget)
-    await executeInstall({ fs, datasetRoot, registries, baseTarget, options, pushLog, presenter })
+    await executeInstall({
+      fs,
+      datasetRoot,
+      registries,
+      baseTarget,
+      workingPath,
+      options,
+      pushLog,
+      presenter,
+    })
   } catch (err) {
     pushLog('error', `Installation failed: ${String(err)}`)
     throw err
@@ -104,6 +115,7 @@ async function setupInstallContext(
   datasetRoot: string
   registries: Record<string, RegistryConfig>
   baseTarget: string
+  workingPath: string
 }> {
   const datasetRoot = await resolveDatasetRoot(fs, config, {
     cliVersion: options?.cliVersion,
@@ -114,13 +126,15 @@ async function setupInstallContext(
   const configContent = loadConfigWithOverrides(fs, configOptions)
 
   const registries = extractRegistries(configContent.config)
-  const validation = validateAllRegistries(registries)
+  const workingPathOverride = resolveWorkingPathOverride(configContent.config)
+  const validation = validateAllRegistries(registries, workingPathOverride)
   if (!validation.valid) {
     throw new Error(validation.errors.join('; ') || 'Invalid registry configuration')
   }
 
   const baseTarget = options?.baseTarget || config.target || fs.currentWorkingDirectory()
-  return { datasetRoot, registries, baseTarget }
+  const workingPath = resolveWorkingPath(configContent.config, baseTarget, fs)
+  return { datasetRoot, registries, baseTarget, workingPath }
 }
 
 function validateDatasetContent(
@@ -168,6 +182,7 @@ type RegistryInstallCtx = {
   registryConfig: RegistryConfig
   datasetRoot: string
   baseTarget: string
+  workingPath: string
   pushLog: (level: LogEntry['level'], message: string) => void
   presenter: CliPresenter
   index: number
@@ -191,7 +206,17 @@ async function installRegistry(ctx: RegistryInstallCtx): Promise<{
   skillNameMap?: SkillNameMap | undefined
   result: RegistryResult
 }> {
-  const { fs, registryName, registryConfig, baseTarget, pushLog, presenter, index, total } = ctx
+  const {
+    fs,
+    registryName,
+    registryConfig,
+    baseTarget,
+    workingPath,
+    pushLog,
+    presenter,
+    index,
+    total,
+  } = ctx
   const {
     source: datasetPath,
     target: effectiveTarget,
@@ -210,7 +235,7 @@ async function installRegistry(ctx: RegistryInstallCtx): Promise<{
     source: datasetPath,
     target: effectiveTarget,
     datasetRoot: effectiveDatasetRoot,
-    options: buildCopyOptions(registryConfig),
+    options: buildCopyOptions(registryConfig, [workingPath]),
   })
 
   if (copyResult['skipped']) {
@@ -231,6 +256,7 @@ type InstallContext = {
   datasetRoot: string
   registries: Record<string, RegistryConfig>
   baseTarget: string
+  workingPath: string
   options: InstallHandlerOptions | undefined
   pushLog: (level: LogEntry['level'], message: string) => void
   presenter: CliPresenter
@@ -240,7 +266,7 @@ async function installAllRegistries(ctx: InstallContext): Promise<{
   results: RegistryResult[]
   skillNameMap: SkillNameMap
 }> {
-  const { fs, datasetRoot, registries, baseTarget, pushLog, presenter } = ctx
+  const { fs, datasetRoot, registries, baseTarget, workingPath, pushLog, presenter } = ctx
   const accumulated: SkillNameMap = new Map()
   const total = Object.keys(registries).length
 
@@ -251,6 +277,7 @@ async function installAllRegistries(ctx: InstallContext): Promise<{
       registryConfig,
       datasetRoot,
       baseTarget,
+      workingPath,
       pushLog,
       presenter,
       index,
