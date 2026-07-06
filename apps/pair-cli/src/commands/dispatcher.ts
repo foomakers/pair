@@ -42,7 +42,7 @@ export async function dispatchCommand(
     case 'kb-verify':
       return dispatchWithExitCode(() => commandRegistry['kb-verify'].handle(config, fs))
     case 'kb-info':
-      return dispatchWithExitCode(() => commandRegistry['kb-info'].handle(config, fs))
+      return dispatchWithExitCode(() => commandRegistry['kb-info'].handle(config, fs, opts))
   }
 }
 

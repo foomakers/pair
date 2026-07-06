@@ -263,6 +263,7 @@ describe('dispatchCommand() - real handlers integration', () => {
   test('dispatches kb-info command and sets exit code on failure', async () => {
     const config: KbInfoCommandConfig = {
       command: 'kb-info',
+      mode: 'package',
       packagePath: '/nonexistent/package.zip',
       json: false,
     }
@@ -272,5 +273,19 @@ describe('dispatchCommand() - real handlers integration', () => {
     await dispatchCommand(config, fs)
 
     expect(process.exitCode).toBe(1)
+  })
+
+  test('dispatches kb-info version-check mode without throwing', async () => {
+    const config: KbInfoCommandConfig = {
+      command: 'kb-info',
+      mode: 'version-check',
+      json: false,
+    }
+
+    process.exitCode = 0
+
+    await dispatchCommand(config, fs)
+
+    expect(process.exitCode).toBe(0)
   })
 })
