@@ -1,0 +1,54 @@
+---
+title: Quality Model
+description: The single source of default quality rules — 3-layer principle, 3 pillars, classification dimensions, per-tier requirements, tag projection, and the risk-matrix adoption delta.
+---
+
+The Quality Model is the single source of default quality rules in the pair Knowledge Base. `classify`, `assess-cost`, `assess-security`, code review, quality gates, and bootstrap all resolve their behavior from this one document — no criteria live anywhere else. Source: [`quality-model.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md).
+
+> **Resolution order** for every rule below: **Argument > Adoption > KB default**. A malformed adoption delta is treated as absent — skills warn and fall back to KB defaults.
+
+## Three-Layer Principle
+
+| Layer | Role | Examples |
+| --- | --- | --- |
+| **Doc** | Rules, written once | this document + pillar guidelines |
+| **Skill** | Applies the rules on demand | `classify`, `assess-cost`, `assess-security`, code review |
+| **Automation** | Consumes tags deterministically, zero judgment | CI gates, `pair-next --filter` |
+
+Quality is classified in refinement — before code exists — not only at review time (shift-left). The matrix is built twice: once from the story context in refinement, once from the diff in review. Automation never carries its own criteria — it only reads tags.
+
+## Three Pillars
+
+| Pillar | Covers | Tag family |
+| --- | --- | --- |
+| **Cost** | Financial exposure of building/running the change | `cost:*` |
+| **Security** | Vulnerabilities, compliance, secure-by-design | feeds `risk:*` + deterministic CI scanning |
+| **Delivery** | Correctness, performance, a11y, observability, docs, planning, architecture, release, AI metrics | `risk:*` |
+
+Every quality theme nests under one of these three pillars, pointing at its existing guideline — no dedicated status page per theme.
+
+## Classification & Tiers
+
+The compiled matrix has one row per dimension: service/domain criticality, change/diff risk, business impact, security relevance, and coupling balance. Each resolves to green/yellow/red; the **risk tier is the max across assessed dimensions** and is never lowered once raised by review. Cost is tracked separately as its own class (`cost:green|yellow|orange|red`, driven by the highest detected cost signal).
+
+| Tier | Merge | Reviewers | SLA | Approval |
+| --- | --- | --- | --- | --- |
+| 🟢 Green | Self-merge at green gate checks | 0 (AI review informational) | — | none |
+| 🟡 Yellow | Blocked until reviewed | 1 reviewer | 1 working day | reviewer approval |
+| 🔴 Red | Blocked until reviewed and approved | 1 reviewer | 2 working days | explicit approval |
+
+A PR without classification tags is treated as 🔴 (fail-safe).
+
+## Tag Projection & Eligibility
+
+Tags are a **chromatic projection** of the matrix — `risk:green|yellow|red`, `cost:green|yellow|orange|red` — created only if your adoption declares the matrix→tag projection (the quickstart activates the standard set by default). There is no dedicated "eligibility" tag: automation eligibility is a **filter you declare over classification tags** (e.g. `risk:green`), consumed generically by `pair-next`.
+
+## Project Overrides — `tech/risk-matrix.md`
+
+Optional. Absent means KB defaults apply completely — nothing fails. When present, it carries only the delta: a criticality table (service/domain → High/Medium/Low) and optional threshold overrides — see the full schema and a filled-in example in the [Guidelines Catalog](/docs/reference/guidelines-catalog#quality-assurance).
+
+## Related
+
+- [Guidelines Catalog](/docs/reference/guidelines-catalog) — where the Quality Model sits among the other 9 guideline categories
+- [Customize for Your Team](/docs/customization/team) — how to override guidelines via adoption files
+- [KB Structure](/docs/reference/kb-structure) — directory layout, `knowledge/` vs `adoption/`
