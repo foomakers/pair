@@ -1,0 +1,59 @@
+---
+title: Canonical States & State Mapping
+description: How pair skills resolve work-item state across any board vocabulary without hardcoding board-specific names.
+---
+
+pair skills reason about work-item state using **5 canonical macrostates** — never board-specific labels like "Todo" or "In Review". Every board (GitHub Projects, Jira, Linear, a plain 3-column Kanban) maps its own column names onto these 5 macrostates, so skills work the same way regardless of what your board columns are called.
+
+## The 5 Macrostates
+
+```text
+Draft → Ready → In Progress → Review → Done
+```
+
+| Macrostate      | Meaning                                                        |
+| --------------- | ---------------------------------------------------------------- |
+| **Draft**       | Not yet refined — missing acceptance criteria or technical analysis |
+| **Ready**       | Meets the Definition of Ready — eligible for sprint/WIP           |
+| **In Progress** | Actively being implemented                                        |
+| **Review**      | Implementation complete, awaiting code review / PR approval       |
+| **Done**        | Delivered and accepted                                             |
+
+`/refine-story` is the single Draft → Ready transition. `/implement` produces In Progress and Review. `/review` produces Done on merge.
+
+## Zero Configuration by Default
+
+If your board already uses these 5 names, you configure nothing. Skills resolve state by matching the board column name against the canonical names directly.
+
+If your board uses different names — which is common, and true even of pair's own recommended GitHub Projects setup (`Todo`, `Refined`, `In Progress`, `Review`, `Done`) — add a `## State Mapping` section to `way-of-working.md`:
+
+```markdown
+## State Mapping
+
+| Board State | Macrostate  |
+| ------------ | ----------- |
+| Todo         | Draft       |
+| Refined      | Ready       |
+| In Progress  | In Progress |
+| Review       | Review      |
+| Done         | Done        |
+```
+
+The mapping is **n-m**: several board states can map to the same macrostate (e.g., both `Icebox` and `Backlog` mapping to `Draft`), but a single board state never maps to more than one macrostate. Board states with no entry are simply ignored — not an error.
+
+## Minimal Boards Work Too
+
+A 3-column board (`Todo`, `In Progress`, `Done`) has no dedicated column for "refined but not started." pair doesn't require one: items in `Todo` that satisfy the Definition of Ready are treated as `Ready` through a **readiness fallback** — skills check the item's content (does it have acceptance criteria? a technical analysis?) instead of guessing from the column name.
+
+## How Skills Use It
+
+- **Reading state**: a skill looks up the item's board-state value in the mapping table. Found → use the mapped macrostate. Not found and the section is absent (or has no entry for it) → fall back to matching the canonical name directly. Still unresolved → the item is out of scope for state-based logic, no error.
+- **Writing state**: a skill resolves the target macrostate to a board state — the first board state listed under that macrostate in the mapping table. No mapping needed → write the canonical name itself. No board state maps to the target macrostate at all → the skill halts and reports the gap rather than guessing.
+
+This resolution rule is what lets `/write-issue` and `/next` — and, over time, the rest of the skill catalog — stay completely free of hardcoded board-state names.
+
+## Related
+
+- [Adoption Files](/docs/concepts/adoption-files) — `way-of-working.md` is where the `State Mapping` section lives
+- [GitHub Projects](/docs/pm-tools/github-projects) — pair's own board setup and how it maps
+- Full schema, resolution algorithm, and worked examples: `.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md` in your installed Knowledge Base
