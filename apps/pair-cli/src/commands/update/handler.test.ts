@@ -1336,3 +1336,81 @@ describe('#257: working area excluded from update (D14)', () => {
     )
   })
 })
+
+/**
+ * #261: update records the applied KB version (AC4 "record it" loop) and
+ * prints a non-blocking drift hint (AC3) when the recorded version differs
+ * from the one about to be applied.
+ */
+describe('update — KB version recording (#261)', () => {
+  const cwd = '/version-test-project'
+  const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+
+  function baseFiles(kbVersion?: string, priorInstalledVersion?: string) {
+    return {
+      [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+      [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+        name: '@pair/knowledge-hub',
+        ...(kbVersion && { version: kbVersion }),
+      }),
+      [`${cwd}/config.json`]: JSON.stringify({
+        asset_registries: {
+          'test-registry': {
+            source: 'test-registry',
+            behavior: 'mirror',
+            targets: [{ path: '.pair/test-registry', mode: 'canonical' }],
+            description: 'Test registry',
+          },
+        },
+      }),
+      [`${datasetSrc}/test-registry/file1.md`]: '# New Content',
+      [`${cwd}/.pair/test-registry/file1.md`]: '# Old Content',
+      ...(priorInstalledVersion && {
+        [`${cwd}/.pair/.kb-version.json`]: JSON.stringify({ version: priorInstalledVersion }),
+      }),
+    }
+  }
+
+  test('records the updated KB version on success', async () => {
+    const fs = new InMemoryFileSystemService(baseFiles('1.2.0'), cwd, cwd)
+
+    await handleUpdateCommand(
+      { command: 'update', resolution: 'default', kb: true, offline: false },
+      fs,
+    )
+
+    expect(await fs.exists(`${cwd}/.pair/.kb-version.json`)).toBe(true)
+    const marker = JSON.parse(await fs.readFile(`${cwd}/.pair/.kb-version.json`))
+    expect(marker.version).toBe('1.2.0')
+  })
+
+  test('prints a non-blocking drift hint with migration URL when versions differ', async () => {
+    const fs = new InMemoryFileSystemService(baseFiles('1.2.0', '1.1.0'), cwd, cwd)
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await handleUpdateCommand(
+      { command: 'update', resolution: 'default', kb: true, offline: false },
+      fs,
+    )
+
+    const output = logSpy.mock.calls.map(args => args.join(' ')).join('\n')
+    expect(output).toContain('KB version drift')
+    expect(output).toContain('Migration guide')
+
+    const marker = JSON.parse(await fs.readFile(`${cwd}/.pair/.kb-version.json`))
+    expect(marker.version).toBe('1.2.0')
+
+    logSpy.mockRestore()
+  })
+
+  test('does not write a marker when the KB source carries no version metadata', async () => {
+    const fs = new InMemoryFileSystemService(baseFiles(), cwd, cwd)
+
+    await handleUpdateCommand(
+      { command: 'update', resolution: 'default', kb: true, offline: false },
+      fs,
+    )
+
+    expect(await fs.exists(`${cwd}/.pair/.kb-version.json`)).toBe(false)
+  })
+})

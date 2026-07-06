@@ -23,6 +23,7 @@ import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
 import { BackupService, type SkillNameMap } from '@pair/content-ops'
 import { createCliPresenter, type CliPresenter, type RegistryResult } from '#ui'
+import { emitVersionDriftHint, recordInstalledVersion } from '../kb-info/version-hint'
 
 /**
  * Update options for handler
@@ -67,6 +68,7 @@ export async function handleUpdateCommand(
 
   try {
     const { datasetRoot, registries, baseTarget } = await setupUpdateContext(fs, config, options)
+    await emitVersionDriftHint({ fs, datasetRoot, baseTarget, presenter })
     validateUpdateContext(fs, registries, baseTarget)
     await executeUpdate({
       fs,
@@ -158,6 +160,11 @@ async function runUpdateSequence(
   }
 
   await writeProjectLlmsTxt(fs, context.baseTarget, pushLog)
+  await recordInstalledVersion({
+    fs,
+    datasetRoot: context.datasetRoot,
+    baseTarget: context.baseTarget,
+  })
 
   if (!options?.persistBackup && shouldBackup) {
     await backupService.commit(false)

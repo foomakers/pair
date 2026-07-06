@@ -917,3 +917,90 @@ describe('#238: flatten+prefix pipeline for external KB and collision detection'
     await expect(handleInstallCommand(installConfig, fs)).rejects.toThrow(/collision/i)
   })
 })
+
+/**
+ * #261: install records the applied KB version so a later `pair kb-info`
+ * version check has something to compare against (AC4 "record it" loop),
+ * and prints a non-blocking drift hint when re-installing over a different
+ * recorded version (AC3).
+ */
+describe('install — KB version recording (#261)', () => {
+  const cwd = '/version-test-project'
+
+  const testConfig = {
+    asset_registries: {
+      github: {
+        source: 'github',
+        behavior: 'mirror',
+        targets: [{ path: '.github', mode: 'canonical' }],
+        description: 'GitHub registry',
+      },
+    },
+  }
+
+  function baseFiles(kbVersion?: string) {
+    return {
+      [`${cwd}/package.json`]: JSON.stringify({ name: 'test-pkg', version: '0.1.0' }),
+      [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+        name: '@pair/knowledge-hub',
+        ...(kbVersion && { version: kbVersion }),
+      }),
+      [`${cwd}/packages/knowledge-hub/dataset/github/workflow.yml`]: 'content: val',
+    }
+  }
+
+  test('records the installed KB version on success', async () => {
+    const fs = createTestFs(testConfig, baseFiles('1.2.0'), cwd)
+
+    await handleInstallCommand(
+      { command: 'install', resolution: 'default', kb: true, offline: false },
+      fs,
+    )
+
+    expect(await fs.exists(`${cwd}/.pair/.kb-version.json`)).toBe(true)
+    const marker = JSON.parse(await fs.readFile(`${cwd}/.pair/.kb-version.json`))
+    expect(marker.version).toBe('1.2.0')
+    expect(marker.recordedAt).toBeTruthy()
+  })
+
+  test('does not write a marker when the KB source carries no version metadata', async () => {
+    const fs = createTestFs(testConfig, baseFiles(), cwd)
+
+    await handleInstallCommand(
+      { command: 'install', resolution: 'default', kb: true, offline: false },
+      fs,
+    )
+
+    expect(await fs.exists(`${cwd}/.pair/.kb-version.json`)).toBe(false)
+  })
+
+  test('prints a non-blocking drift hint with migration URL when a prior version is recorded', async () => {
+    const fs = createTestFs(
+      testConfig,
+      {
+        ...baseFiles('1.2.0'),
+        [`${cwd}/.pair/.kb-version.json`]: JSON.stringify({ version: '1.1.0' }),
+      },
+      cwd,
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await handleInstallCommand(
+      { command: 'install', resolution: 'default', kb: true, offline: false },
+      fs,
+    )
+
+    const output = logSpy.mock.calls.map(args => args.join(' ')).join('\n')
+    expect(output).toContain('KB version drift')
+    expect(output).toContain('1.1.0')
+    expect(output).toContain('1.2.0')
+    expect(output).toContain('Migration guide')
+
+    // Install still succeeds and the marker now reflects the newly applied version
+    expect(await fs.exists(`${cwd}/.github/workflow.yml`)).toBe(true)
+    const marker = JSON.parse(await fs.readFile(`${cwd}/.pair/.kb-version.json`))
+    expect(marker.version).toBe('1.2.0')
+
+    logSpy.mockRestore()
+  })
+})
