@@ -1,6 +1,7 @@
 # [Subdomain Name] ([Classification] Subdomain)
 
 > Classification: **[Core | Supporting | Generic]**
+> Volatility: **[High | Medium | Low]** — defaulted from classification (Core→High, Supporting→Medium, Generic→Low), human override: [none | reason]
 
 **Business Purpose:**
 [Clear value statement — what this subdomain does for the business]
@@ -30,3 +31,6 @@
 
 **Implementation Priority:**
 [High | Medium | Low] — [Rationale for development sequence, considering dependencies and business value]
+
+**Implementation Volatility** (Generic subdomains only):
+[High | Medium | Low] — probability of switching provider/technology. When **High**, relationships toward this subdomain require an integration contract (see bounded-context-template.md relationship assessment).

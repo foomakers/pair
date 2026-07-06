@@ -11,14 +11,12 @@ Analyze project state and recommend the single most relevant next skill to invok
 
 ## Skill Catalog (30 skills)
 
-### Process Skills (11)
+### Process Skills (9)
 
 | Skill              | Lifecycle Phase    | Description                                     |
 | ------------------ | ------------------ | ----------------------------------------------- |
 | `/specify-prd`     | Induction          | Create or update Product Requirements Document  |
 | `/bootstrap`       | Induction          | Orchestrate full project setup                  |
-| `/map-subdomains`  | Strategic          | Define DDD subdomains from PRD                  |
-| `/map-contexts`    | Strategic          | Define bounded contexts from subdomains         |
 | `/plan-initiatives`| Strategic          | Create strategic initiatives from PRD           |
 | `/plan-epics`      | Strategic          | Break initiatives into epics                    |
 | `/plan-stories`    | Sprint Planning    | Break epics into user stories                   |
@@ -27,10 +25,12 @@ Analyze project state and recommend the single most relevant next skill to invok
 | `/implement`       | Sprint Execution   | Implement story tasks with TDD                  |
 | `/review`          | Sprint Execution   | Review PR through structured phases             |
 
-### Capability Skills (19)
+### Capability Skills (21)
 
 | Skill                | Category     | Description                                     |
 | -------------------- | ------------ | ----------------------------------------------- |
+| `/map-subdomains`    | Domain Modeling | Scoped DDD subdomain placement (+ Volatility) |
+| `/map-contexts`      | Domain Modeling | Scoped DDD bounded-context placement + relationship assessment |
 | `/record-decision`   | Decision     | Record ADR or ADL with adoption update          |
 | `/write-issue`       | PM Tool      | Create/update issues in adopted PM tool         |
 | `/setup-pm`          | PM Tool      | Configure project management tool               |
@@ -76,10 +76,10 @@ Read the following files and classify each as **populated** or **template**:
 | --- | --------------------------------------------------------- | ----------------- | -------------------------------- |
 | 1   | PRD.md is template                                        | `/specify-prd`    | Product vision must come first   |
 | 2   | PRD.md populated AND 3+ tech adoption files are templates | `/bootstrap`      | Project needs foundational setup |
-| 3   | subdomain/README.md is template                           | `/map-subdomains` | Domain decomposition needed      |
-| 4   | boundedcontext/README.md is template                      | `/map-contexts`   | Architecture boundaries needed   |
 
 If any of the above matched, output the suggestion and stop.
+
+> DDD domain mapping (`/map-subdomains`, `/map-contexts`) is a scoped capability, not a mandatory fresh-project step — it is invoked by `/plan-initiatives`, `/plan-epics`, `/refine-story`, `/plan-tasks`, or `/bootstrap` when they touch a capability/context, not suggested directly here. Projects without DDD artifacts fall back to "system areas" gracefully — no HALT.
 
 ### Step 3: Cascade — Established Project Detection
 

@@ -151,8 +151,8 @@ With the default config (`prefix: "pair"`, `flatten: true`):
 | Prefix | Count | Purpose |
 | ------ | ----- | ------- |
 | `pair-` | 1 | Top-level skills (only `next`) |
-| `pair-process-` | 11 | Workflow orchestration skills |
-| `pair-capability-` | 19 | Atomic operation skills |
+| `pair-process-` | 9 | Workflow orchestration skills |
+| `pair-capability-` | 23 | Atomic operation skills |
 
 ### Transform Functions
 
@@ -198,8 +198,23 @@ Skill references (slash commands in markdown) are rewritten using boundary-aware
 
 On Windows, symlink targets fall back to `copy` mode because symlinks are not reliably supported. This means secondary targets (`.github/skills/`, `.cursor/skills/`) get independent copies instead of symlinks.
 
+## Migration Notes
+
+### map-subdomains, map-contexts: process → capability
+
+Reclassified so they can be invoked scoped by any planning/refinement skill, not just as a standalone lifecycle step:
+
+| | Before | After |
+| --- | --- | --- |
+| Source path | `.skills/process/map-subdomains/`, `.skills/process/map-contexts/` | `.skills/capability/map-subdomains/`, `.skills/capability/map-contexts/` |
+| Installed command | `/pair-process-map-subdomains`, `/pair-process-map-contexts` | `/pair-capability-map-subdomains`, `/pair-capability-map-contexts` |
+| `$scope` | Optional (`all` default, or `single`) | Required — items/areas the caller touched; `all` is bootstrap-only |
+| No DDD artifacts | Prerequisite check HALTs | Falls back to "system areas" (services/modules) — no HALT |
+
+No code change is required in `apps/pair-cli` — the `skills` registry (`config.json`) is category-agnostic; moving a skill between `process/` and `capability/` in the dataset is picked up automatically by the flatten+prefix transform on the next `pair install`/`pair update`.
+
 ## Related
 
-- [Skills Catalog](/docs/reference/skills-catalog) — All 32 pair skills
+- [Skills Catalog](/docs/reference/skills-catalog) — All 33 pair skills
 - [Configuration Reference](/docs/reference/configuration) — config.json registry settings
 - [KB Structure Reference](/docs/reference/kb-structure) — Directory layout

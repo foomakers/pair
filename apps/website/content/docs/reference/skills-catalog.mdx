@@ -5,7 +5,7 @@ description: Complete catalog of all 33 pair skills organized by type — proces
 
 pair ships with 33 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
 
-> **Last updated:** 2026-02-21. Source: `packages/knowledge-hub/dataset/.skills/`
+> **Last updated:** 2026-07-07. Source: `packages/knowledge-hub/dataset/.skills/`
 
 ## Meta Skills
 
@@ -21,8 +21,6 @@ Process skills orchestrate multi-step workflows by composing capability skills.
 | ----- | ------- | ----------- | -------- |
 | **specify-prd** | `/pair-process-specify-prd` | Creates or updates a Product Requirements Document through structured template analysis and iterative review. | — |
 | **bootstrap** | `/pair-process-bootstrap` | Orchestrates full project setup: PRD verification, project categorization, checklist completion, standards generation, quality gate setup, and PM tool configuration. | `/pair-process-specify-prd`, `/pair-capability-setup-pm`, `/pair-capability-record-decision`, assess-* (optional) |
-| **map-subdomains** | `/pair-process-map-subdomains` | Defines DDD subdomains from PRD and initiatives. Classifies as core/supporting/generic, produces subdomain files. | — |
-| **map-contexts** | `/pair-process-map-contexts` | Defines DDD bounded contexts from subdomain catalog. Maps subdomains to contexts with integration patterns. | — |
 | **plan-initiatives** | `/pair-process-plan-initiatives` | Creates strategic initiatives from PRD analysis. Prioritizes by business impact (P0/P1/P2). | `/pair-capability-write-issue` |
 | **plan-epics** | `/pair-process-plan-epics` | Breaks initiatives into epics through structured analysis and collaborative validation. Includes Epic 0 assessment. | `/pair-capability-write-issue` |
 | **plan-stories** | `/pair-process-plan-stories` | Breaks epics into user stories using vertical slicing and INVEST validation. | `/pair-capability-write-issue` |
@@ -34,6 +32,15 @@ Process skills orchestrate multi-step workflows by composing capability skills.
 ## Capability Skills
 
 Capability skills are atomic operations invoked independently or composed by process skills.
+
+### Domain Modeling Capabilities
+
+| Skill | Command | Description |
+| ----- | ------- | ----------- |
+| **map-subdomains** | `/pair-capability-map-subdomains` | Classifies business capabilities into DDD subdomains (core/supporting/generic) with a Volatility rating, scoped to the caller's touched items. Falls back to "system areas" when no DDD artifacts exist. Composed by `/pair-process-refine-story`, `/pair-process-plan-initiatives`, `/pair-process-plan-epics`; full scope only via `/pair-process-bootstrap`. |
+| **map-contexts** | `/pair-capability-map-contexts` | Maps subdomains to DDD bounded contexts, scoped to the caller's touched items. Assesses each relationship on integration strength, socio-technical distance and volatility; gates unbalanced+volatile relationships at approval. Composed by `/pair-process-refine-story`, `/pair-process-plan-tasks`; full scope only via `/pair-process-bootstrap`. |
+
+Reclassified from process skills — see [Migration Notes](/docs/reference/skill-management#migration-notes).
 
 ### Assessment Capabilities
 

@@ -11,14 +11,12 @@ Analyze project state and recommend the single most relevant next skill to invok
 
 ## Skill Catalog (30 skills)
 
-### Process Skills (11)
+### Process Skills (9)
 
 | Skill              | Lifecycle Phase    | Description                                     |
 | ------------------ | ------------------ | ----------------------------------------------- |
 | `/pair-process-specify-prd`     | Induction          | Create or update Product Requirements Document  |
 | `/pair-process-bootstrap`       | Induction          | Orchestrate full project setup                  |
-| `/pair-process-map-subdomains`  | Strategic          | Define DDD subdomains from PRD                  |
-| `/pair-process-map-contexts`    | Strategic          | Define bounded contexts from subdomains         |
 | `/pair-process-plan-initiatives`| Strategic          | Create strategic initiatives from PRD           |
 | `/pair-process-plan-epics`      | Strategic          | Break initiatives into epics                    |
 | `/pair-process-plan-stories`    | Sprint Planning    | Break epics into user stories                   |
@@ -27,10 +25,12 @@ Analyze project state and recommend the single most relevant next skill to invok
 | `/pair-process-implement`       | Sprint Execution   | Implement story tasks with TDD                  |
 | `/pair-process-review`          | Sprint Execution   | Review PR through structured phases             |
 
-### Capability Skills (19)
+### Capability Skills (21)
 
 | Skill                | Category     | Description                                     |
 | -------------------- | ------------ | ----------------------------------------------- |
+| `/pair-capability-map-subdomains`    | Domain Modeling | Scoped DDD subdomain placement (+ Volatility) |
+| `/pair-capability-map-contexts`      | Domain Modeling | Scoped DDD bounded-context placement + relationship assessment |
 | `/pair-capability-record-decision`   | Decision     | Record ADR or ADL with adoption update          |
 | `/pair-capability-write-issue`       | PM Tool      | Create/update issues in adopted PM tool         |
 | `/pair-capability-setup-pm`          | PM Tool      | Configure project management tool               |
@@ -76,10 +76,10 @@ Read the following files and classify each as **populated** or **template**:
 | --- | --------------------------------------------------------- | ----------------- | -------------------------------- |
 | 1   | PRD.md is template                                        | `/pair-process-specify-prd`    | Product vision must come first   |
 | 2   | PRD.md populated AND 3+ tech adoption files are templates | `/pair-process-bootstrap`      | Project needs foundational setup |
-| 3   | subdomain/README.md is template                           | `/pair-process-map-subdomains` | Domain decomposition needed      |
-| 4   | boundedcontext/README.md is template                      | `/pair-process-map-contexts`   | Architecture boundaries needed   |
 
 If any of the above matched, output the suggestion and stop.
+
+> DDD domain mapping (`/pair-capability-map-subdomains`, `/pair-capability-map-contexts`) is a scoped capability, not a mandatory fresh-project step — it is invoked by `/pair-process-plan-initiatives`, `/pair-process-plan-epics`, `/pair-process-refine-story`, `/pair-process-plan-tasks`, or `/pair-process-bootstrap` when they touch a capability/context, not suggested directly here. Projects without DDD artifacts fall back to "system areas" gracefully — no HALT.
 
 ### Step 3: Cascade — Established Project Detection
 

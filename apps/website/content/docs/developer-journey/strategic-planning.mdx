@@ -35,13 +35,13 @@ Epic 0 is created only when the assessment identifies essential setup work.
 
 ## Optional: Domain Modeling (DDD)
 
-If your project benefits from domain-driven design, add two intermediate steps between initiatives and epics:
+If your project benefits from domain-driven design, two capabilities place work into subdomains and bounded contexts. They are **scoped capabilities**, not standalone steps — invoked by `/pair-process-plan-initiatives`, `/pair-process-plan-epics`, `/pair-process-refine-story`, or `/pair-process-plan-tasks` with `$scope` set to what was just touched (see [Migration Notes](/docs/reference/skill-management#migration-notes)).
 
 ### Define Subdomains
 
 | | |
 | --- | --- |
-| **Skill** | `/pair-process-map-subdomains` |
+| **Skill** | `/pair-capability-map-subdomains` |
 | **How-to guide** | [04 — How to Define Subdomains](/docs/reference/guidelines-catalog) |
 
 Classifies problem areas as:
@@ -49,16 +49,18 @@ Classifies problem areas as:
 - **Supporting** — necessary but not differentiating, build or buy
 - **Generic** — commodity, buy or use open source
 
+Each subdomain also gets a **Volatility** rating (High/Medium/Low), defaulted from the classification with a human override.
+
 ### Define Bounded Contexts
 
 | | |
 | --- | --- |
-| **Skill** | `/pair-process-map-contexts` |
+| **Skill** | `/pair-capability-map-contexts` |
 | **How-to guide** | [05 — How to Define Bounded Contexts](/docs/reference/guidelines-catalog) |
 
-Establishes service boundaries and integration patterns between contexts (synchronous, asynchronous, shared kernel).
+Establishes service boundaries and integration patterns between contexts (synchronous, asynchronous, shared kernel, contract). Each relationship is assessed on integration strength, socio-technical distance, and volatility — an unbalanced and volatile relationship must be mitigated or explicitly accepted before it passes approval.
 
-Skip DDD if your project is a simple CRUD app or doesn't need service decomposition.
+Skip DDD if your project is a simple CRUD app or doesn't need service decomposition — both capabilities fall back to plain "system areas" (services/modules) when no DDD artifacts exist, without erroring.
 
 ## What You Have After Strategic Planning
 

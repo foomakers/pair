@@ -33,9 +33,9 @@ If your agent supports [Agent Skills](https://agentskills.io), prefer invoking s
 | Skill | How-To | Activity |
 |-------|--------|----------|
 | `/pair-process-bootstrap` | 02 | Project setup and bootstrap |
-| `/pair-process-map-contexts` | 05 | Define bounded contexts |
+| `/pair-capability-map-contexts` | 05 | Define bounded contexts (scoped capability) |
 | `/pair-process-review` | 11 | Code review |
-| `/pair-process-map-subdomains` | 04 | Support subdomain definition |
+| `/pair-capability-map-subdomains` | 04 | Support subdomain definition (scoped capability) |
 
 Run `/pair-next` at session start to determine which skill to invoke.
 
