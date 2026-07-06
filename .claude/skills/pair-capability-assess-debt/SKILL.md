@@ -1,28 +1,37 @@
 ---
 name: pair-capability-assess-debt
-description: "Assesses technical debt using resolution cascade (Argument > Adoption > Assessment). Categorizes debt (code, design, test, documentation, infrastructure), applies prioritization formula (impact x effort), proposes remediation priority. Idempotent: detects existing assessment. Invocable independently or composed by /pair-process-review."
+description: "Assesses technical debt using resolution cascade (Argument > Adoption > Assessment). Categorizes debt (code, design, test, documentation, infrastructure), applies prioritization formula (impact x effort), proposes remediation priority. Idempotent: detects existing assessment; `$mode: scan` converts findings into tracked tech-debt items keyed by location+pattern to avoid duplicates. Invocable independently or composed by /pair-process-review."
 version: 0.4.1
 author: Foomakers
 ---
 
 # /pair-capability-assess-debt — Technical Debt Assessment
 
-Detect, categorize, and prioritize technical debt items. Applies the prioritization framework from [technical-debt.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/technical-debt.md) guidelines. Produces a debt report with categorized items, severity, impact/effort scoring, and remediation recommendations.
+Detect, categorize, and prioritize technical debt items. Applies the prioritization framework from [technical-debt.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/technical-debt.md) guidelines. Produces a debt report with categorized items, severity, impact/effort scoring, and remediation recommendations. In `scan` mode, also converts findings directly into tracked `tech-debt` backlog items (see [Scan Mode Algorithm](#scan-mode-algorithm-mode-scan)).
 
 ## Arguments
 
-| Argument | Required | Description                                                                                                                                      |
-| -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `$scope` | No       | Limit assessment to specific categories: `code`, `design`, `test`, `documentation`, `infrastructure`, `all` (default: `all`)                    |
-| `$choice`| No       | Pre-identified debt item to assess (e.g., `"missing error handling in API layer"`). Skips detection, goes directly to categorization and scoring. |
+| Argument  | Required | Description                                                                                                                                        |
+| --------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$scope`  | No       | Limit assessment to specific categories: `code`, `design`, `test`, `documentation`, `infrastructure`, `all` (default: `all`)                        |
+| `$choice` | No       | Pre-identified debt item to assess (e.g., `"missing error handling in API layer"`). Skips detection, goes directly to categorization and scoring.   |
+| `$mode`   | No       | `assess` (default) — categorize/prioritize/report only. `scan` — grep-based detection (code smells + design-rule violations) that creates tracked `tech-debt` items via `/pair-capability-write-issue`. See [Scan Mode Algorithm](#scan-mode-algorithm-mode-scan). |
 
 ## Composed Skills
 
-| Skill              | Type       | Required                                         |
-| ------------------ | ---------- | ------------------------------------------------ |
-| `/pair-capability-record-decision` | Capability | No — only if remediation requires a decision     |
+| Skill              | Type       | Required                                                                    |
+| ------------------ | ---------- | ---------------------------------------------------------------------------- |
+| `/pair-capability-record-decision` | Capability | No — only if remediation requires a decision                                 |
+| `/pair-capability-write-issue`      | Capability | No — only in `$mode: scan`, or when `/pair-process-review` flags new debt introduced by a PR |
 
 ## Algorithm
+
+### Step 0: Determine Mode
+
+1. **Check**: Is `$mode` set to `scan`?
+2. **Skip**: If `$mode` is absent or `assess` → proceed to Step 1 (Resolution Cascade, below).
+3. **Act**: If `$mode: scan` → skip Steps 1–5, go directly to [Scan Mode Algorithm](#scan-mode-algorithm-mode-scan).
+4. **Verify**: Mode determined.
 
 ### Step 1: Resolution Cascade
 
@@ -152,6 +161,47 @@ For each detected item, apply the prioritization formula:
    - `$topic: debt-remediation-[item]`
 4. **Verify**: Decisions recorded.
 
+## Scan Mode Algorithm (`$mode: scan`)
+
+Grep-based detection that runs independently of the Resolution Cascade — always a fresh scan (no "existing assessment" shortcut; re-running is the idempotency contract, not a reason to skip). Applies `$scope` to filter categories, same as assess mode.
+
+### Step S1: Pattern Scan
+
+1. **Act**: Scan the target (full codebase, or PR diff when composed by `/pair-process-review`) for:
+   - Code-smell markers: `TODO`, `FIXME`, `HACK`, `WORKAROUND` comments.
+   - Design-rule violations: recognition criteria from any do/don't rule entry in [code-design guidelines](../../../.pair/knowledge/guidelines/code-design) (rules consolidated by [#223](https://github.com/foomakers/pair/issues/223)).
+2. **Skip**: If no do/don't rule entries exist yet (design rules not yet consolidated) → scan code-smell markers only, note the gap in the output.
+3. **Verify**: Raw match list produced — each match carries file path, line (or block start), and pattern/rule id.
+
+### Step S2: Idempotency Filter
+
+1. **Act**: For each match, compute a **detection key**: `<relative-file-path>:<line-or-block>:<pattern-or-rule-id>`.
+2. **Check**: Does an open `tech-debt`-labeled item already carry this detection key (search the PM tool for the key in issue bodies)?
+3. **Skip**: If tracked → drop the match, log it as skipped ("Scan match already tracked").
+4. **Act**: If the pattern no longer reproduces at a previously-recorded location (finding already fixed) → drop it, log it as skipped ("Finding already fixed since last scan").
+5. **Verify**: Only new, untracked matches remain.
+
+### Step S3: Group and Threshold (flood control)
+
+1. **Act**: Group remaining matches by file, then by module/directory when multiple related files match — one candidate item per group, not one per line. This is the mitigation for the "item flood from scan" risk.
+2. **Act**: Apply Step 3's scoring to each group; drop groups scoring below Low severity unless `$scope` explicitly requests full visibility.
+3. **Verify**: Grouped, thresholded candidate items ready for scoring.
+
+### Step S4: Categorize and Score
+
+1. **Act**: Apply Step 3 (Categorize and Score) and Step 4 (Remediation) exactly as in assess mode, per group.
+2. **Verify**: Each group has Impact, Effort, Score, Severity, and a remediation note.
+
+### Step S5: Create Tracked Items
+
+1. **Act**: For each remaining group, compose `/pair-capability-write-issue` with `$type: task`, `$content` containing: title, description (matched locations + remediation note), the detection key(s) covered (so future scans can match Step S2), and label `tech-debt` in addition to the type label. Map **Severity → Priority**: High → P1, Medium → P2, Low → P3.
+2. **Verify**: Item created (default board status — no explicit `$status` needed). Record the returned issue id against its detection key(s).
+3. **Skip**: If `/pair-capability-write-issue` is not installed → report candidate items without creating them (see Graceful Degradation).
+
+### Step S6: Report
+
+Output the scan summary (see [Output Format](#output-format)) with counts of: matched, skipped (already tracked), skipped (already fixed), grouped, created.
+
 ## Output Format
 
 ```text
@@ -174,21 +224,39 @@ REMEDIATION PLAN (High severity):
 RESULT: [N items assessed, N high-priority, N decisions recorded]
 ```
 
+Scan mode (`$mode: scan`) output:
+
+```text
+TECH DEBT SCAN:
+├── Matched:        [N raw matches]
+├── Skipped:        Already tracked: [N] | Already fixed: [N]
+├── Grouped Items:  [N] (by file/module)
+├── Created:        [N tech-debt items | 0 — /pair-capability-write-issue not installed]
+└── Severity:       High: [N] | Medium: [N] | Low: [N]
+
+CREATED ITEMS:
+ # | Priority | Issue  | Description         | Detection Key(s)
+---|----------|--------|----------------------|-------------------
+ 1 | P1       | #[id]  | [desc]               | [file:line:pattern]
+ 2 | ...
+
+RESULT: [N matches, N created, N skipped-tracked, N skipped-fixed]
+```
+
 ## Composition Interface
 
 When composed by `/pair-process-review`:
 
-- **Input**: /pair-process-review invokes `/pair-capability-assess-debt` during the completeness phase (Phase 4).
-- **Output**: Returns the debt assessment report. /pair-process-review incorporates findings into review output.
-  - High severity items may influence the review decision (TECH-DEBT verdict).
-  - Items are informational — they do not HALT the review.
-  - Remediation recommendations inform CHANGES-REQUESTED if critical debt is introduced.
+- **Input**: `/pair-process-review` invokes `/pair-capability-assess-debt` during the completeness phase (Phase 4), scoped to the PR diff (default `assess` mode — `$mode: scan` is not invoked automatically by review; it is a separate, explicit invocation for full-codebase sweeps).
+- **Output**: Returns the debt assessment report, distinguishing items **introduced by this PR** from pre-existing debt surfaced incidentally.
+  - For each item introduced by the PR: `/pair-process-review` composes `/pair-capability-write-issue` (`$type: task`, label `tech-debt`, priority from Severity → Priority mapping) to create a tracked item. Re-invocation on the same PR head commit does not recreate items already created earlier in the session (idempotent, per detection key).
+  - **Debt never blocks the PR (R7.2)** — findings only ever feed the TECH-DEBT verdict (approve, track separately), never CHANGES-REQUESTED. Remediation recommendations are informational, not a gate.
 
 When invoked **independently**:
 
-- Full interactive flow. Scan codebase or specified scope for debt.
-- Report findings with categorization and prioritization.
-- This skill is **read-only** when detecting — it does not modify code. Decision recording via `/pair-capability-record-decision` is the only write action.
+- `$mode: assess` (default): full interactive flow. Scan codebase or specified scope for debt, report findings with categorization and prioritization.
+- `$mode: scan`: grep-based detection that creates tracked `tech-debt` items directly (see [Scan Mode Algorithm](#scan-mode-algorithm-mode-scan)). Safe to re-run — idempotent via detection key.
+- This skill is **read-only** when detecting in `assess` mode — it does not modify code. Decision recording via `/pair-capability-record-decision` and item creation via `/pair-capability-write-issue` (scan mode, or PR-introduced debt) are the only write actions.
 
 ## Graceful Degradation
 
@@ -196,13 +264,16 @@ When invoked **independently**:
 - If [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) is not found, skip infrastructure dependency checks.
 - If [architecture.md](../../../.pair/adoption/tech/architecture.md) is not found, skip design debt detection for architectural violations.
 - If `/pair-capability-record-decision` is not installed, warn and skip decision recording.
+- If `/pair-capability-write-issue` is not installed, `$mode: scan` reports candidate items without creating them — warn: "`/pair-capability-write-issue` not installed — scan results are informational only."
+- If no do/don't rule entries exist in code-design guidelines yet, `$mode: scan` falls back to code-smell markers only (TODO/FIXME/HACK/WORKAROUND).
 - If guidelines are not found, use built-in heuristics for detection (complexity thresholds, naming patterns, test file presence).
 
 ## Notes
 
 - This skill **replaces the stub implementation** from [#100](https://github.com/foomakers/pair/issues/100). Full categorization, prioritization formula, and remediation recommendations are now included.
-- **Resolution cascade**: Path A (pre-identified item) → Path B (existing assessment) → Path C (full scan). Follows the same pattern as other assess-* skills.
-- **Idempotent**: re-invocation on an already-assessed codebase confirms the existing assessment. Re-assessment only on explicit developer request.
-- **Read-only for detection** — this skill inspects code but never modifies files directly. The only write action is decision recording via `/pair-capability-record-decision`.
-- Prioritization formula `Impact × (6 - Effort)` favors quick wins: high-impact items with low effort get the highest scores.
+- **Resolution cascade**: Path A (pre-identified item) → Path B (existing assessment) → Path C (full scan). Follows the same pattern as other assess-* skills. Applies to `$mode: assess` only — `$mode: scan` always re-scans (Step 0).
+- **Idempotent**: re-invocation on an already-assessed codebase confirms the existing assessment (assess mode) or skips already-tracked matches (scan mode, via the `<file>:<line>:<pattern>` detection key). Re-assessment only on explicit developer request; re-scan is always safe.
+- **Read-only for detection** — this skill inspects code but never modifies files directly. Writes happen only via `/pair-capability-record-decision` (decisions) and `/pair-capability-write-issue` (scan-mode items, or PR-introduced debt when composed by `/pair-process-review`).
+- Prioritization formula `Impact × (6 - Effort)` favors quick wins: high-impact items with low effort get the highest scores. Severity → Priority label mapping for created items: High → P1, Medium → P2, Low → P3.
 - Debt is contextual — the same pattern may be acceptable in a prototype but unacceptable in production code. Severity assessment considers the project's maturity and risk tolerance.
+- Debt never blocks PRs (R7.2) — this applies uniformly whether debt is found via `/pair-process-review` composition or a standalone `$mode: scan` sweep.

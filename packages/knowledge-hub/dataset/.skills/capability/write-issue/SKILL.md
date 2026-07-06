@@ -1,6 +1,6 @@
 ---
 name: write-issue
-description: "Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Invocable independently or composed by /refine-story, /plan-tasks, /plan-initiatives, /plan-epics, and /plan-stories."
+description: "Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Invocable independently or composed by /refine-story, /plan-tasks, /plan-initiatives, /plan-epics, /plan-stories, /assess-debt (scan mode), and /review (PR-introduced debt)."
 version: 0.4.1
 author: Foomakers
 ---
@@ -14,7 +14,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 | Argument   | Required | Description                                                                                                                                                     |
 | ---------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$type`    | Yes      | Issue type: `story`, `task`, `epic`, or `initiative`. Determines which template is used. |
-| `$content` | Yes      | Structured content to fill the template — fields map to template sections.                                                                                      |
+| `$content` | Yes      | Structured content to fill the template — fields map to template sections. Optional `labels: [...]` adds extra labels beyond the `$type`-based one (e.g., `tech-debt`). |
 | `$id`      | No       | Existing issue identifier. If provided → **update**; if absent → **create**.                                                                                    |
 | `$parent`  | No       | Parent issue identifier for hierarchy linking (e.g., epic → story, story → task).                                                                               |
 | `$status`  | No       | Target **macrostate** — one of `Draft`, `Ready`, `In Progress`, `Review`, `Done` (never a board-specific label). Resolved to the actual board state via the `state-mapping` resolution rule ([canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)) before the board field is updated. |
@@ -104,7 +104,7 @@ Skills never write board-specific labels — `$status` is always a canonical mac
    - **`$id` present → Update mode**: Verify the issue exists, then update it.
 2. **Act (Create)**:
    - Create issue with the formatted body.
-   - Apply labels based on `$type` (e.g., `user story`, `task`, `epic`, `initiative`).
+   - Apply labels based on `$type` (e.g., `user story`, `task`, `epic`, `initiative`), plus any extra labels passed in `$content.labels` (e.g., `tech-debt`).
    - If `$parent` is provided, link to parent issue (hierarchy: epic → story → task).
    - Configure project field settings (priority, type, status) per the implementation guide.
    - Record the new issue identifier for return.
@@ -167,6 +167,11 @@ When composed by `/plan-stories`:
 
 - **Input**: `/plan-stories` invokes `/write-issue` with `$type: story`, `$content` containing the story data, and `$parent` linking to the parent epic.
 - **Output**: Returns the issue identifier. `/plan-stories` uses it for status tracking.
+
+When composed by `/assess-debt` (`$mode: scan`) or by `/review` (PR-introduced debt):
+
+- **Input**: Invokes `/write-issue` with `$type: task`, `$content` containing a lightweight body (location, description, remediation note, detection key) and `$content.labels: [tech-debt]`. No `$parent` — debt items are standalone.
+- **Output**: Returns the issue identifier. The composing skill records it against the finding's detection key to keep re-scans idempotent.
 
 When invoked **independently**:
 
