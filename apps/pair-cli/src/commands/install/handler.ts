@@ -14,7 +14,7 @@ import {
   doCopyAndUpdateLinks,
   buildCopyOptions,
   postCopyOps,
-  applySkillRefsToNonSkillRegistries,
+  reconcileSkillNameRegistry,
   resolveEffectiveDatasetRoot,
   writeProjectLlmsTxt,
   type RegistryConfig,
@@ -273,9 +273,8 @@ async function executeInstall(context: InstallContext): Promise<void> {
 
   const { results, skillNameMap } = await installAllRegistries(context)
 
-  if (skillNameMap.size > 0) {
-    await applySkillRefsToNonSkillRegistries({ fs, baseTarget, pushLog }, registries, skillNameMap)
-  }
+  await reconcileSkillNameRegistry({ fs, baseTarget, pushLog }, registries, skillNameMap)
+
   if (options?.linkStyle) {
     await applyLinkTransformation(fs, { linkStyle: options.linkStyle }, pushLog, 'install')
   }

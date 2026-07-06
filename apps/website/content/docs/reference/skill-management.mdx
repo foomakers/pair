@@ -154,6 +154,10 @@ With the default config (`prefix: "pair"`, `flatten: true`):
 | `capability/verify-quality/` | `pair-capability-verify-quality/` | `/pair-capability-verify-quality` |
 | `capability/record-decision/` | `pair-capability-record-decision/` | `/pair-capability-record-decision` |
 
+### Collision Detection
+
+If two different source paths flatten to the same installed name (e.g. `a/b/` and `a-b/` both becoming `a-b/`), install fails outright with an explicit error listing the collision instead of silently overwriting one skill with the other.
+
 ### Three Namespace Prefixes
 
 | Prefix | Count | Purpose |
@@ -201,6 +205,46 @@ Skill references (slash commands in markdown) are rewritten using boundary-aware
 | `invoke /implement immediately` | `invoke /pair-process-implement immediately` |
 | `name: pair-next` (no leading slash) | `name: pair-next` (unchanged) |
 | `path/next/page` (mid-path) | `path/next/page` (unchanged) |
+
+### Fenced Code Blocks Are Skipped
+
+Rewriting is applied line-by-line and tracks fenced code blocks (` ``` ` or `~~~`). Content inside a fence is left untouched — a skill name quoted as example text isn't a live invocation. Inline single-backtick code spans (`` `/next` ``) are still rewritten; only triple-backtick/tilde *blocks* are excluded.
+
+```text
+Run `/next` to start.                    <- rewritten (inline code span)
+[fenced code block containing "/next"]   <- left as-is
+Then run /implement.                     <- rewritten (prose)
+```
+
+The relative-link rewriter (Stage 3) gets this for free: it walks a real markdown AST, so links inside fenced or inline code were never extracted as links in the first place.
+
+## Idempotent Updates and Prefix Changes
+
+### The Problem
+
+`pair update` re-derives skill bodies from source on every run, so a rename (e.g. a prefix change in `pair.config.json`) always produces the correct *new* skill files. But two kinds of content are **not** re-derived from source every run:
+
+- Files copied with `add` behavior (e.g. adoption docs) — never overwritten once they exist, so a stale reference baked in during an earlier install (`/pair-next`) is never revisited by a plain copy-and-rewrite pass.
+- Anything a previous run wrote using the *old* prefix, where the current config only knows the *new* one.
+
+Guessing at the old prefix by string-matching (`"pair-"` → `"foo-"`) is explicitly avoided — it produces false positives on unrelated content that happens to start with the same string.
+
+### The Fix: A Recorded Mapping
+
+Each install/update writes a small manifest (`.pair/.skill-name-map.json`) recording this run's `{shortName: installedName}` map. The next run reads it back and computes an exact transition map (`oldInstalledName -> newInstalledName`) for every skill whose installed name changed — then applies that transition on top of the normal short-name rewrite when reconciling non-skill registries. The manifest is then rewritten with the current mapping.
+
+This is why `install -> update -> update` is byte-stable, and why changing `prefix` between two runs correctly:
+
+- removes the old flattened directory (e.g. `pair-catalog-next/`) instead of leaving it orphaned alongside the new one,
+- rewrites already-installed references — including ones living in `add`-behavior files — to the new name.
+
+### Removed or Disabled Skills
+
+If a skill disappears from the source registry between runs, its old installed name has no valid new target. Any remaining `/oldName` invocation is left exactly as-is, and the install/update report logs a warning so it can be cleaned up by hand.
+
+### External KBs
+
+The same registry-build, rewrite, and manifest pipeline runs regardless of where the dataset comes from — the official KB, a project override, or an external KB installed via `--source`. No source-side restructuring is required or supported; the nested `.skills/<type>/<name>/` layout is flattened, prefixed, and rewritten identically either way.
 
 ## Windows Compatibility
 

@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import type { SkillNameMap } from '@pair/content-ops'
-import { rewriteSkillRefsInTarget, applySkillRefsToNonSkillRegistries } from './skill-refs'
+import {
+  rewriteSkillRefsInTarget,
+  applySkillRefsToNonSkillRegistries,
+  detectOrphanedSkillReferences,
+  resolveSkillNameManifestPath,
+} from './skill-refs'
 import type { RegistryConfig } from './resolver'
 
 describe('rewriteSkillRefsInTarget', () => {
@@ -206,5 +211,133 @@ describe('applySkillRefsToNonSkillRegistries', () => {
 
     const result = await fs.readFile('/project/AGENTS.md')
     expect(result).toBe('# AGENTS\n\nNo skills.')
+  })
+})
+
+describe('resolveSkillNameManifestPath', () => {
+  it('resolves under .pair/ relative to baseTarget', () => {
+    const fs = new InMemoryFileSystemService({}, '/project', '/project')
+    expect(resolveSkillNameManifestPath(fs, '/project')).toBe(
+      '/project/.pair/.skill-name-map.json',
+    )
+  })
+
+  it('is outside the knowledge and adoption registry targets', () => {
+    const fs = new InMemoryFileSystemService({}, '/project', '/project')
+    const manifestPath = resolveSkillNameManifestPath(fs, '/project')
+    expect(manifestPath.startsWith('/project/.pair/knowledge')).toBe(false)
+    expect(manifestPath.startsWith('/project/.pair/adoption')).toBe(false)
+  })
+})
+
+describe('detectOrphanedSkillReferences', () => {
+  const noopLog = () => {}
+
+  it('does nothing when there are no orphaned names', async () => {
+    const fs = new InMemoryFileSystemService({ '/project/AGENTS.md': '# AGENTS' }, '/project', '/project')
+    const registries: Record<string, RegistryConfig> = {
+      agents: {
+        source: 'AGENTS.md',
+        behavior: 'mirror',
+        description: 'Agents',
+        include: [],
+        flatten: false,
+        targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+      },
+    }
+
+    await detectOrphanedSkillReferences({ fs, baseTarget: '/project', pushLog: noopLog }, registries, [])
+
+    // no-op — nothing to assert beyond "did not throw"
+  })
+
+  it('warns when an orphaned installed name is still referenced', async () => {
+    const fs = new InMemoryFileSystemService(
+      { '/project/AGENTS.md': '# AGENTS\n\nRun /pair-removed for legacy setup.' },
+      '/project',
+      '/project',
+    )
+    const registries: Record<string, RegistryConfig> = {
+      agents: {
+        source: 'AGENTS.md',
+        behavior: 'mirror',
+        description: 'Agents',
+        include: [],
+        flatten: false,
+        targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+      },
+    }
+
+    const warnings: string[] = []
+    const pushLog = (level: string, message: string) => {
+      if (level === 'warn') warnings.push(message)
+    }
+
+    await detectOrphanedSkillReferences(
+      { fs, baseTarget: '/project', pushLog },
+      registries,
+      ['pair-removed'],
+    )
+
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('/pair-removed')
+    expect(warnings[0]).toContain('AGENTS.md')
+
+    // content is left untouched
+    const content = await fs.readFile('/project/AGENTS.md')
+    expect(content).toBe('# AGENTS\n\nRun /pair-removed for legacy setup.')
+  })
+
+  it('does not warn when the orphaned name only appears in a fenced code block', async () => {
+    const fs = new InMemoryFileSystemService(
+      { '/project/AGENTS.md': ['# AGENTS', '```', '/pair-removed', '```'].join('\n') },
+      '/project',
+      '/project',
+    )
+    const registries: Record<string, RegistryConfig> = {
+      agents: {
+        source: 'AGENTS.md',
+        behavior: 'mirror',
+        description: 'Agents',
+        include: [],
+        flatten: false,
+        targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+      },
+    }
+
+    const warnings: string[] = []
+    const pushLog = (level: string, message: string) => {
+      if (level === 'warn') warnings.push(message)
+    }
+
+    await detectOrphanedSkillReferences(
+      { fs, baseTarget: '/project', pushLog },
+      registries,
+      ['pair-removed'],
+    )
+
+    expect(warnings).toHaveLength(0)
+  })
+
+  it('does not throw when target does not exist', async () => {
+    const fs = new InMemoryFileSystemService({}, '/project', '/project')
+    const registries: Record<string, RegistryConfig> = {
+      agents: {
+        source: 'AGENTS.md',
+        behavior: 'mirror',
+        description: 'Agents',
+        include: [],
+        flatten: false,
+        targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+      },
+    }
+
+    await expect(
+      detectOrphanedSkillReferences(
+        { fs, baseTarget: '/project', pushLog: noopLog },
+        registries,
+        ['pair-removed'],
+      ),
+    ).resolves.not.toThrow()
   })
 })

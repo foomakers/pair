@@ -587,6 +587,10 @@ export async function copyDirectoryWithTransforms(params: {
     })
   }
 
+  if (options?.defaultBehavior === 'mirror') {
+    await cleanupStaleTransformedEntries({ fileService, destPath, dirMappingFiles, transformOpts })
+  }
+
   await rewriteLinksForTransformedDirs(params, dirMappingFiles, transformOpts)
   const skillNameMap = await applySkillReferenceRewrites(
     fileService,
@@ -598,6 +602,40 @@ export async function copyDirectoryWithTransforms(params: {
     `Copied contents of ${srcPath} -> ${destPath} (flatten=${flatten}, prefix=${prefix ?? 'none'})`,
   )
   return skillNameMap.size > 0 ? { skillNameMap } : {}
+}
+
+/**
+ * Removes stale top-level entries under a flatten/prefix target that no
+ * longer correspond to a source directory. This is what makes `mirror`
+ * behavior idempotent across renames: a removed skill's leftover flattened
+ * directory is cleaned up, and a prefix change no longer leaves the old
+ * prefixed directory orphaned alongside the new one.
+ *
+ * Only top-level entries are considered — matches the granularity of the
+ * non-transform `handleMirrorCleanup` and the flatten use case (one source
+ * subdirectory maps to exactly one top-level target directory).
+ */
+async function cleanupStaleTransformedEntries(params: {
+  fileService: FileSystemService
+  destPath: string
+  dirMappingFiles: Map<string, string[]>
+  transformOpts: TransformOpts
+}): Promise<void> {
+  const { fileService, destPath, dirMappingFiles, transformOpts } = params
+
+  const expected = new Set<string>()
+  for (const originalSubDir of dirMappingFiles.keys()) {
+    const transformedDir = transformPath(originalSubDir, transformOpts)
+    expected.add(transformedDir.split('/')[0]!)
+  }
+
+  const entries = await fileService.readdir(destPath).catch(() => [])
+  for (const entry of entries) {
+    if (expected.has(entry.name)) continue
+    const toRemove = join(destPath, entry.name)
+    await fileService.rm(toRemove, { recursive: true, force: true })
+    logger.info(`Mirror: removed stale transformed entry ${toRemove}`)
+  }
 }
 
 async function rewriteLinksForTransformedDirs(

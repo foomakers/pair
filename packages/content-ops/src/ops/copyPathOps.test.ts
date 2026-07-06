@@ -499,6 +499,85 @@ describe('copyPathOps - flatten and prefix', () => {
       }),
     ).rejects.toThrow(/collision/i)
   })
+
+  describe('mirror behavior — idempotent updates (AC4)', () => {
+    it('removes a stale flattened directory when its source skill is gone', async () => {
+      const fileService = new InMemoryFileSystemService(
+        {
+          '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
+          // Stale leftover from a previous run — no longer present under source
+          '/dataset/target/pair-catalog-removed/SKILL.md': '---\nname: pair-catalog-removed\n---',
+        },
+        '/',
+        '/',
+      )
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', defaultBehavior: 'mirror', targets: [] },
+      })
+
+      await expect(
+        fileService.exists('/dataset/target/pair-catalog-removed/SKILL.md'),
+      ).resolves.toBe(false)
+      await expect(fileService.exists('/dataset/target/pair-catalog-next/SKILL.md')).resolves.toBe(
+        true,
+      )
+    })
+
+    it('removes the old prefixed directory after a prefix change', async () => {
+      const fileService = new InMemoryFileSystemService(
+        {
+          '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
+          // Leftover from a previous install with prefix "pair"
+          '/dataset/target/pair-catalog-next/SKILL.md': '---\nname: pair-catalog-next\n---',
+        },
+        '/',
+        '/',
+      )
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'foo', defaultBehavior: 'mirror', targets: [] },
+      })
+
+      await expect(fileService.exists('/dataset/target/pair-catalog-next/SKILL.md')).resolves.toBe(
+        false,
+      )
+      await expect(fileService.exists('/dataset/target/foo-catalog-next/SKILL.md')).resolves.toBe(
+        true,
+      )
+    })
+
+    it('does not clean up stale entries when behavior is not mirror', async () => {
+      const fileService = new InMemoryFileSystemService(
+        {
+          '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
+          '/dataset/target/pair-catalog-removed/SKILL.md': '---\nname: pair-catalog-removed\n---',
+        },
+        '/',
+        '/',
+      )
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', defaultBehavior: 'overwrite', targets: [] },
+      })
+
+      await expect(
+        fileService.exists('/dataset/target/pair-catalog-removed/SKILL.md'),
+      ).resolves.toBe(true)
+    })
+  })
 })
 
 describe('copyPathOps - error cases', () => {

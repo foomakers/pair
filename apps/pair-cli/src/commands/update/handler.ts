@@ -12,7 +12,7 @@ import {
   doCopyAndUpdateLinks,
   buildCopyOptions,
   postCopyOps,
-  applySkillRefsToNonSkillRegistries,
+  reconcileSkillNameRegistry,
   handleBackupRollback,
   resolveEffectiveDatasetRoot,
   writeProjectLlmsTxt,
@@ -269,13 +269,11 @@ async function updateRegistries(context: UpdateContext): Promise<RegistryResult[
     return result
   })
 
-  if (accumulatedSkillNameMap.size > 0) {
-    await applySkillRefsToNonSkillRegistries(
-      { fs, baseTarget, pushLog },
-      registries,
-      accumulatedSkillNameMap,
-    )
-  }
+  await reconcileSkillNameRegistry(
+    { fs, baseTarget, pushLog },
+    registries,
+    accumulatedSkillNameMap,
+  )
 
   presenter.summary(results, 'update', Date.now() - startTime)
   return results
