@@ -23,7 +23,7 @@ The `/next` skill reads project adoption files and PM tool state to recommend th
 
 ```text
 SESSION STATE:
-├── How-to: [which .pair/how-to/XX-*.md file you're following]
+├── How-to: [which .pair/knowledge/how-to/XX-*.md file you're following]
 ├── Role: [product-manager | product-engineer | staff-engineer]
 ├── PM Tool: [GitHub Projects | Jira | Linear | Trello | etc.]
 └── PM Access: [MCP command | URL/location for project management queries]
@@ -42,13 +42,13 @@ PM Access: MCP github_projects (org: mycompany, repo: myproject)
 
 1. **Determine how-to**: Use task selection algorithm below
 2. **Identify role**: Check user language/request type, or ask if unclear
-3. **Find PM tool**: Read `.pair/tech/adopted/way-of-working.md` to get the current project management tool
-4. **Get PM access**: Extract tool-specific access instructions from `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md`
+3. **Find PM tool**: Read `.pair/adoption/tech/way-of-working.md` to get the current project management tool
+4. **Get PM access**: Extract tool-specific access instructions from `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md`
 
 #### PM Tool Setup Process
 
-- **Primary source**: `.pair/tech/adopted/way-of-working.md` (contains the adopted PM tool)
-- **Usage instructions**: `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` (contains tool-specific guidance)
+- **Primary source**: `.pair/adoption/tech/way-of-working.md` (contains the adopted PM tool)
+- **Usage instructions**: `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` (contains tool-specific guidance)
 - **If tool not specified**: Ask developer which PM tool to use
 - **Access details**: Extract MCP commands or URLs from the framework file for your specific tool
 
@@ -62,10 +62,10 @@ PM Access: MCP github_projects (org: mycompany, repo: myproject)
 **Without skills** (manual flow):
 
 1. **Establish session context** (see Session Context above - maintain for entire conversation)
-2. **Understand the project**: Read `.pair/product/adopted/PRD.md` for project overview
-3. **Identify your task**: Match your request to a task category using `.pair/how-to/index.json`
+2. **Understand the project**: Read `.pair/adoption/product/PRD.md` for project overview
+3. **Identify your task**: Match your request to a task category using `.pair/knowledge/how-to/`
 4. **Follow the guidance**: Use the selected how-to file for specific instructions
-5. **Apply constraints**: Check `.pair/tech/adopted/` for technical requirements
+5. **Apply constraints**: Check `.pair/adoption/tech/` for technical requirements
 
 ## 📋 Available Tasks
 
@@ -118,18 +118,18 @@ pnpm lint --filter <package_name>
 ## 📚 Key References
 
 - **AI-friendly index**: `.pair/llms.txt` (llmstxt.org — machine-readable knowledge base index)
-- **Project context**: `.pair/product/adopted/PRD.md`
-- **PM tool adoption**: `.pair/tech/adopted/way-of-working.md` (determines which PM tool to use)
-- **PM tool usage**: `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` (tool-specific instructions)
-- **Technical decisions**: `.pair/tech/adopted/` (architecture, tech-stack, infrastructure)
-- **Testing strategy**: `.pair/tech/knowledge-base/07-testing-strategy.md`
-- **Code guidelines**: `.pair/tech/knowledge-base/02-code-design-guidelines.md`
-- **Security rules**: `.pair/tech/knowledge-base/10-security-guidelines.md`
+- **Project context**: `.pair/adoption/product/PRD.md`
+- **PM tool adoption**: `.pair/adoption/tech/way-of-working.md` (determines which PM tool to use)
+- **PM tool usage**: `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` (tool-specific instructions)
+- **Technical decisions**: `.pair/adoption/tech/` (architecture, tech-stack, infrastructure)
+- **Testing strategy**: `.pair/knowledge/guidelines/testing/README.md`
+- **Code guidelines**: `.pair/knowledge/guidelines/code-design/README.md`
+- **Security rules**: `.pair/knowledge/guidelines/quality-assurance/security/security-guidelines.md`
 
 <!-- @claude-skip-start -->
 ## 🎭 If unsure about your task
 
-**Use the index**: Load `.pair/how-to/index.json` and match user request keywords to task `tags`
+**Use the index**: Load `.pair/knowledge/how-to/` and match user request keywords to task `tags`
 
 ### Workflow categories
 
@@ -152,12 +152,12 @@ pnpm lint --filter <package_name>
 - **Maintain session context** - Always reference your current how-to, role, PM tool, and access method
 - **One task per session** - keep changes focused within the current how-to scope
 - **Tests required** - follow testing strategy for all code changes
-- **Check adoptions first** - `.pair/tech/adopted/` overrides other guidance
+- **Check adoptions first** - `.pair/adoption/tech/` overrides other guidance
 - **Package-specific rules win** - check for `.pair/knowledge/guidelines/` in target package
 - **No secrets in code** - ask for secure access instructions if needed
 - **Context consistency** - if switching how-to mid-session, explicitly update your session context
 - **Bug fix workflow** - NEVER modify code to fix a bug before creating a test that reproduces it. Test-first debugging ensures the fix actually addresses the problem.
-- **Record decisions** - architectural/project decisions MUST be recorded as ADR or ADL. Use `/record-decision` skill or write to `.pair/tech/adopted/adr/` (architectural) / `.pair/tech/adopted/adl/` (non-architectural).
+- **Record decisions** - architectural/project decisions MUST be recorded as ADR or ADL. Use `/record-decision` skill or write to `.pair/adoption/tech/adr/` (architectural) / `.pair/adoption/tech/adl/` (non-architectural).
 - **Follow templates** - PRs, code reviews, commits, branches, tasks, user stories MUST follow templates in `.pair/knowledge/guidelines/collaboration/templates/` unless adoption files specify otherwise. Key templates: `pr-template.md`, `code-review-template.md`, `commit-template.md`, `branch-template.md`, `task-template.md`, `user-story-template.md`.
 
 ## 🐛 Bug Resolution Workflow
@@ -210,7 +210,7 @@ function isLocalPath(str: string): boolean {
 ## 🔄 Task Selection Algorithm
 
 1. **Exact match**: Developer mentions specific how-to ID/filename → use it
-2. **Tag matching**: Use `.pair/how-to/index.json` to match request keywords to task tags
+2. **Tag matching**: Use `.pair/knowledge/how-to/` to match request keywords to task tags
 3. **Category workflow**: Follow the natural progression (induction → strategic → iteration → execution → review)
 4. **Role context**: Consider if developer specified a role (product-manager, product-engineer, staff-engineer)
 5. **When ambiguous**: Show top 2 matches with their tags and ask for confirmation
