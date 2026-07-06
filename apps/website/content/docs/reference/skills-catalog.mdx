@@ -27,7 +27,7 @@ Process skills orchestrate multi-step workflows by composing capability skills.
 | **refine-story** | `/pair-process-refine-story` | Refines a user story from Todo to Refined state: requirements analysis (Given-When-Then), technical analysis, sprint readiness. | `/pair-capability-write-issue` |
 | **plan-tasks** | `/pair-process-plan-tasks` | Breaks a refined user story into implementation tasks. Appends Technical Analysis + Task Breakdown to the story body. | `/pair-capability-write-issue` |
 | **implement** | `/pair-process-implement` | Implements a user story by iterating through its tasks one at a time following a 5-step cycle per task. Creates a PR at story completion. | `/pair-capability-verify-quality`, `/pair-capability-record-decision` |
-| **review** | `/pair-process-review` | Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness, decision, and optional merge. | `/pair-capability-verify-quality`, `/pair-capability-verify-done`, `/pair-capability-record-decision`, `/pair-capability-assess-debt` (required); `/pair-capability-verify-adoption`, `/pair-capability-assess-stack`, `/pair-capability-execute-manual-tests` (optional) |
+| **review** | `/pair-process-review` | Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness, decision, and optional merge. New tech debt found in the diff becomes a tracked item — never blocks the PR. | `/pair-capability-verify-quality`, `/pair-capability-verify-done`, `/pair-capability-record-decision`, `/pair-capability-assess-debt`, `/pair-capability-write-issue` (required); `/pair-capability-verify-adoption`, `/pair-capability-assess-stack`, `/pair-capability-execute-manual-tests` (optional) |
 
 ## Capability Skills
 
@@ -49,7 +49,7 @@ Reclassified from process skills — see [Migration Notes](/docs/reference/skill
 | **assess-ai** | `/pair-capability-assess-ai` | Assess AI development tools using resolution cascade (Argument > Adoption > Assessment). |
 | **assess-architecture** | `/pair-capability-assess-architecture` | Assess architecture pattern using resolution cascade. |
 | **assess-code-quality** | `/pair-capability-assess-code-quality` | Assess code quality using quality score formula from code-metrics guidelines. |
-| **assess-debt** | `/pair-capability-assess-debt` | Assess technical debt. Categorizes debt (code, design, test, documentation, infrastructure), applies prioritization formula. |
+| **assess-debt** | `/pair-capability-assess-debt` | Assess technical debt. Categorizes debt (code, design, test, documentation, infrastructure), applies prioritization formula. `$mode: scan` greps for code smells + design-rule violations and creates tracked `tech-debt` items idempotently. |
 | **assess-infrastructure** | `/pair-capability-assess-infrastructure` | Assess infrastructure strategy: cloud, CI/CD, deployment choices. |
 | **assess-methodology** | `/pair-capability-assess-methodology` | Assess development methodology: Scrum, Kanban, Lean, etc. |
 | **assess-observability** | `/pair-capability-assess-observability` | Assess observability strategy: monitoring, logging, tracing. |
@@ -85,7 +85,7 @@ Reclassified from process skills — see [Migration Notes](/docs/reference/skill
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
 | **record-decision** | `/pair-capability-record-decision` | Records an architectural (ADR) or non-architectural (ADL) decision. Updates adoption files. |
-| **write-issue** | `/pair-capability-write-issue` | Creates or updates issues in the adopted PM tool using template-driven formatting. |
+| **write-issue** | `/pair-capability-write-issue` | Creates or updates issues in the adopted PM tool using template-driven formatting. Supports extra labels (e.g. `tech-debt`) via `$content.labels`. |
 | **estimate** | `/pair-capability-estimate` | Estimates a refined user story using the adopted estimation methodology. |
 
 ### Discovery Capabilities
