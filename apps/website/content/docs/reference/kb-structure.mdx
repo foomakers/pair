@@ -51,7 +51,8 @@ The `.pair/` directory is the root of pair's Knowledge Base. It contains all gui
 │   ├── decision-log/             # Non-architectural decision log (ADL)
 │   ├── product/                  # Product decisions
 │   │   ├── PRD.md                # Product Requirements Document
-│   │   └── subdomain/            # DDD subdomain definitions
+│   │   ├── subdomain/            # DDD subdomain definitions
+│   │   └── ddr/                  # Domain Decision Records
 │   └── tech/                     # Technical decisions
 │       ├── architecture.md       # Architecture pattern
 │       ├── tech-stack.md         # Approved libraries and versions
@@ -80,6 +81,7 @@ Contains project-specific decisions that **override** knowledge-layer defaults. 
 
 - **`product/PRD.md`** — Your Product Requirements Document
 - **`product/subdomain/`** — DDD subdomain definitions for your domain
+- **`product/ddr/`** — Domain Decision Records (why a domain rule was decided; the domain context file holds the current state)
 - **`tech/architecture.md`** — Your chosen architecture pattern
 - **`tech/tech-stack.md`** — Your approved libraries with pinned versions
 - **`tech/way-of-working.md`** — Your development process, quality gates, PM tool
@@ -98,6 +100,7 @@ Contains project-specific decisions that **override** knowledge-layer defaults. 
 | `adoption/` | Add (new files only) | Yes |
 | `adoption/tech/adr/` | Preserved | Yes |
 | `adoption/decision-log/` | Preserved | Yes |
+| `adoption/product/ddr/` | Preserved | Yes |
 
 ## Related
 
