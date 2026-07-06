@@ -15,9 +15,9 @@ Run `/next` at the start of every session. It reads project adoption files and P
 | Type | Count | Purpose |
 |------|-------|---------|
 | **Process** | 9 | Lifecycle phases — orchestrate capability skills |
-| **Capability** | 23 | Atomic units — perform a single focused operation |
+| **Capability** | 24 | Atomic units — perform a single focused operation |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 33 (9 process + 23 capability + 1 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 34 (9 process + 24 capability + 1 navigator).
 
 ## Full Catalog
 
@@ -37,7 +37,7 @@ Process skills compose capability skills. Capability skills are independently in
 
 > How-to guides 04 and 05 (subdomain/bounded-context definition) were removed — domain modeling is referenced inline by each real caller's own how-to (02, 03, 06, 09; 08 planned — #242). See [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
 
-### Capability Skills (23)
+### Capability Skills (24)
 
 #### Domain Modeling Skills (2)
 
@@ -94,6 +94,12 @@ Reclassified from process to capability (D24) — see [Callers Matrix](#callers-
 | `/assess-code-quality` | Code quality metrics assessment |
 | `/manage-flags` | Feature flag lifecycle management |
 
+#### Discovery Skills (1)
+
+| Skill | Scope |
+|-------|-------|
+| `/grill` | Reusable interview engine (interview / sync modes), write-free |
+
 ## Directory Structure
 
 ```text
@@ -121,7 +127,8 @@ Reclassified from process to capability (D24) — see [Callers Matrix](#callers-
 │   ├── setup-gates/
 │   ├── setup-pm/
 │   ├── assess-code-quality/
-│   └── manage-flags/
+│   ├── manage-flags/
+│   └── grill/
 └── next/                 # Navigator skill
     └── SKILL.md
 ```

@@ -1,9 +1,9 @@
 ---
 title: Skills Catalog
-description: Complete catalog of all 33 pair skills organized by type — process, capability, and meta.
+description: Complete catalog of all 34 pair skills organized by type — process, capability, and meta.
 ---
 
-pair ships with 33 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
+pair ships with 34 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
 
 > **Last updated:** 2026-07-07. Source: `packages/knowledge-hub/dataset/.skills/`
 
@@ -87,6 +87,12 @@ Reclassified from process skills — see [Migration Notes](/docs/reference/skill
 | **record-decision** | `/pair-capability-record-decision` | Records an architectural (ADR) or non-architectural (ADL) decision. Updates adoption files. |
 | **write-issue** | `/pair-capability-write-issue` | Creates or updates issues in the adopted PM tool using template-driven formatting. |
 | **estimate** | `/pair-capability-estimate` | Estimates a refined user story using the adopted estimation methodology. |
+
+### Discovery Capabilities
+
+| Skill | Command | Description |
+| ----- | ------- | ----------- |
+| **grill** | `/pair-capability-grill` | Reusable interview engine: one question at a time, always with a recommendation, exploring KB/codebase before asking. `sync` mode drives systematic AI-human alignment on a story until explicit shared understanding. Write-free — returns the synthesis to the caller. |
 
 ## Skill Properties
 
