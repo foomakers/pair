@@ -73,7 +73,8 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
    - Convert requirements into **Given-When-Then** scenarios.
    - Identify **business rules** with measurable criteria.
    - Address **edge cases** and error handling conditions.
-2. **Act**: Present the proposed criteria to the developer for validation:
+2. **Act**: Domain check — if `context-map.md` (in `.pair/adoption/product/`) exists, read it (plus any linked `subdomain/<slug>.context.md` this story touches). When the story introduces or sharpens a domain term, update the map inline per the [Context Map Maintenance](../../../.pair/knowledge/guidelines/architecture/design-patterns/context-map-maintenance.md) guideline. When a proposed criterion conflicts with a registered rule, flag it citing that rule (and the DDR, when one exists) and resolve with the developer before proceeding. Skip this step entirely if the map doesn't exist — its absence is expected, not an error.
+3. **Act**: Present the proposed criteria to the developer for validation:
 
    > Proposed acceptance criteria for `#[ID]`:
    > [List Given-When-Then scenarios]
@@ -81,7 +82,7 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
    > [Edge cases]
    > Approve or adjust?
 
-3. **Verify**: Developer approves. Criteria finalized.
+4. **Verify**: Developer approves. Criteria finalized.
 
 ### Step 3: Technical Analysis
 
@@ -159,6 +160,7 @@ STORY REFINEMENT COMPLETE:
 - If `/write-issue` is not installed, warn and provide the formatted story body for manual PM tool update.
 - If the PM tool is not accessible, produce the refined story content and ask the developer to update manually.
 - If adoption files (architecture, tech-stack) are not found, skip technical analysis alignment checks and warn.
+- If `context-map.md` is not found, skip the domain check in Step 2 — its absence is the expected steady state, not an error.
 
 ## Notes
 
