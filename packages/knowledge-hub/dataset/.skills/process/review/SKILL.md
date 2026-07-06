@@ -104,10 +104,11 @@ Ask: _"Proceed with review?"_
 1. **Check**: Have code quality issues already been identified in this session?
 2. **Skip**: If already assessed — move to Step 2.3.
 3. **Act**: Review changed files against:
+   - [Design Rules](../../../.pair/knowledge/guidelines/code-design/design-principles/design-rules.md) — do/don't patterns (DR-1, DR-2, ...). A diff **clearly** matching a rule's recognition criteria is a **violation** — cite the rule ID (e.g. "DR-1 — God Module") in the finding, not a generic "improve structure" comment. A **partial or ambiguous** match is a **suggestion**, not a violation — do not count it toward the review decision.
    - [Code design guidelines](../../../.pair/knowledge/guidelines/code-design/README.md) — readability, maintainability, naming
    - [Technical standards](../../../.pair/knowledge/guidelines/technical-standards/README.md) — patterns, conventions
    - Review type-specific concerns (e.g., behavior preservation for refactors, regression tests for bugs)
-4. **Verify**: Issues catalogued by severity (critical / major / minor).
+4. **Verify**: Issues catalogued by severity (critical / major / minor), with rule ID referenced where a Design Rule applies.
 
 ### Step 2.3: Architecture & ADR Compliance
 
