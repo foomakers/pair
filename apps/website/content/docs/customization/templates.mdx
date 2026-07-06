@@ -3,7 +3,7 @@ title: Customize Templates
 description: Override pair's built-in templates for commits, PRs, stories, epics, and other workflow artifacts.
 ---
 
-pair ships with 12 templates that control the structure of workflow artifacts — from commit messages to user stories. This guide shows how to customize them for your team.
+pair ships with 13 templates that control the structure of workflow artifacts — from commit messages to user stories. This guide shows how to customize them for your team.
 
 ## Where Templates Live
 
@@ -13,6 +13,7 @@ Templates are part of the Knowledge Base:
 .pair/knowledge/guidelines/collaboration/templates/
 ├── adr-template.md              # Architecture Decision Records
 ├── adl-template.md              # Architecture Decision Log entries
+├── ddr-template.md              # Domain Decision Records
 ├── bounded-context-template.md  # DDD bounded context definitions
 ├── branch-template.md           # Git branch naming conventions
 ├── code-review-template.md      # Code review checklists
@@ -47,12 +48,13 @@ The AI reads these templates when creating the corresponding artifacts. When you
 | **user-story-template.md** | `/pair-process-plan-stories`, `/pair-process-refine-story` | Story issue body: statement, AC (Given-When-Then), technical analysis, tasks |
 | **task-template.md** | `/pair-process-plan-tasks` | Task structure: approach, AC mapping, implementation steps |
 
-### Architecture Decisions
+### Decision Records
 
 | Template | Used by | Controls |
 | --- | --- | --- |
 | **adr-template.md** | `/pair-capability-record-decision` | ADR structure: context, decision, consequences |
 | **adl-template.md** | `/pair-capability-record-decision` | Decision log entry: date, topic, outcome |
+| **ddr-template.md** | `/pair-capability-record-decision` | DDR structure: domain context, 3-criteria gate evidence, decision, context map impact |
 
 ### Domain Modeling
 

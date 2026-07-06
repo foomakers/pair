@@ -105,7 +105,7 @@ Every time an AI assistant starts a session, it reads the adoption files to unde
 1. **Generating code** — uses only approved libraries and follows the architecture pattern
 2. **Creating tasks** — references adoption files in each task specification
 3. **Code review** — checks that new code conforms to recorded decisions
-4. **Making decisions** — when a new choice arises, records it as an ADR
+4. **Making decisions** — when a new choice arises, records it as an ADR, ADL, or DDR
 
 If a developer asks the AI to add a feature and the implementation requires a library not in `tech-stack.md`, the AI flags it and creates an Architectural Decision Record (ADR) to document the choice.
 
@@ -126,6 +126,24 @@ Each ADR documents:
 - **Consequences** — tradeoffs and implications
 
 ADRs provide an audit trail of your project's technical evolution.
+
+## Domain Decision Records
+
+Domain decisions — business rules, glossary terms, or behavior — are recorded as DDRs in `.pair/adoption/product/ddr/`, but only when they clear a 3-criteria gate: hard to reverse, surprising without context, and a real trade-off. A candidate that fails the gate is recorded as an ADL or an inline context-map note instead.
+
+```text
+ddr/
+  ddr-001-refund-window-30-days.md
+  ddr-002-single-active-subscription.md
+```
+
+Each DDR documents:
+- **Context** — the domain rule affected and evidence for each gate criterion
+- **Decision** — the rule now in force
+- **Consequences** — tradeoffs and implications
+- **Context Map Impact** — which entry in `context-map.md` (or `<slug>.context.md`) changed
+
+Unlike ADRs, a DDR always syncs a second artifact — the context map — so the domain's current state never diverges from why it got that way.
 
 ## Protection
 
