@@ -1187,3 +1187,152 @@ describe('#238: idempotent skill name registry (manifest-backed)', () => {
     ).resolves.toBe(false)
   })
 })
+
+/**
+ * #257: `.pair/working/` excluded from KB registries + adoption path override (D14)
+ *
+ * Checkpoints and reports live outside every asset registry so `pair update`
+ * never touches them — round-trip content must stay byte-identical.
+ */
+describe('#257: working area excluded from update (D14)', () => {
+  test('populated working area survives update byte-identical (default path)', async () => {
+    const cwd = '/project'
+    const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: {
+              source: '.pair/knowledge',
+              behavior: 'mirror',
+              description: 'Knowledge base',
+              targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+            },
+          },
+        }),
+        [`${datasetSrc}/.pair/knowledge/guide.md`]: '# New Guide',
+        [`${cwd}/.pair/knowledge/guide.md`]: '# Old Guide',
+        // Operational working area — must survive untouched
+        [`${cwd}/.pair/working/checkpoints/story-257.md`]: 'DO NOT TOUCH: checkpoint',
+        [`${cwd}/.pair/working/reports/quality/report-1.md`]: 'DO NOT TOUCH: report',
+      },
+      cwd,
+      cwd,
+    )
+
+    const httpClient = new MockHttpClientService()
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleUpdateCommand(config, fs, { httpClient })
+
+    // Registry content was updated as expected
+    expect(await fs.readFile(`${cwd}/.pair/knowledge/guide.md`)).toBe('# New Guide')
+
+    // Working area is byte-identical to before the update
+    expect(await fs.readFile(`${cwd}/.pair/working/checkpoints/story-257.md`)).toBe(
+      'DO NOT TOUCH: checkpoint',
+    )
+    expect(await fs.readFile(`${cwd}/.pair/working/reports/quality/report-1.md`)).toBe(
+      'DO NOT TOUCH: report',
+    )
+  })
+
+  test('rejects an update whose registry accidentally covers the working area, leaving files untouched', async () => {
+    const cwd = '/project'
+    const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            pairroot: {
+              source: '.pair',
+              behavior: 'mirror',
+              description: 'Accidentally mirrors the whole .pair root',
+              targets: [{ path: '.pair', mode: 'canonical' }],
+            },
+          },
+        }),
+        [`${datasetSrc}/.pair/knowledge.md`]: '# KB',
+        [`${cwd}/.pair/knowledge.md`]: '# old KB',
+        [`${cwd}/.pair/working/checkpoints/story-257.md`]: 'DO NOT TOUCH',
+      },
+      cwd,
+      cwd,
+    )
+
+    const httpClient = new MockHttpClientService()
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await expect(handleUpdateCommand(config, fs, { httpClient })).rejects.toThrow(/working area/)
+
+    // Nothing was touched — validation rejected the config before any copy ran
+    expect(await fs.readFile(`${cwd}/.pair/working/checkpoints/story-257.md`)).toBe('DO NOT TOUCH')
+    expect(await fs.readFile(`${cwd}/.pair/knowledge.md`)).toBe('# old KB')
+  })
+
+  test('respects an overridden working_path, excluding it from update instead of the default path', async () => {
+    const cwd = '/project'
+    const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${cwd}/config.json`]: JSON.stringify({
+          working_path: '.pair/scratch',
+          asset_registries: {
+            knowledge: {
+              source: '.pair/knowledge',
+              behavior: 'mirror',
+              description: 'Knowledge base',
+              targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+            },
+          },
+        }),
+        [`${datasetSrc}/.pair/knowledge/guide.md`]: '# New Guide',
+        [`${cwd}/.pair/knowledge/guide.md`]: '# Old Guide',
+        // Overridden working area — must survive untouched
+        [`${cwd}/.pair/scratch/checkpoints/story-257.md`]: 'DO NOT TOUCH: overridden path',
+      },
+      cwd,
+      cwd,
+    )
+
+    const httpClient = new MockHttpClientService()
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleUpdateCommand(config, fs, { httpClient })
+
+    expect(await fs.readFile(`${cwd}/.pair/knowledge/guide.md`)).toBe('# New Guide')
+    expect(await fs.readFile(`${cwd}/.pair/scratch/checkpoints/story-257.md`)).toBe(
+      'DO NOT TOUCH: overridden path',
+    )
+  })
+})

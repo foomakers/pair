@@ -3,6 +3,7 @@ import {
   copyDirectoryWithTransforms,
   copyFileHelper,
   FileSystemService,
+  isPathExcluded,
   type TargetConfig,
   type TransformConfig,
   type CopyPathOpsResult,
@@ -17,6 +18,8 @@ import { getCanonicalTarget } from './layout'
 
 /**
  * Performs the actual copy/mirror operation for a registry.
+ * Hard-skips the whole operation when the resolved target is the working
+ * area (or lies within it) — registry configuration cannot override this (D14).
  */
 export async function doCopyAndUpdateLinks(
   fsService: FileSystemService,
@@ -31,6 +34,10 @@ export async function doCopyAndUpdateLinks(
 
   const srcPath = isAbsolute(source) ? source : fsService.resolve(datasetRoot, source)
   const tgtPath = isAbsolute(target) ? target : fsService.resolve(datasetRoot, target)
+
+  if (isPathExcluded(tgtPath, options?.excludePaths)) {
+    return { skipped: true, reason: `Target path is excluded from registry operations: ${tgtPath}` }
+  }
 
   if (!(await fsService.exists(srcPath))) {
     return { skipped: true, reason: `Source path does not exist: ${srcPath}` }
@@ -52,6 +59,25 @@ export async function doCopyAndUpdateLinks(
   }
 
   return {}
+}
+
+function buildCopyDirHelperContext(ctx: {
+  fsService: FileSystemService
+  srcPath: string
+  tgtPath: string
+  datasetRoot: string
+  options?: SyncOptions
+}) {
+  const { fsService, srcPath, tgtPath, datasetRoot, options } = ctx
+  return {
+    fileService: fsService,
+    oldDir: srcPath,
+    newDir: tgtPath,
+    defaultBehavior: options?.defaultBehavior ?? 'overwrite',
+    datasetRoot,
+    ...(options?.folderBehavior && { folderBehavior: options.folderBehavior }),
+    ...(options?.excludePaths && { excludePaths: options.excludePaths }),
+  }
 }
 
 async function copyDirectory(
@@ -76,17 +102,18 @@ async function copyDirectory(
       datasetRoot,
       options,
     })
-  } else {
-    await copyDirHelper({
-      fileService: fsService,
-      oldDir: srcPath,
-      newDir: tgtPath,
-      defaultBehavior: options?.defaultBehavior ?? 'overwrite',
-      ...(options?.folderBehavior && { folderBehavior: options.folderBehavior }),
-      datasetRoot,
-    })
-    return {}
   }
+
+  await copyDirHelper(
+    buildCopyDirHelperContext({
+      fsService,
+      srcPath,
+      tgtPath,
+      datasetRoot,
+      ...(options && { options }),
+    }),
+  )
+  return {}
 }
 
 /**
@@ -127,8 +154,13 @@ export function calculatePaths(
 
 /**
  * Build SyncOptions from a RegistryConfig for use with content-ops copy operations.
+ * `excludePaths` (typically the resolved working-area path) is injected unconditionally —
+ * it is a hard exclusion, not something a registry can opt out of (D14).
  */
-export function buildCopyOptions(registryConfig: RegistryConfig): SyncOptions {
+export function buildCopyOptions(
+  registryConfig: RegistryConfig,
+  excludePaths?: string[],
+): SyncOptions {
   const behavior = registryConfig.behavior
   const include = registryConfig.include
 
@@ -140,6 +172,7 @@ export function buildCopyOptions(registryConfig: RegistryConfig): SyncOptions {
     flatten: registryConfig.flatten,
     targets: registryConfig.targets,
     ...(registryConfig.prefix && { prefix: registryConfig.prefix }),
+    ...(excludePaths && excludePaths.length > 0 && { excludePaths }),
   }
 
   if (include.length > 0 && behavior === 'mirror') {

@@ -3,7 +3,12 @@ export { InMemoryFileSystemService } from './test-utils/in-memory-fs'
 export { MockHttpClientService } from './test-utils/mock-http-client-service'
 export { buildTestResponse, toIncomingMessage } from './test-utils/http-test-helpers'
 export { walkMarkdownFiles, isExternalLink } from './file-system/file-system-utils'
-export { cleanupFile, copyFileHelper, copyDirHelper } from './file-system/file-operations'
+export {
+  cleanupFile,
+  copyFileHelper,
+  copyDirHelper,
+  isPathExcluded,
+} from './file-system/file-operations'
 export { extractLinks, type ParsedLink, LinkProcessor } from './markdown/link-processor'
 export { detectLinkStyle } from './markdown/link-processor'
 export {

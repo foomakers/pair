@@ -127,6 +127,21 @@ The transform also updates:
 }
 ```
 
+## Working Area Override
+
+`.pair/working/` (checkpoints, reports) is operational data, not knowledge — it is hard-excluded from every registry copy/mirror operation and never scaffolded by `pair install` (D14). See the [KB Structure Reference](/docs/reference/kb-structure) for the full convention.
+
+Override the default path with a top-level `working_path` field, a sibling of `asset_registries` — not nested inside it:
+
+```json
+{
+  "working_path": ".pair/scratch",
+  "asset_registries": { "...": "..." }
+}
+```
+
+When set, the override path — not `.pair/working` — is what gets excluded from registry operations, and is what `pair validate-config` checks for overlap.
+
 ## Validation
 
 Validate your config with:
@@ -144,6 +159,7 @@ pair validate-config --config ./custom-config.json
 - Transform config is valid (non-empty prefix, not combined with symlink mode)
 - Source paths exist (if specified)
 - Include patterns are valid arrays
+- No registry's `source`/`target` overlaps with the working area (default or overridden `working_path`) — see [Working Area Override](#working-area-override)
 
 ## Environment Variables
 

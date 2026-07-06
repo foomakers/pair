@@ -136,6 +136,90 @@ describe('buildCopyOptions', () => {
       '.github/workflows': 'mirror',
     })
   })
+
+  it('omits excludePaths when none are provided', () => {
+    const config: RegistryConfig = {
+      source: '.pair',
+      behavior: 'mirror',
+      description: 'KB',
+      include: [],
+      flatten: false,
+      targets: [{ path: '.pair', mode: 'canonical' }],
+    }
+    const options = buildCopyOptions(config)
+    expect(options.excludePaths).toBeUndefined()
+  })
+
+  it('injects excludePaths unconditionally when provided (D14 hard rule)', () => {
+    const config: RegistryConfig = {
+      source: '.pair',
+      behavior: 'mirror',
+      description: 'KB',
+      include: [],
+      flatten: false,
+      targets: [{ path: '.pair', mode: 'canonical' }],
+    }
+    const options = buildCopyOptions(config, ['/project/.pair/working'])
+    expect(options.excludePaths).toEqual(['/project/.pair/working'])
+  })
+})
+
+describe('doCopyAndUpdateLinks - working area hard exclusion (D14)', () => {
+  const cwd = '/test'
+
+  it('skips the whole operation when the target is the working area itself', async () => {
+    const fs = createTestFs(
+      {},
+      {
+        '/dataset/src/checkpoint.md': 'from KB source',
+        '/test/.pair/working/checkpoint.md': 'DO NOT TOUCH',
+      },
+      cwd,
+    )
+
+    const result = await doCopyAndUpdateLinks(fs, {
+      source: 'src',
+      target: '/test/.pair/working',
+      datasetRoot: '/dataset',
+      options: {
+        ...defaultSyncOptions(),
+        defaultBehavior: 'mirror',
+        excludePaths: ['/test/.pair/working'],
+      },
+    })
+
+    expect(result['skipped']).toBe(true)
+    expect(await fs.readFile('/test/.pair/working/checkpoint.md')).toBe('DO NOT TOUCH')
+  })
+
+  it('protects a nested working area when the registry target is an ancestor', async () => {
+    // Simulates a registry configured to mirror the whole .pair root — the
+    // source happens to also contain a "working" folder (the accident the
+    // story guards against). The nested working area must never be entered.
+    const fs = createTestFs(
+      {},
+      {
+        '/dataset/src/knowledge.md': '# KB',
+        '/dataset/src/working/checkpoint.md': 'from KB source',
+        '/test/.pair/working/checkpoint.md': 'DO NOT TOUCH',
+      },
+      cwd,
+    )
+
+    await doCopyAndUpdateLinks(fs, {
+      source: 'src',
+      target: '/test/.pair',
+      datasetRoot: '/dataset',
+      options: {
+        ...defaultSyncOptions(),
+        defaultBehavior: 'mirror',
+        excludePaths: ['/test/.pair/working'],
+      },
+    })
+
+    expect(await fs.readFile('/test/.pair/knowledge.md')).toBe('# KB')
+    expect(await fs.readFile('/test/.pair/working/checkpoint.md')).toBe('DO NOT TOUCH')
+  })
 })
 
 describe('distributeToSecondaryTargets', () => {

@@ -1,6 +1,11 @@
 import { join } from 'path'
 import { FileSystemService } from '@pair/content-ops'
-import { Config, extractRegistries, validateAllRegistries } from '#registry'
+import {
+  Config,
+  extractRegistries,
+  validateAllRegistries,
+  resolveWorkingPathOverride,
+} from '#registry'
 
 /**
  * Loads the CLI configuration with optional overrides from project-local
@@ -130,5 +135,6 @@ function mergeConfigs(baseConfig: Config, overrideConfig: Config): Config {
  */
 export function validateConfig(config: unknown): { valid: boolean; errors: string[] } {
   const registries = extractRegistries(config)
-  return validateAllRegistries(registries)
+  const workingPath = resolveWorkingPathOverride(config)
+  return validateAllRegistries(registries, workingPath)
 }
