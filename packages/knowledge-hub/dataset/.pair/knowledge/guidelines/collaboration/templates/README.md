@@ -226,6 +226,7 @@ Templates work with popular project management tools:
 | `manual-test-report-template.md` | Quality | Test execution report | Low     |
 | `context-map-template.md`        | Domain  | Ubiquitous language, entities, common rules | Medium |
 | `subdomain-context-template.md`  | Domain  | Lazy per-subdomain context split | Low |
+| `checkpoint-template.md`         | Operational | Resumable progress state | Low |
 
 ### Template Relationships
 
@@ -284,6 +285,7 @@ The **TemplateOrchestrator** provides comprehensive template management through 
 - Feature specification templates with comprehensive requirement documentation
 - Bug report templates with detailed reproduction steps and environment information
 - Technical decision templates with evaluation criteria and rationale documentation
+- **[Checkpoint Template](checkpoint-template.md)** - Resumable progress state (story, branch, tasks done, decisions, remaining todos) for context-reset handoffs
 
 ### 2. **Project Management Templates**
 
