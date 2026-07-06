@@ -61,6 +61,11 @@ The `.pair/` directory is the root of pair's Knowledge Base. It contains all gui
 │       ├── adr/                  # Architecture Decision Records
 │       └── boundedcontext/       # DDD bounded context definitions
 │
+├── working/                      # Operational area — excluded from every registry (D14)
+│   ├── checkpoints/               # Resumable state for multi-task flows
+│   └── reports/
+│       └── <category>/            # Generated reports, grouped by category
+│
 └── product/                      # (alias) Points to adoption/product/
 ```
 
@@ -86,6 +91,15 @@ Contains project-specific decisions that **override** knowledge-layer defaults. 
 - **`tech/adr/`** — Architecture Decision Records documenting significant choices
 - **`tech/boundedcontext/`** — DDD bounded context definitions
 
+### `working/` — Operational Area (D14)
+
+Holds state produced **during** execution — checkpoints and reports — not knowledge. Outside every asset registry by design: `pair install` and `pair update` never create, modify, or delete anything under it.
+
+- **`checkpoints/`** — Resumable state for multi-task flows (e.g. an interrupted `/implement` run)
+- **`reports/<category>/`** — Generated reports, grouped by category (e.g. quality, monitoring)
+
+Neither subdirectory is scaffolded by `pair install` — a skill creates them on demand the first time it writes a checkpoint or report. The path defaults to `.pair/working` and can be overridden with `working_path` in `config.json` (see [Configuration Reference](/docs/reference/configuration#working-area-override)); `pair validate-config` rejects any registry that overlaps with it, default or overridden.
+
 ### Precedence Rule
 
 **Adoption always wins over knowledge.** When a skill reads guidelines, it checks adoption files first. If a decision is recorded there, it takes precedence over the corresponding knowledge-layer guideline.
@@ -98,6 +112,7 @@ Contains project-specific decisions that **override** knowledge-layer defaults. 
 | `adoption/` | Add (new files only) | Yes |
 | `adoption/tech/adr/` | Preserved | Yes |
 | `adoption/decision-log/` | Preserved | Yes |
+| `working/` | Never touched (excluded) | Yes |
 
 ## Related
 

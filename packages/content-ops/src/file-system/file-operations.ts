@@ -1,4 +1,5 @@
 import { join, relative, dirname } from 'path'
+import type { Dirent } from 'fs'
 import { FileSystemService } from './file-system-service'
 import { Behavior, normalizeKey, resolveBehavior } from '../ops/behavior'
 import { logger } from '../observability'
@@ -49,53 +50,93 @@ export type CopyDirContext = {
   folderBehavior?: Record<string, Behavior>
   defaultBehavior: Behavior
   datasetRoot: string
+  /** Absolute destination paths to hard-skip, regardless of behavior. */
+  excludePaths?: string[]
+}
+
+/**
+ * True if `candidate` equals, or lies within, one of `excludePaths`.
+ * Used to hard-exclude operational areas (e.g. `.pair/working/`) from copy and
+ * mirror-cleanup traversals, independent of registry/behavior configuration.
+ */
+export function isPathExcluded(candidate: string, excludePaths?: string[]): boolean {
+  if (!excludePaths || excludePaths.length === 0) return false
+  const normalizedCandidate = candidate.replace(/\\/g, '/').replace(/\/+$/, '')
+  return excludePaths.some(excluded => {
+    const normalizedExcluded = excluded.replace(/\\/g, '/').replace(/\/+$/, '')
+    return (
+      normalizedCandidate === normalizedExcluded ||
+      normalizedCandidate.startsWith(normalizedExcluded + '/')
+    )
+  })
 }
 
 export async function copyDirHelper(context: CopyDirContext): Promise<void> {
-  const { fileService, oldDir, newDir, folderBehavior, defaultBehavior, datasetRoot } = context
+  const { fileService, oldDir, newDir } = context
 
   return logger.time(async () => {
     await fileService.mkdir(newDir, { recursive: true })
     const entries = await fileService.readdir(oldDir)
     for (const entry of entries) {
-      const oldEntry = join(oldDir, entry.name)
-      const newEntry = join(newDir, entry.name)
-
-      // Determine behavior for this entry
-      const relPath = datasetRoot ? normalizeKey(relative(datasetRoot, oldEntry)) : entry.name
-      const entryBehavior = resolveBehavior(relPath, folderBehavior, defaultBehavior)
-
-      // Skip if behavior is 'skip'
-      if (entryBehavior === 'skip') {
-        continue
-      }
-
-      // For 'add' behavior, check if destination already exists
-      if (entryBehavior === 'add') {
-        try {
-          await fileService.stat(newEntry)
-          // File/directory already exists, skip
-          continue
-        } catch {
-          // File/directory doesn't exist, proceed with copy
-        }
-      }
-
-      if (entry.isDirectory()) {
-        const recursiveContext: CopyDirContext = {
-          fileService,
-          oldDir: oldEntry,
-          newDir: newEntry,
-          defaultBehavior,
-          datasetRoot,
-        }
-        if (folderBehavior) {
-          recursiveContext.folderBehavior = folderBehavior
-        }
-        await copyDirHelper(recursiveContext)
-      } else {
-        await copyFileHelper(fileService, oldEntry, newEntry, entryBehavior)
-      }
+      await copyDirEntry(entry, context)
     }
   }, 'copyDirHelper')
+}
+
+async function destinationExists(fileService: FileSystemService, path: string): Promise<boolean> {
+  try {
+    await fileService.stat(path)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Copies (or recurses into) a single directory entry, honoring exclusion,
+ * behavior resolution, and the 'add'/'skip' short-circuits.
+ */
+async function copyDirEntry(entry: Dirent, context: CopyDirContext): Promise<void> {
+  const {
+    fileService,
+    oldDir,
+    newDir,
+    folderBehavior,
+    defaultBehavior,
+    datasetRoot,
+    excludePaths,
+  } = context
+  const oldEntry = join(oldDir, entry.name)
+  const newEntry = join(newDir, entry.name)
+
+  if (isPathExcluded(newEntry, excludePaths)) {
+    logger.info(`Skipping excluded path: ${newEntry}`)
+    return
+  }
+
+  // Determine behavior for this entry
+  const relPath = datasetRoot ? normalizeKey(relative(datasetRoot, oldEntry)) : entry.name
+  const entryBehavior = resolveBehavior(relPath, folderBehavior, defaultBehavior)
+
+  if (entryBehavior === 'skip') return
+  if (entryBehavior === 'add' && (await destinationExists(fileService, newEntry))) return
+
+  if (entry.isDirectory()) {
+    const recursiveContext: CopyDirContext = {
+      fileService,
+      oldDir: oldEntry,
+      newDir: newEntry,
+      defaultBehavior,
+      datasetRoot,
+    }
+    if (folderBehavior) {
+      recursiveContext.folderBehavior = folderBehavior
+    }
+    if (excludePaths) {
+      recursiveContext.excludePaths = excludePaths
+    }
+    await copyDirHelper(recursiveContext)
+  } else {
+    await copyFileHelper(fileService, oldEntry, newEntry, entryBehavior)
+  }
 }

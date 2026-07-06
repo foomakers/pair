@@ -54,6 +54,10 @@ This framework does not cover:
 
 **[Decision Records](decision-records.md)** - ADR (Architecture Decision Records) and ADL (Adoption Decision Log) formats, file naming conventions, and integration with skills
 
+### Operational Conventions
+
+**[Working Area](working-area.md)** - `.pair/working/` convention: checkpoints and reports, exclusion from KB registries (D14), and the `working_path` override
+
 ## Introduction to Collaboration Excellence
 
 ### Purpose
