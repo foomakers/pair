@@ -150,7 +150,7 @@ npm install -g @github/github-mcp-server
 
 #### Custom Fields:
 
-- **Priority**: P0 (Must-Have), P1 (Should-Have), P2 (Could-Have)
+- **Priority**: P0 (Must-Have), P1 (Should-Have), P2 (Could-Have), P3 (Opportunistic — Low-severity tech-debt items only)
 - **Type**: Initiative, Epic, User Story, Task
 - **Effort**: Estimation field (Story Points or Hours)
 - **Sprint**: Sprint assignment field

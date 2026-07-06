@@ -10,6 +10,12 @@
 - **Commit History Policy:**: All feature branches must be squashed into a single commit during the PR merge, unless otherwise specified by the story or epic. See [commit template](../../knowledge/guidelines/collaboration/templates/commit-template.md) for details. Unless specified, prefer commit per task (mark the commit title with the task number other than the user story number) where complete all tasks of the story without confirmation and update the body of the story at each commit without confirmation. At the end of the story raise a draft PR following the PR template.
 - Ensure use proper template for commit messages and PRs, see [commit template](../../knowledge/guidelines/collaboration/templates/commit-template.md) and [PR template](../../knowledge/guidelines/collaboration/templates/pr-template.md) for details.
 
+## Technical Debt Tracking
+
+- Tech debt is tracked as `tech-debt`-labeled backlog items (Priority P1/P2/P3), not as static audit documents. See [2026-07-06-tech-debt-backlog-conversion](../decision-log/2026-07-06-tech-debt-backlog-conversion.md).
+- Debt never blocks a PR (R7.2) — `/pair-process-review` may create a `tech-debt` item for new debt but always still reaches APPROVED/TECH-DEBT, never CHANGES-REQUESTED on debt alone.
+- `/pair-capability-assess-debt` `$mode: scan` sweeps the codebase for code-smell markers and design-rule violations, creating items idempotently (keyed on `<file>:<line>:<pattern>`).
+
 ## Manual Testing
 
 - Manual test suites live in `qa/` at the repository root.
