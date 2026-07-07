@@ -175,11 +175,11 @@ Grep-based detection that runs independently of the Resolution Cascade — alway
 
 ### Step S2: Idempotency Filter
 
-1. **Act**: For each match, compute a **detection key**: `<relative-file-path>:<line-or-block>:<pattern-or-rule-id>`.
+1. **Act**: For each match from Step S1, compute a **detection key**: `<relative-file-path>:<line-or-block>:<pattern-or-rule-id>`.
 2. **Check**: Does an open `tech-debt`-labeled item already carry this detection key (search the PM tool for the key in issue bodies)?
 3. **Skip**: If tracked → drop the match, log it as skipped ("Scan match already tracked").
-4. **Act**: If the pattern no longer reproduces at a previously-recorded location (finding already fixed) → drop it, log it as skipped ("Finding already fixed since last scan").
-5. **Verify**: Only new, untracked matches remain.
+4. **Act**: Separately, for each *previously-tracked* open `tech-debt` item whose detection key is **not** present among this scan's Step S1 matches → the finding no longer reproduces (fixed since last scan). Close the item (update via `/write-issue` if available, otherwise report for manual closure) and log it as resolved ("Finding already fixed since last scan").
+5. **Verify**: Only new, untracked matches remain for Step S3; no-longer-reproducing tracked items are closed or reported.
 
 ### Step S3: Group and Threshold (flood control)
 

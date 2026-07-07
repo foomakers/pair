@@ -392,7 +392,7 @@ Re-invoking `/pair-process-review` on a partially reviewed PR is safe:
 
 - This skill **reads code, posts review comments, and optionally merges PRs** — it does not modify source code. It does create `tech-debt` items (Step 4.3), which is a PM-tool write, not a source-code write.
 - First skill to compose 8 atomic skills (5 required + 3 optional). Proves composition pattern at scale.
-- **Debt never blocks (R7.2)**: this holds regardless of severity — the only decision debt influences is APPROVED vs. TECH-DEBT, never CHANGES-REQUESTED. See [assess-debt](../../../.skills/capability/assess-debt/SKILL.md) for the same rule stated from the composed side.
+- **Debt never blocks (R7.2)**: this holds regardless of severity — the only decision debt influences is APPROVED vs. TECH-DEBT, never CHANGES-REQUESTED. See [assess-debt](../pair-capability-assess-debt/SKILL.md) for the same rule stated from the composed side.
 - Review phases are sequential — each phase builds on findings from prior phases.
 - The reviewer can stop between phases. Re-invoke to resume (idempotency ensures correct state).
 - Output follows [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) — the template defines structure, /pair-process-review fills it with findings.
