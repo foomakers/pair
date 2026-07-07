@@ -70,9 +70,9 @@ These are the rules every skill follows when it needs to read or write item stat
 
 ### Readiness Fallback (Draft vs. Ready ambiguity)
 
-Some boards don't distinguish "not yet refined" from "refined" with a dedicated column (see Example 3). When the map can't resolve whether an item is `Draft` or `Ready`, skills needing readiness fall back to evaluating **Definition of Ready criteria** against the item's content (acceptance criteria present, technical analysis complete, etc.) instead of guessing from the board-state name.
+Some boards don't distinguish "not yet refined" from "refined" with a dedicated column (see Example 3) — structurally, no board state anywhere in the map is mapped to `Ready` at all. When a board can't distinguish `Draft` from `Ready` this way (no dedicated Ready column), skills needing readiness fall back to evaluating **Definition of Ready criteria** against the item's content (acceptance criteria present, technical analysis complete, etc.) instead of guessing from the board-state name.
 
-- The **mapped state is always the primary signal** — DoR criteria are a fallback only for the Draft/Ready boundary, and only when the map doesn't resolve it.
+- The **mapped state is always the primary signal** — DoR criteria are a fallback only for the Draft/Ready boundary, and only when no board state in the map resolves to `Ready`.
 - Full DoR/DoD criteria are defined in the companion DoR/DoD guideline (tracked as a dependent story to this one) — until adopted, a minimal readiness signal (acceptance criteria present + technical analysis present) applies.
 
 ## Examples

@@ -422,7 +422,7 @@ gh api graphql -f query='{
 #### Step 3: Update the Status Field
 
 ```bash
-# Transition to any status (e.g., Refined, In Progress, Done)
+# Transition to any status (e.g., Ready, In Progress, Done)
 gh api graphql -f query='mutation {
   updateProjectV2ItemFieldValue(input: {
     projectId: "[PROJECT_ID]"
@@ -437,7 +437,7 @@ gh api graphql -f query='mutation {
 
 | Transition | When | Triggered by |
 |-----------|------|-------------|
-| Todo → Refined | Story refinement complete | `/refine-story` via `/write-issue $status: Refined` |
+| Todo → Refined | Story refinement complete | `/refine-story` via `/write-issue $status: Ready` |
 | Refined → In Progress | Implementation starts | `/implement` via `/write-issue $status: In Progress` |
 | In Progress → Done | PR merged + issue closed | `/review` merge step |
 
