@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   InMemoryFileSystemService,
   MockHttpClientService,
@@ -102,6 +102,36 @@ describe('resolveCurrentVersion - registry source', () => {
     expect(result.available).toBe(false)
     expect(result.version).toBeNull()
     expect(result.error).toBeTruthy()
+  })
+
+  it('falls back to download in a real release install (no monorepo, no local dataset, network available)', async () => {
+    // Simulate a real npm-installed CLI: no monorepo packages.knowledge-hub,
+    // no node_modules/@pair/knowledge-hub (never published, private:true).
+    const moduleDir = '/opt/pair-cli'
+    const fsService = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/package.json`]: JSON.stringify({
+          name: '@foomakers/pair-cli',
+          version: '0.4.3',
+        }),
+        '/cache/kb/0.4.3/manifest.json': JSON.stringify({ version: '0.4.3' }),
+      },
+      moduleDir,
+      moduleDir,
+    )
+    const httpClient = new MockHttpClientService()
+
+    const kbManager = await import('#kb-manager')
+    vi.spyOn(kbManager, 'isKBCached').mockResolvedValue(false)
+    vi.spyOn(kbManager, 'ensureKBAvailable').mockResolvedValue('/cache/kb/0.4.3')
+
+    const result = await resolveCurrentVersion(fsService, { httpClient, cliVersion: '0.4.3' })
+
+    expect(result).toMatchObject({
+      sourceKind: 'registry',
+      version: '0.4.3',
+      available: true,
+    })
   })
 })
 
