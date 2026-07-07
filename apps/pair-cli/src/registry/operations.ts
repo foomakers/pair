@@ -222,17 +222,46 @@ export async function stripMarkersFromTarget(
 }
 
 /**
+ * Writes a single secondary target: applies a transform, creates a symlink,
+ * or copies from the canonical path, depending on the target's mode.
+ */
+async function writeSecondaryTarget(params: {
+  fileService: FileSystemService
+  sourcePath: string
+  canonicalPath: string
+  target: TargetConfig
+  targetPath: string
+}): Promise<void> {
+  const { fileService, sourcePath, canonicalPath, target, targetPath } = params
+  if (target.transform) {
+    const content = await fileService.readFile(sourcePath)
+    throwOnMarkerErrors(content, sourcePath)
+    const transformed = applyTransformCommands(content, target.transform.prefix)
+    const clean = stripAllMarkers(transformed)
+    await fileService.mkdir(dirname(targetPath), { recursive: true })
+    await fileService.writeFile(targetPath, clean)
+  } else if (target.mode === 'symlink') {
+    await createOrReplaceSymlink(fileService, canonicalPath, targetPath)
+  } else if (target.mode === 'copy') {
+    await fileService.copy(canonicalPath, targetPath)
+  }
+}
+
+/**
  * Distributes content from canonical target to secondary targets (symlinks and copies).
  * For targets with a transform config, reads from the original source and applies the transform.
  * Called after the primary copy to canonical target is complete.
+ * Hard-skips any resolved secondary target that is (or lies within) `excludePaths`
+ * (the working area) — mirrors the guard already applied to the primary copy (D14).
  */
 export async function distributeToSecondaryTargets(params: {
   fileService: FileSystemService
   sourcePath: string
   targets: TargetConfig[]
   baseTarget: string
+  excludePaths?: string[]
 }): Promise<void> {
-  const { fileService, sourcePath, targets, baseTarget } = params
+  const { fileService, sourcePath, targets, baseTarget, excludePaths } = params
 
   const canonical = getCanonicalTarget(targets)
   if (!canonical) return
@@ -254,18 +283,13 @@ export async function distributeToSecondaryTargets(params: {
       ? target.path
       : fileService.resolve(baseTarget, target.path)
 
-    if (target.transform) {
-      const content = await fileService.readFile(sourcePath)
-      throwOnMarkerErrors(content, sourcePath)
-      const transformed = applyTransformCommands(content, target.transform.prefix)
-      const clean = stripAllMarkers(transformed)
-      await fileService.mkdir(dirname(targetPath), { recursive: true })
-      await fileService.writeFile(targetPath, clean)
-    } else if (target.mode === 'symlink') {
-      await createOrReplaceSymlink(fileService, canonicalPath, targetPath)
-    } else if (target.mode === 'copy') {
-      await fileService.copy(canonicalPath, targetPath)
+    if (isPathExcluded(targetPath, excludePaths)) {
+      const { logger } = await import('@pair/content-ops')
+      logger.info(`Skipping excluded secondary target: ${targetPath}`)
+      continue
     }
+
+    await writeSecondaryTarget({ fileService, sourcePath, canonicalPath, target, targetPath })
   }
 }
 
@@ -279,8 +303,9 @@ export async function postCopyOps(ctx: {
   effectiveTarget: string
   datasetPath: string
   baseTarget: string
+  excludePaths?: string[]
 }): Promise<void> {
-  const { fs, registryConfig, effectiveTarget, datasetPath, baseTarget } = ctx
+  const { fs, registryConfig, effectiveTarget, datasetPath, baseTarget, excludePaths } = ctx
   const canonicalTarget = getCanonicalTarget(registryConfig.targets)
   if (await fs.exists(effectiveTarget)) {
     const stat = await fs.stat(effectiveTarget)
@@ -294,6 +319,7 @@ export async function postCopyOps(ctx: {
       sourcePath: datasetPath,
       targets: registryConfig.targets,
       baseTarget,
+      ...(excludePaths && { excludePaths }),
     })
   }
 }

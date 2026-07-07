@@ -306,6 +306,46 @@ describe('distributeToSecondaryTargets', () => {
     expect(await fs.exists('/project/.cursor/skills')).toBe(false)
   })
 
+  it('skips a secondary target excluded by excludePaths (D14)', async () => {
+    const fs = createTestFs({}, {}, '/project')
+    await fs.mkdir('/project/.claude/skills', { recursive: true })
+    await fs.writeFile('/project/.claude/skills/SKILL.md', '# Skill')
+
+    await distributeToSecondaryTargets({
+      fileService: fs,
+      sourcePath: '/dataset/.claude/skills',
+      targets: [
+        { path: '.claude/skills/', mode: 'canonical' },
+        { path: '.pair/working', mode: 'copy' },
+      ],
+      baseTarget: '/project',
+      excludePaths: ['/project/.pair/working'],
+    })
+
+    expect(await fs.exists('/project/.pair/working')).toBe(false)
+  })
+
+  it('still distributes to non-excluded secondary targets when excludePaths is set', async () => {
+    const fs = createTestFs({}, {}, '/project')
+    await fs.mkdir('/project/.claude/skills', { recursive: true })
+    await fs.writeFile('/project/.claude/skills/SKILL.md', '# Skill')
+
+    await distributeToSecondaryTargets({
+      fileService: fs,
+      sourcePath: '/dataset/.claude/skills',
+      targets: [
+        { path: '.claude/skills/', mode: 'canonical' },
+        { path: '.cursor/skills/', mode: 'copy' },
+        { path: '.pair/working', mode: 'copy' },
+      ],
+      baseTarget: '/project',
+      excludePaths: ['/project/.pair/working'],
+    })
+
+    expect(await fs.exists('/project/.cursor/skills/SKILL.md')).toBe(true)
+    expect(await fs.exists('/project/.pair/working')).toBe(false)
+  })
+
   it('applies transform for copy targets with transform config', async () => {
     const sourceContent = [
       '# AGENTS.md',
@@ -475,6 +515,35 @@ describe('postCopyOps', () => {
     // Markers should remain — stripMarkers only runs on files, not directories
     const result = await fs.readFile('/project/.pair/knowledge/README.md')
     expect(result).toContain('<!-- @claude-skip-start -->')
+  })
+
+  it('forwards excludePaths to secondary target distribution (D14)', async () => {
+    const fs = createTestFs({}, {}, '/project')
+    await fs.mkdir('/project/.claude/skills', { recursive: true })
+    await fs.writeFile('/project/.claude/skills/SKILL.md', '# Skill')
+
+    const registryConfig: RegistryConfig = {
+      source: '.skills',
+      behavior: 'mirror',
+      description: 'Skills',
+      include: [],
+      flatten: false,
+      targets: [
+        { path: '.claude/skills/', mode: 'canonical' },
+        { path: '.pair/working', mode: 'copy' },
+      ],
+    }
+
+    await postCopyOps({
+      fs,
+      registryConfig,
+      effectiveTarget: '/project/.claude/skills',
+      datasetPath: '/dataset/.skills',
+      baseTarget: '/project',
+      excludePaths: ['/project/.pair/working'],
+    })
+
+    expect(await fs.exists('/project/.pair/working')).toBe(false)
   })
 
   it('no-op when single canonical target', async () => {
