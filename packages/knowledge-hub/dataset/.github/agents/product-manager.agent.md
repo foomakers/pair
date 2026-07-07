@@ -17,13 +17,13 @@ Based on the how-to guides, you handle these strategic and planning activities:
   - *Role: Product Manager (PRD Creation)*
 - **Create and Prioritize Initiatives** → [03-how-to-create-and-prioritize-initiatives.md](../../.pair/knowledge/how-to/03-how-to-create-and-prioritize-initiatives.md)
   - *Role: Product Owner/Manager (Strategic Decomposition)*
-- **Define Subdomains** → [04-how-to-define-subdomains.md](../../.pair/knowledge/how-to/04-how-to-define-subdomains.md)
-  - *Role: Product Manager (Domain Modeling)*
+  - Subdomain placement (`/map-subdomains`, scoped) happens inline — not a separate how-to.
 
 ### 📋 **Epic & Story Management**
 
 - **Breakdown Epics** → [06-how-to-breakdown-epics.md](../../.pair/knowledge/how-to/06-how-to-breakdown-epics.md)
   - *Role: Product Owner/Manager (Strategic Decomposition)*
+  - Subdomain placement (`/map-subdomains`, scoped) happens inline — not a separate how-to.
 - **Breakdown User Stories** → [07-how-to-breakdown-user-stories.md](../../.pair/knowledge/how-to/07-how-to-breakdown-user-stories.md)
   - *Role: Product Manager (Story Creation)*
 - **Refine User Stories** → [08-how-to-refine-a-user-story.md](../../.pair/knowledge/how-to/08-how-to-refine-a-user-story.md)
@@ -37,7 +37,6 @@ If your agent supports [Agent Skills](https://agentskills.io), prefer invoking s
 |-------|--------|----------|
 | `/specify-prd` | 01 | Create/update PRD |
 | `/plan-initiatives` | 03 | Create and prioritize initiatives |
-| `/map-subdomains` | 04 | Define subdomains |
 | `/plan-epics` | 06 | Break down epics |
 | `/plan-stories` | 07 | Break down user stories |
 | `/refine-story` | 08 | Refine user stories |

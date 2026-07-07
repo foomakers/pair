@@ -24,6 +24,8 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
 | `/assess-methodology`   | Capability | Optional — methodology assessment. Graceful degradation if absent.            |
 | `/assess-pm`            | Capability | Optional — PM tool assessment (delegates to /setup-pm). Graceful degradation if absent. |
 | `/assess-ai`            | Capability | Optional — AI development tools assessment. Graceful degradation if absent.   |
+| `/map-subdomains`       | Capability | Optional — full-catalog (`$scope: all`) domain mapping, the only caller allowed this scope. Graceful degradation if absent. |
+| `/map-contexts`         | Capability | Optional — full-catalog (`$scope: all`) context mapping, the only caller allowed this scope. Graceful degradation if absent. |
 
 ## Phase 0: PRD Verification (BLOCKING)
 
@@ -200,6 +202,24 @@ For each missing adoption file (in order: architecture → tech-stack → infras
 
 6. **Verify**: Quality gates documented in way-of-working and placeholder scripts exist.
 
+## Phase 3.5: Domain Modeling (optional, full-catalog)
+
+Runs after architecture and tech-stack are adopted (Step 3.1) — both are prerequisites for `/map-contexts`.
+
+### Step 3.5.1: Subdomain Placement
+
+1. **Check**: Is `/map-subdomains` installed? Does [`adoption/product/subdomain/`](../../../.pair/adoption/product/subdomain/) already contain populated entries?
+2. **Skip**: If not installed → warn and proceed to Step 3.5.2 without subdomain placement. If already populated → proceed to Step 3.5.2.
+3. **Act**: Compose `/map-subdomains` with `$scope: all` — the only caller allowed a full-catalog run. Uses PRD (always present at this point); falls back to "system areas" if no initiatives exist yet.
+4. **Verify**: Subdomain catalog created/updated, or fallback noted. Proceed regardless of outcome.
+
+### Step 3.5.2: Bounded Context Placement
+
+1. **Check**: Is `/map-contexts` installed? Does [`adoption/tech/boundedcontext/`](../../../.pair/adoption/tech/boundedcontext/) already contain populated entries?
+2. **Skip**: If not installed → warn and proceed to Phase 4 without context mapping. If already populated → proceed to Phase 4.
+3. **Act**: Compose `/map-contexts` with `$scope: all` — the only caller allowed a full-catalog run. Uses the subdomain catalog (Step 3.5.1) plus architecture.md and tech-stack.md (Step 3.1).
+4. **Verify**: Bounded context catalog created/updated, or fallback noted. Domain modeling never blocks bootstrap completion — proceed to Phase 4 regardless of outcome.
+
 ## Phase 4: Finalization
 
 ### Step 4.1: Consistency Verification
@@ -245,6 +265,7 @@ BOOTSTRAP COMPLETE:
 │   ├── ux-ui.md:           [generated | existing | skipped | n/a]
 │   └── way-of-working.md:  [generated | existing | skipped]
 ├── Quality Gates:   [N gates configured — standard + custom]
+├── Domain Model:    [subdomains: N | contexts: N | skipped — not installed]
 ├── PM Tool:         [configured via /setup-pm | already configured]
 ├── Decisions:       [N decisions recorded (ADR: X, ADL: Y)]
 └── Status:          [Complete | Partial — details]
@@ -280,6 +301,7 @@ Phase completion is detected via output file existence — never re-does complet
 - **/record-decision not installed**: Skip decision recording. Warn: "Decisions not recorded — /record-decision not installed. Document decisions manually in adoption files."
 - **Bootstrap checklist asset not found**: Use Phase 2 section questions as fallback — they cover the same areas.
 - **Adoption directory doesn't exist**: Create `adoption/tech/` and `adoption/decision-log/` on first write.
+- **/map-subdomains or /map-contexts not installed**: Skip the corresponding step in Phase 3.5 with a warning. Domain modeling never blocks bootstrap completion.
 
 ## Notes
 
@@ -288,4 +310,5 @@ Phase completion is detected via output file existence — never re-does complet
 - The developer can stop between phases. Re-invoke to resume (idempotency ensures correct state).
 - All decisions during bootstrap are recorded via `/record-decision`. Non-architectural → ADL. Architectural → ADR.
 - Quality gate setup ensures the gate infrastructure is executable from day one (not deferred to first implementation).
-- Content source: how-to-02 Phases 0-4. How-to-02 retains orchestration flow, this skill has operational detail.
+- Phase 3.5 is the only full-catalog (`$scope: all`) entry point for `/map-subdomains` and `/map-contexts` — every other caller is scoped to what it just touched. See [Callers Matrix](../../../.pair/knowledge/skills-guide.md#callers-matrix-scoped-capabilities).
+- Content source: how-to-02 Phases 0-4 (including domain modeling). How-to-02 retains orchestration flow, this skill has operational detail.

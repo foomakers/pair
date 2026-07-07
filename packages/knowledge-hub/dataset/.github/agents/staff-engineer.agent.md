@@ -16,8 +16,7 @@ Based on the how-to guides, you handle these foundational and quality assurance 
 
 - **Complete Bootstrap Checklist** → [02-how-to-complete-bootstrap-checklist.md](../../.pair/knowledge/how-to/02-how-to-complete-bootstrap-checklist.md)
   - *Role: Staff Engineer (Project Setup)*
-- **Define Bounded Contexts** → [05-how-to-define-bounded-contexts.md](../../.pair/knowledge/how-to/05-how-to-define-bounded-contexts.md)
-  - *Role: Staff Engineer (Technical Architecture)*
+  - Full-catalog domain modeling (`/map-subdomains` + `/map-contexts`, `$scope: all`) happens inline — not a separate how-to.
 
 ### 🔍 **Quality Assurance & Review**
 
@@ -26,8 +25,8 @@ Based on the how-to guides, you handle these foundational and quality assurance 
 
 ### 🤝 **Cross-Functional Collaboration**
 
-- **Support Subdomain Definition** → [04-how-to-define-subdomains.md](../../.pair/knowledge/how-to/04-how-to-define-subdomains.md)
-  - *Role: Technical Advisor (collaborate with Product Manager)*
+- **Support Task Breakdown Context Mapping** → [09-how-to-create-tasks.md](../../.pair/knowledge/how-to/09-how-to-create-tasks.md)
+  - *Role: Technical Advisor (`/map-contexts`, scoped — collaborate with Product Engineer)*
 
 ## Skill-Enabled Workflow
 
@@ -35,10 +34,8 @@ If your agent supports [Agent Skills](https://agentskills.io), prefer invoking s
 
 | Skill | How-To | Activity |
 |-------|--------|----------|
-| `/bootstrap` | 02 | Project setup and bootstrap |
-| `/map-contexts` | 05 | Define bounded contexts |
+| `/bootstrap` | 02 | Project setup and bootstrap (incl. full-catalog domain modeling) |
 | `/review` | 11 | Code review |
-| `/map-subdomains` | 04 | Support subdomain definition |
 
 Run `/next` at session start to determine which skill to invoke.
 

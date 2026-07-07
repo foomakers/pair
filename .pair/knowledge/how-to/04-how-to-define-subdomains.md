@@ -6,29 +6,30 @@ Transform PRD and strategic initiatives into Domain-Driven Design subdomains thr
 
 **Role**: Product Engineer & Product Owner/Manager (Subdomain Definition)
 **Process**: AI analyzes & proposes, Developer validates & approves
-**Skill**: When `/pair-process-map-subdomains` is available, invoke it — it automates the operational steps of this workflow (capability analysis, DDD classification, file creation). This how-to describes the workflow and its HALT conditions.
+**Skill**: `/pair-capability-map-subdomains` is a **capability**, not a standalone process step — it is invoked scoped (`$scope` = the items just touched) by `/pair-process-plan-initiatives`, `/pair-process-plan-epics`, `/pair-process-refine-story`, or `/pair-process-bootstrap` (full scope). When available, it automates the operational steps of this workflow (capability analysis, DDD classification, file creation). This how-to describes the workflow and its HALT conditions.
 
 ## Skill Composition
 
-This how-to orchestrates the `/pair-process-map-subdomains` skill.
+This how-to is realized by the `/pair-capability-map-subdomains` capability, invoked by another skill.
 
 | Skill              | Purpose                                                                                              |
 | ------------------ | ---------------------------------------------------------------------------------------------------- |
-| `/pair-process-map-subdomains`  | Executes the full process: business analysis, DDD classification, subdomain file creation.           |
+| `/pair-capability-map-subdomains`  | Executes the scoped process: business analysis, DDD classification + Volatility, subdomain file creation. |
 
 > **If skills are not installed**, follow the manual workflow below.
+> **No DDD artifacts yet and no caller context**: falls back to "system areas" (services/modules) instead of requiring PRD/initiatives — no HALT.
 
 ## Orchestration Flow
 
-1. **Verify prerequisites**: PRD exists at [PRD.md](../../adoption/product/PRD.md), initiatives exist, bootstrap complete per [way-of-working.md](../../adoption/tech/way-of-working.md).
-2. **Invoke `/pair-process-map-subdomains`** with optional `$scope` argument (`all` or `single`). The skill handles:
-   - Existing subdomain detection (idempotent — skips already-defined files)
-   - Business capability analysis from PRD and initiatives
-   - DDD classification (Core / Supporting / Generic)
-   - Subdomain file creation following [subdomain-template.md](../guidelines/collaboration/templates/subdomain-template.md)
-   - Catalog README update
-3. **Developer validates** the subdomain catalog when prompted by the skill.
-4. **Re-invoke** to create missing subdomains or request explicit update for existing ones.
+1. **Verify prerequisites**: PRD exists at [PRD.md](../../adoption/product/PRD.md), initiatives exist, bootstrap complete per [way-of-working.md](../../adoption/tech/way-of-working.md). If none exist, the system-areas fallback applies instead of halting.
+2. **Invoke `/pair-capability-map-subdomains`** with `$scope` set to the items just touched (`all` only when composed by `/pair-process-bootstrap`). The skill handles:
+   - Existing subdomain detection (idempotent — only entries inside `$scope` are evaluated)
+   - Business capability analysis from PRD and initiatives (or system-areas fallback)
+   - DDD classification (Core / Supporting / Generic) with a `Volatility` rating (defaulted from classification, human override)
+   - Subdomain file creation/update following [subdomain-template.md](../guidelines/collaboration/templates/subdomain-template.md)
+   - Catalog README update for the touched entries
+3. **Developer validates** the scoped subdomain delta when prompted by the skill.
+4. **Re-invoke** (scoped to new items) to create missing subdomains or request explicit update for existing ones.
 
 ## Manual Workflow (without skills)
 
@@ -61,17 +62,17 @@ This how-to orchestrates the `/pair-process-map-subdomains` skill.
 
 ## HALT Conditions
 
-- **PRD missing** — business context required for domain analysis
-- **Initiatives missing** — strategic priorities drive classification
-- **Developer rejects catalog** — must resolve before file creation
+- **Developer rejects catalog delta** — must resolve before file creation
 - **Template not found** — [subdomain-template.md](../guidelines/collaboration/templates/subdomain-template.md) required
+- **PRD/Initiatives missing** no longer halts — the capability falls back to "system areas" (services/modules) instead
 
 ## Key Principles
 
-- **PRD-driven** — business capabilities come from PRD, not technical assumptions
-- **DDD classification** — Core/Supporting/Generic drives architectural investment
-- **Catalog before details** — validate complete landscape first, then define individually
-- **Idempotent** — re-invocation detects existing files, creates only missing ones
+- **Scoped capability, not a process step** — invoked with `$scope` set to the caller's touched items; full-catalog `$scope: all` is bootstrap-only
+- **PRD-driven** — business capabilities come from PRD, not technical assumptions (system-areas fallback when unavailable)
+- **DDD classification + Volatility** — Core/Supporting/Generic drives architectural investment; Volatility defaults from classification, human override
+- **Catalog before details** — validate the scoped delta first, then define individually
+- **Idempotent** — re-invocation detects existing files; only entries inside `$scope` are evaluated
 - **Design artifacts** — subdomains are adoption files, not PM tool issues
 
 ## References

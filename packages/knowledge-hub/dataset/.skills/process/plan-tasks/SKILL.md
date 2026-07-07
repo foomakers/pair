@@ -14,6 +14,7 @@ Transform a refined user story into specific, actionable implementation tasks. T
 | Skill          | Type       | Required                                                   |
 | -------------- | ---------- | ---------------------------------------------------------- |
 | `/write-issue` | Capability | Yes — updates the story issue body with the Task Breakdown section |
+| `/map-contexts` | Capability | Optional — scoped context mapping for the story's touched bounded contexts. Graceful degradation if absent. |
 
 ## Arguments
 
@@ -60,6 +61,13 @@ Transform a refined user story into specific, actionable implementation tasks. T
    - Map story to [bounded contexts](../../../.pair/adoption/tech/boundedcontext/).
 2. **Act**: Present technical context summary to developer for validation.
 3. **Verify**: Developer approves. Context established.
+
+### Step 2.5: Context Mapping (scoped)
+
+1. **Check**: Is `/map-contexts` installed?
+2. **Skip**: If not installed → warn and proceed to Step 3 without context mapping.
+3. **Act**: Compose `/map-contexts` with `$scope` set to the bounded contexts/services touched by this story (from Step 2's mapping) — not `all` — full-catalog remapping stays `/bootstrap`-only.
+4. **Verify**: Bounded context catalog delta (if any) approved by developer. Proceed to Step 3 regardless of outcome — context mapping never blocks task breakdown.
 
 ### Step 3: Task Identification
 

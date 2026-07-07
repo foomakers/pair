@@ -36,7 +36,7 @@ If your agent supports [Agent Skills](https://agentskills.io), prefer invoking s
 |-------|--------|----------|
 | `/pair-process-specify-prd` | 01 | Create/update PRD |
 | `/pair-process-plan-initiatives` | 03 | Create and prioritize initiatives |
-| `/pair-process-map-subdomains` | 04 | Define subdomains |
+| `/pair-capability-map-subdomains` | 04 | Define subdomains (scoped capability) |
 | `/pair-process-plan-epics` | 06 | Break down epics |
 | `/pair-process-plan-stories` | 07 | Break down user stories |
 | `/pair-process-refine-story` | 08 | Refine user stories |

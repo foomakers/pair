@@ -6,7 +6,7 @@ Transform PRD requirements into comprehensive technical standards through system
 
 **Role**: Senior Technical Architect (Bootstrap and Standards Creation)
 **Process**: AI proposes and drafts, Developer validates and approves
-**Skills**: `/bootstrap` (operational details), `/setup-pm` (PM tool configuration)
+**Skills**: `/bootstrap` (operational details), `/setup-pm` (PM tool configuration), `/map-subdomains` + `/map-contexts` (full-catalog domain modeling — capabilities, composed by `/bootstrap` with `$scope: all`, the only caller allowed that scope)
 
 ## Session State Management
 
@@ -73,6 +73,18 @@ For each document:
 
 See `/bootstrap` Phase 3 for generation procedures and quality gate setup.
 
+### Phase 2.5: Domain Modeling (optional, full-catalog)
+
+Runs once architecture.md and tech-stack.md are adopted — both are prerequisites for bounded context placement.
+
+1. Compose `/map-subdomains` with `$scope: all` — classifies business capabilities from the PRD into Core/Supporting/Generic subdomains with a Volatility rating. Falls back to "system areas" if no initiatives exist yet.
+2. Compose `/map-contexts` with `$scope: all` — derives bounded context boundaries from the subdomain catalog, architecture, and tech stack; assesses per-relationship integration strength/distance/volatility.
+3. Both capabilities degrade gracefully if not installed — domain modeling never blocks bootstrap completion.
+
+This is the **only** point where either capability runs a full-catalog `$scope: all` mapping — every other caller (`/plan-initiatives`, `/plan-epics`, `/plan-tasks`, `/refine-story`) invokes them scoped to what it just touched. See [Callers Matrix](../skills-guide.md#callers-matrix-scoped-capabilities).
+
+See `/bootstrap` Phase 3.5 for operational details.
+
 ### Phase 3: Finalization
 
 1. Verify consistency across all standards documents
@@ -89,6 +101,7 @@ See `/bootstrap` Phase 4 for verification and PM configuration flow.
 - [ ] Documents stored in [`.pair/adoption/tech/`](../../adoption/tech/)
 - [ ] Internal consistency verified across all documents
 - [ ] Quality gates configured and executable
+- [ ] Domain model bootstrapped via `/map-subdomains` + `/map-contexts` (full-catalog), or explicitly skipped
 - [ ] PM tool configured via `/setup-pm`
 
 ## References
@@ -99,6 +112,4 @@ See `/bootstrap` Phase 4 for verification and PM configuration flow.
 
 ## Next Steps
 
-- **Create and Prioritize Initiatives** → [03-how-to-create-and-prioritize-initiatives.md](03-how-to-create-and-prioritize-initiatives.md)
-- **Define Project Subdomains** → [04-how-to-define-subdomains.md](04-how-to-define-subdomains.md)
-- **Define Bounded Contexts** → [05-how-to-define-bounded-contexts.md](05-how-to-define-bounded-contexts.md)
+- **Create and Prioritize Initiatives** → [03-how-to-create-and-prioritize-initiatives.md](03-how-to-create-and-prioritize-initiatives.md) — subdomain placement happens inline via `/map-subdomains`, scoped to each initiative

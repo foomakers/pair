@@ -67,8 +67,6 @@ Welcome to the AI-Human pairing repository template! This guide provides essenti
 │       ├── 01-how-to-create-PRD.md
 │       ├── 02-how-to-complete-bootstrap-checklist.md
 │       ├── 03-how-to-create-and-prioritize-initiatives.md
-│       ├── 04-how-to-define-subdomains.md
-│       ├── 05-how-to-define-bounded-contexts.md
 │       ├── 06-how-to-breakdown-epics.md
 │       ├── 07-how-to-breakdown-user-stories.md
 │       ├── 08-how-to-refine-a-user-story.md
