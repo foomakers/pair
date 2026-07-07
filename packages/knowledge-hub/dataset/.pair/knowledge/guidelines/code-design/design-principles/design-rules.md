@@ -56,7 +56,7 @@ export async function extractLinks(content: string) {}
 export async function extractLinksFromFile(path: string, fs: FileSystemService) {}
 ```
 
-**Evidence**: #199 P0.4 `markdown/link-processor.ts:42-411` — `class LinkProcessor` with 18 static methods; the fix direction was already emerging in the file's own compat re-exports (`link-processor.ts:406-421`, standalone `extractLinks`/`detectLinkStyle` functions wrapping the static calls). See Migration Plan below.
+**Evidence**: #199 P0.4 `markdown/link-processor.ts:42-404` — `class LinkProcessor` with 18 static methods; the fix direction was already emerging in the file's own compat re-exports (`link-processor.ts:406-421`, standalone `extractLinks`/`detectLinkStyle` functions wrapping the static calls). See Migration Plan below.
 
 ## DR-3 — Optional-Bag Dispatch Instead of Discriminated Union
 
