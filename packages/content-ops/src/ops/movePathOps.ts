@@ -220,7 +220,7 @@ async function handleDirectoryMove(params: HandleDirectoryMoveParams) {
   const sourceFolderBehavior = resolveBehavior(relSourceKey, folderBehavior, defaultBehavior)
 
   if (sourceFolderBehavior === 'mirror') {
-    await handleMirrorCleanup(fileService, srcPath, destPath)
+    await handleMirrorCleanup(fileService, srcPath, destPath, options?.excludePaths)
   }
 
   await moveAndUpdateDirectory({

@@ -10,10 +10,15 @@ import {
   BackupService,
 } from '@pair/content-ops'
 import { dirname } from 'path'
-import { getKnowledgeHubDatasetPath } from '#config'
+import { getKnowledgeHubDatasetPath, loadConfigWithOverrides } from '#config'
 import { createLogger, type LogEntry } from '#diagnostics'
 import { setLogLevel } from '@pair/content-ops'
-import { createRegistryBackupConfig, handleBackupRollback } from '#registry'
+import {
+  createRegistryBackupConfig,
+  handleBackupRollback,
+  resolveWorkingPath,
+  pathsOverlap,
+} from '#registry'
 
 function transformLink(
   link: ParsedLink,
@@ -98,6 +103,24 @@ async function verifyKB(
 
   if (!fs.existsSync(kbPath)) {
     const message = `No Knowledge Base found at: ${kbPath}. Please run "pair install" first.`
+    pushLog('error', message)
+    throw new Error(message)
+  }
+
+  // Hard-guard: the working area must stay outside every KB operation, including
+  // update-link (D14). Only reachable via an explicit --target/working_path
+  // override — the defaults never overlap. Config loading is best-effort: if it
+  // fails, fall back to the default working path rather than blocking the command.
+  const baseTarget = fs.currentWorkingDirectory()
+  let projectConfig: unknown
+  try {
+    projectConfig = loadConfigWithOverrides(fs).config
+  } catch {
+    projectConfig = undefined
+  }
+  const workingPath = resolveWorkingPath(projectConfig, baseTarget, fs)
+  if (pathsOverlap(kbPath, workingPath)) {
+    const message = `Refusing to process '${kbPath}': overlaps with the working area '${workingPath}' (D14).`
     pushLog('error', message)
     throw new Error(message)
   }

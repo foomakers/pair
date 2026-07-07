@@ -214,6 +214,18 @@ interface UpdateRegistryCtx {
   total: number
 }
 
+/**
+ * Runs postCopyOps for a registry, hard-excluding the working area from
+ * secondary target distribution (D14).
+ */
+async function finalizeRegistryCopy(
+  ctx: UpdateRegistryCtx,
+  paths: { effectiveTarget: string; datasetPath: string },
+): Promise<void> {
+  const { fs, registryConfig, baseTarget, workingPath } = ctx
+  await postCopyOps({ fs, registryConfig, baseTarget, excludePaths: [workingPath], ...paths })
+}
+
 async function updateSingleRegistry(
   ctx: UpdateRegistryCtx,
 ): Promise<{ skillNameMap?: SkillNameMap | undefined; result: RegistryResult }> {
@@ -256,7 +268,7 @@ async function updateSingleRegistry(
     options: buildCopyOptions(registryConfig, [workingPath]),
   })
 
-  await postCopyOps({ fs, registryConfig, effectiveTarget, datasetPath, baseTarget })
+  await finalizeRegistryCopy(ctx, { effectiveTarget, datasetPath })
   presenter.registryDone(registryName)
   return {
     skillNameMap: copyResult['skillNameMap'] as SkillNameMap | undefined,

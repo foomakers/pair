@@ -73,6 +73,34 @@ describe('pathsOverlap', () => {
   })
 })
 
+describe('isWithinPath - case sensitivity by platform (D14)', () => {
+  it('is case-insensitive on darwin', () => {
+    expect(isWithinPath('.pair/Working', '.pair/working', 'darwin')).toBe(true)
+  })
+
+  it('is case-insensitive on win32', () => {
+    expect(isWithinPath('.pair/Working', '.pair/working', 'win32')).toBe(true)
+  })
+
+  it('is case-sensitive on linux', () => {
+    expect(isWithinPath('.pair/Working', '.pair/working', 'linux')).toBe(false)
+  })
+})
+
+describe('pathsOverlap - case sensitivity by platform (D14)', () => {
+  it('flags a working_path override differing only in case on darwin', () => {
+    expect(pathsOverlap('.pair/Working', '.pair/working', 'darwin')).toBe(true)
+  })
+
+  it('flags a working_path override differing only in case on win32', () => {
+    expect(pathsOverlap('.pair/Working', '.pair/working', 'win32')).toBe(true)
+  })
+
+  it('does not fold case on linux', () => {
+    expect(pathsOverlap('.pair/Working', '.pair/working', 'linux')).toBe(false)
+  })
+})
+
 describe('detectWorkingPathOverlap', () => {
   const baseRegistry: RegistryConfig = {
     source: '.pair/knowledge',

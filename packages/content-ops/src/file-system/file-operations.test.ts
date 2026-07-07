@@ -164,6 +164,26 @@ describe('isPathExcluded', () => {
   })
 })
 
+describe('isPathExcluded - case sensitivity by platform (D14)', () => {
+  it('matches a case-differing override on darwin', () => {
+    expect(
+      isPathExcluded('/target/.pair/Working', ['/target/.pair/working'], 'darwin'),
+    ).toBe(true)
+  })
+
+  it('matches a case-differing override on win32', () => {
+    expect(
+      isPathExcluded('/target/.pair/Working', ['/target/.pair/working'], 'win32'),
+    ).toBe(true)
+  })
+
+  it('does not fold case on linux', () => {
+    expect(
+      isPathExcluded('/target/.pair/Working', ['/target/.pair/working'], 'linux'),
+    ).toBe(false)
+  })
+})
+
 describe('copyDirHelper - excludePaths (hard exclusion, D14)', () => {
   beforeEach(() => {
     fileService = new InMemoryFileSystemService(
