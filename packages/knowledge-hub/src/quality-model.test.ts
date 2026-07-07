@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
+import { readFileSync, existsSync } from 'fs'
 import { join } from 'path'
+
+const QUALITY_ASSURANCE_DIR = join(
+  __dirname,
+  '../dataset/.pair/knowledge/guidelines/quality-assurance',
+)
 
 const QUALITY_MODEL = readFileSync(
   join(
@@ -78,6 +83,15 @@ describe('quality-model.md — structure', () => {
   it('does not create dead hyperlinks for guidelines that do not exist yet', () => {
     expect(QUALITY_MODEL).not.toMatch(/\]\([^)]*coupling-balance\.md\)/)
     expect(QUALITY_MODEL).toContain('`architecture/design-patterns/coupling-balance.md`')
+  })
+
+  it('resolves every §7 nested-taxonomy pointer link to a file on disk', () => {
+    const section = QUALITY_MODEL.split('## 7. Nested Taxonomy')[1]
+    const links = [...section.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1])
+    expect(links.length).toBeGreaterThanOrEqual(9)
+    for (const link of links) {
+      expect(existsSync(join(QUALITY_ASSURANCE_DIR, link))).toBe(true)
+    }
   })
 
   it('nests every listed theme under a pillar with a pointer', () => {

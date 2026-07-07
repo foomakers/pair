@@ -12,7 +12,7 @@ The single source of default quality rules for this KB. `classify`, `assess-cost
 | **Skill** | Applies the rules on demand, produces artifacts | `classify`, `assess-cost`, `assess-security`, `pair-process-review` |
 | **Automation** | Consumes artifacts deterministically, zero judgment | CI gates, `pair-next --filter` |
 
-**Shift-left**: quality is classified in refinement — before code exists — not only at review time (see [Shift-Left Quality](README.md) in the QA framework overview). The matrix is built twice, refinement and review (§3.2); automation never adds its own criteria (D18) — it only reads tags.
+**Shift-left** (R1.3): quality is classified in refinement — before code exists — not only at review time (see [Shift-Left Quality](README.md) in the QA framework overview). The matrix is built twice, refinement and review (§3.2); automation never adds its own criteria (D18) — it only reads tags.
 
 ## 2. Three Pillars
 
