@@ -27,3 +27,7 @@ Custom gates run **after** the standard gates (Lint, Type Check, Test). Add rows
 - **Commit format**: follows the [commit template](../../knowledge/guidelines/collaboration/templates/commit-template.md).
 - **Branch cleanup**: feature branches are deleted after merge.
 - **Merge confirmation**: `prompt` — `/review` asks developer before merging. Set to `silent` to skip confirmation after recording preference via `/record-decision`.
+
+## State Mapping
+
+Optional. Skills resolve item state to 5 canonical macrostates — `Draft`, `Ready`, `In Progress`, `Review`, `Done` — through this section. **Omitted by default**: pair assumes your board already uses canonical names, so nothing needs to be configured here. Add a `Board State → Macrostate` table only if your board uses different names — mapping is n-m (many board states may map to one macrostate, never the inverse). See [canonical-states.md](../../knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) for the full schema, semantics, and examples (default, GitHub Projects, minimal board, custom n-m).

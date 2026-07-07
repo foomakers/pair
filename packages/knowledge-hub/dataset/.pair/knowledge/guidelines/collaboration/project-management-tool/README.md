@@ -26,6 +26,10 @@ This framework does not cover:
 
 ## Directory Contents
 
+### State Model
+
+**[canonical-states.md](canonical-states.md)** - The 5 canonical macrostates (`Draft`, `Ready`, `In Progress`, `Review`, `Done`), their semantics, and the n-m `state-mapping` schema skills use to resolve board-specific state names — the default is canonical names, adoption carries only the delta
+
 ### Implementation Guides
 
 **[filesystem-implementation.md](filesystem-implementation.md)** - Complete setup and usage guide for filesystem-based project management

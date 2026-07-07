@@ -87,15 +87,17 @@ All adoption files are populated. Query the PM tool to determine backlog state.
 
 **PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
 
+**State resolution**: The conditions below refer to canonical **macrostates** (`Draft`, `Ready`, `In Progress`, `Review`, `Done`), never board-specific labels. Resolve each item's board state to a macrostate via the `## State Mapping` section in way-of-working.md — omitted ⇒ canonical names are assumed. See [canonical-states.md](../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) for the full resolution rule. When a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback: evaluate Definition of Ready criteria against the item instead of guessing from the board-state name.
+
 | #   | Condition                                                        | Suggestion          | Rationale                                   |
 | --- | ---------------------------------------------------------------- | ------------------- | ------------------------------------------- |
 | 5   | No initiatives or epics exist in PM tool                         | `/plan-initiatives` | Strategic planning needed                   |
 | 6   | Initiatives exist but no epics                                   | `/plan-epics`       | Epic decomposition needed                   |
 | 7   | Epics exist but no user stories                                  | `/plan-stories`     | Story breakdown needed                      |
-| 8   | Stories exist without acceptance criteria or with `status:draft`  | `/refine-story`     | Stories need refinement before work         |
-| 9   | Refined stories exist but have no task breakdown                  | `/plan-tasks`       | Tasks must be created before implementation |
-| 10  | Tasks in "ready" or "todo" state exist                            | `/implement`        | Work is ready to start                      |
-| 11  | Open pull requests or tasks in "review" state                     | `/review`           | Code review pending                         |
+| 8   | Stories resolve to macrostate `Draft` (missing acceptance criteria, or failing Definition of Ready via the Readiness Fallback) | `/refine-story` | Stories need refinement before work |
+| 9   | Stories resolve to macrostate `Ready` but have no task breakdown  | `/plan-tasks`       | Tasks must be created before implementation |
+| 10  | Tasks or stories resolve to macrostate `Ready`                    | `/implement`        | Work is ready to start                      |
+| 11  | Open pull requests, or items resolve to macrostate `Review`       | `/review`           | Code review pending                         |
 
 ### Step 4: Capability Skill Suggestions
 
@@ -140,10 +142,13 @@ Then ask: "Shall I run `/skill-name`?"
 - If a suggested skill is not installed, tell the user which skill is needed and where to find it.
 - If the PM tool is not accessible (no MCP connection, no credentials), skip Step 3 and report: "PM tool not accessible — recommendation based on adoption files only."
 - If adoption files cannot be read (not installed yet), suggest `/bootstrap` as the entry point.
+- If way-of-working.md has no `## State Mapping` section, canonical macrostate names are assumed — this is the zero-configuration default, not a degradation.
+- If a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback (Definition of Ready criteria) rather than treating Step 8's condition as unresolvable.
 
 ## Notes
 
 - This skill is read-only: it inspects state but never modifies files or PM tool data.
+- State resolution: conditions are evaluated against canonical macrostates, never board-specific labels — see [canonical-states.md](../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md).
 - When multiple items are actionable (e.g., tasks to implement AND PRs to review), prefer the item closest to delivery (`/review` > `/implement` > `/plan-tasks`).
 - Re-run `/next` after completing any skill to get an updated recommendation.
 - **Full catalog coverage**: this navigator can suggest any of the 30 skills based on project state. Process skills are suggested through the cascading checks (Steps 2-3). Capability skills are suggested through targeted checks (Step 4) or as part of process skill composition.

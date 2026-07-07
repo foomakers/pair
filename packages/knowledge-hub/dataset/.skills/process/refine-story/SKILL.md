@@ -116,8 +116,8 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
    - `$type: story`
    - `$content`: the assembled refined story body
    - `$id`: the story identifier (update mode — story already exists)
-   - `$status: Refined` — transitions the project board field from Todo to Refined
-3. **Verify**: Story updated in PM tool. Board status is Refined.
+   - `$status: Ready` — transitions the project board field from Todo to Refined
+3. **Verify**: Story updated in PM tool. Board status is Ready.
 
 ### Step 6: Already-Refined Update (optional path)
 

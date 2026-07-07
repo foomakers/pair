@@ -1,0 +1,84 @@
+---
+title: Canonical States & State Mapping
+description: How pair skills resolve work-item state across any board vocabulary without hardcoding board-specific names.
+---
+
+pair skills reason about work-item state using **5 canonical macrostates** — never board-specific labels like "Todo" or "In Review". Every board (GitHub Projects, Jira, Linear, a plain 3-column Kanban) maps its own column names onto these 5 macrostates, so skills work the same way regardless of what your board columns are called.
+
+## The 5 Macrostates
+
+```text
+Draft → Ready → In Progress → Review → Done
+```
+
+| Macrostate      | Meaning                                                        |
+| --------------- | ---------------------------------------------------------------- |
+| **Draft**       | Not yet refined — missing acceptance criteria or technical analysis |
+| **Ready**       | Meets the Definition of Ready — eligible for sprint/WIP           |
+| **In Progress** | Actively being implemented                                        |
+| **Review**      | Implementation complete, awaiting code review / PR approval       |
+| **Done**        | Delivered and accepted                                             |
+
+`/refine-story` is the single Draft → Ready transition. `/implement` produces In Progress and Review. `/review` produces Done on merge.
+
+## Zero Configuration by Default
+
+If your board already uses these 5 names, you configure nothing. Skills resolve state by matching the board column name against the canonical names directly.
+
+If your board uses different names — which is common, and true even of pair's own recommended GitHub Projects setup (`Todo`, `Refined`, `In Progress`, `Review`, `Done`) — add a `## State Mapping` section to `way-of-working.md`:
+
+```markdown
+## State Mapping
+
+| Board State | Macrostate  |
+| ------------ | ----------- |
+| Todo         | Draft       |
+| Refined      | Ready       |
+| In Progress  | In Progress |
+| Review       | Review      |
+| Done         | Done        |
+```
+
+The mapping is **n-m**: several board states can map to the same macrostate (e.g., both `Icebox` and `Backlog` mapping to `Draft`), but a single board state never maps to more than one macrostate. Board states with no entry are simply ignored — not an error.
+
+## Minimal Boards Work Too
+
+A 3-column board (`Todo`, `In Progress`, `Done`) has no dedicated column for "refined but not started." pair doesn't require one. The readiness fallback triggers when the mapping is **structurally** missing a `Ready` target — no board state anywhere in the map is mapped to `Ready` at all (not when a specific item is merely ambiguous: a board state that IS in the map always resolves deterministically). In that case, skills check the item's content instead of the column name — does it have acceptance criteria? a technical analysis? — and treat it as `Ready` if so.
+
+## Customizing for Your Board
+
+Walking through a real n-m case: a team backlog has both an `Icebox` and a `Backlog` column (both pre-refinement), a single `Ready for Dev` column, and no separate `Review` column (PRs get merged straight from `In Progress`).
+
+```markdown
+## State Mapping
+
+| Board State   | Macrostate  |
+| -------------- | ----------- |
+| Icebox         | Draft       |
+| Backlog        | Draft       |
+| Ready for Dev  | Ready       |
+| In Progress    | In Progress |
+| Done           | Done        |
+```
+
+Notes on this example:
+
+- **Icebox and Backlog both map to Draft** — that's the n-m rule in practice: many board states, one macrostate, never the reverse.
+- **No board state maps to Review** — that's fine, not every macrostate needs a mapped column. A skill that needs to *write* Review will halt and report the gap (it never guesses); a skill that only *reads* state simply never resolves an item to Review, which matches the team's real workflow of merging straight from `In Progress`.
+- **On write, first-listed wins**: if you later added a second column also mapped to `Draft` (say, `Someday`), `/refine-story` moving an item out of Draft would still target whichever of `Icebox`/`Backlog` is listed first in the table.
+
+To write your own mapping: list every board state you have, map each to the one macrostate it represents, and leave states genuinely outside pair's lifecycle (e.g. `Won't Do`, `Duplicate`) out of the table entirely — unmapped states are ignored, not an error.
+
+## How Skills Use It
+
+- **Reading state**: a skill looks up the item's board-state value in the mapping table. Found → use the mapped macrostate. Not found and the section is absent (or has no entry for it) → fall back to matching the canonical name directly. Still unresolved → the item is out of scope for state-based logic, no error.
+- **Writing state**: a skill resolves the target macrostate to a board state — the first board state listed under that macrostate in the mapping table. No mapping needed → write the canonical name itself. No board state maps to the target macrostate at all → the skill halts and reports the gap rather than guessing.
+
+This resolution rule is what lets `/write-issue` and `/next` — and, over time, the rest of the skill catalog — stay completely free of hardcoded board-state names.
+
+## Related
+
+- [Adoption Files](/docs/concepts/adoption-files) — `way-of-working.md` is where the `State Mapping` section lives
+- [GitHub Projects](/docs/pm-tools/github-projects) — pair's own board setup and how it maps
+- [Migrating to v0.5](/docs/migrations/v0.4-to-v0.5) — upgrading an existing project to canonical states
+- Full schema, resolution algorithm, and worked examples: `.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md` in your installed Knowledge Base

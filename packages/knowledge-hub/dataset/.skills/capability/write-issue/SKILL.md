@@ -17,7 +17,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 | `$content` | Yes      | Structured content to fill the template — fields map to template sections.                                                                                      |
 | `$id`      | No       | Existing issue identifier. If provided → **update**; if absent → **create**.                                                                                    |
 | `$parent`  | No       | Parent issue identifier for hierarchy linking (e.g., epic → story, story → task).                                                                               |
-| `$status`  | No       | Target status for the project board field (e.g., `Refined`, `In Progress`, `Done`). If provided, updates the project board status field per the implementation guide. |
+| `$status`  | No       | Target **macrostate** — one of `Draft`, `Ready`, `In Progress`, `Review`, `Done` (never a board-specific label). Resolved to the actual board state via the `state-mapping` resolution rule ([canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)) before the board field is updated. |
 
 ## Algorithm
 
@@ -77,7 +77,27 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 
 4. **Verify**: Implementation guide loaded (or warning issued).
 
-### Step 6: Create or Update Issue
+### Step 6: Resolve `$status` to a Board State
+
+Skills never write board-specific labels — `$status` is always a canonical macrostate (`Draft`, `Ready`, `In Progress`, `Review`, `Done`). Resolve it to a board state before touching the board field.
+
+1. **Check**: Is `$status` provided?
+2. **Skip**: If `$status` is absent, proceed to Step 7 — no board field update is requested.
+3. **Act**: Resolve `$status` per [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md):
+   - Read the `## State Mapping` section in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md), if present.
+   - **Mapped**: find all board states mapped to the `$status` macrostate, in the order listed; target the **first listed** one.
+   - **Omitted, or macrostate absent from the map**: target the macrostate name itself (canonical convention — no configuration needed).
+4. **Act**: If the target macrostate has no mapped board state and the canonical name isn't a plausible board column either → **HALT**:
+
+   > Cannot transition to `$status` — no board state is mapped to this macrostate. Add it to the `state-mapping` section or use a supported macrostate.
+
+5. **Act**: If the `state-mapping` section is unparseable, or a board state is listed under more than one macrostate → **HALT**:
+
+   > Malformed `state-mapping` in way-of-working.md. See [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) for the schema.
+
+6. **Verify**: A single resolved board state is available, or Step 7 proceeds with no board update.
+
+### Step 7: Create or Update Issue
 
 1. **Check**: Is `$id` provided?
    - **`$id` absent → Create mode**: Create a new issue in the PM tool.
@@ -93,12 +113,12 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
    - If not found → **HALT**: `Issue #$id not found.`
    - Update the issue body with the formatted content.
    - Preserve existing labels and hierarchy links unless explicitly changed.
-   - If `$status` is provided, update the project board status field per the implementation guide (e.g., GraphQL mutation for GitHub Projects). This is the **board field**, not the body text.
-4. **Verify**: Issue created or updated successfully. If `$status` was provided, confirm the board field reflects the new status.
+   - If `$status` was provided, update the project board status field to the board state resolved in Step 6, per the implementation guide (e.g., GraphQL mutation for GitHub Projects). This is the **board field**, not the body text.
+4. **Verify**: Issue created or updated successfully. If `$status` was provided, confirm the board field reflects the resolved board state.
 
-### Step 7: Handle Errors
+### Step 8: Handle Errors
 
-1. **Check**: Did the PM tool return an error during Step 6?
+1. **Check**: Did the PM tool return an error during Step 7?
 2. **Skip**: If no error, proceed to output.
 3. **Act**: **HALT** with descriptive error:
 
@@ -125,7 +145,7 @@ ISSUE WRITTEN:
 
 When composed by `/refine-story`:
 
-- **Input**: `/refine-story` invokes `/write-issue` with `$type: story`, `$content` containing the refined story data, `$id` when updating an existing story, and `$status: Refined` to transition the board field.
+- **Input**: `/refine-story` invokes `/write-issue` with `$type: story`, `$content` containing the refined story data, `$id` when updating an existing story, and `$status: Ready` to transition the board field.
 - **Output**: Returns the issue identifier. `/refine-story` uses it for linking.
 
 When composed by `/plan-tasks`:
@@ -159,8 +179,10 @@ When invoked **independently**:
 - **Unsupported `$type`** (Step 1) — lists currently supported types.
 - **No PM tool configured** (Step 2) — directs to configuration.
 - **Template not found** (Step 3) — missing knowledge base file.
-- **`$id` provided but issue not found** (Step 6) — issue does not exist.
-- **PM tool error** (Step 7) — no fallback, descriptive error reported.
+- **Target macrostate has no mapped board state** (Step 6) — reports the gap instead of guessing.
+- **Malformed `state-mapping` section** (Step 6) — points to canonical-states.md.
+- **`$id` provided but issue not found** (Step 7) — issue does not exist.
+- **PM tool error** (Step 8) — no fallback, descriptive error reported.
 
 ## Extensibility
 
@@ -172,6 +194,7 @@ This skill supports `story`, `task`, `epic`, and `initiative` types. Adding a ne
 - If the template file is not found, HALT — template-driven formatting is mandatory.
 - If the PM tool implementation guide is not found, warn and proceed with default behavior.
 - If the PM tool is not accessible (auth failure, rate limit, network), HALT with descriptive error — no fallback.
+- If `way-of-working.md` has no `## State Mapping` section, canonical macrostate names are assumed for board writes — this is the zero-configuration default, not a degradation.
 
 ## Notes
 
@@ -179,3 +202,4 @@ This skill supports `story`, `task`, `epic`, and `initiative` types. Adding a ne
 - No PM tool fallback: if the adopted tool fails, the skill HALTs. The developer resolves the issue, then re-invokes (idempotent by design — `$id` prevents duplicate creation).
 - Template = source of truth for issue body format. Changes to template structure automatically affect all future issue creation.
 - Labels and hierarchy linking follow the PM tool implementation guide conventions.
+- State resolution: `$status` is always a canonical macrostate — never a board-specific label. See [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md).

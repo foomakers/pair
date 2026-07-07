@@ -26,6 +26,10 @@ This framework does not cover:
 
 ## Directory Contents
 
+### State Model
+
+**[canonical-states.md](canonical-states.md)** - The 5 canonical macrostates (`Draft`, `Ready`, `In Progress`, `Review`, `Done`), their semantics, and the n-m `state-mapping` schema skills use to resolve board-specific state names — the default is canonical names, adoption carries only the delta
+
 ### Implementation Guides
 
 **[filesystem-implementation.md](filesystem-implementation.md)** - Complete setup and usage guide for filesystem-based project management
@@ -275,6 +279,6 @@ Each guide provides:
 
 ---
 
-**Skill**: Use `/pair-capability-assess-pm` to evaluate and adopt a PM tool from these guidelines via the resolution cascade. Use `/pair-capability-setup-pm` for tool configuration.
+**Skill**: Use `/assess-pm` to evaluate and adopt a PM tool from these guidelines via the resolution cascade. Use `/setup-pm` for tool configuration.
 
 _This framework provides comprehensive guidance for selecting and implementing project management tools that integrate seamlessly with development workflows and team collaboration patterns._
