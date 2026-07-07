@@ -58,12 +58,24 @@ export type CopyDirContext = {
  * True if `candidate` equals, or lies within, one of `excludePaths`.
  * Used to hard-exclude operational areas (e.g. `.pair/working/`) from copy and
  * mirror-cleanup traversals, independent of registry/behavior configuration.
+ * On case-insensitive filesystems (macOS/Windows) the comparison is
+ * case-folded so a `working_path` override differing only in case still matches.
+ * @param platform - OS platform (defaults to process.platform), injectable for tests.
  */
-export function isPathExcluded(candidate: string, excludePaths?: string[]): boolean {
+export function isPathExcluded(
+  candidate: string,
+  excludePaths?: string[],
+  platform: string = process.platform,
+): boolean {
   if (!excludePaths || excludePaths.length === 0) return false
-  const normalizedCandidate = candidate.replace(/\\/g, '/').replace(/\/+$/, '')
+  const foldCase = platform === 'darwin' || platform === 'win32'
+  const normalize = (p: string) => {
+    const stripped = p.replace(/\\/g, '/').replace(/\/+$/, '')
+    return foldCase ? stripped.toLowerCase() : stripped
+  }
+  const normalizedCandidate = normalize(candidate)
   return excludePaths.some(excluded => {
-    const normalizedExcluded = excluded.replace(/\\/g, '/').replace(/\/+$/, '')
+    const normalizedExcluded = normalize(excluded)
     return (
       normalizedCandidate === normalizedExcluded ||
       normalizedCandidate.startsWith(normalizedExcluded + '/')

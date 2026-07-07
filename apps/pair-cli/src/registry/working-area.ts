@@ -17,8 +17,16 @@ interface WorkingAreaConfig {
   [key: string]: unknown
 }
 
-function normalize(p: string): string {
-  return p.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+/**
+ * Normalizes a path for overlap comparison. On case-insensitive filesystems
+ * (macOS/Windows) the result is case-folded so a `working_path` override
+ * differing only in case (e.g. ".pair/Working" vs ".pair/working") is still
+ * recognized as overlapping.
+ * @param platform - OS platform (defaults to process.platform), injectable for tests.
+ */
+function normalize(p: string, platform: string = process.platform): string {
+  const stripped = p.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+  return platform === 'darwin' || platform === 'win32' ? stripped.toLowerCase() : stripped
 }
 
 /**
@@ -46,17 +54,21 @@ export function resolveWorkingPath(
  * True if `candidate` equals, or lies within, `containerPath`.
  * Both paths must share the same base (both relative, or both absolute).
  */
-export function isWithinPath(candidate: string, containerPath: string): boolean {
-  const a = normalize(candidate)
-  const b = normalize(containerPath)
+export function isWithinPath(
+  candidate: string,
+  containerPath: string,
+  platform: string = process.platform,
+): boolean {
+  const a = normalize(candidate, platform)
+  const b = normalize(containerPath, platform)
   return a === b || a.startsWith(b + '/')
 }
 
 /**
  * True if `a` and `b` are equal, or either one contains the other.
  */
-export function pathsOverlap(a: string, b: string): boolean {
-  return isWithinPath(a, b) || isWithinPath(b, a)
+export function pathsOverlap(a: string, b: string, platform: string = process.platform): boolean {
+  return isWithinPath(a, b, platform) || isWithinPath(b, a, platform)
 }
 
 /**

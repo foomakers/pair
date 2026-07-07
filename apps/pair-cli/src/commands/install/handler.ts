@@ -202,21 +202,23 @@ function resolveRegistryIO(ctx: RegistryInstallCtx) {
   return { source: resolved.source, target: resolved.target, effectiveDatasetRoot }
 }
 
+/**
+ * Runs postCopyOps for a registry, hard-excluding the working area from
+ * secondary target distribution (D14).
+ */
+async function finalizeRegistryCopy(
+  ctx: RegistryInstallCtx,
+  paths: { effectiveTarget: string; datasetPath: string },
+): Promise<void> {
+  const { fs, registryConfig, baseTarget, workingPath } = ctx
+  await postCopyOps({ fs, registryConfig, baseTarget, excludePaths: [workingPath], ...paths })
+}
+
 async function installRegistry(ctx: RegistryInstallCtx): Promise<{
   skillNameMap?: SkillNameMap | undefined
   result: RegistryResult
 }> {
-  const {
-    fs,
-    registryName,
-    registryConfig,
-    baseTarget,
-    workingPath,
-    pushLog,
-    presenter,
-    index,
-    total,
-  } = ctx
+  const { fs, registryName, registryConfig, workingPath, pushLog, presenter, index, total } = ctx
   const {
     source: datasetPath,
     target: effectiveTarget,
@@ -243,7 +245,7 @@ async function installRegistry(ctx: RegistryInstallCtx): Promise<{
     return { result: { name: registryName, target: effectiveTarget, ok: false } }
   }
 
-  await postCopyOps({ fs, registryConfig, effectiveTarget, datasetPath, baseTarget })
+  await finalizeRegistryCopy(ctx, { effectiveTarget, datasetPath })
   presenter.registryDone(registryName)
   return {
     skillNameMap: copyResult['skillNameMap'] as SkillNameMap | undefined,

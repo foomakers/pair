@@ -98,6 +98,43 @@ describe('movePathOps - error cases', () => {
     ).rejects.toThrow('Source and target paths must be relative, not absolute')
   })
 
+  it('should not remove excluded destination-only entries during mirror cleanup', async () => {
+    // Mirrors copyPathOps' behavior: excludePaths must reach handleMirrorCleanup
+    // so operational areas (e.g. .pair/working) survive a mirror move (D14).
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/folder/file1.md': '# File 1',
+        '/dataset/moved-folder/working/checkpoint.md': 'DO NOT TOUCH',
+      },
+      '/dataset',
+      '/dataset',
+    )
+
+    await movePathOps({
+      fileService,
+      source: 'folder',
+      target: 'moved-folder',
+      datasetRoot: '/dataset',
+      options: {
+        defaultBehavior: 'mirror',
+        flatten: false,
+        targets: [],
+        excludePaths: ['/dataset/moved-folder/working'],
+      },
+    })
+
+    await TEST_ASSERTIONS.assertFileExists(
+      fileService,
+      '/dataset/moved-folder/file1.md',
+      '# File 1',
+    )
+    await TEST_ASSERTIONS.assertFileExists(
+      fileService,
+      '/dataset/moved-folder/working/checkpoint.md',
+      'DO NOT TOUCH',
+    )
+  })
+
   it('should respect behavior options', async () => {
     fileService = new InMemoryFileSystemService(TEST_FILE_STRUCTURES.existingTarget, '/', '/')
 
