@@ -11,6 +11,7 @@ import { compareVersions } from './version-check'
 export interface KbInfoHandlerOptions {
   httpClient?: HttpClientService
   baseTarget?: string
+  cliVersion?: string
 }
 
 async function handlePackageMode(
@@ -45,6 +46,7 @@ async function handleVersionCheckMode(
   const current = await resolveCurrentVersion(fs, {
     ...(config.source && { source: config.source }),
     ...(options.httpClient && { httpClient: options.httpClient }),
+    ...(options.cliVersion && { cliVersion: options.cliVersion }),
   })
 
   const result = compareVersions(installed, current)

@@ -1,7 +1,7 @@
 import { join } from 'path'
 import type { FileSystemService, HttpClientService } from '@pair/content-ops'
 import { isGitUrl, isRemoteUrl } from '@pair/content-ops'
-import { getKnowledgeHubDatasetPath } from '#config/kb-resolver'
+import { resolveDatasetRoot } from '#config/kb-resolver'
 import { readManifestFromZip } from './manifest-reader'
 
 /** KB source kind, as detected from an (optional) --source value. */
@@ -70,11 +70,22 @@ function detectSourceKind(source?: string): KbSourceKind {
   return 'local'
 }
 
-function resolveRegistryVersion(
+/**
+ * Resolve the registry (no --source) KB version. Mirrors install/update's own
+ * dataset resolution: tries the monorepo dataset first, then falls back to
+ * download/cache via `resolveDatasetRoot`'s 'default' resolution — the same
+ * path release-context (real npm-installed, no monorepo) users go through.
+ */
+async function resolveRegistryVersion(
   fs: FileSystemService,
-): Omit<CurrentVersionResult, 'sourceKind' | 'stable'> {
+  options: { httpClient?: HttpClientService; cliVersion?: string } = {},
+): Promise<Omit<CurrentVersionResult, 'sourceKind' | 'stable'>> {
   try {
-    const datasetPath = getKnowledgeHubDatasetPath(fs)
+    const datasetPath = await resolveDatasetRoot(
+      fs,
+      { resolution: 'default' },
+      { cliVersion: options.cliVersion, httpClient: options.httpClient },
+    )
     if (!fs.existsSync(datasetPath)) {
       return {
         version: null,
@@ -176,7 +187,7 @@ async function resolveLocalVersion(
  */
 export async function resolveCurrentVersion(
   fs: FileSystemService,
-  options: { source?: string; httpClient?: HttpClientService } = {},
+  options: { source?: string; httpClient?: HttpClientService; cliVersion?: string } = {},
 ): Promise<CurrentVersionResult> {
   const sourceKind = detectSourceKind(options.source)
 
@@ -191,11 +202,14 @@ export async function resolveCurrentVersion(
 async function resolvePartialCurrentVersion(
   sourceKind: KbSourceKind,
   fs: FileSystemService,
-  options: { source?: string; httpClient?: HttpClientService },
+  options: { source?: string; httpClient?: HttpClientService; cliVersion?: string },
 ): Promise<Omit<CurrentVersionResult, 'sourceKind' | 'stable'>> {
   switch (sourceKind) {
     case 'registry':
-      return resolveRegistryVersion(fs)
+      return resolveRegistryVersion(fs, {
+        ...(options.httpClient && { httpClient: options.httpClient }),
+        ...(options.cliVersion && { cliVersion: options.cliVersion }),
+      })
     case 'local':
       return resolveLocalVersion(fs, options.source as string)
     case 'remote':
