@@ -36,6 +36,10 @@ A new `.pair/working/` area hosts **operational state** — checkpoints and repo
 
 Neither subdirectory is created upfront — a skill creates it on demand the first time it writes a checkpoint or report, so most projects have nothing to migrate here. The default path can be overridden with a top-level `working_path` field in `pair.config.json`; `pair validate-config` rejects any registry that overlaps it.
 
+### Skill renames: `map-subdomains`, `map-contexts`
+
+Reclassified from process to capability (D24): `/pair-process-map-subdomains` → `/pair-capability-map-subdomains`, `/pair-process-map-contexts` → `/pair-capability-map-contexts`. The next `pair update` picks up the rename automatically — there's nothing under `.pair/adoption/` to change. If you have your own scripts, docs, or CI steps that invoke the old command names directly, update those references manually; the prompt below doesn't touch them (it's scoped to adoption files only).
+
 ## Prompt
 
 Copy-paste this into any AI coding agent (Claude Code, Cursor, Copilot, Codex, or similar) with write access to your project. It only touches files under `.pair/adoption/` (and, if you opt into a custom working-area path, `pair.config.json`) — never `.pair/knowledge/`, skill files, or application code. It's safe to re-run: each step checks whether it already applied before acting.
@@ -94,6 +98,7 @@ and report what you skipped.
 - [ ] `.pair/adoption/tech/way-of-working.md` either has a `## State Mapping` section matching your board, or your board already uses canonical names (Draft/Ready/In Progress/Review/Done)
 - [ ] `git status` (or equivalent) shows changes only under `.pair/adoption/` (and, if you set an override, `pair.config.json`)
 - [ ] Re-running the prompt makes no further changes — a second run reports every step as skipped
+- [ ] If you had scripts/docs referencing `/pair-process-map-subdomains` or `/pair-process-map-contexts`, they're updated to the new `/pair-capability-*` names
 
 If you're several versions behind, run the earlier pages in the [Migrations index](/docs/migrations) first, then this one.
 
