@@ -164,7 +164,8 @@ No caller performs a full re-mapping outside `/pair-process-bootstrap`. When no 
 
 **map-subdomains, map-contexts: process → capability (D24, #246)**
 
-- Old path: `pair-process-map-subdomains`, `pair-process-map-contexts` — new path: `pair-capability-map-subdomains`, `pair-capability-map-contexts`.
+- Old path: `.skills/process/map-subdomains/`, `.skills/process/map-contexts/` — new path: `.skills/capability/map-subdomains/`, `.skills/capability/map-contexts/`.
+- Installed command names change accordingly: `/pair-process-map-subdomains` → `/pair-capability-map-subdomains`; `/pair-process-map-contexts` → `/pair-capability-map-contexts`. Unprefixed dataset command names (`/map-subdomains`, `/map-contexts`) are unchanged.
 - Invocation contract changed: `$scope` is now **required** and means "items/areas the caller touched" (not `all`/`single`). Full-catalog `$scope: all` is now bootstrap-only.
 - New behavior: graceful "system areas" fallback when no DDD artifacts exist; `Volatility` field on subdomains; per-relationship strength/distance/volatility assessment with an approval gate on unbalanced+volatile relationships (see `subdomain-template.md`, `bounded-context-template.md`).
 - No standalone process step remains for domain mapping — how-to guides 04/05 still describe the workflow, but the underlying skill is invoked scoped by the callers in the [Callers Matrix](#callers-matrix-scoped-capabilities) above.

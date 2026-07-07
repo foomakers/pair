@@ -7,9 +7,9 @@ author: Foomakers
 
 # /pair-next — Project Navigator
 
-Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 30-skill catalog across all lifecycle phases.
+Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 33-skill catalog across all lifecycle phases.
 
-## Skill Catalog (30 skills)
+## Skill Catalog (33 skills)
 
 ### Process Skills (9)
 
@@ -25,7 +25,7 @@ Analyze project state and recommend the single most relevant next skill to invok
 | `/pair-process-implement`       | Sprint Execution   | Implement story tasks with TDD                  |
 | `/pair-process-review`          | Sprint Execution   | Review PR through structured phases             |
 
-### Capability Skills (21)
+### Capability Skills (23)
 
 | Skill                | Category     | Description                                     |
 | -------------------- | ------------ | ----------------------------------------------- |
@@ -50,6 +50,8 @@ Analyze project state and recommend the single most relevant next skill to invok
 | `/pair-capability-estimate`          | Planning     | Estimate story using adopted methodology        |
 | `/pair-capability-setup-gates`       | Configuration| Configure CI/CD quality gates                   |
 | `/pair-capability-manage-flags`      | Configuration| Manage feature flag lifecycle                   |
+| `/pair-capability-design-manual-tests`| Testing     | Generate manual test suite from project analysis|
+| `/pair-capability-execute-manual-tests`| Testing   | Execute manual test suite + generate report     |
 
 ## Algorithm
 
@@ -151,4 +153,4 @@ Then ask: "Shall I run `/skill-name`?"
 - State resolution: conditions are evaluated against canonical macrostates, never board-specific labels — see [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md).
 - When multiple items are actionable (e.g., tasks to implement AND PRs to review), prefer the item closest to delivery (`/pair-process-review` > `/pair-process-implement` > `/pair-process-plan-tasks`).
 - Re-run `/pair-next` after completing any skill to get an updated recommendation.
-- **Full catalog coverage**: this navigator can suggest any of the 30 skills based on project state. Process skills are suggested through the cascading checks (Steps 2-3). Capability skills are suggested through targeted checks (Step 4) or as part of process skill composition.
+- **Full catalog coverage**: this navigator can suggest any of the 33 skills based on project state. Process skills are suggested through the cascading checks (Steps 2-3). Capability skills are suggested through targeted checks (Step 4) or as part of process skill composition.
