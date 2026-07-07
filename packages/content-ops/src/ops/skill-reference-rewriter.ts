@@ -10,6 +10,14 @@
  * Fenced code blocks (```...``` or ~~~...~~~) are left untouched — a skill name quoted
  * as example text inside a fenced block is not a live invocation. Inline code spans
  * (single backtick, e.g. `` `/next` ``) are still rewritten.
+ *
+ * Known limitation: fence detection is column-anchored to ≤3 leading spaces
+ * (matching CommonMark's rule for top-level fences), so a fence nested
+ * inside a blockquote (e.g. `> ```) is never recognized as fenced and its
+ * content is rewritten like normal prose — the inverse of the guarantee
+ * above. Not fixed: KB skill bodies don't use blockquoted fences, and
+ * correctly supporting them needs blockquote-prefix-aware line stripping,
+ * which is a larger change for a case that doesn't occur in practice.
  */
 
 import { logger } from '../observability'
@@ -41,11 +49,30 @@ function buildReferenceRegex(name: string): RegExp {
 /** Detects a fenced code block delimiter line (```/~~~, up to 3 leading spaces, optional info string). */
 const FENCE_OPEN_RE = /^ {0,3}(`{3,}|~{3,})/
 
+/**
+ * Matches a fence-open line, honoring the CommonMark rule that a
+ * backtick-fence's info string (the text after the marker on the opening
+ * line) must itself be backtick-free. Without this check, a single-line
+ * construct like `` ```inline `code` span``` `` — which CommonMark does NOT
+ * treat as a fence at all — would be misclassified as fence-open here and
+ * suppress rewriting for the rest of the file (no closing marker would ever
+ * legitimately match). Tilde fences have no such restriction, since
+ * backticks in their info string are unambiguous.
+ *
+ * Known limitation (not handled): fences nested inside a blockquote
+ * (e.g. `> ```) are column-anchored out of this check entirely — see
+ * module docs.
+ */
 function matchFenceOpen(line: string): { char: string; len: number } | null {
   const m = FENCE_OPEN_RE.exec(line)
   if (!m) return null
   const marker = m[1]!
-  return { char: marker[0]!, len: marker.length }
+  const char = marker[0]!
+  if (char === '`') {
+    const infoString = line.slice(m[0].length)
+    if (infoString.includes('`')) return null
+  }
+  return { char, len: marker.length }
 }
 
 function isFenceClose(line: string, fenceChar: string, fenceLen: number): boolean {

@@ -178,6 +178,25 @@ describe('rewriteSkillReferences', () => {
       const input = ['```', '/next', 'still inside /implement'].join('\n')
       expect(rewriteSkillReferences(input, map)).toBe(input)
     })
+
+    it('does not treat a backtick-containing info string as a fence-open (CommonMark)', () => {
+      // Per CommonMark, a backtick-fence's info string must itself be
+      // backtick-free; a line like this never opens a real fence, so
+      // rewriting must continue normally afterward instead of being
+      // suppressed for the rest of the file.
+      const input = ['intro line', '```inline `code` marker', 'Run /next to start.'].join('\n')
+      expect(rewriteSkillReferences(input, map)).toBe(
+        ['intro line', '```inline `code` marker', 'Run /pair-next to start.'].join('\n'),
+      )
+    })
+
+    it('still treats a tilde-fence with a backtick in its info string as fenced', () => {
+      // Tilde fences have no backtick restriction on the info string.
+      const input = ['~~~lang `with backtick`', '/next', '~~~', 'Run /next after.'].join('\n')
+      expect(rewriteSkillReferences(input, map)).toBe(
+        ['~~~lang `with backtick`', '/next', '~~~', 'Run /pair-next after.'].join('\n'),
+      )
+    })
   })
 })
 

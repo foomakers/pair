@@ -151,6 +151,16 @@ export async function reconcileSkillNameRegistry(
   registries: Record<string, RegistryConfig>,
   skillNameMap: SkillNameMap,
 ): Promise<void> {
+  // Covers both "no manifest yet" and "flatten/prefix disabled for every
+  // registry this run" (accumulated map empty either way — see
+  // `hasNamingTransforms` in copyPathOps.ts, which skips building a
+  // skillNameMap entirely when no transform is active). Intentionally a
+  // full no-op in both cases: with an empty current map we cannot tell
+  // "skill removed from the registry" apart from "skill still installed,
+  // just no longer prefixed" (the latter never produces a map entry), so
+  // even attempting orphan detection from the stale manifest alone would
+  // misreport still-installed skills as removed. See
+  // skill-refs.test.ts > reconcileSkillNameRegistry for the locked-in case.
   if (skillNameMap.size === 0) return
 
   const { fs, baseTarget } = context
