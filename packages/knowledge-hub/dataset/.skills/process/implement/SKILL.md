@@ -76,6 +76,7 @@ Ask: _"Ready to proceed with implementation?"_
    - [architecture.md](../../../.pair/adoption/tech/architecture.md) — architectural patterns
    - [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — approved libraries and versions
    - [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) — development process
+   - [Design Rules](../../../.pair/knowledge/guidelines/code-design/design-principles/design-rules.md) — evidence-based do/don't patterns to avoid generating (constraints, not suggestions)
 4. **Verify**: Technical context loaded. If adoption files missing, warn and proceed with guideline defaults.
 
 ### Step 1.2: Create or Switch to Feature Branch
@@ -132,7 +133,7 @@ Process tasks **sequentially**, one at a time. For each task:
 
 #### For Development Tasks (TDD Required):
 
-Follow the TDD discipline rules strictly:
+Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/knowledge/guidelines/code-design/design-principles/design-rules.md) loaded in Step 1.1 — do not generate a new instance of a known do/don't pattern (e.g. god module, static-only namespace class, optional-bag dispatch instead of a discriminated union).
 
 #### TDD Discipline Rules:
 
