@@ -10,7 +10,7 @@ This guideline documents the pattern generically and then walks through pair's o
 
 1. **One package per concern** — do not bundle lint + format + types into a single "tooling" package. Each tool gets its own package (`*-config`) so it can version and release independently.
 2. **Consume via the tool's own mechanism** — don't invent a custom loader. Use `extends` for `tsconfig.json`, `require`/`extends` for ESLint flat config, a `"prettier"` field in `package.json`, and a config-discovery bin wrapper for tools that don't support a field (markdownlint).
-3. **Package the enforcement, not just the rules** — ship bin wrappers (`lint`, `lint-fix`, `prettier-check`, `mdlint:check`, …) alongside the config so workspace `package.json` scripts stay one-liners instead of re-declaring flags/paths everywhere.
+3. **Package the enforcement, not just the rules** — ship bin wrappers (`lint`, `lint-fix`, `prettier-check`, `markdownlint-check`, …) alongside the config so workspace `package.json` scripts stay one-liners instead of re-declaring flags/paths everywhere. (`mdlint:check` is the root script alias that calls the `markdownlint-check` bin — not a bin name itself.)
 4. **Workspace configs carry only local overrides** — `paths`, `references`, `outDir`, package-specific `ignores`. Everything shared lives in the config package.
 5. **Version like a dependency** — `@scope/*-config` is a `workspace:*` devDependency; bumping it (e.g. tightening a rule) is a normal dependency update, reviewed like one.
 
