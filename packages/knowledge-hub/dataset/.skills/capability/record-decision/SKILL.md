@@ -113,7 +113,7 @@ This step is **always required** — adoption files and the context map are the 
 
 #### If `domain` → Context Map Sync:
 
-1. **Check**: Does [adoption/product/context-map.md](../../../.pair/adoption/product/context-map.md) exist? If the affected subdomain has already split into its own file, check for `adoption/product/subdomain/<slug>.context.md` instead and prefer it.
+1. **Check**: Does `adoption/product/context-map.md` exist? If the affected subdomain has already split into its own file, check for `adoption/product/subdomain/<slug>.context.md` instead and prefer it.
 2. **Act**: If no context file exists at all, offer to create a minimal `context-map.md` containing just the affected rule/term (a title and one entry) — warn the developer this is the project's first domain-context artifact.
 3. **Act**: Update the current-state entry for the affected rule/term so it matches the DDR's Decision section exactly.
 4. **Act**: If this DDR supersedes a previously registered rule, replace the old rule's entry — the context file must reflect only the new rule, never both.
@@ -165,7 +165,7 @@ When invoked **independently**:
 - If [ADL template](../../../.pair/knowledge/guidelines/collaboration/templates/adl-template.md) is not found, use the minimal ADL structure: Date, Status, Context, Decision, Consequences, Adoption Impact.
 - If [DDR template](../../../.pair/knowledge/guidelines/collaboration/templates/ddr-template.md) is not found, use the minimal DDR structure: Status, Date, Context, Decision, Consequences, Context Map Impact.
 - If adoption directories don't exist, create them and warn: "Created adoption directory — this appears to be a new project."
-- If neither `context-map.md` nor a matching `<slug>.context.md` exists for a DDR, create a minimal `context-map.md` and warn: "Created context map — this appears to be the project's first domain decision."
+- If neither `context-map.md` nor a matching `<slug>.context.md` exists for a DDR, offer to create a minimal `context-map.md` containing just the affected rule/term — warn the developer this is the project's first domain-context artifact.
 
 ## Notes
 
