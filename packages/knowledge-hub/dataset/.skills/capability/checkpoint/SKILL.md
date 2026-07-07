@@ -1,6 +1,6 @@
 ---
 name: checkpoint
-description: "Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) so work survives context resets. Write mode persists state to .pair/working/checkpoints/<story-id>.md, one file per story; resume mode locates and parses it. Invocable independently or composed by /implement and /publish-pr as a handoff."
+description: "Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) so work survives context resets. Write mode persists state to .pair/working/checkpoints/<story-id>.md, one file per story; resume mode locates and parses it. Invocable independently; composed by a future closing phase of /implement (story #256) and a future /publish-pr as a handoff."
 version: 0.4.1
 author: Foomakers
 ---
@@ -75,7 +75,7 @@ Write and resume a self-contained progress checkpoint so a fresh session (or a s
 
 ### Step 7: Parse Checkpoint
 
-1. **Act**: Parse the five sections in order: Story, Branch, Tasks Done, Key Decisions, Remaining Todos.
+1. **Act**: Parse the five sections in order: Story, Branch, Tasks Done, Key Decisions, Remaining Todos. Ignore a trailing "Template Notes" (or any 6th) section if one is present — it is authoring guidance, not checkpoint state.
 2. **Check**: Are all five sections present and structurally well-formed?
 3. **Skip**: If yes, proceed to Step 8 with full confidence.
 4. **Act**: If any section is missing, empty, or malformed — report exactly what WAS parsed, list what's missing or ambiguous, and ask the caller to confirm before proceeding. Never fill gaps by guessing.
@@ -114,9 +114,9 @@ CHECKPOINT RESUMED:
 
 ## Composition Interface
 
-When composed by `/implement`:
+When composed by a future closing phase of `/implement` (story #256):
 
-- **Input**: `/implement` invokes `/checkpoint` with `$mode=write` between tasks (or on developer request) to persist progress, and `$mode=resume` at Phase 0 when re-invoked on a story that may have been interrupted.
+- **Input**: `/implement` would invoke `/checkpoint` with `$mode=write` between tasks (or on developer request) to persist progress, and `$mode=resume` at Phase 0 when re-invoked on a story that may have been interrupted.
 - **Output**: Write mode's returned text becomes the session's record of state. Resume mode's parsed state lets `/implement` skip re-analysis and jump straight to the first pending task.
 
 When composed by a future `/publish-pr` (companion capability from the same epic split):

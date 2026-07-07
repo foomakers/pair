@@ -43,6 +43,8 @@
 
 ## Template Notes
 
+Everything below this line is authoring guidance — omit it from rendered checkpoints.
+
 - **File location:** `.pair/working/checkpoints/<story-id>.md` — one file per story, updated in place, never duplicated.
 - **Source of truth:** the file. If an issue-body mirror exists, it must be explicitly marked as a copy and must not diverge in meaning from the file.
 - **Resume parsing:** a resuming session reads sections 1–5 top to bottom. It should not need the original conversation to continue safely.
