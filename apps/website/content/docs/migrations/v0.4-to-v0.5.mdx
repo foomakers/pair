@@ -1,11 +1,11 @@
 ---
-title: "v0.4 → v0.5: Canonical States"
-description: Migration prompt for pair's canonical backlog states + n-m state-mapping schema.
+title: "v0.4 → v0.5: Canonical States + Domain Modeling"
+description: Migration prompt for pair's canonical backlog states, n-m state-mapping schema, and the map-subdomains/map-contexts process-to-capability rename.
 ---
 
-This page grows incrementally as the stories driving the v0.4 → v0.5 jump land — it currently covers canonical states only.
+This page grows incrementally as the stories driving the v0.4 → v0.5 jump land — it currently covers canonical states and the domain-modeling capability rename.
 
-Structural background: [Canonical states (#202)](https://github.com/foomakers/pair/issues/202) · [Versioning & migration epic (#214)](https://github.com/foomakers/pair/issues/214)
+Structural background: [Canonical states (#202)](https://github.com/foomakers/pair/issues/202) · [map-subdomains/map-contexts reclassification (#246)](https://github.com/foomakers/pair/issues/246) · [Versioning & migration epic (#214)](https://github.com/foomakers/pair/issues/214)
 
 ## Changed
 
@@ -19,15 +19,21 @@ Draft → Ready → In Progress → Review → Done
 
 Your board can keep any naming. `.pair/adoption/tech/way-of-working.md` gains an optional `## State Mapping` section — a `Board State | Macrostate` table, n-to-m (multiple board states may map to one macrostate; first-listed wins on write). Omit it and pair assumes your board already uses the canonical names.
 
+### Skill renames: map-subdomains, map-contexts (process → capability)
+
+`/map-subdomains` and `/map-contexts` move from `.skills/process/` to `.skills/capability/`. Installed command names change accordingly: `/pair-process-map-subdomains` → `/pair-capability-map-subdomains`, `/pair-process-map-contexts` → `/pair-capability-map-contexts` (unprefixed dataset names `/map-subdomains`/`/map-contexts` are unchanged). This is a knowledge-base change — `pair update` picks it up automatically, no `.pair/adoption/` edit needed for the rename itself. The only thing worth checking is whether *your own* adoption docs (way-of-working.md, custom guidelines) reference the old prefixed command names or the old `.skills/process/map-*` paths literally.
+
+Existing `adoption/product/subdomain/*.md` and `adoption/tech/boundedcontext/*.md` files created under the old process-skill flow remain valid as-is — no forced migration. A `Volatility` field (subdomains) or relationship-strength assessment (bounded contexts) is added lazily, the next time that entry falls inside a future scoped run — never backfilled in bulk.
+
 ## Prompt
 
-Copy-paste this into any AI coding agent (Claude Code, Cursor, Copilot, Codex, or similar) with write access to your project. It only touches `.pair/adoption/tech/way-of-working.md` — never `.pair/knowledge/`, skill files, or application code. Safe to re-run.
+Copy-paste this into any AI coding agent (Claude Code, Cursor, Copilot, Codex, or similar) with write access to your project. It only touches files under `.pair/adoption/` — never `.pair/knowledge/`, skill files, or application code. Safe to re-run.
 
 ```text
 You are migrating this project's `.pair/` structure to pair's canonical-states
-release (v0.4 → v0.5). Work only inside `.pair/adoption/tech/way-of-working.md`.
-Do not edit `.pair/knowledge/`, any skill file, or application code. Perform
-the step only if not already done, and report what you skipped.
+release (v0.4 → v0.5). Work only inside `.pair/adoption/`. Do not edit
+`.pair/knowledge/`, any skill file, or application code. Perform each step
+only if not already done, and report what you skipped.
 
 1. Open `.pair/adoption/tech/way-of-working.md`. Determine whether your PM
    board's state names already match the canonical set (Draft, Ready,
@@ -41,16 +47,27 @@ the step only if not already done, and report what you skipped.
      states outside the mapping are allowed and left unmapped.
    Skip this step entirely if a `## State Mapping` section already exists.
 
-2. Summarize what you created or changed versus what was already in place, and
-   confirm with `git status` (or equivalent) that only
-   `.pair/adoption/tech/way-of-working.md` was touched.
+2. Search your own `.pair/adoption/` files (way-of-working.md, any custom
+   guidelines you authored) for literal references to `/pair-process-map-subdomains`,
+   `/pair-process-map-contexts`, or the path `.skills/process/map-subdomains`
+   or `.skills/process/map-contexts`.
+   - If found, update them to `/pair-capability-map-subdomains`,
+     `/pair-capability-map-contexts`, and `.skills/capability/map-*`
+     respectively.
+   - If none found, do nothing — this is the common case, since the rename
+     is picked up automatically on `pair update`.
+
+3. Summarize what you created or changed versus what was already in place, and
+   confirm with `git status` (or equivalent) that only files under
+   `.pair/adoption/` were touched.
 ```
 
 ## Verify
 
 - [ ] `.pair/adoption/tech/way-of-working.md` either has a `## State Mapping` section matching your board, or your board already uses canonical names (Draft/Ready/In Progress/Review/Done)
-- [ ] `git status` (or equivalent) shows changes only to `way-of-working.md`
-- [ ] Re-running the prompt makes no further changes — a second run reports the step as skipped
+- [ ] Your own `.pair/adoption/` docs have no remaining literal references to `/pair-process-map-subdomains`, `/pair-process-map-contexts`, or `.skills/process/map-*` — updated to the `-capability-`/`capability/` equivalents if any were found
+- [ ] `git status` (or equivalent) shows changes only under `.pair/adoption/`
+- [ ] Re-running the prompt makes no further changes — a second run reports each step as skipped
 
 If you're several versions behind, run the earlier pages in the [Migrations index](/docs/migrations) first, then this one.
 

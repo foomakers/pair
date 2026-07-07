@@ -74,20 +74,18 @@ PM Access: MCP github_projects (org: mycompany, repo: myproject)
 ### Induction (Getting Started)
 
 | - **Create PRD** → `01-how-to-create-PRD.md`                      | Tags: prd, requirements, planning  |
-| - **Setup project** → `02-how-to-complete-bootstrap-checklist.md` | Tags: bootstrap, setup, onboarding |
-| - **Define subdomains** → `04-how-to-define-subdomains.md`        | Tags: subdomain, domain, model     |
+| - **Setup project** → `02-how-to-complete-bootstrap-checklist.md` | Tags: bootstrap, setup, onboarding, subdomain, bounded-context, domain-model |
 
 ### Strategic (High-level Planning)
 
-| - **Plan initiatives** → `03-how-to-create-and-prioritize-initiatives.md` | Tags: initiative, roadmap            |
-| - **Define architecture** → `05-how-to-define-bounded-contexts.md`        | Tags: bounded, context, architecture |
-| - **Break down epics** → `06-how-to-breakdown-epics.md`                   | Tags: epic, breakdown                |
+| - **Plan initiatives** → `03-how-to-create-and-prioritize-initiatives.md` | Tags: initiative, roadmap, subdomain |
+| - **Break down epics** → `06-how-to-breakdown-epics.md`                   | Tags: epic, breakdown, subdomain      |
 
 ### Iteration (Sprint Planning)
 
 | - **Create user stories** → `07-how-to-breakdown-user-stories.md` | Tags: story, requirements          |
 | - **Refine stories** → `08-how-to-refine-a-user-story.md`         | Tags: refine, acceptance, criteria |
-| - **Create tasks** → `09-how-to-create-tasks.md`                  | Tags: task, breakdown, assign      |
+| - **Create tasks** → `09-how-to-create-tasks.md`                  | Tags: task, breakdown, assign, bounded-context |
 
 ### Execution (Development)
 

@@ -56,12 +56,14 @@ A raw `SKILL.md` file contains relative links, short skill names, and category-b
 The pipeline runs during `pair install` and `pair update`:
 
 **Stage 1: Copy with naming transforms**
+
 ```text
 Source:  .skills/capability/verify-quality/SKILL.md
 Target:  .claude/skills/pair-capability-verify-quality/SKILL.md
 ```
 
 **Stage 2: Frontmatter sync**
+
 ```yaml
 # Before (source)
 name: verify-quality
@@ -71,6 +73,7 @@ name: pair-capability-verify-quality
 ```
 
 **Stage 3: Link rewriting**
+
 ```markdown
 <!-- Before: relative link in category structure -->
 See [record-decision](../../capability/record-decision/SKILL.md)
@@ -80,6 +83,7 @@ See [record-decision](../pair-capability-record-decision/SKILL.md)
 ```
 
 **Stage 4: Skill reference rewriting**
+
 ```markdown
 <!-- Before -->
 Composes /verify-quality and /record-decision.
@@ -89,6 +93,7 @@ Composes /pair-capability-verify-quality and /pair-capability-record-decision.
 ```
 
 **Stage 5: Multi-target distribution**
+
 ```text
 .claude/skills/pair-capability-verify-quality/  (canonical — physical copy)
 .github/skills/pair-capability-verify-quality/  (symlink → .claude/skills/...)
@@ -98,6 +103,7 @@ Composes /pair-capability-verify-quality and /pair-capability-record-decision.
 **Stage 6: Cross-registry propagation**
 
 After all registries are installed, skill references in non-skills files (like AGENTS.md) are also rewritten:
+
 ```markdown
 <!-- AGENTS.md before -->
 Run /next to get started.
@@ -111,6 +117,7 @@ Run /pair-next to get started.
 Here's a full before/after for the `implement` skill:
 
 **Before (source):**
+
 ```text
 Path: .skills/process/implement/SKILL.md
 Frontmatter: name: implement
@@ -119,6 +126,7 @@ Link: See [verify-quality](../../capability/verify-quality/SKILL.md)
 ```
 
 **After (installed):**
+
 ```text
 Path: .claude/skills/pair-process-implement/SKILL.md
 Frontmatter: name: pair-process-implement

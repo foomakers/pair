@@ -73,13 +73,15 @@ _Skip if in system-areas fallback — go to Step 2b._
 
 ### Step 3: DDD Classification, Volatility & Catalog Delta
 
+_Skip if in system-areas fallback — the Classification/Volatility already assigned in Step 2b (Generic/Low unless the caller has clear evidence otherwise) is final for this run; go straight to Step 4._
+
 1. **Act** (DDD mode): Classify each in-scope capability:
    - **Core** — competitive advantage, high business value, high complexity. Build in-house, invest deeply. Default `Volatility: High`.
    - **Supporting** — operational necessity, medium value. Important but not differentiating. Default `Volatility: Medium`.
    - **Generic** — commodity function, low differentiation. Buy or use standard solutions. Default `Volatility: Low`. Additionally assess **implementation volatility** — the probability of switching provider/technology; when High, note that relationships toward this subdomain require an integration contract (feeds `/map-contexts` strength assessment).
 2. **Act**: Volatility default follows the classification above; the developer may override it (business-domain judgment, never inferred from commit history alone).
 3. **Act**: Map relationships and data flow between in-scope subdomains and their existing dependencies.
-4. **Check**: Does an in-scope subdomain already exist in the registry with different classification/volatility (catalog conflict)?
+4. **Check**: Does an in-scope subdomain already exist in the registry with a different classification, or a different Volatility that was **not** recorded as a human override? Compare against the existing file's recorded values, not a freshly-recomputed classification-derived default — a Volatility that already carries an override reason is never treated as conflicting with that same default recomputed again; only a change to classification, or an explicit new override request, is a conflict.
 5. **Act**: If a conflict exists → propose the delta only (not a full re-map):
 
    > Existing: `[Name]` — Classification: [X], Volatility: [Y]

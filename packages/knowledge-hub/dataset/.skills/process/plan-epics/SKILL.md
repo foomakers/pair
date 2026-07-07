@@ -14,6 +14,7 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
 | Skill          | Type       | Required                                                  |
 | -------------- | ---------- | --------------------------------------------------------- |
 | `/write-issue` | Capability | Yes — creates or updates epic issues in the PM tool       |
+| `/map-subdomains` | Capability | Optional — scoped domain mapping for the approved epic breakdown. Graceful degradation if absent. |
 
 ## Arguments
 
@@ -87,6 +88,13 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
 
 4. **Verify**: Developer approves the breakdown.
 
+### Step 3.5: Domain Mapping (scoped)
+
+1. **Check**: Is `/map-subdomains` installed?
+2. **Skip**: If not installed → warn and proceed to Step 4 without domain mapping.
+3. **Act**: Compose `/map-subdomains` with `$scope` set to the capability area(s) covered by the approved epic breakdown (not `all` — full-catalog remapping stays `/bootstrap`-only).
+4. **Verify**: Subdomain catalog delta (if any) approved by developer. Proceed to Step 4 regardless of outcome — domain mapping never blocks epic creation.
+
 ### Step 4: Epic Creation
 
 Process epics sequentially (Epic 0 first if needed). For each epic:
@@ -136,6 +144,7 @@ EPICS COMPLETE:
 ## Graceful Degradation
 
 - If `/write-issue` is not installed, warn and provide formatted epic content for manual PM tool entry.
+- If `/map-subdomains` is not installed, skip Step 3.5 with a warning — epic creation proceeds without domain mapping.
 - If bounded contexts are not defined, proceed with PRD and initiative analysis only.
 - If PM tool is not accessible, produce epic documents and ask developer to create manually.
 
@@ -145,4 +154,5 @@ EPICS COMPLETE:
 - Idempotent: re-invocation detects existing epics and skips them.
 - Epic 0 rule: for new projects, always assess if a bootstrap/foundation epic is needed before functional epics.
 - Each epic should deliver end-to-end user value in 2-4 sprints.
+- Domain mapping (Step 3.5) is scoped to this run's epic breakdown — see [map-subdomains](../../capability/map-subdomains/SKILL.md).
 - After epic creation, proceed to `/plan-stories` for user story breakdown.
