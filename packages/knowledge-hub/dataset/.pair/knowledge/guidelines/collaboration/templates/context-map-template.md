@@ -8,7 +8,7 @@ Dispatcher + index + core for this project's domain model. The unit is the **sub
 
 | Subdomain | Classification | Own Context | Volatility |
 | --- | --- | --- | --- |
-| [Subdomain slug] | [Core \| Supporting \| Generic] | [No — context inline below \| Yes — see `subdomain/<slug>.context.md`] | [Low \| Medium \| High \| _(leave empty if not set in the catalog)_] |
+| [Subdomain slug] | [Core \| Supporting \| Generic] | [No \| Yes] | [Low \| Medium \| High \| _(leave empty if not set in the catalog)_] |
 
 - **Classification** and **Volatility** mirror the subdomain catalog (`subdomain/<slug>.md`) — one column each here, never invented in the map.
 - **Own Context** flips to "Yes" only after a lazy, human-approved split: once a subdomain's inline context has grown, its Glossary and Entities rows move to the co-located `subdomain/<slug>.context.md` sibling (see the [Subdomain Context Template](subdomain-context-template.md)).
