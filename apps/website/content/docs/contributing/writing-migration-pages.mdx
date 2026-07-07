@@ -70,7 +70,7 @@ skill files, or application code. Safe to re-run.
 
 1. Add the page at `apps/website/content/docs/migrations/<vX.Y-to-vA.B>.mdx`.
 2. Add its filename to the `pages` array in `apps/website/content/docs/migrations/meta.json`, in version order.
-3. Add a row to the table in `apps/website/content/docs/migrations/index.mdx`.
+3. Update the "Published migration pages" section in `apps/website/content/docs/migrations/index.mdx`: if this is the first page ever published, replace the "no pages published yet" note with a `Version jump | What changed` table and add your row; if a table already exists, add your row to it.
 4. Run the prompt end-to-end against a fixture project on the previous structure — twice, to confirm idempotency — before publishing.
 5. Grep-check that no migration logic leaked into a skill: search `packages/knowledge-hub/dataset/.skills` for migration-specific logic; it should turn up nothing.
 
