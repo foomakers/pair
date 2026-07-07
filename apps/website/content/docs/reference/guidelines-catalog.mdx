@@ -1,37 +1,35 @@
 ---
 title: Guidelines & How-To Catalog
-description: Complete catalog of all pair Knowledge Base guidelines (9 categories) and how-to guides (11 sequential steps).
+description: Complete catalog of all pair Knowledge Base guidelines (9 categories) and how-to guides (9 sequential steps).
 ---
 
-The pair Knowledge Base ships with opinionated guidelines organized into 9 categories and 11 sequential how-to guides covering the full AI-assisted development lifecycle. Guidelines live in `.pair/knowledge/guidelines/`, how-to guides in `.pair/knowledge/how-to/`.
+The pair Knowledge Base ships with opinionated guidelines organized into 9 categories and 9 sequential how-to guides covering the full AI-assisted development lifecycle. Guidelines live in `.pair/knowledge/guidelines/`, how-to guides in `.pair/knowledge/how-to/`.
 
 > **Last updated:** 2026-07-07. Source: `packages/knowledge-hub/dataset/.pair/knowledge/`
 
 ## How-To Guides
 
-11 sequential guides that walk you through the complete development process — from product requirements to code review. Each guide can be followed manually or invoked as a skill (recommended). See the [Developer Journey](/docs/developer-journey) for the full step-by-step walkthrough.
+9 sequential guides that walk you through the complete development process — from product requirements to code review. Each guide can be followed manually or invoked as a skill (recommended). See the [Developer Journey](/docs/developer-journey) for the full step-by-step walkthrough.
 
 | # | Guide | Tags | Skill (preferred) |
 | --- | --- | --- | --- |
 | 01 | **Create a PRD** | prd, requirements, planning | `/pair-process-specify-prd` |
-| 02 | **Complete Bootstrap Checklist** | bootstrap, setup, onboarding | `/pair-process-bootstrap` |
-| 03 | **Create & Prioritize Initiatives** | initiative, roadmap, P0/P1/P2 | `/pair-process-plan-initiatives` |
-| 04 | **Define Subdomains** | subdomain, domain, DDD | `/pair-capability-map-subdomains` (scoped capability) |
-| 05 | **Define Bounded Contexts** | bounded context, architecture, DDD | `/pair-capability-map-contexts` (scoped capability) |
-| 06 | **Break Down Epics** | epic, breakdown, 2-4 sprints | `/pair-process-plan-epics` |
+| 02 | **Complete Bootstrap Checklist** | bootstrap, setup, onboarding, subdomain, bounded-context, domain-model | `/pair-process-bootstrap` |
+| 03 | **Create & Prioritize Initiatives** | initiative, roadmap, P0/P1/P2, subdomain | `/pair-process-plan-initiatives` |
+| 06 | **Break Down Epics** | epic, breakdown, 2-4 sprints, subdomain | `/pair-process-plan-epics` |
 | 07 | **Break Down User Stories** | story, vertical slicing, INVEST | `/pair-process-plan-stories` |
 | 08 | **Refine a User Story** | refine, Given-When-Then, technical analysis | `/pair-process-refine-story` |
-| 09 | **Create Tasks** | task, breakdown, dependency mapping | `/pair-process-plan-tasks` |
+| 09 | **Create Tasks** | task, breakdown, dependency mapping, bounded-context | `/pair-process-plan-tasks` |
 | 10 | **Implement a Task** | implement, TDD, code | `/pair-process-implement` |
 | 11 | **Code Review** | review, quality gates, ADR | `/pair-process-review` |
+
+Numbering keeps the original sequence — 04 and 05 (subdomain/bounded-context definition) were removed as standalone guides when `map-subdomains`/`map-contexts` were reclassified from process to capability (D24, [#246](https://github.com/foomakers/pair/issues/246)). Domain modeling is now invoked inline, scoped to the caller, at the point in 02/03/06/09 noted above — see the [Callers Matrix](https://github.com/foomakers/pair/blob/main/.pair/knowledge/skills-guide.md#callers-matrix-scoped-capabilities) for exactly which step invokes which capability.
 
 ### How-To Flow
 
 ```text
-01 PRD → 02 Bootstrap → 03 Initiatives → (04 Subdomains → 05 Contexts) → 06 Epics → 07 Stories → 08 Refine → 09 Tasks → 10 Implement → 11 Review
+01 PRD → 02 Bootstrap → 03 Initiatives → 06 Epics → 07 Stories → 08 Refine → 09 Tasks → 10 Implement → 11 Review
 ```
-
-Steps 04-05 (DDD) are optional — skip them if your project doesn't need domain modeling.
 
 ## Guideline Categories
 
