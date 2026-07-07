@@ -56,7 +56,7 @@ export async function extractLinks(content: string) {}
 export async function extractLinksFromFile(path: string, fs: FileSystemService) {}
 ```
 
-**Evidence**: #199 P0.4 `markdown/link-processor.ts:42-411` — `class LinkProcessor` with 18 static methods; the fix direction was already emerging in the file's own compat re-exports (`link-processor.ts:409-418`, standalone `extractLinks`/`detectLinkStyle` functions wrapping the static calls). See Migration Plan below.
+**Evidence**: #199 P0.4 `markdown/link-processor.ts:42-411` — `class LinkProcessor` with 18 static methods; the fix direction was already emerging in the file's own compat re-exports (`link-processor.ts:406-421`, standalone `extractLinks`/`detectLinkStyle` functions wrapping the static calls). See Migration Plan below.
 
 ## DR-3 — Optional-Bag Dispatch Instead of Discriminated Union
 
@@ -107,6 +107,8 @@ Current, concrete instances found while extracting these rules from #199 — not
 | DR-1 | `packages/content-ops/src/test-utils/in-memory-fs.ts` (429 LOC) | P2 | test-only; split read/write/seed helpers |
 | DR-2 | `packages/content-ops/src/markdown/link-processor.ts` (`class LinkProcessor`) | P1 | convert to named exports; re-exports already exist for the compat path |
 | DR-3 | `packages/content-ops/src/ops/movePathOps.ts:189` (`MoveCtx`) | P2 | opportunistic, when the file is next touched |
+
+**Note**: no `tech-debt` Draft items are created by this story. Item creation from this table is deferred to #224 (`pair-capability-assess-debt` scan mode).
 
 ## Related
 
