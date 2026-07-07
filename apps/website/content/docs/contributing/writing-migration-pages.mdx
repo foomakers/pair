@@ -1,0 +1,81 @@
+---
+title: Writing Migration Pages
+description: How to author a new pair migration page — the Changed / Prompt / Verify pattern, one page per version jump.
+---
+
+Every pair release that changes the `.pair/adoption/` or `.pair/knowledge/` structure ships a migration page under [Migrations](/docs/migrations). This is the *only* place migration logic lives — no pair skill ever contains it (grep-verifiable: searching `packages/knowledge-hub/dataset/.skills` for migration logic should turn up nothing).
+
+## When to write one
+
+- **Breaking structure change** → page required. Treat it as a release-checklist item: no breaking adoption/KB structure change ships without a page.
+- **No structure change** → no page. The [Migrations index](/docs/migrations) simply won't list that version — absence of a page means "nothing to migrate."
+
+## Page structure: Changed / Prompt / Verify
+
+Every migration page has exactly three sections, in this order:
+
+| Section | Purpose |
+| --- | --- |
+| **Changed** | What structurally changed, in plain terms — new files/directories, renamed sections, new optional adoption fields. No prompt text here. |
+| **Prompt** | One copy-paste block any AI coding agent can run unmodified. Agent-agnostic, idempotent, scoped only to `.pair/adoption/` and `.pair/working/` in the *consumer* project. |
+| **Verify** | A checklist the reader (or the same agent) ticks off after running the prompt, including an idempotency check — re-running should make no further changes. |
+
+### Prompt requirements
+
+- **Copy-paste.** A single fenced block, no placeholders the reader has to fill in blind. If a value is project-specific, tell the agent how to discover it — don't ask the human to edit the prompt first.
+- **Agent-agnostic.** No pair-specific slash command or skill invocation — plain instructions any coding agent can follow by reading and writing files.
+- **Idempotent.** Every step checks "is this already done?" before acting, and the prompt says so explicitly. Re-running must be safe.
+- **Scoped.** Touches only adoption/KB files in the consumer project (`.pair/adoption/`, `.pair/working/`). Never edits `.pair/knowledge/` (upstream, overwritten by `pair update` anyway), skill files, or application code.
+- **Resumable, not duplicating.** If a previous run was interrupted or only partially applied, the prompt detects the partial state and finishes it rather than starting over or double-writing.
+
+## Template
+
+Copy this skeleton for a new page:
+
+````mdx
+---
+title: "vX.Y → vA.B: <one-line summary of what changed>"
+description: Migration prompt for <what changed>.
+---
+
+Structural background: [<link to the epic/issue driving the change>](...)
+
+## Changed
+
+### <Change 1 title>
+
+<What changed, why, before/after if it helps.>
+
+## Prompt
+
+Copy-paste this into any AI coding agent with write access to your project. It
+only touches `.pair/adoption/` and `.pair/working/` — never `.pair/knowledge/`,
+skill files, or application code. Safe to re-run.
+
+```text
+<Numbered, idempotent, agent-agnostic instructions.>
+```
+
+## Verify
+
+- [ ] <Checklist item per change>
+- [ ] Re-running the prompt makes no further changes
+
+## Related
+
+- [Migrations index](/docs/migrations)
+````
+
+## Publishing checklist
+
+1. Add the page at `apps/website/content/docs/migrations/<vX.Y-to-vA.B>.mdx`.
+2. Add its filename to the `pages` array in `apps/website/content/docs/migrations/meta.json`, in version order.
+3. Update the "Published migration pages" section in `apps/website/content/docs/migrations/index.mdx`: if this is the first page ever published, replace the "no pages published yet" note with a `Version jump | What changed` table and add your row; if a table already exists, add your row to it.
+4. Run the prompt end-to-end against a fixture project on the previous structure — twice, to confirm idempotency — before publishing.
+5. Grep-check that no migration logic leaked into a skill: search `packages/knowledge-hub/dataset/.skills` for migration-specific logic; it should turn up nothing.
+
+## Related
+
+- [Migrations index](/docs/migrations)
+- [KB Structure Reference](/docs/reference/kb-structure)
+- [Writing Skills](/docs/contributing/writing-skills) — the equivalent authoring guide for skills

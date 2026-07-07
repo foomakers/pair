@@ -1,0 +1,33 @@
+---
+title: Migrations
+description: Version-jump migration pages for pair's adoption/KB structure — copy-paste prompts, one per breaking change.
+---
+
+Every pair release that changes the `.pair/adoption/` or `.pair/knowledge/` structure ships a migration page here. Pages are the entire migration surface — no pair skill contains migration logic.
+
+## How this section works
+
+- **One page per version jump.** A page covers exactly one breaking release (e.g. `v0.4 → v0.5`).
+- **Sequential composition.** Several versions behind? Run the pages in order — there are no gaps between published breaking versions.
+- **No page means no migration needed.** If a release isn't listed below, it didn't change the adoption/KB structure.
+- **Prompts are copy-paste and agent-agnostic.** Paste the prompt into any AI coding agent (Claude Code, Cursor, Copilot, Codex, or similar) working in your project — it edits only your `.pair/` files.
+- **Prompts are idempotent.** Re-running a prompt is safe; it detects what's already migrated and resumes instead of duplicating work.
+
+## Detect your version
+
+Before picking a starting page:
+
+- If you still have the KB package/ZIP you installed from, run `pair kb-info <package-path>` to read its version metadata.
+- Otherwise, check for the structural markers a migration would have added — e.g. does `.pair/adoption/product/context-map.md` exist? Does `.pair/working/` exist? Their absence means you're pre-migration for that jump.
+
+A dedicated CLI check (installed KB vs. current, compared directly) is landing in a follow-up story — until then, use the checks above.
+
+## Published migration pages
+
+No breaking version jump has published a page yet. A page appears here as soon as the first story driving it merges, then grows incrementally — each subsequent story that touches the same version jump appends its own step, rather than one story publishing the whole page at once.
+
+## Related
+
+- [Writing Migration Pages](/docs/contributing/writing-migration-pages) — the Changed / Prompt / Verify pattern, for maintainers authoring a new page
+- [KB Structure Reference](/docs/reference/kb-structure) — current `.pair/` directory layout
+- [CLI Commands](/docs/reference/cli/commands) — `kb-info` and other pair-cli commands

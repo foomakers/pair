@@ -42,6 +42,8 @@ This opens an interactive prompt:
 
 A `.changeset/*.md` file is created. Commit it with your PR.
 
+If the change breaks `.pair/adoption/` or `.pair/knowledge/` structure, add a migration page under [Migrations](/docs/migrations) before merging — see [Writing Migration Pages](/docs/contributing/writing-migration-pages).
+
 ### 2. Merge your PR to main
 
 When your PR merges, the **Version workflow** (`version.yml`) detects the changeset and automatically:
