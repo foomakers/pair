@@ -48,6 +48,10 @@ UserProfile.stories.tsx (if using Storybook)
 
 ```text
 
+**Tests spanning multiple modules**: when a test exercises more than one implementation file together (e.g. an integration test driving two collaborating functions end-to-end), it does not get its own standalone file — it goes in the test file already co-located with the *root* module of that call chain, the one whose exported entry point the test is actually verifying. A test that seeds its fixture through module B but asserts on module A's behavior belongs in `A.test.ts`, not a new `A-and-b-integration.test.ts`. This keeps the co-location rule intact (one root module → one test file) instead of a proliferation of ad hoc integration-test files that duplicate coverage or drift out of sync with the modules they actually exercise.
+
+This does not apply to two other, already-common test categories that are correctly named after what they validate rather than a source module: end-to-end/page-level tests (e.g. `landing.e2e.test.ts`, testing a user flow across many files by design) and content/asset-validation tests (e.g. asserting on a generated markdown file's content, where there is no single source module to co-locate against).
+
 **Types**: Co-locate types when feature-specific:
 ```
 
