@@ -69,7 +69,8 @@ Systematic AI↔human alignment on a specific story, covering all six aspects of
    - **Gives a different answer** → record that instead.
    - **"Don't know"** → the recommendation becomes the **provisional answer**, flagged as an assumption in the synthesis.
    - **Raises a new sub-question** → insert it into the queue before continuing.
-3. **Verify**: Exactly one answer recorded per question. Never batch multiple questions in a single turn.
+3. **Never answer on the human's behalf.** The recommendation is a proposal, not a stand-in for consent — if no reply has been given yet, the turn ends there and the session waits for real input. Treating a missing reply as acceptance, or drafting what the human "would probably say," breaks the interview — grill is HITL by design, and the agent never speaks for the human's side of it.
+4. **Verify**: Exactly one answer recorded per question. Never batch multiple questions in a single turn.
 
 ### Step 4: Repeat Until Explicit Shared Understanding
 
