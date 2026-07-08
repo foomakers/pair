@@ -73,6 +73,11 @@ This folder contains guidelines for establishing solid architectural foundations
    - Build optimization strategies
    - Dependency isolation techniques
 
+9. **Context Map Maintenance** (`context-map-maintenance.md`)
+   - Inline-maintenance method for the context map (challenge, sharpen, stress-test, cross-check)
+   - Lazy, human-approved subdomain context split convention
+   - Loading and conflict-flag instructions for brainstorm/refine sessions
+
 ## 🔄 Decision Support
 
 ### Pattern Selection Decision Tree

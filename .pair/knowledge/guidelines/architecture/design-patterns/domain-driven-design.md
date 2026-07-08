@@ -61,6 +61,7 @@ src/
 
 - **[Strategic Subdomain Definition](strategic-subdomain-definition.md)** - Comprehensive subdomain identification and classification guide
 - **[Bounded Contexts](bounded-contexts.md)** - Technical implementation boundaries for subdomains
+- **[Context Map Maintenance](context-map-maintenance.md)** - Inline maintenance of the ubiquitous language, entities, and common rules artifact
 - **[System Design README](README.md)** - Overall system design principles
 - **[Decision Records](../decision-frameworks/README.md)** - ADR process for DDD decisions
 - **[Code Design](../../code-design/README.md)** - Implementation patterns for DDD

@@ -14,7 +14,10 @@ While the [Knowledge Base](/docs/concepts/knowledge-base) provides general guide
   product/                      # Product decisions
     adopted/
       PRD.md                    # Product Requirements Document
+    context-map.md              # Domain glossary, entities, common rules (optional)
     subdomain/                  # Domain-Driven Design subdomains
+      <slug>.md                 # Subdomain catalog entry
+      <slug>.context.md         # Lazy per-subdomain context split (optional)
 
   tech/                         # Technical decisions
     adopted/
@@ -67,6 +70,21 @@ It also hosts an optional `## State Mapping` section — only needed if your boa
 ### PRD.md
 
 Your Product Requirements Document — the source of truth for what the project does, who it serves, and what features are prioritized (P0/P1/P2).
+
+### context-map.md
+
+An optional, living domain model: dispatcher + subdomain index + core (glossary, entities, common rules and invariants). Unlike the other adoption files, it isn't scaffolded during bootstrap — it's created and updated inline the first time a brainstorm or refine session sharpens a domain term, per the [Context Map Maintenance](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/architecture/design-patterns/context-map-maintenance.md) guideline. There's no dedicated skill for it — no ceremony, just an embedded step in the skills that already touch domain scope.
+
+```text
+- Subdomain Index: which subdomains have their own context file, classification, Volatility (mirrored from the subdomain catalog)
+- Glossary: ubiquitous language, one row per term
+- Entities: domain entities and aggregates
+- Common Rules and Invariants: domain-wide business rules
+```
+
+The unit is the **subdomain**, not a separate "domain" taxonomy. When a subdomain's inline context grows too large, the session proposes moving it to a co-located `subdomain/<slug>.context.md` file — lazy, and only after you approve. The map keeps the index entry and the domain-wide rules; everything subdomain-specific (glossary, entities) moves to the sibling file.
+
+If the file doesn't exist, AI assistants skip the domain check entirely — this is the expected state for most projects, not an error.
 
 ## How They Get Created
 
