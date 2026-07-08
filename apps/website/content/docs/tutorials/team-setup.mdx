@@ -137,6 +137,8 @@ Edit `.pair/adoption/tech/way-of-working.md` to define your team's quality gate:
 
 Every developer and every AI assistant will run these checks before committing.
 
+Prefer automation over hand-editing: `/pair-capability-setup-gates` provisions shared lint/format config packages (per-type overrides for backend/frontend/shared-lib workspaces) plus pre-commit + pre-push hooks, defaulting to husky. See the [shared config packages guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/code-design/quality-standards/shared-config-packages.md) for the pattern — pair's own `tools/*` is the reference implementation. Override the hook manager by recording your choice in `way-of-working.md` before running the skill.
+
 ### 7. Record key decisions
 
 For significant decisions that need rationale, create Architecture Decision Records (`/pair-next` may suggest this when decisions are pending):

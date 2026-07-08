@@ -1,6 +1,6 @@
 ---
 name: setup-gates
-description: "Configures CI/CD quality gates per quality-assurance guidelines, producing pipeline configuration for the adopted tech stack. Reads existing gate config from way-of-working. Idempotent: detects existing configuration, confirms rather than re-configuring."
+description: "Configures CI/CD quality gates per quality-assurance guidelines, producing pipeline configuration for the adopted tech stack. Provisions shared lint/format config packages and husky pre-commit/pre-push hooks. Reads existing gate config from way-of-working. Idempotent: detects existing configuration, confirms rather than re-configuring."
 version: 0.4.1
 author: Foomakers
 ---
@@ -27,13 +27,16 @@ Configure CI/CD quality gates for the project. Reads quality assurance guideline
 
 1. **Check**: Read [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → look for Quality Gates section and Custom Gate Registry.
 2. **Check**: Scan for existing CI/CD pipeline files (`.github/workflows/`, `.gitlab-ci.yml`, `Jenkinsfile`, etc.).
-3. **Branch**:
-   - **Gates fully configured** (Quality Gates section + Custom Gate Registry + pipeline files exist) → present current config:
+3. **Check**: Scan for existing shared lint/format config packages (e.g. `tools/*-config`, `packages/*-config`) and hook manager setup (`.husky/`, `lefthook.yml`, `.git/hooks/` via `simple-git-hooks`, etc.).
+4. **Branch**:
+   - **Gates fully configured** (Quality Gates section + Custom Gate Registry + pipeline files + shared config/hooks exist) → present current config:
 
      > Quality gates already configured:
      > - Quality gate command: `[command]`
      > - Custom gates: [N gates listed]
      > - CI/CD pipeline: [file(s)]
+     > - Shared config packages: [package list | none found]
+     > - Hook manager: [husky | override | none found]
      >
      > Update configuration? (Only if developer explicitly requests.)
 
@@ -47,6 +50,7 @@ Configure CI/CD quality gates for the project. Reads quality assurance guideline
 1. **Act**: Read quality assurance guidelines:
    - [quality-assurance.md](../../../.pair/knowledge/guidelines/technical-standards/git-workflow/quality-assurance.md) — gate types and checklists
    - [quality-gates.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/quality-gates.md) — gate framework and registry format
+   - [shared-config-packages.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/shared-config-packages.md) — shared-config-package pattern, per-type overrides, `tools/*` reference implementation
 2. **Act**: Read adopted tech stack:
    - [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — languages, test framework, linter, formatter
    - [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) — existing process
@@ -96,12 +100,29 @@ Configure CI/CD quality gates for the project. Reads quality assurance guideline
    - Other → document commands for manual pipeline setup
 3. **Verify**: Configuration files written.
 
-### Step 5: Record Decision
+### Step 5: Provision Shared Lint/Format Config + Hooks
+
+1. **Check**: For each config already detected in Step 1 that is not conflicting, skip provisioning it and note it as already present.
+2. **Act**: Following [shared-config-packages.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/shared-config-packages.md), provision one shared config package per lint/format concern the adopted tech stack uses (lint, format, types, and any project-specific linters). Split each into base + per-type presets (backend/frontend/shared-lib) only where the tool's rules actually diverge by runtime — pair's own `tools/*` is the reference implementation.
+3. **Act**: Install the hook manager and wire the hooks:
+   - **Check Step 1.3 first**: if a hook manager was already detected on disk, it is the de facto override — use it, record it in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) if not already recorded, and skip installing husky.
+   - **Otherwise, husky is the KB default** (decision D21/Q11). Use it unless [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) records a hook-manager override — if it does, use the overridden tool instead.
+   - `.husky/pre-commit` (or equivalent) — fast local checks (lint and/or type-check).
+   - `.husky/pre-push` (or equivalent) — pre-push lint (at minimum the adopted lint command; may be the full quality-gate command).
+   - Wire the install step (e.g. `"prepare": "husky install"`) into the root `package.json`.
+4. **Verify**: Run the adopted lint command — it passes out of the box (AC3). Confirm the hook files are executable and fire on a trial commit/push.
+
+**Edge Cases:**
+
+- **Existing conflicting config** (a workspace already has its own lint/format config file that would be replaced): ask before overwriting — "Found existing `[file]`. Replace with the shared config, keep it, or merge?" Never overwrite silently.
+- **Non-JS project**: the shared-config-package mechanism (`extends`/`require`/package-manager fields) is JS/TS-specific. Degrade to documenting the pattern generically (see shared-config-packages.md § Non-JS / Polyglot Projects) and pointing to the ecosystem's equivalent config package; skip file generation.
+
+### Step 6: Record Decision
 
 1. **Act**: Compose `/record-decision`:
    - `$type: non-architectural`
    - `$topic: quality-gate-configuration`
-   - `$summary: "Quality gates configured: [gate list]. Command: [command]. CI: [pipeline type]."`
+   - `$summary: "Quality gates configured: [gate list]. Command: [command]. CI: [pipeline type]. Shared config packages: [list]. Hook manager: [husky | override]."`
 2. **Verify**: Decision recorded.
 
 ## Output Format
@@ -113,6 +134,8 @@ GATE CONFIGURATION COMPLETE:
 ├── CI:              [N gates configured]
 ├── Pre-production:  [N gates configured | N/A]
 ├── Pipeline:        [file path | manual]
+├── Shared configs:  [package list | N/A — non-JS, documented pointer only]
+├── Hooks:           [husky pre-commit + pre-push | override: <tool> | N/A]
 ├── Adoption:        [way-of-working.md — updated]
 ├── Record:          [ADL path — created]
 └── Status:          [Complete | Confirmed existing | Updated]
@@ -135,10 +158,12 @@ When invoked **independently**:
 - If tech-stack.md is not found, ask developer for tooling choices to generate appropriate gate commands.
 - If `/record-decision` is not installed, warn and skip decision recording.
 - If no CI/CD platform is detectable, document gate commands for manual execution and skip pipeline file generation.
+- If the project is not JS/TS, document the shared-config-package pattern generically (see [shared-config-packages.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/shared-config-packages.md) § Non-JS / Polyglot Projects) and skip config-file generation — point to the ecosystem's equivalent shared config package.
 
 ## Notes
 
-- This skill **modifies files** — it writes to way-of-working.md and creates/updates CI/CD pipeline configuration.
-- **Idempotent**: re-invocation on an already-configured project confirms the existing configuration. Update only on explicit developer request.
+- This skill **modifies files** — it writes to way-of-working.md, creates/updates CI/CD pipeline configuration, and provisions shared lint/format config packages + hook manager files (`.husky/` by default).
+- **Idempotent**: re-invocation on an already-configured project confirms the existing configuration, including already-provisioned shared configs and hooks. Update only on explicit developer request. If a conflicting local config is found, ask before overwriting — never overwrite silently.
 - Gate commands must be executable in the project's development environment. Verify commands exist before writing.
 - Custom Gate Registry format follows the table schema from [quality-gates.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/quality-gates.md): Order, Gate, Command, Scope Key, Required, Description.
+- **Hook manager default**: husky (decision D21/Q11). Adoption can override — record the override in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) and this skill reads it before provisioning.
