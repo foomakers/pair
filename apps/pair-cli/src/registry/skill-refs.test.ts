@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops'
 import type { SkillNameMap } from '@pair/content-ops'
-import { rewriteSkillRefsInTarget, applySkillRefsToNonSkillRegistries } from './skill-refs'
+import {
+  rewriteSkillRefsInTarget,
+  applySkillRefsToNonSkillRegistries,
+  detectOrphanedSkillReferences,
+  resolveSkillNameManifestPath,
+  reconcileSkillNameRegistry,
+} from './skill-refs'
 import type { RegistryConfig } from './resolver'
 
 describe('rewriteSkillRefsInTarget', () => {
@@ -206,5 +212,189 @@ describe('applySkillRefsToNonSkillRegistries', () => {
 
     const result = await fs.readFile('/project/AGENTS.md')
     expect(result).toBe('# AGENTS\n\nNo skills.')
+  })
+})
+
+describe('resolveSkillNameManifestPath', () => {
+  it('resolves under .pair/ relative to baseTarget', () => {
+    const fs = new InMemoryFileSystemService({}, '/project', '/project')
+    expect(resolveSkillNameManifestPath(fs, '/project')).toBe(
+      '/project/.pair/.skill-name-map.json',
+    )
+  })
+
+  it('is outside the knowledge and adoption registry targets', () => {
+    const fs = new InMemoryFileSystemService({}, '/project', '/project')
+    const manifestPath = resolveSkillNameManifestPath(fs, '/project')
+    expect(manifestPath.startsWith('/project/.pair/knowledge')).toBe(false)
+    expect(manifestPath.startsWith('/project/.pair/adoption')).toBe(false)
+  })
+})
+
+describe('detectOrphanedSkillReferences', () => {
+  const noopLog = () => {}
+
+  it('does nothing when there are no orphaned names', async () => {
+    const fs = new InMemoryFileSystemService({ '/project/AGENTS.md': '# AGENTS' }, '/project', '/project')
+    const registries: Record<string, RegistryConfig> = {
+      agents: {
+        source: 'AGENTS.md',
+        behavior: 'mirror',
+        description: 'Agents',
+        include: [],
+        flatten: false,
+        targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+      },
+    }
+
+    await detectOrphanedSkillReferences({ fs, baseTarget: '/project', pushLog: noopLog }, registries, [])
+
+    // no-op — nothing to assert beyond "did not throw"
+  })
+
+  it('warns when an orphaned installed name is still referenced', async () => {
+    const fs = new InMemoryFileSystemService(
+      { '/project/AGENTS.md': '# AGENTS\n\nRun /pair-removed for legacy setup.' },
+      '/project',
+      '/project',
+    )
+    const registries: Record<string, RegistryConfig> = {
+      agents: {
+        source: 'AGENTS.md',
+        behavior: 'mirror',
+        description: 'Agents',
+        include: [],
+        flatten: false,
+        targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+      },
+    }
+
+    const warnings: string[] = []
+    const pushLog = (level: string, message: string) => {
+      if (level === 'warn') warnings.push(message)
+    }
+
+    await detectOrphanedSkillReferences(
+      { fs, baseTarget: '/project', pushLog },
+      registries,
+      ['pair-removed'],
+    )
+
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('/pair-removed')
+    expect(warnings[0]).toContain('AGENTS.md')
+
+    // content is left untouched
+    const content = await fs.readFile('/project/AGENTS.md')
+    expect(content).toBe('# AGENTS\n\nRun /pair-removed for legacy setup.')
+  })
+
+  it('does not warn when the orphaned name only appears in a fenced code block', async () => {
+    const fs = new InMemoryFileSystemService(
+      { '/project/AGENTS.md': ['# AGENTS', '```', '/pair-removed', '```'].join('\n') },
+      '/project',
+      '/project',
+    )
+    const registries: Record<string, RegistryConfig> = {
+      agents: {
+        source: 'AGENTS.md',
+        behavior: 'mirror',
+        description: 'Agents',
+        include: [],
+        flatten: false,
+        targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+      },
+    }
+
+    const warnings: string[] = []
+    const pushLog = (level: string, message: string) => {
+      if (level === 'warn') warnings.push(message)
+    }
+
+    await detectOrphanedSkillReferences(
+      { fs, baseTarget: '/project', pushLog },
+      registries,
+      ['pair-removed'],
+    )
+
+    expect(warnings).toHaveLength(0)
+  })
+
+  it('does not throw when target does not exist', async () => {
+    const fs = new InMemoryFileSystemService({}, '/project', '/project')
+    const registries: Record<string, RegistryConfig> = {
+      agents: {
+        source: 'AGENTS.md',
+        behavior: 'mirror',
+        description: 'Agents',
+        include: [],
+        flatten: false,
+        targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+      },
+    }
+
+    await expect(
+      detectOrphanedSkillReferences(
+        { fs, baseTarget: '/project', pushLog: noopLog },
+        registries,
+        ['pair-removed'],
+      ),
+    ).resolves.not.toThrow()
+  })
+})
+
+describe('reconcileSkillNameRegistry', () => {
+  // #238 finding: when this run's skillNameMap is empty — not just "no
+  // manifest yet" but also "flatten/prefix was disabled for every registry
+  // this run" — reconcile is a full no-op (no orphan warnings, no rewrite,
+  // no manifest write), even though a previous manifest exists.
+  //
+  // This is intentional, not an oversight: with an empty current map we
+  // cannot tell "skill removed from the registry" apart from "skill still
+  // present but now installed under its unprefixed name" (the latter never
+  // gets a skillNameMap entry when transforms are off — see
+  // `hasNamingTransforms` in copyPathOps.ts). Attempting orphan detection
+  // from the stale manifest alone would flag every previously-renamed skill
+  // as "removed", which is actively misleading for the common case where it
+  // is still installed, just unprefixed. No-op is the safer failure mode.
+  it('is a no-op when the current run has no renames, even with a stale manifest', async () => {
+    const previousManifest = JSON.stringify({ version: 1, skills: { next: 'pair-process-next' } })
+    const fs = new InMemoryFileSystemService(
+      {
+        '/project/AGENTS.md': '# AGENTS\n\nRun /pair-process-next to get started.\n',
+        '/project/.pair/.skill-name-map.json': previousManifest,
+      },
+      '/project',
+      '/project',
+    )
+
+    const registries: Record<string, RegistryConfig> = {
+      agents: {
+        source: 'AGENTS.md',
+        behavior: 'mirror',
+        description: 'Agents',
+        include: [],
+        flatten: false,
+        targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+      },
+    }
+
+    const warnings: string[] = []
+    const pushLog = (level: string, message: string) => {
+      if (level === 'warn') warnings.push(message)
+    }
+
+    await reconcileSkillNameRegistry({ fs, baseTarget: '/project', pushLog }, registries, new Map())
+
+    // No orphan warning — "pair-process-next" is not misreported as removed.
+    expect(warnings).toHaveLength(0)
+
+    // Non-skill registry content is left untouched (no rewrite attempted).
+    const agents = await fs.readFile('/project/AGENTS.md')
+    expect(agents).toBe('# AGENTS\n\nRun /pair-process-next to get started.\n')
+
+    // The stale manifest is left as recorded, not overwritten with an empty map.
+    const manifest = await fs.readFile('/project/.pair/.skill-name-map.json')
+    expect(manifest).toBe(previousManifest)
   })
 })

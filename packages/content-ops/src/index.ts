@@ -55,8 +55,17 @@ export { syncFrontmatter } from './ops/frontmatter-transform'
 export {
   rewriteSkillReferences,
   buildSkillNameMap,
+  findSkillReferences,
   type SkillNameMap,
 } from './ops/skill-reference-rewriter'
+export {
+  readSkillNameManifest,
+  writeSkillNameManifest,
+  buildTransitionMap,
+  findOrphanedInstalledNames,
+  mergeSkillNameMaps,
+  type SkillNameManifest,
+} from './ops/skill-name-manifest'
 export { validatePathOps } from './ops/validatePathOps'
 export {
   processFilesWithLinkReplacements,

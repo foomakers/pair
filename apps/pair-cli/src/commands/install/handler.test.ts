@@ -775,3 +775,102 @@ describe('install — Bug 5: skill ref rewrite with agents-before-skills order',
     expect(agentsContent).not.toMatch(/(?<![a-z-])\/implement(?![a-z-])/)
   })
 })
+
+describe('#238: flatten+prefix pipeline for external KB and collision detection', () => {
+  const moduleDir = '/project'
+  const datasetSrc = `${moduleDir}/packages/knowledge-hub/dataset`
+
+  test('AC5: external KB installed via local --source path applies the same flatten/prefix/rewrite pipeline', async () => {
+    const externalKbPath = '/external/kb'
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/package.json`]: JSON.stringify({
+          name: 'test-project',
+          version: '0.1.0',
+        }),
+        [`${moduleDir}/config.json`]: JSON.stringify({
+          asset_registries: {
+            skills: {
+              source: '.skills',
+              behavior: 'mirror',
+              flatten: true,
+              prefix: 'ext',
+              description: 'Agent skills',
+              targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+            },
+            agents: {
+              source: 'AGENTS.md',
+              behavior: 'mirror',
+              description: 'AI agents guidance',
+              targets: [{ path: 'AGENTS.md', mode: 'canonical' }],
+            },
+          },
+        }),
+        // Minimal nested external KB — standard `.skills/<type>/<name>/` layout
+        [`${externalKbPath}/AGENTS.md`]: '# AGENTS\n\nRun /next for the external KB.\n',
+        [`${externalKbPath}/.skills/catalog/next/SKILL.md`]: '---\nname: next\n---\n# /next\n',
+      },
+      moduleDir,
+      moduleDir,
+    )
+
+    const installConfig: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'local',
+      path: externalKbPath,
+      offline: true,
+      kb: true,
+    }
+    await handleInstallCommand(installConfig, fs)
+
+    // Flattened + prefixed exactly like the official dataset pipeline
+    await expect(
+      fs.exists(`${moduleDir}/.claude/skills/ext-catalog-next/SKILL.md`),
+    ).resolves.toBe(true)
+    const skillContent = await fs.readFile(`${moduleDir}/.claude/skills/ext-catalog-next/SKILL.md`)
+    expect(skillContent).toContain('name: ext-catalog-next')
+
+    // Cross-registry rewrite applied without any source-side restructuring
+    const agentsContent = await fs.readFile(`${moduleDir}/AGENTS.md`)
+    expect(agentsContent).toContain('/ext-catalog-next')
+  })
+
+  test('name collision after flattening fails install with an explicit error', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${moduleDir}/package.json`]: JSON.stringify({
+          name: 'test-project',
+          version: '0.1.0',
+        }),
+        [`${moduleDir}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${moduleDir}/config.json`]: JSON.stringify({
+          asset_registries: {
+            skills: {
+              source: '.skills',
+              behavior: 'mirror',
+              flatten: true,
+              description: 'Agent skills',
+              targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+            },
+          },
+        }),
+        // Two distinct source paths that flatten to the same target name
+        [`${datasetSrc}/.skills/a/b/SKILL.md`]: '# Skill 1',
+        [`${datasetSrc}/.skills/a-b/SKILL.md`]: '# Skill 2',
+      },
+      moduleDir,
+      moduleDir,
+    )
+
+    const installConfig: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await expect(handleInstallCommand(installConfig, fs)).rejects.toThrow(/collision/i)
+  })
+})

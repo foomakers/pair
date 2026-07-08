@@ -3,6 +3,7 @@ import {
   rewriteSkillReferences,
   buildSkillNameMap,
   rewriteSkillReferencesInFiles,
+  findSkillReferences,
 } from './skill-reference-rewriter'
 import { InMemoryFileSystemService } from '../test-utils'
 
@@ -122,6 +123,108 @@ describe('rewriteSkillReferences', () => {
   it('replaces reference followed by colon', () => {
     const input = 'run /next:'
     expect(rewriteSkillReferences(input, map)).toBe('run /pair-next:')
+  })
+
+  describe('fenced code blocks (AC6)', () => {
+    it('leaves a fenced code block referencing a skill name untouched', () => {
+      const input = ['Run `/next` to start.', '```', '/next', '```', 'Then run /implement.'].join(
+        '\n',
+      )
+      expect(rewriteSkillReferences(input, map)).toBe(
+        ['Run `/pair-next` to start.', '```', '/next', '```', 'Then run /pair-process-implement.'].join(
+          '\n',
+        ),
+      )
+    })
+
+    it('leaves a fenced block with a language tag and multiple lines untouched', () => {
+      const input = [
+        '```text',
+        'pair install',
+        '/next',
+        '/implement',
+        '```',
+        'Compose /next.',
+      ].join('\n')
+      expect(rewriteSkillReferences(input, map)).toBe(
+        ['```text', 'pair install', '/next', '/implement', '```', 'Compose /pair-next.'].join(
+          '\n',
+        ),
+      )
+    })
+
+    it('handles a tilde-fenced code block', () => {
+      const input = ['~~~', '/next', '~~~', 'Run /next.'].join('\n')
+      expect(rewriteSkillReferences(input, map)).toBe(
+        ['~~~', '/next', '~~~', 'Run /pair-next.'].join('\n'),
+      )
+    })
+
+    it('rewrites prose again after a fence closes', () => {
+      const input = ['```', '/next', '```', 'Run /next after the fence.'].join('\n')
+      expect(rewriteSkillReferences(input, map)).toBe(
+        ['```', '/next', '```', 'Run /pair-next after the fence.'].join('\n'),
+      )
+    })
+
+    it('still rewrites inline single-backtick code spans (not a fence)', () => {
+      const input = 'Composes `/verify-quality` inline.'
+      expect(rewriteSkillReferences(input, map)).toBe(
+        'Composes `/pair-capability-verify-quality` inline.',
+      )
+    })
+
+    it('treats an unterminated fence as fenced through end of content', () => {
+      const input = ['```', '/next', 'still inside /implement'].join('\n')
+      expect(rewriteSkillReferences(input, map)).toBe(input)
+    })
+
+    it('does not treat a backtick-containing info string as a fence-open (CommonMark)', () => {
+      // Per CommonMark, a backtick-fence's info string must itself be
+      // backtick-free; a line like this never opens a real fence, so
+      // rewriting must continue normally afterward instead of being
+      // suppressed for the rest of the file.
+      const input = ['intro line', '```inline `code` marker', 'Run /next to start.'].join('\n')
+      expect(rewriteSkillReferences(input, map)).toBe(
+        ['intro line', '```inline `code` marker', 'Run /pair-next to start.'].join('\n'),
+      )
+    })
+
+    it('still treats a tilde-fence with a backtick in its info string as fenced', () => {
+      // Tilde fences have no backtick restriction on the info string.
+      const input = ['~~~lang `with backtick`', '/next', '~~~', 'Run /next after.'].join('\n')
+      expect(rewriteSkillReferences(input, map)).toBe(
+        ['~~~lang `with backtick`', '/next', '~~~', 'Run /pair-next after.'].join('\n'),
+      )
+    })
+  })
+})
+
+describe('findSkillReferences', () => {
+  it('returns empty array when no names given', () => {
+    expect(findSkillReferences('/next', [])).toEqual([])
+  })
+
+  it('finds a prose invocation', () => {
+    expect(findSkillReferences('run /old-name here', ['old-name'])).toEqual(['old-name'])
+  })
+
+  it('finds a backtick-wrapped invocation', () => {
+    expect(findSkillReferences('`/old-name`', ['old-name'])).toEqual(['old-name'])
+  })
+
+  it('does not find a name only present inside a fenced code block', () => {
+    const content = ['```', '/old-name', '```'].join('\n')
+    expect(findSkillReferences(content, ['old-name'])).toEqual([])
+  })
+
+  it('does not match a name that is not present', () => {
+    expect(findSkillReferences('nothing here', ['old-name'])).toEqual([])
+  })
+
+  it('finds multiple distinct names', () => {
+    const found = findSkillReferences('/a and /b', ['a', 'b', 'c'])
+    expect(found.sort()).toEqual(['a', 'b'])
   })
 })
 
