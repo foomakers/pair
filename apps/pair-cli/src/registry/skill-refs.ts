@@ -174,5 +174,9 @@ export async function reconcileSkillNameRegistry(
   await applySkillRefsToNonSkillRegistries(context, registries, combinedMap)
   await detectOrphanedSkillReferences(context, registries, orphanedNames)
 
+  // Not atomic with the two passes above: if either throws partway through, the
+  // manifest is left un-updated for a run that partially applied its rewrites.
+  // Low impact by design — rewriting is idempotent, so the next successful run
+  // re-diffs against the still-valid (if stale) previous map and self-corrects.
   await writeSkillNameManifest(fs, manifestPath, skillNameMap)
 }

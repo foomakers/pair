@@ -122,11 +122,17 @@ export function rewriteSkillReferences(content: string, skillNameMap: SkillNameM
   if (skillNameMap.size === 0) return content
 
   const sorted = [...skillNameMap.entries()].sort((a, b) => b[0].length - a[0].length)
+  // Compile each pattern once per call, not once per line — String.replace() resets a
+  // global regex's lastIndex to 0 at the start of every call, so reusing the same
+  // compiled RegExp across lines is safe (unlike reusing it across .test() calls).
+  const compiled = sorted.map(
+    ([oldName, newName]) => [buildReferenceRegex(oldName), newName] as const,
+  )
 
   return transformOutsideFences(content, line => {
     let result = line
-    for (const [oldName, newName] of sorted) {
-      result = result.replace(buildReferenceRegex(oldName), `/${newName}`)
+    for (const [pattern, newName] of compiled) {
+      result = result.replace(pattern, `/${newName}`)
     }
     return result
   })

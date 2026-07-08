@@ -555,6 +555,40 @@ describe('copyPathOps - flatten and prefix', () => {
       )
     })
 
+    it('does not delete a root-level (non-nested) source file on a second mirror run', async () => {
+      // Regression: cleanupStaleTransformedEntries built its "expected" set only from
+      // dirMappingFiles, which copyFileWithTransform only populates for files under a
+      // subdirectory (dir !== '.'). A file copied directly from the source root was never
+      // registered as expected, so a second mirror run would delete it as "stale".
+      const fileService = new InMemoryFileSystemService(
+        {
+          '/dataset/source/README.md': '# Root-level file, no subdirectory',
+          '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
+        },
+        '/',
+        '/',
+      )
+
+      const runOnce = () =>
+        copyPathOps({
+          fileService,
+          source: 'source',
+          target: 'target',
+          datasetRoot: '/dataset',
+          options: { flatten: true, prefix: 'pair', defaultBehavior: 'mirror', targets: [] },
+        })
+
+      await runOnce()
+      await expect(fileService.exists('/dataset/target/README.md')).resolves.toBe(true)
+
+      // Second run must be idempotent — the root-level file must survive.
+      await runOnce()
+      await expect(fileService.exists('/dataset/target/README.md')).resolves.toBe(true)
+      await expect(fileService.exists('/dataset/target/pair-catalog-next/SKILL.md')).resolves.toBe(
+        true,
+      )
+    })
+
     it('does not clean up stale entries when behavior is not mirror', async () => {
       const fileService = new InMemoryFileSystemService(
         {

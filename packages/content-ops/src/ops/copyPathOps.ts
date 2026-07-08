@@ -504,8 +504,10 @@ async function copyFileWithTransform(ctx: {
   destPath: string
   transformOpts: TransformOpts
   dirMappingFiles: Map<string, string[]>
+  topLevelFiles: Set<string>
 }): Promise<void> {
-  const { fileService, filePath, srcPath, destPath, transformOpts, dirMappingFiles } = ctx
+  const { fileService, filePath, srcPath, destPath, transformOpts, dirMappingFiles, topLevelFiles } =
+    ctx
   const dir = dirname(filePath)
   const fileName = filePath.slice(dir === '.' ? 0 : dir.length + 1)
   const transformedDir = dir === '.' ? null : transformPath(dir, transformOpts)
@@ -514,6 +516,13 @@ async function copyFileWithTransform(ctx: {
   await fileService.mkdir(targetDir, { recursive: true })
   const targetFilePath = join(targetDir, fileName)
   await copyFileHelper(fileService, join(srcPath, filePath), targetFilePath, 'overwrite')
+
+  if (dir === '.') {
+    // Root-level source file — has no transformed subdirectory of its own, so it's
+    // never added to dirMappingFiles. Track it separately so cleanupStaleTransformedEntries
+    // knows it's a legitimate copy, not a stale leftover (see that function's docstring).
+    topLevelFiles.add(fileName)
+  }
 
   if (dir !== '.' && transformedDir) {
     const leafName = dir.split('/').pop()!
@@ -552,6 +561,36 @@ function buildPathMapping(
 }
 
 /**
+ * Copies every file with naming transforms applied, collecting both the
+ * per-subdirectory mapping (for link rewriting, skill renames, and mirror
+ * cleanup of transformed directories) and the set of root-level file names
+ * (for mirror cleanup of files that have no subdirectory of their own).
+ */
+async function copyAllFilesWithTransform(params: {
+  fileService: FileSystemService
+  files: string[]
+  srcPath: string
+  destPath: string
+  transformOpts: TransformOpts
+}): Promise<{ dirMappingFiles: Map<string, string[]>; topLevelFiles: Set<string> }> {
+  const { fileService, files, srcPath, destPath, transformOpts } = params
+  const dirMappingFiles = new Map<string, string[]>()
+  const topLevelFiles = new Set<string>()
+  for (const filePath of files) {
+    await copyFileWithTransform({
+      fileService,
+      filePath,
+      srcPath,
+      destPath,
+      transformOpts,
+      dirMappingFiles,
+      topLevelFiles,
+    })
+  }
+  return { dirMappingFiles, topLevelFiles }
+}
+
+/**
  * Copies a directory with flatten/prefix naming transforms applied.
  * Each file's directory path (relative to source) is transformed, then
  * the file is copied to the transformed location under the target.
@@ -575,20 +614,22 @@ export async function copyDirectoryWithTransforms(params: {
 
   await fileService.mkdir(destPath, { recursive: true })
 
-  const dirMappingFiles = new Map<string, string[]>()
-  for (const filePath of files) {
-    await copyFileWithTransform({
-      fileService,
-      filePath,
-      srcPath,
-      destPath,
-      transformOpts,
-      dirMappingFiles,
-    })
-  }
+  const { dirMappingFiles, topLevelFiles } = await copyAllFilesWithTransform({
+    fileService,
+    files,
+    srcPath,
+    destPath,
+    transformOpts,
+  })
 
   if (options?.defaultBehavior === 'mirror') {
-    await cleanupStaleTransformedEntries({ fileService, destPath, dirMappingFiles, transformOpts })
+    await cleanupStaleTransformedEntries({
+      fileService,
+      destPath,
+      dirMappingFiles,
+      topLevelFiles,
+      transformOpts,
+    })
   }
 
   await rewriteLinksForTransformedDirs(params, dirMappingFiles, transformOpts)
@@ -606,24 +647,31 @@ export async function copyDirectoryWithTransforms(params: {
 
 /**
  * Removes stale top-level entries under a flatten/prefix target that no
- * longer correspond to a source directory. This is what makes `mirror`
- * behavior idempotent across renames: a removed skill's leftover flattened
- * directory is cleaned up, and a prefix change no longer leaves the old
- * prefixed directory orphaned alongside the new one.
+ * longer correspond to a source directory or a root-level source file. This
+ * is what makes `mirror` behavior idempotent across renames: a removed
+ * skill's leftover flattened directory is cleaned up, and a prefix change no
+ * longer leaves the old prefixed directory orphaned alongside the new one.
  *
  * Only top-level entries are considered — matches the granularity of the
  * non-transform `handleMirrorCleanup` and the flatten use case (one source
  * subdirectory maps to exactly one top-level target directory).
+ *
+ * `topLevelFiles` (file names copied directly from the source root, with no
+ * subdirectory of their own) must be included in `expected` alongside the
+ * transformed directory names — they're never in `dirMappingFiles` (which
+ * only tracks files under a subdirectory), so without this they'd be
+ * wrongly deleted as stale on the very next mirror run.
  */
 async function cleanupStaleTransformedEntries(params: {
   fileService: FileSystemService
   destPath: string
   dirMappingFiles: Map<string, string[]>
+  topLevelFiles: Set<string>
   transformOpts: TransformOpts
 }): Promise<void> {
-  const { fileService, destPath, dirMappingFiles, transformOpts } = params
+  const { fileService, destPath, dirMappingFiles, topLevelFiles, transformOpts } = params
 
-  const expected = new Set<string>()
+  const expected = new Set<string>(topLevelFiles)
   for (const originalSubDir of dirMappingFiles.keys()) {
     const transformedDir = transformPath(originalSubDir, transformOpts)
     expected.add(transformedDir.split('/')[0]!)
