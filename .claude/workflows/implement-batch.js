@@ -26,40 +26,57 @@ if (typeof _args === 'string') {
 const STORIES = _args?.stories ?? []
 const MAX_FIX_ROUNDS = 2
 
-// ── Schemas (compact) ────────────────────────────────────────────────────
+// ── Schemas (orchestration return-value contracts) ─────────────────────────
+// These are the compact values agents RETURN for control-flow — NOT the artifact
+// formats. The human-facing artifacts follow the KB templates, applied by the
+// agents: the PR body → `pr-template.md`, the review report → `code-review-template.md`
+// (posted as a PR comment by the reviewer), the checkpoint → `checkpoint-template.md`.
+// Where a schema field overlaps a template field it MIRRORS the template's
+// vocabulary (single source of truth) so the machine contract and the human
+// artifact cannot drift.
 const STEP_SCHEMA = {
   type: 'object',
   properties: {
     branch: { type: 'string' },
-    checkpointPath: { type: 'string' },
+    checkpointPath: { type: 'string' }, // checkpoint body follows checkpoint-template.md
     gatesPassed: { type: 'boolean' },
     summary: { type: 'string' },
   },
   required: ['gatesPassed'],
 }
 const PR_SCHEMA = {
+  // The PR BODY follows pr-template.md (authored by the agent); this is only the handle.
   type: 'object',
   properties: { prNumber: { type: 'number' }, url: { type: 'string' } },
   required: ['prNumber'],
 }
 const REVIEW_SCHEMA = {
+  // Mirrors code-review-template.md: the Overall Assessment verdict options and the
+  // Detailed Review Comments finding fields (File:Line / severity / description /
+  // recommendation). The posted report is the artifact; this is the return value.
   type: 'object',
   properties: {
-    verdict: { type: 'string', enum: ['APPROVED', 'CHANGES-REQUESTED'] },
+    // Free string mirroring code-review-template.md's "Overall Assessment" options
+    // (Approved / Approved with Comments / Request Changes / Comment Only) — NOT
+    // enum-locked, so a template vocabulary change doesn't break validation. Control
+    // flow keys on `nonActionable` + actionable count, never on specific verdict strings.
+    // (Target: derive this contract from the template via an AI-generated contract.json —
+    // see the execution-layer generalization story.)
+    verdict: { type: 'string' },
     needsHumanDecision: { type: 'boolean' },
     findings: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
-          severity: { type: 'string' },
-          location: { type: 'string' },
-          scenario: { type: 'string' },
+          location: { type: 'string' }, // File:Line
+          severity: { type: 'string' }, // Critical | Major | Minor per template (not enum-locked)
+          description: { type: 'string' }, // the issue and its impact
+          recommendation: { type: 'string' }, // suggested resolution
           // true = by-design / won't-fix: fixing it would be wrong (byte-consistent
           // with a source of truth, matches an existing convention, resolves only
-          // post-merge, etc.). Must include the justification in `scenario`.
-          // Non-actionable findings do NOT block convergence; they are surfaced to
-          // the human at the merge gate as accepted findings.
+          // post-merge, etc.). Put the justification in `description`. Non-actionable
+          // findings do NOT block convergence; surfaced to the human at the merge gate.
           nonActionable: { type: 'boolean' },
         },
       },
@@ -124,7 +141,7 @@ async function driveStory(story) {
   let accepted = []
   while (true) {
     const review = await agent(
-      `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit). For any finding that is by-design / won't-fix — fixing it would be WRONG (byte-consistent with a source of truth, matches an existing convention in the same file, resolves only after merge, etc.) — set \`nonActionable: true\` and put the justification in \`scenario\`. ${round > 0 ? `Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.` : ''} Return findings and a verdict.`,
+      `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the code-review-template vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {Critical, Major, Minor}, \`description\` (issue + impact), \`recommendation\`; verdict ∈ {Approved, Approved with Comments, Request Changes, Comment Only}. For any finding that is by-design / won't-fix — fixing it would be WRONG (byte-consistent with a source of truth, matches an existing convention in the same file, resolves only after merge, etc.) — set \`nonActionable: true\` and put the justification in \`description\`. ${round > 0 ? `Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.` : ''} Return findings and a verdict.`,
       { agentType: 'reviewer', phase: 'Review', label: `rev:${tag} r${round}`, schema: REVIEW_SCHEMA },
     )
     const findings = review?.findings ?? []
