@@ -20,6 +20,11 @@ export interface RegistryConfig {
  */
 export interface Config {
   asset_registries: Record<string, RegistryConfig>
+  /**
+   * Override for the operational "working area" path (default `.pair/working`).
+   * Excluded from every asset registry — see `resolveWorkingPathOverride` (D14).
+   */
+  working_path?: string
   [key: string]: unknown
 }
 

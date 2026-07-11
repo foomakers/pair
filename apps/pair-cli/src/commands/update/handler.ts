@@ -16,6 +16,8 @@ import {
   handleBackupRollback,
   resolveEffectiveDatasetRoot,
   writeProjectLlmsTxt,
+  resolveWorkingPathOverride,
+  resolveWorkingPath,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
@@ -43,6 +45,7 @@ type UpdateContext = {
   datasetRoot: string
   registries: Record<string, RegistryConfig>
   baseTarget: string
+  workingPath: string
   options: UpdateHandlerOptions | undefined
   pushLog: (level: LogEntry['level'], message: string) => void
   presenter: CliPresenter
@@ -65,9 +68,22 @@ export async function handleUpdateCommand(
   const presenter = options?.presenter ?? createCliPresenter(pushLog)
 
   try {
-    const { datasetRoot, registries, baseTarget } = await setupUpdateContext(fs, config, options)
+    const { datasetRoot, registries, baseTarget, workingPath } = await setupUpdateContext(
+      fs,
+      config,
+      options,
+    )
     validateUpdateContext(fs, registries, baseTarget)
-    await executeUpdate({ fs, datasetRoot, registries, baseTarget, options, pushLog, presenter })
+    await executeUpdate({
+      fs,
+      datasetRoot,
+      registries,
+      baseTarget,
+      workingPath,
+      options,
+      pushLog,
+      presenter,
+    })
   } catch (err) {
     pushLog('error', `Update failed: ${String(err)}`)
     throw err
@@ -82,6 +98,7 @@ async function setupUpdateContext(
   datasetRoot: string
   registries: Record<string, RegistryConfig>
   baseTarget: string
+  workingPath: string
 }> {
   const datasetRoot = await resolveDatasetRoot(fs, config, {
     cliVersion: options?.cliVersion,
@@ -92,13 +109,15 @@ async function setupUpdateContext(
   const configContent = loadConfigWithOverrides(fs, configOptions)
 
   const registries = extractRegistries(configContent.config)
-  const validation = validateAllRegistries(registries)
+  const workingPathOverride = resolveWorkingPathOverride(configContent.config)
+  const validation = validateAllRegistries(registries, workingPathOverride)
   if (!validation.valid) {
     throw new Error(validation.errors.join('; ') || 'Invalid registry configuration')
   }
 
   const baseTarget = options?.baseTarget || config.target || fs.currentWorkingDirectory()
-  return { datasetRoot, registries, baseTarget }
+  const workingPath = resolveWorkingPath(configContent.config, baseTarget, fs)
+  return { datasetRoot, registries, baseTarget, workingPath }
 }
 
 function validateUpdateContext(
@@ -188,10 +207,23 @@ interface UpdateRegistryCtx {
   registryName: string
   registryConfig: RegistryConfig
   baseTarget: string
+  workingPath: string
   pushLog: (level: LogEntry['level'], message: string) => void
   presenter: CliPresenter
   index: number
   total: number
+}
+
+/**
+ * Runs postCopyOps for a registry, hard-excluding the working area from
+ * secondary target distribution (D14).
+ */
+async function finalizeRegistryCopy(
+  ctx: UpdateRegistryCtx,
+  paths: { effectiveTarget: string; datasetPath: string },
+): Promise<void> {
+  const { fs, registryConfig, baseTarget, workingPath } = ctx
+  await postCopyOps({ fs, registryConfig, baseTarget, excludePaths: [workingPath], ...paths })
 }
 
 async function updateSingleRegistry(
@@ -203,6 +235,7 @@ async function updateSingleRegistry(
     registryName,
     registryConfig,
     baseTarget,
+    workingPath,
     pushLog,
     presenter,
     index,
@@ -232,10 +265,10 @@ async function updateSingleRegistry(
     source: datasetPath,
     target: effectiveTarget,
     datasetRoot: effectiveDatasetRoot,
-    options: buildCopyOptions(registryConfig),
+    options: buildCopyOptions(registryConfig, [workingPath]),
   })
 
-  await postCopyOps({ fs, registryConfig, effectiveTarget, datasetPath, baseTarget })
+  await finalizeRegistryCopy(ctx, { effectiveTarget, datasetPath })
   presenter.registryDone(registryName)
   return {
     skillNameMap: copyResult['skillNameMap'] as SkillNameMap | undefined,
@@ -244,7 +277,7 @@ async function updateSingleRegistry(
 }
 
 async function updateRegistries(context: UpdateContext): Promise<RegistryResult[]> {
-  const { fs, datasetRoot, registries, baseTarget, pushLog, presenter } = context
+  const { fs, datasetRoot, registries, baseTarget, workingPath, pushLog, presenter } = context
   const accumulatedSkillNameMap: SkillNameMap = new Map()
   const total = Object.keys(registries).length
   const startTime = Date.now()
@@ -258,6 +291,7 @@ async function updateRegistries(context: UpdateContext): Promise<RegistryResult[
       registryName,
       registryConfig,
       baseTarget,
+      workingPath,
       pushLog,
       presenter,
       index,

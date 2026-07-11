@@ -2,7 +2,7 @@ import { join, relative, dirname } from 'path/posix'
 import { Stats } from 'fs'
 import { logger, createError } from '../observability'
 import { validateSourceExists } from '../file-system/file-validations'
-import { copyFileHelper, copyDirHelper } from '../file-system'
+import { copyFileHelper, copyDirHelper, isPathExcluded } from '../file-system'
 import type { CopyDirContext } from '../file-system/file-operations'
 import { SyncOptions } from './SyncOptions'
 import { FileSystemService } from '../file-system'
@@ -190,6 +190,57 @@ async function handleFileCopyForType(params: {
  * or invalid operations are attempted
  */
 
+type PreparedCopy =
+  | { skip: true; result: CopyPathOpsResult }
+  | {
+      skip: false
+      normSource: string
+      normTarget: string
+      srcPath: string
+      destPath: string
+      defaultBehavior: Behavior
+      folderBehavior?: Record<string, Behavior>
+    }
+
+/**
+ * Resolves and validates source/target paths for a copy operation, applying
+ * the same-path skip and the hard working-area exclusion (D14) up front.
+ */
+function prepareCopyPathOperation(
+  source: string,
+  target: string,
+  datasetRoot: string,
+  options?: SyncOptions,
+): PreparedCopy {
+  const setup = setupPathOperation(source, target, datasetRoot, options)
+  if (setup.shouldSkip) return { skip: true, result: {} }
+
+  const { normSource, normTarget, srcPath, destPath, defaultBehavior, folderBehavior } = setup
+  if (!srcPath || !destPath) {
+    throw createError({
+      type: 'IO_ERROR',
+      message: 'Invalid source or destination path',
+      operation: 'setup',
+      path: srcPath || destPath || '',
+    })
+  }
+
+  if (isPathExcluded(destPath, options?.excludePaths)) {
+    logger.info(`Skipping excluded path: ${destPath}`)
+    return { skip: true, result: {} }
+  }
+
+  return {
+    skip: false,
+    normSource,
+    normTarget,
+    srcPath,
+    destPath,
+    defaultBehavior: defaultBehavior ?? 'overwrite',
+    ...(folderBehavior && { folderBehavior }),
+  }
+}
+
 export async function copyPathOps(params: CopyPathOpsParams): Promise<CopyPathOpsResult> {
   const { fileService, source, target, datasetRoot, options, skillNameMap } = params
   if (isAbsolute(source) || isAbsolute(target)) {
@@ -201,32 +252,21 @@ export async function copyPathOps(params: CopyPathOpsParams): Promise<CopyPathOp
     })
   }
   return logger.time(async () => {
-    // Setup and initial validation
-    const setup = setupPathOperation(source, target, datasetRoot, options)
-    if (setup.shouldSkip) return {}
+    const prepared = prepareCopyPathOperation(source, target, datasetRoot, options)
+    if (prepared.skip) return prepared.result
 
-    const { normSource, normTarget, srcPath, destPath, defaultBehavior, folderBehavior } = setup
-    if (!srcPath || !destPath) {
-      throw createError({
-        type: 'IO_ERROR',
-        message: 'Invalid source or destination path',
-        operation: 'setup',
-        path: srcPath || destPath || '',
-      })
-    }
-
-    const stat = await validateSourceExists(fileService, srcPath)
+    const stat = await validateSourceExists(fileService, prepared.srcPath)
     return performCopyBasedOnType(stat, {
       fileService,
-      srcPath,
-      destPath,
+      srcPath: prepared.srcPath,
+      destPath: prepared.destPath,
       source,
       target,
-      normSource,
-      normTarget,
+      normSource: prepared.normSource,
+      normTarget: prepared.normTarget,
       datasetRoot,
-      defaultBehavior: defaultBehavior ?? 'overwrite',
-      ...(folderBehavior && { folderBehavior }),
+      defaultBehavior: prepared.defaultBehavior,
+      ...(prepared.folderBehavior && { folderBehavior: prepared.folderBehavior }),
       ...(options && { options }),
       ...(skillNameMap && { skillNameMap }),
     })
@@ -295,31 +335,16 @@ async function performDirectoryCopyAndUpdate(params: {
   target: string
   options?: SyncOptions
 }) {
-  const {
-    fileService,
-    srcPath,
-    destPath,
-    normSource,
-    normTarget,
-    datasetRoot,
-    folderBehavior,
-    sourceFolderBehavior,
-    defaultBehavior,
-    source,
-    target,
-    options,
-  } = params
+  const { fileService, destPath, datasetRoot, folderBehavior, source, target, options, ...rest } =
+    params
 
   await performDirectoryCopy({
+    ...rest,
     fileService,
-    srcPath,
     destPath,
-    normSource,
-    normTarget,
     datasetRoot,
     ...(folderBehavior && { folderBehavior }),
-    sourceFolderBehavior,
-    defaultBehavior,
+    ...(options?.excludePaths && { excludePaths: options.excludePaths }),
   })
 
   await updateLinksAfterDirectoryCopy({
@@ -375,6 +400,7 @@ async function performDirectoryCopy(params: {
   folderBehavior?: Record<string, Behavior>
   sourceFolderBehavior: Behavior
   defaultBehavior: Behavior
+  excludePaths?: string[]
 }) {
   const {
     fileService,
@@ -386,12 +412,13 @@ async function performDirectoryCopy(params: {
     folderBehavior,
     sourceFolderBehavior,
     defaultBehavior,
+    excludePaths,
   } = params
   await fileService.mkdir(destPath, { recursive: true })
   validateSubfolderOperation({ srcPath, destPath, normSource, normTarget, operation: 'copy' })
 
   if (sourceFolderBehavior === 'mirror') {
-    await handleMirrorCleanup(fileService, srcPath, destPath)
+    await handleMirrorCleanup(fileService, srcPath, destPath, excludePaths)
   }
 
   await copyDirectoryContents({
@@ -401,6 +428,7 @@ async function performDirectoryCopy(params: {
     datasetRoot,
     ...(folderBehavior && { folderBehavior }),
     defaultBehavior,
+    ...(excludePaths && { excludePaths }),
   })
 
   logger.info(`Copied contents of ${srcPath} -> ${destPath}`)
@@ -413,8 +441,17 @@ async function copyDirectoryContents(params: {
   datasetRoot: string
   folderBehavior?: Record<string, Behavior>
   defaultBehavior: Behavior
+  excludePaths?: string[]
 }) {
-  const { fileService, srcPath, destPath, datasetRoot, folderBehavior, defaultBehavior } = params
+  const {
+    fileService,
+    srcPath,
+    destPath,
+    datasetRoot,
+    folderBehavior,
+    defaultBehavior,
+    excludePaths,
+  } = params
 
   try {
     const copyContext: CopyDirContext = {
@@ -424,6 +461,7 @@ async function copyDirectoryContents(params: {
       defaultBehavior,
       datasetRoot,
       ...(folderBehavior && { folderBehavior }),
+      ...(excludePaths && { excludePaths }),
     }
     await copyDirHelper(copyContext)
   } catch (err) {
@@ -505,38 +543,91 @@ async function copyFileWithTransform(ctx: {
   transformOpts: TransformOpts
   dirMappingFiles: Map<string, string[]>
   topLevelFiles: Set<string>
+  excludePaths?: string[]
 }): Promise<void> {
-  const { fileService, filePath, srcPath, destPath, transformOpts, dirMappingFiles, topLevelFiles } =
-    ctx
+  const {
+    fileService,
+    filePath,
+    srcPath,
+    destPath,
+    transformOpts,
+    dirMappingFiles,
+    topLevelFiles,
+    excludePaths,
+  } = ctx
   const dir = dirname(filePath)
   const fileName = filePath.slice(dir === '.' ? 0 : dir.length + 1)
   const transformedDir = dir === '.' ? null : transformPath(dir, transformOpts)
   const targetDir = transformedDir ? join(destPath, transformedDir) : destPath
+  const targetFilePath = join(targetDir, fileName)
+
+  // Hard working-area exclusion (D14): defense-in-depth guard mirroring
+  // copyDirHelper's per-entry check, so the transform copy path can never write
+  // into an excluded area even if a future caller routes one here.
+  if (isPathExcluded(targetFilePath, excludePaths)) {
+    logger.info(`Skipping excluded path: ${targetFilePath}`)
+    return
+  }
 
   await fileService.mkdir(targetDir, { recursive: true })
-  const targetFilePath = join(targetDir, fileName)
   await copyFileHelper(fileService, join(srcPath, filePath), targetFilePath, 'overwrite')
+
+  await trackTransformedFile({
+    fileService,
+    dir,
+    fileName,
+    transformedDir,
+    targetFilePath,
+    dirMappingFiles,
+    topLevelFiles,
+  })
+}
+
+/**
+ * Post-copy bookkeeping for a transformed file: syncs the frontmatter `name`
+ * when a subdirectory was renamed, and records the file in either
+ * `dirMappingFiles` (files under a subdirectory) or `topLevelFiles` (root-level
+ * source files) so link rewriting and mirror cleanup can see it.
+ */
+async function trackTransformedFile(ctx: {
+  fileService: FileSystemService
+  dir: string
+  fileName: string
+  transformedDir: string | null
+  targetFilePath: string
+  dirMappingFiles: Map<string, string[]>
+  topLevelFiles: Set<string>
+}): Promise<void> {
+  const {
+    fileService,
+    dir,
+    fileName,
+    transformedDir,
+    targetFilePath,
+    dirMappingFiles,
+    topLevelFiles,
+  } = ctx
 
   if (dir === '.') {
     // Root-level source file — has no transformed subdirectory of its own, so it's
     // never added to dirMappingFiles. Track it separately so cleanupStaleTransformedEntries
     // knows it's a legitimate copy, not a stale leftover (see that function's docstring).
     topLevelFiles.add(fileName)
+    return
   }
+  if (!transformedDir) return
 
-  if (dir !== '.' && transformedDir) {
-    const leafName = dir.split('/').pop()!
-    if (leafName !== transformedDir) {
-      const content = await fileService.readFile(targetFilePath)
-      const synced = syncFrontmatter(content, { from: leafName, to: transformedDir })
-      if (synced !== content) {
-        await fileService.writeFile(targetFilePath, synced)
-      }
+  const leafName = dir.split('/').pop()!
+  if (leafName !== transformedDir) {
+    const content = await fileService.readFile(targetFilePath)
+    const synced = syncFrontmatter(content, { from: leafName, to: transformedDir })
+    if (synced !== content) {
+      await fileService.writeFile(targetFilePath, synced)
     }
-
-    if (!dirMappingFiles.has(dir)) dirMappingFiles.set(dir, [])
-    dirMappingFiles.get(dir)!.push(targetFilePath)
   }
+
+  if (!dirMappingFiles.has(dir)) dirMappingFiles.set(dir, [])
+  dirMappingFiles.get(dir)!.push(targetFilePath)
 }
 
 /**
@@ -572,8 +663,9 @@ async function copyAllFilesWithTransform(params: {
   srcPath: string
   destPath: string
   transformOpts: TransformOpts
+  excludePaths?: string[]
 }): Promise<{ dirMappingFiles: Map<string, string[]>; topLevelFiles: Set<string> }> {
-  const { fileService, files, srcPath, destPath, transformOpts } = params
+  const { fileService, files, srcPath, destPath, transformOpts, excludePaths } = params
   const dirMappingFiles = new Map<string, string[]>()
   const topLevelFiles = new Set<string>()
   for (const filePath of files) {
@@ -585,6 +677,7 @@ async function copyAllFilesWithTransform(params: {
       transformOpts,
       dirMappingFiles,
       topLevelFiles,
+      ...(excludePaths && { excludePaths }),
     })
   }
   return { dirMappingFiles, topLevelFiles }
@@ -595,6 +688,12 @@ async function copyAllFilesWithTransform(params: {
  * Each file's directory path (relative to source) is transformed, then
  * the file is copied to the transformed location under the target.
  */
+function buildTransformOpts(options?: SyncOptions): TransformOpts {
+  const flatten = options?.flatten ?? false
+  const prefix = options?.prefix
+  return prefix ? { flatten, prefix } : { flatten }
+}
+
 export async function copyDirectoryWithTransforms(params: {
   fileService: FileSystemService
   srcPath: string
@@ -605,9 +704,7 @@ export async function copyDirectoryWithTransforms(params: {
   options?: SyncOptions
 }): Promise<CopyPathOpsResult> {
   const { fileService, srcPath, destPath, options } = params
-  const flatten = options?.flatten ?? false
-  const prefix = options?.prefix
-  const transformOpts: TransformOpts = prefix ? { flatten, prefix } : { flatten }
+  const transformOpts = buildTransformOpts(options)
 
   const files = await collectFiles(fileService, srcPath, srcPath)
   validateNoCollisions(files, transformOpts, srcPath)
@@ -620,6 +717,7 @@ export async function copyDirectoryWithTransforms(params: {
     srcPath,
     destPath,
     transformOpts,
+    ...(options?.excludePaths && { excludePaths: options.excludePaths }),
   })
 
   if (options?.defaultBehavior === 'mirror') {
@@ -640,7 +738,7 @@ export async function copyDirectoryWithTransforms(params: {
   )
 
   logger.info(
-    `Copied contents of ${srcPath} -> ${destPath} (flatten=${flatten}, prefix=${prefix ?? 'none'})`,
+    `Copied contents of ${srcPath} -> ${destPath} (flatten=${transformOpts.flatten}, prefix=${transformOpts.prefix ?? 'none'})`,
   )
   return skillNameMap.size > 0 ? { skillNameMap } : {}
 }
