@@ -1,0 +1,54 @@
+---
+title: Quality Model
+description: The single source of default quality rules — 3-layer principle, 3 pillars, classification dimensions, per-tier requirements, tag projection, and the risk-matrix adoption delta.
+---
+
+The Quality Model is the single source of default quality rules in the pair Knowledge Base. `classify`, `assess-cost`, `assess-security`, code review, quality gates, and bootstrap all resolve their behavior from this one document — no criteria live anywhere else. Source: [`quality-model.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md).
+
+> **Resolution order** for every rule below: **Argument > Adoption > KB default**. A malformed adoption delta is treated as absent — skills warn and fall back to KB defaults.
+
+## Three-Layer Principle
+
+| Layer | Role | Examples |
+| --- | --- | --- |
+| **Doc** | Rules, written once | this document + pillar guidelines |
+| **Skill** | Applies the rules on demand | `classify`, `assess-cost`, `assess-security`, code review |
+| **Automation** | Consumes tags deterministically, zero judgment | CI gates, `pair-next --filter` |
+
+Quality is classified in refinement — before code exists — not only at review time (shift-left). The matrix is built twice: once from the story context in refinement, once from the diff in review. Automation never carries its own criteria — it only reads tags.
+
+## Three Pillars
+
+| Pillar | Covers | Tag family (if exposed) |
+| --- | --- | --- |
+| **Cost** | Financial exposure of building/running the change | `cost:*` — opt-in |
+| **Security** | Vulnerabilities, compliance, secure-by-design | feeds `risk:*` + deterministic CI scanning |
+| **Delivery** | Correctness, performance, a11y, observability, docs, planning, architecture, release, AI metrics | `risk:*` — KB default |
+
+Every quality theme nests under one of these three pillars, pointing at its existing guideline — no dedicated status page per theme.
+
+## Classification & Tiers
+
+The compiled matrix has one row per dimension: service/domain criticality, change/diff risk, business impact, security relevance, and coupling balance. Each resolves to green/yellow/red; the **risk tier is the max across assessed dimensions** and is never lowered once raised by review. Cost is tracked separately as its own class, always computed and written to the matrix — it's projected as the `cost:green|yellow|orange|red` tag only if a project chooses to expose it (see Tag Projection below).
+
+| Tier | Merge | Reviewers | SLA | Approval |
+| --- | --- | --- | --- | --- |
+| 🟢 Green | Self-merge at green gate checks | 0 (AI review informational) | — | none |
+| 🟡 Yellow | Blocked until reviewed | 1 reviewer | 1 working day | reviewer approval |
+| 🔴 Red | Blocked until reviewed and approved | 1 reviewer | 2 working days | explicit approval |
+
+Reviewer counts and SLAs above are KB defaults, not fixed rules — override either per tier in `tech/risk-matrix.md`'s Overrides section (e.g. `tier.red.reviewers: 2`). A PR without classification tags is treated as 🔴 (fail-safe).
+
+## Tag Projection & Eligibility
+
+Tags are a **chromatic projection** of the matrix. `risk:green|yellow|red` is the only tag family the KB names and proposes by default — `classify` asks to activate it the first time it runs and writes the declaration once you confirm, so you get sensible tagging without needing to know the schema exists. Every other parameter the model computes (cost class, security relevance, business impact, coupling balance) is available to expose as its own tag, but the KB doesn't pre-select which, if any — that's entirely your call, added to the declaration when you want it. There is no dedicated "eligibility" tag: automation eligibility is a **filter you declare over classification tags** (e.g. `risk:green`), consumed generically by `pair-next`.
+
+## Project Overrides — `tech/risk-matrix.md`
+
+Optional file with up to three independent sections — none imply the others: **Tag Projection** (which tags are active — typically the first section a project ends up with, since `classify` proposes it), a **criticality table** (service/domain → High/Medium/Low), and **overrides** — threshold tweaks plus optional per-tier reviewer count / SLA overrides (e.g. `tier.red.reviewers: 2`). Fully absent means KB defaults apply completely and no tags are emitted — nothing fails. See the full schema in [`quality-model.md` §5–§6](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md#6-techrisk-matrixmd--adoption-delta) and a filled-in example at [`risk-matrix-example.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/assets/risk-matrix-example.md).
+
+## Related
+
+- [Guidelines Catalog](/docs/reference/guidelines-catalog) — where the Quality Model sits among the other 9 guideline categories
+- [Customize for Your Team](/docs/customization/team) — how to override guidelines via adoption files
+- [KB Structure](/docs/reference/kb-structure) — directory layout, `knowledge/` vs `adoption/`
