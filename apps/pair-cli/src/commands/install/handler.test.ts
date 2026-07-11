@@ -1,4 +1,4 @@
-import { describe, expect, beforeEach, test } from 'vitest'
+import { describe, expect, beforeEach, test, vi } from 'vitest'
 import { handleInstallCommand } from './handler'
 import type { InstallCommandConfig } from './parser'
 import { createTestFs } from '#test-utils'
