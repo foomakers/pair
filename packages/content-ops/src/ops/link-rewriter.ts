@@ -1,7 +1,7 @@
 import { posix } from 'path'
 import { logger } from '../observability'
 import { FileSystemService } from '../file-system'
-import { LinkProcessor } from '../markdown/link-processor'
+import { extractLinks } from '../markdown/link-processor'
 import { isExternalLink } from '../file-system/file-system-utils'
 import type { ParsedLink } from '../markdown/markdown-parser'
 
@@ -134,7 +134,7 @@ export async function rewriteLinksInFile(params: RewriteLinksInFileParams): Prom
   const { fileService, filePath, originalDir, newDir, datasetRoot, sourceContentRoot } = params
 
   const content = await fileService.readFile(filePath)
-  const links = await LinkProcessor.extractLinks(content)
+  const links = await extractLinks(content)
 
   if (links.length === 0) return
 

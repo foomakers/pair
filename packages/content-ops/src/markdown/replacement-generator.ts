@@ -1,8 +1,12 @@
-// path.relative is no longer used; normalization delegated to LinkProcessor
+// path.relative is no longer used; normalization delegated to link-processor
 import { FileSystemService } from '../file-system/file-system-service'
 import { dirname } from 'path'
 import { ParsedLink } from './markdown-parser'
-import { LinkProcessor, LinkProcessingConfig } from './link-processor'
+import {
+  generateNormalizationReplacements as normalizeLinks,
+  generatePathSubstitutionReplacements as substitutePaths,
+  LinkProcessingConfig,
+} from './link-processor'
 import { ErrorLog } from '../observability'
 import { Replacement } from './replacement-applier'
 import { isExternalLink, stripAnchor } from '../file-system/file-system-utils'
@@ -33,7 +37,7 @@ function shouldSkipLink(linkPath: string, config?: { exclusionList?: string[] })
 /**
  * Generate relative path normalization replacement
  */
-// Delegated normalization helpers removed; use LinkProcessor
+// Delegated normalization helpers removed; use link-processor
 
 export async function generateNormalizationReplacements(
   links: ParsedLink[],
@@ -41,11 +45,11 @@ export async function generateNormalizationReplacements(
   config: LinkProcessingConfig,
   fileService: FileSystemService,
 ): Promise<Replacement[]> {
-  // Delegate to centralized LinkProcessor implementation using a typed config
-  return LinkProcessor.generateNormalizationReplacements(links, file, config, fileService)
+  // Delegate to the centralized link-processor implementation using a typed config
+  return normalizeLinks(links, file, config, fileService)
 }
 
-// Normalization logic delegated to LinkProcessor
+// Normalization logic delegated to link-processor
 
 export async function generateExistenceCheckReplacements(
   context: ExistenceCheckContext,
@@ -155,6 +159,6 @@ export async function generatePathSubstitutionReplacements(
   oldBase: string,
   newBase: string,
 ): Promise<Replacement[]> {
-  // Delegate to LinkProcessor implementation
-  return LinkProcessor.generatePathSubstitutionReplacements(links, oldBase, newBase)
+  // Delegate to the centralized link-processor implementation
+  return substitutePaths(links, oldBase, newBase)
 }

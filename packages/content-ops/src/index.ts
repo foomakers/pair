@@ -10,8 +10,19 @@ export {
   isWithinPath,
   normalizePathForCompare,
 } from './file-system/file-operations'
-export { extractLinks, type ParsedLink, LinkProcessor } from './markdown/link-processor'
-export { detectLinkStyle } from './markdown/link-processor'
+export {
+  extractLinks,
+  extractLinksFromFile,
+  extractLinksFromDirectory,
+  classifyLinkType,
+  extractAnchor,
+  splitLinkParts,
+  generateNormalizationReplacements,
+  generatePathSubstitutionReplacements,
+  detectLinkStyle,
+  type ParsedLink,
+  type LinkProcessingConfig,
+} from './markdown/link-processor'
 export {
   calculateSHA256,
   validateChecksum,

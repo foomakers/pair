@@ -1,5 +1,5 @@
 import { ParsedLink, extractLinks } from './markdown-parser'
-import { LinkProcessor } from './link-processor'
+import { extractLinksFromFile } from './link-processor'
 import { FileSystemService } from '../file-system'
 
 function applyOffsetReplacement(content: string, r: Replacement) {
@@ -108,7 +108,7 @@ export async function processFileReplacement(
   const content = await fileService.readFile(file)
   const lines = content.split(/\r?\n/)
   // Use enriched link extraction when possible (includes filePath, type, anchor)
-  // This is an adapter to prefer LinkProcessor.extractLinksFromFile while
+  // This is an adapter to prefer extractLinksFromFile while
   // keeping existing processFileWithLinks available for compatibility.
   let result = await tryEnrichedProcess({ file, generateReplacements, content, lines, fileService })
   if (!result) {
@@ -135,7 +135,7 @@ async function tryEnrichedProcess(opts: {
 }): Promise<ApplyResult | null> {
   const { file, generateReplacements, content, lines, fileService } = opts
   try {
-    const enriched = await LinkProcessor.extractLinksFromFile(file, fileService)
+    const enriched = await extractLinksFromFile(file, fileService)
     // Pass only the ParsedLink shape expected by generators (enriched includes extras)
     const parsedLinks: ParsedLink[] = enriched.map(l => ({
       href: l.href,

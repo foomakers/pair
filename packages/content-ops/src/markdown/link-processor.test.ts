@@ -1,5 +1,15 @@
 import { describe, it, expect, vi } from 'vitest'
-import { LinkProcessor } from './link-processor'
+import {
+  extractLinks,
+  extractLinksFromFile,
+  extractLinksFromDirectory,
+  classifyLinkType,
+  detectLinkStyle,
+  generateNormalizationReplacements,
+  generatePathSubstitutionReplacements,
+  applyReplacements,
+  processFileWithLinks,
+} from './link-processor'
 import type { ParsedLink, LinkProcessingConfig } from './link-processor'
 import { InMemoryFileSystemService } from '../test-utils/in-memory-fs'
 import { replaceLinkOnLine } from './replacement-applier'
@@ -21,7 +31,7 @@ Here is a [link](page.md) and a [link with anchor](other.md#section).
 Another line with an external [link](https://example.com).
 `
 
-    const links = await LinkProcessor.extractLinks(content)
+    const links = await extractLinks(content)
 
     expect(links).toHaveLength(3)
     expect(links[0]).toMatchObject({
@@ -38,7 +48,7 @@ Another line with an external [link](https://example.com).
     })
   })
   it('should handle empty content', async function () {
-    const links = await LinkProcessor.extractLinks('')
+    const links = await extractLinks('')
     expect(links).toHaveLength(0)
   })
 })
@@ -70,7 +80,7 @@ describe('generateNormalizationReplacements - core', () => {
       exclusionList: [],
     }
 
-    const replacements = await LinkProcessor.generateNormalizationReplacements(
+    const replacements = await generateNormalizationReplacements(
       links,
       '/dataset/docs/current.md',
       config,
@@ -110,7 +120,7 @@ describe('generateNormalizationReplacements - path substitution', () => {
       exclusionList: [],
     }
 
-    const replacements = await LinkProcessor.generateNormalizationReplacements(
+    const replacements = await generateNormalizationReplacements(
       links,
       '/dataset/docs/current.md',
       config,
@@ -142,11 +152,7 @@ describe('generatePathSubstitutionReplacements', () => {
       },
     ]
 
-    const replacements = await LinkProcessor.generatePathSubstitutionReplacements(
-      links,
-      'old/path',
-      'new/path',
-    )
+    const replacements = await generatePathSubstitutionReplacements(links, 'old/path', 'new/path')
 
     expect(replacements).toHaveLength(1)
     expect(replacements[0].newHref).toBe('new/path/page.md')
@@ -167,7 +173,7 @@ describe('applyReplacements', () => {
       },
     ]
 
-    const result = LinkProcessor.applyReplacements(content, replacements)
+    const result = applyReplacements(content, replacements)
 
     expect(result.content).toBe('This is a [link](new.md) and [another](other.md).')
     expect(result.applied).toBe(1)
@@ -176,7 +182,7 @@ describe('applyReplacements', () => {
 
   it('should handle empty replacements', function () {
     const content = 'No links here.'
-    const result = LinkProcessor.applyReplacements(content, [])
+    const result = applyReplacements(content, [])
 
     expect(result.content).toBe('No links here.')
     expect(result.applied).toBe(0)
@@ -197,7 +203,7 @@ describe('processFileWithLinks', () => {
       },
     ])
 
-    const result = await LinkProcessor.processFileWithLinks(content, generateReplacements)
+    const result = await processFileWithLinks(content, generateReplacements)
 
     expect(result.content).toBe('This is a [link](new-page.md).')
     expect(result.applied).toBe(1)
@@ -262,7 +268,7 @@ it('should normalize ../page.md to page.md as normalizedRel when file exists und
     exclusionList: [],
   }
 
-  const replacements = await LinkProcessor.generateNormalizationReplacements(
+  const replacements = await generateNormalizationReplacements(
     links,
     '/dataset/docs/current.md',
     config,
@@ -299,7 +305,7 @@ it('should not normalize ../index.md to index.md when not appropriate', async fu
     exclusionList: [],
   }
 
-  const replacements = await LinkProcessor.generateNormalizationReplacements(
+  const replacements = await generateNormalizationReplacements(
     links,
     '/dataset/guide/current.md',
     config,
@@ -368,7 +374,7 @@ it('extractLinksFromFile: should extract links with file context', async functio
     '/project',
   )
 
-  const links = await LinkProcessor.extractLinksFromFile('/project/docs/guide.md', fileService)
+  const links = await extractLinksFromFile('/project/docs/guide.md', fileService)
 
   expect(links).toHaveLength(2)
   expect(links[0]).toMatchObject({
@@ -401,7 +407,7 @@ it('extractLinksFromFile: should classify link types', async function () {
     '/project',
   )
 
-  const links = await LinkProcessor.extractLinksFromFile('/project/test.md', fileService)
+  const links = await extractLinksFromFile('/project/test.md', fileService)
 
   expect(links).toHaveLength(5)
   expect(links[0]).toMatchObject({ href: './file.md', type: 'relative' })
@@ -420,7 +426,7 @@ it('extractLinksFromFile: should extract anchor from links with fragments', asyn
     '/project',
   )
 
-  const links = await LinkProcessor.extractLinksFromFile('/project/test.md', fileService)
+  const links = await extractLinksFromFile('/project/test.md', fileService)
 
   expect(links).toHaveLength(1)
   expect(links[0]).toMatchObject({
@@ -439,7 +445,7 @@ it('extractLinksFromFile: should handle files with no links', async function () 
     '/project',
   )
 
-  const links = await LinkProcessor.extractLinksFromFile('/project/plain.md', fileService)
+  const links = await extractLinksFromFile('/project/plain.md', fileService)
 
   expect(links).toHaveLength(0)
 })
@@ -455,7 +461,7 @@ it('extractLinksFromDirectory: should extract links from all markdown files in d
     '/project',
   )
 
-  const links = await LinkProcessor.extractLinksFromDirectory('/project/docs', fileService)
+  const links = await extractLinksFromDirectory('/project/docs', fileService)
 
   expect(links.length).toBeGreaterThanOrEqual(2)
   const filesParsed = [...new Set(links.map(l => l.filePath))]
@@ -473,7 +479,7 @@ it('extractLinksFromDirectory: should handle nested directories', async function
     '/project',
   )
 
-  const links = await LinkProcessor.extractLinksFromDirectory('/project/docs', fileService)
+  const links = await extractLinksFromDirectory('/project/docs', fileService)
 
   expect(links.length).toBeGreaterThanOrEqual(2)
 })
@@ -489,7 +495,7 @@ it('extractLinksFromDirectory: should skip non-markdown files', async function (
     '/project',
   )
 
-  const links = await LinkProcessor.extractLinksFromDirectory('/project/docs', fileService)
+  const links = await extractLinksFromDirectory('/project/docs', fileService)
 
   const filesParsed = [...new Set(links.map(l => l.filePath))]
   expect(filesParsed).toHaveLength(1)
@@ -505,39 +511,39 @@ it('extractLinksFromDirectory: should handle empty directories', async function 
     '/project',
   )
 
-  const links = await LinkProcessor.extractLinksFromDirectory('/project/docs', fileService)
+  const links = await extractLinksFromDirectory('/project/docs', fileService)
 
   expect(links).toHaveLength(0)
 })
-describe('LinkProcessor - classifyLinkType (T-69-02)', () => {
+describe('link-processor - classifyLinkType (T-69-02)', () => {
   it('should classify relative paths', () => {
-    expect(LinkProcessor.classifyLinkType('./file.md')).toBe('relative')
-    expect(LinkProcessor.classifyLinkType('../file.md')).toBe('relative')
-    expect(LinkProcessor.classifyLinkType('file.md')).toBe('relative')
-    expect(LinkProcessor.classifyLinkType('docs/file.md')).toBe('relative')
+    expect(classifyLinkType('./file.md')).toBe('relative')
+    expect(classifyLinkType('../file.md')).toBe('relative')
+    expect(classifyLinkType('file.md')).toBe('relative')
+    expect(classifyLinkType('docs/file.md')).toBe('relative')
   })
 
   it('should classify absolute paths', () => {
-    expect(LinkProcessor.classifyLinkType('/docs/file.md')).toBe('absolute')
-    expect(LinkProcessor.classifyLinkType('/file.md')).toBe('absolute')
+    expect(classifyLinkType('/docs/file.md')).toBe('absolute')
+    expect(classifyLinkType('/file.md')).toBe('absolute')
   })
 
   it('should classify HTTP/HTTPS URLs', () => {
-    expect(LinkProcessor.classifyLinkType('https://example.com')).toBe('http')
-    expect(LinkProcessor.classifyLinkType('http://example.com')).toBe('http')
+    expect(classifyLinkType('https://example.com')).toBe('http')
+    expect(classifyLinkType('http://example.com')).toBe('http')
   })
 
   it('should classify mailto links', () => {
-    expect(LinkProcessor.classifyLinkType('mailto:test@example.com')).toBe('mailto')
+    expect(classifyLinkType('mailto:test@example.com')).toBe('mailto')
   })
 
   it('should classify anchor-only links', () => {
-    expect(LinkProcessor.classifyLinkType('#section')).toBe('anchor')
-    expect(LinkProcessor.classifyLinkType('#')).toBe('anchor')
+    expect(classifyLinkType('#section')).toBe('anchor')
+    expect(classifyLinkType('#')).toBe('anchor')
   })
 })
 
-describe('LinkProcessor - performance (T-69-02)', () => {
+describe('link-processor - performance (T-69-02)', () => {
   it('should handle large files efficiently', async function () {
     const largeContent = Array(1000)
       .fill(0)
@@ -553,7 +559,7 @@ describe('LinkProcessor - performance (T-69-02)', () => {
     )
 
     const startTime = Date.now()
-    const links = await LinkProcessor.extractLinksFromFile('/project/large.md', fileService)
+    const links = await extractLinksFromFile('/project/large.md', fileService)
     const duration = Date.now() - startTime
 
     expect(links).toHaveLength(1000)
@@ -561,7 +567,7 @@ describe('LinkProcessor - performance (T-69-02)', () => {
   })
 })
 
-describe('LinkProcessor - edge cases (T-69-02)', () => {
+describe('link-processor - edge cases (T-69-02)', () => {
   it('should handle malformed markdown gracefully', async function () {
     const fileService = new InMemoryFileSystemService(
       {
@@ -571,7 +577,7 @@ describe('LinkProcessor - edge cases (T-69-02)', () => {
       '/project',
     )
 
-    const links = await LinkProcessor.extractLinksFromFile('/project/malformed.md', fileService)
+    const links = await extractLinksFromFile('/project/malformed.md', fileService)
 
     expect(links.length).toBeGreaterThanOrEqual(0)
   })
@@ -585,7 +591,7 @@ describe('LinkProcessor - edge cases (T-69-02)', () => {
       '/project',
     )
 
-    const links = await LinkProcessor.extractLinksFromFile('/project/special.md', fileService)
+    const links = await extractLinksFromFile('/project/special.md', fileService)
 
     expect(links).toHaveLength(1)
     expect(links[0].href).toBe('file%20with%20spaces.md')
@@ -618,7 +624,7 @@ it('should preserve simple anchors when normalizing relative links', async funct
     exclusionList: [],
   }
 
-  const replacements = await LinkProcessor.generateNormalizationReplacements(
+  const replacements = await generateNormalizationReplacements(
     links,
     '/dataset/docs/current.md',
     config,
@@ -656,7 +662,7 @@ it('should preserve encoded anchors when normalizing', async function () {
     exclusionList: [],
   }
 
-  const replacements = await LinkProcessor.generateNormalizationReplacements(
+  const replacements = await generateNormalizationReplacements(
     links,
     '/dataset/docs/current.md',
     config,
@@ -694,7 +700,7 @@ it('should preserve query parameters alongside anchors when normalizing', async 
     exclusionList: [],
   }
 
-  const replacements = await LinkProcessor.generateNormalizationReplacements(
+  const replacements = await generateNormalizationReplacements(
     links,
     '/dataset/docs/current.md',
     config,
@@ -732,7 +738,7 @@ it('should preserve encoded query and anchor characters when normalizing', async
     exclusionList: [],
   }
 
-  const replacements = await LinkProcessor.generateNormalizationReplacements(
+  const replacements = await generateNormalizationReplacements(
     links,
     '/dataset/docs/current.md',
     config,
@@ -775,7 +781,7 @@ describe('generateNormalizationReplacements - no full normalization', () => {
       exclusionList: [],
     }
 
-    const replacements = await LinkProcessor.generateNormalizationReplacements(
+    const replacements = await generateNormalizationReplacements(
       links,
       '/dataset/.skills/capability/verify-quality/SKILL.md',
       config,
@@ -813,7 +819,7 @@ describe('generateNormalizationReplacements - no full normalization', () => {
       exclusionList: [],
     }
 
-    const replacements = await LinkProcessor.generateNormalizationReplacements(
+    const replacements = await generateNormalizationReplacements(
       links,
       '/dataset/.pair/knowledge/how-to/other.md',
       config,
@@ -827,7 +833,7 @@ describe('generateNormalizationReplacements - no full normalization', () => {
   })
 })
 
-describe('LinkProcessor - detectLinkStyle', () => {
+describe('link-processor - detectLinkStyle', () => {
   const cwd = '/test'
 
   it('should return relative when majority are relative', async () => {
@@ -838,7 +844,7 @@ describe('LinkProcessor - detectLinkStyle', () => {
       cwd,
       cwd,
     )
-    expect(await LinkProcessor.detectLinkStyle(fs, cwd)).toBe('relative')
+    expect(await detectLinkStyle(fs, cwd)).toBe('relative')
   })
 
   it('should return absolute when majority are absolute', async () => {
@@ -849,7 +855,7 @@ describe('LinkProcessor - detectLinkStyle', () => {
       cwd,
       cwd,
     )
-    expect(await LinkProcessor.detectLinkStyle(fs, cwd)).toBe('absolute')
+    expect(await detectLinkStyle(fs, cwd)).toBe('absolute')
   })
 
   it('should skip external and anchor links', async () => {
@@ -862,7 +868,7 @@ describe('LinkProcessor - detectLinkStyle', () => {
       cwd,
     )
     // 2 absolute vs 1 relative (anchor and external skipped)
-    expect(await LinkProcessor.detectLinkStyle(fs, cwd)).toBe('absolute')
+    expect(await detectLinkStyle(fs, cwd)).toBe('absolute')
   })
 
   it('should return relative when counts are equal', async () => {
@@ -873,12 +879,12 @@ describe('LinkProcessor - detectLinkStyle', () => {
       cwd,
       cwd,
     )
-    expect(await LinkProcessor.detectLinkStyle(fs, cwd)).toBe('relative')
+    expect(await detectLinkStyle(fs, cwd)).toBe('relative')
   })
 
   it('should return relative in empty directory', async () => {
     const fs = new InMemoryFileSystemService({}, cwd, cwd)
     await fs.mkdir(cwd, { recursive: true })
-    expect(await LinkProcessor.detectLinkStyle(fs, cwd)).toBe('relative')
+    expect(await detectLinkStyle(fs, cwd)).toBe('relative')
   })
 })
