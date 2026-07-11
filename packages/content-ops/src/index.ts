@@ -8,6 +8,8 @@ export {
   copyFileHelper,
   copyDirHelper,
   isPathExcluded,
+  isWithinPath,
+  normalizePathForCompare,
 } from './file-system/file-operations'
 export { extractLinks, type ParsedLink, LinkProcessor } from './markdown/link-processor'
 export { detectLinkStyle } from './markdown/link-processor'

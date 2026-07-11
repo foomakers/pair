@@ -158,6 +158,35 @@ describe('copyPathOps - flatten and prefix', () => {
     )
   })
 
+  it('should skip transformed entries whose destination is excluded (D14)', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/source/catalog/SKILL.md': '# Catalog Skill',
+        '/dataset/source/working/checkpoint.md': 'DO NOT COPY',
+      },
+      '/',
+      '/',
+    )
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true, targets: [], excludePaths: ['/dataset/target/working'] },
+    })
+
+    await TEST_ASSERTIONS.assertFileExists(
+      fileService,
+      '/dataset/target/catalog/SKILL.md',
+      '# Catalog Skill',
+    )
+    await TEST_ASSERTIONS.assertFileDoesNotExist(
+      fileService,
+      '/dataset/target/working/checkpoint.md',
+    )
+  })
+
   it('should apply prefix to top-level directory names', async () => {
     const fileService = new InMemoryFileSystemService(
       {

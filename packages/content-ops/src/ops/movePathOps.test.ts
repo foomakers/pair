@@ -135,6 +135,36 @@ describe('movePathOps - error cases', () => {
     )
   })
 
+  it('should not move an entry whose destination is excluded (per-entry guard, D14)', async () => {
+    fileService = new InMemoryFileSystemService(
+      {
+        '/dataset/folder/keep.md': '# Keep',
+        '/dataset/folder/working/checkpoint.md': 'DO NOT MOVE',
+      },
+      '/dataset',
+      '/dataset',
+    )
+
+    await movePathOps({
+      fileService,
+      source: 'folder',
+      target: 'moved-folder',
+      datasetRoot: '/dataset',
+      options: {
+        defaultBehavior: 'overwrite',
+        flatten: false,
+        targets: [],
+        excludePaths: ['/dataset/moved-folder/working'],
+      },
+    })
+
+    await TEST_ASSERTIONS.assertFileExists(fileService, '/dataset/moved-folder/keep.md', '# Keep')
+    await TEST_ASSERTIONS.assertFileDoesNotExist(
+      fileService,
+      '/dataset/moved-folder/working/checkpoint.md',
+    )
+  })
+
   it('should respect behavior options', async () => {
     fileService = new InMemoryFileSystemService(TEST_FILE_STRUCTURES.existingTarget, '/', '/')
 
