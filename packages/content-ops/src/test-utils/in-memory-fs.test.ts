@@ -63,13 +63,13 @@ describe('InMemoryFileSystemService - Path Resolution', () => {
 
   describe('resolvePath', () => {
     it('should return absolute paths unchanged', () => {
-      expect(fs['resolvePath']('/absolute/path')).toBe('/absolute/path')
+      expect(fs['state'].resolvePath('/absolute/path')).toBe('/absolute/path')
     })
 
     it('should resolve relative paths against working directory', () => {
-      expect(fs['resolvePath']('relative/path')).toBe('/app/relative/path')
-      expect(fs['resolvePath']('./relative/path')).toBe('/app/relative/path')
-      expect(fs['resolvePath']('../parent/path')).toBe('/parent/path')
+      expect(fs['state'].resolvePath('relative/path')).toBe('/app/relative/path')
+      expect(fs['state'].resolvePath('./relative/path')).toBe('/app/relative/path')
+      expect(fs['state'].resolvePath('../parent/path')).toBe('/parent/path')
     })
   })
 })
@@ -461,12 +461,12 @@ describe('InMemoryFileSystemService - Complex Scenarios - Project Structure', ()
 describe('InMemoryFileSystemService - Complex Scenarios - Path Resolution', () => {
   it('should handle path resolution with custom working directory', () => {
     const customFs = new InMemoryFileSystemService({}, '/custom/module', '/custom/work')
-    expect(customFs['resolvePath']('file.txt')).toBe('/custom/work/file.txt')
-    expect(customFs['resolvePath']('../file.txt')).toBe('/custom/file.txt')
-    expect(customFs['resolvePath']('dir/../file.txt')).toBe('/custom/work/file.txt')
+    expect(customFs['state'].resolvePath('file.txt')).toBe('/custom/work/file.txt')
+    expect(customFs['state'].resolvePath('../file.txt')).toBe('/custom/file.txt')
+    expect(customFs['state'].resolvePath('dir/../file.txt')).toBe('/custom/work/file.txt')
 
     // Test absolute paths
-    expect(customFs['resolvePath']('/absolute/file.txt')).toBe('/absolute/file.txt')
+    expect(customFs['state'].resolvePath('/absolute/file.txt')).toBe('/absolute/file.txt')
   })
 })
 
