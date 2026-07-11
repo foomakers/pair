@@ -28,7 +28,7 @@ Both subdirectories are created **on demand** by the skill that first needs them
 The working area is excluded from asset registries at two levels:
 
 1. **By convention**: no registry's `target` should ever point at the working area or an ancestor of it. (A registry's `source` resolves against the KB dataset root, not the consuming project's working area, so it is not a source of overlap.)
-2. **By hard rule in `pair-cli`**: every registry copy/mirror operation excludes the resolved working-area path unconditionally, regardless of registry configuration. A registry accidentally configured to mirror an ancestor of the working area (e.g. the whole `.pair/` root) cannot reach inside it — the nested working subtree is skipped during traversal.
+2. **By hard rule in `pair-cli`**: every registry copy/mirror operation excludes the resolved working-area path unconditionally, regardless of registry configuration. A registry accidentally configured to mirror an ancestor of the working area (e.g. the whole `.pair/` root) cannot reach inside it — the nested working subtree is skipped both when copying (it is never written) and during mirror cleanup (it is never deleted as "stale"), on the plain and the flatten/prefix transform paths alike.
 
 The hard rule exists as defense-in-depth on top of validation (see below): even a config that somehow bypasses `pair validate-config` cannot cause `pair install`/`pair update` to touch the working area.
 

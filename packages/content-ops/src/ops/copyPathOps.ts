@@ -727,6 +727,7 @@ export async function copyDirectoryWithTransforms(params: {
       dirMappingFiles,
       topLevelFiles,
       transformOpts,
+      ...(options?.excludePaths && { excludePaths: options.excludePaths }),
     })
   }
 
@@ -759,6 +760,12 @@ export async function copyDirectoryWithTransforms(params: {
  * transformed directory names — they're never in `dirMappingFiles` (which
  * only tracks files under a subdirectory), so without this they'd be
  * wrongly deleted as stale on the very next mirror run.
+ *
+ * Working-area exclusion (D14): mirrors the non-transform `handleMirrorCleanup`
+ * guard so a flatten+prefix+mirror registry can never delete an excluded
+ * top-level entry (e.g. the working area) even if a future caller targets an
+ * ancestor of it — the copy path already skips it (copyFileWithTransform), so
+ * cleanup must skip it too, otherwise it'd be treated as stale and removed.
  */
 async function cleanupStaleTransformedEntries(params: {
   fileService: FileSystemService
@@ -766,8 +773,10 @@ async function cleanupStaleTransformedEntries(params: {
   dirMappingFiles: Map<string, string[]>
   topLevelFiles: Set<string>
   transformOpts: TransformOpts
+  excludePaths?: string[]
 }): Promise<void> {
-  const { fileService, destPath, dirMappingFiles, topLevelFiles, transformOpts } = params
+  const { fileService, destPath, dirMappingFiles, topLevelFiles, transformOpts, excludePaths } =
+    params
 
   const expected = new Set<string>(topLevelFiles)
   for (const originalSubDir of dirMappingFiles.keys()) {
@@ -779,6 +788,10 @@ async function cleanupStaleTransformedEntries(params: {
   for (const entry of entries) {
     if (expected.has(entry.name)) continue
     const toRemove = join(destPath, entry.name)
+    if (isPathExcluded(toRemove, excludePaths)) {
+      logger.info(`Mirror: skipped excluded path ${toRemove}`)
+      continue
+    }
     await fileService.rm(toRemove, { recursive: true, force: true })
     logger.info(`Mirror: removed stale transformed entry ${toRemove}`)
   }

@@ -618,6 +618,45 @@ describe('copyPathOps - flatten and prefix', () => {
       )
     })
 
+    it('does not delete an excluded top-level entry as stale during mirror cleanup (D14)', async () => {
+      // Regression: cleanupStaleTransformedEntries removed any top-level target entry
+      // absent from the source. If a flatten+prefix+mirror registry ever targeted an
+      // ancestor of the working area, the working subtree — never in the source, so
+      // never in `expected` — would be treated as stale and removed on cleanup, even
+      // though the copy path (copyFileWithTransform) already skips it. Cleanup must
+      // honor excludePaths symmetrically, like the non-transform handleMirrorCleanup.
+      const fileService = new InMemoryFileSystemService(
+        {
+          '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
+          // Pre-existing working area under the target — not present in source.
+          '/dataset/target/working/checkpoint.md': 'DO NOT DELETE',
+        },
+        '/',
+        '/',
+      )
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: {
+          flatten: true,
+          prefix: 'pair',
+          defaultBehavior: 'mirror',
+          targets: [],
+          excludePaths: ['/dataset/target/working'],
+        },
+      })
+
+      // Excluded working area survives mirror cleanup.
+      await expect(fileService.exists('/dataset/target/working/checkpoint.md')).resolves.toBe(true)
+      // Normal transformed entry still copied.
+      await expect(fileService.exists('/dataset/target/pair-catalog-next/SKILL.md')).resolves.toBe(
+        true,
+      )
+    })
+
     it('does not clean up stale entries when behavior is not mirror', async () => {
       const fileService = new InMemoryFileSystemService(
         {
