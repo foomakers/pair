@@ -18,7 +18,7 @@ function compareStableVersions(a: string, b: string): number {
  * upgrade — building a migration URL there would point at a non-existent
  * v{newer}-to-v{older} page.
  */
-function isUpgrade(installed: string, current: string): boolean {
+export function isUpgrade(installed: string, current: string): boolean {
   return (
     isStableVersion(installed) &&
     isStableVersion(current) &&

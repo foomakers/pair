@@ -1,4 +1,4 @@
-import { join } from 'path'
+import { join, dirname } from 'path'
 import type { FileSystemService, HttpClientService } from '@pair/content-ops'
 import { isGitUrl, isRemoteUrl } from '@pair/content-ops'
 import { resolveDatasetRoot } from '#config/kb-resolver'
@@ -259,11 +259,13 @@ export async function writeInstalledVersion(
   projectRoot: string,
   version: string,
 ): Promise<void> {
-  const markerDir = join(projectRoot, '.pair')
+  // Derive from the same constant resolveInstalledVersion reads, so write and
+  // read paths cannot drift.
+  const markerPath = join(projectRoot, INSTALLED_VERSION_MARKER)
+  const markerDir = dirname(markerPath)
   if (!fs.existsSync(markerDir)) {
     await fs.mkdir(markerDir, { recursive: true })
   }
-  const markerPath = join(markerDir, '.kb-version.json')
   const content = JSON.stringify({ version, recordedAt: new Date().toISOString() }, null, 2)
   await fs.writeFile(markerPath, content)
 }

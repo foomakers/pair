@@ -1003,4 +1003,28 @@ describe('install — KB version recording (#261)', () => {
 
     logSpy.mockRestore()
   })
+
+  test('drift hint omits the migration URL on a downgrade (installed newer than applied)', async () => {
+    const fs = createTestFs(
+      testConfig,
+      {
+        ...baseFiles('1.1.0'), // dataset applies the OLDER 1.1.0
+        [`${cwd}/.pair/.kb-version.json`]: JSON.stringify({ version: '1.2.0' }), // recorded newer
+      },
+      cwd,
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await handleInstallCommand(
+      { command: 'install', resolution: 'default', kb: true, offline: false },
+      fs,
+    )
+
+    const output = logSpy.mock.calls.map(args => args.join(' ')).join('\n')
+    expect(output).toContain('KB version drift')
+    // downgrade → no v{newer}-to-v{older} migration page
+    expect(output).not.toContain('Migration guide')
+
+    logSpy.mockRestore()
+  })
 })

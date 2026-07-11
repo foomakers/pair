@@ -6,6 +6,7 @@ import {
   writeInstalledVersion,
 } from './version-resolver'
 import { buildMigrationUrl } from './migration-url'
+import { isUpgrade } from './version-check'
 
 /**
  * Non-blocking pre-install/update hint (AC3): if the KB about to be applied
@@ -27,9 +28,15 @@ export async function emitVersionDriftHint(deps: {
     const installed = resolveInstalledVersion(fs, baseTarget)
     if (!installed.version || installed.version === newVersion) return
 
-    const migrationUrl = buildMigrationUrl(installed.version, newVersion)
+    // Only an upgrade has a v{old}-to-v{new} migration page; a downgrade or a
+    // pre-release drift is flagged without a (non-existent) URL — same guard as
+    // compareVersions, so both call sites agree.
+    const migrationUrl = isUpgrade(installed.version, newVersion)
+      ? buildMigrationUrl(installed.version, newVersion)
+      : undefined
     presenter.phase(
-      `KB version drift: installed ${installed.version}, applying ${newVersion}. Migration guide: ${migrationUrl}`,
+      `KB version drift: installed ${installed.version}, applying ${newVersion}.` +
+        (migrationUrl ? ` Migration guide: ${migrationUrl}` : ''),
     )
   } catch {
     // best-effort hint only — never block install/update
