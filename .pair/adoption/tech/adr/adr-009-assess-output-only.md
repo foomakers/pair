@@ -31,7 +31,7 @@ Accepted
 
 ## Decision
 
-Adopt **Option 2**. `assess-*` skills are **output-only**; `/record-decision` is the **single writer** of adoption files.
+Adopt **Option 2**. `assess-*` skills are **output-only**; `/record-decision` is the **sole generic writer** of adoption files. The one delegated exception is `/setup-pm`, which owns PM-tool configuration end-to-end: it writes the PM section of `way-of-working.md` directly, then composes `/record-decision` only for the decision record.
 
 Contract (assess output → record-decision input):
 
@@ -50,7 +50,7 @@ Additional rules:
 ### Benefits
 
 - **No side effects when assessing** — assessments are safe to run for information only.
-- **Single adoption writer** (`record-decision`) — one place owns adoption writes; the invariant "only record-decision touches adoption files; only assess-* renders its own content" is explicit.
+- **Sole generic adoption writer** (`record-decision`) — one place owns generic adoption writes; the invariant "only record-decision writes adoption files generically (sole exception: `/setup-pm` writes the PM section of `way-of-working.md` directly); only assess-* renders its own content" is explicit.
 - **No backlog pollution** — debt is surfaced without auto-creating cards; promotion is deliberate.
 - **Debt never blocks PRs** (R7.2) is enforced by the review flow.
 
@@ -59,6 +59,7 @@ Additional rules:
 - Composing flows (`bootstrap`, `review`) carry the persistence step (compose `/record-decision` per accepted proposal). This is a minor orchestration cost.
 - If `/record-decision` is not installed, assess-* proposals cannot be persisted automatically — the proposal stands as a report and adoption stays unchanged until an explicit decision is made.
 - `/implement` still composes `/assess-stack` for new dependencies; persistence there flows through its existing `/record-decision` step. The assess-stack composition wording in `/implement` is unaffected functionally.
+- **`/setup-pm` is a delegated exception to the single-writer rule**: it writes the PM section of `way-of-working.md` directly (it owns PM-tool configuration end-to-end) and composes `/record-decision` only for the ADL. So `/record-decision` is the *sole generic* adoption writer, not the *only* process that ever touches an adoption file — the PM-tool section is deliberately owned by `/setup-pm`.
 
 ## Adoption Impact
 
