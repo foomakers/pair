@@ -22,7 +22,10 @@ import { pathsOverlap } from './working-area'
 export function getReservedPaths(workingPath: string): string[] {
   return [
     workingPath,
-    // #261: append '.pair/.kb-version.json' and other meta/config files here.
+    // The KB version marker — durable project state (a version pin), never a
+    // registry target. Must match INSTALLED_VERSION_MARKER in
+    // commands/kb-info/version-resolver.ts (a test asserts they agree).
+    '.pair/.kb-version.json',
   ]
 }
 

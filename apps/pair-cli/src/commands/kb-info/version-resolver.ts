@@ -22,7 +22,7 @@ export interface InstalledVersionResult {
   recordedAt?: string
 }
 
-const INSTALLED_VERSION_MARKER = join('.pair', '.kb-version.json')
+export const INSTALLED_VERSION_MARKER = join('.pair', '.kb-version.json')
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
