@@ -1,13 +1,13 @@
 ---
 name: pair-capability-assess-stack
-description: "Assess tech stack using resolution cascade (Argument > Adoption > Assessment). Lifecycle-spanning: bootstrap (full eval), implementation (add dependency), review (detect unlisted). Version tracking. Composes /pair-capability-record-decision. Idempotent."
-version: 0.4.1
+description: "Assess tech stack using resolution cascade (Argument > Adoption > Assessment). Lifecycle-spanning: bootstrap (full eval), implementation (add dependency), review (detect unlisted). Version tracking. Output-only: emits rendered adoption content + target; the caller persists via /pair-capability-record-decision. Idempotent."
+version: 0.5.0
 author: Foomakers
 ---
 
 # /pair-capability-assess-stack — Tech Stack Assessment
 
-Evaluate and decide on the technology stack: languages, frameworks, runtime, database, and libraries — all with version tracking. Follows the resolution cascade and operates across the entire project lifecycle.
+Evaluate and recommend the technology stack: languages, frameworks, runtime, database, and libraries — all with version tracking. Follows the resolution cascade and operates across the entire project lifecycle. **Output-only**: produces a proposal (rendered tech-stack.md content + target) plus a report — writes no files. Persistence is delegated to `/pair-capability-record-decision`.
 
 ## Arguments
 
@@ -18,11 +18,11 @@ Evaluate and decide on the technology stack: languages, frameworks, runtime, dat
 
 ## Composed Skills
 
-| Skill              | Type       | Required                                     |
-| ------------------ | ---------- | -------------------------------------------- |
-| `/pair-capability-record-decision` | Capability | Yes — records stack decision as ADL (or ADR) |
+This skill is **output-only** — it composes no skill and writes no files. Persistence of the proposal is the caller's responsibility via `/pair-capability-record-decision` (see [Composition Interface](#composition-interface)).
 
-## Adoption File
+## Proposal Target
+
+The rendered adoption content is destined for this file — the caller writes it via `/pair-capability-record-decision`:
 
 - **Target**: [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — **core sections only**
 - **Ownership**: Core sections (language, framework, runtime, database, monorepo, bundling, release, linting, git hooks, CLI tooling, markdown/docs)
@@ -32,15 +32,15 @@ Evaluate and decide on the technology stack: languages, frameworks, runtime, dat
 
 ### Bootstrap Mode
 
-Full stack evaluation. Used when no tech stack is defined yet. Evaluates language, framework, runtime, database, key libraries. Produces the initial `tech-stack.md` with all core sections and versions.
+Full stack evaluation. Used when no tech stack is defined yet. Evaluates language, framework, runtime, database, key libraries. Renders the initial `tech-stack.md` proposal with all core sections and versions for the caller to persist.
 
 ### Implementation Mode
 
-Add or update a single dependency. Used when `/pair-process-implement` detects a new dependency or developer wants to add a library. Validates compatibility with existing stack, adds to `tech-stack.md` with version, records decision.
+Add or update a single dependency. Used when `/pair-process-implement` detects a new dependency or developer wants to add a library. Validates compatibility with existing stack and renders the affected-entry proposal; the caller (e.g. `/pair-process-implement`) persists it via `/pair-capability-record-decision`.
 
 ### Review Mode
 
-Detect and evaluate unlisted dependencies. Used when `/pair-process-review` finds a dependency in code that isn't in `tech-stack.md`. Presents approve/reject options to developer. If approved, adds to stack and records decision.
+Detect and evaluate unlisted dependencies. Used when `/pair-process-review` finds a dependency in code that isn't in `tech-stack.md`. Presents approve/reject options to developer. If approved, renders the entry proposal for the caller to persist.
 
 ## Algorithm
 
@@ -88,7 +88,7 @@ Detect and evaluate unlisted dependencies. Used when `/pair-process-review` find
    > [Summary of key technologies with versions]
 
 4. **Check**: Does a corresponding decision record exist?
-5. **Act**: If decision record missing, compose `/pair-capability-record-decision` to backfill.
+5. **Act**: If decision record missing, report it as a gap in the output — this skill writes nothing; the caller persists a backfill via `/pair-capability-record-decision`.
 6. **Verify**: Adoption and decision record consistent. Done — exit skill.
 
 #### Path C — Full Assessment (bootstrap mode)
@@ -160,33 +160,36 @@ Detect and evaluate unlisted dependencies. Used when `/pair-process-review` find
    > Not listed in tech-stack.md.
    >
    > Options:
-   > 1. **Approve** — add to tech stack with version + record decision
+   > 1. **Approve** — render entry proposal for the caller to add to stack + record decision
    > 2. **Reject** — flag for removal from implementation
 
-2. **Act**: If approved → treat as implementation mode addition.
+2. **Act**: If approved → treat as implementation mode addition (render entry proposal).
 3. **Act**: If rejected → report back to caller (e.g. /pair-process-review marks as CHANGES-REQUESTED).
 4. **Verify**: Developer decision captured.
 
-### Step 4: Write Adoption File
+### Step 4: Render Adoption Proposal
 
-1. **Check**: Does [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) exist?
-2. **Act** (bootstrap mode): Write full tech-stack.md with all core sections. Include version for every entry.
-3. **Act** (implementation/review mode): Add or update **only the affected entry** in the appropriate section. Preserve all other content, including sections owned by /pair-capability-assess-testing and /pair-capability-assess-ai.
-4. **Verify**: Adoption file written. All entries have versions. Section ownership respected.
+1. **Act** (bootstrap mode): Render full tech-stack.md content with all core sections. Include version for every entry.
+2. **Act** (implementation/review mode): Render the affected-entry content for the appropriate section, scoped so the caller's write preserves all other content, including sections owned by /pair-capability-assess-testing and /pair-capability-assess-ai.
+3. **Verify**: The rendered `content` and its `target` are ready to emit. All entries have versions; section ownership respected. **This skill writes no files.**
 
-### Step 5: Record Decision
+### Step 5: Emit Proposal
 
-1. **Act**: Compose `/pair-capability-record-decision`:
-   - **Bootstrap**: `$type: non-architectural`, `$topic: tech-stack-initial`, `$summary: "Initial tech stack adopted: [key technologies]"`
-   - **Implementation**: `$type: non-architectural`, `$topic: stack-add-[name]`, `$summary: "[name]@[version] added to tech stack — [rationale]"`
-   - **Review approve**: `$type: non-architectural`, `$topic: stack-approve-[name]`, `$summary: "[name]@[version] approved during review — added to tech stack"`
-2. **Verify**: Decision record created. Adoption file consistent with record.
+1. **Act**: Emit the proposal to the caller:
+   - `content`: the rendered tech-stack.md body (full or affected entry) from Step 4
+   - `target`: [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) (core sections)
+   - `decision-metadata` (by mode):
+     - **Bootstrap**: `$type: non-architectural`, `$topic: tech-stack-initial`, `$summary: "Initial tech stack adopted: [key technologies]"`
+     - **Implementation**: `$type: non-architectural`, `$topic: stack-add-[name]`, `$summary: "[name]@[version] added to tech stack — [rationale]"`
+     - **Review approve**: `$type: non-architectural`, `$topic: stack-approve-[name]`, `$summary: "[name]@[version] approved during review — added to tech stack"`
+   - plus the human-facing report (see Output Format), and the validation result (approved/rejected) for implementation/review modes
+2. **Verify**: Proposal emitted. Persistence is performed by the caller via `/pair-capability-record-decision(content, target, decision-metadata)`, never by this skill.
 
 ## Version Tracking Policy
 
 - Every entry in tech-stack.md **MUST** include a version: `[tool] v[X.Y.Z]` or `[tool]@[X.Y.Z]`.
 - **Major.minor required**, patch optional.
-- Version updates go through /pair-capability-assess-stack: check compatibility with existing stack, update adoption, write decision record.
+- Version updates go through /pair-capability-assess-stack: check compatibility with existing stack, render the updated entry proposal; the caller persists via `/pair-capability-record-decision`.
 - Version format in adoption file: human-readable prose (e.g. "vitest v3.2.4 is adopted").
 
 ## Section Ownership
@@ -197,20 +200,21 @@ Detect and evaluate unlisted dependencies. Used when `/pair-process-review` find
 | Monorepo, bundling, release | `/pair-capability-assess-stack`  | Read-only for others                |
 | Linting, formatting, hooks  | `/pair-capability-assess-stack`  | Read-only for others                |
 | CLI tooling, markdown/docs  | `/pair-capability-assess-stack`  | Read-only for others                |
-| **Testing**                 | `/pair-capability-assess-testing`| /pair-capability-assess-stack reads, never writes   |
-| **AI**                      | `/pair-capability-assess-ai`     | /pair-capability-assess-stack reads, never writes   |
+| **Testing**                 | `/pair-capability-assess-testing`| /pair-capability-assess-stack reads, never renders  |
+| **AI**                      | `/pair-capability-assess-ai`     | /pair-capability-assess-stack reads, never renders  |
 
 ## Output Format
 
 ```text
-ASSESSMENT COMPLETE:
+ASSESSMENT COMPLETE (output-only — no files written):
 ├── Domain:    Tech Stack
 ├── Mode:      [Bootstrap | Implementation | Review]
 ├── Path:      [Argument Override | Adoption Exists | Full Assessment]
 ├── Decision:  [technology@version — or full stack summary]
-├── Adoption:  [tech-stack.md — written | confirmed | updated | entry added]
-├── Record:    [ADL path — created | exists | backfilled]
-└── Status:    [Complete | Confirmed existing | Approved | Rejected]
+├── Proposal:  [content rendered for tech-stack.md — full | affected entry]
+├── Target:    adoption/tech/tech-stack.md (core sections)
+├── Persist:   [caller composes /pair-capability-record-decision(content, target) → ADL]
+└── Status:    [Proposal ready | Confirmed existing | Approved | Rejected]
 ```
 
 ## Composition Interface
@@ -218,45 +222,45 @@ ASSESSMENT COMPLETE:
 When composed by `/pair-process-bootstrap`:
 
 - **Input**: `/pair-process-bootstrap` invokes `/pair-capability-assess-stack` during Phase 2 with `$mode: bootstrap`. May pass `$choice` for pre-selected stack.
-- **Output**: Returns decision summary and adoption file path.
-- `/pair-process-bootstrap` includes adoption and ADL changes in the next commit.
+- **Output**: Returns `{ content, target, decision-metadata }` plus the report. Writes nothing.
+- **Persistence**: `/pair-process-bootstrap` accepts the proposal and composes `/pair-capability-record-decision(content, target, decision-metadata)`, then includes those changes in the next commit.
 
 When composed by `/pair-process-implement`:
 
 - **Input**: `/pair-process-implement` detects new import/dependency → invokes `/pair-capability-assess-stack` with `$choice: [name@version]`, `$mode: implementation`.
-- **Output**: Returns validation result (approved/rejected) and adoption file path.
-- If rejected (incompatible) → `/pair-process-implement` HALTs.
+- **Output**: Returns the validation result (approved/rejected) plus, when approved, `{ content, target, decision-metadata }`.
+- **Persistence**: on approval, `/pair-process-implement` persists the entry via `/pair-capability-record-decision`. If rejected (incompatible) → `/pair-process-implement` HALTs.
 
 When composed by `/pair-process-review`:
 
 - **Input**: `/pair-process-review` detects unlisted dependency → invokes `/pair-capability-assess-stack` with `$choice: [name@version]`, `$mode: review`.
-- **Output**: Returns developer decision (approve/reject).
-- If rejected → `/pair-process-review` includes as CHANGES-REQUESTED finding.
+- **Output**: Returns the developer decision (approve/reject) plus, when approved, `{ content, target, decision-metadata }`.
+- **Persistence**: on approval, `/pair-process-review` persists via `/pair-capability-record-decision`. If rejected → `/pair-process-review` includes as CHANGES-REQUESTED finding.
 
 When invoked **independently**:
 
-- Full interactive flow. Mode auto-detected. Developer commits changes.
+- Full interactive flow. Mode auto-detected. The skill returns the proposal; the human (or agent) persists it by composing `/pair-capability-record-decision`, then commits.
 
 ## Edge Cases
 
 - **Argument conflicts with adoption**: Warn developer with details, ask for confirmation.
 - **Version conflict**: Library requires runtime version different from adopted → warn, propose resolution (upgrade runtime or reject library).
 - **Duplicate entry**: Same library already in stack → check if version differs. If same, skip. If different, treat as version update.
-- **Multiple skills writing same file**: Section ownership prevents conflicts. Each skill writes only its sections.
-- **tech-stack.md exists but missing core sections**: Fill gaps, preserve existing content.
-- **Decision record already exists for same scope+decision**: Skip writing (no duplicates).
+- **Multiple skills rendering same file**: Section ownership prevents conflicts. Each skill renders only its sections; the caller's write preserves the rest.
+- **tech-stack.md exists but missing core sections**: Render content that fills gaps; the caller's write preserves existing content.
+- **Decision record already exists for same scope+decision**: Report "already recorded" — no proposal to persist (no duplicates).
 
 ## Graceful Degradation
 
 - If technology guidelines are not found, use minimal assessment: ask developer for stack choices directly.
-- If `/pair-capability-record-decision` is not installed, warn and skip decision recording.
+- If the caller cannot persist (e.g. `/pair-capability-record-decision` not installed), the proposal stands as a report — adoption stays unchanged.
 - If architecture.md doesn't exist, warn: "No architecture adopted — stack compatibility cannot be verified against architecture."
-- If tech-stack.md doesn't exist (bootstrap mode), create it. If implementation/review mode, HALT: "No tech stack defined — run /pair-capability-assess-stack in bootstrap mode first."
+- If tech-stack.md doesn't exist (bootstrap mode), the caller creates it on persist. If implementation/review mode, HALT: "No tech stack defined — run /pair-capability-assess-stack in bootstrap mode first."
 
 ## Notes
 
 - **Lifecycle-spanning**: unlike other assess-* skills (primarily bootstrap), /pair-capability-assess-stack is used throughout bootstrap, implementation, and review.
 - **Tech stack as registry**: `tech-stack.md` is the registry of approved technologies. Only listed technologies are approved. Unlisted technologies detected during review trigger /pair-capability-assess-stack evaluation.
-- Stack decisions are typically **non-architectural** → produce ADL. Exception: if a stack choice fundamentally changes the architecture (e.g. switching from monolith to microservices runtime), use ADR.
-- **Section ownership** prevents parallel write conflicts: each assess-* skill owns its sections, preserves others.
+- Stack decisions are typically **non-architectural** → the caller records them as an ADL. Exception: if a stack choice fundamentally changes the architecture (e.g. switching from monolith to microservices runtime), the caller uses ADR.
+- **Section ownership** keeps proposals non-overlapping: each assess-* skill renders only its sections; the single adoption writer is `/pair-capability-record-decision`, which preserves others on write.
 - Educational content (technology descriptions, ecosystem overview, WHY) stays in guidelines. This skill references guidelines for evaluation criteria and comparison matrices.

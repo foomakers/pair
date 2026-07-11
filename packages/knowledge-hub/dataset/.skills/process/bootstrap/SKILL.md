@@ -1,7 +1,7 @@
 ---
 name: bootstrap
 description: "Orchestrates full project setup: PRD verification, project categorization, checklist completion, standards generation, quality gate setup, and PM tool configuration. Composes /specify-prd, /setup-pm, /record-decision, and assess-* (optional). Idempotent — detects completed phases and resumes."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
@@ -99,19 +99,21 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
 ### Step 2.2: Assessment Phase (Optional)
 
 1. **Check**: Are assess-\* skills installed? Scan installed skills directory for `assess-*` skills.
-2. **Act** (installed): Compose assess-\* skills in recommended sequence. Each skill checks its own adoption file first — already-decided domains are skipped automatically (resolution cascade).
+2. **Act** (installed): Compose assess-\* skills in recommended sequence. Each skill checks its own adoption file first — already-decided domains are skipped automatically (resolution cascade). **assess-\* skills are output-only**: each returns a proposal `{ content, target, decision-metadata }` and writes nothing. For each accepted proposal, `/bootstrap` composes `/record-decision(content, target, decision-metadata)` — the **sole adoption writer** — to persist it. Never let an assess-\* skill write adoption directly.
 
    **Recommended sequence** (respects adoption file dependencies):
-   1. `/assess-architecture` → writes `architecture.md` (needed by stack and infrastructure)
-   2. `/assess-stack` → writes core sections of `tech-stack.md` (needed by testing and AI)
-   3. `/assess-testing` → writes testing section of `tech-stack.md`
-   4. `/assess-ai` → writes AI section of `tech-stack.md`
-   5. `/assess-infrastructure` → writes `infrastructure.md` (needed by observability)
-   6. `/assess-observability` → writes observability section of `infrastructure.md`
-   7. `/assess-methodology` → writes methodology section of `way-of-working.md`
-   8. `/assess-pm` → writes PM section of `way-of-working.md` (delegates to `/setup-pm`)
+   1. `/assess-architecture` → proposes `architecture.md` content (needed by stack and infrastructure)
+   2. `/assess-stack` → proposes core sections of `tech-stack.md` (needed by testing and AI)
+   3. `/assess-testing` → proposes testing section of `tech-stack.md`
+   4. `/assess-ai` → proposes AI section of `tech-stack.md`
+   5. `/assess-infrastructure` → proposes `infrastructure.md` content (needed by observability)
+   6. `/assess-observability` → proposes observability section of `infrastructure.md`
+   7. `/assess-methodology` → proposes methodology section of `way-of-working.md`
+   8. `/assess-pm` → proposes PM section of `way-of-working.md` (delegates to `/setup-pm` when installed)
 
-   **Section ownership** (prevents parallel write conflicts):
+   After each assessment (or after collecting the batch), compose `/record-decision(content, target, decision-metadata)` to persist the proposal to its target adoption file and record the ADR/ADL. `/assess-pm` persists via `/setup-pm` when that skill is installed; otherwise `/bootstrap` persists its proposal via `/record-decision` like the others.
+
+   **Section ownership** (each assess-\* proposal owns its section; `/record-decision` preserves the rest on write):
 
    | Adoption File        | Section            | Owner Skill            |
    | -------------------- | ------------------ | ---------------------- |
@@ -125,7 +127,7 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
    | `way-of-working.md`  | PM tool            | `/assess-pm`           |
    | `way-of-working.md`  | Quality gates      | `/bootstrap` (Step 3.2)|
 
-   **Parallel safety**: Skills writing different adoption files can run in parallel. Skills writing different sections of the same file are safe if each respects section ownership. The recommended sequence avoids any conflicts.
+   **Parallel safety**: Because assess-\* skills only produce proposals (no writes), they can run in parallel freely. The actual writes happen serially through `/record-decision` (the sole writer), which preserves sections it does not own. The recommended sequence orders the proposals by adoption-file dependency.
 
    **Partial installation**: If only some assess-\* skills are installed, compose those and skip the rest with a warning. Each assess-\* skill is independent — partial installation is supported.
 
@@ -134,7 +136,7 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
    > assess-\* skills are not yet installed. Proceeding with manual assessment.
    > For each technical area, I'll reference the guidelines and ask you to make decisions directly.
 
-4. **Verify**: Assessment data collected (via skills or manually). All adoption files written by assess-\* skills are consistent.
+4. **Verify**: Assessment data collected (via skills or manually) and persisted via `/record-decision`. All adoption files written from assess-\* proposals are consistent.
 
 ### Step 2.3: Gather Information per Section
 
@@ -298,7 +300,7 @@ Phase completion is detected via output file existence — never re-does complet
 - **assess-\* skills not installed**: Skip assessment phase, reference guideline files directly, ask developer for manual decisions. Log: "assess-\* skills not installed — using manual assessment."
 - **/specify-prd not installed**: HALT at Phase 0 if PRD is missing. Suggest creating PRD manually using how-to-01.
 - **/setup-pm not installed**: Skip PM configuration in Phase 4. Warn: "PM tool not configured — /setup-pm not installed."
-- **/record-decision not installed**: Skip decision recording. Warn: "Decisions not recorded — /record-decision not installed. Document decisions manually in adoption files."
+- **/record-decision not installed**: Adoption cannot be persisted automatically — assess-\* skills are output-only and never write adoption themselves. Warn: "/record-decision not installed — assess-\* proposals cannot be persisted. Write adoption files manually from the proposals and record decisions by hand."
 - **Bootstrap checklist asset not found**: Use Phase 2 section questions as fallback — they cover the same areas.
 - **Adoption directory doesn't exist**: Create `adoption/tech/` and `adoption/decision-log/` on first write.
 - **/map-subdomains or /map-contexts not installed**: Skip the corresponding step in Phase 3.5 with a warning. Domain modeling never blocks bootstrap completion.

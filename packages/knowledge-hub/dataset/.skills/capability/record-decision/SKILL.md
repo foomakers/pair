@@ -1,13 +1,15 @@
 ---
 name: record-decision
-description: "Records an architectural, non-architectural, or domain decision. Architectural decisions produce an ADR; non-architectural decisions produce an ADL entry; domain decisions meeting the 3-criteria gate produce a DDR and sync the context map. All always update the relevant adoption/context files. Invocable independently or composed by /implement and /review."
-version: 0.4.1
+description: "Records an architectural, non-architectural, or domain decision and is the SOLE writer of adoption files. Architectural decisions produce an ADR; non-architectural decisions produce an ADL entry; domain decisions meeting the 3-criteria gate produce a DDR and sync the context map. All always update the relevant adoption/context files. Accepts pre-rendered {content, target} from assess-* proposals (generic persister — no per-domain rendering). Invocable independently or composed by /implement and /review."
+version: 0.5.0
 author: Foomakers
 ---
 
 # /record-decision — Decision Recorder
 
 Record a decision as an ADR (architectural), ADL (non-architectural), or DDR (domain). Always update the corresponding adoption files — or, for DDR, the context map — to keep them as the single source of truth for "what we use now."
+
+This skill is the **single writer of adoption files** in the system. `assess-*` skills are output-only: they render adoption content and delegate persistence here. When a caller supplies pre-rendered `$content` and a `$target`, this skill acts as a **generic persister** — it writes `$content` verbatim to `$target` and records the decision, with **no per-domain rendering logic** (each `assess-*` knows how to render its own adoption content; this skill only persists it).
 
 ## Arguments
 
@@ -16,6 +18,8 @@ Record a decision as an ADR (architectural), ADL (non-architectural), or DDR (do
 | `$type`    | Yes      | Decision type: `architectural`, `non-architectural`, or `domain`                |
 | `$topic`   | Yes      | Short kebab-case topic name (e.g., `streaming-downloads`, `refund-window-30-days`) |
 | `$summary` | No       | One-line summary of the decision (will be asked interactively if omitted)        |
+| `$content` | No       | Pre-rendered adoption content (e.g. from an `assess-*` proposal). When provided with `$target`, this skill persists it verbatim (generic persist) instead of re-deriving the affected files. |
+| `$target`  | No       | Adoption file/section the `$content` is written to (e.g. `adoption/tech/tech-stack.md`). Required when `$content` is provided. |
 
 ## Core Rule: ADR, ADL, and DDR Are Mutually Exclusive
 
@@ -96,9 +100,16 @@ A domain decision only becomes a DDR if it meets **all three** criteria. This is
 
 ### Step 4: Update Adoption Files or Context Map
 
-This step is **always required** — adoption files and the context map are the single source of truth.
+This step is **always required** — adoption files and the context map are the single source of truth. This skill is the **only** skill that writes adoption files.
 
-#### If `architectural` or `non-architectural` → Update Adoption Files:
+#### If `$content` and `$target` provided → Generic Persist (assess-* proposal):
+
+1. **Check**: Did the caller supply pre-rendered `$content` and a `$target`? (This is the `assess-* → record-decision` path.)
+2. **Skip**: If not, fall through to the interactive identification below.
+3. **Act**: Write `$content` **verbatim** to `$target`, preserving any sections of the target the content does not own (section-scoped update). Perform **no per-domain rendering** — the content is authored by the assess-* skill; this skill only persists it.
+4. **Verify**: `$target` reflects the supplied content. Proceed to Step 5.
+
+#### If `architectural` or `non-architectural` (interactive) → Update Adoption Files:
 
 1. **Check**: Identify which adoption files are affected by this decision:
    - [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — if the decision involves libraries, frameworks, or tools
@@ -143,6 +154,12 @@ When composed by `/implement` or `/review`:
 - **Input**: The composing skill detects a decision need and invokes `/record-decision` with `$type` and `$topic`.
 - **Output**: Returns the path to the decision file and list of updated adoption/context files.
 - The composing skill includes the decision file in the next commit.
+
+When composed by `/bootstrap` or an `assess-*` proposal (generic persist):
+
+- **Input**: The caller passes `$content` (the rendered adoption body from an `assess-*` skill) and `$target` (the adoption file/section), plus `$type`, `$topic`, `$summary`.
+- **Output**: This skill writes `$content` to `$target` verbatim and records the ADR/ADL — it is the **sole adoption writer**. It performs no per-domain rendering; the assess-* skill owns the content.
+- This keeps the invariant: **only `record-decision` touches adoption files**; **only assess-* renders** its own adoption content; the caller orchestrates the two.
 
 When invoked **independently**:
 

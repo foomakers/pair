@@ -1,13 +1,13 @@
 ---
 name: assess-infrastructure
-description: "Assess infrastructure strategy using resolution cascade (Argument > Adoption > Assessment). Reads infrastructure guidelines, proposes cloud/CI/CD/deployment choices, writes infrastructure.md adoption, composes /record-decision. Idempotent."
-version: 0.4.1
+description: "Assess infrastructure strategy using resolution cascade (Argument > Adoption > Assessment). Reads infrastructure guidelines, proposes cloud/CI/CD/deployment choices and emits rendered adoption content + target (output-only, writes nothing); the caller persists via /record-decision. Idempotent."
+version: 0.5.0
 author: Foomakers
 ---
 
 # /assess-infrastructure — Infrastructure Assessment
 
-Evaluate and decide on infrastructure strategy: cloud provider, CI/CD pipeline, deployment patterns, IaC approach, and environments. Follows the resolution cascade.
+Evaluate and recommend infrastructure strategy: cloud provider, CI/CD pipeline, deployment patterns, IaC approach, and environments. Follows the resolution cascade. **Output-only**: produces a proposal (rendered infrastructure.md content + target) plus a report — writes no files. Persistence is delegated to `/record-decision`.
 
 ## Arguments
 
@@ -17,11 +17,11 @@ Evaluate and decide on infrastructure strategy: cloud provider, CI/CD pipeline, 
 
 ## Composed Skills
 
-| Skill              | Type       | Required                                               |
-| ------------------ | ---------- | ------------------------------------------------------ |
-| `/record-decision` | Capability | Yes — records infrastructure decision as ADR or ADL    |
+This skill is **output-only** — it composes no skill and writes no files. Persistence of the proposal is the caller's responsibility via `/record-decision` (see [Composition Interface](#composition-interface)).
 
-## Adoption File
+## Proposal Target
+
+The rendered adoption content is destined for this file — the caller writes it via `/record-decision`:
 
 - **Target**: [adoption/tech/infrastructure.md](../../../.pair/adoption/tech/infrastructure.md) — core infrastructure sections
 - **Ownership**: Full file, except observability section (owned by /assess-observability)
@@ -43,7 +43,7 @@ Evaluate and decide on infrastructure strategy: cloud provider, CI/CD pipeline, 
 2. **Skip**: If not populated or missing, go to Path C.
 3. **Act**: Read current adoption. Confirm it's valid.
 4. **Check**: Does a corresponding decision record exist?
-5. **Act**: If decision record missing, compose `/record-decision` to backfill.
+5. **Act**: If decision record missing, report it as a gap in the output — this skill writes nothing; the caller persists a backfill via `/record-decision`.
 6. **Verify**: Done — exit skill.
 
 #### Path C — Full Assessment
@@ -82,31 +82,33 @@ Evaluate and decide on infrastructure strategy: cloud provider, CI/CD pipeline, 
 
 3. **Verify**: Developer approves.
 
-### Step 4: Write Adoption File
+### Step 4: Render Adoption Proposal
 
-1. **Act**: Write or update [adoption/tech/infrastructure.md](../../../.pair/adoption/tech/infrastructure.md):
+1. **Act**: Render the infrastructure.md content — the ready-to-write body for the target file:
    - Concise, prescriptive statements
-   - Preserve observability section if it exists (owned by /assess-observability)
-2. **Verify**: Adoption file written and consistent.
+   - Scope to the core infrastructure sections so the caller's write preserves the observability section (owned by /assess-observability)
+2. **Verify**: The rendered `content` and its `target` are ready to emit. **This skill writes no files.**
 
-### Step 5: Record Decision
+### Step 5: Emit Proposal
 
-1. **Act**: Compose `/record-decision`:
-   - `$type`: `architectural` (infrastructure decisions affect system structure)
-   - `$topic`: `infrastructure-strategy`
-   - `$summary`: "[Summary of key infrastructure choices]"
-2. **Verify**: ADR created. Adoption consistent.
+1. **Act**: Emit the proposal to the caller:
+   - `content`: the rendered infrastructure.md body from Step 4
+   - `target`: [adoption/tech/infrastructure.md](../../../.pair/adoption/tech/infrastructure.md) (core sections)
+   - `decision-metadata`: `$type: architectural` (infrastructure decisions affect system structure), `$topic: infrastructure-strategy`, `$summary: "[Summary of key infrastructure choices]"`
+   - plus the human-facing report (see Output Format)
+2. **Verify**: Proposal emitted. Persistence is performed by the caller via `/record-decision(content, target, decision-metadata)`, never by this skill.
 
 ## Output Format
 
 ```text
-ASSESSMENT COMPLETE:
+ASSESSMENT COMPLETE (output-only — no files written):
 ├── Domain:    Infrastructure
 ├── Path:      [Argument Override | Adoption Exists | Full Assessment]
 ├── Decision:  [key infrastructure choices]
-├── Adoption:  [infrastructure.md — written | confirmed | updated]
-├── Record:    [ADR path — created | exists | backfilled]
-└── Status:    [Complete | Confirmed existing]
+├── Proposal:  [content rendered for infrastructure.md]
+├── Target:    adoption/tech/infrastructure.md (core sections)
+├── Persist:   [caller composes /record-decision(content, target) → ADR]
+└── Status:    [Proposal ready | Confirmed existing]
 ```
 
 ## Composition Interface
@@ -114,26 +116,27 @@ ASSESSMENT COMPLETE:
 When composed by `/bootstrap`:
 
 - **Input**: `/bootstrap` invokes during Phase 2.
-- **Output**: Returns decision summary and adoption file path.
+- **Output**: Returns `{ content, target, decision-metadata }` plus the report. Writes nothing.
+- **Persistence**: `/bootstrap` accepts the proposal and composes `/record-decision(content, target, decision-metadata)` to write infrastructure.md and record the ADR.
 
 When invoked **independently**:
 
-- Full interactive flow. Developer commits changes.
+- Full interactive flow. The skill returns the proposal; the human (or agent) persists it by composing `/record-decision`, then commits.
 
 ## Edge Cases
 
-- **Project doesn't need infrastructure** (e.g. pure library, CLI tool): Write minimal infrastructure.md noting CI/CD only, no cloud deployment.
-- **Adoption file partially exists**: Fill gaps, preserve existing content.
-- **Observability section exists**: Preserve it — owned by /assess-observability.
+- **Project doesn't need infrastructure** (e.g. pure library, CLI tool): Render a minimal infrastructure.md noting CI/CD only, no cloud deployment, for the caller to persist.
+- **Adoption file partially exists**: Render content that fills gaps; the caller's write preserves existing content.
+- **Observability section exists**: Do not touch it — owned by /assess-observability. Scope the rendered content to core sections.
 
 ## Graceful Degradation
 
 - If infrastructure guidelines not found, use minimal assessment: ask developer for CI/CD and deployment preferences.
-- If `/record-decision` not installed, warn and skip recording.
-- If adoption directory doesn't exist, create it.
+- If the caller cannot persist (e.g. `/record-decision` not installed), the proposal stands as a report — adoption stays unchanged.
+- If adoption files are missing, the assessment still runs — the caller creates the file on persist via `/record-decision`.
 
 ## Notes
 
-- Infrastructure decisions are typically **architectural** → produce ADR.
-- **Section ownership**: /assess-observability owns observability section of infrastructure.md if that section exists there; otherwise observability goes in its own section of way-of-working or a separate file.
+- Infrastructure decisions are typically **architectural** → the caller records them as an ADR.
+- **Section ownership**: /assess-observability owns the observability section of infrastructure.md if that section exists there; otherwise observability goes in its own section of way-of-working or a separate file. The single adoption writer is `/record-decision`.
 - Educational content (cloud concepts, IaC principles) stays in guidelines.

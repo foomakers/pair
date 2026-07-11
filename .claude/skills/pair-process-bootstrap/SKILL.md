@@ -1,7 +1,7 @@
 ---
 name: pair-process-bootstrap
 description: "Orchestrates full project setup: PRD verification, project categorization, checklist completion, standards generation, quality gate setup, and PM tool configuration. Composes /pair-process-specify-prd, /pair-capability-setup-pm, /pair-capability-record-decision, and assess-* (optional). Idempotent — detects completed phases and resumes."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
@@ -24,6 +24,8 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
 | `/pair-capability-assess-methodology`   | Capability | Optional — methodology assessment. Graceful degradation if absent.            |
 | `/pair-capability-assess-pm`            | Capability | Optional — PM tool assessment (delegates to /pair-capability-setup-pm). Graceful degradation if absent. |
 | `/pair-capability-assess-ai`            | Capability | Optional — AI development tools assessment. Graceful degradation if absent.   |
+| `/pair-capability-map-subdomains`       | Capability | Optional — full-catalog (`$scope: all`) domain mapping, the only caller allowed this scope. Graceful degradation if absent. |
+| `/pair-capability-map-contexts`         | Capability | Optional — full-catalog (`$scope: all`) context mapping, the only caller allowed this scope. Graceful degradation if absent. |
 
 ## Phase 0: PRD Verification (BLOCKING)
 
@@ -97,19 +99,21 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
 ### Step 2.2: Assessment Phase (Optional)
 
 1. **Check**: Are assess-\* skills installed? Scan installed skills directory for `assess-*` skills.
-2. **Act** (installed): Compose assess-\* skills in recommended sequence. Each skill checks its own adoption file first — already-decided domains are skipped automatically (resolution cascade).
+2. **Act** (installed): Compose assess-\* skills in recommended sequence. Each skill checks its own adoption file first — already-decided domains are skipped automatically (resolution cascade). **assess-\* skills are output-only**: each returns a proposal `{ content, target, decision-metadata }` and writes nothing. For each accepted proposal, `/pair-process-bootstrap` composes `/pair-capability-record-decision(content, target, decision-metadata)` — the **sole adoption writer** — to persist it. Never let an assess-\* skill write adoption directly.
 
    **Recommended sequence** (respects adoption file dependencies):
-   1. `/pair-capability-assess-architecture` → writes `architecture.md` (needed by stack and infrastructure)
-   2. `/pair-capability-assess-stack` → writes core sections of `tech-stack.md` (needed by testing and AI)
-   3. `/pair-capability-assess-testing` → writes testing section of `tech-stack.md`
-   4. `/pair-capability-assess-ai` → writes AI section of `tech-stack.md`
-   5. `/pair-capability-assess-infrastructure` → writes `infrastructure.md` (needed by observability)
-   6. `/pair-capability-assess-observability` → writes observability section of `infrastructure.md`
-   7. `/pair-capability-assess-methodology` → writes methodology section of `way-of-working.md`
-   8. `/pair-capability-assess-pm` → writes PM section of `way-of-working.md` (delegates to `/pair-capability-setup-pm`)
+   1. `/pair-capability-assess-architecture` → proposes `architecture.md` content (needed by stack and infrastructure)
+   2. `/pair-capability-assess-stack` → proposes core sections of `tech-stack.md` (needed by testing and AI)
+   3. `/pair-capability-assess-testing` → proposes testing section of `tech-stack.md`
+   4. `/pair-capability-assess-ai` → proposes AI section of `tech-stack.md`
+   5. `/pair-capability-assess-infrastructure` → proposes `infrastructure.md` content (needed by observability)
+   6. `/pair-capability-assess-observability` → proposes observability section of `infrastructure.md`
+   7. `/pair-capability-assess-methodology` → proposes methodology section of `way-of-working.md`
+   8. `/pair-capability-assess-pm` → proposes PM section of `way-of-working.md` (delegates to `/pair-capability-setup-pm` when installed)
 
-   **Section ownership** (prevents parallel write conflicts):
+   After each assessment (or after collecting the batch), compose `/pair-capability-record-decision(content, target, decision-metadata)` to persist the proposal to its target adoption file and record the ADR/ADL. `/pair-capability-assess-pm` persists via `/pair-capability-setup-pm` when that skill is installed; otherwise `/pair-process-bootstrap` persists its proposal via `/pair-capability-record-decision` like the others.
+
+   **Section ownership** (each assess-\* proposal owns its section; `/pair-capability-record-decision` preserves the rest on write):
 
    | Adoption File        | Section            | Owner Skill            |
    | -------------------- | ------------------ | ---------------------- |
@@ -123,7 +127,7 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
    | `way-of-working.md`  | PM tool            | `/pair-capability-assess-pm`           |
    | `way-of-working.md`  | Quality gates      | `/pair-process-bootstrap` (Step 3.2)|
 
-   **Parallel safety**: Skills writing different adoption files can run in parallel. Skills writing different sections of the same file are safe if each respects section ownership. The recommended sequence avoids any conflicts.
+   **Parallel safety**: Because assess-\* skills only produce proposals (no writes), they can run in parallel freely. The actual writes happen serially through `/pair-capability-record-decision` (the sole writer), which preserves sections it does not own. The recommended sequence orders the proposals by adoption-file dependency.
 
    **Partial installation**: If only some assess-\* skills are installed, compose those and skip the rest with a warning. Each assess-\* skill is independent — partial installation is supported.
 
@@ -132,7 +136,7 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
    > assess-\* skills are not yet installed. Proceeding with manual assessment.
    > For each technical area, I'll reference the guidelines and ask you to make decisions directly.
 
-4. **Verify**: Assessment data collected (via skills or manually). All adoption files written by assess-\* skills are consistent.
+4. **Verify**: Assessment data collected (via skills or manually) and persisted via `/pair-capability-record-decision`. All adoption files written from assess-\* proposals are consistent.
 
 ### Step 2.3: Gather Information per Section
 
@@ -200,6 +204,24 @@ For each missing adoption file (in order: architecture → tech-stack → infras
 
 6. **Verify**: Quality gates documented in way-of-working and placeholder scripts exist.
 
+## Phase 3.5: Domain Modeling (optional, full-catalog)
+
+Runs after architecture and tech-stack are adopted (Step 3.1) — both are prerequisites for `/pair-capability-map-contexts`.
+
+### Step 3.5.1: Subdomain Placement
+
+1. **Check**: Is `/pair-capability-map-subdomains` installed? Does [`adoption/product/subdomain/`](../../../.pair/adoption/product/subdomain) already contain populated entries?
+2. **Skip**: If not installed → warn and proceed to Step 3.5.2 without subdomain placement. If already populated → proceed to Step 3.5.2.
+3. **Act**: Compose `/pair-capability-map-subdomains` with `$scope: all` — the only caller allowed a full-catalog run. Uses PRD (always present at this point); falls back to "system areas" if no initiatives exist yet.
+4. **Verify**: Subdomain catalog created/updated, or fallback noted. Proceed regardless of outcome.
+
+### Step 3.5.2: Bounded Context Placement
+
+1. **Check**: Is `/pair-capability-map-contexts` installed? Does [`adoption/tech/boundedcontext/`](../../../.pair/adoption/tech/boundedcontext) already contain populated entries?
+2. **Skip**: If not installed → warn and proceed to Phase 4 without context mapping. If already populated → proceed to Phase 4.
+3. **Act**: Compose `/pair-capability-map-contexts` with `$scope: all` — the only caller allowed a full-catalog run. Uses the subdomain catalog (Step 3.5.1) plus architecture.md and tech-stack.md (Step 3.1).
+4. **Verify**: Bounded context catalog created/updated, or fallback noted. Domain modeling never blocks bootstrap completion — proceed to Phase 4 regardless of outcome.
+
 ## Phase 4: Finalization
 
 ### Step 4.1: Consistency Verification
@@ -245,6 +267,7 @@ BOOTSTRAP COMPLETE:
 │   ├── ux-ui.md:           [generated | existing | skipped | n/a]
 │   └── way-of-working.md:  [generated | existing | skipped]
 ├── Quality Gates:   [N gates configured — standard + custom]
+├── Domain Model:    [subdomains: N | contexts: N | skipped — not installed]
 ├── PM Tool:         [configured via /pair-capability-setup-pm | already configured]
 ├── Decisions:       [N decisions recorded (ADR: X, ADL: Y)]
 └── Status:          [Complete | Partial — details]
@@ -275,11 +298,12 @@ Phase completion is detected via output file existence — never re-does complet
 ## Graceful Degradation
 
 - **assess-\* skills not installed**: Skip assessment phase, reference guideline files directly, ask developer for manual decisions. Log: "assess-\* skills not installed — using manual assessment."
-- **/specify-prd not installed**: HALT at Phase 0 if PRD is missing. Suggest creating PRD manually using how-to-01.
-- **/setup-pm not installed**: Skip PM configuration in Phase 4. Warn: "PM tool not configured — /pair-capability-setup-pm not installed."
-- **/record-decision not installed**: Skip decision recording. Warn: "Decisions not recorded — /pair-capability-record-decision not installed. Document decisions manually in adoption files."
+- **/pair-process-specify-prd not installed**: HALT at Phase 0 if PRD is missing. Suggest creating PRD manually using how-to-01.
+- **/pair-capability-setup-pm not installed**: Skip PM configuration in Phase 4. Warn: "PM tool not configured — /pair-capability-setup-pm not installed."
+- **/pair-capability-record-decision not installed**: Adoption cannot be persisted automatically — assess-\* skills are output-only and never write adoption themselves. Warn: "/pair-capability-record-decision not installed — assess-\* proposals cannot be persisted. Write adoption files manually from the proposals and record decisions by hand."
 - **Bootstrap checklist asset not found**: Use Phase 2 section questions as fallback — they cover the same areas.
 - **Adoption directory doesn't exist**: Create `adoption/tech/` and `adoption/decision-log/` on first write.
+- **/pair-capability-map-subdomains or /pair-capability-map-contexts not installed**: Skip the corresponding step in Phase 3.5 with a warning. Domain modeling never blocks bootstrap completion.
 
 ## Notes
 
@@ -288,4 +312,5 @@ Phase completion is detected via output file existence — never re-does complet
 - The developer can stop between phases. Re-invoke to resume (idempotency ensures correct state).
 - All decisions during bootstrap are recorded via `/pair-capability-record-decision`. Non-architectural → ADL. Architectural → ADR.
 - Quality gate setup ensures the gate infrastructure is executable from day one (not deferred to first implementation).
-- Content source: how-to-02 Phases 0-4. How-to-02 retains orchestration flow, this skill has operational detail.
+- Phase 3.5 is the only full-catalog (`$scope: all`) entry point for `/pair-capability-map-subdomains` and `/pair-capability-map-contexts` — every other caller is scoped to what it just touched. See [Callers Matrix](../../../.pair/knowledge/skills-guide.md#callers-matrix-scoped-capabilities).
+- Content source: how-to-02 Phases 0-4 (including domain modeling). How-to-02 retains orchestration flow, this skill has operational detail.

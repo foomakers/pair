@@ -1,13 +1,13 @@
 ---
 name: pair-capability-assess-pm
-description: "Assess project management tool using resolution cascade (Argument > Adoption > Assessment). Reads PM tool guidelines, proposes tool choice, writes way-of-working.md PM section, composes /pair-capability-record-decision. Delegates setup to /pair-capability-setup-pm. Idempotent."
-version: 0.4.1
+description: "Assess project management tool using resolution cascade (Argument > Adoption > Assessment). Reads PM tool guidelines, proposes a tool choice and emits rendered adoption content + target (output-only, writes nothing); persistence via /pair-capability-setup-pm or the caller's /pair-capability-record-decision. Idempotent."
+version: 0.5.0
 author: Foomakers
 ---
 
 # /pair-capability-assess-pm — PM Tool Assessment
 
-Evaluate and decide on the project management tool. Follows the resolution cascade. After decision, delegates actual tool configuration to `/pair-capability-setup-pm`.
+Evaluate and recommend the project management tool. Follows the resolution cascade. **Output-only** for adoption: this skill produces a proposal (rendered PM-section content + target) plus a report and never writes adoption itself. When `/pair-capability-setup-pm` is installed it delegates tool configuration and persistence to it; otherwise the caller persists the proposal via `/pair-capability-record-decision`.
 
 ## Arguments
 
@@ -19,10 +19,13 @@ Evaluate and decide on the project management tool. Follows the resolution casca
 
 | Skill              | Type       | Required                                         |
 | ------------------ | ---------- | ------------------------------------------------ |
-| `/pair-capability-record-decision` | Capability | Yes — records PM tool decision as ADL            |
-| `/pair-capability-setup-pm`        | Capability | Optional — delegates tool configuration if installed |
+| `/pair-capability-setup-pm`        | Capability | Optional — delegates tool configuration + persistence if installed |
 
-## Adoption File
+This skill writes no adoption files itself. When `/pair-capability-setup-pm` is absent, persistence of the proposal is the caller's responsibility via `/pair-capability-record-decision` (see [Composition Interface](#composition-interface)).
+
+## Proposal Target
+
+The rendered adoption content is destined for this section — the caller (or `/pair-capability-setup-pm`) writes it:
 
 - **Target**: [adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) — **PM tool section**
 - **Ownership**: PM tool section (shared file — /pair-capability-assess-methodology owns methodology section)
@@ -44,7 +47,7 @@ Evaluate and decide on the project management tool. Follows the resolution casca
 2. **Skip**: If no PM tool defined, go to Path C.
 3. **Act**: Read current PM adoption. Confirm it's valid.
 4. **Check**: Does a corresponding decision record exist?
-5. **Act**: If decision record missing, compose `/pair-capability-record-decision` to backfill.
+5. **Act**: If decision record missing, report it as a gap in the output — this skill writes nothing; the caller persists a backfill via `/pair-capability-record-decision`.
 6. **Verify**: Done — exit skill.
 
 #### Path C — Full Assessment
@@ -83,36 +86,38 @@ Evaluate and decide on the project management tool. Follows the resolution casca
 
 4. **Verify**: Developer approves.
 
-### Step 4: Delegate Setup or Write Adoption
+### Step 4: Delegate Setup or Render Proposal
 
 1. **Check**: Is `/pair-capability-setup-pm` installed?
-2. **Act** (installed): Compose `/pair-capability-setup-pm` with `$tool: [chosen tool]`. `/pair-capability-setup-pm` handles adoption update and decision recording. Done — exit skill.
-3. **Act** (not installed): Write PM tool section in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) directly:
+2. **Act** (installed): Compose `/pair-capability-setup-pm` with `$tool: [chosen tool]`. `/pair-capability-setup-pm` handles tool configuration, adoption update, and decision recording. Done — exit skill.
+3. **Act** (not installed): Render the **PM tool section** content — the ready-to-write body for way-of-working.md:
    - Tool name
    - Workflow methodology integration
    - Access method (MCP, CLI, filesystem)
-   - Preserve all other sections
-4. **Verify**: PM tool section written.
+   - Scope strictly to the PM tool section so the caller's write preserves all other sections
+4. **Verify**: The rendered `content` and its `target` are ready to emit. **This skill writes no files.**
 
-### Step 5: Record Decision (only if /pair-capability-setup-pm not invoked)
+### Step 5: Emit Proposal (only if /pair-capability-setup-pm not invoked)
 
-1. **Check**: Was `/pair-capability-setup-pm` composed in Step 4? If yes, it already recorded the decision — skip.
-2. **Act**: Compose `/pair-capability-record-decision`:
-   - `$type`: `non-architectural`
-   - `$topic`: `pm-tool-choice`
-   - `$summary`: "[Tool] adopted for project management"
-3. **Verify**: ADL created. Adoption consistent.
+1. **Check**: Was `/pair-capability-setup-pm` composed in Step 4? If yes, it already configured and persisted — skip.
+2. **Act**: Emit the proposal to the caller:
+   - `content`: the rendered PM-section body from Step 4
+   - `target`: [adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) (PM tool section)
+   - `decision-metadata`: `$type: non-architectural`, `$topic: pm-tool-choice`, `$summary: "[Tool] adopted for project management"`
+   - plus the human-facing report (see Output Format)
+3. **Verify**: Proposal emitted. Persistence is performed by the caller via `/pair-capability-record-decision(content, target, decision-metadata)`, never by this skill.
 
 ## Output Format
 
 ```text
-ASSESSMENT COMPLETE:
+ASSESSMENT COMPLETE (output-only for adoption — no files written by this skill):
 ├── Domain:    Project Management
 ├── Path:      [Argument Override | Adoption Exists | Full Assessment]
 ├── Decision:  [tool name]
-├── Adoption:  [way-of-working.md PM section — written | confirmed | delegated to /pair-capability-setup-pm]
-├── Record:    [ADL path — created | exists | delegated to /pair-capability-setup-pm]
-└── Status:    [Complete | Confirmed existing | Delegated]
+├── Proposal:  [content rendered for way-of-working.md PM section | delegated to /pair-capability-setup-pm]
+├── Target:    adoption/tech/way-of-working.md (PM tool section)
+├── Persist:   [caller composes /pair-capability-record-decision(content, target) → ADL | delegated to /pair-capability-setup-pm]
+└── Status:    [Proposal ready | Confirmed existing | Delegated]
 ```
 
 ## Composition Interface
@@ -120,27 +125,28 @@ ASSESSMENT COMPLETE:
 When composed by `/pair-process-bootstrap`:
 
 - **Input**: `/pair-process-bootstrap` invokes during Phase 2 (checklist completion). May pass `$choice`.
-- **Output**: Returns decision summary. If `/pair-capability-setup-pm` was composed, returns its output.
+- **Output**: If `/pair-capability-setup-pm` was composed, returns its output. Otherwise returns `{ content, target, decision-metadata }` plus the report — writes nothing.
+- **Persistence**: when not delegated, `/pair-process-bootstrap` accepts the proposal and composes `/pair-capability-record-decision(content, target, decision-metadata)`.
 
 When invoked **independently**:
 
-- Full interactive flow. Developer commits changes.
+- Full interactive flow. If `/pair-capability-setup-pm` is present it persists; otherwise the human (or agent) persists the proposal by composing `/pair-capability-record-decision`, then commits.
 
 ## Edge Cases
 
-- **way-of-working.md exists but no PM section**: Add PM section, preserve all other content.
-- **Tool without implementation guide**: Write adoption but warn about manual setup.
+- **way-of-working.md exists but no PM section**: Render content that adds the PM section; the caller's write preserves all other content.
+- **Tool without implementation guide**: Emit the proposal but warn about manual setup.
 - **Multiple PM tools needed**: Not supported — one tool per project. Document primary tool.
 
 ## Graceful Degradation
 
 - If PM tool guidelines not found, use minimal assessment: ask developer for tool preference.
-- If `/pair-capability-setup-pm` not installed, write adoption directly (no tool-specific configuration).
-- If `/pair-capability-record-decision` not installed, warn and skip recording.
+- If `/pair-capability-setup-pm` not installed, emit the proposal for the caller to persist via `/pair-capability-record-decision` (no tool-specific configuration).
+- If the caller cannot persist (e.g. `/pair-capability-record-decision` not installed), the proposal stands as a report — adoption stays unchanged.
 
 ## Notes
 
-- PM tool decisions are **non-architectural** → produce ADL.
-- **Section ownership**: this skill writes ONLY PM tool content in way-of-working.md.
-- **Delegation pattern**: /pair-capability-assess-pm decides WHICH tool, /pair-capability-setup-pm configures it. If /pair-capability-setup-pm is installed, it handles both adoption write and decision recording.
+- PM tool decisions are **non-architectural** → the caller records them as an ADL.
+- **Section ownership**: this skill renders content ONLY for the PM tool section of way-of-working.md. The single adoption writer is `/pair-capability-record-decision` (or `/pair-capability-setup-pm` when it handles configuration).
+- **Delegation pattern**: /pair-capability-assess-pm decides WHICH tool, /pair-capability-setup-pm configures it. If /pair-capability-setup-pm is installed, it handles both adoption write and decision recording; assess-pm itself never writes adoption.
 - Educational content (tool descriptions, integration details) stays in guidelines.

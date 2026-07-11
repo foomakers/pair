@@ -1,13 +1,13 @@
 ---
 name: pair-capability-assess-debt
-description: "Assesses technical debt using resolution cascade (Argument > Adoption > Assessment). Categorizes debt (code, design, test, documentation, infrastructure), applies prioritization formula (impact x effort), proposes remediation priority. Idempotent: detects existing assessment. Invocable independently or composed by /pair-process-review."
-version: 0.4.1
+description: "Assesses technical debt using resolution cascade (Argument > Adoption > Assessment). Categorizes debt (code, design, test, documentation, infrastructure), applies prioritization formula (impact x effort), proposes remediation priority. Output-only: returns a report, writes no files, creates no backlog items, never blocks. Idempotent. Invocable independently or composed by /pair-process-review."
+version: 0.5.0
 author: Foomakers
 ---
 
 # /pair-capability-assess-debt — Technical Debt Assessment
 
-Detect, categorize, and prioritize technical debt items. Applies the prioritization framework from [technical-debt.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/technical-debt.md) guidelines. Produces a debt report with categorized items, severity, impact/effort scoring, and remediation recommendations.
+Detect, categorize, and prioritize technical debt items. Applies the prioritization framework from [technical-debt.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/technical-debt.md) guidelines. Produces a debt report with categorized items, severity, impact/effort scoring, and remediation recommendations. **Output-only**: this skill returns a report — it writes no files, creates no PM-tool items, and there is **no `$mode:scan`** and **no auto-conversion** of debt into backlog cards. Technical debt **never blocks a PR** (R7.2).
 
 ## Arguments
 
@@ -18,9 +18,7 @@ Detect, categorize, and prioritize technical debt items. Applies the prioritizat
 
 ## Composed Skills
 
-| Skill              | Type       | Required                                         |
-| ------------------ | ---------- | ------------------------------------------------ |
-| `/pair-capability-record-decision` | Capability | No — only if remediation requires a decision     |
+This skill is **output-only** — it composes no skill and writes no files. It never auto-creates tech-debt items. A debt item worth scheduling is promoted **deliberately** to the backlog by a human/agent via `/pair-capability-write-issue` with the `tech-debt` label (see [Composition Interface](#composition-interface)) — a manual, selective act, never a 100% auto-conversion.
 
 ## Algorithm
 
@@ -143,23 +141,20 @@ For each detected item, apply the prioritization formula:
 2. **Act**: For Medium items, provide general guidance.
 3. **Act**: For Low items, note for tracking only.
 
-### Step 5: Compose Decision (if needed)
+### Step 5: Return the Report
 
-1. **Check**: Do any High severity items require an architectural decision to remediate?
-2. **Skip**: If no decisions needed → proceed to output.
-3. **Act**: Compose `/pair-capability-record-decision` for each decision-worthy item:
-   - `$type: architectural` (if it changes architecture) or `$type: non-architectural` (if it's a tooling/process change)
-   - `$topic: debt-remediation-[item]`
-4. **Verify**: Decisions recorded.
+1. **Act**: Return the debt report (see Output Format) to the caller or developer. **This skill writes nothing** — no adoption file, no code change, no PM-tool item.
+2. **Act**: If a High-severity item is worth scheduling, recommend that the developer promote it **deliberately** to the backlog via `/pair-capability-write-issue` (`$type` per template, `tech-debt` label). This is a manual, selective decision — the skill never creates the card itself.
+3. **Verify**: Report returned. No side effects.
 
 ## Output Format
 
 ```text
-TECH DEBT ASSESSMENT:
+TECH DEBT ASSESSMENT (output-only — no files or issues created):
 ├── Items Found:  [N total]
 ├── Categories:   Code: [N] | Design: [N] | Test: [N] | Docs: [N] | Infra: [N]
 ├── Severity:     High: [N] | Medium: [N] | Low: [N]
-└── Decisions:    [N recorded | none needed]
+└── Promotion:    [none | suggested: N items for deliberate /pair-capability-write-issue promotion]
 
 PRIORITIZED ITEMS:
  # | Severity | Category | Impact | Effort | Score | Description | Location
@@ -171,7 +166,7 @@ REMEDIATION PLAN (High severity):
 1. [item] — [strategy] (est. [effort])
 2. ...
 
-RESULT: [N items assessed, N high-priority, N decisions recorded]
+RESULT: [N items assessed, N high-priority — report only, nothing created/blocked]
 ```
 
 ## Composition Interface
@@ -179,23 +174,21 @@ RESULT: [N items assessed, N high-priority, N decisions recorded]
 When composed by `/pair-process-review`:
 
 - **Input**: /pair-process-review invokes `/pair-capability-assess-debt` during the completeness phase (Phase 4).
-- **Output**: Returns the debt assessment report. /pair-process-review incorporates findings into review output.
-  - High severity items may influence the review decision (TECH-DEBT verdict).
-  - Items are informational — they do not HALT the review.
-  - Remediation recommendations inform CHANGES-REQUESTED if critical debt is introduced.
+- **Output**: Returns the debt assessment report. /pair-process-review incorporates findings into review output (the Tech Debt section).
+  - Debt items are **informational** — they do **not** HALT the review and **never** block the PR (R7.2).
+  - /pair-process-review does **not** auto-create tech-debt issues. Items worth tracking are promoted deliberately (after review) via `/pair-capability-write-issue` with the `tech-debt` label.
 
 When invoked **independently**:
 
 - Full interactive flow. Scan codebase or specified scope for debt.
 - Report findings with categorization and prioritization.
-- This skill is **read-only** when detecting — it does not modify code. Decision recording via `/pair-capability-record-decision` is the only write action.
+- This skill is **output-only** — it inspects code but writes no files, creates no issues, and blocks nothing. Promotion to the backlog is a separate, deliberate `/pair-capability-write-issue` action.
 
 ## Graceful Degradation
 
 - If adoption files are missing, skip design and infrastructure categories — report only code-level debt (code smells, duplication, test gaps, documentation).
 - If [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) is not found, skip infrastructure dependency checks.
 - If [architecture.md](../../../.pair/adoption/tech/architecture.md) is not found, skip design debt detection for architectural violations.
-- If `/pair-capability-record-decision` is not installed, warn and skip decision recording.
 - If guidelines are not found, use built-in heuristics for detection (complexity thresholds, naming patterns, test file presence).
 
 ## Notes
@@ -203,6 +196,6 @@ When invoked **independently**:
 - This skill **replaces the stub implementation** from [#100](https://github.com/foomakers/pair/issues/100). Full categorization, prioritization formula, and remediation recommendations are now included.
 - **Resolution cascade**: Path A (pre-identified item) → Path B (existing assessment) → Path C (full scan). Follows the same pattern as other assess-* skills.
 - **Idempotent**: re-invocation on an already-assessed codebase confirms the existing assessment. Re-assessment only on explicit developer request.
-- **Read-only for detection** — this skill inspects code but never modifies files directly. The only write action is decision recording via `/pair-capability-record-decision`.
+- **Output-only** — this skill inspects code but never modifies files, adoption, or the PM tool. There is no `$mode:scan` and no auto-creation of tech-debt items (R7.2). Debt is surfaced in the report; promotion to the backlog is a deliberate `/pair-capability-write-issue` act with the `tech-debt` label.
 - Prioritization formula `Impact × (6 - Effort)` favors quick wins: high-impact items with low effort get the highest scores.
 - Debt is contextual — the same pattern may be acceptable in a prototype but unacceptable in production code. Severity assessment considers the project's maturity and risk tolerance.

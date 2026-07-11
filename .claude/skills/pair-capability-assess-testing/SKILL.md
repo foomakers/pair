@@ -1,13 +1,13 @@
 ---
 name: pair-capability-assess-testing
-description: "Assess testing strategy using resolution cascade (Argument > Adoption > Assessment). Reads testing guidelines, proposes framework and strategy, writes testing section of tech-stack.md, composes /pair-capability-record-decision. Idempotent."
-version: 0.4.1
+description: "Assess testing strategy using resolution cascade (Argument > Adoption > Assessment). Reads testing guidelines, proposes framework and strategy and emits rendered adoption content + target (output-only, writes nothing); the caller persists via /pair-capability-record-decision. Idempotent."
+version: 0.5.0
 author: Foomakers
 ---
 
 # /pair-capability-assess-testing — Testing Strategy Assessment
 
-Evaluate and decide on the testing strategy: framework, pyramid distribution, coverage targets, and TDD approach. Follows the resolution cascade: explicit argument wins, then existing adoption, then full assessment from guidelines.
+Evaluate and recommend the testing strategy: framework, pyramid distribution, coverage targets, and TDD approach. Follows the resolution cascade: explicit argument wins, then existing adoption, then full assessment from guidelines. **Output-only**: produces a proposal (rendered testing-section content + target) plus a report — writes no files. Persistence is delegated to `/pair-capability-record-decision`.
 
 ## Arguments
 
@@ -17,11 +17,11 @@ Evaluate and decide on the testing strategy: framework, pyramid distribution, co
 
 ## Composed Skills
 
-| Skill              | Type       | Required                                      |
-| ------------------ | ---------- | --------------------------------------------- |
-| `/pair-capability-record-decision` | Capability | Yes — records testing decision as ADL or ADR  |
+This skill is **output-only** — it composes no skill and writes no files. Persistence of the proposal is the caller's responsibility via `/pair-capability-record-decision` (see [Composition Interface](#composition-interface)).
 
-## Adoption File
+## Proposal Target
+
+The rendered adoption content is destined for this section — the caller writes it via `/pair-capability-record-decision`:
 
 - **Target**: [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — **testing section only**
 - **Ownership**: Testing section (shared file — /pair-capability-assess-stack owns core sections, /pair-capability-assess-ai owns AI section)
@@ -37,7 +37,7 @@ Evaluate and decide on the testing strategy: framework, pyramid distribution, co
 3. **Act**: Confirm the choice with the developer:
 
    > Testing framework override: **$choice**.
-   > This will be adopted without full assessment.
+   > This will be proposed without full assessment.
    > Confirm?
 
 4. **Check**: Does [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) already have a testing section with a different framework?
@@ -58,7 +58,7 @@ Evaluate and decide on the testing strategy: framework, pyramid distribution, co
    > Adoption is current and valid.
 
 4. **Check**: Does a corresponding decision record exist? (Scan [adoption/decision-log/](../../../.pair/adoption/decision-log) or [adoption/tech/adr/](../../../.pair/adoption/tech/adr) for `*testing*` files.)
-5. **Act**: If decision record missing, compose `/pair-capability-record-decision` to backfill.
+5. **Act**: If decision record missing, report it as a gap in the output — this skill writes nothing; the caller persists a backfill via `/pair-capability-record-decision`.
 6. **Verify**: Adoption and decision record consistent. Done — exit skill.
 
 #### Path C — Full Assessment
@@ -101,34 +101,35 @@ Evaluate and decide on the testing strategy: framework, pyramid distribution, co
 
 4. **Verify**: Developer approves the strategy.
 
-### Step 4: Write Adoption File
+### Step 4: Render Adoption Proposal
 
-1. **Check**: Does [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) exist?
-2. **Act**: Write or update **only the Testing section** of tech-stack.md:
+1. **Act**: Render the **Testing section** content — the ready-to-write body for tech-stack.md:
    - Framework name and version
    - Coverage tool and version
    - Additional testing tools with versions
-   - Preserve all other sections (core, AI, etc.) untouched
-3. **Verify**: Testing section written. Other sections preserved.
+   - Scope strictly to the Testing section so the caller's write preserves all other sections (core, AI, etc.)
+2. **Verify**: The rendered `content` and its `target` are ready to emit. **This skill writes no files.**
 
-### Step 5: Record Decision
+### Step 5: Emit Proposal
 
-1. **Act**: Compose `/pair-capability-record-decision`:
-   - `$type`: `non-architectural` (testing framework is a tooling choice, not structural)
-   - `$topic`: `testing-strategy`
-   - `$summary`: "[Framework] vX.Y adopted as testing framework with [coverage target]% coverage"
-2. **Verify**: ADL created at `adoption/decision-log/YYYY-MM-DD-testing-strategy.md`. Adoption file consistent with ADL.
+1. **Act**: Emit the proposal to the caller:
+   - `content`: the rendered Testing-section body from Step 4
+   - `target`: [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) (Testing section)
+   - `decision-metadata`: `$type: non-architectural` (testing framework is a tooling choice), `$topic: testing-strategy`, `$summary: "[Framework] vX.Y adopted as testing framework with [coverage target]% coverage"`
+   - plus the human-facing report (see Output Format)
+2. **Verify**: Proposal emitted. Persistence is performed by the caller via `/pair-capability-record-decision(content, target, decision-metadata)`, never by this skill.
 
 ## Output Format
 
 ```text
-ASSESSMENT COMPLETE:
+ASSESSMENT COMPLETE (output-only — no files written):
 ├── Domain:    Testing
 ├── Path:      [Argument Override | Adoption Exists | Full Assessment]
 ├── Decision:  [framework vX.Y + coverage tool + pyramid distribution]
-├── Adoption:  [tech-stack.md testing section — written | confirmed | updated]
-├── Record:    [ADL path — created | exists | backfilled]
-└── Status:    [Complete | Confirmed existing]
+├── Proposal:  [content rendered for tech-stack.md testing section]
+├── Target:    adoption/tech/tech-stack.md (Testing section)
+├── Persist:   [caller composes /pair-capability-record-decision(content, target) → ADL]
+└── Status:    [Proposal ready | Confirmed existing]
 ```
 
 ## Composition Interface
@@ -136,31 +137,31 @@ ASSESSMENT COMPLETE:
 When composed by `/pair-process-bootstrap`:
 
 - **Input**: `/pair-process-bootstrap` invokes `/pair-capability-assess-testing` during Phase 2. May pass `$choice` if developer pre-selected.
-- **Output**: Returns decision summary and adoption file path.
-- `/pair-process-bootstrap` includes adoption and ADL changes in the next commit.
+- **Output**: Returns `{ content, target, decision-metadata }` plus the report. Writes nothing.
+- **Persistence**: `/pair-process-bootstrap` accepts the proposal and composes `/pair-capability-record-decision(content, target, decision-metadata)` to write the Testing section and record the ADL, then includes those changes in the next commit.
 
 When invoked **independently**:
 
-- Full interactive flow. Developer commits changes when satisfied.
+- Full interactive flow. The skill returns the proposal; the human (or agent) persists it by composing `/pair-capability-record-decision`, then commits the changes.
 
 ## Edge Cases
 
-- **Argument conflicts with adoption**: Warn developer, ask for confirmation. If confirmed, update testing section and create new decision record.
-- **tech-stack.md exists but no testing section**: Add testing section, preserve all other content.
+- **Argument conflicts with adoption**: Warn developer, ask for confirmation. If confirmed, the proposal supersedes the previous decision — the caller records the new decision.
+- **tech-stack.md exists but no testing section**: Render content that adds the testing section; the caller's write preserves all other content.
 - **Framework incompatible with adopted language**: HALT — warn developer of incompatibility, suggest compatible alternatives.
-- **Decision record already exists for same scope+decision**: Skip writing (no duplicates).
+- **Decision record already exists for same scope+decision**: Report "already recorded" — no proposal to persist (no duplicates).
 - **Multiple valid frameworks score equally**: Present top 2 with trade-off analysis, ask developer to choose.
 
 ## Graceful Degradation
 
 - If testing guidelines are not found, use minimal assessment: ask developer for framework preference based on language.
-- If `/pair-capability-record-decision` is not installed, warn and skip decision recording.
-- If tech-stack.md doesn't exist, create it with testing section as initial content. Warn: "Created tech-stack.md — other sections should be populated by /pair-capability-assess-stack."
+- If the caller cannot persist (e.g. `/pair-capability-record-decision` not installed), the proposal stands as a report — adoption stays unchanged.
+- If tech-stack.md doesn't exist, the assessment still runs and produces its proposal — the caller creates the file on persist via `/pair-capability-record-decision`.
 
 ## Notes
 
-- Testing decisions are typically **non-architectural** → produce ADL. Exception: if the testing strategy choice affects system structure (e.g. choosing contract testing that requires service boundaries), use ADR instead.
-- **Section ownership**: this skill writes ONLY the Testing section of tech-stack.md. /pair-capability-assess-stack owns core sections, /pair-capability-assess-ai owns AI section.
+- Testing decisions are typically **non-architectural** → the caller records them as an ADL. Exception: if the testing strategy choice affects system structure (e.g. choosing contract testing that requires service boundaries), the caller uses ADR instead.
+- **Section ownership**: this skill renders content ONLY for the Testing section of tech-stack.md. /pair-capability-assess-stack owns core sections, /pair-capability-assess-ai owns AI section. The single adoption writer is `/pair-capability-record-decision`.
 - Version tracking: every testing tool includes specific version.
 - The resolution cascade IS the idempotency mechanism: if testing section is populated, assessment is already done.
 - Educational content (testing philosophy, principles, WHY) stays in guidelines. This skill references guidelines for framework comparison and strategy decisions.

@@ -1,13 +1,13 @@
 ---
 name: pair-capability-assess-code-quality
-description: "Assesses code quality using resolution cascade (Argument > Adoption > Assessment). Applies quality score formula from code-metrics guidelines. Produces quality report with complexity, size, coverage, and maintainability metrics. Idempotent: detects existing report, checks staleness. Invocable independently or composed by /pair-process-review."
-version: 0.4.1
+description: "Assesses code quality using resolution cascade (Argument > Adoption > Assessment). Applies quality score formula from code-metrics guidelines. Produces quality report with complexity, size, coverage, and maintainability metrics (output-only, writes nothing). Idempotent: detects existing report, checks staleness. Invocable independently or composed by /pair-process-review."
+version: 0.5.0
 author: Foomakers
 ---
 
 # /pair-capability-assess-code-quality — Code Quality Assessment
 
-Evaluate code quality using objective metrics from [code-metrics.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/code-metrics.md). Produces a quality report with complexity, size, coverage, duplication, and maintainability scores. Includes actionable recommendations for improvement.
+Evaluate code quality using objective metrics from [code-metrics.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/code-metrics.md). Produces a quality report with complexity, size, coverage, duplication, and maintainability scores. Includes actionable recommendations for improvement. **Output-only**: this skill inspects code and runs coverage but writes no files — it never mutates adoption, code, or the PM tool.
 
 ## Arguments
 
@@ -160,7 +160,7 @@ When invoked **independently**:
 
 ## Notes
 
-- This skill is **read-only** — it inspects code, runs coverage (via existing test commands), but never modifies files.
+- This skill is **read-only / output-only** — it inspects code, runs coverage (via existing test commands), but never modifies files, adoption, or the PM tool. A finding worth tracking is promoted deliberately to the backlog via `/pair-capability-write-issue` (a manual, selective act) — never auto-created.
 - **Idempotent**: re-invocation checks staleness of existing report. If codebase unchanged → confirms existing report. If changed → re-assesses only.
 - **Resolution cascade**: Path A (existing recent report) → Path B (full assessment). Follows the same cascade pattern as other assess-* skills.
 - Metrics are **health indicators, not absolute quality measures**. Context matters: business logic naturally has higher complexity, and metric targets should align with team capabilities.
