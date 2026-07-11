@@ -27,7 +27,7 @@ Both subdirectories are created **on demand** by the skill that first needs them
 
 The working area is excluded from asset registries at two levels:
 
-1. **By convention**: no registry's `source` or `target` should ever point at the working area or an ancestor of it.
+1. **By convention**: no registry's `target` should ever point at the working area or an ancestor of it. (A registry's `source` resolves against the KB dataset root, not the consuming project's working area, so it is not a source of overlap.)
 2. **By hard rule in `pair-cli`**: every registry copy/mirror operation excludes the resolved working-area path unconditionally, regardless of registry configuration. A registry accidentally configured to mirror an ancestor of the working area (e.g. the whole `.pair/` root) cannot reach inside it — the nested working subtree is skipped during traversal.
 
 The hard rule exists as defense-in-depth on top of validation (see below): even a config that somehow bypasses `pair validate-config` cannot cause `pair install`/`pair update` to touch the working area.
@@ -53,14 +53,14 @@ When overridden:
 
 `pair validate-config` fails the config with a clear error in both of these cases:
 
-- **A registry overlaps the working area**: a registry's `source` or `target` equals, contains, or is contained by the (default or overridden) working path.
+- **A registry overlaps the working area**: a registry's `target` path equals, contains, or is contained by the (default or overridden) working path.
 - **An override lands inside a registry-managed directory**: the same overlap check, triggered from the override side.
 
 Both cases are the same rule checked from either direction — a registry accidentally covering the working area, and a working-area override that lands inside a registry.
 
 ## Convention for External KBs
 
-This rule is not specific to the `foomakers/pair` KB — any KB dataset consumed by `pair-cli` inherits the same guarantee, because the exclusion is enforced by `pair-cli` itself (`buildCopyOptions`, `doCopyAndUpdateLinks`, `validateAllRegistries`), not by anything the dataset declares. A custom or organization-specific KB does not need to do anything special to get this protection — it only needs to avoid declaring a registry whose `source`/`target` overlaps the working area, which `pair validate-config` will catch anyway.
+This rule is not specific to the `foomakers/pair` KB — any KB dataset consumed by `pair-cli` inherits the same guarantee, because the exclusion is enforced by `pair-cli` itself (`buildCopyOptions`, `doCopyAndUpdateLinks`, `validateAllRegistries`), not by anything the dataset declares. A custom or organization-specific KB does not need to do anything special to get this protection — it only needs to avoid declaring a registry whose `target` overlaps the working area, which `pair validate-config` will catch anyway.
 
 ## Not Ambient Context
 
