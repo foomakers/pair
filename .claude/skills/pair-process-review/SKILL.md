@@ -302,7 +302,8 @@ Based on compiled findings:
 
 1. **Act**: Delete the feature branch (remote):
    - CLI: `git push origin --delete <branch>`.
-2. **Verify**: Feature branch deleted.
+2. **Act**: Remove the story's checkpoint if one exists — `.pair/working/checkpoints/<story-id>.md` — so completed-story state does not linger as stale context (per the task-scoped cleanup rule; see `/pair-capability-checkpoint`).
+3. **Verify**: Feature branch deleted and story checkpoint removed (if any existed).
 
 ### Step 6.6: Post-Merge Manual Test Validation (Optional)
 

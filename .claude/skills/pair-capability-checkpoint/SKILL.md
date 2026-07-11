@@ -17,11 +17,11 @@ Write and resume a self-contained progress checkpoint so a fresh session (or a s
 | `$story`   | No       | Story ID. If omitted, detected from session context or the current branch (`feature/#<id>-*`). If it cannot be detected → **HALT**.                                   |
 | `$persist` | No       | Write mode only. `true` (default) — write/update the file at the default location. `false` — write-free: synthesize and return the checkpoint text without touching the filesystem; the composer decides where it lands. |
 
-## Core Rule: One Checkpoint Per Story
+## Core Rules
 
-- Default location: `.pair/working/checkpoints/<story-id>.md`.
-- Write mode always updates this file in place. It never creates a second file for the same story.
-- The file is the source of truth. An issue-body mirror is optional and, if used, must be explicitly marked as a copy.
+- **One file per story:** default location `.pair/working/checkpoints/<story-id>.md`. Write mode always updates it in place — never a second file for the same story. The file is the source of truth; an issue-body mirror is optional and, if used, must be explicitly marked as a copy.
+- **Task-scoped:** a checkpoint is a downstream handoff consumed only by a session or subagent resuming or continuing _that_ story. It is NEVER loaded as ambient context into a chat or activity unrelated to the story.
+- **Write freely, clean up on completion:** writing — including automatically, e.g. between tasks — is fine; the constraint is on _consumption scope_, not on when it is written. When the story is Done (its closing phase, or PR merge), the checkpoint is removed so finished-story state never lingers as stale context.
 
 ## Algorithm
 
@@ -116,7 +116,7 @@ CHECKPOINT RESUMED:
 
 When composed by a future closing phase of `/pair-process-implement` (story #256):
 
-- **Input**: `/pair-process-implement` would invoke `/pair-capability-checkpoint` with `$mode=write` between tasks (or on developer request) to persist progress, and `$mode=resume` at Phase 0 when re-invoked on a story that may have been interrupted.
+- **Input**: `/pair-process-implement` would invoke `/pair-capability-checkpoint` with `$mode=write` between tasks (or on developer request) to persist progress, `$mode=resume` at Phase 0 when re-invoked on a story that may have been interrupted, and remove the checkpoint on story completion (cleanup).
 - **Output**: Write mode's returned text becomes the session's record of state. Resume mode's parsed state lets `/pair-process-implement` skip re-analysis and jump straight to the first pending task.
 
 When composed by a future `/pair-capability-publish-pr` (companion capability from the same epic split):
