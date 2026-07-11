@@ -7,6 +7,8 @@ import {
   toIncomingMessage,
 } from '@pair/content-ops'
 import { handleKbInfoCommand } from './handler'
+import { handleInstallCommand } from '../install/handler'
+import { handleUpdateCommand } from '../update/handler'
 import { createPackageZip } from '../package/zip-creator'
 import type { ManifestMetadata } from '../package/metadata'
 import type { RegistryConfig } from '#registry'
@@ -368,5 +370,87 @@ describe('handleKbInfoCommand - version-check mode', () => {
     expect(parsed.status).toBe('up-to-date')
     expect(parsed.current.version).toBe('1.2.0')
     expect(parsed.current.sourceKind).toBe('remote')
+  })
+})
+
+/**
+ * #261 DoD round-trip (co-located here — root of the call chain is
+ * handleKbInfoCommand, whose version-check output this asserts on; install/update
+ * are setup). Shares one in-memory FS across all three handlers so the recorded
+ * marker (`.pair/.kb-version.json`) is exactly what kb-info reads back.
+ */
+describe('handleKbInfoCommand - install -> check(drift) -> update -> check(clean) round-trip', () => {
+  const cwd = '/roundtrip-project'
+  const kbPkg = `${cwd}/packages/knowledge-hub/package.json`
+  const datasetFile = `${cwd}/packages/knowledge-hub/dataset/test-registry/file1.md`
+  const marker = `${cwd}/.pair/.kb-version.json`
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function makeFs(): InMemoryFileSystemService {
+    return new InMemoryFileSystemService(
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [kbPkg]: JSON.stringify({ name: '@pair/knowledge-hub', version: '1.1.0' }),
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            'test-registry': {
+              source: 'test-registry',
+              behavior: 'mirror',
+              targets: [{ path: '.pair/test-registry', mode: 'canonical' }],
+              description: 'Test registry',
+            },
+          },
+        }),
+        [datasetFile]: '# Content v1',
+      },
+      cwd,
+      cwd,
+    )
+  }
+
+  function versionCheck(fs: InMemoryFileSystemService) {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    return handleKbInfoCommand({ command: 'kb-info', mode: 'version-check', json: true }, fs, {
+      baseTarget: cwd,
+    }).then(exitCode => {
+      const output = logSpy.mock.calls.map(args => args.join(' ')).join('\n')
+      logSpy.mockRestore()
+      return { exitCode, result: JSON.parse(output) }
+    })
+  }
+
+  it('drift is flagged after installing an older KB, then cleared by update', async () => {
+    const fs = makeFs()
+
+    await handleInstallCommand(
+      { command: 'install', resolution: 'default', kb: true, offline: false },
+      fs,
+    )
+    expect(JSON.parse(await fs.readFile(marker)).version).toBe('1.1.0')
+
+    await fs.writeFile(kbPkg, JSON.stringify({ name: '@pair/knowledge-hub', version: '1.2.0' }))
+    await fs.writeFile(datasetFile, '# Content v2')
+
+    const drift = await versionCheck(fs)
+    expect(drift.exitCode).toBe(0)
+    expect(drift.result.status).toBe('drift')
+    expect(drift.result.installed.version).toBe('1.1.0')
+    expect(drift.result.current.version).toBe('1.2.0')
+    expect(drift.result.migrationUrl).toContain('v1.1.0-to-v1.2.0')
+
+    await handleUpdateCommand(
+      { command: 'update', resolution: 'default', kb: true, offline: false },
+      fs,
+    )
+    expect(JSON.parse(await fs.readFile(marker)).version).toBe('1.2.0')
+
+    const clean = await versionCheck(fs)
+    expect(clean.exitCode).toBe(0)
+    expect(clean.result.status).toBe('up-to-date')
+    expect(clean.result.installed.version).toBe('1.2.0')
+    expect(clean.result.current.version).toBe('1.2.0')
   })
 })
