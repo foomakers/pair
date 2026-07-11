@@ -101,6 +101,7 @@ describe('quality-model.md — structure', () => {
       'Observability',
       'Documentation',
       'Planning',
+      'Code design / code quality',
       'Architecture / modularity',
       'Release',
       'AI metrics / retro',

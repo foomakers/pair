@@ -120,6 +120,7 @@ Every quality theme not covered by §1–§6 lives under one of the three pillar
 | Observability | Delivery | [../observability/README.md](../observability/README.md) |
 | Documentation | Delivery | [../technical-standards/ai-development/documentation-standards.md](../technical-standards/ai-development/documentation-standards.md) |
 | Planning | Delivery | [../collaboration/methodology/README.md](../collaboration/methodology/README.md) |
+| Code design / code quality | Delivery | [../code-design/README.md](../code-design/README.md) |
 | Architecture / modularity | Delivery | `architecture/design-patterns/coupling-balance.md` (not yet published — single home for the coupling model, see §3.1) |
 | Release | Delivery | [../technical-standards/deployment-workflow/release-management.md](../technical-standards/deployment-workflow/release-management.md) |
 | AI metrics / retro | Delivery | [../collaboration/project-tracking/README.md](../collaboration/project-tracking/README.md) (reports land in `.pair/working/reports/`, once available) |
