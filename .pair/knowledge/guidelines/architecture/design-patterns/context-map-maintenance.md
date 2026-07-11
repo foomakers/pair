@@ -34,6 +34,10 @@ Run the new or sharpened term through one concrete scenario from the current fea
 
 When the codebase already has a type, table, or module using the term, verify the glossary definition matches what the code actually does. Flag the mismatch instead of writing a definition that only matches the ticket.
 
+### 5. Cite the Deciding Source
+
+Every term, entity, and rule points to where it was decided, so the map stays citable. Prefer the most stable reference available, in this order: an adopted ADR/DDR or decision-log entry, then a linked guideline/template, then the issue number. When the only source is a working or triage document that is **not tracked in the repo** (e.g. a requirements-triage note), cite a stable handle from it — the issue number plus the decision ID (`#<n>`, `D<k>`) — rather than a file path that will not resolve for a reader. Terms are both concepts and the framework's own **meta/process terms** (states, phases, record types, distribution) — not only business-domain nouns; register whichever the ubiquitous language actually uses.
+
 ## Lazy-Split Criteria and Convention
 
 The map starts as a single file. Splitting is **lazy and human-approved — never automatic.**
