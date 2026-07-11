@@ -15,9 +15,9 @@ Run `/pair-next` at the start of every session. It reads project adoption files 
 | Type | Count | Purpose |
 |------|-------|---------|
 | **Process** | 9 | Lifecycle phases — orchestrate capability skills |
-| **Capability** | 24 | Atomic units — perform a single focused operation |
+| **Capability** | 25 | Atomic units — perform a single focused operation |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 34 (9 process + 24 capability + 1 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 35 (9 process + 25 capability + 1 navigator).
 
 ## Full Catalog
 
