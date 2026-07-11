@@ -2,7 +2,7 @@ import { isAbsolute, join } from 'path/posix'
 import { Dirent } from 'fs'
 import { logger, createError } from '../observability'
 import { validateSourceExists } from '../file-system/file-validations'
-import { FileSystemService } from '../file-system'
+import { FileSystemService, isPathExcluded } from '../file-system'
 import { SyncOptions } from './SyncOptions'
 import { Behavior, normalizeKey, resolveBehavior } from './behavior'
 import { convertToRelative } from '../path-resolution'
@@ -345,7 +345,7 @@ async function moveDirectoryContents(
   entries: Dirent[],
   folderBehavior: Record<string, Behavior> | undefined,
 ) {
-  const { fileService, srcPath, destPath, datasetRoot, defaultBehavior } = params
+  const { fileService, srcPath, destPath, datasetRoot, defaultBehavior, options } = params
 
   for (const entry of entries) {
     await moveDirectoryEntry(entry, {
@@ -355,6 +355,7 @@ async function moveDirectoryContents(
       datasetRoot,
       defaultBehavior,
       folderBehavior,
+      ...(options?.excludePaths && { excludePaths: options.excludePaths }),
     })
   }
 }
@@ -368,25 +369,12 @@ async function moveDirectoryEntry(
     datasetRoot: string
     defaultBehavior: Behavior
     folderBehavior: Record<string, Behavior> | undefined
+    excludePaths?: string[]
   },
 ) {
-  const { fileService, srcPath, destPath, datasetRoot, defaultBehavior, folderBehavior } = ctx
+  const { srcPath } = ctx
   try {
-    const entryRel = normalizeKey(convertToRelative(datasetRoot, join(datasetRoot, entry.name)))
-    const entryBehavior = resolveBehavior(entryRel, folderBehavior, defaultBehavior)
-    const from = join(srcPath, entry.name)
-    const to = join(destPath, entry.name)
-
-    if (entry.isDirectory()) {
-      await performRecursiveRename(fileService, from, to)
-    } else {
-      const exists = await fileService.exists(to).catch(() => false)
-      if (entryBehavior === 'add' && exists) {
-        logger.info(`Skipped existing file (add): ${to}`)
-        return
-      }
-      await fileService.rename(from, to)
-    }
+    await performEntryMove(entry, ctx)
   } catch (err) {
     logger.error(`Failed to move entry ${entry.name}: ${String(err)}`)
     // If the original error message is specific (like test errors), preserve it
@@ -401,6 +389,52 @@ async function moveDirectoryEntry(
       originalError: err,
     })
   }
+}
+
+async function performEntryMove(
+  entry: Dirent,
+  ctx: {
+    fileService: FileSystemService
+    srcPath: string
+    destPath: string
+    datasetRoot: string
+    defaultBehavior: Behavior
+    folderBehavior: Record<string, Behavior> | undefined
+    excludePaths?: string[]
+  },
+) {
+  const {
+    fileService,
+    srcPath,
+    destPath,
+    datasetRoot,
+    defaultBehavior,
+    folderBehavior,
+    excludePaths,
+  } = ctx
+  const entryRel = normalizeKey(convertToRelative(datasetRoot, join(datasetRoot, entry.name)))
+  const entryBehavior = resolveBehavior(entryRel, folderBehavior, defaultBehavior)
+  const from = join(srcPath, entry.name)
+  const to = join(destPath, entry.name)
+
+  // Hard working-area exclusion (D14): defense-in-depth guard so a direct
+  // move of an entry into an excluded area is blocked at the per-entry layer,
+  // matching the copy path's guard.
+  if (isPathExcluded(to, excludePaths)) {
+    logger.info(`Skipping excluded path: ${to}`)
+    return
+  }
+
+  if (entry.isDirectory()) {
+    await performRecursiveRename(fileService, from, to)
+    return
+  }
+  const exists = await fileService.exists(to).catch(() => false)
+  if (entryBehavior === 'add' && exists) {
+    logger.info(`Skipped existing file (add): ${to}`)
+    return
+  }
+  await fileService.rename(from, to)
 }
 
 async function performRecursiveRename(fileService: FileSystemService, from: string, to: string) {

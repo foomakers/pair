@@ -543,38 +543,91 @@ async function copyFileWithTransform(ctx: {
   transformOpts: TransformOpts
   dirMappingFiles: Map<string, string[]>
   topLevelFiles: Set<string>
+  excludePaths?: string[]
 }): Promise<void> {
-  const { fileService, filePath, srcPath, destPath, transformOpts, dirMappingFiles, topLevelFiles } =
-    ctx
+  const {
+    fileService,
+    filePath,
+    srcPath,
+    destPath,
+    transformOpts,
+    dirMappingFiles,
+    topLevelFiles,
+    excludePaths,
+  } = ctx
   const dir = dirname(filePath)
   const fileName = filePath.slice(dir === '.' ? 0 : dir.length + 1)
   const transformedDir = dir === '.' ? null : transformPath(dir, transformOpts)
   const targetDir = transformedDir ? join(destPath, transformedDir) : destPath
+  const targetFilePath = join(targetDir, fileName)
+
+  // Hard working-area exclusion (D14): defense-in-depth guard mirroring
+  // copyDirHelper's per-entry check, so the transform copy path can never write
+  // into an excluded area even if a future caller routes one here.
+  if (isPathExcluded(targetFilePath, excludePaths)) {
+    logger.info(`Skipping excluded path: ${targetFilePath}`)
+    return
+  }
 
   await fileService.mkdir(targetDir, { recursive: true })
-  const targetFilePath = join(targetDir, fileName)
   await copyFileHelper(fileService, join(srcPath, filePath), targetFilePath, 'overwrite')
+
+  await trackTransformedFile({
+    fileService,
+    dir,
+    fileName,
+    transformedDir,
+    targetFilePath,
+    dirMappingFiles,
+    topLevelFiles,
+  })
+}
+
+/**
+ * Post-copy bookkeeping for a transformed file: syncs the frontmatter `name`
+ * when a subdirectory was renamed, and records the file in either
+ * `dirMappingFiles` (files under a subdirectory) or `topLevelFiles` (root-level
+ * source files) so link rewriting and mirror cleanup can see it.
+ */
+async function trackTransformedFile(ctx: {
+  fileService: FileSystemService
+  dir: string
+  fileName: string
+  transformedDir: string | null
+  targetFilePath: string
+  dirMappingFiles: Map<string, string[]>
+  topLevelFiles: Set<string>
+}): Promise<void> {
+  const {
+    fileService,
+    dir,
+    fileName,
+    transformedDir,
+    targetFilePath,
+    dirMappingFiles,
+    topLevelFiles,
+  } = ctx
 
   if (dir === '.') {
     // Root-level source file — has no transformed subdirectory of its own, so it's
     // never added to dirMappingFiles. Track it separately so cleanupStaleTransformedEntries
     // knows it's a legitimate copy, not a stale leftover (see that function's docstring).
     topLevelFiles.add(fileName)
+    return
   }
+  if (!transformedDir) return
 
-  if (dir !== '.' && transformedDir) {
-    const leafName = dir.split('/').pop()!
-    if (leafName !== transformedDir) {
-      const content = await fileService.readFile(targetFilePath)
-      const synced = syncFrontmatter(content, { from: leafName, to: transformedDir })
-      if (synced !== content) {
-        await fileService.writeFile(targetFilePath, synced)
-      }
+  const leafName = dir.split('/').pop()!
+  if (leafName !== transformedDir) {
+    const content = await fileService.readFile(targetFilePath)
+    const synced = syncFrontmatter(content, { from: leafName, to: transformedDir })
+    if (synced !== content) {
+      await fileService.writeFile(targetFilePath, synced)
     }
-
-    if (!dirMappingFiles.has(dir)) dirMappingFiles.set(dir, [])
-    dirMappingFiles.get(dir)!.push(targetFilePath)
   }
+
+  if (!dirMappingFiles.has(dir)) dirMappingFiles.set(dir, [])
+  dirMappingFiles.get(dir)!.push(targetFilePath)
 }
 
 /**
@@ -610,8 +663,9 @@ async function copyAllFilesWithTransform(params: {
   srcPath: string
   destPath: string
   transformOpts: TransformOpts
+  excludePaths?: string[]
 }): Promise<{ dirMappingFiles: Map<string, string[]>; topLevelFiles: Set<string> }> {
-  const { fileService, files, srcPath, destPath, transformOpts } = params
+  const { fileService, files, srcPath, destPath, transformOpts, excludePaths } = params
   const dirMappingFiles = new Map<string, string[]>()
   const topLevelFiles = new Set<string>()
   for (const filePath of files) {
@@ -623,6 +677,7 @@ async function copyAllFilesWithTransform(params: {
       transformOpts,
       dirMappingFiles,
       topLevelFiles,
+      ...(excludePaths && { excludePaths }),
     })
   }
   return { dirMappingFiles, topLevelFiles }
@@ -633,6 +688,12 @@ async function copyAllFilesWithTransform(params: {
  * Each file's directory path (relative to source) is transformed, then
  * the file is copied to the transformed location under the target.
  */
+function buildTransformOpts(options?: SyncOptions): TransformOpts {
+  const flatten = options?.flatten ?? false
+  const prefix = options?.prefix
+  return prefix ? { flatten, prefix } : { flatten }
+}
+
 export async function copyDirectoryWithTransforms(params: {
   fileService: FileSystemService
   srcPath: string
@@ -643,9 +704,7 @@ export async function copyDirectoryWithTransforms(params: {
   options?: SyncOptions
 }): Promise<CopyPathOpsResult> {
   const { fileService, srcPath, destPath, options } = params
-  const flatten = options?.flatten ?? false
-  const prefix = options?.prefix
-  const transformOpts: TransformOpts = prefix ? { flatten, prefix } : { flatten }
+  const transformOpts = buildTransformOpts(options)
 
   const files = await collectFiles(fileService, srcPath, srcPath)
   validateNoCollisions(files, transformOpts, srcPath)
@@ -658,6 +717,7 @@ export async function copyDirectoryWithTransforms(params: {
     srcPath,
     destPath,
     transformOpts,
+    ...(options?.excludePaths && { excludePaths: options.excludePaths }),
   })
 
   if (options?.defaultBehavior === 'mirror') {
@@ -678,7 +738,7 @@ export async function copyDirectoryWithTransforms(params: {
   )
 
   logger.info(
-    `Copied contents of ${srcPath} -> ${destPath} (flatten=${flatten}, prefix=${prefix ?? 'none'})`,
+    `Copied contents of ${srcPath} -> ${destPath} (flatten=${transformOpts.flatten}, prefix=${transformOpts.prefix ?? 'none'})`,
   )
   return skillNameMap.size > 0 ? { skillNameMap } : {}
 }
