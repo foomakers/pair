@@ -88,6 +88,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
   - globals v15.0.0
   - prettier v3.6.2 (configured via workspace `tools/prettier-config`)
   - markdownlint-cli v0.47.0 (configured via workspace `tools/markdownlint-config`, wired into `pnpm quality-gate` via `mdlint:check` / `mdlint:fix`)
+  - jscpd v5.0.12 (copy/paste duplication scanner, configured via `.jscpd.json`, wired into `pnpm quality-gate` via `dup:check`; current threshold 5% — baseline ~1.4%)
 
 ## Git hooks
 
