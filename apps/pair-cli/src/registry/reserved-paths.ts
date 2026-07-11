@@ -1,3 +1,4 @@
+import { posix as posixPath } from 'path'
 import type { RegistryConfig } from './resolver'
 import { pathsOverlap } from './working-area'
 
@@ -45,8 +46,12 @@ export function detectReservedPathOverlap(
     if (!config?.targets) continue
     for (const target of config.targets) {
       if (!target?.path) continue
+      // Canonicalize both operands (collapse `.`/`..`) before comparing, so a
+      // non-canonical target — e.g. '.pair/knowledge/../working' or './.pair' —
+      // that actually covers a reserved path cannot slip past the overlap check.
+      const normTarget = posixPath.normalize(target.path)
       for (const reserved of reservedPaths) {
-        if (pathsOverlap(target.path, reserved)) {
+        if (pathsOverlap(normTarget, posixPath.normalize(reserved))) {
           errors.push(
             `Registry '${name}' target '${target.path}' overlaps the reserved path '${reserved}'. ` +
               `Reserved paths must stay outside every asset registry (D14).`,

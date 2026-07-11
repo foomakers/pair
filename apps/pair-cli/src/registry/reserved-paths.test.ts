@@ -79,6 +79,30 @@ describe('detectReservedPathOverlap', () => {
     expect(errors).toHaveLength(1)
   })
 
+  it('rejects a non-canonical target that resolves onto a reserved path (`..` segments)', () => {
+    const registries: Record<string, RegistryConfig> = {
+      sneaky: {
+        ...baseRegistry,
+        // resolves to `.pair/working` — must not slip past the overlap check
+        targets: [{ path: '.pair/knowledge/../working', mode: 'canonical' }],
+      },
+    }
+    const errors = detectReservedPathOverlap(registries, reserved)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain("Registry 'sneaky'")
+  })
+
+  it('rejects a non-canonical ancestor target (`./.pair`)', () => {
+    const registries: Record<string, RegistryConfig> = {
+      dotpair: {
+        ...baseRegistry,
+        // `./.pair` resolves to `.pair`, an ancestor of the working area
+        targets: [{ path: './.pair', mode: 'canonical' }],
+      },
+    }
+    expect(detectReservedPathOverlap(registries, reserved)).toHaveLength(1)
+  })
+
   it('flags every reserved path a target covers (extensible set)', () => {
     // Simulates a future reserved path (e.g. #261 .pair/.kb-version.json): a
     // registry mirroring an ancestor of multiple reserved paths is flagged per hit.
