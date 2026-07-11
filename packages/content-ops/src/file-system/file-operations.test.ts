@@ -174,4 +174,3 @@ describe('isWithinPath (shared primitive, D14)', () => {
     expect(isWithinPath('/t/.pair/Working', '/t/.pair/working', 'linux')).toBe(false)
   })
 })
-

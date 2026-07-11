@@ -525,8 +525,15 @@ async function copyFileWithTransform(ctx: {
   dirMappingFiles: Map<string, string[]>
   topLevelFiles: Set<string>
 }): Promise<void> {
-  const { fileService, filePath, srcPath, destPath, transformOpts, dirMappingFiles, topLevelFiles } =
-    ctx
+  const {
+    fileService,
+    filePath,
+    srcPath,
+    destPath,
+    transformOpts,
+    dirMappingFiles,
+    topLevelFiles,
+  } = ctx
   const dir = dirname(filePath)
   const fileName = filePath.slice(dir === '.' ? 0 : dir.length + 1)
   const transformedDir = dir === '.' ? null : transformPath(dir, transformOpts)

@@ -136,7 +136,6 @@ describe('buildCopyOptions', () => {
       '.github/workflows': 'mirror',
     })
   })
-
 })
 
 describe('distributeToSecondaryTargets', () => {

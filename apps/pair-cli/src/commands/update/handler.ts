@@ -215,8 +215,17 @@ async function finalizeRegistryCopy(
 async function updateSingleRegistry(
   ctx: UpdateRegistryCtx,
 ): Promise<{ skillNameMap?: SkillNameMap | undefined; result: RegistryResult }> {
-  const { fs, datasetRoot, registryName, registryConfig, baseTarget, pushLog, presenter, index, total } =
-    ctx
+  const {
+    fs,
+    datasetRoot,
+    registryName,
+    registryConfig,
+    baseTarget,
+    pushLog,
+    presenter,
+    index,
+    total,
+  } = ctx
   const resolved = resolveRegistryPaths({
     name: registryName,
     config: registryConfig,

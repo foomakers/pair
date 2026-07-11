@@ -89,7 +89,10 @@ describe('detectReservedPathOverlap', () => {
         targets: [{ path: '.pair', mode: 'canonical' }],
       },
     }
-    const errors = detectReservedPathOverlap(registries, ['.pair/working', '.pair/.kb-version.json'])
+    const errors = detectReservedPathOverlap(registries, [
+      '.pair/working',
+      '.pair/.kb-version.json',
+    ])
     expect(errors).toHaveLength(2)
   })
 })

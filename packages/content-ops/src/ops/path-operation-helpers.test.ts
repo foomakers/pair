@@ -318,7 +318,6 @@ describe('handleMirrorCleanup', () => {
     // No files should be removed since destination is empty
     await expect(fileService.exists('/dataset/dest/extra.md')).resolves.toBe(false)
   })
-
 })
 
 describe('handleMirrorCleanup - error handling', () => {
