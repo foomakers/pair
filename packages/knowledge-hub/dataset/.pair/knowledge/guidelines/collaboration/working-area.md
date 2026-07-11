@@ -62,6 +62,10 @@ Both cases are the same rule checked from either direction — a registry accide
 
 This rule is not specific to the `foomakers/pair` KB — any KB dataset consumed by `pair-cli` inherits the same guarantee, because the exclusion is enforced by `pair-cli` itself (`buildCopyOptions`, `doCopyAndUpdateLinks`, `validateAllRegistries`), not by anything the dataset declares. A custom or organization-specific KB does not need to do anything special to get this protection — it only needs to avoid declaring a registry whose `source`/`target` overlaps the working area, which `pair validate-config` will catch anyway.
 
+## Not Ambient Context
+
+The working area is operational handoff state, not shared knowledge, so it is **never loaded as ambient context**. This is an existing project-wide rule (see the "`.pair/working/` is not ambient context" Quick Rule in `AGENTS.md`, recorded in ADL `2026-07-11-working-artifacts-task-scoped.md`): content under `.pair/working/` is read or written only by the specific capability that owns a given file (e.g. the checkpoint capability owns `checkpoints/<story-id>.md`), and only on explicit invocation (write/resume/save/load) — never swept in by a broad glob or a "read everything under `.pair/`" exploration step. Skill authors: do not add `.pair/working/` to a generic context-gathering step.
+
 ## Integration with Skills
 
 | Skill / Area | Interaction |
