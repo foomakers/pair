@@ -7,7 +7,6 @@ export {
   cleanupFile,
   copyFileHelper,
   copyDirHelper,
-  isPathExcluded,
   isWithinPath,
   normalizePathForCompare,
 } from './file-system/file-operations'

@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   copyFileHelper,
   copyDirHelper,
-  isPathExcluded,
   isWithinPath,
   normalizePathForCompare,
 } from './file-operations'
@@ -176,71 +175,3 @@ describe('isWithinPath (shared primitive, D14)', () => {
   })
 })
 
-describe('isPathExcluded', () => {
-  it('returns false when no excludePaths are provided', () => {
-    expect(isPathExcluded('/target/.pair/working')).toBe(false)
-  })
-
-  it('matches an exact path', () => {
-    expect(isPathExcluded('/target/.pair/working', ['/target/.pair/working'])).toBe(true)
-  })
-
-  it('matches a nested path', () => {
-    expect(
-      isPathExcluded('/target/.pair/working/checkpoints/a.md', ['/target/.pair/working']),
-    ).toBe(true)
-  })
-
-  it('does not match a sibling path sharing the same string prefix', () => {
-    expect(isPathExcluded('/target/.pair/working-notes', ['/target/.pair/working'])).toBe(false)
-  })
-
-  it('does not match an unrelated path', () => {
-    expect(isPathExcluded('/target/.pair/knowledge', ['/target/.pair/working'])).toBe(false)
-  })
-})
-
-describe('isPathExcluded - case sensitivity by platform (D14)', () => {
-  it('matches a case-differing override on darwin', () => {
-    expect(isPathExcluded('/target/.pair/Working', ['/target/.pair/working'], 'darwin')).toBe(true)
-  })
-
-  it('matches a case-differing override on win32', () => {
-    expect(isPathExcluded('/target/.pair/Working', ['/target/.pair/working'], 'win32')).toBe(true)
-  })
-
-  it('does not fold case on linux', () => {
-    expect(isPathExcluded('/target/.pair/Working', ['/target/.pair/working'], 'linux')).toBe(false)
-  })
-})
-
-describe('copyDirHelper - excludePaths (hard exclusion, D14)', () => {
-  beforeEach(() => {
-    fileService = new InMemoryFileSystemService(
-      {
-        '/source/dir/file1.txt': 'file1 content',
-        // Source accidentally also contains a "working" folder (e.g. a KB config
-        // mirroring an ancestor directory) — must never reach the target.
-        '/source/dir/working/checkpoint.md': 'from source',
-      },
-      '/',
-      '/',
-    )
-  })
-
-  it('never enters an excluded subtree, leaving pre-existing target content untouched', async () => {
-    await fileService.writeFile('/target/dir/working/checkpoint.md', 'DO NOT TOUCH')
-
-    await copyDirHelper({
-      fileService,
-      oldDir: '/source/dir',
-      newDir: '/target/dir',
-      defaultBehavior: 'overwrite',
-      datasetRoot: '/',
-      excludePaths: ['/target/dir/working'],
-    })
-
-    expect(await fileService.readFile('/target/dir/working/checkpoint.md')).toBe('DO NOT TOUCH')
-    expect(await fileService.readFile('/target/dir/file1.txt')).toBe('file1 content')
-  })
-})

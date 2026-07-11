@@ -1283,7 +1283,7 @@ describe('#257: working area excluded from update (D14)', () => {
       offline: false,
     }
 
-    await expect(handleUpdateCommand(config, fs, { httpClient })).rejects.toThrow(/working area/)
+    await expect(handleUpdateCommand(config, fs, { httpClient })).rejects.toThrow(/reserved path/)
 
     // Nothing was touched — validation rejected the config before any copy ran
     expect(await fs.readFile(`${cwd}/.pair/working/checkpoints/story-257.md`)).toBe('DO NOT TOUCH')

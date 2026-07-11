@@ -19,7 +19,7 @@ describe('handleValidateConfigCommand - unit tests', () => {
   })
 })
 
-describe('handleValidateConfigCommand - working area overlap (D14)', () => {
+describe('handleValidateConfigCommand - reserved path overlap (D14)', () => {
   const cwd = '/test-project'
 
   // Base config.json at rootModuleDirectory is always loaded by loadConfigWithOverrides,
@@ -56,7 +56,7 @@ describe('handleValidateConfigCommand - working area overlap (D14)', () => {
       config: `${cwd}/custom-config.json`,
     }
 
-    await expect(handleValidateConfigCommand(config, fs)).rejects.toThrow(/working area/)
+    await expect(handleValidateConfigCommand(config, fs)).rejects.toThrow(/reserved path/)
   })
 
   test('flags an overridden working_path that lands inside a registry-managed directory', async () => {
@@ -79,7 +79,30 @@ describe('handleValidateConfigCommand - working area overlap (D14)', () => {
       config: `${cwd}/custom-config.json`,
     }
 
-    await expect(handleValidateConfigCommand(config, fs)).rejects.toThrow(/working area/)
+    await expect(handleValidateConfigCommand(config, fs)).rejects.toThrow(/reserved path/)
+  })
+
+  test('rejects a non-project-relative (absolute) working_path', async () => {
+    const fs = new InMemoryFileSystemService(baseConfigFiles, cwd, cwd)
+    const customConfig = {
+      working_path: '/var/tmp/working',
+      asset_registries: {
+        knowledge: {
+          source: '.pair/knowledge',
+          behavior: 'mirror',
+          description: 'Knowledge base',
+          targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        },
+      },
+    }
+    await fs.writeFile(`${cwd}/custom-config.json`, JSON.stringify(customConfig))
+
+    const config: ValidateConfigCommandConfig = {
+      command: 'validate-config',
+      config: `${cwd}/custom-config.json`,
+    }
+
+    await expect(handleValidateConfigCommand(config, fs)).rejects.toThrow(/project-relative/)
   })
 
   test('passes when the working override sits outside every registry', async () => {

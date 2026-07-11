@@ -319,28 +319,6 @@ describe('handleMirrorCleanup', () => {
     await expect(fileService.exists('/dataset/dest/extra.md')).resolves.toBe(false)
   })
 
-  it('never removes an excluded path even though it is extraneous relative to source (D14)', async () => {
-    fileService = new InMemoryFileSystemService(
-      {
-        '/dataset/src/file1.md': 'content1',
-        '/dataset/dest/file1.md': 'old1',
-        '/dataset/dest/working/checkpoint.md': 'DO NOT TOUCH',
-        '/dataset/dest/extra.md': 'to remove',
-      },
-      '/',
-      '/',
-    )
-
-    await handleMirrorCleanup(fileService, '/dataset/src', '/dataset/dest', [
-      '/dataset/dest/working',
-    ])
-
-    // Excluded working area survives even though it's not present in source
-    await expect(fileService.exists('/dataset/dest/working/checkpoint.md')).resolves.toBe(true)
-    expect(await fileService.readFile('/dataset/dest/working/checkpoint.md')).toBe('DO NOT TOUCH')
-    // Non-excluded extraneous file is still cleaned up as before
-    await expect(fileService.exists('/dataset/dest/extra.md')).resolves.toBe(false)
-  })
 })
 
 describe('handleMirrorCleanup - error handling', () => {

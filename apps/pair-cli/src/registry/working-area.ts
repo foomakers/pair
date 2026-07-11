@@ -1,11 +1,10 @@
-import type { FileSystemService } from '@pair/content-ops'
 import { isWithinPath } from '@pair/content-ops'
-import type { RegistryConfig } from './resolver'
+import { isAbsolute } from 'path'
 
 /**
  * Default location of the operational "working area" (checkpoints, reports).
- * Excluded from every KB asset registry by design — it is operational data,
- * not knowledge (D14).
+ * It is operational data, not knowledge — and, by design, it is never a
+ * registry source or target, so install/update never touch it (D14).
  */
 export const DEFAULT_WORKING_PATH = '.pair/working'
 
@@ -28,21 +27,9 @@ export function resolveWorkingPathOverride(config: unknown): string {
 }
 
 /**
- * Resolves the absolute working-area path for a given base target
- * (the installed project root), honoring any configured override.
- */
-export function resolveWorkingPath(
-  config: unknown,
-  baseTarget: string,
-  fs: FileSystemService,
-): string {
-  return fs.resolve(baseTarget, resolveWorkingPathOverride(config))
-}
-
-/**
  * True if `candidate` equals, or lies within, `containerPath`. Re-exported from
- * content-ops so runtime exclusion (isPathExcluded) and this config-validation
- * overlap check share one containment primitive and cannot drift (D14).
+ * content-ops so the config-validation overlap check shares one containment
+ * primitive with the rest of the codebase (D14).
  */
 export { isWithinPath }
 
@@ -54,35 +41,21 @@ export function pathsOverlap(a: string, b: string, platform: string = process.pl
 }
 
 /**
- * Detects registry targets that overlap with the working-area path.
- * Catches both directions of the edge cases called out by the story:
- * a registry accidentally covering the working area, and an override that
- * lands inside a registry-managed directory.
- *
- * Contract: both operands are **project-relative** — `target.path` (registry
- * target) and `workingPath` (the `working_path` override, project-relative by
- * design; see `resolveWorkingPathOverride`). An absolute override is out of
- * contract for this config-lint and would not compare meaningfully against a
- * relative target; the runtime hard-exclusion (`resolveWorkingPath` →
- * `isPathExcluded`) is the backstop that protects install/update regardless (D14).
+ * Validates that the working-area path is project-relative. An absolute
+ * `working_path` (or one escaping the project root via `..`) is rejected at
+ * config-validation time: it cannot be compared meaningfully against the
+ * project-relative registry targets that the reserved-path overlap check
+ * compares against, so it would silently defeat that guard. Returns validation
+ * error strings (empty when valid). The working area is the first member of the
+ * reserved-path set — see `reserved-paths.ts`.
  */
-export function detectWorkingPathOverlap(
-  registries: Record<string, RegistryConfig>,
-  workingPath: string = DEFAULT_WORKING_PATH,
-): string[] {
-  const overlapping: string[] = []
-
-  for (const [name, config] of Object.entries(registries)) {
-    if (!config?.targets) continue
-    for (const target of config.targets) {
-      if (target?.path && pathsOverlap(target.path, workingPath)) {
-        overlapping.push(
-          `Registry '${name}' target '${target.path}' overlaps with the working area '${workingPath}'. ` +
-            `The working area must stay outside every asset registry (D14).`,
-        )
-      }
-    }
+export function validateWorkingPath(workingPath: string): string[] {
+  const normalized = workingPath.replace(/\\/g, '/')
+  if (isAbsolute(workingPath) || normalized === '..' || normalized.startsWith('../')) {
+    return [
+      `working_path '${workingPath}' must be project-relative (not absolute, not escaping the ` +
+        `project root). It is compared against project-relative registry targets (D14).`,
+    ]
   }
-
-  return overlapping
+  return []
 }

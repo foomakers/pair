@@ -23,12 +23,6 @@ export type SyncOptions = {
   prefix?: string
   /** Target configurations for multi-target distribution (empty array = no targets) */
   targets: TargetConfig[]
-  /**
-   * Absolute paths to always skip during copy/mirror operations, regardless of
-   * registry configuration. Used to hard-exclude operational areas (e.g. a
-   * project's `.pair/working/`) from every copy and mirror-cleanup traversal.
-   */
-  excludePaths?: string[]
 }
 
 export function defaultSyncOptions(): SyncOptions {

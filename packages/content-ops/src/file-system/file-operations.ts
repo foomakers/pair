@@ -50,19 +50,15 @@ export type CopyDirContext = {
   folderBehavior?: Record<string, Behavior>
   defaultBehavior: Behavior
   datasetRoot: string
-  /** Absolute destination paths to hard-skip, regardless of behavior. */
-  excludePaths?: string[]
 }
 
 /**
  * Normalizes a path for case-fold-aware containment comparison: forward-slash
  * separators, no leading/trailing slashes, lowercased on case-insensitive
- * filesystems (macOS/Windows). The single normalization primitive shared by
- * both the runtime exclusion guard (`isPathExcluded`, absolute paths) and the
- * config-validation overlap check (working-area, relative paths), so what gets
- * excluded can't drift from what gets validated (D14). Stripping the leading
- * slash is safe for the absolute-path case because both operands are normalized
- * the same way before comparison.
+ * filesystems (macOS/Windows). The single normalization primitive behind the
+ * config-validation overlap check (working-area, relative paths). Stripping the
+ * leading slash is safe for the absolute-path case because both operands are
+ * normalized the same way before comparison.
  * @param platform - OS platform (defaults to process.platform), injectable for tests.
  */
 export function normalizePathForCompare(p: string, platform: string = process.platform): string {
@@ -73,8 +69,8 @@ export function normalizePathForCompare(p: string, platform: string = process.pl
 /**
  * True if `candidate` equals, or lies within, `containerPath`. Both paths must
  * share the same base (both absolute, or both relative). Comparison is by
- * normalized path segments, case-folded per platform. Shared primitive reused
- * by `isPathExcluded` and by the working-area overlap validation (D14).
+ * normalized path segments, case-folded per platform. Shared primitive used by
+ * the working-area overlap validation (D14).
  * @param platform - OS platform (defaults to process.platform), injectable for tests.
  */
 export function isWithinPath(
@@ -85,24 +81,6 @@ export function isWithinPath(
   const a = normalizePathForCompare(candidate, platform)
   const b = normalizePathForCompare(containerPath, platform)
   return a === b || a.startsWith(b + '/')
-}
-
-/**
- * True if `candidate` equals, or lies within, one of `excludePaths`.
- * Used to hard-exclude operational areas (e.g. `.pair/working/`) from copy and
- * mirror-cleanup traversals, independent of registry/behavior configuration.
- * On case-insensitive filesystems (macOS/Windows) the comparison is
- * case-folded so a `working_path` override differing only in case still matches.
- * Built on the shared `isWithinPath` primitive.
- * @param platform - OS platform (defaults to process.platform), injectable for tests.
- */
-export function isPathExcluded(
-  candidate: string,
-  excludePaths?: string[],
-  platform: string = process.platform,
-): boolean {
-  if (!excludePaths || excludePaths.length === 0) return false
-  return excludePaths.some(excluded => isWithinPath(candidate, excluded, platform))
 }
 
 export async function copyDirHelper(context: CopyDirContext): Promise<void> {
@@ -127,26 +105,13 @@ async function destinationExists(fileService: FileSystemService, path: string): 
 }
 
 /**
- * Copies (or recurses into) a single directory entry, honoring exclusion,
- * behavior resolution, and the 'add'/'skip' short-circuits.
+ * Copies (or recurses into) a single directory entry, honoring behavior
+ * resolution and the 'add'/'skip' short-circuits.
  */
 async function copyDirEntry(entry: Dirent, context: CopyDirContext): Promise<void> {
-  const {
-    fileService,
-    oldDir,
-    newDir,
-    folderBehavior,
-    defaultBehavior,
-    datasetRoot,
-    excludePaths,
-  } = context
+  const { fileService, oldDir, newDir, folderBehavior, defaultBehavior, datasetRoot } = context
   const oldEntry = join(oldDir, entry.name)
   const newEntry = join(newDir, entry.name)
-
-  if (isPathExcluded(newEntry, excludePaths)) {
-    logger.info(`Skipping excluded path: ${newEntry}`)
-    return
-  }
 
   // Determine behavior for this entry
   const relPath = datasetRoot ? normalizeKey(relative(datasetRoot, oldEntry)) : entry.name
@@ -165,9 +130,6 @@ async function copyDirEntry(entry: Dirent, context: CopyDirContext): Promise<voi
     }
     if (folderBehavior) {
       recursiveContext.folderBehavior = folderBehavior
-    }
-    if (excludePaths) {
-      recursiveContext.excludePaths = excludePaths
     }
     await copyDirHelper(recursiveContext)
   } else {

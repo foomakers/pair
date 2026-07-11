@@ -1,7 +1,8 @@
 import { Behavior, FileSystemService, validateTargets, type TargetConfig } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
 import { getCanonicalTarget } from './layout'
-import { DEFAULT_WORKING_PATH, detectWorkingPathOverlap } from './working-area'
+import { DEFAULT_WORKING_PATH, validateWorkingPath } from './working-area'
+import { getReservedPaths, detectReservedPathOverlap } from './reserved-paths'
 
 /**
  * Check if a target directory is empty or doesn't exist
@@ -247,6 +248,14 @@ export function validateAllRegistries(
     return { valid: false, errors }
   }
 
+  // Reject a non-project-relative working_path up front: it would silently
+  // defeat the overlap guard below, which compares project-relative paths (D14).
+  const workingPathErrors = validateWorkingPath(workingPath)
+  if (workingPathErrors.length > 0) {
+    errors.push(...workingPathErrors)
+    return { valid: false, errors }
+  }
+
   const canonicalPaths: Record<string, string> = {}
   let validRegistryCount = 0
 
@@ -270,7 +279,7 @@ export function validateAllRegistries(
   if (errors.length === 0) {
     const overlapping = detectOverlappingTargets(canonicalPaths)
     errors.push(...overlapping)
-    errors.push(...detectWorkingPathOverlap(registries, workingPath))
+    errors.push(...detectReservedPathOverlap(registries, getReservedPaths(workingPath)))
   }
 
   return { valid: errors.length === 0, errors }

@@ -23,14 +23,13 @@ This is distinct from the other two `.pair/` areas:
 
 Both subdirectories are created **on demand** by the skill that first needs them — a checkpoint capability creates `checkpoints/` the first time it writes state, a reporting capability creates `reports/<category>/` the first time it writes a report. `pair install` does not scaffold this structure.
 
-## Exclusion Rule (D14)
+## How It Is Protected (D14)
 
-The working area is excluded from asset registries at two levels:
+`pair install`/`pair update` only ever touch paths **inside a configured registry's target** — the mirror cleanup deletes only entries within a registry `target` that are absent from that registry's `source`. A directory that is not a registry `source` or `target` is therefore never created, modified, or deleted. The working area is protected by exactly this: **it is never a registry target.**
 
-1. **By convention**: no registry's `target` should ever point at the working area or an ancestor of it. (A registry's `source` resolves against the KB dataset root, not the consuming project's working area, so it is not a source of overlap.)
-2. **By hard rule in `pair-cli`**: every registry copy/mirror operation excludes the resolved working-area path unconditionally, regardless of registry configuration. A registry accidentally configured to mirror an ancestor of the working area (e.g. the whole `.pair/` root) cannot reach inside it — the nested working subtree is skipped both when copying (it is never written) and during mirror cleanup (it is never deleted as "stale"), on the plain and the flatten/prefix transform paths alike.
+There is no runtime "hard-exclusion" carve-out. The only way the working area could be touched is a *misconfigured* registry whose `target` equals or is an ancestor/descendant of it (e.g. a registry mirroring the whole `.pair/` root). That is prevented at config-validation time — `pair validate-config`, and the same check run inside `pair install`/`pair update`, **reject** any such config before a single file is copied (see [Validation](#validation)). Fail-closed: a bad config errors out; it does not silently proceed with a carve-out.
 
-The hard rule exists as defense-in-depth on top of validation (see below): even a config that somehow bypasses `pair validate-config` cannot cause `pair install`/`pair update` to touch the working area.
+The working area is the first member of a small set of **reserved project-side paths** that no registry target may overlap. The set is extensible — future meta/config files (e.g. the KB version marker) join the same guard.
 
 ## Overriding the Path
 
@@ -45,22 +44,22 @@ The default path is `.pair/working`. A project can override it by declaring `wor
 
 When overridden:
 
-- The override — not the default — is what gets excluded from registry operations.
+- The override — not the default — is the reserved path that no registry target may overlap.
 - Skills reading or writing checkpoints/reports must resolve the same override (read `working_path` from `pair.config.json`; fall back to `.pair/working` when absent) so the two sides never disagree on where the working area lives.
-- The override is still validated against every registry (see below) — an override is not a way to opt out of the exclusion, only to relocate it.
+- The override must be **project-relative**. An absolute `working_path` is rejected by `pair validate-config` — it cannot be compared against the project-relative registry targets, so it would defeat the overlap guard.
 
 ## Validation
 
-`pair validate-config` fails the config with a clear error in both of these cases:
+`pair validate-config` (and the identical check inside `pair install`/`pair update`) **rejects** the config in these cases:
 
-- **A registry overlaps the working area**: a registry's `target` path equals, contains, or is contained by the (default or overridden) working path.
-- **An override lands inside a registry-managed directory**: the same overlap check, triggered from the override side.
+- **A registry overlaps a reserved path**: a registry's `target` path equals, contains, or is contained by the (default or overridden) working path. This catches both directions — a registry accidentally covering the working area, and a working-area override that lands inside a registry-managed directory.
+- **A non-project-relative `working_path`**: an absolute path (or one escaping the project root) is rejected.
 
-Both cases are the same rule checked from either direction — a registry accidentally covering the working area, and a working-area override that lands inside a registry.
+Because the working area is simply not a registry target, a valid config guarantees `pair install`/`pair update` never touch it — no runtime carve-out is needed.
 
 ## Convention for External KBs
 
-This rule is not specific to the `foomakers/pair` KB — any KB dataset consumed by `pair-cli` inherits the same guarantee, because the exclusion is enforced by `pair-cli` itself (`buildCopyOptions`, `doCopyAndUpdateLinks`, `validateAllRegistries`), not by anything the dataset declares. A custom or organization-specific KB does not need to do anything special to get this protection — it only needs to avoid declaring a registry whose `target` overlaps the working area, which `pair validate-config` will catch anyway.
+This guarantee is not specific to the `foomakers/pair` KB — any KB dataset consumed by `pair-cli` inherits it, because the reserved-path validation is enforced by `pair-cli` itself (`validateAllRegistries` → `detectReservedPathOverlap`), not by anything the dataset declares. A custom or organization-specific KB does not need to do anything special: it only needs to avoid declaring a registry whose `target` overlaps the working area, which `pair validate-config` rejects.
 
 ## Not Ambient Context
 

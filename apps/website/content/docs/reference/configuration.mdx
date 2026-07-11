@@ -129,9 +129,9 @@ The transform also updates:
 
 ## Working Area Override
 
-`.pair/working/` (checkpoints, reports) is operational data, not knowledge — it is hard-excluded from every registry copy/mirror operation and never scaffolded by `pair install` (D14). See the [KB Structure Reference](/docs/reference/kb-structure) for the full convention.
+`.pair/working/` (checkpoints, reports) is operational data, not knowledge. It is protected simply by **never being a registry target**: `pair install`/`pair update` only touch paths inside a configured registry, so a directory that is not a registry `source` or `target` is never created, modified, or deleted (D14). There is no runtime carve-out — instead, `pair validate-config` **rejects** any config whose registry `target` would overlap the working area. See the [KB Structure Reference](/docs/reference/kb-structure) for the full convention.
 
-Override the default path with a top-level `working_path` field, a sibling of `asset_registries` — not nested inside it. The value is a **project-relative** path (relative to the project root, like `asset_registries` targets):
+Override the default path with a top-level `working_path` field, a sibling of `asset_registries` — not nested inside it. The value must be a **project-relative** path (relative to the project root, like `asset_registries` targets); an absolute `working_path` is rejected by `pair validate-config`:
 
 ```json
 {
@@ -140,7 +140,7 @@ Override the default path with a top-level `working_path` field, a sibling of `a
 }
 ```
 
-When set, the override path — not `.pair/working` — is what gets excluded from registry operations, and is what `pair validate-config` checks for overlap.
+When set, the override path — not `.pair/working` — is the reserved path that no registry `target` may overlap, checked by `pair validate-config`.
 
 ## Validation
 
@@ -159,7 +159,7 @@ pair validate-config --config ./custom-config.json
 - Transform config is valid (non-empty prefix, not combined with symlink mode)
 - Source paths exist (if specified)
 - Include patterns are valid arrays
-- No registry's `target` overlaps with the working area (default or overridden `working_path`) — see [Working Area Override](#working-area-override)
+- No registry's `target` overlaps a reserved path — the working area (default or overridden `working_path`) — and `working_path` is project-relative; see [Working Area Override](#working-area-override)
 
 ## Environment Variables
 

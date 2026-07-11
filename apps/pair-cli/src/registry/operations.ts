@@ -3,7 +3,6 @@ import {
   copyDirectoryWithTransforms,
   copyFileHelper,
   FileSystemService,
-  isPathExcluded,
   type TargetConfig,
   type TransformConfig,
   type CopyPathOpsResult,
@@ -18,8 +17,6 @@ import { getCanonicalTarget } from './layout'
 
 /**
  * Performs the actual copy/mirror operation for a registry.
- * Hard-skips the whole operation when the resolved target is the working
- * area (or lies within it) — registry configuration cannot override this (D14).
  */
 export async function doCopyAndUpdateLinks(
   fsService: FileSystemService,
@@ -34,10 +31,6 @@ export async function doCopyAndUpdateLinks(
 
   const srcPath = isAbsolute(source) ? source : fsService.resolve(datasetRoot, source)
   const tgtPath = isAbsolute(target) ? target : fsService.resolve(datasetRoot, target)
-
-  if (isPathExcluded(tgtPath, options?.excludePaths)) {
-    return { skipped: true, reason: `Target path is excluded from registry operations: ${tgtPath}` }
-  }
 
   if (!(await fsService.exists(srcPath))) {
     return { skipped: true, reason: `Source path does not exist: ${srcPath}` }
@@ -76,7 +69,6 @@ function buildCopyDirHelperContext(ctx: {
     defaultBehavior: options?.defaultBehavior ?? 'overwrite',
     datasetRoot,
     ...(options?.folderBehavior && { folderBehavior: options.folderBehavior }),
-    ...(options?.excludePaths && { excludePaths: options.excludePaths }),
   }
 }
 
@@ -154,13 +146,8 @@ export function calculatePaths(
 
 /**
  * Build SyncOptions from a RegistryConfig for use with content-ops copy operations.
- * `excludePaths` (typically the resolved working-area path) is injected unconditionally —
- * it is a hard exclusion, not something a registry can opt out of (D14).
  */
-export function buildCopyOptions(
-  registryConfig: RegistryConfig,
-  excludePaths?: string[],
-): SyncOptions {
+export function buildCopyOptions(registryConfig: RegistryConfig): SyncOptions {
   const behavior = registryConfig.behavior
   const include = registryConfig.include
 
@@ -172,7 +159,6 @@ export function buildCopyOptions(
     flatten: registryConfig.flatten,
     targets: registryConfig.targets,
     ...(registryConfig.prefix && { prefix: registryConfig.prefix }),
-    ...(excludePaths && excludePaths.length > 0 && { excludePaths }),
   }
 
   if (include.length > 0 && behavior === 'mirror') {
@@ -251,17 +237,14 @@ async function writeSecondaryTarget(params: {
  * Distributes content from canonical target to secondary targets (symlinks and copies).
  * For targets with a transform config, reads from the original source and applies the transform.
  * Called after the primary copy to canonical target is complete.
- * Hard-skips any resolved secondary target that is (or lies within) `excludePaths`
- * (the working area) — mirrors the guard already applied to the primary copy (D14).
  */
 export async function distributeToSecondaryTargets(params: {
   fileService: FileSystemService
   sourcePath: string
   targets: TargetConfig[]
   baseTarget: string
-  excludePaths?: string[]
 }): Promise<void> {
-  const { fileService, sourcePath, targets, baseTarget, excludePaths } = params
+  const { fileService, sourcePath, targets, baseTarget } = params
 
   const canonical = getCanonicalTarget(targets)
   if (!canonical) return
@@ -283,12 +266,6 @@ export async function distributeToSecondaryTargets(params: {
       ? target.path
       : fileService.resolve(baseTarget, target.path)
 
-    if (isPathExcluded(targetPath, excludePaths)) {
-      const { logger } = await import('@pair/content-ops')
-      logger.info(`Skipping excluded secondary target: ${targetPath}`)
-      continue
-    }
-
     await writeSecondaryTarget({ fileService, sourcePath, canonicalPath, target, targetPath })
   }
 }
@@ -303,9 +280,8 @@ export async function postCopyOps(ctx: {
   effectiveTarget: string
   datasetPath: string
   baseTarget: string
-  excludePaths?: string[]
 }): Promise<void> {
-  const { fs, registryConfig, effectiveTarget, datasetPath, baseTarget, excludePaths } = ctx
+  const { fs, registryConfig, effectiveTarget, datasetPath, baseTarget } = ctx
   const canonicalTarget = getCanonicalTarget(registryConfig.targets)
   if (await fs.exists(effectiveTarget)) {
     const stat = await fs.stat(effectiveTarget)
@@ -319,7 +295,6 @@ export async function postCopyOps(ctx: {
       sourcePath: datasetPath,
       targets: registryConfig.targets,
       baseTarget,
-      ...(excludePaths && { excludePaths }),
     })
   }
 }

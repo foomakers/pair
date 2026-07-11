@@ -2,7 +2,7 @@ import { join, relative, basename, dirname } from 'path/posix'
 import { logger, createMirrorConstraintError, createError } from '../observability'
 import { validatePaths } from '../file-system/file-validations'
 import { SyncOptions } from './SyncOptions'
-import { FileSystemService, isPathExcluded } from '../file-system'
+import { FileSystemService } from '../file-system'
 import { Behavior, validateMirrorConstraints } from './behavior'
 import { processPathSubstitution } from './link-batch-processor'
 
@@ -111,7 +111,6 @@ export async function handleMirrorCleanup(
   fileService: FileSystemService,
   srcPath: string,
   destPath: string,
-  excludePaths?: string[],
 ) {
   const destEntries = await fileService.readdir(destPath).catch(() => [])
   const srcNames = new Set((await fileService.readdir(srcPath).catch(() => [])).map(e => e.name))
@@ -119,10 +118,6 @@ export async function handleMirrorCleanup(
   for (const de of destEntries) {
     if (!srcNames.has(de.name)) {
       const toRemove = join(destPath, de.name)
-      if (isPathExcluded(toRemove, excludePaths)) {
-        logger.info(`Mirror: skipped excluded path ${toRemove}`)
-        continue
-      }
       if (fileService.rm) {
         await fileService.rm(toRemove, { recursive: true, force: true })
         logger.info(`Mirror: removed ${toRemove}`)

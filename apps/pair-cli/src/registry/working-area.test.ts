@@ -2,13 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   DEFAULT_WORKING_PATH,
   resolveWorkingPathOverride,
-  resolveWorkingPath,
+  validateWorkingPath,
   isWithinPath,
   pathsOverlap,
-  detectWorkingPathOverlap,
 } from './working-area'
-import { RegistryConfig } from './resolver'
-import { createTestFs } from '#test-utils'
 
 describe('resolveWorkingPathOverride', () => {
   it('returns the default when no override is configured', () => {
@@ -27,17 +24,21 @@ describe('resolveWorkingPathOverride', () => {
   })
 })
 
-describe('resolveWorkingPath', () => {
-  it('resolves the default working path relative to baseTarget', () => {
-    const fs = createTestFs({}, {}, '/project')
-    expect(resolveWorkingPath({}, '/project', fs)).toBe('/project/.pair/working')
+describe('validateWorkingPath', () => {
+  it('accepts a project-relative working path', () => {
+    expect(validateWorkingPath('.pair/working')).toHaveLength(0)
+    expect(validateWorkingPath('.pair/scratch')).toHaveLength(0)
   })
 
-  it('resolves an overridden working path relative to baseTarget', () => {
-    const fs = createTestFs({}, {}, '/project')
-    expect(resolveWorkingPath({ working_path: '.pair/scratch' }, '/project', fs)).toBe(
-      '/project/.pair/scratch',
-    )
+  it('rejects an absolute working path', () => {
+    const errors = validateWorkingPath('/var/tmp/working')
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('must be project-relative')
+  })
+
+  it('rejects a working path that escapes the project root', () => {
+    expect(validateWorkingPath('..')).toHaveLength(1)
+    expect(validateWorkingPath('../outside')).toHaveLength(1)
   })
 })
 
@@ -98,70 +99,5 @@ describe('pathsOverlap - case sensitivity by platform (D14)', () => {
 
   it('does not fold case on linux', () => {
     expect(pathsOverlap('.pair/Working', '.pair/working', 'linux')).toBe(false)
-  })
-})
-
-describe('detectWorkingPathOverlap', () => {
-  const baseRegistry: RegistryConfig = {
-    source: '.pair/knowledge',
-    behavior: 'mirror',
-    description: 'Knowledge base',
-    include: [],
-    flatten: false,
-    targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
-  }
-
-  it('reports no overlap for the default registries and default working path', () => {
-    const registries: Record<string, RegistryConfig> = { knowledge: baseRegistry }
-    expect(detectWorkingPathOverlap(registries)).toHaveLength(0)
-  })
-
-  it('flags a registry that accidentally targets the working path exactly', () => {
-    const registries: Record<string, RegistryConfig> = {
-      knowledge: baseRegistry,
-      working: {
-        ...baseRegistry,
-        targets: [{ path: '.pair/working', mode: 'canonical' }],
-      },
-    }
-    const errors = detectWorkingPathOverlap(registries)
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain("Registry 'working'")
-    expect(errors[0]).toContain('overlaps with the working area')
-  })
-
-  it('flags a registry mirroring an ancestor of the working path', () => {
-    const registries: Record<string, RegistryConfig> = {
-      pairroot: {
-        ...baseRegistry,
-        source: '.pair',
-        targets: [{ path: '.pair', mode: 'canonical' }],
-      },
-    }
-    const errors = detectWorkingPathOverlap(registries)
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain("Registry 'pairroot'")
-  })
-
-  it('flags an override that lands inside a registry-managed directory', () => {
-    const registries: Record<string, RegistryConfig> = { knowledge: baseRegistry }
-    const errors = detectWorkingPathOverlap(registries, '.pair/knowledge/working')
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain("Registry 'knowledge'")
-  })
-
-  it('checks secondary (non-canonical) targets too', () => {
-    const registries: Record<string, RegistryConfig> = {
-      agents: {
-        ...baseRegistry,
-        source: 'AGENTS.md',
-        targets: [
-          { path: 'AGENTS.md', mode: 'canonical' },
-          { path: '.pair/working', mode: 'copy' },
-        ],
-      },
-    }
-    const errors = detectWorkingPathOverlap(registries)
-    expect(errors).toHaveLength(1)
   })
 })

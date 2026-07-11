@@ -2,7 +2,7 @@ import { join, relative, dirname } from 'path/posix'
 import { Stats } from 'fs'
 import { logger, createError } from '../observability'
 import { validateSourceExists } from '../file-system/file-validations'
-import { copyFileHelper, copyDirHelper, isPathExcluded } from '../file-system'
+import { copyFileHelper, copyDirHelper } from '../file-system'
 import type { CopyDirContext } from '../file-system/file-operations'
 import { SyncOptions } from './SyncOptions'
 import { FileSystemService } from '../file-system'
@@ -204,7 +204,7 @@ type PreparedCopy =
 
 /**
  * Resolves and validates source/target paths for a copy operation, applying
- * the same-path skip and the hard working-area exclusion (D14) up front.
+ * the same-path skip up front.
  */
 function prepareCopyPathOperation(
   source: string,
@@ -223,11 +223,6 @@ function prepareCopyPathOperation(
       operation: 'setup',
       path: srcPath || destPath || '',
     })
-  }
-
-  if (isPathExcluded(destPath, options?.excludePaths)) {
-    logger.info(`Skipping excluded path: ${destPath}`)
-    return { skip: true, result: {} }
   }
 
   return {
@@ -344,7 +339,6 @@ async function performDirectoryCopyAndUpdate(params: {
     destPath,
     datasetRoot,
     ...(folderBehavior && { folderBehavior }),
-    ...(options?.excludePaths && { excludePaths: options.excludePaths }),
   })
 
   await updateLinksAfterDirectoryCopy({
@@ -400,7 +394,6 @@ async function performDirectoryCopy(params: {
   folderBehavior?: Record<string, Behavior>
   sourceFolderBehavior: Behavior
   defaultBehavior: Behavior
-  excludePaths?: string[]
 }) {
   const {
     fileService,
@@ -412,13 +405,12 @@ async function performDirectoryCopy(params: {
     folderBehavior,
     sourceFolderBehavior,
     defaultBehavior,
-    excludePaths,
   } = params
   await fileService.mkdir(destPath, { recursive: true })
   validateSubfolderOperation({ srcPath, destPath, normSource, normTarget, operation: 'copy' })
 
   if (sourceFolderBehavior === 'mirror') {
-    await handleMirrorCleanup(fileService, srcPath, destPath, excludePaths)
+    await handleMirrorCleanup(fileService, srcPath, destPath)
   }
 
   await copyDirectoryContents({
@@ -428,7 +420,6 @@ async function performDirectoryCopy(params: {
     datasetRoot,
     ...(folderBehavior && { folderBehavior }),
     defaultBehavior,
-    ...(excludePaths && { excludePaths }),
   })
 
   logger.info(`Copied contents of ${srcPath} -> ${destPath}`)
@@ -441,17 +432,8 @@ async function copyDirectoryContents(params: {
   datasetRoot: string
   folderBehavior?: Record<string, Behavior>
   defaultBehavior: Behavior
-  excludePaths?: string[]
 }) {
-  const {
-    fileService,
-    srcPath,
-    destPath,
-    datasetRoot,
-    folderBehavior,
-    defaultBehavior,
-    excludePaths,
-  } = params
+  const { fileService, srcPath, destPath, datasetRoot, folderBehavior, defaultBehavior } = params
 
   try {
     const copyContext: CopyDirContext = {
@@ -461,7 +443,6 @@ async function copyDirectoryContents(params: {
       defaultBehavior,
       datasetRoot,
       ...(folderBehavior && { folderBehavior }),
-      ...(excludePaths && { excludePaths }),
     }
     await copyDirHelper(copyContext)
   } catch (err) {
@@ -543,31 +524,14 @@ async function copyFileWithTransform(ctx: {
   transformOpts: TransformOpts
   dirMappingFiles: Map<string, string[]>
   topLevelFiles: Set<string>
-  excludePaths?: string[]
 }): Promise<void> {
-  const {
-    fileService,
-    filePath,
-    srcPath,
-    destPath,
-    transformOpts,
-    dirMappingFiles,
-    topLevelFiles,
-    excludePaths,
-  } = ctx
+  const { fileService, filePath, srcPath, destPath, transformOpts, dirMappingFiles, topLevelFiles } =
+    ctx
   const dir = dirname(filePath)
   const fileName = filePath.slice(dir === '.' ? 0 : dir.length + 1)
   const transformedDir = dir === '.' ? null : transformPath(dir, transformOpts)
   const targetDir = transformedDir ? join(destPath, transformedDir) : destPath
   const targetFilePath = join(targetDir, fileName)
-
-  // Hard working-area exclusion (D14): defense-in-depth guard mirroring
-  // copyDirHelper's per-entry check, so the transform copy path can never write
-  // into an excluded area even if a future caller routes one here.
-  if (isPathExcluded(targetFilePath, excludePaths)) {
-    logger.info(`Skipping excluded path: ${targetFilePath}`)
-    return
-  }
 
   await fileService.mkdir(targetDir, { recursive: true })
   await copyFileHelper(fileService, join(srcPath, filePath), targetFilePath, 'overwrite')
@@ -663,9 +627,8 @@ async function copyAllFilesWithTransform(params: {
   srcPath: string
   destPath: string
   transformOpts: TransformOpts
-  excludePaths?: string[]
 }): Promise<{ dirMappingFiles: Map<string, string[]>; topLevelFiles: Set<string> }> {
-  const { fileService, files, srcPath, destPath, transformOpts, excludePaths } = params
+  const { fileService, files, srcPath, destPath, transformOpts } = params
   const dirMappingFiles = new Map<string, string[]>()
   const topLevelFiles = new Set<string>()
   for (const filePath of files) {
@@ -677,7 +640,6 @@ async function copyAllFilesWithTransform(params: {
       transformOpts,
       dirMappingFiles,
       topLevelFiles,
-      ...(excludePaths && { excludePaths }),
     })
   }
   return { dirMappingFiles, topLevelFiles }
@@ -717,7 +679,6 @@ export async function copyDirectoryWithTransforms(params: {
     srcPath,
     destPath,
     transformOpts,
-    ...(options?.excludePaths && { excludePaths: options.excludePaths }),
   })
 
   if (options?.defaultBehavior === 'mirror') {
@@ -727,7 +688,6 @@ export async function copyDirectoryWithTransforms(params: {
       dirMappingFiles,
       topLevelFiles,
       transformOpts,
-      ...(options?.excludePaths && { excludePaths: options.excludePaths }),
     })
   }
 
@@ -760,12 +720,6 @@ export async function copyDirectoryWithTransforms(params: {
  * transformed directory names — they're never in `dirMappingFiles` (which
  * only tracks files under a subdirectory), so without this they'd be
  * wrongly deleted as stale on the very next mirror run.
- *
- * Working-area exclusion (D14): mirrors the non-transform `handleMirrorCleanup`
- * guard so a flatten+prefix+mirror registry can never delete an excluded
- * top-level entry (e.g. the working area) even if a future caller targets an
- * ancestor of it — the copy path already skips it (copyFileWithTransform), so
- * cleanup must skip it too, otherwise it'd be treated as stale and removed.
  */
 async function cleanupStaleTransformedEntries(params: {
   fileService: FileSystemService
@@ -773,10 +727,8 @@ async function cleanupStaleTransformedEntries(params: {
   dirMappingFiles: Map<string, string[]>
   topLevelFiles: Set<string>
   transformOpts: TransformOpts
-  excludePaths?: string[]
 }): Promise<void> {
-  const { fileService, destPath, dirMappingFiles, topLevelFiles, transformOpts, excludePaths } =
-    params
+  const { fileService, destPath, dirMappingFiles, topLevelFiles, transformOpts } = params
 
   const expected = new Set<string>(topLevelFiles)
   for (const originalSubDir of dirMappingFiles.keys()) {
@@ -788,10 +740,6 @@ async function cleanupStaleTransformedEntries(params: {
   for (const entry of entries) {
     if (expected.has(entry.name)) continue
     const toRemove = join(destPath, entry.name)
-    if (isPathExcluded(toRemove, excludePaths)) {
-      logger.info(`Mirror: skipped excluded path ${toRemove}`)
-      continue
-    }
     await fileService.rm(toRemove, { recursive: true, force: true })
     logger.info(`Mirror: removed stale transformed entry ${toRemove}`)
   }

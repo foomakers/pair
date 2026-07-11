@@ -18,7 +18,6 @@ import {
   resolveEffectiveDatasetRoot,
   writeProjectLlmsTxt,
   resolveWorkingPathOverride,
-  resolveWorkingPath,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
@@ -59,7 +58,7 @@ export async function handleInstallCommand(
     if (config.resolution === 'list-targets') {
       return listTargets(fs, options)
     }
-    const { datasetRoot, registries, baseTarget, workingPath } = await setupInstallContext(
+    const { datasetRoot, registries, baseTarget } = await setupInstallContext(
       fs,
       config as InstallableConfig,
       options,
@@ -71,7 +70,6 @@ export async function handleInstallCommand(
       datasetRoot,
       registries,
       baseTarget,
-      workingPath,
       options,
       pushLog,
       presenter,
@@ -115,7 +113,6 @@ async function setupInstallContext(
   datasetRoot: string
   registries: Record<string, RegistryConfig>
   baseTarget: string
-  workingPath: string
 }> {
   const datasetRoot = await resolveDatasetRoot(fs, config, {
     cliVersion: options?.cliVersion,
@@ -133,8 +130,7 @@ async function setupInstallContext(
   }
 
   const baseTarget = options?.baseTarget || config.target || fs.currentWorkingDirectory()
-  const workingPath = resolveWorkingPath(configContent.config, baseTarget, fs)
-  return { datasetRoot, registries, baseTarget, workingPath }
+  return { datasetRoot, registries, baseTarget }
 }
 
 function validateDatasetContent(
@@ -182,7 +178,6 @@ type RegistryInstallCtx = {
   registryConfig: RegistryConfig
   datasetRoot: string
   baseTarget: string
-  workingPath: string
   pushLog: (level: LogEntry['level'], message: string) => void
   presenter: CliPresenter
   index: number
@@ -202,23 +197,19 @@ function resolveRegistryIO(ctx: RegistryInstallCtx) {
   return { source: resolved.source, target: resolved.target, effectiveDatasetRoot }
 }
 
-/**
- * Runs postCopyOps for a registry, hard-excluding the working area from
- * secondary target distribution (D14).
- */
 async function finalizeRegistryCopy(
   ctx: RegistryInstallCtx,
   paths: { effectiveTarget: string; datasetPath: string },
 ): Promise<void> {
-  const { fs, registryConfig, baseTarget, workingPath } = ctx
-  await postCopyOps({ fs, registryConfig, baseTarget, excludePaths: [workingPath], ...paths })
+  const { fs, registryConfig, baseTarget } = ctx
+  await postCopyOps({ fs, registryConfig, baseTarget, ...paths })
 }
 
 async function installRegistry(ctx: RegistryInstallCtx): Promise<{
   skillNameMap?: SkillNameMap | undefined
   result: RegistryResult
 }> {
-  const { fs, registryName, registryConfig, workingPath, pushLog, presenter, index, total } = ctx
+  const { fs, registryName, registryConfig, pushLog, presenter, index, total } = ctx
   const {
     source: datasetPath,
     target: effectiveTarget,
@@ -237,7 +228,7 @@ async function installRegistry(ctx: RegistryInstallCtx): Promise<{
     source: datasetPath,
     target: effectiveTarget,
     datasetRoot: effectiveDatasetRoot,
-    options: buildCopyOptions(registryConfig, [workingPath]),
+    options: buildCopyOptions(registryConfig),
   })
 
   if (copyResult['skipped']) {
@@ -258,7 +249,6 @@ type InstallContext = {
   datasetRoot: string
   registries: Record<string, RegistryConfig>
   baseTarget: string
-  workingPath: string
   options: InstallHandlerOptions | undefined
   pushLog: (level: LogEntry['level'], message: string) => void
   presenter: CliPresenter
@@ -268,7 +258,7 @@ async function installAllRegistries(ctx: InstallContext): Promise<{
   results: RegistryResult[]
   skillNameMap: SkillNameMap
 }> {
-  const { fs, datasetRoot, registries, baseTarget, workingPath, pushLog, presenter } = ctx
+  const { fs, datasetRoot, registries, baseTarget, pushLog, presenter } = ctx
   const accumulated: SkillNameMap = new Map()
   const total = Object.keys(registries).length
 
@@ -279,7 +269,6 @@ async function installAllRegistries(ctx: InstallContext): Promise<{
       registryConfig,
       datasetRoot,
       baseTarget,
-      workingPath,
       pushLog,
       presenter,
       index,
