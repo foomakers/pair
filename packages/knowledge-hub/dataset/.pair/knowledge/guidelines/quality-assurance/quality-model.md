@@ -16,11 +16,11 @@ The single source of default quality rules for this KB. `classify`, `assess-cost
 
 ## 2. Three Pillars
 
-| Pillar | Covers | Tag family | Primary skill |
+| Pillar | Covers | Tag family (if exposed) | Primary skill |
 | --- | --- | --- | --- |
-| **Cost** | Financial exposure of building/running the change | `cost:*` | `assess-cost` (cost-signal catalog, forthcoming) |
+| **Cost** | Financial exposure of building/running the change | `cost:*` — opt-in, §5 | `assess-cost` (cost-signal catalog, forthcoming) |
 | **Security** | Vulnerabilities, compliance, secure-by-design | none dedicated — feeds `risk:*` (§3) + deterministic CI scanning | `assess-security`, [security/](security/README.md) |
-| **Delivery** | Everything else: correctness, performance, a11y, observability, docs, planning, architecture, release, AI metrics | `risk:*` (correctness/blast-radius facets) | `pair-process-review`, `classify` |
+| **Delivery** | Everything else: correctness, performance, a11y, observability, docs, planning, architecture, release, AI metrics | `risk:*` (correctness/blast-radius facets) — KB default, §5 | `pair-process-review`, `classify` |
 
 Every theme not directly named here nests under one of these three — see §7. No status pages, no dedicated backlog per theme: a theme gets a card only when there is real work.
 
@@ -46,11 +46,11 @@ Coupling sources absent (no subdomain/bounded-context artifacts, no `assess-coup
 
 - Built **twice** per story (D17): in refinement from the **story context** (declared/estimated), in review from the **code/diff** (observed). The review value is a floor: it may raise the tier, **never lower it**.
 - A PR with no classification present is treated as `red` (fail-safe).
-- Cost (§3.3) is not part of this max — it is its own class with its own tag family, computed independently, and carried in the same compiled matrix.
+- Cost (§3.3) is not part of this max — it is its own class, computed independently and carried in the same compiled matrix; it gets its own tag format, `cost:green|yellow|orange|red`, only if a project chooses to expose it as a tag (§5) — it is never a KB default.
 
 ### 3.3 Cost class (R6.2)
 
-Cost class = **highest detected signal**, projected as `cost:green|yellow|orange|red`. The signal catalog (paid-SDK imports, API-key env vars, IaC/provisioning changes, cron/queues, media processing, LLM calls) is maintained in the cost-assessment guideline (forthcoming, `assess-cost`); no signal detected ⇒ `green`. General + provider-specific heuristics: [infrastructure/cloud-providers/cost-optimization.md](../infrastructure/cloud-providers/cost-optimization.md).
+Cost class = **highest detected signal**. The signal catalog (paid-SDK imports, API-key env vars, IaC/provisioning changes, cron/queues, media processing, LLM calls) is maintained in the cost-assessment guideline (forthcoming, `assess-cost`); no signal detected ⇒ `green`. General + provider-specific heuristics: [infrastructure/cloud-providers/cost-optimization.md](../infrastructure/cloud-providers/cost-optimization.md). This value is always computed and written to the story/PR body's matrix (§1); it is projected as the `cost:green|yellow|orange|red` tag only if a project adds `cost` to its Tag Projection declaration (§5) — the KB does not do this by default.
 
 ## 4. Per-Tier Requirements
 

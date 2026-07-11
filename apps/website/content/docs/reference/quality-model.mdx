@@ -19,17 +19,17 @@ Quality is classified in refinement — before code exists — not only at revie
 
 ## Three Pillars
 
-| Pillar | Covers | Tag family |
+| Pillar | Covers | Tag family (if exposed) |
 | --- | --- | --- |
-| **Cost** | Financial exposure of building/running the change | `cost:*` |
+| **Cost** | Financial exposure of building/running the change | `cost:*` — opt-in |
 | **Security** | Vulnerabilities, compliance, secure-by-design | feeds `risk:*` + deterministic CI scanning |
-| **Delivery** | Correctness, performance, a11y, observability, docs, planning, architecture, release, AI metrics | `risk:*` |
+| **Delivery** | Correctness, performance, a11y, observability, docs, planning, architecture, release, AI metrics | `risk:*` — KB default |
 
 Every quality theme nests under one of these three pillars, pointing at its existing guideline — no dedicated status page per theme.
 
 ## Classification & Tiers
 
-The compiled matrix has one row per dimension: service/domain criticality, change/diff risk, business impact, security relevance, and coupling balance. Each resolves to green/yellow/red; the **risk tier is the max across assessed dimensions** and is never lowered once raised by review. Cost is tracked separately as its own class (`cost:green|yellow|orange|red`, driven by the highest detected cost signal).
+The compiled matrix has one row per dimension: service/domain criticality, change/diff risk, business impact, security relevance, and coupling balance. Each resolves to green/yellow/red; the **risk tier is the max across assessed dimensions** and is never lowered once raised by review. Cost is tracked separately as its own class, always computed and written to the matrix — it's projected as the `cost:green|yellow|orange|red` tag only if a project chooses to expose it (see Tag Projection below).
 
 | Tier | Merge | Reviewers | SLA | Approval |
 | --- | --- | --- | --- | --- |
@@ -37,7 +37,7 @@ The compiled matrix has one row per dimension: service/domain criticality, chang
 | 🟡 Yellow | Blocked until reviewed | 1 reviewer | 1 working day | reviewer approval |
 | 🔴 Red | Blocked until reviewed and approved | 1 reviewer | 2 working days | explicit approval |
 
-A PR without classification tags is treated as 🔴 (fail-safe).
+Reviewer counts and SLAs above are KB defaults, not fixed rules — override either per tier in `tech/risk-matrix.md`'s Overrides section (e.g. `tier.red.reviewers: 2`). A PR without classification tags is treated as 🔴 (fail-safe).
 
 ## Tag Projection & Eligibility
 
@@ -45,7 +45,7 @@ Tags are a **chromatic projection** of the matrix. `risk:green|yellow|red` is th
 
 ## Project Overrides — `tech/risk-matrix.md`
 
-Optional file with up to three independent sections — none imply the others: **Tag Projection** (which tags are active — typically the first section a project ends up with, since `classify` proposes it), a **criticality table** (service/domain → High/Medium/Low), and **threshold overrides**. Fully absent means KB defaults apply completely and no tags are emitted — nothing fails. See the full schema in [`quality-model.md` §5–§6](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md#6-techrisk-matrixmd--adoption-delta) and a filled-in example at [`risk-matrix-example.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/assets/risk-matrix-example.md).
+Optional file with up to three independent sections — none imply the others: **Tag Projection** (which tags are active — typically the first section a project ends up with, since `classify` proposes it), a **criticality table** (service/domain → High/Medium/Low), and **overrides** — threshold tweaks plus optional per-tier reviewer count / SLA overrides (e.g. `tier.red.reviewers: 2`). Fully absent means KB defaults apply completely and no tags are emitted — nothing fails. See the full schema in [`quality-model.md` §5–§6](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md#6-techrisk-matrixmd--adoption-delta) and a filled-in example at [`risk-matrix-example.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/assets/risk-matrix-example.md).
 
 ## Related
 
