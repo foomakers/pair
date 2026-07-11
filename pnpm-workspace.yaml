@@ -37,6 +37,7 @@ catalog:
   eslint-plugin-react-hooks: 5.1.0
   globals: 15.0.0
   husky: 8.0.0
+  jscpd: ^5.0.12
   jsdom: 25.0.1
   markdown-it: 14.1.0
   markdownlint-cli: 0.47.0

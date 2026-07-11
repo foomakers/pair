@@ -34,7 +34,7 @@
     "@changesets/cli": "catalog:",
     "@pair/prettier-config": "workspace:*",
     "husky": "catalog:",
-    "jscpd": "^5.0.12",
+    "jscpd": "catalog:",
     "turbo": "catalog:"
   },
   "packageManager": "pnpm@10.15.0",

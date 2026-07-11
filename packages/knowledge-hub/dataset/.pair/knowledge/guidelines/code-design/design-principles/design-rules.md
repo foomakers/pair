@@ -32,7 +32,7 @@ export async function handleMirrorCleanup(...) {}
 // copy-orchestrator.ts — dispatch + shared setup
 ```
 
-**Evidence**: #199 P0.5 `copyPathOps.ts` (705 LOC / 19 functions) · P0.3 `cli.e2e.test.ts` (1507 LOC, one file per CLI command instead) · P2.2 `dev/App.tsx` (456 LOC / 11 inline sections) · P2.3 `in-memory-fs.ts` (429 LOC) — recurring cluster in `content-ops/src/ops/` (4 of the audit's top-10 largest files). See Migration Plan below for per-instance priority.
+**Evidence** (historical — all resolved in #199): `copyPathOps.ts` (705 LOC / 19 functions), `cli.e2e.test.ts` (1507 LOC), `dev/App.tsx` (456 LOC / 11 inline sections), `in-memory-fs.ts` (429 LOC) — a recurring cluster in `content-ops/src/ops/` (4 of the 2026-04-17 audit's top-10 largest files), each since split along its natural seams. See Migration Plan below.
 
 ## DR-2 — Static-Only Namespace Class
 
@@ -41,6 +41,7 @@ export async function handleMirrorCleanup(...) {}
 **Recognition**: a class where every method is `static` and no instance property/state exists — it's a namespace pretending to be an object.
 
 ```typescript
+// Illustrative anti-pattern (not live code):
 export class LinkProcessor {
   static async extractLinks(content: string) {}
   static async extractLinksFromFile(path: string, fs: FileSystemService) {}
@@ -56,7 +57,7 @@ export async function extractLinks(content: string) {}
 export async function extractLinksFromFile(path: string, fs: FileSystemService) {}
 ```
 
-**Evidence**: #199 P0.4 `markdown/link-processor.ts:42-404` — `class LinkProcessor` with 18 static methods; the fix direction was already emerging in the file's own compat re-exports (`link-processor.ts:406-421`, standalone `extractLinks`/`detectLinkStyle` functions wrapping the static calls). See Migration Plan below.
+**Evidence** (historical — resolved in #199): `markdown/link-processor.ts` once exposed a `class LinkProcessor` with 18 static methods; #199 converted it to a module of named function exports (the direction the file's own compat re-exports were already pointing). See Migration Plan below.
 
 ## DR-3 — Optional-Bag Dispatch Instead of Discriminated Union
 
@@ -93,22 +94,22 @@ switch (op.kind) {
 }
 ```
 
-**Evidence**: #199 P1.3 `content-ops/src/ops/movePathOps.ts:189` (`MoveCtx = Partial<...>`) with non-null assertions at the two dispatch sites (`movePathOps.ts:157-158`, `172-173`). See Migration Plan below.
+**Evidence** (historical — non-null assertions resolved in #199): `content-ops/src/ops/movePathOps.ts` once modelled `MoveCtx` as `Partial<...>` with `ctx.source!` assertions at the two dispatch sites. #199 made `MoveCtx` a total type and dropped the assertions; a full discriminated-union rewrite was judged N/A here (the branch is unknown at ctx-build time). See Migration Plan below.
 
-## Migration Plan (existing violations)
+## Migration Plan (originating instances)
 
-Current, concrete instances found while extracting these rules from #199 — not blocking, tracked as tech-debt. This list is the seed for `pair-capability-assess-debt` scan mode (#224): it converts findings like these into `tech-debt` Draft items (P1–P3) so they live in the backlog instead of only in this doc.
+The concrete instances found while extracting these rules from the 2026-04-17 audit. All were resolved in #199, so they are recorded here as the rules' provenance rather than as open work.
 
-| Rule | Location | Priority | Note |
-| ---- | -------- | -------- | ---- |
-| DR-1 | `content-ops/src/ops/copyPathOps.ts` (705 LOC) | P1 | split per #199 suggested execution: `copy-file.ts` / `copy-directory.ts` / `copy-orchestrator.ts` |
-| DR-1 | `apps/pair-cli/src/cli.e2e.test.ts` (1507 LOC) | P1 | split per CLI command (install / update / kb-validate / update-link) |
-| DR-1 | `packages/brand/dev/App.tsx` (456 LOC) | P2 | dev-only harness; extract sections to `dev/sections/*` |
-| DR-1 | `packages/content-ops/src/test-utils/in-memory-fs.ts` (429 LOC) | P2 | test-only; split read/write/seed helpers |
-| DR-2 | `packages/content-ops/src/markdown/link-processor.ts` (`class LinkProcessor`) | P1 | convert to named exports; re-exports already exist for the compat path |
-| DR-3 | `packages/content-ops/src/ops/movePathOps.ts:189` (`MoveCtx`) | P2 | opportunistic, when the file is next touched |
+| Rule | Location | Status |
+| ---- | -------- | ------ |
+| DR-1 | `content-ops/src/ops/copyPathOps.ts` (705 LOC) | Resolved in #199 — split into `copy-file` / `copy-directory` / `copy-directory-transforms` / `copy-types` + orchestrator |
+| DR-1 | `apps/pair-cli/src/cli.e2e.test.ts` (1507 LOC) | Resolved in #199 — split into per-command e2e files + shared helpers |
+| DR-1 | `packages/brand/dev/App.tsx` (456 LOC) | Resolved in #199 — sections extracted to `dev/sections/*` (App.tsx → 51 LOC) |
+| DR-1 | `packages/content-ops/src/test-utils/in-memory-fs.ts` (429 LOC) | Resolved in #199 — split into state + read/write/seed modules |
+| DR-2 | `packages/content-ops/src/markdown/link-processor.ts` (`class LinkProcessor`) | Resolved in #199 — converted to named function exports |
+| DR-3 | `packages/content-ops/src/ops/movePathOps.ts` (`MoveCtx`) | Resolved in #199 — `MoveCtx` made total, `ctx.source!` assertions dropped (discriminated-union rewrite N/A) |
 
-**Note**: no `tech-debt` Draft items are created by this story. Item creation from this table is deferred to #224 (`pair-capability-assess-debt` scan mode).
+**Note**: these originating instances are cleared. New violations found by later audits are tracked as `tech-debt` Draft items (P1–P3) via `pair-capability-assess-debt` scan mode (#224), not appended here.
 
 ## Related
 

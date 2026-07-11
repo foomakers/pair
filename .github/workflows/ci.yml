@@ -59,6 +59,12 @@ jobs:
         run: pnpm build
       - name: Run lint
         run: pnpm lint
+      - name: Run code-hygiene check
+        run: pnpm hygiene:check
+      - name: Run docs-staleness check
+        run: pnpm docs:staleness
+      - name: Run duplication check
+        run: pnpm dup:check
       - name: Install Playwright browsers
         run: |
           pnpm --filter @pair/brand exec playwright install --with-deps chromium
