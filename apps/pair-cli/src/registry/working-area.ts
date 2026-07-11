@@ -1,4 +1,5 @@
 import type { FileSystemService } from '@pair/content-ops'
+import { isWithinPath } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
 
 /**
@@ -15,18 +16,6 @@ export const DEFAULT_WORKING_PATH = '.pair/working'
 interface WorkingAreaConfig {
   working_path?: unknown
   [key: string]: unknown
-}
-
-/**
- * Normalizes a path for overlap comparison. On case-insensitive filesystems
- * (macOS/Windows) the result is case-folded so a `working_path` override
- * differing only in case (e.g. ".pair/Working" vs ".pair/working") is still
- * recognized as overlapping.
- * @param platform - OS platform (defaults to process.platform), injectable for tests.
- */
-function normalize(p: string, platform: string = process.platform): string {
-  const stripped = p.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
-  return platform === 'darwin' || platform === 'win32' ? stripped.toLowerCase() : stripped
 }
 
 /**
@@ -51,18 +40,11 @@ export function resolveWorkingPath(
 }
 
 /**
- * True if `candidate` equals, or lies within, `containerPath`.
- * Both paths must share the same base (both relative, or both absolute).
+ * True if `candidate` equals, or lies within, `containerPath`. Re-exported from
+ * content-ops so runtime exclusion (isPathExcluded) and this config-validation
+ * overlap check share one containment primitive and cannot drift (D14).
  */
-export function isWithinPath(
-  candidate: string,
-  containerPath: string,
-  platform: string = process.platform,
-): boolean {
-  const a = normalize(candidate, platform)
-  const b = normalize(containerPath, platform)
-  return a === b || a.startsWith(b + '/')
-}
+export { isWithinPath }
 
 /**
  * True if `a` and `b` are equal, or either one contains the other.

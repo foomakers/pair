@@ -55,11 +55,45 @@ export type CopyDirContext = {
 }
 
 /**
+ * Normalizes a path for case-fold-aware containment comparison: forward-slash
+ * separators, no leading/trailing slashes, lowercased on case-insensitive
+ * filesystems (macOS/Windows). The single normalization primitive shared by
+ * both the runtime exclusion guard (`isPathExcluded`, absolute paths) and the
+ * config-validation overlap check (working-area, relative paths), so what gets
+ * excluded can't drift from what gets validated (D14). Stripping the leading
+ * slash is safe for the absolute-path case because both operands are normalized
+ * the same way before comparison.
+ * @param platform - OS platform (defaults to process.platform), injectable for tests.
+ */
+export function normalizePathForCompare(p: string, platform: string = process.platform): string {
+  const stripped = p.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '')
+  return platform === 'darwin' || platform === 'win32' ? stripped.toLowerCase() : stripped
+}
+
+/**
+ * True if `candidate` equals, or lies within, `containerPath`. Both paths must
+ * share the same base (both absolute, or both relative). Comparison is by
+ * normalized path segments, case-folded per platform. Shared primitive reused
+ * by `isPathExcluded` and by the working-area overlap validation (D14).
+ * @param platform - OS platform (defaults to process.platform), injectable for tests.
+ */
+export function isWithinPath(
+  candidate: string,
+  containerPath: string,
+  platform: string = process.platform,
+): boolean {
+  const a = normalizePathForCompare(candidate, platform)
+  const b = normalizePathForCompare(containerPath, platform)
+  return a === b || a.startsWith(b + '/')
+}
+
+/**
  * True if `candidate` equals, or lies within, one of `excludePaths`.
  * Used to hard-exclude operational areas (e.g. `.pair/working/`) from copy and
  * mirror-cleanup traversals, independent of registry/behavior configuration.
  * On case-insensitive filesystems (macOS/Windows) the comparison is
  * case-folded so a `working_path` override differing only in case still matches.
+ * Built on the shared `isWithinPath` primitive.
  * @param platform - OS platform (defaults to process.platform), injectable for tests.
  */
 export function isPathExcluded(
@@ -68,19 +102,7 @@ export function isPathExcluded(
   platform: string = process.platform,
 ): boolean {
   if (!excludePaths || excludePaths.length === 0) return false
-  const foldCase = platform === 'darwin' || platform === 'win32'
-  const normalize = (p: string) => {
-    const stripped = p.replace(/\\/g, '/').replace(/\/+$/, '')
-    return foldCase ? stripped.toLowerCase() : stripped
-  }
-  const normalizedCandidate = normalize(candidate)
-  return excludePaths.some(excluded => {
-    const normalizedExcluded = normalize(excluded)
-    return (
-      normalizedCandidate === normalizedExcluded ||
-      normalizedCandidate.startsWith(normalizedExcluded + '/')
-    )
-  })
+  return excludePaths.some(excluded => isWithinPath(candidate, excluded, platform))
 }
 
 export async function copyDirHelper(context: CopyDirContext): Promise<void> {
