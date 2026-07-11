@@ -58,6 +58,13 @@ export function pathsOverlap(a: string, b: string, platform: string = process.pl
  * Catches both directions of the edge cases called out by the story:
  * a registry accidentally covering the working area, and an override that
  * lands inside a registry-managed directory.
+ *
+ * Contract: both operands are **project-relative** — `target.path` (registry
+ * target) and `workingPath` (the `working_path` override, project-relative by
+ * design; see `resolveWorkingPathOverride`). An absolute override is out of
+ * contract for this config-lint and would not compare meaningfully against a
+ * relative target; the runtime hard-exclusion (`resolveWorkingPath` →
+ * `isPathExcluded`) is the backstop that protects install/update regardless (D14).
  */
 export function detectWorkingPathOverlap(
   registries: Record<string, RegistryConfig>,

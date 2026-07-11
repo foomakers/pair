@@ -131,7 +131,7 @@ The transform also updates:
 
 `.pair/working/` (checkpoints, reports) is operational data, not knowledge — it is hard-excluded from every registry copy/mirror operation and never scaffolded by `pair install` (D14). See the [KB Structure Reference](/docs/reference/kb-structure) for the full convention.
 
-Override the default path with a top-level `working_path` field, a sibling of `asset_registries` — not nested inside it:
+Override the default path with a top-level `working_path` field, a sibling of `asset_registries` — not nested inside it. The value is a **project-relative** path (relative to the project root, like `asset_registries` targets):
 
 ```json
 {
