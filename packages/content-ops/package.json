@@ -49,7 +49,7 @@
     "@pair/prettier-config": "workspace:*",
     "@pair/markdownlint-config": "workspace:*",
     "@pair/ts-config": "workspace:*",
-    "@types/adm-zip": "^0.5.5",
+    "@types/adm-zip": "catalog:",
     "@types/markdown-it": "catalog:",
     "@types/mdast": "catalog:",
     "@types/node": "catalog:",
@@ -60,7 +60,7 @@
     "vitest": "catalog:"
   },
   "dependencies": {
-    "adm-zip": "^0.5.9",
+    "adm-zip": "catalog:",
     "markdown-it": "catalog:",
     "mdast": "catalog:",
     "remark-parse": "catalog:",

@@ -54,11 +54,11 @@ jobs:
             export $(grep -v '^#' .env | xargs)
           fi
       - name: Run type check
-        run: pnpm ts:check || echo "No ts:check script defined"
+        run: pnpm ts:check
       - name: Run build
-        run: pnpm build || echo "No build script defined"
+        run: pnpm build
       - name: Run lint
-        run: pnpm lint || echo "No lint script defined"
+        run: pnpm lint
       - name: Install Playwright browsers
         run: |
           pnpm --filter @pair/brand exec playwright install --with-deps chromium

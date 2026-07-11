@@ -416,7 +416,7 @@ importers:
   packages/content-ops:
     dependencies:
       adm-zip:
-        specifier: ^0.5.9
+        specifier: 'catalog:'
         version: 0.5.16
       markdown-it:
         specifier: 'catalog:'
@@ -444,7 +444,7 @@ importers:
         specifier: workspace:*
         version: link:../../tools/ts-config
       '@types/adm-zip':
-        specifier: ^0.5.5
+        specifier: 'catalog:'
         version: 0.5.7
       '@types/markdown-it':
         specifier: 'catalog:'
