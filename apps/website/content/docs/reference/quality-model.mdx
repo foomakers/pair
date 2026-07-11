@@ -41,11 +41,11 @@ A PR without classification tags is treated as 🔴 (fail-safe).
 
 ## Tag Projection & Eligibility
 
-Tags are a **chromatic projection** of the matrix — `risk:green|yellow|red`, `cost:green|yellow|orange|red` — created only if your adoption declares the matrix→tag projection (the quickstart activates the standard set by default). There is no dedicated "eligibility" tag: automation eligibility is a **filter you declare over classification tags** (e.g. `risk:green`), consumed generically by `pair-next`.
+Tags are a **chromatic projection** of the matrix — `risk:green|yellow|red`, `cost:green|yellow|orange|red`. Emission is declared, not implicit: `risk` is the only family the KB proposes by default — `classify` asks to activate it the first time it runs and writes the declaration once you confirm, so you get sensible tagging without needing to know the schema exists. `cost` (and any future tag family) stays opt-in, added only on explicit request. There is no dedicated "eligibility" tag: automation eligibility is a **filter you declare over classification tags** (e.g. `risk:green`), consumed generically by `pair-next`.
 
 ## Project Overrides — `tech/risk-matrix.md`
 
-Optional. Absent means KB defaults apply completely — nothing fails. When present, it carries only the delta: a criticality table (service/domain → High/Medium/Low) and optional threshold overrides — see the full schema in [`quality-model.md` §6](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md#6-techrisk-matrixmd--adoption-delta) and a filled-in example at [`risk-matrix-example.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/assets/risk-matrix-example.md).
+Optional file with up to three independent sections — none imply the others: **Tag Projection** (which tags are active — typically the first section a project ends up with, since `classify` proposes it), a **criticality table** (service/domain → High/Medium/Low), and **threshold overrides**. Fully absent means KB defaults apply completely and no tags are emitted — nothing fails. See the full schema in [`quality-model.md` §5–§6](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md#6-techrisk-matrixmd--adoption-delta) and a filled-in example at [`risk-matrix-example.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/assets/risk-matrix-example.md).
 
 ## Related
 

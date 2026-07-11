@@ -65,6 +65,26 @@ describe('quality-model.md — structure', () => {
     expect(QUALITY_MODEL).toContain('cost:green|yellow|orange|red')
   })
 
+  it('states risk is the KB-proposed default tag family and cost is opt-in', () => {
+    expect(QUALITY_MODEL).toMatch(/`risk` is the only tag family the KB proposes by default/)
+    expect(QUALITY_MODEL).toMatch(/`cost`[\s\S]{0,200}is \*\*opt-in\*\*/)
+  })
+
+  it("documents classify's propose-then-write Tag Projection flow", () => {
+    expect(QUALITY_MODEL).toMatch(/does `tech\/risk-matrix\.md` have a `## Tag Projection` section/)
+    expect(QUALITY_MODEL).toMatch(/No Tag Projection declared yet\. Activate `risk:green\|yellow\|red`/)
+    expect(QUALITY_MODEL).toMatch(/records the opt-out so this isn't asked again/)
+    expect(QUALITY_MODEL).toMatch(
+      /the compiled matrix is written to the story\/PR body \*\*regardless of the answer\*\*/,
+    )
+  })
+
+  it('shows the Tag Projection declaration schema (default, multi-family, opt-out)', () => {
+    expect(QUALITY_MODEL).toMatch(/## Tag Projection\n\nActive: risk\n/)
+    expect(QUALITY_MODEL).toContain('Active: risk, cost')
+    expect(QUALITY_MODEL).toContain('Active: none')
+  })
+
   it('states there is no dedicated eligibility tag', () => {
     expect(QUALITY_MODEL).toMatch(/No dedicated eligibility tag/)
   })
@@ -73,8 +93,15 @@ describe('quality-model.md — structure', () => {
     expect(QUALITY_MODEL).toContain('Argument > Adoption > KB default')
   })
 
+  it('states tech/risk-matrix.md holds 3 independent sections that do not imply each other', () => {
+    expect(QUALITY_MODEL).toMatch(/up to three independent sections/)
+    expect(QUALITY_MODEL).toMatch(/the presence of one never implies the others/)
+  })
+
   it('walks through the resolution cascade with and without the delta file', () => {
     expect(QUALITY_MODEL).toMatch(/No file[^|]*\|\s*absent/)
+    expect(QUALITY_MODEL).toMatch(/Tag Projection declared, `risk` active/)
+    expect(QUALITY_MODEL).toMatch(/Tag Projection explicitly opted out/)
     expect(QUALITY_MODEL).toMatch(/File present, service listed/)
     expect(QUALITY_MODEL).toMatch(/File present, service \*\*not\*\* listed/)
     expect(QUALITY_MODEL).toMatch(/File present but malformed/)

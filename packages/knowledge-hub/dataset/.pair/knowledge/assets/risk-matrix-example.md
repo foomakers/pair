@@ -1,6 +1,12 @@
 # `tech/risk-matrix.md` — Example
 
-Illustrative adoption delta for a fictitious e-commerce project. Copy the sections you need — this file is only committed as a reference; a real project's `tech/risk-matrix.md` normally has just a few rows. See the schema and resolution rules in the [quality model](../guidelines/quality-assurance/quality-model.md), §6.
+Illustrative adoption delta for a fictitious e-commerce project. Copy the sections you need — this file is only committed as a reference; a real project's `tech/risk-matrix.md` normally has just a few rows. See the schema and resolution rules in the [quality model](../guidelines/quality-assurance/quality-model.md), §5–§6.
+
+## Tag Projection
+
+Active: risk, cost
+
+`risk` is the only tag family the KB proposes by default — `classify` writes this section itself the first time it runs, once the proposal to activate it is confirmed (§5). This project also added `cost` to the list, since it tracks cloud spend closely.
 
 ## Criticality Table
 

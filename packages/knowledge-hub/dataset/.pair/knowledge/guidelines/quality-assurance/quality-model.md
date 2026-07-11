@@ -75,15 +75,46 @@ Chromatic scheme only — no semantic tag beyond color:
 - `risk:green|yellow|red` — §3.2
 - `cost:green|yellow|orange|red` — §3.3
 
-**Adoption-gated emission**: `classify` creates these tags **only if adoption declares the matrix→tag projection** (quickstart activates the standard set above by default; a project may rename or disable individual tags in `tech/risk-matrix.md`, §6). Without a declared projection, the matrix still exists in the story/PR body — it is simply not projected onto tags.
+**Tag emission is declared, not implicit.** `classify` only creates tags once a `## Tag Projection` declaration exists in `tech/risk-matrix.md` (§6) — but that declaration is not something a project has to remember to write from scratch:
+
+- **`risk` is the only tag family the KB proposes by default.** `cost` (and any future tag family this model might grow — e.g. if a dedicated security-relevance tag is ever introduced) is **opt-in**: it is projected only once a project explicitly adds it to the declaration.
+- **`classify` proposes the declaration on its own first run**, the same propose-then-write-if-confirmed pattern already used elsewhere in this KB (e.g. `pair-capability-verify-quality`'s first-time Custom Gate Registry setup):
+  1. **Check**: does `tech/risk-matrix.md` have a `## Tag Projection` section?
+  2. **Skip**: if yes, use it exactly as written — including an explicit opt-out (see below) — and never propose again.
+  3. **Act**: if no, ask before creating any tag:
+
+     > No Tag Projection declared yet. Activate `risk:green|yellow|red` on stories and PRs? (recommended — `cost` and other families can be added later)
+     > 1. Yes, activate `risk` (writes the declaration below)
+     > 2. No, don't tag anything (records the opt-out so this isn't asked again)
+
+  4. **Verify**: the compiled matrix is written to the story/PR body **regardless of the answer** — §3.2/§3.3's body output never depends on tag projection; only tag *emission* is gated by it.
+- Until the proposal is answered, or if it's explicitly declined, the matrix still exists in the story/PR body — it is simply not projected onto tags.
+
+```markdown
+## Tag Projection
+
+Active: risk
+```
+
+Add `cost` to the `Active` list to turn it on (`Active: risk, cost`); write `Active: none` to explicitly opt out of all tag emission (`classify` reads this as a durable "don't ask again," not as "not yet configured"). A project may also rename either tag family's prefix here (e.g. `risk` → `priority`) — the color values and their meaning stay the same, only the label changes.
 
 **No dedicated eligibility tag**: automation eligibility is an **adoption-declared filter over classification tags** (e.g. `risk:green`, optionally combined with project tags), not a special tag of its own. `pair-next` consumes it generically, like any other tag filter, re-evaluated on every run (tags can change between runs, e.g. review raising the tier).
 
 ## 6. `tech/risk-matrix.md` — Adoption Delta
 
-Optional. Absent ⇒ KB defaults (§3.1) apply completely, nothing fails (D21). Present ⇒ only the delta: criticality table and/or threshold overrides — a few lines, not a rewrite of this document.
+Optional file holding up to three independent sections — a project may have none, one, or all three; the presence of one never implies the others:
+
+- **`## Tag Projection`** (§5) — which classification tags get emitted. In practice the section most projects end up with first, since `classify` proactively proposes it the first time it runs (§5) — a project doesn't have to know this file exists to get a sensible default.
+- **`## Criticality Table`** — per-service/domain criticality overrides (§3.1).
+- **`## Overrides`** — threshold overrides for other dimensions.
+
+Absent entirely ⇒ KB defaults (§3.1) apply completely to the matrix, and no tags are emitted (§5) — nothing fails (D21). This is the state before `classify` has ever run, or before its Tag Projection proposal has been answered.
 
 ```markdown
+## Tag Projection
+
+Active: risk
+
 ## Criticality Table
 
 | Service/Domain | Criticality |
@@ -96,18 +127,20 @@ Optional. Absent ⇒ KB defaults (§3.1) apply completely, nothing fails (D21). 
 - change-risk.shared-paths: ["packages/billing/**"]
 ```
 
-- **Malformed file** (unparseable table, unknown keys): skills warn and fall back to KB defaults entirely (D21).
-- **Unknown service/domain** (queried but not in the table): treated as unclassified ⇒ conservative High for that dimension.
+- **Malformed file** (unparseable table, unknown keys): skills warn and fall back to KB defaults entirely (D21) — including no tag emission, exactly as if the whole file were absent.
+- **Unknown service/domain** (queried but not in the criticality table): treated as unclassified ⇒ conservative High for that dimension.
 - A filled-in example (also usable as adoption starting point) is at [risk-matrix-example.md](../../assets/risk-matrix-example.md).
 
 ### Resolution-cascade walkthrough
 
 | Scenario | `tech/risk-matrix.md` | Resolution |
 | --- | --- | --- |
-| No file | absent | Service criticality defaults to Medium; all other dimensions per §3.1 defaults; nothing fails (AC2) |
+| No file, or Tag Projection proposal not yet answered | absent, or missing `## Tag Projection` | Matrix computed and written to the story/PR body per §3.1 defaults; no tags emitted — `classify` proposes the Tag Projection declaration on its next run |
+| Tag Projection declared, `risk` active | `## Tag Projection` → `Active: risk` | `risk:*` tag applied to the story/PR alongside the body matrix; `classify` never re-proposes |
+| Tag Projection explicitly opted out | `## Tag Projection` → `Active: none` | Matrix written to the body; no tags applied; `classify` never re-proposes |
 | File present, service listed | `payments: High` | `payments` resolves to red for that dimension, overriding the Medium default (AC3) |
 | File present, service **not** listed | table has other entries only | Conservative High (red) for that dimension, not the absent-file Medium default |
-| File present but malformed | unparseable | Warn, fall back to KB defaults as if absent |
+| File present but malformed | unparseable | Warn, fall back to KB defaults as if absent (including no tag emission) |
 
 ## 7. Nested Taxonomy
 
