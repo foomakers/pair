@@ -1,5 +1,11 @@
 import type { VersionCheckResult } from './version-check'
 import { migrationsIndexUrl } from './migration-url'
+import { isStableVersion } from './version-resolver'
+
+/** ` (non-stable)` suffix for a non-null pre-release version, else empty. */
+function nonStableSuffix(version: string | null): string {
+  return version && !isStableVersion(version) ? ' (non-stable)' : ''
+}
 
 function versionLabel(version: string | null): string {
   return version ?? 'unknown'
@@ -28,7 +34,9 @@ export function formatVersionCheckHuman(result: VersionCheckResult): string {
   lines.push('═════════════════')
   lines.push('')
   lines.push(`  Status:     ${statusLine(result)}`)
-  lines.push(`  Installed:  ${versionLabel(result.installed.version)}`)
+  lines.push(
+    `  Installed:  ${versionLabel(result.installed.version)}${nonStableSuffix(result.installed.version)}`,
+  )
   lines.push(
     `  Current:    ${versionLabel(result.current.version)}${
       result.current.available ? '' : ' (unavailable)'

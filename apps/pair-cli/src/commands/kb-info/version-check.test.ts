@@ -33,6 +33,25 @@ describe('compareVersions', () => {
     )
   })
 
+  it('reports drift WITHOUT a migration URL on downgrade (installed newer than current)', () => {
+    const result = compareVersions(installed({ version: '1.3.0' }), current({ version: '1.2.0' }))
+
+    expect(result.status).toBe('drift')
+    // A downgrade has no v{newer}-to-v{older} migration page.
+    expect(result.migrationUrl).toBeUndefined()
+  })
+
+  it('reports drift WITHOUT a migration URL when a pre-release is involved', () => {
+    const result = compareVersions(
+      installed({ version: '1.2.0' }),
+      current({ version: '1.3.0-beta.1', stable: false }),
+    )
+
+    expect(result.status).toBe('drift')
+    // Pre-release ordering is not defined for migration pages.
+    expect(result.migrationUrl).toBeUndefined()
+  })
+
   it('reports unknown-installed when no installed version is recorded (legacy fixture)', () => {
     const result = compareVersions(installed({ version: null }), current({ version: '1.2.0' }))
 

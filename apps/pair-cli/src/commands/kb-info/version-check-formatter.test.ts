@@ -74,4 +74,15 @@ describe('formatVersionCheckHuman', () => {
     const output = formatVersionCheckHuman(result)
     expect(output).toContain('non-stable')
   })
+
+  it('labels a non-stable INSTALLED version on the Installed line', () => {
+    const result = compareVersions(
+      { version: '1.2.0-rc.1' },
+      { sourceKind: 'registry', version: '1.2.0', available: true, stable: true },
+    )
+
+    const output = formatVersionCheckHuman(result)
+    const installedLine = output.split('\n').find((l) => l.includes('Installed:')) ?? ''
+    expect(installedLine).toContain('non-stable')
+  })
 })
