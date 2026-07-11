@@ -370,23 +370,9 @@ async function moveDirectoryEntry(
     folderBehavior: Record<string, Behavior> | undefined
   },
 ) {
-  const { fileService, srcPath, destPath, datasetRoot, defaultBehavior, folderBehavior } = ctx
+  const { srcPath } = ctx
   try {
-    const entryRel = normalizeKey(convertToRelative(datasetRoot, join(datasetRoot, entry.name)))
-    const entryBehavior = resolveBehavior(entryRel, folderBehavior, defaultBehavior)
-    const from = join(srcPath, entry.name)
-    const to = join(destPath, entry.name)
-
-    if (entry.isDirectory()) {
-      await performRecursiveRename(fileService, from, to)
-    } else {
-      const exists = await fileService.exists(to).catch(() => false)
-      if (entryBehavior === 'add' && exists) {
-        logger.info(`Skipped existing file (add): ${to}`)
-        return
-      }
-      await fileService.rename(from, to)
-    }
+    await performEntryMove(entry, ctx)
   } catch (err) {
     logger.error(`Failed to move entry ${entry.name}: ${String(err)}`)
     // If the original error message is specific (like test errors), preserve it
@@ -401,6 +387,35 @@ async function moveDirectoryEntry(
       originalError: err,
     })
   }
+}
+
+async function performEntryMove(
+  entry: Dirent,
+  ctx: {
+    fileService: FileSystemService
+    srcPath: string
+    destPath: string
+    datasetRoot: string
+    defaultBehavior: Behavior
+    folderBehavior: Record<string, Behavior> | undefined
+  },
+) {
+  const { fileService, srcPath, destPath, datasetRoot, defaultBehavior, folderBehavior } = ctx
+  const entryRel = normalizeKey(convertToRelative(datasetRoot, join(datasetRoot, entry.name)))
+  const entryBehavior = resolveBehavior(entryRel, folderBehavior, defaultBehavior)
+  const from = join(srcPath, entry.name)
+  const to = join(destPath, entry.name)
+
+  if (entry.isDirectory()) {
+    await performRecursiveRename(fileService, from, to)
+    return
+  }
+  const exists = await fileService.exists(to).catch(() => false)
+  if (entryBehavior === 'add' && exists) {
+    logger.info(`Skipped existing file (add): ${to}`)
+    return
+  }
+  await fileService.rename(from, to)
 }
 
 async function performRecursiveRename(fileService: FileSystemService, from: string, to: string) {

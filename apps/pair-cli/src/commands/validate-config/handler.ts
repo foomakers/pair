@@ -2,7 +2,12 @@ import type { ValidateConfigCommandConfig } from './parser'
 import type { FileSystemService } from '@pair/content-ops'
 import chalk from 'chalk'
 import { loadConfigWithOverrides } from '#config'
-import { extractRegistries, validateAllRegistries, type RegistryConfig } from '#registry'
+import {
+  extractRegistries,
+  validateAllRegistries,
+  resolveWorkingPathOverride,
+  type RegistryConfig,
+} from '#registry'
 
 /**
  * Handles the validate-config command execution.
@@ -27,18 +32,23 @@ export async function handleValidateConfigCommand(
   // Validate the config - if a custom config is provided, validate only that config
   // without merging with base config (to catch errors in the user's config)
   let registries: Record<string, RegistryConfig>
+  let workingPathSource: unknown
   if (config.config) {
     // For custom config, read and validate only that config file
     const customConfigContent = fs.readFileSync(config.config)
     const customConfig = JSON.parse(customConfigContent) as {
       asset_registries?: Record<string, RegistryConfig>
+      working_path?: string
     }
     registries = customConfig.asset_registries || {}
+    workingPathSource = customConfig
   } else {
     registries = extractRegistries(result.config)
+    workingPathSource = result.config
   }
 
-  const validation = validateAllRegistries(registries)
+  const workingPath = resolveWorkingPathOverride(workingPathSource)
+  const validation = validateAllRegistries(registries, workingPath)
 
   if (!validation.valid) {
     const errorMessages = validation.errors.join('\n  - ')

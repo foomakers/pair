@@ -16,6 +16,7 @@ import {
   handleBackupRollback,
   resolveEffectiveDatasetRoot,
   writeProjectLlmsTxt,
+  resolveWorkingPathOverride,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
@@ -67,7 +68,15 @@ export async function handleUpdateCommand(
   try {
     const { datasetRoot, registries, baseTarget } = await setupUpdateContext(fs, config, options)
     validateUpdateContext(fs, registries, baseTarget)
-    await executeUpdate({ fs, datasetRoot, registries, baseTarget, options, pushLog, presenter })
+    await executeUpdate({
+      fs,
+      datasetRoot,
+      registries,
+      baseTarget,
+      options,
+      pushLog,
+      presenter,
+    })
   } catch (err) {
     pushLog('error', `Update failed: ${String(err)}`)
     throw err
@@ -92,7 +101,8 @@ async function setupUpdateContext(
   const configContent = loadConfigWithOverrides(fs, configOptions)
 
   const registries = extractRegistries(configContent.config)
-  const validation = validateAllRegistries(registries)
+  const workingPathOverride = resolveWorkingPathOverride(configContent.config)
+  const validation = validateAllRegistries(registries, workingPathOverride)
   if (!validation.valid) {
     throw new Error(validation.errors.join('; ') || 'Invalid registry configuration')
   }
@@ -194,6 +204,14 @@ interface UpdateRegistryCtx {
   total: number
 }
 
+async function finalizeRegistryCopy(
+  ctx: UpdateRegistryCtx,
+  paths: { effectiveTarget: string; datasetPath: string },
+): Promise<void> {
+  const { fs, registryConfig, baseTarget } = ctx
+  await postCopyOps({ fs, registryConfig, baseTarget, ...paths })
+}
+
 async function updateSingleRegistry(
   ctx: UpdateRegistryCtx,
 ): Promise<{ skillNameMap?: SkillNameMap | undefined; result: RegistryResult }> {
@@ -235,7 +253,7 @@ async function updateSingleRegistry(
     options: buildCopyOptions(registryConfig),
   })
 
-  await postCopyOps({ fs, registryConfig, effectiveTarget, datasetPath, baseTarget })
+  await finalizeRegistryCopy(ctx, { effectiveTarget, datasetPath })
   presenter.registryDone(registryName)
   return {
     skillNameMap: copyResult['skillNameMap'] as SkillNameMap | undefined,
@@ -269,11 +287,7 @@ async function updateRegistries(context: UpdateContext): Promise<RegistryResult[
     return result
   })
 
-  await reconcileSkillNameRegistry(
-    { fs, baseTarget, pushLog },
-    registries,
-    accumulatedSkillNameMap,
-  )
+  await reconcileSkillNameRegistry({ fs, baseTarget, pushLog }, registries, accumulatedSkillNameMap)
 
   presenter.summary(results, 'update', Date.now() - startTime)
   return results

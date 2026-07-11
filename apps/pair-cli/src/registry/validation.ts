@@ -1,6 +1,8 @@
 import { Behavior, FileSystemService, validateTargets, type TargetConfig } from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
 import { getCanonicalTarget } from './layout'
+import { DEFAULT_WORKING_PATH, validateWorkingPath } from './working-area'
+import { getReservedPaths, detectReservedPathOverlap } from './reserved-paths'
 
 /**
  * Check if a target directory is empty or doesn't exist
@@ -229,9 +231,13 @@ export function detectOverlappingTargets(targets: Record<string, string>): strin
 }
 
 /**
- * Validates a map of registries and checks for global conflicts.
+ * Validates a map of registries and checks for global conflicts, including
+ * overlap with the (possibly overridden) working area path (D14).
  */
-export function validateAllRegistries(registries: Record<string, RegistryConfig>): {
+export function validateAllRegistries(
+  registries: Record<string, RegistryConfig>,
+  workingPath: string = DEFAULT_WORKING_PATH,
+): {
   valid: boolean
   errors: string[]
 } {
@@ -239,6 +245,14 @@ export function validateAllRegistries(registries: Record<string, RegistryConfig>
 
   if (!registries || Object.keys(registries).length === 0) {
     errors.push('Config must have asset_registries object')
+    return { valid: false, errors }
+  }
+
+  // Reject a non-project-relative working_path up front: it would silently
+  // defeat the overlap guard below, which compares project-relative paths (D14).
+  const workingPathErrors = validateWorkingPath(workingPath)
+  if (workingPathErrors.length > 0) {
+    errors.push(...workingPathErrors)
     return { valid: false, errors }
   }
 
@@ -265,6 +279,7 @@ export function validateAllRegistries(registries: Record<string, RegistryConfig>
   if (errors.length === 0) {
     const overlapping = detectOverlappingTargets(canonicalPaths)
     errors.push(...overlapping)
+    errors.push(...detectReservedPathOverlap(registries, getReservedPaths(workingPath)))
   }
 
   return { valid: errors.length === 0, errors }

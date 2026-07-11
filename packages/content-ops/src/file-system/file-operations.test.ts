@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { copyFileHelper, copyDirHelper } from './file-operations'
+import {
+  copyFileHelper,
+  copyDirHelper,
+  isWithinPath,
+  normalizePathForCompare,
+} from './file-operations'
 import { InMemoryFileSystemService } from '../test-utils/in-memory-fs'
 
 let fileService: InMemoryFileSystemService
@@ -137,5 +142,35 @@ describe('copyDirHelper - error cases', () => {
         datasetRoot: '/',
       }),
     ).rejects.toThrow()
+  })
+})
+
+describe('normalizePathForCompare (shared primitive, D14)', () => {
+  it('strips leading and trailing slashes and normalizes separators', () => {
+    expect(normalizePathForCompare('/a/b/', 'linux')).toBe('a/b')
+    expect(normalizePathForCompare('a\\b', 'linux')).toBe('a/b')
+  })
+
+  it('case-folds on darwin/win32 but not linux', () => {
+    expect(normalizePathForCompare('/A/B', 'darwin')).toBe('a/b')
+    expect(normalizePathForCompare('/A/B', 'win32')).toBe('a/b')
+    expect(normalizePathForCompare('/A/B', 'linux')).toBe('A/B')
+  })
+})
+
+describe('isWithinPath (shared primitive, D14)', () => {
+  it('matches exact and nested paths, absolute or relative', () => {
+    expect(isWithinPath('/t/.pair/working', '/t/.pair/working')).toBe(true)
+    expect(isWithinPath('/t/.pair/working/c.md', '/t/.pair/working')).toBe(true)
+    expect(isWithinPath('.pair/working/c.md', '.pair/working')).toBe(true)
+  })
+
+  it('does not match a sibling sharing the same string prefix', () => {
+    expect(isWithinPath('/t/.pair/working-notes', '/t/.pair/working')).toBe(false)
+  })
+
+  it('folds case per platform', () => {
+    expect(isWithinPath('/t/.pair/Working', '/t/.pair/working', 'darwin')).toBe(true)
+    expect(isWithinPath('/t/.pair/Working', '/t/.pair/working', 'linux')).toBe(false)
   })
 })

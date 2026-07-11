@@ -54,6 +54,24 @@ export async function doCopyAndUpdateLinks(
   return {}
 }
 
+function buildCopyDirHelperContext(ctx: {
+  fsService: FileSystemService
+  srcPath: string
+  tgtPath: string
+  datasetRoot: string
+  options?: SyncOptions
+}) {
+  const { fsService, srcPath, tgtPath, datasetRoot, options } = ctx
+  return {
+    fileService: fsService,
+    oldDir: srcPath,
+    newDir: tgtPath,
+    defaultBehavior: options?.defaultBehavior ?? 'overwrite',
+    datasetRoot,
+    ...(options?.folderBehavior && { folderBehavior: options.folderBehavior }),
+  }
+}
+
 async function copyDirectory(
   fsService: FileSystemService,
   ctx: {
@@ -76,17 +94,18 @@ async function copyDirectory(
       datasetRoot,
       options,
     })
-  } else {
-    await copyDirHelper({
-      fileService: fsService,
-      oldDir: srcPath,
-      newDir: tgtPath,
-      defaultBehavior: options?.defaultBehavior ?? 'overwrite',
-      ...(options?.folderBehavior && { folderBehavior: options.folderBehavior }),
-      datasetRoot,
-    })
-    return {}
   }
+
+  await copyDirHelper(
+    buildCopyDirHelperContext({
+      fsService,
+      srcPath,
+      tgtPath,
+      datasetRoot,
+      ...(options && { options }),
+    }),
+  )
+  return {}
 }
 
 /**
@@ -189,6 +208,32 @@ export async function stripMarkersFromTarget(
 }
 
 /**
+ * Writes a single secondary target: applies a transform, creates a symlink,
+ * or copies from the canonical path, depending on the target's mode.
+ */
+async function writeSecondaryTarget(params: {
+  fileService: FileSystemService
+  sourcePath: string
+  canonicalPath: string
+  target: TargetConfig
+  targetPath: string
+}): Promise<void> {
+  const { fileService, sourcePath, canonicalPath, target, targetPath } = params
+  if (target.transform) {
+    const content = await fileService.readFile(sourcePath)
+    throwOnMarkerErrors(content, sourcePath)
+    const transformed = applyTransformCommands(content, target.transform.prefix)
+    const clean = stripAllMarkers(transformed)
+    await fileService.mkdir(dirname(targetPath), { recursive: true })
+    await fileService.writeFile(targetPath, clean)
+  } else if (target.mode === 'symlink') {
+    await createOrReplaceSymlink(fileService, canonicalPath, targetPath)
+  } else if (target.mode === 'copy') {
+    await fileService.copy(canonicalPath, targetPath)
+  }
+}
+
+/**
  * Distributes content from canonical target to secondary targets (symlinks and copies).
  * For targets with a transform config, reads from the original source and applies the transform.
  * Called after the primary copy to canonical target is complete.
@@ -221,18 +266,7 @@ export async function distributeToSecondaryTargets(params: {
       ? target.path
       : fileService.resolve(baseTarget, target.path)
 
-    if (target.transform) {
-      const content = await fileService.readFile(sourcePath)
-      throwOnMarkerErrors(content, sourcePath)
-      const transformed = applyTransformCommands(content, target.transform.prefix)
-      const clean = stripAllMarkers(transformed)
-      await fileService.mkdir(dirname(targetPath), { recursive: true })
-      await fileService.writeFile(targetPath, clean)
-    } else if (target.mode === 'symlink') {
-      await createOrReplaceSymlink(fileService, canonicalPath, targetPath)
-    } else if (target.mode === 'copy') {
-      await fileService.copy(canonicalPath, targetPath)
-    }
+    await writeSecondaryTarget({ fileService, sourcePath, canonicalPath, target, targetPath })
   }
 }
 

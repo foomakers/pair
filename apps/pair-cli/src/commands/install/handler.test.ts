@@ -196,6 +196,49 @@ describe('handleInstallCommand - real services integration', () => {
 })
 
 /**
+ * #257: `.pair/working/` excluded from KB registries + adoption path override (D14)
+ *
+ * AC3: a fresh project without a working area is not scaffolded by `pair install` —
+ * skills create it on demand later. AC1: install never touches a pre-existing one.
+ */
+describe('#257: working area exclusion on install (D14)', () => {
+  const cwd = '/test-project'
+
+  const testConfig = {
+    asset_registries: {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+        description: 'Knowledge base',
+      },
+    },
+  }
+
+  const extraFiles = {
+    [`${cwd}/package.json`]: JSON.stringify({ name: 'test-pkg', version: '0.1.0' }),
+    [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({ name: '@pair/knowledge-hub' }),
+    [`${cwd}/packages/knowledge-hub/dataset/.pair/knowledge/guide.md`]: '# Guide',
+  }
+
+  test('does not scaffold the working area on a fresh install', async () => {
+    const fs = createTestFs(testConfig, extraFiles, cwd)
+
+    const config: InstallCommandConfig = {
+      command: 'install',
+      resolution: 'default',
+      kb: true,
+      offline: false,
+    }
+
+    await handleInstallCommand(config, fs)
+
+    expect(await fs.exists(`${cwd}/.pair/knowledge/guide.md`)).toBe(true)
+    expect(await fs.exists(`${cwd}/.pair/working`)).toBe(false)
+  })
+})
+
+/**
  * Bug regression tests for install handler — same bugs as update handler.
  * See handler.test.ts in update/ for detailed bug descriptions.
  */
@@ -824,9 +867,9 @@ describe('#238: flatten+prefix pipeline for external KB and collision detection'
     await handleInstallCommand(installConfig, fs)
 
     // Flattened + prefixed exactly like the official dataset pipeline
-    await expect(
-      fs.exists(`${moduleDir}/.claude/skills/ext-catalog-next/SKILL.md`),
-    ).resolves.toBe(true)
+    await expect(fs.exists(`${moduleDir}/.claude/skills/ext-catalog-next/SKILL.md`)).resolves.toBe(
+      true,
+    )
     const skillContent = await fs.readFile(`${moduleDir}/.claude/skills/ext-catalog-next/SKILL.md`)
     expect(skillContent).toContain('name: ext-catalog-next')
 

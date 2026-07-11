@@ -172,6 +172,71 @@ describe('registry validation - validateAllRegistries', () => {
   })
 })
 
+describe('registry validation - reserved path overlap (D14)', () => {
+  it('passes for default registries against the default working path', () => {
+    const registries: Record<string, RegistryConfig> = {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        description: 'desc',
+        include: [],
+        flatten: false,
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+      },
+    }
+    const result = validateAllRegistries(registries)
+    expect(result.valid).toBe(true)
+  })
+
+  it('fails when a registry target overlaps a reserved path (working area)', () => {
+    const registries: Record<string, RegistryConfig> = {
+      pairroot: {
+        source: '.pair',
+        behavior: 'mirror',
+        description: 'desc',
+        include: [],
+        flatten: false,
+        targets: [{ path: '.pair', mode: 'canonical' }],
+      },
+    }
+    const result = validateAllRegistries(registries)
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('reserved path'))).toBe(true)
+  })
+
+  it('fails when an overridden working path lands inside a registry-managed directory', () => {
+    const registries: Record<string, RegistryConfig> = {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        description: 'desc',
+        include: [],
+        flatten: false,
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+      },
+    }
+    const result = validateAllRegistries(registries, '.pair/knowledge/working')
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('reserved path'))).toBe(true)
+  })
+
+  it('rejects a non-project-relative (absolute) working_path', () => {
+    const registries: Record<string, RegistryConfig> = {
+      knowledge: {
+        source: '.pair/knowledge',
+        behavior: 'mirror',
+        description: 'desc',
+        include: [],
+        flatten: false,
+        targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+      },
+    }
+    const result = validateAllRegistries(registries, '/var/tmp/working')
+    expect(result.valid).toBe(false)
+    expect(result.errors.some(e => e.includes('must be project-relative'))).toBe(true)
+  })
+})
+
 describe('registry validation - targets', () => {
   it('accepts registry with valid targets', () => {
     const config: RegistryConfig = {

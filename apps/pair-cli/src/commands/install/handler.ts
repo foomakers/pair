@@ -17,6 +17,7 @@ import {
   reconcileSkillNameRegistry,
   resolveEffectiveDatasetRoot,
   writeProjectLlmsTxt,
+  resolveWorkingPathOverride,
   type RegistryConfig,
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
@@ -64,7 +65,15 @@ export async function handleInstallCommand(
     )
     validateDatasetContent(fs, datasetRoot, registries)
     await validateInstallContext(fs, registries, baseTarget)
-    await executeInstall({ fs, datasetRoot, registries, baseTarget, options, pushLog, presenter })
+    await executeInstall({
+      fs,
+      datasetRoot,
+      registries,
+      baseTarget,
+      options,
+      pushLog,
+      presenter,
+    })
   } catch (err) {
     pushLog('error', `Installation failed: ${String(err)}`)
     throw err
@@ -114,7 +123,8 @@ async function setupInstallContext(
   const configContent = loadConfigWithOverrides(fs, configOptions)
 
   const registries = extractRegistries(configContent.config)
-  const validation = validateAllRegistries(registries)
+  const workingPathOverride = resolveWorkingPathOverride(configContent.config)
+  const validation = validateAllRegistries(registries, workingPathOverride)
   if (!validation.valid) {
     throw new Error(validation.errors.join('; ') || 'Invalid registry configuration')
   }
@@ -187,11 +197,19 @@ function resolveRegistryIO(ctx: RegistryInstallCtx) {
   return { source: resolved.source, target: resolved.target, effectiveDatasetRoot }
 }
 
+async function finalizeRegistryCopy(
+  ctx: RegistryInstallCtx,
+  paths: { effectiveTarget: string; datasetPath: string },
+): Promise<void> {
+  const { fs, registryConfig, baseTarget } = ctx
+  await postCopyOps({ fs, registryConfig, baseTarget, ...paths })
+}
+
 async function installRegistry(ctx: RegistryInstallCtx): Promise<{
   skillNameMap?: SkillNameMap | undefined
   result: RegistryResult
 }> {
-  const { fs, registryName, registryConfig, baseTarget, pushLog, presenter, index, total } = ctx
+  const { fs, registryName, registryConfig, pushLog, presenter, index, total } = ctx
   const {
     source: datasetPath,
     target: effectiveTarget,
@@ -218,7 +236,7 @@ async function installRegistry(ctx: RegistryInstallCtx): Promise<{
     return { result: { name: registryName, target: effectiveTarget, ok: false } }
   }
 
-  await postCopyOps({ fs, registryConfig, effectiveTarget, datasetPath, baseTarget })
+  await finalizeRegistryCopy(ctx, { effectiveTarget, datasetPath })
   presenter.registryDone(registryName)
   return {
     skillNameMap: copyResult['skillNameMap'] as SkillNameMap | undefined,

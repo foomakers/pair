@@ -20,6 +20,13 @@ export interface RegistryConfig {
  */
 export interface Config {
   asset_registries: Record<string, RegistryConfig>
+  /**
+   * Override for the operational "working area" path (default `.pair/working`).
+   * A reserved project-side path: validate-config REJECTS any registry whose
+   * target overlaps it, so install/update never touch it (D14). Must be
+   * project-relative — see `reserved-paths.ts` / `validateWorkingPath`.
+   */
+  working_path?: string
   [key: string]: unknown
 }
 
