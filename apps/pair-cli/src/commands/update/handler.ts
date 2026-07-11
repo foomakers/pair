@@ -303,11 +303,7 @@ async function updateRegistries(context: UpdateContext): Promise<RegistryResult[
     return result
   })
 
-  await reconcileSkillNameRegistry(
-    { fs, baseTarget, pushLog },
-    registries,
-    accumulatedSkillNameMap,
-  )
+  await reconcileSkillNameRegistry({ fs, baseTarget, pushLog }, registries, accumulatedSkillNameMap)
 
   presenter.summary(results, 'update', Date.now() - startTime)
   return results

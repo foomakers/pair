@@ -1107,9 +1107,9 @@ describe('#238: idempotent skill name registry (manifest-backed)', () => {
     await handleUpdateCommand(updateConfig, fs, { persistBackup: false })
 
     // Old prefixed directory is gone, new one exists
-    await expect(
-      fs.exists(`${moduleDir}/.claude/skills/pair-process-next/SKILL.md`),
-    ).resolves.toBe(false)
+    await expect(fs.exists(`${moduleDir}/.claude/skills/pair-process-next/SKILL.md`)).resolves.toBe(
+      false,
+    )
     await expect(fs.exists(`${moduleDir}/.claude/skills/foo-process-next/SKILL.md`)).resolves.toBe(
       true,
     )

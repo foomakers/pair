@@ -867,9 +867,9 @@ describe('#238: flatten+prefix pipeline for external KB and collision detection'
     await handleInstallCommand(installConfig, fs)
 
     // Flattened + prefixed exactly like the official dataset pipeline
-    await expect(
-      fs.exists(`${moduleDir}/.claude/skills/ext-catalog-next/SKILL.md`),
-    ).resolves.toBe(true)
+    await expect(fs.exists(`${moduleDir}/.claude/skills/ext-catalog-next/SKILL.md`)).resolves.toBe(
+      true,
+    )
     const skillContent = await fs.readFile(`${moduleDir}/.claude/skills/ext-catalog-next/SKILL.md`)
     expect(skillContent).toContain('name: ext-catalog-next')
 
