@@ -41,7 +41,7 @@ A PR without classification tags is treated as 🔴 (fail-safe).
 
 ## Tag Projection & Eligibility
 
-Tags are a **chromatic projection** of the matrix — `risk:green|yellow|red`, `cost:green|yellow|orange|red`. Emission is declared, not implicit: `risk` is the only family the KB proposes by default — `classify` asks to activate it the first time it runs and writes the declaration once you confirm, so you get sensible tagging without needing to know the schema exists. `cost` (and any future tag family) stays opt-in, added only on explicit request. There is no dedicated "eligibility" tag: automation eligibility is a **filter you declare over classification tags** (e.g. `risk:green`), consumed generically by `pair-next`.
+Tags are a **chromatic projection** of the matrix. `risk:green|yellow|red` is the only tag family the KB names and proposes by default — `classify` asks to activate it the first time it runs and writes the declaration once you confirm, so you get sensible tagging without needing to know the schema exists. Every other parameter the model computes (cost class, security relevance, business impact, coupling balance) is available to expose as its own tag, but the KB doesn't pre-select which, if any — that's entirely your call, added to the declaration when you want it. There is no dedicated "eligibility" tag: automation eligibility is a **filter you declare over classification tags** (e.g. `risk:green`), consumed generically by `pair-next`.
 
 ## Project Overrides — `tech/risk-matrix.md`
 

@@ -57,7 +57,15 @@ describe('quality-model.md — structure', () => {
   it('matches the D10 SLA table exactly — 1 reviewer even at red tier', () => {
     expect(QUALITY_MODEL).toMatch(/🟢[^\n]*Self-merge/)
     expect(QUALITY_MODEL).toMatch(/🟡[^\n]*\|\s*1 reviewer\s*\|\s*1 working day/)
-    expect(QUALITY_MODEL).toMatch(/🔴[^\n]*\|\s*1 reviewer \(not 2\)\s*\|\s*2 working days/)
+    expect(QUALITY_MODEL).toMatch(/🔴[^\n]*\|\s*1 reviewer\s*\|\s*2 working days/)
+  })
+
+  it('states reviewer counts and SLAs are adoption-overridable KB defaults, not fixed', () => {
+    expect(QUALITY_MODEL).toMatch(
+      /Reviewer counts and SLAs are \*\*KB defaults\*\*[\s\S]{0,300}Argument > Adoption > KB default/,
+    )
+    expect(QUALITY_MODEL).toContain('tier.red.reviewers: 2')
+    expect(QUALITY_MODEL).toMatch(/this part is not overridable, only the reviewer count and SLA are/)
   })
 
   it('defines the chromatic tag projection', () => {
@@ -65,9 +73,14 @@ describe('quality-model.md — structure', () => {
     expect(QUALITY_MODEL).toContain('cost:green|yellow|orange|red')
   })
 
-  it('states risk is the KB-proposed default tag family and cost is opt-in', () => {
-    expect(QUALITY_MODEL).toMatch(/`risk` is the only tag family the KB proposes by default/)
-    expect(QUALITY_MODEL).toMatch(/`cost`[\s\S]{0,200}is \*\*opt-in\*\*/)
+  it('states risk is the only KB-named/proposed tag family and does not special-case cost as a second default', () => {
+    expect(QUALITY_MODEL).toMatch(
+      /`risk:green\|yellow\|red` \(§3\.2\) is the only tag family the KB names and proposes by default/,
+    )
+    expect(QUALITY_MODEL).toMatch(/Only `risk` is a KB default/)
+    expect(QUALITY_MODEL).toMatch(
+      /the KB does not pre-select which, if any: that choice belongs entirely to the project/,
+    )
   })
 
   it("documents classify's propose-then-write Tag Projection flow", () => {

@@ -58,9 +58,18 @@ Cost class = **highest detected signal**, projected as `cost:green|yellow|orange
 | --- | --- | --- | --- | --- | --- |
 | 🟢 Green | Self-merge once gate checks are green | 0 (AI review informational, ≤4h) | — | standard | none |
 | 🟡 Yellow | Blocked until reviewed | 1 reviewer | 1 working day | standard | reviewer approval |
-| 🔴 Red | Blocked until reviewed and approved | 1 reviewer (not 2) | 2 working days | extended | explicit approval required |
+| 🔴 Red | Blocked until reviewed and approved | 1 reviewer | 2 working days | extended | explicit approval required |
 
-Review always runs, tests are always green, at every tier (R5.3 + D10). Gate (mechanical) and review (judgment) are distinct enforcers — gate blocks first, review starts only once gates are green:
+Reviewer counts and SLAs are **KB defaults** (D10), resolved through the same **Argument > Adoption > KB default** cascade as every other rule in this document — not fixed forever. A project may override either per tier in `tech/risk-matrix.md`'s Overrides section (§6), e.g. requiring 2 reviewers at 🔴 Red for a larger team:
+
+```markdown
+## Overrides
+
+- tier.red.reviewers: 2
+- tier.red.sla_days: 3
+```
+
+Review always runs, tests are always green, at every tier (R5.3 + D10) — this part is not overridable, only the reviewer count and SLA are. Gate (mechanical) and review (judgment) are distinct enforcers — gate blocks first, review starts only once gates are green:
 
 | Tier | Gate checks |
 | --- | --- |
@@ -70,20 +79,17 @@ Review always runs, tests are always green, at every tier (R5.3 + D10). Gate (me
 
 ## 5. Tag Projection
 
-Chromatic scheme only — no semantic tag beyond color:
-
-- `risk:green|yellow|red` — §3.2
-- `cost:green|yellow|orange|red` — §3.3
+Chromatic, no semantic tag beyond color. **`risk:green|yellow|red` (§3.2) is the only tag family the KB names and proposes by default.**
 
 **Tag emission is declared, not implicit.** `classify` only creates tags once a `## Tag Projection` declaration exists in `tech/risk-matrix.md` (§6) — but that declaration is not something a project has to remember to write from scratch:
 
-- **`risk` is the only tag family the KB proposes by default.** `cost` (and any future tag family this model might grow — e.g. if a dedicated security-relevance tag is ever introduced) is **opt-in**: it is projected only once a project explicitly adds it to the declaration.
-- **`classify` proposes the declaration on its own first run**, the same propose-then-write-if-confirmed pattern already used elsewhere in this KB (e.g. `pair-capability-verify-quality`'s first-time Custom Gate Registry setup):
+- **Only `risk` is a KB default.** Every other parameter this model computes — cost class (§3.3), security relevance, business impact, coupling balance, or any dimension added later — is available to expose as its own tag, but the KB does not pre-select which, if any: that choice belongs entirely to the project. Adding a parameter to the declaration (e.g. `Active: risk, cost`) is what exposes it; nothing beyond `risk` is projected until a project explicitly says so.
+- **`classify` proposes only the `risk` default on its own first run**, the same propose-then-write-if-confirmed pattern already used elsewhere in this KB (e.g. `pair-capability-verify-quality`'s first-time Custom Gate Registry setup):
   1. **Check**: does `tech/risk-matrix.md` have a `## Tag Projection` section?
   2. **Skip**: if yes, use it exactly as written — including an explicit opt-out (see below) — and never propose again.
   3. **Act**: if no, ask before creating any tag:
 
-     > No Tag Projection declared yet. Activate `risk:green|yellow|red` on stories and PRs? (recommended — `cost` and other families can be added later)
+     > No Tag Projection declared yet. Activate `risk:green|yellow|red` on stories and PRs? (recommended — other model parameters can be exposed as tags later, if you decide you want them)
      > 1. Yes, activate `risk` (writes the declaration below)
      > 2. No, don't tag anything (records the opt-out so this isn't asked again)
 
@@ -96,7 +102,7 @@ Chromatic scheme only — no semantic tag beyond color:
 Active: risk
 ```
 
-Add `cost` to the `Active` list to turn it on (`Active: risk, cost`); write `Active: none` to explicitly opt out of all tag emission (`classify` reads this as a durable "don't ask again," not as "not yet configured"). A project may also rename either tag family's prefix here (e.g. `risk` → `priority`) — the color values and their meaning stay the same, only the label changes.
+A project decides which other model parameters, if any, to expose by adding them to the `Active` list — e.g. `Active: risk, cost` if it also wants the cost class (§3.3) projected as a tag; the choice, and the resulting tag's color scheme, follows whichever parameter was added. Write `Active: none` to explicitly opt out of all tag emission (`classify` reads this as a durable "don't ask again," not as "not yet configured"). A project may also rename `risk` itself here (e.g. `risk` → `priority`) — the color values and their meaning stay the same, only the label changes.
 
 **No dedicated eligibility tag**: automation eligibility is an **adoption-declared filter over classification tags** (e.g. `risk:green`, optionally combined with project tags), not a special tag of its own. `pair-next` consumes it generically, like any other tag filter, re-evaluated on every run (tags can change between runs, e.g. review raising the tier).
 
@@ -106,7 +112,7 @@ Optional file holding up to three independent sections — a project may have no
 
 - **`## Tag Projection`** (§5) — which classification tags get emitted. In practice the section most projects end up with first, since `classify` proactively proposes it the first time it runs (§5) — a project doesn't have to know this file exists to get a sensible default.
 - **`## Criticality Table`** — per-service/domain criticality overrides (§3.1).
-- **`## Overrides`** — threshold overrides for other dimensions.
+- **`## Overrides`** — threshold overrides for other dimensions, plus optional per-tier reviewer-count/SLA overrides (§4).
 
 Absent entirely ⇒ KB defaults (§3.1) apply completely to the matrix, and no tags are emitted (§5) — nothing fails (D21). This is the state before `classify` has ever run, or before its Tag Projection proposal has been answered.
 
