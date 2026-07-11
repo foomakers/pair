@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
+import { posix } from 'path'
 import { getReservedPaths, detectReservedPathOverlap } from './reserved-paths'
 import { DEFAULT_WORKING_PATH } from './working-area'
 import { RegistryConfig } from './resolver'
+import { INSTALLED_VERSION_MARKER } from '../commands/kb-info/version-resolver'
 
 const baseRegistry: RegistryConfig = {
   source: '.pair/knowledge',
@@ -19,6 +21,13 @@ describe('getReservedPaths', () => {
 
   it('includes the working area override', () => {
     expect(getReservedPaths('.pair/scratch')).toContain('.pair/scratch')
+  })
+
+  it('includes the KB version marker, matching INSTALLED_VERSION_MARKER (#261)', () => {
+    const paths = getReservedPaths(DEFAULT_WORKING_PATH)
+    expect(paths).toContain('.pair/.kb-version.json')
+    // anti-drift: the reserved literal must agree with the marker constant
+    expect(paths.map(p => posix.normalize(p))).toContain(posix.normalize(INSTALLED_VERSION_MARKER))
   })
 })
 
@@ -53,8 +62,9 @@ describe('detectReservedPathOverlap', () => {
       },
     }
     const errors = detectReservedPathOverlap(registries, reserved)
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain("Registry 'pairroot'")
+    // `.pair` is an ancestor of every reserved path under it — flagged per hit
+    expect(errors.length).toBeGreaterThanOrEqual(1)
+    expect(errors.every(e => e.includes("Registry 'pairroot'"))).toBe(true)
   })
 
   it('rejects a reserved path that lands inside a registry-managed directory', () => {
@@ -96,11 +106,25 @@ describe('detectReservedPathOverlap', () => {
     const registries: Record<string, RegistryConfig> = {
       dotpair: {
         ...baseRegistry,
-        // `./.pair` resolves to `.pair`, an ancestor of the working area
+        // `./.pair` resolves to `.pair`, an ancestor of the reserved paths
         targets: [{ path: './.pair', mode: 'canonical' }],
       },
     }
-    expect(detectReservedPathOverlap(registries, reserved)).toHaveLength(1)
+    const errs = detectReservedPathOverlap(registries, reserved)
+    expect(errs.length).toBeGreaterThanOrEqual(1)
+    expect(errs.every(e => e.includes("Registry 'dotpair'"))).toBe(true)
+  })
+
+  it('rejects a registry target equal to the KB version marker (#261)', () => {
+    const registries: Record<string, RegistryConfig> = {
+      ver: {
+        ...baseRegistry,
+        targets: [{ path: '.pair/.kb-version.json', mode: 'canonical' }],
+      },
+    }
+    const errors = detectReservedPathOverlap(registries, reserved)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('.pair/.kb-version.json')
   })
 
   it('flags every reserved path a target covers (extensible set)', () => {

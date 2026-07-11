@@ -24,6 +24,7 @@ import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
 import { type SkillNameMap } from '@pair/content-ops'
 import { createCliPresenter, type CliPresenter, type RegistryResult } from '#ui'
+import { emitVersionDriftHint, recordInstalledVersion } from '../kb-info/version-hint'
 
 /**
  * Install options for handler
@@ -63,6 +64,7 @@ export async function handleInstallCommand(
       config as InstallableConfig,
       options,
     )
+    await emitVersionDriftHint({ fs, datasetRoot, baseTarget, presenter })
     validateDatasetContent(fs, datasetRoot, registries)
     await validateInstallContext(fs, registries, baseTarget)
     await executeInstall({
@@ -283,7 +285,7 @@ async function installAllRegistries(ctx: InstallContext): Promise<{
 }
 
 async function executeInstall(context: InstallContext): Promise<void> {
-  const { fs, registries, baseTarget, options, pushLog, presenter } = context
+  const { fs, datasetRoot, registries, baseTarget, options, pushLog, presenter } = context
   const total = Object.keys(registries).length
   const startTime = Date.now()
 
@@ -298,6 +300,7 @@ async function executeInstall(context: InstallContext): Promise<void> {
   }
 
   await writeProjectLlmsTxt(fs, baseTarget, pushLog)
+  await recordInstalledVersion({ fs, datasetRoot, baseTarget })
 
   presenter.summary(results, 'install', Date.now() - startTime)
 }

@@ -11,7 +11,7 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 - [update](#update) — Update existing documentation
 - [update-link](#update-link) — Validate and update links
 - [package](#package) — Package KB content into ZIP
-- [kb-info](#kb-info) — Display package metadata
+- [kb-info](#kb-info) — Display package metadata, or check installed vs current KB version
 - [kb-verify](#kb-verify) — Verify KB package integrity
 - [kb validate](#kb-validate) — Validate KB structure
 - [validate-config](#validate-config) — Validate configuration
@@ -240,20 +240,39 @@ When `--org` is active, the CLI looks for `.pair/org-template.json` to pre-fill 
 
 ## kb-info
 
-Display metadata from a KB package ZIP file.
+Display metadata from a KB package ZIP file, or — when no package path is given — check the
+project's installed KB version against the current one.
 
 ### Usage
 
 ```bash
-pair kb-info <package-path> [options]
+pair kb-info [package-path] [options]
 ```
 
 ### Options
 
-| Option                | Description                                       |
-| --------------------- | ------------------------------------------------- |
-| `--json`              | Output package metadata as JSON format            |
-| `--log-level <level>` | Set minimum log level (debug, info, warn, error)  |
+| Option                 | Description                                                    |
+| ----------------------- | --------------------------------------------------------------- |
+| `--json`                | Output package metadata or version-check result as JSON format  |
+| `--source <path\|url>`  | KB source to resolve the current version from (version-check mode only) |
+| `--log-level <level>`   | Set minimum log level (debug, info, warn, error)                |
+
+### Version Check Mode
+
+Running `pair kb-info` without a package path compares the KB version recorded as installed in
+the project (written by `install`/`update` on success) against the current one:
+
+- **Up to date** — installed matches current, exit code 0.
+- **Version drift** — installed differs from current; the output includes a migration-page URL
+  for the version jump (one page per jump, per the docs Migrations index).
+- **Unknown installed version** — legacy install with no recorded metadata; run `pair install` or
+  `pair update` to record it.
+- **Current version unavailable** — the source could not be resolved (offline, unreachable
+  mirror, etc.); the installed version is still reported. Exit code is 0 in all cases — this is a
+  metadata check only, it never performs migration.
+
+`install` and `update` also print a non-blocking heads-up with the same migration-page pointer
+when the version about to be applied differs from what's currently recorded.
 
 ### Examples
 
@@ -263,6 +282,15 @@ pair kb-info my-kb.zip
 
 # Display as JSON
 pair kb-info my-kb.zip --json
+
+# Check installed vs current KB version
+pair kb-info
+
+# Version check, JSON output (for CI)
+pair kb-info --json
+
+# Version check against a custom source
+pair kb-info --source /path/to/kb
 ```
 
 ---

@@ -10,19 +10,21 @@ import { pathsOverlap } from './working-area'
  * it that isn't in the registry source. Keeping them out of every registry is
  * what protects them — there is no runtime exclusion (D14).
  *
- * Extension point — add reserved paths here as a single trivial change:
- *   - `.pair/working` (or the `working_path` override) — the operational working
- *     area, added below.
- *   - `.pair/.kb-version.json` (the KB version marker) and sibling meta/config
- *     files will be appended by a follow-up (#261) once that story merges and
- *     this branch rebases.
+ * Extension point — add reserved paths here as a single trivial change. Current
+ * members:
+ *   - `.pair/working` (or the `working_path` override) — the operational working area.
+ *   - `.pair/.kb-version.json` (#261) — the KB version marker (a version pin).
+ * Append further meta/config files below as needed.
  *
  * @param workingPath - the resolved (project-relative) working-area path.
  */
 export function getReservedPaths(workingPath: string): string[] {
   return [
     workingPath,
-    // #261: append '.pair/.kb-version.json' and other meta/config files here.
+    // The KB version marker — durable project state (a version pin), never a
+    // registry target. Must match INSTALLED_VERSION_MARKER in
+    // commands/kb-info/version-resolver.ts (a test asserts they agree).
+    '.pair/.kb-version.json',
   ]
 }
 
