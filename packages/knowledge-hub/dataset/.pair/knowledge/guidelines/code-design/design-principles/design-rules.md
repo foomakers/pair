@@ -2,7 +2,7 @@
 
 ## Overview
 
-Evidence-based do/don't rules for patterns that repeatedly show up as tech-debt in codebase audits — the ones an AI assistant tends to (re)generate unless explicitly constrained. Each rule: **recognition** (how to spot it), **alternative** (what to do instead), **evidence** (real finding it comes from). No separate anti-pattern catalog — these rules live here, in the code-design guidelines, and are consolidated as new evidence appears.
+Evidence-based do/don't rules for patterns that repeatedly show up as tech-debt in codebase audits — the ones an AI assistant tends to (re)generate unless explicitly constrained. Each rule: **recognition** (how to spot it), **alternative** (what to do instead). No separate anti-pattern catalog — these rules live here, in the code-design guidelines, and are consolidated as new evidence appears.
 
 **Precedence**: if a rule conflicts with a project's own adoption decision (`.pair/adoption/tech/`), the adoption decision wins. Note the override next to the rule it affects instead of deleting the rule (it may still apply to other projects/packages).
 
@@ -32,8 +32,6 @@ export async function handleMirrorCleanup(...) {}
 // copy-orchestrator.ts — dispatch + shared setup
 ```
 
-**Evidence** (historical — all resolved in #199): `copyPathOps.ts` (705 LOC / 19 functions), `cli.e2e.test.ts` (1507 LOC), `dev/App.tsx` (456 LOC / 11 inline sections), `in-memory-fs.ts` (429 LOC) — a recurring cluster in `content-ops/src/ops/` (4 of the 2026-04-17 audit's top-10 largest files), each since split along its natural seams. See Migration Plan below.
-
 ## DR-2 — Static-Only Namespace Class
 
 **Don't**: wrap a set of stateless functions in a `class` used only for its `static` methods. It adds ceremony (import the class, call through it) without adding behavior — no instance, no state, no polymorphism.
@@ -56,8 +54,6 @@ export class LinkProcessor {
 export async function extractLinks(content: string) {}
 export async function extractLinksFromFile(path: string, fs: FileSystemService) {}
 ```
-
-**Evidence** (historical — resolved in #199): `markdown/link-processor.ts` once exposed a `class LinkProcessor` with 18 static methods; #199 converted it to a module of named function exports (the direction the file's own compat re-exports were already pointing). See Migration Plan below.
 
 ## DR-3 — Optional-Bag Dispatch Instead of Discriminated Union
 
@@ -94,22 +90,30 @@ switch (op.kind) {
 }
 ```
 
-**Evidence** (historical — non-null assertions resolved in #199): `content-ops/src/ops/movePathOps.ts` once modelled `MoveCtx` as `Partial<...>` with `ctx.source!` assertions at the two dispatch sites. #199 made `MoveCtx` a total type and dropped the assertions; a full discriminated-union rewrite was judged N/A here (the branch is unknown at ctx-build time). See Migration Plan below.
+## DR-4 — Split Files Without a Barrel
 
-## Migration Plan (originating instances)
+**Don't**: split a god module (DR-1) into several sibling files that are only ever consumed together through a single entry point, and leave them as loose files in the parent directory. The directory listing grows noisy and a reader can't tell at a glance which of the siblings is the actual public API versus internal-only support files.
 
-The concrete instances found while extracting these rules from the 2026-04-17 audit. All were resolved in #199, so they are recorded here as the rules' provenance rather than as open work.
+**Recognition**: a group of files in the same directory where exactly one function/class is imported by anything outside the directory, and the rest are internal collaborators imported only by that one entry point or by each other.
 
-| Rule | Location | Status |
-| ---- | -------- | ------ |
-| DR-1 | `content-ops/src/ops/copyPathOps.ts` (705 LOC) | Resolved in #199 — split into `copy-file` / `copy-directory` / `copy-directory-transforms` / `copy-types` + orchestrator |
-| DR-1 | `apps/pair-cli/src/cli.e2e.test.ts` (1507 LOC) | Resolved in #199 — split into per-command e2e files + shared helpers |
-| DR-1 | `packages/brand/dev/App.tsx` (456 LOC) | Resolved in #199 — sections extracted to `dev/sections/*` (App.tsx → 51 LOC) |
-| DR-1 | `packages/content-ops/src/test-utils/in-memory-fs.ts` (429 LOC) | Resolved in #199 — split into state + read/write/seed modules |
-| DR-2 | `packages/content-ops/src/markdown/link-processor.ts` (`class LinkProcessor`) | Resolved in #199 — converted to named function exports |
-| DR-3 | `packages/content-ops/src/ops/movePathOps.ts` (`MoveCtx`) | Resolved in #199 — `MoveCtx` made total, `ctx.source!` assertions dropped (discriminated-union rewrite N/A) |
+```typescript
+// ops/
+//   widget-orchestrator.ts   <- the only export consumed outside ops/
+//   widget-validation.ts    <- internal-only, imported by widget-orchestrator.ts
+//   widget-transform.ts     <- internal-only, imported by widget-orchestrator.ts
+//   widget-types.ts         <- internal-only, shared types
+```
 
-**Note**: these originating instances are cleared. New violations found by later audits are tracked as `tech-debt` Draft items (P1–P3) via `pair-capability-assess-debt` scan mode (#224), not appended here.
+**Do**: group the split files in their own folder with an `index.ts` barrel that re-exports exactly what's externally consumed today. From the caller's side nothing changes (same import path, now resolving to the folder); the directory now signals which files are the public surface (the barrel) versus internal implementation.
+
+```typescript
+// ops/widget/
+//   index.ts              -> export { widgetOrchestrator } from './widget-orchestrator'
+//   widget-orchestrator.ts
+//   widget-validation.ts
+//   widget-transform.ts
+//   widget-types.ts
+```
 
 ## Related
 
@@ -117,3 +121,4 @@ The concrete instances found while extracting these rules from the 2026-04-17 au
 - [SOLID Principles](solid-principles.md) — DR-1 is the practical, evidence-backed form of Single Responsibility
 - [Naming Conventions](../code-organization/naming-conventions.md) — DR-2 is a naming/module-shape convention violation
 - [TypeScript](../framework-patterns/typescript.md) — DR-3 is a type-narrowing pattern (discriminated unions)
+- [File Structure](../code-organization/file-structure.md) — DR-4 is a directory/module-grouping convention, applied at the split-file level
