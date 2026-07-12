@@ -2,7 +2,7 @@
 
 ## Overview
 
-Evidence-based do/don't rules for patterns that repeatedly show up as tech-debt in codebase audits — the ones an AI assistant tends to (re)generate unless explicitly constrained. Each rule: **recognition** (how to spot it), **alternative** (what to do instead), **evidence** (real finding it comes from). No separate anti-pattern catalog — these rules live here, in the code-design guidelines, and are consolidated as new evidence appears.
+Evidence-based do/don't rules for patterns that repeatedly show up as tech-debt in codebase audits — the ones an AI assistant tends to (re)generate unless explicitly constrained. Each rule: **recognition** (how to spot it), **alternative** (what to do instead). No separate anti-pattern catalog — these rules live here, in the code-design guidelines, and are consolidated as new evidence appears.
 
 **Precedence**: if a rule conflicts with a project's own adoption decision (`.pair/adoption/tech/`), the adoption decision wins. Note the override next to the rule it affects instead of deleting the rule (it may still apply to other projects/packages).
 
@@ -32,8 +32,6 @@ export async function handleMirrorCleanup(...) {}
 // copy-orchestrator.ts — dispatch + shared setup
 ```
 
-**Evidence**: #199 P0.5 `copyPathOps.ts` (705 LOC / 19 functions) · P0.3 `cli.e2e.test.ts` (1507 LOC, one file per CLI command instead) · P2.2 `dev/App.tsx` (456 LOC / 11 inline sections) · P2.3 `in-memory-fs.ts` (429 LOC) — recurring cluster in `content-ops/src/ops/` (4 of the audit's top-10 largest files). See Migration Plan below for per-instance priority.
-
 ## DR-2 — Static-Only Namespace Class
 
 **Don't**: wrap a set of stateless functions in a `class` used only for its `static` methods. It adds ceremony (import the class, call through it) without adding behavior — no instance, no state, no polymorphism.
@@ -41,6 +39,7 @@ export async function handleMirrorCleanup(...) {}
 **Recognition**: a class where every method is `static` and no instance property/state exists — it's a namespace pretending to be an object.
 
 ```typescript
+// Illustrative anti-pattern (not live code):
 export class LinkProcessor {
   static async extractLinks(content: string) {}
   static async extractLinksFromFile(path: string, fs: FileSystemService) {}
@@ -55,8 +54,6 @@ export class LinkProcessor {
 export async function extractLinks(content: string) {}
 export async function extractLinksFromFile(path: string, fs: FileSystemService) {}
 ```
-
-**Evidence**: #199 P0.4 `markdown/link-processor.ts:42-404` — `class LinkProcessor` with 18 static methods; the fix direction was already emerging in the file's own compat re-exports (`link-processor.ts:406-421`, standalone `extractLinks`/`detectLinkStyle` functions wrapping the static calls). See Migration Plan below.
 
 ## DR-3 — Optional-Bag Dispatch Instead of Discriminated Union
 
@@ -93,22 +90,30 @@ switch (op.kind) {
 }
 ```
 
-**Evidence**: #199 P1.3 `content-ops/src/ops/movePathOps.ts:189` (`MoveCtx = Partial<...>`) with non-null assertions at the two dispatch sites (`movePathOps.ts:157-158`, `172-173`). See Migration Plan below.
+## DR-4 — Split Files Without a Barrel
 
-## Migration Plan (existing violations)
+**Don't**: split a god module (DR-1) into several sibling files that are only ever consumed together through a single entry point, and leave them as loose files in the parent directory. The directory listing grows noisy and a reader can't tell at a glance which of the siblings is the actual public API versus internal-only support files.
 
-Current, concrete instances found while extracting these rules from #199 — not blocking, tracked as tech-debt. This list is the seed for `pair-capability-assess-debt` scan mode (#224): it converts findings like these into `tech-debt` Draft items (P1–P3) so they live in the backlog instead of only in this doc.
+**Recognition**: a group of files in the same directory where exactly one function/class is imported by anything outside the directory, and the rest are internal collaborators imported only by that one entry point or by each other.
 
-| Rule | Location | Priority | Note |
-| ---- | -------- | -------- | ---- |
-| DR-1 | `content-ops/src/ops/copyPathOps.ts` (705 LOC) | P1 | split per #199 suggested execution: `copy-file.ts` / `copy-directory.ts` / `copy-orchestrator.ts` |
-| DR-1 | `apps/pair-cli/src/cli.e2e.test.ts` (1507 LOC) | P1 | split per CLI command (install / update / kb-validate / update-link) |
-| DR-1 | `packages/brand/dev/App.tsx` (456 LOC) | P2 | dev-only harness; extract sections to `dev/sections/*` |
-| DR-1 | `packages/content-ops/src/test-utils/in-memory-fs.ts` (429 LOC) | P2 | test-only; split read/write/seed helpers |
-| DR-2 | `packages/content-ops/src/markdown/link-processor.ts` (`class LinkProcessor`) | P1 | convert to named exports; re-exports already exist for the compat path |
-| DR-3 | `packages/content-ops/src/ops/movePathOps.ts:189` (`MoveCtx`) | P2 | opportunistic, when the file is next touched |
+```typescript
+// ops/
+//   widget-orchestrator.ts   <- the only export consumed outside ops/
+//   widget-validation.ts    <- internal-only, imported by widget-orchestrator.ts
+//   widget-transform.ts     <- internal-only, imported by widget-orchestrator.ts
+//   widget-types.ts         <- internal-only, shared types
+```
 
-**Note**: no `tech-debt` Draft items are created by this story. Item creation from this table is deferred to #224 (`pair-capability-assess-debt` scan mode).
+**Do**: group the split files in their own folder with an `index.ts` barrel that re-exports exactly what's externally consumed today. From the caller's side nothing changes (same import path, now resolving to the folder); the directory now signals which files are the public surface (the barrel) versus internal implementation.
+
+```typescript
+// ops/widget/
+//   index.ts              -> export { widgetOrchestrator } from './widget-orchestrator'
+//   widget-orchestrator.ts
+//   widget-validation.ts
+//   widget-transform.ts
+//   widget-types.ts
+```
 
 ## Related
 
@@ -116,3 +121,4 @@ Current, concrete instances found while extracting these rules from #199 — not
 - [SOLID Principles](solid-principles.md) — DR-1 is the practical, evidence-backed form of Single Responsibility
 - [Naming Conventions](../code-organization/naming-conventions.md) — DR-2 is a naming/module-shape convention violation
 - [TypeScript](../framework-patterns/typescript.md) — DR-3 is a type-narrowing pattern (discriminated unions)
+- [File Structure](../code-organization/file-structure.md) — DR-4 is a directory/module-grouping convention, applied at the split-file level

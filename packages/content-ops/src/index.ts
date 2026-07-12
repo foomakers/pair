@@ -10,8 +10,19 @@ export {
   isWithinPath,
   normalizePathForCompare,
 } from './file-system/file-operations'
-export { extractLinks, type ParsedLink, LinkProcessor } from './markdown/link-processor'
-export { detectLinkStyle } from './markdown/link-processor'
+export {
+  extractLinks,
+  extractLinksFromFile,
+  extractLinksFromDirectory,
+  classifyLinkType,
+  extractAnchor,
+  splitLinkParts,
+  generateNormalizationReplacements,
+  generatePathSubstitutionReplacements,
+  detectLinkStyle,
+  type ParsedLink,
+  type LinkProcessingConfig,
+} from './markdown/link-processor'
 export {
   calculateSHA256,
   validateChecksum,
@@ -43,7 +54,7 @@ export {
   type TargetConfig,
   type TransformConfig,
 } from './ops/behavior'
-export { copyPathOps, copyDirectoryWithTransforms, type CopyPathOpsResult } from './ops/copyPathOps'
+export { copyPathOps, copyDirectoryWithTransforms, type CopyPathOpsResult } from './ops/copy'
 export { flattenPath, prefixPath, transformPath, detectCollisions } from './ops/naming-transforms'
 export {
   rewriteLinksInFile,

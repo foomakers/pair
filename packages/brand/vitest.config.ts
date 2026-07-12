@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig, coverageConfigDefaults } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
@@ -18,5 +18,21 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
     exclude: ['**/*.ct.test.tsx', '**/node_modules/**'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'html'],
+      exclude: [
+        ...coverageConfigDefaults.exclude,
+        '**/*.ct.test.tsx',
+        'playwright*.config.ts',
+        'vitest.setup.ts',
+      ],
+      thresholds: {
+        branches: 80,
+        functions: 80,
+        lines: 80,
+        statements: 80,
+      },
+    },
   },
 })

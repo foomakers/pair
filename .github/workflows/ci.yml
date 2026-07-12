@@ -54,16 +54,24 @@ jobs:
             export $(grep -v '^#' .env | xargs)
           fi
       - name: Run type check
-        run: pnpm ts:check || echo "No ts:check script defined"
+        run: pnpm ts:check
       - name: Run build
-        run: pnpm build || echo "No build script defined"
+        run: pnpm build
       - name: Run lint
-        run: pnpm lint || echo "No lint script defined"
+        run: pnpm lint
+      - name: Run code-hygiene check
+        run: pnpm hygiene:check
+      - name: Run docs-staleness check
+        run: pnpm docs:staleness
+      - name: Run duplication check
+        run: pnpm dup:check
       - name: Install Playwright browsers
         run: |
           pnpm --filter @pair/brand exec playwright install --with-deps chromium
           pnpm --filter @pair/website exec playwright install --with-deps chromium
       - name: Run tests
         run: pnpm test
+      - name: Run coverage thresholds (brand, website)
+        run: pnpm turbo test:coverage --filter=@pair/brand --filter=@pair/website
       - name: Run E2E tests
         run: pnpm --filter @pair/website e2e

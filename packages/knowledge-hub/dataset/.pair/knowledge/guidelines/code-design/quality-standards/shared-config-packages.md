@@ -43,17 +43,17 @@ pair's own monorepo is the canonical example. Four config packages, each consume
 Per-type mapping in practice — Node/service/lib workspaces (`apps/pair-cli`, `packages/knowledge-hub`, `packages/content-ops`) extend `@pair/ts-config/node.json` and take the ESLint base config as-is. Frontend and UI-lib workspaces (`apps/website`, `packages/brand`) extend `@pair/ts-config/ui.json` and override `eslint.config.cjs` to layer the React overlay:
 
 ```jsonc
-// apps/pair-cli/tsconfig.json (backend/CLI — node preset)
+// apps/api/tsconfig.json (backend/CLI — node preset)
 { "extends": "@pair/ts-config/node.json", "compilerOptions": { /* local overrides only */ } }
 ```
 
 ```jsonc
-// apps/website/tsconfig.json (frontend — ui preset)
+// apps/web/tsconfig.json (frontend — ui preset)
 { "extends": "@pair/ts-config/ui.json", "compilerOptions": { "jsx": "preserve" /* local overrides only */ } }
 ```
 
 ```js
-// packages/brand/eslint.config.cjs (shared UI lib — same override as frontend, because it ships JSX)
+// packages/ui-lib/eslint.config.cjs (shared UI lib — same override as frontend, because it ships JSX)
 module.exports = require('@pair/eslint-config/eslint.config.react.cjs')
 ```
 

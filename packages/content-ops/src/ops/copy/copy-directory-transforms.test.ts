@@ -1,142 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { copyPathOps } from './copyPathOps'
-import {
-  TEST_SETUP,
-  TEST_ASSERTIONS,
-  TEST_FILE_STRUCTURES,
-  InMemoryFileSystemService,
-} from '../test-utils'
+import { TEST_ASSERTIONS, createTestFileService } from '../../test-utils'
 
-describe('copyPathOps', () => {
-  let fileService: InMemoryFileSystemService
-
-  beforeEach(() => {
-    fileService = TEST_SETUP.createBasicSetup()
-  })
-
-  it('should copy a file and update links', async () => {
-    const result = await copyPathOps({
-      fileService,
-      source: 'source.md',
-      target: 'copied.md',
-      datasetRoot: '/dataset',
-    })
-
-    TEST_ASSERTIONS.assertSuccessfulOperation(result)
-    await TEST_ASSERTIONS.assertFileExists(
-      fileService,
-      '/dataset/copied.md',
-      '# Source File\n[link](target.md)',
-    )
-  })
-
-  it('should throw INVALID_PATH error for absolute source and target paths', async () => {
-    await expect(
-      copyPathOps({
-        fileService,
-        source: '/dataset/kb/source.md',
-        target: '/project/kb/copied.md',
-        datasetRoot: '/dataset',
-      }),
-    ).rejects.toThrow('Source and target paths must be relative, not absolute')
-  })
-
-  it('should update links in other files when copying', async () => {
-    const result = await copyPathOps({
-      fileService,
-      source: 'source.md',
-      target: 'copied.md',
-      datasetRoot: '/dataset',
-    })
-
-    TEST_ASSERTIONS.assertSuccessfulOperation(result)
-    await TEST_ASSERTIONS.assertFileContains(fileService, '/dataset/other.md', '[link](copied.md)')
-  })
-})
-
-describe('copyPathOps - root file operations', () => {
-  beforeEach(() => {})
-
-  it('should copy using the provided example parameters and overwrite existing root file', async () => {
-    const fs = new InMemoryFileSystemService(
-      {
-        '/development/path/pair/apps/pair-cli/config.json':
-          '{"asset_registries":{"agents":{"source":"AGENTS.md","behavior":"overwrite"}}}',
-        '/development/path/pair/apps/pair-cli/dataset/AGENTS.md': 'agents content',
-      },
-      '/development/path/pair/apps/pair-cli',
-      '/development/path/pair/apps/pair-cli',
-    )
-
-    const options = {
-      fileService: fs,
-      source: 'dataset/AGENTS.md',
-      target: 'AGENTS.md',
-      datasetRoot: '/development/path/pair/apps/pair-cli',
-      options: {
-        defaultBehavior: 'overwrite' as const,
-        folderBehavior: undefined,
-        flatten: false,
-        targets: [],
-      },
-    }
-
-    const result = await copyPathOps(options)
-    TEST_ASSERTIONS.assertSuccessfulOperation(result)
-
-    // Verify the dataset file was present
-    await TEST_ASSERTIONS.assertFileExists(
-      fs,
-      '/development/path/pair/apps/pair-cli/dataset/AGENTS.md',
-      'agents content',
-    )
-
-    // In the provided in-memory FS the previous tests showed the file ended up at
-    // '/development/path/pair/apps/pair-cli/AGENTS.md/AGENTS.md' so assert both
-    // the top-level and nested target to be safe.
-    await TEST_ASSERTIONS.assertFileExists(
-      fs,
-      '/development/path/pair/apps/pair-cli/AGENTS.md',
-      'agents content',
-    )
-  })
-})
-
-describe('copyPathOps - directory operations', () => {
-  let fileService: InMemoryFileSystemService
-
-  beforeEach(() => {
-    fileService = TEST_SETUP.createBasicSetup()
-  })
-
-  it('should copy a directory and update links', async () => {
-    fileService = TEST_SETUP.createDirectorySetup()
-    const result = await copyPathOps({
-      fileService,
-      source: 'folder',
-      target: 'copied-folder',
-      datasetRoot: '/dataset',
-    })
-
-    TEST_ASSERTIONS.assertSuccessfulOperation(result)
-    await TEST_ASSERTIONS.assertFileExists(
-      fileService,
-      '/dataset/copied-folder/file1.md',
-      '# File 1',
-    )
-  })
-})
-
-describe('copyPathOps - flatten and prefix', () => {
+describe('copyDirectoryWithTransforms (via copyPathOps, flatten/prefix)', () => {
   it('should flatten directory hierarchy into hyphen-separated names', async () => {
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/dataset/source/catalog/next/SKILL.md': '# Next Skill',
-        '/dataset/source/process/implement/SKILL.md': '# Implement Skill',
-      },
-      '/',
-      '/',
-    )
+    const fileService = createTestFileService({
+      '/dataset/source/catalog/next/SKILL.md': '# Next Skill',
+      '/dataset/source/process/implement/SKILL.md': '# Implement Skill',
+    })
 
     await copyPathOps({
       fileService,
@@ -159,13 +30,9 @@ describe('copyPathOps - flatten and prefix', () => {
   })
 
   it('should apply prefix to top-level directory names', async () => {
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/dataset/source/catalog/SKILL.md': '# Catalog Skill',
-      },
-      '/',
-      '/',
-    )
+    const fileService = createTestFileService({
+      '/dataset/source/catalog/SKILL.md': '# Catalog Skill',
+    })
 
     await copyPathOps({
       fileService,
@@ -183,13 +50,9 @@ describe('copyPathOps - flatten and prefix', () => {
   })
 
   it('should apply both flatten and prefix', async () => {
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/dataset/source/catalog/next/SKILL.md': '# Next Skill',
-      },
-      '/',
-      '/',
-    )
+    const fileService = createTestFileService({
+      '/dataset/source/catalog/next/SKILL.md': '# Next Skill',
+    })
 
     await copyPathOps({
       fileService,
@@ -207,13 +70,9 @@ describe('copyPathOps - flatten and prefix', () => {
   })
 
   it('should apply prefix only without flatten (prefix top-level, keep hierarchy)', async () => {
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/dataset/source/catalog/next/SKILL.md': '# Next Skill',
-      },
-      '/',
-      '/',
-    )
+    const fileService = createTestFileService({
+      '/dataset/source/catalog/next/SKILL.md': '# Next Skill',
+    })
 
     await copyPathOps({
       fileService,
@@ -232,14 +91,10 @@ describe('copyPathOps - flatten and prefix', () => {
 
   it('should rewrite relative links after flatten+prefix copy (full pipeline)', async () => {
     // File at source/catalog/next/ (depth 3) links up 3 levels to reach dataset root
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/dataset/source/catalog/next/SKILL.md':
-          '# Next\n[guide](../../../.pair/knowledge/testing/README.md)',
-      },
-      '/',
-      '/',
-    )
+    const fileService = createTestFileService({
+      '/dataset/source/catalog/next/SKILL.md':
+        '# Next\n[guide](../../../.pair/knowledge/testing/README.md)',
+    })
 
     await copyPathOps({
       fileService,
@@ -260,14 +115,10 @@ describe('copyPathOps - flatten and prefix', () => {
     // Simulates real pipeline: source deep in monorepo, target at project root
     // source = packages/kb/dataset/.skills → content root = packages/kb/dataset/
     // target = .claude/skills → content root = project root
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/project/packages/kb/dataset/.skills/next/SKILL.md':
-          '# Next\n[PRD](../../.pair/adoption/PRD.md)',
-      },
-      '/',
-      '/',
-    )
+    const fileService = createTestFileService({
+      '/project/packages/kb/dataset/.skills/next/SKILL.md':
+        '# Next\n[PRD](../../.pair/adoption/PRD.md)',
+    })
 
     await copyPathOps({
       fileService,
@@ -295,13 +146,9 @@ describe('copyPathOps - flatten and prefix', () => {
       '# /record-decision',
     ].join('\n')
 
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/dataset/source/capability/record-decision/SKILL.md': skillContent,
-      },
-      '/',
-      '/',
-    )
+    const fileService = createTestFileService({
+      '/dataset/source/capability/record-decision/SKILL.md': skillContent,
+    })
 
     await copyPathOps({
       fileService,
@@ -333,13 +180,9 @@ describe('copyPathOps - flatten and prefix', () => {
       '# Body',
     ].join('\n')
 
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/dataset/source/category/my-skill/SKILL.md': skillContent,
-      },
-      '/',
-      '/',
-    )
+    const fileService = createTestFileService({
+      '/dataset/source/category/my-skill/SKILL.md': skillContent,
+    })
 
     await copyPathOps({
       fileService,
@@ -380,18 +223,14 @@ describe('copyPathOps - flatten and prefix', () => {
       'Composed by /implement and /review.',
     ].join('\n')
 
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/dataset/source/process/implement/SKILL.md': implementContent,
-        '/dataset/source/capability/verify-quality/SKILL.md': verifyContent,
-        '/dataset/source/capability/record-decision/SKILL.md':
-          '---\nname: record-decision\n---\n# /record-decision',
-        '/dataset/source/capability/assess-stack/SKILL.md':
-          '---\nname: assess-stack\n---\n# /assess-stack',
-      },
-      '/',
-      '/',
-    )
+    const fileService = createTestFileService({
+      '/dataset/source/process/implement/SKILL.md': implementContent,
+      '/dataset/source/capability/verify-quality/SKILL.md': verifyContent,
+      '/dataset/source/capability/record-decision/SKILL.md':
+        '---\nname: record-decision\n---\n# /record-decision',
+      '/dataset/source/capability/assess-stack/SKILL.md':
+        '---\nname: assess-stack\n---\n# /assess-stack',
+    })
 
     await copyPathOps({
       fileService,
@@ -418,14 +257,10 @@ describe('copyPathOps - flatten and prefix', () => {
   })
 
   it('should return skillNameMap from flatten+prefix copy', async () => {
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
-        '/dataset/source/process/implement/SKILL.md': '---\nname: implement\n---\n# /implement',
-      },
-      '/',
-      '/',
-    )
+    const fileService = createTestFileService({
+      '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
+      '/dataset/source/process/implement/SKILL.md': '---\nname: implement\n---\n# /implement',
+    })
 
     const result = await copyPathOps({
       fileService,
@@ -450,13 +285,9 @@ describe('copyPathOps - flatten and prefix', () => {
       'Then `/implement` your task.',
     ].join('\n')
 
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/project/src/AGENTS.md': agentsContent,
-      },
-      '/',
-      '/',
-    )
+    const fileService = createTestFileService({
+      '/project/src/AGENTS.md': agentsContent,
+    })
 
     const skillNameMap = new Map([
       ['next', 'pair-next'],
@@ -480,14 +311,10 @@ describe('copyPathOps - flatten and prefix', () => {
   })
 
   it('should detect and throw on flatten collisions', async () => {
-    const fileService = new InMemoryFileSystemService(
-      {
-        '/dataset/source/a/b/SKILL.md': '# Skill 1',
-        '/dataset/source/a-b/SKILL.md': '# Skill 2',
-      },
-      '/',
-      '/',
-    )
+    const fileService = createTestFileService({
+      '/dataset/source/a/b/SKILL.md': '# Skill 1',
+      '/dataset/source/a-b/SKILL.md': '# Skill 2',
+    })
 
     await expect(
       copyPathOps({
@@ -502,15 +329,11 @@ describe('copyPathOps - flatten and prefix', () => {
 
   describe('mirror behavior — idempotent updates (AC4)', () => {
     it('removes a stale flattened directory when its source skill is gone', async () => {
-      const fileService = new InMemoryFileSystemService(
-        {
-          '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
-          // Stale leftover from a previous run — no longer present under source
-          '/dataset/target/pair-catalog-removed/SKILL.md': '---\nname: pair-catalog-removed\n---',
-        },
-        '/',
-        '/',
-      )
+      const fileService = createTestFileService({
+        '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
+        // Stale leftover from a previous run — no longer present under source
+        '/dataset/target/pair-catalog-removed/SKILL.md': '---\nname: pair-catalog-removed\n---',
+      })
 
       await copyPathOps({
         fileService,
@@ -529,15 +352,11 @@ describe('copyPathOps - flatten and prefix', () => {
     })
 
     it('removes the old prefixed directory after a prefix change', async () => {
-      const fileService = new InMemoryFileSystemService(
-        {
-          '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
-          // Leftover from a previous install with prefix "pair"
-          '/dataset/target/pair-catalog-next/SKILL.md': '---\nname: pair-catalog-next\n---',
-        },
-        '/',
-        '/',
-      )
+      const fileService = createTestFileService({
+        '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
+        // Leftover from a previous install with prefix "pair"
+        '/dataset/target/pair-catalog-next/SKILL.md': '---\nname: pair-catalog-next\n---',
+      })
 
       await copyPathOps({
         fileService,
@@ -560,14 +379,10 @@ describe('copyPathOps - flatten and prefix', () => {
       // dirMappingFiles, which copyFileWithTransform only populates for files under a
       // subdirectory (dir !== '.'). A file copied directly from the source root was never
       // registered as expected, so a second mirror run would delete it as "stale".
-      const fileService = new InMemoryFileSystemService(
-        {
-          '/dataset/source/README.md': '# Root-level file, no subdirectory',
-          '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
-        },
-        '/',
-        '/',
-      )
+      const fileService = createTestFileService({
+        '/dataset/source/README.md': '# Root-level file, no subdirectory',
+        '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
+      })
 
       const runOnce = () =>
         copyPathOps({
@@ -590,14 +405,10 @@ describe('copyPathOps - flatten and prefix', () => {
     })
 
     it('does not clean up stale entries when behavior is not mirror', async () => {
-      const fileService = new InMemoryFileSystemService(
-        {
-          '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
-          '/dataset/target/pair-catalog-removed/SKILL.md': '---\nname: pair-catalog-removed\n---',
-        },
-        '/',
-        '/',
-      )
+      const fileService = createTestFileService({
+        '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
+        '/dataset/target/pair-catalog-removed/SKILL.md': '---\nname: pair-catalog-removed\n---',
+      })
 
       await copyPathOps({
         fileService,
@@ -611,43 +422,5 @@ describe('copyPathOps - flatten and prefix', () => {
         fileService.exists('/dataset/target/pair-catalog-removed/SKILL.md'),
       ).resolves.toBe(true)
     })
-  })
-})
-
-describe('copyPathOps - error cases', () => {
-  let fileService: InMemoryFileSystemService
-
-  beforeEach(() => {
-    fileService = TEST_SETUP.createBasicSetup()
-  })
-
-  it('should throw error for nonexistent source', async () => {
-    await expect(
-      copyPathOps({
-        fileService,
-        source: 'nonexistent.md',
-        target: 'target.md',
-        datasetRoot: '/dataset',
-      }),
-    ).rejects.toThrow()
-  })
-
-  it('should respect behavior options', async () => {
-    fileService = new InMemoryFileSystemService(TEST_FILE_STRUCTURES.existingTarget, '/', '/')
-
-    const result = await copyPathOps({
-      fileService,
-      source: 'source.md',
-      target: 'target.md',
-      datasetRoot: '/dataset',
-      options: {
-        defaultBehavior: 'add',
-        flatten: false,
-        targets: [],
-      },
-    })
-
-    TEST_ASSERTIONS.assertSuccessfulOperation(result)
-    await TEST_ASSERTIONS.assertFileExists(fileService, '/dataset/target.md', '# Existing Target')
   })
 })

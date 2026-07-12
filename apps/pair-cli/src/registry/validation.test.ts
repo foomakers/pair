@@ -74,6 +74,23 @@ describe('registry validation - validateRegistry', () => {
     const errors = validateRegistry('test', config)
     expect(errors[0]).toContain('at least one target')
   })
+
+  it('fails when registry config is not an object', () => {
+    const errors = validateRegistry('test', 'invalid-registry')
+    expect(errors).toContain("Registry 'test' must be a valid object")
+  })
+
+  it('fails when include array contains non-string items', () => {
+    const config = {
+      source: '.pair',
+      behavior: 'mirror',
+      description: 'Test',
+      include: ['valid-string', 123],
+      targets: [{ path: '.pair', mode: 'canonical' }],
+    }
+    const errors = validateRegistry('test', config)
+    expect(errors).toContain("Registry 'test' include array must contain only strings")
+  })
 })
 
 describe('registry validation - detectOverlappingTargets', () => {

@@ -1,0 +1,19 @@
+{
+  "description": "Committed coverage baseline for trend tracking (story #199, P1.4). Totals from `pnpm --filter <pkg> test:coverage` on 2026-07-12. Refresh when coverage materially changes; raise thresholds toward target as coverage improves.",
+  "generatedAt": "2026-07-12",
+  "packages": {
+    "@pair/content-ops": {
+      "threshold": 80,
+      "total": { "lines": 91.27, "statements": 91.27, "functions": 85.31, "branches": 85.63 }
+    },
+    "@pair/brand": {
+      "threshold": 80,
+      "total": { "lines": 84.53, "statements": 84.53, "functions": 85.45, "branches": 89.28 }
+    },
+    "@pair/website": {
+      "threshold": { "lines": 9, "statements": 9, "functions": 40, "branches": 60 },
+      "note": "Realistic baseline, not 80%: Next.js app validated primarily via Playwright ct + e2e; unit coverage of pages/components intentionally low. See ADL 2026-07-12-website-coverage-baseline.",
+      "total": { "lines": 9.89, "statements": 9.89, "functions": 47.22, "branches": 66.19 }
+    }
+  }
+}

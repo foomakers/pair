@@ -1,6 +1,12 @@
 import { FileSystemService, walkMarkdownFiles } from '../file-system'
 import { Replacement } from '../markdown'
-import { LinkProcessor, ParsedLink, LinkProcessingConfig } from '../markdown/link-processor'
+import {
+  generateNormalizationReplacements,
+  generatePathSubstitutionReplacements,
+  processFileWithLinks,
+  ParsedLink,
+  LinkProcessingConfig,
+} from '../markdown/link-processor'
 import { logger } from '../observability'
 import { DEFAULT_CONCURRENCY_LIMIT } from './path-operation-helpers'
 
@@ -120,7 +126,7 @@ export async function processPathSubstitution(options: {
 }): Promise<BatchProcessingResult> {
   const { datasetRoot, oldBase, newBase, config, fileService } = options
   const generateReplacements = async (links: ParsedLink[]) =>
-    LinkProcessor.generatePathSubstitutionReplacements(links, oldBase, newBase)
+    generatePathSubstitutionReplacements(links, oldBase, newBase)
 
   return processDirectoryWithLinkReplacements(
     datasetRoot,
@@ -143,7 +149,7 @@ export async function processNormalization(
     file: string,
     config: LinkProcessingConfig,
     fileService: FileSystemService,
-  ) => LinkProcessor.generateNormalizationReplacements(links, file, config, fileService)
+  ) => generateNormalizationReplacements(links, file, config, fileService)
 
   return processDirectoryWithLinkReplacements(
     datasetRoot,
@@ -177,7 +183,7 @@ async function processSingleFile(
   try {
     const content = await fileService.readFile(file)
 
-    const result = await LinkProcessor.processFileWithLinks(content, async (links: ParsedLink[]) =>
+    const result = await processFileWithLinks(content, async (links: ParsedLink[]) =>
       generateReplacements(links, file, config, fileService),
     )
 

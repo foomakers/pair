@@ -176,6 +176,103 @@ describe('handleInstallCommand - real services integration', () => {
       expect(await fs.exists(`${cwd}/dest/file.txt`)).toBe(true)
       expect(await fs.readFile(`${cwd}/dest/file.txt`)).toBe('local content')
     })
+
+    // Moved from cli-install.e2e.test.ts (#199 test reorg) — genuine gap: handler-level
+    // content distribution had no coverage with a relative source path.
+    test('handles local path source to a directory given as a relative path', async () => {
+      await fs.mkdir(`${cwd}/relative-kb/my-reg`, { recursive: true })
+      await fs.writeFile(`${cwd}/relative-kb/my-reg/file.txt`, 'relative content')
+      await fs.writeFile(`${cwd}/relative-kb/AGENTS.md`, '# KB marker')
+
+      const localConfig = {
+        asset_registries: {
+          'my-reg': {
+            behavior: 'mirror',
+            targets: [{ path: 'dest', mode: 'canonical' }],
+            description: 'Local reg',
+          },
+        },
+      }
+      await fs.writeFile(`${cwd}/config.json`, JSON.stringify(localConfig))
+
+      const command: InstallCommandConfig = {
+        command: 'install',
+        resolution: 'local',
+        path: './relative-kb',
+        offline: true,
+        kb: true,
+      }
+
+      await handleInstallCommand(command, fs)
+
+      expect(await fs.exists(`${cwd}/dest/file.txt`)).toBe(true)
+      expect(await fs.readFile(`${cwd}/dest/file.txt`)).toBe('relative content')
+    })
+
+    // Moved from cli-install.e2e.test.ts (#199 test reorg) — genuine gap: no handler-level
+    // coverage of the local .zip resolution branch (mocked like update/handler.test.ts's
+    // equivalent zip test, since real zip extraction is covered by kb-installer.test.ts).
+    test('handles local .zip source with an absolute path', async () => {
+      const kbInstaller = await import('#kb-manager/kb-installer')
+      const extractedPath = '/cached/unzipped-abs'
+      vi.spyOn(kbInstaller, 'installKBFromLocalZip').mockResolvedValue(extractedPath)
+      await fs.writeFile(`${extractedPath}/my-reg/file.txt`, 'zip content')
+
+      const localConfig = {
+        asset_registries: {
+          'my-reg': {
+            behavior: 'mirror',
+            targets: [{ path: 'dest', mode: 'canonical' }],
+            description: 'Local reg',
+          },
+        },
+      }
+      await fs.writeFile(`${cwd}/config.json`, JSON.stringify(localConfig))
+
+      const command: InstallCommandConfig = {
+        command: 'install',
+        resolution: 'local',
+        path: '/downloads/kb.zip',
+        offline: true,
+        kb: true,
+      }
+
+      await handleInstallCommand(command, fs)
+
+      expect(await fs.exists(`${cwd}/dest/file.txt`)).toBe(true)
+      expect(await fs.readFile(`${cwd}/dest/file.txt`)).toBe('zip content')
+    })
+
+    test('handles local .zip source with a relative path', async () => {
+      const kbInstaller = await import('#kb-manager/kb-installer')
+      const extractedPath = '/cached/unzipped-rel'
+      vi.spyOn(kbInstaller, 'installKBFromLocalZip').mockResolvedValue(extractedPath)
+      await fs.writeFile(`${extractedPath}/my-reg/file.txt`, 'zip content')
+
+      const localConfig = {
+        asset_registries: {
+          'my-reg': {
+            behavior: 'mirror',
+            targets: [{ path: 'dest', mode: 'canonical' }],
+            description: 'Local reg',
+          },
+        },
+      }
+      await fs.writeFile(`${cwd}/config.json`, JSON.stringify(localConfig))
+
+      const command: InstallCommandConfig = {
+        command: 'install',
+        resolution: 'local',
+        path: './downloads/kb.zip',
+        offline: true,
+        kb: true,
+      }
+
+      await handleInstallCommand(command, fs)
+
+      expect(await fs.exists(`${cwd}/dest/file.txt`)).toBe(true)
+      expect(await fs.readFile(`${cwd}/dest/file.txt`)).toBe('zip content')
+    })
   })
 
   describe('error handling', () => {
@@ -1026,5 +1123,86 @@ describe('install — KB version recording (#261)', () => {
     expect(output).not.toContain('Migration guide')
 
     logSpy.mockRestore()
+  })
+})
+
+// Moved from cli-link.e2e.test.ts (#199 test reorg) — genuine gap: no coverage of the
+// options.linkStyle wire-through on install. The transformation logic itself is unit-tested
+// in update-link/logic.test.ts; this only verifies install accepts and applies the option
+// without breaking the distribution pipeline.
+describe('install — linkStyle option', () => {
+  const cwd = '/test-project'
+  const testConfig = {
+    asset_registries: {
+      github: {
+        source: 'github',
+        behavior: 'mirror',
+        targets: [{ path: '.github', mode: 'canonical' }],
+        description: 'GitHub registry',
+      },
+    },
+  }
+  const extraFiles = {
+    [`${cwd}/package.json`]: JSON.stringify({ name: 'test-pkg', version: '0.1.0' }),
+    [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({ name: '@pair/knowledge-hub' }),
+    [`${cwd}/packages/knowledge-hub/dataset/github/workflow.yml`]: 'content: val',
+  }
+
+  test('installs successfully with linkStyle: relative', async () => {
+    const fs = createTestFs(testConfig, extraFiles, cwd)
+
+    await handleInstallCommand(
+      { command: 'install', resolution: 'default', kb: true, offline: false },
+      fs,
+      { linkStyle: 'relative' },
+    )
+
+    expect(await fs.exists(`${cwd}/.github/workflow.yml`)).toBe(true)
+  })
+})
+
+// Moved from cli-packaging.e2e.test.ts (#199 test reorg) — the canonical-target
+// flatten+prefix assertion is already covered by the #238 describe block above;
+// only the secondary (symlink) target distribution was a genuine gap.
+describe('install — skills registry secondary (symlink) targets', () => {
+  test('creates symlinks for secondary skills targets', async () => {
+    const cwd = '/test-skills-install'
+    const seed: Record<string, string> = {
+      [`${cwd}/dataset/.pair/knowledge/index.md`]: '# Knowledge Base',
+      [`${cwd}/dataset/.skills/next/SKILL.md`]:
+        '---\nname: next\ndescription: Project navigator\n---\n# /next',
+      [`${cwd}/config.json`]: JSON.stringify({
+        asset_registries: {
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            description: 'Knowledge base content',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+          },
+          skills: {
+            source: '.skills',
+            behavior: 'mirror',
+            flatten: true,
+            prefix: 'pair',
+            description: 'Agent skills distributed to AI tool directories',
+            targets: [
+              { path: '.claude/skills/', mode: 'canonical' },
+              { path: '.github/skills/', mode: 'symlink' },
+              { path: '.cursor/skills/', mode: 'symlink' },
+            ],
+          },
+        },
+      }),
+    }
+    const fs = new InMemoryFileSystemService(seed, cwd, cwd)
+
+    await handleInstallCommand(
+      { command: 'install', resolution: 'local', path: `${cwd}/dataset`, offline: true, kb: true },
+      fs,
+    )
+
+    const symlinks = fs.getSymlinks()
+    expect(symlinks.has(`${cwd}/.github/skills`)).toBe(true)
+    expect(symlinks.has(`${cwd}/.cursor/skills`)).toBe(true)
   })
 })

@@ -111,7 +111,7 @@ async function runMove(params: MovePathOpsParams) {
   // For 'add' behavior, check if destination already exists and skip if so
   if (await shouldSkipDueToAddBehavior(fileService, destPath, defaultBehavior)) return {}
 
-  await dispatchMoveBasedOnStat(stat, {
+  const ctx: MoveCtx = {
     fileService,
     srcPath,
     destPath,
@@ -121,9 +121,10 @@ async function runMove(params: MovePathOpsParams) {
     normTarget,
     datasetRoot,
     defaultBehavior,
-    folderBehavior,
-    options,
-  } as MoveCtx)
+    ...(folderBehavior && { folderBehavior }),
+    ...(options && { options }),
+  }
+  await dispatchMoveBasedOnStat(stat, ctx)
 
   return {}
 }
@@ -154,10 +155,10 @@ async function dispatchMoveBasedOnStat(
       fileService: ctx.fileService,
       srcPath: ctx.srcPath,
       destPath: ctx.destPath,
-      source: ctx.source!,
-      target: ctx.target!,
-      normSource: ctx.normSource!,
-      normTarget: ctx.normTarget!,
+      source: ctx.source,
+      target: ctx.target,
+      normSource: ctx.normSource,
+      normTarget: ctx.normTarget,
       datasetRoot: ctx.datasetRoot,
       defaultBehavior: ctx.defaultBehavior,
       ...(ctx.folderBehavior && { folderBehavior: ctx.folderBehavior }),
@@ -169,9 +170,9 @@ async function dispatchMoveBasedOnStat(
       fileService: ctx.fileService,
       srcPath: ctx.srcPath,
       destPath: ctx.destPath,
-      source: ctx.source!,
-      target: ctx.target!,
-      normTarget: ctx.normTarget!,
+      source: ctx.source,
+      target: ctx.target,
+      normTarget: ctx.normTarget,
       datasetRoot: ctx.datasetRoot,
       ...(ctx.options && { options: ctx.options }),
     }
@@ -185,13 +186,23 @@ async function dispatchMoveBasedOnStat(
   }
 }
 
-// Local combined context type where optional properties may be undefined (satisfies exactOptionalPropertyTypes)
-type MoveCtx = Partial<HandleDirectoryMoveParams & HandleFileMoveParams> & {
+// Fully-resolved move context: every path/name is known once setup has run and
+// the source/dest null check has passed, so all fields are required. The two
+// behavior maps stay optional (absent unless configured). Replaces the former
+// `Partial<...>` + non-null assertions — the branch (file vs directory) is not
+// known when the context is built, so a discriminated union does not apply here.
+type MoveCtx = {
   fileService: FileSystemService
   srcPath: string
   destPath: string
+  source: string
+  target: string
+  normSource: string
+  normTarget: string
   datasetRoot: string
   defaultBehavior: Behavior
+  folderBehavior?: Record<string, Behavior>
+  options?: SyncOptions
 }
 
 /**

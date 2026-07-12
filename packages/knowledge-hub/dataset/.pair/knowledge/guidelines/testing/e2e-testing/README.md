@@ -30,6 +30,8 @@ E2E tests are the most comprehensive but also the most expensive to maintain. Th
 
 Effective E2E testing requires careful test design, robust test infrastructure, and clear understanding of user behavior patterns. These tests serve as living documentation of how the system should behave from a user's perspective.
 
+**File organization**: a large e2e file, or many of them, is a signal — not a target. Genuine e2e tests depend on a real hand-off between independently-invoked components; anything that only exercises one component belongs in that component's own unit tests. See [file-structure.md](../../code-design/code-organization/file-structure.md)'s co-location rules for the file-per-entry-point default and when splitting is actually justified.
+
 ## Framework Comparison
 
 | Framework      | Best For                             | Learning Curve | Debugging | Ecosystem       |
