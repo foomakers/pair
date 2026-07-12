@@ -88,6 +88,33 @@ for (const docSkill of catalogSkills) {
   }
 }
 
+// --- Check 2b: How-to guide counts ---
+// Same protection as Check 1, for "N how-to guides" / "N process guides"
+// claims (the manual-flow counterpart of skills). Guide files live in the KB
+// dataset as NN-how-to-*.md; README is the index, not a guide.
+
+const HOW_TO_DIR = path.join(ROOT, 'packages/knowledge-hub/dataset/.pair/knowledge/how-to')
+
+if (fs.existsSync(HOW_TO_DIR)) {
+  const howToCount = fs
+    .readdirSync(HOW_TO_DIR)
+    .filter((f) => /^\d+-how-to-.*\.md$/.test(f)).length
+
+  const GUIDE_COUNT_RE = /(\d+)\s+(?:how-to|process)\s+guides/g
+  for (const file of docsFiles) {
+    const content = fs.readFileSync(file, 'utf-8')
+    const rel = path.relative(DOCS_DIR, file)
+    for (const m of content.matchAll(GUIDE_COUNT_RE)) {
+      const docCount = parseInt(m[1], 10)
+      if (docCount !== howToCount) {
+        errors.push(
+          `How-to guide count mismatch in ${rel}: docs say "${m[0]}", actual count is ${howToCount}`,
+        )
+      }
+    }
+  }
+}
+
 // --- Check 3: CLI commands ---
 
 const commandDirs = fs
