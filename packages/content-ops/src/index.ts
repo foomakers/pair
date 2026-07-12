@@ -54,7 +54,7 @@ export {
   type TargetConfig,
   type TransformConfig,
 } from './ops/behavior'
-export { copyPathOps, copyDirectoryWithTransforms, type CopyPathOpsResult } from './ops/copyPathOps'
+export { copyPathOps, copyDirectoryWithTransforms, type CopyPathOpsResult } from './ops/copy'
 export { flattenPath, prefixPath, transformPath, detectCollisions } from './ops/naming-transforms'
 export {
   rewriteLinksInFile,

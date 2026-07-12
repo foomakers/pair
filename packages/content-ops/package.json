@@ -27,9 +27,9 @@
       "require": "./dist/ops/SyncOptions.js"
     },
     "./test-utils/in-memory-fs": {
-      "types": "./dist/test-utils/in-memory-fs.d.ts",
-      "import": "./dist/test-utils/in-memory-fs.js",
-      "require": "./dist/test-utils/in-memory-fs.js"
+      "types": "./dist/test-utils/in-memory-fs/index.d.ts",
+      "import": "./dist/test-utils/in-memory-fs/index.js",
+      "require": "./dist/test-utils/in-memory-fs/index.js"
     }
   },
   "scripts": {
