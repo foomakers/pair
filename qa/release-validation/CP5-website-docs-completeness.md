@@ -60,12 +60,11 @@
 - `$BASE_URL/docs/pm-tools/filesystem`
 - `$BASE_URL/docs/pm-tools/linear`
 
-**Guides** (6 pages):
+**Guides** (5 pages):
 - `$BASE_URL/docs/guides/cli-workflows`
 - `$BASE_URL/docs/guides/install-from-url`
 - `$BASE_URL/docs/guides/customize-kb`
 - `$BASE_URL/docs/guides/adopter-checklist`
-- `$BASE_URL/docs/guides/troubleshooting`
 - `$BASE_URL/docs/guides/update-link`
 
 **Reference** (10 pages):
@@ -83,7 +82,7 @@
 **Support** (3 pages):
 - `$BASE_URL/docs/support`
 - `$BASE_URL/docs/support/general-faq`
-- `$BASE_URL/docs/support/faq`
+- `$BASE_URL/docs/support/troubleshooting`
 
 **Tutorials** (5 pages):
 - `$BASE_URL/docs/tutorials`

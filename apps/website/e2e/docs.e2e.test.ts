@@ -194,10 +194,21 @@ test('guides section: navigate and verify content', async ({ page }) => {
   await expect(page.locator('body')).toContainText('Guides')
 
   // Navigate to another guide via sidebar
-  await page.locator('a', { hasText: 'Troubleshooting' }).first().click()
-  await expect(page).toHaveURL('/docs/guides/troubleshooting')
+  await page.locator('a', { hasText: 'Install from URL' }).first().click()
+  await expect(page).toHaveURL('/docs/guides/install-from-url')
+  await expect(page.locator('main h1')).toContainText('Install from URL')
+})
+
+test('redirects: old FAQ/troubleshooting URLs land on support/troubleshooting', async ({
+  page,
+}) => {
+  await page.goto('/docs/support/faq')
+  await expect(page).toHaveURL('/docs/support/troubleshooting')
   await expect(page.locator('main h1')).toContainText('Troubleshooting')
-  await expect(main).toContainText('Installation Issues')
+
+  await page.goto('/docs/guides/troubleshooting')
+  await expect(page).toHaveURL('/docs/support/troubleshooting')
+  await expect(page.locator('main h1')).toContainText('Troubleshooting')
 })
 
 test('reference section: navigate CLI, specs, and top-level pages', async ({ page }) => {
@@ -263,10 +274,10 @@ test('support section: navigate and verify content', async ({ page }) => {
   await expect(main).toContainText('Project Management')
   await expect(main).toContainText('Customization')
 
-  // Navigate to Installation FAQ via sidebar
-  await page.locator('a', { hasText: 'Installation FAQ' }).first().click()
-  await expect(page).toHaveURL('/docs/support/faq')
-  await expect(page.locator('main h1')).toContainText('Installation FAQ')
+  // Navigate to Troubleshooting via sidebar (merged Installation FAQ + guides troubleshooting)
+  await page.locator('a', { hasText: 'Troubleshooting' }).first().click()
+  await expect(page).toHaveURL('/docs/support/troubleshooting')
+  await expect(page.locator('main h1')).toContainText('Troubleshooting')
   await expect(main).toContainText('Permission Issues')
   await expect(main).toContainText('Node Version Issues')
 })
@@ -277,7 +288,6 @@ test('smoke: all guides/reference/support pages return 200', async ({ page }) =>
     { url: '/docs/guides/install-from-url', title: 'Install from URL' },
     { url: '/docs/guides/customize-kb', title: 'Customize the Knowledge Base' },
     { url: '/docs/guides/adopter-checklist', title: 'Adopter Checklist' },
-    { url: '/docs/guides/troubleshooting', title: 'Troubleshooting' },
     { url: '/docs/guides/update-link', title: 'Link Update' },
     { url: '/docs/reference/cli/commands', title: 'CLI Commands' },
     { url: '/docs/reference/cli/examples', title: 'CLI Help Examples' },
@@ -290,7 +300,7 @@ test('smoke: all guides/reference/support pages return 200', async ({ page }) =>
     { url: '/docs/reference/configuration', title: 'Configuration' },
     { url: '/docs/support', title: 'Support' },
     { url: '/docs/support/general-faq', title: 'FAQ' },
-    { url: '/docs/support/faq', title: 'Installation FAQ' },
+    { url: '/docs/support/troubleshooting', title: 'Troubleshooting' },
   ]
   for (const { url, title } of pages) {
     const response = await page.goto(url)
@@ -884,7 +894,6 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/guides/install-from-url',
     '/docs/guides/customize-kb',
     '/docs/guides/adopter-checklist',
-    '/docs/guides/troubleshooting',
     '/docs/guides/update-link',
     '/docs/reference/cli/commands',
     '/docs/reference/cli/examples',
@@ -897,7 +906,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/reference/configuration',
     '/docs/support',
     '/docs/support/general-faq',
-    '/docs/support/faq',
+    '/docs/support/troubleshooting',
     '/docs/tutorials',
     '/docs/tutorials/first-project',
     '/docs/tutorials/existing-project',
