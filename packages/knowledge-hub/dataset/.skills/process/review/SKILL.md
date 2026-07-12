@@ -17,8 +17,8 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 | `/verify-done`     | Capability | Yes      | 4     | Definition of Done checking          |
 | `/record-decision` | Capability | Yes      | Any   | Record missing ADR (HALT condition)  |
 | `/assess-debt`     | Capability | Yes      | 4     | Flag tech debt items                 |
-| `/verify-adoption`       | Capability | Optional | 3     | Full adoption compliance (from #105)           |
-| `/assess-stack`          | Capability | Optional | 3     | Tech-stack resolution (from #104)              |
+| `/verify-adoption`       | Capability | Optional | 3     | Full adoption compliance                       |
+| `/assess-stack`          | Capability | Optional | 3     | Tech-stack resolution                          |
 | `/execute-manual-tests`  | Capability | Optional | 6     | Post-merge release validation (manual tests)   |
 
 ## Arguments
@@ -384,10 +384,8 @@ Re-invoking `/review` on a partially reviewed PR is safe:
 ## Notes
 
 - This skill **reads code, posts review comments, and optionally merges PRs** — it does not modify source code.
-- First skill to compose 7 atomic skills (4 required + 3 optional). Proves composition pattern at scale.
 - Review phases are sequential — each phase builds on findings from prior phases.
-- The reviewer can stop between phases. Re-invoke to resume (idempotency ensures correct state).
+- The reviewer can stop between phases; re-invoke to resume (idempotency ensures correct state).
 - Output follows [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) — the template defines structure, /review fills it with findings.
 - HALT on missing ADR is inherited from [how-to-11](../../../.pair/knowledge/how-to/11-how-to-code-review.md) — this is a business rule, not a skill limitation.
-- **Phase 6 is optional** — the reviewer can stop after Phase 5. The author can alternatively merge via `/implement` Phase 4.
 - **Parent cascade is best-effort** — if sub-issue queries fail, the skill reports which updates need manual attention.

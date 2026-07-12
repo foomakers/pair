@@ -111,7 +111,7 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
    7. `/pair-capability-assess-methodology` → proposes methodology section of `way-of-working.md`
    8. `/pair-capability-assess-pm` → proposes PM section of `way-of-working.md` (delegates to `/pair-capability-setup-pm` when installed)
 
-   After each assessment (or after collecting the batch), compose `/pair-capability-record-decision(content, target, decision-metadata)` to persist the proposal to its target adoption file and record the ADR/ADL. `/pair-capability-assess-pm` persists via `/pair-capability-setup-pm` when that skill is installed; otherwise `/pair-process-bootstrap` persists its proposal via `/pair-capability-record-decision` like the others.
+   After each assessment (or after collecting the batch), compose `/pair-capability-record-decision(content, target, decision-metadata)` to persist the proposal and record the ADR/ADL. `/pair-capability-assess-pm` persists via `/pair-capability-setup-pm` when that skill is installed; otherwise `/pair-process-bootstrap` persists its proposal via `/pair-capability-record-decision` like the others.
 
    **Section ownership** (each assess-\* proposal owns its section; `/pair-capability-record-decision` preserves the rest on write):
 
@@ -307,10 +307,6 @@ Phase completion is detected via output file existence — never re-does complet
 
 ## Notes
 
-- This is the most complex process skill — it orchestrates the full project setup sequence.
-- Each phase is independent: completion of one phase doesn't require re-running previous phases.
-- The developer can stop between phases. Re-invoke to resume (idempotency ensures correct state).
-- All decisions during bootstrap are recorded via `/pair-capability-record-decision`. Non-architectural → ADL. Architectural → ADR.
-- Quality gate setup ensures the gate infrastructure is executable from day one (not deferred to first implementation).
+- The developer can stop between phases; re-invoke to resume (idempotency ensures correct state).
 - Phase 3.5 is the only full-catalog (`$scope: all`) entry point for `/pair-capability-map-subdomains` and `/pair-capability-map-contexts` — every other caller is scoped to what it just touched. See [Callers Matrix](../../../.pair/knowledge/skills-guide.md#callers-matrix-scoped-capabilities).
 - Content source: how-to-02 Phases 0-4 (including domain modeling). How-to-02 retains orchestration flow, this skill has operational detail.

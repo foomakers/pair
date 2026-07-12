@@ -45,7 +45,7 @@ Evaluate code quality using objective metrics from [code-metrics.md](../../../.p
    - Size metrics: lines of code, function length, class/module size, file size
    - Quality metrics: test coverage, code duplication, maintainability index
    - Thresholds per metric (e.g., cyclomatic complexity 1-5 = simple, 16+ = refactor needed)
-2. **Verify**: Guidelines loaded. If not found, use built-in thresholds.
+2. **Verify**: Guidelines loaded.
 
 ### Step 3: Collect Metrics
 
@@ -149,7 +149,6 @@ When composed by `/review`:
 When invoked **independently**:
 
 - Full interactive flow. Developer receives the report and decides on improvement actions.
-- This skill is **read-only** — it inspects code and runs tests (coverage) but does not modify files.
 
 ## Graceful Degradation
 
@@ -162,7 +161,6 @@ When invoked **independently**:
 
 - This skill is **read-only / output-only** — it inspects code, runs coverage (via existing test commands), but never modifies files, adoption, or the PM tool. A finding worth tracking is promoted deliberately to the backlog via `/write-issue` (a manual, selective act) — never auto-created.
 - **Idempotent**: re-invocation checks staleness of existing report. If codebase unchanged → confirms existing report. If changed → re-assesses only.
-- **Resolution cascade**: Path A (existing recent report) → Path B (full assessment). Follows the same cascade pattern as other assess-* skills.
 - Metrics are **health indicators, not absolute quality measures**. Context matters: business logic naturally has higher complexity, and metric targets should align with team capabilities.
 - Quality assessment is most valuable as a **trend** — individual snapshots matter less than improvement direction over time.
 - The maintainability index is a composite heuristic — it provides a single number for quick assessment but the component metrics offer more actionable insights.
