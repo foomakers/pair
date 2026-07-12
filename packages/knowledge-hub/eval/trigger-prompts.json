@@ -1,0 +1,594 @@
+{
+  "$comment": "Trigger eval prompt sets (story #313, T7). One entry per skill family. Prompt types: should-trigger (expected = the skill an executor must load) and should-not-trigger (expected = the correct destination — a sibling skill or 'none'; near_miss_for = the skill the prompt is a decoy for and must NOT fire). Prompts are grounded in the frontmatter descriptions of packages/knowledge-hub/dataset/.skills/**/SKILL.md. Run procedure: see README.md in this directory.",
+  "corpus_size": 35,
+  "families": [
+    {
+      "family": "router",
+      "skills": ["next"],
+      "prompts": [
+        {
+          "id": "RT-01",
+          "type": "should-trigger",
+          "expected": "next",
+          "prompt": "I just opened this project and have no idea where things stand. What should we work on?"
+        },
+        {
+          "id": "RT-02",
+          "type": "should-trigger",
+          "expected": "next",
+          "prompt": "We finished the last story. Figure out what the most useful next step is for this repo."
+        },
+        {
+          "id": "RT-N1",
+          "type": "should-not-trigger",
+          "near_miss_for": "next",
+          "expected": "refine-story",
+          "prompt": "Pick the next Todo story from the backlog and get it ready for the sprint."
+        }
+      ]
+    },
+    {
+      "family": "assess-decision",
+      "skills": [
+        "assess-ai",
+        "assess-architecture",
+        "assess-infrastructure",
+        "assess-methodology",
+        "assess-observability",
+        "assess-pm",
+        "assess-stack",
+        "assess-testing"
+      ],
+      "prompts": [
+        {
+          "id": "AD-01",
+          "type": "should-trigger",
+          "expected": "assess-ai",
+          "prompt": "Which AI coding assistants and agent tools should this team adopt, and in what versions?"
+        },
+        {
+          "id": "AD-02",
+          "type": "should-trigger",
+          "expected": "assess-ai",
+          "prompt": "We want to bring Copilot or something similar into our workflow — evaluate the options for us."
+        },
+        {
+          "id": "AD-03",
+          "type": "should-trigger",
+          "expected": "assess-architecture",
+          "prompt": "Propose an architecture pattern for this service — layered, hexagonal, or something else."
+        },
+        {
+          "id": "AD-04",
+          "type": "should-trigger",
+          "expected": "assess-architecture",
+          "prompt": "Should this app be a modular monolith or split into microservices? Give us a recommendation."
+        },
+        {
+          "id": "AD-05",
+          "type": "should-trigger",
+          "expected": "assess-infrastructure",
+          "prompt": "Evaluate where we should host this system and how CI/CD should deploy it."
+        },
+        {
+          "id": "AD-06",
+          "type": "should-trigger",
+          "expected": "assess-infrastructure",
+          "prompt": "We need a plan for cloud provider, environments and release pipeline for this product."
+        },
+        {
+          "id": "AD-07",
+          "type": "should-trigger",
+          "expected": "assess-methodology",
+          "prompt": "Should this team run Scrum or Kanban? Assess what fits us."
+        },
+        {
+          "id": "AD-08",
+          "type": "should-trigger",
+          "expected": "assess-methodology",
+          "prompt": "Recommend how we should organize our development process — iterations, ceremonies, flow."
+        },
+        {
+          "id": "AD-09",
+          "type": "should-trigger",
+          "expected": "assess-observability",
+          "prompt": "Propose a monitoring, logging and tracing strategy for production."
+        },
+        {
+          "id": "AD-10",
+          "type": "should-trigger",
+          "expected": "assess-observability",
+          "prompt": "We have zero telemetry — how will we even know when production breaks? Work out what we need."
+        },
+        {
+          "id": "AD-11",
+          "type": "should-trigger",
+          "expected": "assess-pm",
+          "prompt": "Which project management tool fits this project — Jira, Linear, or GitHub Projects?"
+        },
+        {
+          "id": "AD-12",
+          "type": "should-trigger",
+          "expected": "assess-pm",
+          "prompt": "Recommend where we should track our work items going forward."
+        },
+        {
+          "id": "AD-13",
+          "type": "should-trigger",
+          "expected": "assess-stack",
+          "prompt": "Evaluate a tech stack for this new web app — language, framework, database."
+        },
+        {
+          "id": "AD-14",
+          "type": "should-trigger",
+          "expected": "assess-stack",
+          "prompt": "I want to add Redis as a dependency — check whether that's consistent with our stack."
+        },
+        {
+          "id": "AD-15",
+          "type": "should-trigger",
+          "expected": "assess-testing",
+          "prompt": "Propose a testing strategy and framework choice for this repo."
+        },
+        {
+          "id": "AD-16",
+          "type": "should-trigger",
+          "expected": "assess-testing",
+          "prompt": "How much unit vs integration coverage should we aim for, and with which tools?"
+        },
+        {
+          "id": "AD-N1",
+          "type": "should-not-trigger",
+          "near_miss_for": "assess-pm",
+          "expected": "setup-pm",
+          "prompt": "Set up GitHub Projects as the tracker for this repo — we already decided on it."
+        },
+        {
+          "id": "AD-N2",
+          "type": "should-not-trigger",
+          "near_miss_for": "assess-stack",
+          "expected": "record-decision",
+          "prompt": "We already agreed on Postgres yesterday — write that down properly as an architecture decision."
+        },
+        {
+          "id": "AD-N3",
+          "type": "should-not-trigger",
+          "near_miss_for": "assess-*",
+          "expected": "none",
+          "prompt": "Assess the security posture of our login flow."
+        },
+        {
+          "id": "AD-N4",
+          "type": "should-not-trigger",
+          "near_miss_for": "assess-testing",
+          "expected": "none",
+          "prompt": "Write unit tests for the parser module."
+        }
+      ]
+    },
+    {
+      "family": "assess-report",
+      "skills": ["assess-code-quality", "assess-debt"],
+      "prompts": [
+        {
+          "id": "AR-01",
+          "type": "should-trigger",
+          "expected": "assess-code-quality",
+          "prompt": "Give me a code quality report for this repo — complexity, size, coverage, the works."
+        },
+        {
+          "id": "AR-02",
+          "type": "should-trigger",
+          "expected": "assess-code-quality",
+          "prompt": "How maintainable is this codebase right now? Score it."
+        },
+        {
+          "id": "AR-03",
+          "type": "should-trigger",
+          "expected": "assess-debt",
+          "prompt": "Catalog our technical debt and tell us what to fix first."
+        },
+        {
+          "id": "AR-04",
+          "type": "should-trigger",
+          "expected": "assess-debt",
+          "prompt": "The code is full of TODO and FIXME comments — prioritize the cleanup for us."
+        },
+        {
+          "id": "AR-N1",
+          "type": "should-not-trigger",
+          "near_miss_for": "assess-code-quality",
+          "expected": "verify-quality",
+          "prompt": "Is the quality gate passing? Run lint, tests and type-check and tell me."
+        },
+        {
+          "id": "AR-N2",
+          "type": "should-not-trigger",
+          "near_miss_for": "assess-debt",
+          "expected": "none",
+          "prompt": "Refactor the auth module to pay down its debt."
+        }
+      ]
+    },
+    {
+      "family": "verification",
+      "skills": ["verify-quality", "verify-done", "verify-adoption"],
+      "prompts": [
+        {
+          "id": "VF-01",
+          "type": "should-trigger",
+          "expected": "verify-quality",
+          "prompt": "Run the quality gates and report what fails."
+        },
+        {
+          "id": "VF-02",
+          "type": "should-trigger",
+          "expected": "verify-quality",
+          "prompt": "Before I push, check whether lint, tests and type-check all pass."
+        },
+        {
+          "id": "VF-03",
+          "type": "should-trigger",
+          "expected": "verify-done",
+          "prompt": "Is PR #42 actually done per our Definition of Done?"
+        },
+        {
+          "id": "VF-04",
+          "type": "should-trigger",
+          "expected": "verify-adoption",
+          "prompt": "Check whether the code in packages/api follows our adopted architecture and tech-stack decisions."
+        },
+        {
+          "id": "VF-N1",
+          "type": "should-not-trigger",
+          "near_miss_for": "verify-quality",
+          "expected": "none",
+          "prompt": "Fix the three failing lint errors in src/utils.ts."
+        },
+        {
+          "id": "VF-N2",
+          "type": "should-not-trigger",
+          "near_miss_for": "verify-done",
+          "expected": "review",
+          "prompt": "Give PR #42 a full review and decide whether it can merge."
+        }
+      ]
+    },
+    {
+      "family": "decision-recording",
+      "skills": ["record-decision"],
+      "prompts": [
+        {
+          "id": "DR-01",
+          "type": "should-trigger",
+          "expected": "record-decision",
+          "prompt": "Record the decision to use Postgres as an ADR."
+        },
+        {
+          "id": "DR-02",
+          "type": "should-trigger",
+          "expected": "record-decision",
+          "prompt": "We agreed sessions live in Redis — log that decision in the project's decision records."
+        },
+        {
+          "id": "DR-N1",
+          "type": "should-not-trigger",
+          "near_miss_for": "record-decision",
+          "expected": "assess-stack",
+          "prompt": "Which database should we use for this service?"
+        }
+      ]
+    },
+    {
+      "family": "pm-and-backlog",
+      "skills": ["write-issue", "setup-pm", "estimate"],
+      "prompts": [
+        {
+          "id": "PB-01",
+          "type": "should-trigger",
+          "expected": "write-issue",
+          "prompt": "Create a bug issue in our tracker for the login timeout, formatted per our template."
+        },
+        {
+          "id": "PB-02",
+          "type": "should-trigger",
+          "expected": "write-issue",
+          "prompt": "Update story #42's body in GitHub so it matches the user-story template."
+        },
+        {
+          "id": "PB-03",
+          "type": "should-trigger",
+          "expected": "setup-pm",
+          "prompt": "Configure Jira as this project's PM tool and wire up our way of working."
+        },
+        {
+          "id": "PB-04",
+          "type": "should-trigger",
+          "expected": "estimate",
+          "prompt": "How many story points is story #87? Estimate it with our adopted method."
+        },
+        {
+          "id": "PB-N1",
+          "type": "should-not-trigger",
+          "near_miss_for": "write-issue",
+          "expected": "plan-tasks",
+          "prompt": "Break story #87 into implementation tasks."
+        },
+        {
+          "id": "PB-N2",
+          "type": "should-not-trigger",
+          "near_miss_for": "setup-pm",
+          "expected": "assess-pm",
+          "prompt": "We haven't picked a tracker yet — what should we use?"
+        }
+      ]
+    },
+    {
+      "family": "ddd-mapping",
+      "skills": ["map-subdomains", "map-contexts"],
+      "prompts": [
+        {
+          "id": "DM-01",
+          "type": "should-trigger",
+          "expected": "map-subdomains",
+          "prompt": "Classify our business capabilities into core, supporting and generic subdomains."
+        },
+        {
+          "id": "DM-02",
+          "type": "should-trigger",
+          "expected": "map-contexts",
+          "prompt": "Map our subdomains to bounded contexts and derive the integration patterns between them."
+        },
+        {
+          "id": "DM-N1",
+          "type": "should-not-trigger",
+          "near_miss_for": "map-contexts",
+          "expected": "none",
+          "prompt": "Draw a network diagram of our AWS VPCs and subnets."
+        },
+        {
+          "id": "DM-N2",
+          "type": "should-not-trigger",
+          "near_miss_for": "map-subdomains",
+          "expected": "none",
+          "prompt": "Register the domain name for our new product website."
+        }
+      ]
+    },
+    {
+      "family": "session-continuity",
+      "skills": ["checkpoint", "grill"],
+      "prompts": [
+        {
+          "id": "SC-01",
+          "type": "should-trigger",
+          "expected": "checkpoint",
+          "prompt": "Save our progress on story #313 so we can resume after a context reset."
+        },
+        {
+          "id": "SC-02",
+          "type": "should-trigger",
+          "expected": "checkpoint",
+          "prompt": "Resume work on story #256 from where the last session left off."
+        },
+        {
+          "id": "SC-03",
+          "type": "should-trigger",
+          "expected": "grill",
+          "prompt": "Interview me one question at a time until we're fully aligned on this story's scope."
+        },
+        {
+          "id": "SC-04",
+          "type": "should-trigger",
+          "expected": "grill",
+          "prompt": "Before we start, grill me on the requirements — I want us to reach explicit shared understanding."
+        },
+        {
+          "id": "SC-N1",
+          "type": "should-not-trigger",
+          "near_miss_for": "checkpoint",
+          "expected": "none",
+          "prompt": "Commit my work so it isn't lost."
+        },
+        {
+          "id": "SC-N2",
+          "type": "should-not-trigger",
+          "near_miss_for": "grill",
+          "expected": "none",
+          "prompt": "Summarize what we discussed in this conversation."
+        }
+      ]
+    },
+    {
+      "family": "manual-testing",
+      "skills": ["design-manual-tests", "execute-manual-tests"],
+      "prompts": [
+        {
+          "id": "MT-01",
+          "type": "should-trigger",
+          "expected": "design-manual-tests",
+          "prompt": "Create a manual test suite with critical paths for validating our releases."
+        },
+        {
+          "id": "MT-02",
+          "type": "should-trigger",
+          "expected": "execute-manual-tests",
+          "prompt": "Run the manual test suite against the v0.4 release and produce the report."
+        },
+        {
+          "id": "MT-N1",
+          "type": "should-not-trigger",
+          "near_miss_for": "design-manual-tests",
+          "expected": "assess-testing",
+          "prompt": "Design our overall automated testing approach — pyramid, tools, coverage targets."
+        },
+        {
+          "id": "MT-N2",
+          "type": "should-not-trigger",
+          "near_miss_for": "execute-manual-tests",
+          "expected": "verify-quality",
+          "prompt": "Run the automated test suite and tell me if everything passes."
+        }
+      ]
+    },
+    {
+      "family": "setup-ops",
+      "skills": ["setup-gates", "manage-flags"],
+      "prompts": [
+        {
+          "id": "SO-01",
+          "type": "should-trigger",
+          "expected": "setup-gates",
+          "prompt": "Configure CI quality gates and husky pre-push hooks for this repo."
+        },
+        {
+          "id": "SO-02",
+          "type": "should-trigger",
+          "expected": "manage-flags",
+          "prompt": "Create a feature flag for the new checkout flow and plan its cleanup."
+        },
+        {
+          "id": "SO-N1",
+          "type": "should-not-trigger",
+          "near_miss_for": "setup-gates",
+          "expected": "verify-quality",
+          "prompt": "Is CI green on this branch?"
+        },
+        {
+          "id": "SO-N2",
+          "type": "should-not-trigger",
+          "near_miss_for": "manage-flags",
+          "expected": "none",
+          "prompt": "Add a new option to the app's settings.json config."
+        }
+      ]
+    },
+    {
+      "family": "planning-processes",
+      "skills": [
+        "specify-prd",
+        "plan-initiatives",
+        "plan-epics",
+        "plan-stories",
+        "plan-tasks",
+        "refine-story"
+      ],
+      "prompts": [
+        {
+          "id": "PP-01",
+          "type": "should-trigger",
+          "expected": "specify-prd",
+          "prompt": "Create a PRD for this product idea."
+        },
+        {
+          "id": "PP-02",
+          "type": "should-trigger",
+          "expected": "specify-prd",
+          "prompt": "Our PRD is missing the success-metrics section — update it."
+        },
+        {
+          "id": "PP-03",
+          "type": "should-trigger",
+          "expected": "plan-initiatives",
+          "prompt": "Turn the PRD into prioritized strategic initiatives."
+        },
+        {
+          "id": "PP-04",
+          "type": "should-trigger",
+          "expected": "plan-epics",
+          "prompt": "Break the onboarding initiative down into epics."
+        },
+        {
+          "id": "PP-05",
+          "type": "should-trigger",
+          "expected": "plan-stories",
+          "prompt": "Slice the payments epic into user stories."
+        },
+        {
+          "id": "PP-06",
+          "type": "should-trigger",
+          "expected": "plan-tasks",
+          "prompt": "Story #313 is refined — break it into implementation tasks with a dependency graph."
+        },
+        {
+          "id": "PP-07",
+          "type": "should-trigger",
+          "expected": "refine-story",
+          "prompt": "Refine story #250 so it's sprint-ready, with Given-When-Then acceptance criteria."
+        },
+        {
+          "id": "PP-N1",
+          "type": "should-not-trigger",
+          "near_miss_for": "plan-epics",
+          "expected": "write-issue",
+          "prompt": "Create an epic issue in GitHub from this text I already wrote."
+        },
+        {
+          "id": "PP-N2",
+          "type": "should-not-trigger",
+          "near_miss_for": "plan-stories",
+          "expected": "none",
+          "prompt": "Split this oversized pull request into smaller ones."
+        },
+        {
+          "id": "PP-N3",
+          "type": "should-not-trigger",
+          "near_miss_for": "refine-story",
+          "expected": "estimate",
+          "prompt": "Story #250 is already refined — just size it."
+        }
+      ]
+    },
+    {
+      "family": "execution-orchestrators",
+      "skills": ["bootstrap", "implement", "review"],
+      "prompts": [
+        {
+          "id": "EO-01",
+          "type": "should-trigger",
+          "expected": "bootstrap",
+          "prompt": "This is a brand-new project — set up everything: standards, quality gates, PM tool, the full onboarding."
+        },
+        {
+          "id": "EO-02",
+          "type": "should-trigger",
+          "expected": "bootstrap",
+          "prompt": "Run the project setup checklist from PRD verification through PM configuration."
+        },
+        {
+          "id": "EO-03",
+          "type": "should-trigger",
+          "expected": "implement",
+          "prompt": "Implement story #250, working through its tasks one at a time, and open a PR at the end."
+        },
+        {
+          "id": "EO-04",
+          "type": "should-trigger",
+          "expected": "review",
+          "prompt": "Review PR #310 end to end and decide whether it merges."
+        },
+        {
+          "id": "EO-N1",
+          "type": "should-not-trigger",
+          "near_miss_for": "implement",
+          "expected": "none",
+          "prompt": "Fix this one-line typo in the README."
+        },
+        {
+          "id": "EO-N2",
+          "type": "should-not-trigger",
+          "near_miss_for": "bootstrap",
+          "expected": "none",
+          "prompt": "Install the pair CLI in this repo."
+        },
+        {
+          "id": "EO-N3",
+          "type": "should-not-trigger",
+          "near_miss_for": "review",
+          "expected": "verify-quality",
+          "prompt": "Quick sanity check that my branch builds and tests pass — no full review needed."
+        }
+      ]
+    }
+  ]
+}
