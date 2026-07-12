@@ -9,8 +9,9 @@ const path = require('path')
 const ROOT = path.resolve(__dirname, '..')
 const SKILLS_DIR = path.join(ROOT, 'packages/knowledge-hub/dataset/.skills')
 const COMMANDS_DIR = path.join(ROOT, 'apps/pair-cli/src/commands')
-const CATALOG_FILE = path.join(ROOT, 'apps/website/content/docs/reference/skills-catalog.mdx')
-const COMMANDS_FILE = path.join(ROOT, 'apps/website/content/docs/reference/cli/commands.mdx')
+const DOCS_DIR = path.join(ROOT, 'apps/website/content/docs')
+const CATALOG_FILE = path.join(DOCS_DIR, 'reference/skills-catalog.mdx')
+const COMMANDS_FILE = path.join(DOCS_DIR, 'reference/cli/commands.mdx')
 
 const errors = []
 
@@ -27,6 +28,18 @@ function getSkillNames(categoryDir) {
   return []
 }
 
+function walkMdx(dir) {
+  const out = []
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory()) out.push(...walkMdx(full))
+    else if (entry.name.endsWith('.mdx')) out.push(full)
+  }
+  return out
+}
+
+const docsFiles = walkMdx(DOCS_DIR)
+
 // --- Check 1 & 2: Skills ---
 
 const categories = fs.readdirSync(SKILLS_DIR, { withFileTypes: true }).filter((d) => d.isDirectory())
@@ -39,12 +52,20 @@ const skillCount = allSkills.length
 
 const catalog = fs.readFileSync(CATALOG_FILE, 'utf-8')
 
-// Check 1: every occurrence of "N skills" matches actual count
-const countMatches = [...catalog.matchAll(/(\d+)\s+(?:pair\s+)?skills/g)]
-for (const m of countMatches) {
-  const docCount = parseInt(m[1], 10)
-  if (docCount !== skillCount) {
-    errors.push(`Skill count mismatch: docs say "${m[0]}", actual count is ${skillCount}`)
+// Check 1: every occurrence of "N skills" across ALL docs pages matches actual count.
+// Regex is intentionally narrow to avoid prose false positives: it matches
+// "N skills", "N pair skills", "N composable skills" (the total-count phrasings
+// used in docs). Subset counts ("9 process skills") do NOT match because the
+// word between the number and "skills" must be pair/composable or absent.
+const COUNT_RE = /(\d+)\s+(?:pair\s+|composable\s+)?skills/g
+for (const file of docsFiles) {
+  const content = fs.readFileSync(file, 'utf-8')
+  const rel = path.relative(DOCS_DIR, file)
+  for (const m of content.matchAll(COUNT_RE)) {
+    const docCount = parseInt(m[1], 10)
+    if (docCount !== skillCount) {
+      errors.push(`Skill count mismatch in ${rel}: docs say "${m[0]}", actual count is ${skillCount}`)
+    }
   }
 }
 
@@ -108,6 +129,30 @@ if (fs.existsSync(TUTORIALS_DIR)) {
       errors.push(
         `Tutorial references "pair-cli ${cmd}" but no matching command dir in commands/`,
       )
+    }
+  }
+}
+
+// --- Check 5: Dead internal docs links ---
+// Every markdown link target starting with /docs must resolve to a page in the
+// content tree (file route, or folder route backed by an index.mdx). Would have
+// caught the index-less section links (/docs/concepts, /docs/guides, /docs/reference).
+
+const validRoutes = new Set()
+for (const file of docsFiles) {
+  const rel = path.relative(DOCS_DIR, file).replace(/\\/g, '/').replace(/\.mdx$/, '')
+  const route = rel === 'index' ? '/docs' : `/docs/${rel.replace(/\/index$/, '')}`
+  validRoutes.add(route)
+}
+
+const LINK_RE = /\]\((\/docs[^)\s]*)\)/g
+for (const file of docsFiles) {
+  const content = fs.readFileSync(file, 'utf-8')
+  const rel = path.relative(DOCS_DIR, file)
+  for (const m of content.matchAll(LINK_RE)) {
+    const target = m[1].split('#')[0].split('?')[0].replace(/\/$/, '') || '/docs'
+    if (!validRoutes.has(target)) {
+      errors.push(`Dead internal link in ${rel}: ${m[1]} does not resolve to a docs page`)
     }
   }
 }

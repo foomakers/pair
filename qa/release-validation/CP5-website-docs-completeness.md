@@ -23,7 +23,8 @@
 - `$BASE_URL/docs/getting-started/quickstart-team`
 - `$BASE_URL/docs/getting-started/quickstart-org`
 
-**Concepts** (6 pages):
+**Concepts** (7 pages):
+- `$BASE_URL/docs/concepts`
 - `$BASE_URL/docs/concepts/ai-assisted-sdlc`
 - `$BASE_URL/docs/concepts/knowledge-base`
 - `$BASE_URL/docs/concepts/skills`
@@ -31,7 +32,7 @@
 - `$BASE_URL/docs/concepts/agent-integration`
 - `$BASE_URL/docs/concepts/llms-txt`
 
-**Developer Journey** (5 pages):
+**Process Lifecycle** (5 pages):
 - `$BASE_URL/docs/developer-journey`
 - `$BASE_URL/docs/developer-journey/induction`
 - `$BASE_URL/docs/developer-journey/strategic-planning`
@@ -67,7 +68,8 @@
 - `$BASE_URL/docs/guides/troubleshooting`
 - `$BASE_URL/docs/guides/update-link`
 
-**Reference** (9 pages):
+**Reference** (10 pages):
+- `$BASE_URL/docs/reference`
 - `$BASE_URL/docs/reference/cli/commands`
 - `$BASE_URL/docs/reference/cli/examples`
 - `$BASE_URL/docs/reference/specs/cli-contracts`
@@ -100,13 +102,13 @@
 
 ### Expected Result
 
-- All 60 URLs return HTTP 200
+- All 62 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 60 pages
+- Total: 62 pages
 
 ---
 

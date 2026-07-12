@@ -59,7 +59,7 @@ test('solo setup journey: quickstart → solo setup with content verification', 
 
   // Solo setup page renders with expected content
   const main = page.locator('main')
-  await expect(page.locator('main h1')).toContainText('Solo Setup')
+  await expect(page.locator('main h1')).toContainText('Quickstart: Solo')
   await expect(main).toContainText('Solo Workflow')
   await expect(main).toContainText('/pair-next')
   await expect(main).toContainText('pair-cli install --list-targets')
@@ -83,7 +83,7 @@ test('team journey: overview → team setup with content verification', async ({
   await page.goto('/docs/getting-started')
 
   // Navigate to Team Setup via sidebar
-  await page.locator('a', { hasText: 'Team Setup' }).first().click()
+  await page.locator('a', { hasText: 'Quickstart: Team' }).first().click()
   await expect(page).toHaveURL('/docs/getting-started/quickstart-team')
 
   // AC-4: shared KB, adoption files, bridge pattern
@@ -103,7 +103,7 @@ test('org journey: overview → org setup with content verification', async ({ p
   await page.goto('/docs/getting-started')
 
   // Navigate to Org Setup via sidebar
-  await page.locator('a', { hasText: 'Organization Setup' }).first().click()
+  await page.locator('a', { hasText: 'Quickstart: Organization' }).first().click()
   await expect(page).toHaveURL('/docs/getting-started/quickstart-org')
 
   // AC-5: KB packaging, distribution, compliance
@@ -160,9 +160,9 @@ test('smoke: all docs pages return 200 with correct titles', async ({ page }) =>
   const pages = [
     { url: '/docs/getting-started', title: 'What is pair?' },
     { url: '/docs/getting-started/quickstart', title: 'Quickstart' },
-    { url: '/docs/getting-started/quickstart-solo', title: 'Solo Setup' },
-    { url: '/docs/getting-started/quickstart-team', title: 'Team Setup' },
-    { url: '/docs/getting-started/quickstart-org', title: 'Organization Setup' },
+    { url: '/docs/getting-started/quickstart-solo', title: 'Quickstart: Solo' },
+    { url: '/docs/getting-started/quickstart-team', title: 'Quickstart: Team' },
+    { url: '/docs/getting-started/quickstart-org', title: 'Quickstart: Organization' },
     { url: '/docs/concepts/ai-assisted-sdlc', title: 'AI-Assisted SDLC' },
     { url: '/docs/concepts/knowledge-base', title: 'Knowledge Base' },
     { url: '/docs/concepts/skills', title: 'Skills' },
@@ -332,8 +332,8 @@ test('developer journey: navigate through section pages', async ({ page }) => {
   await expect(main).toContainText('The Four Levels')
   await expect(main).toContainText('Entry Points')
 
-  // Sidebar shows Developer Journey section
-  await expect(page.locator('body')).toContainText('Developer Journey')
+  // Sidebar shows Process Lifecycle section (label unified with index title)
+  await expect(page.locator('body')).toContainText('Process Lifecycle')
 
   // Navigate to Induction
   await page
