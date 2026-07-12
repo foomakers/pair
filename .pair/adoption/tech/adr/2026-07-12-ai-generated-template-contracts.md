@@ -63,3 +63,7 @@ Option 3. Additional calls within it:
 
 - No adoption file changes: the execution layer is opt-in, lives under `.claude/`, and is not part of the shipped dataset/KB.
 - New components: `.claude/agents/contract-generator.md`, `.claude/workflows/contracts/ensure-contract.mjs` (+ tests), phase 0 in `.claude/workflows/implement-batch.js`.
+
+## Related Changes
+
+This branch also bundles an unrelated-but-small orchestrator feature: a per-story `notes` field (`STORIES[].notes` in `implement-batch.js`), a free-text scope directive threaded verbatim into the implement and PR prompts, overriding the issue body where they conflict (e.g. "resolve all findings in ONE PR, do not split"). It ships alongside the contract work rather than as a separate story because it was needed to drive this same story's own batch run; noted here so a reviewer reading only this ADR knows it is deliberate, not scope creep.

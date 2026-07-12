@@ -171,15 +171,19 @@ const crContract = contracts.find((c) => c.name === 'code-review')
 // Schema the reviewer returns: template-derived when the contract is usable,
 // the loose skeleton otherwise. Control flow stays value-agnostic either way.
 const REVIEW_SCHEMA = crContract?.schema ?? LOOSE_REVIEW_SCHEMA
-// Reviewer prompt vocabulary: threaded from the contract (single source of
-// truth = the template), with the current KB wording as fallback.
+// Reviewer prompt vocabulary: `verdictOptions` and `severities` are CANONICAL,
+// required contract keys (ensure-contract.mjs's validateContract rejects any
+// contract missing either) — so whenever a contract IS present, both are
+// guaranteed populated and the schema (enum-locked from these same keys) and
+// the prompt text can never diverge. The hardcoded arrays below are the
+// single fallback, used ONLY in the true fallback-loose case (no usable
+// contract at all, `crContract?.contract` is null) — never a second,
+// independently-drifting vocabulary source.
 const REVIEW_VOCAB = crContract?.contract?.vocabulary
-const SEVERITIES = (REVIEW_VOCAB?.severities?.length ? REVIEW_VOCAB.severities : ['Critical', 'Major', 'Minor']).join(', ')
-const VERDICTS = (
-  REVIEW_VOCAB?.verdictOptions?.length
-    ? REVIEW_VOCAB.verdictOptions
-    : ['Approved', 'Approved with Comments', 'Request Changes', 'Comment Only']
-).join(', ')
+const DEFAULT_SEVERITIES = ['Critical', 'Major', 'Minor']
+const DEFAULT_VERDICTS = ['Approved', 'Approved with Comments', 'Request Changes', 'Comment Only']
+const SEVERITIES = (REVIEW_VOCAB?.severities ?? DEFAULT_SEVERITIES).join(', ')
+const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
 
 // ── Isolation convention ───────────────────────────────────────────────────
 // The AUTHORING chain (implement -> PR -> fix) runs inside a dedicated, PERSISTENT

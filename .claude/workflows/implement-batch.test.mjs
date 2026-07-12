@@ -3,7 +3,7 @@
 // phase-0 ensure-contract behavior — derived schema on a valid contract (AC1),
 // loose fallback on a malformed/failed one (AC4), value-agnostic control flow
 // (AC6) — plus the optional per-story `notes` scope directive threading.
-// Run: node --test .claude/workflows
+// Run (from repo root): node --test '.claude/workflows/**/*.test.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
@@ -133,6 +133,26 @@ test('control flow stays value-agnostic: nonActionable findings converge without
   })
   assert.equal(result.batch[0].status, 'ready-for-merge')
   assert.equal(result.batch[0].acceptedFindings.length, 1)
+})
+
+test('contract with usable schema but missing canonical vocabulary keys: prompt falls back to default vocabulary text (never silently drifts)', async () => {
+  const contract = validContract()
+  delete contract.vocabulary.severities
+  delete contract.vocabulary.verdictOptions
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract } }),
+  })
+  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  // Schema is still enum-locked from the (structurally usable) contract...
+  assert.deepEqual(rev.opts.schema, contract.schema)
+  // ...but the prompt vocabulary text falls back to the documented defaults,
+  // since verdictOptions/severities (the canonical keys it's threaded from)
+  // are absent. In practice ensure-contract.mjs's validateContract now rejects
+  // such a contract before it is ever persisted — this exercises the
+  // consumer-side fallback as defense in depth.
+  assert.ok(rev.prompt.includes('Critical, Major, Minor'), 'default severities fallback')
+  assert.ok(rev.prompt.includes('Comment Only'), 'default verdict fallback')
 })
 
 test('story.notes: scope directive threaded into implement and PR prompts', async () => {

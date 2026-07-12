@@ -8,7 +8,8 @@
 // Contract artifact shape (`*.contract.json`, git-ignored derived cache):
 //   {
 //     "$meta": { source, sourceHash: "sha256:<hex>", generatedAt, generator },
-//     "vocabulary": { <name>: [strings...] },   // e.g. verdictOptions, severities
+//     "vocabulary": { <name>: [strings...] },   // verdictOptions, severities (required,
+//                                                // canonical keys), plus any others (e.g. findingFields)
 //     "schema": { ...JSON Schema for the agent return value... }
 //   }
 //
@@ -87,6 +88,14 @@ export function validateContract(contract) {
         values.some(v => typeof v !== 'string' || !v)
       )
         errors.push(`vocabulary.${key} must be a non-empty array of non-empty strings`)
+    // verdictOptions and severities are CANONICAL required keys: consumers (e.g.
+    // implement-batch.js) derive the reviewer prompt's vocabulary text from these
+    // exact names as the single source of truth, so a contract using different
+    // key names could enum-lock the schema while the prompt silently falls back
+    // to a hardcoded default — reject that mismatch here, at the source.
+    for (const required of ['verdictOptions', 'severities'])
+      if (!Array.isArray(vocab[required]) || vocab[required].length === 0)
+        errors.push(`vocabulary.${required} is required and must be a non-empty array`)
   }
   errors.push(...schemaErrors(contract.schema))
   return { ok: errors.length === 0, errors }

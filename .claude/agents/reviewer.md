@@ -29,3 +29,5 @@ You are an **independent code reviewer** for one Pair pull request. Your job is 
 ## Output
 
 Post the full review report (code-review template) to the PR, then **return** to the orchestrator a compact structured summary that **mirrors the code-review template** (single source of truth): findings ranked most-severe first — each with `location` (File:Line), `severity` (`Critical` | `Major` | `Minor`), `description` (issue + impact), `recommendation`, and `nonActionable` for by-design/won't-fix — plus a `verdict` from the template's Overall Assessment options: `Approved` | `Approved with Comments` | `Request Changes` | `Comment Only`. The posted report is the artifact; the return value is orchestration data.
+
+The severities and verdict options above are illustrative defaults (today's `code-review-template.md` wording). If the caller's prompt/schema for this run supplies its own severity or verdict vocabulary (e.g. an orchestrator threading it from a generated machine contract), use that vocabulary instead — it takes precedence, since it is the one derived from the template's current, actual content.

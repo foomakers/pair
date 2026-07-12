@@ -1,7 +1,7 @@
 // Tests for the deterministic side of the md → contract.json pattern (#292):
 // hashing, cache decision (fresh/stale/missing/invalid), contract validation,
 // stamping, and the CLI fixture dry-run (cache-hit / cache-miss / fallback path).
-// Run: node --test .claude/workflows
+// Run (from repo root): node --test '.claude/workflows/**/*.test.mjs'
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
@@ -128,6 +128,31 @@ test('validateContract rejects empty or non-string vocabulary entries', () => {
   const c2 = stamped()
   c2.vocabulary = {}
   assert.equal(validateContract(c2).ok, false)
+})
+
+test('validateContract rejects a contract missing the canonical verdictOptions key', () => {
+  const c = stamped()
+  delete c.vocabulary.verdictOptions
+  const { ok, errors } = validateContract(c)
+  assert.equal(ok, false)
+  assert.ok(errors.some(e => e.includes('vocabulary.verdictOptions')))
+})
+
+test('validateContract rejects a contract missing the canonical severities key', () => {
+  const c = stamped()
+  delete c.vocabulary.severities
+  const { ok, errors } = validateContract(c)
+  assert.equal(ok, false)
+  assert.ok(errors.some(e => e.includes('vocabulary.severities')))
+})
+
+test('decide: contract missing canonical vocabulary keys → invalid (fallback path, AC4)', () => {
+  const draft = goodDraft()
+  delete draft.vocabulary.severities
+  const raw = JSON.stringify(
+    stampContract(draft, { source: 't.md', sourceHash: hashContent(TEMPLATE_V1) }),
+  )
+  assert.equal(decide({ templateHash: hashContent(TEMPLATE_V1), contractRaw: raw }), 'invalid')
 })
 
 test('validateContract rejects non-object input', () => {
