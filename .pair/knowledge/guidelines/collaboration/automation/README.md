@@ -9,6 +9,7 @@ Systematic workflow automation through intelligent process orchestration, task a
 This framework covers:
 
 - GitHub automation workflows and Actions
+- Azure DevOps board rules, branch policies, and service hooks
 - Filesystem-based automation scripts and utilities
 - Status synchronization between tools and platforms
 - Development workflow automation (branch, PR, deployment)
@@ -28,6 +29,8 @@ This framework does not cover:
 
 **[github-automation.md](github-automation.md)** - GitHub Actions and workflow automation strategies
 
+**[azure-devops-automation.md](azure-devops-automation.md)** - Azure DevOps board rules, branch policies, and service hooks
+
 **[filesystem-automation.md](filesystem-automation.md)** - Local script automation and filesystem-based workflows
 
 ## Introduction to Collaboration Automation
@@ -44,6 +47,14 @@ This section covers automation approaches for project management workflows, deve
   - Status synchronization between issues and project boards
   - Pull request and code review automation
   - Branch workflow automation
+
+### Azure DevOps Automation
+
+- **[azure-devops-automation.md](azure-devops-automation.md)** - Board rules and policy automation
+  - Board rules for state synchronization
+  - Branch policies (reviewers, work-item linking, build validation)
+  - Service hooks for event notifications
+  - Minimal pipeline example (quality gates linked, not duplicated)
 
 ### Filesystem Automation
 

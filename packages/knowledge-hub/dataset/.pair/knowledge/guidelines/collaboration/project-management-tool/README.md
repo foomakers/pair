@@ -9,7 +9,7 @@ Systematic project management tool orchestration through platform evaluation, im
 This framework covers:
 
 - Project management tool selection, setup, and implementation guidance
-- GitHub Projects and filesystem-based project management implementations
+- GitHub Projects, Azure DevOps, and filesystem-based project management implementations
 - Tool-specific workflow configuration and optimization strategies
 - Integration patterns with development tools and communication platforms
 - Migration strategies and tool evaluation frameworks
@@ -46,9 +46,16 @@ This framework does not cover:
 - Cross-topic navigation and integration
 - Advanced configuration options
 
+**[azure-devops-implementation.md](azure-devops-implementation.md)** - Complete setup and usage guide for Azure DevOps (Boards)-based project management
+
+- Azure CLI (`az boards`/`az repos`) integration
+- Work item hierarchy mapping (Initiative→Epic, Epic→Feature, Story→PBI, Task→Task)
+- State mapping example for Azure Boards columns
+- Pull request and merge workflow
+
 ### Quick Reference
 
-Both implementation guides include:
+All implementation guides include:
 
 - ✅ Prerequisites and setup steps
 - ✅ Cross-topic integration with other collaboration areas

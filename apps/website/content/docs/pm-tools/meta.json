@@ -1,4 +1,4 @@
 {
   "title": "PM Tools",
-  "pages": ["filesystem", "github-projects", "linear"]
+  "pages": ["filesystem", "github-projects", "linear", "azure-devops"]
 }

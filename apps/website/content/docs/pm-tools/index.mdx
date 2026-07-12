@@ -21,12 +21,14 @@ You focus on the work. pair keeps the board in sync.
 | [Filesystem](/docs/pm-tools/filesystem) | Solo devs, offline work, simple projects | No |
 | [GitHub Projects](/docs/pm-tools/github-projects) | Teams already on GitHub, open source projects | Yes (free) |
 | [Linear](/docs/pm-tools/linear) | Teams wanting a polished PM experience | Yes (paid) |
+| [Azure DevOps](/docs/pm-tools/azure-devops) | Teams in the Microsoft ecosystem, enterprise requirements | Yes (free tier) |
 
 ### Choosing a Tool
 
 - **Starting solo or want zero dependencies?** Use [Filesystem](/docs/pm-tools/filesystem) — everything lives in your repo as Markdown files.
 - **Team on GitHub?** Use [GitHub Projects](/docs/pm-tools/github-projects) — issues, labels, and project boards you already know.
 - **Want a dedicated PM tool?** Use [Linear](/docs/pm-tools/linear) — clean UI, fast workflows, great API.
+- **Microsoft shop or enterprise?** Use [Azure DevOps](/docs/pm-tools/azure-devops) — Boards work items, branch policies, and pipelines in one place.
 
 You can switch between tools at any time by updating `way-of-working.md`. Your adoption files and Knowledge Base stay the same.
 
@@ -43,12 +45,12 @@ Initiative (strategic goal)
 
 Each PM tool maps this hierarchy to its own concepts:
 
-| pair Concept | Filesystem | GitHub Projects | Linear |
-|-------------|-----------|----------------|--------|
-| Initiative | Markdown file | Issue + label | Project |
-| Epic | Markdown file | Issue + label | Issue (parent) |
-| User Story | Markdown file | Issue + label | Issue (sub-issue) |
-| Task | Checklist in story | Checklist in issue body | Checklist in issue |
+| pair Concept | Filesystem | GitHub Projects | Linear | Azure DevOps |
+|-------------|-----------|----------------|--------|--------------|
+| Initiative | Markdown file | Issue + label | Project | Epic |
+| Epic | Markdown file | Issue + label | Issue (parent) | Feature |
+| User Story | Markdown file | Issue + label | Issue (sub-issue) | Product Backlog Item |
+| Task | Checklist in story | Checklist in issue body | Checklist in issue | Task (child work item) |
 
 ## Configuration
 
