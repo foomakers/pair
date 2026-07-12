@@ -188,4 +188,3 @@ When invoked **independently**:
 
 - Target file is always [adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md) — the single source of truth for product requirements.
 - This skill modifies one file: the PRD. Changes should be committed by the calling skill or developer.
-- Hypothesis-driven questioning reduces developer effort: confirm/correct is faster than open-ended answers.

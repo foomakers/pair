@@ -161,7 +161,10 @@ AI:  [explores codebase: finds no cache layer; checks tech-stack.md: Redis alrea
      Recommendation: reuse Redis — avoids a new dependency.
 You: don't know
 AI:  [records "reuse Redis" as provisional answer, flagged as assumption]
-     Do we have shared understanding here? (yes / no)
+     What's the target cache TTL?
+     Recommendation: 5 minutes — matches the existing session-token TTL in auth config.
+You: agreed
+AI:  Do we have shared understanding here? (yes / no)
 You: yes
 AI:  GRILL SESSION COMPLETE — Mode: interview · Assumptions: 1 (store choice) · Handoff: none
 ```
@@ -205,5 +208,4 @@ AI:  GRILL SESSION COMPLETE — Mode: sync · Coverage: 6/6 · returns alignment
 - **Write-free by design**: single-writer responsibility stays with composers. Grill never writes adoption files or PM tool issues in any mode; the only file it ever writes is the optional `.pair/working/` handoff, on request or interruption.
 - **Recommendation always present**: every question carries a recommended answer, adapted from mattpocock `grilling`.
 - **Never auto-exit**: the exit condition is always an explicit shared-understanding confirmation — an empty question queue alone is not enough to end a session.
-- Sync mode's coverage ordering is a checklist, not a script: aspects already resolved by exploration or earlier conversation are skipped, keeping sessions proportional to what's actually unknown.
 - The `.pair/working/` handoff format here is a minimal, self-contained default — expect it to align with the checkpoint capability once that lands, without changing grill's write-free contract.
