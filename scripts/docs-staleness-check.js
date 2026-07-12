@@ -95,12 +95,19 @@ for (const docSkill of catalogSkills) {
 
 const HOW_TO_DIR = path.join(ROOT, 'packages/knowledge-hub/dataset/.pair/knowledge/how-to')
 
-if (fs.existsSync(HOW_TO_DIR)) {
+if (!fs.existsSync(HOW_TO_DIR)) {
+  // Loud failure (consistent with Check 1): a moved dataset dir must not
+  // silently disable the guide-count check.
+  errors.push(`How-to guides dir not found: ${HOW_TO_DIR} — guide-count check cannot run`)
+} else {
   const howToCount = fs
     .readdirSync(HOW_TO_DIR)
     .filter((f) => /^\d+-how-to-.*\.md$/.test(f)).length
 
-  const GUIDE_COUNT_RE = /(\d+)\s+(?:how-to|process)\s+guides/g
+  // Optional adjective + optional modifier, mirroring Check 1's shape:
+  // "9 guides", "9 how-to guides", "9 sequential guides",
+  // "9 sequential how-to guides", "9 step-by-step guides", "9 process guides".
+  const GUIDE_COUNT_RE = /(\d+)\s+(?:sequential\s+|step-by-step\s+)?(?:how-to\s+|process\s+)?guides/g
   for (const file of docsFiles) {
     const content = fs.readFileSync(file, 'utf-8')
     const rel = path.relative(DOCS_DIR, file)

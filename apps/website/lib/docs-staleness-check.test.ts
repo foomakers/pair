@@ -13,7 +13,7 @@ const SCRIPT = resolve(__dirname, '../../../scripts/docs-staleness-check.js')
 let fixtureRoot: string
 
 // Fixture tree with exactly 1 skill and 1 how-to guide, so any other count in docs is stale.
-function buildFixture(skillCountClaim: string, extraProse = ''): void {
+function buildFixture(skillCountClaim: string, extraProse = '', withHowToDir = true): void {
   const docsDir = join(fixtureRoot, 'apps/website/content/docs')
   mkdirSync(join(fixtureRoot, 'packages/knowledge-hub/dataset/.skills/capability/verify-quality'), {
     recursive: true,
@@ -23,9 +23,12 @@ function buildFixture(skillCountClaim: string, extraProse = ''): void {
     '# verify-quality\n',
   )
   const howToDir = join(fixtureRoot, 'packages/knowledge-hub/dataset/.pair/knowledge/how-to')
-  mkdirSync(howToDir, { recursive: true })
-  writeFileSync(join(howToDir, '01-how-to-create-PRD.md'), '# how-to\n')
-  writeFileSync(join(howToDir, 'README.md'), '# index\n')
+  rmSync(howToDir, { recursive: true, force: true })
+  if (withHowToDir) {
+    mkdirSync(howToDir, { recursive: true })
+    writeFileSync(join(howToDir, '01-how-to-create-PRD.md'), '# how-to\n')
+    writeFileSync(join(howToDir, 'README.md'), '# index\n')
+  }
   mkdirSync(join(fixtureRoot, 'apps/pair-cli/src/commands'), { recursive: true })
   mkdirSync(join(docsDir, 'reference/cli'), { recursive: true })
   mkdirSync(join(docsDir, 'integrations'), { recursive: true })
@@ -81,5 +84,22 @@ describe('docs-staleness-check skill count gate', () => {
     buildFixture('1 skills', 'The KB ships 1 how-to guides.\n')
     const { status, stdout } = runCheck()
     expect(status, stdout).toBe(0)
+  })
+
+  it('fails (exit 1) on wrong counts in adjective phrasings ("N sequential guides")', () => {
+    buildFixture('1 skills', 'The KB has 9 sequential guides and 9 step-by-step guides.\n')
+    const { status, stdout } = runCheck()
+    expect(status).toBe(1)
+    expect(stdout).toContain('How-to guide count mismatch')
+    expect(stdout).toContain('9 sequential guides')
+    expect(stdout).toContain('9 step-by-step guides')
+  })
+
+  it('fails (exit 1) when the how-to dataset dir is missing (no silent skip)', () => {
+    buildFixture('1 skills', '', false)
+    const { status, stdout } = runCheck()
+    expect(status).toBe(1)
+    expect(stdout).toContain('how-to')
+    expect(stdout).toContain('not found')
   })
 })
