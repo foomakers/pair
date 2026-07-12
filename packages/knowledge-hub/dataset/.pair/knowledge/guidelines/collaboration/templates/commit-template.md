@@ -65,9 +65,7 @@ Refs: #T-456
 Refs: #T-456
 ```
 
-## Commit Message Examples
-
-### Feature Implementation
+## Commit Message Example
 
 ```text
 [US-789] feat: add real-time notifications system
@@ -76,72 +74,13 @@ Implement WebSocket-based notification delivery:
 - Add WebSocket server configuration
 - Create notification event handlers
 - Implement client-side notification display
-- Add notification persistence to database
 
-This enables users to receive instant updates without page refresh,
-improving user engagement and system responsiveness.
+This enables users to receive instant updates without page refresh.
 
 Refs: #T-234, #T-235
 ```
 
-### Bug Fix
-
-```text
-[US-456] fix: resolve memory leak in data processing
-
-- Fix unclosed database connections in batch processor
-- Add proper cleanup in error handling paths
-- Implement connection pooling timeout
-- Add memory usage monitoring
-
-The memory leak was causing application crashes during large
-data imports. This fix ensures proper resource cleanup and
-adds monitoring to prevent future issues.
-
-Closes #BUG-123
-```
-
-### Refactoring
-
-```text
-[US-321] refactor: restructure user management module
-
-- Extract user validation into separate service
-- Simplify user creation workflow
-- Improve error handling consistency
-- Add comprehensive unit test coverage
-
-No functional changes - purely code organization improvement
-for better maintainability and testability.
-
-Refs: #T-567
-```
-
-### Documentation
-
-```text
-[US-654] docs: add API documentation for user endpoints
-
-- Document authentication endpoints
-- Add request/response examples
-- Include error code explanations
-- Add usage examples for common scenarios
-
-Refs: #T-890
-```
-
-### Configuration/Setup
-
-```text
-[US-987] chore: configure production deployment pipeline
-
-- Add Docker configuration for production
-- Set up environment variable management
-- Configure health check endpoints
-- Add logging and monitoring setup
-
-Refs: #T-111
-```
+The same structure applies to every type (fix, refactor, docs, chore, ...): subject line, optional body with bullets explaining what and why, optional footer with references.
 
 ## Commit Message Guidelines
 
@@ -189,46 +128,7 @@ Format: [BUG-###] - Bug tracking number
 Example: Closes #BUG-123
 ```
 
-## Non-Code Task Commits
-
-### Documentation Tasks
-
-```text
-[US-456] docs: update user onboarding guide
-
-- Add screenshots for new UI elements
-- Update step-by-step instructions
-- Include troubleshooting section
-- Add FAQ for common issues
-
-Refs: #T-789
-```
-
-### Configuration Changes
-
-```text
-[US-123] chore: update project configuration
-
-- Configure ESLint rules for TypeScript
-- Add Prettier formatting configuration
-- Update package.json scripts
-- Add VS Code workspace settings
-
-Refs: #T-234
-```
-
-### Infrastructure Setup
-
-```text
-[US-789] build: setup CI/CD pipeline
-
-- Add GitHub Actions workflow configuration
-- Configure automated testing on pull requests
-- Set up deployment to staging environment
-- Add code quality checks
-
-Refs: #T-345
-```
+Non-code tasks (documentation, configuration, infrastructure) follow the same format with the matching type (`docs`, `chore`, `build`, `ci`).
 
 ## Quality Checklist
 
@@ -257,38 +157,11 @@ Before committing, ensure:
 
 ## Atomic Commit Principles
 
-### Single Responsibility
-
-Each commit should represent one logical change:
-
-- ✅ Good: Fix one specific bug
-- ❌ Bad: Fix bug + add new feature + update documentation
-
-### Complete Functionality
-
-Commits should leave the codebase in a working state:
-
-- ✅ Good: Complete feature implementation with tests
-- ❌ Bad: Partial implementation that breaks build
-
-### Meaningful Scope
-
-Commit scope should be appropriately sized:
-
-- ✅ Good: Implement one component or fix one issue
-- ❌ Bad: Massive commit touching unrelated areas
+- **Single responsibility**: one logical change per commit (not bug fix + feature + docs together)
+- **Complete functionality**: each commit leaves the codebase in a working state
+- **Meaningful scope**: one component or one issue — never a massive commit touching unrelated areas
 
 ## Branch and Merge Strategy
-
-### Feature Branch Commits
-
-```text
-# During feature development
-[US-123] test: add failing tests for user search
-[US-123] feat: implement basic search functionality
-[US-123] refactor: optimize search performance
-[US-123] docs: document search API endpoints
-```
 
 ### Squash Merge Strategy
 
@@ -309,72 +182,12 @@ Closes #T-234, #T-235, #T-236
 
 ### Merge Commit Strategy
 
-When preserving commit history, ensure each commit follows guidelines:
-
-```text
-# Each commit in the branch should be clean and follow standards
-[US-123] test: add unit tests for search service
-[US-123] feat: implement search backend API
-[US-123] feat: create search UI components
-[US-123] refactor: optimize search query performance
-```
+When preserving commit history, each commit in the branch must be clean and follow the standards above.
 
 ---
 
 ## Common Anti-Patterns to Avoid
 
-### Poor Commit Messages
-
-❌ **Bad Examples:**
-
-```text
-fix stuff
-WIP
-asdf
-update code
-fix bug
-```
-
-✅ **Good Examples:**
-
-```text
-[US-123] fix: resolve null pointer in user validation
-[US-456] feat: add email notification service
-[US-789] refactor: extract common validation logic
-```
-
-### Inappropriate Grouping
-
-❌ **Bad:** Mixed unrelated changes
-
-```text
-[US-123] feat: add user search + fix login bug + update docs
-```
-
-✅ **Good:** Separate logical commits
-
-```text
-[US-123] feat: add user search functionality
-[US-124] fix: resolve login validation error
-[US-123] docs: update search API documentation
-```
-
-### Missing Context
-
-❌ **Bad:** No explanation for complex changes
-
-```text
-[US-123] refactor: change user service
-```
-
-✅ **Good:** Clear explanation of reasoning
-
-```text
-[US-123] refactor: extract user validation to separate service
-
-- Move validation logic from controller to dedicated service
-- Improve testability and code reuse
-- Prepare for upcoming role-based permissions feature
-
-Refs: #T-456
-```
+❌ Vague messages (`fix stuff`, `WIP`, `update code`) — ✅ `[US-123] fix: resolve null pointer in user validation`
+❌ Mixed unrelated changes in one commit — ✅ separate logical commits per story/type
+❌ Complex change with no body — ✅ body explaining what and why, with refs

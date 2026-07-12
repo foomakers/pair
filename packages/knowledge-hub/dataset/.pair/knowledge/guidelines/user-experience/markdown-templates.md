@@ -2,30 +2,11 @@
 
 ## Introduction
 
-Markdown templates provide standardized formats for documentation, content creation, and communication across design and development workflows. These templates ensure consistency, improve efficiency, and maintain quality standards while facilitating collaboration between team members and stakeholders.
+Markdown templates provide standardized formats for documentation, content creation, and communication across design and development workflows.
 
 ## Scope
 
-### In Scope
-
-- Documentation template creation and maintenance
-- Content structure standardization
-- Design system documentation templates
-- User story and requirement templates
-- Process documentation frameworks
-- Meeting notes and decision record templates
-- Design review and handoff templates
-- Quality assurance and testing templates
-- Project communication templates
-- Knowledge base article templates
-
-### Out of Scope
-
-- Content writing training
-- Markdown syntax education
-- Platform-specific implementation
-- Content strategy development
-- Editorial workflow management
+**In scope**: documentation, design system, process, UX research, and project management templates. **Out of scope**: content writing training, markdown syntax education, platform-specific implementation, content strategy.
 
 ## Template Categories
 
@@ -411,128 +392,10 @@ Description of process experiment to try.
 
 ## Content Standards
 
-### Writing Guidelines
+- **Voice and tone**: clear, concise, active voice, consistent and inclusive terminology.
+- **Structure**: logical hierarchy, scannable organization, consistent heading levels, bullets for lists, tables for structured data.
+- **Formatting**: proper link formatting, code blocks for code, image alt text, table headers.
 
-#### Voice and Tone
+## Template Maintenance
 
-- Clear and concise language
-- Active voice preference
-- Professional yet approachable tone
-- Consistent terminology usage
-- Inclusive language practices
-
-#### Structure Principles
-
-- Logical information hierarchy
-- Scannable content organization
-- Consistent heading levels
-- Bullet points for lists
-- Tables for structured data
-
-#### Formatting Standards
-
-- Consistent heading styles
-- Proper link formatting
-- Code block usage
-- Image alt text inclusion
-- Table header definitions
-
-### Template Maintenance
-
-#### Version Control
-
-- Template versioning system
-- Change tracking and history
-- Update notification process
-- Approval workflow for changes
-- Archive management
-
-#### Quality Assurance
-
-- Regular template review
-- Usage analytics monitoring
-- Feedback collection
-- Improvement identification
-- Update implementation
-
-## Implementation Guidelines
-
-### Tool Integration
-
-#### Platform Compatibility
-
-- GitHub markdown compatibility
-- Notion integration support
-- Confluence adaptation
-- Slack formatting consideration
-- Email template variations
-
-#### Automation Opportunities
-
-- Template generation scripts
-- Content validation tools
-- Formatting automation
-- Link checking systems
-- Version update notifications
-
-### Team Adoption
-
-#### Training and Onboarding
-
-- Template usage training
-- Best practice guidelines
-- Example implementations
-- Common mistake prevention
-- Feedback collection methods
-
-#### Compliance Monitoring
-
-- Template usage tracking
-- Quality standard enforcement
-- Consistency checking
-- Improvement suggestions
-- Support provision
-
-## Best Practices
-
-### Content Creation
-
-- Start with template selection
-- Follow established patterns
-- Maintain consistency
-- Include required sections
-- Review before publishing
-
-### Template Evolution
-
-- Regular usage analysis
-- Feedback integration
-- Continuous improvement
-- Version management
-- Change communication
-
-### Team Collaboration
-
-- Shared template library
-- Collaborative editing
-- Review processes
-- Knowledge sharing
-- Standard adoption
-
-## Measurement and Analytics
-
-### Usage Metrics
-
-- Template adoption rates
-- Content creation efficiency
-- Quality improvement indicators
-- Team satisfaction scores
-- Process compliance rates
-
-### Continuous Improvement
-
-- Regular template audits
-- User feedback integration
-- Process optimization
-- Tool integration enhancement
-- Training effectiveness measurement
+Templates are versioned with the knowledge base: propose changes via PR, review regularly, evolve from usage feedback. When creating content, start from the matching template, include its required sections, and review before publishing.

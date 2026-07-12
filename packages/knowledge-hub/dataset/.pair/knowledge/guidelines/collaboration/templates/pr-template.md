@@ -248,12 +248,7 @@ Impact: [Improvement/degradation percentage]
 ### Testing the Changes
 
 ```bash
-# Steps to test this PR locally
-git checkout [branch-name]
-npm install  # or relevant dependency installation
-npm run test  # run test suite
-npm run start  # start local development
-# Navigate to [specific URLs] to test functionality
+[Commands to test this PR locally: checkout, install, test, run]
 ```
 
 ### Key Test Scenarios
@@ -299,126 +294,7 @@ npm run start  # start local development
 
 ---
 
-## Templates for Different PR Types
-
-### Feature PR Template
-
-```markdown
-## Feature Implementation: [Feature Name]
-
-**User Story:** [US-XXX]
-**Epic:** [EP-XXX]
-
-### What's New
-
-[Description of new functionality added]
-
-### User Impact
-
-[How this improves user experience]
-
-### Technical Implementation
-
-[Key technical decisions and approaches]
-```
-
-### Bug Fix PR Template
-
-```markdown
-## Bug Fix: [Issue Description]
-
-**Bug Report:** [BUG-XXX]
-**Severity:** [Critical/High/Medium/Low]
-
-### Problem
-
-[Description of the bug and its impact]
-
-### Root Cause
-
-[Explanation of what caused the issue]
-
-### Solution
-
-[How the fix addresses the root cause]
-
-### Verification
-
-[How the fix was tested and verified]
-```
-
-### Refactoring PR Template
-
-```markdown
-## Refactoring: [Code Area]
-
-**Story:** [US-XXX]
-**Type:** Code Quality Improvement
-
-### Motivation
-
-[Why this refactoring was needed]
-
-### Changes Made
-
-[What was restructured or improved]
-
-### Benefits
-
-[Improved maintainability, performance, or readability]
-
-### Risk Assessment
-
-[Low risk - no functional changes]
-```
-
-### Documentation PR Template
-
-```markdown
-## Documentation Update: [Documentation Area]
-
-**Story:** [US-XXX]
-**Type:** Documentation
-
-### Documentation Changes
-
-[What documentation was added or updated]
-
-### Target Audience
-
-[Who will benefit from this documentation]
-
-### Coverage
-
-[What areas are now better documented]
-```
-
-### Hotfix PR Template
-
-```markdown
-## HOTFIX: [Critical Issue]
-
-**Severity:** CRITICAL
-**Issue:** [Production issue description]
-
-### Immediate Problem
-
-[What is broken in production]
-
-### Quick Fix
-
-[Minimal change to resolve immediate issue]
-
-### Full Solution Plan
-
-[Link to planned comprehensive fix]
-
-### Rollback Plan
-
-[How to quickly rollback if needed]
-```
-
----
+Type emphasis: Feature → user impact + technical decisions; Bug Fix → problem, root cause, solution, verification; Refactoring → motivation + no functional changes; Documentation → audience + coverage; Hotfix → immediate problem, minimal fix, rollback plan.
 
 ## Pre-Submission Checklist
 
