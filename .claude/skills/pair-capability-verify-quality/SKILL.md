@@ -146,8 +146,7 @@ When invoked **independently**:
 ## Notes
 
 - This skill is **read-only** except for Step 5.C (first-time setup writes opt-out or Custom Gate Registry to way-of-working.md). All other steps only run existing commands.
-- Two sources: [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) for the project-specific quality gate command and custom gates (adoption-driven), [quality-standards](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/README.md) for universal quality standards.
-- Standard gates (Lint, Type Check, Test) are universal and language/platform-independent. Custom gates are project-specific and defined in adoption.
+- Standard gates (Lint, Type Check, Test) are universal and language/platform-independent. Custom gates are project-specific and defined in adoption (see the two sources of truth above).
 - Each gate is independent — a failure in one gate does not prevent checking subsequent gates.
 - Re-invoke after fixes to confirm resolution. Already-passing gates are re-verified but complete instantly.
 - First-time setup (Step 5.C) only triggers once — after the developer responds, way-of-working.md is updated and subsequent invocations follow branch A or B.

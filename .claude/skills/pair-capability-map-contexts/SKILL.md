@@ -161,7 +161,6 @@ CONTEXT PLACEMENT COMPLETE:
 
 ## Notes
 
-- **Capability, not a process step**: this skill is always invoked scoped to the caller's touched items. `/pair-process-bootstrap` is the only caller allowed a full-catalog `$scope: all` run.
 - This skill **creates/updates adoption files** — not PM tool issues. Bounded contexts are design artifacts.
 - Idempotent: re-invocation detects existing files by filename; only entries inside `$scope` are evaluated for changes.
 - The 3-dimension relationship assessment (strength, distance, volatility) is the input to the coupling-balance guideline — see `.pair/knowledge/guidelines/architecture/design-patterns/coupling-balance.md` (introduced by #209); until that guideline lands, apply the heuristics in Step 3 directly.

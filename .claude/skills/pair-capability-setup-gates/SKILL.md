@@ -105,8 +105,8 @@ Configure CI/CD quality gates for the project. Reads quality assurance guideline
 1. **Check**: For each config already detected in Step 1 that is not conflicting, skip provisioning it and note it as already present.
 2. **Act**: Following [shared-config-packages.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/shared-config-packages.md), provision one shared config package per lint/format concern the adopted tech stack uses (lint, format, types, and any project-specific linters). Split each into base + per-type presets (backend/frontend/shared-lib) only where the tool's rules actually diverge by runtime — pair's own `tools/*` is the reference implementation.
 3. **Act**: Install the hook manager and wire the hooks:
-   - **Check Step 1.3 first**: if a hook manager was already detected on disk, it is the de facto override — use it, record it in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) if not already recorded, and skip installing husky.
-   - **Otherwise, husky is the KB default** (decision D21/Q11). Use it unless [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) records a hook-manager override — if it does, use the overridden tool instead.
+   - **Check Step 1.3 first**: a hook manager already detected on disk is the de facto override — use it, record it in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) if not already recorded, and skip installing husky.
+   - **Otherwise, husky is the KB default** (decision D21/Q11), unless [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) records a hook-manager override — then use that tool.
    - `.husky/pre-commit` (or equivalent) — fast local checks (lint and/or type-check).
    - `.husky/pre-push` (or equivalent) — pre-push lint (at minimum the adopted lint command; may be the full quality-gate command).
    - Wire the install step (e.g. `"prepare": "husky install"`) into the root `package.json`.
@@ -163,7 +163,7 @@ When invoked **independently**:
 ## Notes
 
 - This skill **modifies files** — it writes to way-of-working.md, creates/updates CI/CD pipeline configuration, and provisions shared lint/format config packages + hook manager files (`.husky/` by default).
-- **Idempotent**: re-invocation on an already-configured project confirms the existing configuration, including already-provisioned shared configs and hooks. Update only on explicit developer request. If a conflicting local config is found, ask before overwriting — never overwrite silently.
+- **Idempotent**: re-invocation on an already-configured project confirms the existing configuration, including provisioned shared configs and hooks; update only on explicit developer request. Conflicting local config → ask before overwriting, never silently.
 - Gate commands must be executable in the project's development environment. Verify commands exist before writing.
 - Custom Gate Registry format follows the table schema from [quality-gates.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/quality-gates.md): Order, Gate, Command, Scope Key, Required, Description.
-- **Hook manager default**: husky (decision D21/Q11). Adoption can override — record the override in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) and this skill reads it before provisioning.
+- **Hook manager default**: husky (decision D21/Q11). An override recorded in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) wins — this skill reads it before provisioning.
