@@ -19,10 +19,7 @@ function buildFixture(skillCountClaim: string, extraProse = ''): void {
     recursive: true,
   })
   writeFileSync(
-    join(
-      fixtureRoot,
-      'packages/knowledge-hub/dataset/.skills/capability/verify-quality/SKILL.md',
-    ),
+    join(fixtureRoot, 'packages/knowledge-hub/dataset/.skills/capability/verify-quality/SKILL.md'),
     '# verify-quality\n',
   )
   const howToDir = join(fixtureRoot, 'packages/knowledge-hub/dataset/.pair/knowledge/how-to')

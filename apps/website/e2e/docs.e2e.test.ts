@@ -830,9 +830,7 @@ test('smoke: docs hub returns 200 with journey links and top tasks', async ({ pa
   await expect(main).toContainText('Top tasks')
 })
 
-test('smoke: concepts and reference section indexes return 200 with headings', async ({
-  page,
-}) => {
+test('smoke: concepts and reference section indexes return 200 with headings', async ({ page }) => {
   const pages = [
     { url: '/docs/concepts', title: 'Concepts' },
     { url: '/docs/reference', title: 'Reference' },
