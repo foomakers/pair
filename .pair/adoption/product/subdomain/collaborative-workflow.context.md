@@ -16,7 +16,7 @@ Ubiquitous language scoped to this subdomain.
 | Phase | A stage of the development lifecycle Pair guides, from requirements definition to delivery. |
 | Decision validation | Real-time confirmation of an AI-proposed choice against the project's/team's choices *before* acting — the mechanism that mitigates misalignment. |
 | Project type | The project category (pet / startup-scaleup / enterprise) that selects a tailored workflow and guideline set. |
-| Macrostato (Macrostate) | A canonical Pair workflow state in the fixed model `Draft → Ready → In Progress → Review → Done`. Skills reason only over macrostates, never over raw board labels. Ref: [ADR canonical-states](../../tech/adr/2026-07-07-canonical-states-state-mapping.md), D3. |
+| Macrostato (Macrostate) | A canonical Pair workflow state in the fixed model `Draft → Ready → In Progress → Review → Done`. Skills reason only over macrostates, never over raw board labels. Ref: [ADR canonical-states](../../tech/adr/adr-011-canonical-states-state-mapping.md), D3. |
 | State mapping (n-m) | The adoption delta (`way-of-working.md`) mapping many board states to one macrostato; omitted mapping ⇒ canonical names. Ref: [canonical-states guideline](../../../knowledge/guidelines/collaboration/project-management-tool/canonical-states.md), D21. |
 | DoR (Definition of Ready) | Criteria a story must meet to enter development; the primary signal is the mapped `Ready` macrostato, with DoR-on-body as fallback. Ref: [#241](https://github.com/foomakers/pair/issues/241), D4. |
 | DoD (Definition of Done) | Criteria for a story to be Done: AC satisfied, PR approved for its risk tier, CI green, no critical bugs. Ref: [#241](https://github.com/foomakers/pair/issues/241), G1. |
@@ -38,6 +38,6 @@ Domain entities and aggregates owned by this subdomain.
 
 Business rules scoped to this subdomain. Domain-wide rules stay in `context-map.md`'s Common Rules — not duplicated here.
 
-- **Skills never read board state names directly** — they resolve every state through the state mapping to a macrostato. Violation: a skill hardcodes a board label and breaks on any project that renamed it. Ref: [ADR canonical-states](../../tech/adr/2026-07-07-canonical-states-state-mapping.md), D3.
+- **Skills never read board state names directly** — they resolve every state through the state mapping to a macrostato. Violation: a skill hardcodes a board label and breaks on any project that renamed it. Ref: [ADR canonical-states](../../tech/adr/adr-011-canonical-states-state-mapping.md), D3.
 - **The macro-phase boundary is a checkpoint.** A fresh, zero-context session or subagent resumes from the checkpoint rather than re-deriving state. Violation: lost context and duplicated work across the refinement→implementation handoff. Ref: D8.
 - **Human gates are explicit and never auto-advanced.** 🔴 review approval and state promotions require a human; the supervisor holds no classification logic (grep-verifiable). Violation: the autonomous loop merges or promotes without the human gate. Ref: G10, D9.
