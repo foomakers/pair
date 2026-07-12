@@ -22,20 +22,20 @@ Tasks appear on the sprint Taskboard, nested under their story. Enable all level
 
 ### Board Columns
 
-Each backlog level has its own board. Columns are team-configurable and typically differ from pair's canonical states — resolve them through the `## State Mapping` section in `way-of-working.md` ([canonical-states.md](../project-management-tool/canonical-states.md) documents the schema and the Azure Boards example).
+Each backlog level has its own board. Columns are team-configurable and typically differ from pair's canonical states — but a column only relabels an existing **state** visually, it does not create one. Resolve states through the `## State Mapping` section in `way-of-working.md` ([canonical-states.md](../project-management-tool/canonical-states.md) documents the schema, the Azure Boards example, and the routes to a `Review` state).
 
 #### Recommended Story Board Columns
 
 - `New` - Items not yet refined (→ Draft)
 - `Approved` - Stories ready for development (→ Ready)
 - `Committed` - Active work items (→ In Progress)
-- `In Review` - Items in code review (→ Review, split column added by the team)
+- `In Review` - Items in code review (→ Review; requires either an inherited-process custom state, or reusing `Committed` and only splitting the column visually — see canonical-states.md Example 5)
 - `Done` - Completed items (→ Done)
 
 #### Column Limits (WIP)
 
 - Committed: 3-5 items per team member
-- In Review: no more than 2x team size
+- In Review: no more than 2x team size (whichever state is actually mapped to Review, per the note above)
 
 Configure via board settings → Columns (WIP limit per column).
 

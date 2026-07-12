@@ -63,7 +63,12 @@ Branch naming follows the pair [branch-template](../templates/branch-template.md
 git checkout -b feature/#[story_id]-[short-description] <base-branch>
 ```
 
-Azure DevOps links branches and PRs to work items when the work item ID appears with `#` in the branch name or PR description, or explicitly via:
+Azure DevOps does **not** parse branch names for work-item IDs — naming a branch `feature/#123-...` does not, by itself, link it. Real linking mechanisms:
+
+- **"Create a branch" action on the work item** (UI or API) — links the created branch automatically
+- **Commit-message mentions** — `#[id]` (or `AB#[id]`) in a commit message, when the repository's "link commits to work items" setting is enabled
+- **PR description/title mentions** — `#[id]` links the same way
+- **Explicit linking on PR creation** — the reliable, scriptable path:
 
 ```bash
 az repos pr create ... --work-items [story_id]

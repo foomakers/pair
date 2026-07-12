@@ -136,7 +136,11 @@ Two board states map to `Draft` (`Icebox`, `Backlog`) and two to `In Progress` (
 
 ### Example 5 — Azure Boards (Scrum process)
 
-Azure Boards' default Scrum columns for Product Backlog Items are `New`, `Approved`, `Committed`, `Done` — plus, here, a team-added `In Review` split column ([azure-devops-implementation.md](azure-devops-implementation.md)):
+Azure Boards' default Scrum **states** for Product Backlog Items are `New`, `Approved`, `Committed`, `Done`, `Removed` — none of them is a "Review" state out of the box, and a board **column** alone cannot create one: `System.BoardColumn` only labels a visual bucket inside an existing state and is not something `az boards work-item update --state` can target (see [azure-devops-implementation.md](azure-devops-implementation.md)). Resolving a `Review` macrostate on this process takes one of three routes:
+
+- **(a) Custom state** — add a state to the PBI work item type via an **inherited process** and map it below (this example assumes route (a): a state literally named `In Review` was added);
+- **(b) Reuse an existing state** — map `Review` to `Committed` (or another existing state); the board column can still visually split that state into sub-columns for the team, but only one state — `Committed` — is actually written;
+- **(c) Accept the gap** — leave `Review` unmapped and accept the HALT behavior described below.
 
 ```markdown
 ## State Mapping
@@ -150,7 +154,7 @@ Azure Boards' default Scrum columns for Product Backlog Items are `New`, `Approv
 | Done         | Done        |
 ```
 
-The `Removed` state is deliberately **unmapped** — removed items are out of scope for pair semantics and ignored (partial mapping is allowed by the n-m schema). Without the team-added `In Review` column, `Review` would have no mapped board state and a write targeting it would HALT per the write rules — teams either add the column or accept that gap explicitly.
+The `Removed` state is deliberately **unmapped** — removed items are out of scope for pair semantics and ignored (partial mapping is allowed by the n-m schema). Without a state mapped to `Review` (route (a) or (b) above), `Review` would have no mapped board state and a write targeting it would HALT per the write rules (route (c)).
 
 ## Edge Cases and Error Handling
 

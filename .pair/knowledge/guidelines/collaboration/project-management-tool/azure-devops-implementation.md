@@ -123,6 +123,15 @@ Azure Boards states differ per process and per team board columns. Skills resolv
 - Service hooks
 - Minimal pipeline example (quality gates linked, not duplicated)
 
+### Communication
+
+#### → See [../team/README.md](../team/README.md)
+
+- Pull request workflows and reviews
+- Work item discussion threads
+- Notification management
+- Team collaboration patterns
+
 ### Estimation Integration
 
 #### → See [../estimation/](../estimation/README.md)
@@ -166,18 +175,19 @@ az boards work-item relation add \
 az boards work-item update --id [id] --state "[target board state]"
 ```
 
-The target state literal comes from the State Mapping resolution (write rule: first-mapped-wins) — see [canonical-states.md](canonical-states.md).
+The target state literal comes from the State Mapping resolution (write rule: first-mapped-wins) — see [canonical-states.md](canonical-states.md). The literal must be an actual **work item state** for that type (Scrum PBI default: `New`/`Approved`/`Committed`/`Done`/`Removed`) — a Kanban **board column** is a different thing (`System.BoardColumn`, display-only) and adding one does not create a writable state. States outside the default process require an inherited-process custom state; see [canonical-states.md](canonical-states.md#example-5--azure-boards-scrum-process) for the `Review` macrostate case.
 
 ### Query
 
 ```bash
-# All open stories in the project
+# All open stories in the project (Removed is out of scope, per canonical-states.md Example 5)
 az boards query --wiql \
   "SELECT [System.Id], [System.Title], [System.State] \
    FROM WorkItems \
    WHERE [System.TeamProject] = '<project>' \
      AND [System.WorkItemType] = 'Product Backlog Item' \
-     AND [System.State] <> 'Done'"
+     AND [System.State] <> 'Done' \
+     AND [System.State] <> 'Removed'"
 ```
 
 ## Code Review & PR Management
@@ -264,7 +274,8 @@ When closing a story after merge, evaluate the parent hierarchy:
 ### Common Issues
 
 - **`az: command not found`**: install Azure CLI, then `az extension add --name azure-devops`
-- **`TF401019` / auth errors**: re-run `az login` or refresh the PAT; verify PAT scopes
+- **`TF400813` (auth/permission)**: re-run `az login` or refresh the PAT; verify PAT scopes
+- **`TF401019` (repository not found / no access)**: repository name or ID is wrong, or the account lacks Code (Read) on that specific repo — verify with `az repos list`
 - **Wrong work item type names**: project uses Agile or an inherited process — apply the type override table above
 - **State rejected on update**: state literal not valid for the type — check the board's states and the State Mapping section
 
@@ -281,4 +292,4 @@ When closing a story after merge, evaluate the parent hierarchy:
 - **[Azure DevOps CLI Reference](https://learn.microsoft.com/cli/azure/boards)**
 - **[Azure DevOps REST API](https://learn.microsoft.com/rest/api/azure/devops/)**
 
-_Verified against Azure CLI `azure-devops` extension 1.0.x, API version 7.1 (2026-07)._
+_Written against Azure CLI `azure-devops` extension 1.0.x, API version 7.1 (2026-07) — not live-verified against a running Azure DevOps org._

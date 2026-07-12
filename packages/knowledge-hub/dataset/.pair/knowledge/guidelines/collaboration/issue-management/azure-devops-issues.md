@@ -16,7 +16,7 @@ pair item types map to Azure Boards work item types:
 | Epic       | Feature              | Feature       | Feature set under an initiative    |
 | User Story | Product Backlog Item | User Story    | Deliverable increment              |
 | Task       | Task                 | Task          | Implementation step under a story  |
-| Bug        | Bug                  | Bug           | Defect — test-first workflow apply |
+| Bug        | Bug                  | Bug           | Defect — test-first workflow applies |
 
 Inherited processes with custom type names override this table in `way-of-working.md` — see [Custom Work Item Types](../project-management-tool/azure-devops-implementation.md#custom-work-item-types-inherited-process).
 
@@ -150,10 +150,12 @@ az boards query --wiql \
   "SELECT [System.Id], [System.Title] FROM WorkItems \
    WHERE [System.Tags] CONTAINS 'blocked'"
 
-# Items in current sprint
+# Items in current sprint — @CurrentIteration needs a team context to resolve;
+# a plain project-scoped query can't tell which team's current iteration is meant.
+# Pass '<project>\<team>' explicitly, or use a literal iteration path instead.
 az boards query --wiql \
   "SELECT [System.Id], [System.Title] FROM WorkItems \
-   WHERE [System.IterationPath] = @CurrentIteration"
+   WHERE [System.IterationPath] = @CurrentIteration('<project>\\<team>')"
 ```
 
 ## Best Practices
