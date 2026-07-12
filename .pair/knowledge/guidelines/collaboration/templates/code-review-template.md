@@ -277,4 +277,4 @@ Performance Tests: ✅ Within Limits / ⚠️ Degradation Detected
 
 ---
 
-For review type emphasis: Feature → acceptance criteria and UX; Bug Fix → root cause addressed + regression test; Refactoring → behavior unchanged, coverage maintained; Hotfix → minimal change, rollback ready. Review conduct standards: see collaboration guidelines (single source of truth).
+For review type emphasis: Feature → acceptance criteria and UX; Bug Fix → root cause addressed + regression test; Refactoring → behavior unchanged, coverage maintained; Hotfix → minimal change, rollback ready. Review conduct standards: see [team standards](../team/standards.md) (single source of truth).

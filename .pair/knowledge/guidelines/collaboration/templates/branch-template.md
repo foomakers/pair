@@ -106,7 +106,7 @@ Conflicts are resolved by the branch owner during rebase/merge, then pushed with
 - [ ] No merge commits in feature branch
 - [ ] Branch is up to date with base branch
 
-Automated checks (CI/CD, linting, security scan, coverage) and review standards are defined in the quality-assurance guidelines.
+Automated checks (CI/CD, linting, security scan, coverage) and review standards are defined in the [quality-assurance guidelines](../../quality-assurance/README.md).
 
 ## Troubleshooting
 
