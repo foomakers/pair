@@ -42,10 +42,6 @@ export async function handleFileCopy(params: HandleFileCopyParams) {
     await copyFileHelper(fileService, srcPath, finalDest, defaultBehavior)
   } catch (err) {
     logger.error(`Failed to copy file ${srcPath} -> ${finalDest}: ${String(err)}`)
-    // If the original error message is specific (like test errors), preserve it
-    if (err instanceof Error && err.message.includes('boom')) {
-      throw err
-    }
     throw createError({
       type: 'IO_ERROR',
       message: `Failed to copy file ${srcPath} -> ${finalDest}`,

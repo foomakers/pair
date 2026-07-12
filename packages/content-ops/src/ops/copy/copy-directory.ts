@@ -205,9 +205,6 @@ async function copyDirectoryContents(params: {
     await copyDirHelper(copyContext)
   } catch (err) {
     logger.error(`Failed to copy entries: ${String(err)}`)
-    if (err instanceof Error && err.message.includes('boom')) {
-      throw err
-    }
     throw createError({
       type: 'IO_ERROR',
       message: `Failed to copy directory contents from ${srcPath} to ${destPath}`,
