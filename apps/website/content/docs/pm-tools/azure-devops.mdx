@@ -1,0 +1,120 @@
+---
+title: Azure DevOps
+description: Configure pair to manage work items with Azure DevOps Boards — setup, mapping model, state mapping, and first-run walkthrough.
+---
+
+## Configuration
+
+Add these lines to `.pair/adoption/tech/way-of-working.md`:
+
+```markdown
+- Azure DevOps is adopted for project management.
+  Organization: <org>. Project: <project>.
+  See `.pair/knowledge/guidelines/collaboration/project-management-tool/azure-devops-implementation.md` for usage.
+```
+
+### Prerequisites
+
+- Azure DevOps organization and project (`https://dev.azure.com/<org>/<project>`)
+- Azure CLI (`az`) with the `azure-devops` extension installed
+- Authenticated session (`az login` or a PAT via `az devops login`)
+
+```bash
+az extension add --name azure-devops
+az devops configure --defaults organization=https://dev.azure.com/<org> project=<project>
+```
+
+pair's AI assistants operate on work items via `az boards` and on pull requests via `az repos`. If the CLI is missing or unauthenticated, skills stop and point you to the setup steps — they never install or log in on their own.
+
+## Mapping Model
+
+pair maps its work hierarchy to Azure Boards work item types (Scrum process shown; Agile uses User Story instead of PBI):
+
+```text
+pair                    Azure Boards
+────                    ────────────
+Initiative          →   Epic
+Epic                →   Feature
+User Story          →   Product Backlog Item
+Task                →   Task
+```
+
+### How It Works
+
+- **Initiatives** are Epics on the Epics backlog level
+- **Epics** are Features, children of their initiative
+- **User Stories** are Product Backlog Items, children of their feature
+- **Tasks** are Task work items nested under the story on the sprint Taskboard
+- **Hierarchy** uses native parent-child relations (`az boards work-item relation add`)
+- Custom process with renamed types? Override the mapping table in `way-of-working.md`
+
+### State Mapping
+
+Azure Boards columns rarely match pair's canonical states (`Draft`, `Ready`, `In Progress`, `Review`, `Done`). Declare the mapping once in `way-of-working.md`:
+
+```markdown
+## State Mapping
+
+| Board State | Macrostate  |
+| ------------ | ----------- |
+| New          | Draft       |
+| Approved     | Ready       |
+| Committed    | In Progress |
+| In Review    | Review      |
+| Done         | Done        |
+```
+
+Skills read and write board states exclusively through this map. Extra columns can stay unmapped — pair ignores them.
+
+### Status Transitions
+
+| pair Action | Azure Boards Effect |
+|------------|--------------------|
+| Refine a story | PBI state → "Approved" (Ready-mapped) |
+| Start implementing a story | PBI state → "Committed" (In Progress-mapped) |
+| Create PR | PR linked via `--work-items`, PBI → Review-mapped state |
+| Merge PR | `--transition-work-items` moves PBI → Done-mapped state |
+| All stories in feature done | Parent feature moved to Done |
+
+### Priority and Fields
+
+| Azure Boards Feature | pair Usage |
+|---------------------|-----------|
+| Priority field (1-4) | Maps to P0/P1/P2 → 1/2/3 |
+| Effort / Story Points | Estimation |
+| Iteration Path | Sprint tracking |
+| Tags | Work item type markers, `blocked` |
+
+## First-Run Example
+
+After configuring `way-of-working.md`, run a process skill:
+
+```bash
+/pair-process-plan-stories #42    # break feature #42 into stories
+```
+
+**Expected output:**
+
+```text
+STORIES CREATED:
+├── PBI 101: As a user, I want to sign up so that I can access the platform
+├── PBI 102: As a user, I want to log in so that I can see my dashboard
+├── PBI 103: As a user, I want to reset my password so that I can recover access
+└── Feature 42: 3 stories created, all in "New"
+```
+
+pair creates Product Backlog Items as children of the feature, sets priority, and places them on your board.
+
+### Verifying the Setup
+
+1. Open Boards → Backlogs → Backlog items
+2. Verify new PBIs appear in the Draft-mapped column ("New")
+3. Each PBI should show its parent feature
+4. Priority and tags should match pair's configuration
+
+## Related
+
+- [PM Tools overview](/docs/pm-tools) — choosing the right tool
+- [Filesystem](/docs/pm-tools/filesystem) — zero-dependency alternative
+- [GitHub Projects](/docs/pm-tools/github-projects) — GitHub-native option
+- [Linear](/docs/pm-tools/linear) — dedicated PM tool option
