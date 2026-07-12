@@ -27,6 +27,53 @@ The `.pair/` directory has two layers:
 
 **Adoption always wins.** When both layers have an opinion on the same topic, the AI reads adoption files first. This means you can override any guideline by recording a decision in the adoption layer.
 
+## Quick Recipe: Override a Guideline
+
+Need to change a single KB default? Three steps:
+
+### Step 1: Identify what to change
+
+Browse the knowledge layer to find the guideline:
+
+```bash
+# List all guideline categories
+ls .pair/knowledge/guidelines/
+
+# Example: see testing guidelines
+ls .pair/knowledge/guidelines/quality-assurance/
+```
+
+### Step 2: Record your decision
+
+Create or update the corresponding adoption file. For example, to change the testing framework, edit `.pair/adoption/tech/tech-stack.md`:
+
+```markdown
+## Testing
+
+- jest is adopted as the testing framework (jest v29.x).
+```
+
+Adoption files always override knowledge files — no need to touch `.pair/knowledge/`.
+
+### Step 3: Verify
+
+```bash
+pair-cli kb validate
+pair-cli update-link --dry-run
+```
+
+### Which file to edit
+
+| You want to change...                 | Edit this adoption file                 |
+| ------------------------------------- | --------------------------------------- |
+| Testing framework, language, library  | `.pair/adoption/tech/tech-stack.md`      |
+| Architecture pattern                   | `.pair/adoption/tech/architecture.md`    |
+| Methodology, quality gates             | `.pair/adoption/tech/way-of-working.md`  |
+| Add a new guideline                    | Create a new file in `.pair/adoption/`   |
+| Record a significant decision          | Create an ADR in `.pair/adoption/tech/adr/` |
+
+The rest of this guide covers each of these in depth.
+
 ## Customize Guidelines
 
 ### Override the Tech Stack
@@ -149,4 +196,4 @@ pair-cli update-link --dry-run
 
 - **Want to distribute your customized KB?** [Publish a Knowledge Base](/docs/customization/organization) — package and distribute for other teams.
 - **Need the directory reference?** [KB Structure](/docs/reference/kb-structure) — every directory and file explained.
-- **Quick override guide?** [Customize the Knowledge Base](/docs/guides/customize-kb) — concise override patterns.
+- **Config options?** [Configuration Reference](/docs/reference/configuration) — config.json options.

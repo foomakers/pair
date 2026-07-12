@@ -16,12 +16,13 @@
 
 1. For each URL below, issue an HTTP request and check status code
 
-**Getting Started** (5 pages):
+**Getting Started** (6 pages):
 - `$BASE_URL/docs/getting-started`
 - `$BASE_URL/docs/getting-started/quickstart`
 - `$BASE_URL/docs/getting-started/quickstart-solo`
 - `$BASE_URL/docs/getting-started/quickstart-team`
 - `$BASE_URL/docs/getting-started/quickstart-org`
+- `$BASE_URL/docs/getting-started/checklist`
 
 **Concepts** (7 pages):
 - `$BASE_URL/docs/concepts`
@@ -39,9 +40,10 @@
 - `$BASE_URL/docs/developer-journey/iteration`
 - `$BASE_URL/docs/developer-journey/execution`
 
-**Customization** (5 pages):
+**Customization** (6 pages):
 - `$BASE_URL/docs/customization`
 - `$BASE_URL/docs/customization/adopt`
+- `$BASE_URL/docs/customization/install-from-url`
 - `$BASE_URL/docs/customization/team`
 - `$BASE_URL/docs/customization/templates`
 - `$BASE_URL/docs/customization/organization`
@@ -60,17 +62,12 @@
 - `$BASE_URL/docs/pm-tools/filesystem`
 - `$BASE_URL/docs/pm-tools/linear`
 
-**Guides** (5 pages):
-- `$BASE_URL/docs/guides/cli-workflows`
-- `$BASE_URL/docs/guides/install-from-url`
-- `$BASE_URL/docs/guides/customize-kb`
-- `$BASE_URL/docs/guides/adopter-checklist`
-- `$BASE_URL/docs/guides/update-link`
-
-**Reference** (10 pages):
+**Reference** (12 pages):
 - `$BASE_URL/docs/reference`
 - `$BASE_URL/docs/reference/cli/commands`
 - `$BASE_URL/docs/reference/cli/examples`
+- `$BASE_URL/docs/reference/cli/workflows`
+- `$BASE_URL/docs/reference/cli/update-link`
 - `$BASE_URL/docs/reference/specs/cli-contracts`
 - `$BASE_URL/docs/reference/specs/kb-source-resolution`
 - `$BASE_URL/docs/reference/skills-catalog`
@@ -101,13 +98,13 @@
 
 ### Expected Result
 
-- All 62 URLs return HTTP 200
+- All 60 URLs return HTTP 200
 - Log any non-200 as FAIL with status code
 
 ### Notes
 
 - Use batch `curl -sI` or WebFetch for efficiency
-- Total: 62 pages
+- Total: 60 pages
 
 ---
 

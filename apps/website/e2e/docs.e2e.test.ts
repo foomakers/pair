@@ -181,22 +181,23 @@ test('smoke: all docs pages return 200 with correct titles', async ({ page }) =>
 // E2E: Docs — Guides, Reference, and Support sections (#124)
 // ============================================================
 
-test('guides section: navigate and verify content', async ({ page }) => {
-  await page.goto('/docs/guides/cli-workflows')
+test('moved guides pages: render at their new locations', async ({ page }) => {
+  await page.goto('/docs/reference/cli/workflows')
   const main = page.locator('main')
 
-  // Guides page renders with expected content
+  // CLI Workflows now lives under Reference > CLI
   await expect(page.locator('main h1')).toContainText('CLI Workflows')
   await expect(main).toContainText('Common Workflows')
   await expect(main).toContainText('pair-cli install')
 
-  // Sidebar shows Guides section
-  await expect(page.locator('body')).toContainText('Guides')
-
-  // Navigate to another guide via sidebar
-  await page.locator('a', { hasText: 'Install from URL' }).first().click()
-  await expect(page).toHaveURL('/docs/guides/install-from-url')
+  await page.goto('/docs/customization/install-from-url')
   await expect(page.locator('main h1')).toContainText('Install from URL')
+
+  await page.goto('/docs/getting-started/checklist')
+  await expect(page.locator('main h1')).toContainText('Adopter Checklist')
+
+  await page.goto('/docs/reference/cli/update-link')
+  await expect(page.locator('main h1')).toContainText('Link Update')
 })
 
 test('redirects: old FAQ/troubleshooting URLs land on support/troubleshooting', async ({
@@ -209,6 +210,23 @@ test('redirects: old FAQ/troubleshooting URLs land on support/troubleshooting', 
   await page.goto('/docs/guides/troubleshooting')
   await expect(page).toHaveURL('/docs/support/troubleshooting')
   await expect(page.locator('main h1')).toContainText('Troubleshooting')
+})
+
+test('redirects: dissolved guides URLs land on their new locations', async ({ page }) => {
+  const redirects = [
+    { from: '/docs/guides/adopter-checklist', to: '/docs/getting-started/checklist' },
+    { from: '/docs/guides/cli-workflows', to: '/docs/reference/cli/workflows' },
+    { from: '/docs/guides/customize-kb', to: '/docs/customization/team' },
+    { from: '/docs/guides/install-from-url', to: '/docs/customization/install-from-url' },
+    { from: '/docs/guides/packaging', to: '/docs/customization/organization' },
+    { from: '/docs/guides/update-link', to: '/docs/reference/cli/update-link' },
+    { from: '/docs/guides', to: '/docs' },
+  ]
+  for (const { from, to } of redirects) {
+    await page.goto(from)
+    await expect(page, `${from} should redirect to ${to}`).toHaveURL(to)
+    await expect(page.locator('main h1')).toBeVisible()
+  }
 })
 
 test('reference section: navigate CLI, specs, and top-level pages', async ({ page }) => {
@@ -284,11 +302,10 @@ test('support section: navigate and verify content', async ({ page }) => {
 
 test('smoke: all guides/reference/support pages return 200', async ({ page }) => {
   const pages = [
-    { url: '/docs/guides/cli-workflows', title: 'CLI Workflows' },
-    { url: '/docs/guides/install-from-url', title: 'Install from URL' },
-    { url: '/docs/guides/customize-kb', title: 'Customize the Knowledge Base' },
-    { url: '/docs/guides/adopter-checklist', title: 'Adopter Checklist' },
-    { url: '/docs/guides/update-link', title: 'Link Update' },
+    { url: '/docs/reference/cli/workflows', title: 'CLI Workflows' },
+    { url: '/docs/customization/install-from-url', title: 'Install from URL' },
+    { url: '/docs/getting-started/checklist', title: 'Adopter Checklist' },
+    { url: '/docs/reference/cli/update-link', title: 'Link Update' },
     { url: '/docs/reference/cli/commands', title: 'CLI Commands' },
     { url: '/docs/reference/cli/examples', title: 'CLI Help Examples' },
     { url: '/docs/reference/specs/cli-contracts', title: 'CLI Contracts' },
@@ -312,7 +329,7 @@ test('smoke: all guides/reference/support pages return 200', async ({ page }) =>
 
 test('no broken .md links in guides/reference/support sections', async ({ page }) => {
   const sections = [
-    '/docs/guides/cli-workflows',
+    '/docs/reference/cli/workflows',
     '/docs/reference/cli/commands',
     '/docs/reference/skills-catalog',
     '/docs/support',
@@ -890,11 +907,10 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/pm-tools/filesystem',
     '/docs/pm-tools/github-projects',
     '/docs/pm-tools/linear',
-    '/docs/guides/cli-workflows',
-    '/docs/guides/install-from-url',
-    '/docs/guides/customize-kb',
-    '/docs/guides/adopter-checklist',
-    '/docs/guides/update-link',
+    '/docs/getting-started/checklist',
+    '/docs/customization/install-from-url',
+    '/docs/reference/cli/workflows',
+    '/docs/reference/cli/update-link',
     '/docs/reference/cli/commands',
     '/docs/reference/cli/examples',
     '/docs/reference/specs/cli-contracts',
