@@ -69,7 +69,7 @@ Systematic AI↔human alignment on a specific story, covering all six aspects of
    - **Gives a different answer** → record that instead.
    - **"Don't know"** → the recommendation becomes the **provisional answer**, flagged as an assumption in the synthesis.
    - **Raises a new sub-question** → insert it into the queue before continuing.
-3. **Never answer on the human's behalf.** The recommendation is a proposal, not a stand-in for consent — if no reply has been given yet, the turn ends there and the session waits for real input. Treating a missing reply as acceptance, or drafting what the human "would probably say," breaks the interview — grill is HITL by design, and the agent never speaks for the human's side of it.
+3. **Never answer on the human's behalf.** The recommendation is a proposal, not a stand-in for consent — if no reply has been given yet, the turn ends and the session waits for real input. Treating a missing reply as acceptance, or drafting what the human "would probably say," breaks the interview: grill is HITL by design.
 4. **Verify**: Exactly one answer recorded per question. Never batch multiple questions in a single turn.
 
 ### Step 4: Repeat Until Explicit Shared Understanding
@@ -101,7 +101,7 @@ Systematic AI↔human alignment on a specific story, covering all six aspects of
 
 ## Sync Coverage Checklist
 
-Ordered by risk of omission. Goal always comes first — it anchors every other aspect, so it precedes the risk ordering; the remaining five follow the same order the story template already uses functional-first, technical-last.
+Ordered by risk of omission, except Goal always first — it anchors every other aspect; the remaining five follow the story template's functional-first, technical-last order.
 
 | # | Aspect       | Story Template Section(s)                                                          | Explore First                                                     | Sample Probe                                             |
 | - | ------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------------------- |
@@ -112,7 +112,7 @@ Ordered by risk of omission. Goal always comes first — it anchors every other 
 | 5 | Design       | Technical Analysis → Implementation Approach, Key Components, Integration Points     | architecture.md, tech-stack.md, codebase                           | "Which existing component/pattern implements this?"        |
 | 6 | Risks        | Technical Risks and Mitigation                                                        | Story's existing risk table, decision-log/adr precedent            | "What's most likely to break or slip here?"                |
 
-Any aspect already covered by Step 1's exploration, or already answered elsewhere in the same conversation, is skipped and marked explored rather than asked — this is the session-length mitigation: the checklist stays fixed, but only genuinely open aspects consume a question.
+Aspects already covered by Step 1's exploration, or answered earlier in the same conversation, are skipped and marked explored rather than asked — the checklist stays fixed, but only genuinely open aspects consume a question.
 
 ## Output Format
 
@@ -199,14 +199,13 @@ AI:  GRILL SESSION COMPLETE — Mode: sync · Coverage: 6/6 · returns alignment
 
 ## Graceful Degradation
 
-- If KB/codebase exploration is unavailable (no repo access), skip Step 1 silently in the sense that nothing is marked explored, ask every aspect/topic question directly, and note in the synthesis that explore-first was skipped.
+- If KB/codebase exploration is unavailable (no repo access), skip Step 1 (nothing marked explored), ask every aspect/topic question directly, and note in the synthesis that explore-first was skipped.
 - If `.pair/working/` cannot be created or written, present the handoff content inline in conversation and tell the human to save it manually.
 - If the composing skill (`/brainstorm`, `/refine-story`) is not installed, grill still runs standalone — it has no required composed skills.
 
 ## Notes
 
-- **Write-free by design**: single-writer responsibility stays with composers. Grill never writes adoption files or PM tool issues in any mode; the only file it ever writes is the optional `.pair/working/` handoff, and only on request or interruption.
+- **Write-free by design**: single-writer responsibility stays with composers. Grill never writes adoption files or PM tool issues in any mode; the only file it ever writes is the optional `.pair/working/` handoff, on request or interruption.
 - **Recommendation always present**: every question carries a recommended answer, adapted from mattpocock `grilling`.
 - **Never auto-exit**: the exit condition is always an explicit shared-understanding confirmation — an empty question queue alone is not enough to end a session.
-- Sync mode's coverage ordering is a checklist, not a script: aspects already resolved by exploration or earlier conversation are skipped, keeping sessions proportional to what's actually unknown.
 - The `.pair/working/` handoff format here is a minimal, self-contained default — expect it to align with the checkpoint capability once that lands, without changing grill's write-free contract.

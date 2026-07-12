@@ -9,7 +9,7 @@ author: Foomakers
 
 Analyze a project's released artifacts, deployment targets, and user-facing surfaces to generate a complete manual test suite. Produces critical path files (`CP*.md`) and a suite `README.md` in the test suite directory.
 
-Each test case follows the [manual-test-case-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-case-template.md). For design principles, see [manual-testing.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-testing.md). For the organizational context, see [manual-verification.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-verification.md).
+Each test case follows the [manual-test-case-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-case-template.md). Design principles: [manual-testing.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-testing.md); organizational context: [manual-verification.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-verification.md).
 
 ## Arguments
 
@@ -96,7 +96,7 @@ For each category, design critical paths ordered by release risk.
    | CP3 | CLI Functional | P0-P1 | Core commands, error handling, idempotency |
    | CP4 | Registry Publish | P1 | Package visibility, install from registry |
 
-   Adapt the number, naming, and content of CPs to match the actual project — do not use this example as a fixed template.
+   Adapt CP number, naming, and content to the actual project — this example is not a fixed template.
 
 1. **Verify**: CP plan built. Present CP outline with estimated test counts before generating files.
 

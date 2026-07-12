@@ -146,7 +146,6 @@ SUBDOMAIN PLACEMENT COMPLETE:
 
 ## Notes
 
-- **Capability, not a process step**: this skill is always invoked scoped to the caller's touched items. `/pair-process-bootstrap` is the only caller allowed a full-catalog `$scope: all` run.
 - This skill **creates/updates adoption files** — not PM tool issues. Subdomains are design artifacts.
 - Idempotent: re-invocation detects existing files by filename; only entries inside `$scope` are evaluated for changes.
 - Volatility is evaluated from the business domain (classification-derived default + human override), never from commit history alone.

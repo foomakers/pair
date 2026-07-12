@@ -153,6 +153,4 @@ EPICS COMPLETE:
 - This skill **modifies PM tool state** — creates epic issues linked to initiatives.
 - Idempotent: re-invocation detects existing epics and skips them.
 - Epic 0 rule: for new projects, always assess if a bootstrap/foundation epic is needed before functional epics.
-- Each epic should deliver end-to-end user value in 2-4 sprints.
 - Domain mapping (Step 3.5) is scoped to this run's epic breakdown — see [map-subdomains](../../capability/map-subdomains/SKILL.md).
-- After epic creation, proceed to `/plan-stories` for user story breakdown.

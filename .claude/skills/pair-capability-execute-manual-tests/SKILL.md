@@ -9,9 +9,7 @@ author: Foomakers
 
 Execute a manual test suite against released or deployed artifacts (website, CLI packages, registries). Produces a structured report following the [manual-test-report-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-report-template.md).
 
-Reads test case files from the project's manual test suite directory. Each test case follows the format defined in [manual-test-case-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-case-template.md).
-
-For the organizational context (who, when, which areas), see [manual-verification.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-verification.md). For test case design principles, see [manual-testing.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-testing.md).
+Reads test case files from the project's manual test suite directory; each follows the [manual-test-case-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-case-template.md). Organizational context (who, when, which areas): [manual-verification.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-verification.md); test case design principles: [manual-testing.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-testing.md).
 
 ## Arguments
 

@@ -143,5 +143,3 @@ INITIATIVES COMPLETE:
 - This skill **modifies PM tool state** — creates initiative issues.
 - Idempotent: re-invocation detects existing initiatives by title matching and skips them.
 - Initiative = highest-level work item. Hierarchy: initiative → epic → story → task.
-- The prioritization framework (P0/P1/P2) aligns with PRD business objectives — P0 = launch-critical, P1 = growth, P2 = enhancement.
-- After initiative creation, proceed to `/map-subdomains` (domain modeling, invoked with `$scope` set to this initiative's capability — a capability, not a process step) or `/plan-epics` (direct epic breakdown).
