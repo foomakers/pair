@@ -1,7 +1,7 @@
 ---
 name: review
 description: "Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness check, decision, and optional merge with parent cascade. Composes /verify-quality, /verify-done, /record-decision, /assess-debt (required) and /verify-adoption, /assess-stack (optional with graceful degradation). Output follows the code review template. Idempotent — re-invocation resumes from incomplete phases."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
@@ -146,7 +146,7 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 
 1. Compose `/verify-adoption` with `$scope = all`.
 2. For each non-conformity:
-   - **Tech-stack**: compose `/assess-stack` → developer approves (add to stack) or rejects (CHANGES-REQUESTED).
+   - **Tech-stack**: compose `/assess-stack` (output-only — returns a proposal) → on developer approval, `/review` persists the entry via `/record-decision(content, target)` (the sole writer); on rejection → CHANGES-REQUESTED.
    - **Architecture**: report to developer for resolution. Missing ADR → HALT via `/record-decision`.
    - **Other** (security, coding-standards, infrastructure): report findings.
 3. Record all results.
@@ -161,7 +161,7 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 **Level 3** (/assess-stack only):
 
 1. Inline check: scan PR diff for new dependencies not in [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
-2. For unlisted dependencies: compose `/assess-stack` → developer approves or rejects.
+2. For unlisted dependencies: compose `/assess-stack` (output-only — returns a proposal) → on approval, `/review` persists via `/record-decision`; on rejection, flag as CHANGES-REQUESTED.
 3. No broader adoption compliance check (security, architecture, etc. — covered partially by Phase 2).
 4. Record results.
 
@@ -193,8 +193,10 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 
 1. **Check**: Has `/assess-debt` already run in this session?
 2. **Skip**: If already run — reuse results, move to Phase 5.
-3. **Act**: Compose `/assess-debt` with `$scope = all`.
-4. **Verify**: Record debt items. High-severity items may influence the review decision.
+3. **Act**: Compose `/assess-debt` with `$scope = all`. `/assess-debt` is **output-only** — it returns a report and creates nothing.
+4. **Act**: Report the debt items in the review output (Tech Debt section). Debt introduced by the PR is **surfaced, not blocked**: it does **not** HALT the review and **never** blocks the PR (R7.2). Do **not** auto-create a tech-debt issue.
+5. **Act**: If a debt item is worth scheduling, note it as a recommendation for **deliberate** promotion after review via `/write-issue` (with the `tech-debt` label) — a manual, selective act, never automatic.
+6. **Verify**: Debt items recorded in the report. High-severity items may inform the review verdict (TECH-DEBT: approve + track separately) but never force CHANGES-REQUESTED on debt grounds alone.
 
 ## Phase 5: Review Decision
 

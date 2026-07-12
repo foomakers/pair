@@ -1,13 +1,13 @@
 ---
 name: pair-capability-assess-ai
-description: "Assess AI development tools using resolution cascade (Argument > Adoption > Assessment). Reads AI development guidelines, proposes AI tool choices with versions, writes AI section of tech-stack.md, composes /pair-capability-record-decision. Idempotent."
-version: 0.4.1
+description: "Assess AI development tools using resolution cascade (Argument > Adoption > Assessment). Reads AI development guidelines, proposes AI tool choices with versions and emits rendered adoption content + target (output-only, writes nothing); the caller persists via /pair-capability-record-decision. Idempotent."
+version: 0.5.0
 author: Foomakers
 ---
 
 # /pair-capability-assess-ai — AI Development Assessment
 
-Evaluate and decide on AI development tools: AI assistants, MCP integrations, AI-specific SDKs, and models. Follows the resolution cascade.
+Evaluate and recommend AI development tools: AI assistants, MCP integrations, AI-specific SDKs, and models. Follows the resolution cascade. **Output-only**: produces a proposal (rendered AI-section content + target) plus a report — writes no files. Persistence is delegated to `/pair-capability-record-decision`.
 
 ## Arguments
 
@@ -17,11 +17,11 @@ Evaluate and decide on AI development tools: AI assistants, MCP integrations, AI
 
 ## Composed Skills
 
-| Skill              | Type       | Required                                    |
-| ------------------ | ---------- | ------------------------------------------- |
-| `/pair-capability-record-decision` | Capability | Yes — records AI tool decision as ADL       |
+This skill is **output-only** — it composes no skill and writes no files. Persistence of the proposal is the caller's responsibility via `/pair-capability-record-decision` (see [Composition Interface](#composition-interface)).
 
-## Adoption File
+## Proposal Target
+
+The rendered adoption content is destined for this section — the caller writes it via `/pair-capability-record-decision`:
 
 - **Target**: [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — **AI section only**
 - **Ownership**: AI section (shared file — /pair-capability-assess-stack owns core sections, /pair-capability-assess-testing owns testing section)
@@ -43,7 +43,7 @@ Evaluate and decide on AI development tools: AI assistants, MCP integrations, AI
 2. **Skip**: If no AI section or empty, go to Path C.
 3. **Act**: Read current AI adoption. Confirm it's valid.
 4. **Check**: Does a corresponding decision record exist?
-5. **Act**: If decision record missing, compose `/pair-capability-record-decision` to backfill.
+5. **Act**: If decision record missing, report it as a gap in the output — this skill writes nothing; the caller persists a backfill via `/pair-capability-record-decision`.
 6. **Verify**: Done — exit skill.
 
 #### Path C — Full Assessment
@@ -90,33 +90,35 @@ Evaluate and decide on AI development tools: AI assistants, MCP integrations, AI
 
 5. **Verify**: Developer approves.
 
-### Step 4: Write Adoption File
+### Step 4: Render Adoption Proposal
 
-1. **Act**: Write or update **only the AI section** of [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md):
+1. **Act**: Render the **AI section** content — the ready-to-write body for tech-stack.md:
    - AI assistants with versions/tiers
    - MCP integrations if applicable
    - AI-specific SDKs and libraries with versions
-   - Preserve all other sections (core, testing)
-2. **Verify**: AI section written. Other sections preserved.
+   - Scope strictly to the AI section so the caller's write preserves all other sections (core, testing)
+2. **Verify**: The rendered `content` and its `target` are ready to emit. **This skill writes no files.**
 
-### Step 5: Record Decision
+### Step 5: Emit Proposal
 
-1. **Act**: Compose `/pair-capability-record-decision`:
-   - `$type`: `non-architectural`
-   - `$topic`: `ai-development-tools`
-   - `$summary`: "[Primary tool] adopted as AI development assistant with [maturity level] target"
-2. **Verify**: ADL created. Adoption consistent.
+1. **Act**: Emit the proposal to the caller:
+   - `content`: the rendered AI-section body from Step 4
+   - `target`: [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) (AI section)
+   - `decision-metadata`: `$type: non-architectural`, `$topic: ai-development-tools`, `$summary: "[Primary tool] adopted as AI development assistant with [maturity level] target"`
+   - plus the human-facing report (see Output Format)
+2. **Verify**: Proposal emitted. Persistence is performed by the caller via `/pair-capability-record-decision(content, target, decision-metadata)`, never by this skill.
 
 ## Output Format
 
 ```text
-ASSESSMENT COMPLETE:
+ASSESSMENT COMPLETE (output-only — no files written):
 ├── Domain:    AI Development
 ├── Path:      [Argument Override | Adoption Exists | Full Assessment]
 ├── Decision:  [primary tool + maturity level + additional tools]
-├── Adoption:  [tech-stack.md AI section — written | confirmed | updated]
-├── Record:    [ADL path — created | exists | backfilled]
-└── Status:    [Complete | Confirmed existing]
+├── Proposal:  [content rendered for tech-stack.md AI section]
+├── Target:    adoption/tech/tech-stack.md (AI section)
+├── Persist:   [caller composes /pair-capability-record-decision(content, target) → ADL]
+└── Status:    [Proposal ready | Confirmed existing]
 ```
 
 ## Composition Interface
@@ -124,28 +126,29 @@ ASSESSMENT COMPLETE:
 When composed by `/pair-process-bootstrap`:
 
 - **Input**: `/pair-process-bootstrap` invokes during Phase 2.
-- **Output**: Returns decision summary and adoption file path.
+- **Output**: Returns `{ content, target, decision-metadata }` plus the report. Writes nothing.
+- **Persistence**: `/pair-process-bootstrap` accepts the proposal and composes `/pair-capability-record-decision(content, target, decision-metadata)` to write the AI section and record the ADL.
 
 When invoked **independently**:
 
-- Full interactive flow. Developer commits changes.
+- Full interactive flow. The skill returns the proposal; the human (or agent) persists it by composing `/pair-capability-record-decision`, then commits.
 
 ## Edge Cases
 
-- **tech-stack.md exists but no AI section**: Add AI section, preserve all other content.
-- **Project doesn't use AI tools**: Write minimal section noting "AI development tools not adopted — [reason]".
+- **tech-stack.md exists but no AI section**: Render content that adds the AI section; the caller's write preserves all other content.
+- **Project doesn't use AI tools**: Render a minimal section noting "AI development tools not adopted — [reason]" for the caller to persist.
 - **Multiple AI assistants**: Document primary and secondary with roles (e.g. primary for coding, secondary for architecture review).
 - **MCP adoption requires infrastructure changes**: Recommend composing /pair-capability-assess-infrastructure for infra implications.
 
 ## Graceful Degradation
 
 - If AI development guidelines not found, use minimal assessment: ask developer for AI tool preferences.
-- If `/pair-capability-record-decision` not installed, warn and skip recording.
-- If tech-stack.md doesn't exist, create it with AI section. Warn: "Created tech-stack.md — core sections should be populated by /pair-capability-assess-stack."
+- If the caller cannot persist (e.g. `/pair-capability-record-decision` not installed), the proposal stands as a report — adoption stays unchanged.
+- If tech-stack.md doesn't exist, the assessment still runs — the caller creates the file on persist via `/pair-capability-record-decision`.
 
 ## Notes
 
-- AI tool decisions are **non-architectural** → produce ADL. Exception: if MCP integration fundamentally changes system architecture, use ADR.
-- **Section ownership**: this skill writes ONLY the AI section of tech-stack.md.
+- AI tool decisions are **non-architectural** → the caller records them as an ADL. Exception: if MCP integration fundamentally changes system architecture, the caller uses ADR.
+- **Section ownership**: this skill renders content ONLY for the AI section of tech-stack.md. The single adoption writer is `/pair-capability-record-decision`.
 - **Version tracking**: every AI tool includes version or tier (e.g. "Claude Code", "GPT-4o", "Cursor Pro").
 - Educational content (AI development principles, best practices, WHY) stays in guidelines.

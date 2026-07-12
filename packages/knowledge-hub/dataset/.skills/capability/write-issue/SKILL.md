@@ -1,7 +1,7 @@
 ---
 name: write-issue
-description: "Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Invocable independently or composed by /refine-story, /plan-tasks, /plan-initiatives, /plan-epics, and /plan-stories."
-version: 0.4.1
+description: "Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Supports topical labels (e.g. tech-debt) for deliberate promotion. Invocable independently or composed by /refine-story, /plan-tasks, /plan-initiatives, /plan-epics, and /plan-stories."
+version: 0.5.0
 author: Foomakers
 ---
 
@@ -18,6 +18,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 | `$id`      | No       | Existing issue identifier. If provided → **update**; if absent → **create**.                                                                                    |
 | `$parent`  | No       | Parent issue identifier for hierarchy linking (e.g., epic → story, story → task).                                                                               |
 | `$status`  | No       | Target **macrostate** — one of `Draft`, `Ready`, `In Progress`, `Review`, `Done` (never a board-specific label). Resolved to the actual board state via the `state-mapping` resolution rule ([canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)) before the board field is updated. |
+| `$labels`  | No       | Additional **topical** labels to apply alongside the type label, e.g. `tech-debt` when a debt or quality finding is promoted to the backlog deliberately. A list of label names (created if the PM tool supports it). |
 
 ## Algorithm
 
@@ -104,7 +105,7 @@ Skills never write board-specific labels — `$status` is always a canonical mac
    - **`$id` present → Update mode**: Verify the issue exists, then update it.
 2. **Act (Create)**:
    - Create issue with the formatted body.
-   - Apply labels based on `$type` (e.g., `user story`, `task`, `epic`, `initiative`).
+   - Apply labels based on `$type` (e.g., `user story`, `task`, `epic`, `initiative`), plus any topical labels in `$labels` (e.g. `tech-debt`).
    - If `$parent` is provided, link to parent issue (hierarchy: epic → story → task).
    - Configure project field settings (priority, type, status) per the implementation guide.
    - Record the new issue identifier for return.
@@ -202,4 +203,5 @@ This skill supports `story`, `task`, `epic`, and `initiative` types. Adding a ne
 - No PM tool fallback: if the adopted tool fails, the skill HALTs. The developer resolves the issue, then re-invokes (idempotent by design — `$id` prevents duplicate creation).
 - Template = source of truth for issue body format. Changes to template structure automatically affect all future issue creation.
 - Labels and hierarchy linking follow the PM tool implementation guide conventions.
+- **Deliberate tech-debt promotion**: assess-* skills are output-only and never auto-create backlog items. When a debt or quality finding is worth scheduling, a human/agent promotes it here **deliberately** by passing `tech-debt` in `$labels` — a manual, selective act, never a 100% auto-conversion (R7.2).
 - State resolution: `$status` is always a canonical macrostate — never a board-specific label. See [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md).

@@ -44,18 +44,20 @@ Reclassified from process skills — see [Migration Notes](/docs/reference/skill
 
 ### Assessment Capabilities
 
+All `assess-*` skills are **output-only**: they produce a proposal (rendered adoption content + target) plus a human-facing report and write no files. Persistence of a proposal is delegated to `/pair-capability-record-decision`, the **sole adoption writer**, composed by the caller (a process skill or a human/agent). See ADR-009 (`adr-009-assess-output-only`) in the project adoption records.
+
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
-| **assess-ai** | `/pair-capability-assess-ai` | Assess AI development tools using resolution cascade (Argument > Adoption > Assessment). |
-| **assess-architecture** | `/pair-capability-assess-architecture` | Assess architecture pattern using resolution cascade. |
-| **assess-code-quality** | `/pair-capability-assess-code-quality` | Assess code quality using quality score formula from code-metrics guidelines. |
-| **assess-debt** | `/pair-capability-assess-debt` | Assess technical debt. Categorizes debt (code, design, test, documentation, infrastructure), applies prioritization formula. |
-| **assess-infrastructure** | `/pair-capability-assess-infrastructure` | Assess infrastructure strategy: cloud, CI/CD, deployment choices. |
-| **assess-methodology** | `/pair-capability-assess-methodology` | Assess development methodology: Scrum, Kanban, Lean, etc. |
-| **assess-observability** | `/pair-capability-assess-observability` | Assess observability strategy: monitoring, logging, tracing. |
-| **assess-pm** | `/pair-capability-assess-pm` | Assess project management tool choice. Delegates setup to `/pair-capability-setup-pm`. |
-| **assess-stack** | `/pair-capability-assess-stack` | Assess tech stack with version tracking. Lifecycle-spanning: bootstrap (full eval), implementation (add dependency), review (detect unlisted). |
-| **assess-testing** | `/pair-capability-assess-testing` | Assess testing framework and strategy. |
+| **assess-ai** | `/pair-capability-assess-ai` | Assess AI development tools using resolution cascade (Argument > Adoption > Assessment). Output-only — proposes AI-section content; caller persists via `/pair-capability-record-decision`. |
+| **assess-architecture** | `/pair-capability-assess-architecture` | Assess architecture pattern using resolution cascade. Output-only — proposes adoption content; caller persists via `/pair-capability-record-decision`. |
+| **assess-code-quality** | `/pair-capability-assess-code-quality` | Assess code quality using quality score formula from code-metrics guidelines. Output-only — report; writes nothing. |
+| **assess-debt** | `/pair-capability-assess-debt` | Assess technical debt (code, design, test, documentation, infrastructure) with impact×effort prioritization. Output-only — report; no scan-mode, no auto-created issues, never blocks a PR. |
+| **assess-infrastructure** | `/pair-capability-assess-infrastructure` | Assess infrastructure strategy: cloud, CI/CD, deployment choices. Output-only — proposes adoption content; caller persists via `/pair-capability-record-decision`. |
+| **assess-methodology** | `/pair-capability-assess-methodology` | Assess development methodology: Scrum, Kanban, Lean, etc. Output-only — proposes methodology-section content; caller persists via `/pair-capability-record-decision`. |
+| **assess-observability** | `/pair-capability-assess-observability` | Assess observability strategy: monitoring, logging, tracing. Output-only — proposes observability-section content; caller persists via `/pair-capability-record-decision`. |
+| **assess-pm** | `/pair-capability-assess-pm` | Assess project management tool choice. Output-only — proposes PM-section content; persists via `/pair-capability-setup-pm` or the caller's `/pair-capability-record-decision`. |
+| **assess-stack** | `/pair-capability-assess-stack` | Assess tech stack with version tracking. Lifecycle-spanning: bootstrap (full eval), implementation (add dependency), review (detect unlisted). Output-only — proposes tech-stack content; caller persists via `/pair-capability-record-decision`. |
+| **assess-testing** | `/pair-capability-assess-testing` | Assess testing framework and strategy. Output-only — proposes testing-section content; caller persists via `/pair-capability-record-decision`. |
 
 ### Verification Capabilities
 
@@ -84,8 +86,8 @@ Reclassified from process skills — see [Migration Notes](/docs/reference/skill
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
-| **record-decision** | `/pair-capability-record-decision` | Records an architectural (ADR), non-architectural (ADL), or domain (DDR) decision. Updates adoption files or syncs the context map. |
-| **write-issue** | `/pair-capability-write-issue` | Creates or updates issues in the adopted PM tool using template-driven formatting. |
+| **record-decision** | `/pair-capability-record-decision` | Records an architectural (ADR), non-architectural (ADL), or domain (DDR) decision. The **sole writer** of adoption files: accepts pre-rendered `{content, target}` from assess-* proposals (generic persist) and updates adoption files or syncs the context map. |
+| **write-issue** | `/pair-capability-write-issue` | Creates or updates issues in the adopted PM tool using template-driven formatting. Supports topical labels (e.g. `tech-debt`) for deliberate backlog promotion. |
 | **estimate** | `/pair-capability-estimate` | Estimates a refined user story using the adopted estimation methodology. |
 
 ### Discovery Capabilities
