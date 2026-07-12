@@ -52,6 +52,12 @@ UserProfile.stories.tsx (if using Storybook)
 
 This does not apply to two other, already-common test categories that are correctly named after what they validate rather than a source module: end-to-end/page-level tests (e.g. `landing.e2e.test.ts`, testing a user flow across many files by design) and content/asset-validation tests (e.g. asserting on a generated markdown file's content, where there is no single source module to co-locate against).
 
+The end-to-end exemption is checkable, not just descriptive — all three must hold for a given `*.e2e.test.ts` file, or it should be a regular co-located test instead:
+
+1. **Named after a real flow**: the file name corresponds to an identifiable user-facing flow or CLI command (e.g. `cli-install.e2e.test.ts` for the install flow), not an arbitrary grouping of convenience.
+2. **Additive, not sole coverage**: every module/command the e2e file exercises also has its own co-located unit test file (e.g. `handler.test.ts`) covering its non-integration behavior. The e2e file is verified to be additive cross-cutting coverage, never the only coverage for a module — that would be the isolation-smell case.
+3. **Genuine cross-module interaction**: the file exercises more than one command/module with a real interaction between them. If it exercises exactly one module with no cross-module flow, that's a signal it should have been a regular unit test in that module's own test file instead — the exemption is for genuine multi-module flows, not a generic escape hatch.
+
 **Types**: Co-locate types when feature-specific:
 ```
 
