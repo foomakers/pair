@@ -159,4 +159,3 @@ STORIES COMPLETE:
 - Idempotent: re-invocation detects existing stories and skips them.
 - Stories at breakdown stage are rough planning units — detailed requirements are added during `/pair-process-refine-story`.
 - INVEST validation is mandatory — stories failing INVEST must be reworked before creation.
-- After story creation, proceed to `/pair-process-refine-story` for detailed specification.

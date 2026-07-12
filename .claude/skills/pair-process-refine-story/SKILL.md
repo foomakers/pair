@@ -165,7 +165,6 @@ STORY REFINEMENT COMPLETE:
 ## Notes
 
 - This skill **modifies PM tool state** — it updates story issues.
-- Section-level idempotency: re-invoking on a partially refined story resumes from the first missing section.
-- Template ordering: functional sections first, technical sections last. This positions Technical Analysis as the bridge to Task Breakdown (added by `/pair-process-plan-tasks`).
+- Template ordering (Step 5) positions Technical Analysis as the bridge to Task Breakdown (added by `/pair-process-plan-tasks`).
 - INVEST validation: the refined story must satisfy Independent, Negotiable, Valuable, Estimable, Small, Testable criteria.
 - The `/pair-process-refine-story` skill handles the transition from Initial Breakdown template format to Refined template format.

@@ -137,7 +137,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 
 #### TDD Discipline Rules:
 
-1. **New features → add tests autonomously.** Write unit tests without asking. Every new module file MUST have a corresponding unit test file (1:1 mapping).
+1. **New features → add tests autonomously.** Write unit tests without asking.
 2. **Modifying existing tests → ask developer with evidence.** Show what changes and why, get approval before modifying any existing test.
 3. **No code+test changes in the same session.** When changing production code, do NOT modify tests until all existing tests pass. Separate RED, GREEN, and REFACTOR into distinct sessions:
    - **RED session**: Write or modify ONLY test code. Tests MUST fail. No implementation code changes.
@@ -203,7 +203,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 
    Ask: _"Task T-N done. OK to commit or changes needed?"_
 
-   **This confirmation is required for EVERY task.** The purpose of commit-per-task is precisely to give the developer a checkpoint between tasks.
+   **This confirmation is required for EVERY task** — commit-per-task exists precisely to give the developer a checkpoint between tasks.
 
 4. **Verify**: Developer confirms. If changes needed → apply changes, re-run quality (Step 2.7), ask again.
 5. **Act**: Stage and commit following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md):
@@ -415,9 +415,6 @@ The skill resumes from the first incomplete step — never re-does completed wor
 
 - This skill **modifies files and creates git artifacts** (branches, commits, PRs).
 - Task iteration is sequential — each task completes its full cycle before the next begins.
-- The developer can stop between tasks. Re-invoke to resume (idempotency ensures correct state).
+- The developer can stop between tasks; re-invoke to resume (idempotency ensures correct state).
 - Single PR per story regardless of commit strategy.
 - **Squash happens at merge** (Phase 4), not before PR creation. Individual commits are preserved on the branch during review.
-- Commit messages follow the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md).
-- PR description follows the [PR template](../../../.pair/knowledge/guidelines/collaboration/templates/pr-template.md).
-- **Phase 4 is invoked separately** after code review approval — re-invoke `/implement` to merge and update status.

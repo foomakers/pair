@@ -157,7 +157,5 @@ TASK BREAKDOWN COMPLETE:
 
 - This skill **modifies PM tool state** — it updates the story body with the Task Breakdown section. No separate task issues are created.
 - Task-level idempotency: re-invoking on a story with partial tasks appends only missing ones to the story body.
-- The integrated Technical Analysis + Task Breakdown format positions these as the last content sections in the story body (functional sections first, technical sections last).
-- Condensed TA retains: strategy summary, data flow/pipeline order, key risks. Removes verbose implementation detail that belongs in individual tasks.
-- Task template reference: [task-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/task-template.md).
+- Condensed TA removes verbose implementation detail that belongs in individual tasks (retained items: see Step 5).
 - Story template reference: [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md).

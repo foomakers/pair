@@ -89,10 +89,7 @@ For each uncovered checklist section, gather information using this pattern:
 
    > Based on [context/docs], I assume [specific hypothesis]. Is this accurate?
 
-   Example questions:
-   - *"Based on the documentation, the primary problem is [pain point hypothesis]. Is this accurate?"*
-   - *"The primary user persona would be [role hypothesis] who needs [need hypothesis]. Correct?"*
-   - *"The must-have MVP features would include [3-4 feature hypotheses]. Are these the right priorities?"*
+   Example: *"Based on the documentation, the primary problem is [pain point hypothesis]. Is this accurate?"*
 
 2. **Act**: Wait for developer response (confirmation, correction, elaboration).
 3. **Act**: Update checklist — mark section as covered when sufficient information gathered.
@@ -192,4 +189,3 @@ When invoked **independently**:
 - Target file is always [adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md) — the single source of truth for product requirements.
 - This skill modifies one file: the PRD. Changes should be committed by the calling skill or developer.
 - Hypothesis-driven questioning reduces developer effort: confirm/correct is faster than open-ended answers.
-- One question at a time prevents cognitive overload and ensures thorough coverage.
