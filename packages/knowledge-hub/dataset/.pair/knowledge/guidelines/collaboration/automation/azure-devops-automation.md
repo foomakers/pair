@@ -59,7 +59,7 @@ The work-item-linking policy is what makes traceability automatic: every merged 
 Branch naming follows the pair [branch-template](../templates/branch-template.md), parametrized on `<base-branch>`:
 
 ```bash
-# Create a branch from a work item (links automatically by name convention)
+# Create a branch from a work item (does not auto-link by name — see below)
 git checkout -b feature/#[story_id]-[short-description] <base-branch>
 ```
 
