@@ -67,6 +67,6 @@ A standard fixes the root cause: without an effectiveness bar, every future skil
 ## References
 
 - Story: #313 (Skill corpus effectiveness), Task T2; AC2.
-- Agent Skills specification: https://agentskills.io
+- Agent Skills specification: <https://agentskills.io>
 - Reference model: `mattpocock/skills` — `writing-great-skills` skill + glossary (predictability as root virtue).
 - Corpus audit evidence: #313 Background section (2026-07-12).

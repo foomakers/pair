@@ -140,7 +140,7 @@ Conformance to the anatomy above makes a skill *valid*; it does not make it *eff
 
 The frontmatter `description` carries a dual burden — it identifies the skill's purpose, and it enumerates the **trigger branches**: the distinct situations that should cause an agent to load it. Rules:
 
-- **One trigger per branch.** Two clauses naming the same situation in different words still describe one branch — "evaluates the tech stack … use when choosing technologies" is a single trigger stated twice, not two. Merge such pairs down to the one branch they actually cover.
+- **A branch earns exactly one trigger.** Two clauses naming the same situation in different words still describe one branch — "evaluates the tech stack … use when choosing technologies" is a single trigger stated twice, not two. Merge such pairs down to the one branch they actually cover.
 - **Reach clause for composed capabilities.** A capability that fires mostly through composition by other skills carries a lean reach clause ("Composed by `/refine-story` and `/plan-tasks`; invoke directly when …") instead of a prompt-trigger list.
 - **Body identity stays in the body.** Algorithm detail, step structure, and output format belong below the frontmatter. Since every session reloads the description on every turn, its token cost compounds — which is exactly why it deserves the most aggressive trimming of anything in the file.
 
@@ -148,13 +148,13 @@ The frontmatter `description` carries a dual burden — it identifies the skill'
 
 ### 2. Information hierarchy
 
-A skill's content falls into tiers, ordered by how soon after invocation the material actually gets used:
+Content in a skill sits at different depths, ranked by how soon after invocation it actually gets used:
 
 1. **Steps** — the sequence of actions written directly into `SKILL.md`; this is the top tier, read first and acted on immediately.
 2. **In-file reference** — definitions, rules, and tables that stay in `SKILL.md` but are only looked up when a step actually calls for them.
-3. **Disclosed reference** — a sibling `.md` file kept in the skill directory, brought in through a **context pointer**. How reliably that happens hinges on the phrasing of the pointer itself, not on what it points to.
+3. **Disclosed reference** — a same-directory `.md` file, folded in through a **context pointer**. How it's phrased is what decides whether it actually gets pulled in — the destination it names has no bearing on that.
 
-**Progressive disclosure** — pushing reference material down into a sibling file — keeps the top of that stack readable: when reference piles up around the steps, whether the executor actually reads and follows them each time stops being a sure thing. Deciding what to disclose comes down to **branching** — how many paths actually reach the material: if every run passes through it, keep it inline; if only a subset of runs ever gets there, that subset is the candidate for a pointer. If a pointer meant to surface must-have material doesn't fire reliably, the first fix is rewording it; folding the content back into the main file is a last resort, reserved for when rewording hasn't solved the problem.
+**Progressive disclosure** — pushing reference material down into a sibling file — keeps the top of that stack readable: when reference piles up around the steps, whether the executor actually reads and follows them each time stops being a sure thing. Deciding what to disclose comes down to **branching** — how many paths actually reach the material. Material every run touches belongs inline; once only a fraction of runs ever reach it, that fraction marks the cut point for a pointer. Rewrite the pointer's wording first when it fails to surface must-have material — that's the cheap, local fix; only fold the content back into the main file if repeated rewording still doesn't make it stick.
 
 **How to check:** for each block ask "does every run need this before acting?" — yes: keep it with the steps; on demand: in-file reference; only some branches: sibling file behind a sharply worded pointer.
 
@@ -168,28 +168,28 @@ Every step's **Verify** beat needs two properties. First, it must be *checkable*
 
 Four tests keep a skill lean, run on every edit — pruning by discipline, not by periodic slimming passes:
 
-- **Single source of truth** — pick one authoritative home for each meaning and have everything else point back to it, so changing the behavior means editing exactly one spot. A convention shared by many skills lives in one KB reference; each skill keeps only its delta. Two up-to-date copies are still a bug: the next edit desynchronizes them.
+- **One home per meaning** — pick a single authoritative spot for each meaning and have everything else point back to it, so changing the behavior means editing exactly one place. A convention shared across many skills belongs in one KB reference, with each skill holding only its own delta. Two up-to-date copies are still a bug: the next edit desynchronizes them.
 - **Relevance**, per line — if you deleted this line, would the skill actually lose something it depends on?
-- **No-op**, per sentence — pull the sentence out and ask whether the model's behavior would change at all; if it wouldn't, the sentence wasn't doing any work. When a sentence fails, delete the whole sentence; rewriting a no-op just produces a shorter no-op.
+- **No-op**, per sentence — pull the sentence out and ask whether the model's behavior would change at all; if it wouldn't, the sentence wasn't doing any work. When a sentence fails that test, remove it in full — reworking a no-op only leaves behind a shorter no-op.
 - **Sediment** — a skill only ever grows by default, because appending a new rule feels low-risk while deleting an old one feels like it might break something for someone. Nobody schedules a pass to remove what's no longer true, so it doesn't happen on its own. Make removal part of the edit you're already making, not a separate pass you'll get to later.
 
 **How to check:** run relevance + no-op on every section you touch, and search the corpus for the meaning you're about to add — if it already lives somewhere, point to it instead of restating it.
 
 ### 5. Leading words
 
-A **leading word** is a compact concept the model already holds from pretraining (*idempotent*, *scope*, *gate*, *halt*, *delta*). Naming a behavior with one of these words is cheaper than describing it, because the word arrives pre-loaded with the behavior's shape — the model doesn't need the surrounding sentence to know what *halt* implies. Placement changes what the word does: written into a step, it keeps the executor's action consistent every time that step runs; written into the description, it keeps invocation consistent — a word that also shows up in the user's own prompts and the project's docs pulls the skill in more reliably.
+Certain words already carry a fully-formed behavior from what the model saw during pretraining — *idempotent*, *scope*, *gate*, *halt*, *delta* — call these **leading words**: naming one does the work a full explanation would otherwise need, because the model brings its own sense of what *halt* means without the sentence spelling it out. Where you place one changes what it stabilizes: inside a step it keeps the executor's action the same on every run; inside the description it keeps invocation itself consistent, especially when that same word also turns up in the user's prompts and the project's docs.
 
-**How to check:** find every sentence in the file that restates the same single quality; that set must either collapse into one recurring leading word, or you must be able to name why no existing pretrained word already carries it. A leading word too weak to beat the model's default ("be thorough") fails the no-op test; the fix is a stronger word, not more prose.
+**How to check:** scan the file for every sentence circling the same single quality; either they collapse into one recurring leading word, or there's a reason no pretrained word already covers it. Take an example like "be thorough" — it doesn't out-pull what the model does by default, so it earns nothing and should be swapped for a sharper word rather than padded with extra prose.
 
 ### 6. Positive phrasing
 
-State the target behavior. Telling the executor what not to do puts the banned behavior on the page, and the page is what it reads from next — "never skip the verify step" leaves *skip the verify step* as the most recent phrase in view, competing with the instruction meant to prevent it. Reach for a prohibition only when there is no positive behavior that closes the same gap — a true hard guardrail — and even then, write the positive target next to it so the executor has somewhere else to look.
+State the target behavior. Naming the behavior you don't want puts exactly that behavior on the page, and the page is what the executor reads from next — "never skip the verify step" leaves *skip the verify step* as the most recent phrase in view, competing with the instruction meant to prevent it. Reach for a prohibition only when there is no positive behavior that closes the same gap — a true hard guardrail — and even then, write the positive target next to it so the executor has somewhere else to look.
 
 **How to check:** for every "never"/"don't", attempt the positive rewrite (e.g. swap "never merge without a green quality gate" for "merge only once the quality gate reports green"). Keep the negation only where the rewrite loses the guardrail — and confirm the positive target sits beside it.
 
 ### 7. Co-location
 
-Group a concept's definition, its rules, and its exceptions under the one heading that governs the step they apply to, rather than letting them settle wherever they were written. A load-bearing rule buried in a Notes section hundreds of lines from the step it constrains is a variance bug: whether the executor attends to it becomes a coin flip. Co-location is not the same failure as duplication — duplication says the same thing twice in two places; poor co-location says one thing once, but in pieces spread across the file, so no single read of it is complete.
+Group a concept's definition, its rules, and its exceptions under the one heading that governs the step they apply to, rather than letting them settle wherever they were written. A load-bearing rule buried in a Notes section hundreds of lines from the step it constrains makes whether the executor notices it a toss-up between runs, not a certainty. Co-location is not the same failure as duplication — duplication says the same thing twice in two places; poor co-location says one thing once, but scattered as fragments throughout the document — no single pass through it gives the whole picture.
 
 **How to check:** for each load-bearing concept, search the skill: if its rules appear under more than one heading (other than a context pointer), regroup them under the concept's own heading.
 
@@ -216,7 +216,7 @@ One line per principle — use it when authoring or reviewing any skill change:
 - [ ] Every description clause maps to a distinct trigger branch (or a lean reach clause for composed capabilities); no body identity in the description
 - [ ] Steps lead; in-file reference only where most runs need it; branch-specific material disclosed behind a sharply worded pointer
 - [ ] Every Verify beat leaves no room for a judgment call, and is exhaustive where thoroughness matters
-- [ ] No meaning duplicated (in-skill or cross-skill); every touched line passes relevance, every sentence the no-op test
+- [ ] No meaning duplicated (in-skill or cross-skill); every touched line passes relevance, every sentence clears the no-op check
 - [ ] Recurring concepts anchored by leading words, not restated prose
 - [ ] Prohibitions only as hard guardrails, each paired with its positive target
 - [ ] Each concept's rules co-located under one heading, adjacent to the step they govern
