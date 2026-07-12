@@ -6,7 +6,7 @@
 
 ## Status
 
-Active
+Active (amended 2026-07-12 — see Update below: thresholds now gate CI)
 
 ## Category
 
@@ -64,3 +64,25 @@ gate normal PRs.
 
 - No change to `adoption/tech/tech-stack.md` (vitest + @vitest/coverage-v8
   already adopted). This ADL is the record of the per-package threshold policy.
+
+## Update — 2026-07-12: thresholds now gate CI (reverses "bite only on explicit runs")
+
+Original text above ("Note: the quality-gate command runs `test`, not
+`test:coverage`, so these thresholds bite only on explicit coverage runs /
+trend tracking — they do not gate normal PRs.") is superseded per explicit
+user direction: silent coverage regression is not acceptable even for a low
+baseline floor.
+
+- `.github/workflows/ci.yml` gained a `Run coverage thresholds (brand,
+  website)` step running `pnpm turbo test:coverage --filter=@pair/brand
+  --filter=@pair/website` after the existing `Run tests` step. A regression
+  below either package's `coverage.thresholds` now fails the CI job (vitest's
+  v8 coverage provider exits non-zero when a configured threshold is
+  violated).
+- The baseline floors themselves (website: 9/9/40/60, brand: 80/80/80/80) are
+  unchanged by this update — only their enforcement moved from "trend-only"
+  to "PR-gating".
+- Adoption Impact update: `.pair/adoption/tech/way-of-working.md` Quality
+  Gates registry is unchanged (CI is a separate gate from `pnpm quality-gate`
+  in this project's convention); this ADL plus the CI diff is the record of
+  the enforcement change.

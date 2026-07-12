@@ -71,5 +71,7 @@ jobs:
           pnpm --filter @pair/website exec playwright install --with-deps chromium
       - name: Run tests
         run: pnpm test
+      - name: Run coverage thresholds (brand, website)
+        run: pnpm turbo test:coverage --filter=@pair/brand --filter=@pair/website
       - name: Run E2E tests
         run: pnpm --filter @pair/website e2e
