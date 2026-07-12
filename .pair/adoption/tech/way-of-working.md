@@ -9,6 +9,7 @@
 - Team communication is informal and direct, with decisions validated collaboratively.
 - **Commit History Policy:**: All feature branches must be squashed into a single commit during the PR merge, unless otherwise specified by the story or epic. See [commit template](../../knowledge/guidelines/collaboration/templates/commit-template.md) for details. Unless specified, prefer commit per task (mark the commit title with the task number other than the user story number) where complete all tasks of the story without confirmation and update the body of the story at each commit without confirmation. At the end of the story raise a draft PR following the PR template.
 - Ensure use proper template for commit messages and PRs, see [commit template](../../knowledge/guidelines/collaboration/templates/commit-template.md) and [PR template](../../knowledge/guidelines/collaboration/templates/pr-template.md) for details.
+- **PR granularity — one PR per story (default):** A story's work lands in a single PR by default, even when the story is broken into multiple inline tasks/findings. Splitting into multiple PRs per story requires an explicit reason (e.g. unusually large story, or independently shippable/needed-sooner parts) — it is not the default. Per-task granularity within that one PR is expressed as commit-per-task (see Commit History Policy above), not as separate PRs. See ADL [2026-07-12-one-pr-per-story-default.md](../decision-log/2026-07-12-one-pr-per-story-default.md) for rationale.
 
 ## Manual Testing
 
