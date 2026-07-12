@@ -5,7 +5,7 @@ description: How to create Agent Skills for pair — directory structure, SKILL.
 
 Agent Skills are structured instructions that AI coding assistants discover and execute. They follow the [Agent Skills](https://agentskills.io) open standard, supported by Claude Code, Cursor, VS Code Copilot, and OpenAI Codex.
 
-This guide has two parts: the **mechanics** of a pair skill (structure, anatomy, composition), and the **effectiveness standard** — what makes a skill trigger reliably and execute predictably. A skill exists to make an agent take the same *process* every run, not produce the same output; every rule below is a lever on that predictability.
+This guide has two parts: the **mechanics** of a pair skill (structure, anatomy, composition), and the **effectiveness standard** — what makes a skill trigger reliably and execute predictably. The goal isn't identical output — it's an agent that runs through identical steps on every invocation; everything in the standard below is aimed at protecting that repeatability.
 
 ## Skill types
 
@@ -138,29 +138,29 @@ Conformance to the anatomy above makes a skill *valid*; it does not make it *eff
 
 ### 1. Description = trigger
 
-The frontmatter `description` does two jobs: state what the skill is, and list the **trigger branches** — the distinct situations in which an agent should load it. Rules:
+The frontmatter `description` carries a dual burden — it identifies the skill's purpose, and it enumerates the **trigger branches**: the distinct situations that should cause an agent to load it. Rules:
 
 - **One trigger per branch.** Two clauses naming the same situation in different words still describe one branch — "evaluates the tech stack … use when choosing technologies" is a single trigger stated twice, not two. Merge such pairs down to the one branch they actually cover.
 - **Reach clause for composed capabilities.** A capability that fires mostly through composition by other skills carries a lean reach clause ("Composed by `/refine-story` and `/plan-tasks`; invoke directly when …") instead of a prompt-trigger list.
-- **Body identity stays in the body.** Algorithm detail, step structure, and output format belong below the frontmatter. The description is loaded on every turn of every session, so it earns the hardest pruning in the file.
+- **Body identity stays in the body.** Algorithm detail, step structure, and output format belong below the frontmatter. Since every session reloads the description on every turn, its token cost compounds — which is exactly why it deserves the most aggressive trimming of anything in the file.
 
 **How to check:** map every description clause to a distinct trigger branch; two clauses on one branch collapse into one. Any clause that only matters *after* the skill is loaded moves to the body.
 
 ### 2. Information hierarchy
 
-A skill's content sits on a ladder ranked by how immediately the executor needs it:
+A skill's content falls into tiers, ordered by how soon after invocation the material actually gets used:
 
-1. **Steps** — ordered actions in `SKILL.md`, the primary tier.
-2. **In-file reference** — definitions, rules, and tables consulted on demand.
-3. **Disclosed reference** — a sibling `.md` file in the skill directory, reached through a **context pointer** whose *wording* — not its target — determines when and how reliably the executor loads it.
+1. **Steps** — the sequence of actions written directly into `SKILL.md`; this is the top tier, read first and acted on immediately.
+2. **In-file reference** — definitions, rules, and tables that stay in `SKILL.md` but are only looked up when a step actually calls for them.
+3. **Disclosed reference** — a sibling `.md` file kept in the skill directory, brought in through a **context pointer**. How reliably that happens hinges on the phrasing of the pointer itself, not on what it points to.
 
-**Progressive disclosure** — moving reference down the ladder into a sibling file — protects the legibility of the top: steps buried under reference turn attending to them into a coin flip. Disclosure is licensed by **branching**: inline what every run needs; push behind a pointer what only some paths reach. When a pointer fires unreliably on must-have material, sharpen its wording first; inline the material only if sharpening fails.
+**Progressive disclosure** — pushing reference material down into a sibling file — keeps the top of that stack readable: when reference piles up around the steps, whether the executor actually reads and follows them each time stops being a sure thing. Deciding what to disclose comes down to **branching** — how many paths actually reach the material: if every run passes through it, keep it inline; if only a subset of runs ever gets there, that subset is the candidate for a pointer. If a pointer meant to surface must-have material doesn't fire reliably, the first fix is rewording it; folding the content back into the main file is a last resort, reserved for when rewording hasn't solved the problem.
 
 **How to check:** for each block ask "does every run need this before acting?" — yes: keep it with the steps; on demand: in-file reference; only some branches: sibling file behind a sharply worded pointer.
 
 ### 3. Completion criteria
 
-Every step's **Verify** beat must be *checkable* — an executor can decide done vs not-done from observable state — and *exhaustive* where thoroughness matters ("every AC has a mapped task", not "coverage looks reasonable"). A vague criterion ("internally consistent", "guidelines loaded") is trivially satisfiable and invites **premature completion**: the executor's attention slips to being done instead of doing. Where the real gate is human judgement, write an explicit human approval gate rather than a soft self-assessment.
+Every step's **Verify** beat needs two properties. First, it must be *checkable*: given the current state of things, either the step obviously happened or it obviously didn't, with no judgment call needed in between. Second, where thoroughness actually matters, it must be *exhaustive* — say "every AC has a mapped task" rather than something as loose as "coverage looks reasonable." A criterion like "internally consistent" or "guidelines loaded" passes almost automatically, which opens the door to **premature completion** — the step gets marked finished because finishing became the goal, not because the underlying work actually got done. Where a human, not the executor, is the real judge, say so explicitly with an approval gate instead of dressing up a soft self-assessment as a check.
 
 **How to check:** for each Verify beat, ask "could two executors disagree on whether this is satisfied?" If yes, rewrite it as an observable condition or an explicit approval gate.
 
@@ -168,9 +168,9 @@ Every step's **Verify** beat must be *checkable* — an executor can decide done
 
 Four tests keep a skill lean, run on every edit — pruning by discipline, not by periodic slimming passes:
 
-- **Single source of truth** — each meaning lives in exactly one authoritative place. A convention shared by many skills lives in one KB reference; each skill keeps only its delta. Two up-to-date copies are still a bug: the next edit desynchronizes them.
-- **Relevance**, per line — does it still bear on what the skill does?
-- **No-op**, per sentence — does it change behavior versus what the model does by default? When a sentence fails, delete the whole sentence; rewriting a no-op just produces a shorter no-op.
+- **Single source of truth** — pick one authoritative home for each meaning and have everything else point back to it, so changing the behavior means editing exactly one spot. A convention shared by many skills lives in one KB reference; each skill keeps only its delta. Two up-to-date copies are still a bug: the next edit desynchronizes them.
+- **Relevance**, per line — if you deleted this line, would the skill actually lose something it depends on?
+- **No-op**, per sentence — pull the sentence out and ask whether the model's behavior would change at all; if it wouldn't, the sentence wasn't doing any work. When a sentence fails, delete the whole sentence; rewriting a no-op just produces a shorter no-op.
 - **Sediment** — a skill only ever grows by default, because appending a new rule feels low-risk while deleting an old one feels like it might break something for someone. Nobody schedules a pass to remove what's no longer true, so it doesn't happen on its own. Make removal part of the edit you're already making, not a separate pass you'll get to later.
 
 **How to check:** run relevance + no-op on every section you touch, and search the corpus for the meaning you're about to add — if it already lives somewhere, point to it instead of restating it.
@@ -215,7 +215,7 @@ One line per principle — use it when authoring or reviewing any skill change:
 
 - [ ] Every description clause maps to a distinct trigger branch (or a lean reach clause for composed capabilities); no body identity in the description
 - [ ] Steps lead; in-file reference only where most runs need it; branch-specific material disclosed behind a sharply worded pointer
-- [ ] Every Verify beat checkable (done vs not-done decidable) and exhaustive where thoroughness matters
+- [ ] Every Verify beat leaves no room for a judgment call, and is exhaustive where thoroughness matters
 - [ ] No meaning duplicated (in-skill or cross-skill); every touched line passes relevance, every sentence the no-op test
 - [ ] Recurring concepts anchored by leading words, not restated prose
 - [ ] Prohibitions only as hard guardrails, each paired with its positive target
