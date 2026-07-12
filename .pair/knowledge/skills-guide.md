@@ -149,6 +149,20 @@ Process skills compose capability skills with optional graceful degradation:
 
 Optional skills degrade gracefully: if not installed, the process skill warns and continues without blocking.
 
+## Authoring Standard
+
+Every skill is held to an effectiveness standard, not just structural conformance. The goal is predictability — the executor takes the same *process* every run. Nine principles, each with its check (full standard with worked examples and review checklist: website contributing guide "Writing Skills"; recorded as ADR-010):
+
+1. **Description = trigger** — the description states what the skill is plus its distinct trigger branches, one trigger per branch (synonyms restating a branch are duplication); mostly-composed capabilities carry a lean reach clause (e.g. "Composed by `/pair-process-refine-story`; invoke directly when …") instead of a trigger list; algorithm detail stays in the body. *Check: every clause maps to a distinct branch; nothing that only matters after loading.*
+2. **Information hierarchy** — steps first, in-file reference second, branch-specific reference disclosed to a sibling file behind a context pointer whose wording (not its target) decides when it's loaded; inline what every run needs, disclose what only some branches reach. *Check: "does every run need this before acting?" decides the rung.*
+3. **Completion criteria** — every Verify beat is checkable (done vs not-done decidable from observable state) and exhaustive where thoroughness matters; vague criteria invite premature completion. *Check: two executors couldn't disagree on whether it's satisfied.*
+4. **Pruning** — single source of truth per meaning (shared conventions live once; skills keep deltas); every line passes a relevance test; every sentence passes a no-op test (does it change behavior vs the model default? delete whole failing sentences); prune on every edit before sediment settles. *Check: the meaning you're adding doesn't already live elsewhere.*
+5. **Leading words** — compact pretrained concepts repeated as tokens (*idempotent*, *scope*, *gate*, *halt*) anchor behavior in the body and invocation in the description at minimal token cost. *Check: prose restating one idea across sentences collapses into one strong word.*
+6. **Positive phrasing** — state the target behavior; a prohibition names the banned behavior into context; keep one only as a hard guardrail, paired with the positive target. *Check: each "never" survives an attempted positive rewrite.*
+7. **Co-location** — a concept's definition, rules, and caveats under one heading, adjacent to the step they govern. *Check: no load-bearing rule stranded in a distant Notes section.*
+8. **Constraints** — `name` + `description` ≤ 1024 characters (agentskills.io limit); dataset skills carry only agentskills.io-spec frontmatter (`name` + `description` required, spec-defined optionals like `version` allowed — no assistant-specific fields); dataset and installed mirror change in the same commit. *Check: char count, frontmatter field diff, commit touches both copies.*
+9. **Evaluation** — should-trigger / should-not-trigger prompt sets per skill family, run in fresh sessions; description rewrites record before/after results, and a regression reverts the rewrite. *Check: evidence recorded per rewritten description.*
+
 ## Callers Matrix (Scoped Capabilities)
 
 `/pair-capability-map-subdomains` and `/pair-capability-map-contexts` are capabilities, not process steps: every caller invokes them with `$scope` set to the items it just touched. `/pair-process-bootstrap` is the only caller allowed a full-catalog `$scope: all` run.
