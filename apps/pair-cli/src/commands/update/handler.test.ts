@@ -1414,3 +1414,209 @@ describe('update — KB version recording (#261)', () => {
     expect(await fs.exists(`${cwd}/.pair/.kb-version.json`)).toBe(false)
   })
 })
+
+/**
+ * Moved from cli-link.e2e.test.ts (#199 test reorg) — genuine gap: no coverage of the
+ * options.linkStyle wire-through on update. The former e2e version chained a real
+ * installCommand call first only to satisfy the "targets must exist" precondition; per
+ * the confirmed reorg decision, we reseed that pre-existing state directly via fs writes
+ * instead, matching this file's own fixture convention (see BUG #04 above).
+ */
+describe('update — linkStyle option', () => {
+  const cwd = '/project'
+  const datasetSrc = `${cwd}/packages/knowledge-hub/dataset`
+
+  function seedFs() {
+    return new InMemoryFileSystemService(
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/packages/knowledge-hub/package.json`]: JSON.stringify({
+          name: '@pair/knowledge-hub',
+        }),
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            knowledge: {
+              source: '.pair/knowledge',
+              behavior: 'mirror',
+              targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+              description: 'KB',
+            },
+          },
+        }),
+        [`${datasetSrc}/.pair/knowledge/guide.md`]: '# New Guide',
+        // Pre-existing target — simulates a project already installed, without
+        // chaining a real install call.
+        [`${cwd}/.pair/knowledge/guide.md`]: '# Old Guide',
+      },
+      cwd,
+      cwd,
+    )
+  }
+
+  test('updates successfully with linkStyle: absolute', async () => {
+    const fs = seedFs()
+    const httpClient = new MockHttpClientService()
+
+    await handleUpdateCommand(
+      { command: 'update', resolution: 'default', kb: true, offline: false },
+      fs,
+      { httpClient, linkStyle: 'absolute' },
+    )
+
+    expect(await fs.readFile(`${cwd}/.pair/knowledge/guide.md`)).toBe('# New Guide')
+  })
+
+  test('updates successfully with linkStyle: auto', async () => {
+    const fs = seedFs()
+    const httpClient = new MockHttpClientService()
+
+    await handleUpdateCommand(
+      { command: 'update', resolution: 'default', kb: true, offline: false },
+      fs,
+      { httpClient, linkStyle: 'auto' },
+    )
+
+    expect(await fs.readFile(`${cwd}/.pair/knowledge/guide.md`)).toBe('# New Guide')
+  })
+})
+
+/**
+ * Moved from cli-packaging.e2e.test.ts (#199 test reorg) — 'update distributes skills
+ * with flatten + prefix to canonical target' was a redundant duplicate of the #238 AC4
+ * test above and was deleted; only the secondary (symlink) target assertion below was a
+ * genuine gap.
+ */
+describe('update — skills registry secondary (symlink) targets', () => {
+  test('creates symlinks for secondary skills targets', async () => {
+    const cwd = '/test-skills-symlink'
+    const datasetBase = `${cwd}/dataset`
+    const seed: Record<string, string> = {
+      // Pre-existing target for a different registry — satisfies the "already installed"
+      // precondition without pre-seeding the skills target itself.
+      [`${cwd}/.pair/knowledge/old.md`]: '# old',
+      [`${datasetBase}/.pair/knowledge/index.md`]: '# Knowledge Base',
+      [`${datasetBase}/.skills/next/SKILL.md`]:
+        '---\nname: next\ndescription: Project navigator\n---\n# /next',
+      [`${cwd}/config.json`]: JSON.stringify({
+        asset_registries: {
+          knowledge: {
+            source: '.pair/knowledge',
+            behavior: 'mirror',
+            description: 'Knowledge base content',
+            targets: [{ path: '.pair/knowledge', mode: 'canonical' }],
+          },
+          skills: {
+            source: '.skills',
+            behavior: 'mirror',
+            flatten: true,
+            prefix: 'pair',
+            description: 'Agent skills distributed to AI tool directories',
+            targets: [
+              { path: '.claude/skills/', mode: 'canonical' },
+              { path: '.github/skills/', mode: 'symlink' },
+              { path: '.cursor/skills/', mode: 'symlink' },
+            ],
+          },
+        },
+      }),
+    }
+    const fs = new InMemoryFileSystemService(seed, cwd, cwd)
+
+    await handleUpdateCommand(
+      { command: 'update', resolution: 'local', path: datasetBase, offline: true, kb: true },
+      fs,
+    )
+
+    const symlinks = fs.getSymlinks()
+    expect(symlinks.has(`${cwd}/.github/skills`)).toBe(true)
+    expect(symlinks.has(`${cwd}/.cursor/skills`)).toBe(true)
+  })
+})
+
+/**
+ * Moved from cli-update.e2e.test.ts (#199 test reorg) — the former e2e tests had zero
+ * real assertions (only checked the call didn't throw). 'absolute path ZIP' is covered
+ * (with real assertions) by the 'uses installKBFromLocalZip for .zip local resolution'
+ * test above; 'relative path ZIP' and 'relative path directory' were genuinely uncovered
+ * anywhere, so they are added here with real assertions.
+ */
+describe('update — local source path styles (#199 reorg)', () => {
+  test('updates from a local .zip source given as a relative path', async () => {
+    const cwd = '/project'
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            'test-registry': {
+              source: 'test-registry',
+              behavior: 'mirror',
+              targets: [{ path: '.pair/test-registry', mode: 'canonical' }],
+              description: 'Test registry',
+            },
+          },
+        }),
+        // Pre-existing target — project already installed
+        [`${cwd}/.pair/test-registry/file1.md`]: '# Old Content',
+      },
+      cwd,
+      cwd,
+    )
+
+    const kbInstaller = await import('#kb-manager/kb-installer')
+    const extractedPath = '/cached/unzipped-rel-update'
+    vi.spyOn(kbInstaller, 'installKBFromLocalZip').mockResolvedValue(extractedPath)
+    await fs.writeFile(`${extractedPath}/test-registry/file1.md`, '# New Content')
+
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'local',
+      path: './downloads/kb.zip',
+      kb: true,
+      offline: true,
+    }
+
+    await handleUpdateCommand(config, fs)
+
+    expect(await fs.readFile(`${cwd}/.pair/test-registry/file1.md`)).toBe('# New Content')
+  })
+
+  test('updates from a local directory source given as a relative path', async () => {
+    const cwd = '/project'
+    const dirPath = 'dataset'
+    const fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/package.json`]: JSON.stringify({ name: 'test', version: '0.1.0' }),
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            'test-registry': {
+              source: 'test-registry',
+              behavior: 'mirror',
+              targets: [{ path: '.pair/test-registry', mode: 'canonical' }],
+              description: 'Test registry',
+            },
+          },
+        }),
+        // Dataset source (relative dir, resolved against CWD) — AGENTS.md marks it as a valid KB
+        [`${cwd}/${dirPath}/AGENTS.md`]: 'this is agents.md',
+        [`${cwd}/${dirPath}/test-registry/file1.md`]: '# New Content',
+        // Pre-existing target — project already installed
+        [`${cwd}/.pair/test-registry/file1.md`]: '# Old Content',
+      },
+      cwd,
+      cwd,
+    )
+
+    const config: UpdateCommandConfig = {
+      command: 'update',
+      resolution: 'local',
+      path: `./${dirPath}`,
+      kb: true,
+      offline: true,
+    }
+
+    await handleUpdateCommand(config, fs)
+
+    expect(await fs.readFile(`${cwd}/.pair/test-registry/file1.md`)).toBe('# New Content')
+  })
+})
