@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
-import { createDevScenarioFs, withTempConfig, createTestConfig } from './cli-e2e-helpers'
+import { createDevScenarioFs, withTempConfig, createTestConfig } from '#test-utils/cli-e2e-helpers'
 
 describe('pair-cli e2e - validate-config success', () => {
   it('validate-config succeeds with valid config', async () => {

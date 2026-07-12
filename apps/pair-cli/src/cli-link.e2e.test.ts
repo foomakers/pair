@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 import { installCommand, updateCommand } from './commands'
-import { withTempConfig, createTestConfig, getDeploymentConfig } from './cli-e2e-helpers'
+import { withTempConfig, createTestConfig, getDeploymentConfig } from '#test-utils/cli-e2e-helpers'
 
 describe('pair-cli e2e - link strategy', () => {
   it('install with relative link style', async () => {

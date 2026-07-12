@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
 import { installCommand, handleUpdateCommand, parseUpdateCommand } from './commands'
-import { withTempConfig } from './cli-e2e-helpers'
+import { withTempConfig } from '#test-utils/cli-e2e-helpers'
 
 describe('pair-cli e2e - package command', () => {
   it('package command creates valid ZIP with manifest', async () => {
