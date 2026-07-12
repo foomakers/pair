@@ -150,7 +150,6 @@ Then ask: "Shall I run `/skill-name`?"
 ## Notes
 
 - This skill is read-only: it inspects state but never modifies files or PM tool data.
-- State resolution: conditions are evaluated against canonical macrostates, never board-specific labels — see [canonical-states.md](../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md).
 - When multiple items are actionable (e.g., tasks to implement AND PRs to review), prefer the item closest to delivery (`/review` > `/implement` > `/plan-tasks`).
 - Re-run `/next` after completing any skill to get an updated recommendation.
-- **Full catalog coverage**: this navigator can suggest any of the 33 skills based on project state. Process skills are suggested through the cascading checks (Steps 2-3). Capability skills are suggested through targeted checks (Step 4) or as part of process skill composition.
+- **Full catalog coverage**: any of the 33 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (Step 4) or process-skill composition.
