@@ -194,7 +194,7 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 1. **Check**: Has `/assess-debt` already run in this session?
 2. **Skip**: If already run — reuse results, move to Phase 5.
 3. **Act**: Compose `/assess-debt` with `$scope = all`. `/assess-debt` is **output-only** — it returns a report and creates nothing.
-4. **Act**: Report the debt items in the review output (Tech Debt section). Debt introduced by the PR is **surfaced, not blocked**: it does **not** HALT the review and **never** blocks the PR (R7.2). Do **not** auto-create a tech-debt issue.
+4. **Act**: Report the debt items in the review output (Tech Debt section). Debt introduced by the PR is **surfaced, not blocked**: it does **not** HALT the review and **never** blocks the PR. Do **not** auto-create a tech-debt issue.
 5. **Act**: If a debt item is worth scheduling, note it as a recommendation for **deliberate** promotion after review via `/write-issue` (with the `tech-debt` label) — a manual, selective act, never automatic.
 6. **Verify**: Debt items recorded in the report. High-severity items may inform the review verdict (TECH-DEBT: approve + track separately) but never force CHANGES-REQUESTED on debt grounds alone.
 

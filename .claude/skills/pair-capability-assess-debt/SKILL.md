@@ -7,7 +7,7 @@ author: Foomakers
 
 # /pair-capability-assess-debt — Technical Debt Assessment
 
-Detect, categorize, and prioritize technical debt items. Applies the prioritization framework from [technical-debt.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/technical-debt.md) guidelines. Produces a debt report with categorized items, severity, impact/effort scoring, and remediation recommendations. **Output-only**: this skill returns a report — it writes no files, creates no PM-tool items, and there is **no `$mode:scan`** and **no auto-conversion** of debt into backlog cards. Technical debt **never blocks a PR** (R7.2).
+Detect, categorize, and prioritize technical debt items. Applies the prioritization framework from [technical-debt.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/technical-debt.md) guidelines. Produces a debt report with categorized items, severity, impact/effort scoring, and remediation recommendations. **Output-only**: this skill returns a report — it writes no files, creates no PM-tool items, and there is **no `$mode:scan`** and **no auto-conversion** of debt into backlog cards. Technical debt **never blocks a PR**.
 
 ## Arguments
 
@@ -175,7 +175,7 @@ When composed by `/pair-process-review`:
 
 - **Input**: /pair-process-review invokes `/pair-capability-assess-debt` during the completeness phase (Phase 4).
 - **Output**: Returns the debt assessment report. /pair-process-review incorporates findings into review output (the Tech Debt section).
-  - Debt items are **informational** — they do **not** HALT the review and **never** block the PR (R7.2).
+  - Debt items are **informational** — they do **not** HALT the review and **never** block the PR.
   - /pair-process-review does **not** auto-create tech-debt issues. Items worth tracking are promoted deliberately (after review) via `/pair-capability-write-issue` with the `tech-debt` label.
 
 When invoked **independently**:
