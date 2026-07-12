@@ -813,6 +813,39 @@ test('smoke: all tutorials pages return 200 with correct titles', async ({ page 
 })
 
 // ============================================================
+// E2E: Docs — Hub + section indexes (#312)
+// ============================================================
+
+test('smoke: docs hub returns 200 with journey links and top tasks', async ({ page }) => {
+  const response = await page.goto('/docs')
+  expect(response?.status(), '/docs should return 200').toBe(200)
+  await expect(page).toHaveTitle(/Welcome/)
+  await expect(page.locator('main h1')).toContainText('Welcome')
+
+  const main = page.locator('main')
+  await expect(main).toContainText('Pick your journey')
+  await expect(main.locator('a[href="/docs/getting-started"]').first()).toBeVisible()
+  await expect(main.locator('a[href="/docs/tutorials"]').first()).toBeVisible()
+  await expect(main.locator('a[href="/docs/reference"]').first()).toBeVisible()
+  await expect(main).toContainText('Top tasks')
+})
+
+test('smoke: concepts and reference section indexes return 200 with headings', async ({
+  page,
+}) => {
+  const pages = [
+    { url: '/docs/concepts', title: 'Concepts' },
+    { url: '/docs/reference', title: 'Reference' },
+  ]
+  for (const { url, title } of pages) {
+    const response = await page.goto(url)
+    expect(response?.status(), `${url} should return 200`).toBe(200)
+    await expect(page.locator('main h1')).toContainText(title)
+    await expect(page).toHaveTitle(new RegExp(title))
+  }
+})
+
+// ============================================================
 // E2E: Search — Orama client-side search
 // ============================================================
 

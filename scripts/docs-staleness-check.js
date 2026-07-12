@@ -6,7 +6,11 @@
 const fs = require('fs')
 const path = require('path')
 
-const ROOT = path.resolve(__dirname, '..')
+// DOCS_STALENESS_ROOT overrides the repo root — used by the negative test
+// (apps/website/lib/docs-staleness-check.test.ts) to run against a fixture tree.
+const ROOT = process.env.DOCS_STALENESS_ROOT
+  ? path.resolve(process.env.DOCS_STALENESS_ROOT)
+  : path.resolve(__dirname, '..')
 const SKILLS_DIR = path.join(ROOT, 'packages/knowledge-hub/dataset/.skills')
 const COMMANDS_DIR = path.join(ROOT, 'apps/pair-cli/src/commands')
 const DOCS_DIR = path.join(ROOT, 'apps/website/content/docs')
