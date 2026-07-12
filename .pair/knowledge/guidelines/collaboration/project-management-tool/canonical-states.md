@@ -134,6 +134,24 @@ A 3-column Kanban board with no way to distinguish refined from unrefined backlo
 
 Two board states map to `Draft` (`Icebox`, `Backlog`) and two to `In Progress` (`Doing`, `Blocked`) — valid n-m mapping. A write targeting `Draft` goes to `Icebox` (first listed); targeting `In Progress` goes to `Doing` (first listed).
 
+### Example 5 — Azure Boards (Scrum process)
+
+Azure Boards' default Scrum columns for Product Backlog Items are `New`, `Approved`, `Committed`, `Done` — plus, here, a team-added `In Review` split column ([azure-devops-implementation.md](azure-devops-implementation.md)):
+
+```markdown
+## State Mapping
+
+| Board State | Macrostate  |
+| ------------ | ----------- |
+| New          | Draft       |
+| Approved     | Ready       |
+| Committed    | In Progress |
+| In Review    | Review      |
+| Done         | Done        |
+```
+
+The `Removed` state is deliberately **unmapped** — removed items are out of scope for pair semantics and ignored (partial mapping is allowed by the n-m schema). Without the team-added `In Review` column, `Review` would have no mapped board state and a write targeting it would HALT per the write rules — teams either add the column or accept that gap explicitly.
+
 ## Edge Cases and Error Handling
 
 | Case                                                     | Behavior                                                                 |
@@ -157,5 +175,5 @@ Rollout across the rest of the skill catalog happens organically in the stories 
 ## Related
 
 - [way-of-working.md](../../../../adoption/tech/way-of-working.md) — hosts the optional `## State Mapping` section
-- [github-implementation.md](github-implementation.md) · [filesystem-implementation.md](filesystem-implementation.md) — PM tool status-field mechanics
+- [github-implementation.md](github-implementation.md) · [azure-devops-implementation.md](azure-devops-implementation.md) · [filesystem-implementation.md](filesystem-implementation.md) — PM tool status-field mechanics
 - [decision-records.md](../decision-records.md) — ADR/ADL process (this schema was adopted via ADR)
