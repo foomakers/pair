@@ -140,7 +140,7 @@ Conformance to the anatomy above makes a skill *valid*; it does not make it *eff
 
 The frontmatter `description` does two jobs: state what the skill is, and list the **trigger branches** — the distinct situations in which an agent should load it. Rules:
 
-- **One trigger per branch.** Synonyms that rename the same branch are duplication — "evaluates the tech stack … use when choosing technologies" states one branch twice. Collapse them; keep only genuinely distinct branches.
+- **One trigger per branch.** Two clauses naming the same situation in different words still describe one branch — "evaluates the tech stack … use when choosing technologies" is a single trigger stated twice, not two. Merge such pairs down to the one branch they actually cover.
 - **Reach clause for composed capabilities.** A capability that fires mostly through composition by other skills carries a lean reach clause ("Composed by `/refine-story` and `/plan-tasks`; invoke directly when …") instead of a prompt-trigger list.
 - **Body identity stays in the body.** Algorithm detail, step structure, and output format belong below the frontmatter. The description is loaded on every turn of every session, so it earns the hardest pruning in the file.
 
@@ -171,25 +171,25 @@ Four tests keep a skill lean, run on every edit — pruning by discipline, not b
 - **Single source of truth** — each meaning lives in exactly one authoritative place. A convention shared by many skills lives in one KB reference; each skill keeps only its delta. Two up-to-date copies are still a bug: the next edit desynchronizes them.
 - **Relevance**, per line — does it still bear on what the skill does?
 - **No-op**, per sentence — does it change behavior versus what the model does by default? When a sentence fails, delete the whole sentence; rewriting a no-op just produces a shorter no-op.
-- **Sediment** — stale layers settle because adding feels safe and removing feels risky. Treat every edit as a chance to clear the layer you're touching.
+- **Sediment** — a skill only ever grows by default, because appending a new rule feels low-risk while deleting an old one feels like it might break something for someone. Nobody schedules a pass to remove what's no longer true, so it doesn't happen on its own. Make removal part of the edit you're already making, not a separate pass you'll get to later.
 
 **How to check:** run relevance + no-op on every section you touch, and search the corpus for the meaning you're about to add — if it already lives somewhere, point to it instead of restating it.
 
 ### 5. Leading words
 
-A **leading word** is a compact concept the model already holds from pretraining (*idempotent*, *scope*, *gate*, *halt*, *delta*), repeated as a token to anchor a whole region of behavior in the fewest tokens. In the body it anchors *execution* — the executor reaches for the same behavior each time the word appears. In the description it anchors *invocation* — when the same word lives in the user's prompts and the project's docs, the skill fires more reliably.
+A **leading word** is a compact concept the model already holds from pretraining (*idempotent*, *scope*, *gate*, *halt*, *delta*). Naming a behavior with one of these words is cheaper than describing it, because the word arrives pre-loaded with the behavior's shape — the model doesn't need the surrounding sentence to know what *halt* implies. Placement changes what the word does: written into a step, it keeps the executor's action consistent every time that step runs; written into the description, it keeps invocation consistent — a word that also shows up in the user's own prompts and the project's docs pulls the skill in more reliably.
 
-**How to check:** a passage restating one quality across several sentences is a collapse candidate for one strong word. A leading word too weak to beat the model's default ("be thorough") fails the no-op test; the fix is a stronger word, not more prose.
+**How to check:** find every sentence in the file that restates the same single quality; that set must either collapse into one recurring leading word, or you must be able to name why no existing pretrained word already carries it. A leading word too weak to beat the model's default ("be thorough") fails the no-op test; the fix is a stronger word, not more prose.
 
 ### 6. Positive phrasing
 
-State the target behavior. A prohibition names the banned behavior into context and makes it *more* available, not less — "never write verbose output" makes verbosity the freshest pattern the executor has read. A prohibition earns its place only as a hard guardrail you cannot phrase positively, and even then it is paired with the positive target so attention lands on what to do.
+State the target behavior. Telling the executor what not to do puts the banned behavior on the page, and the page is what it reads from next — "never skip the verify step" leaves *skip the verify step* as the most recent phrase in view, competing with the instruction meant to prevent it. Reach for a prohibition only when there is no positive behavior that closes the same gap — a true hard guardrail — and even then, write the positive target next to it so the executor has somewhere else to look.
 
-**How to check:** for every "never"/"don't", attempt the positive rewrite ("write one-line summaries"). Keep the negation only where the rewrite loses the guardrail — and confirm the positive target sits beside it.
+**How to check:** for every "never"/"don't", attempt the positive rewrite (e.g. swap "never merge without a green quality gate" for "merge only once the quality gate reports green"). Keep the negation only where the rewrite loses the guardrail — and confirm the positive target sits beside it.
 
 ### 7. Co-location
 
-Keep a concept's definition, rules, and caveats under one heading, adjacent to the step they govern, so reading one part brings its neighbors with it. A load-bearing rule buried in a Notes section hundreds of lines from the step it constrains is a variance bug: whether the executor attends to it becomes a coin flip. Co-location is distinct from duplication — duplication repeats one meaning in two places; scattering fragments one meaning across many.
+Group a concept's definition, its rules, and its exceptions under the one heading that governs the step they apply to, rather than letting them settle wherever they were written. A load-bearing rule buried in a Notes section hundreds of lines from the step it constrains is a variance bug: whether the executor attends to it becomes a coin flip. Co-location is not the same failure as duplication — duplication says the same thing twice in two places; poor co-location says one thing once, but in pieces spread across the file, so no single read of it is complete.
 
 **How to check:** for each load-bearing concept, search the skill: if its rules appear under more than one heading (other than a context pointer), regroup them under the concept's own heading.
 
@@ -197,11 +197,11 @@ Keep a concept's definition, rules, and caveats under one heading, adjacent to t
 
 Hard mechanics on top of the principles:
 
-- **Size limits** — `name` + `description` together stay within 1024 characters (the [agentskills.io](https://agentskills.io) limit).
-- **Portability** — dataset skills carry only frontmatter the agentskills.io spec defines (`name` and `description` required; spec-defined optionals like `version` allowed). Assistant-specific fields (e.g., `disable-model-invocation`) stay out of the dataset: a skill must install identically on Claude Code, Cursor, VS Code Copilot, and Codex.
+- **Size limits** — the spec caps `name` at 64 chars and `description` at 1024 chars separately; Pair adopts a stricter combined ≤1024 bound for both together.
+- **Portability** — the [agentskills.io](https://agentskills.io) spec's top-level frontmatter fields are `name` and `description` (required) plus `license`, `compatibility`, `metadata`, and `allowed-tools` (optional); the spec's own example `version`/`author` keys live *under* `metadata:`, not top-level. Pair skills carry `version`/`author` at top level instead — a tolerated **Pair extension** beyond the spec's optional fields, kept there for provenance tracking (who authored/last bumped a skill) until a future skill-corpus pass considers moving them under `metadata:`. Assistant-specific fields (e.g., `disable-model-invocation`) stay out of the dataset regardless: a skill must install identically on Claude Code, Cursor, VS Code Copilot, and Codex.
 - **Mirror sync** — the dataset copy (`packages/knowledge-hub/dataset/.skills/`) and the installed mirror (`.claude/skills/`) change in the same commit, always.
 
-**How to check:** character-count the frontmatter; diff its fields against the core spec list; confirm the commit touches both copies.
+**How to check:** character-count `name` and `description` against the combined bound; diff the frontmatter's fields against the spec's top-level list plus the tolerated `version`/`author` extension — anything else is a portability violation; confirm the commit touches both copies.
 
 ### 9. Evaluation
 
@@ -220,7 +220,7 @@ One line per principle — use it when authoring or reviewing any skill change:
 - [ ] Recurring concepts anchored by leading words, not restated prose
 - [ ] Prohibitions only as hard guardrails, each paired with its positive target
 - [ ] Each concept's rules co-located under one heading, adjacent to the step they govern
-- [ ] `name` + `description` ≤ 1024 chars; agentskills.io-spec frontmatter only (no assistant-specific fields); dataset + mirror in the same commit
+- [ ] `name` ≤ 64 / `description` ≤ 1024 chars separately (spec), and both together ≤ 1024 (Pair's stricter bound); frontmatter limited to spec fields + the tolerated `version`/`author` extension (no assistant-specific fields); dataset + mirror in the same commit
 - [ ] Description rewrites carry before/after trigger-eval evidence
 
 ## Writing a new skill

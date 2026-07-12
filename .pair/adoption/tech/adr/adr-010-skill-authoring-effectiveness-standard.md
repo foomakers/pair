@@ -17,7 +17,7 @@ Adopt a nine-principle **effectiveness standard** as the authoring bar for every
 5. **Leading words** — compact pretrained concepts repeated as tokens to anchor execution (body) and invocation (description).
 6. **Positive phrasing** — target behavior stated; prohibitions only as hard guardrails paired with the positive target.
 7. **Co-location** — a concept's definition, rules, and caveats under one heading, adjacent to the step they govern.
-8. **Constraints** — `name` + `description` ≤ 1024 chars (agentskills.io); dataset skills carry only agentskills.io-spec frontmatter — no assistant-specific fields (portability across assistants); dataset + installed mirror updated in the same commit.
+8. **Constraints** — spec caps `name` ≤ 64 / `description` ≤ 1024 chars separately, Pair adds a stricter combined ≤1024 bound; dataset skills carry only agentskills.io-spec top-level frontmatter (`name`, `description`, and the optional `license`/`compatibility`/`metadata`/`allowed-tools`) plus `version`/`author` as a tolerated Pair extension for provenance — no assistant-specific fields (portability across assistants); dataset + installed mirror updated in the same commit.
 9. **Evaluation** — should-trigger / should-not-trigger prompt sets run in fresh sessions; description rewrites gated by before/after results.
 
 Documented in:
