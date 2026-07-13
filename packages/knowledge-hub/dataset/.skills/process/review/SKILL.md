@@ -268,7 +268,7 @@ Based on compiled findings:
    Refs: #<story-id>
    ```
 
-1. **Act** (BLOCKING): Present to reviewer for confirmation:
+2. **Act** (BLOCKING): Present to reviewer for confirmation:
 
    > **Merge commit message:**
    >
@@ -278,7 +278,7 @@ Based on compiled findings:
    >
    > Confirm or edit?
 
-1. **Verify**: Reviewer confirms message.
+3. **Verify**: Reviewer confirms message.
 
 ### Step 6.3: Merge PR
 

@@ -1,6 +1,6 @@
 ---
 name: pair-capability-grill
-description: "Reusable interview engine: one question at a time, always with a recommendation, exploring KB/codebase before asking. sync mode drives systematic AI-human alignment on every story aspect until explicit shared understanding is confirmed. Write-free by design — returns the synthesis to the caller, never writes adoption or issues. Invocable standalone or composed by /pair-process-brainstorm (phase 1) and /pair-process-refine-story (phase 0)."
+description: "Reusable interview engine: one question at a time, always with a recommendation, exploring KB/codebase before asking. sync mode drives systematic AI-human alignment on every story aspect until explicit shared understanding is confirmed. Write-free by design — returns the synthesis to the caller, never writes adoption or issues. Invocable standalone or composed by /pair-process-brainstorm (phase 1, planned — #230) and /pair-process-refine-story (phase 0)."
 version: 0.4.1
 author: Foomakers
 ---
@@ -8,6 +8,12 @@ author: Foomakers
 # /pair-capability-grill — Interview Engine
 
 Ask one question at a time, always with a recommended answer, after exploring the KB/codebase for anything already answerable. `interview` mode explores a free topic; `sync` mode systematically aligns AI and human on every aspect of a story. Never writes — returns the synthesis to the caller.
+
+## Core Rules
+
+- **Never answer for the human.** The recommendation attached to each question is a proposal, not a stand-in for consent. If no reply has been given, the turn ends and the session waits for real input — treating a missing reply as acceptance, or drafting what the human "would probably say," breaks the interview. Grill is HITL by design.
+- **One question per turn.** Ask exactly one question at a time; never batch multiple questions.
+- **Write-free.** Never write adoption files or PM tool issues in any mode; the only file grill ever writes is the optional `.pair/working/` handoff, on request or interruption.
 
 ## Arguments
 
@@ -23,7 +29,7 @@ Ask one question at a time, always with a recommended answer, after exploring th
 
 ### Interview Mode (default)
 
-Freeform exploration of `$topic`. No fixed checklist — the question queue grows from what Step 1's exploration leaves open and from what answers reveal. Used standalone or composed by `/pair-process-brainstorm` phase 1 to produce a raw requirements blob.
+Freeform exploration of `$topic`. No fixed checklist — the question queue grows from what Step 1's exploration leaves open and from what answers reveal. Used standalone or composed by `/pair-process-brainstorm` (phase 1, planned — #230) to produce a raw requirements blob.
 
 ### Sync Mode
 
@@ -132,7 +138,7 @@ SYNTHESIS:
 
 ## Composition Interface
 
-When composed by `/pair-process-brainstorm` (phase 1):
+When composed by `/pair-process-brainstorm` (phase 1, planned — #230):
 
 - **Input**: `$mode` omitted (defaults `interview`); `$topic` from the free theme text or the `$root` issue's body; `$context` carries the issue if `$root` was given.
 - **Output**: Returns the raw requirements blob (R3.7). `/pair-process-brainstorm` carries it into phase 2 (domain integration) — grill never touches the PM tool or adoption files itself.

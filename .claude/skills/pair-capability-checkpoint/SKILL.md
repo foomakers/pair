@@ -1,6 +1,6 @@
 ---
 name: pair-capability-checkpoint
-description: "Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) so work survives context resets. Write mode persists state to .pair/working/checkpoints/<story-id>.md, one file per story; resume mode locates and parses it. Invocable independently; composed by a future closing phase of /pair-process-implement (story #256) and a future /pair-capability-publish-pr as a handoff."
+description: "Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) so work survives context resets. Write mode persists state to .pair/working/checkpoints/<story-id>.md, one file per story; resume mode locates and parses it. Invocable independently; composed by a future closing phase of /pair-process-implement (story #256) and a future /pair-capability-publish-pr (planned — #255) as a handoff."
 version: 0.4.1
 author: Foomakers
 ---
@@ -119,7 +119,7 @@ When composed by a future closing phase of `/pair-process-implement` (story #256
 - **Input**: `/pair-process-implement` would invoke `/pair-capability-checkpoint` with `$mode=write` between tasks (or on developer request) to persist progress, `$mode=resume` at Phase 0 when re-invoked on a story that may have been interrupted, and remove the checkpoint on story completion (cleanup).
 - **Output**: Write mode's returned text becomes the session's record of state. Resume mode's parsed state lets `/pair-process-implement` skip re-analysis and jump straight to the first pending task.
 
-When composed by a future `/pair-capability-publish-pr` (companion capability from the same epic split):
+When composed by a future `/pair-capability-publish-pr` (planned — #255; companion capability from the same epic split):
 
 - **Input**: `/pair-capability-publish-pr` invokes `/pair-capability-checkpoint` with `$mode=write, $persist=false` to obtain a handoff prompt summarizing the story before drafting the PR description.
 - **Output**: The returned text (not written to file) is embedded directly into the composer's own output — the composer owns persistence.
