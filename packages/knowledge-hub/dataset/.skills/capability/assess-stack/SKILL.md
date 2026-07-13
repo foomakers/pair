@@ -1,6 +1,6 @@
 ---
 name: assess-stack
-description: "Evaluates and recommends the tech stack — languages, frameworks, database, libraries, versions — when the choice is open: full evaluation at bootstrap, or a single new dependency during implementation ('should we add Redis', 'is this new dependency consistent with our stack'). Doesn't audit code already written (that's /verify-adoption). Output-only: emits a proposal + target for /record-decision to persist."
+description: "Evaluates and recommends the tech stack — languages, frameworks, database, libraries, versions — when the choice is open: full evaluation at bootstrap, a single new dependency during implementation ('should we add Redis', 'is this new dependency consistent with our stack'), or composed by /review when it finds an unlisted dependency in code. Doesn't audit code already written (that's /verify-adoption). Output-only: emits a proposal + target for /record-decision to persist."
 version: 0.5.0
 author: Foomakers
 ---
