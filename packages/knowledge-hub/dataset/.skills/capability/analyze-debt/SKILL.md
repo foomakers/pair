@@ -24,7 +24,7 @@ This skill is **output-only** — it composes no skill and writes no files. No a
 
 ### Step 1: Resolution Cascade
 
-See [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics — this skill uses the **report-skill variant**, where Path B is an [idempotency](../../../.pair/knowledge/skill-conventions/idempotency.md) check against a recent output rather than an adoption file.
+Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics — this skill uses the **report-skill variant**, where Path B is an [idempotency](../../../.pair/knowledge/skill-conventions/idempotency.md) check against a recent output rather than an adoption file.
 
 - **Path A delta**: override argument is `$choice` (a pre-identified debt item). On accept, skip detection (Step 2) and proceed directly to Step 3 with the single item.
 - **Path B delta**: existing-state check is a recent debt report in conversation context or PR comments. Re-analysis only on explicit developer request.

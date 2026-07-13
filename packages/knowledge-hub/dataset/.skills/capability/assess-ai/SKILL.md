@@ -30,7 +30,7 @@ The rendered adoption content is destined for this section — the caller writes
 
 ### Step 1: Resolution Cascade
 
-See [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
+Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
 
 - **Path A delta**: override argument is `$choice`. On confirm, proceed to Step 3.
 - **Path B delta**: adoption check is [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — populated **AI** section. If a corresponding decision record is missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/record-decision`).

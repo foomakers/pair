@@ -20,7 +20,7 @@ Evaluate code quality using objective metrics from [code-metrics.md](../../../.p
 
 ### Step 1: Resolution Cascade
 
-See [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics — this skill uses the **report-skill variant** and has no override argument, so it starts directly at the [idempotency](../../../.pair/knowledge/skill-conventions/idempotency.md) check (no Path A/Argument-Override).
+Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics — this skill uses the **report-skill variant** and has no override argument, so it starts directly at the [idempotency](../../../.pair/knowledge/skill-conventions/idempotency.md) check (no Path A/Argument-Override).
 
 - **Existing-state check (Path B)**: an existing quality report for this codebase (conversation context, CI artifacts, prior output). Staleness test: has the codebase changed since the last analysis (`git diff --stat` since last analysis date/commit)? No changes → confirm and exit. Changes exist → present the delta and proceed to full analysis.
 - **Full-analysis path (Path C)**: proceed to Step 2.

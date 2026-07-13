@@ -30,7 +30,7 @@ The rendered adoption content is destined for this section — the caller writes
 
 ### Step 1: Resolution Cascade
 
-See [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
+Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
 
 - **Path A delta**: override argument is `$choice`. Confirmation prompt: "Testing framework override: **$choice**. This will be proposed without full assessment. Confirm?" — also warn if tech-stack.md already has a testing section with a different framework. On confirm, proceed to Step 2.
 - **Path B delta**: adoption check is [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — populated **Testing** section. Decision-record check scans [adoption/decision-log/](../../../.pair/adoption/decision-log/) or [adoption/tech/adr/](../../../.pair/adoption/tech/adr/) for `*testing*` files; if missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/record-decision`).

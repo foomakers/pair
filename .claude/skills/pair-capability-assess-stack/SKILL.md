@@ -59,7 +59,7 @@ Detect and evaluate unlisted dependencies. Used when `/pair-process-review` find
 
 ### Step 1: Resolution Cascade
 
-See [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
+Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
 
 - **Path A delta** (implementation or bootstrap with `$choice`): parse `$choice` as `name@version`; in implementation mode, validate against [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) for version incompatibility, duplicate entry, or category conflict — warn and offer resolve-or-reject if found. In bootstrap mode with a choice, just confirm. Proceed to Step 3.
 - **Path B delta**: adoption check is [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) with populated core sections. If a corresponding decision record is missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/pair-capability-record-decision`).

@@ -30,7 +30,7 @@ The rendered adoption content is destined for this file — the caller writes it
 
 ### Step 1: Resolution Cascade
 
-See [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
+Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
 
 - **Path A delta**: override argument is `$choice`. Confirmation prompt: "Architecture override: **$choice**. This will be proposed without full assessment. Confirm?" — also warn if adoption already holds a different pattern. On confirm, proceed to Step 2.
 - **Path B delta**: adoption check is [adoption/tech/architecture.md](../../../.pair/adoption/tech/architecture.md), populated (not template). Decision-record check scans [adoption/tech/adr/](../../../.pair/adoption/tech/adr) for `*architecture*` files; if missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/pair-capability-record-decision`).
