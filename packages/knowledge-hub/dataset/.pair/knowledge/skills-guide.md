@@ -37,7 +37,7 @@ Process skills compose capability skills. Capability skills are independently in
 
 > How-to guides 04 and 05 (subdomain/bounded-context definition) were removed — domain modeling is referenced inline by each real caller's own how-to (02, 03, 06, 09; 08 planned — #242). See [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
 
-### Capability Skills (24)
+### Capability Skills (25)
 
 #### Domain Modeling Skills (2)
 
@@ -61,16 +61,24 @@ Reclassified from process to capability (D24) — see [Callers Matrix](#callers-
 | `/assess-observability` | Observability strategy evaluation |
 | `/assess-ai` | AI development tools evaluation |
 
-#### Verification Skills (4)
+#### Analysis Skills (2)
+
+Analyze + **report only** — never block, propose no adoption decision (verb: `analyze-*`, distinct from `assess-*`).
+
+| Skill | Scope |
+|-------|-------|
+| `/analyze-debt` | Technical debt detection + prioritization (report-only) |
+| `/analyze-code-quality` | Code quality metrics — complexity, size, coverage, maintainability (report-only) |
+
+#### Verification Skills (3)
 
 | Skill | Scope |
 |-------|-------|
 | `/verify-quality` | Quality gate checking |
 | `/verify-done` | Definition of Done checking |
 | `/verify-adoption` | Adoption compliance checking |
-| `/assess-debt` | Technical debt detection + prioritization |
 
-#### Operational Skills (5)
+#### Operational Skills (6)
 
 | Skill | Scope |
 |-------|-------|
@@ -79,6 +87,7 @@ Reclassified from process to capability (D24) — see [Callers Matrix](#callers-
 | `/estimate` | Story estimation |
 | `/setup-gates` | CI/CD quality gate configuration |
 | `/setup-pm` | PM tool configuration |
+| `/manage-flags` | Feature flag lifecycle management |
 
 #### Testing Skills (2)
 
@@ -87,12 +96,11 @@ Reclassified from process to capability (D24) — see [Callers Matrix](#callers-
 | `/design-manual-tests` | Manual test suite generation from project analysis |
 | `/execute-manual-tests` | Manual test suite execution + report generation |
 
-#### Code Quality Skills (2)
+#### State and Handoff Skills (1)
 
 | Skill | Scope |
 |-------|-------|
-| `/assess-code-quality` | Code quality metrics assessment |
-| `/manage-flags` | Feature flag lifecycle management |
+| `/checkpoint` | Write/resume story progress checkpoint (work survives context resets) |
 
 #### Discovery Skills (1)
 
@@ -126,7 +134,9 @@ Reclassified from process to capability (D24) — see [Callers Matrix](#callers-
 │   ├── estimate/
 │   ├── setup-gates/
 │   ├── setup-pm/
-│   ├── assess-code-quality/
+│   ├── analyze-debt/          # report-only
+│   ├── analyze-code-quality/  # report-only
+│   ├── checkpoint/
 │   ├── manage-flags/
 │   └── grill/
 └── next/                 # Navigator skill
@@ -191,6 +201,13 @@ Every row above except the two `(planned — #242)`/`(planned — #230)` entries
 - New behavior: graceful "system areas" fallback when no DDD artifacts exist; `Volatility` field on subdomains; per-relationship strength/distance/volatility assessment with an approval gate on unbalanced+volatile relationships (see `subdomain-template.md`, `bounded-context-template.md`).
 - No standalone process step or how-to remains for domain mapping — how-to guides 04 (define-subdomains) and 05 (define-bounded-contexts) were removed; each caller's own how-to (02, 03, 06, 08, 09) now references the capability inline at the point it's invoked, scoped per the [Callers Matrix](#callers-matrix-scoped-capabilities) above. The capability's own `SKILL.md` ([map-subdomains](../../.skills/capability/map-subdomains/SKILL.md), [map-contexts](../../.skills/capability/map-contexts/SKILL.md)) is the canonical reference for its algorithm, fallback behavior, and templates.
 
+**assess-debt, assess-code-quality: assess → analyze (skill naming taxonomy, #313/T8)**
+
+- Rationale: `assess-*` conflated two operations. The corpus now uses three distinct verbs — **`verify-*`** (conformance pass/fail), **`assess-*`** (evaluate options + PROPOSE an adoption choice — the 8 decision skills), **`analyze-*`** (analyze + REPORT only, never blocks, proposes no adoption decision). The two report skills were misfiled under `assess-*` and are renamed to the `analyze-*` verb. Recorded as ADL `2026-07-13-skill-naming-verb-taxonomy.md` in the project decision log.
+- Old path: `.skills/capability/assess-debt/`, `.skills/capability/assess-code-quality/` — new path: `.skills/capability/analyze-debt/`, `.skills/capability/analyze-code-quality/`.
+- Installed command names change accordingly: `/pair-capability-assess-debt` → `/pair-capability-analyze-debt`; `/pair-capability-assess-code-quality` → `/pair-capability-analyze-code-quality`. Unprefixed dataset command names change too: `/assess-debt` → `/analyze-debt`, `/assess-code-quality` → `/analyze-code-quality`.
+- No behavior change: both remain output-only report producers (per ADR-009); only the verb/name changed. Skill count stays 35.
+
 ## How Skills Relate to How-To Guides
 
 - **How-to guides** = workflow orchestrators (the "what" and "when")
@@ -215,4 +232,4 @@ Skills read from and write to adoption files in `.pair/adoption/`:
 
 - **Start here**: Run `/next` to determine what to do
 - **Process flow**: `/specify-prd` → `/bootstrap` → `/plan-initiatives` → ... → `/implement` → `/review`
-- **Independent capability**: Any capability skill can be invoked directly (e.g., `/estimate`, `/assess-debt`)
+- **Independent capability**: Any capability skill can be invoked directly (e.g., `/estimate`, `/analyze-debt`)

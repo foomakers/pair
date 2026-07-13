@@ -1,6 +1,6 @@
 ---
 name: review
-description: "Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness check, decision, and optional merge with parent cascade. Composes /verify-quality, /verify-done, /record-decision, /assess-debt (required) and /verify-adoption, /assess-stack (optional with graceful degradation). Output follows the code review template. Idempotent — re-invocation resumes from incomplete phases."
+description: "Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness check, decision, and optional merge with parent cascade. Composes /verify-quality, /verify-done, /record-decision, /analyze-debt (required) and /verify-adoption, /assess-stack (optional with graceful degradation). Output follows the code review template. Idempotent — re-invocation resumes from incomplete phases."
 version: 0.5.0
 author: Foomakers
 ---
@@ -11,15 +11,15 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 
 ## Composed Skills
 
-| Skill              | Type       | Required | Phase | Purpose                              |
-| ------------------ | ---------- | -------- | ----- | ------------------------------------ |
-| `/verify-quality`  | Capability | Yes      | 2     | Quality gate checking                |
-| `/verify-done`     | Capability | Yes      | 4     | Definition of Done checking          |
-| `/record-decision` | Capability | Yes      | Any   | Record missing ADR (HALT condition)  |
-| `/assess-debt`     | Capability | Yes      | 4     | Flag tech debt items                 |
-| `/verify-adoption`       | Capability | Optional | 3     | Full adoption compliance                       |
-| `/assess-stack`          | Capability | Optional | 3     | Tech-stack resolution                          |
-| `/execute-manual-tests`  | Capability | Optional | 6     | Post-merge release validation (manual tests)   |
+| Skill                   | Type       | Required | Phase | Purpose                                      |
+| ----------------------- | ---------- | -------- | ----- | -------------------------------------------- |
+| `/verify-quality`       | Capability | Yes      | 2     | Quality gate checking                        |
+| `/verify-done`          | Capability | Yes      | 4     | Definition of Done checking                  |
+| `/record-decision`      | Capability | Yes      | Any   | Record missing ADR (HALT condition)          |
+| `/analyze-debt`         | Capability | Yes      | 4     | Flag tech debt items                         |
+| `/verify-adoption`      | Capability | Optional | 3     | Full adoption compliance                     |
+| `/assess-stack`         | Capability | Optional | 3     | Tech-stack resolution                        |
+| `/execute-manual-tests` | Capability | Optional | 6     | Post-merge release validation (manual tests) |
 
 ## Arguments
 
@@ -191,9 +191,9 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 
 ### Step 4.2: Tech Debt Assessment
 
-1. **Check**: Has `/assess-debt` already run in this session?
+1. **Check**: Has `/analyze-debt` already run in this session?
 2. **Skip**: If already run — reuse results, move to Phase 5.
-3. **Act**: Compose `/assess-debt` with `$scope = all`. `/assess-debt` is **output-only** — it returns a report and creates nothing.
+3. **Act**: Compose `/analyze-debt` with `$scope = all`. `/analyze-debt` is **output-only** — it returns a report and creates nothing.
 4. **Act**: Report the debt items in the review output (Tech Debt section). Debt introduced by the PR is **surfaced, not blocked**: it does **not** HALT the review and **never** blocks the PR. Do **not** auto-create a tech-debt issue.
 5. **Act**: If a debt item is worth scheduling, note it as a recommendation for **deliberate** promotion after review via `/write-issue` (with the `tech-debt` label) — a manual, selective act, never automatic.
 6. **Verify**: Debt items recorded in the report. High-severity items may inform the review verdict (TECH-DEBT: approve + track separately) but never force CHANGES-REQUESTED on debt grounds alone.
@@ -211,7 +211,7 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
    - **Documentation Review**: documentation completeness (from /verify-done)
    - **Detailed Review Comments**: issues by severity, positive feedback
    - **Risk Assessment**: technical and business risks
-   - **Tech Debt**: items flagged by /assess-debt
+   - **Tech Debt**: items flagged by /analyze-debt
    - **Adoption Compliance**: results from Phase 3 (with degradation level noted)
 
 ### Step 5.2: Make Review Decision
@@ -373,7 +373,7 @@ Re-invoking `/review` on a partially reviewed PR is safe:
 
 - **/verify-adoption not installed**: Falls back to inline dependency checking against [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md). Warning logged. See degradation cascade (Phase 3).
 - **/assess-stack not installed**: Unlisted dependencies flagged as warnings for manual verification. Does NOT HALT.
-- **/assess-debt not available**: Skip debt assessment, note in report.
+- **/analyze-debt not available**: Skip debt assessment, note in report.
 - **Story not found**: Review proceeds with PR-only validation (no AC check). Phase 6 skips parent cascade.
 - **Code review template not found**: **HALT** — cannot produce review without template.
 - **PM tool not accessible**: Ask reviewer to manually provide PR details. Phase 6 merge via CLI only.

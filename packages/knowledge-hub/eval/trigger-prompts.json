@@ -167,44 +167,44 @@
       ]
     },
     {
-      "family": "assess-report",
-      "skills": ["assess-code-quality", "assess-debt"],
+      "family": "analyze-report",
+      "skills": ["analyze-code-quality", "analyze-debt"],
       "prompts": [
         {
           "id": "AR-01",
           "type": "should-trigger",
-          "expected": "assess-code-quality",
+          "expected": "analyze-code-quality",
           "prompt": "Give me a code quality report for this repo — complexity, size, coverage, the works."
         },
         {
           "id": "AR-02",
           "type": "should-trigger",
-          "expected": "assess-code-quality",
+          "expected": "analyze-code-quality",
           "prompt": "How maintainable is this codebase right now? Score it."
         },
         {
           "id": "AR-03",
           "type": "should-trigger",
-          "expected": "assess-debt",
+          "expected": "analyze-debt",
           "prompt": "Catalog our technical debt and tell us what to fix first."
         },
         {
           "id": "AR-04",
           "type": "should-trigger",
-          "expected": "assess-debt",
+          "expected": "analyze-debt",
           "prompt": "The code is full of TODO and FIXME comments — prioritize the cleanup for us."
         },
         {
           "id": "AR-N1",
           "type": "should-not-trigger",
-          "near_miss_for": "assess-code-quality",
+          "near_miss_for": "analyze-code-quality",
           "expected": "verify-quality",
           "prompt": "Is the quality gate passing? Run lint, tests and type-check and tell me."
         },
         {
           "id": "AR-N2",
           "type": "should-not-trigger",
-          "near_miss_for": "assess-debt",
+          "near_miss_for": "analyze-debt",
           "expected": "none",
           "prompt": "Refactor the auth module to pay down its debt."
         }

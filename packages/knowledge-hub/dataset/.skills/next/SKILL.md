@@ -29,33 +29,33 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 
 ### Capability Skills (25)
 
-| Skill                | Category     | Description                                     |
-| -------------------- | ------------ | ----------------------------------------------- |
-| `/map-subdomains`    | Domain Modeling | Scoped DDD subdomain placement (+ Volatility) |
-| `/map-contexts`      | Domain Modeling | Scoped DDD bounded-context placement + relationship assessment |
-| `/grill`             | Alignment    | Interview engine: explore a topic or sync on a story, one question at a time |
-| `/record-decision`   | Decision     | Record ADR or ADL with adoption update          |
-| `/checkpoint`        | Session State | Write/resume story progress checkpoint (work survives context resets) |
-| `/write-issue`       | PM Tool      | Create/update issues in adopted PM tool         |
-| `/setup-pm`          | PM Tool      | Configure project management tool               |
-| `/verify-quality`    | Quality      | Check quality gates against codebase            |
-| `/verify-done`       | Quality      | Check Definition of Done criteria               |
-| `/verify-adoption`   | Quality      | Check code against adoption files per scope     |
-| `/assess-stack`      | Assessment   | Assess tech stack (lifecycle-spanning)           |
-| `/assess-architecture`| Assessment  | Assess architecture pattern                     |
-| `/assess-testing`    | Assessment   | Assess testing strategy                         |
-| `/assess-ai`         | Assessment   | Assess AI development tools                     |
-| `/assess-methodology`| Assessment   | Assess development methodology                  |
-| `/assess-pm`         | Assessment   | Assess project management tool                  |
-| `/assess-infrastructure`| Assessment| Assess infrastructure strategy                  |
-| `/assess-observability`| Assessment | Assess observability strategy                   |
-| `/assess-debt`       | Assessment   | Assess technical debt with prioritization       |
-| `/assess-code-quality`| Assessment  | Assess code quality with metrics                |
-| `/estimate`          | Planning     | Estimate story using adopted methodology        |
-| `/setup-gates`       | Configuration| Configure CI/CD quality gates                   |
-| `/manage-flags`      | Configuration| Manage feature flag lifecycle                   |
-| `/design-manual-tests`| Testing     | Generate manual test suite from project analysis|
-| `/execute-manual-tests`| Testing   | Execute manual test suite + generate report     |
+| Skill                    | Category        | Description                                                                  |
+| ------------------------ | --------------- | ---------------------------------------------------------------------------- |
+| `/map-subdomains`        | Domain Modeling | Scoped DDD subdomain placement (+ Volatility)                                |
+| `/map-contexts`          | Domain Modeling | Scoped DDD bounded-context placement + relationship assessment               |
+| `/grill`                 | Alignment       | Interview engine: explore a topic or sync on a story, one question at a time |
+| `/record-decision`       | Decision        | Record ADR or ADL with adoption update                                       |
+| `/checkpoint`            | Session State   | Write/resume story progress checkpoint (work survives context resets)        |
+| `/write-issue`           | PM Tool         | Create/update issues in adopted PM tool                                      |
+| `/setup-pm`              | PM Tool         | Configure project management tool                                            |
+| `/verify-quality`        | Quality         | Check quality gates against codebase                                         |
+| `/verify-done`           | Quality         | Check Definition of Done criteria                                            |
+| `/verify-adoption`       | Quality         | Check code against adoption files per scope                                  |
+| `/assess-stack`          | Assessment      | Assess tech stack (lifecycle-spanning)                                       |
+| `/assess-architecture`   | Assessment      | Assess architecture pattern                                                  |
+| `/assess-testing`        | Assessment      | Assess testing strategy                                                      |
+| `/assess-ai`             | Assessment      | Assess AI development tools                                                  |
+| `/assess-methodology`    | Assessment      | Assess development methodology                                               |
+| `/assess-pm`             | Assessment      | Assess project management tool                                               |
+| `/assess-infrastructure` | Assessment      | Assess infrastructure strategy                                               |
+| `/assess-observability`  | Assessment      | Assess observability strategy                                                |
+| `/analyze-debt`          | Analysis        | Analyze technical debt with prioritization                                   |
+| `/analyze-code-quality`  | Analysis        | Analyze code quality with metrics                                            |
+| `/estimate`              | Planning        | Estimate story using adopted methodology                                     |
+| `/setup-gates`           | Configuration   | Configure CI/CD quality gates                                                |
+| `/manage-flags`          | Configuration   | Manage feature flag lifecycle                                                |
+| `/design-manual-tests`   | Testing         | Generate manual test suite from project analysis                             |
+| `/execute-manual-tests`  | Testing         | Execute manual test suite + generate report                                  |
 
 ## Algorithm
 
@@ -117,7 +117,7 @@ If no process skill matched in Steps 2-3, check for capability skill opportuniti
 | --- | ------------------------------------------------------------------------ | -------------------- | ---------------------------------------------- |
 | 12  | Quality gate not configured (no Quality Gates section in way-of-working) | `/setup-gates`       | Quality gates should be established             |
 | 13  | Tech stack has unlisted dependencies detected                            | `/assess-stack`      | Stack registry needs updating                   |
-| 14  | Technical debt flags present (TODO/FIXME/HACK comments detected)         | `/assess-debt`       | Debt should be cataloged and prioritized        |
+| 14  | Technical debt flags present (TODO/FIXME/HACK comments detected)         | `/analyze-debt`      | Debt should be cataloged and prioritized        |
 | 15  | No estimation methodology adopted in way-of-working                      | `/estimate`          | Estimation process should be established        |
 | 16  | A backlog item or topic carries open questions or unclear scope (question markers, conflicting comments) that block planning | `/grill` | Structured one-question-at-a-time alignment before planning |
 

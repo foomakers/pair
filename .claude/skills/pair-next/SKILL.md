@@ -29,33 +29,33 @@ The catalog is **derived from the installed corpus**: every installed skill must
 
 ### Capability Skills (25)
 
-| Skill                | Category     | Description                                     |
-| -------------------- | ------------ | ----------------------------------------------- |
-| `/pair-capability-map-subdomains`    | Domain Modeling | Scoped DDD subdomain placement (+ Volatility) |
-| `/pair-capability-map-contexts`      | Domain Modeling | Scoped DDD bounded-context placement + relationship assessment |
-| `/pair-capability-grill`             | Alignment    | Interview engine: explore a topic or sync on a story, one question at a time |
-| `/pair-capability-record-decision`   | Decision     | Record ADR or ADL with adoption update          |
-| `/pair-capability-checkpoint`        | Session State | Write/resume story progress checkpoint (work survives context resets) |
-| `/pair-capability-write-issue`       | PM Tool      | Create/update issues in adopted PM tool         |
-| `/pair-capability-setup-pm`          | PM Tool      | Configure project management tool               |
-| `/pair-capability-verify-quality`    | Quality      | Check quality gates against codebase            |
-| `/pair-capability-verify-done`       | Quality      | Check Definition of Done criteria               |
-| `/pair-capability-verify-adoption`   | Quality      | Check code against adoption files per scope     |
-| `/pair-capability-assess-stack`      | Assessment   | Assess tech stack (lifecycle-spanning)           |
-| `/pair-capability-assess-architecture`| Assessment  | Assess architecture pattern                     |
-| `/pair-capability-assess-testing`    | Assessment   | Assess testing strategy                         |
-| `/pair-capability-assess-ai`         | Assessment   | Assess AI development tools                     |
-| `/pair-capability-assess-methodology`| Assessment   | Assess development methodology                  |
-| `/pair-capability-assess-pm`         | Assessment   | Assess project management tool                  |
-| `/pair-capability-assess-infrastructure`| Assessment| Assess infrastructure strategy                  |
-| `/pair-capability-assess-observability`| Assessment | Assess observability strategy                   |
-| `/pair-capability-assess-debt`       | Assessment   | Assess technical debt with prioritization       |
-| `/pair-capability-assess-code-quality`| Assessment  | Assess code quality with metrics                |
-| `/pair-capability-estimate`          | Planning     | Estimate story using adopted methodology        |
-| `/pair-capability-setup-gates`       | Configuration| Configure CI/CD quality gates                   |
-| `/pair-capability-manage-flags`      | Configuration| Manage feature flag lifecycle                   |
-| `/pair-capability-design-manual-tests`| Testing     | Generate manual test suite from project analysis|
-| `/pair-capability-execute-manual-tests`| Testing   | Execute manual test suite + generate report     |
+| Skill                                    | Category        | Description                                                                  |
+| ---------------------------------------- | --------------- | ---------------------------------------------------------------------------- |
+| `/pair-capability-map-subdomains`        | Domain Modeling | Scoped DDD subdomain placement (+ Volatility)                                |
+| `/pair-capability-map-contexts`          | Domain Modeling | Scoped DDD bounded-context placement + relationship assessment               |
+| `/pair-capability-grill`                 | Alignment       | Interview engine: explore a topic or sync on a story, one question at a time |
+| `/pair-capability-record-decision`       | Decision        | Record ADR or ADL with adoption update                                       |
+| `/pair-capability-checkpoint`            | Session State   | Write/resume story progress checkpoint (work survives context resets)        |
+| `/pair-capability-write-issue`           | PM Tool         | Create/update issues in adopted PM tool                                      |
+| `/pair-capability-setup-pm`              | PM Tool         | Configure project management tool                                            |
+| `/pair-capability-verify-quality`        | Quality         | Check quality gates against codebase                                         |
+| `/pair-capability-verify-done`           | Quality         | Check Definition of Done criteria                                            |
+| `/pair-capability-verify-adoption`       | Quality         | Check code against adoption files per scope                                  |
+| `/pair-capability-assess-stack`          | Assessment      | Assess tech stack (lifecycle-spanning)                                       |
+| `/pair-capability-assess-architecture`   | Assessment      | Assess architecture pattern                                                  |
+| `/pair-capability-assess-testing`        | Assessment      | Assess testing strategy                                                      |
+| `/pair-capability-assess-ai`             | Assessment      | Assess AI development tools                                                  |
+| `/pair-capability-assess-methodology`    | Assessment      | Assess development methodology                                               |
+| `/pair-capability-assess-pm`             | Assessment      | Assess project management tool                                               |
+| `/pair-capability-assess-infrastructure` | Assessment      | Assess infrastructure strategy                                               |
+| `/pair-capability-assess-observability`  | Assessment      | Assess observability strategy                                                |
+| `/pair-capability-analyze-debt`          | Analysis        | Analyze technical debt with prioritization                                   |
+| `/pair-capability-analyze-code-quality`  | Analysis        | Analyze code quality with metrics                                            |
+| `/pair-capability-estimate`              | Planning        | Estimate story using adopted methodology                                     |
+| `/pair-capability-setup-gates`           | Configuration   | Configure CI/CD quality gates                                                |
+| `/pair-capability-manage-flags`          | Configuration   | Manage feature flag lifecycle                                                |
+| `/pair-capability-design-manual-tests`   | Testing         | Generate manual test suite from project analysis                             |
+| `/pair-capability-execute-manual-tests`  | Testing         | Execute manual test suite + generate report                                  |
 
 ## Algorithm
 
@@ -117,7 +117,7 @@ If no process skill matched in Steps 2-3, check for capability skill opportuniti
 | --- | ------------------------------------------------------------------------ | -------------------- | ---------------------------------------------- |
 | 12  | Quality gate not configured (no Quality Gates section in way-of-working) | `/pair-capability-setup-gates`       | Quality gates should be established             |
 | 13  | Tech stack has unlisted dependencies detected                            | `/pair-capability-assess-stack`      | Stack registry needs updating                   |
-| 14  | Technical debt flags present (TODO/FIXME/HACK comments detected)         | `/pair-capability-assess-debt`       | Debt should be cataloged and prioritized        |
+| 14  | Technical debt flags present (TODO/FIXME/HACK comments detected)         | `/pair-capability-analyze-debt`      | Debt should be cataloged and prioritized        |
 | 15  | No estimation methodology adopted in way-of-working                      | `/pair-capability-estimate`          | Estimation process should be established        |
 | 16  | A backlog item or topic carries open questions or unclear scope (question markers, conflicting comments) that block planning | `/pair-capability-grill` | Structured one-question-at-a-time alignment before planning |
 
