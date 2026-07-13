@@ -4,7 +4,7 @@
 **Date:** 2026-07-12
 **Context:** Story #313 (Skill corpus effectiveness) — Task T2
 
-> Numbering note: `adr-009` exists on an unmerged branch at the time of writing; this ADR takes the next free number on the assumption that branch merges first. Renumber to 009 only if that branch is abandoned.
+> Numbering note: `adr-010` is a valid, collision-free number — `adr-009` and `adr-011` through `adr-013` all exist on main.
 
 ## Decision
 
