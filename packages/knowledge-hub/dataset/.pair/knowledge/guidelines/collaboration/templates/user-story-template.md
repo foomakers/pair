@@ -85,7 +85,7 @@
 
 > **Section ordering**: Functional sections first, technical sections last.
 > Technical Analysis is positioned at the end as the bridge to Task Breakdown
-> (appended by `/plan-tasks`).
+> (appended by `/pair-process-plan-tasks`).
 
 ```markdown
 ## Story Statement

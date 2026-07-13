@@ -48,22 +48,13 @@
 
 ### Primary Business Goals
 
-1. **Objective 1:** [Specific, measurable business objective]
+1. **Objective N:** [Specific, measurable business objective]
 
    - **Target:** [Quantified target with timeline]
    - **Baseline:** [Current performance level]
    - **Impact:** [Expected business impact]
 
-2. **Objective 2:** [Another key business objective]
-
-   - **Target:** [Measurable target]
-   - **Baseline:** [Starting point]
-   - **Impact:** [Business value]
-
-3. **Objective 3:** [Additional strategic objective]
-   - **Target:** [Specific target]
-   - **Baseline:** [Current state]
-   - **Impact:** [Expected outcome]
+[Repeat per objective]
 
 ### Success Metrics & KPIs
 
@@ -85,19 +76,14 @@
 
 ### Customer Segments
 
-**Primary Segment:** [Primary customer segment]
+**[Primary | Secondary] Segment:** [Customer segment]
 
 - **Size:** [Market size and addressable population]
 - **Characteristics:** [Key demographic and behavioral traits]
 - **Current Pain Points:** [Major challenges and frustrations]
 - **Value Proposition:** [How initiative addresses their needs]
 
-**Secondary Segment:** [Secondary customer segment]
-
-- **Size:** [Segment size]
-- **Characteristics:** [Relevant traits]
-- **Current Pain Points:** [Challenges]
-- **Value Proposition:** [Value delivered]
+[Repeat per segment]
 
 ### Customer Journey Impact
 
@@ -117,16 +103,13 @@
 
 ### Key Solution Components
 
-1. **Component 1:** [Major solution area or capability]
+1. **Component N:** [Major solution area or capability]
 
    - **Description:** [What this component delivers]
    - **Value:** [Business and customer value]
    - **Timeline:** [Development timeframe]
 
-2. **Component 2:** [Another key solution component]
-   - **Description:** [Component description]
-   - **Value:** [Value proposition]
-   - **Timeline:** [Delivery timeline]
+[Repeat per component]
 
 ### Innovation & Differentiation
 
@@ -147,11 +130,7 @@
   - **Timeline:** [Expected delivery window]
   - **Dependencies:** [Key dependencies]
 
-- [ ] **EP-XXX:** [Another critical epic]
-  - **Business Value:** [Value delivered]
-  - **Epic Points:** [Size estimate]
-  - **Timeline:** [Delivery timeframe]
-  - **Dependencies:** [Dependencies]
+[Repeat per epic — same fields for each priority tier below]
 
 #### Medium-Priority Epics (Should-Have)
 
@@ -251,24 +230,19 @@
 
 | Risk               | Impact       | Probability  | Mitigation Strategy    | Owner    | Timeline |
 | ------------------ | ------------ | ------------ | ---------------------- | -------- | -------- |
-| [Market risk]      | High/Med/Low | High/Med/Low | [Market mitigation]    | [Person] | [When]   |
-| [Competitive risk] | High/Med/Low | High/Med/Low | [Competitive strategy] | [Person] | [When]   |
-| [Technology risk]  | High/Med/Low | High/Med/Low | [Tech mitigation]      | [Person] | [When]   |
+| [Strategic risk]   | High/Med/Low | High/Med/Low | [Mitigation]           | [Person] | [When]   |
 
 ### Execution Risks
 
 | Risk            | Impact       | Probability  | Mitigation Strategy   | Owner    | Timeline |
 | --------------- | ------------ | ------------ | --------------------- | -------- | -------- |
-| [Resource risk] | High/Med/Low | High/Med/Low | [Resource plan]       | [Person] | [When]   |
-| [Timeline risk] | High/Med/Low | High/Med/Low | [Schedule mitigation] | [Person] | [When]   |
-| [Quality risk]  | High/Med/Low | High/Med/Low | [Quality assurance]   | [Person] | [When]   |
+| [Execution risk] | High/Med/Low | High/Med/Low | [Mitigation]         | [Person] | [When]   |
 
 ### Financial Risks
 
 | Risk             | Impact       | Probability  | Mitigation Strategy  | Owner    | Timeline |
 | ---------------- | ------------ | ------------ | -------------------- | -------- | -------- |
-| [Budget overrun] | High/Med/Low | High/Med/Low | [Budget controls]    | [Person] | [When]   |
-| [ROI shortfall]  | High/Med/Low | High/Med/Low | [Value optimization] | [Person] | [When]   |
+| [Financial risk] | High/Med/Low | High/Med/Low | [Mitigation]         | [Person] | [When]   |
 
 ## Go-to-Market Strategy
 
@@ -338,23 +312,11 @@
 
 ### Communication Plan
 
-#### Executive Updates:
-
-- **Frequency:** [How often executive updates occur]
-- **Format:** [Update format and content]
-- **Audience:** [Who receives executive updates]
-
-#### Team Communication:
-
-- **Frequency:** [Team communication rhythm]
-- **Format:** [Team update format]
-- **Audience:** [Extended team and stakeholders]
-
-#### Organization Communication:
-
-- **Frequency:** [Company-wide communication schedule]
-- **Format:** [Organizational update approach]
-- **Audience:** [Broader organization]
+| Level | Frequency | Format | Audience |
+| ------------------ | ----------- | -------- | ---------- |
+| **Executive** | [How often] | [Format] | [Who] |
+| **Team** | [Rhythm] | [Format] | [Who] |
+| **Organization** | [Schedule] | [Format] | [Who] |
 
 ### Decision-Making Framework
 
