@@ -102,11 +102,12 @@ All adoption files are populated. Query the PM tool to determine backlog state.
 | 5   | Epics exist but no user stories                                  | `/plan-stories`     | Story breakdown needed                      |
 | 6   | Open pull requests, or items resolve to macrostate `Review`       | `/review`           | Code review pending — closest to delivery   |
 | 7   | A story resolves to macrostate `In Progress` AND its checkpoint file exists (`.pair/working/checkpoints/<story-id>.md`) | `/checkpoint` | Resume interrupted work (`$mode: resume`) before re-analysis |
-| 8   | Stories resolve to macrostate `Ready` AND a task breakdown exists | `/implement`        | Work is ready to start                      |
-| 9   | Stories resolve to macrostate `Ready` but have NO task breakdown  | `/plan-tasks`       | Tasks must be created before implementation |
-| 10  | Stories resolve to macrostate `Draft` (missing acceptance criteria, or failing Definition of Ready via the Readiness Fallback) | `/refine-story` | Stories need refinement before work |
+| 8   | A story resolves to macrostate `In Progress` but has NO checkpoint file | `/implement`   | Continue the in-progress work — `/implement` re-derives state from scratch when no checkpoint exists |
+| 9   | Stories resolve to macrostate `Ready` AND a task breakdown exists | `/implement`        | Work is ready to start                      |
+| 10  | Stories resolve to macrostate `Ready` but have NO task breakdown  | `/plan-tasks`       | Tasks must be created before implementation |
+| 11  | Stories resolve to macrostate `Draft` (missing acceptance criteria, or failing Definition of Ready via the Readiness Fallback) | `/refine-story` | Stories need refinement before work |
 
-**Tie-break**: on a real backlog several of rows 6–10 can hold at once (e.g. Draft stories AND an open PR). Row order resolves this — rows are sorted by delivery proximity (`/review` > `/checkpoint` > `/implement` > `/plan-tasks` > `/refine-story`): evaluate top-to-bottom, stop at the first match. For a single item the distinguishing predicates (macrostate, task breakdown present/absent, checkpoint file present/absent) make rows 7–10 mutually exclusive; across items, row order decides.
+**Tie-break**: on a real backlog several of rows 6–11 can hold at once (e.g. Draft stories AND an open PR). Row order resolves this — rows are sorted by delivery proximity (`/review` > `/checkpoint` > `/implement` > `/plan-tasks` > `/refine-story`): evaluate top-to-bottom, stop at the first match. For a single item the distinguishing predicates (macrostate, checkpoint file present/absent, task breakdown present/absent) make rows 7–11 mutually exclusive; across items, row order decides. Every `In Progress` story matches row 7 or row 8 — the fallback (Step 5) is never reached for active work.
 
 ### Step 4: Capability Skill Suggestions
 
@@ -114,11 +115,11 @@ If no process skill matched in Steps 2-3, check for capability skill opportuniti
 
 | #   | Condition                                                                | Suggestion           | Rationale                                      |
 | --- | ------------------------------------------------------------------------ | -------------------- | ---------------------------------------------- |
-| 11  | Quality gate not configured (no Quality Gates section in way-of-working) | `/setup-gates`       | Quality gates should be established             |
-| 12  | Tech stack has unlisted dependencies detected                            | `/assess-stack`      | Stack registry needs updating                   |
-| 13  | Technical debt flags present (TODO/FIXME/HACK comments detected)         | `/assess-debt`       | Debt should be cataloged and prioritized        |
-| 14  | No estimation methodology adopted in way-of-working                      | `/estimate`          | Estimation process should be established        |
-| 15  | A backlog item or topic carries open questions or unclear scope (question markers, conflicting comments) that block planning | `/grill` | Structured one-question-at-a-time alignment before planning |
+| 12  | Quality gate not configured (no Quality Gates section in way-of-working) | `/setup-gates`       | Quality gates should be established             |
+| 13  | Tech stack has unlisted dependencies detected                            | `/assess-stack`      | Stack registry needs updating                   |
+| 14  | Technical debt flags present (TODO/FIXME/HACK comments detected)         | `/assess-debt`       | Debt should be cataloged and prioritized        |
+| 15  | No estimation methodology adopted in way-of-working                      | `/estimate`          | Estimation process should be established        |
+| 16  | A backlog item or topic carries open questions or unclear scope (question markers, conflicting comments) that block planning | `/grill` | Structured one-question-at-a-time alignment before planning |
 
 ### Step 5: Fallback
 
@@ -153,11 +154,11 @@ Then ask: "Shall I run `/skill-name`?"
 - If the PM tool is not accessible (no MCP connection, no credentials), skip Step 3 and report: "PM tool not accessible — recommendation based on adoption files only."
 - If adoption files cannot be read (not installed yet), suggest `/bootstrap` as the entry point.
 - If way-of-working.md has no `## State Mapping` section, canonical macrostate names are assumed — this is the zero-configuration default, not a degradation.
-- If a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback (Definition of Ready criteria) rather than treating row 10's condition as unresolvable.
+- If a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback (Definition of Ready criteria) rather than treating row 11's condition as unresolvable.
 
 ## Notes
 
 - This skill is read-only: it inspects state but never modifies files or PM tool data.
 - Row order encodes the tie-break (delivery proximity) — see the **Tie-break** note under the Step 3 table.
 - Re-run `/next` after completing any skill to get an updated recommendation.
-- **Full catalog coverage**: any of the 35 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (rows 7 `/checkpoint`, 11-15 including `/grill`) or process-skill composition.
+- **Full catalog coverage**: any of the 35 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/checkpoint`, rows 12-16 including `/grill`) or process-skill composition.
