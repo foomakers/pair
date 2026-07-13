@@ -9,6 +9,8 @@ author: Foomakers
 
 Implement a user story by processing its tasks sequentially. Each task follows a 5-step cycle: context → branch → implementation → quality → commit. The story-level process has 5 phases (0–4): analysis, setup, implementation, PR creation, and post-review merge. Creates a single PR when all tasks are done.
 
+**One PR per story:** the story lands on ONE branch with ONE PR; subsequent work on the story (further tasks/features) updates that same PR, never a new one unless explicitly requested.
+
 ## Composed Skills
 
 | Skill              | Type       | Required                                                                                            |
