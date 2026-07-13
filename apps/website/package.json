@@ -22,7 +22,8 @@
     "prettier:fix": "prettier-fix",
     "prettier:check": "prettier-check",
     "mdlint:check": "markdownlint-check",
-    "mdlint:fix": "markdownlint-fix"
+    "mdlint:fix": "markdownlint-fix",
+    "docs:staleness": "tsx lib/docs-staleness-check.ts"
   },
   "dependencies": {
     "@pair/brand": "workspace:*",
@@ -54,6 +55,7 @@
     "jsdom": "catalog:",
     "postcss": "catalog:",
     "tailwindcss": "catalog:",
+    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "vitest-axe": "catalog:"

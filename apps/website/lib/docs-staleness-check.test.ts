@@ -1,156 +1,177 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { spawnSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { describe, it, expect } from 'vitest'
+import { resolve } from 'node:path'
+import {
+  findSkillCountMismatches,
+  findGuideCountMismatches,
+  findDeadLinks,
+  checkCatalogSync,
+  checkCommandAnchors,
+  checkTutorialCommands,
+  countHowToGuides,
+  buildValidRoutes,
+  runAllChecks,
+} from './docs-staleness-check'
 
-// Negative test for the docs staleness gate (scripts/docs-staleness-check.js):
-// proves the extended "N skills" count check actually FAILS on a stale count,
-// not just that it passes on the real tree.
+// White-box unit tests for the docs-staleness gate LOGIC. Exported functions are
+// tested directly — no spawning of any CLI/script. The thin `tsx` CLI wrapper is
+// out of scope here (its logic is these functions); parity with the real docs
+// tree is asserted in-process via runAllChecks() below.
 
-const SCRIPT = resolve(__dirname, '../../../scripts/docs-staleness-check.js')
+const REPO_ROOT = resolve(__dirname, '../../..')
 
-let fixtureRoot: string
-
-// Fixture tree with exactly 1 skill and 1 how-to guide, so any other count in docs is stale.
-function buildFixture(skillCountClaim: string, extraProse = '', withHowToDir = true): void {
-  const docsDir = join(fixtureRoot, 'apps/website/content/docs')
-  mkdirSync(join(fixtureRoot, 'packages/knowledge-hub/dataset/.skills/capability/verify-quality'), {
-    recursive: true,
-  })
-  writeFileSync(
-    join(fixtureRoot, 'packages/knowledge-hub/dataset/.skills/capability/verify-quality/SKILL.md'),
-    '# verify-quality\n',
-  )
-  const howToDir = join(fixtureRoot, 'packages/knowledge-hub/dataset/.pair/knowledge/how-to')
-  rmSync(howToDir, { recursive: true, force: true })
-  if (withHowToDir) {
-    mkdirSync(howToDir, { recursive: true })
-    writeFileSync(join(howToDir, '01-how-to-create-PRD.md'), '# how-to\n')
-    writeFileSync(join(howToDir, 'README.md'), '# index\n')
-  }
-  mkdirSync(join(fixtureRoot, 'apps/pair-cli/src/commands'), { recursive: true })
-  mkdirSync(join(docsDir, 'reference/cli'), { recursive: true })
-  mkdirSync(join(docsDir, 'integrations'), { recursive: true })
-  writeFileSync(join(docsDir, 'reference/skills-catalog.mdx'), '| **verify-quality** | row |\n')
-  writeFileSync(join(docsDir, 'reference/cli/commands.mdx'), 'No commands documented.\n')
-  writeFileSync(
-    join(docsDir, 'integrations/claude-code.mdx'),
-    `The canonical directory contains ${skillCountClaim}.\n${extraProse}`,
-  )
-}
-
-function runCheck(): { status: number | null; stdout: string } {
-  const result = spawnSync(process.execPath, [SCRIPT], {
-    env: { ...process.env, DOCS_STALENESS_ROOT: fixtureRoot },
-    encoding: 'utf-8',
-  })
-  return { status: result.status, stdout: result.stdout }
-}
-
-describe('docs-staleness-check skill count gate', () => {
-  beforeAll(() => {
-    fixtureRoot = mkdtempSync(join(tmpdir(), 'docs-staleness-'))
+describe('findSkillCountMismatches', () => {
+  it('flags a wrong bare "N skills"', () => {
+    expect(findSkillCountMismatches('has 5 skills', 'a.mdx', 35)).toHaveLength(1)
   })
 
-  afterAll(() => {
-    rmSync(fixtureRoot, { recursive: true, force: true })
+  it('passes a matching "N skills"', () => {
+    expect(findSkillCountMismatches('has 35 skills', 'a.mdx', 35)).toHaveLength(0)
   })
 
-  it('fails (exit 1) when a docs page claims a wrong skill count', () => {
-    buildFixture('5 skills')
-    const { status, stdout } = runCheck()
-    expect(status).toBe(1)
-    expect(stdout).toContain('Skill count mismatch')
-    expect(stdout).toContain('integrations/claude-code.mdx')
+  it('flags a wrong "N composable skills" (adjective between number and skills)', () => {
+    const errs = findSkillCountMismatches('7 composable skills', 'a.mdx', 1)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('7 composable skills')
   })
 
-  it('passes (exit 0) when the claimed skill count matches', () => {
-    buildFixture('1 skills')
-    const { status, stdout } = runCheck()
-    expect(status, stdout).toBe(0)
-    expect(stdout).toContain('PASS')
+  it('flags a wrong "N+ skills" (trailing plus)', () => {
+    expect(findSkillCountMismatches('30+ skills', 'a.mdx', 35)).toHaveLength(1)
   })
 
-  it('fails (exit 1) on wrong "N composable skills" (adjective between number and skills)', () => {
-    buildFixture('7 composable skills')
-    const { status, stdout } = runCheck()
-    expect(status).toBe(1)
-    expect(stdout).toContain('Skill count mismatch')
-    expect(stdout).toContain('7 composable skills')
+  it('flags a wrong "N agent skills"', () => {
+    const errs = findSkillCountMismatches('exposes 7 agent skills', 'a.mdx', 1)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('7 agent skills')
   })
 
-  it('fails (exit 1) on wrong "N+ skills" (trailing plus)', () => {
-    buildFixture('7+ skills')
-    const { status, stdout } = runCheck()
-    expect(status).toBe(1)
-    expect(stdout).toContain('Skill count mismatch')
+  it('passes matching "N composable skills" and "N+ skills"', () => {
+    expect(findSkillCountMismatches('1 composable skills and 1+ skills', 'a.mdx', 1)).toHaveLength(
+      0,
+    )
   })
 
-  it('fails (exit 1) on wrong "N agent skills"', () => {
-    buildFixture('1 skills', 'The standard exposes 7 agent skills.\n')
-    const { status, stdout } = runCheck()
-    expect(status).toBe(1)
-    expect(stdout).toContain('Skill count mismatch')
-    expect(stdout).toContain('7 agent skills')
+  it('ignores subset counts ("N process skills")', () => {
+    expect(findSkillCountMismatches('9 process skills', 'a.mdx', 35)).toHaveLength(0)
+  })
+})
+
+describe('findGuideCountMismatches', () => {
+  it('flags a wrong "N how-to guides"', () => {
+    expect(findGuideCountMismatches('11 how-to guides', 'a.mdx', 9)).toHaveLength(1)
   })
 
-  it('passes (exit 0) on matching "N composable skills" / "N+ skills"', () => {
-    buildFixture('1 skills', 'Exactly 1 composable skills and 1+ skills.\n')
-    const { status, stdout } = runCheck()
-    expect(status, stdout).toBe(0)
+  it('passes a matching "N how-to guides"', () => {
+    expect(findGuideCountMismatches('9 how-to guides', 'a.mdx', 9)).toHaveLength(0)
   })
 
-  it('fails (exit 1) when a docs page claims a wrong how-to guide count', () => {
-    buildFixture('1 skills', 'The KB ships 11 how-to guides.\n')
-    const { status, stdout } = runCheck()
-    expect(status).toBe(1)
-    expect(stdout).toContain('How-to guide count mismatch')
-    expect(stdout).toContain('integrations/claude-code.mdx')
+  it('flags wrong counts in adjective phrasings ("N sequential/step-by-step guides")', () => {
+    const errs = findGuideCountMismatches(
+      '11 sequential guides and 11 step-by-step guides',
+      'a.mdx',
+      9,
+    )
+    expect(errs).toHaveLength(2)
+    expect(errs[0]).toContain('11 sequential guides')
+    expect(errs[1]).toContain('11 step-by-step guides')
   })
 
-  it('passes (exit 0) when the claimed how-to guide count matches', () => {
-    buildFixture('1 skills', 'The KB ships 1 how-to guides.\n')
-    const { status, stdout } = runCheck()
-    expect(status, stdout).toBe(0)
+  it('flags "N step-by-step process guides" and "N process guides"', () => {
+    expect(findGuideCountMismatches('11 step-by-step process guides', 'a.mdx', 9)).toHaveLength(1)
+    expect(findGuideCountMismatches('11 process guides', 'a.mdx', 9)).toHaveLength(1)
   })
 
-  it('fails (exit 1) on wrong counts in adjective phrasings ("N sequential guides")', () => {
-    buildFixture('1 skills', 'The KB has 9 sequential guides and 9 step-by-step guides.\n')
-    const { status, stdout } = runCheck()
-    expect(status).toBe(1)
-    expect(stdout).toContain('How-to guide count mismatch')
-    expect(stdout).toContain('9 sequential guides')
-    expect(stdout).toContain('9 step-by-step guides')
+  it('does NOT false-positive on bare "N guides" prose (no how-to qualifier)', () => {
+    expect(
+      findGuideCountMismatches('5 guides at the museum and 3 tour guides', 'a.mdx', 9),
+    ).toHaveLength(0)
+  })
+})
+
+describe('countHowToGuides', () => {
+  it('returns null when the how-to dir is missing (drives the loud gate failure)', () => {
+    expect(countHowToGuides(resolve(REPO_ROOT, 'does/not/exist'))).toBeNull()
   })
 
-  it('fails (exit 1) when the how-to dataset dir is missing (no silent skip)', () => {
-    buildFixture('1 skills', '', false)
-    const { status, stdout } = runCheck()
-    expect(status).toBe(1)
-    expect(stdout).toContain('how-to')
-    expect(stdout).toContain('not found')
+  it('counts NN-how-to-*.md files in the real dataset (ignoring README)', () => {
+    const n = countHowToGuides(
+      resolve(REPO_ROOT, 'packages/knowledge-hub/dataset/.pair/knowledge/how-to'),
+    )
+    expect(n).toBe(9)
+  })
+})
+
+describe('findDeadLinks', () => {
+  const routes = new Set(['/docs', '/docs/reference/skills-catalog', '/docs/tutorials'])
+
+  it('flags a dead markdown link', () => {
+    expect(findDeadLinks('see [x](/docs/nope)', 'a.mdx', routes)).toHaveLength(1)
   })
 
-  it('does NOT false-positive on bare "N guides" prose (non-how-to phrasing)', () => {
-    // Tightened GUIDE_COUNT_RE must ignore arbitrary "N guides" that lack a
-    // how-to/process/sequential/step-by-step qualifier — even when N is "wrong".
-    buildFixture('1 skills', 'The city has 5 guides at the museum and 3 tour guides.\n')
-    const { status, stdout } = runCheck()
-    expect(status, stdout).toBe(0)
+  it('flags a dead JSX href="/docs/..." card link', () => {
+    const errs = findDeadLinks('<Card href="/docs/does-not-exist">x</Card>', 'a.mdx', routes)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('/docs/does-not-exist')
   })
 
-  it('fails (exit 1) on a dead JSX href="/docs/..." card link', () => {
-    buildFixture('1 skills', '<Card href="/docs/does-not-exist">Broken</Card>\n')
-    const { status, stdout } = runCheck()
-    expect(status).toBe(1)
-    expect(stdout).toContain('Dead internal link')
-    expect(stdout).toContain('/docs/does-not-exist')
+  it('passes a valid JSX href and a valid markdown link (incl. anchors)', () => {
+    const ok = '<Card href="/docs/reference/skills-catalog">x</Card> and [t](/docs/tutorials#top)'
+    expect(findDeadLinks(ok, 'a.mdx', routes)).toHaveLength(0)
+  })
+})
+
+describe('checkCatalogSync', () => {
+  it('flags a skill dir missing from the catalog', () => {
+    expect(checkCatalogSync(['implement'], 'no rows here')).toHaveLength(1)
   })
 
-  it('passes (exit 0) on a valid JSX href="/docs/..." card link', () => {
-    buildFixture('1 skills', '<Card href="/docs/reference/skills-catalog">OK</Card>\n')
-    const { status, stdout } = runCheck()
-    expect(status, stdout).toBe(0)
+  it('flags a catalog row with no matching dir', () => {
+    expect(checkCatalogSync([], '| **ghost** | row |')).toHaveLength(1)
+  })
+
+  it('passes when both directions agree', () => {
+    expect(checkCatalogSync(['implement'], '| **implement** | row |')).toHaveLength(0)
+  })
+})
+
+describe('checkCommandAnchors', () => {
+  it('flags a command dir with no anchor', () => {
+    expect(checkCommandAnchors(['install'], 'no anchors')).toHaveLength(1)
+  })
+
+  it('passes when the anchor exists', () => {
+    expect(checkCommandAnchors(['install'], '## install (#install)')).toHaveLength(0)
+  })
+})
+
+describe('checkTutorialCommands', () => {
+  it('flags an unknown pair-cli command reference', () => {
+    expect(checkTutorialCommands(['run pair-cli bogus'], ['install'])).toHaveLength(1)
+  })
+
+  it('ignores builtins and prose words after pair-cli', () => {
+    expect(
+      checkTutorialCommands(['pair-cli --version', 'pair-cli is installed'], ['install']),
+    ).toHaveLength(0)
+  })
+})
+
+describe('buildValidRoutes', () => {
+  it('maps index.mdx to /docs and folder index to the folder route', () => {
+    const docsDir = '/x/docs'
+    const routes = buildValidRoutes(
+      ['/x/docs/index.mdx', '/x/docs/reference/index.mdx', '/x/docs/tutorials/first.mdx'],
+      docsDir,
+    )
+    expect(routes.has('/docs')).toBe(true)
+    expect(routes.has('/docs/reference')).toBe(true)
+    expect(routes.has('/docs/tutorials/first')).toBe(true)
+  })
+})
+
+describe('runAllChecks (in-process, real docs tree)', () => {
+  it('reports zero drift and 35 skills against the actual repo', () => {
+    const { errors, skillCount } = runAllChecks(REPO_ROOT)
+    expect(errors, errors.join('\n')).toHaveLength(0)
+    expect(skillCount).toBe(35)
   })
 })

@@ -35,7 +35,7 @@ Total: **69 pages**. Root `meta.json` orders 13 sidebar entries in two groups (l
 
 Entry points: the marketing landing page links to `/docs` (root Welcome), `/docs/customization/team`, `/docs/customization/organization` (`app/(landing)/`). `llms.txt` / `llms-full.txt` are generated from the source loader (`lib/get-llm-text.ts`) so they follow the tree automatically.
 
-Staleness gate (`scripts/docs-staleness-check.js`) covers exactly: skill count + skill rows in `reference/skills-catalog.mdx`, command anchors in `reference/cli/commands.mdx`, and `pair-cli <cmd>` references in `tutorials/*.mdx`. Nothing else.
+Staleness gate (`apps/website/lib/docs-staleness-check.ts`) covers exactly: skill count + skill rows in `reference/skills-catalog.mdx`, command anchors in `reference/cli/commands.mdx`, and `pair-cli <cmd>` references in `tutorials/*.mdx`. Nothing else.
 
 ### Audience-journey read
 
@@ -53,7 +53,7 @@ Staleness gate (`scripts/docs-staleness-check.js`) covers exactly: skill count +
 | F2 | Major | Findability | **8 broken internal links to index-less section URLs.** `concepts/`, `guides/`, `reference/` have no `index.mdx`, so their URLs 404 under Fumadocs, yet pages link to them: `/docs/concepts` ← `tutorials/index.mdx`, `tutorials/first-project.mdx`, `tutorials/existing-project.mdx`; `/docs/guides` ← `tutorials/index.mdx`, `tutorials/first-project.mdx`, `tutorials/team-setup.mdx`, `tutorials/enterprise-adoption.mdx`; `/docs/reference` ← `tutorials/index.mdx`. |
 | F3 | Major | Consistency / Audience fit | **`guides/` is a grab-bag.** Seven unrelated pages spanning three audiences: adopter recipes (`customize-kb`, `adopter-checklist`), KB-publisher ops (`packaging`, `install-from-url`, `update-link`), CLI usage (`cli-workflows`), and support content (`troubleshooting`). No index page, no shared theme, no principled rule for what lands here vs. `customization/` or `reference/`. |
 | F4 | Major | Redundancy | **Two overlapping troubleshooting/FAQ pages.** `support/faq.mdx` ("Installation FAQ", 361 lines) and `guides/troubleshooting.mdx` (236 lines) both cover permission errors, Node version issues, PATH/command-not-found — with different fixes recommended (e.g. npm-permissions vs. nvm). They cross-link each other. Guaranteed drift. |
-| F5 | Major | Redundancy / Staleness | **Hardcoded skill counts have already drifted, and the gate doesn't see them.** Actual count: 35. Docs say **30** (`getting-started/index.mdx:18`), **32** (`developer-journey/index.mdx:43,120`, `developer-journey/execution.mdx:123`, `reference/kb-structure.mdx:124`), **34** (`reference/guidelines-catalog.mdx:160`). `scripts/docs-staleness-check.js` only checks `reference/skills-catalog.mdx`. |
+| F5 | Major | Redundancy / Staleness | **Hardcoded skill counts have already drifted, and the gate doesn't see them.** Actual count: 35. Docs say **30** (`getting-started/index.mdx:18`), **32** (`developer-journey/index.mdx:43,120`, `developer-journey/execution.mdx:123`, `reference/kb-structure.mdx:124`), **34** (`reference/guidelines-catalog.mdx:160`). The gate then only checked `reference/skills-catalog.mdx`. |
 | F6 | Major | Findability / Consistency | **Duplicate sidebar titles and undifferentiated parallel tracks.** "Team Setup" appears twice (`getting-started/quickstart-team.mdx` and `tutorials/team-setup.mdx`). The quickstart triad (solo/team/org) and the tutorial triad (first-project/team-setup/enterprise-adoption) are intentionally parallel (quick vs. deep) but their titles don't signal which is which. |
 | F7 | Major | Redundancy | **KB packaging documented twice.** `guides/packaging.mdx` (125 lines) and the "Package for Distribution" / "Verify Your Package" sections of `customization/organization.mdx` (221 lines) describe the same `pair-cli package` procedure and layout modes. |
 | F8 | Minor | Redundancy | **`guides/customize-kb.mdx`** (63-line recipe) restates the core of `customization/team.mdx` (identify → override → verify) and links to it. Fine as a recipe, wrong as a sibling section. |
@@ -236,7 +236,7 @@ Top-level = Tutorials / How-to / Explanation / Reference; every section re-paren
 
 **Cross-link updates** — inbound links into moved pages (from the link audit): `guides/install-from-url` ← 4 links (`tutorials/managing-ai-artifacts` ×2, `customization/adopt`, `customization/organization`); `guides/customize-kb` ← 5; `guides/troubleshooting` ← 4; `guides/cli-workflows` ← 3; `guides/update-link` ← 2; `guides/adopter-checklist` ← 1; `guides/packaging` ← 0; `support/faq` ← 5. Plus the 8 broken section links (F2). A repo-wide grep for `/docs/guides` and `/docs/support/faq` catches all of it.
 
-**Docs-staleness gate** (`scripts/docs-staleness-check.js`):
+**Docs-staleness gate** (`apps/website/lib/docs-staleness-check.ts`):
 
 - Unaffected by Option A moves: its anchors (`reference/skills-catalog.mdx`, `reference/cli/commands.mdx`, `tutorials/`) keep their paths — this is why `commands.mdx` and `skills-catalog.mdx` are frozen in the mapping.
 - **Extend it** (batch 1): run the `(\d+)\s+(?:pair\s+)?skills` count check across *all* of `content/docs/**/*.mdx`, not just the catalog — that turns F5 from recurring drift into a CI failure. Optionally add a dead-internal-link check (resolve `](/docs/...)` targets against the source loader), which would have caught F2.
