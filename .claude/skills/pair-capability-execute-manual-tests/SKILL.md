@@ -166,7 +166,9 @@ To maximize reliability when executed by AI agents:
 
 ## Graceful Degradation
 
-- **No test suite found**: HALT with guidance to run `/pair-capability-design-manual-tests` first.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline/template missing → use a minimal structure directly) for the standard scenarios. Additional cases:
+
+- **No test suite found**: HALT with guidance to run `/pair-capability-design-manual-tests` first (a required dependency, not optional).
 - **`agent-browser` not available**: Fall back to Playwright MCP. If Playwright MCP also unavailable, fall back to WebFetch/curl for HTTP checks. Mark interactive tests (search, responsive) as BLOCKED.
 - **No internet**: Skip tests requiring network (website, registry, auto-download). Mark as BLOCKED with reason.
 - **Suite-specific variable not resolvable**: Mark dependent tests as BLOCKED with the resolution hint from the suite README.
