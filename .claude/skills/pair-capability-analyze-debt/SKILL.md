@@ -13,8 +13,8 @@ Detect, categorize, and prioritize technical debt items. Applies the prioritizat
 
 | Argument | Required | Description                                                                                                                                      |
 | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `$scope` | No       | Limit assessment to specific categories: `code`, `design`, `test`, `documentation`, `infrastructure`, `all` (default: `all`)                    |
-| `$choice`| No       | Pre-identified debt item to assess (e.g., `"missing error handling in API layer"`). Skips detection, goes directly to categorization and scoring. |
+| `$scope` | No       | Limit analysis to specific categories: `code`, `design`, `test`, `documentation`, `infrastructure`, `all` (default: `all`)                    |
+| `$choice`| No       | Pre-identified debt item to analyze (e.g., `"missing error handling in API layer"`). Skips detection, goes directly to categorization and scoring. |
 
 ## Composed Skills
 
@@ -31,18 +31,18 @@ This skill is **output-only** — it composes no skill and writes no files. No a
 3. **Act**: Accept the pre-identified debt item. Skip detection (Step 2). Proceed directly to Step 3 (categorization) with the single item.
 4. **Verify**: Item accepted.
 
-#### Path B — Existing Assessment
+#### Path B — Existing Analysis
 
-1. **Check**: Is there an existing debt assessment for this codebase/PR? (Look for a recent debt report in the conversation context or PR comments.)
-2. **Skip**: If no existing assessment, go to Path C.
-3. **Act**: Present the existing assessment:
+1. **Check**: Is there an existing debt analysis for this codebase/PR? (Look for a recent debt report in the conversation context or PR comments.)
+2. **Skip**: If no existing analysis, go to Path C.
+3. **Act**: Present the existing analysis:
 
-   > Existing debt assessment found ([N items], [date]).
-   > Re-assess? (Only if explicitly requested by developer.)
+   > Existing debt analysis found ([N items], [date]).
+   > Re-analyze? (Only if explicitly requested by developer.)
 
-4. **Verify**: If developer confirms existing → exit. If re-assessment requested → proceed to Path C.
+4. **Verify**: If developer confirms existing → exit. If re-analysis requested → proceed to Path C.
 
-#### Path C — Full Assessment
+#### Path C — Full Analysis
 
 1. **Act**: Proceed to Step 2 (detection).
 
@@ -150,7 +150,7 @@ For each detected item, apply the prioritization formula:
 ## Output Format
 
 ```text
-TECH DEBT ASSESSMENT (output-only — no files or issues created):
+TECH DEBT ANALYSIS (output-only — no files or issues created):
 ├── Items Found:  [N total]
 ├── Categories:   Code: [N] | Design: [N] | Test: [N] | Docs: [N] | Infra: [N]
 ├── Severity:     High: [N] | Medium: [N] | Low: [N]
@@ -166,7 +166,7 @@ REMEDIATION PLAN (High severity):
 1. [item] — [strategy] (est. [effort])
 2. ...
 
-RESULT: [N items assessed, N high-priority — report only, nothing created/blocked]
+RESULT: [N items analyzed, N high-priority — report only, nothing created/blocked]
 ```
 
 ## Composition Interface
@@ -174,7 +174,7 @@ RESULT: [N items assessed, N high-priority — report only, nothing created/bloc
 When composed by `/pair-process-review`:
 
 - **Input**: /pair-process-review invokes `/pair-capability-analyze-debt` during the completeness phase (Phase 4).
-- **Output**: Returns the debt assessment report. /pair-process-review incorporates findings into review output (the Tech Debt section).
+- **Output**: Returns the debt report. /pair-process-review incorporates findings into review output (the Tech Debt section).
   - Debt items are **informational** — they do **not** HALT the review and **never** block the PR.
   - /pair-process-review does **not** auto-create tech-debt issues. Items worth tracking are promoted deliberately (after review) via `/pair-capability-write-issue` with the `tech-debt` label.
 
@@ -192,6 +192,6 @@ When invoked **independently**:
 
 ## Notes
 
-- **Idempotent**: re-invocation on an already-assessed codebase confirms the existing assessment. Re-assessment only on explicit developer request.
+- **Idempotent**: re-invocation on an already-analyzed codebase confirms the existing analysis. Re-analysis only on explicit developer request.
 - Prioritization formula `Impact × (6 - Effort)` favors quick wins: high-impact items with low effort get the highest scores.
 - Debt is contextual — the same pattern may be acceptable in a prototype but unacceptable in production code. Severity assessment considers the project's maturity and risk tolerance.

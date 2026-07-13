@@ -11,15 +11,15 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 
 ## Composed Skills
 
-| Skill              | Type       | Required | Phase | Purpose                              |
-| ------------------ | ---------- | -------- | ----- | ------------------------------------ |
-| `/pair-capability-verify-quality`  | Capability | Yes      | 2     | Quality gate checking                |
-| `/pair-capability-verify-done`     | Capability | Yes      | 4     | Definition of Done checking          |
-| `/pair-capability-record-decision` | Capability | Yes      | Any   | Record missing ADR (HALT condition)  |
-| `/pair-capability-analyze-debt`     | Capability | Yes      | 4     | Flag tech debt items                 |
-| `/pair-capability-verify-adoption`       | Capability | Optional | 3     | Full adoption compliance                       |
-| `/pair-capability-assess-stack`          | Capability | Optional | 3     | Tech-stack resolution                          |
-| `/pair-capability-execute-manual-tests`  | Capability | Optional | 6     | Post-merge release validation (manual tests)   |
+| Skill                                   | Type       | Required | Phase | Purpose                                      |
+| --------------------------------------- | ---------- | -------- | ----- | -------------------------------------------- |
+| `/pair-capability-verify-quality`       | Capability | Yes      | 2     | Quality gate checking                        |
+| `/pair-capability-verify-done`          | Capability | Yes      | 4     | Definition of Done checking                  |
+| `/pair-capability-record-decision`      | Capability | Yes      | Any   | Record missing ADR (HALT condition)          |
+| `/pair-capability-analyze-debt`         | Capability | Yes      | 4     | Flag tech debt items                         |
+| `/pair-capability-verify-adoption`      | Capability | Optional | 3     | Full adoption compliance                     |
+| `/pair-capability-assess-stack`         | Capability | Optional | 3     | Tech-stack resolution                        |
+| `/pair-capability-execute-manual-tests` | Capability | Optional | 6     | Post-merge release validation (manual tests) |
 
 ## Arguments
 

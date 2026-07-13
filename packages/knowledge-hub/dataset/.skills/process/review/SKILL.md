@@ -11,15 +11,15 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 
 ## Composed Skills
 
-| Skill              | Type       | Required | Phase | Purpose                              |
-| ------------------ | ---------- | -------- | ----- | ------------------------------------ |
-| `/verify-quality`  | Capability | Yes      | 2     | Quality gate checking                |
-| `/verify-done`     | Capability | Yes      | 4     | Definition of Done checking          |
-| `/record-decision` | Capability | Yes      | Any   | Record missing ADR (HALT condition)  |
-| `/analyze-debt`     | Capability | Yes      | 4     | Flag tech debt items                 |
-| `/verify-adoption`       | Capability | Optional | 3     | Full adoption compliance                       |
-| `/assess-stack`          | Capability | Optional | 3     | Tech-stack resolution                          |
-| `/execute-manual-tests`  | Capability | Optional | 6     | Post-merge release validation (manual tests)   |
+| Skill                   | Type       | Required | Phase | Purpose                                      |
+| ----------------------- | ---------- | -------- | ----- | -------------------------------------------- |
+| `/verify-quality`       | Capability | Yes      | 2     | Quality gate checking                        |
+| `/verify-done`          | Capability | Yes      | 4     | Definition of Done checking                  |
+| `/record-decision`      | Capability | Yes      | Any   | Record missing ADR (HALT condition)          |
+| `/analyze-debt`         | Capability | Yes      | 4     | Flag tech debt items                         |
+| `/verify-adoption`      | Capability | Optional | 3     | Full adoption compliance                     |
+| `/assess-stack`         | Capability | Optional | 3     | Tech-stack resolution                        |
+| `/execute-manual-tests` | Capability | Optional | 6     | Post-merge release validation (manual tests) |
 
 ## Arguments
 

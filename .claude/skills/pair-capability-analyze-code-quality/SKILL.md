@@ -13,8 +13,8 @@ Evaluate code quality using objective metrics from [code-metrics.md](../../../.p
 
 | Argument | Required | Description                                                                                       |
 | -------- | -------- | ------------------------------------------------------------------------------------------------- |
-| `$scope` | No       | Limit assessment to specific metric group: `complexity`, `size`, `coverage`, `duplication`, `maintainability`, `all` (default: `all`) |
-| `$path`  | No       | Limit assessment to a specific file, directory, or package. If omitted, assesses the full codebase. |
+| `$scope` | No       | Limit analysis to specific metric group: `complexity`, `size`, `coverage`, `duplication`, `maintainability`, `all` (default: `all`) |
+| `$path`  | No       | Limit analysis to a specific file, directory, or package. If omitted, analyzes the full codebase. |
 
 ## Algorithm
 
@@ -22,19 +22,19 @@ Evaluate code quality using objective metrics from [code-metrics.md](../../../.p
 
 #### Path A — Existing Recent Report
 
-1. **Check**: Is there an existing quality report for this codebase? (Check conversation context, CI artifacts, or previous assessment output.)
+1. **Check**: Is there an existing quality report for this codebase? (Check conversation context, CI artifacts, or previous analysis output.)
 2. **Skip**: If no existing report, go to Path B.
 3. **Act**: Check staleness:
-   - Has the codebase changed since the last assessment? (Use `git diff --stat` since last assessment date or commit.)
+   - Has the codebase changed since the last analysis? (Use `git diff --stat` since last analysis date or commit.)
    - If no changes → confirm existing report is still valid. Exit.
    - If changes exist → report is stale. Present summary of changes and proceed to Path B.
 
-   > Existing quality report found ([date]). [N files changed since last assessment.]
-   > Re-assess? (Recommended — codebase has changed.)
+   > Existing quality report found ([date]). [N files changed since last analysis.]
+   > Re-analyze? (Recommended — codebase has changed.)
 
-4. **Verify**: If confirmed valid → exit. If stale or re-assessment requested → proceed to Path B.
+4. **Verify**: If confirmed valid → exit. If stale or re-analysis requested → proceed to Path B.
 
-#### Path B — Full Assessment
+#### Path B — Full Analysis
 
 1. **Act**: Proceed to Step 2.
 
@@ -134,7 +134,7 @@ RECOMMENDATIONS:
 1. [priority] [metric] — [current] → [target]: [action]
 2. ...
 
-RESULT: [Quality score: N/100 | Assessed | Confirmed existing]
+RESULT: [Quality score: N/100 | Analyzed | Confirmed existing]
 ```
 
 ## Composition Interface
@@ -160,7 +160,7 @@ When invoked **independently**:
 ## Notes
 
 - This skill is **read-only / output-only** — it inspects code, runs coverage (via existing test commands), but never modifies files, adoption, or the PM tool. A finding worth tracking is promoted deliberately to the backlog via `/pair-capability-write-issue` (a manual, selective act) — never auto-created.
-- **Idempotent**: re-invocation checks staleness of existing report. If codebase unchanged → confirms existing report. If changed → re-assesses only.
+- **Idempotent**: re-invocation checks staleness of existing report. If codebase unchanged → confirms existing report. If changed → re-analyzes only.
 - Metrics are **health indicators, not absolute quality measures**. Context matters: business logic naturally has higher complexity, and metric targets should align with team capabilities.
-- Quality assessment is most valuable as a **trend** — individual snapshots matter less than improvement direction over time.
-- The maintainability index is a composite heuristic — it provides a single number for quick assessment but the component metrics offer more actionable insights.
+- Quality analysis is most valuable as a **trend** — individual snapshots matter less than improvement direction over time.
+- The maintainability index is a composite heuristic — it provides a single number for quick analysis but the component metrics offer more actionable insights.
