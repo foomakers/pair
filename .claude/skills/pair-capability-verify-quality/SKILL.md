@@ -1,6 +1,6 @@
 ---
 name: pair-capability-verify-quality
-description: "Checks quality gates against the current codebase. Reads project-specific quality gate command from way-of-working adoption and universal standards from quality-standards guidelines. Gates already passing are skipped. Invocable independently or composed by /pair-process-implement and /pair-process-review."
+description: "Checks whether the codebase currently passes its quality gates (lint, tests, type-check, coverage) — pass/fail per gate, skipping gates already passing. Composed by /pair-process-implement and /pair-process-review; invoke directly before pushing to check gates on demand."
 version: 0.4.1
 author: Foomakers
 ---

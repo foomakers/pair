@@ -1,6 +1,6 @@
 ---
 name: pair-capability-assess-infrastructure
-description: "Assess infrastructure strategy using resolution cascade (Argument > Adoption > Assessment). Reads infrastructure guidelines, proposes cloud/CI/CD/deployment choices and emits rendered adoption content + target (output-only, writes nothing); the caller persists via /pair-capability-record-decision. Idempotent."
+description: "Evaluates and recommends infrastructure strategy — cloud provider, CI/CD pipeline, deployment pattern, IaC, environments — when the choice is open. Output-only: emits a proposal + target for /pair-capability-record-decision to persist."
 version: 0.5.0
 author: Foomakers
 ---

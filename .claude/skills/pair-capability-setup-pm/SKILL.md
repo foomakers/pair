@@ -1,6 +1,6 @@
 ---
 name: pair-capability-setup-pm
-description: "Configures the project management tool by guiding selection from supported options, applying the implementation guide, updating way-of-working adoption, and recording the decision via /pair-capability-record-decision. Idempotent — detects existing configuration."
+description: "Configures the project management tool — creates/wires it up, applies its implementation guide, updates way-of-working, records the decision — whether the tool was already chosen or picked here. Invoke directly to set up a tracker ('configure Jira', 'set up GitHub Projects'). Composed by /pair-process-bootstrap; /pair-capability-assess-pm delegates here once a tool is picked."
 version: 0.4.1
 author: Foomakers
 ---

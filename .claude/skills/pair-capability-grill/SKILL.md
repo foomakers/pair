@@ -1,6 +1,6 @@
 ---
 name: pair-capability-grill
-description: "Reusable interview engine: one question at a time, always with a recommendation, exploring KB/codebase before asking. sync mode drives systematic AI-human alignment on every story aspect until explicit shared understanding is confirmed. Write-free by design — returns the synthesis to the caller, never writes adoption or issues. Invocable standalone or composed by /pair-process-brainstorm (phase 1, planned — #230) and /pair-process-refine-story (phase 0)."
+description: "Interviews one question at a time, always with a recommendation, after exploring the KB/codebase first; sync mode drives systematic AI-human alignment on a story until shared understanding is confirmed. Invoke directly to interview on any topic ('grill me on the requirements'). Composed by /pair-process-refine-story and a future /pair-process-brainstorm (planned — #230). Write-free — returns the synthesis, never writes adoption or issues."
 version: 0.4.1
 author: Foomakers
 ---

@@ -1,6 +1,6 @@
 ---
 name: pair-capability-assess-stack
-description: "Assess tech stack using resolution cascade (Argument > Adoption > Assessment). Lifecycle-spanning: bootstrap (full eval), implementation (add dependency), review (detect unlisted). Version tracking. Output-only: emits rendered adoption content + target; the caller persists via /pair-capability-record-decision. Idempotent."
+description: "Evaluates and recommends the tech stack — languages, frameworks, database, libraries, versions — when the choice is open: full evaluation at bootstrap, or a single new dependency during implementation ('should we add Redis', 'is this new dependency consistent with our stack'). Doesn't audit code already written (that's /pair-capability-verify-adoption). Output-only: emits a proposal + target for /pair-capability-record-decision to persist."
 version: 0.5.0
 author: Foomakers
 ---

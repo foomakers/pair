@@ -1,6 +1,6 @@
 ---
 name: analyze-code-quality
-description: "Analyzes code quality using resolution cascade (Argument > Adoption > Assessment). Applies quality score formula from code-metrics guidelines. Produces quality report with complexity, size, coverage, and maintainability metrics (output-only, writes nothing). Idempotent: detects existing report, checks staleness. Invocable independently or composed by /review."
+description: "Produces an objective code quality report — complexity, size, coverage, duplication, maintainability score — for a repo or package, with actionable recommendations. Composed by /review; invoke directly for a report on demand ('code quality report', 'how maintainable is this'). Output-only: writes nothing, never blocks."
 version: 0.5.0
 author: Foomakers
 ---

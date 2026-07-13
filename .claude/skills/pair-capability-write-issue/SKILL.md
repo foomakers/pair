@@ -1,6 +1,6 @@
 ---
 name: pair-capability-write-issue
-description: "Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Supports topical labels (e.g. tech-debt) for deliberate promotion. Invocable independently or composed by /pair-process-refine-story, /pair-process-plan-tasks, /pair-process-plan-initiatives, /pair-process-plan-epics, and /pair-process-plan-stories."
+description: "Creates or updates an issue in the adopted PM tool from a type-specific template (bug, story, epic, etc.), including topical labels (e.g. tech-debt) for deliberate promotion. Invoke directly to create/update one issue on demand. Composed by /pair-process-refine-story, /pair-process-plan-tasks, /pair-process-plan-initiatives, /pair-process-plan-epics, /pair-process-plan-stories."
 version: 0.5.0
 author: Foomakers
 ---

@@ -1,6 +1,6 @@
 ---
 name: pair-capability-verify-adoption
-description: "Checks code and configuration against project adoption files for a given scope. Detection-only: returns conformity/non-conformity list per area without resolving issues. Caller decides resolution. Invocable independently or composed by /pair-process-review and /pair-process-implement."
+description: "Detects conformity/non-conformity of already-written code and configuration against the project's adopted decisions (architecture, tech-stack, infrastructure, etc.), for a given scope — a compliance audit, not a new-choice evaluation (that's /pair-capability-assess-stack and siblings). Detection-only; resolution is the caller's. Composed by /pair-process-review and /pair-process-implement; invoke directly to audit a scope on demand."
 version: 0.4.1
 author: Foomakers
 ---

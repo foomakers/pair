@@ -1,6 +1,6 @@
 ---
 name: pair-capability-assess-observability
-description: "Assess observability strategy using resolution cascade (Argument > Adoption > Assessment). Reads observability guidelines, proposes monitoring/logging/tracing choices and emits rendered adoption content + target (output-only, writes nothing); the caller persists via /pair-capability-record-decision. Idempotent."
+description: "Evaluates and recommends the observability strategy — monitoring, logging, tracing, alerting, telemetry — when the choice is open. Output-only: emits a proposal + target for /pair-capability-record-decision to persist."
 version: 0.5.0
 author: Foomakers
 ---

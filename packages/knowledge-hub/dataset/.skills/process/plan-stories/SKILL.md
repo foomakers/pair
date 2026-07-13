@@ -1,6 +1,6 @@
 ---
 name: plan-stories
-description: "Breaks epics into user stories using vertical slicing and INVEST validation. Composes /write-issue with $type: story. Idempotent: detects existing stories, creates only missing ones."
+description: "Slices an epic into user stories via vertical slicing and INVEST validation, each sized for one sprint. Composes /write-issue."
 version: 0.4.1
 author: Foomakers
 ---

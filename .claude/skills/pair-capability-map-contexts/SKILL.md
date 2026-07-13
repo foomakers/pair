@@ -1,6 +1,6 @@
 ---
 name: pair-capability-map-contexts
-description: "Maps subdomains to DDD bounded contexts, scoped to the caller's touched items. Assesses each relationship on integration strength, socio-technical distance and volatility to derive the integration pattern and gate unbalanced+volatile relationships at approval. Falls back to 'system areas' when no DDD artifacts exist yet. Produces/updates files in adoption/tech/boundedcontext/ using bounded-context-template.md. Composed by /pair-process-refine-story, /pair-process-plan-tasks, /brainstorm — full scope only via /pair-process-bootstrap. Idempotent."
+description: "Maps subdomains to DDD bounded contexts and derives the integration pattern between them (integration strength, socio-technical distance, volatility), scoped to items just touched. Composed by /pair-process-refine-story, /pair-process-plan-tasks, a future /pair-process-brainstorm (planned — #230); full-scope re-mapping only via /pair-process-bootstrap."
 version: 0.4.1
 author: Foomakers
 ---

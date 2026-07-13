@@ -1,6 +1,6 @@
 ---
 name: setup-gates
-description: "Configures CI/CD quality gates per quality-assurance guidelines, producing pipeline configuration for the adopted tech stack. Provisions shared lint/format config packages and husky pre-commit/pre-push hooks. Reads existing gate config from way-of-working. Idempotent: detects existing configuration, confirms rather than re-configuring."
+description: "Configures CI/CD quality gates — pipeline config, shared lint/format packages, husky hooks — for the adopted tech stack. Invoke directly to set up or reconfigure gates; idempotent — confirms existing configuration rather than re-configuring."
 version: 0.4.1
 author: Foomakers
 ---

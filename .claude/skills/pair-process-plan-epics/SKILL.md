@@ -1,6 +1,6 @@
 ---
 name: pair-process-plan-epics
-description: "Breaks initiatives into epics through structured analysis and collaborative validation. Composes /pair-capability-write-issue with $type: epic. Idempotent: detects existing epics, creates only missing ones. Includes Epic 0 assessment for new projects."
+description: "Breaks a strategic initiative into epics — each delivering end-to-end value in 2-4 sprints — through structured analysis and validation. Composes /pair-capability-write-issue. Not for filing a single epic issue from text you already wrote (that's /pair-capability-write-issue directly)."
 version: 0.4.1
 author: Foomakers
 ---

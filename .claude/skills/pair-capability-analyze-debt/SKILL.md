@@ -1,6 +1,6 @@
 ---
 name: pair-capability-analyze-debt
-description: "Analyzes technical debt using resolution cascade (Argument > Adoption > Assessment). Categorizes debt (code, design, test, documentation, infrastructure), applies prioritization formula (impact x effort), proposes remediation priority. Output-only: returns a report, writes no files, creates no backlog items, never blocks. Idempotent. Invocable independently or composed by /pair-process-review."
+description: "Produces a technical debt report — categorized items (code, design, test, documentation, infrastructure), prioritized by impact x effort. Composed by /pair-process-review; invoke directly to catalog and prioritize debt on demand. Output-only: writes no files, creates no backlog items, never blocks a PR."
 version: 0.5.0
 author: Foomakers
 ---

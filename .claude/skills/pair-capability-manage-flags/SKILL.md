@@ -1,6 +1,6 @@
 ---
 name: pair-capability-manage-flags
-description: "Manages feature flag lifecycle: creation, activation, deactivation, and cleanup. Follows feature-flags guidelines. Idempotent: detects existing flags, shows current state, offers lifecycle actions rather than re-creating."
+description: "Manages a feature flag's lifecycle — creation, activation, deactivation, cleanup — per the feature-flags guidelines. Invoke directly to create/retire a flag or check its current state; idempotent."
 version: 0.4.1
 author: Foomakers
 ---

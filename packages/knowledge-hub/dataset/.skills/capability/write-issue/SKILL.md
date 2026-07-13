@@ -1,6 +1,6 @@
 ---
 name: write-issue
-description: "Creates or updates issues in the adopted PM tool using template-driven formatting. Reads way-of-working for tool choice and type-specific templates for body structure. Supports topical labels (e.g. tech-debt) for deliberate promotion. Invocable independently or composed by /refine-story, /plan-tasks, /plan-initiatives, /plan-epics, and /plan-stories."
+description: "Creates or updates an issue in the adopted PM tool from a type-specific template (bug, story, epic, etc.), including topical labels (e.g. tech-debt) for deliberate promotion. Invoke directly to create/update one issue on demand. Composed by /refine-story, /plan-tasks, /plan-initiatives, /plan-epics, /plan-stories."
 version: 0.5.0
 author: Foomakers
 ---

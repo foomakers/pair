@@ -1,6 +1,6 @@
 ---
 name: pair-capability-assess-architecture
-description: "Assess architecture pattern using resolution cascade (Argument > Adoption > Assessment). Reads architecture guidelines, proposes a pattern and emits rendered adoption content + target (output-only, writes nothing); the caller persists via /pair-capability-record-decision. Idempotent."
+description: "Evaluates and recommends an architecture pattern (layered, hexagonal, microservices, modular monolith, etc.) when the choice is open. Output-only: emits a proposal + target for /pair-capability-record-decision to persist."
 version: 0.5.0
 author: Foomakers
 ---
