@@ -72,6 +72,35 @@ describe('docs-staleness-check skill count gate', () => {
     expect(stdout).toContain('PASS')
   })
 
+  it('fails (exit 1) on wrong "N composable skills" (adjective between number and skills)', () => {
+    buildFixture('7 composable skills')
+    const { status, stdout } = runCheck()
+    expect(status).toBe(1)
+    expect(stdout).toContain('Skill count mismatch')
+    expect(stdout).toContain('7 composable skills')
+  })
+
+  it('fails (exit 1) on wrong "N+ skills" (trailing plus)', () => {
+    buildFixture('7+ skills')
+    const { status, stdout } = runCheck()
+    expect(status).toBe(1)
+    expect(stdout).toContain('Skill count mismatch')
+  })
+
+  it('fails (exit 1) on wrong "N agent skills"', () => {
+    buildFixture('1 skills', 'The standard exposes 7 agent skills.\n')
+    const { status, stdout } = runCheck()
+    expect(status).toBe(1)
+    expect(stdout).toContain('Skill count mismatch')
+    expect(stdout).toContain('7 agent skills')
+  })
+
+  it('passes (exit 0) on matching "N composable skills" / "N+ skills"', () => {
+    buildFixture('1 skills', 'Exactly 1 composable skills and 1+ skills.\n')
+    const { status, stdout } = runCheck()
+    expect(status, stdout).toBe(0)
+  })
+
   it('fails (exit 1) when a docs page claims a wrong how-to guide count', () => {
     buildFixture('1 skills', 'The KB ships 11 how-to guides.\n')
     const { status, stdout } = runCheck()
@@ -101,5 +130,27 @@ describe('docs-staleness-check skill count gate', () => {
     expect(status).toBe(1)
     expect(stdout).toContain('how-to')
     expect(stdout).toContain('not found')
+  })
+
+  it('does NOT false-positive on bare "N guides" prose (non-how-to phrasing)', () => {
+    // Tightened GUIDE_COUNT_RE must ignore arbitrary "N guides" that lack a
+    // how-to/process/sequential/step-by-step qualifier — even when N is "wrong".
+    buildFixture('1 skills', 'The city has 5 guides at the museum and 3 tour guides.\n')
+    const { status, stdout } = runCheck()
+    expect(status, stdout).toBe(0)
+  })
+
+  it('fails (exit 1) on a dead JSX href="/docs/..." card link', () => {
+    buildFixture('1 skills', '<Card href="/docs/does-not-exist">Broken</Card>\n')
+    const { status, stdout } = runCheck()
+    expect(status).toBe(1)
+    expect(stdout).toContain('Dead internal link')
+    expect(stdout).toContain('/docs/does-not-exist')
+  })
+
+  it('passes (exit 0) on a valid JSX href="/docs/..." card link', () => {
+    buildFixture('1 skills', '<Card href="/docs/reference/skills-catalog">OK</Card>\n')
+    const { status, stdout } = runCheck()
+    expect(status, stdout).toBe(0)
   })
 })

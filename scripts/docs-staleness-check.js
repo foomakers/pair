@@ -57,11 +57,12 @@ const skillCount = allSkills.length
 const catalog = fs.readFileSync(CATALOG_FILE, 'utf-8')
 
 // Check 1: every occurrence of "N skills" across ALL docs pages matches actual count.
-// Regex is intentionally narrow to avoid prose false positives: it matches
-// "N skills", "N pair skills", "N composable skills" (the total-count phrasings
-// used in docs). Subset counts ("9 process skills") do NOT match because the
-// word between the number and "skills" must be pair/composable or absent.
-const COUNT_RE = /(\d+)\s+(?:pair\s+|composable\s+)?skills/g
+// Regex stays narrow to avoid prose false positives but covers the total-count
+// phrasings docs actually use: "N skills", "N+ skills" (trailing plus), and an
+// optional total-count adjective — "N pair/composable/agent/idempotent skills".
+// Subset counts ("9 process skills") still do NOT match: the adjective, when
+// present, must be one of the whitelisted total-count words.
+const COUNT_RE = /(\d+)\+?\s+(?:pair\s+|composable\s+|agent\s+|idempotent\s+)?skills/g
 for (const file of docsFiles) {
   const content = fs.readFileSync(file, 'utf-8')
   const rel = path.relative(DOCS_DIR, file)
@@ -104,10 +105,13 @@ if (!fs.existsSync(HOW_TO_DIR)) {
     .readdirSync(HOW_TO_DIR)
     .filter((f) => /^\d+-how-to-.*\.md$/.test(f)).length
 
-  // Optional adjective + optional modifier, mirroring Check 1's shape:
-  // "9 guides", "9 how-to guides", "9 sequential guides",
-  // "9 sequential how-to guides", "9 step-by-step guides", "9 process guides".
-  const GUIDE_COUNT_RE = /(\d+)\s+(?:sequential\s+|step-by-step\s+)?(?:how-to\s+|process\s+)?guides/g
+  // Requires a how-to qualifier so arbitrary "N guides" prose ("5 guides at the
+  // museum") never false-positives. A match needs EITHER a recognized adjective
+  // (sequential/step-by-step) OR a how-to/process word — bare "N guides" does not
+  // match. Covers: "9 how-to guides", "9 process guides", "9 sequential guides",
+  // "9 step-by-step guides", "9 sequential how-to guides", "9 step-by-step process guides".
+  const GUIDE_COUNT_RE =
+    /(\d+)\s+(?:(?:sequential|step-by-step)\s+(?:how-to\s+|process\s+)?|(?:how-to|process)\s+)guides/g
   for (const file of docsFiles) {
     const content = fs.readFileSync(file, 'utf-8')
     const rel = path.relative(DOCS_DIR, file)
@@ -172,8 +176,10 @@ if (fs.existsSync(TUTORIALS_DIR)) {
 }
 
 // --- Check 5: Dead internal docs links ---
-// Every markdown link target starting with /docs must resolve to a page in the
-// content tree (file route, or folder route backed by an index.mdx). Would have
+// Every /docs target must resolve to a page in the content tree (file route, or
+// folder route backed by an index.mdx). Scans BOTH markdown links `](/docs/...)`
+// and JSX card `href="/docs/..."` attributes (Fumadocs <Card>/<Cards>) — the
+// latter closes a coverage gap for the card-based section indexes. Would have
 // caught the index-less section links (/docs/concepts, /docs/guides, /docs/reference).
 
 const validRoutes = new Set()
@@ -184,16 +190,23 @@ for (const file of docsFiles) {
 }
 
 const LINK_RE = /\]\((\/docs[^)\s]*)\)/g
+const HREF_RE = /href="(\/docs[^"]*)"/g
 for (const file of docsFiles) {
   const content = fs.readFileSync(file, 'utf-8')
   const rel = path.relative(DOCS_DIR, file)
-  for (const m of content.matchAll(LINK_RE)) {
-    const target = m[1].split('#')[0].split('?')[0].replace(/\/$/, '') || '/docs'
-    if (!validRoutes.has(target)) {
-      errors.push(`Dead internal link in ${rel}: ${m[1]} does not resolve to a docs page`)
+  for (const re of [LINK_RE, HREF_RE]) {
+    for (const m of content.matchAll(re)) {
+      const target = m[1].split('#')[0].split('?')[0].replace(/\/$/, '') || '/docs'
+      if (!validRoutes.has(target)) {
+        errors.push(`Dead internal link in ${rel}: ${m[1]} does not resolve to a docs page`)
+      }
     }
   }
 }
+
+// NOTE: repo-root README.md is intentionally OUT of this gate's scope — the gate
+// governs the published docs site (apps/website/content/docs) only. README's own
+// literal skill/guide counts are tracked and fixed by PR #325.
 
 // --- Output ---
 
