@@ -1,6 +1,6 @@
 ---
 name: checkpoint
-description: "Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) so work survives context resets. Write mode persists state to .pair/working/checkpoints/<story-id>.md, one file per story; resume mode locates and parses it. Invocable independently; composed by a future closing phase of /implement (story #256) and a future /publish-pr (planned — #255) as a handoff."
+description: "Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) so work survives context resets. Write mode persists state to .pair/working/checkpoints/<story-id>.md, one file per story; resume mode locates and parses it. Invocable independently; composed by a future closing phase of /implement and a future /publish-pr (planned — #255) as a handoff."
 version: 0.4.1
 author: Foomakers
 ---
@@ -114,7 +114,7 @@ CHECKPOINT RESUMED:
 
 ## Composition Interface
 
-When composed by a future closing phase of `/implement` (story #256):
+When composed by a future closing phase of `/implement`:
 
 - **Input**: `/implement` would invoke `/checkpoint` with `$mode=write` between tasks (or on developer request) to persist progress, `$mode=resume` at Phase 0 when re-invoked on a story that may have been interrupted, and remove the checkpoint on story completion (cleanup).
 - **Output**: Write mode's returned text becomes the session's record of state. Resume mode's parsed state lets `/implement` skip re-analysis and jump straight to the first pending task.

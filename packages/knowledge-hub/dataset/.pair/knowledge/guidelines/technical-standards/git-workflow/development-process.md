@@ -21,6 +21,7 @@ This document establishes a comprehensive Git workflow that supports our rapid d
 - **Lifecycle**: Short-lived (days, not weeks)
 - **Origin**: Always branch from latest `main`
 - **Merge**: Via pull request with squash
+- **PR granularity — one PR per story**: A story is delivered on ONE branch with ONE PR, opened the first time and updated for all subsequent work on it (further tasks are commits/checkboxes within that same PR). Never open a second PR for the same story unless a human explicitly says so.
 
 #### Hotfix Branches
 

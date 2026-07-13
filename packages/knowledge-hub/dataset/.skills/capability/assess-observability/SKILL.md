@@ -17,7 +17,7 @@ Evaluate and recommend the observability strategy: monitoring platform, logging 
 
 ## Composed Skills
 
-This skill is **output-only** — it composes no skill and writes no files. Persistence of the proposal is the caller's responsibility via `/record-decision` (see [Composition Interface](#composition-interface)).
+**Output-only** — composes no skill, writes no files; the caller persists via `/record-decision` (see [Composition Interface](#composition-interface)).
 
 ## Proposal Target
 
@@ -90,7 +90,7 @@ The rendered adoption content is destined for this section — the caller writes
 1. **Act**: Render the **observability section** content — the ready-to-write body for infrastructure.md:
    - Platform, logging, tracing, alerting decisions
    - Scope strictly to the observability section so the caller's write preserves all other sections (owned by /assess-infrastructure)
-2. **Verify**: The rendered `content` and its `target` are ready to emit. **This skill writes no files.**
+2. **Verify**: The rendered `content` and its `target` are ready to emit.
 
 ### Step 5: Emit Proposal
 

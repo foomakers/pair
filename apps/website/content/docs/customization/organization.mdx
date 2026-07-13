@@ -3,6 +3,8 @@ title: Publish a Knowledge Base
 description: Create, structure, package, and distribute a Knowledge Base for your organization.
 ---
 
+import { Callout } from 'fumadocs-ui/components/callout'
+
 You've customized pair for your team. Now you want to codify those practices into a distributable Knowledge Base — so every team in your organization starts from the same foundation. This guide covers the full workflow from creation to distribution.
 
 ## Plan Your KB
@@ -113,18 +115,104 @@ Each `SKILL.md` contains structured instructions the AI discovers and executes. 
 
 ## Package for Distribution
 
-Package your KB for distribution:
+The `pair-cli package` command creates a distributable ZIP containing your KB's knowledge, adoption templates, and skills, with metadata (name, version, description) for registry listing. It supports two **layout modes** that determine which files are included:
+
+| Layout               | Flag              | What it packages                                                                          | When to use                                       |
+| -------------------- | ----------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| **Target** (default) | `--layout target` | Files from installed target directories (e.g., `.pair/knowledge/`, `.claude/skills/`)     | Packaging an installed KB for redistribution        |
+| **Source**           | `--layout source` | Files from the single source directory defined in `config.json`                           | Packaging the original KB dataset before installation |
+
+### Source layout
+
+Packages from the **source directory** defined in each registry's `source` field in `config.json`. This is the canonical, pre-installation structure.
 
 ```bash
-pair-cli package
+pair-cli package --layout source
 ```
 
-This creates a distributable archive containing your KB's knowledge, adoption templates, and skills. The package includes metadata (name, version, description) for registry listing.
+Use source layout when:
 
-For organizational metadata:
+- You maintain a KB dataset and want to distribute the **original files**
+- You want a clean package without installation-time transformations (prefix, flatten)
+- You're building a CI/CD pipeline that packages from the dataset directly
+
+**Example:** A KB with `config.json` registry `skills.source: ".skills"` packages from `.skills/category/name/SKILL.md`.
+
+### Target layout
+
+Packages from **installed target directories** — the files as they appear after `pair-cli install`. This is the default.
 
 ```bash
-pair-cli package --org "your-org-name"
+pair-cli package --layout target
+```
+
+Use target layout when:
+
+- You want to package the KB **as users see it** after installation
+- You need to include prefix/flatten transformations applied during install
+- You're redistributing a customized KB from a project
+
+**Example:** The same skills registry with `flatten: true, prefix: "pair"` packages from `.claude/skills/pair-category-name/SKILL.md`.
+
+<Callout type="info">
+  Target layout excludes symlink targets automatically — only canonical (physical copy) targets are
+  included.
+</Callout>
+
+### Layout and config.json
+
+The layout mode maps to the `source` and `targets` fields in your `config.json` registries:
+
+```json
+{
+  "asset_registries": {
+    "skills": {
+      "source": ".skills",
+      "flatten": true,
+      "prefix": "pair",
+      "targets": [
+        { "path": ".claude/skills", "mode": "canonical" },
+        { "path": ".cursor/skills", "mode": "symlink" }
+      ]
+    }
+  }
+}
+```
+
+- `--layout source` reads from `.skills/`
+- `--layout target` reads from `.claude/skills/` (canonical target only — `.cursor/skills/` is excluded because it's a symlink)
+
+### Packaging walkthrough
+
+```bash
+# 1. Validate with the same layout you'll package
+pair-cli kb validate --layout source
+
+# 2. Package (with metadata)
+pair-cli package --layout source \
+  --name "My KB" \
+  --version 1.0.0 \
+  --description "Team knowledge base" \
+  -o dist/my-kb-source.zip
+
+# 3. Inspect the ZIP contents
+unzip -l dist/my-kb-source.zip
+
+# 4. Validate the packaged KB
+pair-cli kb validate dist/my-kb-source.zip
+```
+
+### Organizational packaging
+
+For enterprise distribution, add organizational metadata:
+
+```bash
+pair-cli package --layout source \
+  --org \
+  --org-name "Acme Corp" \
+  --team "Platform" \
+  --compliance "SOC2,ISO27001" \
+  --distribution restricted
 ```
 
 See [CLI Commands](/docs/reference/cli/commands) for the full `package` reference.
@@ -188,7 +276,7 @@ pair-cli install --source github --url https://github.com/your-org/your-kb/relea
 
 For organizations that restrict external package sources, host the package on an internal registry or file share. Adopters use the `--url` flag to point to the internal location.
 
-See [Install from URL](/docs/guides/install-from-url) for all source options.
+See [Install from URL](/docs/customization/install-from-url) for all source options.
 
 ## Version and Maintain
 

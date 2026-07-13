@@ -17,7 +17,7 @@ Evaluate and recommend infrastructure strategy: cloud provider, CI/CD pipeline, 
 
 ## Composed Skills
 
-This skill is **output-only** — it composes no skill and writes no files. Persistence of the proposal is the caller's responsibility via `/pair-capability-record-decision` (see [Composition Interface](#composition-interface)).
+**Output-only** — composes no skill, writes no files; the caller persists via `/pair-capability-record-decision` (see [Composition Interface](#composition-interface)).
 
 ## Proposal Target
 
@@ -87,7 +87,7 @@ The rendered adoption content is destined for this file — the caller writes it
 1. **Act**: Render the infrastructure.md content — the ready-to-write body for the target file:
    - Concise, prescriptive statements
    - Scope to the core infrastructure sections so the caller's write preserves the observability section (owned by /pair-capability-assess-observability)
-2. **Verify**: The rendered `content` and its `target` are ready to emit. **This skill writes no files.**
+2. **Verify**: The rendered `content` and its `target` are ready to emit.
 
 ### Step 5: Emit Proposal
 

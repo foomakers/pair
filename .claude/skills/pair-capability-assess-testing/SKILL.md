@@ -17,7 +17,7 @@ Evaluate and recommend the testing strategy: framework, pyramid distribution, co
 
 ## Composed Skills
 
-This skill is **output-only** — it composes no skill and writes no files. Persistence of the proposal is the caller's responsibility via `/pair-capability-record-decision` (see [Composition Interface](#composition-interface)).
+**Output-only** — composes no skill, writes no files; the caller persists via `/pair-capability-record-decision` (see [Composition Interface](#composition-interface)).
 
 ## Proposal Target
 
@@ -108,7 +108,7 @@ The rendered adoption content is destined for this section — the caller writes
    - Coverage tool and version
    - Additional testing tools with versions
    - Scope strictly to the Testing section so the caller's write preserves all other sections (core, AI, etc.)
-2. **Verify**: The rendered `content` and its `target` are ready to emit. **This skill writes no files.**
+2. **Verify**: The rendered `content` and its `target` are ready to emit.
 
 ### Step 5: Emit Proposal
 
@@ -142,7 +142,7 @@ When composed by `/pair-process-bootstrap`:
 
 When invoked **independently**:
 
-- Full interactive flow. The skill returns the proposal; the human (or agent) persists it by composing `/pair-capability-record-decision`, then commits the changes.
+- Full interactive flow. The skill returns the proposal; the human (or agent) persists it by composing `/pair-capability-record-decision`, then commits.
 
 ## Edge Cases
 
@@ -161,7 +161,7 @@ When invoked **independently**:
 ## Notes
 
 - Testing decisions are typically **non-architectural** → the caller records them as an ADL. Exception: if the testing strategy choice affects system structure (e.g. choosing contract testing that requires service boundaries), the caller uses ADR instead.
-- **Section ownership**: this skill renders content ONLY for the Testing section of tech-stack.md. /pair-capability-assess-stack owns core sections, /pair-capability-assess-ai owns AI section. The single adoption writer is `/pair-capability-record-decision`.
+- **Section ownership**: this skill renders content ONLY for the Testing section of tech-stack.md. The single adoption writer is `/pair-capability-record-decision`.
 - Version tracking: every testing tool includes specific version.
 - The resolution cascade IS the idempotency mechanism: if testing section is populated, assessment is already done.
 - Educational content (testing philosophy, principles, WHY) stays in guidelines. This skill references guidelines for framework comparison and strategy decisions.

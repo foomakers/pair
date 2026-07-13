@@ -4,7 +4,7 @@
  * jump, no migration logic in the CLI) — kept isolated so a docs-structure
  * change only requires updating this file.
  */
-const DOCS_MIGRATIONS_BASE = 'https://pair.foomakers.com/docs/guides/migrations'
+const DOCS_MIGRATIONS_BASE = 'https://pair.foomakers.com/docs/migrations'
 
 function stripLeadingV(version: string): string {
   return version.replace(/^v/i, '')

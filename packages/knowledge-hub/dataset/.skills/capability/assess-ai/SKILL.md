@@ -17,7 +17,7 @@ Evaluate and recommend AI development tools: AI assistants, MCP integrations, AI
 
 ## Composed Skills
 
-This skill is **output-only** — it composes no skill and writes no files. Persistence of the proposal is the caller's responsibility via `/record-decision` (see [Composition Interface](#composition-interface)).
+**Output-only** — composes no skill, writes no files; the caller persists via `/record-decision` (see [Composition Interface](#composition-interface)).
 
 ## Proposal Target
 
@@ -97,7 +97,7 @@ The rendered adoption content is destined for this section — the caller writes
    - MCP integrations if applicable
    - AI-specific SDKs and libraries with versions
    - Scope strictly to the AI section so the caller's write preserves all other sections (core, testing)
-2. **Verify**: The rendered `content` and its `target` are ready to emit. **This skill writes no files.**
+2. **Verify**: The rendered `content` and its `target` are ready to emit.
 
 ### Step 5: Emit Proposal
 

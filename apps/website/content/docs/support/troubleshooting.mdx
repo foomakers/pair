@@ -1,9 +1,9 @@
 ---
-title: Installation FAQ
-description: Common installation and setup issues with step-by-step solutions for pair-cli.
+title: Troubleshooting
+description: One page for install and setup problems — quick diagnostics, common issues, and step-by-step fixes for pair-cli.
 ---
 
-Common installation and setup issues with step-by-step solutions for pair-cli.
+Install or setup problem? This page collects every known issue and its fix — from permission errors to corrupted installs.
 
 ## Quick Diagnostics
 
@@ -20,27 +20,49 @@ which pair-cli       # Should show installation path
 npm list -g @foomakers/pair-cli  # Global npm installation check
 ```
 
+## Quick Fixes
+
+| Issue             | Quick Fix                            |
+| ----------------- | ------------------------------------ |
+| Permission denied | Use nvm, or fix the npm prefix       |
+| Command not found | Check PATH, or use `npx pair-cli`    |
+| Node version      | `nvm use 18`                         |
+| Network blocked   | Use manual install                   |
+| Files not created | Check directory permissions          |
+
 ## Permission Issues
 
 ### Problem: `EACCES` or permission denied errors during installation
 
-**On macOS/Linux:**
+**Recommended fix — use a Node version manager (nvm).** It installs Node in your home directory, so global installs never need elevated permissions (and it fixes Node-version problems at the same time):
 
 ```bash
-# Option 1: Use npm with correct permissions (recommended)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+source ~/.bashrc
+nvm install 18
+nvm use 18
+npm install -g @foomakers/pair-cli
+```
+
+**Alternatives** if you can't use nvm:
+
+```bash
+# Option 2: Point npm's global prefix at a user-writable directory
 npm config set prefix ~/.npm-global
 echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.profile
 source ~/.profile
 npm install -g @foomakers/pair-cli
 
-# Option 2: Use pnpm (avoids permission issues)
+# Option 3: Use pnpm (avoids permission issues)
 npm install -g pnpm
 pnpm add -g @foomakers/pair-cli
 
-# Option 3: Fix npm permissions (if you prefer npm)
-sudo chown -R $(whoami) $(npm config get prefix)/{lib/node_modules,bin,share}
-npm install -g @foomakers/pair-cli
+# Option 4: Install locally in the project
+pnpm add -D @foomakers/pair-cli
+# Use with: pnpm dlx pair-cli
 ```
+
+Avoid `sudo npm install -g` — it hides the underlying problem and creates root-owned files that break later installs.
 
 **On Windows:**
 
@@ -51,14 +73,14 @@ npm install -g @foomakers/pair-cli
 
 ### Problem: Can't write to `/usr/local/lib/node_modules`
 
+Same root cause: npm's global prefix points at a system directory. Use nvm (recommended, above) or move the prefix:
+
 ```bash
-# Change npm's default directory
 mkdir ~/.npm-global
 npm config set prefix '~/.npm-global'
 echo 'export PATH=~/.npm-global/bin:$PATH' >> ~/.profile
 source ~/.profile
 
-# Now install
 npm install -g @foomakers/pair-cli
 ```
 
@@ -163,6 +185,85 @@ npm install -g pnpm
 pnpm add -g @foomakers/pair-cli
 ```
 
+## Command Not Found & PATH Issues
+
+### Problem: `pair-cli` command not found after installation
+
+**Verify installation location:**
+
+```bash
+# Check if installed
+npm list -g @foomakers/pair-cli
+pnpm list -g @foomakers/pair-cli
+
+# Check PATH
+echo $PATH
+which pair-cli
+```
+
+**Fix PATH issues:**
+
+```bash
+# Add npm global bin to PATH
+npm config get prefix  # Note the output path
+echo 'export PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.profile
+source ~/.profile
+
+# If using nvm, ensure the right Node version is active
+nvm current
+nvm use 18
+
+# Restart terminal or source profile
+source ~/.bashrc  # or ~/.zshrc
+
+# For local installs, use npx
+npx pair-cli --version
+```
+
+### Problem: Command exists but fails to run
+
+**Clean reinstall steps:**
+
+```bash
+# 1. Remove completely
+npm uninstall -g @foomakers/pair-cli
+# or
+pnpm remove -g @foomakers/pair-cli
+
+# 2. Clear caches
+npm cache clean --force
+# or
+pnpm store prune
+
+# 3. Clear global node_modules (careful!)
+rm -rf ~/.npm/_global/node_modules/@pair
+# or similar path for your system
+
+# 4. Reinstall fresh
+npm install -g @foomakers/pair-cli
+```
+
+### Problem: Version conflicts or "command not found" after update
+
+**Deterministic cleanup:**
+
+```bash
+# 1. Find all pair-cli installations
+find /usr/local -name "*pair-cli*" 2>/dev/null
+find ~/.npm -name "*pair-cli*" 2>/dev/null
+find ~/.pnpm -name "*pair-cli*" 2>/dev/null
+
+# 2. Remove all found instances
+# (Review the list first, then remove manually)
+
+# 3. Clean install
+npm install -g @foomakers/pair-cli
+
+# 4. Verify
+pair-cli --version
+which pair-cli
+```
+
 ## Native Build Failures
 
 ### Problem: `node-gyp` errors or native module build failures
@@ -183,7 +284,7 @@ npm install -g @foomakers/pair-cli
 ```bash
 # Install build tools
 sudo apt update
-sudo apt install build-essential python3-distutils
+sudo apt install build-essential python3-dev python3-distutils
 
 # Clear and reinstall
 npm uninstall -g @foomakers/pair-cli
@@ -236,6 +337,8 @@ echo 'export PATH=$HOME/pair-cli-manual-vX.Y.Z/bin:$PATH' >> ~/.profile
 source ~/.profile
 ```
 
+On Windows, run `pair-cli.cmd` from the extracted archive instead of `pair-cli` (use Git Bash or WSL if you hit line-ending or path issues).
+
 ### Problem: Corporate proxy blocking installs
 
 ```bash
@@ -251,78 +354,62 @@ npm config set proxy http://username:password@proxy.company.com:8080
 npm install -g @foomakers/pair-cli
 ```
 
-## Corrupted Installs
+## Runtime Issues
 
-### Problem: `pair-cli` command not found after installation
+### Problem: `pair-cli install` fails with "permission denied"
 
-**Verify installation location:**
-
-```bash
-# Check if installed
-npm list -g @foomakers/pair-cli
-pnpm list -g @foomakers/pair-cli
-
-# Check PATH
-echo $PATH
-which pair-cli
-```
-
-**Fix PATH issues:**
+**Solution:** Ensure write access to the target directory.
 
 ```bash
-# Add npm global bin to PATH
-npm config get prefix  # Note the output path
-echo 'export PATH="$(npm config get prefix)/bin:$PATH"' >> ~/.profile
-source ~/.profile
+# Check permissions
+ls -la .
+
+# Fix permissions if needed
+chmod 755 .
+
+# Or run in a directory you own
+mkdir ~/my-project
+cd ~/my-project
+pair-cli install
 ```
 
-### Problem: Command exists but fails to run
+### Problem: `pair-cli install` runs but no files are created
 
-**Clean reinstall steps:**
+**Solutions:**
 
 ```bash
-# 1. Remove completely
-npm uninstall -g @foomakers/pair-cli
-# or
-pnpm remove -g @foomakers/pair-cli
+# Check current directory
+pwd
 
-# 2. Clear caches
-npm cache clean --force
-# or
-pnpm store prune
+# Ensure you have write permissions
+touch test.txt && rm test.txt
 
-# 3. Clear global node_modules (careful!)
-rm -rf ~/.npm/_global/node_modules/@pair
-# or similar path for your system
+# Try with debug-level logging (if available)
+pair-cli install --log-level debug
 
-# 4. Reinstall fresh
-npm install -g @foomakers/pair-cli
+# Check if assets are available
+pair-cli install --list-targets
 ```
 
-### Problem: Version conflicts or "command not found" after update
+### Problem: Installed assets seem outdated
 
-**Deterministic cleanup:**
+**Solution:** Update to the latest version.
 
 ```bash
-# 1. Find all pair-cli installations
-find /usr/local -name "*pair-cli*" 2>/dev/null
-find ~/.npm -name "*pair-cli*" 2>/dev/null
-find ~/.pnpm -name "*pair-cli*" 2>/dev/null
+# Update all assets
+pair-cli update
 
-# 2. Remove all found instances
-# (Review the list first, then remove manually)
-
-# 3. Clean install
-npm install -g @foomakers/pair-cli
-
-# 4. Verify
-pair-cli --version
-which pair-cli
+# Or reinstall
+pair-cli install --force  # if available
 ```
 
-## Diagnostic Commands
+## Getting Additional Help
 
-When reporting issues, include output from these commands:
+If these solutions don't resolve your issue:
+
+1. **Check existing issues**: [GitHub Issues](https://github.com/foomakers/pair/issues)
+2. **Ask the community**: [GitHub Discussions](https://github.com/foomakers/pair/discussions)
+3. **Open a new issue**: Include output from these diagnostic commands:
 
 ```bash
 # System information
@@ -342,20 +429,13 @@ npm config get prefix     # npm global prefix
 npm config list           # npm configuration
 ```
 
-## Getting Additional Help
+**Include in your report**: operating system and version, Node.js and npm/pnpm versions, the complete error message, and the steps you've already tried.
 
-If these solutions don't resolve your issue:
+**Do not include**: personal paths with usernames, API keys or tokens, corporate proxy credentials.
 
-1. **Check existing issues**: [GitHub Issues](https://github.com/foomakers/pair/issues)
-2. **Open a new issue**: Include diagnostic output from commands above
-3. **Include in your report**:
-   - Operating system and version
-   - Node.js and npm/pnpm versions
-   - Complete error message
-   - Steps you've already tried
+## Prevention
 
-**Do not include** in reports:
-
-- Personal paths with usernames
-- API keys or tokens
-- Corporate proxy credentials
+- Always use Node 18+ (managed with nvm) and pnpm
+- Install globally with nvm-managed Node, or locally with `pnpm dlx`
+- Test in a clean directory first
+- Keep pair-cli updated: `npm update -g @foomakers/pair-cli`

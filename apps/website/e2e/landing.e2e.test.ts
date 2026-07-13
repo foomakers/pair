@@ -48,8 +48,10 @@ test('docs sidebar navigates to Concepts', async ({ page }) => {
     .locator('section[aria-label="Call to action"] a')
     .filter({ hasText: 'Read the docs' })
     .click()
-  await page.locator('button', { hasText: 'Concepts' }).click()
-  await page.locator('a', { hasText: 'AI-Assisted SDLC' }).click()
+  // Concepts now has an index page: the sidebar folder renders as a link, not a button
+  await page.locator('a', { hasText: 'Concepts' }).first().click()
+  await expect(page).toHaveURL('/docs/concepts')
+  await page.locator('a', { hasText: 'AI-Assisted SDLC' }).first().click()
   await expect(page).toHaveURL('/docs/concepts/ai-assisted-sdlc')
   await expect(page.locator('h1')).toContainText('AI-Assisted SDLC')
 })
@@ -70,7 +72,7 @@ test('full flow: landing → quickstart → concept page via Next link', async (
     .click()
   await expect(page).toHaveURL('/docs/getting-started/quickstart')
   await expect(page.locator('h1')).toContainText('Quickstart')
-  // Use prev/next to go to Solo Setup
-  await page.locator('a', { hasText: 'Solo Setup' }).last().click()
+  // Use prev/next to go to Quickstart: Solo
+  await page.locator('a', { hasText: 'Quickstart: Solo' }).last().click()
   await expect(page).toHaveURL('/docs/getting-started/quickstart-solo')
 })

@@ -111,7 +111,7 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
    7. `/assess-methodology` → proposes methodology section of `way-of-working.md`
    8. `/assess-pm` → proposes PM section of `way-of-working.md` (delegates to `/setup-pm` when installed)
 
-   After each assessment (or after collecting the batch), compose `/record-decision(content, target, decision-metadata)` to persist the proposal to its target adoption file and record the ADR/ADL. `/assess-pm` persists via `/setup-pm` when that skill is installed; otherwise `/bootstrap` persists its proposal via `/record-decision` like the others.
+   After each assessment (or after collecting the batch), compose `/record-decision(content, target, decision-metadata)` to persist the proposal and record the ADR/ADL. `/assess-pm` persists via `/setup-pm` when that skill is installed; otherwise `/bootstrap` persists its proposal via `/record-decision` like the others.
 
    **Section ownership** (each assess-\* proposal owns its section; `/record-decision` preserves the rest on write):
 
@@ -307,10 +307,6 @@ Phase completion is detected via output file existence — never re-does complet
 
 ## Notes
 
-- This is the most complex process skill — it orchestrates the full project setup sequence.
-- Each phase is independent: completion of one phase doesn't require re-running previous phases.
-- The developer can stop between phases. Re-invoke to resume (idempotency ensures correct state).
-- All decisions during bootstrap are recorded via `/record-decision`. Non-architectural → ADL. Architectural → ADR.
-- Quality gate setup ensures the gate infrastructure is executable from day one (not deferred to first implementation).
+- The developer can stop between phases; re-invoke to resume (idempotency ensures correct state).
 - Phase 3.5 is the only full-catalog (`$scope: all`) entry point for `/map-subdomains` and `/map-contexts` — every other caller is scoped to what it just touched. See [Callers Matrix](../../../.pair/knowledge/skills-guide.md#callers-matrix-scoped-capabilities).
 - Content source: how-to-02 Phases 0-4 (including domain modeling). How-to-02 retains orchestration flow, this skill has operational detail.

@@ -4,22 +4,19 @@ import { join } from 'path'
 
 const QUALITY_ASSURANCE_DIR = join(
   __dirname,
-  '../dataset/.pair/knowledge/guidelines/quality-assurance',
+  '../../dataset/.pair/knowledge/guidelines/quality-assurance',
 )
 
 const QUALITY_MODEL = readFileSync(
-  join(
-    __dirname,
-    '../dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md',
-  ),
+  join(__dirname, '../../dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md'),
   'utf-8',
 )
 const RISK_MATRIX_EXAMPLE = readFileSync(
-  join(__dirname, '../dataset/.pair/knowledge/assets/risk-matrix-example.md'),
+  join(__dirname, '../../dataset/.pair/knowledge/assets/risk-matrix-example.md'),
   'utf-8',
 )
 const QA_README = readFileSync(
-  join(__dirname, '../dataset/.pair/knowledge/guidelines/quality-assurance/README.md'),
+  join(__dirname, '../../dataset/.pair/knowledge/guidelines/quality-assurance/README.md'),
   'utf-8',
 )
 
@@ -65,7 +62,9 @@ describe('quality-model.md — structure', () => {
       /Reviewer counts and SLAs are \*\*KB defaults\*\*[\s\S]{0,300}Argument > Adoption > KB default/,
     )
     expect(QUALITY_MODEL).toContain('tier.red.reviewers: 2')
-    expect(QUALITY_MODEL).toMatch(/this part is not overridable, only the reviewer count and SLA are/)
+    expect(QUALITY_MODEL).toMatch(
+      /this part is not overridable, only the reviewer count and SLA are/,
+    )
   })
 
   it('defines the chromatic tag projection', () => {
@@ -85,7 +84,9 @@ describe('quality-model.md — structure', () => {
 
   it("documents classify's propose-then-write Tag Projection flow", () => {
     expect(QUALITY_MODEL).toMatch(/does `tech\/risk-matrix\.md` have a `## Tag Projection` section/)
-    expect(QUALITY_MODEL).toMatch(/No Tag Projection declared yet\. Activate `risk:green\|yellow\|red`/)
+    expect(QUALITY_MODEL).toMatch(
+      /No Tag Projection declared yet\. Activate `risk:green\|yellow\|red`/,
+    )
     expect(QUALITY_MODEL).toMatch(/records the opt-out so this isn't asked again/)
     expect(QUALITY_MODEL).toMatch(
       /the compiled matrix is written to the story\/PR body \*\*regardless of the answer\*\*/,
@@ -127,7 +128,7 @@ describe('quality-model.md — structure', () => {
 
   it('resolves every §7 nested-taxonomy pointer link to a file on disk', () => {
     const section = QUALITY_MODEL.split('## 7. Nested Taxonomy')[1]
-    const links = [...section.matchAll(/\]\(([^)]+)\)/g)].map((m) => m[1])
+    const links = [...section.matchAll(/\]\(([^)]+)\)/g)].map(m => m[1])
     expect(links.length).toBeGreaterThanOrEqual(9)
     for (const link of links) {
       expect(existsSync(join(QUALITY_ASSURANCE_DIR, link))).toBe(true)

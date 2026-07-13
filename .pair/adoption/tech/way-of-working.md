@@ -22,6 +22,7 @@
 
 - `pnpm quality-gate` is the adopted project-level quality gate command.
 - Quality gate includes: type checking (`ts:check`), testing (`test`), linting (`lint`), formatting (`prettier:fix`), markdown lint (`mdlint:fix`).
+- **Gate & tooling code:** a gate's logic lives in a tested module in its owning package (white-box unit tests); scripts/CLIs are thin entrypoints and a root gate delegates (`pnpm --filter <pkg> <gate>`). Scripts are never unit-tested — CLI-level checks go to smoke tests. See ADL [2026-07-13-gate-tooling-code-in-tested-modules.md](../decision-log/2026-07-13-gate-tooling-code-in-tested-modules.md).
 
 ### Custom Gate Registry
 

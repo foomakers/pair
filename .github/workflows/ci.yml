@@ -63,6 +63,8 @@ jobs:
         run: pnpm hygiene:check
       - name: Run docs-staleness check
         run: pnpm docs:staleness
+      - name: Run skills-conformance check
+        run: pnpm skills:conformance
       - name: Run duplication check
         run: pnpm dup:check
       - name: Install Playwright browsers

@@ -95,7 +95,7 @@ The rendered adoption content is destined for this section — the caller (or `/
    - Workflow methodology integration
    - Access method (MCP, CLI, filesystem)
    - Scope strictly to the PM tool section so the caller's write preserves all other sections
-4. **Verify**: The rendered `content` and its `target` are ready to emit. **This skill writes no files.**
+4. **Verify**: The rendered `content` and its `target` are ready to emit.
 
 ### Step 5: Emit Proposal (only if /setup-pm not invoked)
 
@@ -148,5 +148,5 @@ When invoked **independently**:
 
 - PM tool decisions are **non-architectural** → the caller records them as an ADL.
 - **Section ownership**: this skill renders content ONLY for the PM tool section of way-of-working.md. The single adoption writer is `/record-decision` (or `/setup-pm` when it handles configuration).
-- **Delegation pattern**: /assess-pm decides WHICH tool, /setup-pm configures it. If /setup-pm is installed, it handles both adoption write and decision recording; assess-pm itself never writes adoption.
+- **Delegation pattern**: /assess-pm decides WHICH tool, /setup-pm configures it — handling both adoption write and decision recording when installed.
 - Educational content (tool descriptions, integration details) stays in guidelines.
