@@ -59,41 +59,11 @@ Detect and evaluate unlisted dependencies. Used when `/pair-process-review` find
 
 ### Step 1: Resolution Cascade
 
-#### Path A — Argument Override (implementation or bootstrap with $choice)
+See [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
 
-1. **Check**: Is `$choice` provided?
-2. **Skip**: If not provided, go to Path B.
-3. **Act** (implementation mode): Validate compatibility:
-   - Parse `$choice` as `name@version`.
-   - Check existing [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) for conflicts:
-     - Version incompatibility (e.g. library needs Node 20, stack has Node 18)
-     - Duplicate entry (same library already listed)
-     - Category conflict (e.g. two ORMs)
-   - If conflict detected, warn developer:
-
-     > **Compatibility issue**: `$choice` conflicts with existing stack.
-     > - Conflict: [description]
-     > - Options: (a) resolve conflict and proceed, (b) reject addition
-
-4. **Act** (bootstrap mode with choice): Confirm the choice and proceed to Step 3.
-5. **Verify**: Choice validated. Proceed to Step 3.
-
-#### Path B — Adoption Exists
-
-1. **Check**: Does [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) exist with populated core sections?
-2. **Skip**: If not populated or missing, go to Path C.
-3. **Act**: Read current adoption. Present summary:
-
-   > Tech stack already adopted. Core sections populated.
-   > [Summary of key technologies with versions]
-
-4. **Check**: Does a corresponding decision record exist?
-5. **Act**: If decision record missing, report it as a gap in the output — this skill writes nothing; the caller persists a backfill via `/pair-capability-record-decision`.
-6. **Verify**: Adoption and decision record consistent. Done — exit skill.
-
-#### Path C — Full Assessment (bootstrap mode)
-
-1. **Act**: Proceed to Step 2 (full assessment).
+- **Path A delta** (implementation or bootstrap with `$choice`): parse `$choice` as `name@version`; in implementation mode, validate against [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) for version incompatibility, duplicate entry, or category conflict — warn and offer resolve-or-reject if found. In bootstrap mode with a choice, just confirm. Proceed to Step 3.
+- **Path B delta**: adoption check is [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) with populated core sections. If a corresponding decision record is missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/pair-capability-record-decision`).
+- **Path C delta** (bootstrap mode): proceed to Step 2 (full assessment).
 
 ### Step 2: Read Guidelines (bootstrap mode only)
 
@@ -183,7 +153,7 @@ Detect and evaluate unlisted dependencies. Used when `/pair-process-review` find
      - **Implementation**: `$type: non-architectural`, `$topic: stack-add-[name]`, `$summary: "[name]@[version] added to tech stack — [rationale]"`
      - **Review approve**: `$type: non-architectural`, `$topic: stack-approve-[name]`, `$summary: "[name]@[version] approved during review — added to tech stack"`
    - plus the human-facing report (see Output Format), and the validation result (approved/rejected) for implementation/review modes
-2. **Verify**: Proposal emitted. Persistence is performed by the caller via `/pair-capability-record-decision(content, target, decision-metadata)`, never by this skill.
+2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (never persisted by this skill).
 
 ## Version Tracking Policy
 
@@ -205,6 +175,8 @@ Detect and evaluate unlisted dependencies. Used when `/pair-process-review` find
 
 ## Output Format
 
+Follows the [Decision Shape](../../../.pair/knowledge/skill-conventions/output-shapes.md#decision-shape) (with an added `Mode` line — a legitimate per-skill variant, see that file, since this skill spans the whole project lifecycle).
+
 ```text
 ASSESSMENT COMPLETE (output-only — no files written):
 ├── Domain:    Tech Stack
@@ -219,27 +191,26 @@ ASSESSMENT COMPLETE (output-only — no files written):
 
 ## Composition Interface
 
+See [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the generic tuple + Input/Output/Persistence shape.
+
 When composed by `/pair-process-bootstrap`:
 
 - **Input**: `/pair-process-bootstrap` invokes `/pair-capability-assess-stack` during Phase 2 with `$mode: bootstrap`. May pass `$choice` for pre-selected stack.
-- **Output**: Returns `{ content, target, decision-metadata }` plus the report. Writes nothing.
-- **Persistence**: `/pair-process-bootstrap` accepts the proposal and composes `/pair-capability-record-decision(content, target, decision-metadata)`, then includes those changes in the next commit.
+- **Persistence**: `/pair-process-bootstrap` composes `/pair-capability-record-decision`, then includes those changes in the next commit.
 
 When composed by `/pair-process-implement`:
 
 - **Input**: `/pair-process-implement` detects new import/dependency → invokes `/pair-capability-assess-stack` with `$choice: [name@version]`, `$mode: implementation`.
-- **Output**: Returns the validation result (approved/rejected) plus, when approved, `{ content, target, decision-metadata }`.
+- **Output**: Returns the validation result (approved/rejected) plus, when approved, the proposal.
 - **Persistence**: on approval, `/pair-process-implement` persists the entry via `/pair-capability-record-decision`. If rejected (incompatible) → `/pair-process-implement` HALTs.
 
 When composed by `/pair-process-review`:
 
 - **Input**: `/pair-process-review` detects unlisted dependency → invokes `/pair-capability-assess-stack` with `$choice: [name@version]`, `$mode: review`.
-- **Output**: Returns the developer decision (approve/reject) plus, when approved, `{ content, target, decision-metadata }`.
+- **Output**: Returns the developer decision (approve/reject) plus, when approved, the proposal.
 - **Persistence**: on approval, `/pair-process-review` persists via `/pair-capability-record-decision`. If rejected → `/pair-process-review` includes as CHANGES-REQUESTED finding.
 
-When invoked **independently**:
-
-- Full interactive flow. Mode auto-detected. The skill returns the proposal; the human (or agent) persists it by composing `/pair-capability-record-decision`, then commits.
+When invoked **independently**: mode auto-detected. The skill returns the proposal; the human (or agent) persists it by composing `/pair-capability-record-decision`, then commits.
 
 ## Edge Cases
 
@@ -252,10 +223,10 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-- If technology guidelines are not found, use minimal assessment: ask developer for stack choices directly.
-- If the caller cannot persist (e.g. `/pair-capability-record-decision` not installed), the proposal stands as a report — adoption stays unchanged.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → ask developer for stack choices directly; adoption file missing in bootstrap mode → the skill still runs, caller creates it on persist) and [record-decision contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) (persistence unavailable → proposal stands as a report) for the standard scenarios. Additional cases:
+
 - If architecture.md doesn't exist, warn: "No architecture adopted — stack compatibility cannot be verified against architecture."
-- If tech-stack.md doesn't exist (bootstrap mode), the caller creates it on persist. If implementation/review mode, HALT: "No tech stack defined — run /pair-capability-assess-stack in bootstrap mode first."
+- If tech-stack.md doesn't exist in implementation/review mode (as opposed to bootstrap, covered above), HALT: "No tech stack defined — run /pair-capability-assess-stack in bootstrap mode first."
 
 ## Notes
 

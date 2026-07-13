@@ -30,40 +30,11 @@ The rendered adoption content is destined for this section — the caller writes
 
 ### Step 1: Resolution Cascade
 
-#### Path A — Argument Override
+See [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
 
-1. **Check**: Is `$choice` provided?
-2. **Skip**: If not provided, go to Path B.
-3. **Act**: Confirm the choice with the developer:
-
-   > Testing framework override: **$choice**.
-   > This will be proposed without full assessment.
-   > Confirm?
-
-4. **Check**: Does [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) already have a testing section with a different framework?
-   - If yes, warn: "Current testing framework is **[existing]**. Override to **$choice**?"
-5. **Verify**: Developer confirms. Proceed to Step 2.
-
-#### Path B — Adoption Exists
-
-1. **Check**: Does [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) exist and contain a populated **Testing** section?
-2. **Skip**: If no testing section or section is empty/template, go to Path C.
-3. **Act**: Read current testing adoption. Present:
-
-   > Testing strategy already adopted:
-   > - Framework: **[name vX.Y]**
-   > - Coverage tool: **[name vX.Y]**
-   > - Additional tools: **[list]**
-   >
-   > Adoption is current and valid.
-
-4. **Check**: Does a corresponding decision record exist? (Scan [adoption/decision-log/](../../../.pair/adoption/decision-log) or [adoption/tech/adr/](../../../.pair/adoption/tech/adr) for `*testing*` files.)
-5. **Act**: If decision record missing, report it as a gap in the output — this skill writes nothing; the caller persists a backfill via `/pair-capability-record-decision`.
-6. **Verify**: Adoption and decision record consistent. Done — exit skill.
-
-#### Path C — Full Assessment
-
-1. **Act**: Proceed to Step 2 (full assessment mode).
+- **Path A delta**: override argument is `$choice`. Confirmation prompt: "Testing framework override: **$choice**. This will be proposed without full assessment. Confirm?" — also warn if tech-stack.md already has a testing section with a different framework. On confirm, proceed to Step 2.
+- **Path B delta**: adoption check is [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — populated **Testing** section. Decision-record check scans [adoption/decision-log/](../../../.pair/adoption/decision-log) or [adoption/tech/adr/](../../../.pair/adoption/tech/adr) for `*testing*` files; if missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/pair-capability-record-decision`).
+- **Path C delta**: proceed to Step 2 (full assessment mode).
 
 ### Step 2: Read Guidelines
 
@@ -117,9 +88,11 @@ The rendered adoption content is destined for this section — the caller writes
    - `target`: [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) (Testing section)
    - `decision-metadata`: `$type: non-architectural` (testing framework is a tooling choice), `$topic: testing-strategy`, `$summary: "[Framework] vX.Y adopted as testing framework with [coverage target]% coverage"`
    - plus the human-facing report (see Output Format)
-2. **Verify**: Proposal emitted. Persistence is performed by the caller via `/pair-capability-record-decision(content, target, decision-metadata)`, never by this skill.
+2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (never persisted by this skill).
 
 ## Output Format
+
+Follows the [Decision Shape](../../../.pair/knowledge/skill-conventions/output-shapes.md#decision-shape).
 
 ```text
 ASSESSMENT COMPLETE (output-only — no files written):
@@ -134,15 +107,14 @@ ASSESSMENT COMPLETE (output-only — no files written):
 
 ## Composition Interface
 
+See [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the generic tuple + Input/Output/Persistence shape.
+
 When composed by `/pair-process-bootstrap`:
 
 - **Input**: `/pair-process-bootstrap` invokes `/pair-capability-assess-testing` during Phase 2. May pass `$choice` if developer pre-selected.
-- **Output**: Returns `{ content, target, decision-metadata }` plus the report. Writes nothing.
-- **Persistence**: `/pair-process-bootstrap` accepts the proposal and composes `/pair-capability-record-decision(content, target, decision-metadata)` to write the Testing section and record the ADL, then includes those changes in the next commit.
+- **Persistence**: `/pair-process-bootstrap` composes `/pair-capability-record-decision` to write the Testing section and record the ADL, then includes those changes in the next commit.
 
-When invoked **independently**:
-
-- Full interactive flow. The skill returns the proposal; the human (or agent) persists it by composing `/pair-capability-record-decision`, then commits.
+When invoked **independently**: the human (or agent) persists the proposal by composing `/pair-capability-record-decision`, then commits.
 
 ## Edge Cases
 
@@ -154,9 +126,7 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-- If testing guidelines are not found, use minimal assessment: ask developer for framework preference based on language.
-- If the caller cannot persist (e.g. `/pair-capability-record-decision` not installed), the proposal stands as a report — adoption stays unchanged.
-- If tech-stack.md doesn't exist, the assessment still runs and produces its proposal — the caller creates the file on persist via `/pair-capability-record-decision`.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → ask developer for framework preference based on language) and [record-decision contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) (persistence unavailable → proposal stands as a report) for the standard scenarios. No additional cases.
 
 ## Notes
 

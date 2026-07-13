@@ -20,23 +20,10 @@ Evaluate code quality using objective metrics from [code-metrics.md](../../../.p
 
 ### Step 1: Resolution Cascade
 
-#### Path A — Existing Recent Report
+See [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics — this skill uses the **report-skill variant** and has no override argument, so it starts directly at the [idempotency](../../../.pair/knowledge/skill-conventions/idempotency.md) check (no Path A/Argument-Override).
 
-1. **Check**: Is there an existing quality report for this codebase? (Check conversation context, CI artifacts, or previous analysis output.)
-2. **Skip**: If no existing report, go to Path B.
-3. **Act**: Check staleness:
-   - Has the codebase changed since the last analysis? (Use `git diff --stat` since last analysis date or commit.)
-   - If no changes → confirm existing report is still valid. Exit.
-   - If changes exist → report is stale. Present summary of changes and proceed to Path B.
-
-   > Existing quality report found ([date]). [N files changed since last analysis.]
-   > Re-analyze? (Recommended — codebase has changed.)
-
-4. **Verify**: If confirmed valid → exit. If stale or re-analysis requested → proceed to Path B.
-
-#### Path B — Full Analysis
-
-1. **Act**: Proceed to Step 2.
+- **Existing-state check (Path B)**: an existing quality report for this codebase (conversation context, CI artifacts, prior output). Staleness test: has the codebase changed since the last analysis (`git diff --stat` since last analysis date/commit)? No changes → confirm and exit. Changes exist → present the delta and proceed to full analysis.
+- **Full-analysis path (Path C)**: proceed to Step 2.
 
 ### Step 2: Read Quality Metrics Guidelines
 
@@ -116,6 +103,8 @@ For each metric group in scope, follow **check → skip → act → verify**.
 
 ## Output Format
 
+Follows the [Report Shape](../../../.pair/knowledge/skill-conventions/output-shapes.md#report-shape).
+
 ```text
 CODE QUALITY REPORT:
 ├── Scope:           [$scope — $path or full codebase]
@@ -160,7 +149,7 @@ When invoked **independently**:
 ## Notes
 
 - This skill is **read-only / output-only** — it inspects code, runs coverage (via existing test commands), but never modifies files, adoption, or the PM tool. A finding worth tracking is promoted deliberately to the backlog via `/write-issue` (a manual, selective act) — never auto-created.
-- **Idempotent**: re-invocation checks staleness of existing report. If codebase unchanged → confirms existing report. If changed → re-analyzes only.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: staleness of the existing report (Step 1) — unchanged codebase confirms it, changed codebase re-analyzes.
 - Metrics are **health indicators, not absolute quality measures**. Context matters: business logic naturally has higher complexity, and metric targets should align with team capabilities.
 - Quality analysis is most valuable as a **trend** — individual snapshots matter less than improvement direction over time.
 - The maintainability index is a composite heuristic — it provides a single number for quick analysis but the component metrics offer more actionable insights.

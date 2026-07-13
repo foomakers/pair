@@ -30,25 +30,11 @@ The rendered adoption content is destined for this file — the caller writes it
 
 ### Step 1: Resolution Cascade
 
-#### Path A — Argument Override
+See [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
 
-1. **Check**: Is `$choice` provided?
-2. **Skip**: If not provided, go to Path B.
-3. **Act**: Confirm the choice with the developer. Check for conflicts with existing adoption.
-4. **Verify**: Developer confirms. Proceed to Step 3.
-
-#### Path B — Adoption Exists
-
-1. **Check**: Does [adoption/tech/infrastructure.md](../../../.pair/adoption/tech/infrastructure.md) exist and is it populated?
-2. **Skip**: If not populated or missing, go to Path C.
-3. **Act**: Read current adoption. Confirm it's valid.
-4. **Check**: Does a corresponding decision record exist?
-5. **Act**: If decision record missing, report it as a gap in the output — this skill writes nothing; the caller persists a backfill via `/pair-capability-record-decision`.
-6. **Verify**: Done — exit skill.
-
-#### Path C — Full Assessment
-
-1. **Act**: Proceed to Step 2.
+- **Path A delta**: override argument is `$choice`. On confirm, proceed to Step 3.
+- **Path B delta**: adoption check is [adoption/tech/infrastructure.md](../../../.pair/adoption/tech/infrastructure.md), populated. If a corresponding decision record is missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/pair-capability-record-decision`).
+- **Path C delta**: proceed to Step 2.
 
 ### Step 2: Read Guidelines
 
@@ -96,9 +82,11 @@ The rendered adoption content is destined for this file — the caller writes it
    - `target`: [adoption/tech/infrastructure.md](../../../.pair/adoption/tech/infrastructure.md) (core sections)
    - `decision-metadata`: `$type: architectural` (infrastructure decisions affect system structure), `$topic: infrastructure-strategy`, `$summary: "[Summary of key infrastructure choices]"`
    - plus the human-facing report (see Output Format)
-2. **Verify**: Proposal emitted. Persistence is performed by the caller via `/pair-capability-record-decision(content, target, decision-metadata)`, never by this skill.
+2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (never persisted by this skill).
 
 ## Output Format
+
+Follows the [Decision Shape](../../../.pair/knowledge/skill-conventions/output-shapes.md#decision-shape).
 
 ```text
 ASSESSMENT COMPLETE (output-only — no files written):
@@ -113,15 +101,14 @@ ASSESSMENT COMPLETE (output-only — no files written):
 
 ## Composition Interface
 
+See [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the generic tuple + Input/Output/Persistence shape.
+
 When composed by `/pair-process-bootstrap`:
 
 - **Input**: `/pair-process-bootstrap` invokes during Phase 2.
-- **Output**: Returns `{ content, target, decision-metadata }` plus the report. Writes nothing.
-- **Persistence**: `/pair-process-bootstrap` accepts the proposal and composes `/pair-capability-record-decision(content, target, decision-metadata)` to write infrastructure.md and record the ADR.
+- **Persistence**: `/pair-process-bootstrap` composes `/pair-capability-record-decision` to write infrastructure.md and record the ADR.
 
-When invoked **independently**:
-
-- Full interactive flow. The skill returns the proposal; the human (or agent) persists it by composing `/pair-capability-record-decision`, then commits.
+When invoked **independently**: the human (or agent) persists the proposal by composing `/pair-capability-record-decision`, then commits.
 
 ## Edge Cases
 
@@ -131,9 +118,7 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-- If infrastructure guidelines not found, use minimal assessment: ask developer for CI/CD and deployment preferences.
-- If the caller cannot persist (e.g. `/pair-capability-record-decision` not installed), the proposal stands as a report — adoption stays unchanged.
-- If adoption files are missing, the assessment still runs — the caller creates the file on persist via `/pair-capability-record-decision`.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → ask developer for CI/CD and deployment preferences directly) and [record-decision contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) (persistence unavailable → proposal stands as a report) for the standard scenarios. No additional cases.
 
 ## Notes
 
