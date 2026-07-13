@@ -18,7 +18,7 @@
  *      TODO(#313/T1): promote catalog-count findings from warning to error once
  *      T1 (#325) regenerates next's catalog (currently states 33, corpus has 35).
  *
- * Runnable as a CLI via `ts-node src/skills-conformance-check.ts`
+ * Runnable as a CLI via `ts-node src/tools/skills-conformance-check.ts`
  * (package script `skills:conformance`). Exit 0 = conformant (warnings allowed),
  * Exit 1 = violations.
  */
@@ -58,11 +58,39 @@ export interface RunResult {
 
 // --- Frontmatter ---
 
+// YAML block-scalar indicator as a value: `|`, `>`, with optional `-`/`+` chomping.
+const BLOCK_SCALAR_RE = /^[|>][+-]?$/
+
 function unquote(value: string): string {
   const quoted =
     (value.startsWith('"') && value.endsWith('"') && value.length > 1) ||
     (value.startsWith("'") && value.endsWith("'") && value.length > 1)
   return quoted ? value.slice(1, -1) : value
+}
+
+// Fold a YAML block scalar into a single measurable string so its real length is
+// counted by the size gate (a raw `description: >` line alone is length ~1 and would
+// otherwise bypass the ≤1024 check). Consumes indented continuation lines starting at
+// `start`; the block ends at the first line dedented to column 0 (next top-level key)
+// or at `end`. Returns the joined text and the index to resume top-level parsing from.
+function foldBlockScalar(
+  lines: string[],
+  start: number,
+  end: number,
+): { text: string; next: number } {
+  const parts: string[] = []
+  let i = start
+  for (; i < end; i++) {
+    const line = lines[i] as string
+    if (line.trim() === '') {
+      parts.push('')
+      continue
+    }
+    const indent = line.length - line.trimStart().length
+    if (indent === 0) break // dedented to key level — block ended
+    parts.push(line.trimStart())
+  }
+  return { text: parts.join(' ').trim(), next: i }
 }
 
 export function parseFrontmatter(content: string): Frontmatter | null {
@@ -72,12 +100,24 @@ export function parseFrontmatter(content: string): Frontmatter | null {
   if (end === -1) return null
   const keys: string[] = []
   const values: Record<string, string> = {}
-  for (const line of lines.slice(1, end)) {
-    const m = line.match(/^([A-Za-z][A-Za-z0-9_-]*):(.*)$/)
-    if (!m) continue // continuation or nested (indented) line — not a top-level key
+  let i = 1
+  while (i < end) {
+    const m = (lines[i] as string).match(/^([A-Za-z][A-Za-z0-9_-]*):(.*)$/)
+    if (!m) {
+      i++ // continuation or nested (indented) line — not a top-level key
+      continue
+    }
     const key = m[1] as string
     keys.push(key)
-    values[key] = unquote((m[2] as string).trim())
+    const inline = (m[2] as string).trim()
+    if (BLOCK_SCALAR_RE.test(inline)) {
+      const folded = foldBlockScalar(lines, i + 1, end)
+      values[key] = folded.text
+      i = folded.next
+    } else {
+      values[key] = unquote(inline)
+      i++
+    }
   }
   return { keys, values, body: lines.slice(end + 1).join('\n') }
 }
@@ -104,6 +144,8 @@ export function checkSizeLimits(name?: string, description?: string): string[] {
   const errors: string[] = []
   const nameLen = (name || '').length
   const descLen = (description || '').length
+  // Attribution per principle 8: agentskills.io spec caps name (64) and description
+  // (1024) SEPARATELY (hence "spec max"); the combined ≤1024 is PAIR's stricter bound.
   if (nameLen > NAME_MAX) {
     errors.push(`name is ${nameLen} chars (spec max ${NAME_MAX})`)
   }

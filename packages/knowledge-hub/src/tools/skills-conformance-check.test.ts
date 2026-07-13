@@ -33,6 +33,20 @@ describe('parseFrontmatter', () => {
     const fm = parseFrontmatter('---\nmetadata:\n  author: someone\n---\n')
     expect(fm?.keys).toEqual(['metadata'])
   })
+
+  it('folds a `>` block scalar to its real length and resumes at the next key', () => {
+    const fm = parseFrontmatter(
+      '---\nname: foo\ndescription: >\n  line one\n  line two\nversion: 0.1.0\n---\n',
+    )
+    expect(fm?.keys).toEqual(['name', 'description', 'version'])
+    expect(fm?.values['description']).toBe('line one line two')
+    expect(fm?.values['version']).toBe('0.1.0')
+  })
+
+  it('folds a `|` block scalar (with chomping) into a measurable value', () => {
+    const fm = parseFrontmatter('---\ndescription: |-\n  alpha\n  beta\n---\n')
+    expect(fm?.values['description']).toBe('alpha beta')
+  })
 })
 
 describe('checkFrontmatterFields', () => {
@@ -164,5 +178,28 @@ describe('runChecks (fixture corpus)', () => {
     expect(warnings).toHaveLength(1)
     expect(warnings[0]).toContain('2-skill')
     expect(warnings[0]).toContain('4 skills')
+  })
+})
+
+describe('runChecks — block-scalar size-gate cannot be bypassed (finding 1)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'skills-conformance-block-'))
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  it('an over-1024 `>` block-scalar description is a violation (drives CLI exit 1)', () => {
+    const longLine = 'x'.repeat(1100)
+    mkdirSync(join(root, 'capability/blocky'), { recursive: true })
+    writeFileSync(
+      join(root, 'capability/blocky', 'SKILL.md'),
+      `---\nname: blocky\ndescription: >\n  ${longLine}\n---\nbody`,
+    )
+    const { errors } = runChecks(root)
+    // Real folded length (~1100) is measured, so the ≤1024 cap catches it instead of
+    // reading the bare `>` as length ~1. A non-empty errors list ⇒ the CLI process.exit(1).
+    expect(
+      errors.some(
+        e => e.includes('blocky') && e.includes('description is') && e.includes('spec max'),
+      ),
+    ).toBe(true)
+    expect(errors.length).toBeGreaterThan(0)
   })
 })
