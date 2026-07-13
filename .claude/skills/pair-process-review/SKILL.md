@@ -49,7 +49,7 @@ CODE REVIEW STATE:
 
 1. **Check**: Is the PR already loaded in this session?
 2. **Skip**: If yes, confirm PR number and move to Step 1.2.
-3. **Act**: Read PR from the PM tool (per [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)):
+3. **Act**: Read PR from the PM tool — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/skill-conventions/way-of-working-pm-resolution.md):
    - PR metadata (author, branch, target, status)
    - Changed files and diff
    - PR description and linked story

@@ -28,7 +28,7 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 
 1. **Check**: Is the user story already loaded in this session?
 2. **Skip**: If yes, confirm story ID and move to Step 0.1b.
-3. **Act**: Read the story from the PM tool (per [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)).
+3. **Act**: Read the story from the PM tool — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/skill-conventions/way-of-working-pm-resolution.md).
    - Understand business value and acceptance criteria.
    - Confirm epic context.
 4. **Verify**: Story is fully loaded. If not → **HALT**.

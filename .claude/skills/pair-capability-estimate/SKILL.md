@@ -20,7 +20,7 @@ Apply the adopted estimation methodology to size a refined user story. Reads the
 
 ### Step 1: Load Story
 
-1. **Check**: Read the story from the PM tool (per [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)).
+1. **Check**: Read the story from the PM tool — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/skill-conventions/way-of-working-pm-resolution.md).
 2. **Verify**: Story exists and has acceptance criteria. If not refined → **HALT**: "Story must be refined before estimation."
 
 ### Step 2: Check Existing Estimate
