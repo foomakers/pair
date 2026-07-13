@@ -4,16 +4,15 @@
   "pages": [
     "index",
     "getting-started",
-    "developer-journey",
+    "tutorials",
     "concepts",
+    "developer-journey",
     "customization",
     "integrations",
     "pm-tools",
     "---",
-    "guides",
-    "migrations",
-    "tutorials",
     "reference",
+    "migrations",
     "support",
     "contributing"
   ]

@@ -59,7 +59,7 @@ test('solo setup journey: quickstart → solo setup with content verification', 
 
   // Solo setup page renders with expected content
   const main = page.locator('main')
-  await expect(page.locator('main h1')).toContainText('Solo Setup')
+  await expect(page.locator('main h1')).toContainText('Quickstart: Solo')
   await expect(main).toContainText('Solo Workflow')
   await expect(main).toContainText('/pair-next')
   await expect(main).toContainText('pair-cli install --list-targets')
@@ -83,7 +83,7 @@ test('team journey: overview → team setup with content verification', async ({
   await page.goto('/docs/getting-started')
 
   // Navigate to Team Setup via sidebar
-  await page.locator('a', { hasText: 'Team Setup' }).first().click()
+  await page.locator('a', { hasText: 'Quickstart: Team' }).first().click()
   await expect(page).toHaveURL('/docs/getting-started/quickstart-team')
 
   // AC-4: shared KB, adoption files, bridge pattern
@@ -103,7 +103,7 @@ test('org journey: overview → org setup with content verification', async ({ p
   await page.goto('/docs/getting-started')
 
   // Navigate to Org Setup via sidebar
-  await page.locator('a', { hasText: 'Organization Setup' }).first().click()
+  await page.locator('a', { hasText: 'Quickstart: Organization' }).first().click()
   await expect(page).toHaveURL('/docs/getting-started/quickstart-org')
 
   // AC-5: KB packaging, distribution, compliance
@@ -160,9 +160,9 @@ test('smoke: all docs pages return 200 with correct titles', async ({ page }) =>
   const pages = [
     { url: '/docs/getting-started', title: 'What is pair?' },
     { url: '/docs/getting-started/quickstart', title: 'Quickstart' },
-    { url: '/docs/getting-started/quickstart-solo', title: 'Solo Setup' },
-    { url: '/docs/getting-started/quickstart-team', title: 'Team Setup' },
-    { url: '/docs/getting-started/quickstart-org', title: 'Organization Setup' },
+    { url: '/docs/getting-started/quickstart-solo', title: 'Quickstart: Solo' },
+    { url: '/docs/getting-started/quickstart-team', title: 'Quickstart: Team' },
+    { url: '/docs/getting-started/quickstart-org', title: 'Quickstart: Organization' },
     { url: '/docs/concepts/ai-assisted-sdlc', title: 'AI-Assisted SDLC' },
     { url: '/docs/concepts/knowledge-base', title: 'Knowledge Base' },
     { url: '/docs/concepts/skills', title: 'Skills' },
@@ -181,23 +181,52 @@ test('smoke: all docs pages return 200 with correct titles', async ({ page }) =>
 // E2E: Docs — Guides, Reference, and Support sections (#124)
 // ============================================================
 
-test('guides section: navigate and verify content', async ({ page }) => {
-  await page.goto('/docs/guides/cli-workflows')
+test('moved guides pages: render at their new locations', async ({ page }) => {
+  await page.goto('/docs/reference/cli/workflows')
   const main = page.locator('main')
 
-  // Guides page renders with expected content
+  // CLI Workflows now lives under Reference > CLI
   await expect(page.locator('main h1')).toContainText('CLI Workflows')
   await expect(main).toContainText('Common Workflows')
   await expect(main).toContainText('pair-cli install')
 
-  // Sidebar shows Guides section
-  await expect(page.locator('body')).toContainText('Guides')
+  await page.goto('/docs/customization/install-from-url')
+  await expect(page.locator('main h1')).toContainText('Install from URL')
 
-  // Navigate to another guide via sidebar
-  await page.locator('a', { hasText: 'Troubleshooting' }).first().click()
-  await expect(page).toHaveURL('/docs/guides/troubleshooting')
+  await page.goto('/docs/getting-started/checklist')
+  await expect(page.locator('main h1')).toContainText('Adopter Checklist')
+
+  await page.goto('/docs/reference/cli/update-link')
+  await expect(page.locator('main h1')).toContainText('Link Update')
+})
+
+test('redirects: old FAQ/troubleshooting URLs land on support/troubleshooting', async ({
+  page,
+}) => {
+  await page.goto('/docs/support/faq')
+  await expect(page).toHaveURL('/docs/support/troubleshooting')
   await expect(page.locator('main h1')).toContainText('Troubleshooting')
-  await expect(main).toContainText('Installation Issues')
+
+  await page.goto('/docs/guides/troubleshooting')
+  await expect(page).toHaveURL('/docs/support/troubleshooting')
+  await expect(page.locator('main h1')).toContainText('Troubleshooting')
+})
+
+test('redirects: dissolved guides URLs land on their new locations', async ({ page }) => {
+  const redirects = [
+    { from: '/docs/guides/adopter-checklist', to: '/docs/getting-started/checklist' },
+    { from: '/docs/guides/cli-workflows', to: '/docs/reference/cli/workflows' },
+    { from: '/docs/guides/customize-kb', to: '/docs/customization/team' },
+    { from: '/docs/guides/install-from-url', to: '/docs/customization/install-from-url' },
+    { from: '/docs/guides/packaging', to: '/docs/customization/organization' },
+    { from: '/docs/guides/update-link', to: '/docs/reference/cli/update-link' },
+    { from: '/docs/guides', to: '/docs' },
+  ]
+  for (const { from, to } of redirects) {
+    await page.goto(from)
+    await expect(page, `${from} should redirect to ${to}`).toHaveURL(to)
+    await expect(page.locator('main h1')).toBeVisible()
+  }
 })
 
 test('reference section: navigate CLI, specs, and top-level pages', async ({ page }) => {
@@ -263,22 +292,20 @@ test('support section: navigate and verify content', async ({ page }) => {
   await expect(main).toContainText('Project Management')
   await expect(main).toContainText('Customization')
 
-  // Navigate to Installation FAQ via sidebar
-  await page.locator('a', { hasText: 'Installation FAQ' }).first().click()
-  await expect(page).toHaveURL('/docs/support/faq')
-  await expect(page.locator('main h1')).toContainText('Installation FAQ')
+  // Navigate to Troubleshooting via sidebar (merged Installation FAQ + guides troubleshooting)
+  await page.locator('a', { hasText: 'Troubleshooting' }).first().click()
+  await expect(page).toHaveURL('/docs/support/troubleshooting')
+  await expect(page.locator('main h1')).toContainText('Troubleshooting')
   await expect(main).toContainText('Permission Issues')
   await expect(main).toContainText('Node Version Issues')
 })
 
 test('smoke: all guides/reference/support pages return 200', async ({ page }) => {
   const pages = [
-    { url: '/docs/guides/cli-workflows', title: 'CLI Workflows' },
-    { url: '/docs/guides/install-from-url', title: 'Install from URL' },
-    { url: '/docs/guides/customize-kb', title: 'Customize the Knowledge Base' },
-    { url: '/docs/guides/adopter-checklist', title: 'Adopter Checklist' },
-    { url: '/docs/guides/troubleshooting', title: 'Troubleshooting' },
-    { url: '/docs/guides/update-link', title: 'Link Update' },
+    { url: '/docs/reference/cli/workflows', title: 'CLI Workflows' },
+    { url: '/docs/customization/install-from-url', title: 'Install from URL' },
+    { url: '/docs/getting-started/checklist', title: 'Adopter Checklist' },
+    { url: '/docs/reference/cli/update-link', title: 'Link Update' },
     { url: '/docs/reference/cli/commands', title: 'CLI Commands' },
     { url: '/docs/reference/cli/examples', title: 'CLI Help Examples' },
     { url: '/docs/reference/specs/cli-contracts', title: 'CLI Contracts' },
@@ -290,7 +317,7 @@ test('smoke: all guides/reference/support pages return 200', async ({ page }) =>
     { url: '/docs/reference/configuration', title: 'Configuration' },
     { url: '/docs/support', title: 'Support' },
     { url: '/docs/support/general-faq', title: 'FAQ' },
-    { url: '/docs/support/faq', title: 'Installation FAQ' },
+    { url: '/docs/support/troubleshooting', title: 'Troubleshooting' },
   ]
   for (const { url, title } of pages) {
     const response = await page.goto(url)
@@ -302,7 +329,7 @@ test('smoke: all guides/reference/support pages return 200', async ({ page }) =>
 
 test('no broken .md links in guides/reference/support sections', async ({ page }) => {
   const sections = [
-    '/docs/guides/cli-workflows',
+    '/docs/reference/cli/workflows',
     '/docs/reference/cli/commands',
     '/docs/reference/skills-catalog',
     '/docs/support',
@@ -332,8 +359,8 @@ test('developer journey: navigate through section pages', async ({ page }) => {
   await expect(main).toContainText('The Four Levels')
   await expect(main).toContainText('Entry Points')
 
-  // Sidebar shows Developer Journey section
-  await expect(page.locator('body')).toContainText('Developer Journey')
+  // Sidebar shows Process Lifecycle section (label unified with index title)
+  await expect(page.locator('body')).toContainText('Process Lifecycle')
 
   // Navigate to Induction
   await page
@@ -786,6 +813,37 @@ test('smoke: all tutorials pages return 200 with correct titles', async ({ page 
 })
 
 // ============================================================
+// E2E: Docs — Hub + section indexes (#312)
+// ============================================================
+
+test('smoke: docs hub returns 200 with journey links and top tasks', async ({ page }) => {
+  const response = await page.goto('/docs')
+  expect(response?.status(), '/docs should return 200').toBe(200)
+  await expect(page).toHaveTitle(/Welcome/)
+  await expect(page.locator('main h1')).toContainText('Welcome')
+
+  const main = page.locator('main')
+  await expect(main).toContainText('Pick your journey')
+  await expect(main.locator('a[href="/docs/getting-started"]').first()).toBeVisible()
+  await expect(main.locator('a[href="/docs/tutorials"]').first()).toBeVisible()
+  await expect(main.locator('a[href="/docs/reference"]').first()).toBeVisible()
+  await expect(main).toContainText('Top tasks')
+})
+
+test('smoke: concepts and reference section indexes return 200 with headings', async ({ page }) => {
+  const pages = [
+    { url: '/docs/concepts', title: 'Concepts' },
+    { url: '/docs/reference', title: 'Reference' },
+  ]
+  for (const { url, title } of pages) {
+    const response = await page.goto(url)
+    expect(response?.status(), `${url} should return 200`).toBe(200)
+    await expect(page.locator('main h1')).toContainText(title)
+    await expect(page).toHaveTitle(new RegExp(title))
+  }
+})
+
+// ============================================================
 // E2E: Search — Orama client-side search
 // ============================================================
 
@@ -880,12 +938,10 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/pm-tools/filesystem',
     '/docs/pm-tools/github-projects',
     '/docs/pm-tools/linear',
-    '/docs/guides/cli-workflows',
-    '/docs/guides/install-from-url',
-    '/docs/guides/customize-kb',
-    '/docs/guides/adopter-checklist',
-    '/docs/guides/troubleshooting',
-    '/docs/guides/update-link',
+    '/docs/getting-started/checklist',
+    '/docs/customization/install-from-url',
+    '/docs/reference/cli/workflows',
+    '/docs/reference/cli/update-link',
     '/docs/reference/cli/commands',
     '/docs/reference/cli/examples',
     '/docs/reference/specs/cli-contracts',
@@ -897,7 +953,7 @@ test('no circular prev/next footer links on any docs page', async ({ page }) => 
     '/docs/reference/configuration',
     '/docs/support',
     '/docs/support/general-faq',
-    '/docs/support/faq',
+    '/docs/support/troubleshooting',
     '/docs/tutorials',
     '/docs/tutorials/first-project',
     '/docs/tutorials/existing-project',

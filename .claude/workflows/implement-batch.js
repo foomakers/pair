@@ -6,9 +6,16 @@ export const meta = {
 }
 
 // ── Input ────────────────────────────────────────────────────────────────
-// args.stories = the batch to drive THIS run. MUST be pre-filtered to be
-// mutex-safe: no two stories here may touch the same shared skill/file
-// (pair-next, pair-process-review, record-decision, apps/pair-cli, templates).
+// args.stories = the batch of STORIES (never tasks) to drive THIS run. A batch
+// ITEM IS A STORY, not a task: each story is delivered on ONE branch with ONE
+// PR — opened the first time and UPDATED for all subsequent work on that story
+// (further tasks/features included). NEVER one-PR-per-task, and NEVER a second
+// PR for the same story: continuing a story that already has a PR reuses its
+// existing branch/{prNumber} and updates that PR (create-or-update). A second
+// PR for the same story is forbidden unless a human explicitly instructs it.
+// MUST be pre-filtered to be mutex-safe: no two stories here may touch the same
+// shared skill/file (pair-next, pair-process-review, record-decision,
+// apps/pair-cli, templates).
 // Chains advance ACROSS runs: after you merge these PRs, re-run with the next
 // batch (the now-unblocked heads). A story's dependency must be MERGED, not
 // just PR-ready, before its dependent enters a batch.
