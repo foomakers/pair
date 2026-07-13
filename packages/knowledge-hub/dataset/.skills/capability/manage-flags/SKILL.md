@@ -124,7 +124,8 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-- If [feature-flags.md](../../../.pair/knowledge/guidelines/technical-standards/feature-flags.md) is not found, provide framework-agnostic patterns: simple boolean flags with environment variables.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → fall back to framework-agnostic patterns) for the standard scenarios. Additional cases:
+
 - If no feature flag tool is configured, use code-level flags (constants, config files) rather than a flag service.
 - If no existing flags are found in the codebase, report empty inventory and offer to create the first flag.
 - If cleanup would break active code paths, warn and require explicit developer confirmation.
@@ -132,7 +133,7 @@ When invoked **independently**:
 ## Notes
 
 - This skill **modifies files** — it creates, activates, deactivates, and removes feature flag code and configuration.
-- **Idempotent**: invoking `create` on an existing flag shows its current state instead of re-creating. Invoking `activate` on an active flag confirms the state. Invoking `cleanup` always requires explicit confirmation.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: `create` on an existing flag shows its current state instead of re-creating; `activate` on an active flag confirms the state; `cleanup` always requires explicit confirmation.
 - **Stale flag detection**: flags inactive for more than 30 days are flagged as stale. Cleanup is recommended but not forced.
 - Flag naming conventions should follow the project's adopted coding standards (e.g., `SCREAMING_SNAKE_CASE` for env vars, `camelCase` for code constants).
 - Cleanup is the most critical lifecycle phase — leftover flags create technical debt. The `status` action helps identify cleanup candidates.

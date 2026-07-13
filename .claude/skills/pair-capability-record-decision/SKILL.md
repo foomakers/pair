@@ -180,9 +180,11 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-- If [ADR template](../../../.pair/knowledge/guidelines/collaboration/templates/adr-template.md) is not found, use the minimal ADR structure: Status, Date, Context, Decision, Consequences, Adoption Impact.
-- If [ADL template](../../../.pair/knowledge/guidelines/collaboration/templates/adl-template.md) is not found, use the minimal ADL structure: Date, Status, Context, Decision, Consequences, Adoption Impact.
-- If [DDR template](../../../.pair/knowledge/guidelines/collaboration/templates/ddr-template.md) is not found, use the minimal DDR structure: Status, Date, Context, Decision, Consequences, Context Map Impact.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline/template missing → use a minimal structure directly) for the standard scenarios. Additional cases (the minimal structure per decision type):
+
+- ADR template missing → minimal ADR structure: Status, Date, Context, Decision, Consequences, Adoption Impact.
+- ADL template missing → minimal ADL structure: Date, Status, Context, Decision, Consequences, Adoption Impact.
+- DDR template missing → minimal DDR structure: Status, Date, Context, Decision, Consequences, Context Map Impact.
 - If adoption directories don't exist, create them and warn: "Created adoption directory — this appears to be a new project."
 
 ## Notes

@@ -165,6 +165,6 @@ When invoked **independently**:
 
 - This skill **generates test definitions** — it does not execute tests or modify application code.
 - Test case IDs are stable across regenerations if the same surfaces are discovered.
-- The skill is idempotent: re-running on an existing suite offers regenerate/extend/abort.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: re-running on an existing suite offers regenerate/extend/abort.
 - Generated test cases are version-agnostic by design — they work across releases without modification.
 - Suite maintenance (adding tests for new features) should re-invoke this skill with `extend` mode.

@@ -139,6 +139,8 @@ SUBDOMAIN PLACEMENT COMPLETE:
 
 ## Graceful Degradation
 
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (adoption/context inputs missing → warn, proceed with what's available rather than halting) for the standard scenarios. Additional cases:
+
 - If initiatives are not available but PRD is, proceed with PRD-only analysis and warn.
 - If neither PRD nor initiatives nor an existing catalog are available, use the system-areas fallback (Step 2b) rather than halting.
 - If the adoption directory doesn't exist, create it.
@@ -147,7 +149,7 @@ SUBDOMAIN PLACEMENT COMPLETE:
 ## Notes
 
 - This skill **creates/updates adoption files** — not PM tool issues. Subdomains are design artifacts.
-- Idempotent: re-invocation detects existing files by filename; only entries inside `$scope` are evaluated for changes.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: detects existing files by filename; only entries inside `$scope` are evaluated for changes.
 - Volatility is evaluated from the business domain (classification-derived default + human override), never from commit history alone.
 - DDD classification and Volatility drive downstream assessments — see `/pair-capability-map-contexts` (relationship strength/distance/volatility) and the architecture-quality capability that consumes them.
 - Migration: this skill was reclassified from a process skill (`pair-process-map-subdomains`) to a capability (`pair-capability-map-subdomains`) — see [skills-guide.md](../../../.pair/knowledge/skills-guide.md#migration-notes) for the rename and new invocation paths.

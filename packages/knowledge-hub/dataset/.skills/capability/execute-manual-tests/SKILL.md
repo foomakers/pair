@@ -162,7 +162,7 @@ To maximize reliability when executed by AI agents:
 - **Version from artifact**: extract from the artifact itself, never from source code.
 - **Isolated filesystem**: `$WORKDIR` must be outside the repo to avoid workspace interference.
 - **Clean npm environment**: use `--no-workspaces`, ensure no `.npmrc` inheritance from parent dirs.
-- **Idempotent re-run**: re-executing produces the same result without manual cleanup.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: re-executing produces the same result without manual cleanup.
 
 ## Graceful Degradation
 

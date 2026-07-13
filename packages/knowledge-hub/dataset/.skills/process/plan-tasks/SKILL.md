@@ -157,13 +157,13 @@ TASK BREAKDOWN COMPLETE:
 
 ## Graceful Degradation
 
-- If `/write-issue` is not installed, warn and provide the formatted Task Breakdown section for manual PM tool update.
-- If the PM tool is not accessible, produce the task breakdown content and ask the developer to update manually.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (optional skill `/write-issue` not installed / PM tool not accessible → produce the task breakdown content, ask developer to update manually) for the standard scenarios. Additional cases:
+
 - If adoption files (architecture, tech-stack, bounded contexts) are not found, skip technical context alignment and warn.
 
 ## Notes
 
 - This skill **modifies PM tool state** — it updates the story body with the Task Breakdown section. No separate task issues are created.
-- Task-level idempotency: re-invoking on a story with partial tasks appends only missing ones to the story body.
+- **Idempotent (task-level)** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: re-invoking on a story with partial tasks appends only missing ones to the story body.
 - Condensed TA removes verbose implementation detail that belongs in individual tasks (retained items: see Step 5).
 - Story template reference: [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md).

@@ -7,7 +7,7 @@ author: Foomakers
 
 # /pair-process-refine-story — Story Refinement
 
-Transform a user story from rough breakdown (Todo) into a development-ready specification (Refined). Section-level idempotency: each refinement section is checked before acting — partial refinements resume from the first missing section.
+Transform a user story from rough breakdown (Todo) into a development-ready specification (Refined). **Section-level idempotency** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md): each refinement section is checked before acting; partial refinements resume from the first missing section.
 
 ## Composed Skills
 
@@ -157,8 +157,8 @@ STORY REFINEMENT COMPLETE:
 
 ## Graceful Degradation
 
-- If `/pair-capability-write-issue` is not installed, warn and provide the formatted story body for manual PM tool update.
-- If the PM tool is not accessible, produce the refined story content and ask the developer to update manually.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce the refined story content, ask developer to update manually) for the standard scenarios. Additional cases:
+
 - If adoption files (architecture, tech-stack) are not found, skip technical analysis alignment checks and warn.
 - If `context-map.md` is not found, skip the domain check in Step 2 — its absence is the expected steady state, not an error.
 

@@ -141,7 +141,8 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-- If [code-metrics.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/code-metrics.md) is not found, use built-in thresholds (cyclomatic > 10, function > 50 lines, file > 300 lines, coverage > 70%).
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → fall back to built-in thresholds) for the standard scenarios. Additional cases:
+
 - If coverage tools are not available, skip test coverage metrics and note: "Coverage: SKIPPED — no coverage tool detected."
 - If duplication detection is not feasible (no tool), use heuristic scanning for obvious copy-paste patterns.
 - If the codebase is too large for full analysis, limit to changed files (PR scope) and note: "Partial analysis — limited to changed files."

@@ -191,16 +191,16 @@ This skill supports `story`, `task`, `epic`, and `initiative` types. Adding a ne
 
 ## Graceful Degradation
 
-- If [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) is not found, HALT — PM tool is required.
-- If the template file is not found, HALT — template-driven formatting is mandatory.
-- If the PM tool implementation guide is not found, warn and proceed with default behavior.
-- If the PM tool is not accessible (auth failure, rate limit, network), HALT with descriptive error — no fallback.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) for the standard scenarios — this skill deliberately **overrides the default degrade behavior with a HALT** for its two load-bearing dependencies:
+
+- PM tool not configured/accessible, or the template file missing → **HALT** (no fallback — this skill's entire job is writing to the PM tool via a template).
+- If the PM tool implementation guide is not found, warn and proceed with default behavior (a genuine degrade, not a HALT).
 - If `way-of-working.md` has no `## State Mapping` section, canonical macrostate names are assumed for board writes — this is the zero-configuration default, not a degradation.
 
 ## Notes
 
 - This skill **modifies PM tool state** — it creates and updates issues.
-- No PM tool fallback: if the adopted tool fails, the skill HALTs — re-invocation is idempotent (`$id` prevents duplicate creation).
+- No PM tool fallback: if the adopted tool fails, the skill HALTs. **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md): `$id` prevents duplicate creation on re-invocation.
 - Template = source of truth for issue body format. Changes to template structure automatically affect all future issue creation.
 - Labels and hierarchy linking follow the PM tool implementation guide conventions.
 - **Deliberate tech-debt promotion**: assess-* skills are output-only and never auto-create backlog items. When a debt or quality finding is worth scheduling, a human/agent promotes it here **deliberately** by passing `tech-debt` in `$labels` — a manual, selective act, never a 100% auto-conversion.

@@ -394,7 +394,7 @@ On HALT: report the blocker clearly, propose resolution, wait for developer.
 
 ## Idempotent Re-invocation
 
-Re-invoking `/implement` on a partially completed story is safe and expected:
+See [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). Re-invoking `/implement` on a partially completed story is safe and expected — per-step:
 
 1. **Branch**: detects existing branch, switches to it.
 2. **Commit strategy**: if commits already exist on branch, infer strategy from history.
@@ -407,16 +407,14 @@ The skill resumes from the first incomplete step — never re-does completed wor
 
 ## Graceful Degradation
 
-- **PM tool not accessible**: Ask developer to manually provide story details and task list.
-- **Missing adoption files**: Warn and proceed with guideline defaults.
-- **/assess-stack not installed**: Warn on new dependency, continue without validation.
-- **/verify-adoption not installed**: Warn, skip adoption compliance check.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (PM tool not accessible → ask the developer directly; adoption file missing → proceed with guideline defaults; optional skill not installed → warn and skip that check) for the standard scenarios. Additional cases:
+
 - **No quality gate command**: Fall back to individual checks (lint, test, type check).
 
 ## Notes
 
 - This skill **modifies files and creates git artifacts** (branches, commits, PRs).
 - Task iteration is sequential — each task completes its full cycle before the next begins.
-- The developer can stop between tasks; re-invoke to resume (idempotency ensures correct state).
+- The developer can stop between tasks; re-invoke to resume (see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md)).
 - Single PR per story regardless of commit strategy.
 - **Squash happens at merge** (Phase 4), not before PR creation. Individual commits are preserved on the branch during review.

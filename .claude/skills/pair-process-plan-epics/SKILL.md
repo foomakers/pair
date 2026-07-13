@@ -135,12 +135,13 @@ EPICS COMPLETE:
 
 ## Graceful Degradation
 
-- If `/pair-capability-write-issue` is not installed, warn and provide formatted epic content for manual PM tool entry.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce epic documents, ask developer to create manually) for the standard scenarios. Additional cases:
+
+- If `/pair-capability-map-subdomains` is not installed, skip Step 3.5 with a warning — epic creation proceeds without domain mapping.
 - If bounded contexts are not defined, proceed with PRD and initiative analysis only.
-- If PM tool is not accessible, produce epic documents and ask developer to create manually.
 
 ## Notes
 
 - This skill **modifies PM tool state** — creates epic issues linked to initiatives.
-- Idempotent: re-invocation detects existing epics and skips them.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: detects existing epics and skips them.
 - Epic 0 rule: for new projects, always assess if a bootstrap/foundation epic is needed before functional epics.
