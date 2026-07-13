@@ -1,11 +1,11 @@
 ---
-name: pair-capability-assess-debt
-description: "Assesses technical debt using resolution cascade (Argument > Adoption > Assessment). Categorizes debt (code, design, test, documentation, infrastructure), applies prioritization formula (impact x effort), proposes remediation priority. Output-only: returns a report, writes no files, creates no backlog items, never blocks. Idempotent. Invocable independently or composed by /pair-process-review."
+name: analyze-debt
+description: "Analyzes technical debt using resolution cascade (Argument > Adoption > Assessment). Categorizes debt (code, design, test, documentation, infrastructure), applies prioritization formula (impact x effort), proposes remediation priority. Output-only: returns a report, writes no files, creates no backlog items, never blocks. Idempotent. Invocable independently or composed by /review."
 version: 0.5.0
 author: Foomakers
 ---
 
-# /pair-capability-assess-debt — Technical Debt Assessment
+# /analyze-debt — Technical Debt Analysis
 
 Detect, categorize, and prioritize technical debt items. Applies the prioritization framework from [technical-debt.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/technical-debt.md) guidelines. Produces a debt report with categorized items, severity, impact/effort scoring, and remediation recommendations. **Output-only**: this skill returns a report — it writes no files, creates no PM-tool items, and there is **no `$mode:scan`** and **no auto-conversion** of debt into backlog cards. Technical debt **never blocks a PR**.
 
@@ -18,7 +18,7 @@ Detect, categorize, and prioritize technical debt items. Applies the prioritizat
 
 ## Composed Skills
 
-This skill is **output-only** — it composes no skill and writes no files. No auto-creation of tech-debt items. A debt item worth scheduling is promoted **deliberately** to the backlog by a human/agent via `/pair-capability-write-issue` with the `tech-debt` label (see [Composition Interface](#composition-interface)) — a manual, selective act, never a 100% auto-conversion.
+This skill is **output-only** — it composes no skill and writes no files. No auto-creation of tech-debt items. A debt item worth scheduling is promoted **deliberately** to the backlog by a human/agent via `/write-issue` with the `tech-debt` label (see [Composition Interface](#composition-interface)) — a manual, selective act, never a 100% auto-conversion.
 
 ## Algorithm
 
@@ -144,7 +144,7 @@ For each detected item, apply the prioritization formula:
 ### Step 5: Return the Report
 
 1. **Act**: Return the debt report (see Output Format) to the caller or developer. **This skill writes nothing** — no adoption file, no code change, no PM-tool item.
-2. **Act**: If a High-severity item is worth scheduling, recommend that the developer promote it **deliberately** to the backlog via `/pair-capability-write-issue` (`$type` per template, `tech-debt` label). This is a manual, selective decision — the skill never creates the card itself.
+2. **Act**: If a High-severity item is worth scheduling, recommend that the developer promote it **deliberately** to the backlog via `/write-issue` (`$type` per template, `tech-debt` label). This is a manual, selective decision — the skill never creates the card itself.
 3. **Verify**: Report returned. No side effects.
 
 ## Output Format
@@ -154,7 +154,7 @@ TECH DEBT ASSESSMENT (output-only — no files or issues created):
 ├── Items Found:  [N total]
 ├── Categories:   Code: [N] | Design: [N] | Test: [N] | Docs: [N] | Infra: [N]
 ├── Severity:     High: [N] | Medium: [N] | Low: [N]
-└── Promotion:    [none | suggested: N items for deliberate /pair-capability-write-issue promotion]
+└── Promotion:    [none | suggested: N items for deliberate /write-issue promotion]
 
 PRIORITIZED ITEMS:
  # | Severity | Category | Impact | Effort | Score | Description | Location
@@ -171,12 +171,12 @@ RESULT: [N items assessed, N high-priority — report only, nothing created/bloc
 
 ## Composition Interface
 
-When composed by `/pair-process-review`:
+When composed by `/review`:
 
-- **Input**: /pair-process-review invokes `/pair-capability-assess-debt` during the completeness phase (Phase 4).
-- **Output**: Returns the debt assessment report. /pair-process-review incorporates findings into review output (the Tech Debt section).
+- **Input**: /review invokes `/analyze-debt` during the completeness phase (Phase 4).
+- **Output**: Returns the debt assessment report. /review incorporates findings into review output (the Tech Debt section).
   - Debt items are **informational** — they do **not** HALT the review and **never** block the PR.
-  - /pair-process-review does **not** auto-create tech-debt issues. Items worth tracking are promoted deliberately (after review) via `/pair-capability-write-issue` with the `tech-debt` label.
+  - /review does **not** auto-create tech-debt issues. Items worth tracking are promoted deliberately (after review) via `/write-issue` with the `tech-debt` label.
 
 When invoked **independently**:
 

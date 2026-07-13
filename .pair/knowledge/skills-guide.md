@@ -37,7 +37,7 @@ Process skills compose capability skills. Capability skills are independently in
 
 > How-to guides 04 and 05 (subdomain/bounded-context definition) no longer map to a process skill — see [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
 
-### Capability Skills (24)
+### Capability Skills (25)
 
 #### Domain Modeling Skills (2)
 
@@ -61,16 +61,24 @@ Reclassified from process to capability (D24) — see [Callers Matrix](#callers-
 | `/pair-capability-assess-observability` | Observability strategy evaluation |
 | `/pair-capability-assess-ai` | AI development tools evaluation |
 
-#### Verification Skills (4)
+#### Analysis Skills (2)
+
+Analyze + **report only** — never block, propose no adoption decision (verb: `analyze-*`, distinct from `assess-*`).
+
+| Skill | Scope |
+|-------|-------|
+| `/pair-capability-analyze-debt` | Technical debt detection + prioritization (report-only) |
+| `/pair-capability-analyze-code-quality` | Code quality metrics — complexity, size, coverage, maintainability (report-only) |
+
+#### Verification Skills (3)
 
 | Skill | Scope |
 |-------|-------|
 | `/pair-capability-verify-quality` | Quality gate checking |
 | `/pair-capability-verify-done` | Definition of Done checking |
 | `/pair-capability-verify-adoption` | Adoption compliance checking |
-| `/pair-capability-assess-debt` | Technical debt detection + prioritization |
 
-#### Operational Skills (5)
+#### Operational Skills (6)
 
 | Skill | Scope |
 |-------|-------|
@@ -79,6 +87,7 @@ Reclassified from process to capability (D24) — see [Callers Matrix](#callers-
 | `/pair-capability-estimate` | Story estimation |
 | `/pair-capability-setup-gates` | CI/CD quality gate configuration |
 | `/pair-capability-setup-pm` | PM tool configuration |
+| `/pair-capability-manage-flags` | Feature flag lifecycle management |
 
 #### Testing Skills (2)
 
@@ -87,12 +96,11 @@ Reclassified from process to capability (D24) — see [Callers Matrix](#callers-
 | `/pair-capability-design-manual-tests` | Manual test suite generation from project analysis |
 | `/pair-capability-execute-manual-tests` | Manual test suite execution + report generation |
 
-#### Code Quality Skills (2)
+#### State and Handoff Skills (1)
 
 | Skill | Scope |
 |-------|-------|
-| `/pair-capability-assess-code-quality` | Code quality metrics assessment |
-| `/pair-capability-manage-flags` | Feature flag lifecycle management |
+| `/pair-capability-checkpoint` | Write/resume story progress checkpoint (work survives context resets) |
 
 #### Discovery Skills (1)
 
@@ -126,7 +134,9 @@ Reclassified from process to capability (D24) — see [Callers Matrix](#callers-
 │   ├── estimate/
 │   ├── setup-gates/
 │   ├── setup-pm/
-│   ├── assess-code-quality/
+│   ├── analyze-debt/          # report-only
+│   ├── analyze-code-quality/  # report-only
+│   ├── checkpoint/
 │   ├── manage-flags/
 │   └── grill/
 └── next/                 # Navigator skill
@@ -191,6 +201,13 @@ No caller performs a full re-mapping outside `/pair-process-bootstrap`. When no 
 - New behavior: graceful "system areas" fallback when no DDD artifacts exist; `Volatility` field on subdomains; per-relationship strength/distance/volatility assessment with an approval gate on unbalanced+volatile relationships (see `subdomain-template.md`, `bounded-context-template.md`).
 - No standalone process step remains for domain mapping — how-to guides 04/05 still describe the workflow, but the underlying skill is invoked scoped by the callers in the [Callers Matrix](#callers-matrix-scoped-capabilities) above.
 
+**assess-debt, assess-code-quality: assess → analyze (skill naming taxonomy, #313/T8)**
+
+- Rationale: `assess-*` conflated two operations. The corpus now uses three distinct verbs — **`verify-*`** (conformance pass/fail), **`assess-*`** (evaluate options + PROPOSE an adoption choice — the 8 decision skills), **`analyze-*`** (analyze + REPORT only, never blocks, proposes no adoption decision). The two report skills were misfiled under `assess-*` and are renamed to the `analyze-*` verb. Recorded as ADL `2026-07-13-skill-naming-verb-taxonomy.md` in the project decision log.
+- Old path: `.skills/capability/assess-debt/`, `.skills/capability/assess-code-quality/` — new path: `.skills/capability/analyze-debt/`, `.skills/capability/analyze-code-quality/`.
+- Installed command names change accordingly: `/pair-capability-assess-debt` → `/pair-capability-analyze-debt`; `/pair-capability-assess-code-quality` → `/pair-capability-analyze-code-quality`. Unprefixed dataset command names change too: `/assess-debt` → `/analyze-debt`, `/assess-code-quality` → `/analyze-code-quality`.
+- No behavior change: both remain output-only report producers (per ADR-009); only the verb/name changed. Skill count stays 35.
+
 ## How Skills Relate to How-To Guides
 
 - **How-to guides** = workflow orchestrators (the "what" and "when")
@@ -215,4 +232,4 @@ Skills read from and write to adoption files in `.pair/adoption/`:
 
 - **Start here**: Run `/pair-next` to determine what to do
 - **Process flow**: `/pair-process-specify-prd` → `/pair-process-bootstrap` → `/pair-process-plan-initiatives` → ... → `/pair-process-implement` → `/pair-process-review`
-- **Independent capability**: Any capability skill can be invoked directly (e.g., `/pair-capability-estimate`, `/pair-capability-assess-debt`)
+- **Independent capability**: Any capability skill can be invoked directly (e.g., `/pair-capability-estimate`, `/pair-capability-analyze-debt`)

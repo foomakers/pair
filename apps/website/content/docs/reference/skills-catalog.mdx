@@ -5,7 +5,7 @@ description: Complete catalog of all 35 pair skills organized by type — proces
 
 pair ships with 35 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
 
-> **Last updated:** 2026-07-11. Source: `packages/knowledge-hub/dataset/.skills/`
+> **Last updated:** 2026-07-13. Source: `packages/knowledge-hub/dataset/.skills/`
 
 ## Meta Skills
 
@@ -27,7 +27,7 @@ Process skills orchestrate multi-step workflows by composing capability skills.
 | **refine-story** | `/pair-process-refine-story` | Refines a user story from Todo to Refined state: requirements analysis (Given-When-Then), technical analysis, sprint readiness. | `/pair-capability-write-issue` |
 | **plan-tasks** | `/pair-process-plan-tasks` | Breaks a refined user story into implementation tasks. Appends Technical Analysis + Task Breakdown to the story body. | `/pair-capability-write-issue` |
 | **implement** | `/pair-process-implement` | Implements a user story by iterating through its tasks one at a time following a 5-step cycle per task. Creates a PR at story completion. | `/pair-capability-verify-quality`, `/pair-capability-record-decision` |
-| **review** | `/pair-process-review` | Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness, decision, and optional merge. | `/pair-capability-verify-quality`, `/pair-capability-verify-done`, `/pair-capability-record-decision`, `/pair-capability-assess-debt` (required); `/pair-capability-verify-adoption`, `/pair-capability-assess-stack`, `/pair-capability-execute-manual-tests` (optional) |
+| **review** | `/pair-process-review` | Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness, decision, and optional merge. | `/pair-capability-verify-quality`, `/pair-capability-verify-done`, `/pair-capability-record-decision`, `/pair-capability-analyze-debt` (required); `/pair-capability-verify-adoption`, `/pair-capability-assess-stack`, `/pair-capability-execute-manual-tests` (optional) |
 
 ## Capability Skills
 
@@ -50,14 +50,21 @@ All `assess-*` skills are **output-only**: they produce a proposal (rendered ado
 | ----- | ------- | ----------- |
 | **assess-ai** | `/pair-capability-assess-ai` | Assess AI development tools using resolution cascade (Argument > Adoption > Assessment). Output-only — proposes AI-section content; caller persists via `/pair-capability-record-decision`. |
 | **assess-architecture** | `/pair-capability-assess-architecture` | Assess architecture pattern using resolution cascade. Output-only — proposes adoption content; caller persists via `/pair-capability-record-decision`. |
-| **assess-code-quality** | `/pair-capability-assess-code-quality` | Assess code quality using quality score formula from code-metrics guidelines. Output-only — report; writes nothing. |
-| **assess-debt** | `/pair-capability-assess-debt` | Assess technical debt (code, design, test, documentation, infrastructure) with impact×effort prioritization. Output-only — report; no scan-mode, no auto-created issues, never blocks a PR. |
 | **assess-infrastructure** | `/pair-capability-assess-infrastructure` | Assess infrastructure strategy: cloud, CI/CD, deployment choices. Output-only — proposes adoption content; caller persists via `/pair-capability-record-decision`. |
 | **assess-methodology** | `/pair-capability-assess-methodology` | Assess development methodology: Scrum, Kanban, Lean, etc. Output-only — proposes methodology-section content; caller persists via `/pair-capability-record-decision`. |
 | **assess-observability** | `/pair-capability-assess-observability` | Assess observability strategy: monitoring, logging, tracing. Output-only — proposes observability-section content; caller persists via `/pair-capability-record-decision`. |
 | **assess-pm** | `/pair-capability-assess-pm` | Assess project management tool choice. Output-only — proposes PM-section content; persists via `/pair-capability-setup-pm` or the caller's `/pair-capability-record-decision`. |
 | **assess-stack** | `/pair-capability-assess-stack` | Assess tech stack with version tracking. Lifecycle-spanning: bootstrap (full eval), implementation (add dependency), review (detect unlisted). Output-only — proposes tech-stack content; caller persists via `/pair-capability-record-decision`. |
 | **assess-testing** | `/pair-capability-assess-testing` | Assess testing framework and strategy. Output-only — proposes testing-section content; caller persists via `/pair-capability-record-decision`. |
+
+### Analysis Capabilities
+
+All `analyze-*` skills are **output-only report producers**: they analyze and report, propose no adoption decision, and never block a PR. Distinct from `assess-*` (evaluate options + propose an adoption choice) and `verify-*` (conformance pass/fail). See ADL `2026-07-13-skill-naming-verb-taxonomy.md` in the project decision log.
+
+| Skill | Command | Description |
+| ----- | ------- | ----------- |
+| **analyze-code-quality** | `/pair-capability-analyze-code-quality` | Analyze code quality using quality score formula from code-metrics guidelines. Output-only — report; writes nothing. |
+| **analyze-debt** | `/pair-capability-analyze-debt` | Analyze technical debt (code, design, test, documentation, infrastructure) with impact×effort prioritization. Output-only — report; no scan-mode, no auto-created issues, never blocks a PR. |
 
 ### Verification Capabilities
 

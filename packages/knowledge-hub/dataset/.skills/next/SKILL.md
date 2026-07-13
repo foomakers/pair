@@ -49,8 +49,8 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 | `/assess-pm`         | Assessment   | Assess project management tool                  |
 | `/assess-infrastructure`| Assessment| Assess infrastructure strategy                  |
 | `/assess-observability`| Assessment | Assess observability strategy                   |
-| `/assess-debt`       | Assessment   | Assess technical debt with prioritization       |
-| `/assess-code-quality`| Assessment  | Assess code quality with metrics                |
+| `/analyze-debt`      | Analysis     | Analyze technical debt with prioritization      |
+| `/analyze-code-quality`| Analysis  | Analyze code quality with metrics               |
 | `/estimate`          | Planning     | Estimate story using adopted methodology        |
 | `/setup-gates`       | Configuration| Configure CI/CD quality gates                   |
 | `/manage-flags`      | Configuration| Manage feature flag lifecycle                   |
@@ -117,7 +117,7 @@ If no process skill matched in Steps 2-3, check for capability skill opportuniti
 | --- | ------------------------------------------------------------------------ | -------------------- | ---------------------------------------------- |
 | 12  | Quality gate not configured (no Quality Gates section in way-of-working) | `/setup-gates`       | Quality gates should be established             |
 | 13  | Tech stack has unlisted dependencies detected                            | `/assess-stack`      | Stack registry needs updating                   |
-| 14  | Technical debt flags present (TODO/FIXME/HACK comments detected)         | `/assess-debt`       | Debt should be cataloged and prioritized        |
+| 14  | Technical debt flags present (TODO/FIXME/HACK comments detected)         | `/analyze-debt`      | Debt should be cataloged and prioritized        |
 | 15  | No estimation methodology adopted in way-of-working                      | `/estimate`          | Estimation process should be established        |
 | 16  | A backlog item or topic carries open questions or unclear scope (question markers, conflicting comments) that block planning | `/grill` | Structured one-question-at-a-time alignment before planning |
 

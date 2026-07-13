@@ -1,11 +1,11 @@
 ---
-name: assess-code-quality
-description: "Assesses code quality using resolution cascade (Argument > Adoption > Assessment). Applies quality score formula from code-metrics guidelines. Produces quality report with complexity, size, coverage, and maintainability metrics (output-only, writes nothing). Idempotent: detects existing report, checks staleness. Invocable independently or composed by /review."
+name: analyze-code-quality
+description: "Analyzes code quality using resolution cascade (Argument > Adoption > Assessment). Applies quality score formula from code-metrics guidelines. Produces quality report with complexity, size, coverage, and maintainability metrics (output-only, writes nothing). Idempotent: detects existing report, checks staleness. Invocable independently or composed by /review."
 version: 0.5.0
 author: Foomakers
 ---
 
-# /assess-code-quality — Code Quality Assessment
+# /analyze-code-quality — Code Quality Analysis
 
 Evaluate code quality using objective metrics from [code-metrics.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/code-metrics.md). Produces a quality report with complexity, size, coverage, duplication, and maintainability scores. Includes actionable recommendations for improvement. **Output-only**: this skill inspects code and runs coverage but writes no files — it never mutates adoption, code, or the PM tool.
 
@@ -141,7 +141,7 @@ RESULT: [Quality score: N/100 | Assessed | Confirmed existing]
 
 When composed by `/review`:
 
-- **Input**: /review may invoke `/assess-code-quality` during the technical review phase.
+- **Input**: /review may invoke `/analyze-code-quality` during the technical review phase.
 - **Output**: Returns the quality report. /review incorporates metrics and hotspots into review findings.
   - Poor maintainability or high complexity may inform review recommendations.
   - Metrics are informational — they do not HALT the review.

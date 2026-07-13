@@ -267,7 +267,11 @@ Add your skill to `packages/knowledge-hub/dataset/.pair/knowledge/skills-guide.m
 |-----------|---------|
 | Process skills | `pair-process-<name>` (e.g., `pair-process-implement`) |
 | Capability skills | `pair-capability-<name>` (e.g., `pair-capability-verify-quality`) |
-| Assessment skills | `pair-capability-assess-<topic>` (e.g., `pair-capability-assess-stack`) |
+| Verification skills | `pair-capability-verify-<aspect>` — conformance pass/fail (e.g., `pair-capability-verify-quality`) |
+| Assessment skills | `pair-capability-assess-<topic>` — evaluate options + propose an adoption choice (e.g., `pair-capability-assess-stack`) |
+| Analysis skills | `pair-capability-analyze-<topic>` — analyze + report only, never blocks (e.g., `pair-capability-analyze-debt`) |
+
+Three distinct verbs, kept separate — don't overload one across branches: **`verify-*`** = conformance pass/fail; **`assess-*`** = evaluate options and PROPOSE an adoption decision; **`analyze-*`** = analyze and REPORT only (no decision, never blocks). Recorded as ADL `2026-07-13-skill-naming-verb-taxonomy.md`.
 
 ## Resources
 
