@@ -4,7 +4,7 @@ import { movePathOps, copyPathOps } from '@pair/content-ops'
 import { stripAllMarkers, applyTransformCommands, validateMarkers } from '@pair/content-ops'
 import type { SyncOptions, SkillNameMap, CopyPathOpsResult } from '@pair/content-ops'
 
-const DATASET = join(__dirname, '..', 'dataset')
+const DATASET = join(__dirname, '..', '..', 'dataset')
 
 export function parseJson(arg: string): Record<string, unknown> {
   // try parse as JSON string first
@@ -180,8 +180,8 @@ if (require.main === module) {
     const [source, target, mode, optionsArg] = args
     if (!source || !target) {
       console.error(
-        'Usage: ts-node src/transfer-dataset.ts [--root <path>] <source> <target> [mode] [optionsJsonOrFile]\n' +
-          '       ts-node src/transfer-dataset.ts [--root <path>] --pipeline <json-array>',
+        'Usage: ts-node src/tools/transfer-dataset.ts [--root <path>] <source> <target> [mode] [optionsJsonOrFile]\n' +
+          '       ts-node src/tools/transfer-dataset.ts [--root <path>] --pipeline <json-array>',
       )
       process.exit(1)
     }
