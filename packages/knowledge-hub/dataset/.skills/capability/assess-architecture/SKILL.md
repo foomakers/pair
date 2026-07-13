@@ -17,7 +17,7 @@ Evaluate and recommend the system architecture pattern. Follows the resolution c
 
 ## Composed Skills
 
-This skill is **output-only** — it composes no skill and writes no files. Persistence of the proposal is the caller's responsibility via `/record-decision` (see [Composition Interface](#composition-interface)).
+**Output-only** — composes no skill, writes no files; the caller persists via `/record-decision` (see [Composition Interface](#composition-interface)).
 
 ## Proposal Target
 
@@ -98,7 +98,7 @@ The rendered adoption content is destined for this file — the caller writes it
    - Concise, prescriptive statements (what IS adopted, not options)
    - Reference guidelines for detailed rationale
    - Scope the content to this skill's owned section so the caller's write preserves other sections
-2. **Verify**: The rendered `content` and its `target` are ready to emit. **This skill writes no files.**
+2. **Verify**: The rendered `content` and its `target` are ready to emit.
 
 ### Step 5: Emit Proposal
 
@@ -107,7 +107,7 @@ The rendered adoption content is destined for this file — the caller writes it
    - `target`: [adoption/tech/architecture.md](../../../.pair/adoption/tech/architecture.md) (owned section)
    - `decision-metadata`: `$type: architectural`, `$topic: architecture-pattern`, `$summary: "[Pattern] adopted as system architecture"`
    - plus the human-facing report (see Output Format)
-2. **Verify**: Proposal emitted. Persistence — writing `content` to `target` and recording the ADR — is performed by the caller via `/record-decision(content, target, decision-metadata)`, never by this skill.
+2. **Verify**: Proposal emitted. Persistence is performed by the caller via `/record-decision(content, target, decision-metadata)`, never by this skill.
 
 ## Output Format
 
@@ -132,7 +132,7 @@ When composed by `/bootstrap`:
 
 When invoked **independently**:
 
-- Full interactive flow. The skill returns the proposal; the human (or agent) persists it by composing `/record-decision`, then commits the changes.
+- Full interactive flow. The skill returns the proposal; the human (or agent) persists it by composing `/record-decision`, then commits.
 
 ## Edge Cases
 

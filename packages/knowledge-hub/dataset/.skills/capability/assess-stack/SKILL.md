@@ -18,7 +18,7 @@ Evaluate and recommend the technology stack: languages, frameworks, runtime, dat
 
 ## Composed Skills
 
-This skill is **output-only** — it composes no skill and writes no files. Persistence of the proposal is the caller's responsibility via `/record-decision` (see [Composition Interface](#composition-interface)).
+**Output-only** — composes no skill, writes no files; the caller persists via `/record-decision` (see [Composition Interface](#composition-interface)).
 
 ## Proposal Target
 
@@ -171,7 +171,7 @@ Detect and evaluate unlisted dependencies. Used when `/review` finds a dependenc
 
 1. **Act** (bootstrap mode): Render full tech-stack.md content with all core sections. Include version for every entry.
 2. **Act** (implementation/review mode): Render the affected-entry content for the appropriate section, scoped so the caller's write preserves all other content, including sections owned by /assess-testing and /assess-ai.
-3. **Verify**: The rendered `content` and its `target` are ready to emit. All entries have versions; section ownership respected. **This skill writes no files.**
+3. **Verify**: The rendered `content` and its `target` are ready to emit. All entries have versions; section ownership respected.
 
 ### Step 5: Emit Proposal
 
@@ -259,8 +259,6 @@ When invoked **independently**:
 
 ## Notes
 
-- **Lifecycle-spanning**: unlike other assess-* skills (primarily bootstrap), /assess-stack is used throughout bootstrap, implementation, and review.
 - **Tech stack as registry**: `tech-stack.md` is the registry of approved technologies. Only listed technologies are approved. Unlisted technologies detected during review trigger /assess-stack evaluation.
 - Stack decisions are typically **non-architectural** → the caller records them as an ADL. Exception: if a stack choice fundamentally changes the architecture (e.g. switching from monolith to microservices runtime), the caller uses ADR.
-- **Section ownership** keeps proposals non-overlapping: each assess-* skill renders only its sections; the single adoption writer is `/record-decision`, which preserves others on write.
 - Educational content (technology descriptions, ecosystem overview, WHY) stays in guidelines. This skill references guidelines for evaluation criteria and comparison matrices.

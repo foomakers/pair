@@ -17,7 +17,7 @@ Evaluate and recommend the development methodology: Scrum, Kanban, Lean, Waterfa
 
 ## Composed Skills
 
-This skill is **output-only** — it composes no skill and writes no files. Persistence of the proposal is the caller's responsibility via `/pair-capability-record-decision` (see [Composition Interface](#composition-interface)).
+**Output-only** — composes no skill, writes no files; the caller persists via `/pair-capability-record-decision` (see [Composition Interface](#composition-interface)).
 
 ## Proposal Target
 
@@ -92,7 +92,7 @@ The rendered adoption content is destined for this section — the caller writes
    - Methodology name and key practices
    - Development cycle description (iterations, flow, etc.)
    - Scope strictly to the methodology section so the caller's write preserves all other sections (quality gates, PM tool, etc.)
-2. **Verify**: The rendered `content` and its `target` are ready to emit. **This skill writes no files.**
+2. **Verify**: The rendered `content` and its `target` are ready to emit.
 
 ### Step 5: Emit Proposal
 

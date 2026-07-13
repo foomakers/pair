@@ -7,7 +7,7 @@ author: Foomakers
 
 # /pair-capability-assess-debt — Technical Debt Assessment
 
-Detect, categorize, and prioritize technical debt items. Applies the prioritization framework from [technical-debt.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/technical-debt.md) guidelines. Produces a debt report with categorized items, severity, impact/effort scoring, and remediation recommendations. **Output-only**: this skill returns a report — it writes no files, creates no PM-tool items, and there is **no `$mode:scan`** and **no auto-conversion** of debt into backlog cards. Technical debt **never blocks a PR** (R7.2).
+Detect, categorize, and prioritize technical debt items. Applies the prioritization framework from [technical-debt.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/technical-debt.md) guidelines. Produces a debt report with categorized items, severity, impact/effort scoring, and remediation recommendations. **Output-only**: this skill returns a report — it writes no files, creates no PM-tool items, and there is **no `$mode:scan`** and **no auto-conversion** of debt into backlog cards. Technical debt **never blocks a PR**.
 
 ## Arguments
 
@@ -18,7 +18,7 @@ Detect, categorize, and prioritize technical debt items. Applies the prioritizat
 
 ## Composed Skills
 
-This skill is **output-only** — it composes no skill and writes no files. It never auto-creates tech-debt items. A debt item worth scheduling is promoted **deliberately** to the backlog by a human/agent via `/pair-capability-write-issue` with the `tech-debt` label (see [Composition Interface](#composition-interface)) — a manual, selective act, never a 100% auto-conversion.
+This skill is **output-only** — it composes no skill and writes no files. No auto-creation of tech-debt items. A debt item worth scheduling is promoted **deliberately** to the backlog by a human/agent via `/pair-capability-write-issue` with the `tech-debt` label (see [Composition Interface](#composition-interface)) — a manual, selective act, never a 100% auto-conversion.
 
 ## Algorithm
 
@@ -175,14 +175,13 @@ When composed by `/pair-process-review`:
 
 - **Input**: /pair-process-review invokes `/pair-capability-assess-debt` during the completeness phase (Phase 4).
 - **Output**: Returns the debt assessment report. /pair-process-review incorporates findings into review output (the Tech Debt section).
-  - Debt items are **informational** — they do **not** HALT the review and **never** block the PR (R7.2).
+  - Debt items are **informational** — they do **not** HALT the review and **never** block the PR.
   - /pair-process-review does **not** auto-create tech-debt issues. Items worth tracking are promoted deliberately (after review) via `/pair-capability-write-issue` with the `tech-debt` label.
 
 When invoked **independently**:
 
 - Full interactive flow. Scan codebase or specified scope for debt.
 - Report findings with categorization and prioritization.
-- This skill is **output-only** — it inspects code but writes no files, creates no issues, and blocks nothing. Promotion to the backlog is a separate, deliberate `/pair-capability-write-issue` action.
 
 ## Graceful Degradation
 
@@ -193,9 +192,6 @@ When invoked **independently**:
 
 ## Notes
 
-- This skill **replaces the stub implementation** from [#100](https://github.com/foomakers/pair/issues/100). Full categorization, prioritization formula, and remediation recommendations are now included.
-- **Resolution cascade**: Path A (pre-identified item) → Path B (existing assessment) → Path C (full scan). Follows the same pattern as other assess-* skills.
 - **Idempotent**: re-invocation on an already-assessed codebase confirms the existing assessment. Re-assessment only on explicit developer request.
-- **Output-only** — this skill inspects code but never modifies files, adoption, or the PM tool. There is no `$mode:scan` and no auto-creation of tech-debt items (R7.2). Debt is surfaced in the report; promotion to the backlog is a deliberate `/pair-capability-write-issue` act with the `tech-debt` label.
 - Prioritization formula `Impact × (6 - Effort)` favors quick wins: high-impact items with low effort get the highest scores.
 - Debt is contextual — the same pattern may be acceptable in a prototype but unacceptable in production code. Severity assessment considers the project's maturity and risk tolerance.

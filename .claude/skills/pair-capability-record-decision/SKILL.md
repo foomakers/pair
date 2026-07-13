@@ -9,7 +9,7 @@ author: Foomakers
 
 Record a decision as an ADR (architectural), ADL (non-architectural), or DDR (domain). Always update the corresponding adoption files — or, for DDR, the context map — to keep them as the single source of truth for "what we use now."
 
-This skill is the **sole generic writer of adoption files** (assess-* are output-only and delegate persistence here); the one exception is `/setup-pm`, which owns PM-tool configuration end-to-end — it writes the PM section of `way-of-working.md` itself, then composes this skill only for the decision record. When a caller supplies pre-rendered `$content` and a `$target`, this skill acts as a **generic persister** — it writes `$content` into its owned section of `$target` (a heading-scoped merge) and records the decision, with **no per-domain rendering logic** (each `assess-*` knows how to render its own adoption content; this skill only persists it).
+This skill is the **sole generic writer of adoption files** (assess-* are output-only and delegate persistence here); the one exception is `/setup-pm`, which owns PM-tool configuration end-to-end — it writes the PM section of `way-of-working.md` itself, then composes this skill only for the decision record. When a caller supplies pre-rendered `$content` and a `$target`, this skill acts as a **generic persister** — it writes `$content` into its owned section of `$target` (a heading-scoped merge) and records the decision, with **no per-domain rendering logic**.
 
 ## Arguments
 
@@ -102,7 +102,7 @@ A domain decision only becomes a DDR if it meets **all three** criteria. This is
 
 ### Step 4: Update Adoption Files or Context Map
 
-This step is **always required** — adoption files and the context map are the single source of truth. This skill is the sole generic writer of adoption files; the one exception is `/setup-pm` for the PM-tool section of way-of-working.md (see the overview).
+This step is **always required** — adoption files and the context map are the single source of truth.
 
 #### If `$content` and `$target` provided → Generic Persist (assess-* proposal):
 
@@ -160,7 +160,7 @@ When composed by `/pair-process-implement` or `/pair-process-review`:
 When composed by `/pair-process-bootstrap` or an `assess-*` proposal (generic persist):
 
 - **Input**: The caller passes `$content` (the rendered adoption body from an `assess-*` skill) and `$target` (the adoption file/section), plus `$type`, `$topic`, `$summary`.
-- **Output**: This skill writes `$content` into its owned section of `$target` (a heading-scoped merge) and records the ADR/ADL — it is the **sole generic adoption writer**. It performs no per-domain rendering; the assess-* skill owns the content.
+- **Output**: This skill writes `$content` into its owned section of `$target` (a heading-scoped merge) and records the ADR/ADL. It performs no per-domain rendering; the assess-* skill owns the content.
 - This keeps the invariant: **only `record-decision` writes adoption files generically** (the sole exception is `/setup-pm`, which writes the PM section of `way-of-working.md` directly); **only assess-* renders** its own adoption content; the caller orchestrates the two.
 
 When invoked **independently**:
@@ -184,12 +184,9 @@ When invoked **independently**:
 - If [ADL template](../../../.pair/knowledge/guidelines/collaboration/templates/adl-template.md) is not found, use the minimal ADL structure: Date, Status, Context, Decision, Consequences, Adoption Impact.
 - If [DDR template](../../../.pair/knowledge/guidelines/collaboration/templates/ddr-template.md) is not found, use the minimal DDR structure: Status, Date, Context, Decision, Consequences, Context Map Impact.
 - If adoption directories don't exist, create them and warn: "Created adoption directory — this appears to be a new project."
-- If neither `context-map.md` nor a matching `<slug>.context.md` exists for a DDR, offer to create a minimal `context-map.md` containing just the affected rule/term — warn the developer this is the project's first domain-context artifact.
 
 ## Notes
 
-- ADR, ADL, and DDR are mutually exclusive. Never write more than one for the same decision.
-- Adoption files (ADR/ADL) and the context map (DDR) are always updated. A decision without that sync is incomplete.
 - Date-based naming (`YYYY-MM-DD-`) ensures ADL sortability; sequential naming (`adr-NNN-`/`ddr-NNN-`) makes ADR and DDR supersede chains and cross-references (e.g., brainstorm conflict flags) easy to cite by number.
 - The DDR criteria gate (Step 1b) exists to keep `adoption/product/ddr/` reserved for decisions worth their own historical record — everything else is an ADL or an inline note.
 - This skill modifies files: decision files and adoption files, or the context map. All changes should be committed together.

@@ -17,8 +17,8 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 | `/pair-capability-verify-done`     | Capability | Yes      | 4     | Definition of Done checking          |
 | `/pair-capability-record-decision` | Capability | Yes      | Any   | Record missing ADR (HALT condition)  |
 | `/pair-capability-assess-debt`     | Capability | Yes      | 4     | Flag tech debt items                 |
-| `/pair-capability-verify-adoption`       | Capability | Optional | 3     | Full adoption compliance (from #105)           |
-| `/pair-capability-assess-stack`          | Capability | Optional | 3     | Tech-stack resolution (from #104)              |
+| `/pair-capability-verify-adoption`       | Capability | Optional | 3     | Full adoption compliance                       |
+| `/pair-capability-assess-stack`          | Capability | Optional | 3     | Tech-stack resolution                          |
 | `/pair-capability-execute-manual-tests`  | Capability | Optional | 6     | Post-merge release validation (manual tests)   |
 
 ## Arguments
@@ -194,7 +194,7 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 1. **Check**: Has `/pair-capability-assess-debt` already run in this session?
 2. **Skip**: If already run — reuse results, move to Phase 5.
 3. **Act**: Compose `/pair-capability-assess-debt` with `$scope = all`. `/pair-capability-assess-debt` is **output-only** — it returns a report and creates nothing.
-4. **Act**: Report the debt items in the review output (Tech Debt section). Debt introduced by the PR is **surfaced, not blocked**: it does **not** HALT the review and **never** blocks the PR (R7.2). Do **not** auto-create a tech-debt issue.
+4. **Act**: Report the debt items in the review output (Tech Debt section). Debt introduced by the PR is **surfaced, not blocked**: it does **not** HALT the review and **never** blocks the PR. Do **not** auto-create a tech-debt issue.
 5. **Act**: If a debt item is worth scheduling, note it as a recommendation for **deliberate** promotion after review via `/pair-capability-write-issue` (with the `tech-debt` label) — a manual, selective act, never automatic.
 6. **Verify**: Debt items recorded in the report. High-severity items may inform the review verdict (TECH-DEBT: approve + track separately) but never force CHANGES-REQUESTED on debt grounds alone.
 
@@ -384,10 +384,8 @@ Re-invoking `/pair-process-review` on a partially reviewed PR is safe:
 ## Notes
 
 - This skill **reads code, posts review comments, and optionally merges PRs** — it does not modify source code.
-- First skill to compose 7 atomic skills (4 required + 3 optional). Proves composition pattern at scale.
 - Review phases are sequential — each phase builds on findings from prior phases.
-- The reviewer can stop between phases. Re-invoke to resume (idempotency ensures correct state).
+- The reviewer can stop between phases; re-invoke to resume (idempotency ensures correct state).
 - Output follows [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) — the template defines structure, /pair-process-review fills it with findings.
 - HALT on missing ADR is inherited from [how-to-11](../../../.pair/knowledge/how-to/11-how-to-code-review.md) — this is a business rule, not a skill limitation.
-- **Phase 6 is optional** — the reviewer can stop after Phase 5. The author can alternatively merge via `/pair-process-implement` Phase 4.
 - **Parent cascade is best-effort** — if sub-issue queries fail, the skill reports which updates need manual attention.

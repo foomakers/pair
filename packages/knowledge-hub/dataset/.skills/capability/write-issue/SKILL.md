@@ -200,8 +200,7 @@ This skill supports `story`, `task`, `epic`, and `initiative` types. Adding a ne
 ## Notes
 
 - This skill **modifies PM tool state** — it creates and updates issues.
-- No PM tool fallback: if the adopted tool fails, the skill HALTs. The developer resolves the issue, then re-invokes (idempotent by design — `$id` prevents duplicate creation).
+- No PM tool fallback: if the adopted tool fails, the skill HALTs — re-invocation is idempotent (`$id` prevents duplicate creation).
 - Template = source of truth for issue body format. Changes to template structure automatically affect all future issue creation.
 - Labels and hierarchy linking follow the PM tool implementation guide conventions.
-- **Deliberate tech-debt promotion**: assess-* skills are output-only and never auto-create backlog items. When a debt or quality finding is worth scheduling, a human/agent promotes it here **deliberately** by passing `tech-debt` in `$labels` — a manual, selective act, never a 100% auto-conversion (R7.2).
-- State resolution: `$status` is always a canonical macrostate — never a board-specific label. See [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md).
+- **Deliberate tech-debt promotion**: assess-* skills are output-only and never auto-create backlog items. When a debt or quality finding is worth scheduling, a human/agent promotes it here **deliberately** by passing `tech-debt` in `$labels` — a manual, selective act, never a 100% auto-conversion.
