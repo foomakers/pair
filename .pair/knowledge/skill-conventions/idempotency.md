@@ -13,7 +13,7 @@ This is the general shape:
 
 The **generic shape above never needs restating**. Every skill keeps only the one line that says what the artifact is and how re-invocation detects it — e.g. "detects existing files by filename", "shows current state instead of re-creating", "task-level: appends only missing tasks". That one line is the entire per-skill delta; write it as a single Notes bullet:
 
-> **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: `<what is detected and how>`.
+> **Idempotent** — see [idempotency convention](idempotency.md). This skill's check: `<what is detected and how>`.
 
 ## Orchestrators (multi-phase skills)
 

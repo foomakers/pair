@@ -15,7 +15,7 @@ Single-source explanations for patterns that recur across many `SKILL.md` files.
 
 A skill's own section keeps its heading (e.g. `### Step 1: Resolution Cascade`, `## Graceful Degradation`) and states its **delta only**, then points here for the generic mechanics, e.g.:
 
-> See [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics. **This skill's Path B**: ...
+> See [resolution cascade](resolution-cascade.md) for the generic Path A/B/C mechanics. **This skill's Path B**: ...
 
 This is a context pointer, not a citation: the executor is expected to follow it when it reaches that step, the same way it already follows pointers to guideline files elsewhere in the algorithm. If a pointer ever proves unreliable for must-have material, sharpen its wording first — inline the content again only if sharpening fails.
 

@@ -15,6 +15,6 @@ A skill's `## Graceful Degradation` section lists what happens when something it
 
 Only bullets that describe a scenario **not** covered above — e.g. a domain-specific fallback ("if no PRD, use the Decision Matrix to recommend a methodology anyway"), or a skill-specific hard requirement that escalates one of the four scenarios to a HALT instead of a degrade. State the pointer once at the top of the section:
 
-> See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) for the standard scenarios (guideline missing, adoption file missing, optional skill not installed, PM tool unreachable). This skill's additional cases:
+> See [graceful degradation](graceful-degradation.md) for the standard scenarios (guideline missing, adoption file missing, optional skill not installed, PM tool unreachable). This skill's additional cases:
 
 then list only what's additional or a deliberate override of the default (don't-HALT vs HALT) behavior.
