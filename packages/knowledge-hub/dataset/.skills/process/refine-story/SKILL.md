@@ -43,25 +43,25 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
 
 1. **Check**: Read the current story body and classify each section as **present** or **missing**:
 
-| Section                               | Detection                                                                  |
-| ------------------------------------- | -------------------------------------------------------------------------- |
-| Story Statement                       | Has `**As a**` / `**I want**` / `**So that**` with non-placeholder content |
-| Epic Context                          | Has `**Parent Epic**` with actual link                                     |
-| Acceptance Criteria (Given-When-Then) | Has `**Given**` / `**When**` / `**Then**` blocks                           |
-| Business Rules                        | Has non-placeholder business rules                                         |
-| Edge Cases                            | Has non-placeholder edge case handling                                     |
-| Technical Analysis                    | Has `### Implementation Approach` or `### Strategy` with content           |
-| Technical Risks                       | Has risk table with entries                                                |
-| Definition of Done                    | Has DoD checklist with items                                               |
-| Story Sizing                          | Has `**Final Story Points**` with value                                    |
-| Dependencies                          | Has dependency information                                                 |
-| Validation Strategy                   | Has testing approach                                                       |
+   | Section                               | Detection                                                                  |
+   | ------------------------------------- | -------------------------------------------------------------------------- |
+   | Story Statement                       | Has `**As a**` / `**I want**` / `**So that**` with non-placeholder content |
+   | Epic Context                          | Has `**Parent Epic**` with actual link                                     |
+   | Acceptance Criteria (Given-When-Then) | Has `**Given**` / `**When**` / `**Then**` blocks                           |
+   | Business Rules                        | Has non-placeholder business rules                                         |
+   | Edge Cases                            | Has non-placeholder edge case handling                                     |
+   | Technical Analysis                    | Has `### Implementation Approach` or `### Strategy` with content           |
+   | Technical Risks                       | Has risk table with entries                                                |
+   | Definition of Done                    | Has DoD checklist with items                                               |
+   | Story Sizing                          | Has `**Final Story Points**` with value                                    |
+   | Dependencies                          | Has dependency information                                                 |
+   | Validation Strategy                   | Has testing approach                                                       |
 
-1. **Act**: Determine refinement state:
+2. **Act**: Determine refinement state:
    - **All sections present** → story is already Refined. Offer selective update (Step 6).
    - **Some sections present** → partial refinement. Resume from first missing section (Steps 2–5).
    - **No sections (only Initial Breakdown)** → full refinement needed (Steps 2–5).
-2. **Verify**: Refinement state determined. Report:
+3. **Verify**: Refinement state determined. Report:
 
    > Refinement state: [N/M sections complete]. [Resuming from: Section X | Full refinement | Already refined — offering update].
 

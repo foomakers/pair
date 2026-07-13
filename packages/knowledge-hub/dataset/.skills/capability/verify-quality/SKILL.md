@@ -14,11 +14,15 @@ Validate the current codebase against quality gates. Two sources of truth:
 
 Only check gates that are not already passing.
 
+**Read-only, with one exception**: every gate only runs existing commands and modifies nothing — except **Step 5.C** (first-time custom-gate setup), the skill's ONLY write, which on a first run with no Custom Gate Registry writes the registry table or an opt-out marker to way-of-working.md (once).
+
 ## Arguments
 
 | Argument | Required | Description                                                                                                    |
 | -------- | -------- | -------------------------------------------------------------------------------------------------------------- |
 | `$scope` | No       | Limit checking: `code-quality`, `tests`, `lint`, `all`, or any custom scope key from adoption (default: `all`) |
+
+> **Write note**: this skill is read-only except **Step 5.C** — first-time custom-gate setup writes the Custom Gate Registry or an opt-out marker to way-of-working.md once. No other step writes anything.
 
 ## Algorithm
 

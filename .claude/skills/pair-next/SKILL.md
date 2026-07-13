@@ -7,9 +7,11 @@ author: Foomakers
 
 # /pair-next — Project Navigator
 
-Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 33-skill catalog across all lifecycle phases.
+Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 35-skill catalog across all lifecycle phases.
 
-## Skill Catalog (33 skills)
+## Skill Catalog (35 skills)
+
+The catalog is **derived from the installed corpus**: every installed skill must appear here — 9 process + 25 capability + `/pair-next` itself = 35. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
 
 ### Process Skills (9)
 
@@ -25,13 +27,15 @@ Analyze project state and recommend the single most relevant next skill to invok
 | `/pair-process-implement`       | Sprint Execution   | Implement story tasks with TDD                  |
 | `/pair-process-review`          | Sprint Execution   | Review PR through structured phases             |
 
-### Capability Skills (23)
+### Capability Skills (25)
 
 | Skill                | Category     | Description                                     |
 | -------------------- | ------------ | ----------------------------------------------- |
 | `/pair-capability-map-subdomains`    | Domain Modeling | Scoped DDD subdomain placement (+ Volatility) |
 | `/pair-capability-map-contexts`      | Domain Modeling | Scoped DDD bounded-context placement + relationship assessment |
+| `/pair-capability-grill`             | Alignment    | Interview engine: explore a topic or sync on a story, one question at a time |
 | `/pair-capability-record-decision`   | Decision     | Record ADR or ADL with adoption update          |
+| `/pair-capability-checkpoint`        | Session State | Write/resume story progress checkpoint (work survives context resets) |
 | `/pair-capability-write-issue`       | PM Tool      | Create/update issues in adopted PM tool         |
 | `/pair-capability-setup-pm`          | PM Tool      | Configure project management tool               |
 | `/pair-capability-verify-quality`    | Quality      | Check quality gates against codebase            |
@@ -93,17 +97,21 @@ All adoption files are populated. Query the PM tool to determine backlog state.
 
 | #   | Condition                                                        | Suggestion          | Rationale                                   |
 | --- | ---------------------------------------------------------------- | ------------------- | ------------------------------------------- |
-| 5   | No initiatives or epics exist in PM tool                         | `/pair-process-plan-initiatives` | Strategic planning needed                   |
-| 6   | Initiatives exist but no epics                                   | `/pair-process-plan-epics`       | Epic decomposition needed                   |
-| 7   | Epics exist but no user stories                                  | `/pair-process-plan-stories`     | Story breakdown needed                      |
-| 8   | Stories resolve to macrostate `Draft` (missing acceptance criteria, or failing Definition of Ready via the Readiness Fallback) | `/pair-process-refine-story` | Stories need refinement before work |
-| 9   | Stories resolve to macrostate `Ready` but have no task breakdown  | `/pair-process-plan-tasks`       | Tasks must be created before implementation |
-| 10  | Tasks or stories resolve to macrostate `Ready`                    | `/pair-process-implement`        | Work is ready to start                      |
-| 11  | Open pull requests, or items resolve to macrostate `Review`       | `/pair-process-review`           | Code review pending                         |
+| 3   | No initiatives or epics exist in PM tool                         | `/pair-process-plan-initiatives` | Strategic planning needed                   |
+| 4   | Initiatives exist but no epics                                   | `/pair-process-plan-epics`       | Epic decomposition needed                   |
+| 5   | Epics exist but no user stories                                  | `/pair-process-plan-stories`     | Story breakdown needed                      |
+| 6   | Open pull requests, or items resolve to macrostate `Review`       | `/pair-process-review`           | Code review pending — closest to delivery   |
+| 7   | A story resolves to macrostate `In Progress` AND its checkpoint file exists (`.pair/working/checkpoints/<story-id>.md`) | `/pair-capability-checkpoint` | Resume interrupted work (`$mode: resume`) before re-analysis |
+| 8   | A story resolves to macrostate `In Progress` but has NO checkpoint file | `/pair-process-implement`   | Continue the in-progress work — `/pair-process-implement` re-derives state from scratch when no checkpoint exists |
+| 9   | Stories resolve to macrostate `Ready` AND a task breakdown exists | `/pair-process-implement`        | Work is ready to start                      |
+| 10  | Stories resolve to macrostate `Ready` but have NO task breakdown  | `/pair-process-plan-tasks`       | Tasks must be created before implementation |
+| 11  | Stories resolve to macrostate `Draft` (missing acceptance criteria, or failing Definition of Ready via the Readiness Fallback) | `/pair-process-refine-story` | Stories need refinement before work |
+
+**Tie-break**: on a real backlog several of rows 6–11 can hold at once (e.g. Draft stories AND an open PR). Row order resolves this — rows are sorted by delivery proximity (`/pair-process-review` > `/pair-capability-checkpoint` > `/pair-process-implement` > `/pair-process-plan-tasks` > `/pair-process-refine-story`): evaluate top-to-bottom, stop at the first match. For a single item the distinguishing predicates (macrostate, checkpoint file present/absent, task breakdown present/absent) make rows 7–11 mutually exclusive; across items, row order decides. Every `In Progress` story matches row 7 or row 8 — the fallback (Step 5) is never reached for active work.
 
 ### Step 4: Capability Skill Suggestions
 
-If no process skill matched in Steps 2-3, check for capability skill opportunities:
+If no process skill matched in Steps 2-3, check for capability skill opportunities (same rule: evaluate in order, stop at the first match):
 
 | #   | Condition                                                                | Suggestion           | Rationale                                      |
 | --- | ------------------------------------------------------------------------ | -------------------- | ---------------------------------------------- |
@@ -111,6 +119,7 @@ If no process skill matched in Steps 2-3, check for capability skill opportuniti
 | 13  | Tech stack has unlisted dependencies detected                            | `/pair-capability-assess-stack`      | Stack registry needs updating                   |
 | 14  | Technical debt flags present (TODO/FIXME/HACK comments detected)         | `/pair-capability-assess-debt`       | Debt should be cataloged and prioritized        |
 | 15  | No estimation methodology adopted in way-of-working                      | `/pair-capability-estimate`          | Estimation process should be established        |
+| 16  | A backlog item or topic carries open questions or unclear scope (question markers, conflicting comments) that block planning | `/pair-capability-grill` | Structured one-question-at-a-time alignment before planning |
 
 ### Step 5: Fallback
 
@@ -145,11 +154,11 @@ Then ask: "Shall I run `/skill-name`?"
 - If the PM tool is not accessible (no MCP connection, no credentials), skip Step 3 and report: "PM tool not accessible — recommendation based on adoption files only."
 - If adoption files cannot be read (not installed yet), suggest `/pair-process-bootstrap` as the entry point.
 - If way-of-working.md has no `## State Mapping` section, canonical macrostate names are assumed — this is the zero-configuration default, not a degradation.
-- If a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback (Definition of Ready criteria) rather than treating Step 8's condition as unresolvable.
+- If a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback (Definition of Ready criteria) rather than treating row 11's condition as unresolvable.
 
 ## Notes
 
 - This skill is read-only: it inspects state but never modifies files or PM tool data.
-- When multiple items are actionable (e.g., tasks to implement AND PRs to review), prefer the item closest to delivery (`/pair-process-review` > `/pair-process-implement` > `/pair-process-plan-tasks`).
+- Row order encodes the tie-break (delivery proximity) — see the **Tie-break** note under the Step 3 table.
 - Re-run `/pair-next` after completing any skill to get an updated recommendation.
-- **Full catalog coverage**: any of the 33 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (Step 4) or process-skill composition.
+- **Full catalog coverage**: any of the 35 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/pair-capability-checkpoint`, rows 12-16 including `/pair-capability-grill`) or process-skill composition.
