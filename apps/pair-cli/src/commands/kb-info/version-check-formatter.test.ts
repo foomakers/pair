@@ -62,7 +62,7 @@ describe('formatVersionCheckHuman', () => {
 
     const output = formatVersionCheckHuman(result)
     expect(output).toContain('Current version unavailable')
-    expect(output).toContain('https://pair.foomakers.com/docs/guides/migrations')
+    expect(output).toContain('https://pair.foomakers.com/docs/migrations')
   })
 
   it('labels non-stable current versions', () => {

@@ -29,7 +29,7 @@ describe('compareVersions', () => {
 
     expect(result.status).toBe('drift')
     expect(result.migrationUrl).toBe(
-      'https://pair.foomakers.com/docs/guides/migrations/v1.1.0-to-v1.2.0',
+      'https://pair.foomakers.com/docs/migrations/v1.1.0-to-v1.2.0',
     )
   })
 

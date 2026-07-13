@@ -22,6 +22,6 @@ export const updateLinkMetadata = {
     'Creates automatic backup before modifications',
     'Skips external URLs and mailto links',
     'Processes all markdown files in .pair/ directory',
-    'See also: https://pair.foomakers.com/docs/guides/update-link',
+    'See also: https://pair.foomakers.com/docs/reference/cli/update-link',
   ],
 } as const
