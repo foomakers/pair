@@ -25,7 +25,7 @@
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { basename, dirname, join, relative, resolve } from 'path'
 
-const ROOT = join(__dirname, '..')
+const ROOT = join(__dirname, '..', '..')
 const SKILLS_DIR = join(ROOT, 'dataset', '.skills')
 
 // agentskills.io spec top-level fields

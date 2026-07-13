@@ -15,7 +15,6 @@ export default defineConfig({
         'coverage/',
         '**/*.test.ts',
         '**/*.spec.ts',
-        'src/index.ts',
         'vitest.config.ts',
       ],
       thresholds: {

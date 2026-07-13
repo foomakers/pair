@@ -2,7 +2,7 @@ import { join } from 'path'
 import { fileSystemService } from '@pair/content-ops'
 import { validatePathOps } from '@pair/content-ops'
 
-const ROOT = join(__dirname, '..')
+const ROOT = join(__dirname, '..', '..')
 const DATASET = join(ROOT, 'dataset')
 const ERRORS_PATH = join(ROOT, 'errors.txt')
 const EXCLUSION_LIST: string[] = [

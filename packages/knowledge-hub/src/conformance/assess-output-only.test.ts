@@ -6,8 +6,8 @@ import { join } from 'path'
 // record-decision is the sole adoption writer; assess-debt has no scan-mode.
 // See adr-009-assess-output-only.md.
 
-const DATASET = join(__dirname, '../dataset/.skills/capability')
-const MIRROR = join(__dirname, '../../../.claude/skills')
+const DATASET = join(__dirname, '../../dataset/.skills/capability')
+const MIRROR = join(__dirname, '../../../../.claude/skills')
 
 const ASSESS_SKILLS = [
   'ai',
