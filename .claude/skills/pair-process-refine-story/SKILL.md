@@ -1,6 +1,6 @@
 ---
 name: pair-process-refine-story
-description: "Refines a user story from Todo to Refined state through structured phases: selection, requirements analysis (Given-When-Then), technical analysis, sprint readiness, and documentation. Section-level idempotency — detects partial refinement and resumes. Composes /pair-capability-write-issue for PM tool updates."
+description: "Refines a user story from Todo to Refined — Given-When-Then acceptance criteria, technical analysis, sprint readiness. Composes /pair-capability-write-issue. Not for sizing an already-refined story (use /pair-capability-estimate)."
 version: 0.4.1
 author: Foomakers
 ---

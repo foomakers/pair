@@ -1,6 +1,6 @@
 ---
 name: assess-ai
-description: "Assess AI development tools using resolution cascade (Argument > Adoption > Assessment). Reads AI development guidelines, proposes AI tool choices with versions and emits rendered adoption content + target (output-only, writes nothing); the caller persists via /record-decision. Idempotent."
+description: "Evaluates and recommends AI development tools — coding assistants (Copilot, Claude Code, Cursor), agent frameworks, MCP integrations, models — when the choice is open. Output-only: emits a proposal + target for /record-decision to persist."
 version: 0.5.0
 author: Foomakers
 ---

@@ -1,6 +1,6 @@
 ---
 name: pair-capability-map-subdomains
-description: "Classifies business capabilities into DDD subdomains (core/supporting/generic) with a Volatility rating, scoped to the caller's touched items. Falls back to 'system areas' when no DDD artifacts exist yet. Produces/updates files in adoption/product/subdomain/ using subdomain-template.md. Composed by /pair-process-refine-story, /pair-process-plan-initiatives, /pair-process-plan-epics, /brainstorm — full scope only via /pair-process-bootstrap. Idempotent."
+description: "Classifies business capabilities into DDD subdomains (core, supporting, generic) with a volatility rating, scoped to items just touched. Composed by /pair-process-refine-story, /pair-process-plan-initiatives, /pair-process-plan-epics, a future /pair-process-brainstorm (planned — #230); full-scope re-mapping only via /pair-process-bootstrap."
 version: 0.4.1
 author: Foomakers
 ---

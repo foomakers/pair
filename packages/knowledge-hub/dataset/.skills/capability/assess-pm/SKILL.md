@@ -1,6 +1,6 @@
 ---
 name: assess-pm
-description: "Assess project management tool using resolution cascade (Argument > Adoption > Assessment). Reads PM tool guidelines, proposes a tool choice and emits rendered adoption content + target (output-only, writes nothing); persistence via /setup-pm or the caller's /record-decision. Idempotent."
+description: "Evaluates and recommends which project management tool fits this project (Jira, Linear, GitHub Projects, etc.) when the choice is still open — proposes a choice, doesn't configure anything. /setup-pm configures the tool once picked; otherwise the caller persists the proposal via /record-decision."
 version: 0.5.0
 author: Foomakers
 ---

@@ -1,6 +1,6 @@
 ---
 name: pair-process-bootstrap
-description: "Orchestrates full project setup: PRD verification, project categorization, checklist completion, standards generation, quality gate setup, and PM tool configuration. Composes /pair-process-specify-prd, /pair-capability-setup-pm, /pair-capability-record-decision, and assess-* (optional). Idempotent — detects completed phases and resumes."
+description: "Orchestrates full project setup — PRD verification, project categorization, checklist, standards, quality gates, PM tool — for a brand-new project, end to end. Composes /pair-process-specify-prd, /pair-capability-setup-pm, /pair-capability-record-decision, assess-* (optional)."
 version: 0.5.0
 author: Foomakers
 ---

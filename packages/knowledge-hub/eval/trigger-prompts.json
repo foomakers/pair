@@ -125,6 +125,18 @@
           "prompt": "I want to add Redis as a dependency — check whether that's consistent with our stack."
         },
         {
+          "id": "AD-14b",
+          "type": "should-trigger",
+          "expected": "assess-stack",
+          "prompt": "This PR adds a dependency that isn't in our tech-stack adoption file — flag it."
+        },
+        {
+          "id": "AD-14c",
+          "type": "should-trigger",
+          "expected": "assess-stack",
+          "prompt": "During review, flag any package in the diff that isn't in our adopted tech stack yet."
+        },
+        {
           "id": "AD-15",
           "type": "should-trigger",
           "expected": "assess-testing",

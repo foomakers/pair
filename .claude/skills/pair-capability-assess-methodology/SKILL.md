@@ -1,6 +1,6 @@
 ---
 name: pair-capability-assess-methodology
-description: "Assess development methodology using resolution cascade (Argument > Adoption > Assessment). Reads methodology guidelines, proposes Scrum/Kanban/Lean/etc. and emits rendered adoption content + target (output-only, writes nothing); the caller persists via /pair-capability-record-decision. Idempotent."
+description: "Evaluates and recommends the development methodology (Scrum, Kanban, Lean, SAFe, hybrid) — iterations, ceremonies, flow — when the choice is open. Output-only: emits a proposal + target for /pair-capability-record-decision to persist."
 version: 0.5.0
 author: Foomakers
 ---

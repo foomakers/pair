@@ -1,6 +1,6 @@
 ---
 name: pair-capability-execute-manual-tests
-description: "Executes a project's manual test suite against released artifacts, producing a structured report. Resolves test variables, iterates through critical paths, records PASS/FAIL per test case, and generates the report from the manual-test-report template. Invocable independently or composed by /pair-process-review (post-merge validation)."
+description: "Executes a project's manual test suite against released or deployed artifacts, producing a structured PASS/FAIL report per critical path. Not for running the automated test suite (use /pair-capability-verify-quality). Composed by /pair-process-review for post-merge validation."
 version: 0.4.1
 author: Foomakers
 ---

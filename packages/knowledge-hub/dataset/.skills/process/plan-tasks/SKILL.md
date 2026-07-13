@@ -1,6 +1,6 @@
 ---
 name: plan-tasks
-description: "Breaks a refined user story into implementation tasks. Task-level idempotency: detects existing tasks and creates only missing ones. Appends condensed Technical Analysis + Task Breakdown (checklist, Dependency Graph, AC Coverage table, detailed tasks) to the story body. Composes /write-issue to update the story issue body. Tasks are documented inline in the story — no separate task issues are created."
+description: "Breaks a refined user story into implementation tasks — checklist, dependency graph, AC-coverage table — appended to the story body; no separate task issues are created. Composes /write-issue."
 version: 0.4.1
 author: Foomakers
 ---

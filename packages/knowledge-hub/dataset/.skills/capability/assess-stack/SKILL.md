@@ -1,6 +1,6 @@
 ---
 name: assess-stack
-description: "Assess tech stack using resolution cascade (Argument > Adoption > Assessment). Lifecycle-spanning: bootstrap (full eval), implementation (add dependency), review (detect unlisted). Version tracking. Output-only: emits rendered adoption content + target; the caller persists via /record-decision. Idempotent."
+description: "Evaluates and recommends the tech stack — languages, frameworks, database, libraries, versions — when the choice is open: full evaluation at bootstrap, a single new dependency during implementation ('should we add Redis', 'is this new dependency consistent with our stack'), or composed by /review when it finds an unlisted dependency in code. Doesn't audit code already written (that's /verify-adoption). Output-only: emits a proposal + target for /record-decision to persist."
 version: 0.5.0
 author: Foomakers
 ---

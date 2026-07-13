@@ -1,6 +1,6 @@
 ---
 name: pair-capability-assess-testing
-description: "Assess testing strategy using resolution cascade (Argument > Adoption > Assessment). Reads testing guidelines, proposes framework and strategy and emits rendered adoption content + target (output-only, writes nothing); the caller persists via /pair-capability-record-decision. Idempotent."
+description: "Evaluates and recommends the testing strategy — framework, pyramid distribution, coverage targets, TDD approach — when the choice is open. Doesn't write tests itself. Output-only: emits a proposal + target for /pair-capability-record-decision to persist."
 version: 0.5.0
 author: Foomakers
 ---

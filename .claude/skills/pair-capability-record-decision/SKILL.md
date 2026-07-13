@@ -1,6 +1,6 @@
 ---
 name: pair-capability-record-decision
-description: "Records an architectural, non-architectural, or domain decision and is the SOLE writer of adoption files. Architectural decisions produce an ADR; non-architectural decisions produce an ADL entry; domain decisions meeting the 3-criteria gate produce a DDR and sync the context map. All always update the relevant adoption/context files. Accepts pre-rendered {content, target} from assess-* proposals (generic persister — no per-domain rendering). Invocable independently or composed by /pair-process-implement and /pair-process-review."
+description: "Records a decision — ADR (architectural), ADL (non-architectural), or DDR (domain, 3-criteria gate) — and is the sole writer of adoption/context-map files. Invoke directly to record or backfill a decision already made ('write that down as an ADR'). Composed by /pair-process-implement and /pair-process-review."
 version: 0.5.0
 author: Foomakers
 ---

@@ -1,6 +1,6 @@
 ---
 name: pair-capability-design-manual-tests
-description: "Designs a manual test suite for post-release validation by analyzing the project's artifacts, architecture, and deployment targets. Generates critical path files (CP*.md) and a suite README following manual-testing guidelines and the manual-test-case-template. Invocable independently or as a prerequisite of /pair-capability-execute-manual-tests."
+description: "Designs a manual test suite — critical path files + suite README — for post-release validation, by analyzing released artifacts, architecture, and deployment targets. Not for planning the automated-testing approach (use /pair-capability-assess-testing). Prerequisite for /pair-capability-execute-manual-tests."
 version: 0.4.1
 author: Foomakers
 ---

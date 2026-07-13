@@ -19,15 +19,15 @@ Process skills orchestrate multi-step workflows by composing capability skills.
 
 | Skill | Command | Description | Composes |
 | ----- | ------- | ----------- | -------- |
-| **specify-prd** | `/pair-process-specify-prd` | Creates or updates a Product Requirements Document through structured template analysis and iterative review. | — |
-| **bootstrap** | `/pair-process-bootstrap` | Orchestrates full project setup: PRD verification, project categorization, checklist completion, standards generation, quality gate setup, and PM tool configuration. | `/pair-process-specify-prd`, `/pair-capability-setup-pm`, `/pair-capability-record-decision`, assess-* (optional) |
-| **plan-initiatives** | `/pair-process-plan-initiatives` | Creates strategic initiatives from PRD analysis. Prioritizes by business impact (P0/P1/P2). | `/pair-capability-write-issue` |
-| **plan-epics** | `/pair-process-plan-epics` | Breaks initiatives into epics through structured analysis and collaborative validation. Includes Epic 0 assessment. | `/pair-capability-write-issue` |
-| **plan-stories** | `/pair-process-plan-stories` | Breaks epics into user stories using vertical slicing and INVEST validation. | `/pair-capability-write-issue` |
-| **refine-story** | `/pair-process-refine-story` | Refines a user story from Todo to Refined state: requirements analysis (Given-When-Then), technical analysis, sprint readiness. | `/pair-capability-write-issue` |
-| **plan-tasks** | `/pair-process-plan-tasks` | Breaks a refined user story into implementation tasks. Appends Technical Analysis + Task Breakdown to the story body. | `/pair-capability-write-issue` |
-| **implement** | `/pair-process-implement` | Implements a user story by iterating through its tasks one at a time following a 5-step cycle per task. Creates a PR at story completion. | `/pair-capability-verify-quality`, `/pair-capability-record-decision` |
-| **review** | `/pair-process-review` | Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness, decision, and optional merge. | `/pair-capability-verify-quality`, `/pair-capability-verify-done`, `/pair-capability-record-decision`, `/pair-capability-analyze-debt` (required); `/pair-capability-verify-adoption`, `/pair-capability-assess-stack`, `/pair-capability-execute-manual-tests` (optional) |
+| **specify-prd** | `/pair-process-specify-prd` | Creates or updates a Product Requirements Document through structured template analysis and iterative review — drafting a new PRD, or filling in a missing/outdated section. | — |
+| **bootstrap** | `/pair-process-bootstrap` | Orchestrates full project setup — PRD verification, categorization, checklist, standards, quality gates, PM tool — for a brand-new project, end to end. | `/pair-process-specify-prd`, `/pair-capability-setup-pm`, `/pair-capability-record-decision`, assess-* (optional) |
+| **plan-initiatives** | `/pair-process-plan-initiatives` | Turns a PRD into prioritized (P0/P1/P2) strategic initiatives through structured analysis and validation. | `/pair-capability-write-issue` |
+| **plan-epics** | `/pair-process-plan-epics` | Breaks a strategic initiative into epics — each delivering end-to-end value in 2-4 sprints. Not for filing a single epic issue from text you already wrote (that's write-issue directly). | `/pair-capability-write-issue` |
+| **plan-stories** | `/pair-process-plan-stories` | Slices an epic into user stories via vertical slicing and INVEST validation, each sized for one sprint. | `/pair-capability-write-issue` |
+| **refine-story** | `/pair-process-refine-story` | Refines a user story from Todo to Refined — Given-When-Then acceptance criteria, technical analysis, sprint readiness. Not for sizing an already-refined story (use estimate). | `/pair-capability-write-issue` |
+| **plan-tasks** | `/pair-process-plan-tasks` | Breaks a refined user story into implementation tasks — checklist, dependency graph, AC-coverage table — appended to the story body; no separate task issues. | `/pair-capability-write-issue` |
+| **implement** | `/pair-process-implement` | Implements a refined user story task-by-task via a 5-step cycle per task (context, branch, implementation, quality, commit); opens one PR when the story completes. | `/pair-capability-verify-quality`, `/pair-capability-record-decision` |
+| **review** | `/pair-process-review` | Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) to decide whether it merges. Not a quick build/test sanity check (use verify-quality). | `/pair-capability-verify-quality`, `/pair-capability-verify-done`, `/pair-capability-record-decision`, `/pair-capability-analyze-debt` (required); `/pair-capability-verify-adoption`, `/pair-capability-assess-stack`, `/pair-capability-execute-manual-tests` (optional) |
 
 ## Capability Skills
 
@@ -37,8 +37,8 @@ Capability skills are atomic operations invoked independently or composed by pro
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
-| **map-subdomains** | `/pair-capability-map-subdomains` | Classifies business capabilities into DDD subdomains (core/supporting/generic) with a Volatility rating, scoped to the caller's touched items. Falls back to "system areas" when no DDD artifacts exist. Composed by `/pair-process-refine-story`, `/pair-process-plan-initiatives`, `/pair-process-plan-epics`; full scope only via `/pair-process-bootstrap`. |
-| **map-contexts** | `/pair-capability-map-contexts` | Maps subdomains to DDD bounded contexts, scoped to the caller's touched items. Assesses each relationship on integration strength, socio-technical distance and volatility; gates unbalanced+volatile relationships at approval. Composed by `/pair-process-refine-story`, `/pair-process-plan-tasks`; full scope only via `/pair-process-bootstrap`. |
+| **map-subdomains** | `/pair-capability-map-subdomains` | Classifies business capabilities into DDD subdomains (core, supporting, generic) with a volatility rating, scoped to items just touched. Composed by `/pair-process-refine-story`, `/pair-process-plan-initiatives`, `/pair-process-plan-epics`; full-scope re-mapping only via `/pair-process-bootstrap`. |
+| **map-contexts** | `/pair-capability-map-contexts` | Maps subdomains to DDD bounded contexts and derives the integration pattern between them (integration strength, socio-technical distance, volatility), scoped to items just touched. Composed by `/pair-process-refine-story`, `/pair-process-plan-tasks`; full-scope re-mapping only via `/pair-process-bootstrap`. |
 
 Reclassified from process skills — see [Migration Notes](/docs/reference/skill-management#migration-notes).
 
@@ -48,14 +48,14 @@ All `assess-*` skills are **output-only**: they produce a proposal (rendered ado
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
-| **assess-ai** | `/pair-capability-assess-ai` | Assess AI development tools using resolution cascade (Argument > Adoption > Assessment). Output-only — proposes AI-section content; caller persists via `/pair-capability-record-decision`. |
-| **assess-architecture** | `/pair-capability-assess-architecture` | Assess architecture pattern using resolution cascade. Output-only — proposes adoption content; caller persists via `/pair-capability-record-decision`. |
-| **assess-infrastructure** | `/pair-capability-assess-infrastructure` | Assess infrastructure strategy: cloud, CI/CD, deployment choices. Output-only — proposes adoption content; caller persists via `/pair-capability-record-decision`. |
-| **assess-methodology** | `/pair-capability-assess-methodology` | Assess development methodology: Scrum, Kanban, Lean, etc. Output-only — proposes methodology-section content; caller persists via `/pair-capability-record-decision`. |
-| **assess-observability** | `/pair-capability-assess-observability` | Assess observability strategy: monitoring, logging, tracing. Output-only — proposes observability-section content; caller persists via `/pair-capability-record-decision`. |
-| **assess-pm** | `/pair-capability-assess-pm` | Assess project management tool choice. Output-only — proposes PM-section content; persists via `/pair-capability-setup-pm` or the caller's `/pair-capability-record-decision`. |
-| **assess-stack** | `/pair-capability-assess-stack` | Assess tech stack with version tracking. Lifecycle-spanning: bootstrap (full eval), implementation (add dependency), review (detect unlisted). Output-only — proposes tech-stack content; caller persists via `/pair-capability-record-decision`. |
-| **assess-testing** | `/pair-capability-assess-testing` | Assess testing framework and strategy. Output-only — proposes testing-section content; caller persists via `/pair-capability-record-decision`. |
+| **assess-ai** | `/pair-capability-assess-ai` | Evaluates and recommends AI development tools — coding assistants, agent frameworks, MCP integrations, models — when the choice is open. Output-only; caller persists via `/pair-capability-record-decision`. |
+| **assess-architecture** | `/pair-capability-assess-architecture` | Evaluates and recommends an architecture pattern (layered, hexagonal, microservices, etc.) when the choice is open. Output-only; caller persists via `/pair-capability-record-decision`. |
+| **assess-infrastructure** | `/pair-capability-assess-infrastructure` | Evaluates and recommends infrastructure strategy — cloud, CI/CD, deployment, IaC, environments — when the choice is open. Output-only; caller persists via `/pair-capability-record-decision`. |
+| **assess-methodology** | `/pair-capability-assess-methodology` | Evaluates and recommends the development methodology (Scrum, Kanban, Lean, etc.) — iterations, ceremonies, flow — when the choice is open. Output-only; caller persists via `/pair-capability-record-decision`. |
+| **assess-observability** | `/pair-capability-assess-observability` | Evaluates and recommends the observability strategy — monitoring, logging, tracing, alerting, telemetry — when the choice is open. Output-only; caller persists via `/pair-capability-record-decision`. |
+| **assess-pm** | `/pair-capability-assess-pm` | Evaluates and recommends which PM tool fits, when the choice is still open — proposes, doesn't configure. `/pair-capability-setup-pm` configures the tool once picked; otherwise the caller persists via `/pair-capability-record-decision`. |
+| **assess-stack** | `/pair-capability-assess-stack` | Evaluates and recommends the tech stack when the choice is open: full evaluation at bootstrap, or a single new dependency during implementation. Doesn't audit code already written (that's verify-adoption). Output-only; caller persists via `/pair-capability-record-decision`. |
+| **assess-testing** | `/pair-capability-assess-testing` | Evaluates and recommends the testing strategy — framework, pyramid distribution, coverage targets — when the choice is open. Doesn't write tests itself. Output-only; caller persists via `/pair-capability-record-decision`. |
 
 ### Analysis Capabilities
 
@@ -63,51 +63,51 @@ All `analyze-*` skills are **output-only report producers**: they analyze and re
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
-| **analyze-code-quality** | `/pair-capability-analyze-code-quality` | Analyze code quality using quality score formula from code-metrics guidelines. Output-only — report; writes nothing. |
-| **analyze-debt** | `/pair-capability-analyze-debt` | Analyze technical debt (code, design, test, documentation, infrastructure) with impact×effort prioritization. Output-only — report; no scan-mode, no auto-created issues, never blocks a PR. |
+| **analyze-code-quality** | `/pair-capability-analyze-code-quality` | Produces an objective code quality report (complexity, size, coverage, duplication, maintainability). Composed by `/pair-process-review`; invoke directly for a report on demand. Output-only, never blocks. |
+| **analyze-debt** | `/pair-capability-analyze-debt` | Produces a technical debt report (code, design, test, documentation, infrastructure), prioritized by impact x effort. Composed by `/pair-process-review`; invoke directly to catalog debt. Output-only, never blocks a PR. |
 
 ### Verification Capabilities
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
-| **verify-adoption** | `/pair-capability-verify-adoption` | Checks code against adoption files for a given scope. Detection-only: returns conformity/non-conformity list. |
-| **verify-done** | `/pair-capability-verify-done` | Checks Definition of Done criteria against a PR or work item. |
-| **verify-quality** | `/pair-capability-verify-quality` | Checks quality gates against the current codebase. |
+| **verify-adoption** | `/pair-capability-verify-adoption` | Detects conformity/non-conformity of already-written code against the project's adopted decisions, for a given scope — a compliance audit, not a new-choice evaluation (that's assess-stack and siblings). Detection-only. |
+| **verify-done** | `/pair-capability-verify-done` | Checks a PR or work item against Definition of Done criteria, skipping already-passing criteria. Composed by `/pair-process-review`; invoke directly on demand. |
+| **verify-quality** | `/pair-capability-verify-quality` | Checks whether the codebase currently passes its quality gates (lint, tests, type-check, coverage), skipping gates already passing. Composed by `/pair-process-implement`, `/pair-process-review`. |
 
 ### Setup and Management Capabilities
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
-| **setup-pm** | `/pair-capability-setup-pm` | Configures the project management tool: selection, implementation guide, adoption update. |
-| **setup-gates** | `/pair-capability-setup-gates` | Configures CI/CD quality gates per quality-assurance guidelines. |
-| **manage-flags** | `/pair-capability-manage-flags` | Manages feature flag lifecycle: creation, activation, deactivation, cleanup. |
+| **setup-pm** | `/pair-capability-setup-pm` | Configures the PM tool — creates/wires it up, applies its implementation guide, updates way-of-working — whether already chosen or picked here. Composed by `/pair-process-bootstrap`; delegated to by assess-pm. |
+| **setup-gates** | `/pair-capability-setup-gates` | Configures CI/CD quality gates — pipeline config, lint/format packages, husky hooks — for the adopted tech stack. Idempotent. |
+| **manage-flags** | `/pair-capability-manage-flags` | Manages a feature flag's lifecycle: creation, activation, deactivation, cleanup. |
 
 ### Quality Assurance Capabilities
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
-| **design-manual-tests** | `/pair-capability-design-manual-tests` | Designs a manual test suite by analyzing the project's artifacts, architecture, and deployment targets. Generates critical path files and a suite README. |
-| **execute-manual-tests** | `/pair-capability-execute-manual-tests` | Executes a project's manual test suite against released artifacts, producing a structured report with PASS/FAIL per test case. If no suite exists, halts with guidance to run `/pair-capability-design-manual-tests` first. |
+| **design-manual-tests** | `/pair-capability-design-manual-tests` | Designs a manual test suite — critical path files + suite README — for post-release validation. Not for planning the automated-testing approach (use assess-testing). |
+| **execute-manual-tests** | `/pair-capability-execute-manual-tests` | Executes a project's manual test suite against released/deployed artifacts, producing a structured PASS/FAIL report per critical path. Not for running the automated suite (use verify-quality). If no suite exists, halts with guidance to run `/pair-capability-design-manual-tests` first. |
 
 ### Recording and Writing Capabilities
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
-| **record-decision** | `/pair-capability-record-decision` | Records an architectural (ADR), non-architectural (ADL), or domain (DDR) decision. The **sole writer** of adoption files: accepts pre-rendered `{content, target}` from assess-* proposals (generic persist) and updates adoption files or syncs the context map. |
-| **write-issue** | `/pair-capability-write-issue` | Creates or updates issues in the adopted PM tool using template-driven formatting. Supports topical labels (e.g. `tech-debt`) for deliberate backlog promotion. |
-| **estimate** | `/pair-capability-estimate` | Estimates a refined user story using the adopted estimation methodology. |
+| **record-decision** | `/pair-capability-record-decision` | Records a decision — ADR (architectural), ADL (non-architectural), or DDR (domain) — and is the **sole writer** of adoption/context-map files. Invoke directly to record or backfill a decision already made. Composed by `/pair-process-implement`, `/pair-process-review`. |
+| **write-issue** | `/pair-capability-write-issue` | Creates or updates an issue in the adopted PM tool from a type-specific template. Supports topical labels (e.g. `tech-debt`) for deliberate backlog promotion. |
+| **estimate** | `/pair-capability-estimate` | Estimates story points for a refined user story using the adopted estimation methodology; confirms rather than re-estimating if already sized. |
 
 ### Discovery Capabilities
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
-| **grill** | `/pair-capability-grill` | Reusable interview engine: one question at a time, always with a recommendation, exploring KB/codebase before asking. `sync` mode drives systematic AI-human alignment on a story until explicit shared understanding. Write-free — returns the synthesis to the caller. |
+| **grill** | `/pair-capability-grill` | Interviews one question at a time, always with a recommendation, after exploring the KB/codebase first; `sync` mode drives systematic AI-human alignment on a story until shared understanding. Invoke directly to interview on any topic. Write-free — returns the synthesis to the caller. |
 
 ### State and Handoff Capabilities
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
-| **checkpoint** | `/pair-capability-checkpoint` | Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) in `.pair/working/checkpoints/`, so work survives context resets. |
+| **checkpoint** | `/pair-capability-checkpoint` | Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) in `.pair/working/checkpoints/`, so work survives a context reset. Invoke directly to save or resume progress. |
 
 ## Skill Properties
 

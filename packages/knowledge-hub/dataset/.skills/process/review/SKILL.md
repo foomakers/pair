@@ -1,6 +1,6 @@
 ---
 name: review
-description: "Reviews a pull request through a structured 6-phase process: validation, technical review, adoption compliance, completeness check, decision, and optional merge with parent cascade. Composes /verify-quality, /verify-done, /record-decision, /analyze-debt (required) and /verify-adoption, /assess-stack (optional with graceful degradation). Output follows the code review template. Idempotent — re-invocation resumes from incomplete phases."
+description: "Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) — validation, technical review, adoption compliance, completeness, decision — to decide whether it merges. Not a quick build/test sanity check (use /verify-quality). Composes /verify-quality, /verify-done, /record-decision, /analyze-debt (required), /verify-adoption, /assess-stack (optional)."
 version: 0.5.0
 author: Foomakers
 ---

@@ -1,6 +1,6 @@
 ---
 name: pair-capability-estimate
-description: "Estimates a refined user story using the adopted estimation methodology. Reads estimation framework from guidelines and methodology from way-of-working. Idempotent: detects existing estimate, confirms rather than re-estimating. Invocable independently or composed by /pair-process-refine-story."
+description: "Estimates story points for a refined user story using the project's adopted estimation methodology; confirms rather than re-estimating if already sized. Composed by /pair-process-refine-story; invoke directly to size a story on demand ('estimate story #87')."
 version: 0.4.1
 author: Foomakers
 ---
