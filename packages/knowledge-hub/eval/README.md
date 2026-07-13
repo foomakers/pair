@@ -68,5 +68,5 @@ When a skill's description changes (e.g. T3 of #313):
 ## Related gates
 
 Static conformance (frontmatter portability, size limits, pointer resolution, catalog counts) is
-enforced separately by `pnpm skills:conformance` (`scripts/skills-conformance-check.js`), wired
-into `quality-gate` and CI.
+enforced separately by `pnpm skills:conformance` (`src/skills-conformance-check.ts`, run via
+`ts-node`), wired into `quality-gate` and CI.

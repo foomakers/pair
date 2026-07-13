@@ -25,7 +25,7 @@
     "a11y:report:html": "turbo a11y:report:html",
     "hygiene:check": "node scripts/code-hygiene-check.js",
     "docs:staleness": "node scripts/docs-staleness-check.js",
-    "skills:conformance": "node scripts/skills-conformance-check.js",
+    "skills:conformance": "pnpm --filter @pair/knowledge-hub skills:conformance",
     "dup:check": "jscpd apps packages",
     "quality-gate": "turbo ts:check test lint && turbo prettier:fix mdlint:fix && ./tools/markdownlint-config/bin/markdownlint-fix.sh '*.md' && pnpm hygiene:check && pnpm docs:staleness && pnpm skills:conformance && pnpm dup:check",
     "e2e": "pnpm --filter @pair/website e2e",

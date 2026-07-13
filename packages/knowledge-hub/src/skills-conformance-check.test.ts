@@ -1,39 +1,8 @@
 import { describe, it, expect, afterAll } from 'vitest'
-import { createRequire } from 'node:module'
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-
-interface Frontmatter {
-  keys: string[]
-  values: Record<string, string>
-  body: string
-}
-
-interface RunResult {
-  errors: string[]
-  warnings: string[]
-  skillCount: number
-}
-
-interface ConformanceModule {
-  parseFrontmatter(content: string): Frontmatter | null
-  checkFrontmatterFields(keys: string[]): string[]
-  checkSizeLimits(name?: string, description?: string): string[]
-  extractLinkTargets(body: string): string[]
-  isCheckableTarget(target: string): boolean
-  checkLinks(filePath: string, body: string): string[]
-  checkCatalogCounts(nextContent: string, actualCount: number): string[]
-  collectSkillFiles(skillsDir: string): string[]
-  runChecks(skillsDir: string): RunResult
-  SPEC_FIELDS: string[]
-  PAIR_EXTENSIONS: string[]
-}
-
-const requireCjs = createRequire(import.meta.url)
-const mod = requireCjs('../../../scripts/skills-conformance-check.js') as ConformanceModule
-
-const {
+import {
   parseFrontmatter,
   checkFrontmatterFields,
   checkSizeLimits,
@@ -41,7 +10,7 @@ const {
   isCheckableTarget,
   checkCatalogCounts,
   runChecks,
-} = mod
+} from './skills-conformance-check'
 
 describe('parseFrontmatter', () => {
   it('parses top-level keys and quoted values', () => {
