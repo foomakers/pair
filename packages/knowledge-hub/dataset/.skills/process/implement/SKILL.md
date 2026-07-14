@@ -308,48 +308,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 
 ## Phase 4: Post-Review Merge
 
-After code review approval (typically via `/review`), re-invoke `/implement` to merge and close.
-
-### Step 4.1: Verify Review Approval
-
-1. **Check**: Is the PR approved by the reviewer?
-2. **Skip**: If not approved → **HALT**. Wait for review completion.
-3. **Verify**: PR has at least one approval.
-
-### Step 4.2: Prepare Merge Commit Message
-
-1. **Check**: Read [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) for merge strategy (squash, merge, rebase).
-2. **Act**: Draft the final commit message:
-   - **If squash**: combine all commits into a single message following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md).
-   - **If merge or rebase**: use the default merge/rebase message.
-3. **Act** (BLOCKING): Present the commit message to the developer for confirmation:
-
-   > **Merge commit message:**
-   >
-   > ```text
-   > [#<story-id>] feat: <story description>
-   >
-   > - <summary of changes>
-   > - Tasks: T-1, T-2, ..., T-N
-   >
-   > Refs: #<story-id>
-   > ```
-   >
-   > Confirm or edit?
-
-4. **Verify**: Developer confirms the commit message.
-
-### Step 4.3: Merge PR
-
-1. **Act**: Merge the PR with the confirmed commit message and the configured merge strategy.
-2. **Verify**: PR merged and closed.
-
-### Step 4.4: Update Story & Parents
-
-1. **Act**: Update user story status to "Done" in the PM tool.
-2. **Act**: Check parent epic — if ALL stories in the epic are Done, update epic status to "Done".
-3. **Act**: Check parent initiative — if ALL epics in the initiative are Done, update initiative status to "Done".
-4. **Verify**: Story and parent hierarchy updated recursively.
+After code review approval (typically via `/review`), re-invoke `/implement` to merge and close — see [post-review-merge.md](post-review-merge.md) for the verify-approval, merge-commit, merge, and parent-cascade steps (Steps 4.1–4.4) plus the completion output.
 
 ## Output Format
 
@@ -366,17 +325,7 @@ IMPLEMENTATION COMPLETE:
 └── Quality:  [All gates passing]
 ```
 
-At merge (Phase 4):
-
-```text
-STORY DONE:
-├── Story:      [#ID: Title]
-├── PR:         [#PR-number — merged]
-├── Merge:      [squash | merge | rebase]
-├── Story:      Done
-├── Epic:       [#ID — Done | In Progress (X/Y stories done)]
-└── Initiative: [#ID — Done | In Progress (X/Y epics done)]
-```
+At merge (Phase 4): see [post-review-merge.md](post-review-merge.md).
 
 ## HALT Conditions
 

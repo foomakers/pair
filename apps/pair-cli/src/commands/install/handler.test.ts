@@ -454,6 +454,64 @@ describe('install — KB distribution pipeline bug regression', () => {
     })
   })
 
+  describe('#313 T5 prerequisite: multi-file skill dir with deep datasetRoot', () => {
+    test('ships sibling files and their cross-references resolve post-install', async () => {
+      const moduleDir = '/project/apps/pair-cli'
+      const datasetSrc = `${moduleDir}/node_modules/@pair/knowledge-hub/dataset`
+
+      const skillsConfig = {
+        asset_registries: {
+          skills: {
+            source: '.skills',
+            behavior: 'mirror',
+            flatten: true,
+            prefix: 'pair',
+            description: 'Agent skills',
+            targets: [{ path: '.claude/skills/', mode: 'canonical' }],
+          },
+        },
+      }
+
+      const fs = new InMemoryFileSystemService(
+        {
+          [`${moduleDir}/package.json`]: JSON.stringify({
+            name: '@pair/pair-cli',
+            version: '0.1.0',
+          }),
+          [`${moduleDir}/node_modules/@pair/knowledge-hub/package.json`]: JSON.stringify({
+            name: '@pair/knowledge-hub',
+          }),
+          [`${moduleDir}/config.json`]: JSON.stringify(skillsConfig),
+          [`${datasetSrc}/.skills/process/implement/SKILL.md`]:
+            '# /implement\n\nSee [edge cases](./edge-cases.md) when a step fails.',
+          [`${datasetSrc}/.skills/process/implement/edge-cases.md`]:
+            '# Edge Cases\n\nBack to [SKILL.md](./SKILL.md).',
+        },
+        moduleDir,
+        moduleDir,
+      )
+
+      const config: InstallCommandConfig = {
+        command: 'install',
+        resolution: 'default',
+        kb: true,
+        offline: false,
+      }
+
+      await handleInstallCommand(config, fs)
+
+      const targetDir = `${moduleDir}/.claude/skills/pair-process-implement`
+      // Sibling file shipped alongside SKILL.md, not dropped by flatten+prefix
+      await expect(fs.exists(`${targetDir}/edge-cases.md`)).resolves.toBe(true)
+
+      const skillContent = await fs.readFile(`${targetDir}/SKILL.md`)
+      const edgeCasesContent = await fs.readFile(`${targetDir}/edge-cases.md`)
+      // Same-directory cross-references resolve post-install (both files moved together)
+      expect(skillContent).toContain('[edge cases](./edge-cases.md)')
+      expect(edgeCasesContent).toContain('[SKILL.md](./SKILL.md)')
+    })
+  })
+
   describe('Bug 3: target directory resolution', () => {
     test('output targets CWD when rootModuleDir differs', async () => {
       const moduleDir = '/project/apps/pair-cli'

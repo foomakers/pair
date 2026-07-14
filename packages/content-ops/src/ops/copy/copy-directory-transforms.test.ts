@@ -327,6 +327,42 @@ describe('copyDirectoryWithTransforms (via copyPathOps, flatten/prefix)', () => 
     ).rejects.toThrow(/collision/i)
   })
 
+  describe('multi-file skill directories (story #313 T5 prerequisite)', () => {
+    it('ships every sibling file of a multi-file skill dir, not just SKILL.md', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/implement/SKILL.md':
+          '---\nname: implement\n---\n# /implement\nSee [edge cases](./edge-cases.md).',
+        '/dataset/source/process/implement/edge-cases.md':
+          '# Edge Cases\nBack to [SKILL](./SKILL.md).',
+        '/dataset/source/process/implement/reference.md': '# Reference material',
+      })
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', targets: [] },
+      })
+
+      // All three sibling files land in the same transformed target directory
+      await TEST_ASSERTIONS.assertFileExists(
+        fileService,
+        '/dataset/target/pair-process-implement/reference.md',
+        '# Reference material',
+      )
+      const skill = await fileService.readFile('/dataset/target/pair-process-implement/SKILL.md')
+      const edgeCases = await fileService.readFile(
+        '/dataset/target/pair-process-implement/edge-cases.md',
+      )
+
+      // Cross-references between siblings resolve post-install (same-dir relative
+      // links are unchanged since both files move together under the same rename)
+      expect(skill).toContain('[edge cases](./edge-cases.md)')
+      expect(edgeCases).toContain('[SKILL](./SKILL.md)')
+    })
+  })
+
   describe('mirror behavior — idempotent updates (AC4)', () => {
     it('removes a stale flattened directory when its source skill is gone', async () => {
       const fileService = createTestFileService({
