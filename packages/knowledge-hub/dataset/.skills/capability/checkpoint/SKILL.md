@@ -136,7 +136,7 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline/template missing → use a minimal structure directly; PM tool not accessible → ask the developer directly) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline/template missing → use a minimal structure directly; PM tool not accessible during state reconstruction, Step 3 → ask the developer to confirm tasks done/pending directly) for the standard scenarios. Additional cases:
 
 - If the [checkpoint template](../../../.pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md) is not found, use the minimal five-section structure directly: Story, Branch, Tasks Done, Key Decisions, Remaining Todos.
 - If `.pair/working/` does not exist yet, create it (and `checkpoints/` under it) on first write.
