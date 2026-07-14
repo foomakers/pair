@@ -14,13 +14,12 @@
  *   3. Pointer resolution — relative file links in SKILL.md bodies resolve to
  *      existing files/dirs in the dataset.
  *   4. Catalog counts — every "N skills"/"N-skill" figure stated in next's
- *      SKILL.md matches the real corpus dir count.
- *      TODO(#313/T1): promote catalog-count findings from warning to error once
- *      T1 (#325) regenerates next's catalog (currently states 33, corpus has 35).
+ *      SKILL.md matches the real corpus dir count. Hard error, like every other
+ *      check here (promoted from WARN once #313/T1 (#325) regenerated next's
+ *      catalog to the real, stable count).
  *
  * Runnable as a CLI via `ts-node src/tools/skills-conformance-check.ts`
- * (package script `skills:conformance`). Exit 0 = conformant (warnings allowed),
- * Exit 1 = violations.
+ * (package script `skills:conformance`). Exit 0 = conformant, Exit 1 = violations.
  */
 import { existsSync, readFileSync, readdirSync } from 'fs'
 import { basename, dirname, join, relative, resolve } from 'path'
@@ -52,7 +51,6 @@ export interface Frontmatter {
 
 export interface RunResult {
   errors: string[]
-  warnings: string[]
   skillCount: number
 }
 
@@ -198,14 +196,14 @@ export function checkLinks(filePath: string, body: string): string[] {
 // --- Catalog counts ---
 
 export function checkCatalogCounts(nextContent: string, actualCount: number): string[] {
-  const warnings: string[] = []
+  const mismatches: string[] = []
   for (const m of nextContent.matchAll(/(\d+)[-\s]skills?\b/g)) {
     const stated = parseInt(m[1] as string, 10)
     if (stated !== actualCount) {
-      warnings.push(`next/SKILL.md states "${m[0]}" but the corpus has ${actualCount} skills`)
+      mismatches.push(`next/SKILL.md states "${m[0]}" but the corpus has ${actualCount} skills`)
     }
   }
-  return warnings
+  return mismatches
 }
 
 // --- Corpus walk ---
@@ -233,7 +231,6 @@ export function collectSkillFiles(skillsDir: string): string[] {
 
 export function runChecks(skillsDir: string): RunResult {
   const errors: string[] = []
-  const warnings: string[] = []
   const files = collectSkillFiles(skillsDir)
 
   for (const file of files) {
@@ -253,29 +250,21 @@ export function runChecks(skillsDir: string): RunResult {
 
   const nextFile = files.find(f => basename(dirname(f)) === 'next')
   if (nextFile) {
-    warnings.push(...checkCatalogCounts(readFileSync(nextFile, 'utf-8'), files.length))
+    errors.push(...checkCatalogCounts(readFileSync(nextFile, 'utf-8'), files.length))
   }
 
-  return { errors, warnings, skillCount: files.length }
+  return { errors, skillCount: files.length }
 }
 
 if (require.main === module) {
-  const { errors, warnings, skillCount } = runChecks(SKILLS_DIR)
+  const { errors, skillCount } = runChecks(SKILLS_DIR)
 
   console.log('Skills Conformance Check')
   console.log('========================')
 
-  if (warnings.length > 0) {
-    console.log(
-      `WARN — ${warnings.length} non-blocking finding${warnings.length > 1 ? 's' : ''} (error once #313/T1 lands):\n`,
-    )
-    for (const w of warnings) console.log(`  • ${w}`)
-    console.log()
-  }
-
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, catalog counts)`,
     )
     process.exit(0)
   } else {
