@@ -149,13 +149,13 @@ STORIES COMPLETE:
 
 ## Graceful Degradation
 
-- If `/pair-capability-write-issue` is not installed, warn and provide formatted story content for manual PM tool entry.
-- If PM tool is not accessible, produce story documents and ask developer to create manually.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce story documents, ask developer to create/enter manually) for the standard scenarios. Additional cases:
+
 - If epic documentation is sparse, proceed with available context and flag gaps.
 
 ## Notes
 
 - This skill **modifies PM tool state** — creates story issues linked to epics.
-- Idempotent: re-invocation detects existing stories and skips them.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: detects existing stories and skips them.
 - Stories at breakdown stage are rough planning units — detailed requirements are added during `/pair-process-refine-story`.
 - INVEST validation is mandatory — stories failing INVEST must be reworked before creation.

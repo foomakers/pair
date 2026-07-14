@@ -154,16 +154,16 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-- If quality-assurance guidelines are not found, propose minimal gates based on detected package.json scripts (test, lint, build).
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → propose minimal gates from what's detectable: detected package.json scripts — test, lint, build) and [record-decision contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) (`/pair-capability-record-decision` not installed → warn and skip decision recording) for the standard scenarios. Additional cases:
+
 - If tech-stack.md is not found, ask developer for tooling choices to generate appropriate gate commands.
-- If `/pair-capability-record-decision` is not installed, warn and skip decision recording.
 - If no CI/CD platform is detectable, document gate commands for manual execution and skip pipeline file generation.
 - If the project is not JS/TS, document the shared-config-package pattern generically (see [shared-config-packages.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/shared-config-packages.md) § Non-JS / Polyglot Projects) and skip config-file generation — point to the ecosystem's equivalent shared config package.
 
 ## Notes
 
 - This skill **modifies files** — it writes to way-of-working.md, creates/updates CI/CD pipeline configuration, and provisions shared lint/format config packages + hook manager files (`.husky/` by default).
-- **Idempotent**: re-invocation on an already-configured project confirms the existing configuration, including provisioned shared configs and hooks; update only on explicit developer request. Conflicting local config → ask before overwriting, never silently.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: an already-configured project (incl. provisioned shared configs and hooks) is confirmed; update only on explicit developer request. Conflicting local config → ask before overwriting, never silently.
 - Gate commands must be executable in the project's development environment. Verify commands exist before writing.
 - Custom Gate Registry format follows the table schema from [quality-gates.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/quality-gates.md): Order, Gate, Command, Scope Key, Required, Description.
 - **Hook manager default**: husky (decision D21/Q11). An override recorded in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) wins — this skill reads it before provisioning.

@@ -123,8 +123,8 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-- If [definition-of-done.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md) is not found, warn and check only adoption-derived criteria.
-- If adoption files are missing, warn and check only universal DoD criteria.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → check only adoption-derived criteria; adoption files missing → check only universal criteria) for the standard scenarios. Additional cases:
+
 - If `$story` is not provided, skip requirements/AC check and evaluate only universal criteria.
 - If specific guideline files are not found (e.g., security guidelines), skip that criterion group and report: "[Area]: SKIPPED — guidelines not found."
 - If /verify-quality already ran in the same session, reuse its results for code standards and testing criteria (avoid duplicate work).

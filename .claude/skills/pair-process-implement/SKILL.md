@@ -28,7 +28,7 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 
 1. **Check**: Is the user story already loaded in this session?
 2. **Skip**: If yes, confirm story ID and move to Step 0.1b.
-3. **Act**: Read the story from the PM tool (per [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)).
+3. **Act**: Read the story from the PM tool — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/skill-conventions/way-of-working-pm-resolution.md).
    - Understand business value and acceptance criteria.
    - Confirm epic context.
 4. **Verify**: Story is fully loaded. If not → **HALT**.
@@ -393,7 +393,7 @@ On HALT: report the blocker clearly, propose resolution, wait for developer.
 
 ## Idempotent Re-invocation
 
-Re-invoking `/pair-process-implement` on a partially completed story is safe and expected:
+See [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). Re-invoking `/pair-process-implement` on a partially completed story is safe and expected — per-step:
 
 1. **Branch**: detects existing branch, switches to it.
 2. **Commit strategy**: if commits already exist on branch, infer strategy from history.
@@ -406,16 +406,16 @@ The skill resumes from the first incomplete step — never re-does completed wor
 
 ## Graceful Degradation
 
-- **PM tool not accessible**: Ask developer to manually provide story details and task list.
-- **Missing adoption files**: Warn and proceed with guideline defaults.
-- **/assess-stack not installed**: Warn on new dependency, continue without validation.
-- **/verify-adoption not installed**: Warn, skip adoption compliance check.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (PM tool not accessible → ask the developer directly; adoption file missing → proceed with guideline defaults) for the standard scenarios. Additional cases:
+
+- **`/pair-capability-assess-stack` not installed**: Warn on new dependency, continue without validation.
+- **`/pair-capability-verify-adoption` not installed**: Warn, skip adoption compliance check.
 - **No quality gate command**: Fall back to individual checks (lint, test, type check).
 
 ## Notes
 
 - This skill **modifies files and creates git artifacts** (branches, commits, PRs).
 - Task iteration is sequential — each task completes its full cycle before the next begins.
-- The developer can stop between tasks; re-invoke to resume (idempotency ensures correct state).
+- The developer can stop between tasks; re-invoke to resume (see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md)).
 - Single PR per story regardless of commit strategy.
 - **Squash happens at merge** (Phase 4), not before PR creation. Individual commits are preserved on the branch during review.

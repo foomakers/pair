@@ -134,12 +134,12 @@ INITIATIVES COMPLETE:
 
 ## Graceful Degradation
 
-- If `/pair-capability-write-issue` is not installed, warn and provide formatted initiative content for manual PM tool entry.
-- If the PM tool is not accessible, produce initiative documents and ask developer to create manually.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce initiative documents, ask developer to create manually) for the standard scenarios. Additional cases:
+
 - If adoption files (architecture, tech-stack) are missing, proceed with PRD analysis only and warn.
 
 ## Notes
 
 - This skill **modifies PM tool state** — creates initiative issues.
-- Idempotent: re-invocation detects existing initiatives by title matching and skips them.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: detects existing initiatives by title matching and skips them.
 - Initiative = highest-level work item. Hierarchy: initiative → epic → story → task.

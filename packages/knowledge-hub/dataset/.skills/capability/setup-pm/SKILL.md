@@ -138,9 +138,11 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (adoption file missing → the skill still runs, creates it) for the standard scenarios. **This skill is the documented exception to the generic [record-decision contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md)**: it writes `way-of-working.md` itself in Step 4, before composing `/record-decision` in Step 5 — so a missing `/record-decision` does not mean "nothing persisted," only that the ADL entry is skipped. Additional cases:
+
 - If [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) doesn't exist, create it with PM section as initial content. Warn: "Created way-of-working.md — this appears to be a new project."
 - If implementation guide not found for selected tool, HALT with contribution instructions (Step 2.4).
-- If `/record-decision` is not installed, warn and skip ADL recording: "Decision not recorded — /record-decision not installed. Please manually document the PM tool choice."
+- If `/record-decision` is not installed, the way-of-working.md write has already succeeded (Step 4) — only the ADL entry (Step 5) is skipped. Warn: "Decision not recorded — /record-decision not installed. Please manually document the PM tool choice."
 
 ## Notes
 

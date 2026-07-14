@@ -20,7 +20,7 @@ Apply the adopted estimation methodology to size a refined user story. Reads the
 
 ### Step 1: Load Story
 
-1. **Check**: Read the story from the PM tool (per [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)).
+1. **Check**: Read the story from the PM tool — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/skill-conventions/way-of-working-pm-resolution.md).
 2. **Verify**: Story exists and has acceptance criteria. If not refined → **HALT**: "Story must be refined before estimation."
 
 ### Step 2: Check Existing Estimate
@@ -108,14 +108,14 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → fall back to developer judgment; PM tool not accessible → ask the developer to record manually) for the standard scenarios. Additional cases:
+
 - If [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) does not specify an estimation methodology, use the Decision Matrix from the estimation guidelines to recommend one.
-- If estimation guidelines are not found, fall back to developer judgment: ask the developer to provide an estimate directly and record it.
-- If the PM tool is not accessible, present the estimate and ask the developer to record it manually.
 - If the story has no acceptance criteria, warn: "Story lacks AC — estimation may be inaccurate. Consider refining first."
 
 ## Notes
 
 - This skill **modifies the PM tool** — it writes the estimate to the story issue.
-- **Idempotent**: re-invocation on an already-estimated story confirms the existing estimate without re-doing the analysis. Re-estimation only happens on explicit developer request.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: an already-estimated story is confirmed without re-doing the analysis; re-estimation only on explicit developer request.
 - The estimation method should be consistent within a project. If the team switches methods, record the decision via `/pair-capability-record-decision`.
 - Estimation is a collaborative activity — the skill proposes, the developer decides. The skill never overrides developer judgment.

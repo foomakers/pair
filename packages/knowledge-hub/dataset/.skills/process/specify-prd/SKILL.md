@@ -180,6 +180,8 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (reference material missing → use a minimal structure directly; adoption directory missing → the skill still runs, creates it) for the standard scenarios. Additional cases:
+
 - If [PRD template](../../../.pair/knowledge/assets/PRD_template.md) not found, use the 13-section structure defined in Phase 1 Step 1.2 checklist as a minimal template.
 - If [PRD example](../../../.pair/knowledge/assets/PRD_example.md) not found, proceed without quality reference but warn: "No PRD example found — quality benchmarking unavailable."
 - If adoption directory doesn't exist, create `adoption/product/` and warn: "Created adoption directory — this appears to be a new project."

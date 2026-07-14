@@ -153,6 +153,8 @@ CONTEXT PLACEMENT COMPLETE:
 
 ## Graceful Degradation
 
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (adoption files missing → warn, proceed with what's available rather than halting) for the standard scenarios. Additional cases:
+
 - If architecture or tech-stack adoption files are missing, warn and infer boundaries from subdomains alone.
 - If subdomains have no `Volatility` field yet, treat volatility as unknown/Medium for the assessment and note it as provisional.
 - If neither a subdomain nor a bounded-context catalog exists, use the system-areas fallback (Step 2b) rather than halting.
@@ -162,7 +164,7 @@ CONTEXT PLACEMENT COMPLETE:
 ## Notes
 
 - This skill **creates/updates adoption files** — not PM tool issues. Bounded contexts are design artifacts.
-- Idempotent: re-invocation detects existing files by filename; only entries inside `$scope` are evaluated for changes.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: detects existing files by filename; only entries inside `$scope` are evaluated for changes.
 - The 3-dimension relationship assessment (strength, distance, volatility) is the input to the coupling-balance guideline — see `.pair/knowledge/guidelines/architecture/design-patterns/coupling-balance.md` (introduced by #209); until that guideline lands, apply the heuristics in Step 3 directly.
 - Contract-coupled (`contract` strength) relationships are annotated "contract tests expected" — `/pair-capability-design-manual-tests` and story-level validation strategies should pick up the contract/boundary test category for that relationship.
 - Migration: this skill was reclassified from a process skill (`pair-process-map-contexts`) to a capability (`pair-capability-map-contexts`) — see [skills-guide.md](../../../.pair/knowledge/skills-guide.md#migration-notes) for the rename and new invocation paths.

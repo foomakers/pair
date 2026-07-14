@@ -205,9 +205,10 @@ AI:  GRILL SESSION COMPLETE — Mode: sync · Coverage: 6/6 · returns alignment
 
 ## Graceful Degradation
 
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (composing skill not installed → this skill still runs standalone) for the standard scenarios. Additional cases:
+
 - If KB/codebase exploration is unavailable (no repo access), skip Step 1 (nothing marked explored), ask every aspect/topic question directly, and note in the synthesis that explore-first was skipped.
 - If `.pair/working/` cannot be created or written, present the handoff content inline in conversation and tell the human to save it manually.
-- If the composing skill (`/brainstorm`, `/refine-story`) is not installed, grill still runs standalone — it has no required composed skills.
 
 ## Notes
 

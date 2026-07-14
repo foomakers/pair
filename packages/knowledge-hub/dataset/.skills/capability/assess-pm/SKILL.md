@@ -34,25 +34,11 @@ The rendered adoption content is destined for this section — the caller (or `/
 
 ### Step 1: Resolution Cascade
 
-#### Path A — Argument Override
+Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
 
-1. **Check**: Is `$choice` provided?
-2. **Skip**: If not provided, go to Path B.
-3. **Act**: Confirm the choice. Check for conflicts with existing adoption.
-4. **Verify**: Developer confirms. Proceed to Step 3.
-
-#### Path B — Adoption Exists
-
-1. **Check**: Does [adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) contain a PM tool configuration?
-2. **Skip**: If no PM tool defined, go to Path C.
-3. **Act**: Read current PM adoption. Confirm it's valid.
-4. **Check**: Does a corresponding decision record exist?
-5. **Act**: If decision record missing, report it as a gap in the output — this skill writes nothing; the caller persists a backfill via `/record-decision`.
-6. **Verify**: Done — exit skill.
-
-#### Path C — Full Assessment
-
-1. **Act**: Proceed to Step 2.
+- **Path A delta**: override argument is `$choice`. On confirm, proceed to Step 3.
+- **Path B delta**: adoption check is a PM tool configuration in [adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md). If a corresponding decision record is missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/record-decision`).
+- **Path C delta**: proceed to Step 2.
 
 ### Step 2: Read Guidelines
 
@@ -105,9 +91,11 @@ The rendered adoption content is destined for this section — the caller (or `/
    - `target`: [adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) (PM tool section)
    - `decision-metadata`: `$type: non-architectural`, `$topic: pm-tool-choice`, `$summary: "[Tool] adopted for project management"`
    - plus the human-facing report (see Output Format)
-3. **Verify**: Proposal emitted. Persistence is performed by the caller via `/record-decision(content, target, decision-metadata)`, never by this skill.
+3. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (never persisted by this skill).
 
 ## Output Format
+
+Follows the [Decision Shape](../../../.pair/knowledge/skill-conventions/output-shapes.md#decision-shape) (with a `Delegated` status for the /setup-pm handoff — a legitimate per-skill variant, see that file).
 
 ```text
 ASSESSMENT COMPLETE (output-only for adoption — no files written by this skill):
@@ -122,15 +110,14 @@ ASSESSMENT COMPLETE (output-only for adoption — no files written by this skill
 
 ## Composition Interface
 
+See [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the generic tuple + Input/Output/Persistence shape.
+
 When composed by `/bootstrap`:
 
 - **Input**: `/bootstrap` invokes during Phase 2 (checklist completion). May pass `$choice`.
-- **Output**: If `/setup-pm` was composed, returns its output. Otherwise returns `{ content, target, decision-metadata }` plus the report — writes nothing.
-- **Persistence**: when not delegated, `/bootstrap` accepts the proposal and composes `/record-decision(content, target, decision-metadata)`.
+- **Persistence**: if `/setup-pm` was composed, it already persisted — otherwise `/bootstrap` composes `/record-decision`.
 
-When invoked **independently**:
-
-- Full interactive flow. If `/setup-pm` is present it persists; otherwise the human (or agent) persists the proposal by composing `/record-decision`, then commits.
+When invoked **independently**: if `/setup-pm` is present it persists; otherwise the human (or agent) persists the proposal by composing `/record-decision`, then commits.
 
 ## Edge Cases
 
@@ -140,9 +127,7 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-- If PM tool guidelines not found, use minimal assessment: ask developer for tool preference.
-- If `/setup-pm` not installed, emit the proposal for the caller to persist via `/record-decision` (no tool-specific configuration).
-- If the caller cannot persist (e.g. `/record-decision` not installed), the proposal stands as a report — adoption stays unchanged.
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → ask developer for tool preference directly; optional skill `/setup-pm` not installed → emit the proposal for the caller to persist via `/record-decision`, no tool-specific configuration) and [record-decision contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) (persistence unavailable → proposal stands as a report) for the standard scenarios. No additional cases.
 
 ## Notes
 
