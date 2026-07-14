@@ -303,6 +303,7 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 - **/specify-prd not installed**: HALT at Phase 0 if PRD is missing (a required dependency, not optional). Suggest creating PRD manually using how-to-01.
 - **/setup-pm not installed**: Skip PM configuration in Phase 4. Warn: "PM tool not configured — /setup-pm not installed."
 - **Bootstrap checklist asset not found**: Use Phase 2 section questions as fallback — they cover the same areas.
+- **Adoption directory doesn't exist**: Create `adoption/tech/` and `adoption/decision-log/` on first write.
 - **/map-subdomains or /map-contexts not installed**: Skip the corresponding step in Phase 3.5 with a warning. Domain modeling never blocks bootstrap completion.
 
 ## Notes

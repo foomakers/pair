@@ -406,8 +406,10 @@ The skill resumes from the first incomplete step — never re-does completed wor
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (PM tool not accessible → ask the developer directly; adoption file missing → proceed with guideline defaults; optional skill not installed → warn and skip that check) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (PM tool not accessible → ask the developer directly; adoption file missing → proceed with guideline defaults) for the standard scenarios. Additional cases:
 
+- **`/pair-capability-assess-stack` not installed**: Warn on new dependency, continue without validation.
+- **`/pair-capability-verify-adoption` not installed**: Warn, skip adoption compliance check.
 - **No quality gate command**: Fall back to individual checks (lint, test, type check).
 
 ## Notes

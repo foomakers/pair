@@ -124,7 +124,7 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → fall back to framework-agnostic patterns) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → fall back to framework-agnostic patterns: simple boolean flags with environment variables) for the standard scenarios. Additional cases:
 
 - If no feature flag tool is configured, use code-level flags (constants, config files) rather than a flag service.
 - If no existing flags are found in the codebase, report empty inventory and offer to create the first flag.

@@ -171,7 +171,7 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → fall back to built-in heuristics; adoption file missing → skip the categories that depend on it) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → fall back to built-in heuristics: complexity thresholds, naming patterns, test file presence; adoption file missing → skip the categories that depend on it) for the standard scenarios. Additional cases:
 
 - If [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) is not found, skip infrastructure dependency checks.
 - If [architecture.md](../../../.pair/adoption/tech/architecture.md) is not found, skip design debt detection for architectural violations.

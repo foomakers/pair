@@ -154,7 +154,7 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → propose minimal gates from what's detectable) and [record-decision contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) (`/record-decision` not installed → warn and skip decision recording) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → propose minimal gates from what's detectable: detected package.json scripts — test, lint, build) and [record-decision contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) (`/record-decision` not installed → warn and skip decision recording) for the standard scenarios. Additional cases:
 
 - If tech-stack.md is not found, ask developer for tooling choices to generate appropriate gate commands.
 - If no CI/CD platform is detectable, document gate commands for manual execution and skip pipeline file generation.
