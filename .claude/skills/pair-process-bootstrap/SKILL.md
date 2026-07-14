@@ -304,6 +304,7 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 - **/pair-capability-setup-pm not installed**: Skip PM configuration in Phase 4. Warn: "PM tool not configured — /pair-capability-setup-pm not installed."
 - **Bootstrap checklist asset not found**: Use Phase 2 section questions as fallback — they cover the same areas.
 - **Adoption directory doesn't exist**: Create `adoption/tech/` and `adoption/decision-log/` on first write.
+- **/pair-capability-record-decision not installed**: Adoption cannot be persisted automatically — assess-\* skills are output-only and never write adoption themselves. Warn: "/pair-capability-record-decision not installed — assess-\* proposals cannot be persisted. Write adoption files manually from the proposals and record decisions by hand."
 - **/pair-capability-map-subdomains or /pair-capability-map-contexts not installed**: Skip the corresponding step in Phase 3.5 with a warning. Domain modeling never blocks bootstrap completion.
 
 ## Notes
