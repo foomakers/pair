@@ -1,7 +1,7 @@
 {
   "name": "@pair/dev-tools",
   "version": "0.4.3",
-  "description": "Pair's own gate/tooling scripts (code-hygiene, sync-version) as tested TypeScript modules — the reference pattern for repo quality gates.",
+  "description": "Pair's own automation scripts for development and deployment (code-hygiene, sync-version, benchmark-update-link, determine-version) as tested TypeScript modules — the reference pattern for repo quality gates and release tooling.",
   "private": true,
   "scripts": {
     "prettier:fix": "prettier-fix",
