@@ -30,6 +30,8 @@ This framework does not cover:
 
 **[canonical-states.md](canonical-states.md)** - The 5 canonical macrostates (`Draft`, `Ready`, `In Progress`, `Review`, `Done`), their semantics, and the n-m `state-mapping` schema skills use to resolve board-specific state names — the default is canonical names, adoption carries only the delta
 
+**[definition-of-ready-and-done.md](definition-of-ready-and-done.md)** - Canonical Definition of Ready (R3.8, 6 criteria) and Definition of Done (R3.9, 4 criteria + per-tier hooks) — companion to canonical-states.md, the source `/pair-capability-verify-done` and the user-story template read
+
 ### Implementation Guides
 
 **[filesystem-implementation.md](filesystem-implementation.md)** - Complete setup and usage guide for filesystem-based project management
