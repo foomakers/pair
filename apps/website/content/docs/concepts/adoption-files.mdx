@@ -105,7 +105,7 @@ Every time an AI assistant starts a session, it reads the adoption files to unde
 1. **Generating code** — uses only approved libraries and follows the architecture pattern
 2. **Creating tasks** — references adoption files in each task specification
 3. **Code review** — checks that new code conforms to recorded decisions
-4. **Making decisions** — when a new choice arises, records it as an ADR, ADL, or DDR
+4. **Making decisions** — when a new choice arises, records it as an ADR, ADL, or DDR; a completed technical analysis is logged separately (analysis-log)
 
 If a developer asks the AI to add a feature and the implementation requires a library not in `tech-stack.md`, the AI flags it and creates an Architectural Decision Record (ADR) to document the choice.
 
@@ -144,6 +144,24 @@ Each DDR documents:
 - **Context Map Impact** — which entry in `context-map.md` (or `<slug>.context.md`) changed
 
 Unlike ADRs, a DDR always syncs a second artifact — the context map — so the domain's current state never diverges from why it got that way.
+
+## Analysis Log
+
+A completed technical analysis (performance investigation, dependency evaluation, benchmark) isn't itself a decision, so it's recorded differently: an analysis-log entry in `.pair/adoption/decision-log/` — the same directory ADL uses, distinguished only by Category `Analysis`. No new artifact directory is introduced.
+
+```text
+decision-log/
+  2026-06-01-checkout-latency-investigation.md   # Category: Analysis
+  2026-06-15-payment-provider-benchmark.md       # Category: Analysis
+```
+
+Each analysis-log entry documents:
+- **Context** — what prompted the analysis
+- **Analysis / Findings** — what was investigated and found
+- **Recommendation** — what should happen next, if anything
+- **Adoption Impact** — which adoption file's current-state summary now reflects this analysis
+
+Like DDR↔context-map, this follows a history↔state split: the record is history (never edited once written — a repeated analysis always adds a new record), while the pertinent adoption file's summary is current state, always replaced with the latest analysis' findings. If no adoption file is clearly pertinent, the AI asks instead of guessing; if the findings contradict an existing ADR, it flags that instead of silently overwriting the summary.
 
 ## Protection
 
