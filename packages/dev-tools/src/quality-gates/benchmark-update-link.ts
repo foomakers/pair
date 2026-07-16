@@ -11,18 +11,18 @@
  * are thin, injectable functions (mirrors the `exec` injection pattern in
  * code-hygiene-check.ts) so they can be exercised with a fake "measurement"
  * in unit tests without ever running the real CLI. The `main()` block is a
- * thin CLI wrapper run via `ts-node src/benchmark-update-link.ts` (package
- * script `benchmark-update-link`, delegated from the repo-root `test:perf`
+ * thin CLI wrapper run via `ts-node src/quality-gates/benchmark-update-link.ts`
+ * (package script `benchmark-update-link`, delegated from the repo-root `test:perf`
  * script). Exit 0 = all targets met, Exit 1 = a hard threshold was missed.
  *
- * REPO_ROOT is resolved from this file's location: packages/dev-tools/src ->
- * packages/dev-tools -> packages -> repo root (up 3).
+ * REPO_ROOT is resolved from this file's location: packages/dev-tools/src/quality-gates
+ * -> src -> dev-tools -> packages -> repo root (up 4).
  */
 import { execSync } from 'child_process'
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'fs'
 import { join, resolve } from 'path'
 
-const REPO_ROOT = resolve(__dirname, '..', '..', '..')
+const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..')
 const BENCHMARK_DIR = join(REPO_ROOT, '.benchmark-tmp')
 const CLI_DIST_PATH = join(REPO_ROOT, 'apps/pair-cli/dist/cli.js')
 const REPORT_PATH = join(REPO_ROOT, 'reports/performance/benchmark-report.json')

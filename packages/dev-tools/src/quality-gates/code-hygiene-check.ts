@@ -3,24 +3,24 @@
  *
  * The LOGIC lives here as individually exported, unit-tested functions (see
  * code-hygiene-check.test.ts, white-box, exec injected — no real git repo needed).
- * The `main()` block is a thin CLI wrapper run via `ts-node src/code-hygiene-check.ts`
+ * The `main()` block is a thin CLI wrapper run via `ts-node src/quality-gates/code-hygiene-check.ts`
  * (package script `code-hygiene:check`, delegated from the repo-root `hygiene:check`
  * script). Exit 0 = clean, Exit 1 = violations found.
  *
  * Runs `git grep` with an explicit `cwd` (the repo root, resolved from this file's
- * location: packages/dev-tools/src -> packages/dev-tools -> packages -> repo root,
- * up 3) so the scan behaves identically regardless of the caller's working
- * directory (e.g. `pnpm --filter` sets cwd to the package dir, not the repo root).
+ * location: packages/dev-tools/src/quality-gates -> src -> dev-tools -> packages
+ * -> repo root, up 4) so the scan behaves identically regardless of the caller's
+ * working directory (e.g. `pnpm --filter` sets cwd to the package dir, not the repo root).
  */
 import { execSync } from 'child_process'
 import { resolve } from 'path'
 
-const REPO_ROOT = resolve(__dirname, '..', '..', '..')
+const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..')
 
 // Path of this module, relative to the repo root — excluded from its own scan so
 // the patterns below (deliberately split so they don't match this file) never
 // trip on the string literals that define them.
-const SELF_EXCLUDE = 'packages/dev-tools/src/code-hygiene-check.ts'
+const SELF_EXCLUDE = 'packages/dev-tools/src/quality-gates/code-hygiene-check.ts'
 
 export interface HygienePattern {
   label: string
