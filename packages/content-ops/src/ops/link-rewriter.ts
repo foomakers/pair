@@ -151,6 +151,25 @@ function computeNewHref(params: ComputeNewHrefParams): string | null {
 }
 
 /**
+ * Locates where the href starts within a link node's raw text (`[label](href)`).
+ *
+ * A bare `indexOf(href)` is ambiguous when the visible label is byte-identical
+ * to the href — e.g. `[SKILL.md](SKILL.md)`, exactly the self-pointer style
+ * this module's callers write (see module docs) — because `indexOf` matches
+ * the label's occurrence (it comes first) instead of the href inside the
+ * parens. Anchoring the search on the `](` delimiter that always immediately
+ * precedes the href in valid markdown link syntax disambiguates the two.
+ */
+function findHrefStart(nodeText: string, href: string): number {
+  const marker = '](' + href
+  const markerPos = nodeText.indexOf(marker)
+  if (markerPos >= 0) return markerPos + 2
+  // Fallback for hrefs the marker search doesn't match (shouldn't happen for
+  // well-formed links) — keeps prior behavior rather than failing outright.
+  return nodeText.indexOf(href)
+}
+
+/**
  * Replaces the href within a link node's text range.
  * Returns the updated content and whether a replacement was made.
  */
@@ -163,7 +182,7 @@ function replaceHrefInNode(
   const nodeStart = link.start
   const nodeEnd = link.end
   const nodeText = content.slice(nodeStart, nodeEnd)
-  const hrefPos = nodeText.indexOf(link.href)
+  const hrefPos = findHrefStart(nodeText, link.href)
   if (hrefPos >= 0) {
     const absStart = nodeStart + hrefPos
     const absEnd = absStart + link.href.length
