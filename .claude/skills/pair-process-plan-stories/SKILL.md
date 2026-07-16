@@ -34,7 +34,7 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
 
    > Prerequisites incomplete: [list missing]. Epics must exist before story breakdown.
 
-4. **Verify**: Context loaded, PM tool accessible.
+4. **Verify**: way-of-working.md exists with project-specific content, epics exist in the PM tool, and the user-story-template.md file is reachable — the "prerequisites present" check from Step 0.
 
 ### Step 1: Epic Selection
 
@@ -50,7 +50,7 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
    > Reason: [business value / sprint urgency / dependency chain].
    > Proceed?
 
-5. **Verify**: Epic selected and loaded.
+5. **Verify**: An epic is identified (from `$epic` or developer confirmation) and its full content is available for Step 2's analysis.
 
 ### Step 2: Detect Existing Stories
 

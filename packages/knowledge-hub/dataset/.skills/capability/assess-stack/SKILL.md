@@ -25,8 +25,7 @@ Evaluate and recommend the technology stack: languages, frameworks, runtime, dat
 The rendered adoption content is destined for this file — the caller writes it via `/record-decision`:
 
 - **Target**: [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — **core sections only**
-- **Ownership**: Core sections (language, framework, runtime, database, monorepo, bundling, release, linting, git hooks, CLI tooling, markdown/docs)
-- **Shared file**: /assess-testing owns Testing section, /assess-ai owns AI section
+- **Ownership**: Core sections only — see [Section Ownership](#section-ownership) below for the full table (Testing owned by /assess-testing, AI by /assess-ai).
 
 ## Lifecycle Modes
 
@@ -75,7 +74,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
 2. **Act**: Read project context:
    - [adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md) — project type, scale, constraints
    - [adoption/tech/architecture.md](../../../.pair/adoption/tech/architecture.md) — architecture pattern (stack must support it)
-3. **Verify**: Guidelines and context loaded.
+3. **Verify**: Every file listed in 1-2 above has been read; any that's missing follows [Graceful Degradation](#graceful-degradation) (ask the developer directly) instead of silently proceeding to Step 3.
 
 ### Step 3: Evaluate and Decide
 
@@ -153,7 +152,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
      - **Implementation**: `$type: non-architectural`, `$topic: stack-add-[name]`, `$summary: "[name]@[version] added to tech stack — [rationale]"`
      - **Review approve**: `$type: non-architectural`, `$topic: stack-approve-[name]`, `$summary: "[name]@[version] approved during review — added to tech stack"`
    - plus the human-facing report (see Output Format), and the validation result (approved/rejected) for implementation/review modes
-2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (never persisted by this skill).
+2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (persistence is always the caller's responsibility, delegated to `/record-decision`).
 
 ## Version Tracking Policy
 
@@ -170,8 +169,8 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
 | Monorepo, bundling, release | `/assess-stack`  | Read-only for others                |
 | Linting, formatting, hooks  | `/assess-stack`  | Read-only for others                |
 | CLI tooling, markdown/docs  | `/assess-stack`  | Read-only for others                |
-| **Testing**                 | `/assess-testing`| /assess-stack reads, never renders  |
-| **AI**                      | `/assess-ai`     | /assess-stack reads, never renders  |
+| **Testing**                 | `/assess-testing`| /assess-stack only reads it         |
+| **AI**                      | `/assess-ai`     | /assess-stack only reads it         |
 
 ## Output Format
 

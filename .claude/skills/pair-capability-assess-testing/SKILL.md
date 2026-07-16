@@ -46,7 +46,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
 2. **Act**: Read project context:
    - [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — language and framework (testing tools must be compatible)
    - [adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md) — project type and quality requirements (if available)
-3. **Verify**: Guidelines and project context loaded.
+3. **Verify**: Every file listed in 1-2 above has been read; any that's missing follows [Graceful Degradation](#graceful-degradation) (ask the developer directly) instead of silently proceeding to Step 3.
 
 ### Step 3: Evaluate Options
 
@@ -88,7 +88,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
    - `target`: [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) (Testing section)
    - `decision-metadata`: `$type: non-architectural` (testing framework is a tooling choice), `$topic: testing-strategy`, `$summary: "[Framework] vX.Y adopted as testing framework with [coverage target]% coverage"`
    - plus the human-facing report (see Output Format)
-2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (never persisted by this skill).
+2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (persistence is always the caller's responsibility, delegated to `/pair-capability-record-decision`).
 
 ## Output Format
 

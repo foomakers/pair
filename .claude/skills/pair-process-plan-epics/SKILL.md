@@ -14,6 +14,7 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
 | Skill          | Type       | Required                                                  |
 | -------------- | ---------- | --------------------------------------------------------- |
 | `/pair-capability-write-issue` | Capability | Yes — creates or updates epic issues in the PM tool       |
+| `/pair-capability-map-subdomains` | Capability | Optional — scoped domain mapping for the approved epic breakdown. Graceful degradation if absent. |
 
 ## Arguments
 
@@ -31,7 +32,7 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
    - Bounded contexts defined (recommended, not required): [`adoption/tech/boundedcontext/`](../../../.pair/adoption/tech/boundedcontext)
 2. **Skip**: If all present, proceed to Step 1.
 3. **Act**: If bootstrap incomplete → **HALT**. If bounded contexts missing, warn and proceed.
-4. **Verify**: Context loaded, PM tool accessible.
+4. **Verify**: way-of-working.md, the PRD, architecture.md, and tech-stack.md each exist with project-specific (non-template) content, and a PM-tool query for initiatives succeeds — the "prerequisites present" check from Step 0.1.
 
 ### Step 1: Initiative Selection
 
@@ -46,7 +47,7 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
    > Reason: [business value / readiness / dependency chain].
    > Proceed?
 
-5. **Verify**: Initiative selected and loaded.
+5. **Verify**: An initiative is identified (from `$initiative` or developer confirmation) and its full content is available for Step 2's analysis.
 
 ### Step 2: Detect Existing Epics
 
@@ -86,6 +87,13 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
    > Approve or adjust?
 
 4. **Verify**: Developer approves the breakdown.
+
+### Step 3.5: Domain Mapping (scoped)
+
+1. **Check**: Is `/pair-capability-map-subdomains` installed?
+2. **Skip**: If not installed → warn and proceed to Step 4 without domain mapping.
+3. **Act**: Compose `/pair-capability-map-subdomains` with `$scope` set to the capability area(s) covered by the approved epic breakdown (not `all` — full-catalog remapping stays `/pair-process-bootstrap`-only).
+4. **Verify**: Subdomain catalog delta (if any) approved by developer. Epic creation always proceeds to Step 4 regardless of the domain-mapping outcome.
 
 ### Step 4: Epic Creation
 
@@ -145,3 +153,4 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 - This skill **modifies PM tool state** — creates epic issues linked to initiatives.
 - **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: detects existing epics and skips them.
 - Epic 0 rule: for new projects, always assess if a bootstrap/foundation epic is needed before functional epics.
+- Domain mapping (Step 3.5) is scoped to this run's epic breakdown — see [map-subdomains](../pair-capability-map-subdomains/SKILL.md).

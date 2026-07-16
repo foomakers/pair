@@ -37,7 +37,7 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
    > Reason: [business value / sprint urgency / unblocks other work].
    > Proceed?
 
-5. **Verify**: Story selected and loaded.
+5. **Verify**: A story is identified (from `$story` or developer confirmation) and its current body is available for Step 1's section detection.
 
 ### Step 1: Detect Refinement State
 
@@ -82,7 +82,7 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
    > [Edge cases]
    > Approve or adjust?
 
-4. **Verify**: Developer approves. Criteria finalized.
+4. **Verify**: Human-judgment gate — the developer explicitly approves the presented Given-When-Then scenarios, business rules, and edge cases (or requests changes, looping back to Step 2's Act). Only an explicit approval finalizes the criteria.
 
 ### Step 3: Technical Analysis
 
@@ -94,7 +94,7 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
    - **Risks**: technical unknowns, complexity, dependencies.
    - Reference [architecture.md](../../../.pair/adoption/tech/architecture.md) and [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
 2. **Act**: Present technical analysis to developer for validation.
-3. **Verify**: Developer approves. Analysis finalized.
+3. **Verify**: Human-judgment gate — the developer explicitly approves the presented strategy, key components, and risks (or requests changes, looping back to Step 3's Act). Only an explicit approval finalizes the analysis.
 
 ### Step 4: Sprint Readiness
 
@@ -106,7 +106,7 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
    - Map dependencies (prerequisite and dependent stories).
    - Define validation and testing strategy.
 2. **Act**: Present sizing assessment to developer.
-3. **Verify**: Developer approves. Sprint readiness confirmed.
+3. **Verify**: Human-judgment gate — the developer explicitly approves the sizing, dependencies, and validation strategy presented in Step 4's Act. Only an explicit approval confirms sprint readiness.
 
 ### Step 5: Documentation and PM Tool Update
 

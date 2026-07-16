@@ -134,7 +134,7 @@ When invoked **independently**:
 
 - **PM tool already configured + reconfigure**: Old configuration is replaced, not appended. The new ADL entry references the previous decision if one exists.
 - **No MCP connection for GitHub**: Warn that GitHub Projects requires MCP or CLI access. Offer to configure the adoption file manually and validate connectivity later.
-- **Multiple PM tools**: Not supported in a single project. One tool per project. If developer needs multiple, suggest primary + secondary pattern and document in way-of-working.
+- **Multiple PM tools**: Supported only as primary + secondary — one PM tool of record per project. If the developer needs multiple, suggest the primary + secondary pattern and document it in way-of-working.
 
 ## Graceful Degradation
 

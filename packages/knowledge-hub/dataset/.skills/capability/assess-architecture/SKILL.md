@@ -43,7 +43,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
    - [Architectural Patterns](../../../.pair/knowledge/guidelines/architecture/architectural-patterns/README.md) — pattern descriptions and trade-offs
    - [Project Constraints](../../../.pair/knowledge/guidelines/architecture/project-constraints/README.md) — team, platform, deployment constraints
 2. **Act**: If PRD exists, read [adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md) for project context (team size, scale, compliance).
-3. **Verify**: Guidelines and project context loaded.
+3. **Verify**: Every file listed in 1-2 above has been read; any that's missing follows [Graceful Degradation](#graceful-degradation) (ask the developer directly) instead of silently proceeding to Step 3.
 
 ### Step 3: Evaluate Options
 
@@ -82,7 +82,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
    - `target`: [adoption/tech/architecture.md](../../../.pair/adoption/tech/architecture.md) (owned section)
    - `decision-metadata`: `$type: architectural`, `$topic: architecture-pattern`, `$summary: "[Pattern] adopted as system architecture"`
    - plus the human-facing report (see Output Format)
-2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (never persisted by this skill).
+2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (persistence is always the caller's responsibility, delegated to `/record-decision`).
 
 ## Output Format
 
@@ -124,6 +124,6 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 ## Notes
 
 - This skill establishes the base pattern for all assess-* skills: resolution cascade + guidelines reference + **rendered adoption proposal (output-only)**. The single adoption writer is `/record-decision`, invoked by the caller.
-- Architecture decisions are **architectural** type → the caller records them as an ADR (never ADL).
+- Architecture decisions are **architectural** type → the caller always records them as an ADR (not ADL).
 - The resolution cascade IS the idempotency mechanism: if adoption exists, assessment is already done.
 - Educational content (pattern descriptions, trade-offs, WHY) stays in guidelines. This skill references guidelines for decision matrices and scoring.

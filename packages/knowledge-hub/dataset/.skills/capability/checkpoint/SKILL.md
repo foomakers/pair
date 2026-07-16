@@ -83,7 +83,7 @@ Write and resume a self-contained progress checkpoint so a fresh session (or a s
 ### Step 8: Report Parsed State
 
 1. **Act**: Present the parsed state to the caller (Output Format) — story, branch, tasks done, tasks pending, key decisions.
-2. **Verify**: Caller has the state needed to continue without repeating completed work.
+2. **Verify**: All five sections from Step 7 (or their explicit gap markers) appear in the presented state — the caller can identify the next pending task without re-deriving Tasks Done.
 
 ## Output Format
 
@@ -111,6 +111,49 @@ CHECKPOINT RESUMED:
 ├── Decisions:  [N recorded | None yet]
 └── Confidence: [High — all sections parsed cleanly | Needs confirmation — see gaps below]
 ```
+
+## Example: Write Mode Mid-Story
+
+Input — invoked with `$mode: write` from a session with story #313 loaded, 2 of 5 tasks done, no explicit `$story`:
+
+```text
+$mode: write
+```
+
+(Story detected from branch `chore/#313-t6-completion-criteria`; state gathered from Step 3: Task Breakdown checklist shows T1-T2 checked, an ADL was recorded for the shared-reference naming convention.)
+
+Output — `.pair/working/checkpoints/313.md` is created with:
+
+```markdown
+# Checkpoint: #313 — Skill corpus effectiveness pass
+
+**Last updated:** 2026-07-16 14:30
+**Written by:** implement session
+
+## 1. Story
+**ID:** #313
+**Title:** Skill corpus effectiveness: trigger descriptions, shared references, ...
+**Goal:** Optimize the 35-skill corpus for LLM-executor effectiveness.
+**Source:** github.com/foomakers/pair/issues/313
+
+## 2. Branch
+**Branch:** `chore/#313-t6-completion-criteria`
+**Commit strategy:** commit-per-task
+**Commits so far:** 2 — "sharpen soft Verify beats across assess-* skills"
+
+## 3. Tasks Done
+- [x] T1 — Router/catalog + correctness fixes — PR #325
+- [x] T2 — Authoring effectiveness standard — PR #319
+
+## 4. Key Decisions
+- Shared-reference naming: `skill-conventions/<topic>.md` — see 2026-07-13-shared-reference-naming.md
+
+## 5. Remaining Todos
+- [ ] T6 — Completion criteria + steering pass
+**Next immediate action:** finish the negation sweep on record-decision, then run the T2 checklist on 4-5 sampled skills.
+```
+
+Followed by the `CHECKPOINT WRITTEN` summary block (Output Format above).
 
 ## Composition Interface
 

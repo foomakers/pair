@@ -87,7 +87,7 @@ For each relationship between an in-scope context and another context it touches
    - Otherwise → **balanced**.
 5. **Act**: Annotate contract-coupled relationships (`contract` strength) as **"contract tests expected"** — downstream story validation strategies touching this relationship inherit the contract/boundary test categories (coupling-balance guideline, see Notes).
 6. **Check**: Is the relationship **unbalanced AND volatile** (either side rated `Volatility: High`)?
-7. **Act**: If unbalanced + volatile → **gate at approval**: do not pass without one of:
+7. **Act**: If unbalanced + volatile → **gate at approval**: proceed only once one of the following is recorded:
    - A mitigation (e.g. introduce an ACL, renegotiate the pattern toward `contract`), or
    - An explicit developer acceptance of the risk (recorded in the context file).
 8. **Verify**: Every in-scope relationship has strength, distance, volatility, outcome, and (if gated) a mitigation/acceptance recorded.
@@ -145,7 +145,7 @@ CONTEXT PLACEMENT COMPLETE:
 ## Edge Cases and Error Handling
 
 - **Scope resolves to nothing** — report "no domain impact", caller proceeds without HALT.
-- **Existing catalog conflicts with scoped update** — propose the delta, human approves (idempotent behavior preserved); never silently overwrite.
+- **Existing catalog conflicts with scoped update** — always propose the delta and require human approval before writing (idempotent behavior preserved).
 - **Pre-existing relationships without the 3-dimension assessment** — treated as valid; assessed only when that relationship falls inside a future `$scope`.
 - **No `subdomain/` or `boundedcontext/` artifacts at all** — system-areas fallback (Step 2b); no error, no DDD prerequisite.
 - **Unbalanced + volatile relationship, no mitigation/acceptance offered** — HALT at Step 4 approval; this is the one case where the capability blocks.

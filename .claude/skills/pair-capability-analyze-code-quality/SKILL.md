@@ -32,7 +32,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
    - Size metrics: lines of code, function length, class/module size, file size
    - Quality metrics: test coverage, code duplication, maintainability index
    - Thresholds per metric (e.g., cyclomatic complexity 1-5 = simple, 16+ = refactor needed)
-2. **Verify**: Guidelines loaded.
+2. **Verify**: The thresholds for every metric group in `$scope` are known from code-metrics.md (or the Graceful Degradation built-in defaults) before Step 3 collects metrics against them.
 
 ### Step 3: Collect Metrics
 
@@ -99,7 +99,7 @@ For each metric group in scope, follow **check → skip → act → verify**.
 ### Step 5: Present Report
 
 1. **Act**: Present the report to the developer with recommendations.
-2. **Verify**: Developer acknowledges. No action required — this is informational.
+2. **Verify**: N/A — this is the terminal, informational step. The report from Step 4 was presented; no further check applies.
 
 ## Output Format
 
@@ -133,7 +133,7 @@ When composed by `/pair-process-review`:
 - **Input**: /pair-process-review may invoke `/pair-capability-analyze-code-quality` during the technical review phase.
 - **Output**: Returns the quality report. /pair-process-review incorporates metrics and hotspots into review findings.
   - Poor maintainability or high complexity may inform review recommendations.
-  - Metrics are informational — they do not HALT the review.
+  - Metrics are informational — the review always proceeds regardless of score.
 
 When invoked **independently**:
 
@@ -149,7 +149,7 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 
 ## Notes
 
-- This skill is **read-only / output-only** — it inspects code, runs coverage (via existing test commands), but never modifies files, adoption, or the PM tool. A finding worth tracking is promoted deliberately to the backlog via `/pair-capability-write-issue` (a manual, selective act) — never auto-created.
+- This skill is **read-only / output-only** — it only inspects code and runs coverage (via existing test commands); files, adoption, and the PM tool stay untouched. A finding worth tracking is promoted deliberately to the backlog via `/pair-capability-write-issue` — always a manual, selective act.
 - **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: staleness of the existing report (Step 1) — unchanged codebase confirms it, changed codebase re-analyzes.
 - Metrics are **health indicators, not absolute quality measures**. Context matters: business logic naturally has higher complexity, and metric targets should align with team capabilities.
 - Quality analysis is most valuable as a **trend** — individual snapshots matter less than improvement direction over time.

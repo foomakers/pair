@@ -47,7 +47,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
 2. **Act**: Read project context:
    - [adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md) — scale, budget, compliance
    - [adoption/tech/architecture.md](../../../.pair/adoption/tech/architecture.md) — architecture pattern (infra must support it)
-3. **Verify**: Guidelines and context loaded.
+3. **Verify**: Every file listed in 1-2 above has been read; any that's missing follows [Graceful Degradation](#graceful-degradation) (ask the developer directly) instead of silently proceeding to Step 3.
 
 ### Step 3: Evaluate Options
 
@@ -82,7 +82,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
    - `target`: [adoption/tech/infrastructure.md](../../../.pair/adoption/tech/infrastructure.md) (core sections)
    - `decision-metadata`: `$type: architectural` (infrastructure decisions affect system structure), `$topic: infrastructure-strategy`, `$summary: "[Summary of key infrastructure choices]"`
    - plus the human-facing report (see Output Format)
-2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (never persisted by this skill).
+2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (persistence is always the caller's responsibility, delegated to `/record-decision`).
 
 ## Output Format
 
@@ -114,7 +114,7 @@ When invoked **independently**: the human (or agent) persists the proposal by co
 
 - **Project doesn't need infrastructure** (e.g. pure library, CLI tool): Render a minimal infrastructure.md noting CI/CD only, no cloud deployment, for the caller to persist.
 - **Adoption file partially exists**: Render content that fills gaps; the caller's write preserves existing content.
-- **Observability section exists**: Do not touch it — owned by /assess-observability. Scope the rendered content to core sections.
+- **Observability section exists**: Leave it untouched — owned by /assess-observability. Scope the rendered content to core sections.
 
 ## Graceful Degradation
 
