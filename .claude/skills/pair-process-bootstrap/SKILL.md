@@ -205,7 +205,7 @@ Runs after architecture and tech-stack are adopted (Step 3.1) — both are prere
    - Way-of-working references correct tools from tech-stack
    - Infrastructure aligns with architecture patterns
 3. **Act**: Fix any inconsistencies found.
-4. **Verify**: The three checks from **Step 4.1.2** hold with no remaining mismatch — tech-stack versions match architecture references, way-of-working tooling matches tech-stack, infrastructure aligns with architecture. Any check still failing after **Step 4.1.3**'s fixes → retry **Step 4.1.3** once; if still unresolved, **HALT**: "Consistency check unresolved — report the specific mismatch to the developer."
+4. **Verify**: The three checks above hold with no remaining mismatch — tech-stack versions match architecture references, way-of-working tooling matches tech-stack, infrastructure aligns with architecture. Any check still failing after the fix step above → retry that step once; if still unresolved, **HALT**: "Consistency check unresolved — report the specific mismatch to the developer."
 
 ### Step 4.2: PM Tool Configuration
 
