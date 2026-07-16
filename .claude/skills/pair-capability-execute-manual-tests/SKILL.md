@@ -140,7 +140,7 @@ When composed by `/pair-process-review` (Phase 6, post-merge):
   - Results are appended to the review report as an addendum.
 - **Scope**: /pair-process-review passes `$scope = P0` (blockers only) for fast post-merge validation. Full suite runs standalone.
 
-When composed by `/pair-capability-verify-done` (Step 5.5, optional):
+When composed by `/pair-capability-verify-done` (Step 11, optional):
 
 - **Input**: /pair-capability-verify-done checks if a manual test report exists for the current version with PASS result.
 - **Output**: Returns PASS (report exists and passing) or SKIPPED (no suite or no report).

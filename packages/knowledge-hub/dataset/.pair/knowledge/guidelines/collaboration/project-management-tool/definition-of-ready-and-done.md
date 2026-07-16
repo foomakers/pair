@@ -21,7 +21,7 @@ A criterion is **unmet** when its section is missing, empty, or still holds temp
 
 ### Inline task-breakdown signal
 
-A `## Task Breakdown` section with at least one checklist item (produced by `/pair-process-plan-tasks`, e.g. `- [ ] T1 — ...`) is a first-class readiness signal in its own right (epic #202 addendum) — it shows the item has already been scoped and decomposed. When present, it independently satisfies criteria 3–5 above (AC, estimate, dependencies) even if their dedicated sections are missing or predate this template. It never substitutes for criterion 1 (title) or 2 (problem/goal) — every item needs those regardless of format.
+A `## Task Breakdown` section with at least one checklist item (produced by `/pair-process-plan-tasks`, e.g. `- [ ] **T-1**: [Task title]` — the format in [task-template.md](../templates/task-template.md#task-breakdown-format-for-story-body)) is a first-class readiness signal in its own right (epic #202 addendum) — it shows the item has already been scoped and decomposed. When present, it independently satisfies criteria 3–5 above (AC, estimate, dependencies) even if their dedicated sections are missing or predate this template. It never substitutes for criterion 1 (title) or 2 (problem/goal) — every item needs those regardless of format.
 
 ### Legacy stories (predate this template)
 
