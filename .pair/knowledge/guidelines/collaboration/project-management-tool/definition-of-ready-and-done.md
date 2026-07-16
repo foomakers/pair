@@ -50,10 +50,10 @@ A 3-column board (`Todo` / `In Progress` / `Done`) has no state mapped to `Ready
 | --- | --- | --- |
 | All 6 criteria met | PASS | `Ready` (fallback applies) |
 | 5/6 met, missing criterion 6 (Design flag) | FAIL — lists "Design flag" as the only gap | `Draft` — never guessed into `Ready` |
-| No dedicated sections, but `## Task Breakdown` present with items | PASS via inline-breakdown signal | `Ready` |
+| No dedicated sections for criteria 3–5, but title/goal present and `## Task Breakdown` has items | PASS via inline-breakdown signal for 3–5 (criteria 1–2 still checked independently) | `Ready` |
 | No dedicated sections, no Task Breakdown | FAIL — lists all missing criteria | `Draft` |
 
-This is the mandatory D4 fallback scenario: a board with no dedicated "Refined"/Ready column still works, because readiness comes from the item's content instead of a column name.
+This is the mandatory D4 fallback scenario: a board with no dedicated "Refined"/Ready column still works, because readiness comes from the item's content instead of a column name. Note row 3: the inline-breakdown signal only ever covers criteria 3–5 — criteria 1 (title) and 2 (problem/goal) are always evaluated on their own, never inferred from the signal (see "Inline task-breakdown signal" above).
 
 ## Conflicting Signals
 
