@@ -99,7 +99,7 @@ For each metric group in scope, follow **check → skip → act → verify**.
 ### Step 5: Present Report
 
 1. **Act**: Present the report to the developer with recommendations.
-2. **Verify**: N/A — this is the terminal, informational step. The report from Step 4 was presented; no further check applies.
+2. **Verify**: Report presented. No side effects — this step is purely informational output, not a decision point, so there is nothing to confirm.
 
 ## Output Format
 
