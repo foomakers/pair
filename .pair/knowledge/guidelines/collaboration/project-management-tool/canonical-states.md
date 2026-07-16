@@ -106,10 +106,10 @@ A project migrating an existing board that already has a literal `Refined` colum
 ```markdown
 ## State Mapping
 
-| Board State | Macrostate |
-| ------------ | ---------- |
-| Refined      | Ready      |
-| Approved     | Ready      |
+| Board State | Macrostate  |
+| ------------ | ----------- |
+| Refined      | Ready       |
+| Approved     | Ready       |
 ```
 
 Zero renames required — both columns keep working, and a write targeting `Ready` goes to `Refined` (first listed). This is the "map, keep the board name" migration path for a project upgrading from a pre-canonical-states pair version (published as the legacy-`Refined` walkthrough in the docs site's `v0.4 → v0.5` migration page). The alternative path — renaming the column to `Ready` instead of mapping it — needs no `## State Mapping` entry at all (omitted ⇒ canonical, per the Resolution Rules above).
