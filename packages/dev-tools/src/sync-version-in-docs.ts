@@ -20,7 +20,7 @@
  * REPO_ROOT is resolved from this file's location: packages/dev-tools/src ->
  * packages/dev-tools -> packages -> repo root (up 3).
  */
-import { readFileSync, readdirSync, writeFileSync } from 'fs'
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { join, relative, resolve } from 'path'
 
 const REPO_ROOT = resolve(__dirname, '..', '..', '..')
@@ -35,6 +35,32 @@ export const DEFAULT_EXCLUDES = [
   'pnpm-workspace.yaml',
   '.changeset/',
 ]
+
+/**
+ * Parse a .gitignore file's content into simple exclude patterns. The deleted
+ * `rg`-based script implicitly respected .gitignore; the pure-JS walker that
+ * replaced it does not by default, so gitignored build-artifact dirs (e.g.
+ * `release/`, which can hold real .md files on disk locally) must be folded in
+ * explicitly. Only simple, single-segment entries are usable by `shouldExclude`
+ * (path-segment substring matching) — comments, blank lines, negations (`!...`),
+ * multi-segment paths, and wildcard globs are skipped (not meaningful at that
+ * granularity, and harmless to omit: they don't hold version-string docs).
+ */
+export function parseGitignoreExcludes(content: string): string[] {
+  return content
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('#') && !line.startsWith('!'))
+    .map(line => (line.endsWith('/') ? line.slice(0, -1) : line))
+    .filter(pattern => !pattern.includes('/') && !pattern.includes('*'))
+}
+
+/** Read and parse `<root>/.gitignore`; [] if the file doesn't exist (e.g. test fixtures). */
+export function readGitignoreExcludes(root: string): string[] {
+  const gitignorePath = join(root, '.gitignore')
+  if (!existsSync(gitignorePath)) return []
+  return parseGitignoreExcludes(readFileSync(gitignorePath, 'utf-8'))
+}
 
 // Patterns that indicate an external version (not ours) — skip these lines.
 const EXTERNAL_LINE_PATTERNS = [
@@ -123,7 +149,11 @@ export function syncVersionInDocs(
   newVersion: string,
   opts: SyncOptions,
 ): SyncResult {
-  const excludePatterns = [...DEFAULT_EXCLUDES, ...(opts.excludePatterns ?? [])]
+  const excludePatterns = [
+    ...DEFAULT_EXCLUDES,
+    ...readGitignoreExcludes(root),
+    ...(opts.excludePatterns ?? []),
+  ]
   const files = findFilesWithVersion(root, oldVersion, excludePatterns)
   const result: SyncResult = { scanned: [], fixed: [], drifted: [], unchanged: [] }
 

@@ -11,6 +11,8 @@ import {
   findFilesWithVersion,
   syncVersionInDocs,
   parseArgv,
+  parseGitignoreExcludes,
+  readGitignoreExcludes,
 } from './sync-version-in-docs'
 
 describe('isExternalLine', () => {
@@ -66,6 +68,37 @@ describe('shouldExclude', () => {
     expect(shouldExclude('packages/foo/node_modules/bar.md', ['node_modules'])).toBe(true)
     expect(shouldExclude('docs/CHANGELOG.md', ['CHANGELOG.md'])).toBe(true)
     expect(shouldExclude('docs/guide.md', ['CHANGELOG.md'])).toBe(false)
+  })
+})
+
+describe('parseGitignoreExcludes', () => {
+  it('extracts simple top-level entries, stripping trailing slashes', () => {
+    const content = ['node_modules/', 'dist/', 'TODO.md', ''].join('\n')
+    expect(parseGitignoreExcludes(content)).toEqual(['node_modules', 'dist', 'TODO.md'])
+  })
+
+  it('ignores comments, blank lines, and negation patterns', () => {
+    const content = ['# comment', '', 'release/', '!scripts/workflows/release'].join('\n')
+    expect(parseGitignoreExcludes(content)).toEqual(['release'])
+  })
+
+  it('ignores multi-segment paths and wildcard globs (not meaningful for segment-level excludes)', () => {
+    const content = ['*.log', 'apps/website/scripts/landing-video/*.cast', 'coverage/'].join('\n')
+    expect(parseGitignoreExcludes(content)).toEqual(['coverage'])
+  })
+})
+
+describe('readGitignoreExcludes', () => {
+  const root = mkdtempSync(join(tmpdir(), 'gitignore-read-'))
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  it('returns [] when no .gitignore exists at root', () => {
+    expect(readGitignoreExcludes(root)).toEqual([])
+  })
+
+  it('reads and parses a real .gitignore at root', () => {
+    writeFileSync(join(root, '.gitignore'), 'release/\ncoverage/\n')
+    expect(readGitignoreExcludes(root)).toEqual(['release', 'coverage'])
   })
 })
 
@@ -137,6 +170,21 @@ describe('syncVersionInDocs', () => {
     const { root } = setup()
     const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: true })
     expect(result.scanned).not.toContain('CHANGELOG.md')
+  })
+
+  // Regression: the pure-JS walker replaced an `rg`-based scan that implicitly
+  // respected .gitignore. A gitignored top-level dir (e.g. `release/`, a real
+  // build-artifact dir in this repo's own .gitignore) can hold real .md files on
+  // disk locally; those must never surface as DRIFT/FIXED.
+  it('skips a gitignored top-level dir holding a stale-version .md file', () => {
+    const { root, write } = setup()
+    write('.gitignore', 'release/\n')
+    write('release/pair-cli-manual-0.4.3/README.md', 'pair v0.4.3 packaged build')
+
+    const result = syncVersionInDocs(root, '0.4.3', '0.5.0', { check: true })
+
+    expect(result.scanned.some(f => f.startsWith('release/'))).toBe(false)
+    expect(readFile(join(root, 'release/pair-cli-manual-0.4.3/README.md'))).toContain('0.4.3')
   })
 })
 
