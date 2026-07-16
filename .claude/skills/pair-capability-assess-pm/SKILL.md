@@ -123,7 +123,7 @@ When invoked **independently**: if `/pair-capability-setup-pm` is present it per
 
 - **way-of-working.md exists but no PM section**: Render content that adds the PM section; the caller's write preserves all other content.
 - **Tool without implementation guide**: Emit the proposal but warn about manual setup.
-- **Multiple PM tools needed**: Supported only as primary + secondary — one PM tool of record per project. Document the primary tool.
+- **Multiple PM tools needed**: Supported: exactly one PM tool per project. Document the primary tool.
 
 ## Graceful Degradation
 
