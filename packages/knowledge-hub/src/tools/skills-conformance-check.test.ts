@@ -167,17 +167,17 @@ describe('runChecks (fixture corpus)', () => {
   )
   skill('next', 'name: next\ndescription: "Router."', 'Covers the full 2-skill catalog.')
 
-  it('reports violations per file, catalog warnings, and the corpus count', () => {
-    const { errors, warnings, skillCount } = runChecks(root)
+  it('reports violations per file plus a catalog-count mismatch as a hard error (drives CLI exit 1)', () => {
+    const { errors, skillCount } = runChecks(root)
     expect(skillCount).toBe(4)
     expect(
       errors.some(e => e.includes('bad-field') && e.includes('disable-model-invocation')),
     ).toBe(true)
     expect(errors.some(e => e.includes('broken-link') && e.includes('./missing.md'))).toBe(true)
     expect(errors.some(e => e.includes('good/SKILL.md'))).toBe(false)
-    expect(warnings).toHaveLength(1)
-    expect(warnings[0]).toContain('2-skill')
-    expect(warnings[0]).toContain('4 skills')
+    const catalogErrors = errors.filter(e => e.includes('2-skill'))
+    expect(catalogErrors).toHaveLength(1)
+    expect(catalogErrors[0]).toContain('4 skills')
   })
 })
 
