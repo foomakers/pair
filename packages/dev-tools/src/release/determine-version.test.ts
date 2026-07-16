@@ -94,7 +94,7 @@ describe('parseArgv', () => {
     })
   })
 
-  it('filters out a literal "--" that survives pnpm/tsx argv forwarding (PR #330 failure mode)', () => {
+  it('filters out a literal "--" that survives pnpm/ts-node argv forwarding (PR #330 failure mode)', () => {
     expect(parseArgv(['--', '--input-version', 'v1.0.0', '--'])).toEqual({
       inputVersion: 'v1.0.0',
       help: false,
@@ -126,7 +126,7 @@ describe('writeGithubOutput / writeGithubEnv', () => {
   let dir: string
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'release-tools-test-'))
+    dir = mkdtempSync(join(tmpdir(), 'dev-tools-release-test-'))
   })
 
   afterEach(() => {

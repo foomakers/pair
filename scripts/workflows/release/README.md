@@ -30,11 +30,11 @@ The release workflow handles the complete process of building, packaging, testin
 ./package-manual.sh v1.0.0
 ```
 
-### 2. `determine-version` (ported to `@pair/release-tools`)
+### 2. `determine-version` (ported to `@pair/dev-tools`)
 
 **Purpose**: Determines the version to use for the release based on GitHub event triggers
 
-This used to be a standalone script here (`determine-version.sh`). It's now a tested TypeScript module, [`packages/release-tools/src/determine-version.ts`](../../../packages/release-tools/README.md), per the same ADL-driven pattern as `@pair/dev-tools` (logic + unit tests live in the package; only a thin CLI wrapper is exposed). See #148.
+This used to be a standalone script here (`determine-version.sh`). It's now a tested TypeScript module, [`packages/dev-tools/src/release/determine-version.ts`](../../../packages/dev-tools/README.md), following the same ADL-driven pattern as the rest of `@pair/dev-tools` (logic + unit tests live in the package; only a thin CLI wrapper is exposed). Originally ported into a standalone `@pair/release-tools` package, then folded into `@pair/dev-tools` — a bounded-context analysis showed both tool families ("automation scripts for development and deployment") map onto the same bounded context, so they're organized as folders (`src/quality-gates/` + `src/release/`) in one package rather than split across packages. See #148.
 
 **Parameters** (unchanged):
 
@@ -53,7 +53,7 @@ This used to be a standalone script here (`determine-version.sh`). It's now a te
 
 ```bash
 # In workflow context
-pnpm --filter @pair/release-tools determine-version -- \
+pnpm --filter @pair/dev-tools determine-version -- \
   --input-version "${{ github.event.inputs.version }}" \
   --release-tag "${{ github.event.release.tag_name }}" \
   --github-ref "$GITHUB_REF" \
@@ -61,7 +61,7 @@ pnpm --filter @pair/release-tools determine-version -- \
   --env-file $GITHUB_ENV
 
 # Local testing
-pnpm --filter @pair/release-tools determine-version -- --input-version "v1.0.0"
+pnpm --filter @pair/dev-tools determine-version -- --input-version "v1.0.0"
 ```
 
 ### 3. `create-registry-tgz.sh`
@@ -284,7 +284,7 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 │    - Install dependencies (pnpm install)                        │
 │    - Run quality gate (lint, typecheck)                         │
 │    - Build all packages (turbo build)                           │
-│    - Determine version (@pair/release-tools determine-version)  │
+│    - Determine version (@pair/dev-tools determine-version)      │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -395,7 +395,7 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 
 ### Integration Points
 
-1. **@pair/release-tools determine-version** → Provides VERSION to all packaging scripts
+1. **@pair/dev-tools determine-version** → Provides VERSION to all packaging scripts
 2. **package-manual.sh** → Creates CLI ZIP (independent of KB)
 3. **create-registry-tgz.sh** → Derives TGZ from CLI ZIP
 4. **package-kb-dataset.sh** → Creates KB ZIP (independent of CLI)
@@ -443,7 +443,7 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 The scripts are called in the following order within the `release.yml` workflow:
 
 ```
-1. @pair/release-tools determine-version → Determines VERSION
+1. @pair/dev-tools determine-version → Determines VERSION
 2. package-manual.sh           → Creates CLI ZIP artifact
 3. create-registry-tgz.sh      → Creates CLI TGZ from ZIP
 4. package-kb-dataset.sh       → Creates KB ZIP artifact (with link normalization + verification)
@@ -470,7 +470,7 @@ All scripts can be tested locally without running the full workflow:
 
 ```bash
 # Test version determination
-pnpm --filter @pair/release-tools determine-version -- --input-version "v1.0.0-test"
+pnpm --filter @pair/dev-tools determine-version -- --input-version "v1.0.0-test"
 
 # Test CLI artifact creation (requires existing build)
 ./package-manual.sh v1.0.0-test
@@ -530,6 +530,6 @@ When modifying these scripts:
 ## Related Files
 
 - `.github/workflows/release.yml`: Main workflow file
-- `../../../packages/release-tools/`: `@pair/release-tools` package (tested `determine-version` module)
+- `../../../packages/dev-tools/src/release/`: `determine-version` module, part of the `@pair/dev-tools` package
 - `release/`: Directory containing generated artifacts
 - `TODO.md`: Project documentation and status

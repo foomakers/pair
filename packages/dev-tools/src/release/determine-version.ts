@@ -4,13 +4,16 @@
  *
  * The LOGIC lives here as individually exported, unit-tested functions (see
  * determine-version.test.ts, white-box). The `main()` block is a thin CLI
- * wrapper run via `tsx src/determine-version.ts` (package script
+ * wrapper run via `ts-node src/release/determine-version.ts` (package script
  * `determine-version`), preserving the same 5 flags and behavior as the
  * bash script it replaces (scripts/workflows/release/determine-version.sh,
- * deleted by this port — see #148).
+ * deleted by this port — see #148). Originally ported into a standalone
+ * `@pair/release-tools` package; folded into `@pair/dev-tools` (this file's
+ * current location) once a bounded-context analysis showed both tool
+ * families map onto the same context — see #148 rework.
  *
  * Usage:
- *   pnpm --filter @pair/release-tools determine-version -- \
+ *   pnpm --filter @pair/dev-tools determine-version -- \
  *     --input-version "$INPUT" --release-tag "$TAG" --github-ref "$GITHUB_REF" \
  *     --output-file $GITHUB_OUTPUT --env-file $GITHUB_ENV
  */
@@ -109,8 +112,8 @@ function requireValue(args: string[], index: number, flag: string): string {
 }
 
 /**
- * Parse CLI argv into flags. A literal `--` may survive pnpm/tsx argv
- * forwarding from `pnpm --filter @pair/release-tools determine-version -- <args>`
+ * Parse CLI argv into flags. A literal `--` may survive pnpm/ts-node argv
+ * forwarding from `pnpm --filter @pair/dev-tools determine-version -- <args>`
  * invocations (the exact failure mode PR #330 hit for @pair/dev-tools) — it's
  * filtered out before flag parsing so it never gets mistaken for a flag value.
  */

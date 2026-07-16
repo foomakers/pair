@@ -1,6 +1,0 @@
-{
-  "extends": "@pair/ts-config/node.json",
-  "compilerOptions": {},
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "**/*.test.ts"]
-}
