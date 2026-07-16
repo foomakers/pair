@@ -95,6 +95,20 @@ Options:
   --env-file FILE              File to write VERSION env var (default: stdout)`
 
 /**
+ * Read the value following a flag, throwing if it's missing (trailing flag
+ * with nothing after it). Matches the original bash script's fail-loud
+ * behavior under `set -u`, where `"$2"` on a missing value is an unbound
+ * variable error rather than a silent `undefined`.
+ */
+function requireValue(args: string[], index: number, flag: string): string {
+  const value = args[index]
+  if (value === undefined) {
+    throw new Error(`Missing value for option: ${flag}\nUse -h or --help for usage information`)
+  }
+  return value
+}
+
+/**
  * Parse CLI argv into flags. A literal `--` may survive pnpm/tsx argv
  * forwarding from `pnpm --filter @pair/release-tools determine-version -- <args>`
  * invocations (the exact failure mode PR #330 hit for @pair/dev-tools) — it's
@@ -108,24 +122,25 @@ export function parseArgv(argv: string[]): ParsedArgs {
     const arg = args[i]
     switch (arg) {
       case '--input-version':
-        result.inputVersion = args[++i]
+        result.inputVersion = requireValue(args, ++i, arg)
         break
       case '--release-tag':
-        result.releaseTag = args[++i]
+        result.releaseTag = requireValue(args, ++i, arg)
         break
       case '--github-ref':
-        result.githubRef = args[++i]
+        result.githubRef = requireValue(args, ++i, arg)
         break
       case '--output-file':
-        result.outputFile = args[++i]
+        result.outputFile = requireValue(args, ++i, arg)
         break
       case '--env-file':
-        result.envFile = args[++i]
+        result.envFile = requireValue(args, ++i, arg)
         break
       case '-h':
       case '--help':
-        result.help = true
-        break
+        // Short-circuit immediately, matching the original bash script's
+        // immediate `exit 0` — the rest of argv is never processed/validated.
+        return { help: true }
       default:
         throw new Error(`Unknown option: ${arg}\nUse -h or --help for usage information`)
     }

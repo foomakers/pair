@@ -60,6 +60,13 @@ describe('resolveVersion', () => {
       source: 'github-ref',
     })
   })
+
+  it('passes an --input-version without a leading v through as-is (no normalization, same as github-ref)', () => {
+    expect(resolveVersion({ inputVersion: '1.2.3' })).toEqual({
+      version: '1.2.3',
+      source: 'input',
+    })
+  })
 })
 
 describe('parseArgv', () => {
@@ -101,6 +108,17 @@ describe('parseArgv', () => {
 
   it('throws on an unknown option', () => {
     expect(() => parseArgv(['--bogus'])).toThrow(/Unknown option: --bogus/)
+  })
+
+  it('throws when a recognized flag is trailing with no value, matching bash `set -u` fail-loud behavior', () => {
+    expect(() => parseArgv(['--input-version'])).toThrow(
+      /Missing value for option: --input-version/,
+    )
+  })
+
+  it('short-circuits on -h/--help without processing/validating the rest of argv', () => {
+    expect(parseArgv(['-h', '--bogus'])).toEqual({ help: true })
+    expect(parseArgv(['--help', '--input-version'])).toEqual({ help: true })
   })
 })
 
