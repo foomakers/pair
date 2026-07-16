@@ -14,7 +14,8 @@
     "mdlint:check": "markdownlint-check",
     "mdlint:fix": "markdownlint-fix",
     "code-hygiene:check": "ts-node src/code-hygiene-check.ts",
-    "sync-version": "ts-node src/sync-version-in-docs.ts"
+    "sync-version": "ts-node src/sync-version-in-docs.ts",
+    "benchmark-update-link": "ts-node src/benchmark-update-link.ts"
   },
   "devDependencies": {
     "@pair/eslint-config": "workspace:*",
