@@ -30,7 +30,7 @@ Execute each criterion group in order. For every criterion, follow the **check â
 1. **Check**: Read [definition-of-done.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md) and extract the DoD checklist.
 2. **Skip**: If `$scope` is set, filter to only the matching criterion group.
 3. **Act**: Build the working checklist. If `$story` is provided, prepend story-specific acceptance criteria from the PM tool.
-4. **Verify**: Checklist loaded. If definition-of-done.md is not found, warn and proceed with adoption-only criteria.
+4. **Verify**: The working checklist lists every criterion group that Steps 2-9 will check (filtered by `$scope` if set). If definition-of-done.md is not found, warn and proceed with adoption-only criteria instead of an empty checklist.
 
 ### Step 2: Requirements & Acceptance Criteria
 

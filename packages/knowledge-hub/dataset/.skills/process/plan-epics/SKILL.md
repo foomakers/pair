@@ -32,7 +32,7 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
    - Bounded contexts defined (recommended, not required): [`adoption/tech/boundedcontext/`](../../../.pair/adoption/tech/boundedcontext/)
 2. **Skip**: If all present, proceed to Step 1.
 3. **Act**: If bootstrap incomplete → **HALT**. If bounded contexts missing, warn and proceed.
-4. **Verify**: Context loaded, PM tool accessible.
+4. **Verify**: way-of-working.md, the PRD, architecture.md, and tech-stack.md each exist with project-specific (non-template) content, and a PM-tool query for initiatives succeeds — the "prerequisites present" check from Step 0.1.
 
 ### Step 1: Initiative Selection
 
@@ -47,7 +47,7 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
    > Reason: [business value / readiness / dependency chain].
    > Proceed?
 
-5. **Verify**: Initiative selected and loaded.
+5. **Verify**: An initiative is identified (from `$initiative` or developer confirmation) and its full content is available for Step 2's analysis.
 
 ### Step 2: Detect Existing Epics
 
@@ -93,7 +93,7 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
 1. **Check**: Is `/map-subdomains` installed?
 2. **Skip**: If not installed → warn and proceed to Step 4 without domain mapping.
 3. **Act**: Compose `/map-subdomains` with `$scope` set to the capability area(s) covered by the approved epic breakdown (not `all` — full-catalog remapping stays `/bootstrap`-only).
-4. **Verify**: Subdomain catalog delta (if any) approved by developer. Proceed to Step 4 regardless of outcome — domain mapping never blocks epic creation.
+4. **Verify**: Subdomain catalog delta (if any) approved by developer. Epic creation always proceeds to Step 4 regardless of the domain-mapping outcome.
 
 ### Step 4: Epic Creation
 

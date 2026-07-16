@@ -41,7 +41,7 @@ Create a comprehensive Product Requirements Document through collaborative analy
 3. **Act**: Read and analyze:
    - [PRD template](../../../.pair/knowledge/assets/PRD_template.md) — understand all required sections and structure
    - [PRD example](../../../.pair/knowledge/assets/PRD_example.md) — understand quality standards, specificity level, writing tone
-4. **Verify**: Template structure and quality expectations are understood.
+4. **Verify**: The template's full section list and the example's quality bar are both in hand — Step 1.2 can enumerate every section from them without re-reading either file.
 
 ### Step 1.2: Create Section Checklist
 
@@ -101,7 +101,7 @@ For each uncovered checklist section, gather information using this pattern:
 - Ask ONE question at a time — never batch multiple questions
 - Always propose a reasonable assumption — never ask open-ended "what is X?"
 - Validate understanding by summarizing complex responses
-- Do NOT proceed to Phase 3 until all sections have information
+- Proceed to Phase 3 only once every checklist section has sufficient information
 
 ## Phase 3: PRD Creation
 
@@ -175,7 +175,7 @@ When invoked **independently**:
 
 - **Template not reviewed** (Phase 1) — must understand structure before gathering information
 - **Example not analyzed** (Phase 1) — must understand quality expectations
-- **Information incomplete** (Phase 2) — do not create PRD with gaps
+- **Information incomplete** (Phase 2) — create the PRD only once every checklist section is covered (Step 2.2)
 - **Developer rejects PRD** (Phase 4) — iterate until approved, never force completion
 
 ## Graceful Degradation

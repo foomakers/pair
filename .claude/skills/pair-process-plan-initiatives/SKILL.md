@@ -34,7 +34,7 @@ Transform Product Requirements Documents into strategic initiatives through PRD 
 
    > Prerequisites incomplete: [list missing]. Complete bootstrap first (`/pair-process-bootstrap`).
 
-4. **Verify**: PRD loaded, PM tool identified.
+4. **Verify**: PRD.md has project-specific (non-template) content, `.pair/adoption/tech/` has way-of-working.md/architecture.md/tech-stack.md, and way-of-working.md names an accessible PM tool — the "prerequisites present" check from Step 0.
 
 ### Step 1: Detect Existing Initiatives
 

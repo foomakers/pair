@@ -50,7 +50,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
 2. **Act**: Read project context:
    - [adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md) — team size, collaboration needs
    - [adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) — methodology (PM tool should support it)
-3. **Verify**: Guidelines and context loaded.
+3. **Verify**: Every file listed in 1-2 above has been read; any that's missing follows [Graceful Degradation](#graceful-degradation) (ask the developer directly) instead of silently proceeding to Step 3.
 
 ### Step 3: Evaluate Options
 
@@ -91,7 +91,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
    - `target`: [adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) (PM tool section)
    - `decision-metadata`: `$type: non-architectural`, `$topic: pm-tool-choice`, `$summary: "[Tool] adopted for project management"`
    - plus the human-facing report (see Output Format)
-3. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (never persisted by this skill).
+3. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (persistence is always the caller's responsibility, delegated to `/pair-capability-record-decision`).
 
 ## Output Format
 
@@ -123,7 +123,7 @@ When invoked **independently**: if `/pair-capability-setup-pm` is present it per
 
 - **way-of-working.md exists but no PM section**: Render content that adds the PM section; the caller's write preserves all other content.
 - **Tool without implementation guide**: Emit the proposal but warn about manual setup.
-- **Multiple PM tools needed**: Not supported — one tool per project. Document primary tool.
+- **Multiple PM tools needed**: Supported: exactly one PM tool per project. Document the primary tool.
 
 ## Graceful Degradation
 

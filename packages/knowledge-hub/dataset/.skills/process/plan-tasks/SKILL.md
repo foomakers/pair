@@ -38,7 +38,7 @@ Transform a refined user story into specific, actionable implementation tasks. T
    > Reason: [business value / sprint urgency / unblocks other work].
    > Proceed?
 
-5. **Verify**: Story selected and loaded.
+5. **Verify**: A story is identified (from `$story` or developer confirmation) and its full body is available for Step 1's task-state detection.
 
 ### Step 1: Detect Existing Tasks
 
@@ -67,7 +67,7 @@ Transform a refined user story into specific, actionable implementation tasks. T
 1. **Check**: Is `/map-contexts` installed?
 2. **Skip**: If not installed → warn and proceed to Step 3 without context mapping.
 3. **Act**: Compose `/map-contexts` with `$scope` set to the bounded contexts/services touched by this story (from Step 2's mapping) — not `all` — full-catalog remapping stays `/bootstrap`-only.
-4. **Verify**: Bounded context catalog delta (if any) approved by developer. Proceed to Step 3 regardless of outcome — context mapping never blocks task breakdown.
+4. **Verify**: Bounded context catalog delta (if any) approved by developer. Task breakdown always proceeds to Step 3 regardless of the context-mapping outcome.
 
 ### Step 3: Task Identification
 
@@ -116,7 +116,7 @@ For each task (skipping tasks that already exist in the story body):
 
 ### Step 6: PM Tool Update
 
-1. **Act**: Compose `/write-issue` with `$type: story`, `$id: [story-id]` to append the Task Breakdown section to the story body. Tasks are documented inline in the story — do NOT create separate task issues.
+1. **Act**: Compose `/write-issue` with `$type: story`, `$id: [story-id]` to append the Task Breakdown section to the story body. Tasks are always documented inline in the story body.
 2. **Verify**: Story body updated with Task Breakdown section.
 
 ### Step 7: Already-Complete Update (optional path)

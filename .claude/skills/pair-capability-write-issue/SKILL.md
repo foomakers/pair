@@ -54,7 +54,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 
    > Template not found: `[template path]`. Ensure the knowledge base is installed.
 
-4. **Verify**: Template loaded and parsed.
+4. **Verify**: The template file's section list is extracted and available to Step 4 — every section name in it has a corresponding slot to fill or omit.
 
 ### Step 4: Format Issue Body
 
@@ -76,7 +76,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 
    > PM tool implementation guide not found for `[tool]`. Proceeding with default behavior.
 
-4. **Verify**: Implementation guide loaded (or warning issued).
+4. **Verify**: Either the guide's steps for Step 7 are in hand, or the warning above was issued — one of the two always happened before proceeding.
 
 ### Step 6: Resolve `$status` to a Board State
 
@@ -141,6 +141,35 @@ ISSUE WRITTEN:
 ```
 
 **Return value**: The issue identifier (e.g., `#42`) — used by composing skills in chain operations.
+
+## Example: Creating a Task Issue
+
+Input — `/pair-process-plan-tasks` composes this skill with:
+
+```text
+$type: task
+$content:
+  title: "T3 — Sharpen Verify beats across the 8 assess-* skills"
+  bounded_context: "Adoption & Guidelines"
+  description: "Rewrite the shared 'Guidelines and context loaded' Verify beat into a checkable condition, per T2's completion-criteria principle."
+  acceptance_criteria: "Every assess-* Step 2 Verify beat references the specific files read and the Graceful Degradation fallback."
+$parent: #313
+```
+
+Output — since `$id` is absent, Step 7 creates a new issue from [task-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/task-template.md) with `$content` mapped into the template's sections, linked to parent `#313`, labeled `task`:
+
+```text
+ISSUE WRITTEN:
+├── Mode:     Created
+├── Type:     task
+├── ID:       #341
+├── PM Tool:  github-projects
+├── Template: task-template.md
+├── Parent:   #313
+└── Status:   Success
+```
+
+Return value: `#341`, which `/pair-process-plan-tasks` records in the story's Task Breakdown checklist.
 
 ## Composition Interface
 

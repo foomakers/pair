@@ -22,8 +22,6 @@ Only check gates that are not already passing.
 | -------- | -------- | -------------------------------------------------------------------------------------------------------------- |
 | `$scope` | No       | Limit checking: `code-quality`, `tests`, `lint`, `all`, or any custom scope key from adoption (default: `all`) |
 
-> **Write note**: this skill is read-only except **Step 5.C** — first-time custom-gate setup writes the Custom Gate Registry or an opt-out marker to way-of-working.md once. No other step writes anything.
-
 ## Algorithm
 
 Execute each gate in order. For every gate, follow the **check → skip → act → verify** pattern.
@@ -150,7 +148,7 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 
 ## Notes
 
-- This skill is **read-only** except for Step 5.C (first-time setup writes opt-out or Custom Gate Registry to way-of-working.md). All other steps only run existing commands.
+- The read-only-except-Step-5.C rule is stated once, in the overview above — this Notes section doesn't restate it.
 - Standard gates (Lint, Type Check, Test) are universal and language/platform-independent. Custom gates are project-specific and defined in adoption (see the two sources of truth above).
 - Each gate is independent — a failure in one gate does not prevent checking subsequent gates.
 - Re-invoke after fixes to confirm resolution. Already-passing gates are re-verified but complete instantly.

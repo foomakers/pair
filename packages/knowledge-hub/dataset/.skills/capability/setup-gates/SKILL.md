@@ -54,7 +54,7 @@ Configure CI/CD quality gates for the project. Reads quality assurance guideline
 2. **Act**: Read adopted tech stack:
    - [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — languages, test framework, linter, formatter
    - [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) — existing process
-3. **Verify**: Guidelines and stack loaded.
+3. **Verify**: Every file listed in 1-2 above has been read — the adopted language, linter, and test framework are known before Step 3 proposes gate commands.
 
 ### Step 3: Propose Gate Configuration
 
@@ -114,7 +114,7 @@ Configure CI/CD quality gates for the project. Reads quality assurance guideline
 
 **Edge Cases:**
 
-- **Existing conflicting config** (a workspace already has its own lint/format config file that would be replaced): ask before overwriting — "Found existing `[file]`. Replace with the shared config, keep it, or merge?" Never overwrite silently.
+- **Existing conflicting config** (a workspace already has its own lint/format config file that would be replaced): always ask before overwriting — "Found existing `[file]`. Replace with the shared config, keep it, or merge?"
 - **Non-JS project**: the shared-config-package mechanism (`extends`/`require`/package-manager fields) is JS/TS-specific. Degrade to documenting the pattern generically (see shared-config-packages.md § Non-JS / Polyglot Projects) and pointing to the ecosystem's equivalent config package; skip file generation.
 
 ### Step 6: Record Decision
@@ -163,7 +163,7 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 ## Notes
 
 - This skill **modifies files** — it writes to way-of-working.md, creates/updates CI/CD pipeline configuration, and provisions shared lint/format config packages + hook manager files (`.husky/` by default).
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: an already-configured project (incl. provisioned shared configs and hooks) is confirmed; update only on explicit developer request. Conflicting local config → ask before overwriting, never silently.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: an already-configured project (incl. provisioned shared configs and hooks) is confirmed; update only on explicit developer request. Conflicting local config is always resolved by asking first (see Edge Cases above).
 - Gate commands must be executable in the project's development environment. Verify commands exist before writing.
 - Custom Gate Registry format follows the table schema from [quality-gates.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/quality-gates.md): Order, Gate, Command, Scope Key, Required, Description.
 - **Hook manager default**: husky (decision D21/Q11). An override recorded in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) wins — this skill reads it before provisioning.

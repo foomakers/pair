@@ -52,7 +52,7 @@ Apply the adopted estimation methodology to size a refined user story. Reads the
    - `ai-assisted` → [ai-assisted-estimation.md](../../../.pair/knowledge/guidelines/collaboration/estimation/ai-assisted-estimation.md)
    - `forecast` → [forecast-based-estimation.md](../../../.pair/knowledge/guidelines/collaboration/estimation/forecast-based-estimation.md)
    - `hybrid` → [hybrid-estimation.md](../../../.pair/knowledge/guidelines/collaboration/estimation/hybrid-estimation.md)
-2. **Verify**: Guidelines loaded.
+2. **Verify**: The methodology-specific guideline for the selected `$method` has been read — its scale/technique is known before Step 5 applies it.
 
 ### Step 5: Apply Estimation
 

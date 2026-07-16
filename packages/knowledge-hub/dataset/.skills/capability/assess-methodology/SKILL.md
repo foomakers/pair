@@ -50,7 +50,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
 2. **Act**: Read project context:
    - [adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md) — team size, timeline, requirements stability
    - [adoption/tech/architecture.md](../../../.pair/adoption/tech/architecture.md) — system complexity
-3. **Verify**: Guidelines and context loaded.
+3. **Verify**: Every file listed in 1-2 above has been read; any that's missing follows [Graceful Degradation](#graceful-degradation) (ask the developer directly) instead of silently proceeding to Step 3.
 
 ### Step 3: Evaluate Options
 
@@ -87,7 +87,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
    - `target`: [adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) (methodology section)
    - `decision-metadata`: `$type: non-architectural`, `$topic: methodology-choice`, `$summary: "[Methodology] adopted for development workflow"`
    - plus the human-facing report (see Output Format)
-2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (never persisted by this skill).
+2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (persistence is always the caller's responsibility, delegated to `/record-decision`).
 
 ## Output Format
 

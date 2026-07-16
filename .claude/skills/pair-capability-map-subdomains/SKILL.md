@@ -132,7 +132,7 @@ SUBDOMAIN PLACEMENT COMPLETE:
 ## Edge Cases and Error Handling
 
 - **Scope resolves to nothing** — report "no domain impact", caller proceeds without HALT.
-- **Existing catalog conflicts with scoped update** — propose the delta, human approves (idempotent behavior preserved); never silently overwrite.
+- **Existing catalog conflicts with scoped update** — always propose the delta and require human approval before writing (idempotent behavior preserved).
 - **Pre-existing files without `Volatility`** — treated as valid; field is added only when that entry falls inside a future `$scope`.
 - **No `subdomain/` or `boundedcontext/` artifacts at all** — system-areas fallback (Step 2b); no error, no DDD prerequisite.
 - **`$scope: all` requested by a caller other than `/pair-process-bootstrap`** — warn and downgrade to the caller's actual touched items; full re-mapping stays bootstrap-only.

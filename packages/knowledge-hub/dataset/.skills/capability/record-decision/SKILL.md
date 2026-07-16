@@ -23,9 +23,11 @@ This skill is the **sole generic writer of adoption files** (assess-* are output
 
 ## Core Rule: ADR, ADL, and DDR Are Mutually Exclusive
 
-- **Architectural decision** → ADR file + adoption update. Never ADL or DDR.
-- **Non-architectural decision** → ADL file + adoption update. Never ADR or DDR.
-- **Domain decision** (meeting the 3-criteria gate) → DDR file + context map sync. Never ADR or ADL.
+Each `$type` produces exactly one decision file — the other two kinds never apply to the same decision:
+
+- **Architectural decision** → exclusively an ADR file + adoption update (not ADL, not DDR).
+- **Non-architectural decision** → exclusively an ADL file + adoption update (not ADR, not DDR).
+- **Domain decision** (meeting the 3-criteria gate) → exclusively a DDR file + context map sync (not ADR, not ADL).
 - **Adoption/context update is always required** regardless of decision type.
 - Adoption files/context map = "what we use now." ADR/ADL/DDR = "why we decided."
 
@@ -130,7 +132,7 @@ This step is **always required** — adoption files and the context map are the 
 2. **Act**: If no context file exists at all, offer to create a minimal `context-map.md` containing just the affected rule/term (a title and one entry) — warn the developer this is the project's first domain-context artifact.
 3. **Act**: Update the current-state entry for the affected rule/term so it matches the DDR's Decision section exactly.
 4. **Act**: If this DDR supersedes a previously registered rule, replace the old rule's entry — the context file must reflect only the new rule, never both.
-5. **Verify**: The context file's affected entry is textually consistent with the DDR's Decision section. DDR (history/why) and context map (current state) are never allowed to diverge.
+5. **Verify**: The context file's affected entry is textually consistent with the DDR's Decision section — DDR (history/why) and context map (current state) must always agree.
 
 ### Step 5: Consistency Check
 
@@ -147,6 +149,35 @@ DECISION RECORDED:
 ├── Mode:     [Created | Updated]
 ├── Adoption: [list of updated adoption files, or updated context file for DDR]
 └── Status:   [Consistent | Inconsistency detected — details]
+```
+
+## Example: Generic Persist from an `assess-*` Proposal
+
+Input — `/assess-testing` (Step 5) emits, and the caller invokes this skill with:
+
+```text
+$type: non-architectural
+$topic: testing-strategy
+$summary: "Vitest v3.2 adopted as testing framework with 80% coverage target"
+$content: |
+  ## Testing
+
+  - **Framework**: Vitest v3.2 — fast, native ESM/TS support, Vite-aligned with the adopted bundler.
+  - **Coverage tool**: v8 (built into Vitest) — no extra dependency.
+  - **Pyramid**: Unit 70% > Integration 25% > E2E 5%.
+  - **Coverage target**: 80% minimum.
+$target: adoption/tech/tech-stack.md (Testing section)
+```
+
+Output — Step 3 writes `adoption/decision-log/2026-07-16-testing-strategy.md` (new ADL file, filled from [adl-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/adl-template.md)); Step 4 merges `$content` into `tech-stack.md`'s `## Testing` heading only, leaving every sibling section (Core, AI, …) untouched; Step 5 confirms both files agree. Reported result:
+
+```text
+DECISION RECORDED:
+├── Type:     Non-architectural (ADL)
+├── File:     adoption/decision-log/2026-07-16-testing-strategy.md
+├── Mode:     Created
+├── Adoption: adoption/tech/tech-stack.md (Testing section updated)
+└── Status:   Consistent
 ```
 
 ## Composition Interface

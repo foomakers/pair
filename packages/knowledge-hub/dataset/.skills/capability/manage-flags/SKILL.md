@@ -24,7 +24,7 @@ Manage feature flags throughout their lifecycle: creation, activation, deactivat
    - Flag types (Release, Experiment, Ops, Permission)
    - Implementation patterns (boolean, percentage-based, conditional)
    - Lifecycle management and cleanup strategies
-2. **Verify**: Guidelines loaded. If not found, use framework-agnostic defaults.
+2. **Verify**: Flag types, implementation patterns, and cleanup strategy above are known from feature-flags.md before Step 2 scans the codebase; if the file isn't found, the framework-agnostic defaults stand in for them.
 
 ### Step 2: Detect Existing Flags
 

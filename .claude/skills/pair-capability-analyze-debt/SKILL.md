@@ -128,7 +128,7 @@ For each detected item, apply the prioritization formula:
 ### Step 5: Return the Report
 
 1. **Act**: Return the debt report (see Output Format) to the caller or developer. **This skill writes nothing** — no adoption file, no code change, no PM-tool item.
-2. **Act**: If a High-severity item is worth scheduling, recommend that the developer promote it **deliberately** to the backlog via `/pair-capability-write-issue` (`$type` per template, `tech-debt` label). This is a manual, selective decision — the skill never creates the card itself.
+2. **Act**: If a High-severity item is worth scheduling, recommend that the developer promote it **deliberately** to the backlog via `/pair-capability-write-issue` (`$type` per template, `tech-debt` label). This is always a manual, selective decision made by the developer.
 3. **Verify**: Report returned. No side effects.
 
 ## Output Format
@@ -161,8 +161,8 @@ When composed by `/pair-process-review`:
 
 - **Input**: /pair-process-review invokes `/pair-capability-analyze-debt` during the completeness phase (Phase 4).
 - **Output**: Returns the debt report. /pair-process-review incorporates findings into review output (the Tech Debt section).
-  - Debt items are **informational** — they do **not** HALT the review and **never** block the PR.
-  - /pair-process-review does **not** auto-create tech-debt issues. Items worth tracking are promoted deliberately (after review) via `/pair-capability-write-issue` with the `tech-debt` label.
+  - Debt items are **informational** — the review and PR always proceed regardless of what's found.
+  - Items worth tracking are promoted deliberately (after review) via `/pair-capability-write-issue` with the `tech-debt` label — /pair-process-review itself only reports them.
 
 When invoked **independently**:
 
