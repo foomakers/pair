@@ -33,11 +33,13 @@ If your board already has a literal `Refined` column — pair's own recommended 
 
 - **Keep the name, add the map** (above) — the board keeps working with zero renames; this is the common path for an existing project.
 - **Rename instead** — if you'd rather rename the `Refined` column to `Ready`, do that and skip the `## State Mapping` entry entirely. An omitted mapping resolves by canonical name, so nothing else changes.
-- **Two Ready-like columns** — some boards split "refined" across two columns (e.g. a `Refined` column plus a separate `Approved` signoff column). Map both to `Ready`; the n-m schema allows several board states pointing at one macrostate, just never the reverse:
+- **Two Ready-like columns** — some boards split "refined" across two columns (e.g. a `Refined` column plus a separate `Approved` signoff column). Add both rows under `## State Mapping` — the n-m schema allows several board states pointing at one macrostate, just never the reverse:
 
   ```markdown
-  | Refined  | Ready |
-  | Approved | Ready |
+  | Board State | Macrostate  |
+  | ------------ | ----------- |
+  | Refined      | Ready       |
+  | Approved     | Ready       |
   ```
 
 Full schema and the worked n-m example (Example 2b): `.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md` in your installed Knowledge Base.

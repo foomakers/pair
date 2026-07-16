@@ -197,4 +197,4 @@ Rollout across the rest of the skill catalog happens organically in the stories 
 - [github-implementation.md](github-implementation.md) · [azure-devops-implementation.md](azure-devops-implementation.md) · [filesystem-implementation.md](filesystem-implementation.md) — PM tool status-field mechanics
 - [decision-records.md](../decision-records.md) — ADR/ADL process (this schema was adopted via ADR)
 - [definition-of-ready-and-done.md](definition-of-ready-and-done.md) — the DoR/DoD criteria behind the Readiness Fallback above
-- Migrating an existing board from a legacy `Refined` state: docs site "v0.4 → v0.5" migration page (Changed → Legacy `Refined` state) walks through Example 2b above end to end
+- [Migrating an existing board from a legacy `Refined` state](https://pair.foomakers.com/docs/migrations/v0.4-to-v0.5#legacy-refined-state--ready) — docs site "v0.4 → v0.5" migration page, walks through Example 2b above end to end
