@@ -73,24 +73,24 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
    - **Business rules**: different scenarios and conditions.
    - **User roles**: admin, member, guest variations.
 2. **Act**: Apply vertical slicing — every story must deliver end-to-end user value with visible UI manifestation. This rule governs CREATE candidates only — see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md)'s per-skill-delta note.
-3. **Act**: Triage each candidate story against the Step 2 registry — see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md) for the matching shape (idempotency key, EXTEND-vs-CREATE threshold, ambiguous-match and closed-item handling). **This skill's parent scope**: the selected epic. Present the triage proposal to developer:
+3. **Act**: Triage each candidate story against the Step 2 registry — see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md) for the matching shape (idempotency key, EXTEND-vs-CREATE threshold, ambiguous-match and closed-item handling). **This skill's parent scope**: the selected epic. First, check each candidate's idempotency key against the registry: an exact match to an existing **open** story is `ALREADY EXISTS #ID` (skip) — per to-issues-triage.md's Skip step, not a triage decision. For every remaining candidate, classify `EXTEND #ID` or `CREATE`. Present the triage proposal to developer:
 
    > Story candidates for Epic `#[ID]: [Title]`:
    >
-   > 1. [Story name] — [user value] — [UI manifestation] → EXTEND #[ID] ([one-line rationale]) | CREATE ([one-line rationale])
+   > 1. [Story name] — [user value] — [UI manifestation] → ALREADY EXISTS #[ID] (skip) | EXTEND #[ID] ([one-line rationale]) | CREATE ([one-line rationale])
    > 2. [Story name] — [user value] — [UI manifestation] → ...
    > ...
    >
    > Approve or adjust?
 
-4. **Verify**: Developer approves the candidate list — every candidate carries exactly one proposal (`EXTEND #ID` or `CREATE`) with its rationale shown, before any write.
+4. **Verify**: Developer approves the candidate list — every candidate carries exactly one proposal (`ALREADY EXISTS #ID` (skip), `EXTEND #ID`, or `CREATE`) with a rationale shown for EXTEND/CREATE, before any write.
 
 ### Step 4: Story Definition & INVEST Validation
 
 For each approved story, per its Step 3 proposal:
 
-1. **Check**: Is this story's idempotency key an exact match to an existing **open** story (the Step 3 "already exists" skip path, not a triage decision)?
-2. **Skip**: If exact match → skip, report:
+1. **Check**: Is this story's confirmed Step 3 proposal `ALREADY EXISTS #ID` (skip)?
+2. **Skip**: If so → skip, report:
 
    > Story `[Title]` already exists (#ID). Skipping.
 
@@ -155,6 +155,6 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 ## Notes
 
 - This skill **modifies PM tool state** — creates and extends story issues linked to epics.
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md) and [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md). This skill's check: exact idempotency-key match skips (Step 4); substantial-overlap match proposes EXTEND instead of a duplicate CREATE (Step 3) — re-running the same candidate tree never duplicates.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md) and [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md). This skill's check: exact idempotency-key match is proposed `ALREADY EXISTS #ID` (skip) at triage time, before any write (Step 3) — Step 4 only executes the confirmed proposal; substantial-overlap match proposes EXTEND instead of a duplicate CREATE (Step 3) — re-running the same candidate tree never duplicates.
 - Stories at breakdown stage are rough planning units — detailed requirements are added during `/pair-process-refine-story`.
 - INVEST validation is mandatory for CREATE candidates — stories failing INVEST must be reworked before creation. EXTEND candidates re-validate INVEST for the merged scope (Step 4).

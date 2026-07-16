@@ -85,6 +85,17 @@ describe.each(PLAN_SKILLS)('%s — to-issues triage composed', skill => {
     expect(content).toMatch(/EXTEND/)
     expect(content).toMatch(/CREATE/)
   })
+
+  it('exact-match check runs at Step 3 triage time (proposal), not deferred to Step 4 (write time)', () => {
+    // Regression guard for PR #338 review finding: the exact idempotency-key
+    // match must be classified as ALREADY EXISTS in the same dry-run proposal
+    // shown for developer approval (Step 3) — not decided later at write time,
+    // which would make the confirmed proposal diverge from what actually happens.
+    const step3 = dataset(skill).split(/### Step 4/)[0]
+    expect(step3).toMatch(/ALREADY EXISTS/)
+    const step4 = dataset(skill).split(/### Step 4/)[1]
+    expect(step4).toMatch(/confirmed Step 3 proposal.*ALREADY EXISTS/)
+  })
 })
 
 describe('plan-stories — INVEST preserved alongside triage (AC2)', () => {
