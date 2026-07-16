@@ -1,0 +1,48 @@
+---
+title: Definition of Ready & Done
+description: The canonical criteria that decide when a story is Ready to start and when work on it counts as Done — the fallback used when a board has no dedicated Ready state.
+---
+
+Companion to [Canonical States](/docs/concepts/canonical-states): that concept defines the 5 macrostates (Draft → Ready → In Progress → Review → Done); this one defines the **criteria** behind two of them — when an item earns `Ready` (Definition of Ready) and when work on it counts as `Done` (Definition of Done).
+
+**Mapped board state is always the primary signal.** These criteria are the **fallback** — used only when no board state resolves to `Ready`, or when a skill checks readiness directly from an item's body (e.g. a story predating this template).
+
+## Definition of Ready — 6 criteria
+
+Each criterion maps to one section of the [refined user-story template](/docs/reference/guidelines-catalog#collaboration):
+
+| # | Criterion | Verifiable via |
+| - | --- | --- |
+| 1 | Clear title | Issue title — not a placeholder |
+| 2 | Problem/goal | Story Statement (As a / I want / So that) |
+| 3 | Verifiable AC | At least one Given-When-Then scenario |
+| 4 | Estimate | Final Story Points has a value |
+| 5 | Dependencies | Story Dependencies present (may state "None") |
+| 6 | Design flag | `Design:` line — `not required` or `required — reference: <link>` |
+
+A criterion is unmet when its section is missing, empty, or still holds placeholder text — a partial DoR check lists every unmet criterion by name rather than guessing.
+
+**Inline task-breakdown signal**: a `## Task Breakdown` section with at least one checklist item is a first-class readiness signal on its own — it shows the item was already scoped and decomposed, and independently satisfies criteria 3–5 even on a story that predates this template. It never substitutes for the title or the problem/goal.
+
+## Definition of Done — 4 criteria
+
+Deployment is **explicitly excluded** — a project may still gate deploys separately, but that's not part of this DoD:
+
+| # | Criterion | Source |
+| - | --- | --- |
+| 1 | AC satisfied | every Acceptance Criteria scenario verified against the diff |
+| 2 | PR approved per risk tier | [Quality Model](/docs/reference/quality-model) per-tier requirements |
+| 3 | CI green | all automated gates passing on the merge commit |
+| 4 | No critical bugs | no open critical/blocker defect tied to the change |
+
+Per-tier reviewer counts and SLAs aren't duplicated here — they live in the [Quality Model](/docs/reference/quality-model) and resolve through the same `Argument > Adoption > KB default` cascade. `/verify-done` evaluates each criterion once per session and skips ones already confirmed passing.
+
+## Readiness fallback in practice
+
+A 3-column board (`Todo` / `In Progress` / `Done`) has no column mapped to `Ready`. An item in `Todo` is still recognized as `Ready` once all 6 DoR criteria are met on its body — no dedicated "Refined" column required. A mapped `Ready` state, when one exists, always wins outright over this fallback; unmet criteria are reported as a warning, never a block.
+
+## Related
+
+- [Canonical States](/docs/concepts/canonical-states) — the macrostates this document is a companion to
+- [Quality Model](/docs/reference/quality-model) — per-tier DoD requirements, risk-tier resolution
+- Full schema and worked examples: `.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md` in your installed Knowledge Base
