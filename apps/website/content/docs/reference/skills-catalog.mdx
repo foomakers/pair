@@ -93,7 +93,7 @@ All `analyze-*` skills are **output-only report producers**: they analyze and re
 
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
-| **record-decision** | `/pair-capability-record-decision` | Records a decision — ADR (architectural), ADL (non-architectural), or DDR (domain) — and is the **sole writer** of adoption/context-map files. Invoke directly to record or backfill a decision already made. Composed by `/pair-process-implement`, `/pair-process-review`. |
+| **record-decision** | `/pair-capability-record-decision` | Records a decision — ADR (architectural), ADL (non-architectural), or DDR (domain) — or an analysis-log entry (`$type: analysis`, written as `Category: Analysis`) for a completed technical analysis, and is the **sole writer** of adoption/context-map files. Invoke directly to record or backfill a decision already made. Composed by `/pair-process-implement`, `/pair-process-review`. |
 | **write-issue** | `/pair-capability-write-issue` | Creates or updates an issue in the adopted PM tool from a type-specific template. Supports topical labels (e.g. `tech-debt`) for deliberate backlog promotion. |
 | **estimate** | `/pair-capability-estimate` | Estimates story points for a refined user story using the adopted estimation methodology; confirms rather than re-estimating if already sized. |
 
