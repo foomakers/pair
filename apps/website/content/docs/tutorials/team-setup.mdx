@@ -139,6 +139,8 @@ Every developer and every AI assistant will run these checks before committing.
 
 Prefer automation over hand-editing: `/pair-capability-setup-gates` provisions shared lint/format config packages (per-type overrides for backend/frontend/shared-lib workspaces) plus pre-commit + pre-push hooks, defaulting to husky. See the [shared config packages guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/code-design/quality-standards/shared-config-packages.md) for the pattern — pair's own `tools/*` is the reference implementation. Override the hook manager by recording your choice in `way-of-working.md` before running the skill.
 
+The same skill also provisions a **deterministic secret-scanning CI job** — required, at every risk tier, no LLM involved. `gitleaks` is the KB default; the job is written as a required, fail-closed step in your CI pipeline alongside a starting `.gitleaks.toml` allowlist at the project root. This is a mechanical CI gate, not a skill judgment call — see the [secret-scanning guideline](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md) for the job template, the allowlist mechanism, and a reproducible verification. Security judgment (authn/authz, injection, OWASP Top 10) is a separate concern, handled per-PR by `/pair-capability-assess-security` — the two never overlap.
+
 ### 7. Record key decisions
 
 For significant decisions that need rationale, create Architecture Decision Records (`/pair-next` may suggest this when decisions are pending):

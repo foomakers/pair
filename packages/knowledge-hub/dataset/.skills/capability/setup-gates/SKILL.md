@@ -1,7 +1,7 @@
 ---
 name: setup-gates
-description: "Configures CI/CD quality gates — pipeline config, shared lint/format packages, husky hooks — for the adopted tech stack. Invoke directly to set up or reconfigure gates; idempotent — confirms existing configuration rather than re-configuring."
-version: 0.4.1
+description: "Configures CI/CD quality gates — pipeline config, shared lint/format packages, husky hooks, the required deterministic secret-scanning job (gitleaks by default, R6.5/D24) — for the adopted tech stack. Invoke directly to set up or reconfigure gates; idempotent — confirms existing configuration rather than re-configuring."
+version: 0.5.0
 author: Foomakers
 ---
 
@@ -51,6 +51,7 @@ Configure CI/CD quality gates for the project. Reads quality assurance guideline
    - [quality-assurance.md](../../../.pair/knowledge/guidelines/technical-standards/git-workflow/quality-assurance.md) — gate types and checklists
    - [quality-gates.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/quality-gates.md) — gate framework and registry format
    - [shared-config-packages.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/shared-config-packages.md) — shared-config-package pattern, per-type overrides, `tools/*` reference implementation
+   - [secret-scanning.md](../../../.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md) — the deterministic, required-at-every-tier CI job this skill provisions (R6.5, D24) — never a skill, never an LLM judgment call
 2. **Act**: Read adopted tech stack:
    - [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — languages, test framework, linter, formatter
    - [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) — existing process
@@ -69,11 +70,11 @@ Configure CI/CD quality gates for the project. Reads quality assurance guideline
    - All pre-commit gates
    - Test suite with coverage
    - Build verification
+   - **Secret scanning** — required, unconditional at every tier (not tier-scoped like the gates above): gitleaks by default, per [secret-scanning.md](../../../.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md) (R6.5, D24); a project overrides the scanner via `way-of-working.md`'s Custom Gate Registry, never by skipping the job
    - Custom gates from registry
 
    **Pre-production gates** (before deployment):
    - All CI gates
-   - Security scan (if adopted)
    - Performance benchmarks (if applicable)
 
 2. **Act**: Present the proposal:
@@ -98,7 +99,8 @@ Configure CI/CD quality gates for the project. Reads quality assurance guideline
    - GitHub Actions → `.github/workflows/quality.yml`
    - GitLab → `.gitlab-ci.yml` quality stage
    - Other → document commands for manual pipeline setup
-3. **Verify**: Configuration files written.
+3. **Act**: Write the secret-scanning job — required, not an optional proposal line: resolve the scanner (Argument > Adoption's Custom Gate Registry override > KB default gitleaks), then write the [CI Job Template](../../../.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md#ci-job-template-github-actions) into the same pipeline file as a `required` job, and provision a starting `.gitleaks.toml` at the project root (see the [allowlist mechanism](../../../.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md#allowlist-mechanism-adoption-controlled)) if one doesn't already exist. Never write the job with `continue-on-error` — fail-closed is not optional (R6.5).
+4. **Verify**: Configuration files written, including the secret-scanning job and `.gitleaks.toml`.
 
 ### Step 5: Provision Shared Lint/Format Config + Hooks
 
@@ -134,6 +136,7 @@ GATE CONFIGURATION COMPLETE:
 ├── CI:              [N gates configured]
 ├── Pre-production:  [N gates configured | N/A]
 ├── Pipeline:        [file path | manual]
+├── Secret Scan:     [gitleaks (KB default) | <override> — job + .gitleaks.toml written | already configured]
 ├── Shared configs:  [package list | N/A — non-JS, documented pointer only]
 ├── Hooks:           [husky pre-commit + pre-push | override: <tool> | N/A]
 ├── Adoption:        [way-of-working.md — updated]
@@ -162,7 +165,8 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 
 ## Notes
 
-- This skill **modifies files** — it writes to way-of-working.md, creates/updates CI/CD pipeline configuration, and provisions shared lint/format config packages + hook manager files (`.husky/` by default).
+- This skill **modifies files** — it writes to way-of-working.md, creates/updates CI/CD pipeline configuration (including the required secret-scanning job and `.gitleaks.toml`), and provisions shared lint/format config packages + hook manager files (`.husky/` by default).
+- **Secret scanning is CI config, not a judgment call** (D24, anti-complexity): this skill provisions the job mechanically; it never evaluates whether a diff contains a secret itself — that is gitleaks' (or the adopted scanner's) job at runtime, with no LLM in the loop. `/assess-security` never re-implements this — see that skill's own Notes.
 - **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: an already-configured project (incl. provisioned shared configs and hooks) is confirmed; update only on explicit developer request. Conflicting local config is always resolved by asking first (see Edge Cases above).
 - Gate commands must be executable in the project's development environment. Verify commands exist before writing.
 - Custom Gate Registry format follows the table schema from [quality-gates.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/quality-gates.md): Order, Gate, Command, Scope Key, Required, Description.
