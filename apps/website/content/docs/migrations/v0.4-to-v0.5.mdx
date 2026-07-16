@@ -3,9 +3,9 @@ title: "v0.4 → v0.5: Canonical States + Domain Modeling"
 description: Migration prompt for pair's canonical backlog states, n-m state-mapping schema, and the map-subdomains/map-contexts process-to-capability rename.
 ---
 
-This page grows incrementally as the stories driving the v0.4 → v0.5 jump land — it currently covers canonical states and the domain-modeling capability rename.
+This page grows incrementally as the stories driving the v0.4 → v0.5 jump land — it currently covers canonical states (including the legacy `Refined` state case), and the domain-modeling capability rename.
 
-Structural background: [Canonical states (#202)](https://github.com/foomakers/pair/issues/202) · [map-subdomains/map-contexts reclassification (#246)](https://github.com/foomakers/pair/issues/246) · [Versioning & migration epic (#214)](https://github.com/foomakers/pair/issues/214)
+Structural background: [Canonical states (#202)](https://github.com/foomakers/pair/issues/202) · [map-subdomains/map-contexts reclassification (#246)](https://github.com/foomakers/pair/issues/246) · [Versioning & migration epic (#214)](https://github.com/foomakers/pair/issues/214) · [Migration note: legacy `Refined` boards (#243)](https://github.com/foomakers/pair/issues/243)
 
 ## Changed
 
@@ -18,6 +18,29 @@ Draft → Ready → In Progress → Review → Done
 ```
 
 Your board can keep any naming. `.pair/adoption/tech/way-of-working.md` gains an optional `## State Mapping` section — a `Board State | Macrostate` table, n-to-m (multiple board states may map to one macrostate; first-listed wins on write). Omit it and pair assumes your board already uses the canonical names.
+
+### Legacy `Refined` state → `Ready`
+
+If your board already has a literal `Refined` column — pair's own recommended GitHub Projects board does, and this repository's own board did before this migration — you don't need to rename anything. Add one row mapping it to the canonical `Ready` macrostate:
+
+```markdown
+## State Mapping
+
+| Board State | Macrostate |
+| ------------ | ---------- |
+| Refined      | Ready      |
+```
+
+- **Keep the name, add the map** (above) — the board keeps working with zero renames; this is the common path for an existing project.
+- **Rename instead** — if you'd rather rename the `Refined` column to `Ready`, do that and skip the `## State Mapping` entry entirely. An omitted mapping resolves by canonical name, so nothing else changes.
+- **Two Ready-like columns** — some boards split "refined" across two columns (e.g. a `Refined` column plus a separate `Approved` signoff column). Map both to `Ready`; the n-m schema allows several board states pointing at one macrostate, just never the reverse:
+
+  ```markdown
+  | Refined  | Ready |
+  | Approved | Ready |
+  ```
+
+Full schema and the worked n-m example (Example 2b): `.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md` in your installed Knowledge Base.
 
 ### Skill renames: map-subdomains, map-contexts (process → capability)
 
@@ -65,6 +88,7 @@ only if not already done, and report what you skipped.
 ## Verify
 
 - [ ] `.pair/adoption/tech/way-of-working.md` either has a `## State Mapping` section matching your board, or your board already uses canonical names (Draft/Ready/In Progress/Review/Done)
+- [ ] If your board has a legacy `Refined` column, you either mapped it to `Ready` (kept the name) or renamed the column to `Ready` (and left it out of the mapping) — not both, not neither
 - [ ] Your own `.pair/adoption/` docs have no remaining literal references to `/pair-process-map-subdomains`, `/pair-process-map-contexts`, or `.skills/process/map-*` — updated to the `-capability-`/`capability/` equivalents if any were found
 - [ ] `git status` (or equivalent) shows changes only under `.pair/adoption/`
 - [ ] Re-running the prompt makes no further changes — a second run reports each step as skipped

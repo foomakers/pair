@@ -99,6 +99,21 @@ pair's own recommended GitHub Projects board uses `Todo` and `Refined` instead o
 | Done         | Done        |
 ```
 
+### Example 2b — Legacy `Refined` plus a second Ready-like column (n-m)
+
+A project migrating an existing board that already has a literal `Refined` column, plus a second column that also means "ready for dev" (e.g. an `Approved` column kept for a separate signoff step). Both map to `Ready` — one board state never maps to more than one macrostate, but the reverse (two board states, one macrostate) is exactly what n-m allows:
+
+```markdown
+## State Mapping
+
+| Board State | Macrostate |
+| ------------ | ---------- |
+| Refined      | Ready      |
+| Approved     | Ready      |
+```
+
+Zero renames required — both columns keep working, and a write targeting `Ready` goes to `Refined` (first listed). This is the "map, keep the board name" migration path for a project upgrading from a pre-canonical-states pair version (published as the legacy-`Refined` walkthrough in the docs site's `v0.4 → v0.5` migration page). The alternative path — renaming the column to `Ready` instead of mapping it — needs no `## State Mapping` entry at all (omitted ⇒ canonical, per the Resolution Rules above).
+
 ### Example 3 — Minimal board (no dedicated Ready column)
 
 A 3-column Kanban board with no way to distinguish refined from unrefined backlog items:
@@ -182,3 +197,4 @@ Rollout across the rest of the skill catalog happens organically in the stories 
 - [github-implementation.md](github-implementation.md) · [azure-devops-implementation.md](azure-devops-implementation.md) · [filesystem-implementation.md](filesystem-implementation.md) — PM tool status-field mechanics
 - [decision-records.md](../decision-records.md) — ADR/ADL process (this schema was adopted via ADR)
 - [definition-of-ready-and-done.md](definition-of-ready-and-done.md) — the DoR/DoD criteria behind the Readiness Fallback above
+- Migrating an existing board from a legacy `Refined` state: docs site "v0.4 → v0.5" migration page (Changed → Legacy `Refined` state) walks through Example 2b above end to end
