@@ -35,7 +35,7 @@ Process skills compose capability skills. Capability skills are independently in
 | `/pair-process-implement` | 10 | Execution | Implement tasks with TDD |
 | `/pair-process-review` | 11 | Review | Code review with merge flow |
 
-> How-to guides 04 and 05 (subdomain/bounded-context definition) no longer map to a process skill — see [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
+> How-to guides 04 and 05 (subdomain/bounded-context definition) were removed — domain modeling is referenced inline by each real caller's own how-to (02, 03, 06, 09; 08 planned — #242). See [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
 
 ### Capability Skills (25)
 
@@ -179,17 +179,17 @@ Every skill is held to an effectiveness standard, not just structural conformanc
 
 | Capability | Caller | Phase | `$scope` set to |
 |------------|--------|-------|-----------------|
-| `/pair-capability-map-subdomains` | `/pair-process-refine-story` | Functional/domain analysis | The story's capability area |
+| `/pair-capability-map-subdomains` | `/pair-process-refine-story` (planned — #242) | Functional/domain analysis | The story's capability area |
 | `/pair-capability-map-subdomains` | `/pair-process-plan-initiatives` | Initiative creation | The initiative's capability area |
 | `/pair-capability-map-subdomains` | `/pair-process-plan-epics` | Epic breakdown | The epic's capability area |
 | `/pair-capability-map-subdomains` | `/brainstorm` (planned — #230) | Broad brainstorm | All capabilities discussed |
 | `/pair-capability-map-subdomains` | `/pair-process-bootstrap` | Project setup | `all` (full catalog — bootstrap only) |
-| `/pair-capability-map-contexts` | `/pair-process-refine-story` | Technical analysis | The story's touched contexts/services |
+| `/pair-capability-map-contexts` | `/pair-process-refine-story` (planned — #242) | Technical analysis | The story's touched contexts/services |
 | `/pair-capability-map-contexts` | `/pair-process-plan-tasks` | Task breakdown | The task's touched contexts/services |
 | `/pair-capability-map-contexts` | `/brainstorm` (planned — #230) | Punctual/technical brainstorm | The contexts discussed |
 | `/pair-capability-map-contexts` | `/pair-process-bootstrap` | Project setup | `all` (full catalog — bootstrap only) |
 
-No caller performs a full re-mapping outside `/pair-process-bootstrap`. When no `subdomain/`/`boundedcontext/` artifacts exist yet, both capabilities fall back to "system areas" (services/modules) instead of requiring the DDD prerequisites — no HALT, no error.
+Every row above except the two `(planned — #242)`/`(planned — #230)` entries is a real composition, verified against each caller's `SKILL.md` — not an aspirational claim. No caller performs a full re-mapping outside `/pair-process-bootstrap`. When no `subdomain/`/`boundedcontext/` artifacts exist yet, both capabilities fall back to "system areas" (services/modules) instead of requiring the DDD prerequisites — no HALT, no error.
 
 ## Migration Notes
 
@@ -199,7 +199,7 @@ No caller performs a full re-mapping outside `/pair-process-bootstrap`. When no 
 - Installed command names change accordingly: `/pair-process-map-subdomains` → `/pair-capability-map-subdomains`; `/pair-process-map-contexts` → `/pair-capability-map-contexts`. Unprefixed dataset command names (`/map-subdomains`, `/map-contexts`) are unchanged.
 - Invocation contract changed: `$scope` is now **required** and means "items/areas the caller touched" (not `all`/`single`). Full-catalog `$scope: all` is now bootstrap-only.
 - New behavior: graceful "system areas" fallback when no DDD artifacts exist; `Volatility` field on subdomains; per-relationship strength/distance/volatility assessment with an approval gate on unbalanced+volatile relationships (see `subdomain-template.md`, `bounded-context-template.md`).
-- No standalone process step remains for domain mapping — how-to guides 04/05 still describe the workflow, but the underlying skill is invoked scoped by the callers in the [Callers Matrix](#callers-matrix-scoped-capabilities) above.
+- No standalone process step or how-to remains for domain mapping — how-to guides 04 (define-subdomains) and 05 (define-bounded-contexts) were removed; each caller's own how-to (02, 03, 06, 08, 09) now references the capability inline at the point it's invoked, scoped per the [Callers Matrix](#callers-matrix-scoped-capabilities) above. The capability's own `SKILL.md` ([map-subdomains](../../.claude/skills/pair-capability-map-subdomains/SKILL.md), [map-contexts](../../.claude/skills/pair-capability-map-contexts/SKILL.md)) is the canonical reference for its algorithm, fallback behavior, and templates.
 
 **assess-debt, assess-code-quality: assess → analyze (skill naming taxonomy, #313/T8)**
 
