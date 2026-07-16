@@ -74,18 +74,18 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
    - **Value-driven grouping**: natural feature groupings following user workflows.
    - **Sequential dependencies**: foundation-first, user journey progression.
    - **Duration sizing**: 2-4 sprints per epic with clear completion criteria.
-3. **Act**: Triage each candidate epic against the Step 2 registry — see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md) for the matching shape (idempotency key, EXTEND-vs-CREATE threshold, ambiguous-match and closed-item handling). **This skill's parent scope**: the selected initiative. First, check each candidate's idempotency key against the registry: an exact match to an existing **open** epic is `ALREADY EXISTS #ID` (skip) — per to-issues-triage.md's Skip step, not a triage decision. For every remaining candidate, classify `EXTEND #ID` or `CREATE`. Present the triage proposal to developer:
+3. **Act**: Triage each candidate epic against the Step 2 registry — see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md) for the matching shape (idempotency key, EXTEND-vs-CREATE threshold, ambiguous-match and closed-item handling). **This skill's parent scope**: the selected initiative. First, check each candidate's idempotency key against the registry: an exact match to an existing **open** epic is `ALREADY EXISTS #ID` (skip) — per to-issues-triage.md's Skip step, not a triage decision. For every remaining candidate, classify `EXTEND #ID` or `CREATE` — or, if ambiguous (per to-issues-triage.md), present it as a question with a recommendation instead of silently picking one side. Present the triage proposal to developer:
 
    > Epic breakdown for Initiative `#[ID]: [Title]`:
    >
    > [Epic 0: Bootstrap (if needed)] → CREATE
    > Epic 1: [Name] (2-3 sprints) — [user value] → ALREADY EXISTS #[ID] (skip) | EXTEND #[ID] ([one-line rationale]) | CREATE ([one-line rationale])
-   > Epic 2: [Name] (3-4 sprints) — [user value] → ...
+   > Epic 2: [Name] (3-4 sprints) — [user value] → Ambiguous: EXTEND #[ID] or CREATE? [recommendation + rationale]
    > ...
    >
    > Approve or adjust?
 
-4. **Verify**: Developer approves the breakdown — every candidate carries exactly one proposal (`ALREADY EXISTS #ID` (skip), `EXTEND #ID`, or `CREATE`) with a rationale shown for EXTEND/CREATE, before any write.
+4. **Verify**: Developer approves the breakdown — every candidate carries exactly one proposal (`ALREADY EXISTS #ID` (skip), `EXTEND #ID`, `CREATE`, or an ambiguous question) with a rationale shown for EXTEND/CREATE, before any write.
 
 ### Step 3.5: Domain Mapping (scoped)
 
@@ -108,7 +108,7 @@ Process epics sequentially (Epic 0 first if needed), per its Step 3 proposal:
    - Present to developer for validation.
 4. **Act**: Compose `/pair-capability-write-issue` per the confirmed proposal:
    - **CREATE**: `$type: epic`, `$content`: the filled epic template, `$parent`: the initiative identifier. If the proposal referenced a closed epic (per to-issues-triage.md's closed-item rule), include that reference in `$content`.
-   - **EXTEND `#ID`**: `$type: epic`, `$id: #ID`, `$content`: the additional scope merged into the existing epic template, `$parent`: unchanged.
+   - **EXTEND `#ID`**: `$type: epic`, `$id: #ID`, `$content`: read the matched epic's current full body from the PM tool (not just the Step 2 registry line) and merge the additional scope into it, `$parent`: unchanged.
 5. **Verify**: Epic created or extended in PM tool. Record the ID. Linked to the initiative (and, for EXTEND, to the closed-item reference if any) — hierarchy and references both present.
 
 ### Step 5: Completion

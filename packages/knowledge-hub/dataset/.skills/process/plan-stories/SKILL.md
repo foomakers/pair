@@ -73,17 +73,17 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
    - **Business rules**: different scenarios and conditions.
    - **User roles**: admin, member, guest variations.
 2. **Act**: Apply vertical slicing — every story must deliver end-to-end user value with visible UI manifestation. This rule governs CREATE candidates only — see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md)'s per-skill-delta note.
-3. **Act**: Triage each candidate story against the Step 2 registry — see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md) for the matching shape (idempotency key, EXTEND-vs-CREATE threshold, ambiguous-match and closed-item handling). **This skill's parent scope**: the selected epic. First, check each candidate's idempotency key against the registry: an exact match to an existing **open** story is `ALREADY EXISTS #ID` (skip) — per to-issues-triage.md's Skip step, not a triage decision. For every remaining candidate, classify `EXTEND #ID` or `CREATE`. Present the triage proposal to developer:
+3. **Act**: Triage each candidate story against the Step 2 registry — see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md) for the matching shape (idempotency key, EXTEND-vs-CREATE threshold, ambiguous-match and closed-item handling). **This skill's parent scope**: the selected epic. First, check each candidate's idempotency key against the registry: an exact match to an existing **open** story is `ALREADY EXISTS #ID` (skip) — per to-issues-triage.md's Skip step, not a triage decision. For every remaining candidate, classify `EXTEND #ID` or `CREATE` — or, if ambiguous (per to-issues-triage.md), present it as a question with a recommendation instead of silently picking one side. Present the triage proposal to developer:
 
    > Story candidates for Epic `#[ID]: [Title]`:
    >
    > 1. [Story name] — [user value] — [UI manifestation] → ALREADY EXISTS #[ID] (skip) | EXTEND #[ID] ([one-line rationale]) | CREATE ([one-line rationale])
-   > 2. [Story name] — [user value] — [UI manifestation] → ...
+   > 2. [Story name] — [user value] — [UI manifestation] → Ambiguous: EXTEND #[ID] or CREATE? [recommendation + rationale]
    > ...
    >
    > Approve or adjust?
 
-4. **Verify**: Developer approves the candidate list — every candidate carries exactly one proposal (`ALREADY EXISTS #ID` (skip), `EXTEND #ID`, or `CREATE`) with a rationale shown for EXTEND/CREATE, before any write.
+4. **Verify**: Developer approves the candidate list — every candidate carries exactly one proposal (`ALREADY EXISTS #ID` (skip), `EXTEND #ID`, `CREATE`, or an ambiguous question) with a rationale shown for EXTEND/CREATE, before any write.
 
 ### Step 4: Story Definition & INVEST Validation
 
@@ -108,7 +108,7 @@ For each approved story, per its Step 3 proposal:
    - **T**estable: outcome can be verified.
 5. **Act**: Compose `/write-issue` per the confirmed proposal:
    - **CREATE**: `$type: story`, `$content`: the story definition, `$parent`: the epic identifier. If the proposal referenced a closed story (per to-issues-triage.md's closed-item rule), include that reference in `$content`.
-   - **EXTEND `#ID`**: `$type: story`, `$id: #ID`, `$content`: the additional scope merged into the existing story definition, `$parent`: unchanged. Re-validate INVEST for the merged scope — extending must not break Independent/Small.
+   - **EXTEND `#ID`**: `$type: story`, `$id: #ID`, `$content`: read the matched story's current full body from the PM tool (not just the Step 2 registry line) and merge the additional scope into it, `$parent`: unchanged. Re-validate INVEST for the merged scope — extending must not break Independent/Small.
 6. **Verify**: Story created or extended in PM tool. Record the ID. Linked to the epic (and, for EXTEND, to the closed-item reference if any) — hierarchy and references both present.
 
 ### Step 5: Coverage Validation & Completion

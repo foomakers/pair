@@ -10,7 +10,7 @@ Two items are the **same** item when their normalized title (lowercase, trimmed,
 
 1. **Check**: Query the PM tool for existing items under the relevant parent scope (the tree the candidate would attach to). Build a registry — same shape as an existing-item registry any plan-* skill already builds, keyed for matching (idempotency key above) rather than just listed.
 2. **Skip**: If a candidate's idempotency key exactly matches an existing **open** item, it already exists — no proposal, report it as already-present (this is the re-run/idempotency path, not a triage decision).
-3. **Act**: For every remaining candidate, compare it against each existing open item in the same parent scope and classify:
+3. **Act**: For every remaining candidate, compare it against each existing item (open or closed) in the same parent scope and classify:
    - **Substantial overlap** (the candidate's scope is already covered by the existing item — implementing it would mean adding an acceptance criterion or task to that item, not slicing a new one) → propose **EXTEND `<id>`**, with the one-line rationale for the overlap.
    - **No substantial overlap** → propose **CREATE**, with the one-line rationale for why it's distinct.
    - **Ambiguous** (score sits in the borderline band, or more than one existing item is a plausible match) → present as a question with a recommendation; never silently pick one side.
