@@ -1,0 +1,31 @@
+{
+  "name": "@pair/release-tools",
+  "version": "0.4.3",
+  "description": "Pair's release-pipeline decision logic (determine-version) as a tested TypeScript module — same reference pattern as @pair/dev-tools.",
+  "private": true,
+  "scripts": {
+    "prettier:fix": "prettier-fix",
+    "prettier:check": "prettier-check",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "ts:check": "tsc --noEmit",
+    "lint": "lint",
+    "lint:fix": "lint-fix",
+    "mdlint:check": "markdownlint-check",
+    "mdlint:fix": "markdownlint-fix",
+    "determine-version": "tsx src/determine-version.ts"
+  },
+  "devDependencies": {
+    "@pair/eslint-config": "workspace:*",
+    "@pair/prettier-config": "workspace:*",
+    "@pair/markdownlint-config": "workspace:*",
+    "@pair/ts-config": "workspace:*",
+    "@types/node": "catalog:",
+    "vitest": "catalog:",
+    "vite-tsconfig-paths": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "typescript": "catalog:",
+    "tsx": "catalog:"
+  },
+  "prettier": "@pair/prettier-config"
+}

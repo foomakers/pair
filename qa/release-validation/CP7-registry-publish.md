@@ -2,7 +2,7 @@
 
 **Priority**: P0
 **Scope**: Package visibility on npmjs.org, install from public registry
-**Preconditions**: `publish-npm` job completed (or local `scripts/publish-npm.sh` run). `$WORKDIR` created outside the repo.
+**Preconditions**: `publish-npm` job completed (or local `scripts/workflows/release/publish-npm.sh` run). `$WORKDIR` created outside the repo.
 
 ---
 

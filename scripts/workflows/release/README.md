@@ -30,11 +30,13 @@ The release workflow handles the complete process of building, packaging, testin
 ./package-manual.sh v1.0.0
 ```
 
-### 2. `determine-version.sh`
+### 2. `determine-version` (ported to `@pair/release-tools`)
 
 **Purpose**: Determines the version to use for the release based on GitHub event triggers
 
-**Parameters**:
+This used to be a standalone script here (`determine-version.sh`). It's now a tested TypeScript module, [`packages/release-tools/src/determine-version.ts`](../../../packages/release-tools/README.md), per the same ADL-driven pattern as `@pair/dev-tools` (logic + unit tests live in the package; only a thin CLI wrapper is exposed). See #148.
+
+**Parameters** (unchanged):
 
 - `--input-version VERSION`: Version from workflow_dispatch input
 - `--release-tag TAG`: Tag name from release event
@@ -51,7 +53,7 @@ The release workflow handles the complete process of building, packaging, testin
 
 ```bash
 # In workflow context
-./determine-version.sh \
+pnpm --filter @pair/release-tools determine-version -- \
   --input-version "${{ github.event.inputs.version }}" \
   --release-tag "${{ github.event.release.tag_name }}" \
   --github-ref "$GITHUB_REF" \
@@ -59,7 +61,7 @@ The release workflow handles the complete process of building, packaging, testin
   --env-file $GITHUB_ENV
 
 # Local testing
-./determine-version.sh --input-version "v1.0.0"
+pnpm --filter @pair/release-tools determine-version -- --input-version "v1.0.0"
 ```
 
 ### 3. `create-registry-tgz.sh`
@@ -237,6 +239,32 @@ PAIR_DIAG=1 ./smoke-test-manual-artifact.sh v1.0.0
 ./create-github-release.sh --dry-run v1.0.0
 ```
 
+### 7. `publish-npm.sh`
+
+**Purpose**: Publishes the npm registry TGZ to npmjs.org (public registry, `@foomakers` scope)
+
+**Parameters**:
+
+- `<tgz_path>`: Path to the TGZ artifact (e.g. `pair-cli-1.0.0.tgz`)
+- `--dry-run`: Validate metadata and auth without actually publishing
+
+**Outputs**:
+
+- Package published to `https://registry.npmjs.org/`
+- Verification: confirms the published version is queryable via `npm view`
+
+**Usage**:
+
+```bash
+# CI (uses NPM_TOKEN env var)
+./publish-npm.sh release/pair-cli-1.0.0.tgz
+
+# Local dry run (uses active npm login session)
+./publish-npm.sh release/pair-cli-1.0.0.tgz --dry-run
+```
+
+**Note**: unlike the other scripts above, this one runs in the separate `publish-npm` job (not the `release` job) — see `.github/workflows/release.yml`'s `publish-npm` job, which only runs on `workflow_dispatch` with `publish=true` or a `v*` tag push.
+
 ## Release Process Overview
 
 ### Complete Workflow Sequence
@@ -256,7 +284,7 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 │    - Install dependencies (pnpm install)                        │
 │    - Run quality gate (lint, typecheck)                         │
 │    - Build all packages (turbo build)                           │
-│    - Determine version (determine-version.sh)                   │
+│    - Determine version (@pair/release-tools determine-version)  │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -367,7 +395,7 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 
 ### Integration Points
 
-1. **determine-version.sh** → Provides VERSION to all packaging scripts
+1. **@pair/release-tools determine-version** → Provides VERSION to all packaging scripts
 2. **package-manual.sh** → Creates CLI ZIP (independent of KB)
 3. **create-registry-tgz.sh** → Derives TGZ from CLI ZIP
 4. **package-kb-dataset.sh** → Creates KB ZIP (independent of CLI)
@@ -415,7 +443,7 @@ The release workflow creates **dual artifacts** (CLI + KB dataset) in a single G
 The scripts are called in the following order within the `release.yml` workflow:
 
 ```
-1. determine-version.sh        → Determines VERSION
+1. @pair/release-tools determine-version → Determines VERSION
 2. package-manual.sh           → Creates CLI ZIP artifact
 3. create-registry-tgz.sh      → Creates CLI TGZ from ZIP
 4. package-kb-dataset.sh       → Creates KB ZIP artifact (with link normalization + verification)
@@ -423,9 +451,10 @@ The scripts are called in the following order within the `release.yml` workflow:
 6. smoke-test-npm-artifact.sh     → Tests CLI TGZ
 7. smoke-test-kb-package.sh       → Tests kb package feature (optional)
 8. create-github-release.sh    → Creates release + uploads all assets (CLI + KB)
+9. publish-npm.sh              → (separate `publish-npm` job) Publishes TGZ to npmjs.org
 ```
 
-**Note**: Steps 2-4 can run in parallel (independent artifact creation). Steps 5-7 require artifacts from steps 2-4.
+**Note**: Steps 2-4 can run in parallel (independent artifact creation). Steps 5-7 require artifacts from steps 2-4. Step 9 runs in a separate job (`publish-npm`), gated on `workflow_dispatch` with `publish=true` or a `v*` tag push.
 
 ## Testing
 
@@ -441,7 +470,7 @@ All scripts can be tested locally without running the full workflow:
 
 ```bash
 # Test version determination
-./determine-version.sh --input-version "v1.0.0-test"
+pnpm --filter @pair/release-tools determine-version -- --input-version "v1.0.0-test"
 
 # Test CLI artifact creation (requires existing build)
 ./package-manual.sh v1.0.0-test
@@ -467,6 +496,9 @@ PAIR_DIAG=1 ./smoke-test-npm-artifact.sh v1.0.0-test
 
 # Test release creation (dry run)
 ./create-github-release.sh --dry-run v1.0.0-test
+
+# Test npm publish (dry run, requires npm login or NPM_TOKEN)
+./publish-npm.sh release/pair-cli-1.0.0-test.tgz --dry-run
 ```
 
 ## Error Handling
@@ -498,5 +530,6 @@ When modifying these scripts:
 ## Related Files
 
 - `.github/workflows/release.yml`: Main workflow file
+- `../../../packages/release-tools/`: `@pair/release-tools` package (tested `determine-version` module)
 - `release/`: Directory containing generated artifacts
 - `TODO.md`: Project documentation and status
