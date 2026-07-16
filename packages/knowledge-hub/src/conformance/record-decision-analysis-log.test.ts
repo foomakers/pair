@@ -35,7 +35,7 @@ describe('record-decision supports the analysis-log type (#247)', () => {
   it('dataset SKILL.md documents the analysis type and its Category', () => {
     const content = readFileSync(DATASET_SKILL, 'utf-8')
     expect(content).toMatch(/`analysis`/)
-    expect(content).toMatch(/Category `[Aa]nalysis`|Category \(`Analysis`\)/)
+    expect(content).toMatch(/Category `Analysis`|Category \(`Analysis`\)/)
     // Never updated in place — history is always preserved for analysis-log.
     expect(content.toLowerCase()).toContain('never updated in place')
   })

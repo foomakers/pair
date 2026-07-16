@@ -28,7 +28,7 @@ Each `$type` produces exactly one decision-record kind — never conflated with 
 - **Architectural decision** → exclusively an ADR file + adoption update (not ADL, not DDR, not analysis-log).
 - **Non-architectural decision** → exclusively an ADL file + adoption update (not ADR, not DDR, not analysis-log).
 - **Domain decision** (meeting the 3-criteria gate) → exclusively a DDR file + context map sync (not ADR, not ADL, not analysis-log).
-- **Analysis** (a completed technical analysis, not a decision) → a `decision-log/` entry with Category `analysis` + adoption current-state summary sync. Shares the directory with ADL — Category is the only thing that distinguishes them, never conflated.
+- **Analysis** (a completed technical analysis, not a decision) → a `decision-log/` entry with Category `Analysis` + adoption current-state summary sync. Shares the directory with ADL — Category is the only thing that distinguishes them, never conflated.
 - **Adoption/context update is always required** regardless of decision type.
 - Adoption files/context map = "what we use now." ADR/ADL/DDR = "why we decided." Analysis-log = "what we investigated and found."
 
@@ -62,7 +62,7 @@ A domain decision only becomes a DDR if it meets **all three** criteria. This is
    - If `architectural`: scan [adoption/tech/adr/](../../../.pair/adoption/tech/adr/) for files containing `$topic` in filename.
    - If `non-architectural`: scan [adoption/decision-log/](../../../.pair/adoption/decision-log/) for files containing `$topic` in filename.
    - If `domain`: scan [adoption/product/ddr/](../../../.pair/adoption/product/ddr/) for files containing `$topic` in filename.
-   - If `analysis`: scan [adoption/decision-log/](../../../.pair/adoption/decision-log/) for files with Category `analysis` containing `$topic` in filename — found only to inform the developer a prior analysis exists, never to offer an update (see item 3's exception, below).
+   - If `analysis`: scan [adoption/decision-log/](../../../.pair/adoption/decision-log/) for files with Category `Analysis` containing `$topic` in filename — found only to inform the developer a prior analysis exists, never to offer an update (see item 3's exception, below).
 2. **Skip**: If no existing file found, proceed to Step 3 (create new).
 3. **Act**: If existing file found, ask the developer:
 
@@ -81,7 +81,7 @@ A domain decision only becomes a DDR if it meets **all three** criteria. This is
 - ADR: `adr-NNN-<topic>.md` (sequential, zero-padded 3-digit number, kebab-case slug, one file per decision).
 - ADL: `YYYY-MM-DD-<topic>.md` (today's date, one file per decision).
 - DDR: `ddr-NNN-<topic>.md` (sequential, zero-padded 3-digit number, kebab-case slug, one file per decision).
-- Analysis-log: `YYYY-MM-DD-<topic>.md` (today's date, same convention as ADL — reuses `decision-log/`, distinguished by Category `analysis`; one file per analysis run, never updated in place).
+- Analysis-log: `YYYY-MM-DD-<topic>.md` (today's date, same convention as ADL — reuses `decision-log/`, distinguished by Category `Analysis`; one file per analysis run, never updated in place).
 
 #### If `architectural` → ADR:
 
