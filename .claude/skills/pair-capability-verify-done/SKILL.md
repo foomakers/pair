@@ -1,15 +1,16 @@
 ---
 name: pair-capability-verify-done
 description: "Checks a PR or work item against Definition of Done criteria (universal + project-specific), skipping already-passing criteria. Composed by /pair-process-review; invoke directly to check DoD on demand ('is PR #42 actually done')."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
 # /pair-capability-verify-done — Definition of Done Checker
 
-Validate a work item against Definition of Done criteria. Two sources of truth:
+Validate a work item against Definition of Done criteria. Three sources of truth, in resolution order:
 
-- **[definition-of-done.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md)** — universal DoD checklist (18 criteria covering requirements, code standards, testing, security, performance, accessibility, deployment, documentation).
+- **[definition-of-ready-and-done.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md)** — the **canonical DoD** (R3.9): AC satisfied, PR approved per risk tier, CI green, no critical bugs. Deployment is explicitly excluded.
+- **[definition-of-done.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md)** — extended/legacy universal checklist (code standards, security, performance, accessibility, documentation) that supplements the canonical 4 with more granular criteria groups.
 - **Adoption files** (`../../../.pair/adoption/tech/`) — project-specific criteria derived from adopted architecture, tech-stack, and way-of-working decisions.
 
 Only check criteria that are not already passing.
@@ -27,10 +28,10 @@ Execute each criterion group in order. For every criterion, follow the **check �
 
 ### Step 1: Load DoD Criteria
 
-1. **Check**: Read [definition-of-done.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md) and extract the DoD checklist.
+1. **Check**: Read [definition-of-ready-and-done.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md) for the canonical DoD (AC satisfied, PR approved per risk tier, CI green, no critical bugs — deployment excluded). Read [definition-of-done.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/definition-of-done.md) for the extended checklist that supplements the canonical 4.
 2. **Skip**: If `$scope` is set, filter to only the matching criterion group.
-3. **Act**: Build the working checklist. If `$story` is provided, prepend story-specific acceptance criteria from the PM tool.
-4. **Verify**: The working checklist lists every criterion group that Steps 2-9 will check (filtered by `$scope` if set). If definition-of-done.md is not found, warn and proceed with adoption-only criteria instead of an empty checklist.
+3. **Act**: Build the working checklist: canonical DoD criteria first (Steps 2, 3, 6, 10 below), then extended criteria groups (Steps 4, 5, 7, 8, 9, 11). If `$story` is provided, prepend story-specific acceptance criteria from the PM tool.
+4. **Verify**: The working checklist lists every criterion group Steps 2-11 will check (filtered by `$scope` if set). Canonical doc not found → warn and fall back to the extended checklist alone (never an empty checklist); extended checklist also not found → warn and proceed with adoption-only criteria.
 
 ### Step 2: Requirements & Acceptance Criteria
 
@@ -39,49 +40,63 @@ Execute each criterion group in order. For every criterion, follow the **check �
 3. **Act**: For each AC, evaluate whether the current code/PR satisfies it. Report unmet criteria.
 4. **Verify**: All AC met, or unmet criteria reported.
 
-### Step 3: Code Standards
+### Step 3: PR Approval per Risk Tier
+
+1. **Check**: Does the PR carry a computed risk tier (🟢/🟡/🔴, from the compiled quality matrix — see [quality-model.md § 4](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md#4-per-tier-requirements))? Does it have the approvals that tier requires (🟢 0 reviewers/self-merge, 🟡 1 reviewer, 🔴 1 reviewer + explicit approval)?
+2. **Skip**: If no `$story`/PR context is available (universal-only run) — mark SKIPPED. If already verified earlier in this session — mark PASS (per canonical DoD's skip-already-passing rule), unless new commits or new PR activity landed since, in which case re-check (approvals are live state that can change mid-session).
+3. **Act**: Count actual approvals against the tier's required count. No risk tier present on the PR → treat the tier as 🔴 for this check only (fail-safe default per ADR-013) and report that the tier itself is missing, not just the approval count.
+4. **Verify**: Required approvals met → PASS. Missing approvals, or missing tier → FAIL, report the specific gap (e.g. "🔴 tier requires 1 explicit approval, PR has 0").
+
+### Step 4: Code Standards
 
 1. **Check**: Does the code follow adopted code design guidelines and technical standards?
 2. **Skip**: If already verified (e.g., by a prior /pair-capability-verify-quality run in the same session) — mark PASS.
 3. **Act**: Check code against [code-design guidelines](../../../.pair/knowledge/guidelines/code-design/README.md) and [technical standards](../../../.pair/knowledge/guidelines/technical-standards/README.md). Report non-conformities.
 4. **Verify**: Standards met or non-conformities reported.
 
-### Step 4: Architecture & ADR Compliance
+### Step 5: Architecture & ADR Compliance
 
 1. **Check**: Does the solution align with adopted [architecture](../../../.pair/adoption/tech/architecture.md)? Are relevant ADRs followed?
 2. **Skip**: If no architectural changes in the PR — mark PASS.
 3. **Act**: Cross-reference changes against architecture adoption and existing ADRs in `adoption/tech/adr/`. Report gaps.
 4. **Verify**: Compliant or gaps reported. Missing ADR is a **HALT condition** for the composing skill.
 
-### Step 5: Testing
+### Step 6: Testing
 
-1. **Check**: Are tests written per [testing strategy](../../../.pair/knowledge/guidelines/testing/test-strategy/README.md)? Do all tests pass?
+1. **Check**: Are tests written per [testing strategy](../../../.pair/knowledge/guidelines/testing/test-strategy/README.md)? Do all tests pass (CI green — canonical criterion)?
 2. **Skip**: If already verified by /pair-capability-verify-quality in the same session — mark PASS.
-3. **Act**: Verify test existence for new/modified modules (1:1 mapping). Check test quality (behavior-based, not implementation-based). Report gaps.
+3. **Act**: Verify test existence for new/modified modules (1:1 mapping). Check test quality (behavior-based, not implementation-based). Confirm CI status on the merge commit. Report gaps.
 4. **Verify**: Testing criteria met or gaps reported.
 
-### Step 6: Security
+### Step 7: Security
 
 1. **Check**: Are security considerations identified and practices followed?
 2. **Skip**: If no security-relevant changes in the PR — mark PASS.
 3. **Act**: Check against [security guidelines](../../../.pair/knowledge/guidelines/quality-assurance/security/security-guidelines.md). Look for: hardcoded secrets, injection vulnerabilities, improper data handling, missing input validation.
 4. **Verify**: Secure or issues reported.
 
-### Step 7: Performance
+### Step 8: Performance
 
 1. **Check**: Do performance benchmarks meet standards?
 2. **Skip**: If no performance-relevant changes — mark PASS.
 3. **Act**: Check for obvious performance issues: N+1 queries, unbounded loops, missing pagination, large bundle imports.
 4. **Verify**: Performance criteria met or issues reported.
 
-### Step 8: Documentation
+### Step 9: Documentation
 
 1. **Check**: Is documentation updated for changed functionality?
 2. **Skip**: If no public API or behavior changes — mark PASS.
 3. **Act**: Check for: updated READMEs, inline documentation for complex logic, updated adoption files if decisions changed.
 4. **Verify**: Documentation current or gaps reported.
 
-### Step 9: Manual Test Validation (Optional)
+### Step 10: Critical Bugs
+
+1. **Check**: Are there open critical/blocker-labeled issues linked to this story or PR?
+2. **Skip**: If the PM tool exposes no linked-issue/label data — mark SKIPPED with note: "No linked-issue data — critical-bug check not verifiable." If already verified earlier in this session — mark PASS (per canonical DoD's skip-already-passing rule), unless new commits or new PR activity landed since, in which case re-check (a critical/blocker label can be added mid-session).
+3. **Act**: Query the PM tool for issues referencing this story/PR carrying a critical/blocker severity label. Report any found.
+4. **Verify**: None found → PASS. Any found → FAIL, list them.
+
+### Step 11: Manual Test Validation (Optional)
 
 1. **Check**: Does the project have a manual test suite (look for `qa/` directory with `CP*.md` files at project root)?
 2. **Skip**: If no manual test suite exists — mark SKIPPED. If `$scope` excludes `manual-testing` — mark SKIPPED.
@@ -95,12 +110,14 @@ Present results as:
 ```text
 DEFINITION OF DONE REPORT:
 ├── Requirements:  [PASS | FAIL — N unmet AC | SKIPPED — no $story]
+├── PR Approval:   [PASS | FAIL — tier/approvals gap | SKIPPED — no PR context]
 ├── Code Standards: [PASS | FAIL — N issues | SKIPPED]
 ├── Architecture:  [PASS | FAIL — N gaps | HALT — missing ADR | SKIPPED]
 ├── Testing:       [PASS | FAIL — N gaps | SKIPPED]
 ├── Security:      [PASS | FAIL — N issues | SKIPPED]
 ├── Performance:      [PASS | FAIL — N issues | SKIPPED]
 ├── Documentation:    [PASS | FAIL — N gaps | SKIPPED]
+├── Critical Bugs:    [PASS | FAIL — N found | SKIPPED — no linked-issue data]
 └── Manual Testing:   [PASS | FAIL — N failures | SKIPPED — no suite or no report]
 
 RESULT: [ALL CRITERIA MET | N criteria failing | HALT — reason]
@@ -126,9 +143,11 @@ When invoked **independently**:
 See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → check only adoption-derived criteria; adoption files missing → check only universal criteria) for the standard scenarios. Additional cases:
 
 - If `$story` is not provided, skip requirements/AC check and evaluate only universal criteria.
+- If the canonical [definition-of-ready-and-done.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md) is not found, fall back to the extended `definition-of-done.md` checklist alone (never an empty checklist).
+- If `quality-model.md` or risk-tier data is unavailable, Step 3 applies the 🔴 fail-safe default (per ADR-013) rather than skipping the check outright — a missing tier is itself reported as the gap.
 - If specific guideline files are not found (e.g., security guidelines), skip that criterion group and report: "[Area]: SKIPPED — guidelines not found."
 - If /pair-capability-verify-quality already ran in the same session, reuse its results for code standards and testing criteria (avoid duplicate work).
-- If no manual test suite exists (`qa/` directory not found), Step 9 is SKIPPED — this is expected for projects without a manual test suite.
+- If no manual test suite exists (`qa/` directory not found), Step 11 is SKIPPED — this is expected for projects without a manual test suite.
 - If a manual test report exists but is for a different version, mark SKIPPED with note about version mismatch.
 
 ## Notes
@@ -137,3 +156,4 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 - Criteria evaluation is contextual: only changes in the PR/work item are assessed, not the entire codebase.
 - SKIPPED criteria (no relevant changes) are distinct from PASS (verified and conformant).
 - HALT on missing ADR: if architectural changes lack an ADR, this is escalated to the composing skill. /pair-capability-verify-done itself does not create ADRs — that is /record-decision's responsibility.
+- **Deployment is explicitly excluded** from the canonical DoD (R3.9) — the Deployment and Release criteria in `definition-of-done.md`'s extended checklist remain available as a project-specific extension but are never required by this skill's canonical result.

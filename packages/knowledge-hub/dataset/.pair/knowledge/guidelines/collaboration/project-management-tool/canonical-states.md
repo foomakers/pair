@@ -73,7 +73,7 @@ These are the rules every skill follows when it needs to read or write item stat
 Some boards don't distinguish "not yet refined" from "refined" with a dedicated column (see Example 3) — structurally, no board state anywhere in the map is mapped to `Ready` at all. When a board can't distinguish `Draft` from `Ready` this way (no dedicated Ready column), skills needing readiness fall back to evaluating **Definition of Ready criteria** against the item's content (acceptance criteria present, technical analysis complete, etc.) instead of guessing from the board-state name.
 
 - The **mapped state is always the primary signal** — DoR criteria are a fallback only for the Draft/Ready boundary, and only when no board state in the map resolves to `Ready`.
-- Full DoR/DoD criteria are defined in the companion DoR/DoD guideline (tracked as a dependent story to this one) — until adopted, a minimal readiness signal (acceptance criteria present + technical analysis present) applies.
+- Full DoR/DoD criteria are defined in [definition-of-ready-and-done.md](definition-of-ready-and-done.md), this document's companion — the 6 DoR criteria plus the inline-task-breakdown signal and legacy-story degradation used above.
 
 ## Examples
 
@@ -181,3 +181,4 @@ Rollout across the rest of the skill catalog happens organically in the stories 
 - [way-of-working.md](../../../../adoption/tech/way-of-working.md) — hosts the optional `## State Mapping` section
 - [github-implementation.md](github-implementation.md) · [azure-devops-implementation.md](azure-devops-implementation.md) · [filesystem-implementation.md](filesystem-implementation.md) — PM tool status-field mechanics
 - [decision-records.md](../decision-records.md) — ADR/ADL process (this schema was adopted via ADR)
+- [definition-of-ready-and-done.md](definition-of-ready-and-done.md) — the DoR/DoD criteria behind the Readiness Fallback above

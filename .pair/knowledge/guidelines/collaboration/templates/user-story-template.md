@@ -87,6 +87,12 @@
 > Technical Analysis is positioned at the end as the bridge to Task Breakdown
 > (appended by `/pair-process-plan-tasks`).
 
+<!-- -->
+
+> **Definition of Ready**: each of the 6 canonical DoR criteria maps to one section below —
+> see [definition-of-ready-and-done.md](../project-management-tool/definition-of-ready-and-done.md)
+> for the full mapping table and the fallback used when a board has no dedicated Ready state.
+
 ```markdown
 ## Story Statement
 
@@ -255,6 +261,7 @@
 **Key Components**: [Major technical components involved]
 **Data Flow**: [How data moves through the system]
 **Integration Points**: [External systems or APIs involved]
+**Design**: [not required | required — reference: link/path to the design doc]
 
 ### Technical Requirements
 

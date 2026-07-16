@@ -27,6 +27,7 @@ This comprehensive quality assurance framework ensures systematic quality manage
 - **automated-verification.md** - Comprehensive automated verification system for tool-based validation and quality gate enforcement
 - **manual-verification.md** - Manual verification processes and human-driven quality assessment methodologies
 - **manual-testing.md** - Guidelines for designing, organizing, and executing manual test suites for post-release validation
+- **quality-model.md** - Single source of default quality rules: 3-layer principle, 3 pillars (Cost/Security/Delivery), classification dimensions and tier resolution, per-tier review/gate requirements, tag projection, `tech/risk-matrix.md` adoption delta schema, nested taxonomy
 
 ### **Quality Standards** (`quality-standards/`)
 
