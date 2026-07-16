@@ -108,7 +108,7 @@ See [ddr-template.md](templates/ddr-template.md) for the full template.
 The analysis-log template captures completed technical analyses with these sections:
 
 1. **Date** — When the analysis was completed (YYYY-MM-DD)
-2. **Status** — `Active` or `Superseded by YYYY-MM-DD-<topic>`
+2. **Status** — Fixed value `Active` (analysis-log entries are never superseded in place — a repeated analysis always appends a new record; see [Lifecycle](#lifecycle))
 3. **Category** — Fixed value `Analysis` (distinguishes the entry from an ADL in the same directory)
 4. **Context** — What prompted the analysis (question, investigation trigger, evaluation need)
 5. **Analysis / Findings** — What was investigated and found

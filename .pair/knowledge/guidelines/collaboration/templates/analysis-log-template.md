@@ -6,7 +6,7 @@ YYYY-MM-DD
 
 ## Status
 
-[Active | Superseded by YYYY-MM-DD-<topic>]
+Active
 
 ## Category
 

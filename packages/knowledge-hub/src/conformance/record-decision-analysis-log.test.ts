@@ -71,6 +71,9 @@ describe('record-decision supports the analysis-log type (#247)', () => {
     const materializedContent = readFileSync(MATERIALIZED_TEMPLATE, 'utf-8')
     expect(materializedContent).toBe(datasetContent)
     expect(datasetContent).toMatch(/^## Category\n\nAnalysis$/m)
+    // Status is a fixed `Active` value (never "Superseded by ..." — analysis-log
+    // entries are additive, not superseded; see decision-records.md Lifecycle).
+    expect(datasetContent).toMatch(/^## Status\n\nActive$/m)
   })
 
   it('the decision-records guideline documents analysis-log in both copies', () => {
