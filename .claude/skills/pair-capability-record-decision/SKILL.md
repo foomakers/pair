@@ -62,7 +62,7 @@ A domain decision only becomes a DDR if it meets **all three** criteria. This is
    - If `architectural`: scan [adoption/tech/adr/](../../../.pair/adoption/tech/adr) for files containing `$topic` in filename.
    - If `non-architectural`: scan [adoption/decision-log/](../../../.pair/adoption/decision-log) for files containing `$topic` in filename.
    - If `domain`: scan [adoption/product/ddr/](../../../.pair/adoption/product/ddr) for files containing `$topic` in filename.
-   - If `analysis`: scan [adoption/decision-log/](../../../.pair/adoption/decision-log) for files with Category `analysis` containing `$topic` in filename — found only to inform the developer a prior analysis exists, never to offer an update (see step 3 exception).
+   - If `analysis`: scan [adoption/decision-log/](../../../.pair/adoption/decision-log) for files with Category `analysis` containing `$topic` in filename — found only to inform the developer a prior analysis exists, never to offer an update (see item 3's exception, below).
 2. **Skip**: If no existing file found, proceed to Step 3 (create new).
 3. **Act**: If existing file found, ask the developer:
 
