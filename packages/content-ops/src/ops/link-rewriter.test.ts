@@ -114,6 +114,35 @@ describe('rewriteLinksInFile', () => {
     expect(content).not.toContain('../../../')
   })
 
+  it('rewrites the href, not the label, when label is byte-identical to href (self-pointer style, e.g. `[SKILL.md](SKILL.md)`)', async () => {
+    // A same-directory, bare (no leading `./`) link whose visible label equals
+    // its href — exactly the T5 disclosure-pointer style (e.g.
+    // `[SKILL.md](SKILL.md)`, `[degradation-levels.md](degradation-levels.md)`).
+    // Moving the file still normalizes the href to `./post-review-merge.md`
+    // (bare relative links get a leading `./`) — this is the case that must
+    // NOT corrupt the label into `[./post-review-merge.md]`.
+    const fs = new InMemoryFileSystemService(
+      {
+        '/dataset/target/pair-process-implement/SKILL.md':
+          '# Skill\nSee [post-review-merge.md](post-review-merge.md) for detail.',
+      },
+      '/',
+      '/',
+    )
+
+    await rewriteLinksInFile({
+      fileService: fs,
+      filePath: '/dataset/target/pair-process-implement/SKILL.md',
+      originalDir: '.skills/process/implement',
+      newDir: 'target/pair-process-implement',
+      datasetRoot: '/dataset',
+    })
+
+    const content = await fs.readFile('/dataset/target/pair-process-implement/SKILL.md')
+    expect(content).toContain('[post-review-merge.md](./post-review-merge.md)')
+    expect(content).not.toContain('[./post-review-merge.md]')
+  })
+
   it('preserves anchor fragments in relative links', async () => {
     const fs = new InMemoryFileSystemService(
       {

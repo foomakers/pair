@@ -57,12 +57,65 @@ function reRootTarget(
   return absoluteTarget
 }
 
+/**
+ * Rebases a link target that resolves inside the current file's own original
+ * directory (e.g. a sibling file in a multi-file skill dir) onto the new
+ * directory that same dir is moving to.
+ *
+ * This takes priority over `reRootTarget`: the current file's directory is
+ * precisely the one this copy operation is moving from `originalFileDir` to
+ * `newFileDir`, so a link resolving inside it maps 1:1 onto the new
+ * directory — no need to go through the coarser dataset-root re-rooting,
+ * which only knows about the *overall* content-root move and would otherwise
+ * misplace a same-directory sibling link (see #313 T5 fixture regression).
+ *
+ * Known scope boundary: only rebases links resolving inside the SAME
+ * directory the current file lives in. A link that escapes to a *different*
+ * transformed sibling directory (e.g. one skill linking into another skill's
+ * sibling file) still falls through to `reRootTarget` and is not corrected by
+ * this function — not needed by any skill in the corpus today.
+ */
+function rebaseWithinMovedDir(
+  absoluteTarget: string,
+  originalFileDir: string,
+  newFileDir: string,
+): string | null {
+  if (absoluteTarget === originalFileDir) return newFileDir
+  if (absoluteTarget.startsWith(originalFileDir + '/')) {
+    return newFileDir + absoluteTarget.slice(originalFileDir.length)
+  }
+  return null
+}
+
 type ComputeNewHrefParams = {
   href: string
   originalFileDir: string
   newFileDir: string
   datasetRoot?: string
   sourceContentRoot?: string
+}
+
+/**
+ * Resolves the absolute target a link points at, after accounting for the
+ * current copy operation: a same-directory rebase takes priority over the
+ * coarser dataset-root re-root (see `rebaseWithinMovedDir` docs).
+ */
+function resolveAbsoluteTarget(params: {
+  originalFileDir: string
+  newFileDir: string
+  pathPart: string
+  datasetRoot?: string
+  sourceContentRoot?: string
+}): string {
+  const { originalFileDir, newFileDir, pathPart, datasetRoot, sourceContentRoot } = params
+  const absoluteTarget = posix.resolve(originalFileDir, pathPart)
+
+  const rebased = rebaseWithinMovedDir(absoluteTarget, originalFileDir, newFileDir)
+  if (rebased) return rebased
+  if (datasetRoot && sourceContentRoot) {
+    return reRootTarget(absoluteTarget, datasetRoot, sourceContentRoot)
+  }
+  return absoluteTarget
 }
 
 /**
@@ -79,11 +132,13 @@ function computeNewHref(params: ComputeNewHrefParams): string | null {
 
   if (pathPart === '') return null // pure anchor link
 
-  let absoluteTarget = posix.resolve(originalFileDir, pathPart)
-
-  if (datasetRoot && sourceContentRoot) {
-    absoluteTarget = reRootTarget(absoluteTarget, datasetRoot, sourceContentRoot)
-  }
+  const absoluteTarget = resolveAbsoluteTarget({
+    originalFileDir,
+    newFileDir,
+    pathPart,
+    ...(datasetRoot && { datasetRoot }),
+    ...(sourceContentRoot && { sourceContentRoot }),
+  })
 
   let newRelativePath = posix.relative(newFileDir, absoluteTarget)
 
@@ -93,6 +148,25 @@ function computeNewHref(params: ComputeNewHrefParams): string | null {
 
   const newHref = newRelativePath + anchorPart
   return newHref === href ? null : newHref
+}
+
+/**
+ * Locates where the href starts within a link node's raw text (`[label](href)`).
+ *
+ * A bare `indexOf(href)` is ambiguous when the visible label is byte-identical
+ * to the href — e.g. `[SKILL.md](SKILL.md)`, exactly the self-pointer style
+ * this module's callers write (see module docs) — because `indexOf` matches
+ * the label's occurrence (it comes first) instead of the href inside the
+ * parens. Anchoring the search on the `](` delimiter that always immediately
+ * precedes the href in valid markdown link syntax disambiguates the two.
+ */
+function findHrefStart(nodeText: string, href: string): number {
+  const marker = '](' + href
+  const markerPos = nodeText.indexOf(marker)
+  if (markerPos >= 0) return markerPos + 2
+  // Fallback for hrefs the marker search doesn't match (shouldn't happen for
+  // well-formed links) — keeps prior behavior rather than failing outright.
+  return nodeText.indexOf(href)
 }
 
 /**
@@ -108,7 +182,7 @@ function replaceHrefInNode(
   const nodeStart = link.start
   const nodeEnd = link.end
   const nodeText = content.slice(nodeStart, nodeEnd)
-  const hrefPos = nodeText.indexOf(link.href)
+  const hrefPos = findHrefStart(nodeText, link.href)
   if (hrefPos >= 0) {
     const absStart = nodeStart + hrefPos
     const absEnd = absStart + link.href.length
