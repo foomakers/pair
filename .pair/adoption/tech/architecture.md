@@ -26,6 +26,10 @@
 - **Integrity Validation**: All KB downloads validated using SHA256 checksums for security and corruption detection. See [ADR-003](adr/adr-003-checksum-validation.md).
 - **Streaming Downloads**: Memory-efficient streaming writes with real-time progress tracking. See [ADR-004](adr/adr-004-streaming-downloads.md).
 
+## Tooling Package Boundaries
+
+- A package boundary tracks a bounded context, not a folder-level tool grouping. When two or more tool families map onto the same bounded context (e.g. `@pair/dev-tools`'s quality-gate tools and release-pipeline tooling both belong to Integration & Process Standardization — see [context](boundedcontext/integration-process-standardization.md)), they live in one package, organized into folders by tool family (e.g. `src/quality-gates/`, `src/release/`) — not split into a package per tool family. See [ADR-014](adr/adr-014-tool-package-boundary-by-bounded-context.md).
+
 ## Skills Distribution
 
 - Skills are stored in `.skills/` within the KB dataset, following the Agent Skills open standard (agentskills.io).

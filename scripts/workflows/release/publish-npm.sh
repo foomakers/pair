@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# scripts/publish-npm.sh
+# scripts/workflows/release/publish-npm.sh
 # Publish a pair-cli TGZ to npmjs.org
-# Usage: ./scripts/publish-npm.sh <tgz_path> [--dry-run]
+# Usage: ./scripts/workflows/release/publish-npm.sh <tgz_path> [--dry-run]
 #
 # Requires NPM_TOKEN env var (CI) or active npm login (local).
 

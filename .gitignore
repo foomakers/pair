@@ -15,6 +15,7 @@ tsconfig.*tsbuildinfo
 .turbo/
 release/
 !scripts/workflows/release
+!packages/dev-tools/src/release
 .tmp/
 .benchmark-tmp/
 .kilocode/

@@ -5,8 +5,8 @@
  * The LOGIC lives here as individually exported, unit-tested functions (see
  * sync-version-in-docs.test.ts, white-box, exercised against a temp-dir fixture
  * tree — no shell-out to an external search tool). The `main()` block is a thin
- * CLI wrapper run via `ts-node src/sync-version-in-docs.ts` (package script
- * `sync-version`).
+ * CLI wrapper run via `ts-node src/quality-gates/sync-version-in-docs.ts` (package
+ * script `sync-version`).
  *
  * Usage:
  *   pnpm --filter @pair/dev-tools sync-version -- <old-version>           # apply
@@ -17,13 +17,13 @@
  * and passed as the first argument. The new version is read from
  * apps/pair-cli/package.json.
  *
- * REPO_ROOT is resolved from this file's location: packages/dev-tools/src ->
- * packages/dev-tools -> packages -> repo root (up 3).
+ * REPO_ROOT is resolved from this file's location: packages/dev-tools/src/quality-gates
+ * -> src -> dev-tools -> packages -> repo root (up 4).
  */
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { join, relative, resolve } from 'path'
 
-const REPO_ROOT = resolve(__dirname, '..', '..', '..')
+const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..')
 
 // Directories/patterns to skip — not our version strings. Merged with infra dirs
 // that should never be walked (large, generated, or vendored trees).

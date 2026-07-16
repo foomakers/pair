@@ -125,7 +125,7 @@ Publishing uses an `NPM_TOKEN` secret (granular access token from npmjs.org):
 ```yaml
 env:
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-run: ./scripts/publish-npm.sh "$TGZ"
+run: ./scripts/workflows/release/publish-npm.sh "$TGZ"
 ```
 
 ### Consumer installation

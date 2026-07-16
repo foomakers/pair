@@ -1,7 +1,7 @@
 {
   "name": "@pair/dev-tools",
   "version": "0.4.3",
-  "description": "Pair's own gate/tooling scripts (code-hygiene, sync-version) as tested TypeScript modules — the reference pattern for repo quality gates.",
+  "description": "Pair's own automation scripts for development and deployment (code-hygiene, sync-version, benchmark-update-link, determine-version) as tested TypeScript modules — the reference pattern for repo quality gates and release tooling.",
   "private": true,
   "scripts": {
     "prettier:fix": "prettier-fix",
@@ -13,9 +13,10 @@
     "lint:fix": "lint-fix",
     "mdlint:check": "markdownlint-check",
     "mdlint:fix": "markdownlint-fix",
-    "code-hygiene:check": "ts-node src/code-hygiene-check.ts",
-    "sync-version": "ts-node src/sync-version-in-docs.ts",
-    "benchmark-update-link": "ts-node src/benchmark-update-link.ts"
+    "code-hygiene:check": "ts-node src/quality-gates/code-hygiene-check.ts",
+    "sync-version": "ts-node src/quality-gates/sync-version-in-docs.ts",
+    "benchmark-update-link": "ts-node src/quality-gates/benchmark-update-link.ts",
+    "determine-version": "ts-node src/release/determine-version.ts"
   },
   "devDependencies": {
     "@pair/eslint-config": "workspace:*",

@@ -67,8 +67,7 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          chmod +x scripts/workflows/release/determine-version.sh
-          ./scripts/workflows/release/determine-version.sh \
+          pnpm --filter @pair/dev-tools determine-version -- \
             --input-version "${{ github.event.inputs.version }}" \
             --release-tag "${{ github.event.release.tag_name }}" \
             --github-ref "$GITHUB_REF" \
@@ -223,5 +222,5 @@ jobs:
           set -euo pipefail
           V=${{ needs.release.outputs.version_no_v || needs.release.outputs.version }}
           TGZ=pair-cli-${V}.tgz
-          chmod +x scripts/publish-npm.sh
-          ./scripts/publish-npm.sh "$TGZ"
+          chmod +x scripts/workflows/release/publish-npm.sh
+          ./scripts/workflows/release/publish-npm.sh "$TGZ"
