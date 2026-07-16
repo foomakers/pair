@@ -1,13 +1,13 @@
 ---
 name: pair-capability-record-decision
-description: "Records a decision — ADR (architectural), ADL (non-architectural), DDR (domain, 3-criteria gate), or an analysis-log entry (category analysis, decision-log/) — and is the sole writer of adoption/context-map files. Invoke directly to record or backfill a decision already made ('write that down as an ADR'). Composed by /pair-process-implement and /pair-process-review."
+description: "Records a decision — ADR (architectural), ADL (non-architectural), DDR (domain, 3-criteria gate), or an analysis-log entry ($type: analysis, written as Category: Analysis, decision-log/) — and is the sole writer of adoption/context-map files. Invoke directly to record or backfill a decision already made ('write that down as an ADR'). Composed by /pair-process-implement and /pair-process-review."
 version: 0.5.0
 author: Foomakers
 ---
 
 # /pair-capability-record-decision — Decision Recorder
 
-Record a decision as an ADR (architectural), ADL (non-architectural), or DDR (domain) — or, for a completed technical analysis that isn't itself a decision, an analysis-log entry (category `analysis`, reusing `decision-log/`). Always update the corresponding adoption files — or, for DDR, the context map; for analysis-log, the pertinent adoption file's current-state summary — to keep them as the single source of truth for "what we use now."
+Record a decision as an ADR (architectural), ADL (non-architectural), or DDR (domain) — or, for a completed technical analysis that isn't itself a decision, an analysis-log entry ($type `analysis`, written as `Category: Analysis`, reusing `decision-log/`). Always update the corresponding adoption files — or, for DDR, the context map; for analysis-log, the pertinent adoption file's current-state summary — to keep them as the single source of truth for "what we use now."
 
 This skill is the **sole generic writer of adoption files** (assess-* are output-only and delegate persistence here); the one exception is `/pair-capability-setup-pm`, which owns PM-tool configuration end-to-end — it writes the PM section of `way-of-working.md` itself, then composes this skill only for the decision record. When a caller supplies pre-rendered `$content` and a `$target`, this skill acts as a **generic persister** — it writes `$content` into its owned section of `$target` (a heading-scoped merge) and records the decision, with **no per-domain rendering logic**.
 
