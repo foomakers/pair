@@ -7,6 +7,7 @@ import {
   buildSkillLinkPathMap,
   applyKnownMirrorTransforms,
   extractLineContaining,
+  reconstructFullMirror,
 } from './skills-guide-mirror'
 
 // packages/knowledge-hub/src/tools -> repo root
@@ -66,6 +67,10 @@ describe('buildSkillLinkPathMap', () => {
  * docs), so applying the real skill-name-prefix + SKILL.md-link transform to
  * the dataset's version of the line must exactly reproduce the root
  * mirror's version — any future drift on these lines fails this test.
+ *
+ * Kept alongside the whole-file test below (not replaced by it): on
+ * failure, a per-anchor mismatch pinpoints the exact paragraph and expected
+ * line, which is a far faster first diagnosis than a whole-file diff.
  */
 const CRITICAL_SECTION_ANCHORS = [
   'How-to guides 04 and 05',
@@ -101,4 +106,35 @@ describe('skills-guide.md dataset <-> root mirror consistency (critical sections
       expect(rootLine).toBe(expectedLine)
     },
   )
+})
+
+/**
+ * Whole-file coverage: `reconstructFullMirror` applies the real mechanical
+ * transform to the ENTIRE dataset content, then overrides the two known
+ * deliberate-exception spans (see `skills-guide-mirror.ts` module docs) to
+ * their correct behavior. If the root mirror has drifted ANYWHERE — not
+ * just on the 5 anchored paragraphs above — this fails.
+ *
+ * On failure, check the targeted-anchor tests above first: if one of them
+ * also fails, its message pinpoints the paragraph directly. If only this
+ * test fails, the drift is somewhere else in the file — diff
+ * `.pair/knowledge/skills-guide.md` against the dataset file's real
+ * transform output (see `reconstructFullMirror`) to find it.
+ */
+describe('skills-guide.md dataset <-> root mirror consistency (whole file)', () => {
+  it('root mirror is byte-for-byte reproducible from the dataset via the real transform + the 2 known exceptions', () => {
+    const datasetContent = readFileSync(DATASET_SKILLS_GUIDE, 'utf-8')
+    const rootContent = readFileSync(ROOT_MIRROR_SKILLS_GUIDE, 'utf-8')
+    const skillNameMap = buildDatasetSkillNameMap(SKILLS_DIR)
+    const linkPathMap = buildSkillLinkPathMap(SKILLS_DIR)
+
+    const reconstructed = reconstructFullMirror(datasetContent, skillNameMap, linkPathMap)
+
+    // If this fails, `.pair/knowledge/skills-guide.md` has drifted from the
+    // canonical dataset file somewhere in the whole file. Reconcile the
+    // root mirror to match the real transform's output (or, if a NEW
+    // deliberate exception is legitimately needed beyond the 2 already
+    // modeled in `reconstructFullMirror`, add it there explicitly).
+    expect(reconstructed).toBe(rootContent)
+  })
 })

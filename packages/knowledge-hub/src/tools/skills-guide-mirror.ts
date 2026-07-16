@@ -25,9 +25,9 @@
  * It's still derived from `transformPath`, not a parallel name-guessing
  * regex.
  *
- * IMPORTANT — this mechanical transform does NOT reproduce the whole file
- * byte-for-byte, by design: skills-guide.md contains at least two spans
- * where a human curator deliberately deviates from the mechanical rule:
+ * IMPORTANT — the raw mechanical transform does NOT reproduce the whole file
+ * byte-for-byte: skills-guide.md contains exactly two spans where a human
+ * curator deliberately deviates from the mechanical rule:
  *   1. The "Composition Pattern" ASCII diagram lives inside a ```text fence
  *      but the author DOES prefix its skill names (unlike
  *      `rewriteSkillReferences`'s default, which treats fenced code as
@@ -37,11 +37,11 @@
  *      form itself, so they must stay unprefixed in both the dataset and
  *      the root mirror, even though they're plain prose the mechanical rule
  *      would otherwise rewrite.
- * A whole-file diff via this transform therefore produces false positives
- * on those two spans. Given that, `skills-guide-mirror.test.ts` does NOT
- * assert whole-file equality — it targets the specific paragraphs that have
- * actually drifted before (see its own docs) with `extractLineContaining`,
- * all of which are unaffected by the two exceptions above.
+ * `reconstructFullMirror` models both exceptions as explicit, narrow
+ * overrides applied on top of the mechanical pass (not by skipping
+ * validation there) — see its own docs — so `skills-guide-mirror.test.ts`
+ * can assert whole-file byte-for-byte equality against the root mirror,
+ * not just a handful of anchored paragraphs.
  */
 import { readdirSync } from 'fs'
 import { join, relative, sep } from 'path'
@@ -148,4 +148,134 @@ export function extractLineContaining(content: string, anchor: string): string {
     throw new Error(`extractLineContaining: no line contains anchor ${JSON.stringify(anchor)}`)
   }
   return line
+}
+
+/** Heading that immediately precedes the one fence exempt from fence-skip (exception 1). */
+const COMPOSITION_PATTERN_HEADING = '## Composition Pattern'
+
+/** Phrase marking the self-referential unprefixed-dataset-command-name spans (exception 2). */
+const MIGRATION_NOTES_UNPREFIXED_ANCHOR = 'Unprefixed dataset command names'
+
+/**
+ * Finds the ``` -fenced block that immediately follows a given heading line
+ * (matched by exact trimmed text), returning the line indices of its open
+ * and close fence markers (both inclusive) in `lines`. Throws if the heading
+ * or a following fence isn't found, so a future reflow/rewording fails this
+ * loudly instead of silently operating on the wrong block.
+ */
+function findFencedBlockAfterHeading(
+  lines: readonly string[],
+  heading: string,
+): { open: number; close: number } {
+  const headingIdx = lines.findIndex(l => l.trim() === heading)
+  if (headingIdx === -1) {
+    throw new Error(`findFencedBlockAfterHeading: heading ${JSON.stringify(heading)} not found`)
+  }
+  let open = -1
+  for (let i = headingIdx + 1; i < lines.length; i++) {
+    if (/^ {0,3}```/.test(lines[i]!)) {
+      open = i
+      break
+    }
+  }
+  if (open === -1) {
+    throw new Error(
+      `findFencedBlockAfterHeading: no fence found after heading ${JSON.stringify(heading)}`,
+    )
+  }
+  let close = -1
+  for (let i = open + 1; i < lines.length; i++) {
+    if (/^ {0,3}```\s*$/.test(lines[i]!)) {
+      close = i
+      break
+    }
+  }
+  if (close === -1) {
+    throw new Error(
+      `findFencedBlockAfterHeading: unterminated fence after heading ${JSON.stringify(heading)}`,
+    )
+  }
+  return { open, close }
+}
+
+/**
+ * Exception 1 override: the "Composition Pattern" fence is the one fence
+ * skills-guide.md's author DOES prefix-transform (see module docs), unlike
+ * `rewriteSkillReferences`'s default fence-skip. Re-derives the block's
+ * transformed content directly from the dataset's own (short-form) fence
+ * lines — `targetLines` has this block untouched up to this point, since the
+ * mechanical pass that produced it skipped every fence, this one included —
+ * and splices the transformed lines back into `targetLines` in place.
+ */
+function applyCompositionPatternFenceException(
+  datasetLines: readonly string[],
+  targetLines: readonly string[],
+  skillNameMap: SkillNameMap,
+  linkPathMap: Map<string, string>,
+): string[] {
+  const { open, close } = findFencedBlockAfterHeading(datasetLines, COMPOSITION_PATTERN_HEADING)
+  const innerDataset = datasetLines.slice(open + 1, close).join('\n')
+  const innerTransformed = applyKnownMirrorTransforms(innerDataset, skillNameMap, linkPathMap)
+  const result = [...targetLines]
+  result.splice(open + 1, close - open - 1, ...innerTransformed.split('\n'))
+  return result
+}
+
+/**
+ * Exception 2 override: from the `MIGRATION_NOTES_UNPREFIXED_ANCHOR` phrase
+ * to end-of-line, Migration Notes prose is TALKING ABOUT the unprefixed
+ * dataset command form itself (see module docs) and must stay verbatim —
+ * copied byte-for-byte from the dataset line, not reprocessed. Only the
+ * portion of the line BEFORE the anchor phrase gets the real mechanical
+ * transform (re-applied here directly from the dataset line, independent of
+ * whatever `targetLines` already holds for that line).
+ */
+function restoreUnprefixedDatasetCommandNameMentions(
+  datasetLines: readonly string[],
+  targetLines: readonly string[],
+  skillNameMap: SkillNameMap,
+  linkPathMap: Map<string, string>,
+): string[] {
+  return targetLines.map((line, i) => {
+    const datasetLine = datasetLines[i]
+    if (datasetLine === undefined) return line
+    const anchorIdx = datasetLine.indexOf(MIGRATION_NOTES_UNPREFIXED_ANCHOR)
+    if (anchorIdx === -1) return line
+    const before = datasetLine.slice(0, anchorIdx)
+    const verbatimFromAnchor = datasetLine.slice(anchorIdx)
+    return applyKnownMirrorTransforms(before, skillNameMap, linkPathMap) + verbatimFromAnchor
+  })
+}
+
+/**
+ * Reconstructs the FULL root-mirror content from the dataset content: the
+ * mechanical transform (`applyKnownMirrorTransforms`) applied everywhere,
+ * with the two known deliberate-exception spans (see module docs) then
+ * explicitly overridden to their correct, narrowly-scoped behavior — not by
+ * skipping validation on those spans, but by modeling exactly what should
+ * happen there. The result is byte-for-byte equal to
+ * `.pair/knowledge/skills-guide.md` iff no OTHER, undocumented manual
+ * divergence exists — that equality is exactly what
+ * `skills-guide-mirror.test.ts`'s full-file test asserts.
+ */
+export function reconstructFullMirror(
+  datasetContent: string,
+  skillNameMap: SkillNameMap,
+  linkPathMap: Map<string, string>,
+): string {
+  const datasetLines = datasetContent.split('\n')
+  const baseTransformed = applyKnownMirrorTransforms(datasetContent, skillNameMap, linkPathMap)
+  const withFenceException = applyCompositionPatternFenceException(
+    datasetLines,
+    baseTransformed.split('\n'),
+    skillNameMap,
+    linkPathMap,
+  )
+  const withMigrationNotesException = restoreUnprefixedDatasetCommandNameMentions(
+    datasetLines,
+    withFenceException,
+    skillNameMap,
+    linkPathMap,
+  )
+  return withMigrationNotesException.join('\n')
 }
