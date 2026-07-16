@@ -1,0 +1,26 @@
+# `.gitleaks.toml` — Example
+
+#
+
+# Illustrative allowlist for a fictitious project. Copy only the entries you need — a
+
+# real project's file normally starts empty (or absent) and grows one entry per confirmed
+
+# false positive. See the mechanism and fail-closed requirement in
+
+# guidelines/quality-assurance/security/secret-scanning.md.
+
+title = "project secret-scanning allowlist"
+
+[extend]
+useDefault = true # keep gitleaks' built-in detection rules — this file only adds exceptions
+
+[allowlist]
+description = "Project-specific false-positive exceptions, confirmed one at a time"
+regexes = [
+  '''EXAMPLE_KEY_[A-Z0-9]{10,}''', # documented placeholder pattern used in docs/fixtures, not a real credential
+]
+paths = [
+  '''\.gitleaks\.toml''', # this file itself contains example patterns that would otherwise self-match
+  '''fixtures/.*\.snap''', # test snapshots with placeholder tokens, if applicable
+]
