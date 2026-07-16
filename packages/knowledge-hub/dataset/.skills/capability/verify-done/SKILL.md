@@ -43,7 +43,7 @@ Execute each criterion group in order. For every criterion, follow the **check �
 ### Step 3: PR Approval per Risk Tier
 
 1. **Check**: Does the PR carry a computed risk tier (🟢/🟡/🔴, from the compiled quality matrix — see [quality-model.md § 4](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md#4-per-tier-requirements))? Does it have the approvals that tier requires (🟢 0 reviewers/self-merge, 🟡 1 reviewer, 🔴 1 reviewer + explicit approval)?
-2. **Skip**: If no `$story`/PR context is available (universal-only run) — mark SKIPPED.
+2. **Skip**: If no `$story`/PR context is available (universal-only run) — mark SKIPPED. If already verified earlier in this session — mark PASS (per canonical DoD's skip-already-passing rule), unless new commits or new PR activity landed since, in which case re-check (approvals are live state that can change mid-session).
 3. **Act**: Count actual approvals against the tier's required count. No risk tier present on the PR → treat the tier as 🔴 for this check only (fail-safe default per ADR-013) and report that the tier itself is missing, not just the approval count.
 4. **Verify**: Required approvals met → PASS. Missing approvals, or missing tier → FAIL, report the specific gap (e.g. "🔴 tier requires 1 explicit approval, PR has 0").
 
@@ -92,7 +92,7 @@ Execute each criterion group in order. For every criterion, follow the **check �
 ### Step 10: Critical Bugs
 
 1. **Check**: Are there open critical/blocker-labeled issues linked to this story or PR?
-2. **Skip**: If the PM tool exposes no linked-issue/label data — mark SKIPPED with note: "No linked-issue data — critical-bug check not verifiable."
+2. **Skip**: If the PM tool exposes no linked-issue/label data — mark SKIPPED with note: "No linked-issue data — critical-bug check not verifiable." If already verified earlier in this session — mark PASS (per canonical DoD's skip-already-passing rule), unless new commits or new PR activity landed since, in which case re-check (a critical/blocker label can be added mid-session).
 3. **Act**: Query the PM tool for issues referencing this story/PR carrying a critical/blocker severity label. Report any found.
 4. **Verify**: None found → PASS. Any found → FAIL, list them.
 

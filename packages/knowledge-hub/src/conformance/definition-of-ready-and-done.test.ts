@@ -21,6 +21,10 @@ const VERIFY_DONE_SKILL = readFileSync(
   join(__dirname, '../../dataset/.skills/capability/verify-done/SKILL.md'),
   'utf-8',
 )
+const VERIFY_DONE_MIRROR = readFileSync(
+  join(__dirname, '../../../../.claude/skills/pair-capability-verify-done/SKILL.md'),
+  'utf-8',
+)
 
 describe('definition-of-ready-and-done.md — structure', () => {
   it('has the expected title and is a companion to canonical-states.md', () => {
@@ -146,5 +150,31 @@ describe('verify-done SKILL.md — canonical DoD integration', () => {
 
   it('states deployment is excluded from the canonical DoD', () => {
     expect(VERIFY_DONE_SKILL).toMatch(/Deployment is explicitly excluded/)
+  })
+})
+
+describe('verify-done SKILL.md — root/dataset structural parity (#241 round-4)', () => {
+  // Guards against the exact drift class this story exists to eliminate: a fix
+  // landing only in the dataset (or only in the root mirror) instead of both.
+  // Content differs in self-naming (/pair-capability-verify-done vs /verify-done)
+  // and cross-skill references, so this checks structure, not byte-equality.
+  const stepHeadings = (content: string) => content.match(/^### Step \d+:.*$/gm) ?? []
+  const skipClauses = (content: string) => content.match(/^\d+\.\s+\*\*Skip\*\*:.*$/gm) ?? []
+
+  it('has the same number of numbered Steps in root and dataset', () => {
+    expect(stepHeadings(VERIFY_DONE_MIRROR).length).toBe(stepHeadings(VERIFY_DONE_SKILL).length)
+  })
+
+  it('has the same number of Skip clauses in root and dataset', () => {
+    expect(skipClauses(VERIFY_DONE_MIRROR).length).toBe(skipClauses(VERIFY_DONE_SKILL).length)
+  })
+
+  it('Steps 3 and 10 carry the already-verified-this-session skip clause in both root and dataset', () => {
+    for (const content of [VERIFY_DONE_SKILL, VERIFY_DONE_MIRROR]) {
+      const step3 = content.split('### Step 3:')[1]?.split('### Step 4:')[0] ?? ''
+      const step10 = content.split('### Step 10:')[1]?.split('### Step 11:')[0] ?? ''
+      expect(step3).toMatch(/already verified earlier in this session.*mark PASS/)
+      expect(step10).toMatch(/already verified earlier in this session.*mark PASS/)
+    }
   })
 })
