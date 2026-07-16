@@ -8,12 +8,13 @@ Pair's own gate/tooling scripts, as tested TypeScript modules — the reference 
 | --------------------- | ----------------------------- | ------------------------------------------------------------------------ |
 | `code-hygiene:check`  | `src/code-hygiene-check.ts`   | Fails if suppression markers (`@ts-ignore`, `eslint-disable`, `.skip`) are committed |
 | `sync-version`        | `src/sync-version-in-docs.ts` | Detects/rewrites hardcoded CLI version strings across `.md`/`.mdx` docs |
+| `benchmark-update-link` | `src/benchmark-update-link.ts` | Perf gate for the CLI's `update-link` command — thresholds: <30,000ms (large KB), >100 links/sec (every size) |
 
-Both are runnable via the repo-root scripts (`pnpm hygiene:check`, `pnpm sync-version -- <old-version>`), which delegate here (`pnpm --filter @pair/dev-tools <script>`).
+All three are runnable via the repo-root scripts (`pnpm hygiene:check`, `pnpm sync-version -- <old-version>`, `pnpm test:perf`), which delegate here (`pnpm --filter @pair/dev-tools <script>`).
 
 ## Scope
 
-This package owns the genuinely **repo-wide, no-package-affinity** gates. Three related tools — `docs-staleness-check` (`apps/website/lib/`), `skills-conformance-check` and `check-broken-links` (`packages/knowledge-hub/src/tools/`) — stay in their owning packages: each needs that package's own context (the website's docs tree, knowledge-hub's dataset) and moving them here would trade a clean path resolution for a deep relative reach into a sibling package's internals. `scripts/perf/benchmark-update-link.js` also stays put (perf benchmark, not a correctness gate).
+This package owns the genuinely **repo-wide, no-package-affinity** gates. Three related tools — `docs-staleness-check` (`apps/website/lib/`), `skills-conformance-check` and `check-broken-links` (`packages/knowledge-hub/src/tools/`) — stay in their owning packages: each needs that package's own context (the website's docs tree, knowledge-hub's dataset) and moving them here would trade a clean path resolution for a deep relative reach into a sibling package's internals.
 
 ## Conventions
 
