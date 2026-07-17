@@ -1,13 +1,8 @@
 # `.gitleaks.toml` — Example
-
 #
-
 # Illustrative allowlist for a fictitious project. Copy only the entries you need — a
-
 # real project's file normally starts empty (or absent) and grows one entry per confirmed
-
 # false positive. See the mechanism and fail-closed requirement in
-
 # guidelines/quality-assurance/security/secret-scanning.md.
 
 title = "project secret-scanning allowlist"
