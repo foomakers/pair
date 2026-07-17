@@ -110,6 +110,20 @@ skill re-implements the other's surface.
   scan over this repo's full history would flag, and resolving that safely (allowlisting the exact
   guideline line, or rewording the example) is deliberately left to a follow-up rather than risked in
   this story's own PR.
+- **The `secret-scanning.md` Verification section is a documented, manually-reproduced check, not a
+  committed automated fixture test** (raised in PR #341 review). Deliberate, for the same reason as
+  the point above: an automated version would need to scaffold a real git repo, shell out to the
+  `gitleaks` binary, and assert on its exit code — a hard dependency on an external tool this repo
+  does not otherwise require (per this ADR's own decision not to dogfood gitleaks into `ci.yml` yet),
+  and exactly the kind of script/CLI end-to-end behavior
+  [2026-07-13-gate-tooling-code-in-tested-modules.md](../../decision-log/2026-07-13-gate-tooling-code-in-tested-modules.md)
+  routes to a smoke test rather than a vitest unit test — not something to bolt onto this repo's own
+  quality gates for a CI-config template meant for *other* projects. The claim is still falsifiable:
+  the exact commands are in the guideline, reproducible with any gitleaks 8.x install, and were
+  independently re-run (not just read) during this story and its review. If a project wants this
+  gated for real, the natural home is that project's own `scripts/smoke-tests/` once gitleaks is
+  dogfooded into this repo's `ci.yml` (see the point above) — tracked as a candidate follow-up, not a
+  gap in this story's DoD.
 
 ## Adoption Impact
 

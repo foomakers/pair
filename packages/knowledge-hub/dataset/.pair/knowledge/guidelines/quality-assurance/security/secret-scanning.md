@@ -76,6 +76,11 @@ gitleaks detect --source . --no-banner --redact --log-opts="-1"; echo "exit: $?"
 # → no leaks found · exit: 0  (allowlisted pattern, green)
 ```
 
+This is a documented, manually-reproduced verification, not a committed automated fixture test — a
+deliberate choice recorded in ADR-015's Trade-offs, not a gap: automating it would shell out to the
+external `gitleaks` binary from inside this repo's own test suite, a dependency this repo does not
+otherwise carry.
+
 ## Relationship to `/assess-security`
 
 `/assess-security` never scans for secrets (its own Notes section states this explicitly) — it evaluates authn/authz, injection, and the rest of the OWASP surface via the KB/adoption rule cascade, a judgment call. Secret detection stays fully deterministic and fully separate, so the "no LLM involved" guarantee in R6.5 is never diluted by composing it with a skill that could, in principle, miss a pattern a human didn't anticipate.
