@@ -15,6 +15,8 @@ Two items are the **same** item when their normalized title (lowercase, trimmed,
    - **No substantial overlap** → propose **CREATE**, with the one-line rationale for why it's distinct.
    - **Ambiguous** (score sits in the borderline band, or more than one existing item is a plausible match) → present as a question with a recommendation; never silently pick one side.
    - **Best/only match is Closed** → never EXTEND a closed item. Propose CREATE, with a reference (link/comment) back to the closed item so the history isn't lost.
+
+   Precedence: the closed-item rule applies regardless of ambiguity. A closed item that is the sole plausible match is always CREATE-with-reference, never surfaced as an ambiguous question — closed items are never EXTENDed either way, so there's nothing ambiguous left to ask about.
 4. **Verify**: Every candidate has exactly one proposal (`EXTEND <id>` or `CREATE`, or an ambiguous question) with its rationale shown — **before any write**. The developer confirms the full proposal list (dry-run); only confirmed `CREATE`/`EXTEND` proposals reach the write-issue step.
 
 ## Threshold — keep it conservative
