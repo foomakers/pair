@@ -57,6 +57,15 @@ describe('to-issues-triage.md — shared convention', () => {
     expect(CONVENTION.toLowerCase()).toMatch(/conservative/)
   })
 
+  it('Step 3 (Act/classify) compares against open-or-closed items, not open-only', () => {
+    // Regression guard for PR #338 round-3 fix (Major-2): Step 3's opening sentence
+    // previously restricted the comparison set to "open" items while the very next
+    // bullet required detecting a "closed" best-match — self-contradictory spec.
+    const step3 = CONVENTION.match(/3\.\s+\*\*Act\*\*:[\s\S]*?(?=\n4\.\s+\*\*Verify\*\*:)/)?.[0]
+    expect(step3).toBeDefined()
+    expect(step3).toMatch(/open or closed/i)
+  })
+
   it('carries a fixture backlog + candidate tree example with a double-run note', () => {
     expect(CONVENTION).toMatch(/Fixture example/)
     expect(CONVENTION.toLowerCase()).toMatch(/re-running/)
@@ -95,6 +104,19 @@ describe.each(PLAN_SKILLS)('%s — to-issues triage composed', skill => {
     expect(step3).toMatch(/ALREADY EXISTS/)
     const step4 = dataset(skill).split(/### Step 4/)[1]
     expect(step4).toMatch(/confirmed Step 3 proposal.*ALREADY EXISTS/)
+  })
+
+  it('Step 3 documents the ambiguous outcome as reachable in dataset and mirror', () => {
+    // Regression guard for PR #338 round-3 fix (Major-1): Step 3's own Verify
+    // wording previously enumerated only ALREADY EXISTS/EXTEND/CREATE, making the
+    // ambiguous-question outcome unreachable per the skill's own spec.
+    const datasetStep3 = dataset(skill).match(/### Step 3:[\s\S]*?(?=\n### )/)?.[0]
+    expect(datasetStep3).toBeDefined()
+    expect(datasetStep3).toMatch(/ambiguous/i)
+
+    const mirrorStep3 = mirror(skill).match(/### Step 3:[\s\S]*?(?=\n### )/)?.[0]
+    expect(mirrorStep3).toBeDefined()
+    expect(mirrorStep3).toMatch(/ambiguous/i)
   })
 })
 
