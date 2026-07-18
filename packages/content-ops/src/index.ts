@@ -73,7 +73,12 @@ export {
   rewriteSkillReferences,
   buildSkillNameMap,
   findSkillReferences,
+  rewriteSkillReferencesInFiles,
+  rewriteSkillLinkPaths,
+  rewriteSkillLinkPathsInFiles,
+  buildSkillLinkPathMap,
   type SkillNameMap,
+  type SkillLinkPathMap,
 } from './ops/skill-reference-rewriter'
 export {
   readSkillNameManifest,

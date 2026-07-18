@@ -101,7 +101,7 @@ ASSESSMENT COMPLETE (output-only — no files written):
 ├── Decision:  [framework vX.Y + coverage tool + pyramid distribution]
 ├── Proposal:  [content rendered for tech-stack.md testing section]
 ├── Target:    adoption/tech/tech-stack.md (Testing section)
-├── Persist:   [caller composes /pair-capability-record-decision(content, target) → ADL]
+├── Persist:   [caller composes /record-decision(content, target) → ADL]
 └── Status:    [Proposal ready | Confirmed existing]
 ```
 

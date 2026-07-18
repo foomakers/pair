@@ -15,6 +15,7 @@ This how-to orchestrates the `/pair-process-refine-story` skill.
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/pair-process-refine-story` | Executes the full refinement process: selection, requirements (Given-When-Then), technical analysis, sprint readiness, documentation. Section-level idempotent. |
 | `/pair-capability-write-issue`  | Composed by `/pair-process-refine-story` — creates or updates the story issue in the PM tool.                                                                                |
+| `/pair-capability-map-subdomains` + `/pair-capability-map-contexts` | Scoped domain/context placement for the story — planned wiring, tracked by [#242](https://github.com/foomakers/pair/issues/242). Not yet composed by `/pair-process-refine-story`. |
 
 > **If skills are not installed**, follow the manual workflow below.
 

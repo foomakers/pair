@@ -11,8 +11,8 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 
 ## Composed Skills
 
-| Skill                                   | Type       | Required | Phase | Purpose                                      |
-| --------------------------------------- | ---------- | -------- | ----- | -------------------------------------------- |
+| Skill                   | Type       | Required | Phase | Purpose                                      |
+| ----------------------- | ---------- | -------- | ----- | -------------------------------------------- |
 | `/pair-capability-verify-quality`       | Capability | Yes      | 2     | Quality gate checking                        |
 | `/pair-capability-verify-done`          | Capability | Yes      | 4     | Definition of Done checking                  |
 | `/pair-capability-record-decision`      | Capability | Yes      | Any   | Record missing ADR (HALT condition)          |
@@ -150,7 +150,7 @@ This phase uses a **4-level graceful degradation cascade** depending on which op
 
 ### Step 3.2: Run Adoption Check
 
-Run the procedure for the level determined in Step 3.1 — see [degradation-levels.md](degradation-levels.md) for the exact steps of each of the 4 levels.
+Run the procedure for the level determined in Step 3.1 — see [degradation-levels.md](./degradation-levels.md) for the exact steps of each of the 4 levels.
 
 ### Step 3.3: Verify Adoption Results
 
@@ -227,7 +227,7 @@ Based on compiled findings:
 
 ## Phase 6: Merge & Close (APPROVED only, optional)
 
-Only reached when the reviewer picked "Merge now" in Step 5.4 — see [merge-and-cascade.md](merge-and-cascade.md) for the merge-strategy, merge-commit, merge, parent-cascade, branch-cleanup, and post-merge-manual-test steps (Steps 6.1–6.6) plus the completion output.
+Only reached when the reviewer picked "Merge now" in Step 5.4 — see [merge-and-cascade.md](./merge-and-cascade.md) for the merge-strategy, merge-commit, merge, parent-cascade, branch-cleanup, and post-merge-manual-test steps (Steps 6.1–6.6) plus the completion output.
 
 ## Output Format
 
@@ -247,7 +247,7 @@ REVIEW COMPLETE:
 └── Report:     [Posted as PR comment]
 ```
 
-At merge (Phase 6): see [merge-and-cascade.md](merge-and-cascade.md).
+At merge (Phase 6): see [merge-and-cascade.md](./merge-and-cascade.md).
 
 ## HALT Conditions
 
@@ -274,15 +274,15 @@ See [idempotency convention](../../../.pair/knowledge/skill-conventions/idempote
 
 See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (optional skill not installed → degrade, never HALT; PM tool not accessible → ask the reviewer directly) for the standard scenarios. Additional cases:
 
-- **/pair-capability-verify-adoption not installed**: Falls back to inline dependency checking against [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md). Warning logged. See degradation cascade (Phase 3).
-- **/pair-capability-assess-stack not installed**: Unlisted dependencies flagged as warnings for manual verification. Does NOT HALT.
-- **/pair-capability-analyze-debt not available**: Skip debt assessment, note in report.
-- **/pair-capability-assess-security not installed**: Skip Step 2.4. Security Review section notes "manual judgment only — /pair-capability-assess-security not installed". Does NOT HALT; a manual security read of the diff is still expected per [how-to-11](../../../.pair/knowledge/how-to/11-how-to-code-review.md).
+- **/verify-adoption not installed**: Falls back to inline dependency checking against [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md). Warning logged. See degradation cascade (Phase 3).
+- **/assess-stack not installed**: Unlisted dependencies flagged as warnings for manual verification. Does NOT HALT.
+- **/analyze-debt not available**: Skip debt assessment, note in report.
+- **/assess-security not installed**: Skip Step 2.4. Security Review section notes "manual judgment only — /pair-capability-assess-security not installed". Does NOT HALT; a manual security read of the diff is still expected per [how-to-11](../../../.pair/knowledge/how-to/11-how-to-code-review.md).
 - **Story not found**: Review proceeds with PR-only validation (no AC check). Phase 6 skips parent cascade.
 - **Code review template not found**: **HALT** — cannot produce review without template (a required dependency, not optional).
 - **PM tool not accessible**: Phase 6 merge via CLI only.
 - **Merge fails** (conflicts, branch protection): Report the failure, ask reviewer to resolve. Do not force-push or bypass protections.
-- **/pair-capability-execute-manual-tests not installed**: Skip Step 6.6. Log "Manual test validation skipped — skill not installed." Does NOT block merge.
+- **/execute-manual-tests not installed**: Skip Step 6.6. Log "Manual test validation skipped — skill not installed." Does NOT block merge.
 - **No manual test suite**: Skip Step 6.6. Log "No manual test suite found." Does NOT block merge.
 
 ## Notes

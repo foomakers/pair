@@ -117,9 +117,9 @@ az boards work-item update --id [id] --state "Committed"
 
 ### Typical Story Flow
 
-1. **Creation** — `/plan-stories` creates the PBI in the Draft-mapped state
-2. **Refinement** — `/refine-story` completes AC + analysis, moves to the Ready-mapped state
-3. **Implementation** — `/implement` moves to the In Progress-mapped state
+1. **Creation** — `/pair-process-plan-stories` creates the PBI in the Draft-mapped state
+2. **Refinement** — `/pair-process-refine-story` completes AC + analysis, moves to the Ready-mapped state
+3. **Implementation** — `/pair-process-implement` moves to the In Progress-mapped state
 4. **PR opened** — PR linked via `--work-items`; item moves to the Review-mapped state
 5. **Merge** — `az repos pr update --transition-work-items true` moves it to the Done-mapped state
 

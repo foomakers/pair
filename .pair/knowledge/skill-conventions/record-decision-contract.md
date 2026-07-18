@@ -17,27 +17,27 @@ An `assess-*` skill never writes. It returns:
 The caller (the orchestrator or the human/agent invoking the assess-* skill directly) persists by composing:
 
 ```text
-/pair-capability-record-decision(content, target, decision-metadata)
+/record-decision(content, target, decision-metadata)
 ```
 
 which writes `content` into its owned section of `target` (a heading-scoped merge — it preserves the rest of the file) and records the ADR/ADL/DDR per its own classification rule.
 
 ## Standard "Verify" line (end of Path A/B in the resolution cascade, and end of the assessment step)
 
-> **Verify**: Proposal emitted. Persistence is performed by the caller via `/pair-capability-record-decision(content, target, decision-metadata)`, never by this skill.
+> **Verify**: Proposal emitted. Persistence is performed by the caller via `/record-decision(content, target, decision-metadata)`, never by this skill.
 
 ## Standard Composition Interface shape
 
 ```markdown
-When composed by `/pair-process-bootstrap`:
+When composed by `/bootstrap`:
 
-- **Input**: `/pair-process-bootstrap` invokes during Phase 2[, with <skill-specific args>].
+- **Input**: `/bootstrap` invokes during Phase 2[, with <skill-specific args>].
 - **Output**: Returns `{ content, target, decision-metadata }` plus the report. Writes nothing.
-- **Persistence**: `/pair-process-bootstrap` accepts the proposal and composes `/pair-capability-record-decision(content, target, decision-metadata)` to write <target> and record the <ADR|ADL>.
+- **Persistence**: `/bootstrap` accepts the proposal and composes `/record-decision(content, target, decision-metadata)` to write <target> and record the <ADR|ADL>.
 
 When invoked **independently**:
 
-- Full interactive flow. The skill returns the proposal; the human (or agent) persists it by composing `/pair-capability-record-decision`, then commits.
+- Full interactive flow. The skill returns the proposal; the human (or agent) persists it by composing `/record-decision`, then commits.
 ```
 
 Additional "When composed by ..." blocks (e.g. `/pair-process-implement`, `/pair-process-review` for `/pair-capability-assess-stack`'s implementation/review modes) follow the same Input/Output/Persistence shape — only the caller name, trigger, and target/ADR-vs-ADL vary.

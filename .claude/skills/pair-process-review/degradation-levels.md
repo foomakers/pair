@@ -1,12 +1,12 @@
 # Phase 3, Step 3.2: Adoption Compliance Levels — Detail
 
-Disclosed from [SKILL.md](SKILL.md) Step 3.2. Run only the procedure matching the level determined in Step 3.1 — the other three never apply on this run.
+Disclosed from [SKILL.md](./SKILL.md) Step 3.2. Run only the procedure matching the level determined in Step 3.1 — the other three never apply on this run.
 
 **Level 1** (/pair-capability-verify-adoption + /pair-capability-assess-stack):
 
 1. Compose `/pair-capability-verify-adoption` with `$scope = all`.
 2. For each non-conformity:
-   - **Tech-stack**: compose `/pair-capability-assess-stack` (output-only — returns a proposal) → on developer approval, `/pair-process-review` persists the entry via `/pair-capability-record-decision(content, target)` (the sole writer); on rejection → CHANGES-REQUESTED.
+   - **Tech-stack**: compose `/pair-capability-assess-stack` (output-only — returns a proposal) → on developer approval, `/pair-process-review` persists the entry via `/record-decision(content, target)` (the sole writer); on rejection → CHANGES-REQUESTED.
    - **Architecture**: report to developer for resolution. Missing ADR → HALT via `/pair-capability-record-decision`.
    - **Other** (security, coding-standards, infrastructure): report findings.
 3. Record all results.

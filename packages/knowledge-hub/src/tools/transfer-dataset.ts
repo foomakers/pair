@@ -2,7 +2,12 @@ import { join, resolve } from 'path'
 import { fileSystemService } from '@pair/content-ops'
 import { movePathOps, copyPathOps } from '@pair/content-ops'
 import { stripAllMarkers, applyTransformCommands, validateMarkers } from '@pair/content-ops'
-import type { SyncOptions, SkillNameMap, CopyPathOpsResult } from '@pair/content-ops'
+import type {
+  SyncOptions,
+  SkillNameMap,
+  SkillLinkPathMap,
+  CopyPathOpsResult,
+} from '@pair/content-ops'
 
 const DATASET = join(__dirname, '..', '..', 'dataset')
 
@@ -39,6 +44,7 @@ export type TransferDatasetConfig = {
   mode?: 'copy' | 'move'
   options?: SyncOptions
   skillNameMap?: SkillNameMap
+  skillLinkPathMap?: SkillLinkPathMap
   /** Content transform: applies @{prefix}-skip removal then strips all markers. */
   transform?: { prefix: string }
   /** Strip all marker comments from the copied file. Default: false. */
@@ -49,7 +55,7 @@ export async function runTransferDataset(
   config: TransferDatasetConfig,
   datasetRoot: string = DATASET,
 ): Promise<CopyPathOpsResult> {
-  const { source, target, mode = 'move', options, skillNameMap } = config
+  const { source, target, mode = 'move', options, skillNameMap, skillLinkPathMap } = config
 
   let result: CopyPathOpsResult
   if (mode === 'copy') {
@@ -60,6 +66,7 @@ export async function runTransferDataset(
       datasetRoot,
       ...(options && { options }),
       ...(skillNameMap && { skillNameMap }),
+      ...(skillLinkPathMap && { skillLinkPathMap }),
     })
   } else {
     await movePathOps({
@@ -115,16 +122,29 @@ export async function runTransferPipeline(
   datasetRoot: string = DATASET,
 ): Promise<CopyPathOpsResult> {
   let accumulatedMap: SkillNameMap | undefined
+  let accumulatedLinkMap: SkillLinkPathMap | undefined
 
   for (const step of steps) {
-    const config = accumulatedMap ? { ...step, skillNameMap: accumulatedMap } : step
+    const config = accumulatedMap
+      ? {
+          ...step,
+          skillNameMap: accumulatedMap,
+          ...(accumulatedLinkMap && { skillLinkPathMap: accumulatedLinkMap }),
+        }
+      : step
     const result = await runTransferDataset(config, datasetRoot)
     if (result.skillNameMap && result.skillNameMap.size > 0) {
       accumulatedMap = result.skillNameMap
+      accumulatedLinkMap = result.skillLinkPathMap
     }
   }
 
-  return accumulatedMap ? { skillNameMap: accumulatedMap } : {}
+  return accumulatedMap
+    ? {
+        skillNameMap: accumulatedMap,
+        ...(accumulatedLinkMap && { skillLinkPathMap: accumulatedLinkMap }),
+      }
+    : {}
 }
 
 // CLI execution logic

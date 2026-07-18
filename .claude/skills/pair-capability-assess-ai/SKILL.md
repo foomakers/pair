@@ -105,7 +105,7 @@ ASSESSMENT COMPLETE (output-only — no files written):
 ├── Decision:  [primary tool + maturity level + additional tools]
 ├── Proposal:  [content rendered for tech-stack.md AI section]
 ├── Target:    adoption/tech/tech-stack.md (AI section)
-├── Persist:   [caller composes /pair-capability-record-decision(content, target) → ADL]
+├── Persist:   [caller composes /record-decision(content, target) → ADL]
 └── Status:    [Proposal ready | Confirmed existing]
 ```
 

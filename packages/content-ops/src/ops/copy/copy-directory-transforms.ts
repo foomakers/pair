@@ -8,8 +8,10 @@ import { rewriteLinksAfterTransform, PathMappingEntry } from '../link-rewriter'
 import { syncFrontmatter } from '../frontmatter-transform'
 import {
   buildSkillNameMap,
+  buildSkillLinkPathMap,
   rewriteSkillReferencesInFiles,
   SkillNameMap,
+  SkillLinkPathMap,
 } from '../skill-reference-rewriter'
 import type { CopyPathOpsResult, TransformOpts } from './copy-types'
 
@@ -250,7 +252,7 @@ export async function copyDirectoryWithTransforms(params: {
   }
 
   await rewriteLinksForTransformedDirs(params, dirMappingFiles, transformOpts)
-  const skillNameMap = await applySkillReferenceRewrites(
+  const { skillNameMap, skillLinkPathMap } = await applySkillReferenceRewrites(
     fileService,
     dirMappingFiles,
     transformOpts,
@@ -259,7 +261,7 @@ export async function copyDirectoryWithTransforms(params: {
   logger.info(
     `Copied contents of ${srcPath} -> ${destPath} (flatten=${transformOpts.flatten}, prefix=${transformOpts.prefix ?? 'none'})`,
   )
-  return skillNameMap.size > 0 ? { skillNameMap } : {}
+  return skillNameMap.size > 0 ? { skillNameMap, skillLinkPathMap } : {}
 }
 
 /**
@@ -335,15 +337,23 @@ async function rewriteLinksForTransformedDirs(
 }
 
 /**
- * Collects .md files from dirMappingFiles and rewrites skill references if any renames occurred.
+ * Collects .md files from dirMappingFiles and rewrites skill references if any
+ * renames occurred, returning both the skill name map (for `/command` token
+ * rewrites) and the skill link-path map (for SKILL.md cross-reference PATH
+ * rewrites) so the caller can chain them onto other registries' files.
+ *
+ * The link-path map is only built and returned here — it is NOT applied to the
+ * copied `.skills` files themselves: their cross-references are already
+ * rewritten by `rewriteLinksAfterTransform` (via `rewriteLinksForTransformedDirs`).
  */
 async function applySkillReferenceRewrites(
   fileService: FileSystemService,
   dirMappingFiles: Map<string, string[]>,
   transformOpts: TransformOpts,
-): Promise<SkillNameMap> {
+): Promise<{ skillNameMap: SkillNameMap; skillLinkPathMap: SkillLinkPathMap }> {
   const skillNameMap = buildSkillNameMap(dirMappingFiles, transformOpts)
-  if (skillNameMap.size === 0) return skillNameMap
+  const skillLinkPathMap = buildSkillLinkPathMap(dirMappingFiles, transformOpts)
+  if (skillNameMap.size === 0) return { skillNameMap, skillLinkPathMap }
 
   const allMdFiles: string[] = []
   for (const mappedFiles of dirMappingFiles.values()) {
@@ -352,5 +362,5 @@ async function applySkillReferenceRewrites(
     }
   }
   await rewriteSkillReferencesInFiles({ fileService, files: allMdFiles, skillNameMap })
-  return skillNameMap
+  return { skillNameMap, skillLinkPathMap }
 }

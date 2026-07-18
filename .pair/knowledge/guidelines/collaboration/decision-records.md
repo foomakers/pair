@@ -39,7 +39,7 @@ ADR and DDR use sequential naming: `adr-NNN-<topic>.md` / `ddr-NNN-<topic>.md`
 
 - **NNN**: Zero-padded 3-digit sequence number, incremented from the highest existing `adr-NNN`/`ddr-NNN` in the respective directory (starts at `001`).
 - **Topic**: Short kebab-case description (e.g., `refund-window-30-days`).
-- Rationale: architectural and domain decisions form supersede chains and are referenced by number elsewhere (brainstorm/refine conflict flags, cross-references) — a chain reads more naturally as `adr-003 supersedes adr-001` than as date deltas. See ADL [2026-07-12-adr-sequential-naming-convention.md](../../../adoption/decision-log/2026-07-12-adr-sequential-naming-convention.md) (updated 2026-07-18 with the DDR/ADL/Analysis-Log rationale).
+- Rationale: architectural and domain decisions form supersede chains and are referenced by number elsewhere (brainstorm/refine conflict flags, cross-references) — a chain reads more naturally as `adr-003 supersedes adr-001` than as date deltas.
 
 Examples:
 

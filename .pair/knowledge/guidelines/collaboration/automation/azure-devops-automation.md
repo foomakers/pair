@@ -13,7 +13,7 @@ Azure Boards supports per-column and per-state automation configured in board se
 - **PR opened → Review-mapped column** — when a linked PR is created, move the work item to the column mapped to `Review`
 - **PR completed → Done-mapped column** — `az repos pr update --transition-work-items true` performs this transition on merge
 - **Child activation → parent activation** — when a Task moves to an In Progress-mapped state, activate the parent story
-- **All children closed → resolve parent** — optional; pair's `/review` skill also performs the parent cascade explicitly
+- **All children closed → resolve parent** — optional; pair's `/pair-process-review` skill also performs the parent cascade explicitly
 
 ### State Transition Consistency
 

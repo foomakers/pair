@@ -95,7 +95,7 @@ ASSESSMENT COMPLETE (output-only — no files written):
 ├── Decision:  [key infrastructure choices]
 ├── Proposal:  [content rendered for infrastructure.md]
 ├── Target:    adoption/tech/infrastructure.md (core sections)
-├── Persist:   [caller composes /pair-capability-record-decision(content, target) → ADR]
+├── Persist:   [caller composes /record-decision(content, target) → ADR]
 └── Status:    [Proposal ready | Confirmed existing]
 ```
 

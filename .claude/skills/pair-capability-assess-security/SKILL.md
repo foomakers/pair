@@ -97,7 +97,7 @@ See [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-c
 ### Review Mode
 
 ```text
-SECURITY REVIEW (composed by /pair-process-review — no files written):
+SECURITY REVIEW (composed by /review — no files written):
 ├── Mode:       Review
 ├── Verdict:    [green | yellow | red] — [1-line summary]
 ├── Findings:   [N total — N introduced, N pre-existing]
@@ -124,7 +124,7 @@ SECURITY AUDIT COMPLETE:
 ├── Report:    [.pair/working/reports/security/<file> — written | N/A — Path B]
 ├── Proposal:  [content rendered for tech/security.md | N/A — Path B, already current]
 ├── Target:    adoption/tech/security.md
-├── Persist:   [caller composes /pair-capability-record-decision(content, target) → ADL | N/A]
+├── Persist:   [caller composes /record-decision(content, target) → ADL | N/A]
 └── Status:    [Report written | Confirmed existing | Proposal ready]
 ```
 
@@ -159,4 +159,4 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 - **Writes exactly one kind of file itself**: the audit report under `.pair/working/reports/security/` (Step 7) — the one exception to the `assess-*` family's usual output-only convention, justified the same way `/pair-capability-design-manual-tests` writes its own suite files: reports are operational artifacts (D14), not adoption content. Adoption content (`tech/security.md`) is never self-written — that always goes through the caller's `/pair-capability-record-decision` composition (Step 8).
 - **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). Audit mode's check: Path B (populated `tech/security.md` + backing decision record) confirms rather than re-running the full OWASP assessment. Review mode is not idempotent in that sense — a fresh verdict is computed every review, against the current diff, by design (findings can change commit to commit).
 - **Never scans for secrets**: committed-secret detection is a deterministic, LLM-free CI layer (R6.5) provisioned by `/pair-capability-setup-gates`, not an assessment this skill performs — keeping the "no LLM involved" guarantee real (D24).
-- **D22** (1-line verdict + collapsed findings, never a table inline): see ADL [2026-07-18-d22-classification-verdict-collapsed-details.md](../../../.pair/adoption/decision-log/2026-07-18-d22-classification-verdict-collapsed-details.md).
+- **D22** (1-line verdict + collapsed findings, never a table inline): a project-level decision record, not part of this portable dataset.

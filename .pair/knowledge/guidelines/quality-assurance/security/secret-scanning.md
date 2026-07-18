@@ -1,8 +1,8 @@
 # Secret Scanning — Deterministic CI Layer
 
-The one security control that is **not** a skill (D24). Every other security judgment call goes through `/assess-security`; a committed secret goes RED mechanically, with no LLM involved (R6.5) — an `Automation` layer in [quality-model.md](../quality-model.md)'s three-layer principle (§1) sense: it reads a scan result deterministically, zero judgment.
+The one security control that is **not** a skill (D24). Every other security judgment call goes through `/pair-capability-assess-security`; a committed secret goes RED mechanically, with no LLM involved (R6.5) — an `Automation` layer in [quality-model.md](../quality-model.md)'s three-layer principle (§1) sense: it reads a scan result deterministically, zero judgment.
 
-`/setup-gates` provisions this layer (CI gates, §4 of [quality-model.md](../quality-model.md)); it applies at **every** tier, unlike tier-scoped gates (unit tests from 🟡, integration/E2E from 🔴 only) — a secret is a secret regardless of the change's risk tier.
+`/pair-capability-setup-gates` provisions this layer (CI gates, §4 of [quality-model.md](../quality-model.md)); it applies at **every** tier, unlike tier-scoped gates (unit tests from 🟡, integration/E2E from 🔴 only) — a secret is a secret regardless of the change's risk tier.
 
 ## Scanner Default
 
@@ -10,7 +10,7 @@ The one security control that is **not** a skill (D24). Every other security jud
 
 ## CI Job Template (GitHub Actions)
 
-`/setup-gates` writes a job equivalent to this into the project's CI pipeline (Step 4 of that skill) — required, not tier-scoped. Two forms below — same fail-closed guarantee (a committed secret fails the build), differing only in scan scope (the Action scans the event's commit range; the binary form here scans full history); pick per the project's GitHub ownership:
+`/pair-capability-setup-gates` writes a job equivalent to this into the project's CI pipeline (Step 4 of that skill) — required, not tier-scoped. Two forms below — same fail-closed guarantee (a committed secret fails the build), differing only in scan scope (the Action scans the event's commit range; the binary form here scans full history); pick per the project's GitHub ownership:
 
 **Option A — `gitleaks-action@v2`** (matches [github-actions-implementation.md](../../infrastructure/cicd-strategy/github-actions-implementation.md)). **Requires a `GITLEAKS_LICENSE` for org-owned repos** — the Action gates on it and fails before scanning if absent, regardless of public/private. A free OSS key is available at gitleaks.io; store it as a repo/org secret. Individual-owned repos don't need it.
 
@@ -52,11 +52,11 @@ Either form exits non-zero the moment it finds a leak, which fails the job — t
 
 ### Fail-Closed Requirement
 
-**Scanner unavailable in CI is a gate failure, not a skip.** If the action can't run (missing config, registry unreachable, runner error) the job must still fail — never silently pass. `/setup-gates` writes the job as `required` in the same way it marks every other blocking gate; a project must not disable failure on this job (e.g. via the `continue-on-error` step option).
+**Scanner unavailable in CI is a gate failure, not a skip.** If the action can't run (missing config, registry unreachable, runner error) the job must still fail — never silently pass. `/pair-capability-setup-gates` writes the job as `required` in the same way it marks every other blocking gate; a project must not disable failure on this job (e.g. via the `continue-on-error` step option).
 
 ## Allowlist Mechanism (Adoption-Controlled)
 
-False positives are handled with a `.gitleaks.toml` at the project root — never by disabling the scan. `/setup-gates` provisions a starting file; a project extends it as false positives are confirmed:
+False positives are handled with a `.gitleaks.toml` at the project root — never by disabling the scan. `/pair-capability-setup-gates` provisions a starting file; a project extends it as false positives are confirmed:
 
 ```toml
 title = "project secret-scanning allowlist"
@@ -78,7 +78,7 @@ Adding an entry is an adoption change (the file lives at the project root, revie
 
 ## Swapping the Scanner
 
-A project can adopt a different scanner (trufflehog, ggshield, a vendor SAST suite's secret-detection module, ...) by recording the override in `tech/way-of-working.md`'s Custom Gate Registry — `/setup-gates` reads that override before provisioning gitleaks (same resolution order as every other gate: **Argument > Adoption > KB default**). The fail-closed and required-check requirements above apply to whichever scanner is adopted, not to gitleaks specifically.
+A project can adopt a different scanner (trufflehog, ggshield, a vendor SAST suite's secret-detection module, ...) by recording the override in `tech/way-of-working.md`'s Custom Gate Registry — `/pair-capability-setup-gates` reads that override before provisioning gitleaks (same resolution order as every other gate: **Argument > Adoption > KB default**). The fail-closed and required-check requirements above apply to whichever scanner is adopted, not to gitleaks specifically.
 
 ## Verification (reproducible)
 
@@ -105,12 +105,12 @@ deliberate choice recorded in ADR-015's Trade-offs, not a gap: automating it wou
 external `gitleaks` binary from inside this repo's own test suite, a dependency this repo does not
 otherwise carry.
 
-## Relationship to `/assess-security`
+## Relationship to `/pair-capability-assess-security`
 
-`/assess-security` never scans for secrets (its own Notes section states this explicitly) — it evaluates authn/authz, injection, and the rest of the OWASP surface via the KB/adoption rule cascade, a judgment call. Secret detection stays fully deterministic and fully separate, so the "no LLM involved" guarantee in R6.5 is never diluted by composing it with a skill that could, in principle, miss a pattern a human didn't anticipate.
+`/pair-capability-assess-security` never scans for secrets (its own Notes section states this explicitly) — it evaluates authn/authz, injection, and the rest of the OWASP surface via the KB/adoption rule cascade, a judgment call. Secret detection stays fully deterministic and fully separate, so the "no LLM involved" guarantee in R6.5 is never diluted by composing it with a skill that could, in principle, miss a pattern a human didn't anticipate.
 
 ## Cross-References
 
 - [quality-model.md](../quality-model.md) §2 (Security pillar), §4 (per-tier gate requirements) — this layer sits in the "Gate checks" row at every tier.
-- `/setup-gates` — provisions the job + allowlist file.
-- `/assess-security` — the judgment-call counterpart; never overlaps with this layer.
+- `/pair-capability-setup-gates` — provisions the job + allowlist file.
+- `/pair-capability-assess-security` — the judgment-call counterpart; never overlaps with this layer.

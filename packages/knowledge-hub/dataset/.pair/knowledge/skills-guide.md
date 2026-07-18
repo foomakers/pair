@@ -151,11 +151,11 @@ Each skill directory contains a `SKILL.md` file with YAML frontmatter (`name` + 
 Process skills compose capability skills with optional graceful degradation:
 
 ```text
-/implement
-├── /verify-quality       (required)
-├── /record-decision      (required)
-├── /assess-stack          (optional — warns if missing)
-└── /verify-adoption       (optional — warns if missing)
+/pair-process-implement
+├── /pair-capability-verify-quality       (required)
+├── /pair-capability-record-decision      (required)
+├── /pair-capability-assess-stack          (optional — warns if missing)
+└── /pair-capability-verify-adoption       (optional — warns if missing)
 ```
 
 Optional skills degrade gracefully: if not installed, the process skill warns and continues without blocking.
@@ -197,7 +197,7 @@ Every row above except the two `(planned — #242)`/`(planned — #230)` entries
 **map-subdomains, map-contexts: process → capability (D24, #246)**
 
 - Old path: `.skills/process/map-subdomains/`, `.skills/process/map-contexts/` — new path: `.skills/capability/map-subdomains/`, `.skills/capability/map-contexts/`.
-- Installed command names change accordingly: `/pair-process-map-subdomains` → `/pair-capability-map-subdomains`; `/pair-process-map-contexts` → `/pair-capability-map-contexts`. Unprefixed dataset command names (`/map-subdomains`, `/map-contexts`) are unchanged.
+- Installed command names change accordingly: `/pair-process-map-subdomains` → `/pair-capability-map-subdomains`; `/pair-process-map-contexts` → `/pair-capability-map-contexts`. Unprefixed dataset command names (`map-subdomains`, `map-contexts`) are unchanged.
 - Invocation contract changed: `$scope` is now **required** and means "items/areas the caller touched" (not `all`/`single`). Full-catalog `$scope: all` is now bootstrap-only.
 - New behavior: graceful "system areas" fallback when no DDD artifacts exist; `Volatility` field on subdomains; per-relationship strength/distance/volatility assessment with an approval gate on unbalanced+volatile relationships (see `subdomain-template.md`, `bounded-context-template.md`).
 - No standalone process step or how-to remains for domain mapping — how-to guides 04 (define-subdomains) and 05 (define-bounded-contexts) were removed; each caller's own how-to (02, 03, 06, 08, 09) now references the capability inline at the point it's invoked, scoped per the [Callers Matrix](#callers-matrix-scoped-capabilities) above. The capability's own `SKILL.md` ([map-subdomains](../../.skills/capability/map-subdomains/SKILL.md), [map-contexts](../../.skills/capability/map-contexts/SKILL.md)) is the canonical reference for its algorithm, fallback behavior, and templates.
@@ -206,7 +206,7 @@ Every row above except the two `(planned — #242)`/`(planned — #230)` entries
 
 - Rationale: `assess-*` conflated two operations. The corpus now uses three distinct verbs — **`verify-*`** (conformance pass/fail), **`assess-*`** (evaluate options + PROPOSE an adoption choice — the 8 decision skills), **`analyze-*`** (analyze + REPORT only, never blocks, proposes no adoption decision). The two report skills were misfiled under `assess-*` and are renamed to the `analyze-*` verb. Recorded as ADL `2026-07-13-skill-naming-verb-taxonomy.md` in the project decision log.
 - Old path: `.skills/capability/assess-debt/`, `.skills/capability/assess-code-quality/` — new path: `.skills/capability/analyze-debt/`, `.skills/capability/analyze-code-quality/`.
-- Installed command names change accordingly: `/pair-capability-assess-debt` → `/pair-capability-analyze-debt`; `/pair-capability-assess-code-quality` → `/pair-capability-analyze-code-quality`. Unprefixed dataset command names change too: `/assess-debt` → `/analyze-debt`, `/assess-code-quality` → `/analyze-code-quality`.
+- Installed command names change accordingly: `/pair-capability-assess-debt` → `/pair-capability-analyze-debt`; `/pair-capability-assess-code-quality` → `/pair-capability-analyze-code-quality`. Unprefixed dataset command names change too: `assess-debt` → `analyze-debt`, `assess-code-quality` → `analyze-code-quality`.
 - No behavior change: both remain output-only report producers (per ADR-009); only the verb/name changed. Skill count stays 35.
 
 ## How Skills Relate to How-To Guides

@@ -29,12 +29,46 @@ describe('rewriteSkillRefsInTarget', () => {
       ['verify-quality', 'pair-capability-verify-quality'],
     ])
 
-    await rewriteSkillRefsInTarget(fs, '/project/AGENTS.md', map, noopLog)
+    await rewriteSkillRefsInTarget(
+      fs,
+      '/project/AGENTS.md',
+      { skillNameMap: map, skillLinkPathMap: new Map() },
+      noopLog,
+    )
 
     const result = await fs.readFile('/project/AGENTS.md')
     expect(result).toContain('/pair-process-next')
     expect(result).toContain('/pair-capability-verify-quality')
     expect(result).not.toMatch(/(?<![a-z-])\/next(?![a-z-])/)
+  })
+
+  it('rewrites SKILL.md cross-reference link paths from the link map', async () => {
+    const fs = new InMemoryFileSystemService(
+      {
+        '/project/doc.md':
+          'See [map-subdomains](../../.skills/capability/map-subdomains/SKILL.md).',
+      },
+      '/project',
+      '/project',
+    )
+    const linkMap = new Map([
+      [
+        '../.skills/capability/map-subdomains/SKILL.md',
+        '../.claude/skills/pair-capability-map-subdomains/SKILL.md',
+      ],
+    ])
+
+    await rewriteSkillRefsInTarget(
+      fs,
+      '/project/doc.md',
+      { skillNameMap: new Map(), skillLinkPathMap: linkMap },
+      noopLog,
+    )
+
+    const result = await fs.readFile('/project/doc.md')
+    expect(result).toBe(
+      'See [map-subdomains](../../.claude/skills/pair-capability-map-subdomains/SKILL.md).',
+    )
   })
 
   it('rewrites all markdown files in a directory', async () => {
@@ -52,7 +86,12 @@ describe('rewriteSkillRefsInTarget', () => {
       ['review', 'pair-process-review'],
     ])
 
-    await rewriteSkillRefsInTarget(fs, '/project/docs', map, noopLog)
+    await rewriteSkillRefsInTarget(
+      fs,
+      '/project/docs',
+      { skillNameMap: map, skillLinkPathMap: new Map() },
+      noopLog,
+    )
 
     expect(await fs.readFile('/project/docs/guide.md')).toContain('/pair-process-implement')
     expect(await fs.readFile('/project/docs/review.md')).toContain('/pair-process-review')
@@ -63,7 +102,12 @@ describe('rewriteSkillRefsInTarget', () => {
     const map = makeSkillNameMap([['next', 'pair-process-next']])
 
     // Should not throw
-    await rewriteSkillRefsInTarget(fs, '/project/nonexistent.md', map, noopLog)
+    await rewriteSkillRefsInTarget(
+      fs,
+      '/project/nonexistent.md',
+      { skillNameMap: map, skillLinkPathMap: new Map() },
+      noopLog,
+    )
   })
 
   it('skips non-markdown files', async () => {
@@ -74,7 +118,12 @@ describe('rewriteSkillRefsInTarget', () => {
     )
 
     const map = makeSkillNameMap([['next', 'pair-process-next']])
-    await rewriteSkillRefsInTarget(fs, '/project/config.json', map, noopLog)
+    await rewriteSkillRefsInTarget(
+      fs,
+      '/project/config.json',
+      { skillNameMap: map, skillLinkPathMap: new Map() },
+      noopLog,
+    )
 
     // Non-md files should not be rewritten
     const result = await fs.readFile('/project/config.json')
@@ -89,7 +138,12 @@ describe('rewriteSkillRefsInTarget', () => {
     )
 
     const map = makeSkillNameMap([['next', 'pair-process-next']])
-    await rewriteSkillRefsInTarget(fs, '/project/README.md', map, noopLog)
+    await rewriteSkillRefsInTarget(
+      fs,
+      '/project/README.md',
+      { skillNameMap: map, skillLinkPathMap: new Map() },
+      noopLog,
+    )
 
     const result = await fs.readFile('/project/README.md')
     expect(result).toBe('# No skill refs here')
@@ -139,6 +193,7 @@ describe('applySkillRefsToNonSkillRegistries', () => {
       { fs, baseTarget: '/project', pushLog: noopLog },
       registries,
       map,
+      new Map(),
     )
 
     // AGENTS.md (non-skills) should be rewritten
@@ -177,6 +232,7 @@ describe('applySkillRefsToNonSkillRegistries', () => {
       { fs, baseTarget: '/project', pushLog: noopLog },
       registries,
       map,
+      new Map(),
     )
 
     // Canonical should be rewritten
@@ -208,6 +264,7 @@ describe('applySkillRefsToNonSkillRegistries', () => {
       { fs, baseTarget: '/project', pushLog: noopLog },
       registries,
       emptyMap,
+      new Map(),
     )
 
     const result = await fs.readFile('/project/AGENTS.md')
@@ -218,9 +275,7 @@ describe('applySkillRefsToNonSkillRegistries', () => {
 describe('resolveSkillNameManifestPath', () => {
   it('resolves under .pair/ relative to baseTarget', () => {
     const fs = new InMemoryFileSystemService({}, '/project', '/project')
-    expect(resolveSkillNameManifestPath(fs, '/project')).toBe(
-      '/project/.pair/.skill-name-map.json',
-    )
+    expect(resolveSkillNameManifestPath(fs, '/project')).toBe('/project/.pair/.skill-name-map.json')
   })
 
   it('is outside the knowledge and adoption registry targets', () => {
@@ -235,7 +290,11 @@ describe('detectOrphanedSkillReferences', () => {
   const noopLog = () => {}
 
   it('does nothing when there are no orphaned names', async () => {
-    const fs = new InMemoryFileSystemService({ '/project/AGENTS.md': '# AGENTS' }, '/project', '/project')
+    const fs = new InMemoryFileSystemService(
+      { '/project/AGENTS.md': '# AGENTS' },
+      '/project',
+      '/project',
+    )
     const registries: Record<string, RegistryConfig> = {
       agents: {
         source: 'AGENTS.md',
@@ -247,7 +306,11 @@ describe('detectOrphanedSkillReferences', () => {
       },
     }
 
-    await detectOrphanedSkillReferences({ fs, baseTarget: '/project', pushLog: noopLog }, registries, [])
+    await detectOrphanedSkillReferences(
+      { fs, baseTarget: '/project', pushLog: noopLog },
+      registries,
+      [],
+    )
 
     // no-op — nothing to assert beyond "did not throw"
   })
@@ -274,11 +337,9 @@ describe('detectOrphanedSkillReferences', () => {
       if (level === 'warn') warnings.push(message)
     }
 
-    await detectOrphanedSkillReferences(
-      { fs, baseTarget: '/project', pushLog },
-      registries,
-      ['pair-removed'],
-    )
+    await detectOrphanedSkillReferences({ fs, baseTarget: '/project', pushLog }, registries, [
+      'pair-removed',
+    ])
 
     expect(warnings).toHaveLength(1)
     expect(warnings[0]).toContain('/pair-removed')
@@ -311,11 +372,9 @@ describe('detectOrphanedSkillReferences', () => {
       if (level === 'warn') warnings.push(message)
     }
 
-    await detectOrphanedSkillReferences(
-      { fs, baseTarget: '/project', pushLog },
-      registries,
-      ['pair-removed'],
-    )
+    await detectOrphanedSkillReferences({ fs, baseTarget: '/project', pushLog }, registries, [
+      'pair-removed',
+    ])
 
     expect(warnings).toHaveLength(0)
   })
@@ -334,11 +393,9 @@ describe('detectOrphanedSkillReferences', () => {
     }
 
     await expect(
-      detectOrphanedSkillReferences(
-        { fs, baseTarget: '/project', pushLog: noopLog },
-        registries,
-        ['pair-removed'],
-      ),
+      detectOrphanedSkillReferences({ fs, baseTarget: '/project', pushLog: noopLog }, registries, [
+        'pair-removed',
+      ]),
     ).resolves.not.toThrow()
   })
 })
@@ -384,7 +441,12 @@ describe('reconcileSkillNameRegistry', () => {
       if (level === 'warn') warnings.push(message)
     }
 
-    await reconcileSkillNameRegistry({ fs, baseTarget: '/project', pushLog }, registries, new Map())
+    await reconcileSkillNameRegistry(
+      { fs, baseTarget: '/project', pushLog },
+      registries,
+      new Map(),
+      new Map(),
+    )
 
     // No orphan warning — "pair-process-next" is not misreported as removed.
     expect(warnings).toHaveLength(0)

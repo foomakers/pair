@@ -14,17 +14,17 @@ Draft → Ready → In Progress → Review → Done
 
 | Macrostate      | Meaning                                                             | Produced by                          |
 | --------------- | -------------------------------------------------------------------- | ------------------------------------- |
-| **Draft**       | Item exists but is not yet refined — missing AC, technical analysis, or estimate | `/plan-stories`, `/plan-epics`, `/plan-initiatives` (creation) |
-| **Ready**       | Item meets the Definition of Ready — refined, estimated, eligible for sprint/WIP | `/refine-story` (Draft → Ready)       |
-| **In Progress** | Item is actively being implemented                                   | `/implement`                          |
-| **Review**      | Implementation is complete, awaiting code review / PR approval       | `/implement` (PR opened)              |
-| **Done**        | Delivered and accepted — PR merged, issue closed                     | `/review` (merge step)                |
+| **Draft**       | Item exists but is not yet refined — missing AC, technical analysis, or estimate | `/pair-process-plan-stories`, `/pair-process-plan-epics`, `/pair-process-plan-initiatives` (creation) |
+| **Ready**       | Item meets the Definition of Ready — refined, estimated, eligible for sprint/WIP | `/pair-process-refine-story` (Draft → Ready)       |
+| **In Progress** | Item is actively being implemented                                   | `/pair-process-implement`                          |
+| **Review**      | Implementation is complete, awaiting code review / PR approval       | `/pair-process-implement` (PR opened)              |
+| **Done**        | Delivered and accepted — PR merged, issue closed                     | `/pair-process-review` (merge step)                |
 
 ### Phase Semantics
 
 - **Backlog** = `Draft` \| `Ready` — both refined and unrefined items live in the backlog.
 - **Sprint / WIP** = `Ready` only — nothing enters a sprint or WIP column while still `Draft`.
-- **Refinement produces `Ready`** — `/refine-story` is the single Draft→Ready transition; no separate "make-ready" skill exists.
+- **Refinement produces `Ready`** — `/pair-process-refine-story` is the single Draft→Ready transition; no separate "make-ready" skill exists.
 - **Planning may promote `Draft` → `Ready` directly** — trivial items can skip full refinement when planning already satisfies the Definition of Ready.
 
 ## State-Mapping Schema
@@ -50,7 +50,7 @@ An optional `## State Mapping` section in `way-of-working.md`, containing a two-
 
 ## Resolution Rules
 
-These are the rules every skill follows when it needs to read or write item state — see `/write-issue` and `/next` for the concrete adoption (Integration with Skills, below).
+These are the rules every skill follows when it needs to read or write item state — see `/pair-capability-write-issue` and `/pair-next` for the concrete adoption (Integration with Skills, below).
 
 ### Reading state (board-state → macrostate)
 
@@ -62,7 +62,7 @@ These are the rules every skill follows when it needs to read or write item stat
 
 ### Writing state (macrostate → board-state)
 
-1. Determine the target macrostate for the transition (e.g., `/refine-story` targets `Ready`).
+1. Determine the target macrostate for the transition (e.g., `/pair-process-refine-story` targets `Ready`).
 2. Find all board states mapped to that macrostate, in the order listed in the `## State Mapping` section.
 3. Write to the **first mapped board state** (first-mapped-wins). To target a different board state, list it first in the map — map order is the override mechanism, not a separate config.
 4. If the section is absent, write the macrostate name itself (canonical convention).
@@ -183,13 +183,13 @@ The `Removed` state is deliberately **unmapped** — removed items are out of sc
 
 | Skill           | Interaction                                                                                          |
 | ---------------- | ----------------------------------------------------------------------------------------------------- |
-| `/write-issue`   | Resolves a target macrostate (`$status`) to a board state before writing the board field (Writing rule above) |
-| `/next`          | Resolves each item's board state to a macrostate before evaluating its cascade conditions (Reading rule above); applies the Readiness Fallback for Draft vs. Ready |
-| `/refine-story`  | Produces `Ready` — writes it through `/write-issue`                                                  |
-| `/implement`     | Produces `In Progress` / `Review` — writes through `/write-issue`                                    |
-| `/review`        | Produces `Done` on merge — writes through `/write-issue`                                             |
+| `/pair-capability-write-issue`   | Resolves a target macrostate (`$status`) to a board state before writing the board field (Writing rule above) |
+| `/pair-next`          | Resolves each item's board state to a macrostate before evaluating its cascade conditions (Reading rule above); applies the Readiness Fallback for Draft vs. Ready |
+| `/pair-process-refine-story`  | Produces `Ready` — writes it through `/pair-capability-write-issue`                                                  |
+| `/pair-process-implement`     | Produces `In Progress` / `Review` — writes through `/pair-capability-write-issue`                                    |
+| `/pair-process-review`        | Produces `Done` on merge — writes through `/pair-capability-write-issue`                                             |
 
-Rollout across the rest of the skill catalog happens organically in the stories that touch each skill — `/write-issue` and `/next` are the first adopters.
+Rollout across the rest of the skill catalog happens organically in the stories that touch each skill — `/pair-capability-write-issue` and `/pair-next` are the first adopters.
 
 ## Related
 

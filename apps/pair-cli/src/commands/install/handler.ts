@@ -22,7 +22,7 @@ import {
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
-import { type SkillNameMap } from '@pair/content-ops'
+import { type SkillNameMap, type SkillLinkPathMap } from '@pair/content-ops'
 import { createCliPresenter, type CliPresenter, type RegistryResult } from '#ui'
 import { emitVersionDriftHint, recordInstalledVersion } from '../kb-info/version-hint'
 
@@ -209,6 +209,7 @@ async function finalizeRegistryCopy(
 
 async function installRegistry(ctx: RegistryInstallCtx): Promise<{
   skillNameMap?: SkillNameMap | undefined
+  skillLinkPathMap?: SkillLinkPathMap | undefined
   result: RegistryResult
 }> {
   const { fs, registryName, registryConfig, pushLog, presenter, index, total } = ctx
@@ -242,6 +243,7 @@ async function installRegistry(ctx: RegistryInstallCtx): Promise<{
   presenter.registryDone(registryName)
   return {
     skillNameMap: copyResult['skillNameMap'] as SkillNameMap | undefined,
+    skillLinkPathMap: copyResult['skillLinkPathMap'] as SkillLinkPathMap | undefined,
     result: { name: registryName, target: effectiveTarget, ok: true },
   }
 }
@@ -259,9 +261,11 @@ type InstallContext = {
 async function installAllRegistries(ctx: InstallContext): Promise<{
   results: RegistryResult[]
   skillNameMap: SkillNameMap
+  skillLinkPathMap: SkillLinkPathMap
 }> {
   const { fs, datasetRoot, registries, baseTarget, pushLog, presenter } = ctx
   const accumulated: SkillNameMap = new Map()
+  const accumulatedLinkMap: SkillLinkPathMap = new Map()
   const total = Object.keys(registries).length
 
   const results = await forEachRegistry(registries, async (registryName, registryConfig, index) => {
@@ -279,9 +283,12 @@ async function installAllRegistries(ctx: InstallContext): Promise<{
     if (out.skillNameMap) {
       for (const [k, v] of out.skillNameMap) accumulated.set(k, v)
     }
+    if (out.skillLinkPathMap) {
+      for (const [k, v] of out.skillLinkPathMap) accumulatedLinkMap.set(k, v)
+    }
     return out.result
   })
-  return { results, skillNameMap: accumulated }
+  return { results, skillNameMap: accumulated, skillLinkPathMap: accumulatedLinkMap }
 }
 
 async function executeInstall(context: InstallContext): Promise<void> {
@@ -291,9 +298,14 @@ async function executeInstall(context: InstallContext): Promise<void> {
 
   presenter.startOperation('install', total)
 
-  const { results, skillNameMap } = await installAllRegistries(context)
+  const { results, skillNameMap, skillLinkPathMap } = await installAllRegistries(context)
 
-  await reconcileSkillNameRegistry({ fs, baseTarget, pushLog }, registries, skillNameMap)
+  await reconcileSkillNameRegistry(
+    { fs, baseTarget, pushLog },
+    registries,
+    skillNameMap,
+    skillLinkPathMap,
+  )
 
   if (options?.linkStyle) {
     await applyLinkTransformation(fs, { linkStyle: options.linkStyle }, pushLog, 'install')

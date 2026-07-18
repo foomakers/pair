@@ -18,7 +18,14 @@ type ProcessingResult = {
 
 export async function validatePathOps(
   fileService: FileSystemService,
-  config: { datasetRoot: string; errorsPath: string; exclusionList: string[] },
+  config: {
+    datasetRoot: string
+    errorsPath: string
+    exclusionList: string[]
+    /** Read-only: report errors/normalizations but never write fixes back.
+     *  Used by the link gate over the generated root tree. */
+    checkOnly?: boolean
+  },
 ) {
   const { datasetRoot, errorsPath } = config
   if (!datasetRoot) throw new Error('datasetRoot is required')
@@ -34,7 +41,7 @@ export async function validatePathOps(
     fileService,
   )
 
-  const finalLogs = generateFinalReport(logs, processingResult)
+  const finalLogs = generateFinalReport(logs, processingResult, config.checkOnly)
 
   return {
     logs: finalLogs,
@@ -56,7 +63,7 @@ async function prepareData(datasetRoot: string, fileService: FileSystemService) 
 async function processAllFiles(
   mdFiles: string[],
   datasetFolders: string[],
-  config: { datasetRoot: string; exclusionList: string[] },
+  config: { datasetRoot: string; exclusionList: string[]; checkOnly?: boolean },
   fileService: FileSystemService,
 ): Promise<ProcessingResult> {
   let allErrors: ErrorLog[] = []
@@ -71,6 +78,7 @@ async function processAllFiles(
         docsFolders: datasetFolders,
         datasetRoot: config.datasetRoot,
         exclusionList: config.exclusionList,
+        ...(config.checkOnly !== undefined && { checkOnly: config.checkOnly }),
       },
       fileService,
     )
@@ -112,7 +120,14 @@ async function handleErrorsAndLogs(
   return logs
 }
 
-function generateFinalReport(logs: string[], processingResult: ProcessingResult): string[] {
+function generateFinalReport(
+  logs: string[],
+  processingResult: ProcessingResult,
+  checkOnly?: boolean,
+): string[] {
+  // In read-only (checkOnly) mode nothing is written, so patch/normalize
+  // counts would be misleading ("Normalized: 4" while the file is untouched).
+  if (checkOnly) return logs
   logs.push(`Patched links: ${processingResult.patchedLinks}`)
   logs.push(`Normalized relative links: ${processingResult.normalizedRelLinks}`)
   logs.push(`Normalized full links: ${processingResult.normalizedFullLinks}`)
@@ -121,7 +136,12 @@ function generateFinalReport(logs: string[], processingResult: ProcessingResult)
 
 export async function validateAndFixFileLinks(
   file: string,
-  config: { docsFolders: string[]; datasetRoot: string; exclusionList: string[] },
+  config: {
+    docsFolders: string[]
+    datasetRoot: string
+    exclusionList: string[]
+    checkOnly?: boolean
+  },
   fileService: FileSystemService,
 ) {
   const content = await fileService.readFile(file)
@@ -136,6 +156,7 @@ export async function validateAndFixFileLinks(
     (links, _content, lines) =>
       generateReplacements(links, _content, lines, { file, config, fileService, errors }),
     fileService,
+    { checkOnly: config.checkOnly ?? false },
   )
 
   const finalContent = result.content

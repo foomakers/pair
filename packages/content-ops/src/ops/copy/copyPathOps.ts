@@ -6,7 +6,7 @@ import { FileSystemService } from '../../file-system'
 import { Behavior } from '../behavior'
 import { setupPathOperation } from '../path-operation-helpers'
 import { isAbsolute } from 'path'
-import { SkillNameMap } from '../skill-reference-rewriter'
+import { SkillNameMap, SkillLinkPathMap } from '../skill-reference-rewriter'
 import { handleDirectoryCopy, HandleDirectoryCopyParams } from './copy-directory'
 import { handleFileCopy, HandleFileCopyParams } from './copy-file'
 import { copyDirectoryWithTransforms } from './copy-directory-transforms'
@@ -24,6 +24,9 @@ type CopyPathOpsParams = {
   /** Pre-built skill name map from a previous copy (e.g., skills registry).
    *  When provided, rewrites skill references in all copied .md files. */
   skillNameMap?: SkillNameMap
+  /** Pre-built skill link-path map from a previous copy (e.g., skills registry).
+   *  When provided, rewrites SKILL.md cross-reference paths in all copied .md files. */
+  skillLinkPathMap?: SkillLinkPathMap
 }
 
 /**
@@ -44,6 +47,7 @@ async function performCopyBasedOnType(
     folderBehavior?: Record<string, Behavior>
     options?: SyncOptions
     skillNameMap?: SkillNameMap
+    skillLinkPathMap?: SkillLinkPathMap
   },
 ): Promise<CopyPathOpsResult> {
   if (stat.isDirectory()) {
@@ -118,6 +122,7 @@ async function handleFileCopyForType(params: {
   defaultBehavior: Behavior
   options?: SyncOptions
   skillNameMap?: SkillNameMap
+  skillLinkPathMap?: SkillLinkPathMap
 }) {
   const fileCopyParams: HandleFileCopyParams = {
     fileService: params.fileService,
@@ -130,6 +135,7 @@ async function handleFileCopyForType(params: {
     defaultBehavior: params.defaultBehavior,
     ...(params.options && { options: params.options }),
     ...(params.skillNameMap && { skillNameMap: params.skillNameMap }),
+    ...(params.skillLinkPathMap && { skillLinkPathMap: params.skillLinkPathMap }),
   }
   await handleFileCopy(fileCopyParams)
 }
@@ -196,7 +202,8 @@ function prepareCopyPathOperation(
 }
 
 export async function copyPathOps(params: CopyPathOpsParams): Promise<CopyPathOpsResult> {
-  const { fileService, source, target, datasetRoot, options, skillNameMap } = params
+  const { fileService, source, target, datasetRoot, options, skillNameMap, skillLinkPathMap } =
+    params
   if (isAbsolute(source) || isAbsolute(target)) {
     throw createError({
       type: 'INVALID_PATH',
@@ -223,6 +230,7 @@ export async function copyPathOps(params: CopyPathOpsParams): Promise<CopyPathOp
       ...(prepared.folderBehavior && { folderBehavior: prepared.folderBehavior }),
       ...(options && { options }),
       ...(skillNameMap && { skillNameMap }),
+      ...(skillLinkPathMap && { skillLinkPathMap }),
     })
   }, 'copyPathAndUpdateLinks')
 }

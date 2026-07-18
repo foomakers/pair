@@ -145,7 +145,7 @@ STORY REFINEMENT COMPLETE:
 ├── Sections: [N/N complete]
 ├── Sizing:   [X points — fits sprint: Yes/No]
 ├── PM Tool:  [Issue updated — #ID]
-└── Next:     /pair-process-plan-tasks to create task breakdown
+└── Next:     /plan-tasks to create task breakdown
 ```
 
 ## HALT Conditions

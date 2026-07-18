@@ -184,7 +184,7 @@ ASSESSMENT COMPLETE (output-only — no files written):
 ├── Decision:  [technology@version — or full stack summary]
 ├── Proposal:  [content rendered for tech-stack.md — full | affected entry]
 ├── Target:    adoption/tech/tech-stack.md (core sections)
-├── Persist:   [caller composes /pair-capability-record-decision(content, target) → ADL]
+├── Persist:   [caller composes /record-decision(content, target) → ADL]
 └── Status:    [Proposal ready | Confirmed existing | Approved | Rejected]
 ```
 

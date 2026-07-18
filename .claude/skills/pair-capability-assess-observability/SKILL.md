@@ -98,7 +98,7 @@ ASSESSMENT COMPLETE (output-only — no files written):
 ├── Decision:  [platform + logging + tracing + alerting]
 ├── Proposal:  [content rendered for infrastructure.md observability section]
 ├── Target:    adoption/tech/infrastructure.md (observability section)
-├── Persist:   [caller composes /pair-capability-record-decision(content, target) → ADL]
+├── Persist:   [caller composes /record-decision(content, target) → ADL]
 └── Status:    [Proposal ready | Confirmed existing]
 ```
 

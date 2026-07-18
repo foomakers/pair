@@ -19,7 +19,7 @@ describe('config loader - skills registry', () => {
 
     expect(skills).toBeDefined()
     expect(skills!.source).toBe('.skills')
-    expect(skills!.behavior).toBe('mirror')
+    expect(skills!.behavior).toBe('overwrite')
     expect(skills!.flatten).toBe(true)
     expect(skills!.prefix).toBe('pair')
     expect(skills!.targets).toHaveLength(6)

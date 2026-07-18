@@ -15,6 +15,7 @@ This how-to orchestrates the `/pair-process-plan-tasks` skill.
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | `/pair-process-plan-tasks`  | Executes the full task breakdown: story analysis, task identification, task definition, documentation. Task-level idempotent. |
 | `/pair-capability-write-issue` | Composed by `/pair-process-plan-tasks` — creates task issues and updates the story body in the PM tool.                                    |
+| `/pair-capability-map-contexts` | Composed by `/pair-process-plan-tasks` — scoped context mapping for the story's touched bounded contexts.                                 |
 
 > **If skills are not installed**, follow the manual workflow below.
 
@@ -25,6 +26,7 @@ This how-to orchestrates the `/pair-process-plan-tasks` skill.
    - Story selection (highest-priority Refined, or specified `$story`)
    - Existing task detection (task-level idempotency — creates only missing tasks)
    - Technical context analysis (architecture, tech-stack, bounded contexts)
+   - Context mapping via `/pair-capability-map-contexts`, scoped to the story's touched bounded contexts — not full-catalog (see [Callers Matrix](../skills-guide.md#callers-matrix-scoped-capabilities))
    - Task identification (AC-to-task mapping, bounded context grouping)
    - Task definition (full task template per task)
    - Task Breakdown appending (condensed TA + checklist + Dependency Graph + AC Coverage + detailed tasks)

@@ -99,7 +99,7 @@ Orchestrate the complete project setup sequence. Transforms a PRD into a fully c
 ### Step 2.2: Assessment Phase (Optional)
 
 1. **Check**: Are assess-\* skills installed? Scan installed skills directory for `assess-*` skills.
-2. **Act** (installed): Compose assess-\* skills in recommended sequence — see [assess-orchestration.md](assess-orchestration.md) for the sequence, each skill's owned adoption-file section, and the parallel-safety/partial-installation rules. Each skill checks its own adoption file first — already-decided domains are skipped automatically (resolution cascade). **assess-\* skills are output-only**: each returns a proposal `{ content, target, decision-metadata }` and writes nothing. For each accepted proposal, `/pair-process-bootstrap` composes `/pair-capability-record-decision(content, target, decision-metadata)` — the **sole adoption writer** — to persist it. Never let an assess-\* skill write adoption directly.
+2. **Act** (installed): Compose assess-\* skills in recommended sequence — see [assess-orchestration.md](./assess-orchestration.md) for the sequence, each skill's owned adoption-file section, and the parallel-safety/partial-installation rules. Each skill checks its own adoption file first — already-decided domains are skipped automatically (resolution cascade). **assess-\* skills are output-only**: each returns a proposal `{ content, target, decision-metadata }` and writes nothing. For each accepted proposal, `/pair-process-bootstrap` composes `/record-decision(content, target, decision-metadata)` — the **sole adoption writer** — to persist it. Never let an assess-\* skill write adoption directly.
 3. **Act** (not installed): Warn and proceed with manual assessment:
 
    > assess-\* skills are not yet installed. Proceeding with manual assessment.
@@ -227,7 +227,7 @@ Runs after architecture and tech-stack are adopted (Step 3.1) — both are prere
 
 ```text
 BOOTSTRAP COMPLETE:
-├── PRD:             [verified | created via /pair-process-specify-prd]
+├── PRD:             [verified | created via /specify-prd]
 ├── Categorization:  [Type A | Type B | Type C] — [ADL path]
 ├── Adoption Files:
 │   ├── architecture.md:    [generated | existing | skipped]
@@ -237,7 +237,7 @@ BOOTSTRAP COMPLETE:
 │   └── way-of-working.md:  [generated | existing | skipped]
 ├── Quality Gates:   [N gates configured — standard + custom]
 ├── Domain Model:    [subdomains: N | contexts: N | skipped — not installed]
-├── PM Tool:         [configured via /pair-capability-setup-pm | already configured]
+├── PM Tool:         [configured via /setup-pm | already configured]
 ├── Decisions:       [N decisions recorded (ADR: X, ADL: Y)]
 └── Status:          [Complete | Partial — details]
 ```
@@ -269,12 +269,12 @@ Phase completion is detected via output file existence — never re-does complet
 See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (optional skill not installed → skip that phase/step with a warning, never blocks) and [record-decision contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) (`/pair-capability-record-decision` not installed → proposals cannot be persisted, document manually) for the standard scenarios. Additional cases (bootstrap's per-phase optional dependencies):
 
 - **assess-\* skills not installed**: Skip assessment phase, reference guideline files directly, ask developer for manual decisions. Log: "assess-\* skills not installed — using manual assessment."
-- **/pair-process-specify-prd not installed**: HALT at Phase 0 if PRD is missing (a required dependency, not optional). Suggest creating PRD manually using how-to-01.
-- **/pair-capability-setup-pm not installed**: Skip PM configuration in Phase 4. Warn: "PM tool not configured — /pair-capability-setup-pm not installed."
+- **/specify-prd not installed**: HALT at Phase 0 if PRD is missing (a required dependency, not optional). Suggest creating PRD manually using how-to-01.
+- **/setup-pm not installed**: Skip PM configuration in Phase 4. Warn: "PM tool not configured — /pair-capability-setup-pm not installed."
 - **Bootstrap checklist asset not found**: Use Phase 2 section questions as fallback — they cover the same areas.
 - **Adoption directory doesn't exist**: Create `adoption/tech/` and `adoption/decision-log/` on first write.
-- **/pair-capability-record-decision not installed**: Adoption cannot be persisted automatically — assess-\* skills are output-only and never write adoption themselves. Warn: "/pair-capability-record-decision not installed — assess-\* proposals cannot be persisted. Write adoption files manually from the proposals and record decisions by hand."
-- **/pair-capability-map-subdomains or /pair-capability-map-contexts not installed**: Skip the corresponding step in Phase 3.5 with a warning. Domain modeling never blocks bootstrap completion.
+- **/record-decision not installed**: Adoption cannot be persisted automatically — assess-\* skills are output-only and never write adoption themselves. Warn: "/pair-capability-record-decision not installed — assess-\* proposals cannot be persisted. Write adoption files manually from the proposals and record decisions by hand."
+- **/map-subdomains or /pair-capability-map-contexts not installed**: Skip the corresponding step in Phase 3.5 with a warning. Domain modeling never blocks bootstrap completion.
 
 ## Notes
 

@@ -102,9 +102,9 @@ ASSESSMENT COMPLETE (output-only for adoption — no files written by this skill
 ├── Domain:    Project Management
 ├── Path:      [Argument Override | Adoption Exists | Full Assessment]
 ├── Decision:  [tool name]
-├── Proposal:  [content rendered for way-of-working.md PM section | delegated to /pair-capability-setup-pm]
+├── Proposal:  [content rendered for way-of-working.md PM section | delegated to /setup-pm]
 ├── Target:    adoption/tech/way-of-working.md (PM tool section)
-├── Persist:   [caller composes /pair-capability-record-decision(content, target) → ADL | delegated to /pair-capability-setup-pm]
+├── Persist:   [caller composes /record-decision(content, target) → ADL | delegated to /setup-pm]
 └── Status:    [Proposal ready | Confirmed existing | Delegated]
 ```
 

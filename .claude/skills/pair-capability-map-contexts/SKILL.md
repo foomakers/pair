@@ -1,6 +1,6 @@
 ---
 name: pair-capability-map-contexts
-description: "Maps subdomains to DDD bounded contexts and derives the integration pattern between them (integration strength, socio-technical distance, volatility), scoped to items just touched. Composed by /pair-process-refine-story, /pair-process-plan-tasks, a future /pair-process-brainstorm (planned — #230); full-scope re-mapping only via /pair-process-bootstrap."
+description: "Maps subdomains to DDD bounded contexts and derives the integration pattern between them (integration strength, socio-technical distance, volatility), scoped to items just touched. Composed by /pair-process-refine-story, /pair-process-plan-tasks, a future /brainstorm (planned — #230); full-scope re-mapping only via /pair-process-bootstrap."
 version: 0.4.1
 author: Foomakers
 ---
@@ -17,11 +17,11 @@ Map subdomains to bounded context boundaries and assess each relationship betwee
 
 ## Composed Skills
 
-| Caller                      | When                                                                       |
-| ----------------------------- | --------------------------------------------------------------------------- |
+| Caller          | When                                                                       |
+| ---------------- | --------------------------------------------------------------------------- |
 | `/pair-process-refine-story`  | Technical analysis phase — identifies touched contexts/services.          |
 | `/pair-process-plan-tasks`    | Identifies touched contexts/services for the task breakdown.              |
-| `/brainstorm`                 | Punctual/technical brainstorm touching one or a few contexts (planned — #230). |
+| `/brainstorm`    | Punctual/technical brainstorm touching one or a few contexts (planned — #230). |
 | `/pair-process-bootstrap`     | Initial full-catalog mapping — the only caller allowed `$scope: all`.     |
 
 Invocable independently with an explicit `$scope` for ad hoc placement.
@@ -30,7 +30,7 @@ Invocable independently with an explicit `$scope` for ad hoc placement.
 
 ### Step 0: Resolve Scope and DDD Adoption State
 
-1. **Check**: Does [`adoption/tech/boundedcontext/`](../../../.pair/adoption/tech/boundedcontext/) contain `.md` files beyond README.md (DDD already adopted)?
+1. **Check**: Does [`adoption/tech/boundedcontext/`](../../../.pair/adoption/tech/boundedcontext) contain `.md` files beyond README.md (DDD already adopted)?
 2. **Check**: If not adopted, are subdomains defined ([`adoption/product/subdomain/`](../../../.pair/adoption/product/subdomain) has `.md` files beyond README.md)?
 3. **Act**: Resolve the working mode:
    - **DDD mode** — bounded context catalog exists, or a subdomain catalog is available to map from.
@@ -139,7 +139,7 @@ CONTEXT PLACEMENT COMPLETE:
 ├── Updated:      [Y existing files]
 ├── Relationships: [balanced: A, unbalanced: B, gated: C]
 ├── Location:     adoption/tech/boundedcontext/
-└── Next:         /pair-process-plan-epics (scoped) or back to the calling process skill
+└── Next:         /plan-epics (scoped) or back to the calling process skill
 ```
 
 ## Edge Cases and Error Handling
@@ -167,4 +167,4 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 - **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: detects existing files by filename; only entries inside `$scope` are evaluated for changes.
 - The 3-dimension relationship assessment (strength, distance, volatility) is the input to the coupling-balance guideline — see `.pair/knowledge/guidelines/architecture/design-patterns/coupling-balance.md` (introduced by #209); until that guideline lands, apply the heuristics in Step 3 directly.
 - Contract-coupled (`contract` strength) relationships are annotated "contract tests expected" — `/pair-capability-design-manual-tests` and story-level validation strategies should pick up the contract/boundary test category for that relationship.
-- Migration: this skill was reclassified from a process skill (`pair-process-map-contexts`) to a capability (`pair-capability-map-contexts`) — see [skills-guide.md](../../../.pair/knowledge/skills-guide.md#migration-notes) for the rename and new invocation paths.
+- Migration: this skill was reclassified from a process skill (`process/map-contexts`) to a capability (`capability/map-contexts`) — see [skills-guide.md](../../../.pair/knowledge/skills-guide.md#migration-notes) for the rename and new invocation paths.

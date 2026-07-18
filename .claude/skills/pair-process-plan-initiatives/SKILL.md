@@ -122,7 +122,7 @@ INITIATIVES COMPLETE:
 ├── Skipped:  [Y existing]
 ├── Priority: [P0: A, P1: B, P2: C]
 ├── PM Tool:  [adopted tool]
-└── Next:     /pair-capability-map-subdomains (scoped to this initiative) or /pair-process-plan-epics
+└── Next:     /map-subdomains (scoped to this initiative) or /plan-epics
 ```
 
 ## HALT Conditions
