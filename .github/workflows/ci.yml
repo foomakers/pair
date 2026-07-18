@@ -28,10 +28,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # gitleaks needs history to scan the diff/commit range
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITLEAKS_CONFIG: .gitleaks.toml
+          fetch-depth: 0 # gitleaks needs history to scan the commit range
+      # Run the gitleaks BINARY directly, not gitleaks-action@v2: the Action
+      # requires a GITLEAKS_LICENSE for org-owned repos (foomakers is an org),
+      # which would fail the job before scanning. The MIT-licensed binary has no
+      # such gate. Fail-closed: any leak -> non-zero exit -> red build (R6.5).
+      - name: Secret scan (gitleaks)
+        run: |
+          set -euo pipefail
+          GITLEAKS_VERSION=8.30.1
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks detect --source . --config .gitleaks.toml --no-banner --redact --exit-code 1
 
   build:
     runs-on: ubuntu-latest

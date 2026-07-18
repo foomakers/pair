@@ -105,15 +105,23 @@ skill re-implements the other's surface.
   wires the job manually) has no secret-scanning gate at all — `assess-security`'s audit mode can only
   report this gap, not close it.
 - **Update (2026-07-18): this repository's own CI (`.github/workflows/ci.yml`) is now wired to the
-  `secret-scan` job.** The KB guideline's own worked example
-  (`AWS_SECRET_ACCESS_KEY=AKIAABCDEFGHIJKLMNOP`) is a secret-shaped string that a bare gitleaks scan
-  over this repo's full history would flag — resolved with a root `.gitleaks.toml` allowlisting the
-  exact literal string (plus two unrelated pre-existing placeholder tokens found in
-  `observability/structured-logging/sensitive-data-protection.md` during the same verification pass:
-  `usr_abc123def456`, `sess_xyz789uvw012`) via precise regexes, not a broad pattern or a path-level
-  exemption — a genuinely different secret in the same files still trips the scan (verified: changing
-  one character of the allowlisted string is caught). Full-history scan verified clean
-  (`gitleaks detect --source . --config .gitleaks.toml`, 283 commits, 0 leaks) before wiring the job.
+  `secret-scan` job — running the gitleaks BINARY directly, not `gitleaks-action@v2`.** The first
+  attempt used the Action and failed on every run in ~5s: `gitleaks-action@v2` requires a
+  `GITLEAKS_LICENSE` for **org-owned** repos (`foomakers` is an org), so it errored
+  ("License key is required") before scanning anything — a red-but-meaningless job. Corrected to invoke
+  the MIT-licensed `gitleaks` binary in a `run:` step (pinned 8.30.1), which has no org-license gate.
+  The KB template (`secret-scanning.md`) documents both forms — Option A (Action + `GITLEAKS_LICENSE`,
+  matching `github-actions-implementation.md`) and Option B (binary, no license) — so adopters on orgs
+  aren't handed a job that fails before scanning. The worked example
+  (`AWS_SECRET_ACCESS_KEY=AKIAABCDEFGHIJKLMNOP`) is a secret-shaped string a full-history scan flags —
+  resolved with a root `.gitleaks.toml` allowlisting the exact literal string (plus two unrelated
+  pre-existing placeholder tokens found during the same pass in
+  `observability/structured-logging/sensitive-data-protection.md`: `usr_abc123def456`,
+  `sess_xyz789uvw012`) via precise regexes, not a broad pattern or a path-level exemption — a
+  genuinely different secret in the same files still trips the scan (verified: changing one character
+  of the allowlisted string is caught). Full-history scan verified clean
+  (`gitleaks detect --source . --config .gitleaks.toml`, 283 commits, 0 leaks); the binary CI job is
+  verified green in a live CI run before this claim.
 - **The `secret-scanning.md` Verification section remains a documented, manually-reproduced check, not
   a committed automated fixture test** (raised in PR #341 review) — this is unaffected by the CI wiring
   above, which runs the real scanner against the real repo, not a fixture harness. An automated fixture

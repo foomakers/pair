@@ -10,7 +10,9 @@ The one security control that is **not** a skill (D24). Every other security jud
 
 ## CI Job Template (GitHub Actions)
 
-`/setup-gates` writes a job equivalent to this into the project's CI pipeline (Step 4 of that skill) — required, not tier-scoped:
+`/setup-gates` writes a job equivalent to this into the project's CI pipeline (Step 4 of that skill) — required, not tier-scoped. Two equivalent forms; pick per the project's GitHub ownership:
+
+**Option A — `gitleaks-action@v2`** (matches [github-actions-implementation.md](../../infrastructure/cicd-strategy/github-actions-implementation.md)). **Requires a `GITLEAKS_LICENSE` for org-owned repos** — the Action gates on it and fails before scanning if absent, regardless of public/private. A free OSS key is available at gitleaks.io; store it as a repo/org secret. Individual-owned repos don't need it.
 
 ```yaml
 secret-scan:
@@ -21,10 +23,30 @@ secret-scan:
         fetch-depth: 0 # gitleaks needs history to scan the diff/commit range
     - uses: gitleaks/gitleaks-action@v2
       env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }} # required for org-owned repos (free OSS key at gitleaks.io)
         GITLEAKS_CONFIG: .gitleaks.toml # optional — omit to use gitleaks' own defaults
 ```
 
-`gitleaks/gitleaks-action` exits non-zero the moment it finds a leak, which fails the job — the required-check mechanism (already how every other gate blocks a PR) is what makes the build go red; nothing about this step involves a model call or a judgment prompt.
+**Option B — the gitleaks binary directly** (no Action, no license gate — the MIT-licensed binary has no org requirement). Preferred when you can't provision a `GITLEAKS_LICENSE` secret:
+
+```yaml
+secret-scan:
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Secret scan (gitleaks)
+      run: |
+        set -euo pipefail
+        GITLEAKS_VERSION=8.30.1
+        curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+          | tar -xz -C /usr/local/bin gitleaks
+        gitleaks detect --source . --config .gitleaks.toml --no-banner --redact --exit-code 1
+```
+
+Either form exits non-zero the moment it finds a leak, which fails the job — the required-check mechanism (already how every other gate blocks a PR) is what makes the build go red; nothing about this step involves a model call or a judgment prompt.
 
 ### Fail-Closed Requirement
 

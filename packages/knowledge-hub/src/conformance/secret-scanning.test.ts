@@ -43,6 +43,14 @@ describe('secret-scanning.md — structure', () => {
     expect(SECRET_SCANNING).toContain('secret-scan:')
   })
 
+  it('documents the org-license requirement for the Action and a license-free binary option', () => {
+    // gitleaks-action@v2 fails before scanning on org-owned repos without a license —
+    // the template must surface GITLEAKS_LICENSE, and offer the no-license binary form.
+    expect(SECRET_SCANNING).toContain('GITLEAKS_LICENSE')
+    expect(SECRET_SCANNING).toMatch(/org-owned repos/)
+    expect(SECRET_SCANNING).toMatch(/gitleaks detect --source \. --config \.gitleaks\.toml/)
+  })
+
   it('states the fail-closed requirement — scanner unavailable is a failure, not a skip', () => {
     expect(SECRET_SCANNING).toMatch(/Fail-Closed Requirement/)
     expect(SECRET_SCANNING).toMatch(/never silently pass/)
