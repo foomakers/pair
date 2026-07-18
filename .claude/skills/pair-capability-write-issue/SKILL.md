@@ -180,7 +180,7 @@ When composed by `/pair-process-refine-story`:
 
 When composed by `/pair-process-plan-tasks`:
 
-- **Input**: `/pair-process-plan-tasks` invokes `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]`, and `$content` containing the Task Breakdown section to append. Tasks are documented inline in the story body — no separate task issues are created.
+- **Input**: `/pair-process-plan-tasks` invokes `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]`, and `$content` = the story's current full body with the Task Breakdown section merged in by the caller (`/pair-capability-write-issue` overwrites the body as-is, it does not append). Tasks are documented inline in the story body — no separate task issues are created.
 - **Output**: Returns the story issue identifier. `/pair-process-plan-tasks` confirms the update.
 
 When composed by `/pair-process-plan-initiatives`:
@@ -190,12 +190,12 @@ When composed by `/pair-process-plan-initiatives`:
 
 When composed by `/pair-process-plan-epics`:
 
-- **Input**: `/pair-process-plan-epics` invokes `/pair-capability-write-issue` with `$type: epic`, `$content` containing the epic data, and `$parent` linking to the parent initiative. For an `EXTEND` triage outcome (see to-issues-triage.md), it instead passes `$id` of the matched epic and `$content` as the matched epic's current full body with the additional scope already merged in by the caller — `/pair-capability-write-issue` overwrites the body as-is, it does not merge.
+- **Input**: `/pair-process-plan-epics` invokes `/pair-capability-write-issue` with `$type: epic`, `$content` containing the epic data, and `$parent` linking to the parent initiative. For an `EXTEND` triage outcome (see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md)), it instead passes `$id` of the matched epic and `$content` as the matched epic's current full body with the additional scope already merged in by the caller — `/pair-capability-write-issue` overwrites the body as-is, it does not merge.
 - **Output**: Returns the issue identifier. `/pair-process-plan-epics` uses it for linking stories.
 
 When composed by `/pair-process-plan-stories`:
 
-- **Input**: `/pair-process-plan-stories` invokes `/pair-capability-write-issue` with `$type: story`, `$content` containing the story data, and `$parent` linking to the parent epic. For an `EXTEND` triage outcome (see to-issues-triage.md), it instead passes `$id` of the matched story and `$content` as the matched story's current full body with the additional scope already merged in by the caller — `/pair-capability-write-issue` overwrites the body as-is, it does not merge.
+- **Input**: `/pair-process-plan-stories` invokes `/pair-capability-write-issue` with `$type: story`, `$content` containing the story data, and `$parent` linking to the parent epic. For an `EXTEND` triage outcome (see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md)), it instead passes `$id` of the matched story and `$content` as the matched story's current full body with the additional scope already merged in by the caller — `/pair-capability-write-issue` overwrites the body as-is, it does not merge.
 - **Output**: Returns the issue identifier. `/pair-process-plan-stories` uses it for status tracking.
 
 When invoked **independently**:

@@ -52,6 +52,8 @@ Proposal list shown before any write:
 
 Re-running this same candidate tree after the two CREATEs land: the SMS and magic-link candidates now match their own new items by idempotency key (Step 2) — reported as already-present, no duplicates. `#41` is still open, so the email candidate is re-checked in Step 3 the same way (still EXTEND `#41`, not a duplicate EXTEND — the write-issue step, composed with `$id: #41`, updates rather than duplicates).
 
+**Body-merge idempotency**: an overlap-based EXTEND re-proposes on every run (its key never exactly matches), so the caller re-merges the additional scope into the matched item's current body each time. That merge must be a **no-op when the scope is already present** — check before appending — so repeated planning runs update the item in place without the scope text accreting inside it.
+
 ## Per-skill delta (what stays in the skill, not here)
 
 Only these vary per skill and belong in the skill's own step that composes this pattern:

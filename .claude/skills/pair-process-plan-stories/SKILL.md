@@ -54,7 +54,7 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
 
 ### Step 2: Build Existing Story Registry
 
-1. **Check**: Query PM tool for existing story issues linked to the selected epic.
+1. **Check**: Query PM tool for existing story issues linked to the selected epic — **including closed/Done items** (the closed-item triage rule in Step 3 depends on them being in the registry; many PM-tool queries default to open-only).
 2. **Act**: Build a registry of existing stories, keyed for matching (idempotency key — see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md)):
 
    ```text
