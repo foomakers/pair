@@ -16,6 +16,7 @@ This how-to orchestrates the `/pair-process-plan-epics` skill.
 | -------------- | ----------------------------------------------------------------------------------------------- |
 | `/pair-process-plan-epics`  | Executes the full process: initiative selection, epic analysis, epic creation, completion.       |
 | `/pair-capability-write-issue` | Composed by `/pair-process-plan-epics` — creates or updates epic issues in the PM tool.                      |
+| `/pair-capability-map-subdomains` | Composed by `/pair-process-plan-epics` — scoped domain placement for the approved epic breakdown's capability area(s). |
 
 > **If skills are not installed**, follow the manual workflow below.
 
@@ -27,6 +28,7 @@ This how-to orchestrates the `/pair-process-plan-epics` skill.
    - Initiative selection (highest-priority Todo, or specified `$initiative`)
    - Epic analysis (business objectives, user value, technical requirements, BC alignment)
    - Epic 0 assessment for new projects (bootstrap/foundation epic)
+   - Domain placement via `/pair-capability-map-subdomains`, scoped to the approved breakdown's capability area(s) — not full-catalog (see [Callers Matrix](../skills-guide.md#callers-matrix-scoped-capabilities))
    - Epic creation via `/pair-capability-write-issue` with `$type: epic`
    - Coverage validation
 3. **Developer validates** the epic breakdown when prompted.
