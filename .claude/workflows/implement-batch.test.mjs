@@ -108,6 +108,26 @@ test('reviewer prompt pins the nonActionable-is-not-a-scope-filter correction', 
   )
 })
 
+test('per-step effort + PR model override are wired into agent opts', async () => {
+  // Guards the model/effort policy: effort is set per step in opts (the running
+  // lever), and the PR-open step dials the implementer down to sonnet/medium.
+  // Role MODEL defaults live in .claude/agents/*.md frontmatter (not visible to
+  // this source-eval harness) — only the opts-level config is asserted here.
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const contract = calls.find(c => c.opts.agentType === 'contract-generator')
+  const impl = calls.find(c => c.opts.phase === 'Implement')
+  const pr = calls.find(c => c.opts.phase === 'PR')
+  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  assert.equal(contract.opts.effort, 'low')
+  assert.equal(impl.opts.effort, 'high')
+  assert.equal(rev.opts.effort, 'xhigh')
+  assert.equal(pr.opts.model, 'sonnet', 'PR step overrides model to sonnet')
+  assert.equal(pr.opts.effort, 'medium')
+})
+
 test('malformed contract: loose fallback schema, run never breaks (AC4)', async () => {
   const { result, calls } = await runWorkflow({
     args: { stories: [STORY] },

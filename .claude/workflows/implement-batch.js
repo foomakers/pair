@@ -2,8 +2,24 @@ export const meta = {
   name: 'implement-batch',
   description:
     'Drive a mutex-safe batch of ready Pair stories, each to a review-approved PR (implement -> PR -> independent review <-> fix loop). Stops at PR-ready; NEVER merges (human gate).',
-  phases: [{ title: 'Contracts' }, { title: 'Implement' }, { title: 'PR' }, { title: 'Review' }],
+  phases: [
+    { title: 'Contracts', model: 'haiku' },
+    { title: 'Implement', model: 'opus' },
+    { title: 'PR', model: 'sonnet' },
+    { title: 'Review', model: 'opus' },
+  ],
 }
+
+// ── Model / effort policy ──────────────────────────────────────────────────
+// MODEL is set per ROLE in each agent's frontmatter (.claude/agents/*.md): the
+// stable default — implementer & reviewer -> opus, contract-generator -> haiku.
+// EFFORT is set per STEP below in the agent() opts (the guaranteed lever for a
+// running workflow), scaled to the step's difficulty. The one MODEL exception is
+// the PR-open step: an implementer doing light checkpoint->PR authoring, dialed
+// down to sonnet/medium via opts (opts win over frontmatter). Spend concentrates
+// where quality pays: coding (implement/fix, opus/high) and the adversarial
+// review gate (opus/xhigh). NOTE: .claude/workflows/ is outside the packages/apps
+// prettier gate — keep the one-line opts style already used in this file.
 
 // ── Input ────────────────────────────────────────────────────────────────
 // args.stories = the batch of STORIES (never tasks) to drive THIS run. A batch
@@ -161,7 +177,7 @@ function usableSchema(contract) {
 async function ensureContract(spec) {
   const res = await agent(
     `Ensure the machine contract for the \`${spec.name}\` template. Template: \`${spec.template}\`. Contract artifact: \`${spec.contract}\` (git-ignored derived cache). Use \`node .claude/workflows/contracts/ensure-contract.mjs\` (\`check\`, then \`write\`) for ALL hash/cache/validation work — NEVER hand-roll hashing or freshness logic. If \`check\` reports \`fresh\`, return the cached contract file content unchanged with status \`cache-hit\`. Otherwise READ the template and generate the contract: take this skeleton schema and tighten ONLY the fields that mirror template vocabulary (${spec.mirrors}) into \`enum\`s, leaving every other field untouched: ${JSON.stringify(spec.skeleton)}. Also fill the contract's \`vocabulary\` object (e.g. verdictOptions, severities, findingFields) from the template. Persist via the \`write\` command (it validates the draft and stamps the template hash), then return status \`regenerated\` plus the final contract content. Never modify the template. If generation or validation fails after one retry, return status \`failed\` with no contract.`,
-    { agentType: 'contract-generator', phase: 'Contracts', label: `contract:${spec.name}`, schema: CONTRACT_RESULT_SCHEMA },
+    { agentType: 'contract-generator', phase: 'Contracts', label: `contract:${spec.name}`, effort: 'low', schema: CONTRACT_RESULT_SCHEMA },
   )
   const schema = usableSchema(res?.contract)
   return {
@@ -222,14 +238,14 @@ async function driveStory(story) {
     // 1. IMPLEMENT — fresh implementer in the story worktree; writes checkpoint.
     const impl = await agent(
       `Implement story ${tag} ("${story.title}") on branch \`${story.branch}\`, following /pair-process-implement, the reference skills, and the task/commit templates.${story.notes ? ` SCOPE DIRECTIVE (overrides the issue body where they conflict): ${story.notes}` : ''} ${wtClause(story)} Test-first. Run scoped quality gates. On completion write the story checkpoint via /pair-capability-checkpoint $mode=write (it lives in the worktree) so a fresh instance can open the PR with zero prior context. Do NOT open the PR yet. Do NOT merge.`,
-      { agentType: 'implementer', phase: 'Implement', label: `impl:${tag}`, schema: STEP_SCHEMA },
+      { agentType: 'implementer', phase: 'Implement', label: `impl:${tag}`, effort: 'high', schema: STEP_SCHEMA },
     )
     if (!impl) return { story, status: 'failed-implement' }
 
     // 2. OPEN PR — fresh implementer instance; resumes from checkpoint (context reset)
     pr = await agent(
       `You are resuming story ${tag}.${story.notes ? ` SCOPE DIRECTIVE: ${story.notes}` : ''} ${wtClause(story)} Read the checkpoint (/pair-capability-checkpoint $mode=resume) — do not re-derive. Push the branch and open the PR for \`${story.branch}\` using the PR template. Put everything a reviewer needs (rationale, decisions, ADR links) in the PR description — the reviewer cannot see the checkpoint. Return the PR number. Do NOT merge.`,
-      { agentType: 'implementer', phase: 'PR', label: `pr:${tag}`, schema: PR_SCHEMA },
+      { agentType: 'implementer', phase: 'PR', label: `pr:${tag}`, model: 'sonnet', effort: 'medium', schema: PR_SCHEMA },
     )
     if (!pr?.prNumber) return { story, status: 'failed-pr' }
   }
@@ -247,7 +263,7 @@ async function driveStory(story) {
   while (true) {
     const review = await agent(
       `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the code-review-template vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (issue + impact), \`recommendation\`; verdict ∈ {${VERDICTS}}. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG (byte-consistent with a source of truth, matches an existing convention/already-tracked deferred plan, resolves only after merge, etc.) — being outside this story's originally stated scope is NOT by itself a reason to mark something nonActionable: a real, fixable gap found during review gets fixed in this same PR unless it is large enough to warrant its own story (state that explicitly in the description if so). ${round > 0 ? `Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.` : ''} Return findings and a verdict.`,
-      { agentType: 'reviewer', phase: 'Review', label: `rev:${tag} r${round}`, schema: REVIEW_SCHEMA },
+      { agentType: 'reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'xhigh', schema: REVIEW_SCHEMA },
     )
     const findings = review?.findings ?? []
     const actionable = findings.filter((f) => !f.nonActionable)
@@ -262,7 +278,7 @@ async function driveStory(story) {
     // FIX — implementer resumes checkpoint (if present) + resolves actionable findings.
     const fix = await agent(
       `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (/pair-capability-checkpoint $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(prevFindings)}. Commit, push, and post a remediation comment mapping each finding to what changed. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
-      { agentType: 'implementer', phase: 'Review', label: `fix:${tag} r${round}`, schema: FIX_SCHEMA },
+      { agentType: 'implementer', phase: 'Review', label: `fix:${tag} r${round}`, effort: 'high', schema: FIX_SCHEMA },
     )
     if (!fix) return { story, prNumber: pr.prNumber, status: 'failed-fix' }
     if (fix.needsHumanDecision)

@@ -1,6 +1,7 @@
 ---
 name: implementer
 description: Implements a single Pair user story end-to-end within the authoring chain — writes code (test-first), opens the PR, and applies review fixes. Spawned per lifecycle step (implement / open-PR / fix) by an orchestrator; resumes from the story checkpoint. Never merges. Use for any code-authoring step of a story.
+model: opus
 tools: Read, Edit, Write, Bash, Grep, Glob, Skill
 ---
 
