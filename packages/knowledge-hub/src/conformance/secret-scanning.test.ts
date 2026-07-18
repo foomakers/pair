@@ -112,6 +112,7 @@ describe('root .pair/knowledge/ mirror byte parity (this story files)', () => {
     'guidelines/quality-assurance/security/secret-scanning.md',
     'guidelines/quality-assurance/security/README.md',
     'assets/gitleaks-example.toml',
+    'guidelines/quality-assurance/quality-model.md',
   ] as const
 
   it.each(MIRRORED_FILES)('%s is byte-identical between dataset and root mirror', relPath => {

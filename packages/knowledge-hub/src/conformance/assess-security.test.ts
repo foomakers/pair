@@ -92,7 +92,9 @@ describe('/pair-capability-setup-gates provisions the deterministic secret-scann
 
     it(`${label} writes the secret-scanning job as required, never continue-on-error`, () => {
       expect(content).toMatch(/required` job/)
-      expect(content).not.toContain('continue-on-error: true')
+      // Matches the YAML key form (continue-on-error: true|false), not prose mentioning
+      // the option by name (e.g. "Never write the job with `continue-on-error`").
+      expect(content).not.toMatch(/continue-on-error\s*:/)
     })
 
     it(`${label} provisions a starting .gitleaks.toml`, () => {
