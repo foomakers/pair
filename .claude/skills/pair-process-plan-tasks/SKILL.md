@@ -1,13 +1,13 @@
 ---
 name: pair-process-plan-tasks
-description: "Breaks a refined user story into implementation tasks — checklist, dependency graph, AC-coverage table — appended to the story body; no separate task issues are created. Composes /pair-capability-write-issue."
+description: "Breaks a refined user story into implementation tasks — checklist, dependency graph, AC-coverage table — added to the story body; no separate task issues are created. Composes /pair-capability-write-issue."
 version: 0.4.1
 author: Foomakers
 ---
 
 # /pair-process-plan-tasks — Task Breakdown
 
-Transform a refined user story into specific, actionable implementation tasks. Task-level idempotency: detects existing tasks in the story body and creates only missing ones. Appends an integrated Technical Analysis + Task Breakdown section to the story issue body. Tasks live inside the story — no separate task issues are created in the PM tool.
+Transform a refined user story into specific, actionable implementation tasks. Task-level idempotency: detects existing tasks in the story body and creates only missing ones. Adds an integrated Technical Analysis + Task Breakdown section to the story issue body (the skill composes the full updated body; write-issue overwrites it, it does not append). Tasks live inside the story — no separate task issues are created in the PM tool.
 
 ## Composed Skills
 
@@ -116,7 +116,7 @@ For each task (skipping tasks that already exist in the story body):
 
 ### Step 6: PM Tool Update
 
-1. **Act**: Compose `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]` to append the Task Breakdown section to the story body. Tasks are always documented inline in the story body.
+1. **Act**: Compose `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]`, and `$content` = the story's current full body with the Task Breakdown section merged in (`/pair-capability-write-issue` overwrites the body as-is, it does not append). Tasks are always documented inline in the story body.
 2. **Verify**: Story body updated with Task Breakdown section.
 
 ### Step 7: Already-Complete Update (optional path)
@@ -164,6 +164,6 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 ## Notes
 
 - This skill **modifies PM tool state** — it updates the story body with the Task Breakdown section. No separate task issues are created.
-- **Idempotent (task-level)** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: re-invoking on a story with partial tasks appends only missing ones to the story body.
+- **Idempotent (task-level)** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: re-invoking on a story with partial tasks adds only the missing ones (the caller composes the full updated body; write-issue overwrites it).
 - Condensed TA removes verbose implementation detail that belongs in individual tasks (retained items: see Step 5).
 - Story template reference: [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md).

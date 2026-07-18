@@ -33,6 +33,10 @@ For new projects, the skill includes an **Epic 0 assessment** — infrastructure
 
 Epic 0 is created only when the assessment identifies essential setup work.
 
+### Triage Against the Existing Backlog
+
+Before writing anything, each candidate epic is matched against epics already linked to the initiative — proposed as **EXTEND #ID** (substantial scope overlap) or **CREATE** (distinct), with the rationale shown before you confirm. A re-run with the same candidates never creates duplicates: an exact title/parent match is recognized as already-present, and a partial-overlap match is proposed as EXTEND again rather than a second CREATE.
+
 ## Optional: Domain Modeling (DDD)
 
 If your project benefits from domain-driven design, two capabilities place work into subdomains and bounded contexts. They are **scoped capabilities**, not standalone steps — invoked by `/pair-process-plan-initiatives`, `/pair-process-plan-epics`, `/pair-process-refine-story`, or `/pair-process-plan-tasks` with `$scope` set to what was just touched (see [Migration Notes](/docs/reference/skill-management#migration-notes)).

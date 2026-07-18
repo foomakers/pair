@@ -112,7 +112,7 @@ Skills never write board-specific labels — `$status` is always a canonical mac
 3. **Act (Update)**:
    - Read the existing issue to confirm it exists.
    - If not found → **HALT**: `Issue #$id not found.`
-   - Update the issue body with the formatted content.
+   - Update the issue body with the formatted content — a **full-body overwrite**, not a merge/append: the body is replaced with what `$content` renders to. Callers that add to an existing body (EXTEND triage, plan-tasks Task Breakdown) must therefore pass the **already-merged full body**, not just the delta (see the Composition Interface below).
    - Preserve existing labels and hierarchy links unless explicitly changed.
    - If `$status` was provided, update the project board status field to the board state resolved in Step 6, per the implementation guide (e.g., GraphQL mutation for GitHub Projects). This is the **board field**, not the body text.
 4. **Verify**: Issue created or updated successfully. If `$status` was provided, confirm the board field reflects the resolved board state.
@@ -180,7 +180,7 @@ When composed by `/pair-process-refine-story`:
 
 When composed by `/pair-process-plan-tasks`:
 
-- **Input**: `/pair-process-plan-tasks` invokes `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]`, and `$content` containing the Task Breakdown section to append. Tasks are documented inline in the story body — no separate task issues are created.
+- **Input**: `/pair-process-plan-tasks` invokes `/pair-capability-write-issue` with `$type: story`, `$id: [story-id]`, and `$content` = the story's current full body with the Task Breakdown section merged in by the caller (`/pair-capability-write-issue` overwrites the body as-is, it does not append). Tasks are documented inline in the story body — no separate task issues are created.
 - **Output**: Returns the story issue identifier. `/pair-process-plan-tasks` confirms the update.
 
 When composed by `/pair-process-plan-initiatives`:
@@ -190,12 +190,12 @@ When composed by `/pair-process-plan-initiatives`:
 
 When composed by `/pair-process-plan-epics`:
 
-- **Input**: `/pair-process-plan-epics` invokes `/pair-capability-write-issue` with `$type: epic`, `$content` containing the epic data, and `$parent` linking to the parent initiative.
+- **Input**: `/pair-process-plan-epics` invokes `/pair-capability-write-issue` with `$type: epic`, `$content` containing the epic data, and `$parent` linking to the parent initiative. For an `EXTEND` triage outcome (see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md)), it instead passes `$id` of the matched epic and `$content` as the matched epic's current full body with the additional scope already merged in by the caller — `/pair-capability-write-issue` overwrites the body as-is, it does not merge.
 - **Output**: Returns the issue identifier. `/pair-process-plan-epics` uses it for linking stories.
 
 When composed by `/pair-process-plan-stories`:
 
-- **Input**: `/pair-process-plan-stories` invokes `/pair-capability-write-issue` with `$type: story`, `$content` containing the story data, and `$parent` linking to the parent epic.
+- **Input**: `/pair-process-plan-stories` invokes `/pair-capability-write-issue` with `$type: story`, `$content` containing the story data, and `$parent` linking to the parent epic. For an `EXTEND` triage outcome (see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md)), it instead passes `$id` of the matched story and `$content` as the matched story's current full body with the additional scope already merged in by the caller — `/pair-capability-write-issue` overwrites the body as-is, it does not merge.
 - **Output**: Returns the issue identifier. `/pair-process-plan-stories` uses it for status tracking.
 
 When invoked **independently**:

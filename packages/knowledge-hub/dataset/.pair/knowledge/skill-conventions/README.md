@@ -10,6 +10,7 @@ Single-source explanations for patterns that recur across many `SKILL.md` files.
 | Way-of-working / PM-tool resolution | [way-of-working-pm-resolution.md](way-of-working-pm-resolution.md) | 18 skills |
 | `/record-decision` invocation contract | [record-decision-contract.md](record-decision-contract.md) | 19 skills |
 | Output Format shapes (Decision / Report) | [output-shapes.md](output-shapes.md) | 10 skills (documentation-only — no logic change) |
+| To-issues triage (extend vs create) | [to-issues-triage.md](to-issues-triage.md) | 2 composing skills (new convention — no prior duplication to extract) |
 
 ## How a skill uses these files
 

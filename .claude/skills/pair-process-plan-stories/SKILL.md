@@ -1,7 +1,7 @@
 ---
 name: pair-process-plan-stories
 description: "Slices an epic into user stories via vertical slicing and INVEST validation, each sized for one sprint. Composes /pair-capability-write-issue."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
@@ -52,10 +52,10 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
 
 5. **Verify**: An epic is identified (from `$epic` or developer confirmation) and its full content is available for Step 2's analysis.
 
-### Step 2: Detect Existing Stories
+### Step 2: Build Existing Story Registry
 
-1. **Check**: Query PM tool for existing story issues linked to the selected epic.
-2. **Act**: Build a registry of existing stories:
+1. **Check**: Query PM tool for existing story issues linked to the selected epic — **including closed/Done items** (the closed-item triage rule in Step 3 depends on them being in the registry; many PM-tool queries default to open-only).
+2. **Act**: Build a registry of existing stories, keyed for matching (idempotency key — see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md)):
 
    ```text
    EXISTING STORIES:
@@ -63,35 +63,34 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
    └── ...
    ```
 
-3. **Verify**: Registry built. Existing stories will be skipped during creation.
+3. **Verify**: Registry built — available to Step 3's triage.
 
-### Step 3: Story Identification
+### Step 3: Story Identification & Triage Proposal
 
-1. **Act**: Analyze epic components for story candidates:
+1. **Act**: Analyze epic components for story candidates (the candidate tree for this run):
    - **Workflow steps**: distinct user journey phases.
    - **CRUD operations**: create, read, update, delete patterns.
    - **Business rules**: different scenarios and conditions.
    - **User roles**: admin, member, guest variations.
-2. **Act**: Apply vertical slicing — every story must deliver end-to-end user value with visible UI manifestation.
-3. **Act**: Present story candidates to developer:
+2. **Act**: Apply vertical slicing — every story must deliver end-to-end user value with visible UI manifestation. This rule governs CREATE candidates only — see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md)'s per-skill-delta note.
+3. **Act**: Triage each candidate story against the Step 2 registry — see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md) for the matching shape (idempotency key, EXTEND-vs-CREATE threshold, ambiguous-match and closed-item handling). **This skill's parent scope**: the selected epic. First, check each candidate's idempotency key against the registry: an exact match to an existing **open** story is `ALREADY EXISTS #ID` (skip) — per to-issues-triage.md's Skip step, not a triage decision. For every remaining candidate, classify `EXTEND #ID` or `CREATE` — or, if ambiguous (per to-issues-triage.md), present it as a question with a recommendation instead of silently picking one side. Present the triage proposal to developer:
 
    > Story candidates for Epic `#[ID]: [Title]`:
    >
-   > 1. [Story name] — [user value] — [UI manifestation]
-   > 2. [Story name] — [user value] — [UI manifestation]
+   > 1. [Story name] — [user value] — [UI manifestation] → ALREADY EXISTS #[ID] (skip) | EXTEND #[ID] ([one-line rationale]) | CREATE ([one-line rationale])
+   > 2. [Story name] — [user value] — [UI manifestation] → Ambiguous: EXTEND #[ID] or CREATE? [recommendation + rationale]
    > ...
    >
-   > [N] already exist (will be skipped).
    > Approve or adjust?
 
-4. **Verify**: Developer approves the candidate list.
+4. **Verify**: Developer approves the candidate list — every candidate carries exactly one proposal (`ALREADY EXISTS #ID` (skip), `EXTEND #ID`, `CREATE`, or an ambiguous question) with a rationale shown for EXTEND/CREATE, before any write.
 
 ### Step 4: Story Definition & INVEST Validation
 
-For each approved story not already in the registry:
+For each approved story, per its Step 3 proposal:
 
-1. **Check**: Does this story already exist in the registry (Step 2)?
-2. **Skip**: If exists → skip, report:
+1. **Check**: Is this story's confirmed Step 3 proposal `ALREADY EXISTS #ID` (skip)?
+2. **Skip**: If so → skip, report:
 
    > Story `[Title]` already exists (#ID). Skipping.
 
@@ -100,18 +99,17 @@ For each approved story not already in the registry:
    - Rough scope boundaries with expected uncertainty.
    - Initial sizing: XS(1), S(2), M(3), L(5), XL(8).
    - UI value manifestation for sprint demo readiness.
-4. **Act**: Validate against INVEST criteria:
+4. **Act**: For CREATE candidates, validate against INVEST criteria (existing rule, unaffected by triage):
    - **I**ndependent: can be planned separately.
    - **N**egotiable: focuses on user value, not implementation.
    - **V**aluable: clear benefit to user persona.
    - **E**stimable: scope clear enough for rough sizing.
    - **S**mall: fits within single sprint.
    - **T**estable: outcome can be verified.
-5. **Act**: Compose `/pair-capability-write-issue` with:
-   - `$type: story`
-   - `$content`: the story definition
-   - `$parent`: the epic identifier
-6. **Verify**: Story created in PM tool. Record the ID.
+5. **Act**: Compose `/pair-capability-write-issue` per the confirmed proposal:
+   - **CREATE**: `$type: story`, `$content`: the story definition, `$parent`: the epic identifier. If the proposal referenced a closed story (per to-issues-triage.md's closed-item rule), include that reference in `$content`.
+   - **EXTEND `#ID`**: `$type: story`, `$id: #ID`, `$content`: read the matched story's current full body from the PM tool (not just the Step 2 registry line) and merge the additional scope into it (idempotent — a no-op when the scope is already present, per to-issues-triage.md's body-merge idempotency, so re-runs don't accrete text), `$parent`: unchanged. Re-validate INVEST for the merged scope — extending must not break Independent/Small.
+6. **Verify**: Story created or extended in PM tool. Record the ID. Linked to the epic (and, for a CREATE that referenced a closed item, to that closed-item reference) — hierarchy and references both present.
 
 ### Step 5: Coverage Validation & Completion
 
@@ -133,9 +131,10 @@ STORIES COMPLETE:
 ├── Epic:     [#ID: Title]
 ├── Total:    [N stories]
 ├── Created:  [X new]
-├── Skipped:  [Y existing]
+├── Extended: [Y existing, scope merged]
+├── Skipped:  [Z exact-match already-present]
 ├── Points:   [total estimated points]
-├── INVEST:   [all validated]
+├── INVEST:   [all CREATE candidates validated]
 ├── PM Tool:  [adopted tool]
 └── Next:     /pair-process-refine-story
 ```
@@ -145,7 +144,7 @@ STORIES COMPLETE:
 - **No epics in Todo state** (Step 1) — nothing to break down.
 - **Epic not found** (Step 1) — invalid `$epic` identifier.
 - **Bootstrap incomplete** (Step 0) — PM tool required.
-- **Developer rejects candidates** (Step 3) — must resolve before creation.
+- **Developer rejects candidates or triage proposal** (Step 3) — must resolve before creation.
 
 ## Graceful Degradation
 
@@ -155,7 +154,7 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 
 ## Notes
 
-- This skill **modifies PM tool state** — creates story issues linked to epics.
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: detects existing stories and skips them.
+- This skill **modifies PM tool state** — creates and extends story issues linked to epics.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md) and [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md). This skill's check: exact idempotency-key match is proposed `ALREADY EXISTS #ID` (skip) at triage time, before any write (Step 3) — Step 4 only executes the confirmed proposal; substantial-overlap match proposes EXTEND instead of a duplicate CREATE (Step 3) — re-running the same candidate tree never duplicates.
 - Stories at breakdown stage are rough planning units — detailed requirements are added during `/pair-process-refine-story`.
-- INVEST validation is mandatory — stories failing INVEST must be reworked before creation.
+- INVEST validation is mandatory for CREATE candidates — stories failing INVEST must be reworked before creation. EXTEND candidates re-validate INVEST for the merged scope (Step 4).

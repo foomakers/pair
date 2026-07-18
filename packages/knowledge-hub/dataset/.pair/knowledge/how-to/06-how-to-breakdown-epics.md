@@ -24,7 +24,7 @@ This how-to orchestrates the `/plan-epics` skill.
 
 1. **Verify prerequisites**: bootstrap complete per [way-of-working.md](../../adoption/tech/way-of-working.md), initiatives exist in PM tool, bounded contexts recommended.
 2. **Invoke `/plan-epics`** with optional `$initiative` argument. The skill handles:
-   - Existing epic detection (idempotent — skips already-created)
+   - Existing epic triage — each candidate is matched against the registry and classified `ALREADY EXISTS` (skip), `EXTEND` an existing epic, `CREATE` new, or flagged as an ambiguous match for the developer to decide (never silently picked)
    - Initiative selection (highest-priority Todo, or specified `$initiative`)
    - Epic analysis (business objectives, user value, technical requirements, BC alignment)
    - Epic 0 assessment for new projects (bootstrap/foundation epic)
@@ -46,6 +46,7 @@ This how-to orchestrates the `/plan-epics` skill.
 
 - Analyze initiative components: objectives, user value, technical requirements
 - Propose epic structure with 2-4 sprint sizing per epic
+- Check each candidate against existing epics in the same initiative: classify `ALREADY EXISTS` (exact match, skip), `EXTEND` an existing epic (substantial overlap), `CREATE` new (no overlap), or present an ambiguous match as a question with a recommendation — never silently pick one side
 - Document each using [Epic Template](../guidelines/collaboration/templates/epic-template.md)
 - Create in PM tool with proper initiative → epic hierarchy
 
@@ -60,6 +61,7 @@ This how-to orchestrates the `/plan-epics` skill.
 - **No Todo initiatives** — nothing to break down
 - **Initiative not found** — invalid identifier
 - **Developer rejects breakdown** — must resolve before creation
+- **Ambiguous EXTEND-vs-CREATE match** — present as a question with a recommendation, wait for developer's call before writing
 
 ## Key Principles
 
@@ -67,7 +69,7 @@ This how-to orchestrates the `/plan-epics` skill.
 - **2-4 sprint sizing** — manageable increments with measurable outcomes
 - **End-to-end value** — each epic delivers complete user functionality
 - **Priority-driven selection** — P0 > P1 > P2
-- **Idempotent** — re-invocation detects existing epics, creates only missing ones
+- **Extend-or-create, not just idempotent** — re-invocation triages every candidate against the registry (already-exists / extend / create / ambiguous question) instead of only skipping exact duplicates
 
 ## References
 

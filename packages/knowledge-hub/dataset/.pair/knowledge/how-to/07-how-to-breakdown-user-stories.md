@@ -23,7 +23,7 @@ This how-to orchestrates the `/plan-stories` skill.
 
 1. **Verify prerequisites**: bootstrap complete per [way-of-working.md](../../adoption/tech/way-of-working.md), epics exist in PM tool, [user story template](../guidelines/collaboration/templates/user-story-template.md) available.
 2. **Invoke `/plan-stories`** with optional `$epic` argument. The skill handles:
-   - Existing story detection (idempotent — skips already-created)
+   - Existing story triage — each candidate is matched against the registry and classified `ALREADY EXISTS` (skip), `EXTEND` an existing story, `CREATE` new, or flagged as an ambiguous match for the developer to decide (never silently picked)
    - Epic selection (highest-priority Todo, or specified `$epic`)
    - Story identification (workflow steps, CRUD, business rules, user roles)
    - Vertical slicing — every story delivers end-to-end user value with UI manifestation
@@ -49,6 +49,7 @@ This how-to orchestrates the `/plan-stories` skill.
   - **Business Rules** — different scenarios and conditions
   - **User Roles** — admin, member, guest variations
 - Apply **vertical slicing** — every story produces visible UI value
+- Check each candidate against existing stories in the same epic: classify `ALREADY EXISTS` (exact match, skip), `EXTEND` an existing story (substantial overlap), `CREATE` new (no overlap), or present an ambiguous match as a question with a recommendation — never silently pick one side
 - Present candidates for developer approval
 
 ### Phase 3: Story Definition & INVEST Validation
@@ -77,6 +78,7 @@ For each approved story:
 - **Epic not found** — invalid identifier
 - **Bootstrap incomplete** — PM tool required
 - **Developer rejects candidates** — must resolve before creation
+- **Ambiguous EXTEND-vs-CREATE match** — present as a question with a recommendation, wait for developer's call before writing
 
 ## Key Principles
 
@@ -85,7 +87,7 @@ For each approved story:
 - **INVEST mandatory** — stories failing INVEST must be reworked before creation
 - **Rough planning units** — intentional uncertainty resolved during refinement
 - **Epic coverage** — all epic scope areas must be addressed by stories
-- **Idempotent** — re-invocation detects existing stories, creates only missing ones
+- **Extend-or-create, not just idempotent** — re-invocation triages every candidate against the registry (already-exists / extend / create / ambiguous question) instead of only skipping exact duplicates
 
 ## References
 
