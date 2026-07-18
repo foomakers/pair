@@ -1,6 +1,6 @@
 {
   "$comment": "Trigger eval prompt sets (story #313, T7). One entry per skill family. Prompt types: should-trigger (expected = the skill an executor must load) and should-not-trigger (expected = the correct destination — a sibling skill or 'none'; near_miss_for = the skill the prompt is a decoy for and must NOT fire). Prompts are grounded in the frontmatter descriptions of packages/knowledge-hub/dataset/.skills/**/SKILL.md. Run procedure: see README.md in this directory.",
-  "corpus_size": 35,
+  "corpus_size": 36,
   "families": [
     {
       "family": "router",
@@ -164,9 +164,8 @@
         },
         {
           "id": "AD-N3",
-          "type": "should-not-trigger",
-          "near_miss_for": "assess-*",
-          "expected": "none",
+          "type": "should-trigger",
+          "expected": "assess-security",
           "prompt": "Assess the security posture of our login flow."
         },
         {
@@ -175,6 +174,38 @@
           "near_miss_for": "assess-testing",
           "expected": "none",
           "prompt": "Write unit tests for the parser module."
+        }
+      ]
+    },
+    {
+      "family": "assess-security",
+      "skills": ["assess-security"],
+      "prompts": [
+        {
+          "id": "AS-01",
+          "type": "should-trigger",
+          "expected": "assess-security",
+          "prompt": "Run a one-shot security audit of this codebase against OWASP Top 10 and propose project rules."
+        },
+        {
+          "id": "AS-02",
+          "type": "should-trigger",
+          "expected": "assess-security",
+          "prompt": "Check this PR's diff for authn/authz issues, injection risks, and any introduced vulnerabilities."
+        },
+        {
+          "id": "AS-N1",
+          "type": "should-not-trigger",
+          "near_miss_for": "assess-security",
+          "expected": "none",
+          "prompt": "Did the gitleaks job pass on the last CI run for this branch?"
+        },
+        {
+          "id": "AS-N2",
+          "type": "should-not-trigger",
+          "near_miss_for": "assess-security",
+          "expected": "setup-gates",
+          "prompt": "Wire a secret-scanning job into our CI pipeline so a committed API key fails the build."
         }
       ]
     },

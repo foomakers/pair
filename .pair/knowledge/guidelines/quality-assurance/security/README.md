@@ -22,6 +22,10 @@ Comprehensive security framework ensuring robust protection through defense-in-d
 
 ## 📋 **DIRECTORY CONTENTS**
 
+### **Deterministic CI Layer**
+
+- **secret-scanning.md** - Committed-secret detection that mechanically blocks the build — CI config, not a skill, no LLM involved (R6.5)
+
 ### **Core Security Standards**
 
 - **api-security.md** - Secure API design, authentication, and data protection standards

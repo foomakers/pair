@@ -39,7 +39,7 @@ Resources managed by pair in this repo:
 | `.pair/adoption/tech/` | Architecture, tech stack, infrastructure, way of working, 15 ADRs |
 | `.pair/adoption/product/` | PRD, subdomain model |
 | `.pair/adoption/decision-log/` | Non-architectural decision records |
-| `.claude/skills/` | 35 Agent Skills — process workflows (implement, review, refine) and capabilities (quality gates, estimation, manual testing, debt assessment) |
+| `.claude/skills/` | 36 Agent Skills — process workflows (implement, review, refine) and capabilities (quality gates, estimation, manual testing, debt assessment) |
 | `AGENTS.md` | Universal agent entry point linking to `.pair/` |
 
 ## Documentation

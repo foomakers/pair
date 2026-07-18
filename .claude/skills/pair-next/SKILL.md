@@ -7,11 +7,11 @@ author: Foomakers
 
 # /pair-next — Project Navigator
 
-Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 35-skill catalog across all lifecycle phases.
+Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 36-skill catalog across all lifecycle phases.
 
-## Skill Catalog (35 skills)
+## Skill Catalog (36 skills)
 
-The catalog is **derived from the installed corpus**: every installed skill must appear here — 9 process + 25 capability + `/pair-next` itself = 35. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
+The catalog is **derived from the installed corpus**: every installed skill must appear here — 9 process + 26 capability + `/pair-next` itself = 36. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
 
 ### Process Skills (9)
 
@@ -27,7 +27,7 @@ The catalog is **derived from the installed corpus**: every installed skill must
 | `/pair-process-implement`       | Sprint Execution   | Implement story tasks with TDD                  |
 | `/pair-process-review`          | Sprint Execution   | Review PR through structured phases             |
 
-### Capability Skills (25)
+### Capability Skills (26)
 
 | Skill                                    | Category        | Description                                                                  |
 | ---------------------------------------- | --------------- | ---------------------------------------------------------------------------- |
@@ -49,6 +49,7 @@ The catalog is **derived from the installed corpus**: every installed skill must
 | `/pair-capability-assess-pm`             | Assessment      | Assess project management tool                                               |
 | `/pair-capability-assess-infrastructure` | Assessment      | Assess infrastructure strategy                                               |
 | `/pair-capability-assess-observability`  | Assessment      | Assess observability strategy                                                |
+| `/pair-capability-assess-security`       | Assessment      | Assess security posture (review verdict + one-shot audit)                    |
 | `/pair-capability-analyze-debt`          | Analysis        | Analyze technical debt with prioritization                                   |
 | `/pair-capability-analyze-code-quality`  | Analysis        | Analyze code quality with metrics                                            |
 | `/pair-capability-estimate`              | Planning        | Estimate story using adopted methodology                                     |
@@ -161,4 +162,4 @@ See [graceful degradation](../../.pair/knowledge/skill-conventions/graceful-degr
 - This skill is read-only: it inspects state but never modifies files or PM tool data.
 - Row order encodes the tie-break (delivery proximity) — see the **Tie-break** note under the Step 3 table.
 - Re-run `/pair-next` after completing any skill to get an updated recommendation.
-- **Full catalog coverage**: any of the 35 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/pair-capability-checkpoint`, rows 12-16 including `/pair-capability-grill`) or process-skill composition.
+- **Full catalog coverage**: any of the 36 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/pair-capability-checkpoint`, rows 12-16 including `/pair-capability-grill`) or process-skill composition.

@@ -1,7 +1,7 @@
 ---
 name: pair-process-review
-description: "Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) — validation, technical review, adoption compliance, completeness, decision — to decide whether it merges. Not a quick build/test sanity check (use /pair-capability-verify-quality). Composes /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-record-decision, /pair-capability-analyze-debt (required), /pair-capability-verify-adoption, /pair-capability-assess-stack (optional)."
-version: 0.5.0
+description: "Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) — validation, technical review, adoption compliance, completeness, decision — to decide whether it merges. Not a quick build/test sanity check (use /pair-capability-verify-quality). Composes /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-record-decision, /pair-capability-analyze-debt, /pair-capability-assess-security (required), /pair-capability-verify-adoption, /pair-capability-assess-stack (optional)."
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -17,6 +17,7 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 | `/pair-capability-verify-done`          | Capability | Yes      | 4     | Definition of Done checking                  |
 | `/pair-capability-record-decision`      | Capability | Yes      | Any   | Record missing ADR (HALT condition)          |
 | `/pair-capability-analyze-debt`         | Capability | Yes      | 4     | Flag tech debt items                         |
+| `/pair-capability-assess-security`      | Capability | Yes      | 2     | Security posture verdict + findings (D22)    |
 | `/pair-capability-verify-adoption`      | Capability | Optional | 3     | Full adoption compliance                     |
 | `/pair-capability-assess-stack`         | Capability | Optional | 3     | Tech-stack resolution                        |
 | `/pair-capability-execute-manual-tests` | Capability | Optional | 6     | Post-merge release validation (manual tests) |
@@ -113,7 +114,7 @@ Ask: _"Proceed with review?"_
 ### Step 2.3: Architecture & ADR Compliance
 
 1. **Check**: Does the PR introduce new technical decisions (libraries, patterns, technologies)?
-2. **Skip**: If no new decisions detected — move to Phase 3.
+2. **Skip**: If no new decisions detected — move to Step 2.4.
 3. **Act**: For each new decision, verify:
    - ADR exists in `adoption/tech/adr/`
    - [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) updated
@@ -122,6 +123,13 @@ Ask: _"Proceed with review?"_
    - Compose `/pair-capability-record-decision` with `$type = architectural` and `$topic` describing the gap.
    - Set review status to CHANGES-REQUESTED until ADR is created.
    - Resume review after ADR is added.
+
+### Step 2.4: Security Assessment
+
+1. **Check**: Has `/pair-capability-assess-security` already run with `$mode: review` on the current PR head commit?
+2. **Skip**: If already run — reuse the verdict + findings, move to Phase 3.
+3. **Act**: Compose `/pair-capability-assess-security` with `$mode: review` against the PR diff. It resolves the rule set (KB global + per-service + per-web-app + adoption project rules) and returns a 1-line verdict + collapsed findings, each tagged **introduced** or **pre-existing**.
+4. **Verify**: Verdict + findings recorded — feeds the Security Review section (Step 5.1) and the risk matrix's security dimension. If any **introduced** finding is red → flag explicitly: this is the AC4 signal that drives the CHANGES-REQUESTED decision in Step 5.2. Does not itself HALT — `/pair-capability-assess-security` has no merge authority, this skill's own decision step does.
 
 ## Phase 3: Adoption Compliance
 
@@ -177,7 +185,7 @@ Run the procedure for the level determined in Step 3.1 — see [degradation-leve
    - **Review Information**: PR number, author, reviewer, date, story, review type
    - **Review Summary**: overall assessment, key changes, business value
    - **Code Review Checklist**: functionality, code quality, technical standards (from Phase 2)
-   - **Security Review**: security findings (from Phase 2 + Phase 3)
+   - **Security Review**: verdict + collapsed findings from `/pair-capability-assess-security` (Step 2.4) — 1-line + `<details>` (D22)
    - **Testing Review**: test coverage and quality (from /pair-capability-verify-quality)
    - **Documentation Review**: documentation completeness (from /pair-capability-verify-done)
    - **Detailed Review Comments**: issues by severity, positive feedback
@@ -192,7 +200,7 @@ Based on compiled findings:
 | Decision              | Condition                                                                                 |
 | --------------------- | ----------------------------------------------------------------------------------------- |
 | **APPROVED**          | No critical or major issues. All AC met. Quality gates pass.                              |
-| **CHANGES-REQUESTED** | Critical issues found, missing ADRs, security vulnerabilities, failing tests, AC not met. |
+| **CHANGES-REQUESTED** | Critical issues found, missing ADRs, any **introduced** red security finding from `/pair-capability-assess-security` (AC4), failing tests, AC not met. |
 | **TECH-DEBT**         | Only minor issues or debt items. Approve current PR, track debt separately.               |
 
 ### Step 5.3: Post Review
@@ -231,6 +239,7 @@ REVIEW COMPLETE:
 ├── Story:      [#ID: Title | N/A]
 ├── Decision:   [APPROVED | CHANGES-REQUESTED | TECH-DEBT]
 ├── Issues:     [critical: N | major: N | minor: N]
+├── Security:   [green | yellow | red — N findings, N introduced | N/A — not installed]
 ├── Quality:    [PASS | FAIL — N gates]
 ├── DoD:        [N/N criteria met]
 ├── Adoption:   [Level N — summary]
@@ -256,7 +265,7 @@ See [idempotency convention](../../../.pair/knowledge/skill-conventions/idempote
 
 1. **PR context**: detects already-loaded PR, skips re-loading.
 2. **Phases**: checks which phases completed (via session state or PR review comments). Resumes from first incomplete phase.
-3. **Skill compositions**: /pair-capability-verify-quality, /pair-capability-verify-done results cached in session. Not re-run if already passing on current commit.
+3. **Skill compositions**: /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-assess-security results cached in session. Not re-run if already passing/current on current commit.
 4. **New commits**: if PR updated since last check, re-validates affected phases only.
 5. **Review report**: updates existing report rather than posting duplicates.
 6. **Merge**: detects already-merged PR. Skips Phase 6 if already merged. Resumes parent cascade if merge succeeded but status updates are incomplete.
@@ -268,6 +277,7 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 - **/pair-capability-verify-adoption not installed**: Falls back to inline dependency checking against [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md). Warning logged. See degradation cascade (Phase 3).
 - **/pair-capability-assess-stack not installed**: Unlisted dependencies flagged as warnings for manual verification. Does NOT HALT.
 - **/pair-capability-analyze-debt not available**: Skip debt assessment, note in report.
+- **/pair-capability-assess-security not installed**: Skip Step 2.4. Security Review section notes "manual judgment only — /pair-capability-assess-security not installed". Does NOT HALT; a manual security read of the diff is still expected per [how-to-11](../../../.pair/knowledge/how-to/11-how-to-code-review.md).
 - **Story not found**: Review proceeds with PR-only validation (no AC check). Phase 6 skips parent cascade.
 - **Code review template not found**: **HALT** — cannot produce review without template (a required dependency, not optional).
 - **PM tool not accessible**: Phase 6 merge via CLI only.

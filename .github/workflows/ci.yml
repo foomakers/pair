@@ -23,6 +23,26 @@ on:
       - '.changeset/**'
 
 jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks needs history to scan the commit range
+      # Run the gitleaks BINARY directly, not gitleaks-action@v2: the Action
+      # requires a GITLEAKS_LICENSE for org-owned repos (foomakers is an org),
+      # which would fail the job before scanning. The MIT-licensed binary has no
+      # such gate. Fail-closed: any leak -> non-zero exit -> red build (R6.5).
+      - name: Secret scan (gitleaks)
+        run: |
+          set -euo pipefail
+          GITLEAKS_VERSION=8.30.1
+          GITLEAKS_SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -   # supply-chain integrity: fail-closed if the asset was swapped
+          tar -xzf gitleaks.tar.gz -C /usr/local/bin gitleaks
+          gitleaks detect --source . --config .gitleaks.toml --no-banner --redact --exit-code 1
+
   build:
     runs-on: ubuntu-latest
     if: "!(startsWith(github.event.head_commit.message, 'chore: release v'))"

@@ -1,11 +1,11 @@
 ---
 title: Skills Catalog
-description: Complete catalog of all 35 pair skills organized by type — process, capability, and meta.
+description: Complete catalog of all 36 pair skills organized by type — process, capability, and meta.
 ---
 
-pair ships with 35 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
+pair ships with 36 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
 
-> **Last updated:** 2026-07-13. Source: `packages/knowledge-hub/dataset/.skills/`
+> **Last updated:** 2026-07-16. Source: `packages/knowledge-hub/dataset/.skills/`
 
 ## Meta Skills
 
@@ -27,7 +27,7 @@ Process skills orchestrate multi-step workflows by composing capability skills.
 | **refine-story** | `/pair-process-refine-story` | Refines a user story from Todo to Refined — Given-When-Then acceptance criteria, technical analysis, sprint readiness. Not for sizing an already-refined story (use estimate). | `/pair-capability-write-issue` |
 | **plan-tasks** | `/pair-process-plan-tasks` | Breaks a refined user story into implementation tasks — checklist, dependency graph, AC-coverage table — appended to the story body; no separate task issues. | `/pair-capability-write-issue` |
 | **implement** | `/pair-process-implement` | Implements a refined user story task-by-task via a 5-step cycle per task (context, branch, implementation, quality, commit); opens one PR when the story completes. | `/pair-capability-verify-quality`, `/pair-capability-record-decision` |
-| **review** | `/pair-process-review` | Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) to decide whether it merges. Not a quick build/test sanity check (use verify-quality). | `/pair-capability-verify-quality`, `/pair-capability-verify-done`, `/pair-capability-record-decision`, `/pair-capability-analyze-debt` (required); `/pair-capability-verify-adoption`, `/pair-capability-assess-stack`, `/pair-capability-execute-manual-tests` (optional) |
+| **review** | `/pair-process-review` | Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) to decide whether it merges. Not a quick build/test sanity check (use verify-quality). | `/pair-capability-verify-quality`, `/pair-capability-verify-done`, `/pair-capability-record-decision`, `/pair-capability-analyze-debt`, `/pair-capability-assess-security` (required); `/pair-capability-verify-adoption`, `/pair-capability-assess-stack`, `/pair-capability-execute-manual-tests` (optional) |
 
 ## Capability Skills
 
@@ -56,6 +56,7 @@ All `assess-*` skills are **output-only**: they produce a proposal (rendered ado
 | **assess-pm** | `/pair-capability-assess-pm` | Evaluates and recommends which PM tool fits, when the choice is still open — proposes, doesn't configure. `/pair-capability-setup-pm` configures the tool once picked; otherwise the caller persists via `/pair-capability-record-decision`. |
 | **assess-stack** | `/pair-capability-assess-stack` | Evaluates and recommends the tech stack when the choice is open: full evaluation at bootstrap, or a single new dependency during implementation. Doesn't audit code already written (that's verify-adoption). Output-only; caller persists via `/pair-capability-record-decision`. |
 | **assess-testing** | `/pair-capability-assess-testing` | Evaluates and recommends the testing strategy — framework, pyramid distribution, coverage targets — when the choice is open. Doesn't write tests itself. Output-only; caller persists via `/pair-capability-record-decision`. |
+| **assess-security** | `/pair-capability-assess-security` | Assesses security posture against the KB/adoption rule cascade — `$mode: review` composed by `/pair-process-review` (1-line verdict + collapsed findings feeding the security dimension, D22); `$mode: audit` — one-shot OWASP Top 10 scan, writes a report to `.pair/working/reports/security/`. The one exception to output-only in this table: it writes that report file itself; adoption content still goes through `/pair-capability-record-decision`. Never scans for committed secrets — that's the deterministic CI layer `/pair-capability-setup-gates` provisions (D24). |
 
 ### Analysis Capabilities
 
