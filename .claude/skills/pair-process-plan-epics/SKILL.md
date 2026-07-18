@@ -78,7 +78,7 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
 
    > Epic breakdown for Initiative `#[ID]: [Title]`:
    >
-   > [Epic 0: Bootstrap (if needed)] → CREATE
+   > [Epic 0: Bootstrap (if needed)] → CREATE (first run) | ALREADY EXISTS #[ID] (skip, on re-run — Epic 0 follows the same triage rule as any other candidate)
    > Epic 1: [Name] (2-3 sprints) — [user value] → ALREADY EXISTS #[ID] (skip) | EXTEND #[ID] ([one-line rationale]) | CREATE ([one-line rationale])
    > Epic 2: [Name] (3-4 sprints) — [user value] → Ambiguous: EXTEND #[ID] or CREATE? [recommendation + rationale]
    > ...

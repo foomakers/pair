@@ -190,12 +190,12 @@ When composed by `/plan-initiatives`:
 
 When composed by `/plan-epics`:
 
-- **Input**: `/plan-epics` invokes `/write-issue` with `$type: epic`, `$content` containing the epic data, and `$parent` linking to the parent initiative. For an `EXTEND` triage outcome (see to-issues-triage.md), it instead passes `$id` of the matched epic and `$content` as the additional scope to merge.
+- **Input**: `/plan-epics` invokes `/write-issue` with `$type: epic`, `$content` containing the epic data, and `$parent` linking to the parent initiative. For an `EXTEND` triage outcome (see to-issues-triage.md), it instead passes `$id` of the matched epic and `$content` as the matched epic's current full body with the additional scope already merged in by the caller — `/write-issue` overwrites the body as-is, it does not merge.
 - **Output**: Returns the issue identifier. `/plan-epics` uses it for linking stories.
 
 When composed by `/plan-stories`:
 
-- **Input**: `/plan-stories` invokes `/write-issue` with `$type: story`, `$content` containing the story data, and `$parent` linking to the parent epic. For an `EXTEND` triage outcome (see to-issues-triage.md), it instead passes `$id` of the matched story and `$content` as the additional scope to merge.
+- **Input**: `/plan-stories` invokes `/write-issue` with `$type: story`, `$content` containing the story data, and `$parent` linking to the parent epic. For an `EXTEND` triage outcome (see to-issues-triage.md), it instead passes `$id` of the matched story and `$content` as the matched story's current full body with the additional scope already merged in by the caller — `/write-issue` overwrites the body as-is, it does not merge.
 - **Output**: Returns the issue identifier. `/plan-stories` uses it for status tracking.
 
 When invoked **independently**:

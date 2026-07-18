@@ -8,6 +8,8 @@ Two items are the **same** item when their normalized title (lowercase, trimmed,
 
 ## The four-step shape
 
+> Numbered 1-4 below for this convention's own internal shape — distinct from, and not aligned to, the numbered Steps of any composing skill's own algorithm (a skill's "Step 3" is its own numbering, not a reference to this list's item 3).
+
 1. **Check**: Query the PM tool for existing items under the relevant parent scope (the tree the candidate would attach to). Build a registry — same shape as an existing-item registry any plan-* skill already builds, keyed for matching (idempotency key above) rather than just listed.
 2. **Skip**: If a candidate's idempotency key exactly matches an existing **open** item, it already exists — no proposal, report it as already-present (this is the re-run/idempotency path, not a triage decision).
 3. **Act**: For every remaining candidate, compare it against each existing item (open or closed) in the same parent scope and classify:
