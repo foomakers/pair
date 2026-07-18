@@ -1,4 +1,4 @@
-# ADR: Quality Model — Single-Document Resolution Cascade (Argument > Adoption > KB Default)
+# ADR-013: Quality Model — Single-Document Resolution Cascade (Argument > Adoption > KB Default)
 
 ## Status
 

@@ -1,4 +1,4 @@
-# ADR: AI-Generated Machine Contracts from KB Templates (md → contract.json)
+# ADR-016: AI-Generated Machine Contracts from KB Templates (md → contract.json)
 
 ## Status
 

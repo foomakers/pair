@@ -1,4 +1,4 @@
-# ADR: map-subdomains / map-contexts — Process Skill → Capability (D24)
+# ADR-012: map-subdomains / map-contexts — Process Skill → Capability (D24)
 
 ## Status
 

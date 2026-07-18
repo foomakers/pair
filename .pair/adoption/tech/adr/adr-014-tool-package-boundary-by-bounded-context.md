@@ -1,4 +1,4 @@
-# ADR: Tool-family packages fold when they share a bounded context — package boundaries track bounded contexts, not folder-level tool groupings
+# ADR-014: Tool-family packages fold when they share a bounded context — package boundaries track bounded contexts, not folder-level tool groupings
 
 ## Status
 
