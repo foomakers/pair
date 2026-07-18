@@ -80,7 +80,7 @@ A project can adopt a different scanner (trufflehog, ggshield, a vendor SAST sui
 
 ## Verification (reproducible)
 
-The mechanism above was verified directly — reproducible with any gitleaks 8.x install. `--log-opts="-1"` scopes the scan to the single commit under test, the same way `gitleaks/gitleaks-action` scopes to the commits a PR introduces — a bare `gitleaks detect --source .` scans the **entire** git history, so a leak committed once would keep failing every later scan regardless of an allowlist added afterwards; that is not what the CI job is testing here:
+The mechanism above was verified directly — reproducible with any gitleaks 8.x install. The reproduction below uses `--log-opts="-1"` to scope each check to the single commit under test, isolating the demonstration. The CI job itself scans **full history** (`gitleaks detect --source .`) against the `.gitleaks.toml` allowlist — the allowlist is exactly what keeps a known example-secret from re-failing every scan, which is what makes full-history scanning safe there:
 
 ```bash
 git init repo && cd repo

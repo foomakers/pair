@@ -164,8 +164,7 @@
         },
         {
           "id": "AD-N3",
-          "type": "should-not-trigger",
-          "near_miss_for": "assess-*",
+          "type": "should-trigger",
           "expected": "assess-security",
           "prompt": "Assess the security posture of our login flow."
         },
