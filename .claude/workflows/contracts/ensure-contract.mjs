@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Deterministic side of the "AI-generated machine contract from KB templates"
-// pattern (#292, ADR 2026-07-12-ai-generated-template-contracts): hashing,
+// pattern (#292, ADR-016 adr-016-ai-generated-template-contracts.md): hashing,
 // cache decision, contract validation, hash stamping. The SEMANTIC step
 // (markdown template → vocabulary/enums) is done by the `contract-generator`
 // agent — this module never parses markdown.

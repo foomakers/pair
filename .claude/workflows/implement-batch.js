@@ -115,8 +115,8 @@ const FIX_SCHEMA = {
 // The pattern is per-template and reusable: add a spec below to contract another
 // template — e.g. { name: 'pr', template: '.../pr-template.md', contract:
 // '.claude/workflows/contracts/pr.contract.json', skeleton: PR_SCHEMA, mirrors: ... }
-// once the PR return value grows beyond a handle. See ADR
-// 2026-07-12-ai-generated-template-contracts.
+// once the PR return value grows beyond a handle. See
+// ADR-016 (adr-016-ai-generated-template-contracts.md).
 const CONTRACT_SPECS = [
   {
     name: 'code-review',
