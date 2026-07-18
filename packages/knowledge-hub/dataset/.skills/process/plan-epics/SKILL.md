@@ -108,7 +108,7 @@ Process epics sequentially (Epic 0 first if needed), per its Step 3 proposal:
    - Present to developer for validation.
 4. **Act**: Compose `/write-issue` per the confirmed proposal:
    - **CREATE**: `$type: epic`, `$content`: the filled epic template, `$parent`: the initiative identifier. If the proposal referenced a closed epic (per to-issues-triage.md's closed-item rule), include that reference in `$content`.
-   - **EXTEND `#ID`**: `$type: epic`, `$id: #ID`, `$content`: read the matched epic's current full body from the PM tool (not just the Step 2 registry line) and merge the additional scope into it, `$parent`: unchanged.
+   - **EXTEND `#ID`**: `$type: epic`, `$id: #ID`, `$content`: read the matched epic's current full body from the PM tool (not just the Step 2 registry line) and merge the additional scope into it (idempotent — a no-op when the scope is already present, per to-issues-triage.md's body-merge idempotency, so re-runs don't accrete text), `$parent`: unchanged.
 5. **Verify**: Epic created or extended in PM tool. Record the ID. Linked to the initiative (and, for a CREATE that referenced a closed item, to that closed-item reference) — hierarchy and references both present.
 
 ### Step 5: Completion

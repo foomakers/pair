@@ -164,6 +164,6 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 ## Notes
 
 - This skill **modifies PM tool state** — it updates the story body with the Task Breakdown section. No separate task issues are created.
-- **Idempotent (task-level)** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: re-invoking on a story with partial tasks appends only missing ones to the story body.
+- **Idempotent (task-level)** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: re-invoking on a story with partial tasks adds only the missing ones (the caller composes the full updated body; write-issue overwrites it).
 - Condensed TA removes verbose implementation detail that belongs in individual tasks (retained items: see Step 5).
 - Story template reference: [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md).

@@ -112,7 +112,7 @@ Skills never write board-specific labels — `$status` is always a canonical mac
 3. **Act (Update)**:
    - Read the existing issue to confirm it exists.
    - If not found → **HALT**: `Issue #$id not found.`
-   - Update the issue body with the formatted content.
+   - Update the issue body with the formatted content — a **full-body overwrite**, not a merge/append: the body is replaced with what `$content` renders to. Callers that add to an existing body (EXTEND triage, plan-tasks Task Breakdown) must therefore pass the **already-merged full body**, not just the delta (see the Composition Interface below).
    - Preserve existing labels and hierarchy links unless explicitly changed.
    - If `$status` was provided, update the project board status field to the board state resolved in Step 6, per the implementation guide (e.g., GraphQL mutation for GitHub Projects). This is the **board field**, not the body text.
 4. **Verify**: Issue created or updated successfully. If `$status` was provided, confirm the board field reflects the resolved board state.
