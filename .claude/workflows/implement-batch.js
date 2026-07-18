@@ -238,12 +238,15 @@ async function driveStory(story) {
   //    Converges when every ACTIONABLE finding is resolved. Findings the reviewer
   //    marks nonActionable (by-design / won't-fix, justified) don't block: they're
   //    carried to the merge gate as `acceptedFindings` for the human to see.
+  //    nonActionable is NOT a scope filter — "not this story's original scope" alone
+  //    never qualifies; only "fixing it would be genuinely wrong" does. See ADL
+  //    decision-log/2026-07-11-agent-execution-layer.md (amended 2026-07-18).
   let round = 0
   let prevFindings = []
   let accepted = []
   while (true) {
     const review = await agent(
-      `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the code-review-template vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (issue + impact), \`recommendation\`; verdict ∈ {${VERDICTS}}. For any finding that is by-design / won't-fix — fixing it would be WRONG (byte-consistent with a source of truth, matches an existing convention in the same file, resolves only after merge, etc.) — set \`nonActionable: true\` and put the justification in \`description\`. ${round > 0 ? `Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.` : ''} Return findings and a verdict.`,
+      `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the code-review-template vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (issue + impact), \`recommendation\`; verdict ∈ {${VERDICTS}}. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG (byte-consistent with a source of truth, matches an existing convention/already-tracked deferred plan, resolves only after merge, etc.) — being outside this story's originally stated scope is NOT by itself a reason to mark something nonActionable: a real, fixable gap found during review gets fixed in this same PR unless it is large enough to warrant its own story (state that explicitly in the description if so). ${round > 0 ? `Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.` : ''} Return findings and a verdict.`,
       { agentType: 'reviewer', phase: 'Review', label: `rev:${tag} r${round}`, schema: REVIEW_SCHEMA },
     )
     const findings = review?.findings ?? []
