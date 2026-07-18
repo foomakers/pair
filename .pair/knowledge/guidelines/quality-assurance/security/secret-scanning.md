@@ -41,8 +41,10 @@ secret-scan:
       run: |
         set -euo pipefail
         GITLEAKS_VERSION=8.30.1
-        curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
-          | tar -xz -C /usr/local/bin gitleaks
+        GITLEAKS_SHA256=551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  # from the release checksums.txt for this version/arch
+        curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
+        echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+        tar -xzf gitleaks.tar.gz -C /usr/local/bin gitleaks
         gitleaks detect --source . --config .gitleaks.toml --no-banner --redact --exit-code 1
 ```
 
