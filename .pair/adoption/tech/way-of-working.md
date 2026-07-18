@@ -23,6 +23,7 @@
 - `pnpm quality-gate` is the adopted project-level quality gate command.
 - Quality gate includes: type checking (`ts:check`), testing (`test`), linting (`lint`), formatting (`prettier:fix`), markdown lint (`mdlint:fix`).
 - **Gate & tooling code:** a gate's logic lives in a tested module in its owning package (white-box unit tests); scripts/CLIs are thin entrypoints and a root gate delegates (`pnpm --filter <pkg> <gate>`). Scripts are never unit-tested — CLI-level checks go to smoke tests. See ADL [2026-07-13-gate-tooling-code-in-tested-modules.md](../decision-log/2026-07-13-gate-tooling-code-in-tested-modules.md). Gate/tooling packages are organized by bounded context, not one package per tool family — a new tool family sharing an existing package's bounded context is a new folder there, not a new package. See [ADR-014](adr/adr-014-tool-package-boundary-by-bounded-context.md).
+- **Conformance tests** (`packages/knowledge-hub/src/conformance/`): one test file per target KB artifact (a `SKILL.md`, guideline, or template), not per introducing story — a new story extends the matching file's `describe` block instead of adding a new story-named file. See ADL [2026-07-18-conformance-test-per-file-not-per-story.md](../decision-log/2026-07-18-conformance-test-per-file-not-per-story.md).
 
 ### Custom Gate Registry
 

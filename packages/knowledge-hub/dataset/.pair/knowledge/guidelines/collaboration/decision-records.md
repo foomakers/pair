@@ -19,7 +19,7 @@ Decision records capture the **why** behind technical and domain choices. Four f
 | **Examples**       | Service boundaries, data flow patterns, API design, infrastructure topology | Library choice, coding conventions, PM tool selection, estimation methodology | Business rule, glossary term, domain behavior meeting the 3-criteria gate | Performance investigation, dependency evaluation, benchmark |
 | **Directory**      | `adoption/tech/adr/`                         | `adoption/decision-log/`                     | `adoption/product/ddr/`                       | `adoption/decision-log/` (shared with ADL)    |
 | **Template**       | [adr-template.md](templates/adr-template.md) | [adl-template.md](templates/adl-template.md) | [ddr-template.md](templates/ddr-template.md)  | [analysis-log-template.md](templates/analysis-log-template.md) |
-| **File naming**    | `YYYY-MM-DD-<topic>.md`                      | `YYYY-MM-DD-<topic>.md`                      | `ddr-NNN-<topic>.md` (sequential)             | `YYYY-MM-DD-<topic>.md` (same as ADL; Category `Analysis` distinguishes it) |
+| **File naming**    | `adr-NNN-<topic>.md` (sequential)            | `YYYY-MM-DD-<topic>.md`                      | `ddr-NNN-<topic>.md` (sequential)             | `YYYY-MM-DD-<topic>.md` (same as ADL; Category `Analysis` distinguishes it) |
 | **Sync target**    | Adoption files (tech-stack, architecture, way-of-working) | Adoption files | Context map (`context-map.md` or `<slug>.context.md`) — never allowed to diverge | Pertinent adoption file's current-state summary — always replaced with the latest analysis |
 | **Gate**           | None — any architectural decision qualifies  | None — any non-architectural decision qualifies | 3 criteria (hard to reverse AND surprising without context AND real trade-off) | None — any completed technical analysis qualifies |
 | **Update mode**    | Update or create new                         | Update or create new                         | Update, or create new + supersede             | **Never updated in place** — every recording creates a new record (history preserved) |
@@ -35,27 +35,28 @@ Decision records capture the **why** behind technical and domain choices. Four f
 
 ## File Naming Convention
 
-ADR and ADL use date-based naming: `YYYY-MM-DD-<topic>.md`
+ADR and DDR use sequential naming: `adr-NNN-<topic>.md` / `ddr-NNN-<topic>.md`
 
-- **Date**: The date the decision was made (ISO 8601).
-- **Topic**: Short kebab-case description (e.g., `streaming-downloads`, `date-library-choice`).
-- **One file per decision**: Each decision entry gets its own file.
-- **Sortable**: Files sort chronologically by default.
+- **NNN**: Zero-padded 3-digit sequence number, incremented from the highest existing `adr-NNN`/`ddr-NNN` in the respective directory (starts at `001`).
+- **Topic**: Short kebab-case description (e.g., `refund-window-30-days`).
+- Rationale: architectural and domain decisions form supersede chains and are referenced by number elsewhere (brainstorm/refine conflict flags, cross-references) — a chain reads more naturally as `adr-015 supersedes adr-012` than as date deltas.
 
 Examples:
 
-- `2026-01-15-tty-detection-pattern.md` (ADR — architectural pattern)
-- `2026-02-01-vitest-adoption.md` (ADL — library choice)
+- `adr-001-tty-detection-pattern.md` (ADR — architectural pattern)
+- `ddr-001-refund-window-30-days.md` (DDR — domain rule)
 
-DDR uses sequential naming instead: `ddr-NNN-<topic>.md`
+ADL and Analysis-Log use date-based naming instead: `YYYY-MM-DD-<topic>.md`
 
-- **NNN**: Zero-padded 3-digit sequence number, incremented from the highest existing `ddr-NNN` in `adoption/product/ddr/` (starts at `001`).
-- **Topic**: Short kebab-case description of the domain rule (e.g., `refund-window-30-days`).
-- Rationale for the different convention: domain rules are referenced by number in brainstorm/refine conflict flags, and supersede chains read more naturally as `ddr-003 supersedes ddr-001` than as date deltas.
+- **Date**: The date the decision/analysis was made (ISO 8601).
+- **Topic**: Short kebab-case description (e.g., `streaming-downloads`, `date-library-choice`).
+- **One file per decision** (or, for Analysis-Log, per analysis run — see below): each entry gets its own file.
+- **Sortable**: Files sort chronologically by default.
+- Rationale: ADL is referenced by topic, not by number, and Analysis-Log is never superseded (every analysis is an independent, additive record) — recency-sortability is the useful property, not a citable sequence.
 
 Example:
 
-- `ddr-001-refund-window-30-days.md` (DDR — domain rule)
+- `2026-02-01-vitest-adoption.md` (ADL — library choice)
 
 Analysis-log reuses the ADL naming exactly: `YYYY-MM-DD-<topic>.md` in `adoption/decision-log/`, distinguished only by Category `Analysis`. Same-day + same-topic repeats append an incremented suffix (`-2`, `-3`, …) — never overwritten, since history is always preserved (unlike ADL, where "update" is a valid choice).
 
