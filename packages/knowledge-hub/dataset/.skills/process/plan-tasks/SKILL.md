@@ -1,6 +1,6 @@
 ---
 name: plan-tasks
-description: "Breaks a refined user story into implementation tasks — checklist, dependency graph, AC-coverage table — appended to the story body; no separate task issues are created. Composes /write-issue."
+description: "Breaks a refined user story into implementation tasks — checklist, dependency graph, AC-coverage table — added to the story body; no separate task issues are created. Composes /write-issue."
 version: 0.4.1
 author: Foomakers
 ---
