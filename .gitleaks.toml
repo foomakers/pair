@@ -1,0 +1,12 @@
+title = "pair secret-scanning allowlist"
+
+[extend]
+useDefault = true # keep gitleaks' built-in detection rules — this file only adds exceptions
+
+[allowlist]
+description = "Project-specific false-positive exceptions, confirmed one at a time"
+regexes = [
+  '''AKIAABCDEFGHIJKLMNOP''', # documented worked example in secret-scanning.md/ADR-015 — a synthetic, illustrative AWS-key-shaped string, not a real credential
+  '''usr_abc123def456''', # placeholder userToken example in observability/structured-logging/sensitive-data-protection.md — not a real credential
+  '''sess_xyz789uvw012''', # placeholder sessionToken example in the same file — not a real credential
+]

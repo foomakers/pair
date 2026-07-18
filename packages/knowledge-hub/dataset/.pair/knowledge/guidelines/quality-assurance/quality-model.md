@@ -24,6 +24,8 @@ The single source of default quality rules for this KB. `classify`, `assess-cost
 
 Every theme not directly named here nests under one of these three — see §7. No status pages, no dedicated backlog per theme: a theme gets a card only when there is real work.
 
+The **Security** pillar's rules resolve through their own 5-layer cascade (global KB → per-service → per-web-app → adoption project rules → package-scoped) — see `assess-security`'s Step 1, not duplicated here.
+
 ## 3. Classification Model
 
 ### 3.1 Risk dimensions

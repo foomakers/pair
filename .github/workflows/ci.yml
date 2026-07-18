@@ -23,6 +23,16 @@ on:
       - '.changeset/**'
 
 jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks needs history to scan the diff/commit range
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITLEAKS_CONFIG: .gitleaks.toml
+
   build:
     runs-on: ubuntu-latest
     if: "!(startsWith(github.event.head_commit.message, 'chore: release v'))"

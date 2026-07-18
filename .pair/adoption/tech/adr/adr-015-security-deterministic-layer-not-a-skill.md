@@ -1,4 +1,4 @@
-# ADR: Deterministic Secret Scanning as a CI Layer, Not a Skill (D24)
+# ADR-015: Deterministic Secret Scanning as a CI Layer, Not a Skill (D24)
 
 ## Status
 
@@ -104,26 +104,27 @@ skill re-implements the other's surface.
 - The protection is opt-in per project: a project that never runs `/pair-capability-setup-gates` (or
   wires the job manually) has no secret-scanning gate at all — `assess-security`'s audit mode can only
   report this gap, not close it.
-- This repository's own CI (`.github/workflows/ci.yml`) is not wired to the gitleaks job as part of
-  this story: the KB guideline's own worked example
-  (`AWS_SECRET_ACCESS_KEY=AKIAABCDEFGHIJKLMNOP`) is itself a secret-shaped string that a bare gitleaks
-  scan over this repo's full history would flag, and resolving that safely (allowlisting the exact
-  guideline line, or rewording the example) is deliberately left to a follow-up rather than risked in
-  this story's own PR.
-- **The `secret-scanning.md` Verification section is a documented, manually-reproduced check, not a
-  committed automated fixture test** (raised in PR #341 review). Deliberate, for the same reason as
-  the point above: an automated version would need to scaffold a real git repo, shell out to the
-  `gitleaks` binary, and assert on its exit code — a hard dependency on an external tool this repo
-  does not otherwise require (per this ADR's own decision not to dogfood gitleaks into `ci.yml` yet),
-  and exactly the kind of script/CLI end-to-end behavior
+- **Update (2026-07-18): this repository's own CI (`.github/workflows/ci.yml`) is now wired to the
+  `secret-scan` job.** The KB guideline's own worked example
+  (`AWS_SECRET_ACCESS_KEY=AKIAABCDEFGHIJKLMNOP`) is a secret-shaped string that a bare gitleaks scan
+  over this repo's full history would flag — resolved with a root `.gitleaks.toml` allowlisting the
+  exact literal string (plus two unrelated pre-existing placeholder tokens found in
+  `observability/structured-logging/sensitive-data-protection.md` during the same verification pass:
+  `usr_abc123def456`, `sess_xyz789uvw012`) via precise regexes, not a broad pattern or a path-level
+  exemption — a genuinely different secret in the same files still trips the scan (verified: changing
+  one character of the allowlisted string is caught). Full-history scan verified clean
+  (`gitleaks detect --source . --config .gitleaks.toml`, 283 commits, 0 leaks) before wiring the job.
+- **The `secret-scanning.md` Verification section remains a documented, manually-reproduced check, not
+  a committed automated fixture test** (raised in PR #341 review) — this is unaffected by the CI wiring
+  above, which runs the real scanner against the real repo, not a fixture harness. An automated fixture
+  version would still need to scaffold a throwaway git repo, shell out to the `gitleaks` binary, and
+  assert on its exit code — exactly the kind of script/CLI end-to-end behavior
   [2026-07-13-gate-tooling-code-in-tested-modules.md](../../decision-log/2026-07-13-gate-tooling-code-in-tested-modules.md)
-  routes to a smoke test rather than a vitest unit test — not something to bolt onto this repo's own
-  quality gates for a CI-config template meant for *other* projects. The claim is still falsifiable:
-  the exact commands are in the guideline, reproducible with any gitleaks 8.x install, and were
-  independently re-run (not just read) during this story and its review. If a project wants this
-  gated for real, the natural home is that project's own `scripts/smoke-tests/` once gitleaks is
-  dogfooded into this repo's `ci.yml` (see the point above) — tracked as a candidate follow-up, not a
-  gap in this story's DoD.
+  routes to a smoke test rather than a vitest unit test. The claim is still falsifiable: the exact
+  commands are in the guideline, reproducible with any gitleaks 8.x install, and were independently
+  re-run (not just read) during this story and its review, and again during this update. If a project
+  wants this gated for real, the natural home is that project's own `scripts/smoke-tests/` — tracked as
+  a candidate follow-up, not a gap in this story's DoD.
 
 ## Adoption Impact
 
