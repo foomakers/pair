@@ -109,7 +109,7 @@ For each approved story, per its Step 3 proposal:
 5. **Act**: Compose `/write-issue` per the confirmed proposal:
    - **CREATE**: `$type: story`, `$content`: the story definition, `$parent`: the epic identifier. If the proposal referenced a closed story (per to-issues-triage.md's closed-item rule), include that reference in `$content`.
    - **EXTEND `#ID`**: `$type: story`, `$id: #ID`, `$content`: read the matched story's current full body from the PM tool (not just the Step 2 registry line) and merge the additional scope into it, `$parent`: unchanged. Re-validate INVEST for the merged scope — extending must not break Independent/Small.
-6. **Verify**: Story created or extended in PM tool. Record the ID. Linked to the epic (and, for EXTEND, to the closed-item reference if any) — hierarchy and references both present.
+6. **Verify**: Story created or extended in PM tool. Record the ID. Linked to the epic (and, for a CREATE that referenced a closed item, to that closed-item reference) — hierarchy and references both present.
 
 ### Step 5: Coverage Validation & Completion
 

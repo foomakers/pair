@@ -7,7 +7,7 @@ author: Foomakers
 
 # /plan-tasks — Task Breakdown
 
-Transform a refined user story into specific, actionable implementation tasks. Task-level idempotency: detects existing tasks in the story body and creates only missing ones. Appends an integrated Technical Analysis + Task Breakdown section to the story issue body. Tasks live inside the story — no separate task issues are created in the PM tool.
+Transform a refined user story into specific, actionable implementation tasks. Task-level idempotency: detects existing tasks in the story body and creates only missing ones. Adds an integrated Technical Analysis + Task Breakdown section to the story issue body (the skill composes the full updated body; write-issue overwrites it, it does not append). Tasks live inside the story — no separate task issues are created in the PM tool.
 
 ## Composed Skills
 
@@ -116,7 +116,7 @@ For each task (skipping tasks that already exist in the story body):
 
 ### Step 6: PM Tool Update
 
-1. **Act**: Compose `/write-issue` with `$type: story`, `$id: [story-id]` to append the Task Breakdown section to the story body. Tasks are always documented inline in the story body.
+1. **Act**: Compose `/write-issue` with `$type: story`, `$id: [story-id]`, and `$content` = the story's current full body with the Task Breakdown section merged in (`/write-issue` overwrites the body as-is, it does not append). Tasks are always documented inline in the story body.
 2. **Verify**: Story body updated with Task Breakdown section.
 
 ### Step 7: Already-Complete Update (optional path)

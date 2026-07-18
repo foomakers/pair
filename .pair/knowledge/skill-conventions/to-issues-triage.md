@@ -15,7 +15,7 @@ Two items are the **same** item when their normalized title (lowercase, trimmed,
 3. **Act**: For every remaining candidate, compare it against each existing item (open or closed) in the same parent scope and classify:
    - **Substantial overlap** (the candidate's scope is already covered by the existing item — implementing it would mean adding an acceptance criterion or task to that item, not slicing a new one) → propose **EXTEND `<id>`**, with the one-line rationale for the overlap.
    - **No substantial overlap** → propose **CREATE**, with the one-line rationale for why it's distinct.
-   - **Ambiguous** (score sits in the borderline band, or more than one existing item is a plausible match) → present as a question with a recommendation; never silently pick one side.
+   - **Ambiguous** (the overlap is genuinely borderline — not clearly substantial, not clearly absent — or more than one existing item is a plausible match) → present as a question with a recommendation; never silently pick one side.
    - **Best/only match is Closed** → never EXTEND a closed item. Propose CREATE, with a reference (link/comment) back to the closed item so the history isn't lost.
 
    Precedence: the closed-item rule applies regardless of ambiguity. A closed item that is the sole plausible match is always CREATE-with-reference, never surfaced as an ambiguous question — closed items are never EXTENDed either way, so there's nothing ambiguous left to ask about.

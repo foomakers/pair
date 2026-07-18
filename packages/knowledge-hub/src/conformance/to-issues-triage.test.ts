@@ -66,6 +66,22 @@ describe('to-issues-triage.md — shared convention', () => {
     expect(step3).toMatch(/open or closed/i)
   })
 
+  it('documents body-merge idempotency (overlap EXTEND re-merge is a no-op when scope already present)', () => {
+    // Regression guard: repeated overlap-based EXTENDs must not accrete scope text.
+    expect(CONVENTION.toLowerCase()).toMatch(/body-merge idempotency/)
+    expect(CONVENTION.toLowerCase()).toMatch(/no-op when the scope is already present/)
+  })
+
+  it('plan-epics/plan-stories Step 2 registry query includes closed/Done items (both dataset + mirror)', () => {
+    // The closed-item triage rule needs closed items in the registry; PM queries
+    // often default to open-only, so the query must say so explicitly.
+    for (const skill of PLAN_SKILLS) {
+      for (const content of [dataset(skill), mirror(skill)]) {
+        expect(content).toMatch(/including closed\/Done items/)
+      }
+    }
+  })
+
   it('carries a fixture backlog + candidate tree example with a double-run note', () => {
     expect(CONVENTION).toMatch(/Fixture example/)
     expect(CONVENTION.toLowerCase()).toMatch(/re-running/)
