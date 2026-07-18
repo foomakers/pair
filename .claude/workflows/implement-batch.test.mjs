@@ -89,6 +89,25 @@ test('valid contract: reviewer schema derives from contract.json (AC1) and cache
   assert.equal(result.batch[0].status, 'ready-for-merge')
 })
 
+test('reviewer prompt pins the nonActionable-is-not-a-scope-filter correction', async () => {
+  // Regression guard for the ADL amendment (2026-07-11-agent-execution-layer):
+  // "outside the story's originally stated scope" must NOT be a reason to mark a
+  // finding nonActionable. A future prompt edit can't silently drop this.
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  assert.ok(
+    rev.prompt.includes('originally stated scope'),
+    'reviewer prompt keeps the scope-filter correction',
+  )
+  assert.ok(
+    rev.prompt.includes('NOT by itself a reason'),
+    'reviewer prompt keeps the "not a reason to mark nonActionable" clause',
+  )
+})
+
 test('malformed contract: loose fallback schema, run never breaks (AC4)', async () => {
   const { result, calls } = await runWorkflow({
     args: { stories: [STORY] },
