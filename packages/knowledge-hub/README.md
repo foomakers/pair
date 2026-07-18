@@ -23,6 +23,8 @@ pnpm --filter @pair/knowledge-hub run check:links # validate markdown links
 pnpm --filter @pair/knowledge-hub lint            # eslint
 ```
 
+**Fresh checkout/worktree**: the commands above use `pnpm --filter`, which runs this package's own script directly — it does not follow turbo's `dependsOn` graph the way `pnpm build`/`pnpm test` (repo-root, via turbo) do. On a fresh checkout or worktree, this package's tests will fail to resolve the `@pair/content-ops` workspace import until that package is built once: `pnpm --filter @pair/content-ops build`. Not needed in CI or after a root `pnpm build`/`turbo build`, which already builds dependencies first.
+
 ### Helper Scripts
 
 | Script | Description |
