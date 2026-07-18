@@ -23,7 +23,7 @@ pnpm --filter @pair/knowledge-hub run check:links # validate markdown links
 pnpm --filter @pair/knowledge-hub lint            # eslint
 ```
 
-**Fresh checkout/worktree**: on a fresh checkout or worktree, the commands above will fail to resolve the `@pair/content-ops` workspace import until that package is built once: `pnpm --filter @pair/content-ops build`. Not needed in CI or after a root `pnpm build`/`turbo build`. See [DEVELOPMENT.md § Turbo Caching](../../DEVELOPMENT.md#turbo-caching) for why (`pnpm --filter` bypasses turbo's `dependsOn` graph) — this affects any workspace package with the same shape, not just this one.
+**Fresh checkout/worktree**: the commands above will fail to resolve the `@pair/content-ops` workspace import until it's built once: `pnpm --filter @pair/content-ops build`. Not needed in CI or after a root `pnpm build`/`turbo build`. See [DEVELOPMENT.md § Turbo Caching](../../DEVELOPMENT.md#turbo-caching).
 
 ### Helper Scripts
 
