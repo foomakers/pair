@@ -32,6 +32,8 @@ Invariants baked into the layer:
 - **Review is independent and blind** — the handoff flows only in the authoring chain (implement → PR → fix), never into verification.
 - **Isolation:** the authoring chain runs in a per-story worktree (`../pair-worktrees/<id>`); the reviewer inspects in a detached throwaway worktree — the main working tree is never mutated, so parallel batches don't collide.
 - **All findings resolved:** the loop converges only when no *actionable* finding remains; by-design findings are marked `nonActionable` and surfaced to the human at the merge gate.
+- **Escalation retry, not per-round check-in:** when a batch invocation escalates (round-cap reached, or `needsHumanDecision`) without a genuine design ambiguity or conflicting requirement, the operator re-invokes the same review↔fix cycle rather than pausing to ask permission for "another round" — the cycle runs to convergence. A pause for a human call is reserved for a real ambiguity, not routine continuation.
+- **`nonActionable` still means fix it if it's fixable:** a finding marked `nonActionable`/by-design/out-of-scope is not an automatic pass — it means "don't force a fix that would be wrong for this specific reason" (e.g. would create a new inconsistency, contradicts an already-tracked deferred plan). A finding that is real and fixable, even if not strictly introduced by this story's stated scope, gets fixed as part of the same cycle rather than deferred to an unscheduled follow-up story. Only genuinely out-of-reasonable-size work (e.g. a repo-wide sweep touching many unrelated files) is deferred, and only after surfacing the scope call to the human rather than deciding unilaterally.
 
 ## Alternatives Considered
 
@@ -44,6 +46,7 @@ Invariants baked into the layer:
 - Validated by smoke test on 2026-07-11 (story #248 → PR): implement → checkpoint handoff → PR → blind review → HALT; `nonActionable` and worktree-isolation behaviours confirmed.
 - To be folded into the framework proper via #255 (`pair-capability-publish-pr`), #256 (`pair-process-implement` composes checkpoint + publish-pr via subagent), #219 (supervisor loop) — each with its own ADR/ADL as it lands.
 - `.pair/working/` is git-ignored (checkpoints are task-scoped runtime state, D14 / working-artifacts-task-scoped).
+- Amended 2026-07-18: the wave-1 follow-up cleanup surfaced that the operator was pausing after every review round to ask whether to continue — the two added invariants above (escalation retry, `nonActionable` isn't an automatic pass) close that gap, per explicit correction from the repo owner.
 
 ## Adoption Impact
 

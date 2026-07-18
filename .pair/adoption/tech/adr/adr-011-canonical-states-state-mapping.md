@@ -1,4 +1,4 @@
-# ADR: Canonical States + n-m State-Mapping Schema
+# ADR-011: Canonical States + n-m State-Mapping Schema
 
 ## Status
 

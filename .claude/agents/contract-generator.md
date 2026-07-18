@@ -1,6 +1,7 @@
 ---
 name: contract-generator
 description: Derives a machine contract (contract.json) from a KB markdown template — reads the template, extracts its vocabulary (verdict options, severities, field lists), and tightens the caller's skeleton schema into an enum-locked JSON Schema. Cache-by-hash via ensure-contract.mjs, so a fresh contract is reused without regeneration. Use in a workflow's phase 0 to ensure template-derived return-value contracts.
+model: haiku
 tools: Read, Write, Bash
 ---
 

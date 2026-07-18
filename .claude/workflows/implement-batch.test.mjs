@@ -89,6 +89,45 @@ test('valid contract: reviewer schema derives from contract.json (AC1) and cache
   assert.equal(result.batch[0].status, 'ready-for-merge')
 })
 
+test('reviewer prompt pins the nonActionable-is-not-a-scope-filter correction', async () => {
+  // Regression guard for the ADL amendment (2026-07-11-agent-execution-layer):
+  // "outside the story's originally stated scope" must NOT be a reason to mark a
+  // finding nonActionable. A future prompt edit can't silently drop this.
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  assert.ok(
+    rev.prompt.includes('originally stated scope'),
+    'reviewer prompt keeps the scope-filter correction',
+  )
+  assert.ok(
+    rev.prompt.includes('NOT by itself a reason'),
+    'reviewer prompt keeps the "not a reason to mark nonActionable" clause',
+  )
+})
+
+test('per-step effort + PR model override are wired into agent opts', async () => {
+  // Guards the model/effort policy: effort is set per step in opts (the running
+  // lever), and the PR-open step dials the implementer down to sonnet/medium.
+  // Role MODEL defaults live in .claude/agents/*.md frontmatter (not visible to
+  // this source-eval harness) — only the opts-level config is asserted here.
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const contract = calls.find(c => c.opts.agentType === 'contract-generator')
+  const impl = calls.find(c => c.opts.phase === 'Implement')
+  const pr = calls.find(c => c.opts.phase === 'PR')
+  const rev = calls.find(c => c.opts.agentType === 'reviewer')
+  assert.equal(contract.opts.effort, 'low')
+  assert.equal(impl.opts.effort, 'high')
+  assert.equal(rev.opts.effort, 'xhigh')
+  assert.equal(pr.opts.model, 'sonnet', 'PR step overrides model to sonnet')
+  assert.equal(pr.opts.effort, 'medium')
+})
+
 test('malformed contract: loose fallback schema, run never breaks (AC4)', async () => {
   const { result, calls } = await runWorkflow({
     args: { stories: [STORY] },

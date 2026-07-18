@@ -188,6 +188,7 @@ pnpm exec changeset version    # Generate version bumps + changelogs
 - Builds and tests are cached automatically by Turbo
 - Cache stored in `node_modules/.cache/turbo`
 - `turbo clean` to clear cache if needed
+- **Fresh checkout/worktree gotcha**: `pnpm --filter <pkg> <script>` runs that package's own script directly — it does not follow turbo's `dependsOn` graph the way root `pnpm build`/`pnpm test` (via `turbo build`/`turbo test`) do. Any package that depends on a workspace package with its own build step (e.g. `@pair/content-ops`, whose `main`/`exports` point at `dist/`) will fail to resolve that import on a fresh checkout/worktree until the dependency is built once: `pnpm --filter <dependency> build`. Not needed in CI or after a root `pnpm build`/`turbo build`, which already builds dependencies first. Affects `@pair/knowledge-hub` and `apps/pair-cli` today (both depend on `@pair/content-ops`); applies to any future workspace package with the same shape — this is the one canonical place to document it (see ADL [2026-07-18-workspace-gotcha-doc-placement.md](.pair/adoption/decision-log/2026-07-18-workspace-gotcha-doc-placement.md)).
 
 ## npmjs.org
 

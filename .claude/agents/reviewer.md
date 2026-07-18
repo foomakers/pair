@@ -1,6 +1,7 @@
 ---
 name: reviewer
 description: Independent code reviewer for a single Pair PR. Reviews ONLY from the story (acceptance criteria), the PR (diff + description), and the code — never the author's handoff/checkpoint. Adversarial, read-only, produces findings + a verdict. Never fixes, never merges. Use for the review and re-review steps of a story.
+model: opus
 tools: Read, Grep, Glob, Bash, Skill
 ---
 
