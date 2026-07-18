@@ -10,7 +10,7 @@ The one security control that is **not** a skill (D24). Every other security jud
 
 ## CI Job Template (GitHub Actions)
 
-`/setup-gates` writes a job equivalent to this into the project's CI pipeline (Step 4 of that skill) — required, not tier-scoped. Two equivalent forms; pick per the project's GitHub ownership:
+`/setup-gates` writes a job equivalent to this into the project's CI pipeline (Step 4 of that skill) — required, not tier-scoped. Two forms below — same fail-closed guarantee (a committed secret fails the build), differing only in scan scope (the Action scans the event's commit range; the binary form here scans full history); pick per the project's GitHub ownership:
 
 **Option A — `gitleaks-action@v2`** (matches [github-actions-implementation.md](../../infrastructure/cicd-strategy/github-actions-implementation.md)). **Requires a `GITLEAKS_LICENSE` for org-owned repos** — the Action gates on it and fails before scanning if absent, regardless of public/private. A free OSS key is available at gitleaks.io; store it as a repo/org secret. Individual-owned repos don't need it.
 
