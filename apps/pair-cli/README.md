@@ -57,5 +57,6 @@ pnpm --filter @pair/pair-cli lint                    # lint
 ### Troubleshooting
 
 - **"Unable to resolve @pair/knowledge-hub"**: `pnpm install` from repo root
+- **"Cannot find module '@pair/content-ops'" (or similar) on a fresh checkout/worktree**: `pnpm --filter @pair/pair-cli dev|test` bypasses turbo's `dependsOn` graph — build the dependency once: `pnpm --filter @pair/content-ops build`. Not needed in CI or after a root `pnpm build`/`turbo build`. See [DEVELOPMENT.md § Turbo Caching](../../DEVELOPMENT.md#turbo-caching).
 - **`install` reports `target-not-empty`**: use `update` or clear target folder
 - **Configuration errors**: `pair-cli validate-config`
