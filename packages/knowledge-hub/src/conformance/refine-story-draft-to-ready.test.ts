@@ -143,6 +143,32 @@ describe('refine-story — state → Ready via mapping + DoR fallback (AC4) (#24
   }
 })
 
+describe('refine-story — Design flag wired end-to-end (AC2, DoR criterion 6) (#242)', () => {
+  for (const v of VARIANTS) {
+    it(`${v.label} Step 1 detection table has a "Design flag" row referencing the \`Design:\` line`, () => {
+      // Isolate Step 1 (detection) so a matching row elsewhere can't satisfy this.
+      const step1 = v.content.slice(v.content.search(/### Step 1: Detect/)).split(/\n### Step 2\b/)[0]
+      const row = step1
+        .split('\n')
+        .find(line => line.trim().startsWith('|') && /Design flag/.test(line))
+      expect(row).toBeDefined()
+      expect(row).toMatch(/`Design:`/)
+    })
+
+    it(`${v.label} Step 3 Act has a bullet that sets the \`Design:\` line (DoR criterion 6)`, () => {
+      // Isolate Step 3 (Technical Analysis) — not Step 3b (Classification).
+      const step3 = v.content
+        .slice(v.content.search(/### Step 3: Technical Analysis/))
+        .split(/\n### Step 3b\b/)[0]
+      const bullet = step3
+        .split('\n')
+        .find(line => /^\s*-\s/.test(line) && /Design flag/.test(line) && /`Design:`/.test(line))
+      expect(bullet).toBeDefined()
+      expect(bullet).toMatch(/not required|required — reference/)
+    })
+  }
+})
+
 describe('refine-story — graceful degradation of composed skills (#242)', () => {
   for (const v of VARIANTS) {
     it(`${v.label} degrades gracefully when grill is absent`, () => {
