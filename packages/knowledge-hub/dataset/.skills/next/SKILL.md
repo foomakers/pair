@@ -27,7 +27,7 @@ Resolve the issue's descendants through the **PM-tool parent/child hierarchy** (
 - **Epic root** → operate at epic level: plan / refine / develop the epic's children only.
 - **Story root** → operate on that story: refine or develop it (and its tasks); never step outside it.
 
-The root issue plus its transitive children form the candidate set; **Step 3's backlog query** then runs against that set instead of the full backlog. Steps 2 and 4 (fresh-project detection and capability suggestions) are project-wide, not subtree-scoped — the candidate set narrows only the Step 3 backlog selection.
+The root issue plus its transitive children form the candidate set; **Step 3's backlog query** then runs against that set instead of the full backlog. Step 2 (fresh-project detection) and Step 4's project-level rows (12–15: gate / stack / debt / estimation config) are project-wide, not subtree-scoped. Step 4 **row 16 is the exception**: it selects a *specific backlog item*, so — exactly like row 6 — it is confined to the candidate set. Under `--root`/`--filter` an out-of-scope item's open questions are **never** surfaced as `/grill`. The candidate set thus narrows both the Step 3 backlog selection and Step 4 row 16.
 
 ### `--filter <tag>` — generic tag match
 
@@ -165,7 +165,7 @@ If no process skill matched in Steps 2-3, check for capability skill opportuniti
 | 13  | Tech stack has unlisted dependencies detected                            | `/assess-stack`      | Stack registry needs updating                   |
 | 14  | Technical debt flags present (TODO/FIXME/HACK comments detected)         | `/analyze-debt`      | Debt should be cataloged and prioritized        |
 | 15  | No estimation methodology adopted in way-of-working                      | `/estimate`          | Estimation process should be established        |
-| 16  | A backlog item or topic carries open questions or unclear scope (question markers, conflicting comments) that block planning | `/grill` | Structured one-question-at-a-time alignment before planning |
+| 16  | A backlog item carries open questions or unclear scope (question markers, conflicting comments) that block planning — **restricted to the Step-0 candidate set when `--root`/`--filter` are set** (an out-of-scope item is never surfaced, same as row 6) | `/grill` | Structured one-question-at-a-time alignment before planning |
 
 ### Step 5: Fallback
 
