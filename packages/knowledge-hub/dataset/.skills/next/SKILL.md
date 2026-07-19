@@ -7,11 +7,11 @@ author: Foomakers
 
 # /next — Project Navigator
 
-Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 36-skill catalog across all lifecycle phases.
+Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 37-skill catalog across all lifecycle phases.
 
-## Skill Catalog (36 skills)
+## Skill Catalog (37 skills)
 
-The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 9 process + 26 capability + `/next` itself = 36. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
+The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 9 process + 27 capability + `/next` itself = 37. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
 
 ### Process Skills (9)
 
@@ -27,7 +27,7 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 | `/implement`       | Sprint Execution   | Implement story tasks with TDD                  |
 | `/review`          | Sprint Execution   | Review PR through structured phases             |
 
-### Capability Skills (26)
+### Capability Skills (27)
 
 | Skill                    | Category        | Description                                                                  |
 | ------------------------ | --------------- | ---------------------------------------------------------------------------- |
@@ -36,6 +36,7 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 | `/grill`                 | Alignment       | Interview engine: explore a topic or sync on a story, one question at a time |
 | `/record-decision`       | Decision        | Record ADR or ADL with adoption update                                       |
 | `/checkpoint`            | Session State   | Write/resume story progress checkpoint (work survives context resets)        |
+| `/publish-pr`            | Delivery        | Publish a story branch as a PR: gate, PR from template, tags, board state    |
 | `/write-issue`           | PM Tool         | Create/update issues in adopted PM tool                                      |
 | `/setup-pm`              | PM Tool         | Configure project management tool                                            |
 | `/verify-quality`        | Quality         | Check quality gates against codebase                                         |
@@ -162,4 +163,4 @@ See [graceful degradation](../../.pair/knowledge/skill-conventions/graceful-degr
 - This skill is read-only: it inspects state but never modifies files or PM tool data.
 - Row order encodes the tie-break (delivery proximity) — see the **Tie-break** note under the Step 3 table.
 - Re-run `/next` after completing any skill to get an updated recommendation.
-- **Full catalog coverage**: any of the 36 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/checkpoint`, rows 12-16 including `/grill`) or process-skill composition.
+- **Full catalog coverage**: any of the 37 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/checkpoint`, rows 12-16 including `/grill`) or process-skill composition (e.g. `/publish-pr` via `/implement`).

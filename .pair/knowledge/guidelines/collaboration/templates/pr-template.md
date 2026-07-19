@@ -55,6 +55,12 @@
 - [ ] **Breaking Changes:** [Any breaking changes to API]
 - [ ] **Documentation:** [API documentation updates]
 
+## Services to Release
+
+> Conditional — include ONLY when the branch touches one or more deployable packages/services. Derived from `git diff --name-only <base-branch>...HEAD` grouped by owning package (`packages/*`, `apps/*`). Omit the whole section when nothing deployable changed.
+
+- **[package/service name]:** [what changed, release-relevant summary]
+
 ## Testing
 
 ### Test Coverage
@@ -80,6 +86,14 @@ Linting: ✅ Clean
 - **Edge Cases:** [Boundary conditions and edge cases]
 - **Error Handling:** [Error scenarios and recovery]
 - **Performance:** [Performance testing results]
+
+## Screenshots
+
+> Conditional — include ONLY when the diff touches UI (per the project's UI package globs, else a path heuristic). Show before/after. Omit the whole section for non-UI changes; if UI changed but no capture is available, keep the section with a `TODO: attach before/after` marker.
+
+| Before | After |
+| ------ | ----- |
+| [before screenshot] | [after screenshot] |
 
 ## Quality Assurance
 
