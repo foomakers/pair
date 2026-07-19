@@ -15,9 +15,9 @@ Run `/next` at the start of every session. It reads project adoption files and P
 | Type | Count | Purpose |
 |------|-------|---------|
 | **Process** | 9 | Lifecycle phases — orchestrate capability skills |
-| **Capability** | 28 | Atomic units — perform a single focused operation |
+| **Capability** | 29 | Atomic units — perform a single focused operation |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 38 (9 process + 28 capability + 1 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 39 (9 process + 29 capability + 1 navigator).
 
 ## Full Catalog
 
@@ -37,7 +37,7 @@ Process skills compose capability skills. Capability skills are independently in
 
 > How-to guides 04 and 05 (subdomain/bounded-context definition) were removed — domain modeling is referenced inline by each real caller's own how-to (02, 03, 06, 09; 08 planned — #242). See [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
 
-### Capability Skills (28)
+### Capability Skills (29)
 
 #### Domain Modeling Skills (2)
 
@@ -48,7 +48,7 @@ Process skills compose capability skills. Capability skills are independently in
 
 Reclassified from process to capability (D24) — see [Callers Matrix](#callers-matrix-scoped-capabilities) and [Migration Notes](#migration-notes).
 
-#### Assessment Skills (9)
+#### Assessment Skills (10)
 
 | Skill | Scope |
 |-------|-------|
@@ -61,6 +61,7 @@ Reclassified from process to capability (D24) — see [Callers Matrix](#callers-
 | `/assess-observability` | Observability strategy evaluation |
 | `/assess-ai` | AI development tools evaluation |
 | `/assess-security` | Security posture — review verdict (`$mode: review`, composed by `/review`) + one-shot OWASP Top 10 audit (`$mode: audit`). Unlike the 8 above, not purely output-only — writes its own audit report (D14 exception); never scans for secrets, that's the deterministic CI layer `/setup-gates` provisions (D24) |
+| `/assess-cost` | Cost exposure — chromatic class (`cost:green\|yellow\|orange\|red`) from the diff/story against the [cost-signal catalog](guidelines/quality-assurance/cost-assessment.md) (general + AWS-first, other providers via adoption links). Output-only: feeds `/classify`'s cost dimension, writes nothing, blocks nothing; report/monitoring mode is a separate slice |
 
 #### Classification Skills (1)
 
