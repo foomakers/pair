@@ -51,6 +51,12 @@ describe.each(sources)(
       // Regression guard: the old blanket wording ("rows 3–5 … skipped under a
       // --root/--filter scope") that hid the epic-root planning path must be gone.
       expect(content).not.toMatch(/rows 3[–-]5[^.]*skipped under a `?--root`?\/`?--filter/i)
+      // Positive invariant (round-6 robustness): a negative grep pinned to one
+      // wording can be slipped past by a differently-worded blanket-skip regression.
+      // So also pin the asymmetry positively — the story root skips rows 3–5 while
+      // the epic root keeps row 5. Any regression that re-blankets the behaviour
+      // must break one of these halves (story-root-only skip + epic-root row-5 kept).
+      expect(lower).toMatch(/story root[^.]*skips? rows 3[–-]5|skips? rows 3[–-]5 entirely/)
       // AC1 (story root actionable): the root issue is itself a first-class member of
       // the candidate set, subject to the item-selection rows. Guards round-5 Major #1.
       expect(lower).toMatch(/first-class/)

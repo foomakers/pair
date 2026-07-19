@@ -151,7 +151,7 @@ Rows 12–15 are likewise project-wide and not surfaced under a scope; when the 
 | --- | ---------------------------------------------------------------- | ------------------- | ------------------------------------------- |
 | 3   | No initiatives or epics exist in PM tool                         | `/pair-process-plan-initiatives` | Strategic planning needed                   |
 | 4   | Initiatives exist but no epics                                   | `/pair-process-plan-epics`       | Epic decomposition needed                   |
-| 5   | Epics exist but no user stories                                  | `/pair-process-plan-stories`     | Story breakdown needed                      |
+| 5   | Epics exist but no user stories (under a `--root <epic>` scope this is evaluated **root-relatively** — the root epic's own story children, not the whole board; see the Step 3 header) | `/pair-process-plan-stories`     | Story breakdown needed                      |
 | 6   | Open pull requests, or items resolve to macrostate `Review`       | `/pair-process-review`           | Code review pending — closest to delivery   |
 | 7   | A story resolves to macrostate `In Progress` AND its checkpoint file exists (`.pair/working/checkpoints/<story-id>.md`) | `/pair-capability-checkpoint` | Resume interrupted work (`$mode: resume`) before re-analysis |
 | 8   | A story resolves to macrostate `In Progress` but has NO checkpoint file | `/pair-process-implement`   | Continue the in-progress work — `/pair-process-implement` re-derives state from scratch when no checkpoint exists |
