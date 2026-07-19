@@ -46,8 +46,10 @@ resolve_tier() {
 # required_suites_for_tier <tier> — echoes the space-separated suite keys the tier
 # requires. Base (install lint type build) always; +unit from yellow;
 # +integration +e2e from red. An unknown tier gets the full (red) set — fail-safe.
-# The tier→checks mapping is the quality model's matrix (§4); this function is the
-# single executable copy of it, not a second source of truth.
+# The tier→checks mapping is the quality model's matrix (§4); this function is an
+# executable projection of it, not a second source of truth. (Note: GitHub's static
+# job-level `if:` conditions in the pipeline template necessarily restate the same
+# tier→suite map — a platform constraint, not an independent authority.)
 required_suites_for_tier() {
   local base="install lint type build"
   case "$1" in

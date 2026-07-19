@@ -80,12 +80,22 @@ jobs:
           echo "tier=$(resolve_tier "$PR_LABELS")" >> "$GITHUB_OUTPUT"
 
   base: # install + lint + type + build — every tier
-    needs: resolve-tier
+    # No `needs: resolve-tier` — base runs on every tier regardless of the
+    # resolved value, so it must not serialize behind (or wait for) tier
+    # resolution. Keeping it independent lets it start in parallel.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint && pnpm ts:check && pnpm build
+      # Separate steps (not `&&`): each runs even if a prior one fails, so one
+      # push surfaces lint + type + build feedback together instead of stopping
+      # at the first failure.
+      - run: pnpm lint
+        if: ${{ !cancelled() }}
+      - run: pnpm ts:check
+        if: ${{ !cancelled() }}
+      - run: pnpm build
+        if: ${{ !cancelled() }}
 
   unit: # from 🟡
     needs: resolve-tier
@@ -148,6 +158,7 @@ Scheduling the jobs is not enough; the code host must **require** them:
 
 - Mark `base` and `secret-scan` as required status checks on the protected branch (`main`).
 - Mark `unit`, `integration`, `e2e` as required **when scheduled**. On green/yellow PRs the higher-tier jobs are not scheduled, so a "required-when-present" convention (or a single aggregating gate job that `needs:` the scheduled set and reports one status) keeps branch protection satisfiable across tiers.
+  - **GitHub note:** a job skipped via a job-level `if:` (as `unit`/`integration`/`e2e` are on lower tiers) reports its required check as **passing**, not pending — GitHub has treated skipped-via-`if:` required checks as successful since ~2021. So on GitHub you can mark all three required directly and lower-tier PRs stay mergeable without an aggregating job; the aggregating-gate pattern above is only needed on hosts that leave an unscheduled required check pending. (This template omits the aggregating job for that reason — add one only if your host needs it.)
 - A failing required job (including a missing-suite failure or a secret finding) blocks merge until the gate is green — this is the gate acting before review (R5.4): review starts only at a green gate.
 - **A label change must force gate re-evaluation before merge.** Because the tier is read from the `risk:*` label, the `pull_request` trigger includes `labeled`/`unlabeled` (above) so a tier raised mid-review re-runs the gate at the wider matrix. The latest run — not a stale earlier one — is what branch protection evaluates, so a PR can never merge on a gate that ran at a lower tier than its current label.
 
