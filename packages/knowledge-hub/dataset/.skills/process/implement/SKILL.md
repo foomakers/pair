@@ -26,6 +26,12 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 | `/assess-stack`    | Capability | Optional — invoked when a new dependency is detected. If not installed, warn and continue.          |
 | `/verify-adoption` | Capability | Optional — invoked before commit to check adoption compliance. If not installed, warn and continue. |
 
+## Arguments
+
+| Argument | Required | Description                                                                                                                                                                                                                             |
+| -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$story` | No       | Story ID to implement, supplied by the invocation (e.g. `/implement #256`). If omitted, detected from session context or the current branch (`feature/#<id>-*`). This is the id the resume probe (Step 0.0) uses and the closing phase forwards to `/checkpoint` and `/publish-pr`. If it cannot be resolved when a checkpoint operation needs it → **HALT**. |
+
 ## Phase 0: Story & Task Analysis (BLOCKING)
 
 #### No implementation without complete understanding.
@@ -36,7 +42,7 @@ The opening phase re-reads the checkpoint so an interrupted story resumes exactl
 
 1. **Check**: Is `/checkpoint` installed AND does a checkpoint exist for this story (`.pair/working/checkpoints/<story-id>.md`)?
 2. **Skip**: If no checkpoint exists → this is a fresh start. Proceed to Step 0.1 (normal one-shot flow — no regression, AC4).
-3. **Act**: Compose `/checkpoint $mode=resume` (pass `$story` when known). Use the parsed state — branch, tasks done, key decisions, remaining todos — to skip re-analysis and jump straight to the **first pending task** in Phase 2, **without repeating** completed tasks.
+3. **Act**: Compose `/checkpoint $mode=resume` (pass `$story` — the story id from the invocation, see [Arguments](#arguments); if absent it is detected from the branch). Use the parsed state — branch, tasks done, key decisions, remaining todos — to skip re-analysis and jump straight to the **first pending task** in Phase 2, **without repeating** completed tasks.
 4. **Act — edge cases** (resolve before continuing):
    - **Checkpoint exists but its branch is missing** (checkpoint says branch X, repo has none): **HALT** and report the divergence. Do not guess a branch.
    - **Stale checkpoint (story already Done)**: warn that the story is already Done and **require explicit developer confirmation** before reusing the checkpoint. Never silently resume a finished story.
@@ -305,9 +311,9 @@ Note: the checkpoint is **not** removed here — it must survive the review/fix 
 
 ## Phase 4: Post-Review Merge
 
-After code review approval (typically via `/review`), re-invoke `/implement` to merge and close — see [post-review-merge.md](post-review-merge.md) for the verify-approval, merge-commit, merge, and parent-cascade steps (Steps 4.1–4.4) plus the completion output.
+After code review approval (typically via `/review`), re-invoke `/implement` to merge and close — see [post-review-merge.md](post-review-merge.md) for the verify-approval, merge-commit, merge, parent-cascade, and checkpoint-cleanup steps (Steps 4.1–4.5) plus the completion output.
 
-On story completion (Done, at merge), the checkpoint is no longer needed — remove `.pair/working/checkpoints/<story-id>.md` so finished-story state never lingers (checkpoint lifecycle: written at the closing phase, cleaned up at merge).
+On story completion (Done, at merge), the checkpoint is no longer needed — `post-review-merge.md` Step 4.5 removes `.pair/working/checkpoints/<story-id>.md` so finished-story state never lingers (checkpoint lifecycle: written at the closing phase, cleaned up at merge).
 
 ## Output Format
 

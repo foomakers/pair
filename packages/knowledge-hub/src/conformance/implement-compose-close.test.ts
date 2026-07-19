@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
+import { syncFrontmatter } from '@pair/content-ops'
+import {
+  buildDatasetSkillNameMap,
+  buildSkillLinkPathMap,
+  applyKnownMirrorTransforms,
+} from '../tools/skills-guide-mirror'
 
 // Conformance guard for story #256: /implement's closing phase composes
 // /checkpoint (write) + /publish-pr (via a handoff-only subagent), and its
@@ -13,6 +19,7 @@ import { join } from 'path'
 
 const DATASET = join(__dirname, '../../dataset/.skills/process/implement/SKILL.md')
 const MIRROR = join(__dirname, '../../../../.claude/skills/pair-process-implement/SKILL.md')
+const SKILLS_DIR = join(__dirname, '../../dataset/.skills')
 
 const dataset = (): string => readFileSync(DATASET, 'utf-8')
 const mirror = (): string => readFileSync(MIRROR, 'utf-8')
@@ -29,6 +36,37 @@ describe('implement composes checkpoint + publish-pr (#256)', () => {
     expect(c).toMatch(/\/pair-capability-checkpoint\b/)
     expect(c).toMatch(/\/pair-capability-publish-pr\b/)
   })
+
+  it('installed mirror is byte-for-byte reproducible from the dataset via the real transform', () => {
+    // Whole-file mirror consistency (the same guarantee skills-guide-mirror.test.ts
+    // asserts for skills-guide.md): the installed SKILL.md must equal the dataset
+    // SKILL.md run through the `pair update` copy pipeline —
+    //   1. syncFrontmatter: the `name:` rename `implement` -> `pair-process-implement`
+    //      the flatten+prefix directory rename triggers (a SKILL.md carries a renamed
+    //      frontmatter `name`, unlike the frontmatter-free skills-guide.md), then
+    //   2. applyKnownMirrorTransforms: content-ops `rewriteSkillReferences` +
+    //      `rewriteSkillLinkPaths` (the `/command` token + SKILL.md link-path rewrites).
+    //
+    // One further copy-pipeline transform is NOT modeled by applyKnownMirrorTransforms:
+    // the flatten/prefix link-rewriter prepends `./` to a bare same-dir relative link
+    // when the file moves (link-rewriter.ts computeNewHref: `if (!startsWith('.')) './'+p`).
+    // For this skill that affects only the same-dir sibling `post-review-merge.md` links
+    // (`](post-review-merge.md)` in the bare-authored dataset -> `](./post-review-merge.md)`
+    // in the mirror). skills-guide.md has no same-dir sibling links, so that helper alone
+    // suffices there but not here. We neutralize exactly that systematic `./`-prepend on
+    // both sides — every OTHER byte must still match, so any real drift (hand-edited mirror,
+    // a dataset edit not propagated via `pair update`) still fails. `pair update` remains
+    // the ground truth for regeneration.
+    const skillNameMap = buildDatasetSkillNameMap(SKILLS_DIR)
+    const linkPathMap = buildSkillLinkPathMap(SKILLS_DIR)
+    const reconstructed = applyKnownMirrorTransforms(
+      syncFrontmatter(dataset(), { from: 'implement', to: 'pair-process-implement' }),
+      skillNameMap,
+      linkPathMap,
+    )
+    const neutralizeSameDirDotSlash = (s: string): string => s.split('](./').join('](')
+    expect(neutralizeSameDirDotSlash(mirror())).toBe(neutralizeSameDirDotSlash(reconstructed))
+  })
 })
 
 describe('closing phase: checkpoint(write) then publish-pr (AC1)', () => {
@@ -38,11 +76,21 @@ describe('closing phase: checkpoint(write) then publish-pr (AC1)', () => {
     // checkpoint is written in write mode at the closing phase.
     expect(c).toMatch(/\$mode\s*=?:?\s*write/i)
     expect(c.toLowerCase()).toContain('checkpoint')
-    // the write happens before the publish-pr composition (ordering).
-    const writeIdx = c.toLowerCase().indexOf('checkpoint')
-    const publishIdx = c.indexOf('/publish-pr')
-    expect(writeIdx).toBeGreaterThanOrEqual(0)
-    expect(publishIdx).toBeGreaterThan(writeIdx)
+    // Ordering within Phase 3: the checkpoint-write step (Step 3.2) precedes the
+    // publish-via-subagent step (Step 3.3). Anchoring on the step HEADINGS is
+    // load-bearing: bare indexOf('checkpoint') / indexOf('/publish-pr') both fall
+    // inside the frontmatter description, so that comparison is trivially true and
+    // would not actually guard the closing-phase ordering.
+    const step32Idx = c.search(/#+\s*Step\s*3\.2:\s*Write the Checkpoint/i)
+    const step33Idx = c.search(/#+\s*Step\s*3\.3:\s*Publish the PR/i)
+    expect(step32Idx).toBeGreaterThanOrEqual(0)
+    expect(step33Idx).toBeGreaterThan(step32Idx)
+    // and within those steps: checkpoint write ($mode=write) comes before the
+    // subagent spawn that runs /publish-pr.
+    const writeInvocationIdx = c.search(/\$mode\s*=?:?\s*write/i)
+    const subagentSpawnIdx = c.toLowerCase().indexOf('spawn an')
+    expect(writeInvocationIdx).toBeGreaterThanOrEqual(0)
+    expect(subagentSpawnIdx).toBeGreaterThan(writeInvocationIdx)
   })
 
   it('spawns an anonymous subagent whose prompt is the handoff only (D23)', () => {
