@@ -31,7 +31,7 @@ The root issue is itself a **first-class member** of the candidate set, alongsid
 
 ### `--filter <tag>` — generic tag match
 
-Keep only candidate issues that carry the given label. `--filter` takes a **single label string**, not a boolean expression — there is no AND/OR/NOT grammar; the whole argument is matched literally against each issue's labels. The tag is interpreted **GENERICALLY: `/pair-next` assigns NO meaning to any tag value.** `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic anywhere in this skill (D18). A filter is a plain PM-tool label query, nothing more.
+Keep only candidate issues that carry the given label. `--filter` takes a **single label string**, not a boolean expression — there is no AND/OR/NOT grammar; the whole argument is matched literally against each issue's labels. The tag is interpreted **GENERICALLY: `/pair-next` assigns NO meaning to any tag value.** `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic anywhere in this skill (D18). A namespaced-looking label such as `tag:ui` carries **no** namespace semantics either: the whole string (colon included) is one opaque label, matched entire — so `--filter tag:ui` selects issues labelled literally `tag:ui`, exactly as `--filter ui` selects issues labelled `ui`. A filter is a plain PM-tool label query, nothing more.
 
 ### Re-evaluation — selection is never cached
 
@@ -105,7 +105,7 @@ Run this before every other step, on **every** invocation — the result is neve
 4. **Both** → apply the intersection: `subtree ∩ matching tags`.
 5. **Empty candidate set** — **zero issues** (e.g. `--filter` matches no issue): report `no matching issues` and exit cleanly — an empty result is normal, **not an error**. A childless `--root` (root with no children) is **one** issue, not empty: it flows into the cascade (see item 2). A **non-empty** set whose issues happen to be all non-actionable (e.g. all Done) is likewise not empty here — it falls through to the Step 5 fallback; actionability is decided in Steps 3–4, not by this emptiness check. Item 5's clean exit governs **backlog-item selection only**: a scoped run that finds no actionable item exits here and does **not** surface the project-wide config rows 12–15.
 
-The resolved candidate set feeds the scoped Step 3 item-selection (rows 6–11) and Step 4 row 16 (`/pair-capability-grill`). Step 2 and rows 12–15 (project-wide) are not surfaced under a scope; rows 3–5 are evaluated **root-relatively** (epic root → row 5 only; story root → skipped) — see Step 3. Because Step 0 re-runs each time, a tag mutation between steps changes the selection on the next step automatically.
+The resolved candidate set feeds the scoped Step 3 item-selection (rows 6–11) and Step 4 row 16 (`/pair-capability-grill`). Step 2 and rows 12–15 (project-wide) are not surfaced under a scope; rows 3–5 are evaluated **root-relatively** (epic root → row 5 only; story root → skipped) — see Step 3. A scope **presupposes an established project** (adoption files populated, a real backlog): on a fresh template project `--root`/`--filter` are never passed — Step 2 fresh-project detection governs and steers to `/pair-process-bootstrap`, so the Step 3 "all adoption files populated" premise always holds under a scope. Because Step 0 re-runs each time, a tag mutation between steps changes the selection on the next step automatically.
 
 ### Step 1: Read Adoption Files
 

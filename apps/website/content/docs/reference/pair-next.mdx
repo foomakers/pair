@@ -18,21 +18,23 @@ By default `/pair-next` considers the whole backlog. Two **optional** arguments 
 
 With neither argument, behaviour is unchanged: the full backlog is in scope.
 
+Both arguments **presuppose an established project** (adoption files populated, a real backlog). On a fresh template project you never pass `--root`/`--filter` — `/pair-next` runs its fresh-project detection and steers you to `/pair-process-bootstrap` instead; a scope has no meaning until there is a backlog to scope.
+
 ## `--root <issue-id>` — subtree scope
 
 `--root` confines selection to the given issue and its transitive children, resolved through the **PM-tool parent/child hierarchy** (sub-issues / parent links) — never through title conventions. Nothing outside the subtree is ever proposed.
 
-- **Epic root** → work at epic level on the epic's children only: an epic with no user-story children yet resolves to `/plan-stories` (the "plan its children" action); otherwise refine or develop those stories.
-- **Story root** → the story is itself the unit of work and a first-class candidate: a Draft story resolves to `/refine-story`, a Ready one to `/implement` (or `/plan-tasks`); its subtree never steps outside it.
+- **Epic root** → work at epic level on the epic's children only: an epic with no user-story children yet resolves to `/pair-process-plan-stories` (the "plan its children" action); otherwise refine or develop those stories.
+- **Story root** → the story is itself the unit of work and a first-class candidate: a Draft story resolves to `/pair-process-refine-story`, a Ready one to `/pair-process-implement` (or `/pair-process-plan-tasks`); its subtree never steps outside it.
 
 ```bash
-/pair-next --root 204     # epic #204 and its stories; no stories yet → /plan-stories
-/pair-next --root 249     # story #249 itself → refine it (Draft) or implement it (Ready)
+/pair-next --root 204     # epic #204 and its stories; no stories yet → /pair-process-plan-stories
+/pair-next --root 249     # story #249 itself → /pair-process-refine-story (Draft) or /pair-process-implement (Ready)
 ```
 
 ## `--filter <tag>` — generic tag match
 
-`--filter` keeps only issues carrying the given label. It takes a **single label string**, not a boolean expression — there is no AND/OR/NOT grammar; the whole argument is matched literally against each issue's labels. The tag is interpreted **generically**: `/pair-next` assigns no meaning to any tag value. `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic inside the navigator. A filter is a plain PM-tool label query.
+`--filter` keeps only issues carrying the given label. It takes a **single label string**, not a boolean expression — there is no AND/OR/NOT grammar; the whole argument is matched literally against each issue's labels. The tag is interpreted **generically**: `/pair-next` assigns no meaning to any tag value. `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic inside the navigator. A namespaced-looking label such as `tag:ui` carries **no** namespace semantics either: the whole string (colon included) is one opaque label, matched entire — so a story's original `--filter tag:ui` selects issues labelled literally `tag:ui`, exactly like `ui` selects issues labelled `ui`. A filter is a plain PM-tool label query.
 
 ```bash
 /pair-next --filter ui                    # only issues carrying the literal label "ui"
