@@ -57,6 +57,11 @@ describe('implement composes checkpoint + publish-pr (#256)', () => {
     // both sides — every OTHER byte must still match, so any real drift (hand-edited mirror,
     // a dataset edit not propagated via `pair update`) still fails. `pair update` remains
     // the ground truth for regeneration.
+    //
+    // Restrict the neutralization to SAME-DIR SIBLING links only (`](./name.md)` with no
+    // further `/`) — that is the exact and only shape the flatten link-rewriter produces
+    // here. A blanket `](./` strip would also mask a nested `](./sub/file.md)` drift, so we
+    // keep the guard tight: any `./`-prefixed link with a path segment still fails.
     const skillNameMap = buildDatasetSkillNameMap(SKILLS_DIR)
     const linkPathMap = buildSkillLinkPathMap(SKILLS_DIR)
     const reconstructed = applyKnownMirrorTransforms(
@@ -64,7 +69,8 @@ describe('implement composes checkpoint + publish-pr (#256)', () => {
       skillNameMap,
       linkPathMap,
     )
-    const neutralizeSameDirDotSlash = (s: string): string => s.split('](./').join('](')
+    const neutralizeSameDirDotSlash = (s: string): string =>
+      s.replace(/\]\(\.\/([^/)]+)\)/g, ']($1)')
     expect(neutralizeSameDirDotSlash(mirror())).toBe(neutralizeSameDirDotSlash(reconstructed))
   })
 })
@@ -86,10 +92,16 @@ describe('closing phase: checkpoint(write) then publish-pr (AC1)', () => {
     expect(step32Idx).toBeGreaterThanOrEqual(0)
     expect(step33Idx).toBeGreaterThan(step32Idx)
     // and within those steps: checkpoint write ($mode=write) comes before the
-    // subagent spawn that runs /publish-pr.
-    const writeInvocationIdx = c.search(/\$mode\s*=?:?\s*write/i)
+    // subagent spawn that runs /publish-pr. Anchor the write search to the
+    // Step 3.2 SPAN (step32..step33), not the first global occurrence — the
+    // first `$mode=write` in the file is the composed-skills table (and the
+    // between-task Step 2.8 write), so a global search would not actually prove
+    // the closing-phase write lives inside Step 3.2.
+    const step32Span = c.slice(step32Idx, step33Idx)
+    const writeWithinStep32 = step32Span.search(/\$mode\s*=?:?\s*write/i)
+    expect(writeWithinStep32).toBeGreaterThanOrEqual(0)
+    const writeInvocationIdx = step32Idx + writeWithinStep32
     const subagentSpawnIdx = c.toLowerCase().indexOf('spawn an')
-    expect(writeInvocationIdx).toBeGreaterThanOrEqual(0)
     expect(subagentSpawnIdx).toBeGreaterThan(writeInvocationIdx)
   })
 
