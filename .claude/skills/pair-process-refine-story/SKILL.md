@@ -1,7 +1,7 @@
 ---
 name: pair-process-refine-story
 description: "Refines a user story from Todo to Refined — Given-When-Then acceptance criteria, technical analysis, sprint readiness. Composes /pair-capability-write-issue. Not for sizing an already-refined story (use /pair-capability-estimate)."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
@@ -11,9 +11,10 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
 
 ## Composed Skills
 
-| Skill          | Type       | Required                                                |
-| -------------- | ---------- | ------------------------------------------------------- |
-| `/pair-capability-write-issue` | Capability | Yes — creates or updates the story issue in the PM tool |
+| Skill          | Type       | Required                                                                                   |
+| -------------- | ---------- | ------------------------------------------------------------------------------------------- |
+| `/pair-capability-write-issue` | Capability | Yes — creates or updates the story issue in the PM tool                                      |
+| `/pair-capability-classify`    | Capability | Optional — shift-left classification matrix into the story body. If not installed, warn and continue. |
 
 ## Arguments
 
@@ -95,6 +96,15 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
    - Reference [architecture.md](../../../.pair/adoption/tech/architecture.md) and [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
 2. **Act**: Present technical analysis to developer for validation.
 3. **Verify**: Human-judgment gate — the developer explicitly approves the presented strategy, key components, and risks (or requests changes, looping back to Step 3's Act). Only an explicit approval finalizes the analysis.
+
+### Step 3b: Classification (shift-left matrix)
+
+**Skip if**: the story body already carries a classification matrix section for the current model + adoption (deterministic — re-running yields the same matrix).
+
+1. **Check**: Is `/pair-capability-classify` installed?
+2. **Skip**: If not installed, warn (`/pair-capability-classify not installed — skipping the shift-left risk matrix; classify at review time`) and move to Step 4.
+3. **Act**: Compose `/pair-capability-classify` with `$context: refinement` and `$target: [story-id]`. It applies the [quality model](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) to the story context, writes the matrix as 1 line + `<details>` into the story body (D22), and — the first time — proposes the `## Tag Projection` declaration before emitting any tag (adoption-gated). No `tech/risk-matrix.md` ⇒ KB defaults, matrix only, no tags (D21).
+4. **Verify**: The story body carries the classification matrix (or the skip was warned). `/pair-capability-classify` HALTs only if the quality model doc (#221) is absent — surface that pointer to the developer.
 
 ### Step 4: Sprint Readiness
 

@@ -9,8 +9,12 @@ import {
   extractLinkTargets,
   isCheckableTarget,
   checkCatalogCounts,
+  countByCategory,
+  checkProseCounts,
+  checkCategoryLabelCounts,
   runChecks,
 } from './skills-conformance-check'
+import { join as pathJoin } from 'node:path'
 
 describe('parseFrontmatter', () => {
   it('parses top-level keys and quoted values', () => {
@@ -143,6 +147,101 @@ describe('checkCatalogCounts', () => {
 
   it('stays silent when counts match', () => {
     expect(checkCatalogCounts('all 35 skills are routable', 35)).toEqual([])
+  })
+})
+
+describe('countByCategory', () => {
+  it('buckets by top-level dir (process/capability/navigator)', () => {
+    const skillsDir = pathJoin('/corpus', '.skills')
+    const files = [
+      pathJoin(skillsDir, 'process', 'review', 'SKILL.md'),
+      pathJoin(skillsDir, 'process', 'implement', 'SKILL.md'),
+      pathJoin(skillsDir, 'capability', 'classify', 'SKILL.md'),
+      pathJoin(skillsDir, 'next', 'SKILL.md'),
+    ]
+    expect(countByCategory(files, skillsDir)).toEqual({
+      total: 4,
+      process: 2,
+      capability: 1,
+      navigator: 1,
+    })
+  })
+})
+
+describe('checkProseCounts', () => {
+  const counts = { total: 37, process: 9, capability: 27, navigator: 1 }
+
+  it('is silent when total and breakdown match the corpus', () => {
+    const content =
+      'the full catalog of 37 skills.\n37 Agent Skills (9 process + 27 capability + 1 navigator)'
+    expect(checkProseCounts('wow.md', content, counts)).toEqual([])
+  })
+
+  it('flags a stale "N skills" total', () => {
+    const errors = checkProseCounts('wow.md', 'full catalog of 36 skills', counts)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('37 skills')
+  })
+
+  it('flags a stale "N Agent Skills" total', () => {
+    const errors = checkProseCounts('gs.md', '36 Agent Skills for you', counts)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('37 skills')
+  })
+
+  it('flags a stale breakdown even when the total is right', () => {
+    const errors = checkProseCounts(
+      'gs.md',
+      '37 Agent Skills (9 process + 26 capability + 1 navigator)',
+      counts,
+    )
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('does not match corpus')
+  })
+
+  it('flags a stale breakdown even when an earlier breakdown in the same file is correct', () => {
+    const content =
+      '37 skills (9 process + 27 capability + 1 navigator).\nrecap: (9 process + 26 capability + 1 navigator)'
+    const errors = checkProseCounts('gs.md', content, counts)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('does not match corpus')
+  })
+
+  it('does not mistake breakdown component numbers for the total', () => {
+    // "9 process" / "27 capability" are followed by a category word, not "skill".
+    expect(checkProseCounts('gs.md', '(9 process + 27 capability + 1 navigator)', counts)).toEqual(
+      [],
+    )
+  })
+})
+
+describe('checkCategoryLabelCounts', () => {
+  const counts = { total: 37, process: 9, capability: 27, navigator: 1 }
+
+  it('is silent when heading and table-cell category counts match', () => {
+    const content =
+      '| **Process** | 9 |\n| **Capability** | 27 |\n### Process Skills (9)\n### Capability Skills (27)'
+    expect(checkCategoryLabelCounts('sg.md', content, counts)).toEqual([])
+  })
+
+  it('flags a stale "### Capability Skills (N)" catalog heading', () => {
+    const errors = checkCategoryLabelCounts('sg.md', '### Capability Skills (26)', counts)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('heading')
+    expect(errors[0]).toContain('27 capability skills')
+  })
+
+  it('flags a stale "**Category** | N" Skill-Types table cell', () => {
+    const errors = checkCategoryLabelCounts('sg.md', '| **Process** | 8 |', counts)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('table cell')
+    expect(errors[0]).toContain('9 process skills')
+  })
+
+  it('ignores subcategory groupings that carry no corpus counterpart', () => {
+    // "Assessment"/"Domain Modeling" are not top-level categories — never matched.
+    const content = '#### Assessment Skills (9)\n#### Domain Modeling Skills (2)'
+    expect(checkCategoryLabelCounts('sg.md', content, counts)).toEqual([])
   })
 })
 
