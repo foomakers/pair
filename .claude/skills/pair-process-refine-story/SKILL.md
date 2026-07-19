@@ -45,7 +45,7 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
 
 ### Phase 0: Shared-Understanding Sync (grill — BLOCKING)
 
-**This is the R3.11 AI↔human alignment gate — a prerequisite, not optional.** No DoR section is authored until shared understanding is explicit; it is the reason no separate "make-ready" step exists (D24).
+**This is the R3.11 AI↔human alignment gate — a prerequisite, not optional.** No DoR section is authored until shared understanding is explicit; it is the reason no separate "make-ready" step exists (D24). Phase 0 runs between Step 0 (selection) and Step 1 (detection): the already-Ready check below is a light read of the body to decide whether to skip the sync — Step 1's detection table is where that state is formally determined.
 
 1. **Check**: Has phase 0 already reached explicit shared understanding this session, or does a prior `/pair-capability-grill` sync handoff for this story exist in `.pair/working/`, or is the story already Ready (Step 1 confirms-and-exits)?
 2. **Skip**: If shared understanding is already confirmed (or the story is already Ready), move to Step 1.
@@ -66,6 +66,7 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
    | Business Rules                        | Has non-placeholder business rules                                         |
    | Edge Cases                            | Has non-placeholder edge case handling                                     |
    | Technical Analysis                    | Has `### Implementation Approach` or `### Strategy` with content           |
+   | Design flag                           | Has a `Design:` line under Technical Analysis → Implementation Approach, set to `not required` or `required — reference: <link>` (DoR criterion 6, [definition-of-ready-and-done.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md)) |
    | Technical Risks                       | Has risk table with entries                                                |
    | Definition of Done                    | Has DoD checklist with items                                               |
    | Story Sizing                          | Has `**Final Story Points**` with value                                    |
@@ -102,12 +103,13 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
 
 ### Step 3: Technical Analysis
 
-**Skip if**: Technical Analysis and Technical Risks are present.
+**Skip if**: Technical Analysis, Technical Risks, and the Design flag are present.
 
 1. **Act**: Assess the implementation approach:
    - **Strategy**: high-level technical approach and architecture alignment.
    - **Key components**: modules, integration points, data flow.
    - **Risks**: technical unknowns, complexity, dependencies.
+   - **Design flag** (DoR criterion 6): set the `Design:` line under Implementation Approach to `not required` when the approach is understood, or `required — reference: <link>` when a design doc/spike is needed — per [definition-of-ready-and-done.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md). This is the criterion Step 5 verifies as the sixth DoR criterion.
    - Reference [architecture.md](../../../.pair/adoption/tech/architecture.md) and [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
 2. **Act**: Touched-context mapping (technical). Is `/pair-capability-map-contexts` installed? Compose `/pair-capability-map-contexts` with `$scope: [the contexts/services this story touches]` — **scoped, never `$scope: all`** (that is `/pair-process-bootstrap`-only). It maps the touched subdomains to bounded contexts and assesses each relationship (integration strength, socio-technical distance, volatility) to derive a balanced/unbalanced verdict. **When it reports an unbalanced integration this story introduces — strong coupling toward a distant and/or volatile context — record it as a row in the Technical Risks and Mitigation table** (D38): the coupling risk this story adds, its impact, and the mitigation. This same map-contexts output feeds the **Coupling balance** dimension of the classification matrix (Step 3b) — refine-story runs no coupling assessment of its own; the inputs come from the scoped map-contexts output and the subdomain catalog volatility (D24). Not installed, or no domain artifacts → coupling is "not assessed", excluded from the matrix max, never blocks (D21).
 3. **Act**: Present technical analysis (strategy, key components, integration points, and any coupling risk from the mapping) to developer for validation.

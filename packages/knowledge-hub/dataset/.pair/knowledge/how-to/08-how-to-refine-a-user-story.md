@@ -13,20 +13,24 @@ This how-to orchestrates the `/refine-story` skill.
 
 | Skill           | Purpose                                                                                                                                                         |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/refine-story` | Executes the full refinement process: selection, requirements (Given-When-Then), technical analysis, sprint readiness, documentation. Section-level idempotent. |
+| `/refine-story` | Executes the full refinement process: phase 0 grill sync, requirements (Given-When-Then), technical analysis, classification, sprint readiness, documentation. Section-level idempotent. |
+| `/grill`        | Composed by `/refine-story` — phase 0 blocking AI↔human shared-understanding sync before any DoR section is authored (R3.11 alignment gate).                     |
+| `/map-subdomains` + `/map-contexts` | Composed by `/refine-story` — scoped domain/context placement for the story; feeds the classification matrix and the coupling dimension. |
+| `/classify`     | Composed by `/refine-story` — writes the shift-left classification (risk/cost) matrix into the story's `## Classification` section.                              |
 | `/write-issue`  | Composed by `/refine-story` — creates or updates the story issue in the PM tool.                                                                                |
-| `/map-subdomains` + `/map-contexts` | Scoped domain/context placement for the story — planned wiring, tracked by [#242](https://github.com/foomakers/pair/issues/242). Not yet composed by `/refine-story`. |
 
 > **If skills are not installed**, follow the manual workflow below.
 
 ## Orchestration Flow
 
-1. **Verify prerequisites**: PM tool configured per [way-of-working.md](../../adoption/tech/way-of-working.md), stories exist in Todo state from [story breakdown](07-how-to-breakdown-user-stories.md).
+1. **Verify prerequisites**: PM tool configured per [way-of-working.md](../../adoption/tech/way-of-working.md), stories exist in the Draft macrostate from [story breakdown](07-how-to-breakdown-user-stories.md).
 2. **Invoke `/refine-story`** with optional `$story` argument. The skill handles:
-   - Story selection (highest-priority Todo, or specified `$story`)
+   - Story selection (highest-priority Draft, or specified `$story`)
+   - **Phase 0 shared-understanding sync** via `/grill` — a blocking R3.11 alignment gate; no DoR section is authored until AI and human agree (HALT otherwise)
    - Section-level idempotency detection (resumes from first missing section)
    - Requirements analysis (Given-When-Then acceptance criteria, business rules, edge cases)
-   - Technical analysis (architecture alignment, risks, spike identification)
+   - Technical analysis (architecture alignment, risks, spike identification) with scoped `/map-subdomains` + `/map-contexts` placement
+   - Classification matrix via `/classify` written into the story's `## Classification` section
    - Sprint readiness (re-estimation, split if oversized, dependency mapping)
    - Documentation and PM tool update via `/write-issue`
 3. **Developer validates** each phase when prompted by the skill.
@@ -34,9 +38,14 @@ This how-to orchestrates the `/refine-story` skill.
 
 ## Manual Workflow (without skills)
 
+### Phase 0: Shared-Understanding Sync
+
+- Before authoring any DoR section, establish explicit AI↔human shared understanding on goal, acceptance criteria, edge cases, dependencies, design, and risks (R3.11 alignment gate)
+- Without `/grill`, the per-phase developer approval gates below are the accepted fallback — but alignment before the story reaches Ready is never skipped
+
 ### Phase 1: Story Selection
 
-- Select highest-priority Todo story (P0 > P1 > P2)
+- Select highest-priority Draft story (P0 > P1 > P2)
 - Consider sprint needs, dependency chains, epic context
 - Present recommendation with rationale; confirm with developer
 
@@ -64,9 +73,9 @@ This how-to orchestrates the `/refine-story` skill.
 
 ### Phase 5: Documentation & Tool Update
 
-- Complete all sections of [User Story Template](../guidelines/collaboration/templates/user-story-template.md) (Refined template)
+- Complete all sections of [User Story Template](../guidelines/collaboration/templates/user-story-template.md) (Refined template), including the `## Classification` matrix
 - Section ordering: functional first, technical last
-- Update story status from Todo to Refined in PM tool
+- Transition the story from Draft to Ready in the PM tool
 - Configure sizing, priority, dependency metadata
 
 ## Quality Checklist
@@ -77,12 +86,12 @@ This how-to orchestrates the `/refine-story` skill.
 - [ ] Story sized for sprint or split with value preservation
 - [ ] All uncertainties resolved
 - [ ] [User Story Template](../guidelines/collaboration/templates/user-story-template.md) completed
-- [ ] PM tool updated with Refined status
+- [ ] PM tool updated to Ready
 - [ ] INVEST criteria verified
 
 ## HALT Conditions
 
-- **No Todo stories** — must have stories from breakdown phase
+- **No Draft stories** — must have stories from breakdown phase
 - **PM tool not configured** — complete [bootstrap](02-how-to-complete-bootstrap-checklist.md) first
 - **Template not reviewed** — read [User Story Template](../guidelines/collaboration/templates/user-story-template.md) before starting
 

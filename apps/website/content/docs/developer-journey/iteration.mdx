@@ -38,7 +38,9 @@ Transform a rough story into a development-ready specification.
 | **Input** | Story issue (status: Todo) |
 | **Output** | Story updated with acceptance criteria, technical analysis, and sizing (status: Ready) |
 
-Refinement adds three things to a story:
+Refinement opens with a **phase 0 alignment gate**: the AI runs a `/pair-capability-grill` shared-understanding sync — goal, acceptance criteria, edge cases, dependencies, design, and risks — one question at a time, and no readiness section is authored until you and the AI explicitly agree. It's a blocking gate: an unaligned story never proceeds to Ready.
+
+Refinement then adds these to a story:
 
 ### Acceptance Criteria (Given-When-Then)
 
@@ -61,6 +63,10 @@ Every AC is testable — either it passes or it doesn't.
 ### Story Sizing
 
 Story points using the team's estimation methodology. The AI proposes a size based on complexity and the team validates.
+
+### Classification Matrix
+
+Refinement also shifts classification left: `/pair-capability-classify` scores the story against the quality model (risk and cost dimensions, coupling fed by the scoped subdomain/context mapping) and writes the matrix into the story's `## Classification` section — so the risk tier is known before a line of code is written, not first surfaced at review.
 
 ## Step 7: Create Tasks
 
