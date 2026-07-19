@@ -14,7 +14,7 @@ By default `/pair-next` considers the whole backlog. Two **optional** arguments 
 | Argument   | Value                                        | Effect                                                          |
 | ---------- | -------------------------------------------- | -------------------------------------------------------------- |
 | `--root`   | an issue id (epic or story)                  | Restrict selection to that issue's subtree in the PM hierarchy. |
-| `--filter` | a tag expression (e.g. `tag:ui`, `risk:red`) | Restrict selection to issues carrying the matching tag.         |
+| `--filter` | a single tag/label (e.g. `ui`, `risk:red`)   | Restrict selection to issues carrying that exact label.         |
 
 With neither argument, behaviour is unchanged: the full backlog is in scope.
 
@@ -30,12 +30,12 @@ With neither argument, behaviour is unchanged: the full backlog is in scope.
 /pair-next --root 249     # only story #249 (refine/develop it)
 ```
 
-## `--filter <tag-expression>` — generic tag match
+## `--filter <tag>` — generic tag match
 
-`--filter` keeps only issues carrying the given tag. The tag is interpreted **generically**: `/pair-next` assigns no meaning to any tag value. `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic inside the navigator. A filter is a plain PM-tool label query.
+`--filter` keeps only issues carrying the given label. It takes a **single label string**, not a boolean expression — there is no AND/OR/NOT grammar; the whole argument is matched literally against each issue's labels. The tag is interpreted **generically**: `/pair-next` assigns no meaning to any tag value. `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic inside the navigator. A filter is a plain PM-tool label query.
 
 ```bash
-/pair-next --filter tag:ui            # only issues tagged ui
+/pair-next --filter ui                    # only issues carrying the literal label "ui"
 /pair-next --root 204 --filter risk:red   # subtree of #204, intersected with risk:red
 ```
 

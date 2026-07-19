@@ -11,12 +11,12 @@ Analyze project state and recommend the single most relevant next skill to invok
 
 ## Arguments (optional)
 
-`/next` accepts two **optional** arguments that SCOPE which backlog items it may select. With neither, it behaves exactly as before — the whole backlog is in scope. This scoping is what makes `/next` the parametrizable atom of automation (R2.2, R2.3).
+`/next` accepts two **optional** arguments that SCOPE which backlog items it may select. With neither, it behaves exactly as before — the whole backlog is in scope. This scoping is what makes `/next` the parametrizable atom of automation.
 
 | Argument   | Value                                          | Effect                                                          |
 | ---------- | ---------------------------------------------- | -------------------------------------------------------------- |
 | `--root`   | an issue id (epic or story)                    | Restrict selection to that issue's subtree in the PM hierarchy. |
-| `--filter` | a tag expression (e.g. `tag:ui`, `risk:red`)   | Restrict selection to issues carrying the matching tag.         |
+| `--filter` | a single tag/label (e.g. `ui`, `risk:red`)     | Restrict selection to issues carrying that exact label.         |
 
 Both may be combined — the effective scope is the **intersection**: `subtree ∩ matching tags` (see Step 0).
 
@@ -27,11 +27,11 @@ Resolve the issue's descendants through the **PM-tool parent/child hierarchy** (
 - **Epic root** → operate at epic level: plan / refine / develop the epic's children only.
 - **Story root** → operate on that story: refine or develop it (and its tasks); never step outside it.
 
-The root issue plus its transitive children form the candidate set; the cascade (Steps 2–4) then runs against that set instead of the full backlog.
+The root issue plus its transitive children form the candidate set; **Step 3's backlog query** then runs against that set instead of the full backlog. Steps 2 and 4 (fresh-project detection and capability suggestions) are project-wide, not subtree-scoped — the candidate set narrows only the Step 3 backlog selection.
 
-### `--filter <tag-expression>` — generic tag match
+### `--filter <tag>` — generic tag match
 
-Keep only candidate issues that carry the given tag. The tag is interpreted **GENERICALLY: `/next` assigns NO meaning to any tag value.** `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic anywhere in this skill (D18). A filter is a plain PM-tool label query, nothing more.
+Keep only candidate issues that carry the given label. `--filter` takes a **single label string**, not a boolean expression — there is no AND/OR/NOT grammar; the whole argument is matched literally against each issue's labels. The tag is interpreted **GENERICALLY: `/next` assigns NO meaning to any tag value.** `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic anywhere in this skill (D18). A filter is a plain PM-tool label query, nothing more.
 
 ### Re-evaluation — selection is never cached
 
@@ -135,7 +135,7 @@ If any of the above matched, output the suggestion and stop.
 
 ### Step 3: Cascade — Established Project Detection
 
-All adoption files are populated. Query the PM tool to determine backlog state — **restricted to the candidate set resolved in Step 0** when `--root`/`--filter` are set (re-evaluated every run, never cached).
+All adoption files are populated. Query the PM tool to determine backlog state — **restricted to the candidate set resolved in Step 0** when `--root`/`--filter` are set (re-evaluated every run, never cached). This restriction includes row 6's open-PR detection: only PRs whose linked issue is inside the candidate set count — a PR for an issue outside the subtree/filter is **never** surfaced as `/review`, preserving the guarantee that nothing outside the scope is ever selected.
 
 **PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
 
