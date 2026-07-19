@@ -23,7 +23,7 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
 
 | Argument | Required | Description                                                                                                     |
 | -------- | -------- | --------------------------------------------------------------------------------------------------------------- |
-| `$story` | No       | Story identifier (e.g., `#42`). If omitted, the skill selects the highest-priority Todo story from the backlog. |
+| `$story` | No       | Story identifier (e.g., `#42`). If omitted, the skill selects the highest-priority `Draft` story from the backlog. |
 
 ## Algorithm
 
@@ -31,7 +31,7 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
 
 1. **Check**: Is `$story` provided?
 2. **Skip**: If provided, load the story from the PM tool and proceed to Step 1.
-3. **Act**: If not provided, query the PM tool for stories in Todo state. Apply selection criteria:
+3. **Act**: If not provided, query the PM tool for stories in the `Draft` macrostate (the board's Todo/backlog column via the state mapping — symmetric with Step 5's `Ready`→`Refined`). Apply selection criteria:
    - **Priority**: P0 > P1 > P2
    - **Sprint need**: stories required for upcoming sprint
    - **Dependency chain**: stories blocking other work
@@ -73,12 +73,12 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
    | Validation Strategy                   | Has testing approach                                                       |
 
 2. **Act**: Determine refinement state:
-   - **All sections present** → story is already Refined. Offer selective update (Step 6).
+   - **All sections present** → story is already Ready. Offer selective update (Step 6).
    - **Some sections present** → partial refinement. Resume from first missing section (Steps 2–5).
    - **No sections (only Initial Breakdown)** → full refinement needed (Steps 2–5).
 3. **Verify**: Refinement state determined. Report:
 
-   > Refinement state: [N/M sections complete]. [Resuming from: Section X | Full refinement | Already refined — offering update].
+   > Refinement state: [N/M sections complete]. [Resuming from: Section X | Full refinement | Already Ready — offering update].
 
 ### Step 2: Requirements Analysis
 
@@ -146,13 +146,13 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
    - `$status: Ready` — **pass it only when a board state maps to the `Ready` macrostate** (a presence check on the `state-mapping`, not a resolution). `/pair-capability-write-issue` owns the board-field write: it resolves `Ready` to the target board state via the [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) writing rule (first board state mapped to `Ready`; e.g. `Refined` on pair's own board) and updates the Status field (its Step 6). **Omit `$status` when no board state maps to `Ready`** (a minimal board, D4): the completed DoR sections on the body are themselves the readiness signal per the [definition-of-ready-and-done.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md) **Readiness Fallback**, and omitting it avoids `/pair-capability-write-issue`'s unmapped-macrostate HALT (its Step 6). Idempotent: a story already at `Ready` is confirmed, not re-moved — refine-story runs no board-field write of its own (D24).
 3. **Verify**: Either `/pair-capability-write-issue` wrote the board state resolved from `$status: Ready` (mapping present), or (no mapping, `$status` omitted) all six DoR criteria are satisfied on the body as the readiness signal.
 
-### Step 6: Already-Refined Update (optional path)
+### Step 6: Already-Ready Update (optional path)
 
 Reached only when Step 1 detects all sections are present.
 
 1. **Act**: Ask the developer which sections to update:
 
-   > Story `#[ID]` is already refined. Which sections need updating?
+   > Story `#[ID]` is already Ready. Which sections need updating?
    > 1. Acceptance Criteria
    > 2. Technical Analysis
    > 3. Sprint Sizing
