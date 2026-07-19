@@ -18,7 +18,7 @@ The single source of default quality rules for this KB. `classify`, `assess-cost
 
 | Pillar | Covers | Tag family (if exposed) | Primary skill |
 | --- | --- | --- | --- |
-| **Cost** | Financial exposure of building/running the change | `cost:*` — opt-in, §5 | `assess-cost` (cost-signal catalog, forthcoming) |
+| **Cost** | Financial exposure of building/running the change | `cost:*` — opt-in, §5 | `assess-cost` (cost-signal catalog) |
 | **Security** | Vulnerabilities, compliance, secure-by-design | none dedicated — feeds `risk:*` (§3) + deterministic CI scanning | `assess-security`, [security/](security/README.md) |
 | **Delivery** | Everything else: correctness, performance, a11y, observability, docs, planning, architecture, release, AI metrics | `risk:*` (correctness/blast-radius facets) — KB default, §5 | `pair-process-review`, `classify` |
 

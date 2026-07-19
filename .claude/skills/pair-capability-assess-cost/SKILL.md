@@ -102,7 +102,7 @@ When composed by `/pair-process-review` (review-time cost dimension):
 
 When composed by `/pair-process-refine-story` / `/pair-capability-classify` (shift-left, refinement):
 
-- Classifies from `$story` scope, producing the declared cost class carried in the story-body matrix — the review pass may only confirm-or-raise it, never lower it (§3.2 floor semantics applied to the cost class).
+- Classifies from `$story` scope, producing the declared cost class carried in the story-body matrix — the review pass may only confirm-or-raise it, never lower it (D17 "built twice": the class is estimated from story context at refinement and re-derived from the diff at review — the more conservative of the two wins).
 
 When invoked **independently** (`/pair-capability-assess-cost` on a branch or story): full one-shot classification, verdict returned to the developer.
 
