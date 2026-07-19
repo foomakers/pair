@@ -85,12 +85,24 @@ describe('runInteractiveFlow', () => {
     const result = await runInteractiveFlow(makeConfig(), makeFs())
 
     expect(result).not.toBeNull()
-    expect(result!.name).toBe('my-kb')
-    expect(result!.version).toBe('1.0.0')
-    expect(result!.description).toBe('My description')
-    expect(result!.author).toBe('Test Author')
-    expect(result!.tags).toEqual(['ai', 'devops'])
-    expect(result!.license).toBe('Apache-2.0')
+    expect(result!.config.name).toBe('my-kb')
+    expect(result!.config.version).toBe('1.0.0')
+    expect(result!.config.description).toBe('My description')
+    expect(result!.config.author).toBe('Test Author')
+    expect(result!.config.tags).toEqual(['ai', 'devops'])
+    expect(result!.config.license).toBe('Apache-2.0')
+
+    // The confirmed answers are also returned as the final resolved defaults,
+    // so the caller need not re-resolve the cascade.
+    expect(result!.defaults).toEqual({
+      name: 'my-kb',
+      version: '1.0.0',
+      description: 'My description',
+      author: 'Test Author',
+      tags: ['ai', 'devops'],
+      license: 'Apache-2.0',
+    })
+    expect(result!.projectRoot).toBe('/project')
   })
 
   it('uses CLI flags as defaults for prompts', async () => {

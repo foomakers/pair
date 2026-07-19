@@ -1,7 +1,17 @@
-import { describe, expect, beforeEach, vi, test } from 'vitest'
+import { describe, expect, beforeEach, afterEach, vi, test } from 'vitest'
+
+// Mock @inquirer/prompts so the guided (--interactive) path can be exercised
+// without a real terminal. Non-interactive tests never touch these.
+vi.mock('@inquirer/prompts', () => ({
+  input: vi.fn(),
+  confirm: vi.fn(),
+}))
+
 import { handlePackageCommand } from './handler'
 import type { PackageCommandConfig } from './parser'
 import { InMemoryFileSystemService } from '@pair/content-ops'
+import { input, confirm } from '@inquirer/prompts'
+import * as defaultsResolver from './defaults-resolver'
 
 describe('handlePackageCommand - real services integration', () => {
   let fs: InMemoryFileSystemService
@@ -272,5 +282,75 @@ describe('handlePackageCommand - real services integration', () => {
     }
 
     await expect(handlePackageCommand(config, fs)).rejects.toThrow(/source path does not exist/)
+  })
+})
+
+describe('handlePackageCommand - guided path resolves defaults once', () => {
+  const cwd = '/my-project'
+  const originalIsTTY = process.stdout.isTTY
+  let fs: InMemoryFileSystemService
+
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    Object.defineProperty(process.stdout, 'isTTY', { value: true, writable: true })
+    fs = new InMemoryFileSystemService(
+      {
+        [`${cwd}/config.json`]: JSON.stringify({
+          asset_registries: {
+            reg1: {
+              source: 'source/reg1',
+              behavior: 'mirror',
+              targets: [{ path: '.pair/reg1', mode: 'canonical' }],
+              description: 'Registry 1',
+            },
+          },
+        }),
+        [`${cwd}/source/reg1/file.txt`]: 'content of reg1',
+      },
+      cwd,
+      cwd,
+    )
+  })
+
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'isTTY', { value: originalIsTTY, writable: true })
+  })
+
+  test('does NOT re-run resolvePackageDefaults after the interactive flow', async () => {
+    // The guided flow resolves the shared cascade internally; the handler must
+    // consume that result, not resolve a second time (redundant git/config read).
+    vi.mocked(input)
+      .mockResolvedValueOnce('guided-kb') // name
+      .mockResolvedValueOnce('4.1.0') // version
+      .mockResolvedValueOnce('Guided description') // description
+      .mockResolvedValueOnce('Guided Author') // author
+      .mockResolvedValueOnce('') // tags
+      .mockResolvedValueOnce('MIT') // license
+    vi.mocked(confirm).mockResolvedValueOnce(true)
+
+    const resolveSpy = vi.spyOn(defaultsResolver, 'resolvePackageDefaults')
+
+    const config: PackageCommandConfig = {
+      command: 'package',
+      output: `${cwd}/dist/guided-kb.zip`,
+      layout: 'source',
+      interactive: true,
+      tags: [],
+      license: 'MIT',
+    }
+
+    await handlePackageCommand(config, fs)
+
+    // Exactly one resolution — inside runInteractiveFlow only. Pre-fix this was 2
+    // (once in the flow, once again in the handler on the merged config).
+    expect(resolveSpy).toHaveBeenCalledTimes(1)
+
+    // Interactive answers still win: they flow through to the manifest unchanged.
+    const extractDir = `${cwd}/extracted`
+    await fs.extractZip(`${cwd}/dist/guided-kb.zip`, extractDir)
+    const manifest = JSON.parse(await fs.readFile(`${extractDir}/manifest.json`))
+    expect(manifest.name).toBe('guided-kb')
+    expect(manifest.version).toBe('4.1.0')
+    expect(manifest.author).toBe('Guided Author')
   })
 })

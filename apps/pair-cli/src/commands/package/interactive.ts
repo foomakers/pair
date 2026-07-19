@@ -18,6 +18,17 @@ class InteractiveCancelledError extends Error {
   }
 }
 
+/**
+ * Outcome of a confirmed guided flow: the merged config plus the already-resolved
+ * `projectRoot` and final `defaults`. The shared defaults cascade is resolved ONCE
+ * here; the caller consumes these directly and must NOT re-resolve (see handler).
+ */
+export interface InteractiveResult {
+  config: PackageCommandConfig
+  projectRoot: string
+  defaults: ResolvedMetadata
+}
+
 function mergeMetadataIntoConfig(
   config: PackageCommandConfig,
   metadata: ResolvedMetadata,
@@ -35,12 +46,13 @@ function mergeMetadataIntoConfig(
 
 /**
  * Run the interactive package creation flow.
- * Returns merged PackageCommandConfig on success, or null if user aborts.
+ * Returns the resolved result on success (merged config + projectRoot + final
+ * defaults), or null if the user aborts.
  */
 export async function runInteractiveFlow(
   config: PackageCommandConfig,
   fs: FileSystemService,
-): Promise<PackageCommandConfig | null> {
+): Promise<InteractiveResult | null> {
   if (!process.stdout.isTTY) {
     throw new Error('Interactive mode requires a terminal (TTY)')
   }
@@ -59,7 +71,10 @@ export async function runInteractiveFlow(
     }
 
     await savePreferences({ packageMetadata: metadata, updatedAt: new Date().toISOString() }, fs)
-    return mergeMetadataIntoConfig(config, metadata)
+    // Guided-path resolution is complete: the cascade was resolved once above and
+    // the user's answers (`metadata`) are the final, highest-precedence values.
+    // Return them so the caller reuses them instead of re-resolving.
+    return { config: mergeMetadataIntoConfig(config, metadata), projectRoot, defaults: metadata }
   } catch (error: unknown) {
     if (isExitPromptError(error) || error instanceof InteractiveCancelledError) {
       console.log('Package creation cancelled')

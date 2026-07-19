@@ -7,6 +7,7 @@ import { generateManifestMetadata } from './metadata'
 import { createPackageZip } from './zip-creator'
 import { runInteractiveFlow } from './interactive'
 import { resolvePackageDefaults } from './defaults-resolver'
+import type { ResolvedMetadata } from './defaults-resolver'
 import { loadOrgTemplate, mergeOrgDefaults } from './org-template'
 import { validateOrgName } from './org-validators'
 import {
@@ -125,6 +126,28 @@ async function resolveOrgMetadata(
 }
 
 /**
+ * Resolve config + projectRoot + defaults for both entry paths, without ever
+ * resolving the shared defaults cascade twice:
+ * - guided (--interactive): runInteractiveFlow resolves the cascade internally
+ *   and returns the result — consumed directly (returns null if the user aborts);
+ * - quick (non-interactive): resolve the cascade here.
+ */
+async function resolveConfigAndDefaults(
+  config: PackageCommandConfig,
+  fs: FileSystemService,
+): Promise<{
+  config: PackageCommandConfig
+  projectRoot: string
+  defaults: ResolvedMetadata
+} | null> {
+  if (config.interactive) {
+    return runInteractiveFlow(config, fs)
+  }
+  const { projectRoot, defaults } = resolvePackageDefaults(config, fs)
+  return { config, projectRoot, defaults }
+}
+
+/**
  * Handles the package command execution.
  * Processes PackageCommandConfig to create KB packages.
  */
@@ -132,16 +155,10 @@ export async function handlePackageCommand(
   config: PackageCommandConfig,
   fs: FileSystemService,
 ): Promise<void> {
-  // Interactive mode: run guided prompts before standard flow
-  if (config.interactive) {
-    const resolved = await runInteractiveFlow(config, fs)
-    if (!resolved) return // user aborted
-    config = resolved
-  }
-
-  // Shared defaults cascade — same one the guided (--interactive) path resolves.
-  // Computed once: projectRoot is reused below, defaults feed the manifest.
-  const { projectRoot, defaults } = resolvePackageDefaults(config, fs)
+  const resolved = await resolveConfigAndDefaults(config, fs)
+  if (!resolved) return // user aborted the guided flow
+  const { projectRoot, defaults } = resolved
+  config = resolved.config
 
   logger.debug('📦 Starting package creation...')
   logger.debug(`   Source: ${projectRoot}`)
