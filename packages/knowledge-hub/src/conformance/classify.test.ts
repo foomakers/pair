@@ -23,6 +23,8 @@ const REFINE_MIRROR = readFileSync(
 )
 const REVIEW_DATASET = readFileSync(join(DATASET_SKILLS, 'process/review/SKILL.md'), 'utf-8')
 const REVIEW_MIRROR = readFileSync(join(MIRROR_SKILLS, 'pair-process-review/SKILL.md'), 'utf-8')
+const NEXT_DATASET = readFileSync(join(DATASET_SKILLS, 'next/SKILL.md'), 'utf-8')
+const NEXT_MIRROR = readFileSync(join(MIRROR_SKILLS, 'pair-next/SKILL.md'), 'utf-8')
 
 describe('classify.md — structure (#233)', () => {
   for (const [label, content] of [
@@ -119,6 +121,26 @@ describe('/review composes classify in review context (AC3 — #233)', () => {
     it(`${label} composes classify with $context: review (confirm-or-raise)`, () => {
       expect(content).toContain(`Compose \`${skillRef}\` with \`$context: review\``)
       expect(content).toMatch(/never lower/i)
+    })
+  }
+})
+
+// DoD self-enforcement (#233): "no downstream consumer (gate/review/next) contains
+// classification criteria" — classify owns the criteria, consumers only read the
+// resulting matrix + tags (D18). The criteria's distinctive vocabulary is the
+// tier-derivation rule (`tier = max`) and the full `risk:green|yellow|red` triple
+// enumeration; a consumer may *reference* a single tier (e.g. `risk:red`) but must
+// not restate the derivation rules. This assertion keeps the DoD claim grep-backed.
+describe('consumers own no classification criteria (D18 — #233)', () => {
+  for (const [label, content] of [
+    ['review dataset', REVIEW_DATASET],
+    ['review mirror', REVIEW_MIRROR],
+    ['next dataset', NEXT_DATASET],
+    ['next mirror', NEXT_MIRROR],
+  ] as const) {
+    it(`${label} restates no tier-derivation rule`, () => {
+      expect(content).not.toMatch(/tier\s*=\s*max/i)
+      expect(content).not.toContain('risk:green|yellow|red')
     })
   }
 })

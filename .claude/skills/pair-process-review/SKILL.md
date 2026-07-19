@@ -1,7 +1,7 @@
 ---
 name: pair-process-review
 description: "Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) — validation, technical review, adoption compliance, completeness, decision — to decide whether it merges. Not a quick build/test sanity check (use /pair-capability-verify-quality). Composes /pair-capability-classify, /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-record-decision, /pair-capability-analyze-debt, /pair-capability-assess-security (required), /pair-capability-verify-adoption, /pair-capability-assess-stack (optional)."
-version: 0.6.0
+version: 0.7.0
 author: Foomakers
 ---
 

@@ -9,8 +9,11 @@ import {
   extractLinkTargets,
   isCheckableTarget,
   checkCatalogCounts,
+  countByCategory,
+  checkProseCounts,
   runChecks,
 } from './skills-conformance-check'
+import { join as pathJoin } from 'node:path'
 
 describe('parseFrontmatter', () => {
   it('parses top-level keys and quoted values', () => {
@@ -143,6 +146,63 @@ describe('checkCatalogCounts', () => {
 
   it('stays silent when counts match', () => {
     expect(checkCatalogCounts('all 35 skills are routable', 35)).toEqual([])
+  })
+})
+
+describe('countByCategory', () => {
+  it('buckets by top-level dir (process/capability/navigator)', () => {
+    const skillsDir = pathJoin('/corpus', '.skills')
+    const files = [
+      pathJoin(skillsDir, 'process', 'review', 'SKILL.md'),
+      pathJoin(skillsDir, 'process', 'implement', 'SKILL.md'),
+      pathJoin(skillsDir, 'capability', 'classify', 'SKILL.md'),
+      pathJoin(skillsDir, 'next', 'SKILL.md'),
+    ]
+    expect(countByCategory(files, skillsDir)).toEqual({
+      total: 4,
+      process: 2,
+      capability: 1,
+      navigator: 1,
+    })
+  })
+})
+
+describe('checkProseCounts', () => {
+  const counts = { total: 37, process: 9, capability: 27, navigator: 1 }
+
+  it('is silent when total and breakdown match the corpus', () => {
+    const content =
+      'the full catalog of 37 skills.\n37 Agent Skills (9 process + 27 capability + 1 navigator)'
+    expect(checkProseCounts('wow.md', content, counts)).toEqual([])
+  })
+
+  it('flags a stale "N skills" total', () => {
+    const errors = checkProseCounts('wow.md', 'full catalog of 36 skills', counts)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('37 skills')
+  })
+
+  it('flags a stale "N Agent Skills" total', () => {
+    const errors = checkProseCounts('gs.md', '36 Agent Skills for you', counts)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('37 skills')
+  })
+
+  it('flags a stale breakdown even when the total is right', () => {
+    const errors = checkProseCounts(
+      'gs.md',
+      '37 Agent Skills (9 process + 26 capability + 1 navigator)',
+      counts,
+    )
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('does not match corpus')
+  })
+
+  it('does not mistake breakdown component numbers for the total', () => {
+    // "9 process" / "27 capability" are followed by a category word, not "skill".
+    expect(checkProseCounts('gs.md', '(9 process + 27 capability + 1 navigator)', counts)).toEqual(
+      [],
+    )
   })
 })
 

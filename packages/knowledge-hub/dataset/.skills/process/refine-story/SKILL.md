@@ -1,7 +1,7 @@
 ---
 name: refine-story
 description: "Refines a user story from Todo to Refined — Given-When-Then acceptance criteria, technical analysis, sprint readiness. Composes /write-issue. Not for sizing an already-refined story (use /estimate)."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 

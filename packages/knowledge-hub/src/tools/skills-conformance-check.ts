@@ -17,15 +17,30 @@
  *      SKILL.md matches the real corpus dir count. Hard error, like every other
  *      check here (promoted from WARN once #313/T1 (#325) regenerated next's
  *      catalog to the real, stable count).
+ *   5. KB prose counts — the skill-count figures restated in the onboarding KB
+ *      prose (way-of-working.md, getting-started.md, skills-guide.md) — both the
+ *      "N skills"/"N Agent Skills" total and the "(P process + C capability + N
+ *      navigator)" breakdown — match the real corpus. Closes the recurrence gap
+ *      from story #233: a skill-count sweep that misses these prose files leaves
+ *      factually-wrong onboarding docs the docs-staleness gate can't catch (it
+ *      scans apps/website only).
  *
  * Runnable as a CLI via `ts-node src/tools/skills-conformance-check.ts`
  * (package script `skills:conformance`). Exit 0 = conformant, Exit 1 = violations.
  */
 import { existsSync, readFileSync, readdirSync } from 'fs'
-import { basename, dirname, join, relative, resolve } from 'path'
+import { basename, dirname, join, relative, resolve, sep } from 'path'
 
 const ROOT = join(__dirname, '..', '..')
 const SKILLS_DIR = join(ROOT, 'dataset', '.skills')
+
+// KB onboarding prose that restates skill counts (relative to ROOT). Kept in
+// lockstep with the real .skills corpus so a count sweep can't leave stale prose.
+const KB_PROSE_FILES = [
+  'dataset/.pair/knowledge/way-of-working.md',
+  'dataset/.pair/knowledge/getting-started.md',
+  'dataset/.pair/knowledge/skills-guide.md',
+]
 
 // agentskills.io spec top-level fields
 export const SPEC_FIELDS = [
@@ -206,6 +221,55 @@ export function checkCatalogCounts(nextContent: string, actualCount: number): st
   return mismatches
 }
 
+export interface CategoryCounts {
+  total: number
+  process: number
+  capability: number
+  navigator: number
+}
+
+// Bucket the corpus by top-level category dir (process/, capability/, everything
+// else = the navigator meta skill), matching the KB's "P process + C capability +
+// N navigator" phrasing.
+export function countByCategory(files: string[], skillsDir: string): CategoryCounts {
+  let process = 0
+  let capability = 0
+  let navigator = 0
+  for (const f of files) {
+    const top = relative(skillsDir, f).split(sep)[0]
+    if (top === 'process') process++
+    else if (top === 'capability') capability++
+    else navigator++
+  }
+  return { total: files.length, process, capability, navigator }
+}
+
+// Validates skill-count figures restated in KB onboarding prose against the real
+// corpus: the "N skills"/"N Agent Skills" total (never the "(P process + …)"
+// component numbers, which are followed by a category word, not "skill") and the
+// "(P process + C capability + N navigator)" breakdown.
+export function checkProseCounts(rel: string, content: string, counts: CategoryCounts): string[] {
+  const errors: string[] = []
+  for (const m of content.matchAll(/(\d+)\s+(?:Agent\s+)?[Ss]kills?\b/g)) {
+    const stated = parseInt(m[1] as string, 10)
+    if (stated !== counts.total) {
+      errors.push(`${rel}: states "${m[0]}" but the corpus has ${counts.total} skills`)
+    }
+  }
+  const b = content.match(/\((\d+)\s+process\s*\+\s*(\d+)\s+capability\s*\+\s*(\d+)\s+navigator\)/)
+  if (b) {
+    const p = parseInt(b[1] as string, 10)
+    const c = parseInt(b[2] as string, 10)
+    const n = parseInt(b[3] as string, 10)
+    if (p !== counts.process || c !== counts.capability || n !== counts.navigator) {
+      errors.push(
+        `${rel}: breakdown "${b[0]}" does not match corpus (${counts.process} process + ${counts.capability} capability + ${counts.navigator} navigator)`,
+      )
+    }
+  }
+  return errors
+}
+
 // --- Corpus walk ---
 
 export function collectSkillFiles(skillsDir: string): string[] {
@@ -253,6 +317,15 @@ export function runChecks(skillsDir: string): RunResult {
     errors.push(...checkCatalogCounts(readFileSync(nextFile, 'utf-8'), files.length))
   }
 
+  const counts = countByCategory(files, skillsDir)
+  const proseRoot = resolve(skillsDir, '..', '..')
+  for (const rel of KB_PROSE_FILES) {
+    const abs = join(proseRoot, rel)
+    if (existsSync(abs)) {
+      errors.push(...checkProseCounts(rel, readFileSync(abs, 'utf-8'), counts))
+    }
+  }
+
   return { errors, skillCount: files.length }
 }
 
@@ -264,7 +337,7 @@ if (require.main === module) {
 
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, catalog counts)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, catalog counts, KB prose counts)`,
     )
     process.exit(0)
   } else {

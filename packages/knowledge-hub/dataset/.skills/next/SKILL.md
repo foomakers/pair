@@ -1,7 +1,7 @@
 ---
 name: next
 description: "Determines the most relevant next action for your project by reading adoption files and PM tool state. Suggests which skill to invoke next. Use at the start of a session, when switching tasks, or whenever you need guidance on what to work on."
-version: 0.4.1
+version: 0.4.2
 author: Foomakers
 ---
 
