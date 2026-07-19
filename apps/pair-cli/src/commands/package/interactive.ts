@@ -1,9 +1,9 @@
 import { input, confirm } from '@inquirer/prompts'
 import type { FileSystemService } from '@pair/content-ops'
 import type { PackageCommandConfig } from './parser'
-import { resolveDefaults, readGitConfig, readPackageJsonDefaults } from './defaults-resolver'
+import { resolvePackageDefaults } from './defaults-resolver'
 import type { ResolvedMetadata } from './defaults-resolver'
-import { readPreferences, savePreferences } from './preferences'
+import { savePreferences } from './preferences'
 import { validatePackageName, validateVersion, parseTagsInput } from './input-validators'
 import { formatPreview } from './preview'
 import { loadConfigWithOverrides } from '#config'
@@ -19,23 +19,14 @@ class InteractiveCancelledError extends Error {
 }
 
 /**
- * Run the interactive package creation flow.
- * Returns merged PackageCommandConfig on success, or null if user aborts.
+ * Outcome of a confirmed guided flow: the merged config plus the already-resolved
+ * `projectRoot` and final `defaults`. The shared defaults cascade is resolved ONCE
+ * here; the caller consumes these directly and must NOT re-resolve (see handler).
  */
-function buildDefaults(config: PackageCommandConfig, fs: FileSystemService) {
-  const projectRoot = config.sourceDir || fs.currentWorkingDirectory()
-  const gitConfig = readGitConfig()
-  const packageJson = readPackageJsonDefaults(projectRoot, fs)
-  const prefs = readPreferences(fs)
-  return {
-    projectRoot,
-    defaults: resolveDefaults({
-      cliFlags: buildCliFlagsSource(config),
-      packageJson,
-      gitConfig,
-      preferences: prefs?.packageMetadata,
-    }),
-  }
+export interface InteractiveResult {
+  config: PackageCommandConfig
+  projectRoot: string
+  defaults: ResolvedMetadata
 }
 
 function mergeMetadataIntoConfig(
@@ -55,17 +46,18 @@ function mergeMetadataIntoConfig(
 
 /**
  * Run the interactive package creation flow.
- * Returns merged PackageCommandConfig on success, or null if user aborts.
+ * Returns the resolved result on success (merged config + projectRoot + final
+ * defaults), or null if the user aborts.
  */
 export async function runInteractiveFlow(
   config: PackageCommandConfig,
   fs: FileSystemService,
-): Promise<PackageCommandConfig | null> {
+): Promise<InteractiveResult | null> {
   if (!process.stdout.isTTY) {
     throw new Error('Interactive mode requires a terminal (TTY)')
   }
 
-  const { projectRoot, defaults } = buildDefaults(config, fs)
+  const { projectRoot, defaults } = resolvePackageDefaults(config, fs)
 
   try {
     const metadata = await collectMetadata(defaults)
@@ -79,7 +71,10 @@ export async function runInteractiveFlow(
     }
 
     await savePreferences({ packageMetadata: metadata, updatedAt: new Date().toISOString() }, fs)
-    return mergeMetadataIntoConfig(config, metadata)
+    // Guided-path resolution is complete: the cascade was resolved once above and
+    // the user's answers (`metadata`) are the final, highest-precedence values.
+    // Return them so the caller reuses them instead of re-resolving.
+    return { config: mergeMetadataIntoConfig(config, metadata), projectRoot, defaults: metadata }
   } catch (error: unknown) {
     if (isExitPromptError(error) || error instanceof InteractiveCancelledError) {
       console.log('Package creation cancelled')
@@ -130,17 +125,6 @@ async function collectMetadata(defaults: ResolvedMetadata): Promise<ResolvedMeta
     tags: parseTagsInput(tagsRaw),
     license: license || defaults.license,
   }
-}
-
-function buildCliFlagsSource(config: PackageCommandConfig): Partial<ResolvedMetadata> {
-  const flags: Partial<ResolvedMetadata> = {}
-  if (config.name) flags.name = config.name
-  if (config.version) flags.version = config.version
-  if (config.description) flags.description = config.description
-  if (config.author) flags.author = config.author
-  if (config.tags.length > 0) flags.tags = config.tags
-  flags.license = config.license
-  return flags
 }
 
 async function getPreviewInfo(

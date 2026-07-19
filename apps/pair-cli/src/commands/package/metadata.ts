@@ -49,7 +49,13 @@ export interface ManifestMetadata {
 
 export type PartialManifestMetadata = Partial<Omit<ManifestMetadata, 'created_at' | 'registries'>>
 
-function defaultManifestFields(): Pick<
+/**
+ * Single source of truth for the hardcoded manifest fallback fields.
+ * The defaults cascade (`defaults-resolver.ts`) imports this as its lowest
+ * (hardcoded) tier, so guided/quick output and the manifest fallback can never
+ * silently diverge — there is exactly one copy of these constants.
+ */
+export function defaultManifestFields(): Pick<
   ManifestMetadata,
   'name' | 'version' | 'description' | 'author' | 'tags' | 'license'
 > {

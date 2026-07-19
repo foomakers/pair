@@ -230,7 +230,7 @@ pair package --org --org-name "Acme Corp" --team "Platform" --compliance "SOC2,I
 
 ### Interactive Mode
 
-When `--interactive` is passed, the CLI enters a guided flow with smart defaults from `package.json`, `git config`, and saved preferences (`~/.pair/preferences.json`). Requires a TTY.
+Quick mode is the default: omitting `--interactive` resolves smart defaults from `package.json`, `git config`, and saved preferences (`~/.pair/preferences.json`) and applies them in one shot — so `pair package` in a repo whose `package.json` name is `foo` produces a `foo` package, not `kb-package`. Passing `--interactive` (the guided selector, requires a TTY) enters a guided flow that pre-fills prompts from the *same* resolved defaults and lets you confirm or override each. This guided/quick duality follows the [Guided / Quick Setup Convention](/docs/contributing/writing-skills#setup-skills-guided-vs-quick).
 
 ### Org Template
 

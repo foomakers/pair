@@ -6,6 +6,8 @@ import { validatePackageStructure } from './validators'
 import { generateManifestMetadata } from './metadata'
 import { createPackageZip } from './zip-creator'
 import { runInteractiveFlow } from './interactive'
+import { resolvePackageDefaults } from './defaults-resolver'
+import type { ResolvedMetadata } from './defaults-resolver'
 import { loadOrgTemplate, mergeOrgDefaults } from './org-template'
 import { validateOrgName } from './org-validators'
 import {
@@ -99,18 +101,6 @@ async function createAndReportZip(params: {
   }
 }
 
-function buildCliParams(config: PackageCommandConfig, organization?: OrganizationMetadata) {
-  return {
-    ...(config.name && { name: config.name }),
-    ...(config.version && { version: config.version }),
-    ...(config.description && { description: config.description }),
-    ...(config.author && { author: config.author }),
-    tags: config.tags,
-    license: config.license,
-    ...(organization && { organization }),
-  }
-}
-
 async function resolveOrgMetadata(
   config: PackageCommandConfig,
   projectRoot: string,
@@ -136,6 +126,28 @@ async function resolveOrgMetadata(
 }
 
 /**
+ * Resolve config + projectRoot + defaults for both entry paths, without ever
+ * resolving the shared defaults cascade twice:
+ * - guided (--interactive): runInteractiveFlow resolves the cascade internally
+ *   and returns the result — consumed directly (returns null if the user aborts);
+ * - quick (non-interactive): resolve the cascade here.
+ */
+async function resolveConfigAndDefaults(
+  config: PackageCommandConfig,
+  fs: FileSystemService,
+): Promise<{
+  config: PackageCommandConfig
+  projectRoot: string
+  defaults: ResolvedMetadata
+} | null> {
+  if (config.interactive) {
+    return runInteractiveFlow(config, fs)
+  }
+  const { projectRoot, defaults } = resolvePackageDefaults(config, fs)
+  return { config, projectRoot, defaults }
+}
+
+/**
  * Handles the package command execution.
  * Processes PackageCommandConfig to create KB packages.
  */
@@ -143,14 +155,10 @@ export async function handlePackageCommand(
   config: PackageCommandConfig,
   fs: FileSystemService,
 ): Promise<void> {
-  // Interactive mode: run guided prompts before standard flow
-  if (config.interactive) {
-    const resolved = await runInteractiveFlow(config, fs)
-    if (!resolved) return // user aborted
-    config = resolved
-  }
-
-  const projectRoot = config.sourceDir || fs.currentWorkingDirectory()
+  const resolved = await resolveConfigAndDefaults(config, fs)
+  if (!resolved) return // user aborted the guided flow
+  const { projectRoot, defaults } = resolved
+  config = resolved.config
 
   logger.debug('📦 Starting package creation...')
   logger.debug(`   Source: ${projectRoot}`)
@@ -172,7 +180,10 @@ export async function handlePackageCommand(
   const registryNames = registries.map(r => r.source || '').filter(Boolean)
 
   const organization = await resolveOrgMetadata(config, projectRoot, fs)
-  const manifest = generateManifestMetadata(registryNames, buildCliParams(config, organization))
+  const manifest = generateManifestMetadata(registryNames, {
+    ...defaults,
+    ...(organization && { organization }),
+  })
 
   // Resolve output path - if relative, make it relative to current working directory
   const outputPath = config.output
