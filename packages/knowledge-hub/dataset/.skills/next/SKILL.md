@@ -103,7 +103,7 @@ Run this before every other step, on **every** invocation — the result is neve
    - Otherwise: collect the root plus its transitive children through the PM-tool hierarchy (parent/child links) into the candidate set. Later steps read this set instead of the full backlog.
 3. **`--filter <tag>`** → keep only candidates carrying the tag, using a plain string-equality label query. The predicate is tag-agnostic — no tag value gets special treatment.
 4. **Both** → apply the intersection: `subtree ∩ matching tags`.
-5. **Empty candidate set** (filter matches nothing / subtree has no actionable child): report `no matching issues` and exit cleanly — an empty result is normal, **not an error**.
+5. **Empty candidate set** (zero issues after filter/subtree resolution — e.g. `--filter` matches no issue, or the subtree is just the root with no children): report `no matching issues` and exit cleanly — an empty result is normal, **not an error**. A **non-empty** set whose issues happen to be all non-actionable (e.g. all Done) is not empty here: it falls through the normal cascade to the Step 5 fallback — actionability is decided in Steps 3–4, not by this Step-0 emptiness check.
 
 The resolved candidate set feeds Step 3's backlog query. Because Step 0 re-runs each time, a tag mutation between steps changes the selection on the next step automatically.
 
