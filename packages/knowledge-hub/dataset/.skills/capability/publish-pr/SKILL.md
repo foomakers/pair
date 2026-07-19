@@ -74,7 +74,7 @@ Each phase follows the **check → skip → act → verify** pattern. Phases run
    - **Changes Made**: tasks completed + files added/modified/deleted (from `git diff --name-only <base-branch>...HEAD`).
    - **Testing**: quality-gate results from Phase 1.
 2. **Act — conditional sections (fill ONLY when pertinent; never leave an empty section):**
-   - **Services to Release**: from `git diff --name-only <base-branch>...HEAD`, group changed files by owning package/service (e.g. `packages/*`, `apps/*`). Include the section only if one or more packages/services are touched; list each once.
+   - **Services to Release**: from `git diff --name-only <base-branch>...HEAD`, group changed files by owning package/service and keep only **deployable** ones. Detect deployable via the adoption's deployable-package globs when declared, else a path heuristic (e.g. `apps/*`, deployable `packages/*`) — exclude content/docs-only packages (e.g. `packages/knowledge-hub`, `apps/website` content). Include the section only if one or more deployable packages/services are touched; list each once. Omit when nothing deployable changed.
    - **Screenshots** (before/after): include ONLY when the diff touches UI. Detect UI via the adoption's UI package globs when declared, else a path heuristic (e.g. `apps/*/`, `*.tsx|*.css|*.svelte`, `**/components/**`). When touched but no screenshot is available, include the section with a `TODO: attach before/after` marker rather than fabricating content.
 3. **Act**: Omit every template section that does not apply (no placeholder-only sections).
 4. **Verify**: The body follows the template, has no empty/placeholder sections, and every included conditional section is genuinely pertinent (AC3).
@@ -102,7 +102,7 @@ PUBLISH-PR REPORT:
 ├── PR:         [#PR-number — URL — Created | Updated]
 ├── Tags:       [copied: label, label | none on story — PR created without tags]
 ├── Code host:  [same as PM tool | <host> (board updates → PM tool)]
-├── Conditional: [Services to Release: N packages | Screenshots: UI touched / n-a]
+├── Conditional: [Services to Release: N deployable packages / n-a | Screenshots: UI touched / n-a]
 └── Board:      [→ Review | not updated — reason]
 
 RESULT: [PR READY FOR REVIEW | HALTED — <reason>]

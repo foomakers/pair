@@ -163,4 +163,4 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 - This skill is read-only: it inspects state but never modifies files or PM tool data.
 - Row order encodes the tie-break (delivery proximity) — see the **Tie-break** note under the Step 3 table.
 - Re-run `/pair-next` after completing any skill to get an updated recommendation.
-- **Full catalog coverage**: any of the 37 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/pair-capability-checkpoint`, rows 12-16 including `/pair-capability-grill`) or process-skill composition (e.g. `/pair-capability-publish-pr` via `/pair-process-implement`).
+- **Full catalog coverage**: nearly all of the 37 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/pair-capability-checkpoint`, rows 12-16 including `/pair-capability-grill`) or process-skill composition. `/pair-capability-publish-pr` will be reachable via `/pair-process-implement` once wired (not yet composed), so `/next` cannot surface it today.
