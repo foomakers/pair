@@ -1,6 +1,6 @@
 ---
 name: pair-process-review
-description: "Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) — validation, technical review, adoption compliance, completeness, decision — to decide whether it merges. Not a quick build/test sanity check (use /pair-capability-verify-quality). Composes /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-record-decision, /pair-capability-analyze-debt, /pair-capability-assess-security (required), /pair-capability-verify-adoption, /pair-capability-assess-stack (optional)."
+description: "Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) — validation, technical review, adoption compliance, completeness, decision — to decide whether it merges. Not a quick build/test sanity check (use /pair-capability-verify-quality). Composes /pair-capability-classify, /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-record-decision, /pair-capability-analyze-debt, /pair-capability-assess-security (required), /pair-capability-verify-adoption, /pair-capability-assess-stack (optional)."
 version: 0.6.0
 author: Foomakers
 ---
@@ -13,6 +13,7 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 
 | Skill                   | Type       | Required | Phase | Purpose                                      |
 | ----------------------- | ---------- | -------- | ----- | -------------------------------------------- |
+| `/pair-capability-classify`             | Capability | Yes      | 1     | Risk matrix from the diff (confirm-or-raise) |
 | `/pair-capability-verify-quality`       | Capability | Yes      | 2     | Quality gate checking                        |
 | `/pair-capability-verify-done`          | Capability | Yes      | 4     | Definition of Done checking                  |
 | `/pair-capability-record-decision`      | Capability | Yes      | Any   | Record missing ADR (HALT condition)          |
@@ -91,6 +92,13 @@ REVIEW READY:
 
 Ask: _"Proceed with review?"_
 
+### Step 1.5: Classification (risk matrix from the diff)
+
+1. **Check**: Has `/pair-capability-classify` already run with `$context: review` on the current PR head commit?
+2. **Skip**: If already run — reuse the matrix + tier, move to Phase 2. If `/pair-capability-classify` is not installed → warn (`/pair-capability-classify not installed — no review-time risk matrix`) and move to Phase 2.
+3. **Act**: Compose `/pair-capability-classify` with `$context: review` against the PR diff. It applies the [quality model](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) to the diff footprint, reads the story's refinement-time tier, and produces the review matrix as a **floor** — it confirms or **raises** the tier, and **never lowers** it (D17). The Security relevance and Coupling balance dimensions are reconciled in Phase 2 (Step 2.4) as `/pair-capability-assess-security` / `/assess-coupling` verdicts land — raise-only.
+4. **Verify**: The review matrix + `risk:*` tier are recorded on the PR (matrix in the body as 1 line + `<details>`, D22; tags applied only when a `## Tag Projection` is declared). A raise to `risk:red` is carried into the Step 5.2 decision. `/pair-capability-classify` HALTs only if the quality model doc (#221) is absent.
+
 ## Phase 2: Technical Review
 
 ### Step 2.1: Quality Gates
@@ -129,7 +137,7 @@ Ask: _"Proceed with review?"_
 1. **Check**: Has `/pair-capability-assess-security` already run with `$mode: review` on the current PR head commit?
 2. **Skip**: If already run — reuse the verdict + findings, move to Phase 3.
 3. **Act**: Compose `/pair-capability-assess-security` with `$mode: review` against the PR diff. It resolves the rule set (KB global + per-service + per-web-app + adoption project rules) and returns a 1-line verdict + collapsed findings, each tagged **introduced** or **pre-existing**.
-4. **Verify**: Verdict + findings recorded — feeds the Security Review section (Step 5.1) and the risk matrix's security dimension. If any **introduced** finding is red → flag explicitly: this is the AC4 signal that drives the CHANGES-REQUESTED decision in Step 5.2. Does not itself HALT — `/pair-capability-assess-security` has no merge authority, this skill's own decision step does.
+4. **Verify**: Verdict + findings recorded — feeds the Security Review section (Step 5.1) and the **Security relevance** dimension of the Step 1.5 classification matrix (`/pair-capability-classify` folds this verdict in **raise-only** — it may raise the tier, never lower it). If any **introduced** finding is red → flag explicitly: this is the AC4 signal that drives the CHANGES-REQUESTED decision in Step 5.2. Does not itself HALT — `/pair-capability-assess-security` has no merge authority, this skill's own decision step does.
 
 ## Phase 3: Adoption Compliance
 

@@ -17,7 +17,7 @@ Run `/next` at the start of every session. It reads project adoption files and P
 | **Process** | 9 | Lifecycle phases — orchestrate capability skills |
 | **Capability** | 27 | Atomic units — perform a single focused operation |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 37 (9 process + 27 capability + 1 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 38 (9 process + 28 capability + 1 navigator).
 
 ## Full Catalog
 
@@ -61,6 +61,14 @@ Reclassified from process to capability (D24) — see [Callers Matrix](#callers-
 | `/assess-observability` | Observability strategy evaluation |
 | `/assess-ai` | AI development tools evaluation |
 | `/assess-security` | Security posture — review verdict (`$mode: review`, composed by `/review`) + one-shot OWASP Top 10 audit (`$mode: audit`). Unlike the 8 above, not purely output-only — writes its own audit report (D14 exception); never scans for secrets, that's the deterministic CI layer `/setup-gates` provisions (D24) |
+
+#### Classification Skills (1)
+
+Applies the [quality model](guidelines/quality-assurance/quality-model.md) (owns no criteria) to produce the objective classification matrix consumed downstream.
+
+| Skill | Scope |
+|-------|-------|
+| `/classify` | Risk/cost matrix from the quality model (KB default + `tech/risk-matrix.md` delta) — story context in refinement, diff in review (confirm-or-raise, never lower); adoption-gated chromatic tag projection. Composed by `/refine-story` and `/review` |
 
 #### Analysis Skills (2)
 
@@ -132,6 +140,7 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 ├── capability/           # Atomic operation skills
 │   ├── map-subdomains/   # scoped DDD subdomain placement
 │   ├── map-contexts/     # scoped DDD bounded-context placement
+│   ├── classify/         # quality-model classification matrix + tag projection
 │   ├── assess-*/         # 8 assessment skills
 │   ├── verify-*/         # 3 verification skills
 │   ├── design-manual-tests/
@@ -198,6 +207,15 @@ Every skill is held to an effectiveness standard, not just structural conformanc
 | `/map-contexts` | `/bootstrap` | Project setup | `all` (full catalog — bootstrap only) |
 
 Every row above except the two `(planned — #242)`/`(planned — #230)` entries is a real composition, verified against each caller's `SKILL.md` — not an aspirational claim. No caller performs a full re-mapping outside `/bootstrap`. When no `subdomain/`/`boundedcontext/` artifacts exist yet, both capabilities fall back to "system areas" (services/modules) instead of requiring the DDD prerequisites — no HALT, no error.
+
+`/classify` is likewise a capability invoked by callers, keyed by `$context` (not `$scope`):
+
+| Capability | Caller | Phase | `$context` |
+|------------|--------|-------|------------|
+| `/classify` | `/refine-story` | Shift-left classification (Step 3b) | `refinement` (story context) |
+| `/classify` | `/review` | PR validation (Step 1.5) | `review` (diff; confirm-or-raise, never lower) |
+
+Both rows are real compositions verified against each caller's `SKILL.md`. `/classify` owns no criteria — it applies the [quality model](guidelines/quality-assurance/quality-model.md); the review pass is a floor over the refinement tier (D17).
 
 ## Migration Notes
 

@@ -1,9 +1,9 @@
 ---
 title: Skills Catalog
-description: Complete catalog of all 37 pair skills organized by type — process, capability, and meta.
+description: Complete catalog of all 38 pair skills organized by type — process, capability, and meta.
 ---
 
-pair ships with 37 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
+pair ships with 38 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
 
 > **Last updated:** 2026-07-19. Source: `packages/knowledge-hub/dataset/.skills/`
 
@@ -24,10 +24,10 @@ Process skills orchestrate multi-step workflows by composing capability skills.
 | **plan-initiatives** | `/pair-process-plan-initiatives` | Turns a PRD into prioritized (P0/P1/P2) strategic initiatives through structured analysis and validation. | `/pair-capability-write-issue` |
 | **plan-epics** | `/pair-process-plan-epics` | Breaks a strategic initiative into epics — each delivering end-to-end value in 2-4 sprints. Not for filing a single epic issue from text you already wrote (that's write-issue directly). | `/pair-capability-write-issue` |
 | **plan-stories** | `/pair-process-plan-stories` | Slices an epic into user stories via vertical slicing and INVEST validation, each sized for one sprint. | `/pair-capability-write-issue` |
-| **refine-story** | `/pair-process-refine-story` | Refines a user story from Todo to Refined — Given-When-Then acceptance criteria, technical analysis, sprint readiness. Not for sizing an already-refined story (use estimate). | `/pair-capability-write-issue` |
+| **refine-story** | `/pair-process-refine-story` | Refines a user story from Todo to Refined — Given-When-Then acceptance criteria, technical analysis, sprint readiness. Not for sizing an already-refined story (use estimate). | `/pair-capability-write-issue`; `/pair-capability-classify` (optional) |
 | **plan-tasks** | `/pair-process-plan-tasks` | Breaks a refined user story into implementation tasks — checklist, dependency graph, AC-coverage table — added to the story body; no separate task issues. | `/pair-capability-write-issue` |
 | **implement** | `/pair-process-implement` | Implements a refined user story task-by-task via a 5-step cycle per task (context, branch, implementation, quality, commit); opens one PR when the story completes. | `/pair-capability-verify-quality`, `/pair-capability-record-decision` |
-| **review** | `/pair-process-review` | Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) to decide whether it merges. Not a quick build/test sanity check (use verify-quality). | `/pair-capability-verify-quality`, `/pair-capability-verify-done`, `/pair-capability-record-decision`, `/pair-capability-analyze-debt`, `/pair-capability-assess-security` (required); `/pair-capability-verify-adoption`, `/pair-capability-assess-stack`, `/pair-capability-execute-manual-tests` (optional) |
+| **review** | `/pair-process-review` | Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) to decide whether it merges. Not a quick build/test sanity check (use verify-quality). | `/pair-capability-classify`, `/pair-capability-verify-quality`, `/pair-capability-verify-done`, `/pair-capability-record-decision`, `/pair-capability-analyze-debt`, `/pair-capability-assess-security` (required); `/pair-capability-verify-adoption`, `/pair-capability-assess-stack`, `/pair-capability-execute-manual-tests` (optional) |
 
 ## Capability Skills
 
@@ -57,6 +57,14 @@ All `assess-*` skills are **output-only**: they produce a proposal (rendered ado
 | **assess-stack** | `/pair-capability-assess-stack` | Evaluates and recommends the tech stack when the choice is open: full evaluation at bootstrap, or a single new dependency during implementation. Doesn't audit code already written (that's verify-adoption). Output-only; caller persists via `/pair-capability-record-decision`. |
 | **assess-testing** | `/pair-capability-assess-testing` | Evaluates and recommends the testing strategy — framework, pyramid distribution, coverage targets — when the choice is open. Doesn't write tests itself. Output-only; caller persists via `/pair-capability-record-decision`. |
 | **assess-security** | `/pair-capability-assess-security` | Assesses security posture against the KB/adoption rule cascade — `$mode: review` composed by `/pair-process-review` (1-line verdict + collapsed findings feeding the security dimension, D22); `$mode: audit` — one-shot OWASP Top 10 scan, writes a report to `.pair/working/reports/security/`. The one exception to output-only in this table: it writes that report file itself; adoption content still goes through `/pair-capability-record-decision`. Never scans for committed secrets — that's the deterministic CI layer `/pair-capability-setup-gates` provisions (D24). |
+
+### Classification Capabilities
+
+`/pair-capability-classify` **applies** the [quality model](/docs/reference/quality-model) (KB default + `tech/risk-matrix.md` delta) and owns no criteria of its own — downstream consumers (gate, review, `/pair-next`, automation) read the resulting matrix and tags without owning any criteria (D18).
+
+| Skill | Command | Description |
+| ----- | ------- | ----------- |
+| **classify** | `/pair-capability-classify` | Builds the classification matrix (risk + cost dimensions) by applying the quality model — from the story context in refinement, from the code/diff in review (confirm-or-raise, never lower, D17). Writes the matrix to the card/PR body as 1 line + `<details>` (D22) and emits chromatic tags (`risk:*`, opt-in `cost:*`) only when `tech/risk-matrix.md` declares the `## Tag Projection`. Deterministic (same input → same matrix). Composed by `/pair-process-refine-story` (`$context: refinement`) and `/pair-process-review` (`$context: review`). |
 
 ### Analysis Capabilities
 

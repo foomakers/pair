@@ -9,9 +9,9 @@ author: Foomakers
 
 Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 37-skill catalog across all lifecycle phases.
 
-## Skill Catalog (37 skills)
+## Skill Catalog (38 skills)
 
-The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 9 process + 27 capability + `/pair-next` itself = 37. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
+The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 9 process + 28 capability + `/pair-next` itself = 38. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
 
 ### Process Skills (9)
 
@@ -33,6 +33,7 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 | ------------------------ | --------------- | ---------------------------------------------------------------------------- |
 | `/pair-capability-map-subdomains`        | Domain Modeling | Scoped DDD subdomain placement (+ Volatility)                                |
 | `/pair-capability-map-contexts`          | Domain Modeling | Scoped DDD bounded-context placement + relationship assessment               |
+| `/pair-capability-classify`              | Classification  | Apply the quality model → risk/cost matrix + tags (composed by refine-story, review) |
 | `/pair-capability-grill`                 | Alignment       | Interview engine: explore a topic or sync on a story, one question at a time |
 | `/pair-capability-record-decision`       | Decision        | Record ADR or ADL with adoption update                                       |
 | `/pair-capability-checkpoint`            | Session State   | Write/resume story progress checkpoint (work survives context resets)        |
@@ -163,4 +164,4 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 - This skill is read-only: it inspects state but never modifies files or PM tool data.
 - Row order encodes the tie-break (delivery proximity) — see the **Tie-break** note under the Step 3 table.
 - Re-run `/pair-next` after completing any skill to get an updated recommendation.
-- **Full catalog coverage**: nearly all of the 37 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/pair-capability-checkpoint`, rows 12-16 including `/pair-capability-grill`) or process-skill composition. `/pair-capability-publish-pr` will be reachable via `/pair-process-implement` once wired (not yet composed), so `/next` cannot surface it today.
+- **Full catalog coverage**: nearly all of the 38 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/pair-capability-checkpoint`, rows 12-16 including `/pair-capability-grill`) or process-skill composition. `/pair-capability-publish-pr` will be reachable via `/pair-process-implement` once wired (not yet composed), so `/next` cannot surface it today.
