@@ -1,13 +1,17 @@
 ---
 name: implement
-description: "Implements a refined user story task-by-task, via a 5-step cycle per task (context, branch, implementation, quality, commit), and opens one PR when the story completes. Composes /verify-quality, /record-decision."
-version: 0.4.1
+description: "Implements a refined user story task-by-task, via a 5-step cycle per task (context, branch, implementation, quality, commit). At the closing phase it writes a checkpoint and publishes the PR through a handoff-only subagent (clean context), resuming from the checkpoint when re-invoked on an interrupted story. Composes /verify-quality, /record-decision, /checkpoint, /publish-pr."
+version: 0.5.0
 author: Foomakers
 ---
 
 # /implement — Task Implementation
 
-Implement a user story by processing its tasks sequentially. Each task follows a 5-step cycle: context → branch → implementation → quality → commit. The story-level process has 5 phases (0–4): analysis, setup, implementation, PR creation, and post-review merge. Creates a single PR when all tasks are done.
+Implement a user story by processing its tasks sequentially. Each task follows a 5-step cycle: context → branch → implementation → quality → commit. The story-level process has 5 phases (0–4): analysis, setup, implementation, **closing (checkpoint + PR)**, and post-review merge. When all tasks are done the closing phase writes a checkpoint (the handoff artifact) and composes `/publish-pr` — inside a **handoff-only subagent** so the PR is always built on a guaranteed-clean context — to produce a single ready-for-review PR.
+
+**Two AI macro-phases (R4.2):** refinement → implementation. The boundary artifact between them is a **checkpoint**: it is written at the closing phase and re-read at the opening phase so an interrupted story resumes exactly where it stopped, never repeating completed tasks.
+
+**implement composes, it never re-does gate/PR logic.** The gate → PR → board sequence lives entirely in `/publish-pr`; this skill composes it (never re-implements PR creation). Task iteration and the checkpoint boundary are what `/implement` owns.
 
 **One PR per story:** the story lands on ONE branch with ONE PR; subsequent work on the story (further tasks/features) updates that same PR, never a new one unless a human explicitly requests it.
 
@@ -17,12 +21,27 @@ Implement a user story by processing its tasks sequentially. Each task follows a
 | ------------------ | ---------- | --------------------------------------------------------------------------------------------------- |
 | `/verify-quality`  | Capability | Yes — invoked at quality validation phase                                                           |
 | `/record-decision` | Capability | Yes — invoked when a decision needs recording                                                       |
+| `/checkpoint`      | Capability | Yes — `$mode=resume` at the opening phase (resume probe), `$mode=write` at the closing phase (handoff artifact). If not installed, degrade to git+PM-tool resume (see Graceful Degradation). |
+| `/publish-pr`      | Capability | Yes — the closing phase composes it (gate → PR → board) inside a handoff-only subagent. If not installed → **HALT** (implement never re-implements PR creation). |
 | `/assess-stack`    | Capability | Optional — invoked when a new dependency is detected. If not installed, warn and continue.          |
 | `/verify-adoption` | Capability | Optional — invoked before commit to check adoption compliance. If not installed, warn and continue. |
 
 ## Phase 0: Story & Task Analysis (BLOCKING)
 
 #### No implementation without complete understanding.
+
+### Step 0.0: Resume Probe (checkpoint) — NEVER SKIP
+
+The opening phase re-reads the checkpoint so an interrupted story resumes exactly where it stopped (AC2). This runs first, before loading the story, so completed tasks are never re-done.
+
+1. **Check**: Is `/checkpoint` installed AND does a checkpoint exist for this story (`.pair/working/checkpoints/<story-id>.md`)?
+2. **Skip**: If no checkpoint exists → this is a fresh start. Proceed to Step 0.1 (normal one-shot flow — no regression, AC4).
+3. **Act**: Compose `/checkpoint $mode=resume` (pass `$story` when known). Use the parsed state — branch, tasks done, key decisions, remaining todos — to skip re-analysis and jump straight to the **first pending task** in Phase 2, **without repeating** completed tasks.
+4. **Act — edge cases** (resolve before continuing):
+   - **Checkpoint exists but its branch is missing** (checkpoint says branch X, repo has none): **HALT** and report the divergence. Do not guess a branch.
+   - **Stale checkpoint (story already Done)**: warn that the story is already Done and **require explicit developer confirmation** before reusing the checkpoint. Never silently resume a finished story.
+   - **Corrupted/incomplete checkpoint**: `/checkpoint` reports what parsed and what is missing — confirm the gaps with the developer before proceeding (never guess).
+5. **Verify**: Either a fresh start is confirmed, or a valid checkpoint is resumed with the first pending task identified. If `/checkpoint` is not installed, fall back to the git+PM-tool resume (Idempotent Re-invocation) and continue.
 
 ### Step 0.1: Load Story
 
@@ -223,11 +242,14 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
 7. **Act**: Update the PM tool story issue body:
    - Mark the completed task checkbox (`- [x] **T-N**`) in the **Task Breakdown** section.
    - Mark any **Definition of Done** checkboxes that are now factually satisfied by this task's work (e.g., "SKILL.md created", "template validated"). Leave unchecked items that require reviewer confirmation (e.g., "Code reviewed and merged").
-8. **Check**: Is this the last task?
-   - **Yes**: Move to Phase 3 (PR).
+8. **Act — persist progress**: If `/checkpoint` is installed, compose `/checkpoint $mode=write` to update `.pair/working/checkpoints/<story-id>.md` with the tasks now done. This keeps the checkpoint current so an interruption after this task resumes from the next pending one (Step 0.0). If `/checkpoint` is not installed, skip — git+PM state still supports the git-based resume.
+9. **Check**: Is this the last task?
+   - **Yes**: Move to Phase 3 (Closing: checkpoint + PR).
    - **No**: Return to Step 2.1.
 
-## Phase 3: Commit (if per-story), Push & PR
+## Phase 3: Closing — Checkpoint + Publish PR
+
+The task cycle is done. The closing phase writes the checkpoint (handoff artifact) and composes `/publish-pr` inside a handoff-only subagent, so the PR is built on a guaranteed-clean context. implement never re-does the gate/PR/board logic here — it composes `/publish-pr` only.
 
 ### Step 3.1: Final Commit (if commit-per-story)
 
@@ -261,68 +283,47 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
    - Mark ALL task checkboxes (`- [x] **T-N**`) in the **Task Breakdown** section.
    - Mark all **Definition of Done** checkboxes that are factually satisfied by the implementation. Leave unchecked items that require reviewer confirmation (e.g., "Code reviewed and merged").
 
-### Step 3.2: Push Branch
+### Step 3.2: Write the Checkpoint (handoff artifact)
 
-1. **Check**: Is the branch already pushed and up to date with remote?
-2. **Skip**: If up to date, move to Step 3.3.
-3. **Act**: Push the branch:
+The checkpoint is the boundary artifact (R4.2) and the **input contract for `/publish-pr`** — the handoff document the subagent runs on.
 
-   ```bash
-   git push -u origin feature/#<story-id>-<description>
-   ```
+1. **Act**: Compose `/checkpoint $mode=write` (pass `$story`). This creates/updates `.pair/working/checkpoints/<story-id>.md` with the five sections: story, branch, tasks done, key decisions, remaining todos.
+2. **Verify**: The checkpoint file exists and captures the completed story state (all tasks done, branch, decisions). This file — not this session's memory — is what the PR is built from.
+3. **Act — if `/checkpoint` is not installed**: synthesize the handoff inline (branch, tasks done, decisions, ACs) and pass it directly to `/publish-pr` as `$handoff`; note the absence in the output.
 
-4. **Verify**: Branch pushed to remote.
+### Step 3.3: Publish the PR via a Handoff-Only Subagent (AC1)
 
-### Step 3.3: Confirm PR with Developer
+The PR is produced on a **guaranteed-clean context**: a fresh subagent whose entire prompt is the handoff, nothing from this session. This is mechanical isolation (D23) — an **anonymous** subagent, **no named role**. A skill cannot `/clear` its own context (D7), so the reset is achieved by delegating to a subagent.
 
-1. **Act**: Present a summary before creating the PR:
+1. **Check**: Is subagent spawning available in this tool/environment?
+2. **Act — primary path (subagent)**: Spawn an **anonymous subagent** whose prompt is the **handoff document only** — the checkpoint contents (or the path `.pair/working/checkpoints/<story-id>.md`) plus a single instruction: run `/publish-pr $story=<story-id> $handoff=.pair/working/checkpoints/<story-id>.md`. Pass **no other session context** — the subagent's context is the handoff and nothing else (clean context / fresh context reset within one execution, R4.1). The subagent runs `/publish-pr` (gate → PR → tags → ready-for-review → board) and returns the PR number/URL and board result.
+3. **Act — degraded inline path (AC3)**: If subagent spawning is **unavailable** (tool/environment cannot spawn one — subagent spawning unavailable), do NOT skip the split: the checkpoint is already written (Step 3.2), then compose `/publish-pr` **inline** in the current session (`$story`, `$handoff` = the checkpoint). **Note the degradation in the output** (`Context: degraded — inline publish, no subagent reset`). Behavior is otherwise equivalent to the primary path.
+4. **Act — edge case (subagent fails mid-PR)**: The checkpoint remains valid. Re-invoking `/implement` re-runs this closing phase; `/publish-pr` is **idempotent** — it detects an existing PR and updates it in place rather than opening a second one. Never open a second PR for the story.
+5. **Verify**: A single ready-for-review PR exists (created or updated), and its number/URL is captured for the output. A red quality gate inside `/publish-pr` propagates here as a **HALT** (no PR side effects) — implement does not create the PR itself.
 
-   ```text
-   PR READY:
-   ├── Branch:  [feature/#story-id-description]
-   ├── Tasks:   [N/N completed]
-   ├── Commits: [N commits on branch]
-   ├── Quality: [All gates passing]
-   └── Title:   [#<story-id>] <type>: <brief description>
-   ```
-
-2. **Ask**: _"Ready to create the PR?"_
-3. **Verify**: Developer confirms. If not → wait for developer instructions.
-
-### Step 3.4: Create or Update PR
-
-1. **Check**: Does a PR already exist for this branch?
-2. **Skip**: If PR exists, update its description and move to output.
-3. **Act**: Read the [PR template](../../../.pair/knowledge/guidelines/collaboration/templates/pr-template.md) and fill ALL its sections:
-   - **Title**: `[#<story-id>] <type>: <brief description>`
-   - **Body**: Use the PR template structure exactly. Fill each section:
-     - **Summary** (What Changed + Why): from story statement and implementation
-     - **Story Context**: link to user story issue, list AC coverage
-     - **Changes Made**: list all completed tasks, files added/modified/deleted
-     - **Testing**: test coverage, quality gate results (from /verify-quality output)
-   - Omit template sections that do not apply (e.g., Database Changes, API Changes for KB-only PRs) — do not leave unfilled placeholders.
-   - **Link**: Reference the user story issue (`Closes #<story-id>`)
-   - **Labels**: Apply appropriate labels
-4. **Act**: Mark the PR as **ready for review** — ensure it is not in draft state. If the PM tool supports review request (e.g., GitHub `gh pr ready`), mark it explicitly.
-5. **Verify**: PR created, description follows template, PR is ready for review.
+Note: the checkpoint is **not** removed here — it must survive the review/fix loop so a re-review or fix round can resume from it. Cleanup happens at merge (Phase 4).
 
 ## Phase 4: Post-Review Merge
 
 After code review approval (typically via `/review`), re-invoke `/implement` to merge and close — see [post-review-merge.md](post-review-merge.md) for the verify-approval, merge-commit, merge, and parent-cascade steps (Steps 4.1–4.4) plus the completion output.
 
+On story completion (Done, at merge), the checkpoint is no longer needed — remove `.pair/working/checkpoints/<story-id>.md` so finished-story state never lingers (checkpoint lifecycle: written at the closing phase, cleaned up at merge).
+
 ## Output Format
 
-At PR creation (Phase 3):
+At the closing phase (Phase 3):
 
 ```text
 IMPLEMENTATION COMPLETE:
-├── Story:    [#ID: Title]
-├── Branch:   [feature/#ID-description]
-├── Strategy: [commit-per-task | commit-per-story]
-├── Tasks:    [N/N completed]
-├── Commits:  [N commits on branch]
-├── PR:       [#PR-number — URL]
-└── Quality:  [All gates passing]
+├── Story:      [#ID: Title]
+├── Branch:     [feature/#ID-description]
+├── Strategy:   [commit-per-task | commit-per-story]
+├── Tasks:      [N/N completed]
+├── Commits:    [N commits on branch]
+├── Checkpoint: [.pair/working/checkpoints/<id>.md — written]
+├── Context:    [clean — subagent handoff-only | degraded — inline publish, no subagent reset]
+├── PR:         [#PR-number — URL — Created | Updated (from /publish-pr)]
+└── Quality:    [All gates passing]
 ```
 
 At merge (Phase 4): see [post-review-merge.md](post-review-merge.md).
@@ -331,12 +332,14 @@ At merge (Phase 4): see [post-review-merge.md](post-review-merge.md).
 
 Implementation stops immediately when:
 
+- **Checkpoint/branch divergence** (Step 0.0) — checkpoint names a branch the repo does not have; report and stop, do not guess a branch
 - **Story not loaded or incomplete** (Phase 0)
 - **Task specifications incomplete** (Step 2.2)
 - **Quality gate failure** (Step 2.7) — developer must fix
 - **New dependency rejected by /assess-stack** (Step 2.4)
-- **PR template not found** (Step 3.4) — cannot create PR without template
 - **Commit template not found** (Step 2.8 / Step 3.1) — cannot commit without template
+- **`/publish-pr` not installed** (Step 3.3) — implement composes the PR sequence, never re-implements it
+- **Quality gate red inside `/publish-pr`** (Step 3.3) — propagates as implement's HALT; no PR side effects (the PR-template-not-found and gate HALTs live in `/publish-pr`)
 - **PR not approved** (Step 4.1) — cannot merge without review approval
 
 On HALT: report the blocker clearly, propose resolution, wait for developer.
@@ -345,12 +348,13 @@ On HALT: report the blocker clearly, propose resolution, wait for developer.
 
 See [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). Re-invoking `/implement` on a partially completed story is safe and expected — per-step:
 
-1. **Branch**: detects existing branch, switches to it.
-2. **Commit strategy**: if commits already exist on branch, infer strategy from history.
-3. **Tasks**: scans task checklist and git log to identify completed tasks. Skips them.
-4. **PR**: detects existing PR, updates instead of creating duplicate.
-5. **Quality gates**: re-runs all gates (fast if already passing).
-6. **Merge**: if PR exists and is approved, proceeds directly to Phase 4 (merge).
+1. **Checkpoint**: the opening-phase resume probe (Step 0.0) reads the checkpoint and jumps to the first pending task — never repeating completed tasks. When `/checkpoint` is absent, the git+PM resume below applies.
+2. **Branch**: detects existing branch, switches to it.
+3. **Commit strategy**: if commits already exist on branch, infer strategy from history.
+4. **Tasks**: scans task checklist and git log to identify completed tasks. Skips them.
+5. **PR**: the closing phase re-composes `/publish-pr`, which detects an existing PR and updates it in place — never a duplicate. A subagent that failed mid-PR is recovered this way (the checkpoint stays valid, the rerun is idempotent).
+6. **Quality gates**: re-runs all gates (fast if already passing).
+7. **Merge**: if PR exists and is approved, proceeds directly to Phase 4 (merge).
 
 The skill resumes from the first incomplete step — never re-does completed work.
 
@@ -358,14 +362,18 @@ The skill resumes from the first incomplete step — never re-does completed wor
 
 See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (PM tool not accessible → ask the developer directly; adoption file missing → proceed with guideline defaults) for the standard scenarios. Additional cases:
 
+- **Subagent spawning unavailable**: take the degraded inline path (Step 3.3) — checkpoint still written, `/publish-pr` composed inline, degradation noted in the output. Never skip the checkpoint/PR split.
+- **`/checkpoint` not installed**: skip the resume probe and the write step; resume from git+PM state (Idempotent Re-invocation) and synthesize the handoff inline for `/publish-pr`.
+- **`/publish-pr` not installed**: **HALT** — implement composes the gate/PR/board sequence, it never re-implements it. Report the missing dependency.
 - **`/assess-stack` not installed**: Warn on new dependency, continue without validation.
 - **`/verify-adoption` not installed**: Warn, skip adoption compliance check.
 - **No quality gate command**: Fall back to individual checks (lint, test, type check).
 
 ## Notes
 
-- This skill **modifies files and creates git artifacts** (branches, commits, PRs).
+- This skill **modifies files and creates git artifacts** (branches, commits) and **writes the checkpoint**. The PR itself is created/updated by the composed `/publish-pr` (in the subagent, or inline when degraded) — implement never re-implements PR creation.
+- The **subagent's prompt is the handoff only** — the checkpoint, nothing from this session. Anonymous, no named role (mechanical isolation, D23); a skill cannot `/clear` its own context (D7), so the subagent provides the clean-context reset.
 - Task iteration is sequential — each task completes its full cycle before the next begins.
-- The developer can stop between tasks; re-invoke to resume (see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md)).
+- The developer can stop between tasks; re-invoke to resume — the opening-phase resume probe (Step 0.0) reads the checkpoint (see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md)).
 - Single PR per story regardless of commit strategy.
 - **Squash happens at merge** (Phase 4), not before PR creation. Individual commits are preserved on the branch during review.
