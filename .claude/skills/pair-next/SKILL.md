@@ -27,7 +27,7 @@ Resolve the issue's descendants through the **PM-tool parent/child hierarchy** (
 - **Epic root** → operate at epic level: plan / refine / develop the epic's children only.
 - **Story root** → operate on that story: refine or develop it (and its tasks); never step outside it.
 
-The root issue plus its transitive children form the candidate set; **Step 3's backlog query** then runs against that set instead of the full backlog. Step 2 (fresh-project detection) and Step 4's project-level rows (12–15: gate / stack / debt / estimation config) are project-wide, not subtree-scoped. Step 4 **row 16 is the exception**: it selects a *specific backlog item*, so — exactly like row 6 — it is confined to the candidate set. Under `--root`/`--filter` an out-of-scope item's open questions are **never** surfaced as `/pair-capability-grill`. The candidate set thus narrows both the Step 3 backlog selection and Step 4 row 16.
+The root issue plus its transitive children form the candidate set; the **item-selection rows (6–11)** of Step 3's backlog query then run against that set instead of the full backlog. The project-wide detectors are **not** subtree-scoped: Step 2 (fresh-project detection), Step 3 rows 3–5 (`/pair-process-plan-initiatives`, `/pair-process-plan-epics`, `/pair-process-plan-stories` — structural planning-gap checks, skipped under a scope since a story/epic root already implies those layers), and Step 4 rows 12–15 (gate / stack / debt / estimation config). Step 4 **row 16 is the exception among Step 4 rows**: it selects a *specific backlog item*, so — exactly like row 6 — it is confined to the candidate set. Under `--root`/`--filter` an out-of-scope item's open questions are **never** surfaced as `/pair-capability-grill`. The candidate set thus narrows both the Step 3 backlog selection and Step 4 row 16.
 
 ### `--filter <tag>` — generic tag match
 
@@ -105,7 +105,7 @@ Run this before every other step, on **every** invocation — the result is neve
 4. **Both** → apply the intersection: `subtree ∩ matching tags`.
 5. **Empty candidate set** (zero issues after filter/subtree resolution — e.g. `--filter` matches no issue, or the subtree is just the root with no children): report `no matching issues` and exit cleanly — an empty result is normal, **not an error**. A **non-empty** set whose issues happen to be all non-actionable (e.g. all Done) is not empty here: it falls through the normal cascade to the Step 5 fallback — actionability is decided in Steps 3–4, not by this Step-0 emptiness check.
 
-The resolved candidate set feeds Step 3's backlog query. Because Step 0 re-runs each time, a tag mutation between steps changes the selection on the next step automatically.
+The resolved candidate set feeds the scoped Step 3 item-selection (rows 6–11) and Step 4 row 16 (`/pair-capability-grill`) — not the project-wide detectors (Step 2, rows 3–5, rows 12–15). Because Step 0 re-runs each time, a tag mutation between steps changes the selection on the next step automatically.
 
 ### Step 1: Read Adoption Files
 
@@ -135,7 +135,7 @@ If any of the above matched, output the suggestion and stop.
 
 ### Step 3: Cascade — Established Project Detection
 
-All adoption files are populated. Query the PM tool to determine backlog state — **restricted to the candidate set resolved in Step 0** when `--root`/`--filter` are set (re-evaluated every run, never cached). This restriction includes row 6's open-PR detection: only PRs whose linked issue is inside the candidate set count — a PR for an issue outside the subtree/filter is **never** surfaced as `/pair-process-review`, preserving the guarantee that nothing outside the scope is ever selected.
+All adoption files are populated. Query the PM tool to determine backlog state — **restricted to the candidate set resolved in Step 0** when `--root`/`--filter` are set (re-evaluated every run, never cached). This restriction is scoped to the **item-selection rows 6–11** (and Step 4 row 16): it includes row 6's open-PR detection — only PRs whose linked issue is inside the candidate set count — so a PR for an issue outside the subtree/filter is **never** surfaced as `/pair-process-review`, preserving the guarantee that nothing outside the scope is ever selected. Rows 3–5 (`/pair-process-plan-initiatives`, `/pair-process-plan-epics`, `/pair-process-plan-stories`) are **project-wide structural planning-gap detectors** — like rows 12–15, they answer whether the project has a planning layer at all, not which item to work on — so they evaluate against the full backlog and are **skipped under a `--root`/`--filter` scope** (a `--root <story>` already implies the initiative/epic/story layers exist; its candidate set holds no initiatives or epics, so these rows must not fire).
 
 **PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
 
