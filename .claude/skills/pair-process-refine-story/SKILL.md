@@ -1,20 +1,23 @@
 ---
 name: pair-process-refine-story
-description: "Refines a user story from Todo to Refined — Given-When-Then acceptance criteria, technical analysis, sprint readiness. Composes /pair-capability-write-issue. Not for sizing an already-refined story (use /pair-capability-estimate)."
-version: 0.5.0
+description: "Refines a user story from Draft to Ready — the single Draft→Ready path (D24): phase 0 grill(sync), Given-When-Then acceptance criteria, map-subdomains/map-contexts scoped analysis, classify matrix, sprint readiness. Composes /pair-capability-grill, /pair-capability-map-subdomains, /pair-capability-map-contexts, /pair-capability-classify, /pair-capability-write-issue. Not for sizing an already-refined story (use /pair-capability-estimate)."
+version: 0.6.0
 author: Foomakers
 ---
 
-# /pair-process-refine-story — Story Refinement
+# /pair-process-refine-story — Story Refinement (single Draft→Ready)
 
-Transform a user story from rough breakdown (Todo) into a development-ready specification (Refined). **Section-level idempotency** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md): each refinement section is checked before acting; partial refinements resume from the first missing section.
+Transform a user story from rough breakdown (Draft) into a development-ready specification (Ready). This is **THE single Draft→Ready path** — no separate "make-ready" skill exists and none is ever born (R3.12, D24); refinement IS the transition (canonical-states.md). **Section-level idempotency** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md): each refinement section is checked before acting; partial refinements resume from the first missing section, an already-Ready story is confirmed and exits.
 
 ## Composed Skills
 
-| Skill          | Type       | Required                                                                                   |
-| -------------- | ---------- | ------------------------------------------------------------------------------------------- |
-| `/pair-capability-write-issue` | Capability | Yes — creates or updates the story issue in the PM tool                                      |
-| `/pair-capability-classify`    | Capability | Optional — shift-left classification matrix into the story body. If not installed, warn and continue. |
+| Skill             | Type       | Required                                                                                                          |
+| ----------------- | ---------- | ---------------------------------------------------------------------------------------------------------------- |
+| `/pair-capability-grill`          | Capability | Yes — phase 0 shared-understanding sync (R3.11 alignment gate). If not installed, warn and fall back to the per-step approval gates. |
+| `/pair-capability-map-subdomains` | Capability | Optional — functional/domain placement (Step 2), scoped to the story. If not installed, warn and skip domain placement.             |
+| `/pair-capability-map-contexts`   | Capability | Optional — touched-context mapping (Step 3), scoped; feeds the coupling dimension. If not installed, warn and skip.                  |
+| `/pair-capability-classify`       | Capability | Optional — shift-left classification matrix into the story body (Step 3b). If not installed, warn and continue.  |
+| `/pair-capability-write-issue`    | Capability | Yes — creates or updates the story issue in the PM tool                                                          |
 
 ## Arguments
 
@@ -39,6 +42,17 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
    > Proceed?
 
 5. **Verify**: A story is identified (from `$story` or developer confirmation) and its current body is available for Step 1's section detection.
+
+### Phase 0: Shared-Understanding Sync (grill — BLOCKING)
+
+**This is the R3.11 AI↔human alignment gate — a prerequisite, not optional.** No DoR section is authored until shared understanding is explicit; it is the reason no separate "make-ready" step exists (D24).
+
+1. **Check**: Has phase 0 already reached explicit shared understanding this session, or does a prior `/pair-capability-grill` sync handoff for this story exist in `.pair/working/`, or is the story already Ready (Step 1 confirms-and-exits)?
+2. **Skip**: If shared understanding is already confirmed (or the story is already Ready), move to Step 1.
+3. **Act**: Is `/pair-capability-grill` installed?
+   - **Yes**: Compose `/pair-capability-grill` with `$mode: sync`, `$story: [story-id]`, and `$context: <current story body>` so grill doesn't re-fetch it. Grill systematically covers all six aspects (goal, AC, edge cases, dependencies, design, risks) one question at a time and returns the alignment synthesis pre-mapped to the Refined template sections. **Resume**: if a prior sync was interrupted, its partial synthesis handoff is loaded and the sync resumes from the first open aspect — prior answers are not re-asked.
+   - **No**: Warn (`/pair-capability-grill not installed — skipping the phase 0 sync; alignment falls to the per-step human-judgment gates in Steps 2–4`) and proceed; the explicit approval gates in Steps 2–4 remain the alignment mechanism.
+4. **Verify**: `/pair-capability-grill` returned **explicit shared understanding** (grill never auto-exits on an empty queue — only an explicit human "yes" ends it), or the skip was warned. Without shared understanding → **HALT**: refinement does not proceed on an unaligned story.
 
 ### Step 1: Detect Refinement State
 
@@ -75,7 +89,8 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
    - Identify **business rules** with measurable criteria.
    - Address **edge cases** and error handling conditions.
 2. **Act**: Domain check — if `context-map.md` (in `.pair/adoption/product/`) exists, read it (plus any linked `subdomain/<slug>.context.md` this story touches). When the story introduces or sharpens a domain term, update the map inline per the [Context Map Maintenance](../../../.pair/knowledge/guidelines/architecture/design-patterns/context-map-maintenance.md) guideline. When a proposed criterion conflicts with a registered rule, flag it citing that rule (and the DDR, when one exists) and resolve with the developer before proceeding. Skip this step entirely if the map doesn't exist — its absence is expected, not an error.
-3. **Act**: Present the proposed criteria to the developer for validation:
+3. **Act**: Domain placement (functional). Is `/pair-capability-map-subdomains` installed? Compose `/pair-capability-map-subdomains` with `$scope: [the business capability this story touches]` — **scoped to the story, never `$scope: all`** (that is `/pair-process-bootstrap`-only). It classifies the touched capability as core/supporting/generic with a Volatility rating; that placement feeds the **Business impact** dimension of the classification matrix (Step 3b) and the volatility input to coupling (Step 3). Not installed, or no domain artifacts and no PRD/initiatives to classify from → degrade: skip domain placement with a note, still produce the functional analysis.
+4. **Act**: Present the proposed criteria to the developer for validation:
 
    > Proposed acceptance criteria for `#[ID]`:
    > [List Given-When-Then scenarios]
@@ -83,7 +98,7 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
    > [Edge cases]
    > Approve or adjust?
 
-4. **Verify**: Human-judgment gate — the developer explicitly approves the presented Given-When-Then scenarios, business rules, and edge cases (or requests changes, looping back to Step 2's Act). Only an explicit approval finalizes the criteria.
+5. **Verify**: Human-judgment gate — the developer explicitly approves the presented Given-When-Then scenarios, business rules, and edge cases (or requests changes, looping back to Step 2's Act). Only an explicit approval finalizes the criteria.
 
 ### Step 3: Technical Analysis
 
@@ -94,8 +109,9 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
    - **Key components**: modules, integration points, data flow.
    - **Risks**: technical unknowns, complexity, dependencies.
    - Reference [architecture.md](../../../.pair/adoption/tech/architecture.md) and [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md).
-2. **Act**: Present technical analysis to developer for validation.
-3. **Verify**: Human-judgment gate — the developer explicitly approves the presented strategy, key components, and risks (or requests changes, looping back to Step 3's Act). Only an explicit approval finalizes the analysis.
+2. **Act**: Touched-context mapping (technical). Is `/pair-capability-map-contexts` installed? Compose `/pair-capability-map-contexts` with `$scope: [the contexts/services this story touches]` — **scoped, never `$scope: all`** (that is `/pair-process-bootstrap`-only). It maps the touched subdomains to bounded contexts and assesses each relationship (integration strength, socio-technical distance, volatility) to derive a balanced/unbalanced verdict. **When it reports an unbalanced integration this story introduces — strong coupling toward a distant and/or volatile context — record it as a row in the Technical Risks and Mitigation table** (D38): the coupling risk this story adds, its impact, and the mitigation. This same map-contexts output feeds the **Coupling balance** dimension of the classification matrix (Step 3b) — refine-story runs no coupling assessment of its own; the inputs come from the scoped map-contexts output and the subdomain catalog volatility (D24). Not installed, or no domain artifacts → coupling is "not assessed", excluded from the matrix max, never blocks (D21).
+3. **Act**: Present technical analysis (strategy, key components, integration points, and any coupling risk from the mapping) to developer for validation.
+4. **Verify**: Human-judgment gate — the developer explicitly approves the presented strategy, key components, and risks (or requests changes, looping back to Step 3's Act). Only an explicit approval finalizes the analysis.
 
 ### Step 3b: Classification (shift-left matrix)
 
@@ -103,8 +119,8 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
 
 1. **Check**: Is `/pair-capability-classify` installed?
 2. **Skip**: If not installed, warn (`/pair-capability-classify not installed — skipping the shift-left risk matrix; classify at review time`) and move to Step 4.
-3. **Act**: Compose `/pair-capability-classify` with `$context: refinement` and `$target: [story-id]`. It applies the [quality model](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) to the story context, writes the matrix as 1 line + `<details>` into the story body (D22), and — the first time — proposes the `## Tag Projection` declaration before emitting any tag (adoption-gated). No `tech/risk-matrix.md` ⇒ KB defaults, matrix only, no tags (D21).
-4. **Verify**: The story body carries the classification matrix (or the skip was warned). `/pair-capability-classify` HALTs only if the quality model doc (#221) is absent — surface that pointer to the developer.
+3. **Act**: Compose `/pair-capability-classify` with `$context: refinement` and `$target: [story-id]`. It applies the [quality model](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) to the story context, writes the matrix as 1 line + `<details>` into the story body's **`## Classification`** section — the first-class template slot in [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) (D22) — and, the first time, proposes the `## Tag Projection` declaration before emitting any tag (adoption-gated). The **Coupling balance** dimension is fed by the scoped `/pair-capability-map-contexts` output from Step 3 (and subdomain volatility from Step 2); with no such output it is "not assessed" and excluded from the tier max (D38, D21). An unbalanced/volatile integration recorded as a risk in Step 3 therefore also raises the coupling dimension here — contributing to the tier via the existing max rule (D38). No `tech/risk-matrix.md` ⇒ KB defaults, matrix only, no tags (D21).
+4. **Verify**: The story body's `## Classification` section carries the matrix (or the skip was warned). `/pair-capability-classify` HALTs only if the quality model doc (#221) is absent — surface that pointer to the developer.
 
 ### Step 4: Sprint Readiness
 
@@ -121,14 +137,14 @@ Transform a user story from rough breakdown (Todo) into a development-ready spec
 ### Step 5: Documentation and PM Tool Update
 
 1. **Act**: Assemble the complete refined story body using the [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) Refined template:
-   - **Functional sections first**: Story Statement → Epic Context → Acceptance Criteria → Definition of Done → Story Sizing → Dependencies → Validation → Notes.
+   - **Functional sections first**: Story Statement → Epic Context → Classification (the Step 3b matrix) → Acceptance Criteria → Definition of Done → Story Sizing → Dependencies → Validation → Notes.
    - **Technical sections last**: Technical Analysis → (Task Breakdown added later by `/pair-process-plan-tasks`).
 2. **Act**: Compose `/pair-capability-write-issue` with:
    - `$type: story`
    - `$content`: the assembled refined story body
    - `$id`: the story identifier (update mode — story already exists)
-   - `$status: Ready` — transitions the project board field from Todo to Refined
-3. **Verify**: Story updated in PM tool. Board status is Ready.
+3. **Act**: Transition the item to the `Ready` macrostate. Resolve the target board state via the [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) **writing rule** (macrostate `Ready` → the first board state mapped to it; e.g. `Refined` on pair's own board). **When no board state maps to `Ready`** (a minimal board, D4), there is nothing to move — the completed DoR sections on the body are themselves the readiness signal, per the [definition-of-ready-and-done.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md) **Readiness Fallback**. Idempotent: a story already at `Ready` is confirmed, not re-moved.
+4. **Verify**: Either the board state resolved to `Ready` was written, or (no mapping) all six DoR criteria are satisfied on the body as the readiness signal.
 
 ### Step 6: Already-Refined Update (optional path)
 
@@ -151,8 +167,11 @@ Reached only when Step 1 detects all sections are present.
 ```text
 STORY REFINEMENT COMPLETE:
 ├── Story:    [#ID: Title]
-├── Status:   [Refined | Updated]
+├── Status:   [Ready | Updated | Ready (DoR-on-body — no board mapping)]
+├── Sync:     [shared understanding confirmed | grill skipped — per-step gates]
 ├── Sections: [N/N complete]
+├── Matrix:   [risk:<tier> · cost:<class> | classify not installed — no matrix]
+├── Domain:   [subdomain placement + touched contexts | map-* not installed — skipped]
 ├── Sizing:   [X points — fits sprint: Yes/No]
 ├── PM Tool:  [Issue updated — #ID]
 └── Next:     /plan-tasks to create task breakdown
@@ -160,8 +179,9 @@ STORY REFINEMENT COMPLETE:
 
 ## HALT Conditions
 
-- **No Todo stories in backlog** (Step 0) — nothing to refine.
+- **No Draft stories in backlog** (Step 0) — nothing to refine.
 - **Story not found** (Step 0) — invalid `$story` identifier.
+- **No shared understanding** (Phase 0) — `/pair-capability-grill` sync ended without an explicit human "yes"; refinement never proceeds on an unaligned story.
 - **PM tool not accessible** — cannot read or update stories.
 - **Developer rejects criteria** (Steps 2–4) — must resolve before proceeding.
 
@@ -169,12 +189,18 @@ STORY REFINEMENT COMPLETE:
 
 See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce the refined story content, ask developer to update manually) for the standard scenarios. Additional cases:
 
+- **`/pair-capability-grill` not installed** (Phase 0): warn and skip the sync; the per-step human-judgment approval gates in Steps 2–4 remain the alignment mechanism — refinement still completes.
+- **`/pair-capability-map-subdomains` / `/pair-capability-map-contexts` not installed, or no domain artifacts** (Steps 2–3): the functional and technical analysis sections are still produced; domain placement and touched-context mapping are skipped with a note, and the coupling dimension is "not assessed" (never a HALT).
+- **`/pair-capability-classify` not installed** (Step 3b): refinement completes without a matrix; the skip is flagged in the summary and the `## Classification` section stays empty.
+- **No state mapping resolves to `Ready`** (Step 5): the completed DoR sections on the body are the readiness signal (definition-of-ready-and-done.md Readiness Fallback) — not an error.
 - If adoption files (architecture, tech-stack) are not found, skip technical analysis alignment checks and warn.
 - If `context-map.md` is not found, skip the domain check in Step 2 — its absence is the expected steady state, not an error.
 
 ## Notes
 
-- This skill **modifies PM tool state** — it updates story issues.
+- **The single Draft→Ready path** (R3.12, D24): refinement IS the transition to `Ready` — there is no separate "make-ready" skill and none is ever added. Phase 0's grill sync is the R3.11 alignment gate that makes this one skill sufficient.
+- This skill **modifies PM tool state** — it updates story issues and transitions the item to `Ready`.
+- **Composes, never re-derives**: domain placement comes from `/pair-capability-map-subdomains`, touched-context/coupling from `/pair-capability-map-contexts`, the matrix from `/pair-capability-classify` — refine-story orchestrates them scoped to the story and owns no assessment criteria of its own (D24).
 - Template ordering (Step 5) positions Technical Analysis as the bridge to Task Breakdown (added by `/pair-process-plan-tasks`).
 - INVEST validation: the refined story must satisfy Independent, Negotiable, Valuable, Estimable, Small, Testable criteria.
 - The `/pair-process-refine-story` skill handles the transition from Initial Breakdown template format to Refined template format.
