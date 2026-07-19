@@ -79,6 +79,8 @@ Review always runs, tests are always green, at every tier (R5.3 + D10) — this 
 | 🟡 | + unit |
 | 🔴 | + integration/E2E |
 
+Install runs at every tier (implicit in each row). Deterministic secret scanning also runs at **every** tier, unconditionally — it is not tier-scoped (security/[secret-scanning.md](security/secret-scanning.md)). How this matrix becomes an actual pipeline that reads the `risk:*` tag only (fail-safe 🔴 when untagged, explicit failure on a missing suite, build+deploy-only post-merge staging) is the delivery-side companion [tier-aware-pipeline.md](../infrastructure/cicd-strategy/tier-aware-pipeline.md) — this table stays the single source of the criteria; that document owns the wiring.
+
 ## 5. Tag Projection
 
 Chromatic, no semantic tag beyond color. **`risk:green|yellow|red` (§3.2) is the only tag family the KB names and proposes by default.**
