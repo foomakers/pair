@@ -1,9 +1,9 @@
 ---
 title: Skills Catalog
-description: Complete catalog of all 38 pair skills organized by type — process, capability, and meta.
+description: Complete catalog of all 39 pair skills organized by type — process, capability, and meta.
 ---
 
-pair ships with 38 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
+pair ships with 39 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
 
 > **Last updated:** 2026-07-19. Source: `packages/knowledge-hub/dataset/.skills/`
 
@@ -50,6 +50,7 @@ All `assess-*` skills are **output-only**: they produce a proposal (rendered ado
 | ----- | ------- | ----------- |
 | **assess-ai** | `/pair-capability-assess-ai` | Evaluates and recommends AI development tools — coding assistants, agent frameworks, MCP integrations, models — when the choice is open. Output-only; caller persists via `/pair-capability-record-decision`. |
 | **assess-architecture** | `/pair-capability-assess-architecture` | Evaluates and recommends an architecture pattern (layered, hexagonal, microservices, etc.) when the choice is open. Output-only; caller persists via `/pair-capability-record-decision`. |
+| **assess-cost** | `/pair-capability-assess-cost` | Assesses cost class (green/yellow/orange/red) against the multi-provider cost-signal catalog — composed by `/pair-process-review` to feed the classification matrix's cost dimension. Output-only, never blocks. |
 | **assess-infrastructure** | `/pair-capability-assess-infrastructure` | Evaluates and recommends infrastructure strategy — cloud, CI/CD, deployment, IaC, environments — when the choice is open. Output-only; caller persists via `/pair-capability-record-decision`. |
 | **assess-methodology** | `/pair-capability-assess-methodology` | Evaluates and recommends the development methodology (Scrum, Kanban, Lean, etc.) — iterations, ceremonies, flow — when the choice is open. Output-only; caller persists via `/pair-capability-record-decision`. |
 | **assess-observability** | `/pair-capability-assess-observability` | Evaluates and recommends the observability strategy — monitoring, logging, tracing, alerting, telemetry — when the choice is open. Output-only; caller persists via `/pair-capability-record-decision`. |
