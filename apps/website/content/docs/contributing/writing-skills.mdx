@@ -132,6 +132,14 @@ This pattern ensures **idempotency** — re-running a skill skips already-comple
 
 Skills define explicit HALT conditions — situations where the skill stops and waits for developer input rather than proceeding with incomplete information.
 
+## Setup skills: guided vs quick
+
+A skill or CLI command that collects inputs to produce or configure something (package metadata, an adoption decision, a scaffolded project) exposes the same two-mode duality — **guided** (asks one input at a time, each pre-filled with a sensible default) and **quick** (accepts KB-sensible defaults in one shot, for CI, scripting, and experienced users). Guided is the safe default; quick is entered only on an explicit signal (a flag, an argument, or a detected non-interactive environment) — never the reverse.
+
+Both modes read the **same resolved defaults** through one precedence cascade — `explicit argument/flag > project state > saved/inferred preferences > hardcoded` — the mode only decides whether each value is confirmed or taken as-is. Two precedents already implement this shape: the `pair package` command's `--interactive` flag + `resolveDefaults()` cascade, and the `assess-*` family's resolution cascade (Path A override = quick, Path C = guided).
+
+Adopt the convention directly rather than re-designing the duality — the full mechanics, precedents, and edge cases live in the KB reference `.pair/knowledge/skill-conventions/guided-quick-setup.md`.
+
 ## The effectiveness standard
 
 Conformance to the anatomy above makes a skill *valid*; it does not make it *effective*. This standard is the authoring bar for every new skill and the review checklist for every edit (recorded as ADR-010). Each principle ends with a **How to check** test you can run against the skill text alone.
