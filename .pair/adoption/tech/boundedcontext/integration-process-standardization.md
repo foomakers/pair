@@ -28,6 +28,7 @@ This context manages all integration logic and process standardization for the p
 
 - Owns integration configurations, process definitions, and automation scripts.
 - Owns the KB dataset, its distribution artifacts/metadata, and the local KB cache.
+- **Ownership splits by concern, not by path.** This context owns the *packaging & distribution* of KB content — the dataset as a release artifact, the flatten/prefix/symlink transform, the `pair update` mirror, and the cache. It does **not** own the content's *authoring*: guidelines and conventions are authored and owned by **Knowledge & Standards**, skills and workflows by **Development Collaboration**. A file under `packages/knowledge-hub/dataset/.pair/knowledge/**` is therefore *authored-by* its content subdomain and *distributed-by* this context — its co-location in the dataset directory is packaging, not content ownership. (Resolves the recurring "same edit lands in two bounded contexts" attribution ambiguity.)
 
 ## Team Alignment
 
