@@ -175,7 +175,7 @@ Return value: `#341`, which `/plan-tasks` records in the story's Task Breakdown 
 
 When composed by `/refine-story`:
 
-- **Input**: `/refine-story` invokes `/write-issue` with `$type: story`, `$content` containing the refined story data, `$id` when updating an existing story, and `$status: Ready` to transition the board field.
+- **Input**: `/refine-story` invokes `/write-issue` with `$type: story`, `$content` containing the refined story data, `$id` when updating an existing story, and `$status: Ready` to transition the board field **when a board state maps to the `Ready` macrostate**; when none does (a minimal board, D4), `/refine-story` omits `$status` — the DoR-on-body readiness signal applies and no board field is written (this skill's Step 6.2 no-ops on absent `$status`).
 - **Output**: Returns the issue identifier. `/refine-story` uses it for linking.
 
 When composed by `/plan-tasks`:

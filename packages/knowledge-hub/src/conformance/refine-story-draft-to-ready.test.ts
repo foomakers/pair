@@ -74,7 +74,8 @@ describe('refine-story — Phase 0 grill sync (AC1) (#242)', () => {
     })
 
     it(`${v.label} makes shared understanding a blocking prerequisite`, () => {
-      const phase0 = v.content.slice(v.content.search(/##\s+Phase 0/)).split(/\n## /)[0]
+      // Phase 0 is a `###` subsection; isolate it by splitting on the next `###`.
+      const phase0 = v.content.slice(v.content.search(/###\s+Phase 0/)).split(/\n### /)[0]
       expect(phase0).toMatch(/shared understanding/i)
       expect(phase0).toMatch(/BLOCKING|HALT|prerequisite/i)
     })
@@ -114,8 +115,12 @@ describe('refine-story — coupling risk routed into the matrix (AC5, D38) (#242
     it(`${v.label} feeds the coupling dimension from map-contexts into classify`, () => {
       expect(v.content).toContain(`Compose \`${v.classify}\` with \`$context: refinement\``)
       // classify's coupling dimension is fed by the scoped map-contexts output.
-      const idxCtx = v.content.indexOf(v.mapCtx)
-      const idxClassify = v.content.indexOf(
+      // Scope to the steps region (Step 3 onward) so the ordering assertion reflects
+      // the actual Step 3 (map-contexts) -> Step 3b (classify) procedure order, not
+      // the Composed Skills table near the top of the file.
+      const stepsRegion = v.content.slice(v.content.search(/### Step 3\b/))
+      const idxCtx = stepsRegion.indexOf(`Compose \`${v.mapCtx}\` with \`$scope:`)
+      const idxClassify = stepsRegion.indexOf(
         `Compose \`${v.classify}\` with \`$context: refinement\``,
       )
       expect(idxCtx).toBeGreaterThan(-1)
@@ -142,7 +147,7 @@ describe('refine-story — graceful degradation of composed skills (#242)', () =
   for (const v of VARIANTS) {
     it(`${v.label} degrades gracefully when grill is absent`, () => {
       const gd = v.content.slice(v.content.indexOf('## Graceful Degradation'))
-      expect(gd).toMatch(new RegExp(`\\${v.grill}`.replace('/', '/')))
+      expect(gd).toContain(v.grill)
     })
 
     it(`${v.label} degrades gracefully when map-* are absent (analysis still produced)`, () => {
