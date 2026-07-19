@@ -24,6 +24,13 @@ import { isBuiltin } from 'node:module'
  *   preceding string literal containing `//` could be dropped (false negative).
  * These blind spots are acceptable because Prettier enforces one import per line
  * at the top of each file, isolated from string-bearing statements.
+ *
+ * Build exclusion: this is a dev/CI-only gate with no runtime consumers, so it is
+ * listed in `tsconfig.build.json`'s `exclude` and does NOT compile into `dist/`
+ * (the published tarball). It stays here as an importable, white-box-tested `src`
+ * module per ADL 2026-07-13-gate-tooling-code-in-tested-modules.md — the ADL
+ * governs where testable gate logic lives, not whether it ships. It imports only
+ * `node:module` and pure string logic, so relocating it costs nothing at runtime.
  */
 export interface PackageManifest {
   dependencies?: Record<string, string>
@@ -104,6 +111,53 @@ export function extractRuntimeImports(sourceText: string): string[] {
   }
 
   return specifiers
+}
+
+/**
+ * Convert a single tsconfig `exclude` glob into a RegExp matching a path relative
+ * to the tsconfig directory (posix `/` separators). Supports the subset of glob
+ * semantics used by our build config:
+ * - `*`  matches within a path segment,
+ * - `**` matches across segments (zero or more, including files),
+ * - a wildcard-free, extension-free pattern (e.g. `node_modules`, or a trailing
+ *   `test-utils` segment) denotes a directory and matches its whole subtree.
+ *
+ * Exists so the published-artifact test can derive "what ships" straight from
+ * `tsconfig.build.json` instead of re-hardcoding an exclusion list that could
+ * silently drift from the build config.
+ */
+export function tsconfigGlobToRegExp(glob: string): RegExp {
+  const lastSegment = glob.split('/').pop() ?? ''
+  const isDirPattern = !/[*.]/.test(lastSegment)
+  const pattern = isDirPattern ? `${glob}/**` : glob
+
+  const DOUBLESTAR = '\u0000'
+  const body = pattern
+    .split('/')
+    .map(segment =>
+      segment === '**'
+        ? DOUBLESTAR
+        : segment.replace(/[.+^${}()|[\]\\?]/g, '\\$&').replace(/\*/g, '[^/]*'),
+    )
+    .join('/')
+    .replace(new RegExp(`/${DOUBLESTAR}/`, 'g'), '/(?:.*/)?') // `/**/` -> optional segments
+    .replace(new RegExp(`^${DOUBLESTAR}/`), '(?:.*/)?') // leading `**/`
+    .replace(new RegExp(`/${DOUBLESTAR}$`), '(?:/.*)?') // trailing `/**` (dir subtree)
+    .replace(new RegExp(DOUBLESTAR, 'g'), '.*') // lone `**`
+
+  return new RegExp(`^${body}$`)
+}
+
+/**
+ * True when `relPath` (relative to the package root, posix separators) is excluded
+ * by any of the given tsconfig `exclude` patterns — i.e. it does NOT ship in the
+ * built artifact.
+ */
+export function isTsconfigExcluded(
+  relPath: string,
+  excludePatterns: readonly string[],
+): boolean {
+  return excludePatterns.some(pattern => tsconfigGlobToRegExp(pattern).test(relPath))
 }
 
 /**

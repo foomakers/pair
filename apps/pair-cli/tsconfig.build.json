@@ -13,7 +13,8 @@
     "dist",
     "vitest.config.ts",
     "src/**/*.test.ts",
-    "src/**/*.test.e2e.ts",
-    "**/test-utils"
+    "src/**/*.e2e.test.ts",
+    "**/test-utils",
+    "src/manifest/runtime-deps.ts"
   ]
 }
