@@ -55,6 +55,11 @@ require_suite e2e "$([ -f playwright.config.ts ] && echo 1 || echo 0)" || exit 1
 name: Pre-Merge Gate
 on:
   pull_request:
+    # `labeled`/`unlabeled` are REQUIRED (not defaults): a tier raised mid-review
+    # (risk:yellow → risk:red) or any risk:* label added after the PR is opened
+    # must re-run the gate so the matrix widens. Without them the gate keeps the
+    # stale lower tier and a red PR could merge on a yellow-level run.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
     branches: [main]
 
 jobs:
@@ -99,7 +104,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test:integration
+      - run: |
+          source .pair/knowledge/assets/tier-resolve.sh
+          require_suite integration "$(grep -q '"test:integration"' package.json && echo 1 || echo 0)" || exit 1
+          pnpm test:integration
 
   e2e: # from 🔴
     needs: resolve-tier
@@ -139,6 +147,7 @@ Scheduling the jobs is not enough; the code host must **require** them:
 - Mark `base` and `secret-scan` as required status checks on the protected branch (`main`).
 - Mark `unit`, `integration`, `e2e` as required **when scheduled**. On green/yellow PRs the higher-tier jobs are not scheduled, so a "required-when-present" convention (or a single aggregating gate job that `needs:` the scheduled set and reports one status) keeps branch protection satisfiable across tiers.
 - A failing required job (including a missing-suite failure or a secret finding) blocks merge until the gate is green — this is the gate acting before review (R5.4): review starts only at a green gate.
+- **A label change must force gate re-evaluation before merge.** Because the tier is read from the `risk:*` label, the `pull_request` trigger includes `labeled`/`unlabeled` (above) so a tier raised mid-review re-runs the gate at the wider matrix. The latest run — not a stale earlier one — is what branch protection evaluates, so a PR can never merge on a gate that ran at a lower tier than its current label.
 
 ## Post-merge staging pipeline: build + deploy only
 
@@ -152,7 +161,6 @@ on:
 
 jobs:
   build-deploy:
-    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

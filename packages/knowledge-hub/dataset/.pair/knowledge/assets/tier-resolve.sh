@@ -23,13 +23,13 @@
 # fail-safe default. Widens on max(); never narrows (risk:red always wins).
 resolve_tier() {
   local raw="${*:-${PR_LABELS:-}}"
-  local best="" malformed=0 saw_risk=0 tok
+  local best="" malformed=0 tok
   for tok in $raw; do
     case "$tok" in
-    risk:red) best=red; saw_risk=1 ;;
-    risk:yellow) saw_risk=1; [ "$best" = red ] || best=yellow ;;
-    risk:green) saw_risk=1; [ -z "$best" ] && best=green ;;
-    risk:*) saw_risk=1; malformed=1 ;;
+    risk:red) best=red ;;
+    risk:yellow) [ "$best" = red ] || best=yellow ;;
+    risk:green) [ -z "$best" ] && best=green ;;
+    risk:*) malformed=1 ;;
     esac
   done
   if [ "$best" = red ]; then echo red; return 0; fi
