@@ -57,7 +57,7 @@
 
 ## Services to Release
 
-> Conditional — include ONLY when the branch touches one or more deployable packages/services. Derived from `git diff --name-only <base-branch>...HEAD` grouped by owning package (`packages/*`, `apps/*`). Omit the whole section when nothing deployable changed.
+> Conditional — include ONLY when the branch touches one or more **deployable** packages/services. Derived from `git diff --name-only <base-branch>...HEAD` grouped by owning package (`packages/*`, `apps/*`), keeping only deployable ones — exclude content/docs-only packages (e.g. `packages/knowledge-hub`, `apps/website` content). Omit the whole section when nothing deployable changed.
 
 - **[package/service name]:** [what changed, release-relevant summary]
 

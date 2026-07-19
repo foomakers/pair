@@ -1,6 +1,6 @@
 ---
 name: pair-capability-checkpoint
-description: "Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) so work survives a context reset. Invoke directly to save or resume progress ('save our progress on #313', 'resume story #256'); composed by a future closing phase of /pair-process-implement and a future /publish-pr (planned — #255)."
+description: "Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) so work survives a context reset. Invoke directly to save or resume progress ('save our progress on #313', 'resume story #256'); composed by a future closing phase of /pair-process-implement and consumed by /pair-capability-publish-pr (via $mode=resume)."
 version: 0.4.1
 author: Foomakers
 ---
@@ -162,10 +162,10 @@ When composed by a future closing phase of `/pair-process-implement`:
 - **Input**: `/pair-process-implement` would invoke `/pair-capability-checkpoint` with `$mode=write` between tasks (or on developer request) to persist progress, `$mode=resume` at Phase 0 when re-invoked on a story that may have been interrupted, and remove the checkpoint on story completion (cleanup).
 - **Output**: Write mode's returned text becomes the session's record of state. Resume mode's parsed state lets `/pair-process-implement` skip re-analysis and jump straight to the first pending task.
 
-When composed by a future `/publish-pr` (planned — #255; companion capability from the same epic split):
+When composed by `/pair-capability-publish-pr` (the companion capability from the same epic split, wired in #256):
 
-- **Input**: `/publish-pr` invokes `/pair-capability-checkpoint` with `$mode=write, $persist=false` to obtain a handoff prompt summarizing the story before drafting the PR description.
-- **Output**: The returned text (not written to file) is embedded directly into the composer's own output — the composer owns persistence.
+- **Input**: `/pair-capability-publish-pr` invokes `/pair-capability-checkpoint` with `$mode=resume` to read the story's handoff (branch, tasks done, decisions) before composing the PR — it is a **read-only consumer**. It never calls `$mode=write`; when no checkpoint exists, `/pair-capability-publish-pr` gathers state directly from the branch + story instead.
+- **Output**: Resume mode's parsed state feeds the PR body. `/pair-capability-publish-pr` owns none of the checkpoint's lifecycle (no write, no cleanup).
 
 When invoked **independently**:
 

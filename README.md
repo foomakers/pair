@@ -23,7 +23,7 @@ This installs the pair Knowledge Base into your project. Your AI assistant reads
 ## What You Get
 
 - **Knowledge Base** — guidelines, how-to guides, and templates for every SDLC phase
-- **Agent Skills** — 35 idempotent workflows following the [agentskills.io](https://agentskills.io) open standard
+- **Agent Skills** — 37 idempotent workflows following the [agentskills.io](https://agentskills.io) open standard
 - **Adoption Files** — project-specific decisions (architecture, tech stack, way of working)
 - **AI-friendly index** — `.pair/llms.txt` for machine-readable KB discovery ([llmstxt.org](https://llmstxt.org))
 

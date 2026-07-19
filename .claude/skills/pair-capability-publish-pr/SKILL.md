@@ -31,7 +31,7 @@ Take a completed story branch to a review-ready pull request in one standalone s
 
 ## Adoption Inputs (read deterministically)
 
-- **[way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `git-workflow` section** — `base-branch`, `branch-format`, `commit-format`, `squash: true|false`. Read as declared; **omitted ⇒ defaults** (`base-branch: main`, standard branch/commit templates, `squash: false`) (AC2).
+- **[way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Merge Strategy`** — the same section the merge consumers read (`/pair-process-review` Phase 6): `Method` (`squash` | `merge` | `rebase`, **default `squash`**) and the `Commit format` ([commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md)). Recorded on the PR as the intended merge strategy; **squash happens at merge, never here** (AC2). `base-branch` defaults to `main`; `branch-format` (to parse the branch id) comes from the [branch template](../../../.pair/knowledge/guidelines/collaboration/templates/branch-template.md). A consolidated `git-workflow` adoption section (base-branch + `code-host` alongside Merge Strategy) is #236's job.
 - **way-of-working.md → `code-host`** — the code host when it differs from the PM tool (#236). Absent ⇒ code host = PM tool (single-tool; AC4 degrades gracefully).
 - **way-of-working.md → `## State Mapping`** — board-column ↔ canonical-macrostate mapping (see [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)). Omitted ⇒ canonical names assumed.
 
@@ -55,15 +55,15 @@ Each phase follows the **check → skip → act → verify** pattern. Phases run
 3. **Skip**: If all gates pass, proceed to Phase 2.
 4. **Act**: If any required gate fails → **HALT** before creating or updating the PR (AC5). Report each failing check (gate name + first failing detail). No PR side effects occur on a red gate.
 
-### Phase 2: Read Git-Workflow & Prepare Base (AC2)
+### Phase 2: Resolve Merge Strategy & Prepare Base (AC2)
 
-1. **Act**: Read the `git-workflow` section (Adoption Inputs). Resolve, with defaults for anything omitted:
-   - `base-branch` (default `main`) — the PR target branch.
-   - `branch-format` (default `feature/#<id>-<slug>`) — used only to parse/validate the branch, never to rename it.
-   - `commit-format` — the commit-message convention (informational; commits already exist on the branch).
-   - `squash: true|false` (default `false`) — recorded on the PR/output as the intended merge strategy. **Squash happens at merge, not here** — this skill never rewrites branch history.
+1. **Act**: Read the `## Merge Strategy` section (Adoption Inputs). Resolve, with defaults for anything omitted:
+   - `Method` (default `squash`) — the intended merge method (`squash` | `merge` | `rebase`), recorded on the PR/output. **Applied at merge, not here** — this skill never rewrites branch history.
+   - `Commit format` — the commit-message convention (informational; commits already exist on the branch).
+   - `base-branch` (default `main`) — the PR target branch. A configurable base lands with the `git-workflow` consolidation (#236).
+   - `branch-format` (default `feature/#<id>-<slug>`, per the branch template) — used only to parse/validate the branch, never to rename it.
 2. **Act**: Ensure the branch is pushed to the code host (`git push -u <remote> <branch>`); if already up to date, skip.
-3. **Verify**: The resolved base branch exists on the remote and the feature branch is pushed. Example: `base-branch: develop` + `squash: true` ⇒ a PR against `develop`, output marks squash-on-merge (AC2).
+3. **Verify**: The resolved base branch exists on the remote and the feature branch is pushed. Example: `Method: squash` (the default) ⇒ the output marks squash-on-merge (AC2).
 
 ### Phase 3: Compose the PR Body (AC3)
 
@@ -110,7 +110,7 @@ RESULT: [PR READY FOR REVIEW | HALTED — <reason>]
 
 ## Composition Interface
 
-When composed by a future closing phase of `/pair-process-implement`:
+When composed by a future closing phase of `/pair-process-implement` (wired in #256):
 
 - **Input**: `/pair-process-implement` invokes `/pair-capability-publish-pr` after the last task's commit, passing `$story` (and, when it wrote one, the checkpoint as `$handoff`). `/pair-process-implement` owns task iteration; `/pair-capability-publish-pr` owns the gate→PR→board sequence.
 - **Output**: The PR number/URL and board-state result flow back to `/pair-process-implement`'s Phase 3 output. A HALTed gate propagates as `/pair-process-implement`'s HALT.
@@ -132,7 +132,7 @@ On HALT: report the blocker, propose resolution, make no PR side effects.
 
 See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline/template missing → minimal structure; PM tool inaccessible → do the PR, warn on the board step) for the standard scenarios. Additional cases:
 
-- **No `git-workflow` section**: use defaults (`main`, standard templates, no squash) — this is the zero-configuration default, not a degradation (AC2).
+- **No `## Merge Strategy` section**: default to `squash` + the commit template, base `main` — the zero-configuration default, not a degradation (AC2). Consistent with the merge consumers, which also default to `squash`.
 - **No `code-host` declared**: code host = PM tool (single-tool; AC4 still satisfied in the degraded shape).
 - **No classification tags on the story**: create the PR without tags and note it (edge case) — never invent tags.
 - **`/pair-capability-checkpoint` not installed**: gather state from branch + story directly (Phase 0).
