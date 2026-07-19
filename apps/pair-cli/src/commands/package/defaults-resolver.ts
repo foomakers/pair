@@ -4,6 +4,7 @@ import { logger } from '@pair/content-ops'
 import type { FileSystemService } from '@pair/content-ops'
 import type { PackageCommandConfig } from './parser'
 import { readPreferences } from './preferences'
+import { defaultManifestFields } from './metadata'
 
 export interface ResolvedMetadata {
   name: string
@@ -23,14 +24,9 @@ export interface DefaultSources {
   preferences?: PartialMetadata | undefined
 }
 
-const HARDCODED: ResolvedMetadata = {
-  name: 'kb-package',
-  version: '1.0.0',
-  description: 'Knowledge base package',
-  author: 'unknown',
-  tags: [],
-  license: 'MIT',
-}
+// Lowest cascade tier — the single source lives in `metadata.ts`
+// (`defaultManifestFields`); imported here so the two never drift.
+const HARDCODED: ResolvedMetadata = defaultManifestFields()
 
 function mergeField<K extends keyof ResolvedMetadata>(
   key: K,
@@ -84,13 +80,18 @@ export function buildCliFlagsSource(config: PackageCommandConfig): PartialMetada
  * the quick (non-interactive) path and the guided (--interactive) path so they
  * agree on defaults; the guided path then lets prompts override, the quick path
  * uses the resolved values directly (CLI flags already applied at top precedence).
+ *
+ * `gitConfigReader` is injectable so the author (git-config) tier can be
+ * asserted deterministically in tests without shelling out to real `git`;
+ * production callers use the default `readGitConfig`.
  */
 export function resolvePackageDefaults(
   config: PackageCommandConfig,
   fs: FileSystemService,
+  gitConfigReader: () => PartialMetadata = readGitConfig,
 ): { projectRoot: string; defaults: ResolvedMetadata } {
   const projectRoot = config.sourceDir || fs.currentWorkingDirectory()
-  const gitConfig = readGitConfig()
+  const gitConfig = gitConfigReader()
   const packageJson = readPackageJsonDefaults(projectRoot, fs)
   const prefs = readPreferences(fs)
   return {

@@ -100,24 +100,6 @@ async function createAndReportZip(params: {
   }
 }
 
-/**
- * Resolve the manifest metadata params from the shared defaults cascade
- * (cliFlags > packageJson > gitConfig > preferences > hardcoded), then attach
- * organization metadata. Same cascade the guided (--interactive) path uses, so
- * quick and guided modes agree on defaults; CLI flags stay highest precedence.
- */
-function resolveManifestParams(
-  config: PackageCommandConfig,
-  fs: FileSystemService,
-  organization?: OrganizationMetadata,
-) {
-  const { defaults } = resolvePackageDefaults(config, fs)
-  return {
-    ...defaults,
-    ...(organization && { organization }),
-  }
-}
-
 async function resolveOrgMetadata(
   config: PackageCommandConfig,
   projectRoot: string,
@@ -157,7 +139,9 @@ export async function handlePackageCommand(
     config = resolved
   }
 
-  const projectRoot = config.sourceDir || fs.currentWorkingDirectory()
+  // Shared defaults cascade — same one the guided (--interactive) path resolves.
+  // Computed once: projectRoot is reused below, defaults feed the manifest.
+  const { projectRoot, defaults } = resolvePackageDefaults(config, fs)
 
   logger.debug('📦 Starting package creation...')
   logger.debug(`   Source: ${projectRoot}`)
@@ -179,10 +163,10 @@ export async function handlePackageCommand(
   const registryNames = registries.map(r => r.source || '').filter(Boolean)
 
   const organization = await resolveOrgMetadata(config, projectRoot, fs)
-  const manifest = generateManifestMetadata(
-    registryNames,
-    resolveManifestParams(config, fs, organization),
-  )
+  const manifest = generateManifestMetadata(registryNames, {
+    ...defaults,
+    ...(organization && { organization }),
+  })
 
   // Resolve output path - if relative, make it relative to current working directory
   const outputPath = config.output

@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from 'vitest'
-import { resolveDefaults, readGitConfig, readPackageJsonDefaults } from './defaults-resolver'
+import { InMemoryFileSystemService } from '@pair/content-ops'
+import {
+  resolveDefaults,
+  readGitConfig,
+  readPackageJsonDefaults,
+  resolvePackageDefaults,
+} from './defaults-resolver'
 import type { ResolvedMetadata } from './defaults-resolver'
+import type { PackageCommandConfig } from './parser'
 
 describe('resolveDefaults', () => {
   const hardcoded: ResolvedMetadata = {
@@ -113,6 +120,42 @@ describe('readGitConfig', () => {
       expect(typeof result.author).toBe('string')
       expect(result.author.length).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('resolvePackageDefaults', () => {
+  const cwd = '/project'
+  const baseConfig: PackageCommandConfig = {
+    command: 'package',
+    layout: 'source',
+    interactive: false,
+    tags: [],
+    license: 'MIT',
+  }
+
+  it('resolves the author (git-config) tier deterministically via injected reader', () => {
+    // The gitConfig tier is injectable so it can be asserted without shelling out
+    // to real `git`. No package.json → author falls to the injected git identity.
+    const fs = new InMemoryFileSystemService({}, cwd, cwd)
+
+    const { defaults } = resolvePackageDefaults(baseConfig, fs, () => ({ author: 'Ada Lovelace' }))
+
+    expect(defaults.author).toBe('Ada Lovelace')
+    expect(defaults.name).toBe('kb-package') // no package.json → hardcoded fallback
+  })
+
+  it('packageJson name outranks the injected git-config author tier', () => {
+    const fs = new InMemoryFileSystemService(
+      { [`${cwd}/package.json`]: JSON.stringify({ name: 'foo', version: '2.5.0' }) },
+      cwd,
+      cwd,
+    )
+
+    const { defaults } = resolvePackageDefaults(baseConfig, fs, () => ({ author: 'Ada Lovelace' }))
+
+    expect(defaults.name).toBe('foo')
+    expect(defaults.version).toBe('2.5.0')
+    expect(defaults.author).toBe('Ada Lovelace') // package.json has no author → git tier wins
   })
 })
 
