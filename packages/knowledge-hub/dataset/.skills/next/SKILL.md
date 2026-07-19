@@ -1,13 +1,41 @@
 ---
 name: next
 description: "Determines the most relevant next action for your project by reading adoption files and PM tool state. Suggests which skill to invoke next. Use at the start of a session, when switching tasks, or whenever you need guidance on what to work on."
-version: 0.4.2
+version: 0.5.0
 author: Foomakers
 ---
 
 # /next — Project Navigator
 
 Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 38-skill catalog across all lifecycle phases.
+
+## Arguments (optional)
+
+`/next` accepts two **optional** arguments that SCOPE which backlog items it may select. With neither, it behaves exactly as before — the whole backlog is in scope. This scoping is what makes `/next` the parametrizable atom of automation.
+
+| Argument   | Value                                          | Effect                                                          |
+| ---------- | ---------------------------------------------- | -------------------------------------------------------------- |
+| `--root`   | an issue id (epic or story)                    | Restrict selection to that issue's subtree in the PM hierarchy. |
+| `--filter` | a single tag/label (e.g. `ui`, `risk:red`)     | Restrict selection to issues carrying that exact label.         |
+
+Both may be combined — the effective scope is the **intersection**: `subtree ∩ matching tags` (see Step 0).
+
+### `--root <issue-id>` — subtree scope
+
+Resolve the issue's descendants through the **PM-tool parent/child hierarchy** (sub-issues / parent links), never through title conventions. Selection is confined to that subtree — nothing outside it is ever proposed.
+
+- **Epic root** → operate at epic level: plan / refine / develop the epic's children only.
+- **Story root** → operate on that story: refine or develop it (and its tasks); never step outside it.
+
+The root issue is itself a **first-class member** of the candidate set, alongside its transitive children; a scoped run is a **backlog-item query** over that set. The **item-selection rows (6–11)** of Step 3 and Step 4 **row 16** (`/grill`) run against the candidate set instead of the full backlog — so a Draft story root selects `/refine-story` on itself, a Ready story root selects `/implement` (or `/plan-tasks`), and nothing outside the set is ever proposed. The project-wide detectors are **never** surfaced under a scope: Step 2 (fresh-project detection) and Step 4 rows 12–15 (gate / stack / debt / estimation config) answer whole-project questions — not "which item in this subtree" — so a scoped run does not emit them; if the candidate set yields no actionable item, the run exits cleanly (Step 0 item 5) rather than falling through to them. Step 3 rows 3–5 (`/plan-initiatives`, `/plan-epics`, `/plan-stories`) are **structural planning-gap detectors evaluated root-relatively**, never fired by a subtree's mere absence of a higher layer: a **story root skips rows 3–5 entirely** and begins at row 6 (its planning layers already exist), while an **epic root keeps row 5 scoped to itself** — an epic with no user-story children selects `/plan-stories` (the epic-root "plan its children" action) — and skips rows 3–4 (an epic contains no initiatives or epics). Under a `--filter`-only scope (no root) there is no subtree, so rows 3–5, like the other project-wide detectors, are not surfaced.
+
+### `--filter <tag>` — generic tag match
+
+Keep only candidate issues that carry the given label. `--filter` takes a **single label string**, not a boolean expression — there is no AND/OR/NOT grammar; the whole argument is matched literally against each issue's labels. The tag is interpreted **GENERICALLY: `/next` assigns NO meaning to any tag value.** `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic anywhere in this skill (D18). A namespaced-looking label such as `tag:ui` carries **no** namespace semantics either: the whole string (colon included) is one opaque label, matched entire — so `--filter tag:ui` selects issues labelled literally `tag:ui`, exactly as `--filter ui` selects issues labelled `ui`. A filter is a plain PM-tool label query, nothing more.
+
+### Re-evaluation — selection is never cached
+
+The scope is **stateless across steps**. Every run — and every step of a multi-step run — re-queries the PM tool and **re-evaluates** `--root` and `--filter` against the **current** board state. If an issue's tags change between steps (e.g. a review raises `risk:yellow` → `risk:red`), the next step's selection reflects the change immediately. `/next` never reuses a selection computed in a previous step.
 
 ## Skill Catalog (38 skills)
 
@@ -64,6 +92,21 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 
 Execute these checks **in order**. Stop at the first match.
 
+### Step 0: Resolve Selection Scope (arguments)
+
+Run this before every other step, on **every** invocation — the result is never carried over from a previous run or step.
+
+1. **No arguments** → the candidate set is the full backlog; skip to Step 1.
+2. **`--root <id>`** → resolve the issue via the PM tool.
+   - **Root not found** (id does not resolve to an issue): **HALT** with a clear message (`root <id> not found`) and propose no action.
+   - **Root resolves to a Done issue**: report that the root is already Done and exit; propose no work.
+   - Otherwise: the candidate set is **the root issue itself plus its transitive children** through the PM-tool hierarchy (parent/child links). The root is a **first-class member** — a childless story or epic root yields a **one-issue** set, not an empty one — and is itself subject to the item-selection rows (a Draft story root → `/refine-story`; a Ready story root → `/implement` or `/plan-tasks`). Later steps read this set instead of the full backlog.
+3. **`--filter <tag>`** → narrow the candidate set to issues carrying the tag, using a plain string-equality label query (tag-agnostic — no tag value gets special treatment). **When `--root` is absent the candidate set defaults to the full backlog, which `--filter` then narrows**; when `--root` is present it narrows that subtree.
+4. **Both** → apply the intersection: `subtree ∩ matching tags`.
+5. **Empty candidate set** — **zero issues** (e.g. `--filter` matches no issue): report `no matching issues` and exit cleanly — an empty result is normal, **not an error**. A childless `--root` (root with no children) is **one** issue, not empty: it flows into the cascade (see item 2). A **non-empty** set whose issues happen to be all non-actionable (e.g. all Done) is likewise not empty here — it falls through to the Step 5 fallback; actionability is decided in Steps 3–4, not by this emptiness check. Item 5's clean exit governs **backlog-item selection only**: a scoped run that finds no actionable item exits here and does **not** surface the project-wide config rows 12–15.
+
+The resolved candidate set feeds the scoped Step 3 item-selection (rows 6–11) and Step 4 row 16 (`/grill`). Step 2 and rows 12–15 (project-wide) are not surfaced under a scope; rows 3–5 are evaluated **root-relatively** (epic root → row 5 only; story root → skipped) — see Step 3. A scope **presupposes an established project** (adoption files populated, a real backlog): on a fresh template project `--root`/`--filter` are never passed — Step 2 fresh-project detection governs and steers to `/bootstrap`, so the Step 3 "all adoption files populated" premise always holds under a scope. Because Step 0 re-runs each time, a tag mutation between steps changes the selection on the next step automatically.
+
 ### Step 1: Read Adoption Files
 
 Read the following files and classify each as **populated** or **template**:
@@ -92,7 +135,13 @@ If any of the above matched, output the suggestion and stop.
 
 ### Step 3: Cascade — Established Project Detection
 
-All adoption files are populated. Query the PM tool to determine backlog state.
+All adoption files are populated. Query the PM tool to determine backlog state — **restricted to the candidate set resolved in Step 0** when `--root`/`--filter` are set (re-evaluated every run, never cached). This restriction is scoped to the **item-selection rows 6–11** (and Step 4 row 16): it includes row 6's open-PR detection — only PRs whose linked issue is inside the candidate set count — so a PR for an issue outside the subtree/filter is **never** surfaced as `/review`, preserving the guarantee that nothing outside the scope is ever selected. Rows 3–5 (`/plan-initiatives`, `/plan-epics`, `/plan-stories`) are **structural planning-gap detectors**, not item selectors, and under `--root` are **evaluated root-relatively** — never fired by a subtree's mere structural absence of a higher layer:
+
+- **Story root** → rows 3–5 are **skipped**; the cascade begins at row 6 (the story's initiative/epic/story layers already exist, and its candidate set holds no initiatives or epics to plan).
+- **Epic root** → rows 3–4 are skipped (an epic contains no initiatives or epics); **row 5 is kept, scoped to the root epic** — if it has no user-story children, select `/plan-stories`. This is the epic-root "plan its children" action AC1 requires.
+- **`--filter`-only (no root)** → there is no subtree; rows 3–5, being project-wide structural detectors, are not surfaced (a scoped run is a backlog-item query).
+
+Rows 12–15 are likewise project-wide and not surfaced under a scope; when the candidate set yields no actionable item, Step 0 item 5's clean exit governs (see Step 0).
 
 **PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
 
@@ -102,7 +151,7 @@ All adoption files are populated. Query the PM tool to determine backlog state.
 | --- | ---------------------------------------------------------------- | ------------------- | ------------------------------------------- |
 | 3   | No initiatives or epics exist in PM tool                         | `/plan-initiatives` | Strategic planning needed                   |
 | 4   | Initiatives exist but no epics                                   | `/plan-epics`       | Epic decomposition needed                   |
-| 5   | Epics exist but no user stories                                  | `/plan-stories`     | Story breakdown needed                      |
+| 5   | Epics exist but no user stories (under a `--root <epic>` scope this is evaluated **root-relatively** — the root epic's own story children, not the whole board; see the Step 3 header) | `/plan-stories`     | Story breakdown needed                      |
 | 6   | Open pull requests, or items resolve to macrostate `Review`       | `/review`           | Code review pending — closest to delivery   |
 | 7   | A story resolves to macrostate `In Progress` AND its checkpoint file exists (`.pair/working/checkpoints/<story-id>.md`) | `/checkpoint` | Resume interrupted work (`$mode: resume`) before re-analysis |
 | 8   | A story resolves to macrostate `In Progress` but has NO checkpoint file | `/implement`   | Continue the in-progress work — `/implement` re-derives state from scratch when no checkpoint exists |
@@ -122,7 +171,7 @@ If no process skill matched in Steps 2-3, check for capability skill opportuniti
 | 13  | Tech stack has unlisted dependencies detected                            | `/assess-stack`      | Stack registry needs updating                   |
 | 14  | Technical debt flags present (TODO/FIXME/HACK comments detected)         | `/analyze-debt`      | Debt should be cataloged and prioritized        |
 | 15  | No estimation methodology adopted in way-of-working                      | `/estimate`          | Estimation process should be established        |
-| 16  | A backlog item or topic carries open questions or unclear scope (question markers, conflicting comments) that block planning | `/grill` | Structured one-question-at-a-time alignment before planning |
+| 16  | A backlog item carries open questions or unclear scope (question markers, conflicting comments) that block planning — **restricted to the Step-0 candidate set when `--root`/`--filter` are set** (an out-of-scope item is never surfaced, same as row 6) | `/grill` | Structured one-question-at-a-time alignment before planning |
 
 ### Step 5: Fallback
 
@@ -143,11 +192,14 @@ PROJECT STATE:
 ├── Subdomains: [populated | template]
 ├── Bounded Contexts: [populated | template]
 ├── PM Tool: [tool name | not configured]
-└── Backlog: [summary of current items]
+├── Scope: [full backlog | root #ID (subtree) | filter <tag> | root #ID ∩ <tag>]
+└── Backlog: [summary of current items — within scope]
 
 RECOMMENDATION: /skill-name
 REASON: [one-line explanation]
 ```
+
+When `--root`/`--filter` yield no work, replace the recommendation with the corresponding Step 0 outcome (`root <id> not found` → HALT; `root <id> is Done` → exit; `no matching issues` → clean exit).
 
 Then ask: "Shall I run `/skill-name`?"
 
@@ -155,6 +207,7 @@ Then ask: "Shall I run `/skill-name`?"
 
 See [graceful degradation](../../.pair/knowledge/skill-conventions/graceful-degradation.md) (PM tool not accessible → skip Step 3, recommend from adoption files only; adoption files missing → suggest `/bootstrap` as the entry point) for the standard scenarios. Additional cases:
 
+- **Argument edge cases** (see Step 0): `--root` not found → HALT, no action; `--root` resolves to a Done issue → report and exit; `--filter` (or the subtree) matches nothing → report `no matching issues` and exit cleanly (an empty result is not an error).
 - If a suggested skill is not installed, tell the user which skill is needed and where to find it.
 - If way-of-working.md has no `## State Mapping` section, canonical macrostate names are assumed — this is the zero-configuration default, not a degradation.
 - If a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback ([Definition of Ready criteria](../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md)) rather than treating row 11's condition as unresolvable.
