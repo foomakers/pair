@@ -22,12 +22,12 @@ With neither argument, behaviour is unchanged: the full backlog is in scope.
 
 `--root` confines selection to the given issue and its transitive children, resolved through the **PM-tool parent/child hierarchy** (sub-issues / parent links) — never through title conventions. Nothing outside the subtree is ever proposed.
 
-- **Epic root** → work at epic level: plan, refine, or develop the epic's children only.
-- **Story root** → work on that story: refine or develop it (and its tasks); never step outside it.
+- **Epic root** → work at epic level on the epic's children only: an epic with no user-story children yet resolves to `/plan-stories` (the "plan its children" action); otherwise refine or develop those stories.
+- **Story root** → the story is itself the unit of work and a first-class candidate: a Draft story resolves to `/refine-story`, a Ready one to `/implement` (or `/plan-tasks`); its subtree never steps outside it.
 
 ```bash
-/pair-next --root 204     # only epic #204 and its stories are in scope
-/pair-next --root 249     # only story #249 (refine/develop it)
+/pair-next --root 204     # epic #204 and its stories; no stories yet → /plan-stories
+/pair-next --root 249     # story #249 itself → refine it (Draft) or implement it (Ready)
 ```
 
 ## `--filter <tag>` — generic tag match

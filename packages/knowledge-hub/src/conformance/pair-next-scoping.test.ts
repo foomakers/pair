@@ -42,6 +42,20 @@ describe.each(sources)(
       expect(content.toLowerCase()).toMatch(/story root/)
     })
 
+    it('pins AC1 scoping intent: epic-root reaches plan-stories, story-root is itself a first-class candidate', () => {
+      const lower = content.toLowerCase()
+      // AC1 (epic root "plan its children"): rows 3-5 are NOT blanket-skipped under a
+      // root scope — an epic root keeps row 5 → /plan-stories. Guards round-5 Major #2.
+      expect(content).toMatch(/plan-stories/)
+      expect(lower).toMatch(/keeps? row 5|row 5 is kept/)
+      // Regression guard: the old blanket wording ("rows 3–5 … skipped under a
+      // --root/--filter scope") that hid the epic-root planning path must be gone.
+      expect(content).not.toMatch(/rows 3[–-]5[^.]*skipped under a `?--root`?\/`?--filter/i)
+      // AC1 (story root actionable): the root issue is itself a first-class member of
+      // the candidate set, subject to the item-selection rows. Guards round-5 Major #1.
+      expect(lower).toMatch(/first-class/)
+    })
+
     it('states --filter is interpreted generically with NO tag semantics (D18)', () => {
       expect(content).toMatch(/D18/)
       expect(content.toLowerCase()).toMatch(/generic/)
