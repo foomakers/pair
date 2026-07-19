@@ -1,13 +1,41 @@
 ---
 name: next
 description: "Determines the most relevant next action for your project by reading adoption files and PM tool state. Suggests which skill to invoke next. Use at the start of a session, when switching tasks, or whenever you need guidance on what to work on."
-version: 0.4.2
+version: 0.5.0
 author: Foomakers
 ---
 
 # /next — Project Navigator
 
 Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 38-skill catalog across all lifecycle phases.
+
+## Arguments (optional)
+
+`/next` accepts two **optional** arguments that SCOPE which backlog items it may select. With neither, it behaves exactly as before — the whole backlog is in scope. This scoping is what makes `/next` the parametrizable atom of automation (R2.2, R2.3).
+
+| Argument   | Value                                          | Effect                                                          |
+| ---------- | ---------------------------------------------- | -------------------------------------------------------------- |
+| `--root`   | an issue id (epic or story)                    | Restrict selection to that issue's subtree in the PM hierarchy. |
+| `--filter` | a tag expression (e.g. `tag:ui`, `risk:red`)   | Restrict selection to issues carrying the matching tag.         |
+
+Both may be combined — the effective scope is the **intersection**: `subtree ∩ matching tags` (see Step 0).
+
+### `--root <issue-id>` — subtree scope
+
+Resolve the issue's descendants through the **PM-tool parent/child hierarchy** (sub-issues / parent links), never through title conventions. Selection is confined to that subtree — nothing outside it is ever proposed.
+
+- **Epic root** → operate at epic level: plan / refine / develop the epic's children only.
+- **Story root** → operate on that story: refine or develop it (and its tasks); never step outside it.
+
+The root issue plus its transitive children form the candidate set; the cascade (Steps 2–4) then runs against that set instead of the full backlog.
+
+### `--filter <tag-expression>` — generic tag match
+
+Keep only candidate issues that carry the given tag. The tag is interpreted **GENERICALLY: `/next` assigns NO meaning to any tag value.** `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic anywhere in this skill (D18). A filter is a plain PM-tool label query, nothing more.
+
+### Re-evaluation — selection is never cached
+
+The scope is **stateless across steps**. Every run — and every step of a multi-step run — re-queries the PM tool and **re-evaluates** `--root` and `--filter` against the **current** board state. If an issue's tags change between steps (e.g. a review raises `risk:yellow` → `risk:red`), the next step's selection reflects the change immediately. `/next` never reuses a selection computed in a previous step.
 
 ## Skill Catalog (38 skills)
 
@@ -64,6 +92,21 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 
 Execute these checks **in order**. Stop at the first match.
 
+### Step 0: Resolve Selection Scope (arguments)
+
+Run this before every other step, on **every** invocation — the result is never carried over from a previous run or step.
+
+1. **No arguments** → scope is the full backlog; skip to Step 1.
+2. **`--root <id>`** → resolve the issue via the PM tool.
+   - **Root not found** (id does not resolve to an issue): **HALT** with a clear message (`root <id> not found`) and propose no action.
+   - **Root resolves to a Done issue**: report that the root is already Done and exit; propose no work.
+   - Otherwise: collect the root plus its transitive children through the PM-tool hierarchy (parent/child links) into the candidate set. Later steps read this set instead of the full backlog.
+3. **`--filter <tag>`** → keep only candidates carrying the tag, using a plain string-equality label query. The predicate is tag-agnostic — no tag value gets special treatment.
+4. **Both** → apply the intersection: `subtree ∩ matching tags`.
+5. **Empty candidate set** (filter matches nothing / subtree has no actionable child): report `no matching issues` and exit cleanly — an empty result is normal, **not an error**.
+
+The resolved candidate set feeds Step 3's backlog query. Because Step 0 re-runs each time, a tag mutation between steps changes the selection on the next step automatically.
+
 ### Step 1: Read Adoption Files
 
 Read the following files and classify each as **populated** or **template**:
@@ -92,7 +135,7 @@ If any of the above matched, output the suggestion and stop.
 
 ### Step 3: Cascade — Established Project Detection
 
-All adoption files are populated. Query the PM tool to determine backlog state.
+All adoption files are populated. Query the PM tool to determine backlog state — **restricted to the candidate set resolved in Step 0** when `--root`/`--filter` are set (re-evaluated every run, never cached).
 
 **PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
 
@@ -143,11 +186,14 @@ PROJECT STATE:
 ├── Subdomains: [populated | template]
 ├── Bounded Contexts: [populated | template]
 ├── PM Tool: [tool name | not configured]
-└── Backlog: [summary of current items]
+├── Scope: [full backlog | root #ID (subtree) | filter <tag> | root #ID ∩ <tag>]
+└── Backlog: [summary of current items — within scope]
 
 RECOMMENDATION: /skill-name
 REASON: [one-line explanation]
 ```
+
+When `--root`/`--filter` yield no work, replace the recommendation with the corresponding Step 0 outcome (`root <id> not found` → HALT; `root <id> is Done` → exit; `no matching issues` → clean exit).
 
 Then ask: "Shall I run `/skill-name`?"
 
@@ -155,6 +201,7 @@ Then ask: "Shall I run `/skill-name`?"
 
 See [graceful degradation](../../.pair/knowledge/skill-conventions/graceful-degradation.md) (PM tool not accessible → skip Step 3, recommend from adoption files only; adoption files missing → suggest `/bootstrap` as the entry point) for the standard scenarios. Additional cases:
 
+- **Argument edge cases** (see Step 0): `--root` not found → HALT, no action; `--root` resolves to a Done issue → report and exit; `--filter` (or the subtree) matches nothing → report `no matching issues` and exit cleanly (an empty result is not an error).
 - If a suggested skill is not installed, tell the user which skill is needed and where to find it.
 - If way-of-working.md has no `## State Mapping` section, canonical macrostate names are assumed — this is the zero-configuration default, not a degradation.
 - If a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback ([Definition of Ready criteria](../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md)) rather than treating row 11's condition as unresolvable.

@@ -1,0 +1,54 @@
+---
+title: pair-next Arguments
+description: Scope the /pair-next navigator with --root (subtree selection) and --filter (generic tag match), re-evaluated on every run and step.
+---
+
+`/pair-next` is the project navigator: it reads adoption files and PM-tool state and recommends the single most relevant skill to run next. See [Skills](/docs/concepts/skills) for how skills work and [Canonical States](/docs/concepts/canonical-states) for how backlog items resolve to macrostates.
+
+By default `/pair-next` considers the whole backlog. Two **optional** arguments narrow what it may select, turning the navigator into the parametrizable atom of automation.
+
+> **Source:** `packages/knowledge-hub/dataset/.skills/next/SKILL.md`
+
+## Arguments
+
+| Argument   | Value                                        | Effect                                                          |
+| ---------- | -------------------------------------------- | -------------------------------------------------------------- |
+| `--root`   | an issue id (epic or story)                  | Restrict selection to that issue's subtree in the PM hierarchy. |
+| `--filter` | a tag expression (e.g. `tag:ui`, `risk:red`) | Restrict selection to issues carrying the matching tag.         |
+
+With neither argument, behaviour is unchanged: the full backlog is in scope.
+
+## `--root <issue-id>` — subtree scope
+
+`--root` confines selection to the given issue and its transitive children, resolved through the **PM-tool parent/child hierarchy** (sub-issues / parent links) — never through title conventions. Nothing outside the subtree is ever proposed.
+
+- **Epic root** → work at epic level: plan, refine, or develop the epic's children only.
+- **Story root** → work on that story: refine or develop it (and its tasks); never step outside it.
+
+```bash
+/pair-next --root 204     # only epic #204 and its stories are in scope
+/pair-next --root 249     # only story #249 (refine/develop it)
+```
+
+## `--filter <tag-expression>` — generic tag match
+
+`--filter` keeps only issues carrying the given tag. The tag is interpreted **generically**: `/pair-next` assigns no meaning to any tag value. `risk:red` is matched by exactly the same string-equality predicate as `team:ui` — there is no classification, tiering, or severity logic inside the navigator. A filter is a plain PM-tool label query.
+
+```bash
+/pair-next --filter tag:ui            # only issues tagged ui
+/pair-next --root 204 --filter risk:red   # subtree of #204, intersected with risk:red
+```
+
+Combining both arguments applies the **intersection**: `subtree ∩ matching tags`.
+
+## Re-evaluation — selection is never cached
+
+Scope is **stateless across steps**. Every run — and every step of a multi-step run — re-queries the PM tool and re-applies `--root` and `--filter` against the **current** board state. If an issue's tags change between steps (for example, a review raises `risk:yellow` to `risk:red`), the next step's selection reflects the change immediately. `/pair-next` never reuses a selection computed in a previous step.
+
+## Edge cases
+
+| Situation                         | Behaviour                                                            |
+| --------------------------------- | ------------------------------------------------------------------- |
+| `--root` id does not resolve      | HALT with a clear message (`root <id> not found`); propose no action. |
+| `--root` resolves to a Done issue | Report that the root is already Done and exit; propose no work.       |
+| Filter (or subtree) matches nothing | Report `no matching issues` and exit cleanly — an empty result is not an error. |
