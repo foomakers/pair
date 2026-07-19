@@ -13,15 +13,17 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 
 | Skill                   | Type       | Required | Phase | Purpose                                      |
 | ----------------------- | ---------- | -------- | ----- | -------------------------------------------- |
-| `/classify`             | Capability | Yes      | 1     | Risk matrix from the diff (confirm-or-raise) |
+| `/classify`             | Capability | Yes †    | 1     | Risk matrix from the diff (confirm-or-raise) |
 | `/verify-quality`       | Capability | Yes      | 2     | Quality gate checking                        |
 | `/verify-done`          | Capability | Yes      | 4     | Definition of Done checking                  |
 | `/record-decision`      | Capability | Yes      | Any   | Record missing ADR (HALT condition)          |
 | `/analyze-debt`         | Capability | Yes      | 4     | Flag tech debt items                         |
-| `/assess-security`      | Capability | Yes      | 2     | Security posture verdict + findings (D22)    |
+| `/assess-security`      | Capability | Yes †    | 2     | Security posture verdict + findings (D22)    |
 | `/verify-adoption`      | Capability | Optional | 3     | Full adoption compliance                     |
 | `/assess-stack`         | Capability | Optional | 3     | Tech-stack resolution                        |
 | `/execute-manual-tests` | Capability | Optional | 6     | Post-merge release validation (manual tests) |
+
+† **Required _when installed_.** `/classify` and `/assess-security` carry Required = Yes because `/review` composes them by default — but both **degrade gracefully**: `/review` **warns and continues** when the skill is absent (`/classify` → Step 1.5 Skip; `/assess-security` → Step 2.4 / Graceful Degradation), never HALTing on their absence. "Required" here means _composed by default_, not _a hard prerequisite_, so the flag never contradicts the graceful-skip steps.
 
 ## Arguments
 
@@ -137,7 +139,7 @@ Ask: _"Proceed with review?"_
 1. **Check**: Has `/assess-security` already run with `$mode: review` on the current PR head commit?
 2. **Skip**: If already run — reuse the verdict + findings, move to Phase 3.
 3. **Act**: Compose `/assess-security` with `$mode: review` against the PR diff. It resolves the rule set (KB global + per-service + per-web-app + adoption project rules) and returns a 1-line verdict + collapsed findings, each tagged **introduced** or **pre-existing**.
-4. **Verify**: Verdict + findings recorded — feeds the Security Review section (Step 5.1) and the **Security relevance** dimension of the Step 1.5 classification matrix (`/classify` folds this verdict in **raise-only** — it may raise the tier, never lower it). **Body re-render**: when the verdict raises Security relevance (or the Coupling verdict raises Coupling balance), `/review` updates the already-written Step 1.5 body matrix **in place** — re-rendering the affected `<details>` row and the 1-line `risk:*` tier so the PR body reflects the final, raised tier; `/classify` is **not** re-invoked (its Phase-1 run stands, and a raise-only edit needs no recompute). If any **introduced** finding is red → flag explicitly: this is the AC4 signal that drives the CHANGES-REQUESTED decision in Step 5.2. Does not itself HALT — `/assess-security` has no merge authority, this skill's own decision step does.
+4. **Verify**: Verdict + findings recorded — feeds the Security Review section (Step 5.1) and the **Security relevance** dimension of the Step 1.5 classification matrix (`/classify` folds this verdict in **raise-only** — it may raise the tier, never lower it). **Body re-render**: when the verdict raises Security relevance (or the Coupling verdict raises Coupling balance), `/review` updates the already-written Step 1.5 body matrix **in place** — re-rendering the affected `<details>` row and the 1-line `risk:*` tier so the PR body reflects the final, raised tier; `/classify` is **not** re-invoked (its Phase-1 run stands, and a raise-only edit needs no recompute). **Tag re-apply**: when a `## Tag Projection` is declared (e.g. `Active: risk`), this in-place Phase-2-originated raise **also re-applies the projected chromatic tag on the PR** — swapping the stale label for the raised tier (e.g. `risk:yellow` → `risk:red`) via the same §5 projection `/classify` uses in its Step 5, applied here by `/review` on the raise-only edit — so the PR label matches the raised body tier (AC3); when no projection is declared, only the body matrix is updated and no label is touched. If any **introduced** finding is red → flag explicitly: this is the AC4 signal that drives the CHANGES-REQUESTED decision in Step 5.2. Does not itself HALT — `/assess-security` has no merge authority, this skill's own decision step does.
 
 ## Phase 3: Adoption Compliance
 

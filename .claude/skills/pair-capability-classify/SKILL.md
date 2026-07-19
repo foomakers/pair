@@ -111,6 +111,45 @@ Confidence: [high | low — unreadable diff, path/service-level fallback]
 </details>
 ```
 
+## Worked Examples
+
+Hand-traced fixtures that pin the two behavioural invariants — **determinism** (AC4) and **never-lower** (D17) — to concrete matrices. Each example lists every dimension value and the resulting tier so the rule (`risk` tier = the max of the assessed dimensions, floored by the refinement pass in review) is auditable, not merely asserted. These fixtures are conformance-checked (`src/conformance/classify.test.ts`): each must carry all five dimensions and a tier that follows the max-rule — and, in review, the refinement floor.
+
+Legend — dimension values are `green` | `yellow` | `red` | `not assessed`; `not assessed` is excluded from the max (D21). Tier is `risk:<green|yellow|red>`.
+
+### Worked Example 1 — Determinism (refinement)
+
+Same story context classified on two independent runs yields an identical matrix (AC4). Story context: an internal supporting-subdomain UI tweak — reposition the settings icon; no data-model change, no security-relevant paths, no cross-context integration, no DDD artifacts present.
+
+| Run | Service/domain criticality | Change/diff risk | Business impact | Security relevance | Coupling balance | Tier |
+| --- | --- | --- | --- | --- | --- | --- |
+| A | green | green | green | green | not assessed | risk:green |
+| B | green | green | green | green | not assessed | risk:green |
+
+Run A and Run B are byte-identical — no randomness, no time-dependence. Tier = max(green, green, green, green) = `risk:green` on both runs.
+
+### Worked Example 2 — Never-lower, benign diff (review)
+
+The story was refined at `risk:yellow` (Change/diff risk yellow — a moderate declared scope). The review diff is benign: a docs paragraph and a user-facing copy string, no logic, no schema, no security paths. The review-computed dimensions are all green, but the **refinement floor** holds the tier at yellow — the review confirms, it never lowers (D17).
+
+| Pass | Service/domain criticality | Change/diff risk | Business impact | Security relevance | Coupling balance | Tier |
+| --- | --- | --- | --- | --- | --- | --- |
+| refinement | green | yellow | green | green | not assessed | risk:yellow |
+| review | green | green | green | green | not assessed | risk:yellow |
+
+Review raw max = green, but `max(review, refinement-floor)` = `max(green, yellow)` = `risk:yellow`. The tier stays yellow; nothing is lowered.
+
+### Worked Example 3 — Never-lower, risky diff raises (review)
+
+Same refinement start (`risk:yellow`), but the review diff reveals a database schema migration plus a change to an authentication path. Change/diff risk rises to red and Security relevance rises to red, so the tier is **raised** to `risk:red` — above both the review-nothing case and the refinement floor.
+
+| Pass | Service/domain criticality | Change/diff risk | Business impact | Security relevance | Coupling balance | Tier |
+| --- | --- | --- | --- | --- | --- | --- |
+| refinement | green | yellow | green | green | not assessed | risk:yellow |
+| review | green | red | green | red | not assessed | risk:red |
+
+Review raw max = red (Change/diff risk, Security relevance), so `max(red, yellow-floor)` = `risk:red`. The tier is raised, never lowered — a later benign diff could confirm red but could not drop it below the refinement floor.
+
 ## Composition Interface
 
 **Composed by `/pair-process-refine-story`** (refinement): invoked with `$context: refinement` after the technical analysis. Returns the matrix; `/pair-process-refine-story` embeds the 1-line + `<details>` into the story body (D22) and lets `classify` apply/propose tags. Absent ⇒ `/pair-process-refine-story` warns and continues without a matrix (graceful degradation — never HALTs on classify's absence).

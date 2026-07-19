@@ -131,6 +131,132 @@ describe('/review composes classify in review context (AC3 — #233)', () => {
 // tier-derivation rule (`tier = max`) and the full `risk:green|yellow|red` triple
 // enumeration; a consumer may *reference* a single tier (e.g. `risk:red`) but must
 // not restate the derivation rules. This assertion keeps the DoD claim grep-backed.
+// Behavioural worked-example fixtures (#233): the classify SKILL documents
+// hand-traced examples that pin determinism (AC4) and never-lower (D17) to
+// CONCRETE matrices. This guard PARSES those fixtures and re-derives each tier
+// from the documented max-rule (floored by the refinement pass in review) — so
+// the examples cannot silently drift out of internal consistency. This is
+// behavioural, not a prose grep: it recomputes the rule over the stated values.
+const TIER_RANK: Record<string, number> = { green: 0, yellow: 1, red: 2 }
+const RANK_TIER = ['green', 'yellow', 'red']
+const REQUIRED_DIMENSIONS = [
+  'Service/domain criticality',
+  'Change/diff risk',
+  'Business impact',
+  'Security relevance',
+  'Coupling balance',
+]
+
+type WorkedRow = { label: string; dims: string[]; tier: string }
+type WorkedExample = { title: string; header: string[]; rows: WorkedRow[] }
+
+function splitRow(line: string): string[] {
+  return line
+    .split('|')
+    .slice(1, -1)
+    .map(c => c.trim())
+}
+
+function dimRank(cell: string): number | null {
+  const v = cell.toLowerCase()
+  if (v.startsWith('not assessed')) return null
+  if (v in TIER_RANK) return TIER_RANK[v]
+  throw new Error(`unexpected dimension value: "${cell}"`)
+}
+
+function tierColor(cell: string): string {
+  const m = cell.match(/risk:(green|yellow|red)/)
+  if (!m) throw new Error(`no risk:<tier> in cell: "${cell}"`)
+  return m[1]
+}
+
+function maxColorOf(dims: string[]): string {
+  const ranks = dims.map(dimRank).filter((r): r is number => r !== null)
+  return RANK_TIER[Math.max(...ranks)]
+}
+
+function parseWorkedExamples(content: string): WorkedExample[] {
+  const start = content.indexOf('## Worked Examples')
+  if (start === -1) throw new Error('no "## Worked Examples" section found')
+  // Section runs until the next H2.
+  const section = content.slice(start).split(/\n## /)[0]
+  const blocks = section.split(/\n### /).slice(1)
+  return blocks.map(block => {
+    const lines = block.split('\n')
+    const title = lines[0].trim()
+    const tableLines = lines.filter(l => l.trim().startsWith('|'))
+    const header = splitRow(tableLines[0])
+    // tableLines[1] is the |---| separator; data rows follow.
+    const rows = tableLines.slice(2).map(l => {
+      const cells = splitRow(l)
+      return { label: cells[0], dims: cells.slice(1, 6), tier: cells[6] }
+    })
+    return { title, header, rows }
+  })
+}
+
+describe('worked-example fixtures are present and internally consistent (AC4/D17 — #233)', () => {
+  for (const [label, content] of [
+    ['dataset', CLASSIFY_DATASET],
+    ['mirror', CLASSIFY_MIRROR],
+  ] as const) {
+    const examples = parseWorkedExamples(content)
+
+    it(`${label} documents >=3 worked examples, each with all five dimensions + a tier`, () => {
+      expect(examples.length).toBeGreaterThanOrEqual(3)
+      for (const ex of examples) {
+        for (const dim of REQUIRED_DIMENSIONS) expect(ex.header).toContain(dim)
+        expect(ex.header[ex.header.length - 1]).toBe('Tier')
+        expect(ex.rows.length).toBeGreaterThanOrEqual(2)
+        for (const row of ex.rows) {
+          expect(row.dims).toHaveLength(5)
+          // every dimension cell parses to a valid rank or "not assessed"
+          for (const d of row.dims) expect(() => dimRank(d)).not.toThrow()
+          expect(() => tierColor(row.tier)).not.toThrow()
+        }
+      }
+    })
+
+    const determinism = examples.filter(ex => ex.rows.every(r => /^[AB]$/.test(r.label)))
+    const neverLower = examples.filter(ex =>
+      ['refinement', 'review'].every(l => ex.rows.some(r => r.label === l)),
+    )
+
+    it(`${label} has a determinism example: two runs, identical matrix, tier = max (AC4)`, () => {
+      expect(determinism.length).toBeGreaterThanOrEqual(1)
+      for (const ex of determinism) {
+        const [a, b] = ex.rows
+        expect(a.dims).toEqual(b.dims)
+        expect(a.tier).toBe(b.tier)
+        expect(tierColor(a.tier)).toBe(maxColorOf(a.dims))
+      }
+    })
+
+    it(`${label} has >=2 never-lower examples; each review tier = max(review dims, refinement floor), never below (D17)`, () => {
+      expect(neverLower.length).toBeGreaterThanOrEqual(2)
+      const outcomes: Array<'stayed' | 'raised'> = []
+      for (const ex of neverLower) {
+        const refinement = ex.rows.find(r => r.label === 'refinement')!
+        const review = ex.rows.find(r => r.label === 'review')!
+        // refinement tier follows the plain max-rule over its own dimensions
+        expect(tierColor(refinement.tier)).toBe(maxColorOf(refinement.dims))
+        // review tier follows the max-rule floored by the refinement tier
+        const refRank = TIER_RANK[tierColor(refinement.tier)]
+        const reviewRawRank = TIER_RANK[maxColorOf(review.dims)]
+        const expectedReview = RANK_TIER[Math.max(refRank, reviewRawRank)]
+        expect(tierColor(review.tier)).toBe(expectedReview)
+        // never-lower invariant: review tier is never below the refinement floor
+        expect(TIER_RANK[tierColor(review.tier)]).toBeGreaterThanOrEqual(refRank)
+        outcomes.push(TIER_RANK[tierColor(review.tier)] > refRank ? 'raised' : 'stayed')
+      }
+      // the fixtures must cover BOTH behaviours: a benign diff that stays and a
+      // risky diff that raises.
+      expect(outcomes).toContain('stayed')
+      expect(outcomes).toContain('raised')
+    })
+  }
+})
+
 describe('consumers own no classification criteria (D18 — #233)', () => {
   for (const [label, content] of [
     ['review dataset', REVIEW_DATASET],
