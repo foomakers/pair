@@ -1,11 +1,11 @@
 ---
 title: "v0.4 → v0.5: Canonical States + Domain Modeling"
-description: Migration prompt for pair's canonical backlog states, n-m state-mapping schema, and the map-subdomains/map-contexts process-to-capability rename.
+description: Migration prompt for pair's canonical backlog states, n-m state-mapping schema, the map-subdomains/map-contexts process-to-capability rename, and the classification / risk-matrix capability.
 ---
 
-This page grows incrementally as the stories driving the v0.4 → v0.5 jump land — it currently covers canonical states (including the legacy `Refined` state case) and the domain-modeling capability rename.
+This page grows incrementally as the stories driving the v0.4 → v0.5 jump land — it currently covers canonical states (including the legacy `Refined` state case), the domain-modeling capability rename, and the classification / risk-matrix capability.
 
-Structural background: [Canonical states (#202)](https://github.com/foomakers/pair/issues/202) · [map-subdomains/map-contexts reclassification (#246)](https://github.com/foomakers/pair/issues/246) · [Versioning & migration epic (#214)](https://github.com/foomakers/pair/issues/214) · [Migration note: legacy `Refined` boards (#243)](https://github.com/foomakers/pair/issues/243)
+Structural background: [Canonical states (#202)](https://github.com/foomakers/pair/issues/202) · [map-subdomains/map-contexts reclassification (#246)](https://github.com/foomakers/pair/issues/246) · [Versioning & migration epic (#214)](https://github.com/foomakers/pair/issues/214) · [Migration note: legacy `Refined` boards (#243)](https://github.com/foomakers/pair/issues/243) · [Classification & risk matrix (#233)](https://github.com/foomakers/pair/issues/233)
 
 ## Changed
 
@@ -50,6 +50,14 @@ Full schema and the worked n-m example (Example 2b): `.pair/knowledge/guidelines
 
 Existing `adoption/product/subdomain/*.md` and `adoption/tech/boundedcontext/*.md` files created under the old process-skill flow remain valid as-is — no forced migration. A `Volatility` field (subdomains) or relationship-strength assessment (bounded contexts) is added lazily, the next time that entry falls inside a future scoped run — never backfilled in bulk.
 
+### Classification & risk matrix
+
+pair now builds a **classification matrix** on every story and every PR: `/refine-story` composes `/classify` to score the story context, and `/review` re-scores from the diff (a review can raise a tier, never lower it). This is automatic and needs **no setup** — with no adoption file, `classify` applies the Knowledge Base defaults and writes the matrix only (no tags, nothing fails).
+
+To turn the matrix into **chromatic tags** on your cards and PRs (`risk:green|yellow|red`), add an optional `.pair/adoption/tech/risk-matrix.md` with a `## Tag Projection` section. You don't have to write it by hand: the first time `/classify` runs it **proposes** this declaration and writes it once you confirm. The same file optionally holds a service/domain **criticality table** and **overrides** (threshold tweaks, per-tier reviewer count / SLA). `risk` is the only tag family enabled by default; cost, security, business impact and coupling are computed too but projected as tags only if you add them.
+
+Full model — dimensions, tiers, tag projection, and the `tech/risk-matrix.md` schema — in [Quality Model](/docs/reference/quality-model).
+
 ## Prompt
 
 Copy-paste this into any AI coding agent (Claude Code, Cursor, Copilot, Codex, or similar) with write access to your project. It only touches files under `.pair/adoption/` — never `.pair/knowledge/`, skill files, or application code. Safe to re-run.
@@ -82,7 +90,16 @@ only if not already done, and report what you skipped.
    - If none found, do nothing — this is the common case, since the rename
      is picked up automatically on `pair update`.
 
-3. Summarize what you created or changed versus what was already in place, and
+3. (Optional — classification tags) pair now scores a risk matrix on every
+   story and PR automatically; no file is required. If you want chromatic
+   risk tags (`risk:green|yellow|red`) applied to your cards/PRs right away,
+   create `.pair/adoption/tech/risk-matrix.md` with a `## Tag Projection`
+   section marking `risk` as Active. If you'd rather not, skip this — the
+   `/classify` skill proposes the same declaration the first time it runs, and
+   until then the matrix is written without tags. Skip if
+   `tech/risk-matrix.md` already exists.
+
+4. Summarize what you created or changed versus what was already in place, and
    confirm with `git status` (or equivalent) that only files under
    `.pair/adoption/` were touched.
 ```
@@ -92,6 +109,7 @@ only if not already done, and report what you skipped.
 - [ ] `.pair/adoption/tech/way-of-working.md` either has a `## State Mapping` section matching your board, or your board already uses canonical names (Draft/Ready/In Progress/Review/Done)
 - [ ] If your board has a legacy `Refined` column, you either mapped it to `Ready` (kept the name) or renamed the column to `Ready` (and left it out of the mapping) — not both, not neither
 - [ ] Your own `.pair/adoption/` docs have no remaining literal references to `/pair-process-map-subdomains`, `/pair-process-map-contexts`, or `.skills/process/map-*` — updated to the `-capability-`/`capability/` equivalents if any were found
+- [ ] Classification needs no action to work (it runs on KB defaults); if you want risk tags, `.pair/adoption/tech/risk-matrix.md` has a `## Tag Projection` section — or you've chosen to let `/classify` propose it on its first run
 - [ ] `git status` (or equivalent) shows changes only under `.pair/adoption/`
 - [ ] Re-running the prompt makes no further changes — a second run reports each step as skipped
 
@@ -102,4 +120,5 @@ If you're several versions behind, run the earlier pages in the [Migrations inde
 - [Migrations index](/docs/migrations) — all published version jumps
 - [Writing Migration Pages](/docs/contributing/writing-migration-pages) — the pattern this page follows
 - [Canonical States & State Mapping](/docs/concepts/canonical-states) — full concept explainer
+- [Quality Model](/docs/reference/quality-model) — classification dimensions, tiers, tags, and the `tech/risk-matrix.md` adoption delta
 - [KB Structure Reference](/docs/reference/kb-structure) — current `.pair/` directory layout

@@ -20,7 +20,7 @@ This context orchestrates the collaboration between developers and AI assistants
 ## Integration Patterns
 
 - Consumes standards and best practices from the Knowledge & Standards Context.
-- Publishes workflow and code generation events to Integration & Infrastructure Context for storage and UI management.
+- Publishes workflow and code generation events to Integration & Process Standardization Context for packaging and distribution.
 
 ## Data Ownership
 
