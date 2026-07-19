@@ -11,6 +11,7 @@ import {
   checkCatalogCounts,
   countByCategory,
   checkProseCounts,
+  checkCategoryLabelCounts,
   runChecks,
 } from './skills-conformance-check'
 import { join as pathJoin } from 'node:path'
@@ -211,6 +212,36 @@ describe('checkProseCounts', () => {
     expect(checkProseCounts('gs.md', '(9 process + 27 capability + 1 navigator)', counts)).toEqual(
       [],
     )
+  })
+})
+
+describe('checkCategoryLabelCounts', () => {
+  const counts = { total: 37, process: 9, capability: 27, navigator: 1 }
+
+  it('is silent when heading and table-cell category counts match', () => {
+    const content =
+      '| **Process** | 9 |\n| **Capability** | 27 |\n### Process Skills (9)\n### Capability Skills (27)'
+    expect(checkCategoryLabelCounts('sg.md', content, counts)).toEqual([])
+  })
+
+  it('flags a stale "### Capability Skills (N)" catalog heading', () => {
+    const errors = checkCategoryLabelCounts('sg.md', '### Capability Skills (26)', counts)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('heading')
+    expect(errors[0]).toContain('27 capability skills')
+  })
+
+  it('flags a stale "**Category** | N" Skill-Types table cell', () => {
+    const errors = checkCategoryLabelCounts('sg.md', '| **Process** | 8 |', counts)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('table cell')
+    expect(errors[0]).toContain('9 process skills')
+  })
+
+  it('ignores subcategory groupings that carry no corpus counterpart', () => {
+    // "Assessment"/"Domain Modeling" are not top-level categories — never matched.
+    const content = '#### Assessment Skills (9)\n#### Domain Modeling Skills (2)'
+    expect(checkCategoryLabelCounts('sg.md', content, counts)).toEqual([])
   })
 })
 

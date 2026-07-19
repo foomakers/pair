@@ -18,9 +18,12 @@
  *      check here (promoted from WARN once #313/T1 (#325) regenerated next's
  *      catalog to the real, stable count).
  *   5. KB prose counts — the skill-count figures restated in the onboarding KB
- *      prose (way-of-working.md, getting-started.md, skills-guide.md) — both the
- *      "N skills"/"N Agent Skills" total and the "(P process + C capability + N
- *      navigator)" breakdown — match the real corpus. Closes the recurrence gap
+ *      prose (way-of-working.md, getting-started.md, skills-guide.md) match the
+ *      real corpus, across every restated form: the number-before-noun
+ *      "N skills"/"N Agent Skills" total, the "(P process + C capability + N
+ *      navigator)" breakdown, and the number-after-noun category forms — the
+ *      "### <Category> Skills (N)" catalog heading and the "**<Category>** | N"
+ *      Skill-Types table cell (defense-in-depth). Closes the recurrence gap
  *      from story #233: a skill-count sweep that misses these prose files leaves
  *      factually-wrong onboarding docs the docs-staleness gate can't catch (it
  *      scans apps/website only).
@@ -271,6 +274,43 @@ export function checkProseCounts(rel: string, content: string, counts: CategoryC
   return errors
 }
 
+// Validates the number-after-noun category-count forms restated in KB prose —
+// the "### <Category> Skills (N)" catalog heading and the "**<Category>** | N"
+// Skill-Types table cell — against the real per-category corpus counts. This is
+// the defense-in-depth complement to checkProseCounts (which covers the
+// number-before-noun "N skills" total and the "(P process + …)" breakdown). Only
+// the three top-level category labels are matched; subcategory groupings (e.g.
+// "Assessment Skills (9)") carry no corpus counterpart and are left untouched.
+export function checkCategoryLabelCounts(
+  rel: string,
+  content: string,
+  counts: CategoryCounts,
+): string[] {
+  const errors: string[] = []
+  const expected: Record<string, number> = {
+    Process: counts.process,
+    Capability: counts.capability,
+    Navigator: counts.navigator,
+  }
+  const forms: Array<{ re: RegExp; kind: string }> = [
+    { re: /\b(Process|Capability|Navigator)\s+Skills\s*\((\d+)\)/g, kind: 'heading' },
+    { re: /\*\*(Process|Capability|Navigator)\*\*\s*\|\s*(\d+)\b/g, kind: 'table cell' },
+  ]
+  for (const { re, kind } of forms) {
+    for (const m of content.matchAll(re)) {
+      const category = m[1] as string
+      const stated = parseInt(m[2] as string, 10)
+      const want = expected[category] as number
+      if (stated !== want) {
+        errors.push(
+          `${rel}: ${kind} "${m[0]}" states ${stated} but the corpus has ${want} ${category.toLowerCase()} skills`,
+        )
+      }
+    }
+  }
+  return errors
+}
+
 // --- Corpus walk ---
 
 export function collectSkillFiles(skillsDir: string): string[] {
@@ -323,7 +363,9 @@ export function runChecks(skillsDir: string): RunResult {
   for (const rel of KB_PROSE_FILES) {
     const abs = join(proseRoot, rel)
     if (existsSync(abs)) {
-      errors.push(...checkProseCounts(rel, readFileSync(abs, 'utf-8'), counts))
+      const proseContent = readFileSync(abs, 'utf-8')
+      errors.push(...checkProseCounts(rel, proseContent, counts))
+      errors.push(...checkCategoryLabelCounts(rel, proseContent, counts))
     }
   }
 
@@ -338,7 +380,7 @@ if (require.main === module) {
 
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, catalog counts, KB prose counts)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, catalog counts, KB prose counts incl. category headings/table cells)`,
     )
     process.exit(0)
   } else {
