@@ -1,9 +1,9 @@
 import { input, confirm } from '@inquirer/prompts'
 import type { FileSystemService } from '@pair/content-ops'
 import type { PackageCommandConfig } from './parser'
-import { resolveDefaults, readGitConfig, readPackageJsonDefaults } from './defaults-resolver'
+import { resolvePackageDefaults } from './defaults-resolver'
 import type { ResolvedMetadata } from './defaults-resolver'
-import { readPreferences, savePreferences } from './preferences'
+import { savePreferences } from './preferences'
 import { validatePackageName, validateVersion, parseTagsInput } from './input-validators'
 import { formatPreview } from './preview'
 import { loadConfigWithOverrides } from '#config'
@@ -15,26 +15,6 @@ class InteractiveCancelledError extends Error {
   constructor() {
     super('Package creation cancelled')
     this.name = 'InteractiveCancelledError'
-  }
-}
-
-/**
- * Run the interactive package creation flow.
- * Returns merged PackageCommandConfig on success, or null if user aborts.
- */
-function buildDefaults(config: PackageCommandConfig, fs: FileSystemService) {
-  const projectRoot = config.sourceDir || fs.currentWorkingDirectory()
-  const gitConfig = readGitConfig()
-  const packageJson = readPackageJsonDefaults(projectRoot, fs)
-  const prefs = readPreferences(fs)
-  return {
-    projectRoot,
-    defaults: resolveDefaults({
-      cliFlags: buildCliFlagsSource(config),
-      packageJson,
-      gitConfig,
-      preferences: prefs?.packageMetadata,
-    }),
   }
 }
 
@@ -65,7 +45,7 @@ export async function runInteractiveFlow(
     throw new Error('Interactive mode requires a terminal (TTY)')
   }
 
-  const { projectRoot, defaults } = buildDefaults(config, fs)
+  const { projectRoot, defaults } = resolvePackageDefaults(config, fs)
 
   try {
     const metadata = await collectMetadata(defaults)
@@ -130,17 +110,6 @@ async function collectMetadata(defaults: ResolvedMetadata): Promise<ResolvedMeta
     tags: parseTagsInput(tagsRaw),
     license: license || defaults.license,
   }
-}
-
-function buildCliFlagsSource(config: PackageCommandConfig): Partial<ResolvedMetadata> {
-  const flags: Partial<ResolvedMetadata> = {}
-  if (config.name) flags.name = config.name
-  if (config.version) flags.version = config.version
-  if (config.description) flags.description = config.description
-  if (config.author) flags.author = config.author
-  if (config.tags.length > 0) flags.tags = config.tags
-  flags.license = config.license
-  return flags
 }
 
 async function getPreviewInfo(

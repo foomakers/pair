@@ -63,6 +63,59 @@ describe('handlePackageCommand - real services integration', () => {
     expect(await fs.readFile(`${extractDir}/source/reg1/file.txt`)).toBe('content of reg1')
   })
 
+  test('quick path (no --name flag) resolves manifest name from package.json via shared cascade', async () => {
+    // Repo whose package.json name is 'foo' → manifest name must be 'foo', NOT the
+    // hardcoded 'kb-package'. Proves the non-interactive/quick path reads the same
+    // resolveDefaults() cascade (packageJson > gitConfig > preferences) the guided
+    // (--interactive) path uses — not manifest hardcoded defaults only. (#276)
+    await fs.writeFile(`${cwd}/package.json`, JSON.stringify({ name: 'foo', version: '2.5.0' }))
+
+    const outputPath = `${cwd}/dist/foo-kb.zip`
+    const config: PackageCommandConfig = {
+      command: 'package',
+      output: outputPath,
+      layout: 'source',
+      interactive: false,
+      tags: [],
+      license: 'MIT',
+    }
+
+    await handlePackageCommand(config, fs)
+
+    const extractDir = `${cwd}/extracted`
+    await fs.extractZip(outputPath, extractDir)
+    const manifest = JSON.parse(await fs.readFile(`${extractDir}/manifest.json`))
+
+    expect(manifest.name).toBe('foo')
+    expect(manifest.version).toBe('2.5.0')
+  })
+
+  test('quick path: explicit --name flag overrides package.json name', async () => {
+    // CLI flags are highest precedence in the shared cascade, in quick mode too.
+    await fs.writeFile(`${cwd}/package.json`, JSON.stringify({ name: 'foo', version: '2.5.0' }))
+
+    const outputPath = `${cwd}/dist/override-kb.zip`
+    const config: PackageCommandConfig = {
+      command: 'package',
+      output: outputPath,
+      name: 'explicit-kb',
+      layout: 'source',
+      interactive: false,
+      tags: [],
+      license: 'MIT',
+    }
+
+    await handlePackageCommand(config, fs)
+
+    const extractDir = `${cwd}/extracted`
+    await fs.extractZip(outputPath, extractDir)
+    const manifest = JSON.parse(await fs.readFile(`${extractDir}/manifest.json`))
+
+    expect(manifest.name).toBe('explicit-kb')
+    // version not supplied as a flag → still falls through to package.json
+    expect(manifest.version).toBe('2.5.0')
+  })
+
   test('creates package with org metadata in manifest', async () => {
     const outputPath = `${cwd}/dist/org-kb.zip`
     const config: PackageCommandConfig = {

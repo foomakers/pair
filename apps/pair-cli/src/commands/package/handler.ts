@@ -6,6 +6,7 @@ import { validatePackageStructure } from './validators'
 import { generateManifestMetadata } from './metadata'
 import { createPackageZip } from './zip-creator'
 import { runInteractiveFlow } from './interactive'
+import { resolvePackageDefaults } from './defaults-resolver'
 import { loadOrgTemplate, mergeOrgDefaults } from './org-template'
 import { validateOrgName } from './org-validators'
 import {
@@ -99,14 +100,20 @@ async function createAndReportZip(params: {
   }
 }
 
-function buildCliParams(config: PackageCommandConfig, organization?: OrganizationMetadata) {
+/**
+ * Resolve the manifest metadata params from the shared defaults cascade
+ * (cliFlags > packageJson > gitConfig > preferences > hardcoded), then attach
+ * organization metadata. Same cascade the guided (--interactive) path uses, so
+ * quick and guided modes agree on defaults; CLI flags stay highest precedence.
+ */
+function resolveManifestParams(
+  config: PackageCommandConfig,
+  fs: FileSystemService,
+  organization?: OrganizationMetadata,
+) {
+  const { defaults } = resolvePackageDefaults(config, fs)
   return {
-    ...(config.name && { name: config.name }),
-    ...(config.version && { version: config.version }),
-    ...(config.description && { description: config.description }),
-    ...(config.author && { author: config.author }),
-    tags: config.tags,
-    license: config.license,
+    ...defaults,
     ...(organization && { organization }),
   }
 }
@@ -172,7 +179,10 @@ export async function handlePackageCommand(
   const registryNames = registries.map(r => r.source || '').filter(Boolean)
 
   const organization = await resolveOrgMetadata(config, projectRoot, fs)
-  const manifest = generateManifestMetadata(registryNames, buildCliParams(config, organization))
+  const manifest = generateManifestMetadata(
+    registryNames,
+    resolveManifestParams(config, fs, organization),
+  )
 
   // Resolve output path - if relative, make it relative to current working directory
   const outputPath = config.output

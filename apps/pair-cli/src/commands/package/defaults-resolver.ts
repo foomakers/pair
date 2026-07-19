@@ -1,6 +1,9 @@
 import { execSync } from 'child_process'
 import path from 'path'
 import { logger } from '@pair/content-ops'
+import type { FileSystemService } from '@pair/content-ops'
+import type { PackageCommandConfig } from './parser'
+import { readPreferences } from './preferences'
 
 export interface ResolvedMetadata {
   name: string
@@ -56,6 +59,48 @@ export function resolveDefaults(sources: DefaultSources): ResolvedMetadata {
     author: mergeField('author', ...order) ?? HARDCODED.author,
     tags: mergeField('tags', ...order) ?? HARDCODED.tags,
     license: mergeField('license', ...order) ?? HARDCODED.license,
+  }
+}
+
+/**
+ * Build the highest-precedence CLI-flags source from a parsed package config.
+ * `license` is always present (parser defaults it to 'MIT'); other fields only
+ * when explicitly provided, so unset flags fall through to the lower sources.
+ */
+export function buildCliFlagsSource(config: PackageCommandConfig): PartialMetadata {
+  const flags: PartialMetadata = {}
+  if (config.name) flags.name = config.name
+  if (config.version) flags.version = config.version
+  if (config.description) flags.description = config.description
+  if (config.author) flags.author = config.author
+  if (config.tags.length > 0) flags.tags = config.tags
+  flags.license = config.license
+  return flags
+}
+
+/**
+ * Resolve package metadata defaults for a parsed config, from the full cascade
+ * (cliFlags > packageJson > gitConfig > preferences > hardcoded). Shared by BOTH
+ * the quick (non-interactive) path and the guided (--interactive) path so they
+ * agree on defaults; the guided path then lets prompts override, the quick path
+ * uses the resolved values directly (CLI flags already applied at top precedence).
+ */
+export function resolvePackageDefaults(
+  config: PackageCommandConfig,
+  fs: FileSystemService,
+): { projectRoot: string; defaults: ResolvedMetadata } {
+  const projectRoot = config.sourceDir || fs.currentWorkingDirectory()
+  const gitConfig = readGitConfig()
+  const packageJson = readPackageJsonDefaults(projectRoot, fs)
+  const prefs = readPreferences(fs)
+  return {
+    projectRoot,
+    defaults: resolveDefaults({
+      cliFlags: buildCliFlagsSource(config),
+      packageJson,
+      gitConfig,
+      preferences: prefs?.packageMetadata,
+    }),
   }
 }
 
