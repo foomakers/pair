@@ -4,31 +4,30 @@ This catalog adopts a grouped approach to bounded context definition, tailored f
 
 ## Why This Grouping?
 
-With only one team of two people, managing many separate bounded contexts would create unnecessary complexity and coordination overhead. By grouping related subdomains into broader bounded contexts, we:
-
-This approach is ideal for small teams, where maximizing collaboration and minimizing management effort is critical. As the project or team expands, contexts can be refined for greater autonomy.
+With only one team of two people, managing many separate bounded contexts would create unnecessary complexity and coordination overhead. By grouping related subdomains into broader bounded contexts, we keep coordination low and collaboration high. As the project or team expands, contexts can be refined for greater autonomy.
 
 ## Bounded Contexts and Subdomain Mapping
 
 ### 1. Development Collaboration Context
 
+- **Type:** Core
+- **Subdomains:** Collaborative Workflow, Code & Documentation Generation
+- **Description:** Coordinates development teams and AI assistants across all phases, and produces consistent code and documentation aligned with team standards and project context.
+- [See details](./development-collaboration.md)
+
 ### 2. Knowledge & Standards Context
 
-### 3. Knowledge Base Management Context
+- **Type:** Supporting
+- **Subdomains:** Adoption & Guidelines, How-To Knowledge
+- **Description:** Manages adoption of practices, tools, and processes; defines operational and technical guidelines; captures and applies operational instructions and best practices.
+- [See details](./knowledge-standards.md)
 
-- **Subdomains:** RAG Infrastructure, UI Management (for KB)
-- **Description:** Stores, retrieves, and publishes operational knowledge and documentation via a dedicated UI. Provides KB access and search capabilities to other contexts.
-- [See details](./knowledge-base-management.md)
-- **Description:** Centralizes technical services, integration, and UI management, supporting all business contexts with shared capabilities.
+### 3. Integration & Process Standardization Context
 
-### 4. Integration & Process Standardization Context
-
-- **Subdomain:** Integration & Process Standardization
-- **Description:** Manages integration logic and process standardization, exposing APIs and coordinating connections with external/internal tools. Mapped for future needs.
+- **Type:** Supporting
+- **Subdomains:** Integration & Process Standardization
+- **Description:** Manages integration logic and process standardization (APIs, external/internal tool connections, automation standards), and packages/distributes the knowledge base (dataset, content distribution, cache) that the knowledge subdomains produce. Absorbs the former Knowledge Base Management context (see DDR `decision-log/2026-07-19-merge-kb-management-into-integration.md`).
 - [See details](./integration-process-standardization.md)
-- [See details](./integration-infrastructure.md)
-
-- This structure ensures that changes in one area (e.g., workflow or standards) are consistently reflected across related activities.
 
 ---
 

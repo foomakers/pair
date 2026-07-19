@@ -1,11 +1,11 @@
 ---
 title: Skills Catalog
-description: Complete catalog of all 36 pair skills organized by type — process, capability, and meta.
+description: Complete catalog of all 37 pair skills organized by type — process, capability, and meta.
 ---
 
-pair ships with 36 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
+pair ships with 37 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
 
-> **Last updated:** 2026-07-16. Source: `packages/knowledge-hub/dataset/.skills/`
+> **Last updated:** 2026-07-19. Source: `packages/knowledge-hub/dataset/.skills/`
 
 ## Meta Skills
 
@@ -109,6 +109,7 @@ All `analyze-*` skills are **output-only report producers**: they analyze and re
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
 | **checkpoint** | `/pair-capability-checkpoint` | Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) in `.pair/working/checkpoints/`, so work survives a context reset. Invoke directly to save or resume progress. |
+| **publish-pr** | `/pair-capability-publish-pr` | Publishes a completed story branch as a pull request: runs the quality gate (HALTs on red), creates or updates ONE PR from the pr-template with conditional sections (Services to Release, Screenshots) filled only when pertinent, copies the story's classification tags, marks it ready-for-review, and updates the board state. Standalone — driven by a handoff/checkpoint; reads the WoW `git-workflow` (base-branch, squash) and `code-host`. Composed by a future closing phase of `/pair-process-implement` (not yet wired); reused by hotfix and automation loops. Never merges. |
 
 ## Skill Properties
 

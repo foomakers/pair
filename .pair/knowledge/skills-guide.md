@@ -15,9 +15,9 @@ Run `/pair-next` at the start of every session. It reads project adoption files 
 | Type | Count | Purpose |
 |------|-------|---------|
 | **Process** | 9 | Lifecycle phases — orchestrate capability skills |
-| **Capability** | 26 | Atomic units — perform a single focused operation |
+| **Capability** | 27 | Atomic units — perform a single focused operation |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 36 (9 process + 26 capability + 1 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 37 (9 process + 27 capability + 1 navigator).
 
 ## Full Catalog
 
@@ -37,7 +37,7 @@ Process skills compose capability skills. Capability skills are independently in
 
 > How-to guides 04 and 05 (subdomain/bounded-context definition) were removed — domain modeling is referenced inline by each real caller's own how-to (02, 03, 06, 09; 08 planned — #242). See [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
 
-### Capability Skills (26)
+### Capability Skills (27)
 
 #### Domain Modeling Skills (2)
 
@@ -103,6 +103,12 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 |-------|-------|
 | `/pair-capability-checkpoint` | Write/resume story progress checkpoint (work survives context resets) |
 
+#### Delivery Skills (1)
+
+| Skill | Scope |
+|-------|-------|
+| `/pair-capability-publish-pr` | Publish a story branch as a PR: gate, PR from template (conditional sections), tag copy, ready-for-review, board state |
+
 #### Discovery Skills (1)
 
 | Skill | Scope |
@@ -138,6 +144,7 @@ Analyze + **report only** — never block, propose no adoption decision (verb: `
 │   ├── analyze-debt/          # report-only
 │   ├── analyze-code-quality/  # report-only
 │   ├── checkpoint/
+│   ├── publish-pr/
 │   ├── manage-flags/
 │   └── grill/
 └── next/                 # Navigator skill
