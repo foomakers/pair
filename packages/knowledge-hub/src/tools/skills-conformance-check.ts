@@ -256,8 +256,9 @@ export function checkProseCounts(rel: string, content: string, counts: CategoryC
       errors.push(`${rel}: states "${m[0]}" but the corpus has ${counts.total} skills`)
     }
   }
-  const b = content.match(/\((\d+)\s+process\s*\+\s*(\d+)\s+capability\s*\+\s*(\d+)\s+navigator\)/)
-  if (b) {
+  for (const b of content.matchAll(
+    /\((\d+)\s+process\s*\+\s*(\d+)\s+capability\s*\+\s*(\d+)\s+navigator\)/g,
+  )) {
     const p = parseInt(b[1] as string, 10)
     const c = parseInt(b[2] as string, 10)
     const n = parseInt(b[3] as string, 10)

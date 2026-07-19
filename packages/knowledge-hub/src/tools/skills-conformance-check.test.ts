@@ -198,6 +198,14 @@ describe('checkProseCounts', () => {
     expect(errors[0]).toContain('does not match corpus')
   })
 
+  it('flags a stale breakdown even when an earlier breakdown in the same file is correct', () => {
+    const content =
+      '37 skills (9 process + 27 capability + 1 navigator).\nrecap: (9 process + 26 capability + 1 navigator)'
+    const errors = checkProseCounts('gs.md', content, counts)
+    expect(errors).toHaveLength(1)
+    expect(errors[0]).toContain('does not match corpus')
+  })
+
   it('does not mistake breakdown component numbers for the total', () => {
     // "9 process" / "27 capability" are followed by a category word, not "skill".
     expect(checkProseCounts('gs.md', '(9 process + 27 capability + 1 navigator)', counts)).toEqual(
