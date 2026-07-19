@@ -15,7 +15,7 @@ Run `/next` at the start of every session. It reads project adoption files and P
 | Type | Count | Purpose |
 |------|-------|---------|
 | **Process** | 9 | Lifecycle phases — orchestrate capability skills |
-| **Capability** | 27 | Atomic units — perform a single focused operation |
+| **Capability** | 28 | Atomic units — perform a single focused operation |
 
 Process skills compose capability skills. Capability skills are independently invocable. Total: 38 (9 process + 28 capability + 1 navigator).
 
@@ -37,7 +37,7 @@ Process skills compose capability skills. Capability skills are independently in
 
 > How-to guides 04 and 05 (subdomain/bounded-context definition) were removed — domain modeling is referenced inline by each real caller's own how-to (02, 03, 06, 09; 08 planned — #242). See [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
 
-### Capability Skills (27)
+### Capability Skills (28)
 
 #### Domain Modeling Skills (2)
 

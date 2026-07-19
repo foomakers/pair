@@ -7,7 +7,7 @@ author: Foomakers
 
 # /next — Project Navigator
 
-Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 37-skill catalog across all lifecycle phases.
+Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 38-skill catalog across all lifecycle phases.
 
 ## Skill Catalog (38 skills)
 
@@ -27,7 +27,7 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 | `/implement`       | Sprint Execution   | Implement story tasks with TDD                  |
 | `/review`          | Sprint Execution   | Review PR through structured phases             |
 
-### Capability Skills (27)
+### Capability Skills (28)
 
 | Skill                    | Category        | Description                                                                  |
 | ------------------------ | --------------- | ---------------------------------------------------------------------------- |
