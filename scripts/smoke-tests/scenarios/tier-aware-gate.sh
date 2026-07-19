@@ -57,13 +57,27 @@ check "red suites"    "install lint type build unit integration e2e" "$(required
 if require_suite e2e 0 2>/dev/null; then log_fail "missing suite passed silently"; FAILED=1; else log_succ "missing suite fails explicitly"; fi
 if require_suite e2e 1 2>/dev/null; then log_succ "present suite passes"; else log_fail "present suite failed"; FAILED=1; fi
 
-# --- Grep audit: resolver + guideline template carry NO classification criteria (D18) ---
-# The resolver/pipeline must never inspect the diff/code to decide a tier — it only
-# reads the risk:* label. Any of these tokens inside the resolver is a criteria leak.
-if grep -Eiq '\b(schema|migration|git diff|--numstat|lines?[ -]changed|loc\b|files?[ -]changed)\b' "$RESOLVER"; then
-  log_fail "resolver leaks classification criteria"; grep -Ein 'schema|migration|numstat|loc|changed' "$RESOLVER"; FAILED=1
+# --- Grep audit: resolver AND the guideline's pipeline template carry NO
+# classification criteria (D18). Neither the resolver nor the generated pipeline may
+# inspect the diff, code, file paths, or change size to decide a tier — they only read
+# the risk:* label. The guideline grep is scoped to its fenced code blocks (the
+# generated pipeline/resolver snippets) so the explanatory prose — which legitimately
+# names diff/schema/path tokens to *describe* the invariant (tier-aware-pipeline.md
+# §"the one rule") — does not false-positive. Any criteria token in either surface is a leak.
+CRITERIA='\b(schema|migration|git diff|--numstat|lines?[ -]changed|loc\b|files?[ -]changed)\b'
+if grep -Eiq "$CRITERIA" "$RESOLVER"; then
+  log_fail "resolver leaks classification criteria"; grep -Ein "$CRITERIA" "$RESOLVER"; FAILED=1
 else
   log_succ "resolver contains no classification criteria"
+fi
+
+# fenced code blocks of the guideline only (toggle on ``` fence lines, keep interior)
+GUIDELINE_CODE="$(awk '/^```/{infb=!infb; next} infb' "$GUIDELINE")"
+if printf '%s\n' "$GUIDELINE_CODE" | grep -Eiq "$CRITERIA"; then
+  log_fail "guideline pipeline template leaks classification criteria"
+  printf '%s\n' "$GUIDELINE_CODE" | grep -Ein "$CRITERIA"; FAILED=1
+else
+  log_succ "guideline pipeline template contains no classification criteria"
 fi
 
 # --- Secret scanning is unconditional: the secret-scan YAML job has NO `if:` key ---

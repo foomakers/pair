@@ -44,12 +44,14 @@ The same helper exposes `required_suites_for_tier <tier>` (the executable copy o
 If a tier requires a suite the repo does not provide (e.g. a 🔴 PR with no E2E suite), the gate **fails with an explicit "suite missing" error** — it must never silently pass. The generated pipeline calls `require_suite` for each required suite:
 
 ```bash
-require_suite e2e "$([ -f playwright.config.ts ] && echo 1 || echo 0)" || exit 1
+require_suite e2e "$(grep -q '"test:e2e"' package.json && echo 1 || echo 0)" || exit 1
 ```
 
 ## Pre-merge pipeline template (GitHub Actions)
 
 `/pair-capability-setup-gates` writes a workflow equivalent to this. Adapt the job bodies to the adopted stack's commands; the **structure** (a tag-only `resolve-tier` job, tier-conditioned `if:` on unit/integration/e2e, an unconditional `secret-scan`) is the invariant.
+
+Each suite job proves its suite exists via `require_suite`. All presence checks use one **layout-independent** idiom — `grep -q '"test:<suite>"' package.json` — rather than probing a fixed directory or config-file location, because unit tests are commonly co-located (`src/**/*.test.ts`) rather than under a top-level `test/` dir, and a layout probe would raise a spurious "suite missing" failure. Adapt the script names if the adopted stack names its suites differently.
 
 ```yaml
 name: Pre-Merge Gate
@@ -94,7 +96,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: |
           source .pair/knowledge/assets/tier-resolve.sh
-          require_suite unit "$([ -n "$(ls -A test 2>/dev/null || true)" ] && echo 1 || echo 0)" || exit 1
+          require_suite unit "$(grep -q '"test:unit"' package.json && echo 1 || echo 0)" || exit 1
           pnpm test:unit
 
   integration: # from 🔴
@@ -118,7 +120,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: |
           source .pair/knowledge/assets/tier-resolve.sh
-          require_suite e2e "$([ -f playwright.config.ts ] && echo 1 || echo 0)" || exit 1
+          require_suite e2e "$(grep -q '"test:e2e"' package.json && echo 1 || echo 0)" || exit 1
           pnpm test:e2e
 
   # Deterministic secret scanning — REQUIRED, unconditional at EVERY tier.
