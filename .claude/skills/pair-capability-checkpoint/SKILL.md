@@ -1,6 +1,6 @@
 ---
 name: pair-capability-checkpoint
-description: "Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) so work survives a context reset. Invoke directly to save or resume progress ('save our progress on #313', 'resume story #256'); composed by a future closing phase of /pair-process-implement and a future /pair-capability-publish-pr (planned — #255)."
+description: "Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) so work survives a context reset. Invoke directly to save or resume progress ('save our progress on #313', 'resume story #256'); composed by a future closing phase of /pair-process-implement and a future /publish-pr (planned — #255)."
 version: 0.4.1
 author: Foomakers
 ---
@@ -47,7 +47,7 @@ Write and resume a self-contained progress checkpoint so a fresh session (or a s
 3. **Act**: If not (e.g., invoked by a subagent with no prior context), reconstruct from artifacts:
    - **Branch**: `git branch --show-current`.
    - **Tasks done/pending**: read the story's Task Breakdown checklist (per [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)), cross-referenced with commits on the branch — the same technique `/pair-process-implement` uses for idempotent resume.
-   - **Decisions**: scan [adoption/tech/adr/](../../../.pair/adoption/tech/adr/) and [adoption/decision-log/](../../../.pair/adoption/decision-log/) for files touched since the branch diverged from main.
+   - **Decisions**: scan [adoption/tech/adr/](../../../.pair/adoption/tech/adr) and [adoption/decision-log/](../../../.pair/adoption/decision-log) for files touched since the branch diverged from main.
 4. **Verify**: All five state elements resolved. Anything that cannot be reconstructed confidently is marked `[unknown — needs confirmation]` — never guessed.
 
 ### Step 4: Detect Existing Checkpoint
@@ -162,9 +162,9 @@ When composed by a future closing phase of `/pair-process-implement`:
 - **Input**: `/pair-process-implement` would invoke `/pair-capability-checkpoint` with `$mode=write` between tasks (or on developer request) to persist progress, `$mode=resume` at Phase 0 when re-invoked on a story that may have been interrupted, and remove the checkpoint on story completion (cleanup).
 - **Output**: Write mode's returned text becomes the session's record of state. Resume mode's parsed state lets `/pair-process-implement` skip re-analysis and jump straight to the first pending task.
 
-When composed by a future `/pair-capability-publish-pr` (planned — #255; companion capability from the same epic split):
+When composed by a future `/publish-pr` (planned — #255; companion capability from the same epic split):
 
-- **Input**: `/pair-capability-publish-pr` invokes `/pair-capability-checkpoint` with `$mode=write, $persist=false` to obtain a handoff prompt summarizing the story before drafting the PR description.
+- **Input**: `/publish-pr` invokes `/pair-capability-checkpoint` with `$mode=write, $persist=false` to obtain a handoff prompt summarizing the story before drafting the PR description.
 - **Output**: The returned text (not written to file) is embedded directly into the composer's own output — the composer owns persistence.
 
 When invoked **independently**:

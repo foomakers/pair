@@ -25,6 +25,7 @@ Fundamental design principles and coding practices that guide the development of
 - `service-abstraction.md`
 - `service-factory.md`
 - `mocking-strategy.md`
+- `design-rules.md`
 
 ## How to use
 
@@ -88,6 +89,14 @@ Establish core design principles that ensure code quality, maintainability, and 
 - Test double strategies and implementation approaches
 - Dependency isolation and test reliability
 - Mock management and test maintainability
+
+### Evidence-Based Rules
+
+#### [Design Rules](design-rules.md)
+
+- Do/don't rules with recognition criteria and preferred alternative, one pattern per entry
+- Evidence-linked to real audit findings (not invented) — no separate anti-pattern catalog
+- Migration plan for existing violations, tracked as tech-debt (does not block PRs)
 
 ## Design Philosophy
 

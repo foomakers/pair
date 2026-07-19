@@ -16,6 +16,7 @@ This how-to orchestrates the `/pair-process-plan-initiatives` skill.
 | ------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `/pair-process-plan-initiatives`  | Executes the full process: PRD analysis, P0/P1/P2 prioritization, initiative creation, dependency mapping.     |
 | `/pair-capability-write-issue`       | Composed by `/pair-process-plan-initiatives` — creates or updates initiative issues in the PM tool.                         |
+| `/pair-capability-map-subdomains`    | Composed by `/pair-process-plan-initiatives` — scoped domain placement for the new initiative's capability area.            |
 
 > **If skills are not installed**, follow the manual workflow below.
 
@@ -27,6 +28,7 @@ This how-to orchestrates the `/pair-process-plan-initiatives` skill.
    - PRD analysis (business objectives, user value, constraints)
    - Prioritization (P0 Must-Have → P1 Should-Have → P2 Could-Have)
    - Initiative creation via `/pair-capability-write-issue` with `$type: initiative`
+   - Domain placement via `/pair-capability-map-subdomains`, scoped to the new initiative's capability area (not full-catalog — see [Callers Matrix](../skills-guide.md#callers-matrix-scoped-capabilities))
    - Dependency mapping and roadmap planning
 3. **Developer validates** each initiative when prompted by the skill.
 4. **Repeat** for additional initiatives or re-invoke to create missing ones.
@@ -83,4 +85,5 @@ This how-to orchestrates the `/pair-process-plan-initiatives` skill.
 - PRD: [`.pair/adoption/product/PRD.md`](../../adoption/product/PRD.md)
 - PM Tool: [PM Tool Guidelines](../guidelines/collaboration/project-management-tool/README.md)
 - Bootstrap: [Bootstrap Checklist](02-how-to-complete-bootstrap-checklist.md)
-- Next: [Define Subdomains](04-how-to-define-subdomains.md) or [Breakdown Epics](06-how-to-breakdown-epics.md)
+- Domain capability: `/pair-capability-map-subdomains` — invoked inline by `/pair-process-plan-initiatives`, scoped to each initiative
+- Next: [Breakdown Epics](06-how-to-breakdown-epics.md)

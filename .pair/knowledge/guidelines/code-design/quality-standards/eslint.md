@@ -115,7 +115,7 @@ For existing codebases, introduce ESLint rules gradually:
 
 ### Team Configuration
 
-**Shared Config Package**: Create a shared ESLint configuration package for consistency across projects. This centralizes rule decisions and makes updates easier.
+**Shared Config Package**: Create a shared ESLint configuration package for consistency across projects. This centralizes rule decisions and makes updates easier. See [shared-config-packages.md](shared-config-packages.md) for the full pattern (per-type presets, bin wrappers, reference implementation).
 
 **Rule Documentation**: Document the reasoning behind custom rules, especially those that differ from community standards. This helps team members understand the rationale.
 

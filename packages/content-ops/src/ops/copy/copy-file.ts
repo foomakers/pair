@@ -4,7 +4,12 @@ import { FileSystemService } from '../../file-system'
 import { SyncOptions } from '../SyncOptions'
 import { Behavior } from '../behavior'
 import { determineFinalDestination, updateMarkdownLinks } from '../path-operation-helpers'
-import { rewriteSkillReferencesInFiles, SkillNameMap } from '../skill-reference-rewriter'
+import {
+  rewriteSkillReferencesInFiles,
+  rewriteSkillLinkPathsInFiles,
+  SkillNameMap,
+  SkillLinkPathMap,
+} from '../skill-reference-rewriter'
 
 export type HandleFileCopyParams = {
   fileService: FileSystemService
@@ -17,6 +22,7 @@ export type HandleFileCopyParams = {
   defaultBehavior: Behavior
   options?: SyncOptions
   skillNameMap?: SkillNameMap
+  skillLinkPathMap?: SkillLinkPathMap
 }
 
 /**
@@ -34,6 +40,7 @@ export async function handleFileCopy(params: HandleFileCopyParams) {
     defaultBehavior,
     options,
     skillNameMap,
+    skillLinkPathMap,
   } = params
 
   const finalDest = await determineFinalDestination(fileService, destPath, source, normTarget)
@@ -62,7 +69,25 @@ export async function handleFileCopy(params: HandleFileCopyParams) {
     options,
   })
 
-  if (skillNameMap && skillNameMap.size > 0 && finalDest.endsWith('.md')) {
+  await applySkillRewrites(fileService, finalDest, skillNameMap, skillLinkPathMap)
+}
+
+/** Applies skill-command and skill-link-path rewrites to a copied markdown file. */
+async function applySkillRewrites(
+  fileService: FileSystemService,
+  finalDest: string,
+  skillNameMap?: SkillNameMap,
+  skillLinkPathMap?: SkillLinkPathMap,
+): Promise<void> {
+  if (!finalDest.endsWith('.md')) return
+  if (skillNameMap && skillNameMap.size > 0) {
     await rewriteSkillReferencesInFiles({ fileService, files: [finalDest], skillNameMap })
+  }
+  if (skillLinkPathMap && skillLinkPathMap.size > 0) {
+    await rewriteSkillLinkPathsInFiles({
+      fileService,
+      files: [finalDest],
+      linkMap: skillLinkPathMap,
+    })
   }
 }

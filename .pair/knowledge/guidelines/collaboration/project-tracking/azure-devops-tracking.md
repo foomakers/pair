@@ -149,7 +149,7 @@ Cycle Time and Lead Time widgets are available on dashboards (backed by Analytic
 ### Data Quality
 
 - One state transition path: skills write states only through the state mapping
-- Effort filled at refinement (`/refine-story`), not retroactively
+- Effort filled at refinement (`/pair-process-refine-story`), not retroactively
 - Iteration assigned at sprint planning, kept current on carry-over
 
 ### Workflow Integration

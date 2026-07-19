@@ -21,7 +21,7 @@ import {
 } from '#registry'
 import { applyLinkTransformation } from '../update-link/logic'
 import type { HttpClientService } from '@pair/content-ops'
-import { BackupService, type SkillNameMap } from '@pair/content-ops'
+import { BackupService, type SkillNameMap, type SkillLinkPathMap } from '@pair/content-ops'
 import { createCliPresenter, type CliPresenter, type RegistryResult } from '#ui'
 import { emitVersionDriftHint, recordInstalledVersion } from '../kb-info/version-hint'
 
@@ -219,9 +219,11 @@ async function finalizeRegistryCopy(
   await postCopyOps({ fs, registryConfig, baseTarget, ...paths })
 }
 
-async function updateSingleRegistry(
-  ctx: UpdateRegistryCtx,
-): Promise<{ skillNameMap?: SkillNameMap | undefined; result: RegistryResult }> {
+async function updateSingleRegistry(ctx: UpdateRegistryCtx): Promise<{
+  skillNameMap?: SkillNameMap | undefined
+  skillLinkPathMap?: SkillLinkPathMap | undefined
+  result: RegistryResult
+}> {
   const {
     fs,
     datasetRoot,
@@ -242,9 +244,7 @@ async function updateSingleRegistry(
   })
   const { target: effectiveTarget, source: datasetPath } = resolved
   await ensureDir(fs, dirname(effectiveTarget))
-
   const effectiveDatasetRoot = resolveEffectiveDatasetRoot(registryConfig, baseTarget, datasetRoot)
-
   await logDatasetEntries(fs, datasetPath, pushLog)
   presenter.registryStart({
     name: registryName,
@@ -264,6 +264,7 @@ async function updateSingleRegistry(
   presenter.registryDone(registryName)
   return {
     skillNameMap: copyResult['skillNameMap'] as SkillNameMap | undefined,
+    skillLinkPathMap: copyResult['skillLinkPathMap'] as SkillLinkPathMap | undefined,
     result: { name: registryName, target: effectiveTarget, ok: true },
   }
 }
@@ -271,13 +272,14 @@ async function updateSingleRegistry(
 async function updateRegistries(context: UpdateContext): Promise<RegistryResult[]> {
   const { fs, datasetRoot, registries, baseTarget, pushLog, presenter } = context
   const accumulatedSkillNameMap: SkillNameMap = new Map()
+  const accumulatedSkillLinkPathMap: SkillLinkPathMap = new Map()
   const total = Object.keys(registries).length
   const startTime = Date.now()
 
   presenter.startOperation('update', total)
 
   const results = await forEachRegistry(registries, async (registryName, registryConfig, index) => {
-    const { skillNameMap, result } = await updateSingleRegistry({
+    const { skillNameMap, skillLinkPathMap, result } = await updateSingleRegistry({
       fs,
       datasetRoot,
       registryName,
@@ -291,10 +293,18 @@ async function updateRegistries(context: UpdateContext): Promise<RegistryResult[
     if (skillNameMap) {
       for (const [k, v] of skillNameMap) accumulatedSkillNameMap.set(k, v)
     }
+    if (skillLinkPathMap) {
+      for (const [k, v] of skillLinkPathMap) accumulatedSkillLinkPathMap.set(k, v)
+    }
     return result
   })
 
-  await reconcileSkillNameRegistry({ fs, baseTarget, pushLog }, registries, accumulatedSkillNameMap)
+  await reconcileSkillNameRegistry(
+    { fs, baseTarget, pushLog },
+    registries,
+    accumulatedSkillNameMap,
+    accumulatedSkillLinkPathMap,
+  )
 
   presenter.summary(results, 'update', Date.now() - startTime)
   return results

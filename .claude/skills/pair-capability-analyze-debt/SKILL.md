@@ -140,7 +140,7 @@ TECH DEBT ANALYSIS (output-only — no files or issues created):
 ├── Items Found:  [N total]
 ├── Categories:   Code: [N] | Design: [N] | Test: [N] | Docs: [N] | Infra: [N]
 ├── Severity:     High: [N] | Medium: [N] | Low: [N]
-└── Promotion:    [none | suggested: N items for deliberate /pair-capability-write-issue promotion]
+└── Promotion:    [none | suggested: N items for deliberate /write-issue promotion]
 
 PRIORITIZED ITEMS:
  # | Severity | Category | Impact | Effort | Score | Description | Location

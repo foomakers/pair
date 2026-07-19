@@ -100,7 +100,7 @@ ASSESSMENT COMPLETE (output-only — no files written):
 ├── Decision:  [methodology name]
 ├── Proposal:  [content rendered for way-of-working.md methodology section]
 ├── Target:    adoption/tech/way-of-working.md (methodology section)
-├── Persist:   [caller composes /pair-capability-record-decision(content, target) → ADL]
+├── Persist:   [caller composes /record-decision(content, target) → ADL]
 └── Status:    [Proposal ready | Confirmed existing]
 ```
 

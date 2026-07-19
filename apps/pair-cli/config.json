@@ -30,7 +30,7 @@
     },
     "skills": {
       "source": ".skills",
-      "behavior": "mirror",
+      "behavior": "overwrite",
       "flatten": true,
       "prefix": "pair",
       "description": "Agent skills distributed to AI tool directories",

@@ -95,7 +95,7 @@ ASSESSMENT COMPLETE (output-only — no files written):
 ├── Decision:  [pattern name]
 ├── Proposal:  [content rendered for adoption/tech/architecture.md]
 ├── Target:    adoption/tech/architecture.md (full file)
-├── Persist:   [caller composes /pair-capability-record-decision(content, target) → ADR]
+├── Persist:   [caller composes /record-decision(content, target) → ADR]
 └── Status:    [Proposal ready | Confirmed existing]
 ```
 

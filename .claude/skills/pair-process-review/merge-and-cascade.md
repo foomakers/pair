@@ -1,6 +1,6 @@
 # Phase 6: Merge & Close — Detail
 
-Disclosed from [SKILL.md](SKILL.md) Phase 6 — only reached when the reviewer picked "Merge now" in Step 5.4.
+Disclosed from [SKILL.md](./SKILL.md) Phase 6 — only reached when the reviewer picked "Merge now" in Step 5.4.
 
 ### Step 6.1: Read Merge Strategy
 

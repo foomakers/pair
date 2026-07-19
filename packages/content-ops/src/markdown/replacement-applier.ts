@@ -104,6 +104,7 @@ export async function processFileReplacement(
     lines: string[],
   ) => Promise<Replacement[]>,
   fileService: FileSystemService,
+  options?: { checkOnly?: boolean },
 ): Promise<{ content: string; applied: number; byKind?: Record<string, number> }> {
   const content = await fileService.readFile(file)
   const lines = content.split(/\r?\n/)
@@ -118,7 +119,11 @@ export async function processFileReplacement(
     )
   }
 
-  await persistIfModified(result, fileService, file)
+  // checkOnly: report errors/normalizations but never write. Used by the link
+  // GATE over the generated root tree — a gate must not mutate its target.
+  if (!options?.checkOnly) {
+    await persistIfModified(result, fileService, file)
+  }
   return result
 }
 

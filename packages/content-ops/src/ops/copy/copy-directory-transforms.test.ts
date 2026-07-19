@@ -387,6 +387,30 @@ describe('copyDirectoryWithTransforms (via copyPathOps, flatten/prefix)', () => 
       )
     })
 
+    it('preserves a foreign (non-source) entry in a shared target under overwrite behavior', async () => {
+      // The skills registry uses `overwrite` (not `mirror`) precisely so a
+      // shared target dir keeps third-party / user-installed skills: overwrite
+      // updates/adds source entries but never runs stale cleanup. A foreign
+      // skill (e.g. agent-browser) therefore survives.
+      const fileService = createTestFileService({
+        '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',
+        '/dataset/target/agent-browser/SKILL.md': '---\nname: agent-browser\n---',
+      })
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', defaultBehavior: 'overwrite', targets: [] },
+      })
+
+      await expect(fileService.exists('/dataset/target/agent-browser/SKILL.md')).resolves.toBe(true)
+      await expect(fileService.exists('/dataset/target/pair-catalog-next/SKILL.md')).resolves.toBe(
+        true,
+      )
+    })
+
     it('removes the old prefixed directory after a prefix change', async () => {
       const fileService = createTestFileService({
         '/dataset/source/catalog/next/SKILL.md': '---\nname: next\n---\n# /next',

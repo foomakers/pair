@@ -116,7 +116,7 @@ ADOPTION COMPLIANCE REPORT:
 
 FINDINGS (if any):
 1. [area] — [description] ([file:line])
-   Resolution: [/assess-stack | /pair-capability-record-decision | developer action]
+   Resolution: [/assess-stack | /record-decision | developer action]
 2. ...
 
 RESULT: [ALL CONFORMANT | N non-conformities across N areas]

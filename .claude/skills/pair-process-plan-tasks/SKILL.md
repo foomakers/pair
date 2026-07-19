@@ -144,7 +144,7 @@ TASK BREAKDOWN COMPLETE:
 ├── Types:      [Development: N, Documentation: N, Configuration: N]
 ├── AC Coverage:[K/K ACs covered]
 ├── PM Tool:    [Story updated with Task Breakdown section]
-└── Next:       /pair-process-implement to start task execution
+└── Next:       /implement to start task execution
 ```
 
 ## HALT Conditions

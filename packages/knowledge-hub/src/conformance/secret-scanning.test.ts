@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
+import { rewriteSkillReferences, rewriteSkillLinkPaths } from '@pair/content-ops'
+import { buildDatasetSkillNameMap, buildSkillLinkPathMap } from '../tools/skills-guide-mirror'
 
 const SECRET_SCANNING = readFileSync(
   join(
@@ -98,24 +100,31 @@ describe('gitleaks-example.toml', () => {
 })
 
 /**
- * Root-mirror byte parity for THIS story's 3 files specifically.
+ * Root-mirror parity for THIS story's files specifically.
  *
  * Scoped narrowly (not a general dataset<->root parity gate — see PR #341's
  * round-3 review): a root mirror of secret-scanning.md went missing entirely
  * in round 2, and gitleaks-example.toml's root mirror had spurious extra
  * blank lines in round 3. Both slipped through undetected because no
  * automated check compares the root .pair/knowledge/ mirror against the
- * dataset for these files. This locks in exact parity for the 3 files this
+ * dataset for these files. This locks in exact parity for the files this
  * story actually mirrors, so neither regression class can recur silently.
  *
- * A repo-wide generalization of this check (every dataset<->root mirrored
- * file, byte-identical) is a larger, separate cleanup: as of this writing the
- * root/dataset trees already have ~30 pre-existing, unrelated byte
- * mismatches (README.md/how-to/skill-conventions files never kept in sync)
- * that a blanket gate would need to resolve first. That's tracked as
- * follow-up tech debt, not fixed here.
+ * Parity here is `root === realTransform(dataset)`, NOT byte-identity: the
+ * `pair update` copy pipeline applies the real content-ops skill transforms
+ * (`rewriteSkillReferences` for `/command` tokens, `rewriteSkillLinkPaths`
+ * for SKILL.md link paths) to every `.pair/knowledge/` file. secret-scanning.md
+ * references `/setup-gates` and `/assess-security`, which are prefixed in the
+ * installed root — so its mirror is the transform of the dataset, not a byte
+ * copy. The other files carry no skill refs, so their transform is identity.
  */
 describe('root .pair/knowledge/ mirror byte parity (this story files)', () => {
+  const SKILLS_DIR = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.skills')
+  const skillNameMap = buildDatasetSkillNameMap(SKILLS_DIR)
+  const linkPathMap = buildSkillLinkPathMap(SKILLS_DIR)
+  const realTransform = (content: string): string =>
+    rewriteSkillLinkPaths(rewriteSkillReferences(content, skillNameMap), linkPathMap)
+
   const MIRRORED_FILES = [
     'guidelines/quality-assurance/security/secret-scanning.md',
     'guidelines/quality-assurance/security/README.md',
@@ -123,12 +132,15 @@ describe('root .pair/knowledge/ mirror byte parity (this story files)', () => {
     'guidelines/quality-assurance/quality-model.md',
   ] as const
 
-  it.each(MIRRORED_FILES)('%s is byte-identical between dataset and root mirror', relPath => {
-    const datasetContent = readFileSync(
-      join(__dirname, '../../dataset/.pair/knowledge', relPath),
-      'utf-8',
-    )
-    const rootContent = readFileSync(join(REPO_ROOT, '.pair/knowledge', relPath), 'utf-8')
-    expect(rootContent).toBe(datasetContent)
-  })
+  it.each(MIRRORED_FILES)(
+    '%s root mirror equals the dataset run through the real transform',
+    relPath => {
+      const datasetContent = readFileSync(
+        join(__dirname, '../../dataset/.pair/knowledge', relPath),
+        'utf-8',
+      )
+      const rootContent = readFileSync(join(REPO_ROOT, '.pair/knowledge', relPath), 'utf-8')
+      expect(rootContent).toBe(realTransform(datasetContent))
+    },
+  )
 })

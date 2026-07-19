@@ -78,6 +78,7 @@ Ask: _"Ready to proceed with implementation?"_
    - [architecture.md](../../../.pair/adoption/tech/architecture.md) — architectural patterns
    - [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — approved libraries and versions
    - [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) — development process
+   - [Design Rules](../../../.pair/knowledge/guidelines/code-design/design-principles/design-rules.md) — evidence-based do/don't patterns to avoid generating (constraints, not suggestions)
 4. **Verify**: Technical context loaded. If adoption files missing, warn and proceed with guideline defaults.
 
 ### Step 1.2: Create or Switch to Feature Branch
@@ -134,7 +135,7 @@ Process tasks **sequentially**, one at a time. For each task:
 
 #### For Development Tasks (TDD Required):
 
-Follow the TDD discipline rules strictly:
+Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/knowledge/guidelines/code-design/design-principles/design-rules.md) loaded in Step 1.1 — do not generate a new instance of a known do/don't pattern (e.g. god module, static-only namespace class, optional-bag dispatch instead of a discriminated union).
 
 #### TDD Discipline Rules:
 
@@ -307,7 +308,7 @@ Follow the TDD discipline rules strictly:
 
 ## Phase 4: Post-Review Merge
 
-After code review approval (typically via `/pair-process-review`), re-invoke `/pair-process-implement` to merge and close — see [post-review-merge.md](post-review-merge.md) for the verify-approval, merge-commit, merge, and parent-cascade steps (Steps 4.1–4.4) plus the completion output.
+After code review approval (typically via `/pair-process-review`), re-invoke `/pair-process-implement` to merge and close — see [post-review-merge.md](./post-review-merge.md) for the verify-approval, merge-commit, merge, and parent-cascade steps (Steps 4.1–4.4) plus the completion output.
 
 ## Output Format
 
@@ -324,7 +325,7 @@ IMPLEMENTATION COMPLETE:
 └── Quality:  [All gates passing]
 ```
 
-At merge (Phase 4): see [post-review-merge.md](post-review-merge.md).
+At merge (Phase 4): see [post-review-merge.md](./post-review-merge.md).
 
 ## HALT Conditions
 

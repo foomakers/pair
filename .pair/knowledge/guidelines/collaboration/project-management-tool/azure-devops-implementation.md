@@ -208,7 +208,7 @@ az repos pr create \
 
 ### Review Actions
 
-Azure Repos uses reviewer votes. The `/review` skill uses these through a tool-agnostic interface — this section documents the Azure-specific implementation.
+Azure Repos uses reviewer votes. The `/pair-process-review` skill uses these through a tool-agnostic interface — this section documents the Azure-specific implementation.
 
 | Action          | Vote Value | When to Use                                           |
 | --------------- | ---------- | ----------------------------------------------------- |

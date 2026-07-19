@@ -22,6 +22,7 @@ Quality standards provide guidance on linting, formatting, code metrics, coverag
 - `linting-tools.md` (recommended linters and rules)
 - `eslint.md` (ESLint configuration and conventions)
 - `prettier-formatting.md` (formatting rules)
+- `shared-config-packages.md` (shared-config-package pattern, per-type overrides, `tools/*` reference)
 - `code-metrics.md` (metrics & measurement)
 - `coverage.md` (coverage targets and strategies)
 - `technical-debt.md` (tracking and remediation)
@@ -66,6 +67,7 @@ Guidelines for linting, formatting, code metrics, test coverage and automation t
 - `linting-tools.md`
 - `eslint.md`
 - `prettier-formatting.md`
+- `shared-config-packages.md`
 - `code-metrics.md`
 - `coverage.md`
 - `technical-debt.md`

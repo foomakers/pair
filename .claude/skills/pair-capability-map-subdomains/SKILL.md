@@ -1,6 +1,6 @@
 ---
 name: pair-capability-map-subdomains
-description: "Classifies business capabilities into DDD subdomains (core, supporting, generic) with a volatility rating, scoped to items just touched. Composed by /pair-process-refine-story, /pair-process-plan-initiatives, /pair-process-plan-epics, a future /pair-process-brainstorm (planned — #230); full-scope re-mapping only via /pair-process-bootstrap."
+description: "Classifies business capabilities into DDD subdomains (core, supporting, generic) with a volatility rating, scoped to items just touched. Composed by /pair-process-refine-story, /pair-process-plan-initiatives, /pair-process-plan-epics, a future /brainstorm (planned — #230); full-scope re-mapping only via /pair-process-bootstrap."
 version: 0.4.1
 author: Foomakers
 ---
@@ -17,13 +17,13 @@ Classify business capabilities into Domain-Driven Design subdomains — core, su
 
 ## Composed Skills
 
-| Caller                        | When                                                             |
-| ------------------------------ | ----------------------------------------------------------------- |
-| `/pair-process-refine-story`   | Functional/domain analysis phase — placement for the story's capability. |
-| `/pair-process-plan-initiatives` | Domain placement for a new initiative's capability area.       |
-| `/pair-process-plan-epics`     | Domain placement for an epic's capability area.                   |
-| `/brainstorm`                  | Broad brainstorm touching multiple capabilities (planned — #230). |
-| `/pair-process-bootstrap`      | Initial full-catalog mapping — the only caller allowed `$scope: all`. |
+| Caller              | When                                                             |
+| ------------------- | ----------------------------------------------------------------- |
+| `/pair-process-refine-story`     | Functional/domain analysis phase — placement for the story's capability. |
+| `/pair-process-plan-initiatives` | Domain placement for a new initiative's capability area.          |
+| `/pair-process-plan-epics`       | Domain placement for an epic's capability area.                   |
+| `/brainstorm`       | Broad brainstorm touching multiple capabilities (planned — #230). |
+| `/pair-process-bootstrap`        | Initial full-catalog mapping — the only caller allowed `$scope: all`. |
 
 Invocable independently with an explicit `$scope` for ad hoc placement.
 
@@ -31,7 +31,7 @@ Invocable independently with an explicit `$scope` for ad hoc placement.
 
 ### Step 0: Resolve Scope and DDD Adoption State
 
-1. **Check**: Does [`adoption/product/subdomain/`](../../../.pair/adoption/product/subdomain/) contain `.md` files beyond README.md (DDD already adopted)?
+1. **Check**: Does [`adoption/product/subdomain/`](../../../.pair/adoption/product/subdomain) contain `.md` files beyond README.md (DDD already adopted)?
 2. **Check**: If not adopted, are PRD and initiatives available (business context to classify from)?
    - PRD: [`.pair/adoption/product/PRD.md`](../../../.pair/adoption/product/PRD.md)
    - Initiatives: query PM tool or check adoption files
@@ -44,7 +44,7 @@ Invocable independently with an explicit `$scope` for ad hoc placement.
 
 ### Step 1: Detect Existing Subdomains
 
-1. **Check**: Scan [`adoption/product/subdomain/`](../../../.pair/adoption/product/subdomain/) for existing `.md` files (excluding README.md).
+1. **Check**: Scan [`adoption/product/subdomain/`](../../../.pair/adoption/product/subdomain) for existing `.md` files (excluding README.md).
 2. **Act**: Build a registry of existing subdomains:
 
    ```text
@@ -73,13 +73,15 @@ _Skip if in system-areas fallback — go to Step 2b._
 
 ### Step 3: DDD Classification, Volatility & Catalog Delta
 
+_Skip if in system-areas fallback — the Classification/Volatility already assigned in Step 2b (Generic/Low unless the caller has clear evidence otherwise) is final for this run; go straight to Step 4._
+
 1. **Act** (DDD mode): Classify each in-scope capability:
    - **Core** — competitive advantage, high business value, high complexity. Build in-house, invest deeply. Default `Volatility: High`.
    - **Supporting** — operational necessity, medium value. Important but not differentiating. Default `Volatility: Medium`.
    - **Generic** — commodity function, low differentiation. Buy or use standard solutions. Default `Volatility: Low`. Additionally assess **implementation volatility** — the probability of switching provider/technology; when High, note that relationships toward this subdomain require an integration contract (feeds `/pair-capability-map-contexts` strength assessment).
 2. **Act**: Volatility default follows the classification above; the developer may override it (business-domain judgment, never inferred from commit history alone).
 3. **Act**: Map relationships and data flow between in-scope subdomains and their existing dependencies.
-4. **Check**: Does an in-scope subdomain already exist in the registry with different classification/volatility (catalog conflict)?
+4. **Check**: Does an in-scope subdomain already exist in the registry with a different classification, or a different Volatility that was **not** recorded as a human override? Compare against the existing file's recorded values, not a freshly-recomputed classification-derived default — a Volatility that already carries an override reason is never treated as conflicting with that same default recomputed again; only a change to classification, or an explicit new override request, is a conflict.
 5. **Act**: If a conflict exists → propose the delta only (not a full re-map):
 
    > Existing: `[Name]` — Classification: [X], Volatility: [Y]
@@ -126,7 +128,7 @@ SUBDOMAIN PLACEMENT COMPLETE:
 ├── Updated:    [Y existing files]
 ├── Volatility: [defaults applied: A, overridden: B]
 ├── Location:   adoption/product/subdomain/
-└── Next:       /pair-capability-map-contexts (scoped to the same items)
+└── Next:       /map-contexts (scoped to the same items)
 ```
 
 ## Edge Cases and Error Handling
@@ -152,4 +154,4 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 - **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: detects existing files by filename; only entries inside `$scope` are evaluated for changes.
 - Volatility is evaluated from the business domain (classification-derived default + human override), never from commit history alone.
 - DDD classification and Volatility drive downstream assessments — see `/pair-capability-map-contexts` (relationship strength/distance/volatility) and the architecture-quality capability that consumes them.
-- Migration: this skill was reclassified from a process skill (`pair-process-map-subdomains`) to a capability (`pair-capability-map-subdomains`) — see [skills-guide.md](../../../.pair/knowledge/skills-guide.md#migration-notes) for the rename and new invocation paths.
+- Migration: this skill was reclassified from a process skill (`process/map-subdomains`) to a capability (`capability/map-subdomains`) — see [skills-guide.md](../../../.pair/knowledge/skills-guide.md#migration-notes) for the rename and new invocation paths.

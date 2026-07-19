@@ -175,7 +175,7 @@ DECISION RECORDED:
 
 ## Example: Generic Persist from an `assess-*` Proposal
 
-Input — `/assess-testing` (Step 5) emits, and the caller invokes this skill with:
+Input — `/pair-capability-assess-testing` (Step 5) emits, and the caller invokes this skill with:
 
 ```text
 $type: non-architectural

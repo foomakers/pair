@@ -136,7 +136,7 @@ STORIES COMPLETE:
 ├── Points:   [total estimated points]
 ├── INVEST:   [all CREATE candidates validated]
 ├── PM Tool:  [adopted tool]
-└── Next:     /pair-process-refine-story
+└── Next:     /refine-story
 ```
 
 ## HALT Conditions

@@ -1,6 +1,6 @@
 # Phase 4: Post-Review Merge — Detail
 
-Disclosed from [SKILL.md](SKILL.md) Phase 4 — only reached when `/pair-process-implement` is re-invoked after code review approval (typically via `/pair-process-review`), to merge and close the story.
+Disclosed from [SKILL.md](./SKILL.md) Phase 4 — only reached when `/pair-process-implement` is re-invoked after code review approval (typically via `/pair-process-review`), to merge and close the story.
 
 ### Step 4.1: Verify Review Approval
 

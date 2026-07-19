@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
+import { rewriteSkillReferences, rewriteSkillLinkPaths } from '@pair/content-ops'
 import {
   collectSkillDirs,
   buildDatasetSkillNameMap,
   buildSkillLinkPathMap,
   applyKnownMirrorTransforms,
   extractLineContaining,
-  reconstructFullMirror,
 } from './skills-guide-mirror'
 
 // packages/knowledge-hub/src/tools -> repo root
@@ -42,11 +42,11 @@ describe('buildDatasetSkillNameMap', () => {
 describe('buildSkillLinkPathMap', () => {
   it('maps dataset-source SKILL.md links to their installed-path equivalents', () => {
     const map = buildSkillLinkPathMap(SKILLS_DIR)
-    expect(map.get('../../.skills/capability/map-subdomains/SKILL.md')).toBe(
-      '../../.claude/skills/pair-capability-map-subdomains/SKILL.md',
+    expect(map.get('../.skills/capability/map-subdomains/SKILL.md')).toBe(
+      '../.claude/skills/pair-capability-map-subdomains/SKILL.md',
     )
-    expect(map.get('../../.skills/capability/map-contexts/SKILL.md')).toBe(
-      '../../.claude/skills/pair-capability-map-contexts/SKILL.md',
+    expect(map.get('../.skills/capability/map-contexts/SKILL.md')).toBe(
+      '../.claude/skills/pair-capability-map-contexts/SKILL.md',
     )
   })
 
@@ -109,32 +109,37 @@ describe('skills-guide.md dataset <-> root mirror consistency (critical sections
 })
 
 /**
- * Whole-file coverage: `reconstructFullMirror` applies the real mechanical
- * transform to the ENTIRE dataset content, then overrides the two known
- * deliberate-exception spans (see `skills-guide-mirror.ts` module docs) to
- * their correct behavior. If the root mirror has drifted ANYWHERE — not
- * just on the 5 anchored paragraphs above — this fails.
+ * Whole-file coverage: applies the REAL content-ops transform
+ * (`rewriteSkillReferences` + `rewriteSkillLinkPaths`) — the exact pair the
+ * `pair update` pipeline runs — to the ENTIRE dataset content, with NO manual
+ * exceptions. The dataset file is authored to be transform-correct (prefixed
+ * Composition Pattern diagram; slash-free self-referential "Unprefixed dataset
+ * command names" phrases), so this reproduces the root mirror byte-for-byte.
+ * If the root mirror has drifted ANYWHERE — not just on the 5 anchored
+ * paragraphs above — this fails.
  *
  * On failure, check the targeted-anchor tests above first: if one of them
  * also fails, its message pinpoints the paragraph directly. If only this
- * test fails, the drift is somewhere else in the file — diff
- * `.pair/knowledge/skills-guide.md` against the dataset file's real
- * transform output (see `reconstructFullMirror`) to find it.
+ * test fails, the drift is somewhere else in the file — regenerate the root
+ * mirror with `node apps/pair-cli/dist/cli.js update` (or, if the dataset
+ * itself has a transform-incorrect span, fix the dataset so the mechanical
+ * transform reproduces the intended installed output).
  */
 describe('skills-guide.md dataset <-> root mirror consistency (whole file)', () => {
-  it('root mirror is byte-for-byte reproducible from the dataset via the real transform + the 2 known exceptions', () => {
+  it('root mirror is byte-for-byte reproducible from the dataset via the real content-ops transform', () => {
     const datasetContent = readFileSync(DATASET_SKILLS_GUIDE, 'utf-8')
     const rootContent = readFileSync(ROOT_MIRROR_SKILLS_GUIDE, 'utf-8')
     const skillNameMap = buildDatasetSkillNameMap(SKILLS_DIR)
     const linkPathMap = buildSkillLinkPathMap(SKILLS_DIR)
 
-    const reconstructed = reconstructFullMirror(datasetContent, skillNameMap, linkPathMap)
+    const reconstructed = rewriteSkillLinkPaths(
+      rewriteSkillReferences(datasetContent, skillNameMap),
+      linkPathMap,
+    )
 
     // If this fails, `.pair/knowledge/skills-guide.md` has drifted from the
-    // canonical dataset file somewhere in the whole file. Reconcile the
-    // root mirror to match the real transform's output (or, if a NEW
-    // deliberate exception is legitimately needed beyond the 2 already
-    // modeled in `reconstructFullMirror`, add it there explicitly).
+    // canonical dataset file's real transform output. Regenerate the root
+    // mirror via `pair update`.
     expect(reconstructed).toBe(rootContent)
   })
 })

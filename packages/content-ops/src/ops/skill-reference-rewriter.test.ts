@@ -4,6 +4,9 @@ import {
   buildSkillNameMap,
   rewriteSkillReferencesInFiles,
   findSkillReferences,
+  buildSkillLinkPathMap,
+  rewriteSkillLinkPaths,
+  rewriteSkillLinkPathsInFiles,
 } from './skill-reference-rewriter'
 import { InMemoryFileSystemService } from '../test-utils'
 
@@ -131,9 +134,13 @@ describe('rewriteSkillReferences', () => {
         '\n',
       )
       expect(rewriteSkillReferences(input, map)).toBe(
-        ['Run `/pair-next` to start.', '```', '/next', '```', 'Then run /pair-process-implement.'].join(
-          '\n',
-        ),
+        [
+          'Run `/pair-next` to start.',
+          '```',
+          '/next',
+          '```',
+          'Then run /pair-process-implement.',
+        ].join('\n'),
       )
     })
 
@@ -147,9 +154,7 @@ describe('rewriteSkillReferences', () => {
         'Compose /next.',
       ].join('\n')
       expect(rewriteSkillReferences(input, map)).toBe(
-        ['```text', 'pair install', '/next', '/implement', '```', 'Compose /pair-next.'].join(
-          '\n',
-        ),
+        ['```text', 'pair install', '/next', '/implement', '```', 'Compose /pair-next.'].join('\n'),
       )
     })
 
@@ -326,5 +331,127 @@ describe('rewriteSkillReferencesInFiles', () => {
 
     const content = await fileService.readFile('/target/README.md')
     expect(content).toBe('# No skill refs here')
+  })
+})
+
+describe('buildSkillLinkPathMap', () => {
+  const opts = { flatten: true, prefix: 'pair' }
+
+  it('maps a nested skill SKILL.md relative link to its installed .claude/skills path', () => {
+    const dirMappingFiles = new Map<string, string[]>([
+      ['capability/map-subdomains', []],
+      ['process/refine-story', []],
+    ])
+    const map = buildSkillLinkPathMap(dirMappingFiles, opts)
+    expect(map.get('../.skills/capability/map-subdomains/SKILL.md')).toBe(
+      '../.claude/skills/pair-capability-map-subdomains/SKILL.md',
+    )
+    expect(map.get('../.skills/process/refine-story/SKILL.md')).toBe(
+      '../.claude/skills/pair-process-refine-story/SKILL.md',
+    )
+  })
+
+  it('skips bare top-level dirs with no category (e.g. next)', () => {
+    const dirMappingFiles = new Map<string, string[]>([
+      ['next', []],
+      ['capability/estimate', []],
+    ])
+    const map = buildSkillLinkPathMap(dirMappingFiles, opts)
+    expect([...map.keys()]).toEqual(['../.skills/capability/estimate/SKILL.md'])
+  })
+
+  it('returns an empty map for an empty input', () => {
+    expect(buildSkillLinkPathMap(new Map(), opts).size).toBe(0)
+  })
+})
+
+describe('rewriteSkillLinkPaths', () => {
+  const linkMap = new Map([
+    [
+      '../.skills/capability/map-subdomains/SKILL.md',
+      '../.claude/skills/pair-capability-map-subdomains/SKILL.md',
+    ],
+    [
+      '../.skills/capability/map-contexts/SKILL.md',
+      '../.claude/skills/pair-capability-map-contexts/SKILL.md',
+    ],
+  ])
+
+  it('returns unchanged content when the map is empty', () => {
+    const content = '[x](../../.skills/capability/map-subdomains/SKILL.md)'
+    expect(rewriteSkillLinkPaths(content, new Map())).toBe(content)
+  })
+
+  it('rewrites a SKILL.md link path preserving the leading ../', () => {
+    const input = '[map-subdomains](../../.skills/capability/map-subdomains/SKILL.md)'
+    expect(rewriteSkillLinkPaths(input, linkMap)).toBe(
+      '[map-subdomains](../../.claude/skills/pair-capability-map-subdomains/SKILL.md)',
+    )
+  })
+
+  it('preserves leading ../ regardless of depth', () => {
+    const input = '[x](../../../../.skills/capability/map-contexts/SKILL.md)'
+    expect(rewriteSkillLinkPaths(input, linkMap)).toBe(
+      '[x](../../../../.claude/skills/pair-capability-map-contexts/SKILL.md)',
+    )
+  })
+
+  it('leaves a bare dataset directory path (prose, no SKILL.md) untouched', () => {
+    const input = 'new path: `.skills/capability/map-subdomains/`'
+    expect(rewriteSkillLinkPaths(input, linkMap)).toBe(input)
+  })
+
+  it('leaves a repo-relative prose file path (no leading ../) untouched', () => {
+    const input = '`packages/knowledge-hub/dataset/.skills/capability/map-subdomains/SKILL.md`'
+    expect(rewriteSkillLinkPaths(input, linkMap)).toBe(input)
+  })
+
+  it('is idempotent — a second pass is a no-op', () => {
+    const input = '(../../.skills/capability/map-subdomains/SKILL.md)'
+    const once = rewriteSkillLinkPaths(input, linkMap)
+    expect(rewriteSkillLinkPaths(once, linkMap)).toBe(once)
+  })
+})
+
+describe('rewriteSkillLinkPathsInFiles', () => {
+  const linkMap = new Map([
+    [
+      '../.skills/capability/map-subdomains/SKILL.md',
+      '../.claude/skills/pair-capability-map-subdomains/SKILL.md',
+    ],
+  ])
+
+  it('rewrites link paths in .md files, skipping non-.md files', async () => {
+    const fileService = new InMemoryFileSystemService(
+      {
+        '/t/doc.md': '[a](../../.skills/capability/map-subdomains/SKILL.md)',
+        '/t/config.json': '"../../.skills/capability/map-subdomains/SKILL.md"',
+      },
+      '/',
+      '/',
+    )
+
+    await rewriteSkillLinkPathsInFiles({
+      fileService,
+      files: ['/t/doc.md', '/t/config.json'],
+      linkMap,
+    })
+
+    expect(await fileService.readFile('/t/doc.md')).toBe(
+      '[a](../../.claude/skills/pair-capability-map-subdomains/SKILL.md)',
+    )
+    expect(await fileService.readFile('/t/config.json')).toBe(
+      '"../../.skills/capability/map-subdomains/SKILL.md"',
+    )
+  })
+
+  it('does not write a file when no link paths match', async () => {
+    const fileService = new InMemoryFileSystemService(
+      { '/t/README.md': '# no skill links here' },
+      '/',
+      '/',
+    )
+    await rewriteSkillLinkPathsInFiles({ fileService, files: ['/t/README.md'], linkMap })
+    expect(await fileService.readFile('/t/README.md')).toBe('# no skill links here')
   })
 })

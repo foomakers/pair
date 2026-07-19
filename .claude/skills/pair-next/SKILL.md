@@ -11,7 +11,7 @@ Analyze project state and recommend the single most relevant next skill to invok
 
 ## Skill Catalog (36 skills)
 
-The catalog is **derived from the installed corpus**: every installed skill must appear here — 9 process + 26 capability + `/pair-next` itself = 36. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
+The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 9 process + 26 capability + `/pair-next` itself = 36. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
 
 ### Process Skills (9)
 
@@ -29,8 +29,8 @@ The catalog is **derived from the installed corpus**: every installed skill must
 
 ### Capability Skills (26)
 
-| Skill                                    | Category        | Description                                                                  |
-| ---------------------------------------- | --------------- | ---------------------------------------------------------------------------- |
+| Skill                    | Category        | Description                                                                  |
+| ------------------------ | --------------- | ---------------------------------------------------------------------------- |
 | `/pair-capability-map-subdomains`        | Domain Modeling | Scoped DDD subdomain placement (+ Volatility)                                |
 | `/pair-capability-map-contexts`          | Domain Modeling | Scoped DDD bounded-context placement + relationship assessment               |
 | `/pair-capability-grill`                 | Alignment       | Interview engine: explore a topic or sync on a story, one question at a time |
@@ -151,7 +151,7 @@ Then ask: "Shall I run `/skill-name`?"
 
 ## Graceful Degradation
 
-See [graceful degradation](../../.pair/knowledge/skill-conventions/graceful-degradation.md) (PM tool not accessible → skip Step 3, recommend from adoption files only; adoption files missing → suggest `/pair-process-bootstrap` as the entry point) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (PM tool not accessible → skip Step 3, recommend from adoption files only; adoption files missing → suggest `/pair-process-bootstrap` as the entry point) for the standard scenarios. Additional cases:
 
 - If a suggested skill is not installed, tell the user which skill is needed and where to find it.
 - If way-of-working.md has no `## State Mapping` section, canonical macrostate names are assumed — this is the zero-configuration default, not a degradation.

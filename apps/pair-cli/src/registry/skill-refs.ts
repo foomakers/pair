@@ -1,6 +1,7 @@
-import type { FileSystemService, SkillNameMap } from '@pair/content-ops'
+import type { FileSystemService, SkillNameMap, SkillLinkPathMap } from '@pair/content-ops'
 import {
   rewriteSkillReferences,
+  rewriteSkillLinkPaths,
   findSkillReferences,
   walkMarkdownFiles,
   readSkillNameManifest,
@@ -33,16 +34,23 @@ export type SkillRefContext = {
 }
 
 /**
- * Rewrites skill references in all markdown files under a target path.
- * If target is a file, rewrites that single file. If a directory, walks all .md files.
- * No-op when target doesn't exist or is a non-markdown file.
+ * Rewrites skill references AND SKILL.md cross-reference link paths in all
+ * markdown files under a target path. If target is a file, rewrites that single
+ * file. If a directory, walks all .md files. No-op when target doesn't exist or
+ * is a non-markdown file.
+ *
+ * The two rewrites are complementary: `rewriteSkillReferences` converts
+ * `/command` tokens (`/setup-gates` → `/pair-capability-setup-gates`);
+ * `rewriteSkillLinkPaths` converts markdown link PATHS
+ * (`.skills/capability/map-subdomains/` → `.claude/skills/pair-capability-map-subdomains/`).
  */
 export async function rewriteSkillRefsInTarget(
   fs: FileSystemService,
   target: string,
-  skillNameMap: SkillNameMap,
+  maps: { skillNameMap: SkillNameMap; skillLinkPathMap: SkillLinkPathMap },
   pushLog: (level: LogEntry['level'], message: string) => void,
 ): Promise<void> {
+  const { skillNameMap, skillLinkPathMap } = maps
   if (!(await fs.exists(target))) return
 
   const stat = await fs.stat(target)
@@ -54,7 +62,8 @@ export async function rewriteSkillRefsInTarget(
 
   for (const filePath of files) {
     const content = await fs.readFile(filePath)
-    const rewritten = rewriteSkillReferences(content, skillNameMap)
+    let rewritten = rewriteSkillReferences(content, skillNameMap)
+    rewritten = rewriteSkillLinkPaths(rewritten, skillLinkPathMap)
     if (rewritten !== content) {
       await fs.writeFile(filePath, rewritten)
       pushLog('info', `Skill reference rewriter: updated ${filePath}`)
@@ -71,6 +80,7 @@ export async function applySkillRefsToNonSkillRegistries(
   context: SkillRefContext,
   registries: Record<string, RegistryConfig>,
   skillNameMap: SkillNameMap,
+  skillLinkPathMap: SkillLinkPathMap,
 ): Promise<void> {
   const { fs, baseTarget, pushLog } = context
 
@@ -81,7 +91,7 @@ export async function applySkillRefsToNonSkillRegistries(
       const target = baseTarget
         ? fs.resolve(baseTarget, targetCfg.path)
         : fs.resolve(targetCfg.path)
-      await rewriteSkillRefsInTarget(fs, target, skillNameMap, pushLog)
+      await rewriteSkillRefsInTarget(fs, target, { skillNameMap, skillLinkPathMap }, pushLog)
     }
   }
 }
@@ -150,6 +160,7 @@ export async function reconcileSkillNameRegistry(
   context: SkillRefContext,
   registries: Record<string, RegistryConfig>,
   skillNameMap: SkillNameMap,
+  skillLinkPathMap: SkillLinkPathMap,
 ): Promise<void> {
   // Covers both "no manifest yet" and "flatten/prefix disabled for every
   // registry this run" (accumulated map empty either way — see
@@ -171,7 +182,7 @@ export async function reconcileSkillNameRegistry(
   const orphanedNames = findOrphanedInstalledNames(previousMap, skillNameMap)
 
   const combinedMap = mergeSkillNameMaps(skillNameMap, transitionMap)
-  await applySkillRefsToNonSkillRegistries(context, registries, combinedMap)
+  await applySkillRefsToNonSkillRegistries(context, registries, combinedMap, skillLinkPathMap)
   await detectOrphanedSkillReferences(context, registries, orphanedNames)
 
   // Not atomic with the two passes above: if either throws partway through, the

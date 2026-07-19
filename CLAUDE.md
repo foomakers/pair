@@ -9,7 +9,7 @@ In all interactions and commit messages, be extremely coincise and sacrify gramm
 If your agent supports **Agent Skills** (agentskills.io), start every session by running:
 
 ```text
-/pair-next
+/next
 ```
 
 The `/pair-next` skill reads project adoption files and PM tool state to recommend the most relevant action. Follow its suggestion or override with a specific skill.
@@ -23,10 +23,10 @@ The `/pair-next` skill reads project adoption files and PM tool state to recomme
 **Without skills** (manual flow):
 
 1. **Establish session context** (see Session Context above - maintain for entire conversation)
-2. **Understand the project**: Read `.pair/product/adopted/PRD.md` for project overview
-3. **Identify your task**: Match your request to a task category using `.pair/how-to/index.json`
+2. **Understand the project**: Read `.pair/adoption/product/PRD.md` for project overview
+3. **Identify your task**: Match your request to a task category using `.pair/knowledge/how-to/`
 4. **Follow the guidance**: Use the selected how-to file for specific instructions
-5. **Apply constraints**: Check `.pair/tech/adopted/` for technical requirements
+5. **Apply constraints**: Check `.pair/adoption/tech/` for technical requirements
 
 ## 📋 Available Tasks
 
@@ -35,20 +35,18 @@ The `/pair-next` skill reads project adoption files and PM tool state to recomme
 ### Induction (Getting Started)
 
 | - **Create PRD** → `01-how-to-create-PRD.md`                      | Tags: prd, requirements, planning  |
-| - **Setup project** → `02-how-to-complete-bootstrap-checklist.md` | Tags: bootstrap, setup, onboarding |
-| - **Define subdomains** → `04-how-to-define-subdomains.md`        | Tags: subdomain, domain, model     |
+| - **Setup project** → `02-how-to-complete-bootstrap-checklist.md` | Tags: bootstrap, setup, onboarding, subdomain, bounded-context, domain-model |
 
 ### Strategic (High-level Planning)
 
-| - **Plan initiatives** → `03-how-to-create-and-prioritize-initiatives.md` | Tags: initiative, roadmap            |
-| - **Define architecture** → `05-how-to-define-bounded-contexts.md`        | Tags: bounded, context, architecture |
-| - **Break down epics** → `06-how-to-breakdown-epics.md`                   | Tags: epic, breakdown                |
+| - **Plan initiatives** → `03-how-to-create-and-prioritize-initiatives.md` | Tags: initiative, roadmap, subdomain |
+| - **Break down epics** → `06-how-to-breakdown-epics.md`                   | Tags: epic, breakdown, subdomain      |
 
 ### Iteration (Sprint Planning)
 
 | - **Create user stories** → `07-how-to-breakdown-user-stories.md` | Tags: story, requirements          |
 | - **Refine stories** → `08-how-to-refine-a-user-story.md`         | Tags: refine, acceptance, criteria |
-| - **Create tasks** → `09-how-to-create-tasks.md`                  | Tags: task, breakdown, assign      |
+| - **Create tasks** → `09-how-to-create-tasks.md`                  | Tags: task, breakdown, assign, bounded-context |
 
 ### Execution (Development)
 
@@ -79,27 +77,26 @@ pnpm lint --filter <package_name>
 ## 📚 Key References
 
 - **AI-friendly index**: `.pair/llms.txt` (llmstxt.org — machine-readable knowledge base index)
-- **Project context**: `.pair/product/adopted/PRD.md`
-- **PM tool adoption**: `.pair/tech/adopted/way-of-working.md` (determines which PM tool to use)
-- **PM tool usage**: `.pair/tech/knowledge-base/12-collaboration-and-process-guidelines/project-management-framework.md` (tool-specific instructions)
-- **Technical decisions**: `.pair/tech/adopted/` (architecture, tech-stack, infrastructure)
-- **Testing strategy**: `.pair/tech/knowledge-base/07-testing-strategy.md`
-- **Code guidelines**: `.pair/tech/knowledge-base/02-code-design-guidelines.md`
-- **Security rules**: `.pair/tech/knowledge-base/10-security-guidelines.md`
-- **Manual test suites**: `qa/release-validation/` (critical path test cases CP1–CP8)
+- **Project context**: `.pair/adoption/product/PRD.md`
+- **PM tool adoption**: `.pair/adoption/tech/way-of-working.md` (determines which PM tool to use)
+- **PM tool usage**: `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` (tool-specific instructions)
+- **Technical decisions**: `.pair/adoption/tech/` (architecture, tech-stack, infrastructure)
+- **Testing strategy**: `.pair/knowledge/guidelines/testing/README.md`
+- **Code guidelines**: `.pair/knowledge/guidelines/code-design/README.md`
+- **Security rules**: `.pair/knowledge/guidelines/quality-assurance/security/security-guidelines.md`
 
 ## ⚡ Quick Rules
 
 - **Maintain session context** - Always reference your current how-to, role, PM tool, and access method
 - **One task per session** - keep changes focused within the current how-to scope
 - **Tests required** - follow testing strategy for all code changes
-- **Check adoptions first** - `.pair/tech/adopted/` overrides other guidance
+- **Check adoptions first** - `.pair/adoption/tech/` overrides other guidance
 - **Package-specific rules win** - check for `.pair/knowledge/guidelines/` in target package
 - **No secrets in code** - ask for secure access instructions if needed
 - **Context consistency** - if switching how-to mid-session, explicitly update your session context
 - **Bug fix workflow** - NEVER modify code to fix a bug before creating a test that reproduces it. Test-first debugging ensures the fix actually addresses the problem.
 - **`.pair/working/` is not ambient context** - Content under `.pair/working/` (checkpoints, reports, handoffs) is never loaded as context unless explicitly specified. The skills that use it decide if and how.
-- **Record decisions** - architectural/project decisions MUST be recorded as ADR or ADL. Use `/pair-capability-record-decision` skill or write to `.pair/tech/adopted/adr/` (architectural) / `.pair/tech/adopted/adl/` (non-architectural).
+- **Record decisions** - architectural/project decisions MUST be recorded as ADR or ADL. Use `/pair-capability-record-decision` skill or write to `.pair/adoption/tech/adr/` (architectural) / `.pair/adoption/tech/adl/` (non-architectural).
 - **Follow templates** - PRs, code reviews, commits, branches, tasks, user stories MUST follow templates in `.pair/knowledge/guidelines/collaboration/templates/` unless adoption files specify otherwise. Key templates: `pr-template.md`, `code-review-template.md`, `commit-template.md`, `branch-template.md`, `task-template.md`, `user-story-template.md`.
 
 ## 🐛 Bug Resolution Workflow
@@ -147,3 +144,4 @@ function isLocalPath(str: string): boolean {
 - **Regression prevention**: Test stays in codebase to catch future breaks
 - **Clarity**: Test documents expected behavior
 - **Confidence**: Linting + tests pass before committing
+

@@ -27,10 +27,24 @@ import { transformPath } from './naming-transforms'
 /** Maps original (short) skill name → new (prefixed) skill name */
 export type SkillNameMap = Map<string, string>
 
+/**
+ * Maps a dataset skill-directory substring (`.skills/<category>/<name>/`) to
+ * its installed equivalent (`.claude/skills/<transformed-name>/`). Used to
+ * convert SKILL.md cross-reference link PATHS in non-`.skills` copied files —
+ * the counterpart to `SkillNameMap`, which only covers the `/command` tokens.
+ */
+export type SkillLinkPathMap = Map<string, string>
+
 export type RewriteSkillRefsParams = {
   fileService: FileSystemService
   files: string[]
   skillNameMap: SkillNameMap
+}
+
+export type RewriteSkillLinkPathsParams = {
+  fileService: FileSystemService
+  files: string[]
+  linkMap: SkillLinkPathMap
 }
 
 function escapeRegex(s: string): string {
@@ -191,6 +205,83 @@ export async function rewriteSkillReferencesInFiles(params: RewriteSkillRefsPara
     if (rewritten !== content) {
       await fileService.writeFile(filePath, rewritten)
       logger.info(`Skill reference rewriter: updated references in ${filePath}`)
+    }
+  }
+}
+
+/**
+ * Builds a skill link-path map from the directory mapping collected during a
+ * flatten+prefix skills copy — the SAME `dirMappingFiles` used to build the
+ * `SkillNameMap`. Each nested (`category/name`) skill directory yields a
+ * mapping from its dataset `.skills/<category>/<name>/SKILL.md` link to the
+ * installed `.claude/skills/<transformed-name>/SKILL.md` link.
+ *
+ * Keyed on a RELATIVE-LINK form — `../.skills/<cat>/<name>/SKILL.md` — not a
+ * bare path, deliberately, so it matches only actual markdown links and never
+ * PROSE that mentions a dataset path:
+ *   - a bare directory path appears in prose describing the dataset layout
+ *     (e.g. "new path: `.skills/capability/foo/`") — no `SKILL.md`, no `../`;
+ *   - a repo-relative file path appears in prose too (e.g.
+ *     "`packages/knowledge-hub/dataset/.skills/process/foo/SKILL.md`") — has
+ *     `SKILL.md` but is preceded by `dataset/`, not `../`.
+ * Only a real relative link (`](../../.skills/<cat>/<name>/SKILL.md)`) carries
+ * a leading `../`, since `.skills` sits at the repo root and every referencing
+ * file is nested under it. Matching the single leading `../` (a substring of
+ * `../../…`, `../../../…`, etc.) redirects the link while preserving all
+ * additional `../` segments, so it works at any file depth. Bare top-level
+ * dirs (e.g. `next`, no category) are skipped — no SKILL.md cross-reference.
+ *
+ * Contract: converts only a skill's `SKILL.md` entrypoint link. Deep links to
+ * other files inside a skill dir (e.g. `references/*.md`) are NOT converted —
+ * none exist in the KB today; add per-file mappings here if that changes.
+ */
+export function buildSkillLinkPathMap(
+  dirMappingFiles: Map<string, string[]>,
+  transformOpts: { flatten?: boolean; prefix?: string },
+): SkillLinkPathMap {
+  const map: SkillLinkPathMap = new Map()
+  for (const originalSubDir of dirMappingFiles.keys()) {
+    if (!originalSubDir.includes('/')) continue
+    const transformed = transformPath(originalSubDir, transformOpts)
+    map.set(`../.skills/${originalSubDir}/SKILL.md`, `../.claude/skills/${transformed}/SKILL.md`)
+  }
+  return map
+}
+
+/**
+ * Rewrites skill SKILL.md link paths in content via plain substring
+ * replacement, longest key first (so a longer path is never pre-empted by a
+ * prefix of it). Idempotent: an installed path (`.claude/skills/...`) contains
+ * no source `.skills/<category>/` substring, so a second pass is a no-op.
+ */
+export function rewriteSkillLinkPaths(content: string, linkMap: SkillLinkPathMap): string {
+  if (linkMap.size === 0) return content
+
+  const sorted = [...linkMap.entries()].sort((a, b) => b[0].length - a[0].length)
+  let result = content
+  for (const [from, to] of sorted) {
+    result = result.split(from).join(to)
+  }
+  return result
+}
+
+/**
+ * Rewrites skill link paths in all provided .md files.
+ * Reads each file, applies rewriteSkillLinkPaths, writes back if changed.
+ */
+export async function rewriteSkillLinkPathsInFiles(
+  params: RewriteSkillLinkPathsParams,
+): Promise<void> {
+  const { fileService, files, linkMap } = params
+  if (linkMap.size === 0) return
+
+  for (const filePath of files) {
+    if (!filePath.endsWith('.md')) continue
+    const content = await fileService.readFile(filePath)
+    const rewritten = rewriteSkillLinkPaths(content, linkMap)
+    if (rewritten !== content) {
+      await fileService.writeFile(filePath, rewritten)
+      logger.info(`Skill link-path rewriter: updated links in ${filePath}`)
     }
   }
 }

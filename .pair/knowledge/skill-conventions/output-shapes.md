@@ -13,7 +13,7 @@ ASSESSMENT COMPLETE (output-only — no files written):
 ├── Decision:  [the recommended choice, in domain-specific terms]
 ├── Proposal:  [content rendered for <target file/section>]
 ├── Target:    <adoption file path> (<owned section>)
-├── Persist:   [caller composes /pair-capability-record-decision(content, target) → ADR|ADL]
+├── Persist:   [caller composes /record-decision(content, target) → ADR|ADL]
 └── Status:    [Proposal ready | Confirmed existing]
 ```
 
