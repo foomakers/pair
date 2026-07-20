@@ -114,12 +114,12 @@ Read the following files and classify each as **populated** or **template**:
 
 | File                                                                                               | Template indicator                                        |
 | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
-| [.pair/adoption/product/PRD.md](../../.pair/adoption/product/PRD.md)                               | Contains `[Product/feature name]` or `[Creation date]`    |
-| [.pair/adoption/product/subdomain/README.md](../../.pair/adoption/product/subdomain/README.md)     | Contains `[list here core subdomain]` or `[PROJECT_NAME]` |
-| [.pair/adoption/tech/architecture.md](../../.pair/adoption/tech/architecture.md)                   | Contains only placeholder headings with no real content   |
-| [.pair/adoption/tech/tech-stack.md](../../.pair/adoption/tech/tech-stack.md)                       | Contains only placeholder headings with no real content   |
-| [.pair/adoption/tech/boundedcontext/README.md](../../.pair/adoption/tech/boundedcontext/README.md) | Contains only placeholder headings with no real content   |
-| [.pair/adoption/tech/way-of-working.md](../../.pair/adoption/tech/way-of-working.md)               | No PM tool specified or only template text                |
+| [.pair/adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md)                               | Contains `[Product/feature name]` or `[Creation date]`    |
+| [.pair/adoption/product/subdomain/README.md](../../../.pair/adoption/product/subdomain/README.md)     | Contains `[list here core subdomain]` or `[PROJECT_NAME]` |
+| [.pair/adoption/tech/architecture.md](../../../.pair/adoption/tech/architecture.md)                   | Contains only placeholder headings with no real content   |
+| [.pair/adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md)                       | Contains only placeholder headings with no real content   |
+| [.pair/adoption/tech/boundedcontext/README.md](../../../.pair/adoption/tech/boundedcontext/README.md) | Contains only placeholder headings with no real content   |
+| [.pair/adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md)               | No PM tool specified or only template text                |
 
 **Template detection rule**: A file is a template if it contains square-bracket placeholders (e.g., `[Product/feature name]`) or if its substantive sections contain no project-specific content.
 
@@ -144,9 +144,9 @@ All adoption files are populated. Query the PM tool to determine backlog state �
 
 Rows 12–15 are likewise project-wide and not surfaced under a scope; when the candidate set yields no actionable item, Step 0 item 5's clean exit governs (see Step 0).
 
-**PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
+**PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
 
-**State resolution**: The conditions below refer to canonical **macrostates** (`Draft`, `Ready`, `In Progress`, `Review`, `Done`), never board-specific labels. Resolve each item's board state to a macrostate via the `## State Mapping` section in way-of-working.md — omitted ⇒ canonical names are assumed. See [canonical-states.md](../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) for the full resolution rule. When a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback: evaluate the [Definition of Ready criteria](../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md) against the item instead of guessing from the board-state name.
+**State resolution**: The conditions below refer to canonical **macrostates** (`Draft`, `Ready`, `In Progress`, `Review`, `Done`), never board-specific labels. Resolve each item's board state to a macrostate via the `## State Mapping` section in way-of-working.md — omitted ⇒ canonical names are assumed. See [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) for the full resolution rule. When a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback: evaluate the [Definition of Ready criteria](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md) against the item instead of guessing from the board-state name.
 
 | #   | Condition                                                        | Suggestion          | Rationale                                   |
 | --- | ---------------------------------------------------------------- | ------------------- | ------------------------------------------- |
@@ -206,12 +206,12 @@ Then ask: "Shall I run `/skill-name`?"
 
 ## Graceful Degradation
 
-See [graceful degradation](../../.pair/knowledge/skill-conventions/graceful-degradation.md) (PM tool not accessible → skip Step 3, recommend from adoption files only; adoption files missing → suggest `/pair-process-bootstrap` as the entry point) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (PM tool not accessible → skip Step 3, recommend from adoption files only; adoption files missing → suggest `/pair-process-bootstrap` as the entry point) for the standard scenarios. Additional cases:
 
 - **Argument edge cases** (see Step 0): `--root` not found → HALT, no action; `--root` resolves to a Done issue → report and exit; `--filter` (or the subtree) matches nothing → report `no matching issues` and exit cleanly (an empty result is not an error).
 - If a suggested skill is not installed, tell the user which skill is needed and where to find it.
 - If way-of-working.md has no `## State Mapping` section, canonical macrostate names are assumed — this is the zero-configuration default, not a degradation.
-- If a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback ([Definition of Ready criteria](../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md)) rather than treating row 11's condition as unresolvable.
+- If a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback ([Definition of Ready criteria](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md)) rather than treating row 11's condition as unresolvable.
 
 ## Notes
 
