@@ -114,6 +114,25 @@
 - **In Progress**: Story is actively being developed
 - **Done**: Story delivered and accepted
 
+## Classification
+
+> Risk/cost matrix compiled by `/pair-capability-classify` in **refinement** context during refinement — written as **1 line + `<details>`** (D22 reading budget), never an inline table. Review re-runs `/pair-capability-classify` in review context: it may **confirm or raise** a dimension, **never lower** it (the refinement tier is a floor, G6/D17). Symmetric with the review side, where the template owns the slot. Leave the placeholder below until `/pair-capability-classify` populates it; when `/pair-capability-classify` is not installed the section stays empty and refinement notes the skip.
+
+`risk:[green | yellow | red]` · `cost:[green | yellow | orange | red]` [· coupling: not assessed — no domain artifacts]
+
+<details>
+<summary>Matrix — per dimension</summary>
+
+| Dimension                  | Tier                  | Source                                       | Note |
+| -------------------------- | --------------------- | -------------------------------------------- | ---- |
+| Service/domain criticality | [g/y/r]               | [Criticality Table \| KB default]            |      |
+| Change/diff risk           | [g/y/r]               | [story scope]                                |      |
+| Business impact            | [g/y/r]               | [subdomain class]                            |      |
+| Security relevance         | [g/y/r]               | [path heuristic]                             |      |
+| Coupling balance           | [g/y/r \| not assessed] | [subdomain volatility + integrations \| absent] |      |
+
+</details>
+
 ## Acceptance Criteria
 
 ### Functional Requirements
