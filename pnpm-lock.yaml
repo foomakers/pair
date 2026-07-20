@@ -200,6 +200,9 @@ importers:
       '@inquirer/prompts':
         specifier: 'catalog:'
         version: 7.5.0(@types/node@24.3.0)
+      '@pair/content-ops':
+        specifier: workspace:*
+        version: link:../../packages/content-ops
       '@pair/knowledge-hub':
         specifier: workspace:*
         version: link:../../packages/knowledge-hub
@@ -219,9 +222,6 @@ importers:
         specifier: 'catalog:'
         version: 14.1.0
     devDependencies:
-      '@pair/content-ops':
-        specifier: workspace:*
-        version: link:../../packages/content-ops
       '@pair/eslint-config':
         specifier: workspace:*
         version: link:../../tools/eslint-config

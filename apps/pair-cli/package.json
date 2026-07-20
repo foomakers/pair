@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@inquirer/prompts": "catalog:",
+    "@pair/content-ops": "workspace:*",
     "@pair/knowledge-hub": "workspace:*",
     "adm-zip": "catalog:",
     "chalk": "catalog:",
@@ -56,7 +57,6 @@
     "markdown-it": "catalog:"
   },
   "devDependencies": {
-    "@pair/content-ops": "workspace:*",
     "@pair/eslint-config": "workspace:*",
     "@pair/prettier-config": "workspace:*",
     "@pair/markdownlint-config": "workspace:*",
