@@ -43,6 +43,15 @@ Disclosed from [SKILL.md](SKILL.md) Phase 4 — only reached when `/implement` i
 3. **Act**: Check parent initiative — if ALL epics in the initiative are Done, update initiative status to "Done".
 4. **Verify**: Story and parent hierarchy updated recursively.
 
+### Step 4.5: Clean Up the Checkpoint
+
+The checkpoint's lifecycle ends at merge — it exists only to survive context resets and the review/fix loop, both of which are over once the story is Done.
+
+1. **Check**: Does `.pair/working/checkpoints/<story-id>.md` exist?
+2. **Skip**: If no checkpoint file exists (e.g. `/checkpoint` was not installed), nothing to clean up.
+3. **Act**: Remove `.pair/working/checkpoints/<story-id>.md` so finished-story state never lingers.
+4. **Verify**: The checkpoint file is gone (checkpoint lifecycle: written at the closing phase — Step 3.2 — cleaned up here at merge).
+
 ## Output Format (merge)
 
 ```text

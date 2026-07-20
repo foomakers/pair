@@ -51,13 +51,14 @@ Every new module file must have a corresponding unit test file (1:1 mapping). Mo
 
 With commit-per-task, the developer gets a checkpoint between every task — the AI presents a summary and waits for confirmation before committing.
 
-### PR Creation
+### Closing Phase: Checkpoint + PR
 
-After all tasks are complete, the skill:
-1. Pushes the feature branch
-2. Creates a PR following the team's [PR template](/docs/reference/guidelines-catalog)
-3. Links the PR to the story issue
-4. Marks the PR as ready for review
+After all tasks are complete, the skill's closing phase splits the handoff from the publish so the PR is always built on a clean context:
+
+1. **Writes a checkpoint** (`/pair-capability-checkpoint` in write mode) — the boundary artifact capturing story, branch, tasks done, decisions, and remaining todos. This is the handoff document the PR is built from, not this session's memory.
+2. **Publishes the PR via a handoff-only subagent** — spawns a fresh, anonymous subagent whose entire prompt is the checkpoint, which resumes from it and runs `/pair-capability-publish-pr`. That skill runs the quality gate, pushes the branch, creates or updates one PR from the [PR template](/docs/reference/guidelines-catalog), links it to the story, copies the classification tags, and marks it ready for review.
+
+If subagent spawning is unavailable, the skill degrades to running `/pair-capability-publish-pr` inline in the same session (checkpoint still written) and notes the degradation. Re-invoking `/pair-process-implement` on an interrupted story reads the checkpoint and resumes from the first pending task — completed tasks are never repeated, and `publish-pr` updates the existing PR rather than opening a second one.
 
 ## Step 9: Code Review
 
@@ -106,7 +107,9 @@ After merge, the skill updates the status hierarchy:
     │
     ├── Task 1: RED → GREEN → REFACTOR → commit
     ├── Task 2: RED → GREEN → REFACTOR → commit
-    └── Task N: ... → commit → PR created
+    ├── Task N: ... → commit
+    │
+    └── Closing: checkpoint (write) → fresh subagent resumes → publish-pr → PR ready
     │
 /pair-process-review #pr-number
     │
