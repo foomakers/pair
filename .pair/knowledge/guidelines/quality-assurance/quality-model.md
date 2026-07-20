@@ -18,7 +18,7 @@ The single source of default quality rules for this KB. `classify`, `assess-cost
 
 | Pillar | Covers | Tag family (if exposed) | Primary skill |
 | --- | --- | --- | --- |
-| **Cost** | Financial exposure of building/running the change | `cost:*` — opt-in, §5 | `assess-cost` (cost-signal catalog, forthcoming) |
+| **Cost** | Financial exposure of building/running the change | `cost:*` — opt-in, §5 | `assess-cost` (cost-signal catalog) |
 | **Security** | Vulnerabilities, compliance, secure-by-design | none dedicated — feeds `risk:*` (§3) + deterministic CI scanning | `assess-security`, [security/](security/README.md) |
 | **Delivery** | Everything else: correctness, performance, a11y, observability, docs, planning, architecture, release, AI metrics | `risk:*` (correctness/blast-radius facets) — KB default, §5 | `pair-process-review`, `classify` |
 
@@ -52,7 +52,7 @@ Coupling sources absent (no subdomain/bounded-context artifacts, no `assess-coup
 
 ### 3.3 Cost class (R6.2)
 
-Cost class = **highest detected signal**. The signal catalog (paid-SDK imports, API-key env vars, IaC/provisioning changes, cron/queues, media processing, LLM calls) is maintained in the cost-assessment guideline (forthcoming, `assess-cost`); no signal detected ⇒ `green`. General + provider-specific heuristics: [infrastructure/cloud-providers/cost-optimization.md](../infrastructure/cloud-providers/cost-optimization.md). This value is always computed and written to the story/PR body's matrix (§1); it is projected as the `cost:green|yellow|orange|red` tag only if a project adds `cost` to its Tag Projection declaration (§5) — the KB does not do this by default.
+Cost class = **highest detected signal**. The signal catalog (paid-SDK imports, API-key env vars, IaC/provisioning changes, cron/queues, media processing, LLM calls) is maintained in the [cost-assessment guideline](cost-assessment.md), applied by `assess-cost`; no signal detected ⇒ `green`. General + provider-specific heuristics (AWS first, other providers via adoption links) live there too; deeper running-cost optimization is in [infrastructure/cloud-providers/cost-optimization.md](../infrastructure/cloud-providers/cost-optimization.md). This value is always computed and written to the story/PR body's matrix (§1); it is projected as the `cost:green|yellow|orange|red` tag only if a project adds `cost` to its Tag Projection declaration (§5) — the KB does not do this by default.
 
 ## 4. Per-Tier Requirements
 
@@ -166,4 +166,4 @@ Every quality theme not covered by §1–§6 lives under one of the three pillar
 | Release | Delivery | [../technical-standards/deployment-workflow/release-management.md](../technical-standards/deployment-workflow/release-management.md) |
 | AI metrics / retro | Delivery | [../collaboration/project-tracking/README.md](../collaboration/project-tracking/README.md) (reports land in `.pair/working/reports/`, once available) |
 | Vulnerabilities / compliance | Security | [security/vulnerability-prevention.md](security/vulnerability-prevention.md), [security/compliance.md](security/compliance.md) |
-| Cost signals | Cost | cost-assessment guideline (not yet published, see §3.3) |
+| Cost signals | Cost | [cost-assessment.md](cost-assessment.md) (see §3.3) |
