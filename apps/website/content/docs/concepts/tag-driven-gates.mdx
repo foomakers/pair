@@ -1,0 +1,45 @@
+---
+title: Tag-Driven Quality Gates
+description: An opt-in pre-merge optimization that scales CI effort to each PR's risk tier by reading classification tags only — never by classifying in CI. Off by default; the default runs the full suite on every PR.
+---
+
+By default, pair's pre-merge quality gate runs the **full check suite on every PR** — base, unit, integration/E2E, and coverage, plus an unconditional secret scan. That is the safe default: every change earns the same, complete verification.
+
+**Tag-driven (tier-aware) gating is an opt-in optimization on top of that.** When enabled, the gate runs more checks on riskier changes and fewer on safe ones — *reducing* the checks on low-risk PRs to trade some verification for speed. Because it narrows coverage, it is off unless a project turns it on by setting `Pre-merge tiering: enabled` in its `way-of-working.md`. Without that flag, `setup-gates` generates the full-suite pipeline and none of the matrix below applies.
+
+When tiering **is** enabled, the gate does **not** decide the risk itself — it reads the `risk:*` tag already on the pull request and applies a fixed matrix. Classification happens once, upstream; CI just consumes the result.
+
+## The matrix (when tiering is enabled)
+
+| Tier | What the gate runs |
+| --- | --- |
+| 🟢 `risk:green` | install + lint + type + build |
+| 🟡 `risk:yellow` | + unit tests |
+| 🔴 `risk:red` | + integration + E2E |
+
+Two things run at **every** tier regardless of the matrix:
+
+- **install + lint + type + build** — the base always runs.
+- **Deterministic secret scanning** (gitleaks by default) — a secret is a secret no matter how small the change. It is never tier-scoped and never skipped.
+
+## Where the tier comes from
+
+The tier is set by classification during refinement and confirmed (or raised) at review, then written onto the PR as a `risk:green|yellow|red` label. The pipeline reads that label and nothing else — it never inspects the diff, file paths, or change size. This keeps CI simple and auditable: you can grep the generated pipeline config and find zero classification logic in it.
+
+See [Canonical States](/docs/concepts/canonical-states) for how work-item state is resolved, and [Definition of Ready & Done](/docs/concepts/definition-of-ready-and-done) for where classification fits in the flow.
+
+## Fail-safe: no tag means red
+
+If a PR has **no** `risk:*` tag — or the tag is unknown or malformed — the gate treats it as 🔴 and runs the full matrix. Missing classification never means "skip the checks"; it means "run everything," with a warning on the PR. Tags are re-read at the start of every run, so re-classifying a PR (for example, review raising the tier) only ever **widens** the matrix — it never narrows it against a previous run.
+
+## Missing a required suite fails loudly
+
+If a tier requires a suite the repository does not have (for example, a 🔴 PR with no E2E suite), the gate **fails with an explicit "suite missing" error**. It never silently passes a tier whose checks could not run.
+
+## Post-merge is build + deploy only
+
+Once a PR merges to the main branch, the gate does not run again — it already passed. The post-merge staging pipeline performs **build + deploy only**. The gate is the deterministic first filter before merge; review starts only once the gate is green.
+
+## Setting it up (opt-in)
+
+Tier-aware gating is **off by default**. To turn it on, set `Pre-merge tiering: enabled` in your project's `way-of-working.md` — `setup-gates` also offers this as a guided-setup question (default **No**). With the flag enabled, `pair`'s `setup-gates` capability generates the tier-aware pipeline for your stack and wires the required status checks so a red gate blocks merge; you do not hand-write the tier logic — it is generated from the quality model's matrix, with the tag-reading step and the unconditional secret-scan job included. Leave the flag off (the default) and `setup-gates` generates the full-suite pipeline where every PR runs every suite.

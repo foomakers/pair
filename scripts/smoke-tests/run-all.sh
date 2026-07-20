@@ -264,6 +264,7 @@ if [ "$IS_CI" = "true" ]; then
     "source-resolution.sh"
     "install-preconditions.sh"
     "default-resolution.sh"
+    "tier-aware-gate.sh"
   )
   
   for t in "${CI_TESTS[@]}"; do

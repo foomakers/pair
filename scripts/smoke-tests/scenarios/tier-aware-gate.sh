@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+# OFFLINE_SAFE=true
+#
+# Tier-aware pre-merge gate — verification scenario (story #258).
+#
+# Exercises the shipped, provider-agnostic tag resolver end-to-end and audits the
+# generated-pipeline guideline for the two non-negotiable properties:
+#   1. the resolver reads classification TAGS ONLY (fail-safe red), and
+#   2. the pipeline contains NO classification criteria (grep-verifiable, D18),
+#      and secret scanning is unconditional at every tier.
+#
+# Per the gate-tooling ADL (2026-07-13) this shell/template surface is verified
+# with a smoke test, not a vitest unit test.
+source "$(dirname "$0")/../lib/utils.sh"
+ensure_tmp_dir
+
+TEST_NAME="Tier-Aware Pre-Merge Gate"
+echo "=== Running $TEST_NAME ==="
+
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}"
+RESOLVER="$REPO_ROOT/packages/knowledge-hub/dataset/.pair/knowledge/assets/tier-resolve.sh"
+GUIDELINE="$REPO_ROOT/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md"
+SETUP_GATES="$REPO_ROOT/packages/knowledge-hub/dataset/.skills/capability/setup-gates/SKILL.md"
+
+FAILED=0
+check() { # check <description> <expected> <actual>
+  if [ "$2" = "$3" ]; then log_succ "$1 => $3"; else log_fail "$1: expected '$2' got '$3'"; FAILED=1; fi
+}
+
+assert_file "$RESOLVER" || exit 1
+assert_file "$GUIDELINE" || exit 1
+assert_file "$SETUP_GATES" || exit 1
+
+# --- Redesign invariant: tier reduction is OPT-IN; default = full checks on every PR ---
+# (ADL 2026-07-20). The guideline must frame itself as an opt-in optimization and
+# state the full-suite default; setup-gates must default to full-suite and gate the
+# tier-aware pipeline behind the explicit `Pre-merge tiering: enabled` opt-in.
+if grep -qi 'opt-in' "$GUIDELINE" && grep -q 'full check suite on every PR' "$GUIDELINE"; then
+  log_succ "guideline frames tiering as opt-in (default = full checks on every PR)"
+else
+  log_fail "guideline no longer frames tiering as opt-in / default-full"; FAILED=1
+fi
+if grep -q 'full check suite by default' "$SETUP_GATES" \
+  && grep -q 'Pre-merge tiering: enabled' "$SETUP_GATES" \
+  && grep -qi 'opt-in' "$SETUP_GATES"; then
+  log_succ "setup-gates defaults to full suite; tier-aware behind explicit opt-in"
+else
+  log_fail "setup-gates no longer defaults to full suite / opt-in tiering"; FAILED=1
+fi
+
+# shellcheck source=/dev/null
+source "$RESOLVER"
+
+# --- Tag -> TIER resolution (reads tags only, fail-safe red) ---
+check "risk:green tag"              green  "$(resolve_tier 'risk:green' 2>/dev/null)"
+check "risk:yellow tag"            yellow "$(resolve_tier 'risk:yellow' 2>/dev/null)"
+check "risk:red tag"               red    "$(resolve_tier 'risk:red' 2>/dev/null)"
+check "untagged PR (fail-safe)"    red    "$(resolve_tier '' 2>/dev/null)"
+check "malformed tag (fail-safe)"  red    "$(resolve_tier 'risk:banana' 2>/dev/null)"
+check "max() widens, never narrows" red   "$(resolve_tier 'risk:green risk:red' 2>/dev/null)"
+check "max() green+yellow => yellow" yellow "$(resolve_tier 'risk:green risk:yellow' 2>/dev/null)"
+
+# untagged/malformed must warn (never silently pass) on stderr
+if resolve_tier '' 2>&1 >/dev/null | grep -q 'fail-safe'; then
+  log_succ "untagged emits fail-safe warning"
+else
+  log_fail "untagged did not warn"; FAILED=1
+fi
+
+# --- Per-tier required suites (matrix sourced from quality-model §4) ---
+check "green suites"  "install lint type build"                  "$(required_suites_for_tier green)"
+check "yellow suites" "install lint type build unit"             "$(required_suites_for_tier yellow)"
+check "red suites"    "install lint type build unit integration e2e" "$(required_suites_for_tier red)"
+
+# --- Missing required suite => explicit failure, never a silent pass ---
+if require_suite e2e 0 2>/dev/null; then log_fail "missing suite passed silently"; FAILED=1; else log_succ "missing suite fails explicitly"; fi
+if require_suite e2e 1 2>/dev/null; then log_succ "present suite passes"; else log_fail "present suite failed"; FAILED=1; fi
+
+# --- Grep audit: resolver AND the guideline's pipeline template carry NO
+# classification criteria (D18). Neither the resolver nor the generated pipeline may
+# inspect the diff, code, file paths, or change size to decide a tier — they only read
+# the risk:* label. The guideline grep is scoped to its fenced code blocks (the
+# generated pipeline/resolver snippets) so the explanatory prose — which legitimately
+# names diff/schema/path tokens to *describe* the invariant (tier-aware-pipeline.md
+# §"the one rule") — does not false-positive. Any criteria token in either surface is a leak.
+CRITERIA='\b(schema|migration|git diff|--numstat|lines?[ -]changed|loc\b|files?[ -]changed)\b'
+if grep -Eiq "$CRITERIA" "$RESOLVER"; then
+  log_fail "resolver leaks classification criteria"; grep -Ein "$CRITERIA" "$RESOLVER"; FAILED=1
+else
+  log_succ "resolver contains no classification criteria"
+fi
+
+# fenced code blocks of the guideline only (toggle on ``` fence lines, keep interior)
+GUIDELINE_CODE="$(awk '/^```/{infb=!infb; next} infb' "$GUIDELINE")"
+if printf '%s\n' "$GUIDELINE_CODE" | grep -Eiq "$CRITERIA"; then
+  log_fail "guideline pipeline template leaks classification criteria"
+  printf '%s\n' "$GUIDELINE_CODE" | grep -Ein "$CRITERIA"; FAILED=1
+else
+  log_succ "guideline pipeline template contains no classification criteria"
+fi
+
+# --- Secret scanning is unconditional: the secret-scan YAML job has NO `if:` key ---
+# Scope strictly to the 2-space-indented `secret-scan:` job block inside the YAML
+# (reset on the next job key), ignoring prose that mentions "if:".
+if awk '
+  /^  secret-scan:/ { injob=1; next }
+  /^  [a-z][a-z0-9-]*:/ { injob=0 }
+  injob && /^ +if:/ { hit=1 }
+  END { exit hit ? 1 : 0 }
+' "$GUIDELINE"; then
+  log_succ "secret-scan job is unconditional at every tier"
+else
+  log_fail "secret-scan job has an if: (tier-conditioned)"; FAILED=1
+fi
+
+if [ "$FAILED" -ne 0 ]; then
+  log_fail "$TEST_NAME had failures"; exit 1
+fi
+log_succ "$TEST_NAME passed"
