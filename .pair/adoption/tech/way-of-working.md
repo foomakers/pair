@@ -11,6 +11,20 @@
 - Ensure use proper template for commit messages and PRs, see [commit template](../../knowledge/guidelines/collaboration/templates/commit-template.md) and [PR template](../../knowledge/guidelines/collaboration/templates/pr-template.md) for details.
 - **PR granularity — one PR per story (default):** A story's work lands in a single PR by default, even when the story is broken into multiple inline tasks/findings. Splitting into multiple PRs per story requires an explicit reason (e.g. unusually large story, or independently shippable/needed-sooner parts) — it is not the default. Per-task granularity within that one PR is expressed as commit-per-task (see Commit History Policy above), not as separate PRs. See ADL [2026-07-12-one-pr-per-story-default.md](../decision-log/2026-07-12-one-pr-per-story-default.md) for rationale.
 
+## State Mapping
+
+Maps this project's GitHub Projects board columns to the 5 canonical macrostates (see [canonical-states.md](../../knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)). Skills read and write item state through this map, never the raw board labels.
+
+| Board State | Macrostate  |
+| ----------- | ----------- |
+| Todo        | Draft       |
+| Refined     | Ready       |
+| In Progress | In Progress |
+| Done        | Done        |
+
+- `Refined` (legacy board column) maps to the canonical `Ready` — the column keeps its name, skills treat it as `Ready` (migration note #243). This is what lets `/pair-process-refine-story` complete its Draft→Ready transition on this board.
+- No board column maps to `Review`: this project reviews on the PR and merges straight to `Done`. A skill asked to write `Review` will HALT and report the gap rather than guess.
+
 ## Manual Testing
 
 - Manual test suites live in `qa/` at the repository root.
