@@ -166,6 +166,7 @@
 - [� CI/CD Strategy Practice](.pair/knowledge/guidelines/infrastructure/cicd-strategy/README.md)
 - [Secrets Management](.pair/knowledge/guidelines/infrastructure/cicd-strategy/secrets-management.md)
 - [CI/CD Strategy](.pair/knowledge/guidelines/infrastructure/cicd-strategy/strategy.md)
+- [Tier-Aware Pre-Merge Pipeline](.pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md)
 - [AWS Deployment Patterns](.pair/knowledge/guidelines/infrastructure/cloud-providers/aws-deployment.md)
 - [Cloud Cost Optimization Strategy](.pair/knowledge/guidelines/infrastructure/cloud-providers/cost-optimization.md)
 - [GCP Deployment Patterns](.pair/knowledge/guidelines/infrastructure/cloud-providers/gcp-deployment.md)

@@ -116,7 +116,7 @@
 
 ## Classification
 
-> Risk/cost matrix compiled by `/pair-capability-classify` in **refinement** context during refinement — written as **1 line + `<details>`** (D22 reading budget), never an inline table. Review re-runs `/pair-capability-classify` in review context: it may **confirm or raise** a dimension, **never lower** it (the refinement tier is a floor, G6/D17). Symmetric with the review side, where the template owns the slot. Leave the placeholder below until `/pair-capability-classify` populates it; when `/pair-capability-classify` is not installed the section stays empty and refinement notes the skip.
+> Risk/cost matrix compiled by `/classify` in **refinement** context during refinement — written as **1 line + `<details>`** (D22 reading budget), never an inline table. Review re-runs `/classify` in review context: it may **confirm or raise** a dimension, **never lower** it (the refinement tier is a floor, G6/D17). Symmetric with the review side, where the template owns the slot. Leave the placeholder below until `/classify` populates it; when `/classify` is not installed the section stays empty and refinement notes the skip.
 
 `risk:[green | yellow | red]` · `cost:[green | yellow | orange | red]` [· coupling: not assessed — no domain artifacts]
 
