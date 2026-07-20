@@ -50,7 +50,7 @@ Configure CI/CD quality gates for the project. Reads quality assurance guideline
 1. **Act**: Read quality assurance guidelines:
    - [quality-assurance.md](../../../.pair/knowledge/guidelines/technical-standards/git-workflow/quality-assurance.md) — gate types and checklists
    - [quality-gates.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/quality-gates.md) — gate framework and registry format
-   - [tier-aware-pipeline.md](../../../.pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md) — how the pre-merge pipeline is modulated by the risk tier (tags only, fail-safe red) and the required-check wiring this skill emits
+   - [tier-aware-pipeline.md](../../../.pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md) — the **opt-in** optimization that reduces checks per risk tier (tags only, fail-safe red); default is the full suite on every PR, tier-aware only when the project opts in
    - [quality-model.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) §4 — the single source of the tier→checks matrix the pipeline projects (never re-declared in generated config)
    - [shared-config-packages.md](../../../.pair/knowledge/guidelines/code-design/quality-standards/shared-config-packages.md) — shared-config-package pattern, per-type overrides, `tools/*` reference implementation
    - [secret-scanning.md](../../../.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md) — the deterministic, required-at-every-tier CI job this skill provisions (R6.5, D24) — never a skill, never an LLM judgment call
@@ -68,14 +68,11 @@ Configure CI/CD quality gates for the project. Reads quality assurance guideline
    - Type check (e.g., `tsc --noEmit`)
    - Formatting (e.g., `prettier --check`)
 
-   **CI gates** (pipeline on push/PR) — **tier-aware**, per [tier-aware-pipeline.md](../../../.pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md):
-   - **Tier-scoped gate matrix** — the pipeline reads the PR's `risk:*` tag only (tags only, no criteria — D18) and schedules the matrix from [quality-model.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) §4:
-     - **base** (install + lint + type + build) at every tier
-     - **unit** from 🟡
-     - **integration + E2E** from 🔴
-     - **untagged / unknown / malformed tag ⇒ 🔴** (fail-safe, never a silent skip); a required suite missing at a tier ⇒ **explicit failure**, not a silent pass
-   - **Secret scanning** — required, unconditional at every tier (not tier-scoped like the gates above): gitleaks by default, per [secret-scanning.md](../../../.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md) (R6.5, D24); a project overrides the scanner via `way-of-working.md`'s Custom Gate Registry, never by skipping the job
+   **CI gates** (pipeline on push/PR) — **full check suite by default**:
+   - **Full pipeline (default)** — every PR runs the **complete** suite: base (install + lint + type + build), unit, integration/E2E, and coverage. This is the safe default — no PR merges on partial verification, matching the pre-tiering behavior.
+   - **Secret scanning** — required, unconditional on every PR (never tier-scoped): gitleaks by default, per [secret-scanning.md](../../../.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md) (R6.5, D24); a project overrides the scanner via `way-of-working.md`'s Custom Gate Registry, never by skipping the job
    - Custom gates from registry
+   - **Optional — risk-tier-scoped checks (opt-in, off by default)**: a project may opt into *reducing* checks on lower-risk PRs (a 🟢 PR skips the heavier suites) per [tier-aware-pipeline.md](../../../.pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md). This narrows coverage, so it is **not** generated unless the project explicitly opts in (see Step 3.3). When enabled, the pipeline reads the PR's `risk:*` tag only (no criteria — D18), schedules the [quality-model.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) §4 matrix (base every tier, unit from 🟡, integration/E2E from 🔴), treats **untagged / unknown / malformed ⇒ 🔴** (fail-safe), and fails explicitly on a required-but-missing suite. Secret-scan stays unconditional in either mode.
 
    **Pre-production gates** (before deployment):
    - All CI gates
@@ -92,22 +89,33 @@ Configure CI/CD quality gates for the project. Reads quality assurance guideline
    >
    > Accept this configuration?
 
-3. **Verify**: Developer approves. If changes needed → adjust.
+3. **Act — tiering opt-in** (per the [guided/quick setup convention](../../../.pair/knowledge/skill-conventions/guided-quick-setup.md), default **No**): the CI pipeline mode is one input resolved like any other — full-suite (default) vs risk-tier-scoped (opt-in).
+   - **Guided mode** (interactive/TTY) — ask **one** question, pre-filled with the default:
+
+     > Enable risk-tier-scoped pre-merge checks? This runs *lighter* checks on lower-risk PRs (a 🟢 PR skips integration/E2E) instead of the full suite on every PR — faster, but with less verification on low-risk changes. **[default: No — run the full suite on every PR]**
+
+     Default (Enter) ⇒ **No** (full pipeline). Only an explicit "Yes" opts in.
+   - **Quick mode / non-interactive / CI** — take the default: **No** (full pipeline). Never prompt.
+   - Record the resolved choice for Step 4: `TIERING = enabled | disabled` (default `disabled`).
+
+4. **Verify**: Developer approves gate configuration and the tiering choice is resolved (`disabled` unless explicitly opted in).
 
 ### Step 4: Write Configuration
 
 1. **Act**: Update [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md):
    - Set quality gate command (e.g., `pnpm quality-gate`)
    - Write or update Custom Gate Registry table
-2. **Act**: Generate the **tier-aware pre-merge pipeline** following [tier-aware-pipeline.md](../../../.pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md), appropriate for the adopted stack and hosting:
+   - **Pre-merge tiering flag**: if `TIERING = enabled` (Step 3.3 opt-in), record `Pre-merge tiering: enabled` in the Quality Gates section. If `disabled` (the default), either omit the line or record `Pre-merge tiering: disabled` — both mean full-suite. Never write `enabled` without the explicit opt-in.
+2. **Act**: Generate the **pre-merge pipeline** appropriate for the adopted stack and hosting. **Which pipeline depends on `TIERING`:**
    - GitHub Actions → `.github/workflows/quality.yml`
    - GitLab → `.gitlab-ci.yml` quality stage
    - Other → document commands for manual pipeline setup
-   - The pipeline **reads the PR's `risk:*` tag only** (via [`tier-resolve.sh`](../../../.pair/knowledge/assets/tier-resolve.sh) — tags only, no classification criteria of its own, D18) and schedules the [quality-model.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) §4 matrix: base every tier, unit from 🟡, integration/E2E from 🔴; **untagged/unknown/malformed ⇒ 🔴** (fail-safe); a required suite missing at a tier ⇒ **explicit failure** (`require_suite`), never a silent pass. Do not copy any tier threshold into the generated config — it is a projection of the model, not a second source.
-   - **Wire required checks**: mark `base` and `secret-scan` as required status checks on the protected branch, and the tier-scoped jobs as required-when-scheduled (or via one aggregating gate job), so a red gate blocks merge.
-   - **Post-merge staging** (on merge to the main branch): **build + deploy only, no gate re-run** — the gate already passed pre-merge.
-3. **Act**: Write the secret-scanning job — required, not an optional proposal line: resolve the scanner (Argument > Adoption's Custom Gate Registry override > KB default gitleaks), then write the [CI Job Template](../../../.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md#ci-job-template-github-actions) into the same pipeline file as a `required` job, and provision a starting `.gitleaks.toml` at the project root (see the [allowlist mechanism](../../../.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md#allowlist-mechanism-adoption-controlled)) if one doesn't already exist. Never write the job with `continue-on-error` — fail-closed is not optional (R6.5).
-4. **Verify**: Configuration files written, including the tier-aware pre-merge pipeline (tag-only resolution + tier-scoped jobs + required-check wiring), the post-merge staging (build+deploy only) config, the secret-scanning job, and `.gitleaks.toml`. Grep the generated pipeline for classification tokens (schema/diff/path heuristics) — there must be none (D18).
+   - **`TIERING = disabled` (default) → full-suite pipeline**: every PR runs base (install + lint + type + build) **and** unit **and** integration/E2E **and** coverage — all jobs unconditional, no tag resolution, no `risk:*` reads. This is the safe default; do **not** generate the tier-aware jobs.
+   - **`TIERING = enabled` (opt-in) → tier-aware pipeline** following [tier-aware-pipeline.md](../../../.pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md): the pipeline **reads the PR's `risk:*` tag only** (via [`tier-resolve.sh`](../../../.pair/knowledge/assets/tier-resolve.sh) — tags only, no classification criteria of its own, D18) and schedules the [quality-model.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) §4 matrix: base every tier, unit from 🟡, integration/E2E from 🔴; **untagged/unknown/malformed ⇒ 🔴** (fail-safe); a required suite missing at a tier ⇒ **explicit failure** (`require_suite`), never a silent pass. Do not copy any tier threshold into the generated config — it is a projection of the model, not a second source.
+   - **Wire required checks**: mark `base` and `secret-scan` as required status checks on the protected branch. In full-suite mode all suite jobs are required; in tier-aware mode the tier-scoped jobs are required-when-scheduled (or via one aggregating gate job). A red gate blocks merge either way.
+   - **Post-merge staging** (on merge to the main branch): **build + deploy only, no gate re-run** — the gate already passed pre-merge (identical in both modes).
+3. **Act**: Write the secret-scanning job — required, not an optional proposal line, in **both** pipeline modes: resolve the scanner (Argument > Adoption's Custom Gate Registry override > KB default gitleaks), then write the [CI Job Template](../../../.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md#ci-job-template-github-actions) into the same pipeline file as a `required` job, and provision a starting `.gitleaks.toml` at the project root (see the [allowlist mechanism](../../../.pair/knowledge/guidelines/quality-assurance/security/secret-scanning.md#allowlist-mechanism-adoption-controlled)) if one doesn't already exist. Never write the job with `continue-on-error` — fail-closed is not optional (R6.5).
+4. **Verify**: Configuration files written, including the pre-merge pipeline (full-suite by default; tag-only tier-aware resolution + tier-scoped jobs only when `TIERING = enabled`) + required-check wiring, the post-merge staging (build+deploy only) config, the secret-scanning job, and `.gitleaks.toml`. If tiering is enabled, grep the generated pipeline for classification tokens (schema/diff/path heuristics) — there must be none (D18). If disabled, confirm no `risk:*` resolution was generated and every suite job runs unconditionally.
 
 ### Step 5: Provision Shared Lint/Format Config + Hooks
 
@@ -142,8 +150,9 @@ GATE CONFIGURATION COMPLETE:
 ├── Pre-commit:      [N gates configured]
 ├── CI:              [N gates configured]
 ├── Pre-production:  [N gates configured | N/A]
-├── Pipeline:        [file path | manual — tier-aware pre-merge (tags only, fail-safe 🔴) + post-merge staging build+deploy]
-├── Required checks: [base + secret-scan required; tier-scoped jobs required-when-scheduled]
+├── Pipeline:        [file path | manual — full-suite pre-merge (default: every PR runs all suites) OR tier-aware pre-merge (opt-in: tags only, fail-safe 🔴) + post-merge staging build+deploy]
+├── Pre-merge tiering: [disabled (default — full suite every PR) | enabled (risk-tier-scoped, opt-in)]
+├── Required checks: [base + secret-scan required; full-suite: all suite jobs required | tier-aware: tier-scoped jobs required-when-scheduled]
 ├── Secret Scan:     [gitleaks (KB default) | <override> — job + .gitleaks.toml written | already configured]
 ├── Shared configs:  [package list | N/A — non-JS, documented pointer only]
 ├── Hooks:           [husky pre-commit + pre-push | override: <tool> | N/A]
@@ -173,8 +182,9 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 
 ## Notes
 
-- This skill **modifies files** — it writes to way-of-working.md, creates/updates CI/CD pipeline configuration (the tier-aware pre-merge pipeline + post-merge staging + the required secret-scanning job and `.gitleaks.toml`), and provisions shared lint/format config packages + hook manager files (`.husky/` by default).
-- **The generated pipeline reads classification tags only, never classifies** (D18): tier criteria live in [quality-model.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) §3/§4; the pipeline is the deterministic Automation layer that projects the matrix from the PR's `risk:*` tag. Untagged ⇒ 🔴 (fail-safe). See [tier-aware-pipeline.md](../../../.pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md).
+- This skill **modifies files** — it writes to way-of-working.md, creates/updates CI/CD pipeline configuration (the pre-merge pipeline — full-suite by default, tier-aware only on opt-in — + post-merge staging + the required secret-scanning job and `.gitleaks.toml`), and provisions shared lint/format config packages + hook manager files (`.husky/` by default).
+- **Full checks are the default; risk-tier reduction is opt-in** (ADL 2026-07-20): unless the project sets `Pre-merge tiering: enabled` in way-of-working.md (Step 3.3 opt-in), the generated pipeline runs the **full suite on every PR** — the safe, pre-tiering behavior. Tiering only *reduces* checks on lower-risk PRs, so it must be enabled explicitly.
+- **When tiering is enabled, the generated pipeline reads classification tags only, never classifies** (D18): tier criteria live in [quality-model.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) §3/§4; the pipeline is the deterministic Automation layer that projects the matrix from the PR's `risk:*` tag. Untagged ⇒ 🔴 (fail-safe). See [tier-aware-pipeline.md](../../../.pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md).
 - **Secret scanning is CI config, not a judgment call** (D24, anti-complexity): this skill provisions the job mechanically; it never evaluates whether a diff contains a secret itself — that is gitleaks' (or the adopted scanner's) job at runtime, with no LLM in the loop. `/assess-security` never re-implements this — see that skill's own Notes.
 - **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: an already-configured project (incl. provisioned shared configs and hooks) is confirmed; update only on explicit developer request. Conflicting local config is always resolved by asking first (see Edge Cases above).
 - Gate commands must be executable in the project's development environment. Verify commands exist before writing.

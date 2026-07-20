@@ -1,6 +1,12 @@
 # Tier-Aware Pre-Merge Pipeline
 
-The pre-merge quality gate is **modulated by the risk tier**, and the tier is read from the PR's classification tags — nothing more. This document defines how `/setup-gates` generates that pipeline and the invariants it must preserve. It is the delivery-side companion to [quality-model.md](../../quality-assurance/quality-model.md), which owns the matrix; this file owns the wiring.
+## Opt-in optimization — the default is full checks on every PR
+
+Tier-aware pre-merge checking is an **opt-in optimization, not the default**. By default `/setup-gates` generates a pipeline that runs the **full check suite on every PR** — base (install + lint + type + build), unit, integration/E2E, and coverage — plus the unconditional secret-scan. That full-suite pipeline is the safe, pre-tiering behavior: every PR earns the same, complete verification.
+
+Tiering exists only to **reduce** the checks run on lower-risk PRs (a 🟢 PR skips the heavier suites), trading some verification for speed. Because it *narrows* coverage, it must be **enabled explicitly**: a project opts in by setting `Pre-merge tiering: enabled` in its [way-of-working.md](../../../../adoption/tech/way-of-working.md). Absent that flag (or set to `disabled`, the default), `/setup-gates` does **not** generate this pipeline — it generates the full-suite pipeline where every PR runs every suite. Everything below applies **only once tiering is enabled**.
+
+When enabled, the pre-merge gate is **modulated by the risk tier**, and the tier is read from the PR's classification tags — nothing more. This document defines how `/setup-gates` generates that pipeline and the invariants it must preserve. It is the delivery-side companion to [quality-model.md](../../quality-assurance/quality-model.md), which owns the matrix; this file owns the wiring.
 
 ## The one rule: the pipeline reads tags, it does not classify
 

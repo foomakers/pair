@@ -20,6 +20,7 @@ echo "=== Running $TEST_NAME ==="
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}"
 RESOLVER="$REPO_ROOT/packages/knowledge-hub/dataset/.pair/knowledge/assets/tier-resolve.sh"
 GUIDELINE="$REPO_ROOT/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md"
+SETUP_GATES="$REPO_ROOT/packages/knowledge-hub/dataset/.skills/capability/setup-gates/SKILL.md"
 
 FAILED=0
 check() { # check <description> <expected> <actual>
@@ -28,6 +29,24 @@ check() { # check <description> <expected> <actual>
 
 assert_file "$RESOLVER" || exit 1
 assert_file "$GUIDELINE" || exit 1
+assert_file "$SETUP_GATES" || exit 1
+
+# --- Redesign invariant: tier reduction is OPT-IN; default = full checks on every PR ---
+# (ADL 2026-07-20). The guideline must frame itself as an opt-in optimization and
+# state the full-suite default; setup-gates must default to full-suite and gate the
+# tier-aware pipeline behind the explicit `Pre-merge tiering: enabled` opt-in.
+if grep -qi 'opt-in' "$GUIDELINE" && grep -q 'full check suite on every PR' "$GUIDELINE"; then
+  log_succ "guideline frames tiering as opt-in (default = full checks on every PR)"
+else
+  log_fail "guideline no longer frames tiering as opt-in / default-full"; FAILED=1
+fi
+if grep -q 'full check suite by default' "$SETUP_GATES" \
+  && grep -q 'Pre-merge tiering: enabled' "$SETUP_GATES" \
+  && grep -qi 'opt-in' "$SETUP_GATES"; then
+  log_succ "setup-gates defaults to full suite; tier-aware behind explicit opt-in"
+else
+  log_fail "setup-gates no longer defaults to full suite / opt-in tiering"; FAILED=1
+fi
 
 # shellcheck source=/dev/null
 source "$RESOLVER"
