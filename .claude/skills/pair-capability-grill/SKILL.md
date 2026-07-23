@@ -92,7 +92,7 @@ Systematic AI↔human alignment on a specific story, covering all six aspects of
 
 1. **Act**: Compile recorded answers, explored facts (with source), and flagged assumptions:
    - `interview` → raw requirements blob (topic, findings per sub-question, open items, assumptions).
-   - `sync` → alignment synthesis mapped to the six [Sync Coverage Checklist](#sync-coverage-checklist) aspects, ready to drop into the matching [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) sections.
+   - `sync` → alignment synthesis mapped to the six [Sync Coverage Checklist](#sync-coverage-checklist) aspects, ready to drop into the matching [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)) sections.
 2. **Verify**: Synthesis accounts for every answered/explored/assumed item — nothing silently dropped.
 
 ### Step 6: Return — Never Write

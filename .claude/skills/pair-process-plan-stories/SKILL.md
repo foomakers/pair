@@ -94,7 +94,7 @@ For each approved story, per its Step 3 proposal:
 
    > Story `[Title]` already exists (#ID). Skipping.
 
-3. **Act**: Define story scope using the Initial Breakdown section of [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md):
+3. **Act**: Define story scope using the Initial Breakdown section of [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
    - Story statement (As a / I want / So that).
    - Rough scope boundaries with expected uncertainty.
    - Initial sizing: XS(1), S(2), M(3), L(5), XL(8).

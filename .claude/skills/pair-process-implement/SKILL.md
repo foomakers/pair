@@ -233,7 +233,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
    **This confirmation is required for EVERY task** — commit-per-task exists precisely to give the developer a checkpoint between tasks.
 
 4. **Verify**: Developer confirms. If changes needed → apply changes, re-run quality (Step 2.7), ask again.
-5. **Act**: Stage and commit following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md):
+5. **Act**: Stage and commit following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
 
    ```text
    [#<story-id>] <type>: <task-description>

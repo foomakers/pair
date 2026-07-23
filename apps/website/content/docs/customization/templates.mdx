@@ -3,7 +3,7 @@ title: Customize Templates
 description: Override pair's built-in templates for commits, PRs, stories, epics, and other workflow artifacts.
 ---
 
-pair ships with 14 templates that control the structure of workflow artifacts — from commit messages to user stories. This guide shows how to customize them for your team.
+pair ships with 19 templates that control the structure of workflow artifacts — from commit messages to user stories. This guide shows how to customize them for your team.
 
 ## Where Templates Live
 
@@ -11,23 +11,28 @@ Templates are part of the Knowledge Base:
 
 ```text
 .pair/knowledge/guidelines/collaboration/templates/
-├── adr-template.md              # Architecture Decision Records
-├── adl-template.md              # Architecture Decision Log entries
-├── ddr-template.md              # Domain Decision Records
-├── analysis-log-template.md     # Analysis-Log entries (category `Analysis`)
-├── bounded-context-template.md  # DDD bounded context definitions
-├── branch-template.md           # Git branch naming conventions
-├── code-review-template.md      # Code review checklists
-├── commit-template.md           # Commit message format
-├── epic-template.md             # Epic issue structure
-├── initiative-template.md       # Initiative issue structure
-├── pr-template.md               # Pull request description
-├── subdomain-template.md        # DDD subdomain definitions
-├── task-template.md             # Task breakdown structure
-└── user-story-template.md       # User story issue structure
+├── adr-template.md                # Architecture Decision Records
+├── adl-template.md                # Architecture Decision Log entries
+├── analysis-log-template.md       # Analysis-Log entries (category `Analysis`)
+├── bounded-context-template.md    # DDD bounded context definitions
+├── branch-template.md             # Git branch naming conventions
+├── checkpoint-template.md         # Resumable progress state (context-reset handoff)
+├── code-review-template.md        # Code review checklists
+├── commit-template.md             # Commit message format
+├── context-map-template.md        # Context map: glossary, entities, common rules
+├── ddr-template.md                # Domain Decision Records
+├── epic-template.md               # Epic issue structure
+├── initiative-template.md         # Initiative issue structure
+├── manual-test-case-template.md   # Manual test case design
+├── manual-test-report-template.md # Manual test execution report
+├── pr-template.md                 # Pull request description
+├── subdomain-context-template.md  # Lazy per-subdomain context split
+├── subdomain-template.md          # DDD subdomain definitions
+├── task-template.md               # Task breakdown structure
+└── user-story-template.md         # User story issue structure
 ```
 
-The AI reads these templates when creating the corresponding artifacts. When you run `/pair-process-implement`, it uses the commit and PR templates. When you run `/pair-process-plan-stories`, it uses the user story template. And so on.
+The AI reads these templates when creating the corresponding artifacts — but it always resolves an [adoption override](#how-to-customize-a-template) first, falling back to the KB copy above only when no override exists. When you run `/pair-process-implement`, it uses the commit and PR templates. When you run `/pair-process-plan-stories`, it uses the user story template. And so on.
 
 ## Template Categories
 
@@ -37,7 +42,7 @@ The AI reads these templates when creating the corresponding artifacts. When you
 | --- | --- | --- |
 | **commit-template.md** | `/pair-process-implement` | Commit message format: `[#story-id] type: description` |
 | **pr-template.md** | `/pair-process-implement` | PR description structure: summary, changes, testing, risks |
-| **branch-template.md** | `/pair-process-implement` | Branch naming: `feature/#story-id-description` |
+| **branch-template.md** | `/pair-process-implement` (via `/pair-capability-publish-pr`, which parses `branch-format`) | Branch naming: `feature/#story-id-description` |
 | **code-review-template.md** | `/pair-process-review` | Review checklist: technical, adoption, completeness, decision |
 
 ### Planning Artifacts
@@ -62,12 +67,24 @@ The AI reads these templates when creating the corresponding artifacts. When you
 
 | Template | Used by | Controls |
 | --- | --- | --- |
-| **subdomain-template.md** | `/pair-capability-map-subdomains` | Subdomain definition: classification, Volatility, boundaries |
+| **subdomain-template.md** | `/pair-capability-map-subdomains`, `/pair-capability-map-contexts` (reads Volatility) | Subdomain definition: classification, Volatility, boundaries |
 | **bounded-context-template.md** | `/pair-capability-map-contexts` | Context definition: responsibilities, per-relationship strength/distance/volatility assessment, Encapsulated Knowledge, Change Vectors |
+| **context-map-template.md** | `/pair-capability-record-decision` (DDR flow), `/pair-capability-map-contexts` (via [context-map maintenance](/docs/reference/guidelines-catalog)) | Context map: ubiquitous language, entities, common rules |
+| **subdomain-context-template.md** | `/pair-capability-map-subdomains` / `/pair-capability-map-contexts` (lazy per-subdomain split) | Per-subdomain slice of the context map, co-located with the subdomain catalog entry |
+
+### Quality & Operations
+
+| Template | Used by | Controls |
+| --- | --- | --- |
+| **manual-test-case-template.md** | `/pair-capability-design-manual-tests`, `/pair-capability-execute-manual-tests` | Manual test case: version-agnostic variables, priority classification |
+| **manual-test-report-template.md** | `/pair-capability-execute-manual-tests` | Manual test execution report with sign-off criteria |
+| **checkpoint-template.md** | `/pair-capability-checkpoint` (written by `/pair-process-implement`, consumed by `/pair-capability-publish-pr`) | Resumable progress state: story, branch, tasks done, decisions, remaining todos |
 
 ## How to Customize a Template
 
 Templates live in `.pair/knowledge/` — the upstream layer that gets overwritten on `pair-cli update`. To customize safely, create an override in the adoption layer.
+
+**How resolution works:** every skill that uses a template resolves it **override-first** by a plain file-existence check — if `.pair/adoption/tech/templates/<name>-template.md` exists (where `<name>-template.md` matches a shipped KB filename above), the skill uses your copy whole; otherwise it uses the KB default. There is no partial merge and no prose to keep in sync — dropping the file in place is the entire mechanism. (Skill-side contract: `.pair/knowledge/skill-conventions/template-resolution.md`.)
 
 ### Step 1: Copy the Template
 
@@ -96,9 +113,11 @@ body explaining the change
 Refs: JIRA-XXX
 ```
 
-### Step 3: Tell the AI
+That's it — the file is now live. The next time a skill needs that template it finds your override and uses it; no restart, no config, no announcement needed.
 
-Record the override in your way-of-working so the AI knows to use your template:
+### Step 3 (optional): Record the Override for Your Team
+
+The override already works from Step 2. This step is purely a **human-readable audit trail** — a record of intent so teammates can see, at a glance, which templates you've customized. It is **not** what triggers resolution (the file existing on disk is), so it can never fall out of sync with the actual behavior:
 
 ```markdown
 <!-- .pair/adoption/tech/way-of-working.md -->
@@ -109,7 +128,7 @@ Record the override in your way-of-working so the AI knows to use your template:
 - Custom PR template: `.pair/adoption/tech/templates/pr-template.md`
 ```
 
-The AI reads adoption files first, so it will pick up your custom templates automatically.
+Leaving this section out changes nothing about which template is used; adding a stale line to it does not activate an override that isn't on disk.
 
 ## Common Customizations
 

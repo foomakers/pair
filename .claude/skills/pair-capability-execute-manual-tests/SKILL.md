@@ -7,7 +7,7 @@ author: Foomakers
 
 # /pair-capability-execute-manual-tests — Manual Test Suite Executor
 
-Execute a manual test suite against released or deployed artifacts (website, CLI packages, registries). Produces a structured report following the [manual-test-report-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-report-template.md).
+Execute a manual test suite against released or deployed artifacts (website, CLI packages, registries). Produces a structured report following the [manual-test-report-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-report-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)).
 
 Reads test case files from the project's manual test suite directory; each follows the [manual-test-case-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-case-template.md). Organizational context (who, when, which areas): [manual-verification.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-verification.md); test case design principles: [manual-testing.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-testing.md).
 

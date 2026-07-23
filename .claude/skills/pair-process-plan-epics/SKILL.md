@@ -103,7 +103,7 @@ Process epics sequentially (Epic 0 first if needed), per its Step 3 proposal:
 
    > Epic `[Title]` already exists (#ID). Skipping.
 
-3. **Act**: Draft the epic following [epic-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/epic-template.md):
+3. **Act**: Draft the epic following [epic-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/epic-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
    - Fill template sections: Epic Statement, Business Value, Solution Overview, Epic Breakdown, Technical Considerations.
    - Present to developer for validation.
 4. **Act**: Compose `/pair-capability-write-issue` per the confirmed proposal:

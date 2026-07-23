@@ -90,7 +90,7 @@ Transform a refined user story into specific, actionable implementation tasks. T
 
 For each task (skipping tasks that already exist in the story body):
 
-1. **Act**: Define the task following the [task-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/task-template.md):
+1. **Act**: Define the task following the [task-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/task-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
    - Task Information (ID, priority, hours, bounded context)
    - Summary and type
    - Description with implementation context

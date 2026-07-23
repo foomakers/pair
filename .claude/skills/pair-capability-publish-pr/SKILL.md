@@ -67,7 +67,7 @@ Each phase follows the **check → skip → act → verify** pattern. Phases run
 
 ### Phase 3: Compose the PR Body (AC3)
 
-1. **Act**: Read the [pr-template](../../../.pair/knowledge/guidelines/collaboration/templates/pr-template.md). Fill the always-applicable sections from the handoff/story:
+1. **Act**: Read the [pr-template](../../../.pair/knowledge/guidelines/collaboration/templates/pr-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md); the same resolution applies to the commit and branch templates referenced above). Fill the always-applicable sections from the handoff/story:
    - **Title**: `[#<story-id>] <type>: <brief description>` (`<type>` from commit-format / story type).
    - **Summary** (What Changed + Why) from the story statement and the handoff's decisions.
    - **Story Context**: link the story issue and list AC coverage.

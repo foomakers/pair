@@ -44,7 +44,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 
 ### Step 3: Load Template
 
-1. **Check**: Resolve template path based on `$type`:
+1. **Check**: Resolve the template path for `$type` **override-first** — see [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md) (adoption `.pair/adoption/tech/templates/<name>-template.md` wins over the KB default below):
    - `story` → [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md)
    - `task` → [task-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/task-template.md)
    - `epic` → [epic-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/epic-template.md)
