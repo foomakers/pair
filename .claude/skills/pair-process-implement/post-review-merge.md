@@ -12,7 +12,7 @@ Disclosed from [SKILL.md](./SKILL.md) Phase 4 — only reached when `/pair-proce
 
 1. **Check**: Read [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) for merge strategy (squash, merge, rebase).
 2. **Act**: Draft the final commit message:
-   - **If squash**: combine all commits into a single message following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md).
+   - **If squash**: combine all commits into a single message following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)).
    - **If merge or rebase**: use the default merge/rebase message.
 3. **Act** (BLOCKING): Present the commit message to the developer for confirmation:
 

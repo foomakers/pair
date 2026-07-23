@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync, readdirSync } from 'fs'
+import { readFileSync } from 'fs'
 import { join, relative } from 'path'
-import { collectSkillFiles } from '../tools/skills-conformance-check'
+import { collectSkillFiles, collectSkillMarkdownFiles } from '../tools/skills-conformance-check'
 
 // Conformance guard for story #314: the template-override mechanism the docs
 // describe (`.pair/adoption/tech/templates/<name>-template.md` shadows the KB
@@ -21,7 +21,19 @@ const POINTER = /template-resolution\.md/
 // A collaboration-template link: .../collaboration/templates/<name>-template.md
 const TEMPLATE_LINK = /collaboration\/templates\/[a-z0-9-]*template\.md/
 
-/** Every SKILL.md under a skills root that links at least one collaboration template. */
+/**
+ * Every skill Markdown file (SKILL.md AND auxiliary composed files) under a
+ * skills root that links at least one collaboration template. Walks all `.md`,
+ * not just SKILL.md, so template links in disclosed files (merge-and-cascade.md,
+ * post-review-merge.md, …) cannot escape the pointer invariant (story #314).
+ */
+function templateLinkingFiles(skillsRoot: string): { rel: string; content: string }[] {
+  return collectSkillMarkdownFiles(skillsRoot)
+    .map(f => ({ rel: relative(skillsRoot, f), content: readFileSync(f, 'utf-8') }))
+    .filter(({ content }) => TEMPLATE_LINK.test(content))
+}
+
+/** Same, but SKILL.md files only — used for the "wired skill count" invariant. */
 function templateLinkingSkills(skillsRoot: string): { rel: string; content: string }[] {
   return collectSkillFiles(skillsRoot)
     .map(f => ({ rel: relative(skillsRoot, f), content: readFileSync(f, 'utf-8') }))
@@ -64,26 +76,21 @@ describe('template-resolution.md — shared convention (AC1, AC3, AC4)', () => {
   })
 })
 
-describe('every template-linking SKILL.md carries the resolution pointer (AC3)', () => {
-  it('dataset: no skill links a collaboration template without the resolution pointer', () => {
-    const offenders = templateLinkingSkills(DATASET_SKILLS)
+describe('every template-linking skill file carries the resolution pointer (AC3)', () => {
+  it('dataset: no skill file (SKILL.md or disclosed .md) links a collaboration template without the resolution pointer', () => {
+    const offenders = templateLinkingFiles(DATASET_SKILLS)
       .filter(({ content }) => !POINTER.test(content))
       .map(({ rel }) => rel)
     expect(offenders).toEqual([])
   })
 
-  it('dataset: at least 15 skills link collaboration templates (the wired set)', () => {
+  it('dataset: at least 15 SKILL.md link collaboration templates (the wired set)', () => {
     expect(templateLinkingSkills(DATASET_SKILLS).length).toBeGreaterThanOrEqual(15)
   })
 
-  it('installed mirror: no skill links a collaboration template without the resolution pointer', () => {
-    // The mirror is flat: .claude/skills/pair-<type>-<name>/SKILL.md
-    const offenders = readdirSync(MIRROR, { withFileTypes: true })
-      .filter(d => d.isDirectory())
-      .map(d => join(MIRROR, d.name, 'SKILL.md'))
-      .filter(f => existsSync(f))
-      .map(f => ({ rel: relative(MIRROR, f), content: readFileSync(f, 'utf-8') }))
-      .filter(({ content }) => TEMPLATE_LINK.test(content) && !POINTER.test(content))
+  it('installed mirror: no skill file links a collaboration template without the resolution pointer', () => {
+    const offenders = templateLinkingFiles(MIRROR)
+      .filter(({ content }) => !POINTER.test(content))
       .map(({ rel }) => rel)
     expect(offenders).toEqual([])
   })
