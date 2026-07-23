@@ -223,3 +223,71 @@ test('empty batch: no agent calls at all (contracts skipped too)', async () => {
   assert.equal(calls.length, 0)
   assert.deepEqual(result.batch, [])
 })
+
+test('review noise policy: first review posts, re-review is silent, fix logs to working, convergence synthesizes ONE remediation', async () => {
+  let revCall = 0
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'reviewer') {
+      revCall++
+      // round 0: one actionable finding; round 1 (re-review): clean → converge
+      return revCall === 1
+        ? { verdict: 'Rework', findings: [{ location: 'a.ts:1', severity: 'Minor', description: 'd', recommendation: 'r' }] }
+        : { verdict: 'Approved', findings: [] }
+    }
+    if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+    if (opts.phase === 'PR') return { prNumber: 7 }
+    if (opts.label?.startsWith('synth:')) return 'posted'
+    return { fixed: true } // fix step
+  }
+  const { result, calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch })
+
+  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  assert.equal(reviews.length, 2, 'first review + one re-review')
+  assert.ok(reviews[0].prompt.includes('This is the FIRST review: POST'), 'first review is posted on the PR')
+  assert.ok(reviews[1].prompt.includes('do NOT post any PR comment'), 're-review posts no comment')
+
+  const fix = calls.find(c => c.opts.label?.startsWith('fix:'))
+  assert.ok(fix.prompt.includes('append this round to the working log'), 'fix logs the round, no per-round PR comment')
+  assert.ok(fix.prompt.includes('.pair/working/reviews/292.md'), 'working log is per-story')
+
+  const synth = calls.find(c => c.opts.label?.startsWith('synth:'))
+  assert.ok(synth, 'a synthesis step runs at convergence')
+  assert.ok(
+    synth.prompt.includes('Post ONE remediation comment') && synth.prompt.includes('DELETE'),
+    'convergence posts ONE remediation comment then deletes the log',
+  )
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+})
+
+test('clean first review: no remediation comment, no synthesis step (first-review comment stands alone)', async () => {
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no synthesis when first review is already clean')
+  assert.ok(!calls.some(c => c.opts.label?.startsWith('fix:')), 'no fix round when nothing actionable')
+  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  assert.equal(reviews.length, 1, 'exactly one (first) review')
+  assert.ok(reviews[0].prompt.includes('This is the FIRST review: POST'))
+})
+
+test('non-convergence: MAX_FIX_ROUNDS escalation flushes the working log to the PR with the open findings, no synthesis', async () => {
+  const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] } // never converges
+    if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+    if (opts.phase === 'PR') return { prNumber: 7 }
+    if (opts.label?.startsWith('flush:')) return 'flushed'
+    return { fixed: true } // fix step
+  }
+  const { result, calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch })
+
+  assert.equal(result.batch[0].status, 'escalate')
+  const flush = calls.find(c => c.opts.label?.startsWith('flush:'))
+  assert.ok(flush, 'escalation posts a flush comment')
+  assert.ok(flush.prompt.includes('x.ts:1'), 'flush carries the still-open findings')
+  assert.ok(flush.prompt.includes('.pair/working/reviews/292.md') && flush.prompt.includes('Do NOT delete the log'), 'flush reads the log and keeps it for the human')
+  assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no synthesis on escalation')
+})

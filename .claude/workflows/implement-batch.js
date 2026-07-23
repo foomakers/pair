@@ -263,12 +263,27 @@ async function driveStory(story) {
   //    nonActionable is NOT a scope filter — "not this story's original scope" alone
   //    never qualifies; only "fixing it would be genuinely wrong" does. See ADL
   //    decision-log/2026-07-11-agent-execution-layer.md (amended 2026-07-18).
+  //
+  //    PR-COMMENT POLICY (noise reduction — the loop is ONE logical cycle):
+  //    - The FIRST review IS posted on the PR (the independent review artifact).
+  //    - The fix<->re-review rounds are NOT commented per round; each round is appended
+  //      to a working log `.pair/working/reviews/<id>.md` (orchestrator-side audit; the
+  //      re-reviewer stays BLIND to it — it receives prior findings via the prompt).
+  //    - At convergence ONE synthesized remediation comment is posted, written
+  //      CONTEXTUALLY to the first review (maps each finding -> resolution + accepted
+  //      dispositions + final verdict); the log is then deleted.
+  //    - On escalation the log is flushed to the PR so the human sees the state (kept).
+  //    The workflow runs in a sandbox (no FS/gh), so file + comment work is delegated to
+  //    agents running in the worktree.
+  const reviewLog = `.pair/working/reviews/${story.id}.md`
   let round = 0
   let prevFindings = []
   let accepted = []
+  let remediated = false
   while (true) {
+    const first = round === 0
     const review = await agent(
-      `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the code-review-template vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (issue + impact), \`recommendation\`; verdict ∈ {${VERDICTS}}. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG (byte-consistent with a source of truth, matches an existing convention/already-tracked deferred plan, resolves only after merge, etc.) — being outside this story's originally stated scope is NOT by itself a reason to mark something nonActionable: a real, fixable gap found during review gets fixed in this same PR unless it is large enough to warrant its own story (state that explicitly in the description if so). Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` — a specific reason that replaces the bare label: write exactly \`Deferred to #<number>\` when the finding belongs to a separate tracked story (file one via /pair-capability-write-issue if none exists yet), otherwise a concrete by-design reason (\`By convention …\` / \`Historical record\` / \`Forward-ref to unbuilt #<n>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. ${round > 0 ? `Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.` : ''} Return findings and a verdict.`,
+      `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the code-review-template vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (issue + impact), \`recommendation\`; verdict ∈ {${VERDICTS}}. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG (byte-consistent with a source of truth, matches an existing convention/already-tracked deferred plan, resolves only after merge, etc.) — being outside this story's originally stated scope is NOT by itself a reason to mark something nonActionable: a real, fixable gap found during review gets fixed in this same PR unless it is large enough to warrant its own story (state that explicitly in the description if so). Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` — a specific reason that replaces the bare label: write exactly \`Deferred to #<number>\` when the finding belongs to a separate tracked story (file one via /pair-capability-write-issue if none exists yet), otherwise a concrete by-design reason (\`By convention …\` / \`Historical record\` / \`Forward-ref to unbuilt #<n>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (code-review-template structure) AND return findings + verdict.` : `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only. Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.`} Return findings and a verdict.`,
       { agentType: 'reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'xhigh', schema: REVIEW_SCHEMA },
     )
     const findings = review?.findings ?? []
@@ -276,20 +291,45 @@ async function driveStory(story) {
     accepted = findings.filter((f) => f.nonActionable)
     // Converge once nothing actionable remains (by-design findings don't block).
     if (actionable.length === 0) break
-    if (round >= MAX_FIX_ROUNDS || review?.needsHumanDecision)
+    if (round >= MAX_FIX_ROUNDS || review?.needsHumanDecision) {
+      if (remediated)
+        await agent(
+          `Story ${tag}: the review<->fix loop is escalating to a human (non-convergence or a design disagreement). ${wtClause(story)} Read the review log \`${reviewLog}\` and post ONE comment on PR #${pr.prNumber} — written as a response to the first code-review comment — summarizing the rounds so far (per finding: what was attempted + current state) and the still-open actionable findings: ${JSON.stringify(actionable)}. Do NOT delete the log (the human acts on it). Do NOT merge.`,
+          { agentType: 'implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
+        )
       return { story, prNumber: pr.prNumber, status: 'escalate', findings: actionable, acceptedFindings: accepted }
+    }
 
     round++
     prevFindings = actionable
+    remediated = true
     // FIX — implementer resumes checkpoint (if present) + resolves actionable findings.
+    // Logs the round to the working review log INSTEAD of posting a per-round PR comment.
     const fix = await agent(
-      `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (/pair-capability-checkpoint $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(prevFindings)}. Commit, push, and post a remediation comment mapping each finding to what changed. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
+      `Resume story ${tag}. ${wtClause(story)} Read the checkpoint if present (/pair-capability-checkpoint $mode=resume); otherwise work from the PR diff + code. Resolve EVERY one of these actionable review findings on PR #${pr.prNumber} — including minor/nit, do not defer any: ${JSON.stringify(prevFindings)}. Commit and push. Do NOT post a remediation PR comment; INSTEAD append this round to the working log \`${reviewLog}\` (create it if absent): list each finding and exactly what changed to resolve it, with commit refs. Only for a genuine design disagreement set needsHumanDecision instead of forcing a fix. Do NOT merge.`,
       { agentType: 'implementer', phase: 'Review', label: `fix:${tag} r${round}`, effort: 'high', schema: FIX_SCHEMA },
     )
-    if (!fix) return { story, prNumber: pr.prNumber, status: 'failed-fix' }
-    if (fix.needsHumanDecision)
+    // failed-fix: the fixer died mid-round; a partial working log may exist. Surface
+    // its path in the return so the human / next resume can find (and clean) it.
+    if (!fix) return { story, prNumber: pr.prNumber, status: 'failed-fix', reviewLog: remediated ? reviewLog : undefined }
+    if (fix.needsHumanDecision) {
+      if (remediated)
+        await agent(
+          `Story ${tag}: escalating a design disagreement to a human. ${wtClause(story)} Read \`${reviewLog}\` and post ONE comment on PR #${pr.prNumber} (response to the first review) summarizing the remediation rounds so far, the still-open findings (${JSON.stringify(prevFindings)}) and the open decision. Do NOT delete the log. Do NOT merge.`,
+          { agentType: 'implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
+        )
       return { story, prNumber: pr.prNumber, status: 'escalate', findings: prevFindings, acceptedFindings: accepted }
+    }
   }
+
+  // Converged. If any remediation happened, post ONE synthesized remediation comment
+  // (contextual to the first review) and delete the working log. If the first review was
+  // already clean (no remediation), the first-review comment stands alone — nothing to do.
+  if (remediated)
+    await agent(
+      `Story ${tag} converged: the latest independent re-review found zero actionable findings. ${wtClause(story)} Read the review log \`${reviewLog}\`. Post ONE remediation comment on PR #${pr.prNumber}, written as a direct RESPONSE to the first code-review comment: map each finding from the first review (and any surfaced during remediation) to how it was resolved (with commit refs), list any accepted/non-actionable findings with their dispositions (${JSON.stringify(accepted)}), and state the final verdict (review clean). This single comment IS the durable audit of the review<->fix cycle. Then DELETE \`${reviewLog}\`. Do NOT merge.`,
+      { agentType: 'implementer', phase: 'Review', label: `synth:${tag}`, model: 'sonnet', effort: 'medium' },
+    )
 
   // STOP at the merge boundary — human decides the merge.
   return { story, prNumber: pr.prNumber, status: 'ready-for-merge', acceptedFindings: accepted }

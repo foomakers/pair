@@ -90,7 +90,7 @@ Process initiatives by priority (P0 → P1 → P2). For each initiative:
 
    > Initiative `[Title]` already exists (#ID). Skipping.
 
-3. **Act**: Draft the initiative following the [initiative-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/initiative-template.md):
+3. **Act**: Draft the initiative following the [initiative-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/initiative-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
    - Fill template sections with PRD-derived content.
    - Include business rationale, scope, success metrics, risk assessment, timeline.
    - Present to developer for validation.

@@ -104,7 +104,7 @@ For each approved subdomain in scope:
 
 1. **Check**: Does this subdomain already exist as a file?
 2. **Act**: If exists and no conflict was raised → leave untouched; pre-existing entries without a `Volatility` field remain valid as-is (no forced migration — the field is added the next time this entry falls inside a `$scope`).
-3. **Act**: If new, or an approved delta applies → create/update the subdomain file following [subdomain-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/subdomain-template.md):
+3. **Act**: If new, or an approved delta applies → create/update the subdomain file following [subdomain-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/subdomain-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
    - Fill all template sections: Classification, Volatility, Business Purpose, Key Capabilities, Strategic Importance, Complexity Assessment, Data Ownership, Dependencies, Team Recommendations, Implementation Priority.
    - File path: `adoption/product/subdomain/[kebab-case-name].md`
 4. **Verify**: File created/updated and parseable. Entries outside `$scope` are untouched.

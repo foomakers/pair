@@ -138,7 +138,7 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
 
 ### Step 5: Documentation and PM Tool Update
 
-1. **Act**: Assemble the complete refined story body using the [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) Refined template:
+1. **Act**: Assemble the complete refined story body using the [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)) Refined template:
    - **Functional sections first**: Story Statement → Epic Context → Classification (the Step 3b matrix) → Acceptance Criteria → Definition of Done → Story Sizing → Dependencies → Validation → Notes.
    - **Technical sections last**: Technical Analysis → (Task Breakdown added later by `/pair-process-plan-tasks`).
 2. **Act**: Compose `/pair-capability-write-issue` with:

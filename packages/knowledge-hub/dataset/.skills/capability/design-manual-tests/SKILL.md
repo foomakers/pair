@@ -9,7 +9,7 @@ author: Foomakers
 
 Analyze a project's released artifacts, deployment targets, and user-facing surfaces to generate a complete manual test suite. Produces critical path files (`CP*.md`) and a suite `README.md` in the test suite directory.
 
-Each test case follows the [manual-test-case-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-case-template.md). Design principles: [manual-testing.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-testing.md); organizational context: [manual-verification.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-verification.md).
+Each test case follows the [manual-test-case-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-case-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)). Design principles: [manual-testing.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-testing.md); organizational context: [manual-verification.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-verification.md).
 
 ## Arguments
 

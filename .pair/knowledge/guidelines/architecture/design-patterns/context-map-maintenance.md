@@ -20,7 +20,7 @@ Apply these four checks whenever the session's domain step is reached. They are 
 
 ### 1. Challenge the Glossary
 
-Before adding a term, check whether `context-map.md` (or the relevant `subdomain/<slug>.context.md`) already has it, or something close enough to conflict. Read the [Subdomain Index](../../collaboration/templates/context-map-template.md) first to know which subdomains keep their context inline versus split out.
+Before adding a term, check whether `context-map.md` (or the relevant `subdomain/<slug>.context.md`) already has it, or something close enough to conflict. Read the [Subdomain Index](../../collaboration/templates/context-map-template.md) (resolve override-first — [template resolution](../../../skill-conventions/template-resolution.md)) first to know which subdomains keep their context inline versus split out.
 
 ### 2. Sharpen Vague Terms
 
@@ -44,7 +44,7 @@ The map starts as a single file. Splitting is **lazy and human-approved — neve
 
 - **Signal to propose a split**: a subdomain's inline Glossary/Entities rows in `context-map.md` have grown large enough that scanning the shared file for unrelated subdomains becomes noisy, or the subdomain's context changes far more often than the rest of the map.
 - **Propose, don't act**: the maintaining session states the reason and asks for approval — e.g. "`billing`'s glossary is now 12 terms; move it to its own context file?" Proceed only once the human agrees.
-- **What moves**: every Glossary and Entities row scoped to that subdomain moves to the co-located sibling `subdomain/<slug>.context.md` (see `subdomain-context-template.md`), sitting next to the strategic `subdomain/<slug>.md` catalog file.
+- **What moves**: every Glossary and Entities row scoped to that subdomain moves to the co-located sibling `subdomain/<slug>.context.md` (see [subdomain-context-template.md](../../collaboration/templates/subdomain-context-template.md) — resolve override-first per [template resolution](../../../skill-conventions/template-resolution.md)), sitting next to the strategic `subdomain/<slug>.md` catalog file.
 - **What stays**: the Subdomain Index row (flipped to "Yes" under Own Context) and the entire Common Rules and Invariants section — domain-wide rules are never split, since they aren't owned by one subdomain.
 - **Never re-map automatically**: a later session may propose merging a context file back inline if it shrinks, but this again requires human approval — the guideline never rewrites the split on its own.
 
@@ -66,8 +66,8 @@ Any skill that touches domain scope (brainstorm's domain step, refine-story's re
 
 ## Related Documents
 
-- **[Context Map Template](../../collaboration/templates/context-map-template.md)** — the dispatcher + index + core artifact this guideline maintains
-- **[Subdomain Context Template](../../collaboration/templates/subdomain-context-template.md)** — the lazy-split sibling file
+- **[Context Map Template](../../collaboration/templates/context-map-template.md)** — the dispatcher + index + core artifact this guideline maintains (resolve override-first per [template resolution](../../../skill-conventions/template-resolution.md))
+- **[Subdomain Context Template](../../collaboration/templates/subdomain-context-template.md)** — the lazy-split sibling file (resolve override-first per [template resolution](../../../skill-conventions/template-resolution.md))
 - **[Strategic Subdomain Definition](strategic-subdomain-definition.md)** — subdomain catalog and classification, source of the mirrored Volatility column
 - **[Domain-Driven Design](domain-driven-design.md)** — overall DDD principles this guideline operationalizes as a maintenance process
 - **[Decision Records](../decision-frameworks/README.md)** — ADR/DDR process for domain decisions cited during conflict-flagging

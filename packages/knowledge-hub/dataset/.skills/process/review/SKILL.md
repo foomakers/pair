@@ -191,7 +191,7 @@ Run the procedure for the level determined in Step 3.1 — see [degradation-leve
 
 ### Step 5.1: Compile Review Report
 
-1. **Act**: Compile all findings into a review report following the [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md):
+1. **Act**: Compile all findings into a review report following the [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
    - **Review Information**: PR number, author, reviewer, date, story, review type
    - **Review Summary**: overall assessment, key changes, business value
    - **Code Review Checklist**: functionality, code quality, technical standards (from Phase 2)

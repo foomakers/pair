@@ -313,6 +313,25 @@ export function checkCategoryLabelCounts(
 
 // --- Corpus walk ---
 
+/**
+ * Every Markdown file under the skills corpus — SKILL.md AND auxiliary composed
+ * files (e.g. `merge-and-cascade.md`, `post-review-merge.md`) that a SKILL.md
+ * discloses to. Instruction lives in these files too, so template-link/pointer
+ * invariants must scan them, not just SKILL.md (story #314).
+ */
+export function collectSkillMarkdownFiles(skillsDir: string): string[] {
+  const files: string[] = []
+  const walk = (dir: string): void => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name)
+      if (e.isDirectory()) walk(p)
+      else if (e.name.endsWith('.md')) files.push(p)
+    }
+  }
+  walk(skillsDir)
+  return files
+}
+
 export function collectSkillFiles(skillsDir: string): string[] {
   const files: string[] = []
   const categories = readdirSync(skillsDir, { withFileTypes: true }).filter(d => d.isDirectory())

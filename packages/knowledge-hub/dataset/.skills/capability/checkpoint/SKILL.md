@@ -7,7 +7,7 @@ author: Foomakers
 
 # /checkpoint — Resumable Progress State
 
-Write and resume a self-contained progress checkpoint so a fresh session (or a subagent) can continue a story exactly where the previous one stopped. Follows the [checkpoint template](../../../.pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md) — five sections: story, branch, tasks done, key decisions, remaining todos.
+Write and resume a self-contained progress checkpoint so a fresh session (or a subagent) can continue a story exactly where the previous one stopped. Follows the [checkpoint template](../../../.pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)) — five sections: story, branch, tasks done, key decisions, remaining todos.
 
 ## Arguments
 
