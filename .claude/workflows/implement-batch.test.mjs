@@ -271,3 +271,23 @@ test('clean first review: no remediation comment, no synthesis step (first-revie
   assert.equal(reviews.length, 1, 'exactly one (first) review')
   assert.ok(reviews[0].prompt.includes('This is the FIRST review: POST'))
 })
+
+test('non-convergence: MAX_FIX_ROUNDS escalation flushes the working log to the PR with the open findings, no synthesis', async () => {
+  const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] } // never converges
+    if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+    if (opts.phase === 'PR') return { prNumber: 7 }
+    if (opts.label?.startsWith('flush:')) return 'flushed'
+    return { fixed: true } // fix step
+  }
+  const { result, calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch })
+
+  assert.equal(result.batch[0].status, 'escalate')
+  const flush = calls.find(c => c.opts.label?.startsWith('flush:'))
+  assert.ok(flush, 'escalation posts a flush comment')
+  assert.ok(flush.prompt.includes('x.ts:1'), 'flush carries the still-open findings')
+  assert.ok(flush.prompt.includes('.pair/working/reviews/292.md') && flush.prompt.includes('Do NOT delete the log'), 'flush reads the log and keeps it for the human')
+  assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no synthesis on escalation')
+})
