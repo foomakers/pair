@@ -66,8 +66,8 @@ Any skill that touches domain scope (brainstorm's domain step, refine-story's re
 
 ## Related Documents
 
-- **[Context Map Template](../../collaboration/templates/context-map-template.md)** — the dispatcher + index + core artifact this guideline maintains
-- **[Subdomain Context Template](../../collaboration/templates/subdomain-context-template.md)** — the lazy-split sibling file
+- **[Context Map Template](../../collaboration/templates/context-map-template.md)** — the dispatcher + index + core artifact this guideline maintains (resolve override-first per [template resolution](../../../skill-conventions/template-resolution.md))
+- **[Subdomain Context Template](../../collaboration/templates/subdomain-context-template.md)** — the lazy-split sibling file (resolve override-first per [template resolution](../../../skill-conventions/template-resolution.md))
 - **[Strategic Subdomain Definition](strategic-subdomain-definition.md)** — subdomain catalog and classification, source of the mirrored Volatility column
 - **[Domain-Driven Design](domain-driven-design.md)** — overall DDD principles this guideline operationalizes as a maintenance process
 - **[Decision Records](../decision-frameworks/README.md)** — ADR/DDR process for domain decisions cited during conflict-flagging

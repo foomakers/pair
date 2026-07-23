@@ -12,6 +12,11 @@ import { collectSkillFiles, collectSkillMarkdownFiles } from '../tools/skills-co
 const DATASET_SKILLS = join(__dirname, '../../dataset/.skills')
 const CONVENTIONS = join(__dirname, '../../dataset/.pair/knowledge/skill-conventions')
 const MIRROR = join(__dirname, '../../../../.claude/skills')
+// The guidelines corpus (dataset source + generated repo root) — the skills scan
+// above never sees it, yet a template use-site lives here (context-map-maintenance.md,
+// Major #2). Both roots are byte-consistent mirrors; scan both.
+const DATASET_GUIDELINES = join(__dirname, '../../dataset/.pair/knowledge/guidelines')
+const ROOT_GUIDELINES = join(__dirname, '../../../../.pair/knowledge/guidelines')
 
 const CONVENTION_FILE = join(CONVENTIONS, 'template-resolution.md')
 const CONVENTION = readFileSync(CONVENTION_FILE, 'utf-8')
@@ -22,14 +27,16 @@ const POINTER = /template-resolution\.md/
 const TEMPLATE_LINK = /collaboration\/templates\/[a-z0-9-]*template\.md/
 
 /**
- * Every skill Markdown file (SKILL.md AND auxiliary composed files) under a
- * skills root that links at least one collaboration template. Walks all `.md`,
- * not just SKILL.md, so template links in disclosed files (merge-and-cascade.md,
- * post-review-merge.md, …) cannot escape the pointer invariant (story #314).
+ * Every Markdown file under a corpus root that links at least one collaboration
+ * template. Walks all `.md`, not just SKILL.md, so template links in disclosed
+ * skill files (merge-and-cascade.md, post-review-merge.md, …) AND in the
+ * guidelines corpus (context-map-maintenance.md) cannot escape the pointer
+ * invariant (story #314). `collectSkillMarkdownFiles` is a generic recursive
+ * `.md` walker — reused here for both the skills and guidelines trees.
  */
-function templateLinkingFiles(skillsRoot: string): { rel: string; content: string }[] {
-  return collectSkillMarkdownFiles(skillsRoot)
-    .map(f => ({ rel: relative(skillsRoot, f), content: readFileSync(f, 'utf-8') }))
+function templateLinkingFiles(root: string): { rel: string; content: string }[] {
+  return collectSkillMarkdownFiles(root)
+    .map(f => ({ rel: relative(root, f), content: readFileSync(f, 'utf-8') }))
     .filter(({ content }) => TEMPLATE_LINK.test(content))
 }
 
@@ -127,4 +134,38 @@ describe('AC2 — key template consumers resolve override-first (dataset + mirro
     expect(content).toMatch(TEMPLATE_LINK)
     expect(content).toMatch(POINTER)
   })
+})
+
+// Major #2 blind-spot: the resolution fix also lives in the guidelines corpus
+// (context-map-maintenance.md), which the skills scan never reaches. Same
+// invariant applied to the guidelines tree (dataset + generated root) so a
+// regression that drops the pointer from a guideline's template use-site fails.
+describe('every template-linking guideline carries the resolution pointer (AC5, Major #2)', () => {
+  const guidelineRoots: { root: string; label: string }[] = [
+    { root: DATASET_GUIDELINES, label: 'dataset' },
+    { root: ROOT_GUIDELINES, label: 'generated root' },
+  ]
+  const CONTEXT_MAP_GUIDELINE = join(
+    'architecture',
+    'design-patterns',
+    'context-map-maintenance.md',
+  )
+
+  it.each(guidelineRoots)(
+    '$label: no guideline links a collaboration template without the resolution pointer',
+    ({ root }) => {
+      const offenders = templateLinkingFiles(root)
+        .filter(({ content }) => !POINTER.test(content))
+        .map(({ rel }) => rel)
+      expect(offenders).toEqual([])
+    },
+  )
+
+  it.each(guidelineRoots)(
+    '$label: context-map-maintenance.md is actually reached by the scan (guards the Major #2 fix)',
+    ({ root }) => {
+      const scanned = templateLinkingFiles(root).map(({ rel }) => rel)
+      expect(scanned).toContain(CONTEXT_MAP_GUIDELINE)
+    },
+  )
 })
