@@ -36,6 +36,14 @@ If a PR has **no** `risk:*` tag — or the tag is unknown or malformed — the g
 
 If a tier requires a suite the repository does not have (for example, a 🔴 PR with no E2E suite), the gate **fails with an explicit "suite missing" error**. It never silently passes a tier whose checks could not run.
 
+## Coverage never silently drops
+
+Coverage is protected by a **baseline regression guardrail** that runs as a job inside the same pipeline — not a separate CI mechanism. A PR that drops coverage **below the established baseline** fails the gate; a PR that maintains or improves it passes. It is a guardrail against regression, not a wall demanding a fixed percentage on every PR, so a legacy codebase is never failed at 0 on day one.
+
+- **Baseline and per-type targets live in adoption** (`tech/coverage-baseline.md`), with sensible defaults — different goals for backend, frontend, and shared libraries. No specific coverage tool is required: the gate reads whatever percentage the adopted test tooling emits.
+- **First run bootstraps the baseline** from the current coverage (a missing or corrupt baseline re-establishes the same way) instead of blocking everything.
+- **No coverage measured** fails safe: it blocks at 🔴 red and warns at lower tiers — never a silent pass.
+
 ## Post-merge is build + deploy only
 
 Once a PR merges to the main branch, the gate does not run again — it already passed. The post-merge staging pipeline performs **build + deploy only**. The gate is the deterministic first filter before merge; review starts only once the gate is green.
