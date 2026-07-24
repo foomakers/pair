@@ -237,7 +237,7 @@ The compiled report **is the body of the native GitHub review** — the verdict 
    - MCP-first: `pull_request_review_write` with `method = create`, the report as `body`, and the appropriate `event`.
    - CLI fallback: `gh pr review <number> --approve|--request-changes --body-file <report>`.
    - **Self-authored PR** (solo/self-review): GitHub rejects `APPROVE` / `REQUEST_CHANGES` on your own PR. Submit the same verdict-first report with `event = COMMENT` (`gh pr review <number> --comment --body-file <report>`) — the verdict token (APPROVED / CHANGES-REQUESTED / TECH-DEBT) still leads the body, so the decision and full report are recorded, never lost. See Graceful Degradation.
-2. **Act**: On re-review, **edit the existing review body in place** rather than posting a duplicate (idempotency).
+2. **Act**: On re-review, submit a **fresh** native review — both documented paths append (MCP `create`; `gh pr review` CLI), neither edits a submitted body. GitHub's latest-review-governs semantics mean the newest review carries the verdict while earlier reviews stay as visible history, so re-invocation is safe without editing in place (idempotency).
 3. **Verify**: The native review is submitted with the verdict-first body — no separate review-comment artifact exists.
 
 ### Step 5.4: Determine Next Action
@@ -296,7 +296,7 @@ See [idempotency convention](../../../.pair/knowledge/guidelines/technical-stand
 2. **Phases**: checks which phases completed (via session state or PR review comments). Resumes from first incomplete phase.
 3. **Skill compositions**: /verify-quality, /verify-done, /assess-security results cached in session. Not re-run if already passing/current on current commit.
 4. **New commits**: if PR updated since last check, re-validates affected phases only.
-5. **Review report**: updates existing report rather than posting duplicates.
+5. **Review report**: re-review appends a fresh native review (MCP `create` / `gh pr review`); GitHub's latest-review-governs semantics make the newest one carry the verdict while prior reviews remain as history. The report is always the review body, never a separate comment — so no duplicate comment artifact is created.
 6. **Merge**: detects already-merged PR. Skips Phase 6 if already merged. Resumes parent cascade if merge succeeded but status updates are incomplete.
 
 ## Graceful Degradation
