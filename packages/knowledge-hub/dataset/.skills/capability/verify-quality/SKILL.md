@@ -26,7 +26,7 @@ Only check gates that are **not already passing** (idempotency preserved).
 | Argument | Required | Description                                                                                                    |
 | -------- | -------- | -------------------------------------------------------------------------------------------------------------- |
 | `$scope` | No       | Limit checking: `code-quality`, `tests`, `lint`, `all`, or any custom scope key from adoption (default: `all`) |
-| `$story` | No       | Story/PR id whose `risk:*` tag drives the tier (see Step 1.5). If omitted, resolved from the branch's PR or the story card. |
+| `$story` | No       | A **story id**, used only for the pre-publish story-card fallback (Step 1.5) when the branch has no PR yet. The tier normally comes from the **current-branch PR** — `gh pr view` with no argument resolves it — so a **PR number is never needed here** (the branch resolves its own PR, and its labels are authoritative). Pass `$story` only to name the story card to read before a PR exists. |
 
 `$scope` and the resolved tier compose: the tier decides the widest set CI would run; `$scope` may narrow within it (e.g. `$scope=lint`). `$scope` never *widens* past the tier.
 
@@ -52,17 +52,19 @@ This step decides **which** suites the standard gates below run, so the local ru
 
    ```bash
    source .pair/knowledge/assets/tier-resolve.sh   # tags only, no criteria (D18)
-   # Prefer the PR's labels; pre-publish (no PR yet) fall back to the story card.
-   if PR_LABELS="$(gh pr view "$story" --json labels -q '.labels[].name' 2>/dev/null)" && [ -n "$PR_LABELS" ]; then
-     : # tags from the PR
-   else
-     PR_LABELS="$(gh issue view "$story" --json labels -q '.labels[].name' 2>/dev/null)"  # from the story card
+   # Primary: read the CURRENT-BRANCH PR's labels — the authoritative tier CI gates on.
+   # `gh pr view` with NO argument resolves the PR of the checked-out branch, so a
+   # review-raised (D17) tag on the PR is always honoured — never a stale story-card tier.
+   LABELS="$(gh pr view --json labels -q '.labels[].name' 2>/dev/null)"
+   if [ -z "$LABELS" ] && [ -n "$story" ]; then
+     # Pre-publish only (no PR yet): fall back to the story card by id.
+     LABELS="$(gh issue view "$story" --json labels -q '.labels[].name' 2>/dev/null)"  # story card
    fi
-   TIER="$(resolve_tier "$PR_LABELS")"                    # green | yellow | red
+   TIER="$(resolve_tier "$LABELS")"                       # green | yellow | red (red = fail-safe if empty)
    ACTIVE_SUITES="$(required_suites_for_tier "$TIER")"    # e.g. "install lint type build unit"
    ```
 
-   - **Edge — tags on the story but not yet on the PR (pre-publish)**: resolve from the story card (`gh issue view`), as above.
+   - **Edge — pre-publish (no PR yet)**: when the branch has no PR, pass the **story id** as `$story` and the tier resolves from the story card (`gh issue view`), as above. A standalone run on a branch that already has a PR needs **no** `$story`: the PR's labels win, so a review-raised (D17) tag is never under-run versus CI.
    - **Fail-safe (AC3)**: `resolve_tier` returns `red` for **no** `risk:*` tag or an **unknown/malformed** value — the widest matrix, never a silent skip. When the tier came from the fail-safe, say so explicitly in the report: `Tier: 🔴 red (fail-safe — no resolvable risk:* tag; running the full set)`.
    - **Widen-only**: because review never lowers a tier (D17), a later run can only widen the set versus an earlier one on the same item — never narrow.
 
@@ -223,7 +225,8 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 ## Notes
 
 - The read-only-except-Step-5.C rule is stated once, in the overview above — this Notes section doesn't restate it.
-- **Local = CI**: the tier and its suites are resolved through the *same* [`tier-resolve.sh`](../../../.pair/knowledge/assets/tier-resolve.sh) helper the CI pre-merge gate uses, so the check set and verdict match. This skill owns no matrix of its own (D18) — [quality-model.md §4](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) is the single source.
+- **Local = CI**: the tier and its suites are resolved through the *same* [`tier-resolve.sh`](../../../.pair/knowledge/assets/tier-resolve.sh) helper the CI pre-merge gate uses, so the check set and verdict match. This skill owns no matrix of its own (D18) — [quality-model.md §4](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) is the single source. "Local = CI" scopes to the **tier check set** — see the coverage-guardrail caveat below.
+- **Coverage guardrail is NOT mirrored locally**: the coverage-baseline guardrail (a separate opt-in CI job — the "twin of tiering") is **not** a tier suite and this skill does **not** run it. When a project sets `Coverage guardrail: enabled`, CI runs that baseline job *in addition to* the tier suites; the "local = CI" parity above covers the tier suites and verdict only, not the coverage guardrail.
 - Standard gates (Lint, Type+Build, Test) are universal and language/platform-independent. Custom gates are project-specific and defined in adoption (see the sources of truth above).
 - Each gate is independent — a failure in one gate does not prevent checking subsequent gates.
 - Re-invoke after fixes to confirm resolution. Already-passing gates are re-verified but complete instantly.

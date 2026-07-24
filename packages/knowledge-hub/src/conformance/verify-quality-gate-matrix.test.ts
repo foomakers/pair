@@ -49,6 +49,12 @@ describe('verify-quality SKILL.md — tier gate matrix integration (#259)', () =
 
   it('AC4 — any failing check ⇒ red verdict with the failing command output surfaced', () => {
     expect(SKILL).toMatch(/failing command output|surface[^\n]*output|command output/i)
+    // Pin the behavioral linkage (failing check ⇒ red verdict ⇒ output surfaced):
+    // the red-verdict wording must co-occur with the failing-output phrase, so a
+    // future edit can't drop the "red verdict" half and still pass.
+    expect(SKILL).toMatch(
+      /red verdict[\s\S]{0,120}(failing command output|command output)|(failing command output|command output)[\s\S]{0,120}red verdict/i,
+    )
   })
 
   it('reads the risk:* tag from the PR, and pre-publish from the story card (never classifies)', () => {
