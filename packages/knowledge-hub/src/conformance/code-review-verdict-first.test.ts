@@ -154,6 +154,11 @@ describe('review skill — review IS the native review body, no separate comment
       const post = v.content.slice(v.content.indexOf('### Step 5.3'))
       expect(post.toLowerCase()).toMatch(/native (github )?review|review body/)
       expect(post.toLowerCase()).not.toMatch(/post the review report as a pr comment/)
+      // Positive behavioral invariant (not just the absence of one phrasing): the report
+      // is delivered via a native-review EVENT + a body-file, so a differently worded
+      // "post as a separate comment" reintroduction still fails this guard.
+      expect(post).toMatch(/APPROVE|REQUEST_CHANGES/)
+      expect(post.toLowerCase()).toMatch(/--body-file|as (the |its )?(native )?(github )?review body|report .*as .*body/)
     })
   }
 })

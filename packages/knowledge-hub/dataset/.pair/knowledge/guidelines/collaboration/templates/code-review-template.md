@@ -1,6 +1,6 @@
 # Code Review Template
 
-> **Verdict-first (D22, R6.6).** This is the **native GitHub review body** submitted with the review action (Approve / Request Changes / Comment) — it is **not a separate PR comment** (decision Q5). The top of the body — classification tags, tier, cost class and the 1-line verdict — reads in **~30 seconds**; every assessment is a 1-line verdict with the breakdown collapsed in `<details>`. A reader scanning the top understands verdict, tier and cost class inside the 30-second reading budget without opening a single `<details>`.
+> **Verdict-first (D22, R6.6).** This is the **native GitHub review body** submitted with the review action (Approve / Request Changes / Comment). In `/pair-process-review`'s own self-review flow it is submitted as that native review body — **not a separate PR comment** (decision Q5). (An independent reviewer agent, or a self-authored PR where GitHub blocks self-approval, delivers this **same body** via a PR comment instead — see `.claude/agents/reviewer.md` and review Step 5.3; the artifact is identical, only the delivery event differs.) The top of the body — classification tags, tier, cost class and the 1-line verdict — reads in **~30 seconds**; every assessment is a 1-line verdict with the breakdown collapsed in `<details>`. A reader scanning the top understands verdict, tier and cost class inside the 30-second reading budget without opening a single `<details>`.
 >
 > **Not assessed is explicit.** When the backing capability is missing or failed (`/assess-security`, `/assess-cost`, `/assess-coupling`), the section verdict reads **not assessed** — never silently omitted.
 
@@ -192,6 +192,16 @@ Feeds from `/assess-cost` against the diff. A **red** cost class surfaces a **bl
 <summary>Documentation</summary>
 
 - [ ] Code / API / user / architecture docs updated as applicable.
+
+</details>
+
+<details>
+<summary>Performance & deployment</summary>
+
+<!-- Lightweight prompt only — kept collapsed so it does not compete with the verdict for the 30s budget. -->
+
+- [ ] No performance regression on hot paths (added queries / N+1, large allocations, sync work on the request path).
+- [ ] Deployment / rollback considered (reversible migrations, feature-flag or staged rollout, a known rollback path).
 
 </details>
 
