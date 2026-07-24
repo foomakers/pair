@@ -24,6 +24,10 @@ const CLI = fileURLToPath(new URL('./ensure-contract.mjs', import.meta.url))
 const TEMPLATE_V1 = '# Code Review Template\n\n- [ ] **Approved**\n'
 const TEMPLATE_V2 = '# Code Review Template\n\n- [ ] **Approved**\n- [ ] **Rejected**\n'
 
+// NB: the verdict/severity values below are INTENTIONALLY ARBITRARY — this suite
+// tests the mechanism (hash / decide / validate / stamp) and is deliberately
+// decoupled from the real code-review template. They are NOT the canonical vocab
+// (canonical is APPROVED / CHANGES-REQUESTED / TECH-DEBT); do not treat as an example.
 function goodDraft() {
   return {
     vocabulary: {
