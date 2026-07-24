@@ -140,7 +140,7 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → check only adoption-derived criteria; adoption files missing → check only universal criteria) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → check only adoption-derived criteria; adoption files missing → check only universal criteria) for the standard scenarios. Additional cases:
 
 - If `$story` is not provided, skip requirements/AC check and evaluate only universal criteria.
 - If the canonical [definition-of-ready-and-done.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md) is not found, fall back to the extended `definition-of-done.md` checklist alone (never an empty checklist).

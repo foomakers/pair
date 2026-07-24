@@ -115,7 +115,7 @@ For each approved context in scope:
 
 1. **Check**: Does this context already exist as a file?
 2. **Act**: If exists and no conflict was raised → leave untouched; pre-existing relationships without the 3-dimension assessment remain valid as-is (no forced migration — assessed the next time that relationship falls inside a `$scope`).
-3. **Act**: If new, or an approved delta applies → create/update the context file following [bounded-context-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/bounded-context-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
+3. **Act**: If new, or an approved delta applies → create/update the context file following [bounded-context-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/bounded-context-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)):
    - Fill all template sections: Type, Subdomains Covered, Business Scope, Relationships (with the 3-dimension assessment per relationship), Integration Patterns, Data Ownership, Team Alignment, Ubiquitous Language, Quality Attributes, Encapsulated Knowledge, Change Vectors.
    - File path: `adoption/tech/boundedcontext/[kebab-case-name].md`
 4. **Verify**: File created/updated and parseable. Entries outside `$scope` are untouched.
@@ -153,7 +153,7 @@ CONTEXT PLACEMENT COMPLETE:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (adoption files missing → warn, proceed with what's available rather than halting) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (adoption files missing → warn, proceed with what's available rather than halting) for the standard scenarios. Additional cases:
 
 - If architecture or tech-stack adoption files are missing, warn and infer boundaries from subdomains alone.
 - If subdomains have no `Volatility` field yet, treat volatility as unknown/Medium for the assessment and note it as provisional.
@@ -164,7 +164,7 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 ## Notes
 
 - This skill **creates/updates adoption files** — not PM tool issues. Bounded contexts are design artifacts.
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: detects existing files by filename; only entries inside `$scope` are evaluated for changes.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). This skill's check: detects existing files by filename; only entries inside `$scope` are evaluated for changes.
 - The 3-dimension relationship assessment (strength, distance, volatility) is the input to the coupling-balance guideline — see `.pair/knowledge/guidelines/architecture/design-patterns/coupling-balance.md` (introduced by #209); until that guideline lands, apply the heuristics in Step 3 directly.
 - Contract-coupled (`contract` strength) relationships are annotated "contract tests expected" — `/design-manual-tests` and story-level validation strategies should pick up the contract/boundary test category for that relationship.
 - Migration: this skill was reclassified from a process skill (`process/map-contexts`) to a capability (`capability/map-contexts`) — see [skills-guide.md](../../../.pair/knowledge/skills-guide.md#migration-notes) for the rename and new invocation paths.

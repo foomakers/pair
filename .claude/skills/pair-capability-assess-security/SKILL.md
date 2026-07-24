@@ -65,7 +65,7 @@ Every rule the skill applies is resolved through the same layered set, most-spec
 
 ### Step 5: Resolution Cascade
 
-See [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics.
+See [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics.
 
 - **Path A** ($choice provided): adopt the named control set (e.g. `owasp-top10`) directly — render the `tech/security.md` proposal referencing it, skip full evaluation, confirm with the developer. Proceed to Step 8.
 - **Path B** (adoption check): `adoption/tech/security.md` exists with a populated project-rules section. Confirm it's still current with the developer; if its backing decision record is missing, report the gap (this skill still writes nothing to adoption — the caller backfills via `/pair-capability-record-decision`). No audit report is generated for an unchanged, confirmed ruleset ("no re-assessment", per the resolution cascade addendum). Exit.
@@ -86,7 +86,7 @@ See [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-c
 ### Step 8: Render Project-Rules Proposal
 
 1. **Act**: Render the `tech/security.md` content: global project security principles distilled from the audit findings (never duplicating KB or per-service/per-web-app guideline content — only the project-specific delta).
-2. **Act**: Assemble the persistence tuple per [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md):
+2. **Act**: Assemble the persistence tuple per [record-decision invocation contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md):
    - `content`: the rendered `tech/security.md` body.
    - `target`: `adoption/tech/security.md`.
    - `decision-metadata`: `$type: non-architectural`, `$topic: security-strategy-initial` (first audit) or `security-strategy-update` (subsequent), `$summary: "Project security rules adopted from audit: [key rules]"`.
@@ -148,7 +148,7 @@ When invoked **independently** in audit mode:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → minimal assessment, ask directly; adoption file missing → skill still runs against KB defaults; PM tool unreachable → n/a, this skill doesn't read the PM tool) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → minimal assessment, ask directly; adoption file missing → skill still runs against KB defaults; PM tool unreachable → n/a, this skill doesn't read the PM tool) for the standard scenarios. Additional cases:
 
 - **Package-scoped override (#237) not active**: load only the root `adoption/tech/security.md` (layer 4) — the package-scoped layer 5 is skipped entirely, not an error.
 - **`/pair-capability-map-contexts` not available** (for per-service/per-web-app boundary detection in review mode): fall back to inferring service/web-app boundaries from package structure (framework markers, `package.json` fields) rather than HALTing.
@@ -157,6 +157,6 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 ## Notes
 
 - **Writes exactly one kind of file itself**: the audit report under `.pair/working/reports/security/` (Step 7) — the one exception to the `assess-*` family's usual output-only convention, justified the same way `/pair-capability-design-manual-tests` writes its own suite files: reports are operational artifacts (D14), not adoption content. Adoption content (`tech/security.md`) is never self-written — that always goes through the caller's `/pair-capability-record-decision` composition (Step 8).
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). Audit mode's check: Path B (populated `tech/security.md` + backing decision record) confirms rather than re-running the full OWASP assessment. Review mode is not idempotent in that sense — a fresh verdict is computed every review, against the current diff, by design (findings can change commit to commit).
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). Audit mode's check: Path B (populated `tech/security.md` + backing decision record) confirms rather than re-running the full OWASP assessment. Review mode is not idempotent in that sense — a fresh verdict is computed every review, against the current diff, by design (findings can change commit to commit).
 - **Never scans for secrets**: committed-secret detection is a deterministic, LLM-free CI layer (R6.5) provisioned by `/pair-capability-setup-gates`, not an assessment this skill performs — keeping the "no LLM involved" guarantee real (D24).
 - **D22** (1-line verdict + collapsed findings, never a table inline): a project-level decision record, not part of this portable dataset.

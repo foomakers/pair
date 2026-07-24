@@ -52,7 +52,7 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
 ### Step 2: Build Existing Epic Registry
 
 1. **Check**: Query PM tool for existing epic issues linked to the selected initiative — **including closed/Done items** (the closed-item triage rule in Step 3 depends on them being in the registry; many PM-tool queries default to open-only).
-2. **Act**: Build a registry of existing epics, keyed for matching (idempotency key — see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md)):
+2. **Act**: Build a registry of existing epics, keyed for matching (idempotency key — see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md)):
 
    ```text
    EXISTING EPICS:
@@ -74,7 +74,7 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
    - **Value-driven grouping**: natural feature groupings following user workflows.
    - **Sequential dependencies**: foundation-first, user journey progression.
    - **Duration sizing**: 2-4 sprints per epic with clear completion criteria.
-3. **Act**: Triage each candidate epic against the Step 2 registry — see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md) for the matching shape (idempotency key, EXTEND-vs-CREATE threshold, ambiguous-match and closed-item handling). **This skill's parent scope**: the selected initiative. First, check each candidate's idempotency key against the registry: an exact match to an existing **open** epic is `ALREADY EXISTS #ID` (skip) — per to-issues-triage.md's Skip step, not a triage decision. For every remaining candidate, classify `EXTEND #ID` or `CREATE` — or, if ambiguous (per to-issues-triage.md), present it as a question with a recommendation instead of silently picking one side. Present the triage proposal to developer:
+3. **Act**: Triage each candidate epic against the Step 2 registry — see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md) for the matching shape (idempotency key, EXTEND-vs-CREATE threshold, ambiguous-match and closed-item handling). **This skill's parent scope**: the selected initiative. First, check each candidate's idempotency key against the registry: an exact match to an existing **open** epic is `ALREADY EXISTS #ID` (skip) — per to-issues-triage.md's Skip step, not a triage decision. For every remaining candidate, classify `EXTEND #ID` or `CREATE` — or, if ambiguous (per to-issues-triage.md), present it as a question with a recommendation instead of silently picking one side. Present the triage proposal to developer:
 
    > Epic breakdown for Initiative `#[ID]: [Title]`:
    >
@@ -103,7 +103,7 @@ Process epics sequentially (Epic 0 first if needed), per its Step 3 proposal:
 
    > Epic `[Title]` already exists (#ID). Skipping.
 
-3. **Act**: Draft the epic following [epic-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/epic-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
+3. **Act**: Draft the epic following [epic-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/epic-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)):
    - Fill template sections: Epic Statement, Business Value, Solution Overview, Epic Breakdown, Technical Considerations.
    - Present to developer for validation.
 4. **Act**: Compose `/pair-capability-write-issue` per the confirmed proposal:
@@ -142,7 +142,7 @@ EPICS COMPLETE:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce epic documents, ask developer to create manually) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce epic documents, ask developer to create manually) for the standard scenarios. Additional cases:
 
 - If `/pair-capability-map-subdomains` is not installed, skip Step 3.5 with a warning — epic creation proceeds without domain mapping.
 - If bounded contexts are not defined, proceed with PRD and initiative analysis only.
@@ -150,6 +150,6 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 ## Notes
 
 - This skill **modifies PM tool state** — creates and extends epic issues linked to initiatives.
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md) and [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md). This skill's check: exact idempotency-key match is proposed `ALREADY EXISTS #ID` (skip) at triage time, before any write (Step 3) — Step 4 only executes the confirmed proposal; substantial-overlap match proposes EXTEND instead of a duplicate CREATE (Step 3) — re-running the same candidate tree never duplicates.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md) and [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md). This skill's check: exact idempotency-key match is proposed `ALREADY EXISTS #ID` (skip) at triage time, before any write (Step 3) — Step 4 only executes the confirmed proposal; substantial-overlap match proposes EXTEND instead of a duplicate CREATE (Step 3) — re-running the same candidate tree never duplicates.
 - Epic 0 rule: for new projects, always assess if a bootstrap/foundation epic is needed before functional epics.
 - Domain mapping (Step 3.5) is scoped to this run's epic breakdown — see [map-subdomains](../../../.skills/capability/map-subdomains/SKILL.md).

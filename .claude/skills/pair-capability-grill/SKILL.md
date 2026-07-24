@@ -92,7 +92,7 @@ Systematic AI↔human alignment on a specific story, covering all six aspects of
 
 1. **Act**: Compile recorded answers, explored facts (with source), and flagged assumptions:
    - `interview` → raw requirements blob (topic, findings per sub-question, open items, assumptions).
-   - `sync` → alignment synthesis mapped to the six [Sync Coverage Checklist](#sync-coverage-checklist) aspects, ready to drop into the matching [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)) sections.
+   - `sync` → alignment synthesis mapped to the six [Sync Coverage Checklist](#sync-coverage-checklist) aspects, ready to drop into the matching [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)) sections.
 2. **Verify**: Synthesis accounts for every answered/explored/assumed item — nothing silently dropped.
 
 ### Step 6: Return — Never Write
@@ -205,7 +205,7 @@ AI:  GRILL SESSION COMPLETE — Mode: sync · Coverage: 6/6 · returns alignment
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (composing skill not installed → this skill still runs standalone) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (composing skill not installed → this skill still runs standalone) for the standard scenarios. Additional cases:
 
 - If KB/codebase exploration is unavailable (no repo access), skip Step 1 (nothing marked explored), ask every aspect/topic question directly, and note in the synthesis that explore-first was skipped.
 - If `.pair/working/` cannot be created or written, present the handoff content inline in conversation and tell the human to save it manually.

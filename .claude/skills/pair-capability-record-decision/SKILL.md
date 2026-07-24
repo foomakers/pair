@@ -88,7 +88,7 @@ A domain decision only becomes a DDR if it meets **all three** criteria. This is
 1. **Check**: Does [adoption/tech/adr/](../../../.pair/adoption/tech/adr) directory exist?
 2. **Act**: If not, create it.
 3. **Check**: Determine the next sequence number — scan existing `adr-NNN-*.md` files, take the highest `NNN`, increment by 1 (zero-padded to 3 digits). If none exist, start at `001`.
-4. **Act**: Create (or update) the ADR file at [adoption/tech/adr/](../../../.pair/adoption/tech/adr)`adr-NNN-<topic>.md` following the standalone [ADR template](../../../.pair/knowledge/guidelines/collaboration/templates/adr-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md); the same applies to the ADL, DDR, and analysis-log templates below). Fill in all sections: Status, Date, Context, Options Considered, Decision, Consequences, and Adoption Impact.
+4. **Act**: Create (or update) the ADR file at [adoption/tech/adr/](../../../.pair/adoption/tech/adr)`adr-NNN-<topic>.md` following the standalone [ADR template](../../../.pair/knowledge/guidelines/collaboration/templates/adr-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md); the same applies to the ADL, DDR, and analysis-log templates below). Fill in all sections: Status, Date, Context, Options Considered, Decision, Consequences, and Adoption Impact.
 5. **Verify**: ADR file exists with complete content following the template structure, and sequential numbering is unbroken.
 
 #### If `non-architectural` → ADL:
@@ -236,7 +236,7 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline/template missing → use a minimal structure directly) for the standard scenarios. Additional cases (the minimal structure per decision type):
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline/template missing → use a minimal structure directly) for the standard scenarios. Additional cases (the minimal structure per decision type):
 
 - ADR template missing → minimal ADR structure: Status, Date, Context, Decision, Consequences, Adoption Impact.
 - ADL template missing → minimal ADL structure: Date, Status, Context, Decision, Consequences, Adoption Impact.

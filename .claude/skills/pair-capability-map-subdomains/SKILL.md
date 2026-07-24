@@ -104,7 +104,7 @@ For each approved subdomain in scope:
 
 1. **Check**: Does this subdomain already exist as a file?
 2. **Act**: If exists and no conflict was raised → leave untouched; pre-existing entries without a `Volatility` field remain valid as-is (no forced migration — the field is added the next time this entry falls inside a `$scope`).
-3. **Act**: If new, or an approved delta applies → create/update the subdomain file following [subdomain-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/subdomain-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
+3. **Act**: If new, or an approved delta applies → create/update the subdomain file following [subdomain-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/subdomain-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)):
    - Fill all template sections: Classification, Volatility, Business Purpose, Key Capabilities, Strategic Importance, Complexity Assessment, Data Ownership, Dependencies, Team Recommendations, Implementation Priority.
    - File path: `adoption/product/subdomain/[kebab-case-name].md`
 4. **Verify**: File created/updated and parseable. Entries outside `$scope` are untouched.
@@ -141,7 +141,7 @@ SUBDOMAIN PLACEMENT COMPLETE:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (adoption/context inputs missing → warn, proceed with what's available rather than halting) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (adoption/context inputs missing → warn, proceed with what's available rather than halting) for the standard scenarios. Additional cases:
 
 - If initiatives are not available but PRD is, proceed with PRD-only analysis and warn.
 - If neither PRD nor initiatives nor an existing catalog are available, use the system-areas fallback (Step 2b) rather than halting.
@@ -151,7 +151,7 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 ## Notes
 
 - This skill **creates/updates adoption files** — not PM tool issues. Subdomains are design artifacts.
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: detects existing files by filename; only entries inside `$scope` are evaluated for changes.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). This skill's check: detects existing files by filename; only entries inside `$scope` are evaluated for changes.
 - Volatility is evaluated from the business domain (classification-derived default + human override), never from commit history alone.
 - DDD classification and Volatility drive downstream assessments — see `/pair-capability-map-contexts` (relationship strength/distance/volatility) and the architecture-quality capability that consumes them.
 - Migration: this skill was reclassified from a process skill (`process/map-subdomains`) to a capability (`capability/map-subdomains`) — see [skills-guide.md](../../../.pair/knowledge/skills-guide.md#migration-notes) for the rename and new invocation paths.

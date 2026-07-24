@@ -89,7 +89,7 @@ Configure CI/CD quality gates for the project. Reads quality assurance guideline
    >
    > Accept this configuration?
 
-3. **Act — tiering opt-in** (per the [guided/quick setup convention](../../../.pair/knowledge/skill-conventions/guided-quick-setup.md), default **No**): the CI pipeline mode is one input resolved like any other — full-suite (default) vs risk-tier-scoped (opt-in).
+3. **Act — tiering opt-in** (per the [guided/quick setup convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/guided-quick-setup.md), default **No**): the CI pipeline mode is one input resolved like any other — full-suite (default) vs risk-tier-scoped (opt-in).
    - **Guided mode** (interactive/TTY) — ask **one** question, pre-filled with the default:
 
      > Enable risk-tier-scoped pre-merge checks? This runs *lighter* checks on lower-risk PRs (a 🟢 PR skips integration/E2E) instead of the full suite on every PR — faster, but with less verification on low-risk changes. **[default: No — run the full suite on every PR]**
@@ -174,7 +174,7 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → propose minimal gates from what's detectable: detected package.json scripts — test, lint, build) and [record-decision contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) (`/record-decision` not installed → warn and skip decision recording) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → propose minimal gates from what's detectable: detected package.json scripts — test, lint, build) and [record-decision contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) (`/record-decision` not installed → warn and skip decision recording) for the standard scenarios. Additional cases:
 
 - If tech-stack.md is not found, ask developer for tooling choices to generate appropriate gate commands.
 - If no CI/CD platform is detectable, document gate commands for manual execution and skip pipeline file generation.
@@ -186,7 +186,7 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 - **Full checks are the default; risk-tier reduction is opt-in** (ADL 2026-07-20): unless the project sets `Pre-merge tiering: enabled` in way-of-working.md (Step 3.3 opt-in), the generated pipeline runs the **full suite on every PR** — the safe, pre-tiering behavior. Tiering only *reduces* checks on lower-risk PRs, so it must be enabled explicitly.
 - **When tiering is enabled, the generated pipeline reads classification tags only, never classifies** (D18): tier criteria live in [quality-model.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) §3/§4; the pipeline is the deterministic Automation layer that projects the matrix from the PR's `risk:*` tag. Untagged ⇒ 🔴 (fail-safe). See [tier-aware-pipeline.md](../../../.pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md).
 - **Secret scanning is CI config, not a judgment call** (D24, anti-complexity): this skill provisions the job mechanically; it never evaluates whether a diff contains a secret itself — that is gitleaks' (or the adopted scanner's) job at runtime, with no LLM in the loop. `/assess-security` never re-implements this — see that skill's own Notes.
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: an already-configured project (incl. provisioned shared configs and hooks) is confirmed; update only on explicit developer request. Conflicting local config is always resolved by asking first (see Edge Cases above).
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). This skill's check: an already-configured project (incl. provisioned shared configs and hooks) is confirmed; update only on explicit developer request. Conflicting local config is always resolved by asking first (see Edge Cases above).
 - Gate commands must be executable in the project's development environment. Verify commands exist before writing.
 - Custom Gate Registry format follows the table schema from [quality-gates.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-standards/quality-gates.md): Order, Gate, Command, Scope Key, Required, Description.
 - **Hook manager default**: husky (decision D21/Q11). An override recorded in [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) wins — this skill reads it before provisioning.

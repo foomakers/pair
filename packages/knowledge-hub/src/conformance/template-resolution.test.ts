@@ -10,7 +10,10 @@ import { collectSkillFiles, collectSkillMarkdownFiles } from '../tools/skills-co
 // `template-resolution.md` convention — not by hardcoding the KB path alone.
 
 const DATASET_SKILLS = join(__dirname, '../../dataset/.skills')
-const CONVENTIONS = join(__dirname, '../../dataset/.pair/knowledge/skill-conventions')
+const CONVENTIONS = join(
+  __dirname,
+  '../../dataset/.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions',
+)
 const MIRROR = join(__dirname, '../../../../.claude/skills')
 // The guidelines corpus (dataset source + generated repo root) — the skills scan
 // above never sees it, yet a template use-site lives here (context-map-maintenance.md,

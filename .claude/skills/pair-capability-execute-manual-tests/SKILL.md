@@ -7,7 +7,7 @@ author: Foomakers
 
 # /pair-capability-execute-manual-tests — Manual Test Suite Executor
 
-Execute a manual test suite against released or deployed artifacts (website, CLI packages, registries). Produces a structured report following the [manual-test-report-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-report-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)).
+Execute a manual test suite against released or deployed artifacts (website, CLI packages, registries). Produces a structured report following the [manual-test-report-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-report-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)).
 
 Reads test case files from the project's manual test suite directory; each follows the [manual-test-case-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-case-template.md). Organizational context (who, when, which areas): [manual-verification.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-verification.md); test case design principles: [manual-testing.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-testing.md).
 
@@ -162,11 +162,11 @@ To maximize reliability when executed by AI agents:
 - **Version from artifact**: extract from the artifact itself, never from source code.
 - **Isolated filesystem**: `$WORKDIR` must be outside the repo to avoid workspace interference.
 - **Clean npm environment**: use `--no-workspaces`, ensure no `.npmrc` inheritance from parent dirs.
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: re-executing produces the same result without manual cleanup.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). This skill's check: re-executing produces the same result without manual cleanup.
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline/template missing → use a minimal structure directly) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline/template missing → use a minimal structure directly) for the standard scenarios. Additional cases:
 
 - **No test suite found**: HALT with guidance to run `/pair-capability-design-manual-tests` first (a required dependency, not optional).
 - **`agent-browser` not available**: Fall back to Playwright MCP. If Playwright MCP also unavailable, fall back to WebFetch/curl for HTTP checks. Mark interactive tests (search, responsive) as BLOCKED.

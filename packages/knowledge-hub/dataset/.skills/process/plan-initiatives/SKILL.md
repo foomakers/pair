@@ -90,7 +90,7 @@ Process initiatives by priority (P0 → P1 → P2). For each initiative:
 
    > Initiative `[Title]` already exists (#ID). Skipping.
 
-3. **Act**: Draft the initiative following the [initiative-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/initiative-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
+3. **Act**: Draft the initiative following the [initiative-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/initiative-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)):
    - Fill template sections with PRD-derived content.
    - Include business rationale, scope, success metrics, risk assessment, timeline.
    - Present to developer for validation.
@@ -134,12 +134,12 @@ INITIATIVES COMPLETE:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (optional skill `/write-issue` not installed / PM tool not accessible → produce initiative documents, ask developer to create manually) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (optional skill `/write-issue` not installed / PM tool not accessible → produce initiative documents, ask developer to create manually) for the standard scenarios. Additional cases:
 
 - If adoption files (architecture, tech-stack) are missing, proceed with PRD analysis only and warn.
 
 ## Notes
 
 - This skill **modifies PM tool state** — creates initiative issues.
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: detects existing initiatives by title matching and skips them.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). This skill's check: detects existing initiatives by title matching and skips them.
 - Initiative = highest-level work item. Hierarchy: initiative → epic → story → task.

@@ -84,7 +84,7 @@ The AI reads these templates when creating the corresponding artifacts — but i
 
 Templates live in `.pair/knowledge/` — the upstream layer that gets overwritten on `pair-cli update`. To customize safely, create an override in the adoption layer.
 
-**How resolution works:** every skill that uses a template resolves it **override-first** by a plain file-existence check — if `.pair/adoption/tech/templates/<name>-template.md` exists (where `<name>-template.md` matches a shipped KB filename above), the skill uses your copy whole; otherwise it uses the KB default. There is no partial merge and no prose to keep in sync — dropping the file in place is the entire mechanism. (Skill-side contract: `.pair/knowledge/skill-conventions/template-resolution.md`.)
+**How resolution works:** every skill that uses a template resolves it **override-first** by a plain file-existence check — if `.pair/adoption/tech/templates/<name>-template.md` exists (where `<name>-template.md` matches a shipped KB filename above), the skill uses your copy whole; otherwise it uses the KB default. There is no partial merge and no prose to keep in sync — dropping the file in place is the entire mechanism. (Skill-side contract: `.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md`.)
 
 ### Step 1: Copy the Template
 

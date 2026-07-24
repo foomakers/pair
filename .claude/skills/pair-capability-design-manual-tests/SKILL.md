@@ -9,7 +9,7 @@ author: Foomakers
 
 Analyze a project's released artifacts, deployment targets, and user-facing surfaces to generate a complete manual test suite. Produces critical path files (`CP*.md`) and a suite `README.md` in the test suite directory.
 
-Each test case follows the [manual-test-case-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-case-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)). Design principles: [manual-testing.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-testing.md); organizational context: [manual-verification.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-verification.md).
+Each test case follows the [manual-test-case-template](../../../.pair/knowledge/guidelines/collaboration/templates/manual-test-case-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)). Design principles: [manual-testing.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-testing.md); organizational context: [manual-verification.md](../../../.pair/knowledge/guidelines/quality-assurance/manual-verification.md).
 
 ## Arguments
 
@@ -165,6 +165,6 @@ When invoked **independently**:
 
 - This skill **generates test definitions** — it does not execute tests or modify application code.
 - Test case IDs are stable across regenerations if the same surfaces are discovered.
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: re-running on an existing suite offers regenerate/extend/abort.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). This skill's check: re-running on an existing suite offers regenerate/extend/abort.
 - Generated test cases are version-agnostic by design — they work across releases without modification.
 - Suite maintenance (adding tests for new features) should re-invoke this skill with `extend` mode.

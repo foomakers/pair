@@ -118,7 +118,7 @@ When invoked **independently** (`/assess-cost` on a branch or story): full one-s
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → minimal assessment against §3.3 alone, ask directly; adoption file missing → run against KB defaults; PM tool unreachable → n/a in `$diff` mode) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → minimal assessment against §3.3 alone, ask directly; adoption file missing → run against KB defaults; PM tool unreachable → n/a in `$diff` mode) for the standard scenarios. Additional cases:
 
 - **cost-assessment guideline absent** (KB partially installed): assess against quality-model §3.3's inline signal list only, and note the reduced catalog in the output rather than HALTing.
 - **`/classify` not available** (independent invocation): the class is still emitted; it simply isn't folded into a compiled matrix by a caller — the developer reads the verdict directly.
@@ -127,6 +127,6 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 
 - **Writes nothing** — the strict output-only convention of the assess-* family (unlike `assess-security`, this skill has no report/audit mode: report/monitoring is deliberately split to a separate slice). The class is data for `/classify`/`/review`, never an action this skill takes.
 - **Never blocks** — no merge authority; a `red` class is a signal for the caller, not a gate this skill enforces.
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md): a fresh class is computed every run against the current diff/story by design (signals change commit to commit); no cached verdict.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): a fresh class is computed every run against the current diff/story by design (signals change commit to commit); no cached verdict.
 - **Provider-agnostic** — adding a provider is an adoption/KB change (a per-provider section in the guideline, or an adoption link), never a change to this skill (R2.13).
 - **D22** (1-line verdict + collapsed details): a project-level rendering decision the caller honors; this skill emits in that shape.
