@@ -305,8 +305,12 @@ async function driveStory(story) {
   //      but-unmerged re-run or a lost/pruned untracked log can't produce a duplicate first
   //      review). The PR-side signal is DETERMINISTIC: the first review emits a fixed hidden
   //      HTML-comment marker and the probe does an EXACT substring match on it — NOT a semantic
-  //      reading of the comment's structure — so the cheap haiku/low probe can't misclassify a
-  //      non-review comment into silencing a real first review (finding 1). Log existence
+  //      reading of the comment's structure — so the probe can't misclassify a
+  //      non-review comment into silencing a real first review (finding 1). The probe runs
+  //      at sonnet/low (not haiku): its job orchestrates a worktree + a `gh` fetch + a
+  //      substring match, and a mis-report fails OPEN toward a duplicate first review (the
+  //      very noise this story removes), so the reliability of those tool steps is worth the
+  //      small tier bump over the cheapest model. Log existence
   //      additionally seeds `cycleHasRemediation` so convergence still
   //      synthesizes+cleans even if round-0 converges immediately; a first-review-only signal
   //      (no log) does NOT seed it, so a clean round-0 adds nothing and never synths a gone log.
@@ -351,7 +355,7 @@ async function driveStory(story) {
   if (resuming) {
     const probe = await agent(
       `Story ${tag}: read-only CONTINUATION PROBE (no review, no edits). ${wtClause(story)} Report TWO booleans: (1) \`logExists\` — is the review working log \`${reviewLog}\` present in the worktree? (2) \`firstReviewPosted\` — does PR #${pr.prNumber} ALREADY carry the first-review comment? Match it DETERMINISTICALLY, not by judgment: fetch the PR comments via \`gh\` and report whether ANY comment's raw body contains the EXACT marker substring \`${firstReviewMarker}\` (the first review always emits this hidden marker verbatim; a minimized/outdated comment still counts — its raw body still contains the marker). Do NOT infer from a comment's structure or tone — it is a plain substring match. Return { logExists, firstReviewPosted }. Do NOT create, modify, or delete the log, do NOT post or minimize any comment, and do NOT run the review — this is a cheap probe to decide whether an in-flight review cycle is being CONTINUED and whether a first review was already posted.`,
-      { agentType: 'implementer', phase: 'Review', label: `probe:${tag}`, model: 'haiku', effort: 'low', schema: PROBE_SCHEMA },
+      { agentType: 'implementer', phase: 'Review', label: `probe:${tag}`, model: 'sonnet', effort: 'low', schema: PROBE_SCHEMA },
     )
     // #373 finding 4: a failed / malformed / schema-invalid probe return yields BOTH signals
     // false (via `?.x === true`), so round-0 falls through to a POSTED first review. This
@@ -382,7 +386,9 @@ async function driveStory(story) {
     // round-0 a SILENT re-review, so a PR never accrues a second first-review.
     const first = round === 0 && !isContinuation && !firstReviewPosted
     const review = await agent(
-      `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the code-review-template vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (issue + impact), \`recommendation\`; verdict ∈ {${VERDICTS}}. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG (byte-consistent with a source of truth, matches an existing convention/already-tracked deferred plan, resolves only after merge, etc.) — being outside this story's originally stated scope is NOT by itself a reason to mark something nonActionable: a real, fixable gap found during review gets fixed in this same PR unless it is large enough to warrant its own story (state that explicitly in the description if so). Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` — a specific reason that replaces the bare label: write exactly \`Deferred to #<number>\` when the finding belongs to a separate tracked story (file one via /pair-capability-write-issue if none exists yet), otherwise a concrete by-design reason (\`By convention …\` / \`Historical record\` / \`Forward-ref to unbuilt #<n>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (code-review-template structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only. Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.`} Return findings and a verdict.`,
+      `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the code-review-template vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (issue + impact), \`recommendation\`; verdict ∈ {${VERDICTS}}. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG (byte-consistent with a source of truth, matches an existing convention/already-tracked deferred plan, resolves only after merge, etc.) — being outside this story's originally stated scope is NOT by itself a reason to mark something nonActionable: a real, fixable gap found during review gets fixed in this same PR unless it is large enough to warrant its own story (state that explicitly in the description if so). Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` — a specific reason that replaces the bare label: write exactly \`Deferred to #<number>\` when the finding belongs to a separate tracked story (file one via /pair-capability-write-issue if none exists yet), otherwise a concrete by-design reason (\`By convention …\` / \`Historical record\` / \`Forward-ref to unbuilt #<n>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (code-review-template structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : prevFindings.length
+            ? `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only. Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.`
+            : `This is a RE-REVIEW on a resumed in-flight cycle (round-0 of this run carries no prior findings): do a FRESH, independent full review pass. do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only.`} Return findings and a verdict.`,
       { agentType: 'reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'xhigh', schema: REVIEW_SCHEMA },
     )
     const findings = review?.findings ?? []
@@ -391,11 +397,23 @@ async function driveStory(story) {
     // Converge once nothing actionable remains (by-design findings don't block).
     if (actionable.length === 0) break
     if (round >= MAX_FIX_ROUNDS || review?.needsHumanDecision) {
-      if (cycleHasRemediation)
+      // #373 finding 1: emit a PR-visible escalation UNLESS this run's round-0 ALREADY posted
+      // the first review (`first === true`) carrying these same findings. The gap this closes:
+      // a SILENT re-review that escalates with no log — a resumed PR whose prior first review
+      // exists but whose untracked working log was never written / was pruned (firstReviewPosted
+      // true, isContinuation false → cycleHasRemediation false, first false). Without the `!first`
+      // arm the new blocking concern surfaced ONLY in the batch return value and a later resume
+      // repeated the silent escalation. The log read is BEST-EFFORT: only a continuing cycle
+      // (cycleHasRemediation) has a log to anchor to; the no-log arm escalates from inline findings.
+      if (cycleHasRemediation || !first) {
+        const logClause = cycleHasRemediation
+          ? `Read the review log \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN `
+          : `No prior review working log exists (a re-review on a resumed PR whose log was never written or was pruned) — escalate from the inline findings directly. `
         await agent(
-          `Story ${tag}: the review<->fix loop is escalating to a human (non-convergence or a design disagreement). ${wtClause(story)} Read the review log \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN post ONE fresh comment on PR #${pr.prNumber} — written as a response to the first code-review comment — summarizing the rounds so far (per finding: what was attempted + current state) and the still-open actionable findings: ${JSON.stringify(actionable)}. Do NOT delete the log — it is the continuation anchor for this cycle. Do NOT merge.`,
+          `Story ${tag}: the review<->fix loop is escalating to a human (non-convergence or a design disagreement). ${wtClause(story)} ${logClause}post ONE fresh comment on PR #${pr.prNumber} — written as a response to the first code-review comment — summarizing${cycleHasRemediation ? ' the rounds so far (per finding: what was attempted + current state) and' : ''} the still-open actionable findings: ${JSON.stringify(actionable)}.${cycleHasRemediation ? ' Do NOT delete the log — it is the continuation anchor for this cycle.' : ''} Do NOT merge.`,
           { agentType: 'implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
         )
+      }
       return { story, prNumber: pr.prNumber, status: 'escalate', findings: actionable, acceptedFindings: accepted }
     }
 
