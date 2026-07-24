@@ -190,7 +190,7 @@ test('contract with usable schema but missing canonical vocabulary keys: prompt 
   // are absent. In practice ensure-contract.mjs's validateContract now rejects
   // such a contract before it is ever persisted — this exercises the
   // consumer-side fallback as defense in depth.
-  assert.ok(rev.prompt.includes('Critical, Major, Minor'), 'default severities fallback')
+  assert.ok(rev.prompt.includes('Critical, Major, Minor, Questions'), 'default severities fallback')
   assert.ok(rev.prompt.includes('CHANGES-REQUESTED'), 'default verdict fallback')
 })
 

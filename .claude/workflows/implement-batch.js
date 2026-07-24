@@ -99,7 +99,7 @@ const LOOSE_REVIEW_SCHEMA = {
         type: 'object',
         properties: {
           location: { type: 'string' }, // File:Line
-          severity: { type: 'string' }, // Critical | Major | Minor per template (not enum-locked)
+          severity: { type: 'string' }, // Critical | Major | Minor | Questions per template (not enum-locked)
           description: { type: 'string' }, // the issue and its impact
           recommendation: { type: 'string' }, // suggested resolution
           // true = by-design / won't-fix: fixing it would be wrong (byte-consistent
@@ -225,7 +225,7 @@ const REVIEW_SCHEMA = crContract?.schema ?? LOOSE_REVIEW_SCHEMA
 // contract at all, `crContract?.contract` is null) — never a second,
 // independently-drifting vocabulary source.
 const REVIEW_VOCAB = crContract?.contract?.vocabulary
-const DEFAULT_SEVERITIES = ['Critical', 'Major', 'Minor']
+const DEFAULT_SEVERITIES = ['Critical', 'Major', 'Minor', 'Questions']
 const DEFAULT_VERDICTS = ['APPROVED', 'CHANGES-REQUESTED', 'TECH-DEBT']
 const SEVERITIES = (REVIEW_VOCAB?.severities ?? DEFAULT_SEVERITIES).join(', ')
 const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
