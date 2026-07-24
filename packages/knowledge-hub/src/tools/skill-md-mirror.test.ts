@@ -20,6 +20,16 @@ const rootMirrorContent = (prefixed: string): string | undefined => {
   return existsSync(p) ? readFileSync(p, 'utf-8') : undefined
 }
 
+/** Runs `fn`, expecting it to throw, and returns the thrown Error's message. */
+const captureThrownMessage = (fn: () => void): string => {
+  try {
+    fn()
+  } catch (err) {
+    return (err as Error).message
+  }
+  throw new Error('expected the assertion to throw, but it did not')
+}
+
 /**
  * Data-driven mirror-equality guard: for EVERY skill dir in the dataset,
  * asserts the root `.claude/skills/<prefixed>/SKILL.md` is byte-for-byte the
@@ -118,9 +128,21 @@ describe('drift-injection: guard fails on each drift class, passes when reconcil
     expect(() => assertRootSkillMdMatches('pair-demo', expected, expected)).not.toThrow()
   })
 
-  it('FAILS on frontmatter name: drift (AC2)', () => {
+  it('FAILS on frontmatter name: drift (AC2), naming the skill + showing expected vs actual', () => {
     const drifted = expected.replace('name: pair-demo', 'name: demo')
     expect(() => assertRootSkillMdMatches('pair-demo', expected, drifted)).toThrow(/drifted/)
+
+    // AC2 explicitly requires the failure to NAME the offending skill and SHOW
+    // expected-vs-actual content — assert the message carries all of it, so a
+    // regression that dropped the skill name or the diff dump would fail here.
+    const message = captureThrownMessage(() =>
+      assertRootSkillMdMatches('pair-demo', expected, drifted),
+    )
+    expect(message).toMatch(/pair-demo/) // names the offending skill
+    expect(message).toContain('--- expected') // labelled expected dump
+    expect(message).toContain('--- actual') // labelled actual dump
+    expect(message).toContain('name: pair-demo') // expected content present
+    expect(message).toContain('name: demo') // drifted actual content present
   })
 
   it('FAILS on relative-link-depth drift (AC3)', () => {

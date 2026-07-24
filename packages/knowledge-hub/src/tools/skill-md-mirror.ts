@@ -33,11 +33,21 @@ export const SKILL_COPY_OPTS = { flatten: true, prefix: 'pair' } as const
 
 const SKILL_FILE = 'SKILL.md'
 
-// Virtual (in-memory) dataset layout mirroring the real registry paths:
-// datasetRoot/.skills -> datasetRoot/.claude/skills, same as `pair update`.
+// Virtual (in-memory) dataset layout that FAITHFULLY mirrors the real
+// `pair update` skills-registry paths, not just a convenient shallow layout.
+// The real run uses datasetRoot = baseTarget = repo root and a DEEP source
+// (`packages/knowledge-hub/dataset/.skills`), so its `sourceContentRoot`
+// (= dirname of the source-relative path) is non-trivial and the link
+// rewriter's `reRootTarget` branch executes. Seeding the source at the same
+// deep path here (rather than a shallow `/ds/.skills`, whose sourceContentRoot
+// collapses to '.') means the guard actually DRIVES that re-rooting branch, so
+// a pipeline bug isolated to `reRootTarget`/`sourceContentRoot` re-rooting also
+// fails the guard.
 const VIRTUAL_DATASET_ROOT = '/ds'
-const VIRTUAL_SRC = `${VIRTUAL_DATASET_ROOT}/.skills`
-const VIRTUAL_DEST = `${VIRTUAL_DATASET_ROOT}/.claude/skills`
+const VIRTUAL_SOURCE_REL = 'packages/knowledge-hub/dataset/.skills'
+const VIRTUAL_TARGET_REL = '.claude/skills'
+const VIRTUAL_SRC = `${VIRTUAL_DATASET_ROOT}/${VIRTUAL_SOURCE_REL}`
+const VIRTUAL_DEST = `${VIRTUAL_DATASET_ROOT}/${VIRTUAL_TARGET_REL}`
 
 /** Posix-relative path under `.skills/` → file content. */
 export type DatasetTree = Record<string, string>
@@ -109,8 +119,11 @@ export async function buildInstalledSkillMd(tree: DatasetTree): Promise<Map<stri
     fileService,
     srcPath: VIRTUAL_SRC,
     destPath: VIRTUAL_DEST,
-    source: '.skills',
-    target: '.claude/skills',
+    // Deep source + repo-root dataset root, exactly as the real `pair update`
+    // resolves them: this makes `sourceContentRoot` non-trivial so the
+    // link-rewriter's `reRootTarget` branch runs (see VIRTUAL_* note above).
+    source: VIRTUAL_SOURCE_REL,
+    target: VIRTUAL_TARGET_REL,
     datasetRoot: VIRTUAL_DATASET_ROOT,
     // Same SyncOptions the `skills` registry resolves to: default sync options
     // (behavior 'overwrite') with the registry's flatten/prefix applied.
