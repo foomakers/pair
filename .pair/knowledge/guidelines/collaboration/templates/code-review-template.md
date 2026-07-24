@@ -1,279 +1,192 @@
 # Code Review Template
 
-## Review Information
+> **Verdict-first (D22, R6.6).** This is the **native GitHub review body** submitted with the review action (Approve / Request Changes / Comment) — it is **not a separate PR comment** (decision Q5). The top of the body — classification tags, tier, cost class and the 1-line verdict — reads in **~30 seconds**; every assessment is a 1-line verdict with the breakdown collapsed in `<details>`. A reader scanning the top understands verdict, tier and cost class inside the 30-second reading budget without opening a single `<details>`.
+>
+> **Not assessed is explicit.** When the backing capability is missing or failed (`/assess-security`, `/assess-cost`, `/assess-coupling`), the section verdict reads **not assessed** — never silently omitted.
 
-**PR Number:** [#XXX]  
-**Author:** [Developer name]  
-**Reviewer:** [Your name]  
-**Review Date:** [YYYY-MM-DD]  
-**Story/Epic:** [US-XXX or EP-XXX]  
-**Review Type:** [Feature/Bug Fix/Refactor/Hotfix]  
-**Estimated Review Time:** [XX minutes]
+## Verdict
 
-## Review Summary
+`risk:<tier>` · `cost:<class>` — **<APPROVED | CHANGES-REQUESTED | TECH-DEBT>** — <one-line reason>
 
-### Overall Assessment
+<!-- Classification-changed drift note: include ONLY when the review-time tier/cost differs from the story's refinement-time classification. Raise-only per quality-model §3.2 / D17 — a drift note fires upward, never records a silent downgrade. Omit the line entirely when unchanged. -->
+> **Classification changed:** `risk:yellow` → `risk:red` — <one-line reason>
 
-- [ ] **Approved** - Ready to merge
-- [ ] **Approved with Comments** - Minor issues noted, can merge
-- [ ] **Request Changes** - Issues must be addressed before merge
-- [ ] **Comment Only** - Feedback provided, no blocking issues
+**PR:** [#XXX] · **Author:** [name] · **Reviewer:** [name] · **Date:** [YYYY-MM-DD] · **Story:** [US-XXX] · **Type:** [feature | bug | refactor | docs | config]
 
-### Key Changes Summary
+<details>
+<summary>Classification matrix — per dimension</summary>
 
-[Brief summary of what was reviewed and the main changes]
+| Dimension                   | Tier    | Source                     | Note              |
+| --------------------------- | ------- | -------------------------- | ----------------- |
+| Service/domain criticality  | [color] | [KB default / table]       | [note]            |
+| Change/diff risk            | [color] | [diff footprint]           | [note]            |
+| Business impact             | [color] | [subdomain class]          | [note]            |
+| Security relevance          | [color] | `/assess-security`         | [raise-only, D17] |
+| Coupling balance            | [color] | `/assess-coupling`         | [not assessed until #263] |
 
-### Business Value Validation
+Tier = max(assessed). Cost = highest detected signal. Review value is a **floor** (D17): confirm or raise, never lower.
 
-[Confirm the changes deliver the expected business value]
+</details>
 
-## Code Review Checklist
+## Assessments
 
-### Functionality Review
+Each assessment is a **1-line verdict**; open the `<details>` for the breakdown. An unavailable capability shows **not assessed** (the section is never dropped).
 
-- [ ] **Requirements Met** - Implementation matches acceptance criteria
-- [ ] **Business Logic** - Logic is correct and handles edge cases
-- [ ] **User Experience** - Changes improve or maintain user experience
-- [ ] **Integration** - Works correctly with existing systems
-- [ ] **Error Handling** - Appropriate error handling and recovery
-- [ ] **Performance** - No performance regressions introduced
+### Security — Input validation
 
-### Code Quality Assessment
+**Verdict:** [green | yellow | red | not assessed] — <one-line>
 
-- [ ] **Readability** - Code is clear and easy to understand
-- [ ] **Maintainability** - Code is organized and well-structured
-- [ ] **Reusability** - Common functionality properly abstracted
-- [ ] **Naming** - Variables, functions, and classes well-named
-- [ ] **Comments** - Appropriate documentation and comments
-- [ ] **Complexity** - Code complexity is reasonable and justified
+<details>
+<summary>Details</summary>
 
-### Technical Standards Compliance
+- Inputs touched by the diff and whether each is validated / sanitized.
+- Feeds from `/assess-security` (`$mode: review`).
 
-- [ ] **Style Guide** - Follows established coding standards
-- [ ] **Architecture** - Aligns with system architecture principles
-- [ ] **Design Patterns** - Uses appropriate design patterns
-- [ ] **Dependencies** - Dependencies are justified and minimal
-- [ ] **API Design** - API changes are backward compatible
-- [ ] **Database** - Database changes are optimized and indexed
+</details>
 
-## Security Review
+### Security — Output handling
 
-### Security Checklist
+**Verdict:** [green | yellow | red | not assessed] — <one-line>
 
-- [ ] **Input Validation** - All user inputs properly validated
-- [ ] **Output Encoding** - Data properly encoded for output
-- [ ] **Authentication** - Authentication mechanisms properly implemented
-- [ ] **Authorization** - Access controls correctly enforced
-- [ ] **Data Protection** - Sensitive data properly handled
-- [ ] **Dependency Security** - No known security vulnerabilities
-- [ ] **Secrets Management** - No hardcoded secrets or credentials
-- [ ] **HTTPS/TLS** - Secure communication protocols used
+<details>
+<summary>Details</summary>
 
-### Security Concerns
+- Output encoding / escaping on the touched surfaces (XSS, injection).
 
-| Concern   | Severity        | Description   | Recommendation |
-| --------- | --------------- | ------------- | -------------- |
-| [Issue 1] | High/Medium/Low | [Description] | [How to fix]   |
-| [Issue 2] | High/Medium/Low | [Description] | [How to fix]   |
+</details>
 
-## Testing Review
+### Security — Authentication
 
-### Test Coverage Assessment
+**Verdict:** [green | yellow | red | not assessed] — <one-line>
 
-- [ ] **Unit Tests** - Adequate unit test coverage (target: 80%+)
-- [ ] **Integration Tests** - Integration scenarios covered
-- [ ] **End-to-End Tests** - Critical user journeys tested
-- [ ] **Edge Cases** - Boundary conditions and edge cases tested
-- [ ] **Error Scenarios** - Error conditions and recovery tested
-- [ ] **Performance Tests** - Performance requirements validated
+<details>
+<summary>Details</summary>
 
-### Test Quality Review
+- Authentication mechanisms on the changed paths.
 
-- [ ] **Test Clarity** - Tests are clear and well-named
-- [ ] **Test Independence** - Tests don't depend on each other
-- [ ] **Test Data** - Test data is appropriate and realistic
-- [ ] **Mocking** - External dependencies properly mocked
-- [ ] **Assertions** - Assertions are specific and meaningful
-- [ ] **Test Organization** - Tests are well-organized and grouped
+</details>
 
-### Testing Feedback
+### Security — Authorization
 
-```text
-Current Coverage: XX%
-New Coverage: XX%
-Coverage Change: +/-XX%
+**Verdict:** [green | yellow | red | not assessed] — <one-line>
 
-Test Results: ✅ All Passing / ❌ X Failing
-Performance Tests: ✅ Within Limits / ⚠️ Degradation Detected
-```
+<details>
+<summary>Details</summary>
 
-## Performance Review
+- Access-control enforcement on the changed paths.
 
-### Performance Analysis
+</details>
 
-- [ ] **Response Time** - API response times within acceptable limits
-- [ ] **Memory Usage** - Memory consumption is reasonable
-- [ ] **Database Performance** - Database queries are optimized
-- [ ] **Caching** - Appropriate caching strategies implemented
-- [ ] **Resource Usage** - CPU and I/O usage is efficient
-- [ ] **Scalability** - Changes support system scalability
+### Security — Introduced vulnerabilities
 
-### Performance Metrics
+**Verdict:** [green | yellow | red | not assessed] — <N introduced, N pre-existing>
 
-| Metric           | Before | After | Change | Acceptable |
-| ---------------- | ------ | ----- | ------ | ---------- |
-| Response Time    | XXXms  | XXXms | +/-XX% | ✅/❌        |
-| Memory Usage     | XXXMb  | XXXMb | +/-XX% | ✅/❌        |
-| Database Queries | XX     | XX    | +/-XX  | ✅/❌        |
+<details>
+<summary>Details</summary>
 
-## Documentation Review
+| Severity | Category | File:location | Introduced / pre-existing | Recommendation |
+| -------- | -------- | ------------- | ------------------------- | -------------- |
+| [P0/P1]  | [OWASP]  | [file:line]   | [introduced]              | [fix]          |
 
-### Documentation Checklist
+Any **introduced** red finding drives **CHANGES-REQUESTED** (AC4). Pre-existing findings are surfaced, not blocking.
 
-- [ ] **Code Comments** - Complex logic appropriately commented
-- [ ] **API Documentation** - API changes documented
-- [ ] **README Updates** - README reflects new functionality
-- [ ] **User Documentation** - User-facing documentation updated
-- [ ] **Technical Documentation** - Architecture/design docs updated
-- [ ] **Change Log** - Changes documented in CHANGELOG
+</details>
 
-### Documentation Quality
+### Cost
 
-- [ ] **Accuracy** - Documentation matches implementation
-- [ ] **Completeness** - All new features documented
-- [ ] **Clarity** - Documentation is clear and understandable
-- [ ] **Examples** - Appropriate examples provided
-- [ ] **Up-to-date** - Existing documentation updated
+**Verdict:** `cost:<class>` — <one-line rationale>
 
-## Detailed Review Comments
+<details>
+<summary>Details</summary>
 
-### Positive Feedback
+| Signal | Class | Provider | Note |
+| ------ | ----- | -------- | ---- |
+| [signal] | [color] | [stack] | [note] |
 
-#### What's Done Well:
+Feeds from `/assess-cost` against the diff. A **red** cost class surfaces a **blocking human sign-off** requirement in the Verdict area. Capability absent → not assessed.
 
-- [Specific positive observations about code quality, approach, or implementation]
-- [Recognition of good practices, clever solutions, or improvements]
-- [Appreciation for thorough testing or documentation]
+</details>
 
-### Issues to Address
+### Architecture (Coupling)
 
-#### Critical Issues ⚠️
+**Verdict:** [green | yellow | red | not assessed] — <one-line balance verdict>
 
-#### Must fix before merge:
+<details>
+<summary>Details</summary>
 
-- [ ] **[File:Line]** - [Critical issue description and impact]
-- [ ] **[File:Line]** - [Another critical issue requiring resolution]
+- Integration strength / socio-technical distance / volatility on the integrations the diff touches.
+- Feeds from `/assess-coupling` (`$scope: diff`). Capability absent (until #263) → not assessed.
 
-#### Major Issues 🔍
+</details>
 
-#### Should fix before merge:
+## Details
 
-- [ ] **[File:Line]** - [Major issue description and suggested solution]
-- [ ] **[File:Line]** - [Another major issue with improvement recommendation]
+<details>
+<summary>Findings by severity</summary>
 
-#### Minor Issues 💡
+**Critical (must fix before merge)**
 
-#### Consider addressing:
+- [ ] **[File:Line]** — [issue + impact]
 
-- [ ] **[File:Line]** - [Minor improvement suggestion]
-- [ ] **[File:Line]** - [Code style or best practice recommendation]
+**Major (should fix before merge)**
 
-#### Questions ❓
+- [ ] **[File:Line]** — [issue + suggested fix]
 
-#### Clarification needed:
+**Minor (consider)**
 
-- [ ] **[File:Line]** - [Question about implementation approach or decision]
-- [ ] **[File:Line]** - [Request for explanation of complex logic]
+- [ ] **[File:Line]** — [suggestion]
 
-## Suggestions and Improvements
+**Questions**
 
-### Code Improvements
+- [ ] **[File:Line]** — [clarification]
 
-```diff
-[Suggested code change in diff format]
-```
+**Positive**
 
-### Architecture Suggestions
+- [what's done well]
 
-- [Suggestion for better design pattern or architectural approach]
-- [Recommendation for improved separation of concerns]
-- [Advice on better abstraction or interface design]
+</details>
 
-### Best Practices
+<details>
+<summary>Functionality & requirements (AC coverage)</summary>
 
-- [Recommendation for following established team practices]
-- [Suggestion for improved error handling patterns]
-- [Advice on better testing strategies]
+- [ ] Acceptance criteria met
+- [ ] Business logic + edge cases correct
+- [ ] Integrates with existing systems
+- [ ] Error handling appropriate
 
-## Risk Assessment
+</details>
 
-### Technical Risks
+<details>
+<summary>Testing & quality gates</summary>
 
-| Risk               | Impact       | Probability  | Mitigation            |
-| ------------------ | ------------ | ------------ | --------------------- |
-| [Technical risk]   | High/Med/Low | High/Med/Low | [Mitigation strategy] |
-| [Integration risk] | High/Med/Low | High/Med/Low | [Risk reduction plan] |
+- [ ] Adequate coverage (unit / integration / e2e as applicable)
+- [ ] Edge + error scenarios tested
+- [ ] Quality gates: [PASS | FAIL — which]
 
-### Business Risks
+</details>
 
-| Risk            | Impact       | Probability  | Mitigation             |
-| --------------- | ------------ | ------------ | ---------------------- |
-| [Business risk] | High/Med/Low | High/Med/Low | [Business mitigation]  |
-| [User impact]   | High/Med/Low | High/Med/Low | [User experience plan] |
+<details>
+<summary>Adoption compliance</summary>
 
-## Deployment Considerations
+- Degradation level: [1–4]
+- Dependencies match `tech-stack.md`; patterns match `architecture.md`
+- ADRs present for new technical decisions (missing ADR → CHANGES-REQUESTED)
 
-### Deployment Checklist
+</details>
 
-- [ ] **Database Migration** - Migration scripts reviewed and tested
-- [ ] **Configuration** - Environment configuration reviewed
-- [ ] **Feature Flags** - Feature toggles properly configured
-- [ ] **Rollback Plan** - Rollback procedure defined and tested
-- [ ] **Monitoring** - Appropriate monitoring and alerting in place
-- [ ] **Documentation** - Deployment documentation updated
+<details>
+<summary>Tech debt</summary>
 
-### Post-Deployment Monitoring
+- Items flagged by `/analyze-debt` (surfaced, never blocking on debt grounds alone).
 
-- [ ] **Error Rates** - Monitor error rate changes
-- [ ] **Performance Metrics** - Track performance indicators
-- [ ] **User Behavior** - Monitor user interaction patterns
-- [ ] **System Health** - Overall system health monitoring
+</details>
 
-## Follow-up Actions
+<details>
+<summary>Documentation</summary>
 
-### Author Action Items
+- [ ] Code / API / user / architecture docs updated as applicable.
 
-- [ ] **[Priority]** - [Action item for the author to complete]
-- [ ] **[Priority]** - [Another action item with deadline if applicable]
-- [ ] **[Priority]** - [Follow-up task or improvement]
-
-### Reviewer Follow-up
-
-- [ ] **Re-review** - Schedule re-review after changes
-- [ ] **Pair Programming** - Offer pairing session for complex issues
-- [ ] **Knowledge Sharing** - Share relevant resources or documentation
-
-### Team Actions
-
-- [ ] **Process Improvement** - Identify process improvements from this review
-- [ ] **Standards Update** - Update coding standards based on findings
-- [ ] **Training Need** - Identify training opportunities for team
-
-## Review Timeline
-
-### Review Process
-
-- **Review Started:** [YYYY-MM-DD HH:MM]
-- **Initial Review Completed:** [YYYY-MM-DD HH:MM]
-- **Changes Requested:** [YYYY-MM-DD HH:MM]
-- **Changes Made:** [YYYY-MM-DD HH:MM]
-- **Final Approval:** [YYYY-MM-DD HH:MM]
-
-### Review Effort
-
-- **Time Spent Reviewing:** [XX hours]
-- **Complexity Level:** [Low/Medium/High]
-- **Review Thoroughness:** [Quick/Standard/Deep]
+</details>
 
 ---
 

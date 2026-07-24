@@ -91,8 +91,8 @@ Follow [project management tool guidelines](../guidelines/collaboration/project-
 
 ### Phase 3: Review Report & Decision
 
-1. **Generate review report** using [code-review-template.md](../guidelines/collaboration/templates/code-review-template.md)
-2. **Post report as PR comment** with all findings by severity
+1. **Generate a verdict-first review report** using [code-review-template.md](../guidelines/collaboration/templates/code-review-template.md) — classification tags + 1-line verdict at the top (~30-second reading budget, D22), assessment sections (security / cost / architecture) collapsed
+2. **Submit the report as the native review body** (verdict = the review action: Approve / Request Changes / Comment) — no separate PR comment (Q5)
 3. **Set PR status** based on findings:
 
 #### Review Decisions:
@@ -120,7 +120,7 @@ Follow [project management tool guidelines](../guidelines/collaboration/project-
 - [ ] ADR and adoption compliance validated for all new technical decisions
 - [ ] All technical standards verified against adoption guidelines
 - [ ] Review report generated using [code-review-template.md](../guidelines/collaboration/templates/code-review-template.md)
-- [ ] Report posted as PR comment
+- [ ] Report submitted as the native review body (verdict-first, no separate comment)
 - [ ] PR status updated (pending/changes-requested/approved)
 - [ ] Review decision made
 
