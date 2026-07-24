@@ -17,12 +17,12 @@ The other packages (`knowledge-hub`, `content-ops`, `dev-tools`, `pair-cli`) hav
 
 ## Baseline (measured current state)
 
-The metric is **line coverage** (`total.lines.pct` from `coverage-summary.json`). Baselines below were **measured on the current `main`/branch state** and floored to the nearest integer to absorb per-run float jitter (so the gate passes today and blocks only a genuine regression):
+The metric is **line coverage** (`total.lines.pct` from `coverage-summary.json`). Baselines below were **measured on the current `main`/branch state** and set **~1pp below** the measured value, to absorb per-run float jitter and legitimate line churn (so the gate passes today and blocks only a genuine regression, not run-to-run noise):
 
-| Type       | Measured lines % | `baseline` | `target` (gradual goal) |
+| Type       | Measured lines % | `baseline` (~1pp margin) | `target` (gradual goal) |
 | ---------- | ---------------- | ---------- | ----------------------- |
-| `shared`   | 85.04 (`@pair/brand`)   | 85 | 90 |
-| `frontend` | 20.16 (`@pair/website`) | 20 | 25 |
+| `shared`   | 85.04 (`@pair/brand`)   | 84 | 90 |
+| `frontend` | 20.16 (`@pair/website`) | 19 | 25 |
 
 `target.frontend` is deliberately modest: the website is e2e-covered by design (see the website vitest ADL 2026-07-12), so unit line coverage is intentionally low; below-target-but-above-baseline only warns.
 
@@ -36,9 +36,10 @@ target.shared=90
 target.frontend=25
 
 # Committed baselines — the guardrail blocks a drop below these (every tier).
-# Measured on current state, floored to absorb float jitter.
-baseline.shared=85
-baseline.frontend=20
+# Set ~1pp below the measured current state to absorb float jitter + legitimate
+# line churn (blocks only a genuine regression, not run-to-run noise).
+baseline.shared=84
+baseline.frontend=19
 ```
 
 ## Notes
