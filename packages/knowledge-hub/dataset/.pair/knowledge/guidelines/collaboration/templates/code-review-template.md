@@ -8,6 +8,8 @@
 
 `risk:<tier>` · `cost:<class>` — **<APPROVED | CHANGES-REQUESTED | TECH-DEBT>** — <one-line reason>
 
+<!-- Unassessed-dimension fallback: when a dimension's backing capability is absent/failed (`/assess-cost`, `/assess-security` → risk), its chip renders `cost:n/a` / `risk:n/a` — the chip is NEVER dropped, so the verdict line always carries both `risk:` and `cost:` prefixes and stays scannable. `n/a` is a rendering placeholder, not a tag value (no `cost:not assessed` tag is ever emitted). This keeps the top-line degradation consistent with the section degradation, whose collapsed body reads "not assessed". -->
+
 <!-- Classification-changed drift note: include ONLY when the review-time tier/cost differs from the story's refinement-time classification. Raise-only per quality-model §3.2 / D17 — a drift note fires upward, never records a silent downgrade. Omit the line entirely when unchanged. -->
 > **Classification changed:** `risk:yellow` → `risk:red` — <one-line reason>
 

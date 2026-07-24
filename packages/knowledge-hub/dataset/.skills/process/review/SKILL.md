@@ -236,6 +236,7 @@ The compiled report **is the body of the native GitHub review** — the verdict 
    - **CHANGES-REQUESTED**: `event = REQUEST_CHANGES`.
    - MCP-first: `pull_request_review_write` with `method = create`, the report as `body`, and the appropriate `event`.
    - CLI fallback: `gh pr review <number> --approve|--request-changes --body-file <report>`.
+   - **Self-authored PR** (solo/self-review): GitHub rejects `APPROVE` / `REQUEST_CHANGES` on your own PR. Submit the same verdict-first report with `event = COMMENT` (`gh pr review <number> --comment --body-file <report>`) — the verdict token (APPROVED / CHANGES-REQUESTED / TECH-DEBT) still leads the body, so the decision and full report are recorded, never lost. See Graceful Degradation.
 2. **Act**: On re-review, **edit the existing review body in place** rather than posting a duplicate (idempotency).
 3. **Verify**: The native review is submitted with the verdict-first body — no separate review-comment artifact exists.
 
@@ -308,6 +309,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **/assess-security not installed**: Skip Step 2.4. The five Security sections (input validation, output handling, authentication, authorization, introduced vulnerabilities) read **not assessed** — never dropped. Does NOT HALT; a manual security read of the diff is still expected per [how-to-11](../../../.pair/knowledge/how-to/11-how-to-code-review.md).
 - **/assess-cost not installed**: Skip Step 2.5. The Cost section reads **not assessed**. Does NOT HALT.
 - **/assess-coupling not installed** (until #263): Skip Step 2.6. The Architecture (Coupling) section reads **not assessed**. Does NOT HALT.
+- **Self-authored PR (self-review)**: GitHub blocks `APPROVE` / `REQUEST_CHANGES` on your own PR, so the native verdict action is rejected for solo authors. Fall back to `event = COMMENT` (`gh pr review <number> --comment --body-file <report>`), keeping the verdict token at the head of the body — the full verdict-first report is still recorded as a review, so nothing is lost (unlike a rejected APPROVE/REQUEST_CHANGES). Does NOT HALT.
 - **Story not found**: Review proceeds with PR-only validation (no AC check). Phase 6 skips parent cascade.
 - **Code review template not found**: **HALT** — cannot produce review without template (a required dependency, not optional).
 - **PM tool not accessible**: Phase 6 merge via CLI only.

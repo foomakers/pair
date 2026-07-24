@@ -174,4 +174,11 @@ describe('code-review-template — root/dataset structural parity (#228)', () =>
   it('has the same number of section headings in root and dataset', () => {
     expect(headings(TEMPLATE_MIRROR).length).toBe(headings(TEMPLATE_DATASET).length)
   })
+
+  // Count parity proves structure, not content. The PR declares the two files an
+  // identical mirror — enforce that fully with byte-equality (analogous to the
+  // skills-guide-mirror byte-equality guard), so a body-only drift can't slip past.
+  it('is byte-identical between root and dataset (identical-mirror invariant)', () => {
+    expect(TEMPLATE_MIRROR).toBe(TEMPLATE_DATASET)
+  })
 })
