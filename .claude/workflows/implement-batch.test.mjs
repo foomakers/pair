@@ -492,11 +492,14 @@ test('#373 finding 1: the first review emits a hidden marker and the probe match
   assert.ok(!/Overall Assessment|Review Summary/.test(probe.prompt), 'probe no longer relies on a semantic template-structure reading of the comment')
 })
 
-test('#373 finding 3: both escalate-flush prompts share ONE authored convention block (supersede + out-of-band + untracked-worktree), so they cannot diverge', async () => {
-  // MAX_FIX_ROUNDS escalation (fresh-story path, cycleHasRemediation set by a prior fix round).
+test('#373 finding 3: both escalate-flush prompts carry the shared convention block, each interpolated from its OWN story/PR (single source, parameterized — not a byte-equal tautology)', async () => {
   const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
+
+  // MAX_FIX_ROUNDS escalation (fresh-story path, cycleHasRemediation set by a prior fix round).
+  // Distinct id (292) + PR (#7 from the PR phase) from the resume path below.
+  const STORY_A = { id: '292', title: 'T', branch: 'feat/#292-x' }
   const maxRoundsFlush = (await runWorkflow({
-    args: { stories: [STORY] },
+    args: { stories: [STORY_A] },
     dispatch: (prompt, opts) => {
       if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
       if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] }
@@ -508,8 +511,10 @@ test('#373 finding 3: both escalate-flush prompts share ONE authored convention 
   })).calls.find(c => c.opts.label?.startsWith('flush:'))
 
   // needsHumanDecision escalation (fixer escalates a design disagreement on a continuation).
+  // DISTINCT id (555) + PR (#88 via resume) so an interpolation regression cannot be masked.
+  const STORY_B = { id: '555', title: 'T', branch: 'feat/#555-y', prNumber: 88 }
   const designFlush = (await runWorkflow({
-    args: { stories: [RESUME_STORY] },
+    args: { stories: [STORY_B] },
     dispatch: (prompt, opts) => {
       if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
       if (opts.label?.startsWith('probe:')) return { logExists: true, firstReviewPosted: true }
@@ -520,12 +525,19 @@ test('#373 finding 3: both escalate-flush prompts share ONE authored convention 
   })).calls.find(c => c.opts.label?.startsWith('flush:'))
 
   assert.ok(maxRoundsFlush && designFlush, 'both escalation paths post a flush')
-  // The extracted convention block is byte-identical in both prompts (single source of truth).
-  const block = /SUPERSEDES the last[\s\S]*prevents a duplicate first review on the next run\)/
-  const a = maxRoundsFlush.prompt.match(block)
-  const b = designFlush.prompt.match(block)
-  assert.ok(a && b, 'both flush prompts carry the shared convention block')
-  assert.equal(a[0], b[0], 'the convention block is identical in both flush prompts (no drift)')
+
+  // Shared single-source marker present in BOTH (Part A supersede clause).
+  assert.match(maxRoundsFlush.prompt, /SUPERSEDES the last/, 'maxRounds flush carries the shared minimize/supersede block')
+  assert.match(designFlush.prompt, /SUPERSEDES the last/, 'design-disagreement flush carries the shared minimize/supersede block')
+
+  // Each flush is interpolated from its OWN story/PR — proving parameterization, not a tautology.
+  assert.match(maxRoundsFlush.prompt, /\.\.\/pair-worktrees\/292\b/, 'maxRounds flush interpolates its own worktree (292)')
+  assert.match(maxRoundsFlush.prompt, /PR #7\b/, 'maxRounds flush interpolates its own PR (#7)')
+  assert.doesNotMatch(maxRoundsFlush.prompt, /pair-worktrees\/555|PR #88\b/, 'maxRounds flush does NOT leak the other story/PR')
+
+  assert.match(designFlush.prompt, /\.\.\/pair-worktrees\/555\b/, 'design flush interpolates its own worktree (555)')
+  assert.match(designFlush.prompt, /PR #88\b/, 'design flush interpolates its own PR (#88)')
+  assert.doesNotMatch(designFlush.prompt, /pair-worktrees\/292|PR #7\b/, 'design flush does NOT leak the other story/PR')
 })
 
 test('#373 escalate ON A CONTINUATION: resume + existing log + never-converging re-review keeps the log, flushes (cycleHasRemediation seeded true), supersedes prior flush, no synth (AC5 on the resume path)', async () => {

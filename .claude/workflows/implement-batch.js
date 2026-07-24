@@ -255,8 +255,23 @@ function revWtClause(story) {
 // escalation prompts (MAX_FIX_ROUNDS + needsHumanDecision). Authored ONCE here so a future
 // change to the convention or the worktree-persistence wording is made in one place and can't
 // silently diverge between the two paths (they had already drifted slightly before this).
+// Part A — PR-comment minimize/supersede. Operates ONLY on already-posted PR comments, so it
+// does NOT depend on a working log and MUST be emitted on EVERY escalation (both arms), else a
+// stale prior flush or a prior convergence's "ready for merge" synthesis is left visible next to
+// an active escalation (finding: the no-log arm previously omitted this).
+function flushMinimize(prNumber) {
+  return `FIRST minimize / mark-outdated any prior escalate-flush comment already posted on PR #${prNumber} — each flush "summarizes the rounds so far", so a new one SUPERSEDES the last; only the newest escalate-flush should stay visible (no-op if there is none). ALSO minimize / mark-outdated any prior final-remediation/synthesis comment left by an EARLIER convergence of this SAME cycle (a converged-but-unmerged PR that was re-run, found new findings and is now escalating): its "review clean / ready for merge" verdict directly contradicts an active escalation, so it must NOT stay visible alongside this flush — mirror the convergence-synthesis path (no-op if there is none), but NEVER minimize the first-review comment.`
+}
+
+// Part B — the log/out-of-band CONVENTION + untracked-worktree-persistence note. Only meaningful
+// when a working log exists (a continuing cycle), so it is emitted only on the log-backed arms.
+function flushLogConvention(story) {
+  return `CONVENTION (state it in the comment so the human/orchestrator knows): any further rework or re-review — including manual out-of-band rounds — should be funneled into THIS same working log (append), NOT posted as standalone PR comments; the next orchestrated run on this story continues the same cycle and its convergence will synthesize ONE final remediation and minimize these intermediate comments. Note too (in the comment) that this working log is an UNTRACKED file living ONLY in the persistent authoring worktree \`../pair-worktrees/${story.id}\`, so that worktree must be PRESERVED until merge — if it is pruned/recreated the audit log is lost (this flush + the first-review comment still remain on the PR, and the PR-side first-review signal still prevents a duplicate first review on the next run).`
+}
+
+// Full convention = minimize (Part A) + log/out-of-band note (Part B), for the log-backed arms.
 function flushConvention(story, prNumber) {
-  return `FIRST minimize / mark-outdated any prior escalate-flush comment already posted on PR #${prNumber} — each flush "summarizes the rounds so far", so a new one SUPERSEDES the last; only the newest escalate-flush should stay visible (no-op if there is none). ALSO minimize / mark-outdated any prior final-remediation/synthesis comment left by an EARLIER convergence of this SAME cycle (a converged-but-unmerged PR that was re-run, found new findings and is now escalating): its "review clean / ready for merge" verdict directly contradicts an active escalation, so it must NOT stay visible alongside this flush — mirror the convergence-synthesis path (no-op if there is none), but NEVER minimize the first-review comment. CONVENTION (state it in the comment so the human/orchestrator knows): any further rework or re-review — including manual out-of-band rounds — should be funneled into THIS same working log (append), NOT posted as standalone PR comments; the next orchestrated run on this story continues the same cycle and its convergence will synthesize ONE final remediation and minimize these intermediate comments. Note too (in the comment) that this working log is an UNTRACKED file living ONLY in the persistent authoring worktree \`../pair-worktrees/${story.id}\`, so that worktree must be PRESERVED until merge — if it is pruned/recreated the audit log is lost (this flush + the first-review comment still remain on the PR, and the PR-side first-review signal still prevents a duplicate first review on the next run).`
+  return `${flushMinimize(prNumber)} ${flushLogConvention(story)}`
 }
 
 // ── Per-story lifecycle ──────────────────────────────────────────────────
@@ -340,7 +355,7 @@ async function driveStory(story) {
   // #373: the first-review comment always emits this hidden HTML-comment marker verbatim
   // (invisible in rendered markdown → no visible noise). The continuation probe detects a
   // prior first review by an EXACT substring match on this marker, NOT by a semantic reading
-  // of the comment's structure — so the cheap haiku/low probe makes no classification
+  // of the comment's structure — so the cheap sonnet/low probe makes no classification
   // judgment and can't false-positive a non-review comment into silencing a real first
   // review (the story's High-impact over-silencing risk). Minimized/outdated comments still
   // match: gh returns their raw body, which still contains the marker.
@@ -408,7 +423,7 @@ async function driveStory(story) {
       if (cycleHasRemediation || !first) {
         const logClause = cycleHasRemediation
           ? `Read the review log \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN `
-          : `No prior review working log exists (a re-review on a resumed PR whose log was never written or was pruned) — escalate from the inline findings directly. `
+          : `No prior review working log exists (a re-review on a resumed PR whose log was never written or was pruned) — escalate from the inline findings directly. ${flushMinimize(pr.prNumber)} `
         await agent(
           `Story ${tag}: the review<->fix loop is escalating to a human (non-convergence or a design disagreement). ${wtClause(story)} ${logClause}post ONE fresh comment on PR #${pr.prNumber} — written as a response to the first code-review comment — summarizing${cycleHasRemediation ? ' the rounds so far (per finding: what was attempted + current state) and' : ''} the still-open actionable findings: ${JSON.stringify(actionable)}.${cycleHasRemediation ? ' Do NOT delete the log — it is the continuation anchor for this cycle.' : ''} Do NOT merge.`,
           { agentType: 'implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
