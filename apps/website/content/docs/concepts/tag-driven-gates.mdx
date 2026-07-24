@@ -52,3 +52,8 @@ Once a PR merges to the main branch, the gate does not run again — it already 
 ## Setting it up (opt-in)
 
 Tier-aware gating is **off by default**. To turn it on, set `Pre-merge tiering: enabled` in your project's `way-of-working.md` — `setup-gates` also offers this as a guided-setup question (default **No**). With the flag enabled, `pair`'s `setup-gates` capability generates the tier-aware pipeline for your stack and wires the required status checks so a red gate blocks merge; you do not hand-write the tier logic — it is generated from the quality model's matrix, with the tag-reading step and the unconditional secret-scan job included. Leave the flag off (the default) and `setup-gates` generates the full-suite pipeline where every PR runs every suite.
+
+## Related
+
+- [Quality Gates & Configuration](/docs/reference/quality-gates-configuration) — the unifying catalog that indexes tiering and the coverage guardrail alongside every other opt-in knob, and lists what is always-on (secret scanning)
+- [Quality Model](/docs/reference/quality-model) — how classification produces the `risk:*` tier this gate reads
