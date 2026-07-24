@@ -139,6 +139,10 @@ jobs:
           require_suite e2e "$(grep -q '"test:e2e"' package.json && echo 1 || echo 0)" || exit 1
           pnpm test:e2e
 
+  # coverage: OPT-IN — this job is emitted ONLY when the project sets
+  # `Coverage guardrail: enabled` in way-of-working.md (default: absent — no job).
+  # It is a further opt-in on top of tiering, exactly like tiering is an opt-in on
+  # top of the full suite: absent the flag, `/setup-gates` does not generate it.
   coverage: # regression guardrail — runs from 🟡 (where the unit suite produces a report)
     needs: [resolve-tier, unit]
     if: ${{ needs.resolve-tier.outputs.tier == 'yellow' || needs.resolve-tier.outputs.tier == 'red' }}
@@ -149,7 +153,7 @@ jobs:
       - run: pnpm test:coverage # adopted tool emits a coverage report, e.g. coverage/coverage-summary.json
       - run: |
           source .pair/knowledge/assets/coverage-gate.sh   # reads adoption config + a number, no criteria
-          CFG=.pair/adoption/tech/coverage-baseline.md
+          CFG=.pair/adoption/tech/coverage-baseline.md      # committed by the adopter when the guardrail is enabled
           # Extract the measured % from whatever the adopted tool emitted. istanbul example:
           COV="$(jq '.total.lines.pct' coverage/coverage-summary.json 2>/dev/null)"
           # TYPE is the touched code's type (backend|frontend|shared|…): a constant for a
@@ -176,19 +180,19 @@ jobs:
 
 The `secret-scan` job is required and unconditional — it carries no tier `if:`. It is the deterministic security layer provisioned by `/pair-capability-setup-gates`; the full job template, fail-closed requirement, and allowlist mechanism live in [secret-scanning.md](../../quality-assurance/security/secret-scanning.md) (R6.5, D24). This story does not re-implement it — it only guarantees the tier-aware pipeline keeps it unconditional.
 
-## Coverage guardrail (regression gate consumed by this pipeline)
+## Coverage guardrail (opt-in regression gate consumed by this pipeline)
 
-Test coverage is guarded by a **regression gate that runs as a job inside this same pipeline** — not a second, parallel CI mechanism (AC3). It consumes the coverage report the test run already produced and the `resolve-tier` output, exactly like the other jobs; it introduces no independent orchestration and, like `tier-resolve.sh`, reads config + a number only — it carries **no classification criteria** (D18).
+The coverage guardrail is **opt-in, off by default** — the twin of tiering itself. `/pair-capability-setup-gates` generates the `coverage` job **only** when the project sets `Coverage guardrail: enabled` in [way-of-working.md](../../../../adoption/tech/way-of-working.md); absent the flag (the default), no coverage job is emitted, in either the full-suite or the tier-aware pipeline. When enabled, coverage is guarded by a **regression gate that runs as a job inside this same pipeline** — not a second, parallel CI mechanism (AC3). It consumes the coverage report the test run already produced and the `resolve-tier` output, exactly like the other jobs; it introduces no independent orchestration and, like `tier-resolve.sh`, reads config + a number only — it carries **no classification criteria** (D18).
 
 The `coverage` job (above) sources the shipped, provider-agnostic [`coverage-gate.sh`](../../../assets/coverage-gate.sh) helper and calls `coverage_gate <tier> <type> <measured-%> <config-file>`. Its policy:
 
-- **Blocks a regression, not an absolute wall.** A PR whose coverage drops **below the established baseline** fails the gate, at every tier (R7.3, epic AC3). A PR that **maintains or improves** coverage passes — the guardrail never demands a fixed X% be hit on every PR. Below the gradual *target* but still at/above the baseline only **warns**.
-- **Baseline + per-type targets live in adoption**, in `tech/coverage-baseline.md` (configurable, with KB-sensible defaults) — see [coverage-config-example.md](../../../assets/coverage-config-example.md). The gate reads whatever coverage number the adopted test tooling produced; **no specific coverage tool is mandated** (istanbul `coverage-summary.json`, LCOV, Cobertura, … — the pipeline extracts the % and passes it in). Per-type targets (`backend`/`frontend`/`shared`/…) let the gate apply the threshold matching the touched code's type (AC5).
-- **Baseline bootstrapping** (AC4): with no baseline established for a type yet — or a missing/corrupt one — the gate **establishes the current coverage as the baseline** with a warning, rather than blocking everything at 0.
+- **Blocks a regression, not an absolute wall.** A PR whose coverage drops **below the committed baseline** fails the gate, at every tier (R7.3, epic AC3). A PR that **maintains or improves** coverage passes — the guardrail never demands a fixed X% be hit on every PR. Below the gradual *target* but still at/above the baseline only **warns**.
+- **Baseline + per-type targets live in adoption**, in `tech/coverage-baseline.md` (created when the guardrail is enabled; configurable, with KB-sensible defaults) — see [coverage-config-example.md](../../../assets/coverage-config-example.md). The gate reads whatever coverage number the adopted test tooling produced; **no specific coverage tool is mandated** (istanbul `coverage-summary.json`, LCOV, Cobertura, … — the pipeline extracts the % and passes it in). Per-type targets (`backend`/`frontend`/`shared`/…) let the gate apply the threshold matching the touched code's type (AC5).
+- **Baseline is human-committed; bootstrapping is advisory** (AC4). The guardrail is live only once a human commits a `baseline.<type>=NN` line to the config. With no committed baseline for a type — or a missing/corrupt one — the gate runs in **bootstrap-only mode**: it prints the current coverage as a suggested `baseline.<type>=NN` to **stderr** and **passes** without blocking. It does **not** persist the baseline itself: a CI checkout is ephemeral, so a written baseline would be discarded and coverage could drift down run after run with the guard never firing. A human copies the suggested line into the committed config to make the guardrail live. Automated commit-back of a bootstrapped baseline is provider-specific and tracked separately — see story #372.
 - **Fail-safe on no report**: if no coverage was measured (tooling emitted nothing, or the suite did not run), the gate **blocks at 🔴 red** and **warns at lower tiers** — never a silent pass, matching this pipeline's fail-safe stance.
-- **Genuinely untestable surface** (generated files, config) is handled by the `exclude` globs in the config, handed to the coverage tool — never a blanket override that disables the guardrail.
+- **Genuinely untestable surface** (generated files, config) is recorded via the `exclude` key in the config, but that key is **applied by the adopter to their own coverage tool's config** — the gate does **not** read it and this pipeline snippet does **not** pass it. It is documentation of the exclusion intent, not a gate-enforced override.
 
-In the **default full-suite pipeline** (tiering off) the same `coverage` job runs on every PR; when tiering is enabled it is scheduled from 🟡 (where the unit suite that produces the report runs), and 🟢 PRs skip it along with the unit suite.
+When enabled, the `coverage` job is scheduled from 🟡 (where the unit suite that produces the report runs), and 🟢 PRs skip it along with the unit suite; in a full-suite (tiering-off) pipeline with the guardrail enabled, the same job runs on every PR. With the flag absent (the default) there is no coverage job in either pipeline.
 
 ## Required-check wiring (what makes red block merge)
 

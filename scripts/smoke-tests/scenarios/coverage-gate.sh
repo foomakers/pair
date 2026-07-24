@@ -8,8 +8,10 @@
 #   1. a regression below the established baseline BLOCKS (fails) at every tier;
 #   2. maintaining or improving coverage PASSES (guardrail, not an absolute wall);
 #   3. per-type targets select the threshold matching the touched code's type;
-#   4. baseline bootstrapping establishes a baseline on first run / when missing /
-#      when corrupt, warning instead of blocking everything at 0;
+#   4. baseline bootstrapping is ADVISORY on first run / when missing / when
+#      corrupt — it SUGGESTS a value on stderr and passes without persisting
+#      (a CI checkout is ephemeral; the baseline is human-committed, see #372),
+#      instead of blocking everything at 0;
 #   5. a missing coverage report fails safe: BLOCKS at red tier, WARNS at lower
 #      tiers, never a silent pass;
 #   6. the guardrail reads adoption config + a coverage number only — it carries NO
@@ -74,6 +76,14 @@ check "target unknown->default" 70 "$(target_for_type "$CFG" mystery)"
 # --- Baseline read ---
 check "baseline backend" 82.5 "$(baseline_for_type "$CFG" backend)"
 
+# --- CRLF-authored config: a trailing CR must NOT corrupt a human-committed
+# baseline (Minor fix — Windows/autocrlf checkout). baseline.backend=82.5\r must
+# read as 82.5, so 80 < 82.5 still BLOCKS instead of silently re-bootstrapping. ---
+CRLF="$TMP_DIR/coverage-crlf.md"
+printf 'target.backend=80\r\nbaseline.backend=82.5\r\n' >"$CRLF"
+check "CRLF baseline read as number"              82.5 "$(baseline_for_type "$CRLF" backend)"
+block "CRLF baseline honored (80 < 82.5 blocks)"  coverage_gate red backend 80 "$CRLF"
+
 # --- Regression blocks; maintain/improve passes (AC1/AC2) — at EVERY tier ---
 block "green: backend 80 < baseline 82.5 blocks"   coverage_gate green  backend 80    "$CFG"
 block "yellow: backend 80 < baseline 82.5 blocks"  coverage_gate yellow backend 80    "$CFG"
@@ -93,32 +103,42 @@ else
   log_fail "missing report did not warn"; FAILED=1
 fi
 
-# --- Baseline bootstrapping: no baseline established for a type (AC4) ---
+# --- Baseline bootstrapping is ADVISORY (AC4 + persistence=A): no committed
+# baseline => the gate SUGGESTS a value on stderr and PASSES, but does NOT persist
+# it (a CI checkout is ephemeral; a human commits it — see #372). ---
 BOOT="$TMP_DIR/coverage-bootstrap.md"
 cat >"$BOOT" <<'EOF'
 ```ini
 target.default=70
 ```
 EOF
-pass  "no baseline -> bootstraps, does not block" coverage_gate red backend 55 "$BOOT"
-if grep -q '^baseline.backend=55' "$BOOT"; then
-  log_succ "bootstrap wrote baseline.backend=55"
+BOOT_BEFORE="$(cat "$BOOT")"
+pass  "no baseline -> advisory pass, does not block" coverage_gate red backend 55 "$BOOT"
+if coverage_gate red backend 55 "$BOOT" 2>&1 >/dev/null | grep -q 'baseline.backend=55'; then
+  log_succ "bootstrap SUGGESTS baseline.backend=55 on stderr"
 else
-  log_fail "bootstrap did not persist baseline"; FAILED=1
+  log_fail "bootstrap did not suggest a baseline on stderr"; FAILED=1
+fi
+if [ "$(cat "$BOOT")" = "$BOOT_BEFORE" ]; then
+  log_succ "bootstrap did NOT persist to the config (advisory-only; ephemeral-safe)"
+else
+  log_fail "bootstrap wrote to the config (must be advisory-only)"; FAILED=1
 fi
 
-# --- Corrupt baseline re-establishes rather than blocking (edge case) ---
+# --- Corrupt baseline is advisory too: pass without blocking AND without
+# overwriting the (corrupt) committed value on its own (edge case). ---
 CORRUPT="$TMP_DIR/coverage-corrupt.md"
 cat >"$CORRUPT" <<'EOF'
 ```ini
 baseline.backend=not-a-number
 ```
 EOF
-pass  "corrupt baseline -> re-bootstraps, no block" coverage_gate red backend 70 "$CORRUPT"
-if grep -q '^baseline.backend=70' "$CORRUPT"; then
-  log_succ "corrupt baseline re-established to 70"
+CORRUPT_BEFORE="$(cat "$CORRUPT")"
+pass  "corrupt baseline -> advisory pass, no block" coverage_gate red backend 70 "$CORRUPT"
+if [ "$(cat "$CORRUPT")" = "$CORRUPT_BEFORE" ]; then
+  log_succ "corrupt baseline NOT overwritten by the gate (advisory-only)"
 else
-  log_fail "corrupt baseline not re-established"; FAILED=1
+  log_fail "corrupt baseline was overwritten (must be advisory-only)"; FAILED=1
 fi
 
 # --- Grep audit: the gate carries NO classification criteria (D18). It reads the
@@ -139,6 +159,33 @@ if grep -qi 'coverage guardrail' "$GUIDELINE" \
   log_succ "guideline documents the coverage guardrail (baseline/regression)"
 else
   log_fail "guideline missing coverage guardrail documentation"; FAILED=1
+fi
+
+# --- Opt-in audit (default off): the guardrail must be documented as opt-in in
+# both the guideline and the docs, and its persistence model must be advisory /
+# human-committed — the Major fix (persistence=A). ---
+if grep -qi 'opt-in' "$GUIDELINE" \
+  && grep -Eqi 'human-committed|human commits|bootstrap-only' "$GUIDELINE"; then
+  log_succ "guideline documents opt-in + advisory/human-committed persistence"
+else
+  log_fail "guideline missing opt-in / persistence documentation"; FAILED=1
+fi
+
+# --- Example audit: persistence=A (human-committed, advisory, commit-back #372)
+# and the exclude-is-adopter-applied clarification (the two remaining Minors). ---
+if grep -Eqi 'human-committed|bootstrap-only' "$EXAMPLE" \
+  && grep -q '#372' "$EXAMPLE" \
+  && grep -qi 'applied by the adopter' "$EXAMPLE"; then
+  log_succ "example documents persistence=A (#372) + exclude adopter-applied"
+else
+  log_fail "example missing persistence / exclude clarification"; FAILED=1
+fi
+
+# --- "machine-maintained" wording must be gone from the shipped assets (Major fix). ---
+if grep -qi 'machine-maintained' "$GATE" "$EXAMPLE" "$GUIDELINE"; then
+  log_fail "'machine-maintained' wording still present (should be removed)"; FAILED=1
+else
+  log_succ "no misleading 'machine-maintained' wording remains"
 fi
 
 if [ "$FAILED" -ne 0 ]; then
