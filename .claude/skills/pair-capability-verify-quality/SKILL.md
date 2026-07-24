@@ -206,6 +206,8 @@ When composed by `/pair-process-implement` or `/pair-process-review`:
 
 The composition contract is **unchanged** for callers (same PASS/FAIL result); the tier resolution is internal to this skill.
 
+> **Tier-resolution assumes the PR branch is checked out.** The no-arg `gh pr view` primary (Step 1.5) resolves the tier from the **current-branch** PR, so it only finds the PR's labels when the invocation cwd is on that PR's branch — the standalone pre-push developer flow. When `/pair-process-review` composes this skill with only `$scope` (no `$story`) from a context **not** on the PR branch, `gh pr view` returns empty and, with no `$story` fallback, resolution degrades to the fail-safe (🔴 red, full set) rather than the tier `/pair-process-review` already resolved in its classify phase. That is the **safe over-check** direction — never an under-check — and `/pair-process-review` is non-blocking on verify-quality (its classify step is the authoritative review-time tier), so the only cost is a wider-than-necessary local run, not a wrong verdict. To get exact CI parity on that path, run this skill from the checked-out PR branch (or pass `$story`). Forwarding `/pair-process-review`'s resolved tier here would remove even that over-check, but that change belongs to `/pair-process-review` (out of scope for this skill).
+
 When invoked **independently**:
 
 - Resolve the tier (Step 1.5), then run the tier's check set (or scoped gates if `$scope` is provided).
