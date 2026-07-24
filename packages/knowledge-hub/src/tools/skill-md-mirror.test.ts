@@ -8,6 +8,7 @@ import {
   buildInstalledSkillMd,
   assertRootSkillMdMatches,
   diffSkillMd,
+  SKILL_COPY_OPTS,
   type DatasetTree,
 } from './skill-md-mirror'
 
@@ -77,15 +78,54 @@ describe('per-skill SKILL.md dataset -> root mirror equality (data-driven)', () 
  * asserted and is NOT treated as drift.
  */
 describe('directional guard ignores root-only skills with no dataset source', () => {
-  it('agent-browser is present in the root mirror but absent from the dataset', () => {
+  it('the guard enumerates ONLY the dataset-derived expected set, never a root-only skill', async () => {
+    // Synthetic dataset that deliberately does NOT contain `agent-browser` (a real root-only skill).
+    const tree: DatasetTree = {
+      'capability/verify-quality/SKILL.md': '---\nname: verify-quality\n---\n\n# vq\n',
+      'next/SKILL.md': '---\nname: next\n---\n\n# next\n',
+    }
+    // Exercise the guard's actual expected-set construction (not filesystem facts):
+    const expectedDirs = datasetSkillDirs(tree).map(installedSkillDir)
+    const installed = await buildInstalledSkillMd(tree)
+
+    // The guard will assert on EXACTLY these dataset-derived, prefixed dirs — the iteration
+    // domain is dataset -> root, so a root-only skill name is structurally never checked.
+    expect(expectedDirs.slice().sort()).toEqual([...installed.keys()].sort())
+    expect(expectedDirs).toContain('pair-capability-verify-quality')
+    expect(expectedDirs).not.toContain('agent-browser')
+    expect([...installed.keys()]).not.toContain('agent-browser')
+
+    // The real root DOES carry agent-browser, yet the dataset-derived expected set above never
+    // enumerates it (proving direction) while dataset skills DO mirror into the root.
     const rootDirs = readdirSync(ROOT_CLAUDE_SKILLS, { withFileTypes: true })
       .filter(e => e.isDirectory())
       .map(e => e.name)
     expect(rootDirs).toContain('agent-browser')
+    expect(
+      datasetSkillDirs(readSkillsDatasetFromDisk(DATASET_SKILLS)).map(installedSkillDir),
+    ).not.toContain('agent-browser')
+  })
+})
 
-    const tree = readSkillsDatasetFromDisk(DATASET_SKILLS)
-    const installedFromDataset = datasetSkillDirs(tree).map(installedSkillDir)
-    expect(installedFromDataset).not.toContain('agent-browser')
+/**
+ * SKILL_COPY_OPTS is a local copy of the `skills` asset-registry knobs in
+ * apps/pair-cli/config.json (what `pair update` actually uses). Pin it so a
+ * registry change (e.g. prefix `pair` -> `p`) fails HERE — correctly attributed
+ * — instead of the guard silently computing the wrong root path and blaming the
+ * mirror / `pair update` (finding: hardcoded duplication of the config).
+ */
+describe('SKILL_COPY_OPTS stays pinned to the pair-cli skills registry', () => {
+  it('flatten/prefix/source match apps/pair-cli/config.json asset_registries.skills', () => {
+    const config = JSON.parse(
+      readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json'), 'utf-8'),
+    ) as {
+      asset_registries: { skills: { source: string; flatten: boolean; prefix: string } }
+    }
+    const registry = config.asset_registries.skills
+    expect(SKILL_COPY_OPTS.flatten).toBe(registry.flatten)
+    expect(SKILL_COPY_OPTS.prefix).toBe(registry.prefix)
+    // the guard reads the dataset from the registry's declared source dir (.skills)
+    expect(DATASET_SKILLS.endsWith(registry.source)).toBe(true)
   })
 })
 
