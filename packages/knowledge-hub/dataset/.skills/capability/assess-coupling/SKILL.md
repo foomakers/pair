@@ -76,8 +76,8 @@ For each relationship, assign **all three** per the guideline:
 
 ### Step 4: Apply the Balance Rule and Severity
 
-1. **Act**: Apply the balance rule (guideline): unbalanced = strength & distance both high (cascading changes) or both low (low cohesion); volatility is the multiplier — low volatility neutralises an imbalance, high volatility sharpens it.
-2. **Act**: Assign severity per the guideline: **critical** = unbalanced + high volatility; **significant** = unbalanced + moderate volatility, or implicit shared knowledge (duplicated rules, private-interface/table access) regardless of stated volatility; **tolerable** = unbalanced + low volatility.
+1. **Act**: Apply the **balance rule** exactly as the guideline defines it — resolve the criteria from [The Balance Rule](../../../.pair/knowledge/guidelines/architecture/design-patterns/coupling-balance.md#the-balance-rule) (combine strength and distance; volatility is the multiplier). Do not restate the rule here.
+2. **Act**: Assign severity from the guideline's [Severity](../../../.pair/knowledge/guidelines/architecture/design-patterns/coupling-balance.md#severity) table (critical / significant / tolerable) — the sole home of the criteria (D37); this skill applies it, never restates the conditions.
 3. **Act**: Rank the findings — unbalanced **and** volatile (critical/significant), plus significant implicit-knowledge findings, earn *attention* and feed the merge decision. An unbalanced-but-low-volatility relationship is **retained as a tolerable finding** for tech-debt promotion — never dropped, never blocking. Only a **balanced** relationship (or a partial <3-dimension score) is **not** a finding ("few critical beat many minor").
 4. **Verify**: every emitted finding is unbalanced on the rule and carries a severity backed by all three dimensions.
 
