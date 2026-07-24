@@ -10,7 +10,16 @@ import {
   countHowToGuides,
   buildValidRoutes,
   runAllChecks,
+  deriveSkillCommand,
+  extractFirstSentence,
+  transformCommandTokens,
+  readSkillDescription,
+  parseCatalogRow,
+  checkCatalogContent,
+  generateCatalogRows,
 } from './docs-staleness-check'
+import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
 
 // White-box unit tests for the docs-staleness gate LOGIC. Exported functions are
 // tested directly — no spawning of any CLI/script. The thin `tsx` CLI wrapper is
@@ -173,5 +182,108 @@ describe('runAllChecks (in-process, real docs tree)', () => {
     const { errors, skillCount } = runAllChecks(REPO_ROOT)
     expect(errors, errors.join('\n')).toHaveLength(0)
     expect(skillCount).toBe(40)
+  })
+})
+
+// Check 2c — catalog ROW CONTENT single-sourced from the dataset SKILL.md frontmatter.
+describe('deriveSkillCommand', () => {
+  it('non-meta skill → /pair-<category>-<name>', () => {
+    expect(deriveSkillCommand('process', 'review')).toBe('/pair-process-review')
+    expect(deriveSkillCommand('capability', 'classify')).toBe('/pair-capability-classify')
+  })
+  it('meta skill (name === category) → /pair-<name>', () => {
+    expect(deriveSkillCommand('next', 'next')).toBe('/pair-next')
+  })
+})
+
+describe('readSkillDescription', () => {
+  it('extracts the quoted description scalar from frontmatter', () => {
+    expect(readSkillDescription('---\nname: x\ndescription: "Hello world."\n---\n# x\n')).toBe(
+      'Hello world.',
+    )
+  })
+  it('returns empty string when absent', () => {
+    expect(readSkillDescription('---\nname: x\n---\n')).toBe('')
+  })
+})
+
+describe('extractFirstSentence', () => {
+  it('cuts at the first sentence-terminating period', () => {
+    expect(extractFirstSentence('First sentence. Second one.')).toBe('First sentence.')
+  })
+  it('does not cut on known abbreviations (e.g.)', () => {
+    expect(extractFirstSentence('Uses e.g. this and that. Next.')).toBe('Uses e.g. this and that.')
+  })
+  it('cuts before a $scope/$mode enumeration and ensures a closing period', () => {
+    expect(extractFirstSentence('Does a thing: `$scope: full` here.')).toBe('Does a thing.')
+  })
+})
+
+describe('transformCommandTokens', () => {
+  const cmds = new Map([['classify', '/pair-capability-classify']])
+  it('backticks + qualifies a bare /command at a word boundary', () => {
+    expect(transformCommandTokens('Composes /classify here.', cmds)).toBe(
+      'Composes `/pair-capability-classify` here.',
+    )
+  })
+  it('leaves slash-joined prose (map-a/map-b) intact', () => {
+    expect(transformCommandTokens('see map-a/map-b flow', cmds)).toBe('see map-a/map-b flow')
+  })
+})
+
+describe('parseCatalogRow', () => {
+  const catalog = '| **classify** | `/pair-capability-classify` | Applies the model. | — |'
+  it('parses the command + description cells of a row', () => {
+    expect(parseCatalogRow(catalog, 'classify')).toEqual({
+      command: '/pair-capability-classify',
+      description: 'Applies the model.',
+    })
+  })
+  it('returns null when the skill has no row', () => {
+    expect(parseCatalogRow(catalog, 'ghost')).toBeNull()
+  })
+})
+
+describe('checkCatalogContent (Check 2c)', () => {
+  const catalog = '| **classify** | `/pair-capability-classify` | Applies the model. | — |'
+  it('passes when the row matches the generated truth', () => {
+    const expected = new Map([
+      ['classify', { command: '/pair-capability-classify', description: 'Applies the model.' }],
+    ])
+    expect(checkCatalogContent(expected, catalog)).toEqual([])
+  })
+  it('flags command drift, naming the skill', () => {
+    const expected = new Map([
+      ['classify', { command: '/pair-capability-classify-X', description: 'Applies the model.' }],
+    ])
+    const errs = checkCatalogContent(expected, catalog)
+    expect(errs.some(e => e.includes('command drift') && e.includes('classify'))).toBe(true)
+  })
+  it('flags description drift, naming the skill', () => {
+    const expected = new Map([
+      ['classify', { command: '/pair-capability-classify', description: 'Something else.' }],
+    ])
+    const errs = checkCatalogContent(expected, catalog)
+    expect(errs.some(e => e.includes('description drift') && e.includes('classify'))).toBe(true)
+  })
+  it('skips a skill with no catalog row (checkCatalogSync owns presence)', () => {
+    const expected = new Map([['ghost', { command: '/pair-ghost', description: 'X.' }]])
+    expect(checkCatalogContent(expected, catalog)).toEqual([])
+  })
+})
+
+describe('generateCatalogRows + committed catalog parity (Check 2c integration)', () => {
+  const SKILLS_DIR = join(REPO_ROOT, 'packages/knowledge-hub/dataset/.skills')
+  const CATALOG = join(REPO_ROOT, 'apps/website/content/docs/reference/skills-catalog.mdx')
+  it('derives a command + non-empty description for every dataset skill', () => {
+    const rows = generateCatalogRows(SKILLS_DIR)
+    expect(rows.size).toBe(40)
+    expect(rows.get('next')?.command).toBe('/pair-next')
+    for (const [, row] of rows) expect(row.description.length).toBeGreaterThan(0)
+  })
+  it('the committed skills-catalog rows match the dataset-derived truth (no drift)', () => {
+    const rows = generateCatalogRows(SKILLS_DIR)
+    const errors = checkCatalogContent(rows, readFileSync(CATALOG, 'utf-8'))
+    expect(errors, errors.join('\n')).toHaveLength(0)
   })
 })
