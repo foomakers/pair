@@ -108,8 +108,11 @@ alone:
 
 The guiding heuristic is **few critical findings beat many minor ones**: a report
 that flags everything flags nothing. Only unbalanced-and-volatile relationships earn
-attention; a balanced relationship, or an imbalance neutralised by low volatility,
-is not a finding.
+*attention* — the critical/significant findings that feed the merge decision. An
+imbalance neutralised by low volatility does **not** vanish: it is **retained as a
+tolerable finding** and surfaced as architectural debt — never dropped, never
+blocking. What is genuinely *not a finding* is a **balanced** relationship, or any
+score resting on fewer than three dimensions.
 
 ## Rebalancing — always two-dimensional
 

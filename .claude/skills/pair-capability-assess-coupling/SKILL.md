@@ -1,6 +1,6 @@
 ---
 name: pair-capability-assess-coupling
-description: "Assesses architecture coupling against the three-dimensional model (integration strength x socio-technical distance x volatility + balance rule): `$scope: diff` — composed by /pair-process-review, emits a 1-line Architecture verdict + collapsed findings feeding the review report (D22), critical findings flagged for the review decision; `$scope: full` — one-shot codebase audit that flags only unbalanced AND volatile integrations, writes a report to .pair/working/reports/architecture/, and hands findings to the caller for tech-debt promotion via /pair-capability-write-issue. Reads real integration points (imports, calls, shared data), never structure alone; never a single-dimension decouple recommendation. Output-only for adoption; the model lives in one guideline, never in this skill (D37)."
+description: "Assesses architecture coupling against the three-dimensional model (integration strength x socio-technical distance x volatility + balance rule): `$scope: diff` — composed by /pair-process-review, emits a 1-line Architecture verdict + collapsed findings (D22), critical findings flagged for the merge decision; `$scope: full` — one-shot codebase audit written to .pair/working/reports/architecture/, handing every unbalanced integration (volatile as critical/significant, stable as tolerable) to the caller for tech-debt promotion. Reads real integration points, never structure alone; never a single-dimension decouple. Output-only; the model lives in one guideline (D37)."
 version: 0.1.0
 author: Foomakers
 ---
@@ -78,7 +78,7 @@ For each relationship, assign **all three** per the guideline:
 
 1. **Act**: Apply the balance rule (guideline): unbalanced = strength & distance both high (cascading changes) or both low (low cohesion); volatility is the multiplier — low volatility neutralises an imbalance, high volatility sharpens it.
 2. **Act**: Assign severity per the guideline: **critical** = unbalanced + high volatility; **significant** = unbalanced + moderate volatility, or implicit shared knowledge (duplicated rules, private-interface/table access) regardless of stated volatility; **tolerable** = unbalanced + low volatility.
-3. **Act**: Keep only findings worth attention — unbalanced **and** volatile (critical/significant), plus significant implicit-knowledge findings. A balanced relationship, or an imbalance neutralised by low volatility, is **not** a finding ("few critical beat many minor").
+3. **Act**: Rank the findings — unbalanced **and** volatile (critical/significant), plus significant implicit-knowledge findings, earn *attention* and feed the merge decision. An unbalanced-but-low-volatility relationship is **retained as a tolerable finding** for tech-debt promotion — never dropped, never blocking. Only a **balanced** relationship (or a partial <3-dimension score) is **not** a finding ("few critical beat many minor").
 4. **Verify**: every emitted finding is unbalanced on the rule and carries a severity backed by all three dimensions.
 
 ### Step 5: Attach a Rebalancing Proposal (two-dimensional, never "decouple")
@@ -105,7 +105,7 @@ For each relationship, assign **all three** per the guideline:
 
 ### Step 8: Write Audit Report + Hand Off Tech-Debt
 
-1. **Act**: Render the report — the mapped integrations and, flagged, only the **unbalanced AND volatile** ones, each with its three-dimensional score, severity, real integration point (file/symbol), and rebalancing proposal. Estimated volatility (no-DDD) is labelled as estimated.
+1. **Act**: Render the report — the mapped integrations and, flagged, **every unbalanced** one: unbalanced+volatile as critical/significant (attention), unbalanced+low-volatility as **tolerable** (retained, surfaced as tech-debt, never dropped), each with its three-dimensional score, severity, real integration point (file/symbol), and rebalancing proposal. Estimated volatility (no-DDD) is labelled as estimated.
 2. **Act**: Create `$output` (default `.pair/working/reports/architecture/`) if absent; write `$output/<YYYY-MM-DD>-coupling-audit.md`. This is a direct write — reports are operational artifacts (D14), the same exception `/pair-capability-assess-security` audit and `/pair-capability-design-manual-tests` use; this skill writes **no adoption content**.
 3. **Act**: Assemble a tech-debt promotion tuple **per finding** for the caller to persist via `/pair-capability-write-issue` (topical label `tech-debt`, the #224 pipeline): title, the three-dimensional rationale, severity, rebalancing proposal. This skill **creates no issues itself** — it hands the tuples to the caller.
 4. **Verify**: report written at the resolved path; tech-debt tuples assembled for handoff.
@@ -137,7 +137,7 @@ COUPLING ASSESSMENT (composed by /pair-process-review — no files written):
 COUPLING AUDIT COMPLETE:
 ├── Scope:     [whole codebase | $area]
 ├── Mapped:    [N integrations]
-├── Flagged:   [N unbalanced+volatile — N critical, N significant, N tolerable]
+├── Flagged:   [N unbalanced — N critical, N significant, N tolerable]
 ├── Report:    [.pair/working/reports/architecture/<file> — written]
 ├── Tech-debt: [N tuples handed to caller for /pair-capability-write-issue (tech-debt label, #224)]
 └── Basis:     [KB model | + subdomain/boundedcontext adoption | volatility estimated (no DDD)]
