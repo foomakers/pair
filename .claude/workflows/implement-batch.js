@@ -124,6 +124,14 @@ const FIX_SCHEMA = {
   properties: { fixed: { type: 'boolean' }, needsHumanDecision: { type: 'boolean' } },
   required: ['fixed'],
 }
+// #373: sandbox-safe existence probe of the persisted working log. The orchestrator
+// has no FS, so a cheap agent in the worktree reports whether the log is present;
+// its existence on a resume run == an in-flight cycle to CONTINUE (silent round-0).
+const PROBE_SCHEMA = {
+  type: 'object',
+  properties: { exists: { type: 'boolean' } },
+  required: ['exists'],
+}
 
 // ── Phase 0: ensure machine contracts (md template → contract.json) ────────
 // The KB markdown template is the single source of truth; the machine contract
@@ -264,24 +272,56 @@ async function driveStory(story) {
   //    never qualifies; only "fixing it would be genuinely wrong" does. See ADL
   //    decision-log/2026-07-11-agent-execution-layer.md (amended 2026-07-18).
   //
-  //    PR-COMMENT POLICY (noise reduction — the loop is ONE logical cycle):
+  //    PR-COMMENT POLICY (noise reduction — the WHOLE cycle of a PR is ONE logical cycle,
+  //    #367 in-loop + #373 across-runs): regardless of how many runs / escalations /
+  //    manual out-of-band rounds it takes to converge, a PR shows AT MOST one first-review
+  //    comment + AT MOST one final remediation comment.
   //    - The FIRST review IS posted on the PR (the independent review artifact).
   //    - The fix<->re-review rounds are NOT commented per round; each round is appended
   //      to a working log `.pair/working/reviews/<id>.md` (orchestrator-side audit; the
-  //      re-reviewer stays BLIND to it — it receives prior findings via the prompt).
+  //      re-reviewer stays BLIND to it — it receives prior findings via the prompt). The
+  //      log is the SINGLE SOURCE OF TRUTH for cycle state ACROSS runs: its existence ==
+  //      an in-flight cycle to CONTINUE, not restart.
+  //    - CONTINUATION (#373): on a resume run the log's existence makes round-0 a SILENT
+  //      re-review (no second full first-review), and seeds `remediated` so convergence
+  //      still synthesizes+cleans even if round-0 converges immediately.
   //    - At convergence ONE synthesized remediation comment is posted, written
-  //      CONTEXTUALLY to the first review (maps each finding -> resolution + accepted
-  //      dispositions + final verdict); the log is then deleted.
-  //    - On escalation the log is flushed to the PR so the human sees the state (kept).
-  //    The workflow runs in a sandbox (no FS/gh), so file + comment work is delegated to
-  //    agents running in the worktree.
+  //      CONTEXTUALLY to the first review (maps EVERY finding across ALL runs in the log
+  //      -> resolution + accepted dispositions + final verdict), AND any prior intermediate
+  //      comments (escalate-flush or manual out-of-band rounds) are minimized / marked
+  //      outdated so only first-review + this one remediation remain visible; the log is
+  //      then deleted.
+  //    - On escalation the log is KEPT and flushed to the PR as the continuation anchor.
+  //    - MANUAL OUT-OF-BAND CONVENTION (#373): if a human/orchestrator takes over rework or
+  //      re-review after an escalate, they funnel their notes into THIS same working log
+  //      (append) rather than posting standalone PR comments; the next orchestrated run
+  //      continues the cycle and its convergence synthesizes one final remediation +
+  //      minimizes the intermediates. (This is a documented CONVENTION only — standalone
+  //      reviewer/fix agents are NOT edited by #373.)
+  //    The workflow runs in a sandbox (no FS/gh), so the log existence-probe, comment
+  //    posting, and comment minimizing are all delegated to agents running in the worktree.
   const reviewLog = `.pair/working/reviews/${story.id}.md`
+  // #373: continuation detection — key off the persisted log's existence. Only meaningful
+  // on a resume run (a fresh story branches from origin/main, so no prior cycle log exists).
+  let isContinuation = false
+  if (resuming) {
+    const probe = await agent(
+      `Story ${tag}: existence check ONLY. ${wtClause(story)} Report whether the review working log \`${reviewLog}\` is present in the worktree: return { exists: true } if the file exists, else { exists: false }. Do NOT create, modify, or delete it, and do NOT run the review — this is a cheap probe to decide whether an in-flight review cycle is being CONTINUED.`,
+      { agentType: 'implementer', phase: 'Review', label: `probe:${tag}`, model: 'haiku', effort: 'low', schema: PROBE_SCHEMA },
+    )
+    isContinuation = probe?.exists === true
+  }
   let round = 0
   let prevFindings = []
   let accepted = []
-  let remediated = false
+  // #373: on a continuation seed `remediated` so an immediate round-0 convergence still
+  // posts the ONE final synthesis + deletes the log (never leaves an escalate-flush as the
+  // last word). A fresh cycle starts false, so a clean first review stands alone (AC6).
+  let remediated = isContinuation
   while (true) {
-    const first = round === 0
+    // #373: round-0 is the FIRST (posted) review ONLY on a fresh cycle. On a continuation
+    // it is a SILENT re-review that appends to the same log — no second first-review.
+    const first = round === 0 && !isContinuation
     const review = await agent(
       `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the code-review-template vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (issue + impact), \`recommendation\`; verdict ∈ {${VERDICTS}}. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG (byte-consistent with a source of truth, matches an existing convention/already-tracked deferred plan, resolves only after merge, etc.) — being outside this story's originally stated scope is NOT by itself a reason to mark something nonActionable: a real, fixable gap found during review gets fixed in this same PR unless it is large enough to warrant its own story (state that explicitly in the description if so). Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` — a specific reason that replaces the bare label: write exactly \`Deferred to #<number>\` when the finding belongs to a separate tracked story (file one via /pair-capability-write-issue if none exists yet), otherwise a concrete by-design reason (\`By convention …\` / \`Historical record\` / \`Forward-ref to unbuilt #<n>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (code-review-template structure) AND return findings + verdict.` : `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only. Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.`} Return findings and a verdict.`,
       { agentType: 'reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'xhigh', schema: REVIEW_SCHEMA },
@@ -294,7 +334,7 @@ async function driveStory(story) {
     if (round >= MAX_FIX_ROUNDS || review?.needsHumanDecision) {
       if (remediated)
         await agent(
-          `Story ${tag}: the review<->fix loop is escalating to a human (non-convergence or a design disagreement). ${wtClause(story)} Read the review log \`${reviewLog}\` and post ONE comment on PR #${pr.prNumber} — written as a response to the first code-review comment — summarizing the rounds so far (per finding: what was attempted + current state) and the still-open actionable findings: ${JSON.stringify(actionable)}. Do NOT delete the log (the human acts on it). Do NOT merge.`,
+          `Story ${tag}: the review<->fix loop is escalating to a human (non-convergence or a design disagreement). ${wtClause(story)} Read the review log \`${reviewLog}\` and post ONE comment on PR #${pr.prNumber} — written as a response to the first code-review comment — summarizing the rounds so far (per finding: what was attempted + current state) and the still-open actionable findings: ${JSON.stringify(actionable)}. Do NOT delete the log — it is the continuation anchor for this cycle. CONVENTION (state it in the comment so the human/orchestrator knows): any further rework or re-review — including manual out-of-band rounds — should be funneled into THIS same working log (append), NOT posted as standalone PR comments; the next orchestrated run on this story continues the same cycle and its convergence will synthesize ONE final remediation and minimize these intermediate comments. Do NOT merge.`,
           { agentType: 'implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
         )
       return { story, prNumber: pr.prNumber, status: 'escalate', findings: actionable, acceptedFindings: accepted }
@@ -315,19 +355,20 @@ async function driveStory(story) {
     if (fix.needsHumanDecision) {
       if (remediated)
         await agent(
-          `Story ${tag}: escalating a design disagreement to a human. ${wtClause(story)} Read \`${reviewLog}\` and post ONE comment on PR #${pr.prNumber} (response to the first review) summarizing the remediation rounds so far, the still-open findings (${JSON.stringify(prevFindings)}) and the open decision. Do NOT delete the log. Do NOT merge.`,
+          `Story ${tag}: escalating a design disagreement to a human. ${wtClause(story)} Read \`${reviewLog}\` and post ONE comment on PR #${pr.prNumber} (response to the first review) summarizing the remediation rounds so far, the still-open findings (${JSON.stringify(prevFindings)}) and the open decision. Do NOT delete the log — it is the continuation anchor for this cycle. CONVENTION (state it in the comment): any further rework/re-review — including manual out-of-band rounds — funnels into THIS same working log (append), NOT standalone PR comments; the next orchestrated run continues the cycle and its convergence synthesizes ONE final remediation and minimizes these intermediate comments. Do NOT merge.`,
           { agentType: 'implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
         )
       return { story, prNumber: pr.prNumber, status: 'escalate', findings: prevFindings, acceptedFindings: accepted }
     }
   }
 
-  // Converged. If any remediation happened, post ONE synthesized remediation comment
-  // (contextual to the first review) and delete the working log. If the first review was
-  // already clean (no remediation), the first-review comment stands alone — nothing to do.
+  // Converged. If any remediation happened (this run OR a prior run this cycle continues),
+  // post ONE synthesized remediation comment (contextual to the first review), minimize any
+  // prior intermediate comments, and delete the working log. If the first review was already
+  // clean (fresh cycle, no remediation), the first-review comment stands alone — nothing to do.
   if (remediated)
     await agent(
-      `Story ${tag} converged: the latest independent re-review found zero actionable findings. ${wtClause(story)} Read the review log \`${reviewLog}\`. Post ONE remediation comment on PR #${pr.prNumber}, written as a direct RESPONSE to the first code-review comment: map each finding from the first review (and any surfaced during remediation) to how it was resolved (with commit refs), list any accepted/non-actionable findings with their dispositions (${JSON.stringify(accepted)}), and state the final verdict (review clean). This single comment IS the durable audit of the review<->fix cycle. Then DELETE \`${reviewLog}\`. Do NOT merge.`,
+      `Story ${tag} converged: the latest independent re-review found zero actionable findings. ${wtClause(story)} Read the review log \`${reviewLog}\` — it may span MULTIPLE runs / escalations / manual rounds of this ONE cycle. Post ONE remediation comment on PR #${pr.prNumber}, written as a direct RESPONSE to the first code-review comment: map EVERY finding recorded across ALL runs in the log (plus any surfaced during remediation) to how it was resolved (with commit refs), list any accepted/non-actionable findings with their dispositions (${JSON.stringify(accepted)}), and state the final verdict (review clean). THEN minimize / mark-outdated any prior intermediate PR comments on #${pr.prNumber} — earlier escalate-flush comments and any manual out-of-band rework/re-review comments — so that ONLY the first review comment and this one final remediation remain as the visible current state (if there are none to minimize, that step is a no-op). This single comment IS the durable audit of the ENTIRE review<->fix cycle across every run. Then DELETE \`${reviewLog}\`. Do NOT merge.`,
       { agentType: 'implementer', phase: 'Review', label: `synth:${tag}`, model: 'sonnet', effort: 'medium' },
     )
 
