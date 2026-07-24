@@ -7,10 +7,15 @@ import { dirname, join, resolve } from 'path'
 // the checks the CI gate would run for that tier — reading TAGS + the KB gate
 // matrix only (D18), never classifying itself. These are content invariants on
 // the source-of-record SKILL.md (dataset), asserted the same way the rest of the
-// KB/skill corpus is tested (see quality-model.test.ts). The executable parity
-// (verify-quality resolving suites through the *same* tier-resolve.sh helper CI
-// uses) is additionally smoke-tested in scripts/smoke-tests/scenarios/tier-aware-gate.sh
-// per the gate-tooling ADL (scripts are smoke-tested, not vitest-unit-tested).
+// KB/skill corpus is tested (see quality-model.test.ts). The parity claim is
+// verified transitively, in two layers, by scripts/smoke-tests/scenarios/tier-aware-gate.sh
+// per the gate-tooling ADL (scripts are smoke-tested, not vitest-unit-tested):
+// (a) the smoke test asserts this SKILL.md *references* the shared tier-resolve.sh
+//     helper (resolve_tier / required_suites_for_tier / require_suite) — i.e. it
+//     composes the same resolver CI uses rather than re-implementing a matrix; and
+// (b) that helper's own tier/suite resolution is behaviorally *executed* there (the
+//     pre-existing #258 block). The skill is prose, so its resolution is not itself
+//     executed here — parity rests on it composing the behaviorally-tested helper.
 
 const SKILL_PATH = join(__dirname, '../../dataset/.skills/capability/verify-quality/SKILL.md')
 const SKILL = readFileSync(SKILL_PATH, 'utf-8')
