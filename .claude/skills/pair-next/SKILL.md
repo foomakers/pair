@@ -7,7 +7,7 @@ author: Foomakers
 
 # /pair-next — Project Navigator
 
-Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 39-skill catalog across all lifecycle phases.
+Analyze project state and recommend the single most relevant next skill to invoke. Covers the full 40-skill catalog across all lifecycle phases.
 
 ## Arguments (optional)
 
@@ -37,9 +37,9 @@ Keep only candidate issues that carry the given label. `--filter` takes a **sing
 
 The scope is **stateless across steps**. Every run — and every step of a multi-step run — re-queries the PM tool and **re-evaluates** `--root` and `--filter` against the **current** board state. If an issue's tags change between steps (e.g. a review raises `risk:yellow` → `risk:red`), the next step's selection reflects the change immediately. `/pair-next` never reuses a selection computed in a previous step.
 
-## Skill Catalog (39 skills)
+## Skill Catalog (40 skills)
 
-The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 9 process + 29 capability + `/pair-next` itself = 39. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
+The catalog is **derived from the installed corpus**: every skill directory under `.skills/` must appear here — 9 process + 30 capability + `/pair-next` itself = 40. If an installed skill is missing from these tables (or a row names a skill that is not installed), the catalog has drifted: update the tables, the stated counts, and the cascade rows together.
 
 ### Process Skills (9)
 
@@ -55,7 +55,7 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 | `/pair-process-implement`       | Sprint Execution   | Implement story tasks with TDD                  |
 | `/pair-process-review`          | Sprint Execution   | Review PR through structured phases             |
 
-### Capability Skills (29)
+### Capability Skills (30)
 
 | Skill                    | Category        | Description                                                                  |
 | ------------------------ | --------------- | ---------------------------------------------------------------------------- |
@@ -81,6 +81,7 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 | `/pair-capability-assess-observability`  | Assessment      | Assess observability strategy                                                |
 | `/pair-capability-assess-security`       | Assessment      | Assess security posture (review verdict + one-shot audit)                    |
 | `/pair-capability-assess-cost`           | Assessment      | Classify cost exposure (green/yellow/orange/red) at review — output-only     |
+| `/pair-capability-assess-coupling`       | Assessment      | Assess coupling balance (strength × distance × volatility) — diff verdict + full audit |
 | `/pair-capability-analyze-debt`          | Analysis        | Analyze technical debt with prioritization                                   |
 | `/pair-capability-analyze-code-quality`  | Analysis        | Analyze code quality with metrics                                            |
 | `/pair-capability-estimate`              | Planning        | Estimate story using adopted methodology                                     |
@@ -218,4 +219,4 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - This skill is read-only: it inspects state but never modifies files or PM tool data.
 - Row order encodes the tie-break (delivery proximity) — see the **Tie-break** note under the Step 3 table.
 - Re-run `/pair-next` after completing any skill to get an updated recommendation.
-- **Full catalog coverage**: nearly all of the 39 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/pair-capability-checkpoint`, rows 12-16 including `/pair-capability-grill`) or process-skill composition. `/pair-capability-publish-pr` will be reachable via `/pair-process-implement` once wired (not yet composed), so `/pair-next` cannot surface it today.
+- **Full catalog coverage**: nearly all of the 40 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/pair-capability-checkpoint`, rows 12-16 including `/pair-capability-grill`) or process-skill composition. `/pair-capability-publish-pr` will be reachable via `/pair-process-implement` once wired (not yet composed), so `/pair-next` cannot surface it today.
