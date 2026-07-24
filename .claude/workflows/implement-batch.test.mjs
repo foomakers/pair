@@ -191,7 +191,7 @@ test('contract with usable schema but missing canonical vocabulary keys: prompt 
   // such a contract before it is ever persisted — this exercises the
   // consumer-side fallback as defense in depth.
   assert.ok(rev.prompt.includes('Critical, Major, Minor'), 'default severities fallback')
-  assert.ok(rev.prompt.includes('Comment Only'), 'default verdict fallback')
+  assert.ok(rev.prompt.includes('CHANGES-REQUESTED'), 'default verdict fallback')
 })
 
 test('story.notes: scope directive threaded into implement and PR prompts', async () => {

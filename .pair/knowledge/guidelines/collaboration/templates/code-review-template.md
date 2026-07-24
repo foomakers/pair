@@ -8,7 +8,7 @@
 
 `risk:<tier>` · `cost:<class>` — **<APPROVED | CHANGES-REQUESTED | TECH-DEBT>** — <one-line reason>
 
-<!-- Unassessed-dimension fallback: when a dimension's backing capability is absent/failed (`/assess-cost`, `/assess-security` → risk), its chip renders `cost:n/a` / `risk:n/a` — the chip is NEVER dropped, so the verdict line always carries both `risk:` and `cost:` prefixes and stays scannable. `n/a` is a rendering placeholder, not a tag value (no `cost:not assessed` tag is ever emitted). This keeps the top-line degradation consistent with the section degradation, whose collapsed body reads "not assessed". -->
+<!-- Unassessed-chip fallback: the chip is NEVER dropped — the verdict line always carries both `risk:` and `cost:` prefixes and stays scannable. `cost:n/a` renders when `/assess-cost` is absent (cost is a single-source dimension). `risk:n/a` renders ONLY when `/classify` is entirely absent (no matrix at all, per skill Step 1.5) — a single unassessed dimension (Security relevance, or Coupling until #263) is EXCLUDED from `max(assessed)` (§3.1 / D21), NOT propagated to the tier, so the risk chip still shows the max of the other assessed dimensions. `n/a` is a rendering placeholder, not a tag value (no `cost:not assessed` / `risk:not assessed` tag is ever emitted). This keeps the top-line degradation consistent with the section degradation, whose collapsed body reads "not assessed". -->
 
 <!-- Classification-changed drift note: include ONLY when the review-time tier/cost differs from the story's refinement-time classification. Raise-only per quality-model §3.2 / D17 — a drift note fires upward, never records a silent downgrade. Omit the line entirely when unchanged. -->
 > **Classification changed:** `risk:yellow` → `risk:red` — <one-line reason>
@@ -90,7 +90,7 @@ Each assessment is a **1-line verdict**; open the `<details>` for the breakdown.
 | -------- | -------- | ------------- | ------------------------- | -------------- |
 | [P0/P1]  | [OWASP]  | [file:line]   | [introduced]              | [fix]          |
 
-Any **introduced** red finding drives **CHANGES-REQUESTED** (AC4). Pre-existing findings are surfaced, not blocking.
+Any **introduced** red finding drives **CHANGES-REQUESTED** (introduced-red-security rule, defined by the security-assessment story #226/AC4 — not an AC of #228). Pre-existing findings are surfaced, not blocking.
 
 </details>
 
