@@ -430,11 +430,15 @@ async function driveStory(story) {
     // its path in the return so the human / next resume can find (and clean) it.
     if (!fix) return { story, prNumber: pr.prNumber, status: 'failed-fix', reviewLog: cycleHasRemediation ? reviewLog : undefined }
     if (fix.needsHumanDecision) {
-      if (cycleHasRemediation)
-        await agent(
-          `Story ${tag}: escalating a design disagreement to a human. ${wtClause(story)} Read \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN post ONE fresh comment on PR #${pr.prNumber} (response to the first review) summarizing the remediation rounds so far, the still-open findings (${JSON.stringify(prevFindings)}) and the open decision. Do NOT delete the log — it is the continuation anchor for this cycle. Do NOT merge.`,
-          { agentType: 'implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
-        )
+      // No guard here: reaching this line means the fix round above already ran, which set
+      // `cycleHasRemediation = true` AND had the fixer append this round to the working log.
+      // So the log always exists and the flush always fires — there is no no-log arm (unlike
+      // the MAX_FIX_ROUNDS escalation at the top of the loop, whose `cycleHasRemediation || !first`
+      // guard IS load-bearing because that path can be reached on a silent round-0 re-review).
+      await agent(
+        `Story ${tag}: escalating a design disagreement to a human. ${wtClause(story)} Read \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN post ONE fresh comment on PR #${pr.prNumber} (response to the first review) summarizing the remediation rounds so far, the still-open findings (${JSON.stringify(prevFindings)}) and the open decision. Do NOT delete the log — it is the continuation anchor for this cycle. Do NOT merge.`,
+        { agentType: 'implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
+      )
       return { story, prNumber: pr.prNumber, status: 'escalate', findings: prevFindings, acceptedFindings: accepted }
     }
   }
