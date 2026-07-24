@@ -424,6 +424,66 @@ test('#373 probe queries BOTH signals and is dialed to the cheap model/effort po
   assert.ok(probe.prompt.includes('logExists') && probe.prompt.includes('firstReviewPosted'), 'probe reports both the log-existence and the PR-side first-review signal')
 })
 
+test('#373 finding 1: the first review emits a hidden marker and the probe matches it DETERMINISTICALLY (no semantic template-structure judgment)', async () => {
+  // The probe runs at haiku/low. It must NOT classify a comment by reading its structure
+  // (a false positive would silence a legitimate first review — the story's High-impact
+  // over-silencing risk). Instead the first review emits a fixed hidden marker and the probe
+  // does a plain EXACT substring match on that same marker.
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.label?.startsWith('probe:')) return { logExists: false, firstReviewPosted: false }
+    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    return { fixed: true }
+  }
+  const { calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
+  const marker = `<!-- pair:first-review #${RESUME_STORY.id} PR#${RESUME_STORY.prNumber} -->`
+
+  const first = calls.find(c => c.opts.agentType === 'reviewer')
+  assert.ok(first.prompt.includes(marker), 'the first review emits the exact hidden marker verbatim')
+  assert.ok(/HTML comment/i.test(first.prompt) && /invisible/i.test(first.prompt), 'marker is documented as an invisible HTML comment (no visible noise)')
+
+  const probe = calls.find(c => c.opts.label?.startsWith('probe:'))
+  assert.ok(probe.prompt.includes(marker), 'the probe matches the SAME marker the first review emits')
+  assert.ok(/EXACT marker substring|plain substring match|DETERMINISTICALLY/.test(probe.prompt), 'probe is a deterministic substring match, not a judgment')
+  assert.ok(!/Overall Assessment|Review Summary/.test(probe.prompt), 'probe no longer relies on a semantic template-structure reading of the comment')
+})
+
+test('#373 finding 3: both escalate-flush prompts share ONE authored convention block (supersede + out-of-band + untracked-worktree), so they cannot diverge', async () => {
+  // MAX_FIX_ROUNDS escalation (fresh-story path, remediated set by a prior fix round).
+  const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
+  const maxRoundsFlush = (await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      if (opts.label?.startsWith('flush:')) return 'flushed'
+      return { fixed: true }
+    },
+  })).calls.find(c => c.opts.label?.startsWith('flush:'))
+
+  // needsHumanDecision escalation (fixer escalates a design disagreement on a continuation).
+  const designFlush = (await runWorkflow({
+    args: { stories: [RESUME_STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.label?.startsWith('probe:')) return { logExists: true, firstReviewPosted: true }
+      if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] }
+      if (opts.label?.startsWith('flush:')) return 'flushed'
+      return { needsHumanDecision: true } // fixer escalates a design disagreement
+    },
+  })).calls.find(c => c.opts.label?.startsWith('flush:'))
+
+  assert.ok(maxRoundsFlush && designFlush, 'both escalation paths post a flush')
+  // The extracted convention block is byte-identical in both prompts (single source of truth).
+  const block = /SUPERSEDES the last[\s\S]*prevents a duplicate first review on the next run\)/
+  const a = maxRoundsFlush.prompt.match(block)
+  const b = designFlush.prompt.match(block)
+  assert.ok(a && b, 'both flush prompts carry the shared convention block')
+  assert.equal(a[0], b[0], 'the convention block is identical in both flush prompts (no drift)')
+})
+
 test('#373 escalate ON A CONTINUATION: resume + existing log + never-converging re-review keeps the log, flushes (remediated seeded true), supersedes prior flush, no synth (AC5 on the resume path)', async () => {
   const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
   const dispatch = (prompt, opts) => {

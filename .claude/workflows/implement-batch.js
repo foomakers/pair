@@ -250,6 +250,15 @@ function revWtClause(story) {
   return `ISOLATION (mandatory, read-only): NEVER switch the main checkout's branch. Inspect the code in a DETACHED throwaway worktree pinned to the PR's current pushed head: \`git worktree remove --force ${p} 2>/dev/null; git fetch origin -q; git worktree add --detach ${p} origin/${story.branch}\`, then \`cd ${p}\`. Read the code there (the untracked checkpoint is absent here — good, stay blind to it). When finished, remove it: \`git worktree remove --force ${p}\`.`
 }
 
+// #373 finding 3: the escalate-flush shared block — supersede-the-prior-flush + the manual
+// out-of-band CONVENTION + the untracked-worktree-persistence note — is identical across BOTH
+// escalation prompts (MAX_FIX_ROUNDS + needsHumanDecision). Authored ONCE here so a future
+// change to the convention or the worktree-persistence wording is made in one place and can't
+// silently diverge between the two paths (they had already drifted slightly before this).
+function flushConvention(story, prNumber) {
+  return `FIRST minimize / mark-outdated any prior escalate-flush comment already posted on PR #${prNumber} — each flush "summarizes the rounds so far", so a new one SUPERSEDES the last; only the newest escalate-flush should stay visible (no-op if there is none). CONVENTION (state it in the comment so the human/orchestrator knows): any further rework or re-review — including manual out-of-band rounds — should be funneled into THIS same working log (append), NOT posted as standalone PR comments; the next orchestrated run on this story continues the same cycle and its convergence will synthesize ONE final remediation and minimize these intermediate comments. Note too (in the comment) that this working log is an UNTRACKED file living ONLY in the persistent authoring worktree \`../pair-worktrees/${story.id}\`, so that worktree must be PRESERVED until merge — if it is pruned/recreated the audit log is lost (this flush + the first-review comment still remain on the PR, and the PR-side first-review signal still prevents a duplicate first review on the next run).`
+}
+
 // ── Per-story lifecycle ──────────────────────────────────────────────────
 async function driveStory(story) {
   const tag = `#${story.id}`
@@ -294,7 +303,11 @@ async function driveStory(story) {
   //      triggered by EITHER signal — the working log still exists (an in-flight cycle) OR a
   //      first-review comment already exists on the PR (PR-side corroboration, so a converged-
   //      but-unmerged re-run or a lost/pruned untracked log can't produce a duplicate first
-  //      review). Log existence additionally seeds `remediated` so convergence still
+  //      review). The PR-side signal is DETERMINISTIC: the first review emits a fixed hidden
+  //      HTML-comment marker and the probe does an EXACT substring match on it — NOT a semantic
+  //      reading of the comment's structure — so the cheap haiku/low probe can't misclassify a
+  //      non-review comment into silencing a real first review (finding 1). Log existence
+  //      additionally seeds `remediated` so convergence still
   //      synthesizes+cleans even if round-0 converges immediately; a first-review-only signal
   //      (no log) does NOT seed it, so a clean round-0 adds nothing and never synths a gone log.
   //    - At convergence ONE synthesized remediation comment is posted, written
@@ -315,18 +328,35 @@ async function driveStory(story) {
   //    The workflow runs in a sandbox (no FS/gh), so the log existence-probe, comment
   //    posting, and comment minimizing are all delegated to agents running in the worktree.
   const reviewLog = `.pair/working/reviews/${story.id}.md`
+  // #373: the first-review comment always emits this hidden HTML-comment marker verbatim
+  // (invisible in rendered markdown → no visible noise). The continuation probe detects a
+  // prior first review by an EXACT substring match on this marker, NOT by a semantic reading
+  // of the comment's structure — so the cheap haiku/low probe makes no classification
+  // judgment and can't false-positive a non-review comment into silencing a real first
+  // review (the story's High-impact over-silencing risk). Minimized/outdated comments still
+  // match: gh returns their raw body, which still contains the marker.
+  const firstReviewMarker = `<!-- pair:first-review #${story.id} PR#${pr.prNumber} -->`
   // #373: continuation detection. Two signals, only meaningful on a resume run (a fresh
   // story branches from origin/main, so neither a prior cycle log nor a prior first-review
   // comment exists): `logExists` = an in-flight cycle to continue; `firstReviewPosted` =
-  // PR-side corroboration that a first review already went out (so we never post a second
-  // one even if the untracked log is gone — findings 1 & 3).
+  // PR-side corroboration (deterministic marker match) that a first review already went out
+  // (so we never post a second one even if the untracked log is gone — findings 1 & 3).
   let isContinuation = false
   let firstReviewPosted = false
   if (resuming) {
     const probe = await agent(
-      `Story ${tag}: read-only CONTINUATION PROBE (no review, no edits). ${wtClause(story)} Report TWO booleans: (1) \`logExists\` — is the review working log \`${reviewLog}\` present in the worktree? (2) \`firstReviewPosted\` — does PR #${pr.prNumber} ALREADY have a first-review comment on it (a code-review report following the code-review-template: look via \`gh\` for an existing PR comment containing the review report's "Overall Assessment" / "Review Summary" structure; a minimized/outdated one still counts)? Return { logExists, firstReviewPosted }. Do NOT create, modify, or delete the log, do NOT post or minimize any comment, and do NOT run the review — this is a cheap probe to decide whether an in-flight review cycle is being CONTINUED and whether a first review was already posted.`,
+      `Story ${tag}: read-only CONTINUATION PROBE (no review, no edits). ${wtClause(story)} Report TWO booleans: (1) \`logExists\` — is the review working log \`${reviewLog}\` present in the worktree? (2) \`firstReviewPosted\` — does PR #${pr.prNumber} ALREADY carry the first-review comment? Match it DETERMINISTICALLY, not by judgment: fetch the PR comments via \`gh\` and report whether ANY comment's raw body contains the EXACT marker substring \`${firstReviewMarker}\` (the first review always emits this hidden marker verbatim; a minimized/outdated comment still counts — its raw body still contains the marker). Do NOT infer from a comment's structure or tone — it is a plain substring match. Return { logExists, firstReviewPosted }. Do NOT create, modify, or delete the log, do NOT post or minimize any comment, and do NOT run the review — this is a cheap probe to decide whether an in-flight review cycle is being CONTINUED and whether a first review was already posted.`,
       { agentType: 'implementer', phase: 'Review', label: `probe:${tag}`, model: 'haiku', effort: 'low', schema: PROBE_SCHEMA },
     )
+    // #373 finding 4: a failed / malformed / schema-invalid probe return yields BOTH signals
+    // false (via `?.x === true`), so round-0 falls through to a POSTED first review. This
+    // fail-open direction is deliberate: degrade toward VISIBILITY (post a review a human can
+    // see) rather than fail-silent (suppress it). The dangerous case — a genuine continuation
+    // where a total probe failure re-posts a first review — is low-probability (requires an
+    // agent/schema failure on a resume of an in-flight cycle) and self-announcing (a visible
+    // duplicate is noticed and pruned), whereas silent over-suppression of a real review is
+    // not. The deterministic marker above removes the misclassification failure mode; only a
+    // hard probe failure reaches this fallback.
     isContinuation = probe?.logExists === true
     firstReviewPosted = probe?.firstReviewPosted === true
   }
@@ -346,7 +376,7 @@ async function driveStory(story) {
     // round-0 a SILENT re-review, so a PR never accrues a second first-review.
     const first = round === 0 && !isContinuation && !firstReviewPosted
     const review = await agent(
-      `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the code-review-template vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (issue + impact), \`recommendation\`; verdict ∈ {${VERDICTS}}. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG (byte-consistent with a source of truth, matches an existing convention/already-tracked deferred plan, resolves only after merge, etc.) — being outside this story's originally stated scope is NOT by itself a reason to mark something nonActionable: a real, fixable gap found during review gets fixed in this same PR unless it is large enough to warrant its own story (state that explicitly in the description if so). Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` — a specific reason that replaces the bare label: write exactly \`Deferred to #<number>\` when the finding belongs to a separate tracked story (file one via /pair-capability-write-issue if none exists yet), otherwise a concrete by-design reason (\`By convention …\` / \`Historical record\` / \`Forward-ref to unbuilt #<n>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (code-review-template structure) AND return findings + verdict.` : `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only. Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.`} Return findings and a verdict.`,
+      `Independently review PR #${pr.prNumber} for story ${tag}, following /pair-process-review. ${revWtClause(story)} Review ONLY from the story's acceptance criteria, the PR diff+description, and the code. Do NOT read .pair/working/. Report EVERY finding regardless of severity (including minor/nit), using the code-review-template vocabulary: each finding = \`location\` (File:Line), \`severity\` ∈ {${SEVERITIES}}, \`description\` (issue + impact), \`recommendation\`; verdict ∈ {${VERDICTS}}. Set \`nonActionable: true\` ONLY if fixing it would be genuinely WRONG (byte-consistent with a source of truth, matches an existing convention/already-tracked deferred plan, resolves only after merge, etc.) — being outside this story's originally stated scope is NOT by itself a reason to mark something nonActionable: a real, fixable gap found during review gets fixed in this same PR unless it is large enough to warrant its own story (state that explicitly in the description if so). Whenever you set \`nonActionable: true\`, ALSO set \`disposition\` — a specific reason that replaces the bare label: write exactly \`Deferred to #<number>\` when the finding belongs to a separate tracked story (file one via /pair-capability-write-issue if none exists yet), otherwise a concrete by-design reason (\`By convention …\` / \`Historical record\` / \`Forward-ref to unbuilt #<n>\` / \`Resolves after merge\`); never leave "non-actionable" as the only explanation. ${first ? `This is the FIRST review: POST your full review report as a PR comment on #${pr.prNumber} (code-review-template structure), and include the marker line \`${firstReviewMarker}\` VERBATIM as the first line of the comment body — it is an HTML comment (invisible in the rendered markdown, so no visible noise) that lets a later resume detect this first review by an EXACT substring match rather than a semantic reading (finding 1). Then return findings + verdict.` : `This is a RE-REVIEW: do NOT post any PR comment (the orchestrator synthesizes the cycle at the end). Return findings + verdict only. Verify these prior findings were genuinely resolved: ${JSON.stringify(prevFindings)}.`} Return findings and a verdict.`,
       { agentType: 'reviewer', phase: 'Review', label: `rev:${tag} r${round}`, effort: 'xhigh', schema: REVIEW_SCHEMA },
     )
     const findings = review?.findings ?? []
@@ -357,7 +387,7 @@ async function driveStory(story) {
     if (round >= MAX_FIX_ROUNDS || review?.needsHumanDecision) {
       if (remediated)
         await agent(
-          `Story ${tag}: the review<->fix loop is escalating to a human (non-convergence or a design disagreement). ${wtClause(story)} Read the review log \`${reviewLog}\`. FIRST minimize / mark-outdated any prior escalate-flush comment you (a previous run) already posted on PR #${pr.prNumber} — each flush "summarizes the rounds so far", so a new one SUPERSEDES the last; only the newest escalate-flush should stay visible (no-op if there is none). THEN post ONE fresh comment on PR #${pr.prNumber} — written as a response to the first code-review comment — summarizing the rounds so far (per finding: what was attempted + current state) and the still-open actionable findings: ${JSON.stringify(actionable)}. Do NOT delete the log — it is the continuation anchor for this cycle. CONVENTION (state it in the comment so the human/orchestrator knows): any further rework or re-review — including manual out-of-band rounds — should be funneled into THIS same working log (append), NOT posted as standalone PR comments; the next orchestrated run on this story continues the same cycle and its convergence will synthesize ONE final remediation and minimize these intermediate comments. Note too (in the comment) that this working log is an UNTRACKED file living ONLY in the persistent authoring worktree \`../pair-worktrees/${story.id}\`, so that worktree must be PRESERVED until merge — if it is pruned/recreated the audit log is lost (this flush + the first-review comment still remain on the PR, and the PR-side first-review signal still prevents a duplicate first review on the next run). Do NOT merge.`,
+          `Story ${tag}: the review<->fix loop is escalating to a human (non-convergence or a design disagreement). ${wtClause(story)} Read the review log \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN post ONE fresh comment on PR #${pr.prNumber} — written as a response to the first code-review comment — summarizing the rounds so far (per finding: what was attempted + current state) and the still-open actionable findings: ${JSON.stringify(actionable)}. Do NOT delete the log — it is the continuation anchor for this cycle. Do NOT merge.`,
           { agentType: 'implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
         )
       return { story, prNumber: pr.prNumber, status: 'escalate', findings: actionable, acceptedFindings: accepted }
@@ -378,7 +408,7 @@ async function driveStory(story) {
     if (fix.needsHumanDecision) {
       if (remediated)
         await agent(
-          `Story ${tag}: escalating a design disagreement to a human. ${wtClause(story)} Read \`${reviewLog}\`. FIRST minimize / mark-outdated any prior escalate-flush comment already posted on PR #${pr.prNumber} — a new flush SUPERSEDES the previous one, so only the newest stays visible (no-op if there is none). THEN post ONE fresh comment on PR #${pr.prNumber} (response to the first review) summarizing the remediation rounds so far, the still-open findings (${JSON.stringify(prevFindings)}) and the open decision. Do NOT delete the log — it is the continuation anchor for this cycle. CONVENTION (state it in the comment): any further rework/re-review — including manual out-of-band rounds — funnels into THIS same working log (append), NOT standalone PR comments; the next orchestrated run continues the cycle and its convergence synthesizes ONE final remediation and minimizes these intermediate comments. Note too (in the comment) that this working log is an UNTRACKED file living ONLY in the persistent authoring worktree \`../pair-worktrees/${story.id}\`, so that worktree must be PRESERVED until merge — if it is pruned/recreated the audit log is lost (this flush + the first-review comment still remain on the PR, and the PR-side first-review signal still prevents a duplicate first review on the next run). Do NOT merge.`,
+          `Story ${tag}: escalating a design disagreement to a human. ${wtClause(story)} Read \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN post ONE fresh comment on PR #${pr.prNumber} (response to the first review) summarizing the remediation rounds so far, the still-open findings (${JSON.stringify(prevFindings)}) and the open decision. Do NOT delete the log — it is the continuation anchor for this cycle. Do NOT merge.`,
           { agentType: 'implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
         )
       return { story, prNumber: pr.prNumber, status: 'escalate', findings: prevFindings, acceptedFindings: accepted }
