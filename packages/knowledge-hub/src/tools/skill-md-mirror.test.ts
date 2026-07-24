@@ -7,6 +7,7 @@ import {
   installedSkillDir,
   buildInstalledSkillMd,
   assertRootSkillMdMatches,
+  diffSkillMd,
   type DatasetTree,
 } from './skill-md-mirror'
 
@@ -89,6 +90,52 @@ describe('directional guard ignores root-only skills with no dataset source', ()
 })
 
 /**
+ * `diffSkillMd` unit coverage: the compact line-level diff behind the drift
+ * failure message (finding-2 remediation — replaces the full two-file dump).
+ * Exercises each edit class directly so a large SKILL.md failure stays readable.
+ */
+describe('diffSkillMd — compact line-level diff', () => {
+  it('shows a changed line as a - expected / + actual pair with surrounding context', () => {
+    const expected = 'a\nb\nc\nd\ne'
+    const actual = 'a\nb\nX\nd\ne'
+    const out = diffSkillMd(expected, actual)
+    expect(out).toContain('-c')
+    expect(out).toContain('+X')
+    expect(out).toContain(' b') // unchanged context line kept
+    expect(out).toContain(' d')
+  })
+
+  it('shows pure insertions as + lines (actual longer than expected)', () => {
+    const out = diffSkillMd('a\nb', 'a\nb\nc\nd')
+    expect(out).toContain('+c')
+    expect(out).toContain('+d')
+    expect(out).not.toContain('-')
+  })
+
+  it('shows pure deletions as - lines (expected longer than actual)', () => {
+    const out = diffSkillMd('a\nb\nc\nd', 'a\nb')
+    expect(out).toContain('-c')
+    expect(out).toContain('-d')
+    expect(out).not.toContain('+')
+  })
+
+  it('collapses long runs of unchanged lines with an ellipsis marker', () => {
+    const many = Array.from({ length: 30 }, (_, i) => `line${i}`).join('\n')
+    const drifted = many.replace('line15', 'CHANGED')
+    const out = diffSkillMd(many, drifted)
+    expect(out).toContain('-line15')
+    expect(out).toContain('+CHANGED')
+    expect(out).toContain('…') // distant unchanged lines elided
+    expect(out).not.toContain('line0\n') // far-from-change context dropped
+  })
+
+  it('returns no diff lines for identical input', () => {
+    // identical input has no changed lines, so nothing is kept — only elision.
+    expect(diffSkillMd('a\nb\nc', 'a\nb\nc').replace(/…/g, '').trim()).toBe('')
+  })
+})
+
+/**
  * Drift-injection: proves the guard FAILS on each drift class the copy
  * transform covers, then PASSES once reconciled. A synthetic mini dataset is
  * run through the SAME real pipeline; the transformed output is then corrupted
@@ -139,10 +186,10 @@ describe('drift-injection: guard fails on each drift class, passes when reconcil
       assertRootSkillMdMatches('pair-demo', expected, drifted),
     )
     expect(message).toMatch(/pair-demo/) // names the offending skill
-    expect(message).toContain('--- expected') // labelled expected dump
-    expect(message).toContain('--- actual') // labelled actual dump
-    expect(message).toContain('name: pair-demo') // expected content present
-    expect(message).toContain('name: demo') // drifted actual content present
+    expect(message).toContain('--- expected') // labelled expected side of the diff
+    expect(message).toContain('+++ actual') // labelled actual side of the diff
+    expect(message).toContain('-name: pair-demo') // expected content shown as a removed diff line
+    expect(message).toContain('+name: demo') // drifted actual content shown as an added diff line
   })
 
   it('FAILS on relative-link-depth drift (AC3)', () => {

@@ -18,6 +18,12 @@
  * Directional (dataset → root): the map is keyed by dataset skill dirs, so a
  * root-only skill with no dataset source (e.g. `agent-browser`) is never
  * asserted — it is not drift.
+ *
+ * SCOPE (by design, per #352): the guard asserts equality for each skill's
+ * `SKILL.md` ONLY. Other artifacts a skill dir contributes through the same
+ * `pair update` transform — sub-docs (e.g. process-review's `merge-and-cascade.md`)
+ * and `references/*` — are NOT asserted here; extending the invariant to all
+ * root skill artifacts is tracked as follow-up tech-debt story #384.
  */
 import { readdirSync, readFileSync } from 'fs'
 import { join, relative, sep } from 'path'
@@ -81,6 +87,12 @@ export function readSkillsDatasetFromDisk(skillsDir: string): DatasetTree {
  * `SKILL.md` (`capability/<name>`, `process/<name>`, or the bare `next`),
  * sorted for stable `it.each` ordering. Data-driven: adding a skill to the
  * dataset extends this list with no test edit (AC5).
+ *
+ * Deliberately NOT reusing `collectSkillDirs` from the sibling
+ * `skills-guide-mirror.ts`: that one re-walks the disk and returns ANY dir
+ * holding at least one file, whereas this one enumerates only SKILL.md-bearing
+ * dirs off the already-read in-memory `tree` — no second disk walk, and a
+ * `references/`-only subdir is never mistaken for a skill's own directory.
  */
 export function datasetSkillDirs(tree: DatasetTree): string[] {
   const dirs = new Set<string>()
@@ -138,6 +150,81 @@ export async function buildInstalledSkillMd(tree: DatasetTree): Promise<Map<stri
   return installed
 }
 
+type DiffEdit = { tag: ' ' | '-' | '+'; line: string }
+
+/**
+ * Minimal line edit-script for `a` → `b` via an LCS table (suffix form):
+ * ` ` unchanged, `-` only in `a` (expected), `+` only in `b` (actual).
+ */
+function lineEditScript(a: string[], b: string[]): DiffEdit[] {
+  const m = a.length
+  const n = b.length
+  const lcs: number[][] = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0))
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      lcs[i]![j] = a[i] === b[j] ? lcs[i + 1]![j + 1]! + 1 : Math.max(lcs[i + 1]![j]!, lcs[i]![j + 1]!)
+    }
+  }
+
+  const edits: DiffEdit[] = []
+  let i = 0
+  let j = 0
+  while (i < m && j < n) {
+    // i < m and j < n guarantee both are defined (noUncheckedIndexedAccess).
+    const ai = a[i]!
+    const bj = b[j]!
+    if (ai === bj) {
+      edits.push({ tag: ' ', line: ai })
+      i++
+      j++
+    } else if (lcs[i + 1]![j]! >= lcs[i]![j + 1]!) {
+      edits.push({ tag: '-', line: ai })
+      i++
+    } else {
+      edits.push({ tag: '+', line: bj })
+      j++
+    }
+  }
+  for (const line of a.slice(i)) edits.push({ tag: '-', line })
+  for (const line of b.slice(j)) edits.push({ tag: '+', line })
+  return edits
+}
+
+/**
+ * Compact line-level diff of `expected` vs `actual`, showing only the changed
+ * lines with a little surrounding context rather than dumping both files in
+ * full — keeps a drift failure readable for a large SKILL.md instead of
+ * flooding CI with two complete copies. `-` lines are `expected` (dataset →
+ * real transform), `+` lines are `actual` (root mirror on disk); collapsed
+ * runs of unchanged context are shown as `  …`.
+ */
+export function diffSkillMd(expected: string, actual: string): string {
+  const edits = lineEditScript(expected.split('\n'), actual.split('\n'))
+
+  // Keep only changed lines plus a little context around each; collapse the rest.
+  const CONTEXT = 2
+  const keep = new Array<boolean>(edits.length).fill(false)
+  edits.forEach((e, idx) => {
+    if (e.tag === ' ') return
+    for (let k = Math.max(0, idx - CONTEXT); k <= Math.min(edits.length - 1, idx + CONTEXT); k++) {
+      keep[k] = true
+    }
+  })
+
+  const out: string[] = []
+  let elided = false
+  edits.forEach((e, idx) => {
+    if (keep[idx]) {
+      out.push(`${e.tag}${e.line}`)
+      elided = false
+    } else if (!elided) {
+      out.push('  …')
+      elided = true
+    }
+  })
+  return out.join('\n')
+}
+
 /**
  * Asserts the root mirror `SKILL.md` equals the real pipeline transform.
  * Throws LOUDLY — naming the skill and giving the `pair update` regenerate
@@ -145,6 +232,10 @@ export async function buildInstalledSkillMd(tree: DatasetTree): Promise<Map<stri
  * the guard's assertion helper, kept in a tested production module (per the
  * "gate & tooling code in tested modules" ADL) so both the real on-disk guard
  * and the drift-injection tests drive the same code path.
+ *
+ * On drift the message carries a compact line-level diff (via `diffSkillMd`)
+ * rather than a full dump of both files, so the expected-vs-actual view AC2
+ * requires stays readable even for a large SKILL.md.
  *
  * `actual` is `undefined` iff the root mirror file does not exist.
  */
@@ -163,8 +254,9 @@ export function assertRootSkillMdMatches(
     throw new Error(
       `Root mirror SKILL.md for skill '${prefixed}' has drifted from its dataset source ` +
         `transform. Run 'pair update' to regenerate .claude/skills/${prefixed}/SKILL.md.\n` +
-        `--- expected (dataset → real transform) ---\n${expected}\n` +
-        `--- actual (root mirror on disk) ---\n${actual}`,
+        `--- expected (dataset → real transform)\n` +
+        `+++ actual (root mirror on disk)\n` +
+        `${diffSkillMd(expected, actual)}`,
     )
   }
 }
