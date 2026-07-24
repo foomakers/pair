@@ -128,7 +128,7 @@ const FIX_SCHEMA = {
 // agent in the worktree reports two signals used to decide whether round-0 must post
 // a fresh first review:
 //   - logExists: the persisted working log is present → an in-flight cycle to CONTINUE
-//     (silent round-0 + seeds `remediated` so convergence still synthesizes+cleans).
+//     (silent round-0 + seeds `cycleHasRemediation` so convergence still synthesizes+cleans).
 //   - firstReviewPosted: a first-review comment already exists on the PR (PR-side
 //     corroboration). Guards the double-first-review the log-only signal can miss when
 //     the log is GONE but a first review was already posted — e.g. a converged-but-not-
@@ -307,13 +307,14 @@ async function driveStory(story) {
   //      HTML-comment marker and the probe does an EXACT substring match on it — NOT a semantic
   //      reading of the comment's structure — so the cheap haiku/low probe can't misclassify a
   //      non-review comment into silencing a real first review (finding 1). Log existence
-  //      additionally seeds `remediated` so convergence still
+  //      additionally seeds `cycleHasRemediation` so convergence still
   //      synthesizes+cleans even if round-0 converges immediately; a first-review-only signal
   //      (no log) does NOT seed it, so a clean round-0 adds nothing and never synths a gone log.
   //    - At convergence ONE synthesized remediation comment is posted, written
   //      CONTEXTUALLY to the first review (maps EVERY finding across ALL runs in the log
   //      -> resolution + accepted dispositions + final verdict), AND any prior intermediate
-  //      comments (escalate-flush or manual out-of-band rounds) are minimized / marked
+  //      comments (escalate-flush, manual out-of-band rounds, OR a prior convergence's own
+  //      final-remediation comment on a re-run→re-converge cycle) are minimized / marked
   //      outdated so only first-review + this one remediation remain visible; the log is
   //      then deleted.
   //    - On escalation the log is KEPT and flushed to the PR as the continuation anchor. A
@@ -363,13 +364,14 @@ async function driveStory(story) {
   let round = 0
   let prevFindings = []
   let accepted = []
-  // #373: on a continuation (log present) seed `remediated` so an immediate round-0
-  // convergence still posts the ONE final synthesis + deletes the log (never leaves an
-  // escalate-flush as the last word). A converged-but-unmerged re-run has NO log
-  // (firstReviewPosted true, isContinuation false) → remediated stays false, so a clean
-  // round-0 adds nothing and never tries to synth a deleted log. A fresh cycle starts
-  // false, so a clean first review stands alone (AC6).
-  let remediated = isContinuation
+  // #373: `cycleHasRemediation` tracks whether THIS CYCLE (across all runs it spans) has
+  // any remediation state to synthesize — not merely whether a fix happened this run. On a
+  // continuation (log present) it is seeded true so an immediate round-0 convergence still
+  // posts the ONE final synthesis + deletes the log (never leaves an escalate-flush as the
+  // last word). A converged-but-unmerged re-run has NO log (firstReviewPosted true,
+  // isContinuation false) → stays false, so a clean round-0 adds nothing and never tries to
+  // synth a deleted log. A fresh cycle starts false, so a clean first review stands alone (AC6).
+  let cycleHasRemediation = isContinuation
   while (true) {
     // #373: round-0 is the FIRST (posted) review ONLY on a genuinely fresh cycle — no
     // in-flight log AND no first-review comment already on the PR. Either signal makes
@@ -385,7 +387,7 @@ async function driveStory(story) {
     // Converge once nothing actionable remains (by-design findings don't block).
     if (actionable.length === 0) break
     if (round >= MAX_FIX_ROUNDS || review?.needsHumanDecision) {
-      if (remediated)
+      if (cycleHasRemediation)
         await agent(
           `Story ${tag}: the review<->fix loop is escalating to a human (non-convergence or a design disagreement). ${wtClause(story)} Read the review log \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN post ONE fresh comment on PR #${pr.prNumber} — written as a response to the first code-review comment — summarizing the rounds so far (per finding: what was attempted + current state) and the still-open actionable findings: ${JSON.stringify(actionable)}. Do NOT delete the log — it is the continuation anchor for this cycle. Do NOT merge.`,
           { agentType: 'implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
@@ -395,7 +397,7 @@ async function driveStory(story) {
 
     round++
     prevFindings = actionable
-    remediated = true
+    cycleHasRemediation = true
     // FIX — implementer resumes checkpoint (if present) + resolves actionable findings.
     // Logs the round to the working review log INSTEAD of posting a per-round PR comment.
     const fix = await agent(
@@ -404,9 +406,9 @@ async function driveStory(story) {
     )
     // failed-fix: the fixer died mid-round; a partial working log may exist. Surface
     // its path in the return so the human / next resume can find (and clean) it.
-    if (!fix) return { story, prNumber: pr.prNumber, status: 'failed-fix', reviewLog: remediated ? reviewLog : undefined }
+    if (!fix) return { story, prNumber: pr.prNumber, status: 'failed-fix', reviewLog: cycleHasRemediation ? reviewLog : undefined }
     if (fix.needsHumanDecision) {
-      if (remediated)
+      if (cycleHasRemediation)
         await agent(
           `Story ${tag}: escalating a design disagreement to a human. ${wtClause(story)} Read \`${reviewLog}\`. ${flushConvention(story, pr.prNumber)} THEN post ONE fresh comment on PR #${pr.prNumber} (response to the first review) summarizing the remediation rounds so far, the still-open findings (${JSON.stringify(prevFindings)}) and the open decision. Do NOT delete the log — it is the continuation anchor for this cycle. Do NOT merge.`,
           { agentType: 'implementer', phase: 'Review', label: `flush:${tag}`, model: 'sonnet', effort: 'medium' },
@@ -419,9 +421,9 @@ async function driveStory(story) {
   // post ONE synthesized remediation comment (contextual to the first review), minimize any
   // prior intermediate comments, and delete the working log. If the first review was already
   // clean (fresh cycle, no remediation), the first-review comment stands alone — nothing to do.
-  if (remediated)
+  if (cycleHasRemediation)
     await agent(
-      `Story ${tag} converged: the latest independent re-review found zero actionable findings. ${wtClause(story)} Read the review log \`${reviewLog}\` — it may span MULTIPLE runs / escalations / manual rounds of this ONE cycle. Post ONE remediation comment on PR #${pr.prNumber}, written as a direct RESPONSE to the first code-review comment: map EVERY finding recorded across ALL runs in the log (plus any surfaced during remediation) to how it was resolved (with commit refs), list any accepted/non-actionable findings with their dispositions (${JSON.stringify(accepted)}), and state the final verdict (review clean). THEN minimize / mark-outdated any prior intermediate PR comments on #${pr.prNumber} — earlier escalate-flush comments and any manual out-of-band rework/re-review comments — so that ONLY the first review comment and this one final remediation remain as the visible current state (if there are none to minimize, that step is a no-op). This single comment IS the durable audit of the ENTIRE review<->fix cycle across every run. Then DELETE \`${reviewLog}\`. Do NOT merge.`,
+      `Story ${tag} converged: the latest independent re-review found zero actionable findings. ${wtClause(story)} Read the review log \`${reviewLog}\` — it may span MULTIPLE runs / escalations / manual rounds of this ONE cycle. Post ONE remediation comment on PR #${pr.prNumber}, written as a direct RESPONSE to the first code-review comment: map EVERY finding recorded across ALL runs in the log (plus any surfaced during remediation) to how it was resolved (with commit refs), list any accepted/non-actionable findings with their dispositions (${JSON.stringify(accepted)}), and state the final verdict (review clean). THEN minimize / mark-outdated any prior intermediate PR comments on #${pr.prNumber} — earlier escalate-flush comments, any manual out-of-band rework/re-review comments, AND any earlier final-remediation/synthesis comment left by a prior convergence of this same cycle (a converged-but-unmerged PR that was re-run, found new findings and re-converged — do NOT minimize the first review comment) — so that ONLY the first review comment and this one final remediation remain as the visible current state (if there are none to minimize, that step is a no-op). This single comment IS the durable audit of the ENTIRE review<->fix cycle across every run. Then DELETE \`${reviewLog}\`. Do NOT merge.`,
       { agentType: 'implementer', phase: 'Review', label: `synth:${tag}`, model: 'sonnet', effort: 'medium' },
     )
 

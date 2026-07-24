@@ -322,7 +322,7 @@ test('#373 continuation (resume + existing log): probe runs, round-0 review is S
   assert.ok(!reviews[0].prompt.includes('This is the FIRST review: POST'), 'no second first-review is posted')
 
   const synth = calls.find(c => c.opts.label?.startsWith('synth:'))
-  assert.ok(synth, 'immediate convergence on a continuation still synthesizes (remediated seeded true)')
+  assert.ok(synth, 'immediate convergence on a continuation still synthesizes (cycleHasRemediation seeded true)')
   assert.equal(result.batch[0].status, 'ready-for-merge')
 })
 
@@ -345,6 +345,11 @@ test('#373 continuation convergence: the ONE synthesis maps ALL runs, minimizes 
   assert.ok(synth, 'convergence synthesizes')
   assert.ok(/ALL runs/i.test(synth.prompt), 'synthesis maps findings across ALL runs of the cycle')
   assert.ok(/minimize/i.test(synth.prompt) && /outdated/i.test(synth.prompt), 'synthesis minimizes / marks-outdated prior intermediate comments')
+  // #373 round-5 finding 1: the minimize set must also cover a PRIOR convergence's own
+  // final-remediation comment (re-run→re-converge edge), while NEVER the first review, so the
+  // 'at most one final remediation' invariant holds on re-entry.
+  assert.ok(/prior convergence/i.test(synth.prompt), 'synthesis minimizes a prior convergence\'s own final-remediation comment (re-run→re-converge edge)')
+  assert.ok(/do NOT minimize the first review/i.test(synth.prompt), 'the first-review comment is explicitly excluded from the minimize set')
   assert.ok(synth.prompt.includes('DELETE'), 'synthesis deletes the log at the end')
   assert.equal(result.batch[0].status, 'ready-for-merge')
 })
@@ -361,7 +366,7 @@ test('#373 resume with NO prior log: round-0 is a FRESH first review (posted), n
   assert.ok(probe, 'probe still runs on resume')
   const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
   assert.ok(reviews[0].prompt.includes('This is the FIRST review: POST'), 'no log → round-0 posts a fresh first review')
-  assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'clean fresh review on resume → no synthesis (remediated stayed false)')
+  assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'clean fresh review on resume → no synthesis (cycleHasRemediation stayed false)')
 })
 
 test('#373 fresh story: no continuation probe runs (fresh path unchanged, AC6)', async () => {
@@ -392,7 +397,7 @@ test('#373 escalate documents the manual out-of-band convention (funnel into the
 test('#373 resume with NO log but a first review ALREADY on the PR: round-0 is SILENT (no duplicate first review), clean → no synth (findings 1 & 3)', async () => {
   // Converged-but-unmerged re-run (log deleted at convergence) OR a pruned/out-of-band
   // clone that lost the untracked log: the PR-side `firstReviewPosted` signal must still
-  // suppress a second first-review. remediated stays false (no log to continue), so a
+  // suppress a second first-review. cycleHasRemediation stays false (no log to continue), so a
   // clean round-0 adds nothing and never tries to synthesize a gone log.
   const dispatch = (prompt, opts) => {
     if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
@@ -449,7 +454,7 @@ test('#373 finding 1: the first review emits a hidden marker and the probe match
 })
 
 test('#373 finding 3: both escalate-flush prompts share ONE authored convention block (supersede + out-of-band + untracked-worktree), so they cannot diverge', async () => {
-  // MAX_FIX_ROUNDS escalation (fresh-story path, remediated set by a prior fix round).
+  // MAX_FIX_ROUNDS escalation (fresh-story path, cycleHasRemediation set by a prior fix round).
   const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
   const maxRoundsFlush = (await runWorkflow({
     args: { stories: [STORY] },
@@ -484,7 +489,7 @@ test('#373 finding 3: both escalate-flush prompts share ONE authored convention 
   assert.equal(a[0], b[0], 'the convention block is identical in both flush prompts (no drift)')
 })
 
-test('#373 escalate ON A CONTINUATION: resume + existing log + never-converging re-review keeps the log, flushes (remediated seeded true), supersedes prior flush, no synth (AC5 on the resume path)', async () => {
+test('#373 escalate ON A CONTINUATION: resume + existing log + never-converging re-review keeps the log, flushes (cycleHasRemediation seeded true), supersedes prior flush, no synth (AC5 on the resume path)', async () => {
   const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
   const dispatch = (prompt, opts) => {
     if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
@@ -495,11 +500,11 @@ test('#373 escalate ON A CONTINUATION: resume + existing log + never-converging 
   }
   const { result, calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
   assert.equal(result.batch[0].status, 'escalate')
-  // remediated was seeded true by the continuation, so the flush fires even though the
+  // cycleHasRemediation was seeded true by the continuation, so the flush fires even though the
   // escalation happened on round-0 of a RESUMED cycle (fresh-story path only reaches the
-  // guarded flush after a fix round sets remediated).
+  // guarded flush after a fix round sets cycleHasRemediation).
   const flush = calls.find(c => c.opts.label?.startsWith('flush:'))
-  assert.ok(flush, 'continuation escalation posts a flush (remediated seeded true from the existing log)')
+  assert.ok(flush, 'continuation escalation posts a flush (cycleHasRemediation seeded true from the existing log)')
   assert.ok(flush.prompt.includes('x.ts:1'), 'flush carries the still-open findings')
   assert.ok(flush.prompt.includes('Do NOT delete the log'), 'the continuation anchor log is kept')
   assert.ok(/minimize|supersede/i.test(flush.prompt), 'a new escalate-flush supersedes/minimizes the prior one (finding 2)')
