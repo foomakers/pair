@@ -86,7 +86,7 @@ export function datasetSkillDirs(tree: DatasetTree): string[] {
   const dirs = new Set<string>()
   for (const rel of Object.keys(tree)) {
     if (rel.endsWith(`/${SKILL_FILE}`)) {
-      dirs.add(rel.slice(0, -(`/${SKILL_FILE}`.length)))
+      dirs.add(rel.slice(0, -`/${SKILL_FILE}`.length))
     }
   }
   return [...dirs].sort()
