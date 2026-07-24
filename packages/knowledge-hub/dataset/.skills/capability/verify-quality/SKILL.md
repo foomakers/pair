@@ -1,6 +1,6 @@
 ---
 name: verify-quality
-description: "Checks whether the codebase passes the quality gates the CI pre-merge gate would run for the item/PR risk tier — resolves the `risk:*` tag, applies the KB gate matrix (🟢 lint+type+build; +unit from 🟡; +integration/E2E on 🔴), and reports pass/fail per gate so local verification mirrors CI (no surprise reds at the gate, no over-checking on green work). Fail-safe red when untagged. Skips gates already passing. Composed by /implement and /review; invoke directly before pushing."
+description: "Checks whether the codebase passes the quality gates the CI pre-merge gate would run for the item/PR risk tier — resolves the `risk:*` tag, applies the KB gate matrix (🟢 lint+type+build; +unit from 🟡; +integration/E2E on 🔴), and reports pass/fail per gate so local verification mirrors CI for the tier check set (tier-check parity, no over-checking on green work; the coverage-guardrail and secret-scan CI layers are NOT mirrored locally). Fail-safe red when untagged. Skips gates already passing. Composed by /implement and /review; invoke directly before pushing."
 version: 0.5.0
 author: Foomakers
 ---
@@ -28,7 +28,7 @@ Only check gates that are **not already passing** (idempotency preserved).
 | `$scope` | No       | Limit checking: `code-quality`, `tests`, `lint`, `all`, or any custom scope key from adoption (default: `all`) |
 | `$story` | No       | A **story id**, used only for the pre-publish story-card fallback (Step 1.5) when the branch has no PR yet. The tier normally comes from the **current-branch PR** — `gh pr view` with no argument resolves it — so a **PR number is never needed here** (the branch resolves its own PR, and its labels are authoritative). Pass `$story` only to name the story card to read before a PR exists. |
 
-`$scope` and the resolved tier compose: the tier decides the widest set CI would run; `$scope` may narrow within it (e.g. `$scope=lint`). `$scope` never *widens* past the tier.
+`$scope` and the resolved tier compose: the tier decides the widest set CI would run; `$scope` may narrow within it (e.g. `$scope=lint`). `$scope` never *widens* past the tier. **Empty intersection is a no-op, not a failure**: if `$scope` selects a check the tier doesn't run (e.g. `$scope=tests` on 🟢 green, whose active test set is empty), the intersection is empty — that gate runs nothing and reports `SKIPPED (tier)`, never a FAIL and never a widen.
 
 ## Algorithm
 
@@ -48,7 +48,7 @@ This step decides **which** suites the standard gates below run, so the local ru
    - **`disabled` (the default), or the flag/section is absent** → **full suite**: the CI gate runs every suite on every PR, so mirror that — set the active suite set to **all adopted gates** (base + unit + integration + e2e + custom + aggregate, exactly the current behavior). Report `Tiering: disabled — running the full suite (CI parity)` and skip to Step 2. Do NOT read tags in this mode.
    - **`enabled`** → continue; the CI gate is tier-scoped, so scope locally by tier.
 
-2. **Act — resolve the tier from tags (never from the diff).** Load the shipped helper and resolve the `risk:*` tag:
+2. **Act — resolve the tier from tags (never from the diff).** Load the shipped helper and resolve the `risk:*` tag. The snippet below assumes the **repo-root working directory** (where CI runs it), so it sources the helper by its repo-root-relative path; the `../../../.pair/...` in the markdown links above is only this skill file's relative path to the *same* asset — not a second copy:
 
    ```bash
    source .pair/knowledge/assets/tier-resolve.sh   # tags only, no criteria (D18)
