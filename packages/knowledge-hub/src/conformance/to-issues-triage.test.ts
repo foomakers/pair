@@ -7,7 +7,10 @@ import { join } from 'path'
 // exists-then-skip check, per the shared to-issues-triage.md convention.
 
 const DATASET_SKILLS = join(__dirname, '../../dataset/.skills/process')
-const DATASET_CONVENTIONS = join(__dirname, '../../dataset/.pair/knowledge/skill-conventions')
+const DATASET_CONVENTIONS = join(
+  __dirname,
+  '../../dataset/.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions',
+)
 const MIRROR = join(__dirname, '../../../../.claude/skills')
 
 const CONVENTION = readFileSync(join(DATASET_CONVENTIONS, 'to-issues-triage.md'), 'utf-8')

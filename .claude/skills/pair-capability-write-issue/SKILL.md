@@ -44,7 +44,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 
 ### Step 3: Load Template
 
-1. **Check**: Resolve the template path for `$type` **override-first** — see [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md) (adoption `.pair/adoption/tech/templates/<name>-template.md` wins over the KB default below):
+1. **Check**: Resolve the template path for `$type` **override-first** — see [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md) (adoption `.pair/adoption/tech/templates/<name>-template.md` wins over the KB default below):
    - `story` → [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md)
    - `task` → [task-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/task-template.md)
    - `epic` → [epic-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/epic-template.md)
@@ -190,12 +190,12 @@ When composed by `/pair-process-plan-initiatives`:
 
 When composed by `/pair-process-plan-epics`:
 
-- **Input**: `/pair-process-plan-epics` invokes `/pair-capability-write-issue` with `$type: epic`, `$content` containing the epic data, and `$parent` linking to the parent initiative. For an `EXTEND` triage outcome (see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md)), it instead passes `$id` of the matched epic and `$content` as the matched epic's current full body with the additional scope already merged in by the caller — `/pair-capability-write-issue` overwrites the body as-is, it does not merge.
+- **Input**: `/pair-process-plan-epics` invokes `/pair-capability-write-issue` with `$type: epic`, `$content` containing the epic data, and `$parent` linking to the parent initiative. For an `EXTEND` triage outcome (see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md)), it instead passes `$id` of the matched epic and `$content` as the matched epic's current full body with the additional scope already merged in by the caller — `/pair-capability-write-issue` overwrites the body as-is, it does not merge.
 - **Output**: Returns the issue identifier. `/pair-process-plan-epics` uses it for linking stories.
 
 When composed by `/pair-process-plan-stories`:
 
-- **Input**: `/pair-process-plan-stories` invokes `/pair-capability-write-issue` with `$type: story`, `$content` containing the story data, and `$parent` linking to the parent epic. For an `EXTEND` triage outcome (see [to-issues-triage.md](../../../.pair/knowledge/skill-conventions/to-issues-triage.md)), it instead passes `$id` of the matched story and `$content` as the matched story's current full body with the additional scope already merged in by the caller — `/pair-capability-write-issue` overwrites the body as-is, it does not merge.
+- **Input**: `/pair-process-plan-stories` invokes `/pair-capability-write-issue` with `$type: story`, `$content` containing the story data, and `$parent` linking to the parent epic. For an `EXTEND` triage outcome (see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md)), it instead passes `$id` of the matched story and `$content` as the matched story's current full body with the additional scope already merged in by the caller — `/pair-capability-write-issue` overwrites the body as-is, it does not merge.
 - **Output**: Returns the issue identifier. `/pair-process-plan-stories` uses it for status tracking.
 
 When invoked **independently**:
@@ -220,7 +220,7 @@ This skill supports `story`, `task`, `epic`, and `initiative` types. Adding a ne
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) for the standard scenarios — this skill deliberately **overrides the default degrade behavior with a HALT** for its two load-bearing dependencies:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) for the standard scenarios — this skill deliberately **overrides the default degrade behavior with a HALT** for its two load-bearing dependencies:
 
 - PM tool not configured/accessible, or the template file missing → **HALT** (no fallback — this skill's entire job is writing to the PM tool via a template).
 - If the PM tool implementation guide is not found, warn and proceed with default behavior (a genuine degrade, not a HALT).
@@ -229,7 +229,7 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 ## Notes
 
 - This skill **modifies PM tool state** — it creates and updates issues.
-- No PM tool fallback: if the adopted tool fails, the skill HALTs. **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md): `$id` prevents duplicate creation on re-invocation.
+- No PM tool fallback: if the adopted tool fails, the skill HALTs. **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): `$id` prevents duplicate creation on re-invocation.
 - Template = source of truth for issue body format. Changes to template structure automatically affect all future issue creation.
 - Labels and hierarchy linking follow the PM tool implementation guide conventions.
 - **Deliberate tech-debt promotion**: assess-* skills are output-only and never auto-create backlog items. When a debt or quality finding is worth scheduling, a human/agent promotes it here **deliberately** by passing `tech-debt` in `$labels` — a manual, selective act, never a 100% auto-conversion.

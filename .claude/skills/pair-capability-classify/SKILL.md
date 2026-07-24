@@ -170,7 +170,7 @@ Review raw max = red (Change/diff risk, Security relevance), so `max(red, yellow
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → minimal run, ask directly; adoption file missing → run against KB defaults; PM tool unreachable → matrix returned to caller, tagging deferred). Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → minimal run, ask directly; adoption file missing → run against KB defaults; PM tool unreachable → matrix returned to caller, tagging deferred). Additional cases:
 
 - **`/pair-capability-assess-security` not available** (review): fall back to the path-heuristic security relevance (quality-model §3.1) instead of the verdict; note the fallback.
 - **`/assess-coupling` not installed / no DDD artifacts**: coupling dimension "not assessed" (never a HALT).
@@ -184,4 +184,4 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 - **Reading budget** (D22): the body/report output is 1 line + `<details>`, never an inline table.
 - **Writes two kinds of thing itself**: the matrix into the card/PR body (Step 4) and — only on a confirmed first-run proposal — the `## Tag Projection` registry section in `tech/risk-matrix.md` (Step 5, the quality-model §5 self-write precedent, mirroring `/pair-capability-verify-quality`'s Custom Gate Registry). Adoption **decision** content is never self-written — that routes through `/pair-capability-record-decision`; the Tag Projection section is config-registry state, not a decision record.
 - **No eligibility tag**: automation eligibility is an adoption-declared filter over classification tags (`risk:green`, …), not a special tag — `/pair-next` consumes it generically (quality-model §5, D18).
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md): re-running on an already-classified card recomputes the same matrix; a declared or opted-out Tag Projection is never re-proposed. Review re-runs recompute against the current diff (a raise can happen commit-to-commit; a lower never can).
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): re-running on an already-classified card recomputes the same matrix; a declared or opted-out Tag Projection is never re-proposed. Review re-runs recompute against the current diff (a raise can happen commit-to-commit; a lower never can).

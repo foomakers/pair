@@ -7,7 +7,7 @@ author: Foomakers
 
 # /pair-process-refine-story — Story Refinement (single Draft→Ready)
 
-Transform a user story from rough breakdown (Draft) into a development-ready specification (Ready). This is **THE single Draft→Ready path** — no separate "make-ready" skill exists and none is ever born (R3.12, D24); refinement IS the transition (canonical-states.md). **Section-level idempotency** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md): each refinement section is checked before acting; partial refinements resume from the first missing section, an already-Ready story is confirmed and exits.
+Transform a user story from rough breakdown (Draft) into a development-ready specification (Ready). This is **THE single Draft→Ready path** — no separate "make-ready" skill exists and none is ever born (R3.12, D24); refinement IS the transition (canonical-states.md). **Section-level idempotency** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): each refinement section is checked before acting; partial refinements resume from the first missing section, an already-Ready story is confirmed and exits.
 
 ## Composed Skills
 
@@ -138,7 +138,7 @@ Transform a user story from rough breakdown (Draft) into a development-ready spe
 
 ### Step 5: Documentation and PM Tool Update
 
-1. **Act**: Assemble the complete refined story body using the [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)) Refined template:
+1. **Act**: Assemble the complete refined story body using the [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)) Refined template:
    - **Functional sections first**: Story Statement → Epic Context → Classification (the Step 3b matrix) → Acceptance Criteria → Definition of Done → Story Sizing → Dependencies → Validation → Notes.
    - **Technical sections last**: Technical Analysis → (Task Breakdown added later by `/pair-process-plan-tasks`).
 2. **Act**: Compose `/pair-capability-write-issue` with:
@@ -189,7 +189,7 @@ STORY REFINEMENT COMPLETE:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce the refined story content, ask developer to update manually) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce the refined story content, ask developer to update manually) for the standard scenarios. Additional cases:
 
 - **`/pair-capability-grill` not installed** (Phase 0): warn and skip the sync; the per-step human-judgment approval gates in Steps 2–4 remain the alignment mechanism — refinement still completes.
 - **`/pair-capability-map-subdomains` / `/pair-capability-map-contexts` not installed, or no domain artifacts** (Steps 2–3): the functional and technical analysis sections are still produced; domain placement and touched-context mapping are skipped with a note, and the coupling dimension is "not assessed" (never a HALT).

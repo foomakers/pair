@@ -253,7 +253,7 @@ On HALT: report the blocker clearly, propose resolution, wait for developer.
 
 ## Idempotent Re-invocation
 
-See [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). Re-invoking `/pair-process-bootstrap` on a partially completed project is safe and expected — per-phase:
+See [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). Re-invoking `/pair-process-bootstrap` on a partially completed project is safe and expected — per-phase:
 
 1. **PRD**: detects existing populated PRD, skips Phase 0.
 2. **Categorization**: detects existing ADL entry for `project-categorization`, skips Phase 1.
@@ -266,7 +266,7 @@ Phase completion is detected via output file existence — never re-does complet
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (optional skill not installed → skip that phase/step with a warning, never blocks) and [record-decision contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) (`/pair-capability-record-decision` not installed → proposals cannot be persisted, document manually) for the standard scenarios. Additional cases (bootstrap's per-phase optional dependencies):
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (optional skill not installed → skip that phase/step with a warning, never blocks) and [record-decision contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) (`/pair-capability-record-decision` not installed → proposals cannot be persisted, document manually) for the standard scenarios. Additional cases (bootstrap's per-phase optional dependencies):
 
 - **assess-\* skills not installed**: Skip assessment phase, reference guideline files directly, ask developer for manual decisions. Log: "assess-\* skills not installed — using manual assessment."
 - **/specify-prd not installed**: HALT at Phase 0 if PRD is missing (a required dependency, not optional). Suggest creating PRD manually using how-to-01.
@@ -278,6 +278,6 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 
 ## Notes
 
-- The developer can stop between phases; re-invoke to resume (see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md)).
+- The developer can stop between phases; re-invoke to resume (see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md)).
 - Phase 3.5 is the only full-catalog (`$scope: all`) entry point for `/pair-capability-map-subdomains` and `/pair-capability-map-contexts` — every other caller is scoped to what it just touched. See [Callers Matrix](../../../.pair/knowledge/skills-guide.md#callers-matrix-scoped-capabilities).
 - Content source: how-to-02 Phases 0-4 (including domain modeling). How-to-02 retains orchestration flow, this skill has operational detail.

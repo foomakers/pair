@@ -53,7 +53,7 @@ CODE REVIEW STATE:
 
 1. **Check**: Is the PR already loaded in this session?
 2. **Skip**: If yes, confirm PR number and move to Step 1.2.
-3. **Act**: Read PR from the PM tool — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/skill-conventions/way-of-working-pm-resolution.md):
+3. **Act**: Read PR from the PM tool — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md):
    - PR metadata (author, branch, target, status)
    - Changed files and diff
    - PR description and linked story
@@ -191,7 +191,7 @@ Run the procedure for the level determined in Step 3.1 — see [degradation-leve
 
 ### Step 5.1: Compile Review Report
 
-1. **Act**: Compile all findings into a review report following the [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
+1. **Act**: Compile all findings into a review report following the [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)):
    - **Review Information**: PR number, author, reviewer, date, story, review type
    - **Review Summary**: overall assessment, key changes, business value
    - **Code Review Checklist**: functionality, code quality, technical standards (from Phase 2)
@@ -271,7 +271,7 @@ On HALT: report the blocker, compose the resolution skill if available, wait for
 
 ## Idempotent Re-invocation
 
-See [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). Re-invoking `/pair-process-review` on a partially reviewed PR is safe — per-phase:
+See [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). Re-invoking `/pair-process-review` on a partially reviewed PR is safe — per-phase:
 
 1. **PR context**: detects already-loaded PR, skips re-loading.
 2. **Phases**: checks which phases completed (via session state or PR review comments). Resumes from first incomplete phase.
@@ -282,7 +282,7 @@ See [idempotency convention](../../../.pair/knowledge/skill-conventions/idempote
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (optional skill not installed → degrade, never HALT; PM tool not accessible → ask the reviewer directly) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (optional skill not installed → degrade, never HALT; PM tool not accessible → ask the reviewer directly) for the standard scenarios. Additional cases:
 
 - **/verify-adoption not installed**: Falls back to inline dependency checking against [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md). Warning logged. See degradation cascade (Phase 3).
 - **/assess-stack not installed**: Unlisted dependencies flagged as warnings for manual verification. Does NOT HALT.
@@ -299,7 +299,7 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 
 - This skill **reads code, posts review comments, and optionally merges PRs** — it does not modify source code.
 - Review phases are sequential — each phase builds on findings from prior phases.
-- The reviewer can stop between phases; re-invoke to resume (see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md)).
+- The reviewer can stop between phases; re-invoke to resume (see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md)).
 - Output follows [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) — the template defines structure, /pair-process-review fills it with findings.
 - HALT on missing ADR is inherited from [how-to-11](../../../.pair/knowledge/how-to/11-how-to-code-review.md) — this is a business rule, not a skill limitation.
 - **Parent cascade is best-effort** — if sub-issue queries fail, the skill reports which updates need manual attention.

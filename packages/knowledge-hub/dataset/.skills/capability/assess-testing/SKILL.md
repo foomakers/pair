@@ -30,7 +30,7 @@ The rendered adoption content is destined for this section — the caller writes
 
 ### Step 1: Resolution Cascade
 
-Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
+Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
 
 - **Path A delta**: override argument is `$choice`. Confirmation prompt: "Testing framework override: **$choice**. This will be proposed without full assessment. Confirm?" — also warn if tech-stack.md already has a testing section with a different framework. On confirm, proceed to Step 2.
 - **Path B delta**: adoption check is [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) — populated **Testing** section. Decision-record check scans [adoption/decision-log/](../../../.pair/adoption/decision-log/) or [adoption/tech/adr/](../../../.pair/adoption/tech/adr/) for `*testing*` files; if missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/record-decision`).
@@ -88,11 +88,11 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
    - `target`: [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) (Testing section)
    - `decision-metadata`: `$type: non-architectural` (testing framework is a tooling choice), `$topic: testing-strategy`, `$summary: "[Framework] vX.Y adopted as testing framework with [coverage target]% coverage"`
    - plus the human-facing report (see Output Format)
-2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (persistence is always the caller's responsibility, delegated to `/record-decision`).
+2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) for the persistence contract (persistence is always the caller's responsibility, delegated to `/record-decision`).
 
 ## Output Format
 
-Follows the [Decision Shape](../../../.pair/knowledge/skill-conventions/output-shapes.md#decision-shape).
+Follows the [Decision Shape](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/output-shapes.md#decision-shape).
 
 ```text
 ASSESSMENT COMPLETE (output-only — no files written):
@@ -107,7 +107,7 @@ ASSESSMENT COMPLETE (output-only — no files written):
 
 ## Composition Interface
 
-See [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the generic tuple + Input/Output/Persistence shape.
+See [record-decision invocation contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) for the generic tuple + Input/Output/Persistence shape.
 
 When composed by `/bootstrap`:
 
@@ -126,7 +126,7 @@ When invoked **independently**: the human (or agent) persists the proposal by co
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → ask developer for framework preference based on language) and [record-decision contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) (persistence unavailable → proposal stands as a report) for the standard scenarios. No additional cases.
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → ask developer for framework preference based on language) and [record-decision contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) (persistence unavailable → proposal stands as a report) for the standard scenarios. No additional cases.
 
 ## Notes
 

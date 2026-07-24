@@ -11,7 +11,7 @@ Disclosed from [SKILL.md](SKILL.md) Phase 6 — only reached when the reviewer p
 
 ### Step 6.2: Prepare Merge Commit
 
-1. **Act**: Draft the merge commit message following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
+1. **Act**: Draft the merge commit message following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)):
 
    ```text
    [#<story-id>] feat: <story description>

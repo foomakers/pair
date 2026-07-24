@@ -53,7 +53,7 @@ The opening phase re-reads the checkpoint so an interrupted story resumes exactl
 
 1. **Check**: Is the user story already loaded in this session?
 2. **Skip**: If yes, confirm story ID and move to Step 0.1b.
-3. **Act**: Read the story from the PM tool — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/skill-conventions/way-of-working-pm-resolution.md).
+3. **Act**: Read the story from the PM tool — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
    - Understand business value and acceptance criteria.
    - Confirm epic context.
 4. **Verify**: Story is fully loaded. If not → **HALT**.
@@ -233,7 +233,7 @@ Follow the TDD discipline rules strictly, and the [Design Rules](../../../.pair/
    **This confirmation is required for EVERY task** — commit-per-task exists precisely to give the developer a checkpoint between tasks.
 
 4. **Verify**: Developer confirms. If changes needed → apply changes, re-run quality (Step 2.7), ask again.
-5. **Act**: Stage and commit following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
+5. **Act**: Stage and commit following the [commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)):
 
    ```text
    [#<story-id>] <type>: <task-description>
@@ -352,7 +352,7 @@ On HALT: report the blocker clearly, propose resolution, wait for developer.
 
 ## Idempotent Re-invocation
 
-See [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). Re-invoking `/pair-process-implement` on a partially completed story is safe and expected — per-step:
+See [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). Re-invoking `/pair-process-implement` on a partially completed story is safe and expected — per-step:
 
 1. **Checkpoint**: the opening-phase resume probe (Step 0.0) reads the checkpoint and jumps to the first pending task — never repeating completed tasks. When `/pair-capability-checkpoint` is absent, the git+PM resume below applies.
 2. **Branch**: detects existing branch, switches to it.
@@ -366,7 +366,7 @@ The skill resumes from the first incomplete step — never re-does completed wor
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (PM tool not accessible → ask the developer directly; adoption file missing → proceed with guideline defaults) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (PM tool not accessible → ask the developer directly; adoption file missing → proceed with guideline defaults) for the standard scenarios. Additional cases:
 
 - **Subagent spawning unavailable**: take the degraded inline path (Step 3.3) — checkpoint still written, `/pair-capability-publish-pr` composed inline, degradation noted in the output. Never skip the checkpoint/PR split.
 - **`/pair-capability-checkpoint` not installed**: skip the resume probe and the write step; resume from git+PM state (Idempotent Re-invocation) and synthesize the handoff inline for `/pair-capability-publish-pr`.
@@ -380,6 +380,6 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 - This skill **modifies files and creates git artifacts** (branches, commits) and **writes the checkpoint**. The PR itself is created/updated by the composed `/pair-capability-publish-pr` (in the subagent, or inline when degraded) — implement never re-implements PR creation.
 - The **subagent's prompt is the handoff only** — the checkpoint, nothing from this session. Anonymous, no named role (mechanical isolation, D23); a skill cannot `/clear` its own context (D7), so the subagent provides the clean-context reset.
 - Task iteration is sequential — each task completes its full cycle before the next begins.
-- The developer can stop between tasks; re-invoke to resume — the opening-phase resume probe (Step 0.0) reads the checkpoint (see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md)).
+- The developer can stop between tasks; re-invoke to resume — the opening-phase resume probe (Step 0.0) reads the checkpoint (see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md)).
 - Single PR per story regardless of commit strategy.
 - **Squash happens at merge** (Phase 4), not before PR creation. Individual commits are preserved on the branch during review.

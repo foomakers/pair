@@ -58,7 +58,7 @@ Detect and evaluate unlisted dependencies. Used when `/pair-process-review` find
 
 ### Step 1: Resolution Cascade
 
-Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
+Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
 
 - **Path A delta** (implementation or bootstrap with `$choice`): parse `$choice` as `name@version`; in implementation mode, validate against [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) for version incompatibility, duplicate entry, or category conflict — warn and offer resolve-or-reject if found. In bootstrap mode with a choice, just confirm. Proceed to Step 3.
 - **Path B delta**: adoption check is [adoption/tech/tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) with populated core sections. If a corresponding decision record is missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/pair-capability-record-decision`).
@@ -152,7 +152,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
      - **Implementation**: `$type: non-architectural`, `$topic: stack-add-[name]`, `$summary: "[name]@[version] added to tech stack — [rationale]"`
      - **Review approve**: `$type: non-architectural`, `$topic: stack-approve-[name]`, `$summary: "[name]@[version] approved during review — added to tech stack"`
    - plus the human-facing report (see Output Format), and the validation result (approved/rejected) for implementation/review modes
-2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (persistence is always the caller's responsibility, delegated to `/pair-capability-record-decision`).
+2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) for the persistence contract (persistence is always the caller's responsibility, delegated to `/pair-capability-record-decision`).
 
 ## Version Tracking Policy
 
@@ -174,7 +174,7 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
 
 ## Output Format
 
-Follows the [Decision Shape](../../../.pair/knowledge/skill-conventions/output-shapes.md#decision-shape) (with an added `Mode` line — a legitimate per-skill variant, see that file, since this skill spans the whole project lifecycle).
+Follows the [Decision Shape](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/output-shapes.md#decision-shape) (with an added `Mode` line — a legitimate per-skill variant, see that file, since this skill spans the whole project lifecycle).
 
 ```text
 ASSESSMENT COMPLETE (output-only — no files written):
@@ -190,7 +190,7 @@ ASSESSMENT COMPLETE (output-only — no files written):
 
 ## Composition Interface
 
-See [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the generic tuple + Input/Output/Persistence shape.
+See [record-decision invocation contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) for the generic tuple + Input/Output/Persistence shape.
 
 When composed by `/pair-process-bootstrap`:
 
@@ -222,7 +222,7 @@ When invoked **independently**: mode auto-detected. The skill returns the propos
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → ask developer for stack choices directly; adoption file missing in bootstrap mode → the skill still runs, caller creates it on persist) and [record-decision contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) (persistence unavailable → proposal stands as a report) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → ask developer for stack choices directly; adoption file missing in bootstrap mode → the skill still runs, caller creates it on persist) and [record-decision contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) (persistence unavailable → proposal stands as a report) for the standard scenarios. Additional cases:
 
 - If architecture.md doesn't exist, warn: "No architecture adopted — stack compatibility cannot be verified against architecture."
 - If tech-stack.md doesn't exist in implementation/review mode (as opposed to bootstrap, covered above), HALT: "No tech stack defined — run /pair-capability-assess-stack in bootstrap mode first."

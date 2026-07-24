@@ -56,6 +56,7 @@ Development guidelines are organized into three specialized practice areas:
   - **[Coding Standards](technical-standards/coding-standards/README.md)** - Coding conventions and standards
   - **[Git Workflow](technical-standards/git-workflow/README.md)** - Version control and development process
   - **[AI Development](technical-standards/ai-development/README.md)** - AI/ML development standards and practices
+    - **[Skill Conventions](technical-standards/ai-development/skill-conventions/README.md)** - Single-source shared conventions for the `SKILL.md` corpus
 
 - **[Testing](testing/README.md)** - How to verify that software works correctly
   - **[Test Strategy](testing/test-strategy/README.md)** - Testing philosophy, pyramid strategy, and comprehensive approaches

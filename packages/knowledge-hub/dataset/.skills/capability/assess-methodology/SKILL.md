@@ -30,7 +30,7 @@ The rendered adoption content is destined for this section — the caller writes
 
 ### Step 1: Resolution Cascade
 
-Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
+Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics (check → skip → act → verify).
 
 - **Path A delta**: override argument is `$choice`. On confirm, proceed to Step 3.
 - **Path B delta**: adoption check is [adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) containing a methodology reference (e.g. "Kanban", "Scrum"). If a corresponding decision record is missing, report the gap (this skill still writes nothing; the caller persists a backfill via `/record-decision`).
@@ -87,11 +87,11 @@ Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-
    - `target`: [adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) (methodology section)
    - `decision-metadata`: `$type: non-architectural`, `$topic: methodology-choice`, `$summary: "[Methodology] adopted for development workflow"`
    - plus the human-facing report (see Output Format)
-2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the persistence contract (persistence is always the caller's responsibility, delegated to `/record-decision`).
+2. **Verify**: Proposal emitted — see [record-decision invocation contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) for the persistence contract (persistence is always the caller's responsibility, delegated to `/record-decision`).
 
 ## Output Format
 
-Follows the [Decision Shape](../../../.pair/knowledge/skill-conventions/output-shapes.md#decision-shape).
+Follows the [Decision Shape](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/output-shapes.md#decision-shape).
 
 ```text
 ASSESSMENT COMPLETE (output-only — no files written):
@@ -106,7 +106,7 @@ ASSESSMENT COMPLETE (output-only — no files written):
 
 ## Composition Interface
 
-See [record-decision invocation contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) for the generic tuple + Input/Output/Persistence shape.
+See [record-decision invocation contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) for the generic tuple + Input/Output/Persistence shape.
 
 When composed by `/bootstrap`:
 
@@ -123,7 +123,7 @@ When invoked **independently**: the human (or agent) persists the proposal by co
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → ask developer for methodology preference based on team size/requirements stability) and [record-decision contract](../../../.pair/knowledge/skill-conventions/record-decision-contract.md) (persistence unavailable → proposal stands as a report) for the standard scenarios. No additional cases.
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → ask developer for methodology preference based on team size/requirements stability) and [record-decision contract](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md) (persistence unavailable → proposal stands as a report) for the standard scenarios. No additional cases.
 
 ## Notes
 

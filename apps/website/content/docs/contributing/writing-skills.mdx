@@ -138,7 +138,7 @@ A skill or CLI command that collects inputs to produce or configure something (p
 
 Both modes read the **same resolved defaults** through one precedence cascade — `explicit argument/flag > project state > saved/inferred preferences > hardcoded` — the mode only decides whether each value is confirmed or taken as-is. This is the `pair package` command's `--interactive` flag + `resolveDefaults()` cascade (both the quick and guided paths resolve it), and the `assess-*` family's resolution cascade (Path A override = quick, Path C = guided).
 
-Adopt the convention directly rather than re-designing the duality — the full mechanics, precedents, and edge cases live in the KB reference `.pair/knowledge/skill-conventions/guided-quick-setup.md`.
+Adopt the convention directly rather than re-designing the duality — the full mechanics, precedents, and edge cases live in the KB reference `.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/guided-quick-setup.md`.
 
 ## The effectiveness standard
 

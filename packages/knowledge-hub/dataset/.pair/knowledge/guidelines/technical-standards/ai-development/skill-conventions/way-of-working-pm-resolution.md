@@ -4,7 +4,7 @@ How any skill that needs the project's PM tool (to read or write a story/PR/epic
 
 ## PM tool discovery
 
-1. **Check**: Read [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) and identify the adopted PM tool (GitHub Projects, Jira, Linear, etc.) and its access method.
+1. **Check**: Read [way-of-working.md](../../../../../../.pair/adoption/tech/way-of-working.md) and identify the adopted PM tool (GitHub Projects, Jira, Linear, etc.) and its access method.
 2. **Skip**: If found, proceed with that tool.
 3. **Act**: If no PM tool is configured, **HALT**:
 
@@ -14,7 +14,7 @@ How any skill that needs the project's PM tool (to read or write a story/PR/epic
 
 ## State resolution (macrostates)
 
-Skills refer to **canonical macrostates** (`Draft`, `Ready`, `In Progress`, `Review`, `Done`) — never board-specific column/label names. Resolve an item's actual board state to a macrostate via the `## State Mapping` section in way-of-working.md; if that section is omitted, canonical names are assumed (zero-configuration default, not a degradation). See [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) for the full resolution rule, including the **Readiness Fallback**: when a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), evaluate Definition-of-Ready criteria against the item instead of guessing from the board-state name.
+Skills refer to **canonical macrostates** (`Draft`, `Ready`, `In Progress`, `Review`, `Done`) — never board-specific column/label names. Resolve an item's actual board state to a macrostate via the `## State Mapping` section in way-of-working.md; if that section is omitted, canonical names are assumed (zero-configuration default, not a degradation). See [canonical-states.md](../../../../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) for the full resolution rule, including the **Readiness Fallback**: when a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), evaluate Definition-of-Ready criteria against the item instead of guessing from the board-state name.
 
 ## What stays in the skill (the delta)
 

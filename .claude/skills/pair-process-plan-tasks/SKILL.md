@@ -90,7 +90,7 @@ Transform a refined user story into specific, actionable implementation tasks. T
 
 For each task (skipping tasks that already exist in the story body):
 
-1. **Act**: Define the task following the [task-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/task-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)):
+1. **Act**: Define the task following the [task-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/task-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)):
    - Task Information (ID, priority, hours, bounded context)
    - Summary and type
    - Description with implementation context
@@ -157,13 +157,13 @@ TASK BREAKDOWN COMPLETE:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce the task breakdown content, ask developer to update manually) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (optional skill `/pair-capability-write-issue` not installed / PM tool not accessible → produce the task breakdown content, ask developer to update manually) for the standard scenarios. Additional cases:
 
 - If adoption files (architecture, tech-stack, bounded contexts) are not found, skip technical context alignment and warn.
 
 ## Notes
 
 - This skill **modifies PM tool state** — it updates the story body with the Task Breakdown section. No separate task issues are created.
-- **Idempotent (task-level)** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: re-invoking on a story with partial tasks adds only the missing ones (the caller composes the full updated body; write-issue overwrites it).
+- **Idempotent (task-level)** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). This skill's check: re-invoking on a story with partial tasks adds only the missing ones (the caller composes the full updated body; write-issue overwrites it).
 - Condensed TA removes verbose implementation detail that belongs in individual tasks (retained items: see Step 5).
 - Story template reference: [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md).

@@ -20,7 +20,7 @@ Evaluate code quality using objective metrics from [code-metrics.md](../../../.p
 
 ### Step 1: Resolution Cascade
 
-Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics — this skill uses the **report-skill variant** and has no override argument, so it starts directly at the [idempotency](../../../.pair/knowledge/skill-conventions/idempotency.md) check (no Path A/Argument-Override).
+Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics — this skill uses the **report-skill variant** and has no override argument, so it starts directly at the [idempotency](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md) check (no Path A/Argument-Override).
 
 - **Existing-state check (Path B)**: an existing quality report for this codebase (conversation context, CI artifacts, prior output). Staleness test: has the codebase changed since the last analysis (`git diff --stat` since last analysis date/commit)? No changes → confirm and exit. Changes exist → present the delta and proceed to full analysis.
 - **Full-analysis path (Path C)**: proceed to Step 2.
@@ -103,7 +103,7 @@ For each metric group in scope, follow **check → skip → act → verify**.
 
 ## Output Format
 
-Follows the [Report Shape](../../../.pair/knowledge/skill-conventions/output-shapes.md#report-shape).
+Follows the [Report Shape](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/output-shapes.md#report-shape).
 
 ```text
 CODE QUALITY REPORT:
@@ -141,7 +141,7 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → fall back to built-in thresholds: cyclomatic > 10, function > 50 lines, file > 300 lines, coverage > 70%) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → fall back to built-in thresholds: cyclomatic > 10, function > 50 lines, file > 300 lines, coverage > 70%) for the standard scenarios. Additional cases:
 
 - If coverage tools are not available, skip test coverage metrics and note: "Coverage: SKIPPED — no coverage tool detected."
 - If duplication detection is not feasible (no tool), use heuristic scanning for obvious copy-paste patterns.
@@ -150,7 +150,7 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 ## Notes
 
 - This skill is **read-only / output-only** — it only inspects code and runs coverage (via existing test commands); files, adoption, and the PM tool stay untouched. A finding worth tracking is promoted deliberately to the backlog via `/pair-capability-write-issue` — always a manual, selective act.
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: staleness of the existing report (Step 1) — unchanged codebase confirms it, changed codebase re-analyzes.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). This skill's check: staleness of the existing report (Step 1) — unchanged codebase confirms it, changed codebase re-analyzes.
 - Metrics are **health indicators, not absolute quality measures**. Context matters: business logic naturally has higher complexity, and metric targets should align with team capabilities.
 - Quality analysis is most valuable as a **trend** — individual snapshots matter less than improvement direction over time.
 - The maintainability index is a composite heuristic — it provides a single number for quick analysis but the component metrics offer more actionable insights.

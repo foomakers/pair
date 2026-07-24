@@ -20,7 +20,7 @@ Apply the adopted estimation methodology to size a refined user story. Reads the
 
 ### Step 1: Load Story
 
-1. **Check**: Read the story from the PM tool — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/skill-conventions/way-of-working-pm-resolution.md).
+1. **Check**: Read the story from the PM tool — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
 2. **Verify**: Story exists and has acceptance criteria. If not refined → **HALT**: "Story must be refined before estimation."
 
 ### Step 2: Check Existing Estimate
@@ -108,7 +108,7 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → fall back to developer judgment; PM tool not accessible → ask the developer to record manually) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → fall back to developer judgment; PM tool not accessible → ask the developer to record manually) for the standard scenarios. Additional cases:
 
 - If [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) does not specify an estimation methodology, use the Decision Matrix from the estimation guidelines to recommend one.
 - If the story has no acceptance criteria, warn: "Story lacks AC — estimation may be inaccurate. Consider refining first."
@@ -116,6 +116,6 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 ## Notes
 
 - This skill **modifies the PM tool** — it writes the estimate to the story issue.
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: an already-estimated story is confirmed without re-doing the analysis; re-estimation only on explicit developer request.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). This skill's check: an already-estimated story is confirmed without re-doing the analysis; re-estimation only on explicit developer request.
 - The estimation method should be consistent within a project. If the team switches methods, record the decision via `/record-decision`.
 - Estimation is a collaborative activity — the skill proposes, the developer decides. The skill never overrides developer judgment.

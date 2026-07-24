@@ -24,7 +24,7 @@ This skill is **output-only** — it composes no skill and writes no files. No a
 
 ### Step 1: Resolution Cascade
 
-Read [resolution cascade](../../../.pair/knowledge/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics — this skill uses the **report-skill variant**, where Path B is an [idempotency](../../../.pair/knowledge/skill-conventions/idempotency.md) check against a recent output rather than an adoption file.
+Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) for the generic Path A/B/C mechanics — this skill uses the **report-skill variant**, where Path B is an [idempotency](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md) check against a recent output rather than an adoption file.
 
 - **Path A delta**: override argument is `$choice` (a pre-identified debt item). On accept, skip detection (Step 2) and proceed directly to Step 3 with the single item.
 - **Path B delta**: existing-state check is a recent debt report in conversation context or PR comments. Re-analysis only on explicit developer request.
@@ -133,7 +133,7 @@ For each detected item, apply the prioritization formula:
 
 ## Output Format
 
-Follows the [Report Shape](../../../.pair/knowledge/skill-conventions/output-shapes.md#report-shape).
+Follows the [Report Shape](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/output-shapes.md#report-shape).
 
 ```text
 TECH DEBT ANALYSIS (output-only — no files or issues created):
@@ -171,13 +171,13 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline missing → fall back to built-in heuristics: complexity thresholds, naming patterns, test file presence; adoption file missing → skip the categories that depend on it) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → fall back to built-in heuristics: complexity thresholds, naming patterns, test file presence; adoption file missing → skip the categories that depend on it) for the standard scenarios. Additional cases:
 
 - If [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md) is not found, skip infrastructure dependency checks.
 - If [architecture.md](../../../.pair/adoption/tech/architecture.md) is not found, skip design debt detection for architectural violations.
 
 ## Notes
 
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: existing analysis for the codebase/PR (Step 1, Path B).
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). This skill's check: existing analysis for the codebase/PR (Step 1, Path B).
 - Prioritization formula `Impact × (6 - Effort)` favors quick wins: high-impact items with low effort get the highest scores.
 - Debt is contextual — the same pattern may be acceptable in a prototype but unacceptable in production code. Severity assessment considers the project's maturity and risk tolerance.

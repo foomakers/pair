@@ -7,7 +7,7 @@ author: Foomakers
 
 # /pair-capability-checkpoint — Resumable Progress State
 
-Write and resume a self-contained progress checkpoint so a fresh session (or a subagent) can continue a story exactly where the previous one stopped. Follows the [checkpoint template](../../../.pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/skill-conventions/template-resolution.md)) — five sections: story, branch, tasks done, key decisions, remaining todos.
+Write and resume a self-contained progress checkpoint so a fresh session (or a subagent) can continue a story exactly where the previous one stopped. Follows the [checkpoint template](../../../.pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)) — five sections: story, branch, tasks done, key decisions, remaining todos.
 
 ## Arguments
 
@@ -179,7 +179,7 @@ When invoked **independently**:
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-degradation.md) (guideline/template missing → use a minimal structure directly; PM tool not accessible during state reconstruction, Step 3 → ask the developer to confirm tasks done/pending directly) for the standard scenarios. Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline/template missing → use a minimal structure directly; PM tool not accessible during state reconstruction, Step 3 → ask the developer to confirm tasks done/pending directly) for the standard scenarios. Additional cases:
 
 - If the [checkpoint template](../../../.pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md) is not found, use the minimal five-section structure directly: Story, Branch, Tasks Done, Key Decisions, Remaining Todos.
 - If `.pair/working/` does not exist yet, create it (and `checkpoints/` under it) on first write.
@@ -188,7 +188,7 @@ See [graceful degradation](../../../.pair/knowledge/skill-conventions/graceful-d
 ## Notes
 
 - This skill **writes at most one file** — `.pair/working/checkpoints/<story-id>.md` — and only in write mode with `$persist=true` (default).
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/skill-conventions/idempotency.md). This skill's check: write mode updates the same file in place (never duplicates); resume mode is read-only and safe to repeat.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). This skill's check: write mode updates the same file in place (never duplicates); resume mode is read-only and safe to repeat.
 - `.pair/working/` holds operational, per-project runtime state — never touched by install or update (D14). It is not part of the distributed KB defaults.
 - Checkpoints complement, not replace, git/PM-tool state. Even when state is reliably reconstructible from git and the PM tool (as `/pair-process-implement` does today), a checkpoint adds an explicit, fast-to-read summary — most valuable across context resets and subagent handoffs, where reconstruction from scratch is expensive or impossible.
 - The write-free (`$persist=false`) option serves composers that own their own persistence (e.g., embedding the handoff directly into a PR body) rather than writing a separate file.
