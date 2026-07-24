@@ -36,6 +36,15 @@ If a PR has **no** `risk:*` tag — or the tag is unknown or malformed — the g
 
 If a tier requires a suite the repository does not have (for example, a 🔴 PR with no E2E suite), the gate **fails with an explicit "suite missing" error**. It never silently passes a tier whose checks could not run.
 
+## Coverage guardrail (opt-in, off by default)
+
+Coverage can be protected by a **baseline regression guardrail** — a job inside the same pipeline, not a separate CI mechanism. It is **opt-in and off by default** (the twin of tiering): a project turns it on by setting `Coverage guardrail: enabled` in its `way-of-working.md`, and `setup-gates` offers it as a guided-setup question (default **No**). Absent the flag, no coverage job is generated. When enabled, a PR that drops coverage **below a committed baseline** fails the gate; a PR that maintains or improves it passes. It is a guardrail against regression, not a wall demanding a fixed percentage on every PR, so a legacy codebase is never failed at 0 on day one.
+
+- **Baseline and per-type targets live in adoption** (`tech/coverage-baseline.md`, created when the guardrail is enabled), with sensible defaults — different goals for backend, frontend, and shared libraries. No specific coverage tool is required: the gate reads whatever percentage the adopted test tooling emits.
+- **The baseline is human-committed.** The guardrail is live only once a `baseline.<type>` line is committed to the config. With none committed (or a missing/corrupt one) the gate runs in **bootstrap-only mode**: it prints a suggested baseline to the CI log and passes, without persisting it — a CI checkout is ephemeral, so it never writes the value itself. A human copies the suggested line into the committed config to activate the guardrail. (Automated commit-back is tracked separately.)
+- **The `exclude` config is applied by the adopter** to their own coverage tool — the gate does not read it; it only documents the exclusion intent for genuinely untestable surface.
+- **No coverage measured** fails safe: it blocks at 🔴 red and warns at lower tiers — never a silent pass.
+
 ## Post-merge is build + deploy only
 
 Once a PR merges to the main branch, the gate does not run again — it already passed. The post-merge staging pipeline performs **build + deploy only**. The gate is the deterministic first filter before merge; review starts only once the gate is green.

@@ -95,5 +95,26 @@ jobs:
         run: pnpm test
       - name: Run coverage thresholds (brand, website)
         run: pnpm turbo test:coverage --filter=@pair/brand --filter=@pair/website
+      # Dogfood of the story #282 coverage guardrail on pair's own CI (opt-in:
+      # way-of-working `Coverage guardrail: enabled`). Standalone/minimal — NOT
+      # the full tier-aware pipeline (#258). Reuses the coverage run above: reads
+      # the line % from each package's istanbul coverage-summary.json and blocks
+      # a regression below the human-committed baseline in tech/coverage-baseline.md.
+      # Conservative fixed tier=red => a missing coverage report fails safe.
+      - name: Coverage guardrail (regression gate — dogfood #282)
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source .pair/knowledge/assets/coverage-gate.sh
+          TIER=red
+          CFG=.pair/adoption/tech/coverage-baseline.md
+          pct() {
+            node -e "const fs=require('fs');process.stdout.write(String(JSON.parse(fs.readFileSync('$1','utf8')).total.lines.pct))"
+          }
+          BRAND_PCT="$(pct packages/brand/coverage/coverage-summary.json || true)"
+          WEBSITE_PCT="$(pct apps/website/coverage/coverage-summary.json || true)"
+          echo "coverage: brand(shared)=${BRAND_PCT}%  website(frontend)=${WEBSITE_PCT}%"
+          coverage_gate "$TIER" shared   "$BRAND_PCT"   "$CFG"
+          coverage_gate "$TIER" frontend "$WEBSITE_PCT" "$CFG"
       - name: Run E2E tests
         run: pnpm --filter @pair/website e2e
