@@ -147,7 +147,7 @@ Feeds from `/assess-cost` against the diff. A **red** cost class surfaces a **bl
 <details>
 <summary>Positive feedback</summary>
 
-<!-- Feedback bucket, NOT a severity — kept outside "Findings by severity" so the contract-generator's severity extraction (sub-headings under that grouping) stays clean. -->
+<!-- Feedback bucket, NOT a severity — kept outside "Findings by severity" so the contract-generator's severity extraction (the severity labels under that grouping) stays clean. -->
 
 - [what's done well]
 
