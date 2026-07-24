@@ -290,6 +290,12 @@ test('non-convergence: MAX_FIX_ROUNDS escalation flushes the working log to the 
   assert.ok(flush.prompt.includes('x.ts:1'), 'flush carries the still-open findings')
   assert.ok(flush.prompt.includes('.pair/working/reviews/292.md') && flush.prompt.includes('Do NOT delete the log'), 'flush reads the log and keeps it for the human')
   assert.ok(/UNTRACKED|PRESERVED|pruned/.test(flush.prompt) && flush.prompt.includes('../pair-worktrees/292'), 'flush documents the worktree-persistence assumption of the untracked log (finding 3)')
+  // #373 round-6 finding: the flush must ALSO minimize a prior convergence's final-remediation
+  // comment (converged-but-unmerged re-run that now escalates) — a stale "ready for merge" verdict
+  // cannot stay visible beside an active escalation; never the first-review comment. Mirrors the
+  // synth-path minimize set.
+  assert.ok(/final-remediation\/synthesis comment left by an EARLIER convergence/i.test(flush.prompt), 'flush minimizes a prior convergence\'s own final-remediation comment (round-6 finding)')
+  assert.ok(/NEVER minimize the first-review comment/i.test(flush.prompt), 'flush carves out the first-review comment from the minimize set')
   assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no synthesis on escalation')
 })
 

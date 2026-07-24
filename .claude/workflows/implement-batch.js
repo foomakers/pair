@@ -256,7 +256,7 @@ function revWtClause(story) {
 // change to the convention or the worktree-persistence wording is made in one place and can't
 // silently diverge between the two paths (they had already drifted slightly before this).
 function flushConvention(story, prNumber) {
-  return `FIRST minimize / mark-outdated any prior escalate-flush comment already posted on PR #${prNumber} — each flush "summarizes the rounds so far", so a new one SUPERSEDES the last; only the newest escalate-flush should stay visible (no-op if there is none). CONVENTION (state it in the comment so the human/orchestrator knows): any further rework or re-review — including manual out-of-band rounds — should be funneled into THIS same working log (append), NOT posted as standalone PR comments; the next orchestrated run on this story continues the same cycle and its convergence will synthesize ONE final remediation and minimize these intermediate comments. Note too (in the comment) that this working log is an UNTRACKED file living ONLY in the persistent authoring worktree \`../pair-worktrees/${story.id}\`, so that worktree must be PRESERVED until merge — if it is pruned/recreated the audit log is lost (this flush + the first-review comment still remain on the PR, and the PR-side first-review signal still prevents a duplicate first review on the next run).`
+  return `FIRST minimize / mark-outdated any prior escalate-flush comment already posted on PR #${prNumber} — each flush "summarizes the rounds so far", so a new one SUPERSEDES the last; only the newest escalate-flush should stay visible (no-op if there is none). ALSO minimize / mark-outdated any prior final-remediation/synthesis comment left by an EARLIER convergence of this SAME cycle (a converged-but-unmerged PR that was re-run, found new findings and is now escalating): its "review clean / ready for merge" verdict directly contradicts an active escalation, so it must NOT stay visible alongside this flush — mirror the convergence-synthesis path (no-op if there is none), but NEVER minimize the first-review comment. CONVENTION (state it in the comment so the human/orchestrator knows): any further rework or re-review — including manual out-of-band rounds — should be funneled into THIS same working log (append), NOT posted as standalone PR comments; the next orchestrated run on this story continues the same cycle and its convergence will synthesize ONE final remediation and minimize these intermediate comments. Note too (in the comment) that this working log is an UNTRACKED file living ONLY in the persistent authoring worktree \`../pair-worktrees/${story.id}\`, so that worktree must be PRESERVED until merge — if it is pruned/recreated the audit log is lost (this flush + the first-review comment still remain on the PR, and the PR-side first-review signal still prevents a duplicate first review on the next run).`
 }
 
 // ── Per-story lifecycle ──────────────────────────────────────────────────
@@ -319,7 +319,11 @@ async function driveStory(story) {
   //      then deleted.
   //    - On escalation the log is KEPT and flushed to the PR as the continuation anchor. A
   //      new escalate-flush SUPERSEDES the prior one (minimized/marked-outdated in place), so
-  //      repeated escalations across runs leave only the newest flush visible, not a pile.
+  //      repeated escalations across runs leave only the newest flush visible, not a pile. It
+  //      ALSO minimizes any prior convergence's own final-remediation comment (a converged-but-
+  //      unmerged PR re-run that now escalates) — a stale "ready for merge" verdict must not
+  //      stay visible next to an active escalation (never the first-review comment), mirroring
+  //      the convergence-synthesis minimize set.
   //    - MANUAL OUT-OF-BAND CONVENTION (#373): if a human/orchestrator takes over rework or
   //      re-review after an escalate, they funnel their notes into THIS same working log
   //      (append) rather than posting standalone PR comments; the next orchestrated run
