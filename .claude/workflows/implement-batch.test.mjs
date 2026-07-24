@@ -289,6 +289,7 @@ test('non-convergence: MAX_FIX_ROUNDS escalation flushes the working log to the 
   assert.ok(flush, 'escalation posts a flush comment')
   assert.ok(flush.prompt.includes('x.ts:1'), 'flush carries the still-open findings')
   assert.ok(flush.prompt.includes('.pair/working/reviews/292.md') && flush.prompt.includes('Do NOT delete the log'), 'flush reads the log and keeps it for the human')
+  assert.ok(/UNTRACKED|PRESERVED|pruned/.test(flush.prompt) && flush.prompt.includes('../pair-worktrees/292'), 'flush documents the worktree-persistence assumption of the untracked log (finding 3)')
   assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no synthesis on escalation')
 })
 
