@@ -44,9 +44,12 @@ describe('per-skill SKILL.md dataset -> root mirror equality (data-driven)', () 
   const skillDirs = datasetSkillDirs(tree)
   let installed: Map<string, string>
 
+  // Runs the real copy pipeline over the whole dataset (temp-dir I/O for every
+  // skill), so it needs more than vitest's 10s default hookTimeout — the suite
+  // shares the machine with the rest of the turbo test fan-out.
   beforeAll(async () => {
     installed = await buildInstalledSkillMd(tree)
-  })
+  }, 120_000)
 
   it('discovers dataset skill dirs directly from disk (no hardcoded count)', () => {
     expect(skillDirs.length).toBeGreaterThan(0)
