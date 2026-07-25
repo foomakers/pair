@@ -15,9 +15,9 @@ Run `/pair-next` at the start of every session. It reads project adoption files 
 | Type | Count | Purpose |
 |------|-------|---------|
 | **Process** | 9 | Lifecycle phases — orchestrate capability skills |
-| **Capability** | 29 | Atomic units — perform a single focused operation |
+| **Capability** | 30 | Atomic units — perform a single focused operation |
 
-Process skills compose capability skills. Capability skills are independently invocable. Total: 39 (9 process + 29 capability + 1 navigator).
+Process skills compose capability skills. Capability skills are independently invocable. Total: 40 (9 process + 30 capability + 1 navigator).
 
 ## Full Catalog
 
@@ -37,7 +37,7 @@ Process skills compose capability skills. Capability skills are independently in
 
 > How-to guides 04 and 05 (subdomain/bounded-context definition) were removed — domain modeling is referenced inline by each real caller's own how-to (02, 03, 06, 09; 08 planned — #242). See [Domain Modeling Skills](#domain-modeling-skills-2) below and [Migration Notes](#migration-notes).
 
-### Capability Skills (29)
+### Capability Skills (30)
 
 #### Domain Modeling Skills (2)
 
@@ -48,7 +48,7 @@ Process skills compose capability skills. Capability skills are independently in
 
 Reclassified from process to capability (D24) — see [Callers Matrix](#callers-matrix-scoped-capabilities) and [Migration Notes](#migration-notes).
 
-#### Assessment Skills (10)
+#### Assessment Skills (11)
 
 | Skill | Scope |
 |-------|-------|
@@ -62,6 +62,7 @@ Reclassified from process to capability (D24) — see [Callers Matrix](#callers-
 | `/pair-capability-assess-ai` | AI development tools evaluation |
 | `/pair-capability-assess-security` | Security posture — review verdict (`$mode: review`, composed by `/pair-process-review`) + one-shot OWASP Top 10 audit (`$mode: audit`). Unlike the 8 above, not purely output-only — writes its own audit report (D14 exception); never scans for secrets, that's the deterministic CI layer `/pair-capability-setup-gates` provisions (D24) |
 | `/pair-capability-assess-cost` | Cost exposure — chromatic class (`cost:green\|yellow\|orange\|red`) from the diff/story against the [cost-signal catalog](guidelines/quality-assurance/cost-assessment.md) (general + AWS-first, other providers via adoption links). Output-only: feeds `/pair-capability-classify`'s cost dimension, writes nothing, blocks nothing; report/monitoring mode is a separate slice |
+| `/pair-capability-assess-coupling` | Coupling balance — three-dimensional model (integration strength × socio-technical distance × volatility + balance rule) from the [coupling-balance guideline](guidelines/architecture/design-patterns/coupling-balance.md). `$scope: diff` feeds the review Architecture verdict (never blocks); `$scope: full` audits the codebase, flags only unbalanced+volatile integrations, writes a report and hands findings to `/pair-capability-write-issue` for tech-debt. Reads real integration points, never structure alone |
 
 #### Classification Skills (1)
 

@@ -115,15 +115,15 @@ describe('assess-cost catalog registration (#226)', () => {
     ['dataset', NEXT_DATASET, SKILLS_GUIDE_DATASET],
     ['mirror', NEXT_MIRROR, SKILLS_GUIDE_MIRROR],
   ] as const) {
-    it(`${label} next catalog lists assess-cost and states 29 capability / 39 total`, () => {
+    it(`${label} next catalog lists assess-cost and states 30 capability / 40 total`, () => {
       expect(next).toMatch(/assess-cost/)
-      expect(next).toContain('29 capability')
-      expect(next).toContain('39 skills')
+      expect(next).toContain('30 capability')
+      expect(next).toContain('40 skills')
     })
 
-    it(`${label} skills-guide lists assess-cost and states 29 capability / 39 total`, () => {
+    it(`${label} skills-guide lists assess-cost and states 30 capability / 40 total`, () => {
       expect(guide).toMatch(/assess-cost/)
-      expect(guide).toContain('29 capability')
+      expect(guide).toContain('30 capability')
     })
   }
 })

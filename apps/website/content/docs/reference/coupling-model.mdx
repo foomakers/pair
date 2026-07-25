@@ -1,0 +1,46 @@
+---
+title: Coupling Model
+description: The three-dimensional coupling model behind the classification matrix's coupling-balance dimension — integration strength, socio-technical distance, volatility, and the balance rule.
+---
+
+Coupling is not a defect to minimise to zero — a system with no coupling does nothing. The engineering question is never "is there coupling?" but "is this coupling **balanced**?". This model answers that on three dimensions, at every level of abstraction, and is the criteria source for the `/pair-capability-assess-coupling` skill and a reading input to `/pair-capability-assess-architecture`. Source: [`coupling-balance.md`](https://github.com/foomakers/pair/blob/main/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/architecture/design-patterns/coupling-balance.md).
+
+> This page orients. The scoring levels, the severity conditions and the mapping onto the DDD patterns live in the guideline linked above — the single source of truth. Nothing here restates them.
+
+## Three dimensions, all three required
+
+| Dimension | Asks | Rebalanced by |
+| --- | --- | --- |
+| **Integration strength** | How much must each side know about the other — private internals, shared behaviour, a shared model, or only a published contract? | Introducing a contract: lowers strength without moving anything |
+| **Socio-technical distance** | What does it cost to change both sides *together* — across code structure, team boundaries, and runtime? | Co-locating (lowers) or decomposing (raises) |
+| **Volatility** | How likely is the coupled behaviour to actually change, judged from the business domain — not from commit history? | Not a lever: it is the multiplier on the other two |
+
+A verdict resting on fewer than three dimensions is not a coupling verdict — the model rejects it as a structural guess.
+
+## The balance rule
+
+Strength and distance must move in **opposite** directions. Both healthy shapes follow from that: high strength with low distance (tightly-related things kept close), or low strength with high distance (loosely-related things kept apart).
+
+The two imbalances are the failure modes:
+
+- **High strength + high distance** — the pathological case. Tightly-coupled components that are expensive to change together produce cascading, expensive changes: every modification ripples across the boundary that was meant to contain it.
+- **Low strength + low distance** — low cohesion. Things that barely relate are crammed together, so the unit has no reason to exist and changes for unrelated reasons.
+
+**Volatility sets the stakes.** An imbalance in a stable relationship is tolerable — it will rarely be paid for, so rebalancing may cost more than it saves. The same imbalance where change actually lands is where the model raises the alarm. Low volatility neutralises an imbalance; high volatility sharpens it. Severity therefore follows from imbalance *and* volatility, never from structure alone, and a low-volatility imbalance is recorded as architectural debt rather than blocking a merge.
+
+The guiding heuristic is **few critical findings beat many minor ones**: a report that flags everything flags nothing.
+
+## Where the verdict lands
+
+`/pair-capability-assess-coupling` applies the model in two modes:
+
+- **`$scope: diff`** — verdict on the integrations a change touches, feeding the **coupling-balance dimension** of the classification matrix (see [Quality Model](/docs/reference/quality-model)). Like every other dimension, it can only raise the risk tier, never lower one already raised.
+- **`$scope: full`** — audit of the whole codebase, producing a prioritised triage plus a tech-debt handoff for the imbalances worth paying down.
+
+Coupling balance is computed as part of classification; it is projected as its own tag only if a project chooses to expose it — `risk:*` is the sole tag family enabled by default.
+
+## Related
+
+- [Quality Model](/docs/reference/quality-model) — how the coupling-balance dimension composes with the other classification dimensions, tiers, and tags
+- [Skills Catalog](/docs/reference/skills-catalog) — `assess-coupling` and `assess-architecture` commands and composition
+- [Guidelines & How-To Catalog](/docs/reference/guidelines-catalog) — the Design Patterns category this model belongs to

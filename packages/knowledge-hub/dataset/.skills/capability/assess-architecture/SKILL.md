@@ -1,7 +1,7 @@
 ---
 name: assess-architecture
 description: "Evaluates and recommends an architecture pattern (layered, hexagonal, microservices, modular monolith, etc.) when the choice is open. Output-only: emits a proposal + target for /record-decision to persist."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -42,6 +42,7 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    - [Architecture README](../../../.pair/knowledge/guidelines/architecture/README.md) — decision tree, complexity matrix, selection criteria
    - [Architectural Patterns](../../../.pair/knowledge/guidelines/architecture/architectural-patterns/README.md) — pattern descriptions and trade-offs
    - [Project Constraints](../../../.pair/knowledge/guidelines/architecture/project-constraints/README.md) — team, platform, deployment constraints
+   - [Coupling Balance](../../../.pair/knowledge/guidelines/architecture/design-patterns/coupling-balance.md) — the three-dimensional coupling model (integration strength × distance × volatility + balance rule); its criteria inform pattern scoring in Step 3 (a pattern that lowers strength or aligns distance to volatility scores higher for a volatile, tightly-coupled domain)
 2. **Act**: If PRD exists, read [adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md) for project context (team size, scale, compliance).
 3. **Verify**: Every file listed in 1-2 above has been read; any that's missing follows [Graceful Degradation](#graceful-degradation) (ask the developer directly) instead of silently proceeding to Step 3.
 

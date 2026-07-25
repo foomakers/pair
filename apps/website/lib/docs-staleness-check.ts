@@ -129,6 +129,164 @@ export function findDeadLinks(content: string, rel: string, validRoutes: Set<str
   return errors
 }
 
+// --- Catalog ROW CONTENT (single-sourced from the dataset SKILL.md frontmatter) ---
+//
+// checkCatalogSync (Check 2) pins the catalog's skill NAME LIST to the dataset;
+// findSkillCountMismatches pins the "N skills" COUNTS. Neither pins the per-row
+// Command / Description CONTENT, which used to be hand-maintained and could drift
+// silently from the dataset. checkCatalogContent (Check 2c) closes that gap: the
+// Command is DERIVED from category+name (the same transform `pair update` applies)
+// and the Description from the skill's frontmatter — so the dataset is the single
+// source of truth, CI-enforced. (The Composes column is NOT owned by this check.)
+
+export interface SkillEntry {
+  category: string
+  name: string
+}
+
+export interface ExpectedRow {
+  command: string
+  description: string
+}
+
+/**
+ * category+name → the slash-command, the same name transform `pair update` applies
+ * when mirroring the dataset into `.claude/skills/`: a meta skill (its SKILL.md sits
+ * at the category root, so name === category, e.g. `next`) becomes `/pair-<name>`;
+ * every other skill becomes `/pair-<category>-<name>`.
+ */
+export function deriveSkillCommand(category: string, name: string): string {
+  return name === category ? `/pair-${name}` : `/pair-${category}-${name}`
+}
+
+/** Enumerate every dataset skill as {category, name} (categories × getSkillNames). */
+export function collectSkillEntries(skillsDir: string): SkillEntry[] {
+  const categories = readdirSync(skillsDir, { withFileTypes: true }).filter(d => d.isDirectory())
+  const out: SkillEntry[] = []
+  for (const cat of categories) {
+    for (const name of getSkillNames(join(skillsDir, cat.name))) {
+      out.push({ category: cat.name, name })
+    }
+  }
+  return out
+}
+
+/** Absolute path to a skill's SKILL.md (a meta skill lives at the category root). */
+export function skillMdPath(skillsDir: string, entry: SkillEntry): string {
+  return entry.name === entry.category
+    ? join(skillsDir, entry.category, 'SKILL.md')
+    : join(skillsDir, entry.category, entry.name, 'SKILL.md')
+}
+
+/** The quoted `description:` scalar from a SKILL.md's YAML frontmatter (empty if absent). */
+export function readSkillDescription(skillMdContent: string): string {
+  const m = skillMdContent.match(/^description:\s*"([\s\S]*?)"\s*$/m)
+  return m?.[1] ?? ''
+}
+
+// Abbreviations whose trailing period does NOT end a sentence ("e.g.", "etc.").
+const SENTENCE_ABBREVIATIONS = /(?:e\.g|i\.e|etc|vs|approx)$/i
+
+/**
+ * The lead sentence of a frontmatter description, as the catalog renders it. Ends at
+ * the first sentence-terminating period (one followed by whitespace/EOS, skipping
+ * known abbreviations and mid-token dots like `.pair/…`), OR — for skills whose lead
+ * is followed by a `$scope`/`$mode` enumeration ("… rule): `$scope: diff` …") — at
+ * the `:` that introduces it. A closing period is always ensured.
+ */
+export function extractFirstSentence(description: string): string {
+  let cut = description.length
+  const mode = /:\s(?=`\$)/.exec(description)
+  if (mode && mode.index + 1 < cut) cut = mode.index + 1
+  const period = /\.(?=\s|$)/g
+  let m: RegExpExecArray | null
+  while ((m = period.exec(description)) !== null) {
+    if (SENTENCE_ABBREVIATIONS.test(description.slice(0, m.index))) continue
+    if (m.index + 1 < cut) cut = m.index + 1
+    break
+  }
+  const lead = description.slice(0, cut).replace(/:\s*$/, '').trim()
+  return /[.!?]$/.test(lead) ? lead : `${lead}.`
+}
+
+/**
+ * Render bare `/short-name` command references as the catalog does — backticked,
+ * fully-qualified `` `/pair-…` ``. A `/` only starts a command token at a word
+ * boundary (not after a letter/backtick), so slash-joined prose like
+ * "map-subdomains/map-contexts" is left intact.
+ */
+export function transformCommandTokens(text: string, commandByName: Map<string, string>): string {
+  return text.replace(/(^|[^\w`])\/([a-z][a-z0-9-]*)/g, (full, pre: string, name: string) => {
+    const cmd = commandByName.get(name)
+    return cmd ? `${pre}\`${cmd}\`` : full
+  })
+}
+
+/** The catalog Description a skill should have: its frontmatter lead, catalog-rendered. */
+export function deriveCatalogDescription(
+  frontmatterDescription: string,
+  commandByName: Map<string, string>,
+): string {
+  return transformCommandTokens(extractFirstSentence(frontmatterDescription), commandByName)
+}
+
+/** Derive the expected Command + Description for every dataset skill (name → row). */
+export function generateCatalogRows(skillsDir: string): Map<string, ExpectedRow> {
+  const entries = collectSkillEntries(skillsDir)
+  const commandByName = new Map(entries.map(e => [e.name, deriveSkillCommand(e.category, e.name)]))
+  const rows = new Map<string, ExpectedRow>()
+  for (const e of entries) {
+    const desc = readSkillDescription(readFileSync(skillMdPath(skillsDir, e), 'utf-8'))
+    rows.set(e.name, {
+      command: deriveSkillCommand(e.category, e.name),
+      description: deriveCatalogDescription(desc, commandByName),
+    })
+  }
+  return rows
+}
+
+/** Parse a skill's Command + Description cells from its catalog table row (null if absent). */
+export function parseCatalogRow(
+  catalog: string,
+  skill: string,
+): { command: string; description: string } | null {
+  for (const line of catalog.split('\n')) {
+    const m = line.match(/^\|\s*\*\*([a-z0-9-]+)\*\*\s*\|/)
+    if (!m || m[1] !== skill) continue
+    // `| **skill** | `/cmd` | description | (composes) |` → ['', '**skill**', '`/cmd`', 'desc', …]
+    const cells = line.split('|').map(c => c.trim())
+    return {
+      command: (cells[2] ?? '').replace(/^`|`$/g, ''),
+      description: cells[3] ?? '',
+    }
+  }
+  return null
+}
+
+/**
+ * Check 2c: every catalog row's Command + Description MATCH the dataset-derived truth.
+ * Presence/absence of rows is checkCatalogSync's job — a skill with no row is skipped
+ * here (checkCatalogSync already flags it) rather than double-reported.
+ */
+export function checkCatalogContent(expected: Map<string, ExpectedRow>, catalog: string): string[] {
+  const errors: string[] = []
+  for (const [skill, exp] of expected) {
+    const row = parseCatalogRow(catalog, skill)
+    if (row === null) continue
+    if (row.command !== exp.command) {
+      errors.push(
+        `Catalog command drift for "${skill}": expected \`${exp.command}\` but catalog has \`${row.command}\``,
+      )
+    }
+    if (row.description !== exp.description) {
+      errors.push(
+        `Catalog description drift for "${skill}": expected "${exp.description}" but catalog has "${row.description}"`,
+      )
+    }
+  }
+  return errors
+}
+
 /** Check 2: catalog lists every skill dir, and no catalog row lacks a dir (both directions). */
 export function checkCatalogSync(allSkills: string[], catalog: string): string[] {
   const errors: string[] = []
@@ -252,7 +410,11 @@ export function runAllChecks(root: string): RunResult {
   }
 
   // Check 2: catalog sync (both directions)
-  errors.push(...checkCatalogSync(allSkills, readFileSync(CATALOG_FILE, 'utf-8')))
+  const catalog = readFileSync(CATALOG_FILE, 'utf-8')
+  errors.push(...checkCatalogSync(allSkills, catalog))
+
+  // Check 2c: catalog row CONTENT (Command + Description) single-sourced from the dataset
+  errors.push(...checkCatalogContent(generateCatalogRows(SKILLS_DIR), catalog))
 
   // Checks 3 & 4: CLI command anchors + tutorial references
   const cli = checkCliCommands(COMMANDS_DIR, COMMANDS_FILE, TUTORIALS_DIR)
