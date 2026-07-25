@@ -29,7 +29,7 @@ Every quality theme nests under one of these three pillars, pointing at its exis
 
 ## Classification & Tiers
 
-The compiled matrix has one row per dimension: service/domain criticality, change/diff risk, business impact, security relevance, and coupling balance. Each resolves to green/yellow/red; the **risk tier is the max across assessed dimensions** and is never lowered once raised by review. Cost is tracked separately as its own class, always computed and written to the matrix — it's projected as the `cost:green|yellow|orange|red` tag only if a project chooses to expose it (see Tag Projection below).
+The compiled matrix has one row per dimension: service/domain criticality, change/diff risk, business impact, security relevance, and [coupling balance](/docs/reference/coupling-model). Each resolves to green/yellow/red; the **risk tier is the max across assessed dimensions** and is never lowered once raised by review. Cost is tracked separately as its own class, always computed and written to the matrix — it's projected as the `cost:green|yellow|orange|red` tag only if a project chooses to expose it (see Tag Projection below).
 
 | Tier | Merge | Reviewers | SLA | Approval |
 | --- | --- | --- | --- | --- |
