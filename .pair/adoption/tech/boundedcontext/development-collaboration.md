@@ -35,8 +35,10 @@ This context orchestrates the collaboration between developers and AI assistants
 | Term | Definition |
 | ---- | ---------- |
 | Workflow | A sequence of collaborative phases (requirements → design → implementation → review) between developer and AI assistant |
-| Adoption | A recorded decision about which practice, tool, or pattern the project follows |
 | Skill | An atomic, invocable unit of operational knowledge that an AI assistant executes |
+| Adoption *(consumed)* | A project's committed choice of a practice, tool, or process, recorded as a delta over KB defaults. **Owned by Knowledge & Standards** (subdomain Adoption & Guidelines); workflows and skills here *read* adoptions, they do not define or own them. |
+
+**Borrowed-term convention.** A term this context consumes but does not own is marked *(consumed)* and names its owning context, reusing that context's definition verbatim in substance. A term appears as owned in exactly one bounded context — an unmarked duplicate across two UL tables is a boundary defect, not a synonym.
 
 ## Quality Attributes
 
