@@ -36,7 +36,7 @@ The model is resolved through the standard **Adoption > KB default** layering; t
 KB guideline is the sole home of the criteria (D37):
 
 1. **KB default** — [coupling-balance.md](../../../.pair/knowledge/guidelines/architecture/design-patterns/coupling-balance.md): strength levels (intrusive > functional > model > contract), the distance axes, essential-vs-accidental volatility, the balance rule, severity, DDD mapping, test implications.
-2. **Volatility inputs (adoption)** — [adoption/product/subdomain/](../../../.pair/adoption/product/subdomain/) (subdomain classification → essential volatility: core = high, supporting = medium, generic = low) and [adoption/tech/boundedcontext/](../../../.pair/adoption/tech/boundedcontext/) (context boundaries → distance). Read when present; **asked or estimated** when absent (no-DDD degradation, never HALT — consistent with #246).
+2. **Volatility inputs (adoption)** — [adoption/product/subdomain/](../../../.pair/adoption/product/subdomain) (subdomain classification → essential volatility: core = high, supporting = medium, generic = low) and [adoption/tech/boundedcontext/](../../../.pair/adoption/tech/boundedcontext) (context boundaries → distance). Read when present; **asked or estimated** when absent (no-DDD degradation, never HALT — consistent with #246).
 3. **Project delta (adoption)** — `tech/risk-matrix.md` `## Overrides` may tune severity thresholds; absent ⇒ KB defaults apply completely (D21).
 
 A missing/malformed adoption file is treated as absent: warn and fall back (never HALT on adoption absence).
@@ -115,7 +115,7 @@ For each relationship, assign **all three** per the guideline:
 ### Diff Scope
 
 ```text
-COUPLING ASSESSMENT (composed by /pair-process-review — no files written):
+COUPLING ASSESSMENT (composed by the review process — no files written):
 ├── Scope:     Diff
 ├── Verdict:   [balanced | tolerable | significant | critical] — [1-line summary]
 ├── Findings:  [N total — N critical, N significant, N tolerable]
@@ -139,7 +139,7 @@ COUPLING AUDIT COMPLETE:
 ├── Mapped:    [N integrations]
 ├── Flagged:   [N unbalanced — N critical, N significant, N tolerable]
 ├── Report:    [.pair/working/reports/architecture/<file> — written]
-├── Tech-debt: [N tuples handed to caller for /pair-capability-write-issue (tech-debt label, #224)]
+├── Tech-debt: [N tuples handed to caller for the write-issue pipeline (tech-debt label, #224)]
 └── Basis:     [KB model | + subdomain/boundedcontext adoption | volatility estimated (no DDD)]
 ```
 
