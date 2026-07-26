@@ -1,0 +1,52 @@
+---
+title: Quality Gates & Configuration
+description: One catalog of every opt-in quality configuration knob — what it is, its default state, the adoption flag/mechanism, how to enable it, and its owning page — plus what is mandatory and always-on.
+---
+
+Most of pair's quality mechanisms are **opt-in**: they ship **off** in the framework/dataset defaults and a project turns them on deliberately. This page is the single **catalog** of those knobs — discover in one place what exists, its default state, and how to enable each — and a clearly separated list of what is instead **mandatory / always-on**.
+
+This page is an **index, not a re-explanation**: every row deep-links to the owning concept/reference/guideline page for depth. It does not duplicate that page's prose — if a default or flag ever changes, the owning page is the source of truth and this catalog links to it.
+
+## Opt-in quality configuration
+
+Every row carries the same uniform schema — **what it is · default state · adoption flag / mechanism · how to enable · owning page**. Defaults below are the **framework/dataset defaults** (what a fresh `pair install` ships), not any single project's choices — see [Framework defaults vs pair's own opt-ins](#framework-defaults-vs-pairs-own-opt-ins).
+
+| Knob | What it is | Default | Adoption flag / mechanism | How to enable | Owning page |
+| --- | --- | --- | --- | --- | --- |
+| **Pre-merge tiering** | Tier-aware pre-merge gate: scales CI effort to each PR's `risk:*` tier by reading the tag only, running fewer checks on low-risk PRs | `disabled` — every PR runs the full check suite | `Pre-merge tiering:` line in `tech/way-of-working.md` | Set `Pre-merge tiering: enabled` in `way-of-working.md`, then run `/pair-capability-setup-gates` to regenerate the pipeline | [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates) |
+| **Coverage guardrail** | Baseline regression job inside the same pipeline: fails a PR whose coverage drops below a human-committed baseline (maintaining/improving passes) | `disabled` — no coverage job generated | `Coverage guardrail:` line in `tech/way-of-working.md`; baseline in `tech/coverage-baseline.md` | Set `Coverage guardrail: enabled` in `way-of-working.md`, then run `/pair-capability-setup-gates` — it scaffolds `tech/coverage-baseline.md` from the KB template (per-type targets, baselines left unset) and wires the coverage job. The guardrail stays advisory-only until the maintainer commits the measured `baseline.<type>` value(s) into that file (those values are always human-authored) | [Coverage guardrail](/docs/concepts/tag-driven-gates#coverage-guardrail-opt-in-off-by-default) |
+| **Template override** | Replace any shipped workflow template (commit, PR, story, …) with your own copy, resolved override-first by a plain file-existence check | KB default template (no override) | File existence: `.pair/adoption/tech/templates/<name>-template.md` matching a shipped KB filename | Copy the KB template into `.pair/adoption/tech/templates/` and edit it — the file existing on disk is the entire mechanism | [Customize Templates](/docs/customization/templates) |
+| **Tag Projection** | Which classification tag families are emitted onto cards/PRs; the matrix is always computed, projection is what surfaces as labels | `risk` proposed on first `classify` run; `cost` and all others off | `## Tag Projection` section (`Active:` list) in `tech/risk-matrix.md` | Add the family to the `Active:` list (e.g. add `cost`); `classify` writes the `risk` declaration for you on first run when you confirm | [Quality Model — Tag Projection](/docs/reference/quality-model#tag-projection--eligibility) |
+| **Criticality Table / Overrides** | Adoption delta over the quality model: service/domain → High/Medium/Low criticality, threshold tweaks, per-tier reviewer count / SLA overrides | Absent — KB defaults apply completely | `## Criticality Table` and/or `## Overrides` sections in `tech/risk-matrix.md` | Add the section(s) to `tech/risk-matrix.md` (e.g. `tier.red.reviewers: 2`); each section is independent — none implies the others | [Quality Model — Project Overrides](/docs/reference/quality-model#project-overrides--techrisk-matrixmd) |
+
+> **Boundary case — knob without a dedicated owning page.** Where a knob has no page of its own yet, its row links to the closest existing owner (the concept or the quality model) rather than a dead link. When a dedicated page ships later, the link is retargeted here.
+
+## Framework defaults vs pair's own opt-ins
+
+The **Default** column above is always the **framework/dataset default** — what the KB template ships with. A project (including pair itself) may opt into any knob; that project-level choice does **not** change the framework default.
+
+Concrete example: pair **dogfoods** the Coverage guardrail — its own `tech/way-of-working.md` sets `Coverage guardrail: enabled` and wires a CI job. The framework default **remains `disabled`**: a fresh `pair install` ships the guardrail off. Read a default here as "what you get out of the box", not "what pair runs on its own repo".
+
+## What is NOT optional (mandatory / always-on)
+
+These are not opt-in knobs. The first two are **truly always-on** — they run regardless of any adoption flag or risk tier. The third is a **default-on** state that Pre-merge tiering **supersedes** once enabled (turning tiering on is precisely what stops the full suite running on every PR). All three exist to make the opt-in vs always-on line unambiguous.
+
+| Mechanism | State | Why it is not tier-scoped |
+| --- | --- | --- |
+| **Deterministic secret scanning** (gitleaks by default, R6.5/D24) | Always active on every PR | A secret is a secret no matter how small the change — never skipped, never scoped to a tier, and independent of `Pre-merge tiering` |
+| **Base pipeline** (install + lint + type + build) | Runs at every tier | The floor of verification; tiering only ever _adds_ checks above this, never removes the base |
+| **Full-suite default** | Default-on — **superseded when `Pre-merge tiering` is enabled** | With `Pre-merge tiering: disabled` (the default), every PR runs the full check suite — tiering is a _narrowing_ optimization layered on top, so "off" is the safe, complete-verification state. Unlike the two rows above, this is not unconditional: enabling tiering narrows what runs per PR |
+
+Secret scanning is a separate deterministic CI layer, distinct from `assess-security` (which is judgment-based classification). See [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates) for how the always-on jobs sit alongside the tier matrix, and [Quality Model](/docs/reference/quality-model) for the classification pillars that feed the `risk:*` tag.
+
+## Keeping this catalog current
+
+This page is the **unifying index** of opt-in quality configuration. When a new opt-in knob ships, adding its row here — with the full uniform schema and a link to its owning page — is part of that feature's Definition of Done, so the catalog never silently drifts out of date.
+
+## Related
+
+- [Tag-Driven Quality Gates](/docs/concepts/tag-driven-gates) — the pre-merge tiering + coverage guardrail mechanics and the always-on jobs
+- [Quality Model](/docs/reference/quality-model) — tag projection, tiers, and the `tech/risk-matrix.md` adoption delta
+- [Customize Templates](/docs/customization/templates) — the file-existence template override mechanism
+- [Customize for Your Team](/docs/customization/team) — how adoption files override guidelines and gates
+- [Configuration](/docs/reference/configuration) — `config.json` registry and target options
