@@ -77,8 +77,8 @@ const PR_SCHEMA = {
   required: ['prNumber'],
 }
 const LOOSE_REVIEW_SCHEMA = {
-  // Mirrors code-review-template.md: the Overall Assessment verdict options and the
-  // Detailed Review Comments finding fields (File:Line / severity / description /
+  // Mirrors code-review-template.md: the `## Verdict`-line verdict options and the
+  // `Findings by severity` finding fields (File:Line / severity / description /
   // recommendation). The posted report is the artifact; this is the return value.
   // This is the loose FALLBACK skeleton: phase-0 (ensure-contract, below) derives an
   // enum-locked version from the template via an AI-generated contract.json; when
@@ -86,9 +86,9 @@ const LOOSE_REVIEW_SCHEMA = {
   // used as-is so the run never breaks.
   type: 'object',
   properties: {
-    // Free string mirroring code-review-template.md's "Overall Assessment" options
-    // (Approved / Approved with Comments / Request Changes / Comment Only) — NOT
-    // enum-locked here, so a template vocabulary change doesn't break validation.
+    // Free string mirroring code-review-template.md's `## Verdict`-line options
+    // (APPROVED / CHANGES-REQUESTED / TECH-DEBT) — NOT enum-locked here, so a
+    // template vocabulary change doesn't break validation.
     // Control flow keys on `nonActionable` + actionable count, never on specific
     // verdict strings.
     verdict: { type: 'string' },
@@ -99,7 +99,7 @@ const LOOSE_REVIEW_SCHEMA = {
         type: 'object',
         properties: {
           location: { type: 'string' }, // File:Line
-          severity: { type: 'string' }, // Critical | Major | Minor per template (not enum-locked)
+          severity: { type: 'string' }, // Critical | Major | Minor | Questions per template (not enum-locked)
           description: { type: 'string' }, // the issue and its impact
           recommendation: { type: 'string' }, // suggested resolution
           // true = by-design / won't-fix: fixing it would be wrong (byte-consistent
@@ -162,7 +162,7 @@ const CONTRACT_SPECS = [
     contract: '.claude/workflows/contracts/code-review.contract.json',
     skeleton: LOOSE_REVIEW_SCHEMA,
     mirrors:
-      'verdict ← the "Overall Assessment" options; findings[].severity ← the "Detailed Review Comments" severity levels',
+      'verdict ← the `## Verdict`-line options; findings[].severity ← the `Findings by severity` severity levels',
   },
 ]
 
@@ -225,8 +225,8 @@ const REVIEW_SCHEMA = crContract?.schema ?? LOOSE_REVIEW_SCHEMA
 // contract at all, `crContract?.contract` is null) — never a second,
 // independently-drifting vocabulary source.
 const REVIEW_VOCAB = crContract?.contract?.vocabulary
-const DEFAULT_SEVERITIES = ['Critical', 'Major', 'Minor']
-const DEFAULT_VERDICTS = ['Approved', 'Approved with Comments', 'Request Changes', 'Comment Only']
+const DEFAULT_SEVERITIES = ['Critical', 'Major', 'Minor', 'Questions']
+const DEFAULT_VERDICTS = ['APPROVED', 'CHANGES-REQUESTED', 'TECH-DEBT']
 const SEVERITIES = (REVIEW_VOCAB?.severities ?? DEFAULT_SEVERITIES).join(', ')
 const VERDICTS = (REVIEW_VOCAB?.verdictOptions ?? DEFAULT_VERDICTS).join(', ')
 

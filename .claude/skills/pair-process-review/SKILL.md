@@ -19,11 +19,13 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 | `/pair-capability-record-decision`      | Capability | Yes      | Any   | Record missing ADR (HALT condition)          |
 | `/pair-capability-analyze-debt`         | Capability | Yes      | 4     | Flag tech debt items                         |
 | `/pair-capability-assess-security`      | Capability | Yes †    | 2     | Security posture verdict + findings (D22)    |
+| `/pair-capability-assess-cost`          | Capability | Yes †    | 2     | Cost class verdict + signals (D22)           |
+| `/pair-capability-assess-coupling`      | Capability | Optional | 2     | Architecture/coupling balance verdict (D22)  |
 | `/pair-capability-verify-adoption`      | Capability | Optional | 3     | Full adoption compliance                     |
 | `/pair-capability-assess-stack`         | Capability | Optional | 3     | Tech-stack resolution                        |
 | `/pair-capability-execute-manual-tests` | Capability | Optional | 6     | Post-merge release validation (manual tests) |
 
-† **Required _when installed_.** `/pair-capability-classify` and `/pair-capability-assess-security` carry Required = Yes because `/pair-process-review` composes them by default — but both **degrade gracefully**: `/pair-process-review` **warns and continues** when the skill is absent (`/pair-capability-classify` → Step 1.5 Skip; `/pair-capability-assess-security` → Step 2.4 / Graceful Degradation), never HALTing on their absence. "Required" here means _composed by default_, not _a hard prerequisite_, so the flag never contradicts the graceful-skip steps.
+† **Required _when installed_.** `/pair-capability-classify`, `/pair-capability-assess-security` and `/pair-capability-assess-cost` carry Required = Yes because `/pair-process-review` composes them by default — but all **degrade gracefully**: `/pair-process-review` **warns and continues** when the skill is absent (`/pair-capability-classify` → Step 1.5 Skip; `/pair-capability-assess-security` → Step 2.4; `/pair-capability-assess-cost` → Step 2.5; each also under Graceful Degradation), the affected section reading **not assessed**, never HALTing on their absence. `/pair-capability-assess-coupling` (#263) is Optional — until it ships the Architecture (Coupling) section reads **not assessed**. "Required" here means _composed by default_, not _a hard prerequisite_, so the flag never contradicts the graceful-skip steps.
 
 ## Arguments
 
@@ -98,8 +100,8 @@ Ask: _"Proceed with review?"_
 
 1. **Check**: Has `/pair-capability-classify` already run with `$context: review` on the current PR head commit?
 2. **Skip**: If already run — reuse the matrix + tier, move to Phase 2. If `/pair-capability-classify` is not installed → warn (`/pair-capability-classify not installed — no review-time risk matrix`) and move to Phase 2.
-3. **Act**: Compose `/pair-capability-classify` with `$context: review` against the PR diff. It applies the [quality model](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) to the diff footprint, reads the story's refinement-time tier, and produces the review matrix as a **floor** — it confirms or **raises** the tier, and **never lowers** it (D17). The Security relevance and Coupling balance dimensions are reconciled in Phase 2 (Step 2.4) as `/pair-capability-assess-security` / `/pair-capability-assess-coupling` verdicts land — raise-only.
-4. **Verify**: The review matrix + `risk:*` tier are recorded on the PR (matrix in the body as 1 line + `<details>`, D22; tags applied only when a `## Tag Projection` is declared). This body matrix is the single rendered artifact — if Phase 2 raises Security relevance or Coupling balance, `/pair-process-review` updates it **in place** (Step 2.4), it is not re-emitted by `/pair-capability-classify`. A raise to `risk:red` is carried into the Step 5.2 decision. `/pair-capability-classify` HALTs only if the quality model doc (#221) is absent.
+3. **Act**: Compose `/pair-capability-classify` with `$context: review` against the PR diff. It applies the [quality model](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) to the diff footprint, reads the story's refinement-time tier, and produces the review matrix as a **floor** — it confirms or **raises** the tier, and **never lowers** it (D17). The Security relevance and Coupling balance dimensions are reconciled in Phase 2 (Steps 2.4 and 2.6) as `/pair-capability-assess-security` / `/pair-capability-assess-coupling` verdicts land — raise-only.
+4. **Verify**: The review matrix + `risk:*` tier are recorded on the **PR description** (matrix as 1 line + `<details>`, D22; tags applied only when a `## Tag Projection` is declared). This PR-description matrix is the **live, editable** copy — if Phase 2 raises Security relevance or Coupling balance, `/pair-process-review` updates it **in place** (Step 2.4), it is not re-emitted by `/pair-capability-classify`. (Phase 5 additionally embeds a point-in-time **snapshot** of this matrix in the Verdict block of the review report; that copy belongs to the **append-only** native review body and is **never** edited in place — a post-submission raise surfaces in the next fresh review, see Step 5.3 / idempotency #5. So "in place" applies only to the editable PR description, not the review body.) A raise to `risk:red` is carried into the Step 5.2 decision. `/pair-capability-classify` HALTs only if the quality model doc (#221) is absent.
 
 ## Phase 2: Technical Review
 
@@ -137,9 +139,25 @@ Ask: _"Proceed with review?"_
 ### Step 2.4: Security Assessment
 
 1. **Check**: Has `/pair-capability-assess-security` already run with `$mode: review` on the current PR head commit?
-2. **Skip**: If already run — reuse the verdict + findings, move to Phase 3.
-3. **Act**: Compose `/pair-capability-assess-security` with `$mode: review` against the PR diff. It resolves the rule set (KB global + per-service + per-web-app + adoption project rules) and returns a 1-line verdict + collapsed findings, each tagged **introduced** or **pre-existing**.
-4. **Verify**: Verdict + findings recorded — feeds the Security Review section (Step 5.1) and the **Security relevance** dimension of the Step 1.5 classification matrix (`/pair-capability-classify` folds this verdict in **raise-only** — it may raise the tier, never lower it). **Body re-render**: when the verdict raises Security relevance (or the Coupling verdict raises Coupling balance), `/pair-process-review` updates the already-written Step 1.5 body matrix **in place** — re-rendering the affected `<details>` row and the 1-line `risk:*` tier so the PR body reflects the final, raised tier; `/pair-capability-classify` is **not** re-invoked (its Phase-1 run stands, and a raise-only edit needs no recompute). **Tag re-apply**: when a `## Tag Projection` is declared (e.g. `Active: risk`), this in-place Phase-2-originated raise **also re-applies the projected chromatic tag on the PR** — swapping the stale label for the raised tier (e.g. `risk:yellow` → `risk:red`) via the same §5 projection `/pair-capability-classify` uses in its Step 5, applied here by `/pair-process-review` on the raise-only edit — so the PR label matches the raised body tier (AC3); when no projection is declared, only the body matrix is updated and no label is touched. If any **introduced** finding is red → flag explicitly: this is the AC4 signal that drives the CHANGES-REQUESTED decision in Step 5.2. Does not itself HALT — `/pair-capability-assess-security` has no merge authority, this skill's own decision step does.
+2. **Skip**: If already run — reuse the verdict + findings, move to Step 2.5.
+3. **Act**: Compose `/pair-capability-assess-security` with `$mode: review` against the PR diff. It resolves the rule set (KB global + per-service + per-web-app + adoption project rules) and returns a 1-line verdict + collapsed findings, each tagged **introduced** or **pre-existing**. The verdict feeds the five verdict-first Security sections of the review body — **input validation, output handling, authentication, authorization, introduced vulnerabilities** (Step 5.1, per the [code-review-template](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md)).
+4. **Verify**: Verdict + findings recorded — feeds the Security sections (Step 5.1) and the **Security relevance** dimension of the Step 1.5 classification matrix (`/pair-capability-classify` folds this verdict in **raise-only** — it may raise the tier, never lower it). **PR-description re-render**: when the verdict raises Security relevance (or the Coupling verdict raises Coupling balance), `/pair-process-review` updates the already-written Step 1.5 **PR-description** matrix **in place** — re-rendering the affected `<details>` row and the 1-line `risk:*` tier so the PR **description** reflects the final, raised tier (the append-only review body is never edited in place — Step 5.3); `/pair-capability-classify` is **not** re-invoked (its Phase-1 run stands, and a raise-only edit needs no recompute). **Tag re-apply**: when a `## Tag Projection` is declared (e.g. `Active: risk`), this in-place Phase-2-originated raise **also re-applies the projected chromatic tag on the PR** — swapping the stale label for the raised tier (e.g. `risk:yellow` → `risk:red`) via the same §5 projection `/pair-capability-classify` uses in its Step 5, applied here by `/pair-process-review` on the raise-only edit — so the PR label matches the raised body tier (AC3); when no projection is declared, only the body matrix is updated and no label is touched. If any **introduced** finding is red → flag explicitly: this is the AC4 signal that drives the CHANGES-REQUESTED decision in Step 5.2. Does not itself HALT — `/pair-capability-assess-security` has no merge authority, this skill's own decision step does.
+5. **Degrade**: `/pair-capability-assess-security` not installed → the five Security sections read **not assessed** (never dropped); a manual security read of the diff is still expected.
+
+### Step 2.5: Cost Assessment
+
+1. **Check**: Has `/pair-capability-assess-cost` already run against the current PR head commit?
+2. **Skip**: If already run — reuse the class + signals, move to Step 2.6.
+3. **Act**: Compose `/pair-capability-assess-cost` against the PR diff. It resolves the cost-signal catalog from the project's stack/architecture/infrastructure adoption and returns the `cost:green|yellow|orange|red` class as a 1-line verdict + collapsed signals table (D22). This is a genuine re-assessment of the diff — never a restatement of the story's refinement-time `cost:*` tag.
+4. **Verify**: Class + signals recorded — feed the **Cost** section of the review body (Step 5.1, 1 line + `<details>`). The `cost:*` class is carried as its own dimension of the matrix (never folded into the risk `max`). A **red** cost class surfaces the **blocking human sign-off** requirement in the Verdict area (Step 5.1) and is carried into the Step 5.2 decision. Tag re-apply on the PR follows the same rule as Step 2.4 when `cost` is in the declared `## Tag Projection`. Does not itself HALT — `/pair-capability-assess-cost` has no merge authority.
+5. **Degrade**: `/pair-capability-assess-cost` not installed → the Cost section reads **not assessed** (never dropped).
+
+### Step 2.6: Architecture (Coupling) Assessment
+
+1. **Check**: Is `/pair-capability-assess-coupling` installed (ships with #263)?
+2. **Skip**: If not installed → the **Architecture (Coupling)** section reads **not assessed** explicitly; move to Phase 3.
+3. **Act**: Compose `/pair-capability-assess-coupling` with `$scope: diff`. It returns a 1-line balance verdict on the integrations the diff touches (integration strength, socio-technical distance, volatility) + collapsed findings (D22).
+4. **Verify**: Verdict + findings recorded — feed the **Architecture (Coupling)** section of the review body (Step 5.1) and the **Coupling balance** dimension of the Step 1.5 matrix (`/pair-capability-classify` folds it in **raise-only**, same in-place body re-render + tag re-apply rule as Step 2.4). Does not itself HALT.
 
 ## Phase 3: Adoption Compliance
 
@@ -191,17 +209,13 @@ Run the procedure for the level determined in Step 3.1 — see [degradation-leve
 
 ### Step 5.1: Compile Review Report
 
-1. **Act**: Compile all findings into a review report following the [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)):
-   - **Review Information**: PR number, author, reviewer, date, story, review type
-   - **Review Summary**: overall assessment, key changes, business value
-   - **Code Review Checklist**: functionality, code quality, technical standards (from Phase 2)
-   - **Security Review**: verdict + collapsed findings from `/pair-capability-assess-security` (Step 2.4) — 1-line + `<details>` (D22)
-   - **Testing Review**: test coverage and quality (from /pair-capability-verify-quality)
-   - **Documentation Review**: documentation completeness (from /pair-capability-verify-done)
-   - **Detailed Review Comments**: issues by severity, positive feedback
-   - **Risk Assessment**: technical and business risks
-   - **Tech Debt**: items flagged by /pair-capability-analyze-debt
-   - **Adoption Compliance**: results from Phase 3 (with degradation level noted)
+1. **Act**: Compile all findings into a **verdict-first** review body following the [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) (resolve override-first — [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md)). The body is ordered so verdict, tier and cost class read in **~30 seconds** (D22, R6.6):
+   - **Verdict** (top): classification tags (`risk:<tier>` · `cost:<class>`) + the decision + a 1-line reason + PR/author/story metadata. Include the **`Classification changed:`** drift note **only** when the review-time tier/cost differs from the story's refinement-time classification — it fires **upward only** (e.g. `risk:yellow` → `risk:red`, raise-only per quality-model §3.2 / D17); a review that would lower a dimension records the reduction as a finding in the collapsed details, never as a silent downgrade. A **red** cost class states the **blocking human sign-off** requirement here.
+   - **Assessments** (each a 1-line verdict + `<details>`, "not assessed" when the capability is absent):
+     - **Security — input validation, output handling, authentication, authorization, introduced vulnerabilities** (five verdicts from `/pair-capability-assess-security`, Step 2.4)
+     - **Cost** — `cost:*` class + signals (from `/pair-capability-assess-cost`, Step 2.5)
+     - **Architecture (Coupling)** — balance verdict (from `/pair-capability-assess-coupling`, Step 2.6; "not assessed" until #263)
+   - **Details** (collapsed): findings by severity + positive feedback (Phase 2); functionality / AC coverage; testing & quality gates (from /pair-capability-verify-quality); adoption compliance with degradation level (Phase 3); tech debt (from /pair-capability-analyze-debt); documentation (from /pair-capability-verify-done).
 
 ### Step 5.2: Make Review Decision
 
@@ -210,18 +224,21 @@ Based on compiled findings:
 | Decision              | Condition                                                                                 |
 | --------------------- | ----------------------------------------------------------------------------------------- |
 | **APPROVED**          | No critical or major issues. All AC met. Quality gates pass.                              |
-| **CHANGES-REQUESTED** | Critical issues found, missing ADRs, any **introduced** red security finding from `/pair-capability-assess-security` (AC4), failing tests, AC not met. |
+| **CHANGES-REQUESTED** | Critical issues found, missing ADRs, any **introduced** red security finding from `/pair-capability-assess-security` (AC4), failing tests, AC not met. A **red** `cost:*` class does not itself block — it surfaces a **blocking human sign-off** requirement in the Verdict (the human, not the skill, gates on cost). |
 | **TECH-DEBT**         | Only minor issues or debt items. Approve current PR, track debt separately.               |
 
-### Step 5.3: Post Review
+### Step 5.3: Submit Review
 
-1. **Act**: Post the review report as a PR comment.
-2. **Act**: Set PR review status using the PM tool (per [github-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md)):
-   - **APPROVED / TECH-DEBT**: Submit review with `event = APPROVE`.
-   - **CHANGES-REQUESTED**: Submit review with `event = REQUEST_CHANGES`.
-   - MCP-first: use `pull_request_review_write` with `method = create` and appropriate `event`.
-   - CLI fallback: `gh pr review <number> --approve` or `--request-changes`.
-3. **Verify**: Review posted and status updated.
+The compiled report **is the body of the native GitHub review** — the verdict is the review action; there is **no separate PR comment** (decision Q5, AC2).
+
+1. **Act**: Submit the native review using the PM tool (per [github-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md)), passing the compiled verdict-first report as the review **body**:
+   - **APPROVED / TECH-DEBT**: `event = APPROVE`.
+   - **CHANGES-REQUESTED**: `event = REQUEST_CHANGES`.
+   - MCP-first: `pull_request_review_write` with `method = create`, the report as `body`, and the appropriate `event`.
+   - CLI fallback: `gh pr review <number> --approve|--request-changes --body-file <report>`.
+   - **Self-authored PR** (solo/self-review): GitHub rejects `APPROVE` / `REQUEST_CHANGES` on your own PR. Submit the same verdict-first report with `event = COMMENT` (`gh pr review <number> --comment --body-file <report>`) — the verdict token (APPROVED / CHANGES-REQUESTED / TECH-DEBT) still leads the body, so the decision and full report are recorded, never lost. See Graceful Degradation.
+2. **Act**: On re-review, submit a **fresh** native review — both documented paths append (MCP `create`; `gh pr review` CLI), neither edits a submitted body. GitHub's latest-review-governs semantics mean the newest review carries the verdict while earlier reviews stay as visible history, so re-invocation is safe without editing in place (idempotency).
+3. **Verify**: The native review is submitted with the verdict-first body — no separate review-comment artifact exists.
 
 ### Step 5.4: Determine Next Action
 
@@ -249,12 +266,14 @@ REVIEW COMPLETE:
 ├── Story:      [#ID: Title | N/A]
 ├── Decision:   [APPROVED | CHANGES-REQUESTED | TECH-DEBT]
 ├── Issues:     [critical: N | major: N | minor: N]
-├── Security:   [green | yellow | red — N findings, N introduced | N/A — not installed]
+├── Security:   [green | yellow | red — N findings, N introduced | not assessed]
+├── Cost:       [green | yellow | orange | red | not assessed]
+├── Coupling:   [green | yellow | red | not assessed — until #263]
 ├── Quality:    [PASS | FAIL — N gates]
 ├── DoD:        [N/N criteria met]
 ├── Adoption:   [Level N — summary]
 ├── Debt:       [N items flagged]
-└── Report:     [Posted as PR comment]
+└── Review:     [Submitted as native review body — no separate comment]
 ```
 
 At merge (Phase 6): see [merge-and-cascade.md](./merge-and-cascade.md).
@@ -277,7 +296,7 @@ See [idempotency convention](../../../.pair/knowledge/guidelines/technical-stand
 2. **Phases**: checks which phases completed (via session state or PR review comments). Resumes from first incomplete phase.
 3. **Skill compositions**: /pair-capability-verify-quality, /pair-capability-verify-done, /pair-capability-assess-security results cached in session. Not re-run if already passing/current on current commit.
 4. **New commits**: if PR updated since last check, re-validates affected phases only.
-5. **Review report**: updates existing report rather than posting duplicates.
+5. **Review report**: re-review appends a fresh native review (MCP `create` / `gh pr review`); GitHub's latest-review-governs semantics make the newest one carry the verdict while prior reviews remain as history. The report is always the review body, never a separate comment — so no duplicate comment artifact is created.
 6. **Merge**: detects already-merged PR. Skips Phase 6 if already merged. Resumes parent cascade if merge succeeded but status updates are incomplete.
 
 ## Graceful Degradation
@@ -287,7 +306,10 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **/verify-adoption not installed**: Falls back to inline dependency checking against [tech-stack.md](../../../.pair/adoption/tech/tech-stack.md). Warning logged. See degradation cascade (Phase 3).
 - **/assess-stack not installed**: Unlisted dependencies flagged as warnings for manual verification. Does NOT HALT.
 - **/analyze-debt not available**: Skip debt assessment, note in report.
-- **/assess-security not installed**: Skip Step 2.4. Security Review section notes "manual judgment only — /pair-capability-assess-security not installed". Does NOT HALT; a manual security read of the diff is still expected per [how-to-11](../../../.pair/knowledge/how-to/11-how-to-code-review.md).
+- **/assess-security not installed**: Skip Step 2.4. The five Security sections (input validation, output handling, authentication, authorization, introduced vulnerabilities) read **not assessed** — never dropped. Does NOT HALT; a manual security read of the diff is still expected per [how-to-11](../../../.pair/knowledge/how-to/11-how-to-code-review.md).
+- **/assess-cost not installed**: Skip Step 2.5. The Cost section reads **not assessed**. Does NOT HALT.
+- **/assess-coupling not installed** (until #263): Skip Step 2.6. The Architecture (Coupling) section reads **not assessed**. Does NOT HALT.
+- **Self-authored PR (self-review)**: GitHub blocks `APPROVE` / `REQUEST_CHANGES` on your own PR, so the native verdict action is rejected for solo authors. Fall back to `event = COMMENT` (`gh pr review <number> --comment --body-file <report>`), keeping the verdict token at the head of the body — the full verdict-first report is still recorded as a review, so nothing is lost (unlike a rejected APPROVE/REQUEST_CHANGES). Does NOT HALT.
 - **Story not found**: Review proceeds with PR-only validation (no AC check). Phase 6 skips parent cascade.
 - **Code review template not found**: **HALT** — cannot produce review without template (a required dependency, not optional).
 - **PM tool not accessible**: Phase 6 merge via CLI only.
@@ -297,7 +319,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 ## Notes
 
-- This skill **reads code, posts review comments, and optionally merges PRs** — it does not modify source code.
+- This skill **reads code, submits the native review (verdict = the review action), and optionally merges PRs** — it does not modify source code and posts no separate review comment (AC2).
 - Review phases are sequential — each phase builds on findings from prior phases.
 - The reviewer can stop between phases; re-invoke to resume (see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md)).
 - Output follows [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) — the template defines structure, /pair-process-review fills it with findings.

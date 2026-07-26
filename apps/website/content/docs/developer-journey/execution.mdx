@@ -74,9 +74,9 @@ Review a pull request through a structured 6-phase process.
 ### The Review Phases
 
 ```text
-Phase 1 ── Validation ────── PR structure, linked story, template compliance
+Phase 1 ── Validation ────── PR structure, linked story, classification (risk floor)
        │
-Phase 2 ── Technical ─────── Code quality, architecture match, security
+Phase 2 ── Technical ─────── Code quality, security, cost, architecture (coupling)
        │
 Phase 3 ── Adoption ──────── Libraries match tech-stack.md, patterns match architecture.md
        │
@@ -86,6 +86,14 @@ Phase 5 ── Decision ──────── APPROVED, CHANGES REQUESTED, or
        │
 Phase 6 ── Merge ─────────── Merge PR, update story/epic/initiative status
 ```
+
+### The Verdict-First Review Body
+
+The review is submitted as the **native GitHub review** (the verdict *is* the Approve / Request Changes / Comment action) — there is no separate review comment. Its body is **verdict-first** so a reader understands the outcome in about 30 seconds (D22):
+
+- **Top:** classification tags (`risk:<tier>` · `cost:<class>`), the decision, and a one-line reason. If the review-time classification differs from the story's refinement-time one, a **Classification changed** line states the change — it only ever fires *upward* (the review value is a floor: it may raise a tier, never lower it).
+- **Assessments** (each a one-line verdict, details collapsed): security — input validation, output handling, authentication, authorization, introduced vulnerabilities (from `/pair-capability-assess-security`); **cost** class (from `/pair-capability-assess-cost`); **architecture / coupling** balance (from `/pair-capability-assess-coupling`).
+- When a capability is not installed, its section reads **not assessed** — explicit, never silently dropped.
 
 ### ADR Enforcement
 

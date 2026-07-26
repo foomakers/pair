@@ -31,6 +31,7 @@ Rationale: a reviewer or PM-tool viewer scanning many cards/PRs needs the verdic
 
 - `pair-capability-assess-security/SKILL.md` and `pair-process-review/SKILL.md`'s existing "D22" citations now resolve to a real record instead of only epic-body prose.
 - Story #228 (code-review-template rewrite) should update this ADL rather than create a separate one when it lands, since it's the same decision applied to the rest of the review template's dimensions.
+  - **Update (#376):** #228/PR #376 delivers the full verdict-first `code-review-template.md` rewrite — the `## Verdict` line (risk tier + cost class + 1-line decision) plus the seven-section structure (input validation, output handling, authentication, authorization, introduced vulnerabilities, cost, architecture/coupling), each a 1-line verdict + `<details>`. This extends D22 from security-only (#227) to every review-template dimension; no new decision is introduced (same reporting/UX convention), so this ADL is updated in place per the note above rather than superseded.
 
 ## Adoption Impact
 
