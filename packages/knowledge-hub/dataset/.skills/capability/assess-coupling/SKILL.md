@@ -115,7 +115,7 @@ For each relationship, assign **all three** per the guideline:
 ### Diff Scope
 
 ```text
-COUPLING ASSESSMENT (composed by /review — no files written):
+COUPLING ASSESSMENT (composed by the review process — no files written):
 ├── Scope:     Diff
 ├── Verdict:   [balanced | tolerable | significant | critical] — [1-line summary]
 ├── Findings:  [N total — N critical, N significant, N tolerable]
@@ -137,9 +137,9 @@ COUPLING ASSESSMENT (composed by /review — no files written):
 COUPLING AUDIT COMPLETE:
 ├── Scope:     [whole codebase | $area]
 ├── Mapped:    [N integrations]
-├── Flagged:   [N unbalanced+volatile — N critical, N significant, N tolerable]
+├── Flagged:   [N unbalanced — N critical, N significant, N tolerable]
 ├── Report:    [.pair/working/reports/architecture/<file> — written]
-├── Tech-debt: [N tuples handed to caller for /write-issue (tech-debt label, #224)]
+├── Tech-debt: [N tuples handed to caller for the write-issue pipeline (tech-debt label, #224)]
 └── Basis:     [KB model | + subdomain/boundedcontext adoption | volatility estimated (no DDD)]
 ```
 

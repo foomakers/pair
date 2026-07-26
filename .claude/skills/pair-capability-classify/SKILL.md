@@ -12,7 +12,7 @@ Compile the classification matrix for a card or PR by **applying the [quality mo
 Two invocation contexts, one model:
 
 - **refinement** — evidence is the **story context** (declared/estimated scope, touched subdomains, cross-context integrations). Shift-left (R1.3): the matrix exists before code does.
-- **review** — evidence is the **code/diff** (observed footprint, `/pair-capability-assess-security` verdict, `/assess-coupling` verdict). The review value is a **floor**: it confirms or **raises** the refinement tier, and **never lowers** it (quality-model §3.2, D17).
+- **review** — evidence is the **code/diff** (observed footprint, `/pair-capability-assess-security` verdict, `/pair-capability-assess-coupling` verdict). The review value is a **floor**: it confirms or **raises** the refinement tier, and **never lowers** it (quality-model §3.2, D17).
 
 ## Arguments
 
@@ -52,9 +52,9 @@ Every rule resolves through the quality model's cascade — **Argument (`$overri
 Per `$context`, collect the source for each dimension (quality-model §3.1, "Source" column):
 
 - **refinement** — from the story body: declared scope (change/diff-risk proxy), the subdomain classification of what it touches (business impact), touched-path heuristics (security relevance), and — if `subdomain/`/`boundedcontext/` artifacts exist — the volatility of touched subdomains plus the cross-context integrations the story introduces (coupling balance).
-- **review** — from the diff: observed footprint (change/diff risk), the `/pair-capability-assess-security` review verdict (security relevance, quality-model §3.1), and the `/assess-coupling` verdict on the diff (coupling balance). An unreadable diff (huge/binary) falls back to file-path/service-level evidence and flags **low confidence** in the `<details>`.
+- **review** — from the diff: observed footprint (change/diff risk), the `/pair-capability-assess-security` review verdict (security relevance, quality-model §3.1), and the `/pair-capability-assess-coupling` verdict on the diff (coupling balance). An unreadable diff (huge/binary) falls back to file-path/service-level evidence and flags **low confidence** in the `<details>`.
 
-**Coupling sources absent** (no subdomain/bounded-context artifacts in refinement, `/assess-coupling` not installed in review) ⇒ the coupling dimension is reported **not assessed**, excluded from the tier max, and never blocks (quality-model §3.1, D21).
+**Coupling sources absent** (no subdomain/bounded-context artifacts in refinement, `/pair-capability-assess-coupling` not installed in review) ⇒ the coupling dimension is reported **not assessed**, excluded from the tier max, and never blocks (quality-model §3.1, D21).
 
 ### Step 3: Compile the Matrix
 
@@ -154,7 +154,7 @@ Review raw max = red (Change/diff risk, Security relevance), so `max(red, yellow
 
 **Composed by `/pair-process-refine-story`** (refinement): invoked with `$context: refinement` after the technical analysis. Returns the matrix; `/pair-process-refine-story` embeds the 1-line + `<details>` into the story body (D22) and lets `classify` apply/propose tags. Absent ⇒ `/pair-process-refine-story` warns and continues without a matrix (graceful degradation — never HALTs on classify's absence).
 
-**Composed by `/pair-process-review`** (review, Phase 1): invoked with `$context: review` against the PR diff. Produces the review-time matrix (confirm-or-raise, never lower). The `/pair-capability-assess-security` verdict (Phase 2) feeds the **Security relevance** dimension and the `/assess-coupling` verdict feeds **Coupling balance** — both raise-only, consistent with the review floor. Any raise to `risk:red` is surfaced for `/pair-process-review`'s own decision step; `classify` never blocks or merges — it has no such authority.
+**Composed by `/pair-process-review`** (review, Phase 1): invoked with `$context: review` against the PR diff. Produces the review-time matrix (confirm-or-raise, never lower). The `/pair-capability-assess-security` verdict (Phase 2) feeds the **Security relevance** dimension and the `/pair-capability-assess-coupling` verdict feeds **Coupling balance** — both raise-only, consistent with the review floor. Any raise to `risk:red` is surfaced for `/pair-process-review`'s own decision step; `classify` never blocks or merges — it has no such authority.
 
 **Invoked directly**: classify a single card or PR on demand; same algorithm, `$context` auto-detected.
 
@@ -173,7 +173,7 @@ Review raw max = red (Change/diff risk, Security relevance), so `max(red, yellow
 See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → minimal run, ask directly; adoption file missing → run against KB defaults; PM tool unreachable → matrix returned to caller, tagging deferred). Additional cases:
 
 - **`/pair-capability-assess-security` not available** (review): fall back to the path-heuristic security relevance (quality-model §3.1) instead of the verdict; note the fallback.
-- **`/assess-coupling` not installed / no DDD artifacts**: coupling dimension "not assessed" (never a HALT).
+- **`/pair-capability-assess-coupling` not installed / no DDD artifacts**: coupling dimension "not assessed" (never a HALT).
 - **`/pair-process-refine-story` or `/pair-process-review` absent as caller**: run standalone via direct invocation.
 
 ## Notes
