@@ -20,12 +20,12 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 | `/analyze-debt`         | Capability | Yes      | 4     | Flag tech debt items                         |
 | `/assess-security`      | Capability | Yes †    | 2     | Security posture verdict + findings (D22)    |
 | `/assess-cost`          | Capability | Yes †    | 2     | Cost class verdict + signals (D22)           |
-| `/assess-coupling`      | Capability | Optional | 2     | Architecture/coupling balance verdict (D22)  |
+| `/assess-coupling`      | Capability | Yes †    | 2     | Architecture/coupling balance verdict (D22)  |
 | `/verify-adoption`      | Capability | Optional | 3     | Full adoption compliance                     |
 | `/assess-stack`         | Capability | Optional | 3     | Tech-stack resolution                        |
 | `/execute-manual-tests` | Capability | Optional | 6     | Post-merge release validation (manual tests) |
 
-† **Required _when installed_.** `/classify`, `/assess-security` and `/assess-cost` carry Required = Yes because `/review` composes them by default — but all **degrade gracefully**: `/review` **warns and continues** when the skill is absent (`/classify` → Step 1.5 Skip; `/assess-security` → Step 2.4; `/assess-cost` → Step 2.5; each also under Graceful Degradation), the affected section reading **not assessed**, never HALTing on their absence. `/assess-coupling` (#263) is Optional — until it ships the Architecture (Coupling) section reads **not assessed**. "Required" here means _composed by default_, not _a hard prerequisite_, so the flag never contradicts the graceful-skip steps.
+† **Required _when installed_.** `/classify`, `/assess-security`, `/assess-cost` and `/assess-coupling` carry Required = Yes because `/review` composes them by default — but all **degrade gracefully**: `/review` **warns and continues** when the skill is absent (`/classify` → Step 1.5 Skip; `/assess-security` → Step 2.4; `/assess-cost` → Step 2.5; `/assess-coupling` → Step 2.6; each also under Graceful Degradation), the affected section reading **not assessed**, never HALTing on their absence. "Required" here means _composed by default_, not _a hard prerequisite_, so the flag never contradicts the graceful-skip steps.
 
 ## Arguments
 
@@ -154,7 +154,7 @@ Ask: _"Proceed with review?"_
 
 ### Step 2.6: Architecture (Coupling) Assessment
 
-1. **Check**: Is `/assess-coupling` installed (ships with #263)?
+1. **Check**: Is `/assess-coupling` installed?
 2. **Skip**: If not installed → the **Architecture (Coupling)** section reads **not assessed** explicitly; move to Phase 3.
 3. **Act**: Compose `/assess-coupling` with `$scope: diff`. It returns a 1-line balance verdict on the integrations the diff touches (integration strength, socio-technical distance, volatility) + collapsed findings (D22).
 4. **Verify**: Verdict + findings recorded — feed the **Architecture (Coupling)** section of the review body (Step 5.1) and the **Coupling balance** dimension of the Step 1.5 matrix (`/classify` folds it in **raise-only**, same in-place body re-render + tag re-apply rule as Step 2.4). Does not itself HALT.
@@ -214,7 +214,7 @@ Run the procedure for the level determined in Step 3.1 — see [degradation-leve
    - **Assessments** (each a 1-line verdict + `<details>`, "not assessed" when the capability is absent):
      - **Security — input validation, output handling, authentication, authorization, introduced vulnerabilities** (five verdicts from `/assess-security`, Step 2.4)
      - **Cost** — `cost:*` class + signals (from `/assess-cost`, Step 2.5)
-     - **Architecture (Coupling)** — balance verdict (from `/assess-coupling`, Step 2.6; "not assessed" until #263)
+     - **Architecture (Coupling)** — balance verdict (from `/assess-coupling`, Step 2.6; "not assessed" when the skill is absent)
    - **Details** (collapsed): findings by severity + positive feedback (Phase 2); functionality / AC coverage; testing & quality gates (from /verify-quality); adoption compliance with degradation level (Phase 3); tech debt (from /analyze-debt); documentation (from /verify-done).
 
 ### Step 5.2: Make Review Decision
@@ -268,7 +268,7 @@ REVIEW COMPLETE:
 ├── Issues:     [critical: N | major: N | minor: N]
 ├── Security:   [green | yellow | red — N findings, N introduced | not assessed]
 ├── Cost:       [green | yellow | orange | red | not assessed]
-├── Coupling:   [green | yellow | red | not assessed — until #263]
+├── Coupling:   [green | yellow | red | not assessed — skill absent]
 ├── Quality:    [PASS | FAIL — N gates]
 ├── DoD:        [N/N criteria met]
 ├── Adoption:   [Level N — summary]
@@ -308,7 +308,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **/analyze-debt not available**: Skip debt assessment, note in report.
 - **/assess-security not installed**: Skip Step 2.4. The five Security sections (input validation, output handling, authentication, authorization, introduced vulnerabilities) read **not assessed** — never dropped. Does NOT HALT; a manual security read of the diff is still expected per [how-to-11](../../../.pair/knowledge/how-to/11-how-to-code-review.md).
 - **/assess-cost not installed**: Skip Step 2.5. The Cost section reads **not assessed**. Does NOT HALT.
-- **/assess-coupling not installed** (until #263): Skip Step 2.6. The Architecture (Coupling) section reads **not assessed**. Does NOT HALT.
+- **/assess-coupling not installed**: Skip Step 2.6. The Architecture (Coupling) section reads **not assessed**. Does NOT HALT.
 - **Self-authored PR (self-review)**: GitHub blocks `APPROVE` / `REQUEST_CHANGES` on your own PR, so the native verdict action is rejected for solo authors. Fall back to `event = COMMENT` (`gh pr review <number> --comment --body-file <report>`), keeping the verdict token at the head of the body — the full verdict-first report is still recorded as a review, so nothing is lost (unlike a rejected APPROVE/REQUEST_CHANGES). Does NOT HALT.
 - **Story not found**: Review proceeds with PR-only validation (no AC check). Phase 6 skips parent cascade.
 - **Code review template not found**: **HALT** — cannot produce review without template (a required dependency, not optional).
