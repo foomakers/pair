@@ -289,5 +289,275 @@ test('non-convergence: MAX_FIX_ROUNDS escalation flushes the working log to the 
   assert.ok(flush, 'escalation posts a flush comment')
   assert.ok(flush.prompt.includes('x.ts:1'), 'flush carries the still-open findings')
   assert.ok(flush.prompt.includes('.pair/working/reviews/292.md') && flush.prompt.includes('Do NOT delete the log'), 'flush reads the log and keeps it for the human')
+  assert.ok(/UNTRACKED|PRESERVED|pruned/.test(flush.prompt) && flush.prompt.includes('../pair-worktrees/292'), 'flush documents the worktree-persistence assumption of the untracked log (finding 3)')
+  // #373 round-6 finding: the flush must ALSO minimize a prior convergence's final-remediation
+  // comment (converged-but-unmerged re-run that now escalates) — a stale "ready for merge" verdict
+  // cannot stay visible beside an active escalation; never the first-review comment. Mirrors the
+  // synth-path minimize set.
+  assert.ok(/final-remediation\/synthesis comment left by an EARLIER convergence/i.test(flush.prompt), 'flush minimizes a prior convergence\'s own final-remediation comment (round-6 finding)')
+  assert.ok(/NEVER minimize the first-review comment/i.test(flush.prompt), 'flush carves out the first-review comment from the minimize set')
+  assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no synthesis on escalation')
+})
+
+// ── #373: whole-cycle noise-reduction across escalate / resume / manual rounds ──
+// The persisted working log is the single source of truth for an in-flight cycle;
+// its EXISTENCE on a resume run == a cycle to CONTINUE (silent round-0), converging
+// to exactly ONE first-review + ONE final remediation regardless of run count.
+const RESUME_STORY = { id: '292', title: 'T', branch: 'feat/#292-x', prNumber: 7 }
+
+test('#373 continuation (resume + existing log): probe runs, round-0 review is SILENT, immediate convergence still synthesizes + deletes (AC1 + immediate-convergence edge)', async () => {
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.label?.startsWith('probe:')) return { logExists: true, firstReviewPosted: true } // prior run left a log + first review
+    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] } // round-0 already clean
+    if (opts.label?.startsWith('synth:')) return 'posted'
+    return { fixed: true }
+  }
+  const { result, calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
+
+  assert.ok(!calls.some(c => c.opts.phase === 'Implement'), 'resume skips implement')
+  assert.ok(!calls.some(c => c.opts.phase === 'PR'), 'resume skips PR-open')
+
+  const probe = calls.find(c => c.opts.label?.startsWith('probe:'))
+  assert.ok(probe, 'a continuation existence-probe runs on resume')
+  assert.ok(probe.prompt.includes('.pair/working/reviews/292.md'), 'probe checks the per-story working log')
+
+  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  assert.equal(reviews.length, 1, 'round-0 only (immediate convergence)')
+  assert.ok(reviews[0].prompt.includes('do NOT post any PR comment'), 'round-0 on a continuation is a SILENT re-review')
+  assert.ok(!reviews[0].prompt.includes('This is the FIRST review: POST'), 'no second first-review is posted')
+
+  const synth = calls.find(c => c.opts.label?.startsWith('synth:'))
+  assert.ok(synth, 'immediate convergence on a continuation still synthesizes (cycleHasRemediation seeded true)')
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+})
+
+test('#373 continuation convergence: the ONE synthesis maps ALL runs, minimizes prior flush/manual comments, then deletes the log (AC2 + AC3)', async () => {
+  let revCall = 0
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.label?.startsWith('probe:')) return { logExists: true, firstReviewPosted: true }
+    if (opts.agentType === 'reviewer') {
+      revCall++
+      return revCall === 1
+        ? { verdict: 'Rework', findings: [{ location: 'a.ts:1', severity: 'Minor', description: 'd', recommendation: 'r' }] }
+        : { verdict: 'Approved', findings: [] }
+    }
+    if (opts.label?.startsWith('synth:')) return 'posted'
+    return { fixed: true }
+  }
+  const { result, calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
+  const synth = calls.find(c => c.opts.label?.startsWith('synth:'))
+  assert.ok(synth, 'convergence synthesizes')
+  assert.ok(/ALL runs/i.test(synth.prompt), 'synthesis maps findings across ALL runs of the cycle')
+  assert.ok(/minimize/i.test(synth.prompt) && /outdated/i.test(synth.prompt), 'synthesis minimizes / marks-outdated prior intermediate comments')
+  // #373 round-5 finding 1: the minimize set must also cover a PRIOR convergence's own
+  // final-remediation comment (re-run→re-converge edge), while NEVER the first review, so the
+  // 'at most one final remediation' invariant holds on re-entry.
+  assert.ok(/prior convergence/i.test(synth.prompt), 'synthesis minimizes a prior convergence\'s own final-remediation comment (re-run→re-converge edge)')
+  assert.ok(/do NOT minimize the first review/i.test(synth.prompt), 'the first-review comment is explicitly excluded from the minimize set')
+  assert.ok(synth.prompt.includes('DELETE'), 'synthesis deletes the log at the end')
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+})
+
+test('#373 resume with NO prior log: round-0 is a FRESH first review (posted), not silenced (prNumber-resume-no-log edge)', async () => {
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.label?.startsWith('probe:')) return { logExists: false, firstReviewPosted: false } // review never ran → no log, no prior first review
+    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    return { fixed: true }
+  }
+  const { calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
+  const probe = calls.find(c => c.opts.label?.startsWith('probe:'))
+  assert.ok(probe, 'probe still runs on resume')
+  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  assert.ok(reviews[0].prompt.includes('This is the FIRST review: POST'), 'no log → round-0 posts a fresh first review')
+  assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'clean fresh review on resume → no synthesis (cycleHasRemediation stayed false)')
+})
+
+test('#373 fresh story: no continuation probe runs (fresh path unchanged, AC6)', async () => {
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  assert.ok(!calls.some(c => c.opts.label?.startsWith('probe:')), 'no existence-probe on a fresh (non-resume) story')
+})
+
+test('#373 escalate documents the manual out-of-band convention (funnel into the same log; next run synthesizes) — AC4', async () => {
+  const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] }
+    if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+    if (opts.phase === 'PR') return { prNumber: 7 }
+    if (opts.label?.startsWith('flush:')) return 'flushed'
+    return { fixed: true }
+  }
+  const { calls } = await runWorkflow({ args: { stories: [STORY] }, dispatch })
+  const flush = calls.find(c => c.opts.label?.startsWith('flush:'))
+  assert.ok(flush, 'escalation posts a flush comment')
+  assert.ok(/same (working )?log|this log/i.test(flush.prompt), 'flush directs further rework into the same working log')
+  assert.ok(/next.*run.*synthesi/i.test(flush.prompt), 'flush states the next orchestrated run synthesizes the cycle')
+})
+
+test('#373 resume with NO log but a first review ALREADY on the PR: round-0 is SILENT (no duplicate first review), clean → no synth (findings 1 & 3)', async () => {
+  // Converged-but-unmerged re-run (log deleted at convergence) OR a pruned/out-of-band
+  // clone that lost the untracked log: the PR-side `firstReviewPosted` signal must still
+  // suppress a second first-review. cycleHasRemediation stays false (no log to continue), so a
+  // clean round-0 adds nothing and never tries to synthesize a gone log.
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.label?.startsWith('probe:')) return { logExists: false, firstReviewPosted: true }
+    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    return { fixed: true }
+  }
+  const { result, calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
+  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  assert.equal(reviews.length, 1, 'round-0 only')
+  assert.ok(reviews[0].prompt.includes('do NOT post any PR comment'), 'round-0 is a SILENT re-review when a first review already exists on the PR')
+  assert.ok(!reviews[0].prompt.includes('This is the FIRST review: POST'), 'no duplicate first-review is posted')
+  assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no log to continue → clean round-0 does not synthesize a deleted log')
+  assert.equal(result.batch[0].status, 'ready-for-merge')
+})
+
+test('#373 finding 1: resume, NO log + first review already on PR, round-0 ESCALATES → flush still posts from inline findings (best-effort log read)', async () => {
+  // The escalate-visibility gap: firstReviewPosted=true + logExists=false means round-0 is a
+  // SILENT re-review (first=false) AND cycleHasRemediation stays false (seeded only from the
+  // log). If round-0 returns needsHumanDecision, the escalation must STILL leave a PR-visible
+  // artifact — otherwise the new blocking concern surfaces only in the batch return value and a
+  // later resume repeats the silent escalation. The `|| !first` arm posts a flush; because
+  // there is no log to anchor to, it escalates from the inline findings directly.
+  const finding = { location: 'x.ts:1', severity: 'Blocker', description: 'design disagreement', recommendation: 'r' }
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.label?.startsWith('probe:')) return { logExists: false, firstReviewPosted: true }
+    if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding], needsHumanDecision: true }
+    if (opts.label?.startsWith('flush:')) return 'flushed'
+    return { fixed: true }
+  }
+  const { result, calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
+  assert.equal(result.batch[0].status, 'escalate')
+  const reviews = calls.filter(c => c.opts.agentType === 'reviewer')
+  assert.equal(reviews.length, 1, 'round-0 only (escalates immediately)')
+  assert.ok(reviews[0].prompt.includes('do NOT post any PR comment'), 'round-0 is SILENT (first review already on PR)')
+  const flush = calls.find(c => c.opts.label?.startsWith('flush:'))
+  assert.ok(flush, 'a resume-path round-0 escalation STILL posts a flush (finding 1: no silent escalation)')
+  assert.ok(flush.prompt.includes('x.ts:1'), 'flush carries the still-open actionable findings')
+  assert.ok(/No prior review working log exists/i.test(flush.prompt), 'no-log arm: escalates from inline findings, not from a (missing) log')
+  assert.ok(!flush.prompt.includes('Read the review log'), 'no-log arm does not instruct reading a non-existent log (best-effort)')
+  assert.ok(!flush.prompt.includes('Do NOT delete the log'), 'no-log arm has no log to keep as an anchor')
+  assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'escalation never synthesizes')
+})
+
+test('#373 finding 4: probe queries BOTH signals and runs at sonnet/low — reliable worktree+gh, still low effort', async () => {
+  // The probe orchestrates a worktree + a `gh` fetch + a substring match, and a mis-report
+  // fails OPEN toward a duplicate first review (the very noise this story removes), so it runs
+  // at sonnet (not the cheapest haiku) while staying at low effort. This pins the model choice
+  // so a later refactor can't silently drop it back to a tier that mis-runs the tool steps.
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.label?.startsWith('probe:')) return { logExists: false, firstReviewPosted: false }
+    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    return { fixed: true }
+  }
+  const { calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
+  const probe = calls.find(c => c.opts.label?.startsWith('probe:'))
+  assert.ok(probe, 'probe runs on resume')
+  assert.equal(probe.opts.model, 'sonnet', 'probe runs at sonnet (reliable worktree+gh substring match, fails open toward duplicate first review)')
+  assert.equal(probe.opts.effort, 'low', 'probe uses low effort')
+  assert.ok(probe.prompt.includes('logExists') && probe.prompt.includes('firstReviewPosted'), 'probe reports both the log-existence and the PR-side first-review signal')
+})
+
+test('#373 finding 1: the first review emits a hidden marker and the probe matches it DETERMINISTICALLY (no semantic template-structure judgment)', async () => {
+  // The probe runs at sonnet/low. It must NOT classify a comment by reading its structure
+  // (a false positive would silence a legitimate first review — the story's High-impact
+  // over-silencing risk). Instead the first review emits a fixed hidden marker and the probe
+  // does a plain EXACT substring match on that same marker.
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.label?.startsWith('probe:')) return { logExists: false, firstReviewPosted: false }
+    if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+    return { fixed: true }
+  }
+  const { calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
+  const marker = `<!-- pair:first-review #${RESUME_STORY.id} PR#${RESUME_STORY.prNumber} -->`
+
+  const first = calls.find(c => c.opts.agentType === 'reviewer')
+  assert.ok(first.prompt.includes(marker), 'the first review emits the exact hidden marker verbatim')
+  assert.ok(/HTML comment/i.test(first.prompt) && /invisible/i.test(first.prompt), 'marker is documented as an invisible HTML comment (no visible noise)')
+
+  const probe = calls.find(c => c.opts.label?.startsWith('probe:'))
+  assert.ok(probe.prompt.includes(marker), 'the probe matches the SAME marker the first review emits')
+  assert.ok(/EXACT marker substring|plain substring match|DETERMINISTICALLY/.test(probe.prompt), 'probe is a deterministic substring match, not a judgment')
+  assert.ok(!/Overall Assessment|Review Summary/.test(probe.prompt), 'probe no longer relies on a semantic template-structure reading of the comment')
+})
+
+test('#373 finding 3: both escalate-flush prompts carry the shared convention block, each interpolated from its OWN story/PR (single source, parameterized — not a byte-equal tautology)', async () => {
+  const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
+
+  // MAX_FIX_ROUNDS escalation (fresh-story path, cycleHasRemediation set by a prior fix round).
+  // Distinct id (292) + PR (#7 from the PR phase) from the resume path below.
+  const STORY_A = { id: '292', title: 'T', branch: 'feat/#292-x' }
+  const maxRoundsFlush = (await runWorkflow({
+    args: { stories: [STORY_A] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      if (opts.label?.startsWith('flush:')) return 'flushed'
+      return { fixed: true }
+    },
+  })).calls.find(c => c.opts.label?.startsWith('flush:'))
+
+  // needsHumanDecision escalation (fixer escalates a design disagreement on a continuation).
+  // DISTINCT id (555) + PR (#88 via resume) so an interpolation regression cannot be masked.
+  const STORY_B = { id: '555', title: 'T', branch: 'feat/#555-y', prNumber: 88 }
+  const designFlush = (await runWorkflow({
+    args: { stories: [STORY_B] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+      if (opts.label?.startsWith('probe:')) return { logExists: true, firstReviewPosted: true }
+      if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] }
+      if (opts.label?.startsWith('flush:')) return 'flushed'
+      return { needsHumanDecision: true } // fixer escalates a design disagreement
+    },
+  })).calls.find(c => c.opts.label?.startsWith('flush:'))
+
+  assert.ok(maxRoundsFlush && designFlush, 'both escalation paths post a flush')
+
+  // Shared single-source marker present in BOTH (Part A supersede clause).
+  assert.match(maxRoundsFlush.prompt, /SUPERSEDES the last/, 'maxRounds flush carries the shared minimize/supersede block')
+  assert.match(designFlush.prompt, /SUPERSEDES the last/, 'design-disagreement flush carries the shared minimize/supersede block')
+
+  // Each flush is interpolated from its OWN story/PR — proving parameterization, not a tautology.
+  assert.match(maxRoundsFlush.prompt, /\.\.\/pair-worktrees\/292\b/, 'maxRounds flush interpolates its own worktree (292)')
+  assert.match(maxRoundsFlush.prompt, /PR #7\b/, 'maxRounds flush interpolates its own PR (#7)')
+  assert.doesNotMatch(maxRoundsFlush.prompt, /pair-worktrees\/555|PR #88\b/, 'maxRounds flush does NOT leak the other story/PR')
+
+  assert.match(designFlush.prompt, /\.\.\/pair-worktrees\/555\b/, 'design flush interpolates its own worktree (555)')
+  assert.match(designFlush.prompt, /PR #88\b/, 'design flush interpolates its own PR (#88)')
+  assert.doesNotMatch(designFlush.prompt, /pair-worktrees\/292|PR #7\b/, 'design flush does NOT leak the other story/PR')
+})
+
+test('#373 escalate ON A CONTINUATION: resume + existing log + never-converging re-review keeps the log, flushes (cycleHasRemediation seeded true), supersedes prior flush, no synth (AC5 on the resume path)', async () => {
+  const finding = { location: 'x.ts:1', severity: 'Minor', description: 'never fixed', recommendation: 'r' }
+  const dispatch = (prompt, opts) => {
+    if (opts.agentType === 'contract-generator') return { status: 'cache-hit', contract: validContract() }
+    if (opts.label?.startsWith('probe:')) return { logExists: true, firstReviewPosted: true }
+    if (opts.agentType === 'reviewer') return { verdict: 'Rework', findings: [finding] } // never converges
+    if (opts.label?.startsWith('flush:')) return 'flushed'
+    return { fixed: true }
+  }
+  const { result, calls } = await runWorkflow({ args: { stories: [RESUME_STORY] }, dispatch })
+  assert.equal(result.batch[0].status, 'escalate')
+  // cycleHasRemediation was seeded true by the continuation, so the flush fires even though the
+  // escalation happened on round-0 of a RESUMED cycle (fresh-story path only reaches the
+  // guarded flush after a fix round sets cycleHasRemediation).
+  const flush = calls.find(c => c.opts.label?.startsWith('flush:'))
+  assert.ok(flush, 'continuation escalation posts a flush (cycleHasRemediation seeded true from the existing log)')
+  assert.ok(flush.prompt.includes('x.ts:1'), 'flush carries the still-open findings')
+  assert.ok(flush.prompt.includes('Do NOT delete the log'), 'the continuation anchor log is kept')
+  assert.ok(/minimize|supersede/i.test(flush.prompt), 'a new escalate-flush supersedes/minimizes the prior one (finding 2)')
   assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no synthesis on escalation')
 })
