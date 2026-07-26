@@ -147,7 +147,9 @@ describe('refine-story — Design flag wired end-to-end (AC2, DoR criterion 6) (
   for (const v of VARIANTS) {
     it(`${v.label} Step 1 detection table has a "Design flag" row referencing the \`Design:\` line`, () => {
       // Isolate Step 1 (detection) so a matching row elsewhere can't satisfy this.
-      const step1 = v.content.slice(v.content.search(/### Step 1: Detect/)).split(/\n### Step 2\b/)[0]
+      const step1 = v.content
+        .slice(v.content.search(/### Step 1: Detect/))
+        .split(/\n### Step 2\b/)[0]
       const row = step1
         .split('\n')
         .find(line => line.trim().startsWith('|') && /Design flag/.test(line))
