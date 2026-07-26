@@ -158,7 +158,9 @@ describe('review skill — review IS the native review body, no separate comment
       // is delivered via a native-review EVENT + a body-file, so a differently worded
       // "post as a separate comment" reintroduction still fails this guard.
       expect(post).toMatch(/APPROVE|REQUEST_CHANGES/)
-      expect(post.toLowerCase()).toMatch(/--body-file|as (the |its )?(native )?(github )?review body|report .*as .*body/)
+      expect(post.toLowerCase()).toMatch(
+        /--body-file|as (the |its )?(native )?(github )?review body|report .*as .*body/,
+      )
     })
   }
 })
