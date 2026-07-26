@@ -36,6 +36,16 @@ If a PR has **no** `risk:*` tag — or the tag is unknown or malformed — the g
 
 If a tier requires a suite the repository does not have (for example, a 🔴 PR with no E2E suite), the gate **fails with an explicit "suite missing" error**. It never silently passes a tier whose checks could not run.
 
+## Checking locally before you push (local = CI)
+
+The `verify-quality` capability runs the **same check set the gate would run for this item's tier**, on your machine, before you push. It resolves the `risk:*` tag — from the pull request, or pre-publish from the story card — and applies the exact same matrix through the same shipped resolver the CI gate uses. So a 🟢 green change runs only lint + type + build locally (no over-checking), and a 🔴 red change runs the full set locally (no surprise red at the gate).
+
+It never classifies: like the pipeline, it reads the tag and the matrix only. The three parity guarantees carry over unchanged:
+
+- **Fail-safe red** — no resolvable `risk:*` tag ⇒ the full set runs locally too, stated explicitly in the report.
+- **Missing suite is loud** — a suite the tier requires but the repo lacks is reported as `suite missing — CI will fail`, never a silent local pass.
+- **Opt-in preserved** — with tiering off (the default), `verify-quality` runs the full suite, exactly as CI does.
+
 ## Coverage guardrail (opt-in, off by default)
 
 Coverage can be protected by a **baseline regression guardrail** — a job inside the same pipeline, not a separate CI mechanism. It is **opt-in and off by default** (the twin of tiering): a project turns it on by setting `Coverage guardrail: enabled` in its `way-of-working.md`, and `setup-gates` offers it as a guided-setup question (default **No**). Absent the flag, no coverage job is generated. When enabled, a PR that drops coverage **below a committed baseline** fails the gate; a PR that maintains or improves it passes. It is a guardrail against regression, not a wall demanding a fixed percentage on every PR, so a legacy codebase is never failed at 0 on day one.

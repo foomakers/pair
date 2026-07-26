@@ -21,6 +21,7 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")/../../.." && pwd)}"
 RESOLVER="$REPO_ROOT/packages/knowledge-hub/dataset/.pair/knowledge/assets/tier-resolve.sh"
 GUIDELINE="$REPO_ROOT/packages/knowledge-hub/dataset/.pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md"
 SETUP_GATES="$REPO_ROOT/packages/knowledge-hub/dataset/.skills/capability/setup-gates/SKILL.md"
+VERIFY_QUALITY="$REPO_ROOT/packages/knowledge-hub/dataset/.skills/capability/verify-quality/SKILL.md"
 
 FAILED=0
 check() { # check <description> <expected> <actual>
@@ -30,6 +31,7 @@ check() { # check <description> <expected> <actual>
 assert_file "$RESOLVER" || exit 1
 assert_file "$GUIDELINE" || exit 1
 assert_file "$SETUP_GATES" || exit 1
+assert_file "$VERIFY_QUALITY" || exit 1
 
 # --- Redesign invariant: tier reduction is OPT-IN; default = full checks on every PR ---
 # (ADL 2026-07-20). The guideline must frame itself as an opt-in optimization and
@@ -111,6 +113,42 @@ if awk '
   log_succ "secret-scan job is unconditional at every tier"
 else
   log_fail "secret-scan job has an if: (tier-conditioned)"; FAILED=1
+fi
+
+# --- verify-quality local = CI parity (story #259) ---
+# verify-quality must resolve the tier and its suites through the SAME shipped
+# helper the CI gate uses (single source, D18) — so local mirrors CI. Audit the
+# skill for the parity wiring, not a re-implemented matrix.
+if grep -q 'tier-resolve.sh' "$VERIFY_QUALITY" \
+  && grep -q 'resolve_tier' "$VERIFY_QUALITY" \
+  && grep -q 'required_suites_for_tier' "$VERIFY_QUALITY" \
+  && grep -q 'require_suite' "$VERIFY_QUALITY"; then
+  log_succ "verify-quality resolves tier+suites via the shipped tier-resolve.sh helper (local = CI)"
+else
+  log_fail "verify-quality does not reuse tier-resolve.sh (would drift from CI)"; FAILED=1
+fi
+
+# opt-in tiering preserved: tiering disabled => full suite (current behavior / CI parity)
+if grep -q 'Pre-merge tiering' "$VERIFY_QUALITY" && grep -qi 'full suite' "$VERIFY_QUALITY"; then
+  log_succ "verify-quality preserves the opt-in flag (disabled => full suite)"
+else
+  log_fail "verify-quality lost the Pre-merge tiering opt-in / full-suite parity"; FAILED=1
+fi
+
+# fail-safe red + explicit missing-suite failure (never a silent pass)
+if grep -qi 'fail-safe' "$VERIFY_QUALITY" \
+  && grep -qi 'suite missing' "$VERIFY_QUALITY" \
+  && grep -q 'CI will fail' "$VERIFY_QUALITY"; then
+  log_succ "verify-quality carries the fail-safe red + explicit missing-suite failure"
+else
+  log_fail "verify-quality missing the fail-safe / missing-suite parity guarantees"; FAILED=1
+fi
+
+# single source: defers to quality-model §4, does not own an independent matrix (D18)
+if grep -q 'quality-model.md' "$VERIFY_QUALITY" && grep -q 'D18' "$VERIFY_QUALITY"; then
+  log_succ "verify-quality defers to quality-model §4 as the single matrix source (D18)"
+else
+  log_fail "verify-quality does not cite the single matrix source (D18)"; FAILED=1
 fi
 
 if [ "$FAILED" -ne 0 ]; then
