@@ -193,6 +193,7 @@ Rollout across the rest of the skill catalog happens organically in the stories 
 
 ## Related
 
+- [pr-states.md](pr-states.md) — the **pull-request** companion to this document: the three PR states (`to-be-reviewed` → `ready-to-merge` / `not-approved`) all live *under* the `Review` macrostate; `Done` is produced by the merge, never by a PR state
 - [way-of-working.md](../../../../adoption/tech/way-of-working.md) — hosts the optional `## State Mapping` section
 - [github-implementation.md](github-implementation.md) · [azure-devops-implementation.md](azure-devops-implementation.md) · [filesystem-implementation.md](filesystem-implementation.md) — PM tool status-field mechanics
 - [decision-records.md](../decision-records.md) — ADR/ADL process (this schema was adopted via ADR)

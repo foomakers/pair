@@ -615,31 +615,48 @@ GitHub mechanics for the two pair checks the [PR state flow](pr-states.md) requi
 
 | Check | Published by | Semantics |
 | --- | --- | --- |
-| `pair-review` | `/review` (and registered `pending` at PR creation by `/publish-pr`) | `success` on APPROVED/TECH-DEBT, `failure` on CHANGES-REQUESTED, `pending` when the review has not produced a decision (never ran, crashed, timed out) |
+| `pair-review` | `/review`, as a **commit status** (registered `pending` at PR creation by `/publish-pr`) | `success` on APPROVED/TECH-DEBT, `failure` on CHANGES-REQUESTED, `pending` when the review has not produced a decision (never ran, crashed, timed out) |
 | `pair-explicit-approval` | a workflow job (below) | `success` when the tier does not require explicit approval, or when a **human** approving review exists on the current head; `failure` at 🔴 without one |
 
 Both are **required status checks** — a `pending` or absent required check blocks the merge on GitHub exactly like a failing one, which is what makes the review unskippable (R5.7).
 
-### Publish the `pair-review` check on the head commit
+**Token prerequisite (why a commit status, not a check run).** The Checks API (`POST /repos/{owner}/{repo}/check-runs`) is writable **only by a GitHub App installation token**: with an ordinary user token or PAT it answers `403 You must authenticate via a GitHub App`. The skills that publish the verdict (`/publish-pr` Phase 5, `/review` Step 5.4) run agent-side with exactly that ordinary token, so a check run is not an option for them. The **commit-statuses API** accepts the same token and branch protection treats a status **context** as a required check identically. The token needs `repo:status` (classic PAT) / `Commit statuses: write` (fine-grained); inside a workflow that is `permissions: statuses: write`. If a project does publish through a GitHub App instead, keep the check-run form — but then the publication must happen inside a workflow holding `checks: write`, plus a relay that carries the agent's verdict there.
+
+### Provision the `pr-state:*` labels (once per repository)
+
+Labels are never auto-created: `gh pr edit --add-label pr-state:to-be-reviewed` fails with `not found` until they exist.
 
 ```bash
-# Register it pending at PR creation (merge is blocked from t0, even if the review crashes)
-HEAD_SHA="$(gh pr view "$PR" --json headRefOid -q .headRefOid)"
-gh api "repos/$OWNER/$REPO/check-runs" -X POST \
-  -f name='pair-review' -f head_sha="$HEAD_SHA" -f status='queued' \
-  -f 'output[title]=pair review pending' \
-  -f 'output[summary]=Review subagent dispatched. Merge stays blocked until the verdict lands.'
-
-# Publish the verdict conclusion (success | failure), mapped by review_check_conclusion
-source .pair/knowledge/assets/pr-state.sh
-CONCLUSION="$(review_check_conclusion "$VERDICT")"   # approved|tech-debt|changes-requested
-gh api "repos/$OWNER/$REPO/check-runs" -X POST \
-  -f name='pair-review' -f head_sha="$HEAD_SHA" -f status='completed' \
-  -f conclusion="$CONCLUSION" \
-  -f 'output[title]=pair review' -f "output[summary]=$VERDICT_SUMMARY"
+gh label create "pr-state:to-be-reviewed" --color "fbca04" --description "PR open, not yet cleared" --force
+gh label create "pr-state:ready-to-merge" --color "0e8a16" --description "Gates green + review approved (+ explicit human approval at red)" --force
+gh label create "pr-state:not-approved"   --color "d73a4a" --description "Review verdict: CHANGES-REQUESTED" --force
 ```
 
-A `pending` conclusion means "no decision yet" — do **not** publish a `completed` check for it; leave the queued run in place so the required check stays unsatisfied.
+Run this before the first `/publish-pr`. **Non-blocking**: if the labels are absent or the label API is unavailable, the flow reports the gap and continues — the label is only a view, and the required checks remain the merge authority.
+
+### Publish the `pair-review` status on the head commit
+
+```bash
+HEAD_SHA="$(gh pr view "$PR" --json headRefOid -q .headRefOid)"
+
+# Register it pending at PR creation (merge is blocked from t0, even if the review crashes)
+gh api "repos/$OWNER/$REPO/statuses/$HEAD_SHA" -X POST \
+  -f state='pending' -f context='pair-review' \
+  -f description='Review dispatched — merge blocked until the verdict lands'
+
+# Publish the verdict (success | failure), mapped by review_check_conclusion
+source .pair/knowledge/assets/pr-state.sh
+STATE="$(review_check_conclusion "$VERDICT")"   # approved|tech-debt ⇒ success · changes-requested ⇒ failure
+[ "$STATE" = pending ] && { echo "no decision yet — leaving the pending status in place"; exit 0; }
+gh api "repos/$OWNER/$REPO/statuses/$HEAD_SHA" -X POST \
+  -f state="$STATE" -f context='pair-review' \
+  -f description="$(printf '%.140s' "$VERDICT_SUMMARY")" \
+  -f target_url="$REVIEW_URL"
+```
+
+`review_check_conclusion` returns `pending` when the review produced no decision — the guard above is mandatory: never overwrite the pending status with a resolved one, so the required context stays unsatisfied and the merge stays blocked. (`description` is capped at 140 characters by the API; the full report lives in the native review that `target_url` points at.)
+
+If the POST is refused (`403`/`404` — token without `repo:status`), enforcement degrades to **advisory**: the verdict is still recorded in the native review and the `pr-state:*` label is still computed, and the skill reports `pair-review: NOT PUBLISHED — advisory` instead of claiming the merge is blocked.
 
 ### `pair-explicit-approval` job (🔴 only, auto-passes below)
 
@@ -655,6 +672,12 @@ on:
   pull_request_review:
     types: [submitted, dismissed]
 
+# Least privilege: read the PR's reviews, nothing more. (Add `statuses: write` only
+# if this same workflow is also made responsible for publishing `pair-review`.)
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   pair-explicit-approval:
     runs-on: ubuntu-latest
@@ -662,6 +685,7 @@ jobs:
       - uses: actions/checkout@v4
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
           PR: ${{ github.event.pull_request.number }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
@@ -675,9 +699,13 @@ jobs:
             echo "tier $TIER — explicit approval not required"; exit 0
           fi
           # A HUMAN approval on the CURRENT head: exclude bots and the PR author.
-          APPROVALS="$(gh pr view "$PR" --json reviews \
-            -q "[.reviews[] | select(.state==\"APPROVED\" and .commit.oid==\"$HEAD_SHA\"
-                 and .author.is_bot==false and .author.login!=\"$PR_AUTHOR\")] | length")"
+          # Use the REST reviews endpoint — it is the only one carrying BOTH the
+          # account type and the reviewed commit. `gh pr view --json reviews` exposes
+          # `author.login` and NO bot flag whatsoever, so filtering there on a
+          # bot-exclusion field matches nothing and silently yields 0 approvals.
+          APPROVALS="$(gh api "repos/$REPO/pulls/$PR/reviews?per_page=100" \
+            --jq '[.[] | select(.state=="APPROVED" and .commit_id==env.HEAD_SHA
+                   and .user.type=="User" and .user.login!=env.PR_AUTHOR)] | length')"
           [ "${APPROVALS:-0}" -ge 1 ] || {
             echo "::error::risk:red PR requires an explicit human approval on the current head (D10)"
             exit 1
@@ -690,10 +718,13 @@ jobs:
 gh api "repos/$OWNER/$REPO/branches/main/protection" -X PUT --input - <<'JSON'
 {
   "required_status_checks": {
-    "strict": true,
+    "strict": false,
     "contexts": ["base", "secret-scan", "pair-review", "pair-explicit-approval"]
   },
-  "required_pull_request_reviews": { "dismiss_stale_reviews": true },
+  "required_pull_request_reviews": {
+    "dismiss_stale_reviews": true,
+    "required_approving_review_count": 0
+  },
   "enforce_admins": true,
   "allow_force_pushes": false,
   "restrictions": null
@@ -701,12 +732,33 @@ gh api "repos/$OWNER/$REPO/branches/main/protection" -X PUT --input - <<'JSON'
 JSON
 ```
 
+- **`required_approving_review_count: 0` is explicit on purpose.** The approval authority is the tier-scoped `pair-explicit-approval` job, not a blanket host rule. Leaving the field unset lets an unstated API default decide, and a default of ≥1 would demand a human approving review on **every** PR — contradicting quality-model §4's 🟢 "self-merge once gate checks are green" row and making the tier-scoped job redundant.
+- **`"strict": false`** — the branch does not have to be up to date with the base. With `strict: true` every base update rewrites the head, and `pair-review` is published **per head commit**, so each base update voids the verdict and demands a fresh agent review: churn bordering on livelock on a busy `main`. Enable `strict` only if the project accepts re-earning the review check on every base update (and pair with an auto-update bot).
+- `dismiss_stale_reviews: true` invalidates a human approval after a force-push. It is belt-and-braces: `pair-explicit-approval` already pins the approval to the current head (`commit_id == HEAD_SHA`), so the 🔴 requirement is head-scoped even without it (edge case in [pr-states.md](pr-states.md)).
+- `enforce_admins: true` removes the admin bypass — apply it only **after** both contexts have been observed reporting on a real PR (ordering below); a required context that never reports leaves every PR blocked with no escape hatch.
 - Add the tier-scoped suite contexts (`unit`, `integration`, `e2e`) when the project runs them — on GitHub a job skipped via `if:` reports its required check as successful, so lower-tier PRs stay mergeable.
-- `dismiss_stale_reviews: true` is what invalidates a human approval after a force-push (edge case in [pr-states.md](pr-states.md)).
+
+### Ordering: add the job, observe the contexts, then protect
+
+Applying branch protection **before** the two contexts ever report makes every PR permanently unmergeable — a required context that has never reported stays pending forever, and `enforce_admins: true` removes the bypass. Apply in this order:
+
+1. **Provision** the `pr-state:*` labels and add the `pair-explicit-approval` workflow to the repository (neither needs admin scope).
+2. **Observe** on a real PR: `gh api "repos/$OWNER/$REPO/commits/$HEAD_SHA/status" --jq '.statuses[].context'` must list `pair-review`, and the Checks tab must show `pair-explicit-approval`. Publishing the status and querying the reviews need no admin scope — only the protection `PUT` does.
+3. **Protect**: `PUT` the payload above with those contexts, keeping `enforce_admins: false` until one PR has merged through the new rule.
+
+**Second human account prerequisite.** At 🔴 the job demands a **non-author** human approving review, and GitHub rejects an approving review from the PR author. On a **single-maintainer** repository no 🔴 PR can therefore satisfy it: either keep the `pair-explicit-approval` context out of the required list there, or add a second human reviewer account. See [pr-states.md](pr-states.md) § Edge cases.
 
 ### Degraded mode
 
-Without permission to write branch protection (no admin token, or a host/plan lacking the API), enforcement is **advisory**: the checks are still published and the `pr-state:*` label still computed, but nothing blocks the merge button. Apply the same contexts manually — repository **Settings → Branches → Branch protection rules → Require status checks to pass** — and record the gap until then; `/setup-gates` reports it rather than pretending the flow is enforced.
+Three independent degradations — each **reported**, never assumed away:
+
+| What is refused | Effect | Reported as |
+| --- | --- | --- |
+| **Status publication** (`403`/`404` — token without `repo:status`) | the verdict lives only in the native review; nothing mechanical blocks the merge | `pair-review: NOT PUBLISHED — advisory` |
+| **Label API** (no permission, labels absent) | the `pr-state:*` view is missing; the required checks stay the authority | `pr-state label: not applied` (non-blocking) |
+| **Branch protection** (no admin token, or a host/plan lacking the API) | checks are published but nothing blocks the merge button | `/setup-gates`: `DEGRADED — enforcement advisory` |
+
+For the last one, apply the same contexts manually — repository **Settings → Branches → Branch protection rules → Require status checks to pass** — and record the gap until then; `/setup-gates` reports it rather than pretending the flow is enforced.
 
 ## Related Resources
 

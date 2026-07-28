@@ -73,7 +73,7 @@ Reviewer counts and SLAs are **KB defaults** (D10), resolved through the same **
 - tier.red.sla_days: 3
 ```
 
-Review always runs, tests are always green, at every tier (R5.3 + D10) — this part is not overridable, only the reviewer count and SLA are. Gate (mechanical) and review (judgment) are distinct enforcers — gate blocks first, review starts only once gates are green:
+Review always runs, tests are always green, at every tier (R5.3 + D10) — this part is not overridable, only the reviewer count and SLA are. Gate (mechanical) and review (judgment) are distinct enforcers — gate blocks first, review starts only once gates are green. **Refinement** (the merge-side companion below, [pr-states.md](../collaboration/project-management-tool/pr-states.md)): a review *may* run at a red gate to report findings early, but it produces **no merge-enabling verdict** — a red gate never yields `ready-to-merge`, whatever the judgment says. "Starts only once gates are green" is about the *merge-enabling* review, not about a prohibition on reading a red-gated diff.
 
 | Tier | Gate checks |
 | --- | --- |

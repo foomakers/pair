@@ -164,8 +164,24 @@ audit "merge is gated on ready-to-merge (HALT otherwise)" "$MERGE_CASCADE" \
   'merge_allowed' 'ready-to-merge' 'HALT'
 audit "setup-gates wires both pair required checks + degraded mode" "$SETUP_GATES" \
   'pair-review' 'pair-explicit-approval' 'DEGRADED'
-audit "github guide carries the check-run + branch-protection recipe" "$GITHUB_GUIDE" \
-  'pair-review' 'pair-explicit-approval' 'required_status_checks' 'dismiss_stale_reviews' 'is_bot'
+audit "github guide carries the status + branch-protection recipe" "$GITHUB_GUIDE" \
+  'pair-review' 'pair-explicit-approval' 'required_status_checks' 'dismiss_stale_reviews' \
+  'statuses/\$HEAD_SHA' 'user.type=="User"' 'gh label create "pr-state:' \
+  'required_approving_review_count": 0'
+
+# The publication command must be runnable with the ORDINARY token the skills hold:
+# POST /check-runs is GitHub-App-only (403), so no command may call it, and the
+# non-existent `author.is_bot` field must not be filtered on anywhere.
+if grep -q 'repos/\$OWNER/\$REPO/check-runs' "$GITHUB_GUIDE"; then
+  log_fail "github guide still publishes via the App-only check-runs API"; FAILED=1
+else
+  log_succ "github guide publishes pair-review via the commit-statuses API"
+fi
+if grep -q 'is_bot' "$GITHUB_GUIDE"; then
+  log_fail "github guide still filters on the non-existent author.is_bot field"; FAILED=1
+else
+  log_succ "github guide does not rely on a non-existent is_bot field"
+fi
 
 # --- The `pair-explicit-approval` job must read the tag only and demand a HUMAN
 # approval on the CURRENT head (a bot/self approval can never satisfy 🔴). ---
@@ -174,6 +190,61 @@ if grep -q 'resolve_tier' "$GITHUB_GUIDE" && grep -q 'explicit_approval_required
   log_succ "explicit-approval job resolves the tag and pins the approval to the current head"
 else
   log_fail "explicit-approval job lost the tag resolution / head pinning"; FAILED=1
+fi
+
+# --- EXECUTED host assertions (read-only) -----------------------------------
+# The recipe is only real if the host API behaves as documented; doc-content
+# invariants alone cannot catch an endpoint that refuses the skills' token or a
+# field that does not exist. These probes are READ-ONLY (no status published, no
+# label created, no protection written) and are SKIPPED — never failed — without
+# gh/token/network, so offline and unauthenticated CI runs stay green.
+if [ "${IS_OFFLINE:-false}" != "true" ] && command -v gh >/dev/null 2>&1 &&
+  gh auth status >/dev/null 2>&1; then
+  PROBE_REPO="${PAIR_HOST_PROBE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)}"
+  if [ -z "$PROBE_REPO" ]; then
+    log_warn "host probe skipped — no repository resolvable"
+  else
+    # 1. The commit-statuses surface (where `pair-review` is published) is reachable
+    #    with the ordinary token. The Checks API is not — hence the statuses recipe.
+    PROBE_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || true)"
+    if [ -n "$PROBE_SHA" ] &&
+      gh api "repos/$PROBE_REPO/commits/$PROBE_SHA/status" --jq '.state' >/dev/null 2>&1; then
+      log_succ "host: commit-statuses API reachable with the agent token ($PROBE_REPO)"
+    else
+      log_warn "host probe skipped — commit-statuses read not available for $PROBE_SHA"
+    fi
+
+    # 2. The approval query's fields exist on the REST reviews payload
+    #    (`commit_id` + `user.type`) — the only endpoint carrying both.
+    #    Prefer a PR of this repo; fall back to a public reference PR whose review
+    #    payload is immutable (override with PAIR_HOST_PROBE_REVIEW_REF=owner/repo#N).
+    PROBE_PR="" PROBE_PR_REPO="$PROBE_REPO"
+    for n in $(gh api "repos/$PROBE_REPO/pulls?state=all&per_page=10" --jq '.[].number' 2>/dev/null); do
+      if [ "$(gh api "repos/$PROBE_REPO/pulls/$n/reviews?per_page=1" --jq 'length' 2>/dev/null)" = "1" ]; then
+        PROBE_PR="$n"
+        break
+      fi
+    done
+    if [ -z "$PROBE_PR" ]; then
+      REF="${PAIR_HOST_PROBE_REVIEW_REF:-cli/cli#13981}"
+      PROBE_PR_REPO="${REF%%#*}" PROBE_PR="${REF##*#}"
+      log_info "no reviewed PR on $PROBE_REPO — probing the reference payload $REF"
+    fi
+    SHAPE="$(gh api "repos/$PROBE_PR_REPO/pulls/$PROBE_PR/reviews?per_page=1" \
+      --jq '.[0] | (has("commit_id") and has("state") and (.user | has("type")))' 2>/dev/null)"
+    if [ -z "$SHAPE" ]; then
+      log_warn "host probe skipped — reviews payload unreachable for $PROBE_PR_REPO#$PROBE_PR"
+    else
+      check "host: reviews REST payload carries commit_id + user.type" true "$SHAPE"
+      # 3. The trap the recipe documents: `gh pr view --json reviews` carries NO bot
+      #    flag, so a bot-exclusion filter there silently yields zero approvals.
+      HAS_BOT_FLAG="$(gh pr view "$PROBE_PR" --repo "$PROBE_PR_REPO" --json reviews \
+        --jq '.reviews[0].author | has("is_bot")' 2>/dev/null)"
+      check "host: gh pr view reviews exposes no bot flag (trap confirmed)" false "$HAS_BOT_FLAG"
+    fi
+  fi
+else
+  log_warn "host probes skipped — offline or gh not authenticated (doc invariants still asserted)"
 fi
 
 if [ "$FAILED" -ne 0 ]; then

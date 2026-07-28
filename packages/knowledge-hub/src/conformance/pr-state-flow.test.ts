@@ -41,6 +41,22 @@ const MERGE_CASCADE = readFileSync(
 )
 const SETUP_GATES_PATH = join(DATASET, '.skills/capability/setup-gates/SKILL.md')
 const SETUP_GATES = readFileSync(SETUP_GATES_PATH, 'utf-8')
+const QUALITY_MODEL = readFileSync(
+  join(DATASET, '.pair/knowledge/guidelines/quality-assurance/quality-model.md'),
+  'utf-8',
+)
+const CANONICAL_STATES = readFileSync(
+  join(
+    DATASET,
+    '.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md',
+  ),
+  'utf-8',
+)
+const HOW_TO_CODE_REVIEW = readFileSync(
+  join(DATASET, '.pair/knowledge/how-to/11-how-to-code-review.md'),
+  'utf-8',
+)
+const WOW_TEMPLATE = readFileSync(join(DATASET, '.pair/adoption/tech/way-of-working.md'), 'utf-8')
 
 /** Every relative markdown link in `content` resolves to a file on disk. */
 const assertLinksResolve = (content: string, fromPath: string, targets: string[]): void => {
@@ -129,6 +145,26 @@ describe('pr-states.md — the PR state flow model (#234)', () => {
       'tier-resolve.sh',
     ])
   })
+
+  // --- review round 1 on PR #390 ---
+
+  it('states plainly that a 🔴 merge needs a SECOND human account (the author cannot approve)', () => {
+    expect(GUIDELINE).toMatch(/second human/i)
+    expect(GUIDELINE).not.toMatch(/what a solo maintainer satisfies deliberately/i)
+    expect(GUIDELINE).toMatch(/solo[\s\S]{0,400}(cannot|impossible|no 🔴)/i)
+  })
+
+  it('maps 🟡’s "reviewer approval" onto the pair review explicitly (no two readings)', () => {
+    expect(GUIDELINE).toMatch(/pair review[\s\S]{0,120}satisfies[\s\S]{0,80}reviewer approval/i)
+  })
+
+  it('says the post-force-push review re-run is skill/human triggered, not automatic', () => {
+    expect(GUIDELINE).toMatch(/re-?run is[\s\S]{0,120}(triggered|manual)/i)
+  })
+
+  it('carries a non-blocking degradation for a missing pr-state label family', () => {
+    expect(GUIDELINE).toMatch(/label[\s\S]{0,240}(non-blocking|not applied)/i)
+  })
 })
 
 describe('pr-state.sh — the deterministic synthesis evaluator (#234)', () => {
@@ -177,6 +213,18 @@ describe('publish-pr — review at PR creation (AC1)', () => {
   it('links the state-flow model instead of restating it', () => {
     assertLinksResolve(PUBLISH_PR, PUBLISH_PR_PATH, ['pr-states.md'])
   })
+
+  // --- review round 1 on PR #390 ---
+
+  it('degrades when the status publication is refused (advisory, reported — never assumed)', () => {
+    expect(PUBLISH_PR).toMatch(/(status|publication)[\s\S]{0,200}refused[\s\S]{0,300}advisory/i)
+  })
+
+  it('degrades non-blocking when the pr-state:* label family is absent', () => {
+    expect(PUBLISH_PR).toMatch(
+      /pr-state[^\n]*label[\s\S]{0,240}(absent|missing|not found)[\s\S]{0,300}non-blocking/i,
+    )
+  })
 })
 
 describe('review — gate-first, synthesis, and the merge precondition (AC2, AC3, AC4)', () => {
@@ -214,6 +262,19 @@ describe('review — gate-first, synthesis, and the merge precondition (AC2, AC3
   it('links the state-flow model instead of restating it', () => {
     assertLinksResolve(REVIEW, REVIEW_PATH, ['pr-states.md'])
   })
+
+  // --- review round 1 on PR #390 ---
+
+  it('publishes pair-review as a COMMIT STATUS (the check-runs API is GitHub-App only)', () => {
+    expect(REVIEW).toMatch(/commit status/i)
+    expect(REVIEW).toMatch(/(status|publication)[\s\S]{0,200}refused[\s\S]{0,300}advisory/i)
+  })
+
+  it('degrades non-blocking when the pr-state:* label family is absent', () => {
+    expect(REVIEW).toMatch(
+      /pr-state[^\n]*label[\s\S]{0,240}(absent|missing|not found)[\s\S]{0,300}non-blocking/i,
+    )
+  })
 })
 
 describe('setup-gates — pair review + explicit approval as required checks (AC5)', () => {
@@ -242,5 +303,76 @@ describe('github-implementation.md — host mechanics for the required checks (R
 
   it('the 🔴 explicit-approval check demands a HUMAN approval, not the pair review itself', () => {
     expect(GITHUB_GUIDE).toMatch(/human[\s\S]{0,200}approv/i)
+  })
+
+  // --- review round 1 on PR #390: every host command must be runnable with the
+  // token the skills actually hold. Verified against the live API. ---
+
+  it('publishes pair-review through the commit-statuses API, never POST /check-runs (403, App-only)', () => {
+    expect(GITHUB_GUIDE).toMatch(/statuses\/\$HEAD_SHA/)
+    expect(GITHUB_GUIDE).toMatch(/context=('|")?pair-review/)
+    // the prose may NAME the Checks API to explain why it is unusable; no command may call it
+    expect(GITHUB_GUIDE).not.toMatch(/repos\/\$OWNER\/\$REPO\/check-runs/)
+    expect(GITHUB_GUIDE).toMatch(/GitHub App/)
+    expect(GITHUB_GUIDE).toMatch(/repo:status/)
+  })
+
+  it('guards the pending verdict in the copy-pasteable snippet (pending is not a publishable state)', () => {
+    expect(GITHUB_GUIDE).toMatch(/=\s*pending\s*\][\s\S]{0,160}exit 0/)
+  })
+
+  it('queries approvals via the REST reviews endpoint — `author.is_bot` does not exist', () => {
+    expect(GITHUB_GUIDE).not.toMatch(/is_bot/)
+    expect(GITHUB_GUIDE).toMatch(/pulls\/\$PR\/reviews/)
+    expect(GITHUB_GUIDE).toMatch(/user\.type\s*==\s*"User"/)
+    expect(GITHUB_GUIDE).toMatch(/commit_id\s*==/)
+  })
+
+  it('provisions the pr-state:* label family (labels never autocreate)', () => {
+    for (const state of ['to-be-reviewed', 'ready-to-merge', 'not-approved']) {
+      expect(GITHUB_GUIDE).toMatch(new RegExp(`gh label create ["']?pr-state:${state}`))
+    }
+  })
+
+  it('states required_approving_review_count explicitly and justifies the strict choice', () => {
+    expect(GITHUB_GUIDE).toMatch(/"required_approving_review_count": 0/)
+    expect(GITHUB_GUIDE).toMatch(/"strict": false/)
+    expect(GITHUB_GUIDE).toMatch(/strict[\s\S]{0,400}(per head|head commit|up to date)/i)
+  })
+
+  it('pins least-privilege permissions on the workflow template', () => {
+    expect(GITHUB_GUIDE).toMatch(/permissions:[\s\S]{0,200}pull-requests: read/)
+  })
+
+  it('records the ordering constraint (add job → observe the contexts → protect) and the enforce_admins trap', () => {
+    expect(GITHUB_GUIDE).toMatch(/## Ordering|### Ordering/i)
+    expect(GITHUB_GUIDE).toMatch(/enforce_admins[\s\S]{0,400}(after|escape|bypass)/i)
+    expect(GITHUB_GUIDE).toMatch(/second human/i)
+  })
+
+  it('documents the three independent degradations: status publication, label API, branch protection', () => {
+    expect(GITHUB_GUIDE).toMatch(/NOT PUBLISHED/)
+    expect(GITHUB_GUIDE).toMatch(/label API/i)
+    expect(GITHUB_GUIDE).toMatch(/branch protection[\s\S]{0,300}advisory/i)
+  })
+})
+
+describe('doc coherence & cross-links for the PR state flow (#234)', () => {
+  it('quality-model §4 points at pr-states.md for the red-gate refinement (no contradictory reading)', () => {
+    expect(QUALITY_MODEL).toMatch(
+      /red gate[\s\S]{0,200}(no merge-enabling|never[\s\S]{0,40}merge-enabling)/i,
+    )
+  })
+
+  it('canonical-states.md back-links the PR state flow companion', () => {
+    expect(CANONICAL_STATES).toMatch(/pr-states\.md/)
+  })
+
+  it('how-to-11’s decision table points at the merge precondition (required checks, merge_allowed)', () => {
+    expect(HOW_TO_CODE_REVIEW).toMatch(/merge_allowed|pr-states\.md/)
+  })
+
+  it('the way-of-working TEMPLATE carries a status placeholder, not an applied-as-fact claim', () => {
+    expect(WOW_TEMPLATE).toMatch(/Status: \[applied \| not yet applied\]/)
   })
 })

@@ -3,6 +3,8 @@ title: PR State Flow (gate ≠ review)
 description: How pair turns mechanical gates, a judgment review, and the risk tier into one PR state — and blocks the merge with required code-host checks instead of good intentions.
 ---
 
+import { Callout } from 'fumadocs-ui/components/callout'
+
 A pull request in pair has exactly **three** states, and nobody types them in. The state is the **synthesis** of signals that already exist on the pull request: the CI gate result, the review verdict, the `risk:*` tier, and whether a human approved explicitly.
 
 ```text
@@ -27,7 +29,7 @@ to-be-reviewed → ready-to-merge
 
 ## The review is a required check, not a convention
 
-At PR creation `publish-pr` registers a **`pair-review`** check as pending and dispatches the review to a clean-context subagent — a reviewing context that inherits nothing from the authoring session. Because `pair-review` is a **required status check** on the protected branch, the merge is blocked from the first second:
+At PR creation `publish-pr` registers a **`pair-review`** check as pending — on GitHub a *commit status*, which an ordinary agent token can write (the Checks API is GitHub-App only) and which branch protection accepts as a required context all the same — and dispatches the review to a clean-context subagent — a reviewing context that inherits nothing from the authoring session. Because `pair-review` is a **required status check** on the protected branch, the merge is blocked from the first second:
 
 - review approved ⇒ check `success`
 - changes requested ⇒ check `failure`
@@ -35,7 +37,15 @@ At PR creation `publish-pr` registers a **`pair-review`** check as pending and d
 
 So the review cannot be skipped, and a crashed review can never leave a PR quietly mergeable.
 
-A second required check, **`pair-explicit-approval`**, enforces the 🔴 tier's extra requirement: a **human** approval on the current head commit (the AI review does not count, and a bot cannot substitute). It auto-passes at 🟢 and 🟡, so lower-risk PRs are never slowed down by it.
+A second required check, **`pair-explicit-approval`**, enforces the 🔴 tier's extra requirement: a **human, non-author** approval on the current head commit (the AI review does not count, and a bot cannot substitute). It auto-passes at 🟢 and 🟡, so lower-risk PRs are never slowed down by it.
+
+<Callout type="warn">
+  **A 🔴 merge needs a second human account.** GitHub rejects an approving review from the PR author,
+  so on a single-maintainer repository no 🔴 PR can satisfy `pair-explicit-approval`. Either add a
+  second human reviewer account, or deliberately keep that context out of the required list there and
+  accept that the 🔴 human-approval rule is advisory (recorded, not silently dropped). At 🟡 there is
+  no such constraint: the pair review itself *is* the reviewer approval the quality model asks for.
+</Callout>
 
 ## Labels are a view; checks are the authority
 
@@ -48,7 +58,7 @@ Reviewer count, SLA, checklist depth, and the 🔴 explicit-approval rule come f
 ## Things that change mid-flight
 
 - **Tier raised during review** (🟡 → 🔴): requirements are re-evaluated on the new tier and the merge **re-blocks** until a human approves. Tiers are raise-only, so re-evaluation never loosens anything.
-- **Force-push after approval**: checks and reviews are per head commit, so the new head has no review check — the merge blocks and the review re-runs. Stale human approvals are dismissed too.
+- **Force-push after approval**: checks and reviews are per head commit, so the new head has no review check — the merge blocks. The re-run is **triggered, not automatic**: re-invoke the review (or add a `synchronize` job that re-registers the pending check) — the fail-safe direction is "blocked", so nothing slips through in the meantime. Stale human approvals are dismissed too.
 - **Review subagent crashes**: the pending check keeps the merge blocked, and the PR gets a comment with the re-run command.
 - **Host without a required-check API**: documented **degraded mode** — the state is still computed and labeled, but enforcement is advisory until the branch protection is applied manually. `setup-gates` reports the gap instead of pretending the flow is enforced.
 

@@ -53,7 +53,9 @@ Accepted
 
 ### Option 3: Two required checks — agent-published verdict + deterministic approval job (chosen)
 
-- **Description**: `pair-review` (published by the review flow on the head commit: `success` on
+- **Description**: `pair-review` (published by the review flow on the head commit as a **commit status**
+  — the Checks API is writable only by a GitHub App installation token, while branch protection accepts a
+  status context as a required check identically: `success` on
   APPROVED/TECH-DEBT, `failure` on CHANGES-REQUESTED, left **pending** when no decision exists) plus
   `pair-explicit-approval` (a deterministic host job that reads the `risk:*` label only, auto-passes
   below 🔴, and at 🔴 asserts a non-bot, non-author approving review on the current head). Both are
@@ -101,6 +103,16 @@ label is an advisory view that can never enable a merge. Concretely:
   or token cannot configure protection — the degradation is visible, never assumed away.
 - 🔴 PRs carry a mechanical, auditable explicit-approval trail (a human, non-author approving review on
   the merged head), satisfying the compliance angle of the story without a new artifact.
+- **Consequence accepted knowingly: a 🔴 merge requires a second human account.** GitHub rejects an
+  approving review from the PR author, so on a single-maintainer repository (including this one) no 🔴 PR
+  can reach `ready-to-merge` while `pair-explicit-approval` is a required context. Such a project either
+  adds a second human reviewer account or deliberately leaves that context out of the required list and
+  records the 🔴 rule as advisory. An alternative solo-approval token (a human-applied `approved:human`
+  label with actor verification, or an `/approve` comment command) is a **design change deferred to its
+  own story** — it is intentionally absent here rather than half-specified.
+- **Ordering is part of the decision**: the workflow job and the `pr-state:*` labels must exist and be
+  observed reporting on a real PR *before* the protection is written (and `enforce_admins` enabled),
+  otherwise a required context that never reports blocks every merge with no escape hatch.
 - Adding a code host means adding an implementation-guide section, not touching the model or the
   evaluator. Hosts lacking required checks remain usable in advisory mode.
 - Verification split per the gate-tooling ADL (2026-07-13): `pr-state.sh` behavior is executed by
