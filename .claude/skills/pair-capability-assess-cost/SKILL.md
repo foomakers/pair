@@ -20,7 +20,7 @@ Assess the financial exposure of a change in two modes, both resolved from the s
 
 | Argument  | Required | Description                                                                                                                              |
 | --------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `$mode`   | No       | `classify` — class of one diff/story (output-only). `report` — period cost monitoring panel. Auto-detected: a diff/story in context (i.e. invoked by `/pair-process-review` or `/pair-capability-classify`) → `classify`; a `$period` given, or no surface in context → `report`. |
+| `$mode`   | No       | `classify` (**the default**) — class of one diff/story (output-only). `report` — period cost monitoring panel. `report` runs **only when explicitly asked for** (`$mode: report`) or when a reporting window is given; every other invocation classifies, a bare one included. |
 | `$diff`   | No       | Classification mode. The PR/branch diff to classify. Default when invoked by `/pair-process-review` or against a branch: the current diff.            |
 | `$story`  | No       | Classification mode. A story/issue to classify from its declared scope instead of a diff — the refinement-time (shift-left) path, mirroring the risk matrix built twice. |
 | `$scope`  | No       | Classification mode. Area/package to scope the scan (default: the whole diff/story). Package-scoped only — never narrows the rule set, only the surface scanned. |
@@ -51,8 +51,8 @@ A missing/malformed adoption file is treated as absent: warn and fall back to KB
 
 1. **Check**: Is `$mode` provided?
 2. **Skip**: If provided, use it. Proceed to Step 2.
-3. **Act**: Auto-detect: a diff/story in context (`$diff`/`$story`, i.e. invoked by `/pair-process-review` or `/pair-capability-classify`) → `classify`; a `$period` given, or no surface in context → `report`.
-4. **Verify**: Mode is set — exactly one mode runs per invocation.
+3. **Act**: Not provided → `report` **only when a `$period` is given**; **otherwise `classify`**, the default. A bare invocation with no surface named (`/pair-capability-assess-cost` on the current branch) is a `classify` run against that branch's diff — the absence of `$diff`/`$story` is _never_ by itself a reason to enter `report`, which is the only file-writing mode and never runs implicitly.
+4. **Verify**: Mode is set — exactly one mode runs per invocation, and `report` was either asked for by name or implied by an explicit `$period`.
 
 ### Step 2: Resolve the Rule Set
 
@@ -87,25 +87,35 @@ A missing/malformed adoption file is treated as absent: warn and fall back to KB
 
 ## Report Mode (period cost monitoring)
 
-Report mode **aggregates and compares**; the classification criteria are **not redefined** here. Each PR's real class comes from re-running the classification path (Steps 3–6) over that PR's merged diff, and each PR's predicted class is read from what refinement already recorded — the catalog/heuristics stay in the guideline (D17/D21), so monitoring can never drift from classification.
+Report mode covers the quality model's cost-monitoring requirements **R6.3** (predicted vs. real cost per change) and **R6.4** (drift in cost prediction surfaced periodically, not per-PR).
 
-The panel's path, period key, in-place idempotency, headline-first shape, empty-period and not-writable behavior all follow the one **report-panel convention** in [working-area.md](../../../.pair/knowledge/guidelines/collaboration/working-area.md) ("Report Panels — Period Key and Idempotent Update") — shared with the delivery/AI-metrics panels, one reports-area pattern for the whole KB. This skill applies that convention; it does not restate it.
+It **aggregates and compares**; the classification criteria are **not redefined** here. Each PR's real class comes from re-running the classification path (Steps 3–5 — surface, scan, compute; emission is report mode's own, Step 11) over that PR's merged diff, and each PR's predicted class is read from what **refinement** already recorded (Step 8.2's precedence rule) — the catalog/heuristics stay in the guideline (D17/D21), so monitoring can never drift from classification.
+
+The panel's path, period key, in-place idempotency, headline-first shape, empty-period and not-writable behavior all follow the one **report-panel convention** in [working-area.md](../../../.pair/knowledge/guidelines/collaboration/working-area.md) ("Report Panels — Period Key and Idempotent Update") — shared with the delivery/AI-metrics panels, one reports-area pattern for the whole KB. That guideline is **authoritative**: Steps 7 and 11 below _summarize_ only the mechanics they act on, and on any conflict the guideline wins.
 
 ### Step 7: Resolve the Period and the Panel Path
 
-1. **Act**: Resolve `$period` to a **period key** in one of the convention's normalized forms — `YYYY-MM` (default: the current calendar month), `YYYY-Wnn`, or `YYYY-MM-DD_YYYY-MM-DD` — and derive the window's start/end dates from it.
+1. **Act**: Resolve `$period` to a **period key** in one of the convention's normalized forms — `YYYY-MM` (default: the current calendar month), `YYYY-Wnn`, or `YYYY-MM-DD_YYYY-MM-DD` — applying the convention's **normalization rule** (a range spanning exactly a calendar month or ISO week collapses to the shorter form) so one window has exactly one key, then derive the window's start/end dates from it.
 2. **Act**: Resolve the panel path: `$output` (default `.pair/working/reports/cost/`, honoring the project's `working_path` override) + `<period-key>-cost-panel.md`.
 3. **Verify**: Exactly one period key, one window and one panel path resolved. An unparseable `$period` → ask for the intended window; never guess a period silently.
 
 ### Step 8: Collect the Period's Closed PRs
 
 1. **Act**: Read the **closed PRs** whose close/merge date falls inside the window from the PM tool / code host — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md). Read-only: report mode never writes to the tracker.
-2. **Act**: For each PR collect (a) the **predicted** cost class — the refinement-time class carried in the story/PR body's classification matrix, or the `cost:*` tag when the project projects it (§5); (b) the surface needed to derive the **real** class (the merged diff); (c) the deploy reference, if the project declares deploy/billing telemetry in `infrastructure.md`.
-3. **Verify**: Every closed PR of the window is in the set. A PR whose prediction is missing (classified before cost was assessed) is **retained** and marked `no prediction — real only` — never dropped, silently or otherwise.
+2. **Act**: For each PR collect (a) the **predicted** cost class, resolved by the precedence rule in 8.2.1 below; (b) the surface needed to derive the **real** class (the merged diff); (c) the deploy reference, if the project declares deploy/billing telemetry in `infrastructure.md`.
+
+   **8.2.1 — Predicted-class precedence (the prediction is _refinement-time only_).** In this order, first hit wins:
+
+   1. The **story-side** classification matrix's cost row, or the **story's** `cost:*` tag when the project projects it (§5) — the shift-left value `/pair-process-refine-story` recorded _before_ any code existed. This is the prediction.
+   2. The **PR body's** matrix row (or the PR's `cost:*` label) **only when it still carries the refinement value copied at publish time** — i.e. review did not touch it.
+   3. Otherwise → **`no prediction — real only`** (8.3), never a fabricated match.
+
+   **Never read the review-time class as the prediction.** `/pair-process-review` re-derives cost from the merged diff and, on a raise, **overwrites the PR-description matrix row in place and re-applies the projected `cost:*` label** — so a review-touched PR body/label holds the _review_ class, which is the same computation Step 9 performs. Pairing them would report `match` for every re-classified PR and make the drift invisible (refinement said green, review raised to orange ⇒ the row must read `under-predicted`, not `match`). A PR body row is therefore usable as the prediction only when the refinement value is provably intact — the story record still holds it, or the review record states the pre-raise value; when neither does, the row is `no prediction — real only`, not a guess.
+3. **Verify**: Every closed PR of the window is in the set, and every predicted value present came from refinement (never from review). A PR whose prediction is missing — cost never assessed, or only a review-time class recoverable — is **retained** and marked `no prediction — real only`: never dropped, silently or otherwise, and never paired against a review-time class.
 
 ### Step 9: Pair Predicted vs. Real (bidirectional)
 
-1. **Act**: For each PR, derive the **real** class by running the classification path (Steps 3–6) over its merged diff, then place it beside the predicted class — the bidirectional view: what refinement expected vs. what the merged change actually carries.
+1. **Act**: For each PR, derive the **real** class by running the classification path (Steps 3–5 only — surface, scan, compute; Step 6's per-run verdict block is _not_ emitted here, report mode emits the panel instead) over its merged diff, then place it beside the predicted class — the bidirectional view: what refinement expected vs. what the merged change actually carries.
 2. **Act**: **Deploy match** — with deploy/billing telemetry declared, match the PR to its deploy and record the observed cost movement; **without telemetry the deploy-match dimension reports `not available`** explicitly for every PR, never a fabricated or inferred match.
 3. **Verify**: Each row has a predicted value (or `no prediction — real only`), a real value, and a deploy-match value (or `not available`).
 
@@ -119,9 +129,9 @@ The panel's path, period key, in-place idempotency, headline-first shape, empty-
 
 1. **Act**: Render the **consolidated panel** headline-first per the convention (D22): the headline block at the top, the per-PR and per-class breakdowns in collapsed `<details>` sections.
 2. **Act**: Write it to the panel path from Step 7, creating the directory when absent. Per the convention, the **period key** identifies the file: a re-run for the same period **updates that panel in place** — one file per period, never a second file, never appended. This is a direct write of an operational artifact (D14), the same exception `/pair-capability-assess-security`'s audit and `/pair-capability-assess-coupling`'s full scope use; no adoption content is ever written here.
-3. **Act**: **No cost data** — render and write the panel with the headline `no cost data for this period` plus the reason, rather than failing (AC4); cost monitoring depends on cost having been assessed, so it says so. Two shapes:
-   - **No closed PR in the window**: the headline is the whole panel (reason: no closed PRs in the period).
-   - **Closed PRs but no prediction on any of them** (cost was never assessed — e.g. Tag Projection not activated, quality-model §5): drift is not computable, so the headline states that with the reason; the real-only rows are still listed (every PR stays `no prediction — real only`, per Step 8.3).
+3. **Act**: **No cost data** — render and write the panel with the headline `no cost data for this period` plus the reason, rather than failing (AC4); cost monitoring depends on cost having been assessed, so it says so. Two **distinct** shapes — the headline must never be contradicted by the table under it:
+   - **Empty window — no closed PR at all**: `no cost data for this period — no closed PRs in the window`. The headline _is_ the whole panel; no per-PR table follows.
+   - **Closed PRs but no prediction on any of them** (cost was never assessed — e.g. Tag Projection not activated, quality-model §5): `no cost data for this period — no _predicted_ cost data, so drift is not computable; N real-only rows below`, plus the reason. The real-only rows **are** listed (every PR stays `no prediction — real only`, per Step 8.3), and the qualifier is **required**: a bare "no cost data" headline above a table of real classes contradicts itself and costs the panel its credibility.
 4. **Act**: **Reports area not writable** (read-only checkout, permissions): present the panel **inline** in the output and tell the human where to save it; the run still succeeds.
 5. **Verify**: Exactly one panel exists for the period at the resolved path (created or updated in place), or the inline degradation was reported.
 
@@ -189,7 +199,7 @@ The panel itself (headline-first, D22):
 </details>
 ```
 
-An empty window renders the same panel with the headline `no cost data for this period` and the reason, and no per-PR table.
+An **empty window** renders the same panel with the headline `no cost data for this period — no closed PRs in the window` and no per-PR table. **Closed PRs but no predictions** renders the qualified headline `no cost data for this period — no _predicted_ cost data, so drift is not computable; N real-only rows below` _followed by_ the real-only per-PR table (Step 11.3).
 
 ## Composition Interface
 
@@ -205,9 +215,9 @@ When composed by `/pair-process-refine-story` / `/pair-capability-classify` (shi
 
 When invoked **independently** (`/pair-capability-assess-cost` on a branch or story): full one-shot classification, verdict returned to the developer.
 
-In **report mode** the skill is standalone: it composes nothing and is composed by nothing — it consumes what classification mode and the quality model already produced (predicted classes recorded at refinement, closed PRs from the tracker) and hands back the panel path. An automation loop or a retro session invokes it on demand; cadence is the caller's concern (D18).
+In **report mode** the skill is standalone: it composes nothing and is composed by nothing — it consumes what classification mode and the quality model already produced (predicted classes recorded at refinement, closed PRs from the tracker) and hands back the panel path. **Trigger, by design: on demand only** — a human (or an automation loop) runs `/pair-capability-assess-cost $mode: report` when the period's monitoring is wanted, and the `next` catalog row is its discovery surface. No in-tree caller invokes it, and none is planned here; should a cadence be wanted later, the retro/metrics flow (#222) is the intended driver and this section is where that caller gets listed. Cadence stays the caller's concern (D18).
 
-> Review-side wiring (listing `/pair-capability-assess-cost` as a Composed Skill in `/pair-process-review` and adding the cost section to the review template) is delivered separately (#228). This skill is authored ready-to-compose; nothing here depends on that wiring existing yet.
+> Review-side wiring — `/pair-capability-assess-cost` listed as a Composed Skill of `/pair-process-review` (its Step 2.5, Cost Assessment) and the `### Cost` section of the code-review template — **landed in #228** and is in-tree. Review-time classification is `classify` mode; report mode adds nothing to that wiring and depends on nothing further.
 
 ## Edge Cases
 
@@ -216,8 +226,8 @@ In **report mode** the skill is standalone: it composes nothing and is composed 
 - **Quality model missing**: **HALT** with a pointer to install/bootstrap the KB (Step 0) — the model is a prerequisite, not something this skill invents.
 - **Provider not covered in-tree**: resolved via the adoption link the adoption file supplies (fallback/extension) — no skill change (Q3).
 - **Adoption file missing/malformed**: warn, fall back to KB defaults (D21) — never a HALT.
-- **No cost data in the monitored period** (report mode): the panel is still written, headlined `no cost data for this period` with the reason (no closed PRs, or cost never assessed — e.g. Tag Projection not activated); when PRs exist without predictions, their real-only rows are still listed — graceful, never a failure (Step 11.3).
-- **PR with no predicted class** (report mode): retained as `no prediction — real only`, contributing to the real-class distribution but not to drift — never dropped from the panel.
+- **No cost data in the monitored period** (report mode): the panel is still written, headlined `no cost data for this period` **with the reason qualifying which shape it is** — an empty window (no closed PRs), or closed PRs with no _predicted_ class (cost never assessed — e.g. Tag Projection not activated), in which case the real-only rows are still listed under the qualified headline — graceful, never a failure (Step 11.3).
+- **PR with no predicted class** (report mode): retained as `no prediction — real only`, contributing to the real-class distribution but not to drift — never dropped from the panel. Applies equally when only a **review-time** class is recoverable: that class is the same computation as `real`, so it is not a prediction (Step 8.2.1).
 - **No deploy telemetry** (report mode): the deploy-match dimension reads `not available` for the whole period rather than fabricating a match.
 - **Reports area not writable** (report mode): the panel is presented inline with a save hint; the run succeeds (Step 11.4).
 

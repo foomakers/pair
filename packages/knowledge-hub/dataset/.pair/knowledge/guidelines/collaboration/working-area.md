@@ -29,6 +29,7 @@ A **panel** is a *recurring, period-scoped* report (cost monitoring, delivery/AI
 
 - **Path**: `reports/<category>/<period-key>-<panel-name>.md` — e.g. `reports/cost/2026-07-cost-panel.md`. The category is the reporting area (`cost`, `metrics`, …); the panel name identifies the panel inside it.
 - **Period key**: the reporting window normalized to a filename-safe token — `YYYY-MM` (calendar month), `YYYY-Wnn` (ISO week), or `YYYY-MM-DD_YYYY-MM-DD` (explicit range). The **period**, not the run date, identifies the file.
+- **Key normalization — one window, one key**: an explicit range that spans *exactly* a calendar month or an ISO week **normalizes to the shorter form before the filename is derived** (`2026-07-01_2026-07-31` → `2026-07`; `2026-07-06_2026-07-12` → `2026-W28`). Without this, the same window asked two ways (`"July"` vs `"1–31 July"`) would produce two panels and break the one-file-per-period guarantee below. The explicit-range form is for windows that are neither a whole month nor a whole ISO week.
 - **Idempotent by period**: re-running for the same period **updates that panel in place** — *one file per period*, never a second copy and never an appended duplicate. A different period writes a new file alongside it. Same inputs ⇒ same content.
 - **Headline-first (D22)**: headline figures (and the verdict, if the panel has one) at the top, readable in about one screen; per-item and per-category breakdowns in collapsed `<details>` sections.
 - **Output override**: a panel writer takes an `$output` argument for the target directory, defaulting to `<working>/reports/<category>/`, where `<working>` itself resolves the `working_path` override (see [Overriding the Path](#overriding-the-path)) — one knob, not two.
@@ -85,6 +86,8 @@ The working area is operational handoff state, not shared knowledge, so it is **
 | --- | --- |
 | Checkpoint capability (e.g. `pair-capability-checkpoint`) | Writes/reads `.pair/working/checkpoints/` |
 | Reporting capabilities (e.g. quality, monitoring) | Write `.pair/working/reports/<category>/` |
+| One-shot audit writers (e.g. `pair-capability-assess-security` audit, `pair-capability-assess-coupling` full) | Write `reports/<category>/<YYYY-MM-DD>-<audit-name>.md` (run-date keyed) |
+| Panel writers (e.g. `pair-capability-assess-cost` report mode → `reports/cost/<period-key>-cost-panel.md`) | Apply [Report Panels — Period Key and Idempotent Update](#report-panels--period-key-and-idempotent-update) |
 | `pair install` | Never scaffolds or touches the working area |
 | `pair update` | Never modifies or deletes anything under the working area |
 | `pair validate-config` | Errors on any registry/working-area overlap |

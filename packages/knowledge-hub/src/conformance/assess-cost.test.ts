@@ -89,9 +89,23 @@ describe('assess-cost.md — skill structure (#226)', () => {
   }
 })
 
-/** The Arguments-table row declaring `$arg` (empty string when absent). */
+/**
+ * The Arguments-TABLE row declaring `$arg` (empty string when absent).
+ *
+ * Anchored to the row's FIRST cell, not a bare substring search: prose (and other
+ * rows' descriptions) mention `$period`/`$mode`, so a substring match silently
+ * resolves to the wrong line and the assertion goes vacuous — e.g. before this
+ * anchoring, `argumentRow(content, 'period')` returned the `$mode` row, whose
+ * description mentions `$period`, so deleting the `$period` row left the guard green.
+ */
 function argumentRow(content: string, arg: string): string {
-  return content.split('\n').find(line => line.includes(`\`$${arg}\``)) ?? ''
+  return (
+    content
+      .split('\n')
+      .map(line => line.trimStart())
+      .filter(line => line.startsWith('|'))
+      .find(line => line.split('|')[1]?.trim() === `\`$${arg}\``) ?? ''
+  )
 }
 
 describe('assess-cost.md — report mode (#281)', () => {
@@ -126,8 +140,14 @@ describe('assess-cost.md — report mode (#281)', () => {
     })
 
     it(`${label} renders the panel headline-first with collapsed breakdown (AC2, D22)`, () => {
-      expect(content).toContain('D22')
-      expect(content.toLowerCase()).toContain('<details>')
+      // Panel-SPECIFIC markers: a bare `D22` + `<details>` pair was already true
+      // before report mode existed (classification mode's Output Format), so it
+      // guarded nothing about the panel. These assert the rendered panel shape.
+      expect(content).toMatch(/^#\s*Cost Panel — <period-key>\s*$/m)
+      expect(content).toContain('**Monitored**')
+      expect(content).toContain('**Drift**')
+      expect(content).toContain('<summary>Per-PR predicted vs. real</summary>')
+      expect(content).toContain('<summary>Class distribution — predicted vs. real</summary>')
     })
 
     it(`${label} is idempotent by period key — same period updates in place (AC3)`, () => {
@@ -173,6 +193,39 @@ describe('assess-cost.md — report mode (#281)', () => {
     it(`${label} report mode consumes the cost class, it does not redefine the criteria`, () => {
       expect(content.toLowerCase()).toMatch(/does not re-?derive|never re-?derives|not redefined/)
     })
+
+    it(`${label} sources the predicted class from refinement only — never the review-time class`, () => {
+      // Without this precedence, `predicted` would be read from the PR body/label that
+      // review overwrites with the REVIEW-time class — the same computation `real` uses —
+      // so every re-classified PR would report `match` and AC1's drift would be invisible.
+      const lower = content.toLowerCase()
+      expect(lower).toContain('never read the review-time class as the prediction')
+      expect(lower).toMatch(/refinement-time only|shift-left value/)
+      // Unresolvable prediction degrades, never fabricates a match.
+      expect(lower).toContain('never a fabricated match')
+    })
+
+    it(`${label} defaults to classify — report mode never runs implicitly`, () => {
+      const row = argumentRow(content, 'mode')
+      expect(row.toLowerCase()).toContain('default')
+      const lower = content.toLowerCase()
+      expect(lower).toMatch(/report.{0,80}never runs implicitly|never runs implicitly/)
+      // The pre-fix "no surface in context → report" auto-detect must stay gone.
+      expect(lower).not.toContain('no surface in context')
+    })
+
+    it(`${label} qualifies the no-cost-data headline when real-only rows are listed`, () => {
+      // AC4's literal phrase is kept, but a bare "no cost data" headline above a table
+      // of real classes contradicts itself — the predicted/real distinction is required.
+      expect(content).toContain('no closed PRs in the window')
+      expect(content).toMatch(/no _?predicted_? cost data/i)
+      expect(content.toLowerCase()).toContain('real-only rows below')
+    })
+
+    it(`${label} cites the R6.3/R6.4 cost-monitoring requirements`, () => {
+      expect(content).toContain('R6.3')
+      expect(content).toContain('R6.4')
+    })
   }
 })
 
@@ -184,6 +237,15 @@ describe('working-area.md — period-keyed report panels (#281)', () => {
     it(`${label} defines the period key and its normalized forms`, () => {
       expect(content.toLowerCase()).toContain('period key')
       expect(content).toContain('YYYY-MM')
+    })
+
+    it(`${label} normalizes a whole-month/whole-week range to the shorter key`, () => {
+      // Two keys for one window (`2026-07` vs `2026-07-01_2026-07-31`) would produce
+      // two panels for the same period, defeating the one-file-per-period guarantee.
+      const lower = content.toLowerCase()
+      expect(lower).toMatch(/normaliz/)
+      expect(lower).toContain('one window, one key')
+      expect(content).toContain('2026-07-01_2026-07-31')
     })
 
     it(`${label} requires the panel to be updated in place — one file per period`, () => {

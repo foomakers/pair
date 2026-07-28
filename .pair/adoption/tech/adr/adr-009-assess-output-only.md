@@ -35,9 +35,21 @@ Adopt **Option 2**. `assess-*` skills are **output-only**; `/pair-capability-rec
 
 Contract (assess output → record-decision input):
 
-- **assess-\*** output = `{ proposal }` carrying the **rendered adoption content + target** (the ready-to-write section/file body and which adoption file/section it belongs to), plus the human-facing report. It performs **no write**.
+- **assess-\*** output = `{ proposal }` carrying the **rendered adoption content + target** (the ready-to-write section/file body and which adoption file/section it belongs to), plus the human-facing report. It performs **no adoption write** (see the operational-report amendment below).
 - **record-decision** input = `{ content, target, decision-metadata }`. It is a **generic persister**: writes `content` to `target` and records the ADR/ADL. It has no knowledge of tech-stack vs architecture vs testing formatting — that lives in each assess-* output.
 - **Orchestration** = the **caller** wires the two: `assess-* (produce content+target) → [accept] → record-decision (write)`. In `bootstrap`/`review` the caller is the process skill; standalone, it is the human/agent.
+
+### Amendment (2026-07-28) — the D14 operational-report exception
+
+"Output-only" means **no adoption write and no backlog write**. It never meant "touches the filesystem never": three `assess-*` skills write a single **operational report** under `.pair/working/reports/` (D14 — operational area, outside every KB registry, never adoption):
+
+| Skill | Mode / scope | Artifact |
+| --- | --- | --- |
+| `/pair-capability-assess-security` | `$mode: audit` | `reports/security/<YYYY-MM-DD>-audit.md` |
+| `/pair-capability-assess-coupling` | `$scope: full` | `reports/architecture/<YYYY-MM-DD>-coupling-audit.md` |
+| `/pair-capability-assess-cost` | `$mode: report` | `reports/cost/<period-key>-cost-panel.md` (period-keyed panel, in place) |
+
+Each writes exactly that one file and nothing else; their review/diff/classify modes stay strictly write-free, and adoption persistence still flows only through `/pair-capability-record-decision`. Recorded in ADL `2026-07-28-reports-area-period-keyed-panels.md`; the docs-site catalog reads "write no **adoption** files" for the same reason.
 
 Additional rules:
 
