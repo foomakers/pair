@@ -20,6 +20,16 @@ pair ships its skills through **two channels**. Pick one per project — never b
 
 Both channels are built from the same source of truth — `packages/knowledge-hub` in the pair repository — so the skill names and content are identical.
 
+<Callout type="warn">
+  **Install one channel, not both.** Because the content is identical, installing both puts the
+  same skill name in `.claude/skills/` *and* in the plugin catalog. The bare `/pair-…` form then
+  stops being unique — and every cross-skill composition in the corpus (a process skill invoking
+  `/pair-capability-verify-quality`, `/pair-capability-classify`, …) plus every doc reference uses
+  exactly that bare form. So the cost of running both channels is not untidiness: multi-phase
+  processes become ambiguous about which copy they are composing. Nothing detects this state today —
+  keeping to one channel per project is on you.
+</Callout>
+
 ### Marketplace Install
 
 ```bash
@@ -35,7 +45,31 @@ The marketplace manifest lives at `.claude-plugin/marketplace.json` in the pair 
 Claude Code copies the plugin into its own cache (`~/.claude/plugins/cache`), so the knowledge base the skills reference travels with them and stays read-only.
 
 <Callout type="warn">
-  The marketplace channel installs **skills**, not your project's adoption files. Skill steps that read `.pair/adoption/` resolve against the plugin's own copy, so a project without its own `.pair/adoption/` gets the guideline defaults (each skill's documented graceful-degradation path). Run `pair-cli init` — the CLI channel — when you want project-specific adoption files driving the skills.
+  **Adoption files: the marketplace channel reads pair's, not yours.** The plugin's source is the
+  pair repository itself, so `.pair/adoption/` travels inside the plugin cache. Skill steps that read
+  an adoption file resolve *that* copy — pair's own decisions — and see them as if they were your
+  project's. This is not a graceful-degradation path: no default kicks in, because from the skill's
+  point of view adoption files are present.
+
+  Concretely, on the marketplace channel a skill can resolve pair's PM tool
+  (`way-of-working.md`: GitHub Projects on the `foomakers/pair` board), pair's risk-matrix and
+  coverage deltas, and pair's tech stack — running against **your** credentials. So skills whose
+  behavior depends on adoption files — `/pair-capability-write-issue`, `/pair-process-review`,
+  `/pair-capability-verify-quality`, and any process skill composing them — require the **CLI
+  channel** (`pair-cli init`), which puts your own `.pair/adoption/` in your repo. On the marketplace
+  channel, stick to skills that only read the knowledge base. Project-scoped adoption resolution for
+  the plugin channel is tracked in
+  [#392](https://github.com/foomakers/pair/issues/392).
+</Callout>
+
+<Callout type="info">
+  **Skill naming on the plugin channel.** Plugin skills are exposed as `pair:pair-…`, while the docs
+  and every cross-skill composition name siblings in the bare `/pair-…` form. Claude Code resolves
+  the bare name too, as long as it is unique — verified on CLI v2.1.220 for a real composition pair
+  (`pair-process-review` → `pair-capability-verify-quality`, both resolved from the plugin by bare
+  name, with no pair skills installed in the project or user scope). Uniqueness is exactly what
+  installing both channels destroys, which is the other reason to pick one. If a bare name ever fails
+  to resolve, the prefixed form always works: `/pair:pair-capability-verify-quality`.
 </Callout>
 
 Update or remove the plugin with the standard Claude Code commands:
@@ -49,6 +83,13 @@ Update or remove the plugin with the standard Claude Code commands:
 No version is pinned in the manifest, so an update always fetches the current catalog.
 
 ## Configure Agent File
+
+<Callout type="info">
+  **CLI channel only.** Everything from here to [Use Skills](#use-skills) — the project structure,
+  `AGENTS.md`/`CLAUDE.md` generation, the `.claude/` directory, the bridge pattern — describes a
+  project set up with `pair-cli init`. On the marketplace channel none of it exists in your
+  repository: the skills and the knowledge base live in the plugin cache.
+</Callout>
 
 Claude Code reads two files at the repository root plus the `.claude/` directory:
 

@@ -56,9 +56,9 @@ The tag push triggers the **Release workflow** (`release.yml`) which:
 
 - [ ] `.claude-plugin/plugin.json` `skills` lists one `./.claude/skills/pair-<flattened-name>` entry per dataset skill, and nothing stale
 - [ ] `claude plugin validate .` passes (the pinned-version warning is expected — see the [marketplace-plugin-packaging ADL](.pair/adoption/decision-log/2026-07-28-marketplace-plugin-packaging.md))
-- [ ] Skills only — no `agents`, `hooks`, or `mcpServers` in either manifest
+- [ ] Skills only — no `agents`, `hooks`, or `mcpServers` in either manifest, and no root-level `agents/`, `commands/`, `hooks/` or `.mcp.json` (with `source: "./"` the repo IS the plugin payload, so Claude Code would load those regardless of the manifest)
 
-The catalog guard (`packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts`, run by `pnpm test`) fails the build when the manifest drifts from `packages/knowledge-hub/dataset/.skills/`, naming the exact entry to add or remove.
+The catalog guard (`packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts`, run by `pnpm test`) fails the build when the manifest drifts from `packages/knowledge-hub/dataset/.skills/`, naming the exact entry to add or remove. It also enforces the skills-only rule automatically — all three manifest keys and the four root-level component paths — so that line is a checklist reminder, not the only backstop.
 
 ## Workflows
 

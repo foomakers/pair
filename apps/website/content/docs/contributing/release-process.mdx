@@ -69,9 +69,9 @@ The [marketplace channel](/docs/integrations/claude-code#install-channels) is se
 
 - `.claude-plugin/plugin.json` `skills` lists one `./.claude/skills/pair-<flattened-name>` entry per dataset skill, and nothing stale.
 - `claude plugin validate .` passes. The "no version specified" warning is expected: the manifest pins no version so `/plugin update` always fetches the current catalog.
-- Skills only — no `agents`, `hooks`, or `mcpServers` in either manifest.
+- Skills only — no `agents`, `hooks`, or `mcpServers` in either manifest, and no root-level `agents/`, `commands/`, `hooks/` or `.mcp.json`: the plugin source is `"./"`, so the repository itself is the payload and Claude Code discovers those components at its root whatever the manifest says.
 
-The catalog guard in `packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts` (run by `pnpm test`) fails when the manifest drifts from `packages/knowledge-hub/dataset/.skills/`, naming the exact entry to add or remove — so a forgotten update is caught before release, not after.
+The catalog guard in `packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts` (run by `pnpm test`) fails when the manifest drifts from `packages/knowledge-hub/dataset/.skills/`, naming the exact entry to add or remove — so a forgotten update is caught before release, not after. The same guard asserts the skills-only rule (all three manifest keys plus the four root-level component paths), so that checklist line has an automatic backstop too.
 
 ## Workflows
 
