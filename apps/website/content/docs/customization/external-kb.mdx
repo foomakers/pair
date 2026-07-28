@@ -1,0 +1,150 @@
+---
+title: Scaffold an External KB
+description: Create a private, self-hosted, or forked Knowledge Base repository with pair-cli scaffold-kb, and release it with the generated script.
+---
+
+`pair-cli scaffold-kb` creates an **external Knowledge Base repository**: a repo whose
+only job is to hold knowledge and skills, package them, and publish them. A project
+installs it exactly like the official KB — no special install path, no custom tooling.
+
+Use it when you want your own KB (private, self-hosted, or a fork) instead of
+hand-assembling the structure described in [Publish a Knowledge Base](/docs/customization/organization).
+
+## Scaffold the repository
+
+```bash
+# in a new, empty directory
+pair-cli scaffold-kb
+
+# or target a directory explicitly
+pair-cli scaffold-kb ../acme-kb --name "Acme KB"
+```
+
+Result:
+
+```text
+acme-kb/
+├── .pair/knowledge/          # your guidelines and how-tos
+│   └── README.md             # seed (yours to replace)
+├── .skills/                  # your agent skills
+│   └── example-skill/SKILL.md
+├── .github/workflows/release.yml   # tag v* → packaged release (github host only)
+├── scripts/release.sh        # packages + publishes a version
+├── pair.config.json          # the registries this KB ships
+├── .gitignore                # excludes dist/, *.zip, credentials
+└── README.md                 # operational guide for maintainers
+```
+
+There is deliberately **no `.pair/adoption/`**: adoption files describe a configured
+project, while a KB is knowledge. Consuming projects keep their own adoption files.
+
+### Options
+
+| Option          | Description                                                       |
+| --------------- | ----------------------------------------------------------------- |
+| `[path]`        | Target directory (default: current directory)                      |
+| `--name <name>` | KB name (default: derived from the directory name)                 |
+| `--host <host>` | `github` (default) or `generic` for any other code host            |
+| `-f, --force`   | Regenerate scaffold-owned files without asking                     |
+
+## What the KB declares
+
+`pair.config.json` declares exactly two registries — knowledge and skills:
+
+```json
+{
+  "asset_registries": {
+    "knowledge": {
+      "source": ".pair/knowledge",
+      "behavior": "mirror",
+      "targets": [{ "path": ".pair/knowledge", "mode": "canonical" }]
+    },
+    "skills": {
+      "source": ".skills",
+      "behavior": "overwrite",
+      "flatten": true,
+      "prefix": "acme-kb",
+      "targets": [{ "path": ".claude/skills/", "mode": "canonical" }]
+    }
+  }
+}
+```
+
+The `prefix` namespaces this KB's skills once installed (`acme-kb-example-skill`), so
+two KBs never collide. Copy this file into a consuming project when you want that
+project to resolve registries the way your KB defines them.
+
+## Add content
+
+1. Write guidelines and how-tos under `.pair/knowledge/`.
+2. Add each skill as `.skills/<skill-name>/SKILL.md` with `name` and `description` frontmatter.
+3. Commit. Nothing else to wire up — the registries above already cover both paths.
+
+## Cut a release
+
+```bash
+bash scripts/release.sh 1.0.0
+```
+
+The script wraps the existing [`pair package`](/docs/reference/cli/commands#package)
+command — the same mechanism the official KB uses — and writes
+`dist/<kb-slug>-1.0.0.zip`. On the `github` host it then tags `v1.0.0` and creates a
+GitHub release with the ZIP attached. Pushing a `v*` tag runs the same script in CI via
+`.github/workflows/release.yml`.
+
+Set `PAIR_CLI` to change how the CLI is invoked (default: `npx --yes @foomakers/pair-cli`).
+
+### Hosts without automated release publishing
+
+Publishing never happens inside `pair-cli` — it lives entirely in the generated script,
+which keeps the CLI code-host agnostic. When the `gh` CLI (or a git repository) is not
+available, or when you scaffolded with `--host generic`, the script stops after
+packaging and tells you where the ZIP is:
+
+```text
+==> Packaged: dist/acme-kb-1.0.0.zip
+    Your KB package is ready — publish it however your org does:
+    attach it to a release, upload it to an artifact store, or serve it over HTTP.
+```
+
+## Install it in a project
+
+```bash
+# from the repository (git)
+pair-cli install --source https://github.com/acme/acme-kb.git
+
+# from a published release ZIP
+pair-cli install --source https://github.com/acme/acme-kb/releases/download/v1.0.0/acme-kb-1.0.0.zip
+
+# from a local clone
+pair-cli install --source ../acme-kb --offline
+```
+
+Registries the external KB does not ship (for example `adoption`) are reported as
+skipped — the install itself succeeds. See
+[Install from URL or Path](/docs/customization/install-from-url) for every source form.
+
+A project consumes **one** distribution channel for a given skill set: an external KB
+like this one, or the marketplace — not both.
+
+## Re-run it safely
+
+`scaffold-kb` is idempotent: re-running it against its own output never corrupts or
+duplicates anything.
+
+| File                                                          | On re-run                                             |
+| ------------------------------------------------------------- | ----------------------------------------------------- |
+| `pair.config.json`, `README.md`, `.gitignore`, `scripts/release.sh`, workflow | regenerated only after confirmation (or `--force`) |
+| Anything under `.pair/knowledge/` or `.skills/`               | never touched                                          |
+| Unmodified files                                              | left as they are, reported as unchanged                |
+
+Without a terminal to ask (CI, scripts), a modified scaffold-owned file is **kept** and
+reported as skipped — nothing is silently overwritten. Use `--force` to regenerate
+deliberately.
+
+## Related
+
+- [Publish a Knowledge Base](/docs/customization/organization) — authoring, packaging, and distribution in depth
+- [CLI Commands](/docs/reference/cli/commands#scaffold-kb) — `scaffold-kb` reference
+- [Install from URL or Path](/docs/customization/install-from-url) — every KB source form
+- [KB Structure](/docs/reference/kb-structure) — full directory layout

@@ -10,6 +10,7 @@ import type { ValidateConfigCommandConfig } from './validate-config/parser'
 import type { KbValidateCommandConfig } from './kb-validate/parser'
 import type { KbVerifyCommandConfig } from './kb-verify/parser'
 import type { KbInfoCommandConfig } from './kb-info/parser'
+import type { ScaffoldKbCommandConfig } from './scaffold-kb/parser'
 
 export type {
   InstallCommandConfig,
@@ -20,6 +21,7 @@ export type {
   KbValidateCommandConfig,
   KbVerifyCommandConfig,
   KbInfoCommandConfig,
+  ScaffoldKbCommandConfig,
 }
 
 // Command registry for dynamic dispatch
@@ -47,6 +49,9 @@ import { kbVerifyCommandMetadata } from './kb-verify/metadata'
 import { parseKbInfoCommand } from './kb-info/parser'
 import { handleKbInfoCommand } from './kb-info/handler'
 import { kbInfoCommandMetadata } from './kb-info/metadata'
+import { parseScaffoldKbCommand } from './scaffold-kb/parser'
+import { handleScaffoldKbCommand } from './scaffold-kb/handler'
+import { scaffoldKbMetadata } from './scaffold-kb/metadata'
 
 export {
   handleInstallCommand,
@@ -57,6 +62,7 @@ export {
   handleKbValidateCommand,
   handleKbVerifyCommand,
   handleKbInfoCommand,
+  handleScaffoldKbCommand,
   parseInstallCommand,
   parseUpdateCommand,
   parseUpdateLinkCommand,
@@ -65,6 +71,7 @@ export {
   parseKbValidateCommand,
   parseKbVerifyCommand,
   parseKbInfoCommand,
+  parseScaffoldKbCommand,
 }
 
 /**
@@ -79,6 +86,7 @@ export type CommandConfig =
   | PackageCommandConfig
   | KbInfoCommandConfig
   | ValidateConfigCommandConfig
+  | ScaffoldKbCommandConfig
 
 /**
  * Command registry mapping command names to their parse/handle/metadata functions.
@@ -123,6 +131,11 @@ export const commandRegistry = {
     parse: parseKbInfoCommand,
     handle: handleKbInfoCommand,
     metadata: kbInfoCommandMetadata,
+  },
+  'scaffold-kb': {
+    parse: parseScaffoldKbCommand,
+    handle: handleScaffoldKbCommand,
+    metadata: scaffoldKbMetadata,
   },
 } as const
 

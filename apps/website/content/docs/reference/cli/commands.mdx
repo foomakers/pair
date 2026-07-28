@@ -11,6 +11,7 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 - [update](#update) — Update existing documentation
 - [update-link](#update-link) — Validate and update links
 - [package](#package) — Package KB content into ZIP
+- [scaffold-kb](#scaffold-kb) — Scaffold an external KB repository
 - [kb-info](#kb-info) — Display package metadata, or check installed vs current KB version
 - [kb-verify](#kb-verify) — Verify KB package integrity
 - [kb validate](#kb-validate) — Validate KB structure
@@ -368,6 +369,72 @@ pair kb validate --strict
 # Validate excluding specific registries
 pair kb validate --skip-registries adoption,github
 ```
+
+---
+
+## scaffold-kb
+
+Scaffold an external knowledge base repository — a pure KB repo (knowledge + skills)
+plus the script that releases it. Publishing itself lives in the generated script, not
+in the CLI, so any code host works.
+
+### Usage
+
+```bash
+pair scaffold-kb [path] [options]
+```
+
+### Arguments
+
+- `[path]` — Target directory for the KB repo (default: current working directory)
+
+### Options
+
+| Option          | Short | Description                                                    |
+| --------------- | ----- | -------------------------------------------------------------- |
+| `--name <name>` |       | KB name (default: derived from the target directory name)       |
+| `--host <host>` |       | Release automation host: `github` or `generic` (default: `github`) |
+| `--force`       | `-f`  | Regenerate scaffold-owned files without confirmation            |
+
+### What Gets Created
+
+| Path                            | Ownership                                          |
+| ------------------------------- | -------------------------------------------------- |
+| `.pair/knowledge/`, `.skills/`  | your content (seed files are never overwritten)     |
+| `pair.config.json`              | scaffold-owned — knowledge + skills registries      |
+| `README.md`, `.gitignore`       | scaffold-owned                                      |
+| `scripts/release.sh`            | scaffold-owned — wraps `pair package`                |
+| `.github/workflows/release.yml` | scaffold-owned — `--host github` only                |
+
+No `.pair/adoption/` is created: a KB is knowledge, not a configured project.
+
+### Idempotency
+
+Re-running is safe. Unchanged files are left alone, content under
+`.pair/knowledge/`/`.skills/` is never touched, and a modified scaffold-owned file is
+only regenerated after confirmation (or with `--force`). Without a terminal the file is
+kept and reported as skipped.
+
+### Examples
+
+```bash
+# Scaffold in the current directory
+pair scaffold-kb
+
+# Scaffold into a new directory with an explicit name
+pair scaffold-kb ../acme-kb --name "Acme KB"
+
+# Non-GitHub code host: release script only, no workflow
+pair scaffold-kb ../acme-kb --host generic
+
+# Release it (wraps pair package, then tags and publishes)
+cd ../acme-kb && bash scripts/release.sh 1.0.0
+
+# Install it into a project
+pair install --source https://github.com/acme/acme-kb.git
+```
+
+See [Scaffold an External KB](/docs/customization/external-kb) for the full workflow.
 
 ---
 

@@ -16,6 +16,11 @@ async function dispatchWithExitCode(handler: () => Promise<number>): Promise<voi
   }
 }
 
+type ResolvedOptions = ReturnType<typeof resolveOptions>
+
+/** kb-* inspection/validation commands, split out to keep each dispatch small */
+type KbCommandConfig = Extract<CommandConfig, { command: `kb-${string}` }>
+
 /**
  * Dispatch CommandConfig to appropriate handler using command registry
  * Type-safe implementation using discriminated union narrowing
@@ -35,8 +40,21 @@ export async function dispatchCommand(
       return commandRegistry['update-link'].handle(config, fs)
     case 'package':
       return commandRegistry.package.handle(config, fs)
+    case 'scaffold-kb':
+      return commandRegistry['scaffold-kb'].handle(config, fs)
     case 'validate-config':
       return commandRegistry['validate-config'].handle(config, fs)
+    default:
+      return dispatchKbCommand(config, fs, opts)
+  }
+}
+
+function dispatchKbCommand(
+  config: KbCommandConfig,
+  fs: FileSystemService,
+  opts: ResolvedOptions,
+): Promise<void> {
+  switch (config.command) {
     case 'kb-validate':
       return commandRegistry['kb-validate'].handle(config, fs)
     case 'kb-verify':

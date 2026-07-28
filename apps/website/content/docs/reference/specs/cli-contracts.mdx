@@ -104,6 +104,28 @@ export interface ManifestMetadata {
 }
 ```
 
+### Scaffold-KB Command
+
+```typescript
+export interface ScaffoldKbCommandConfig {
+  command: 'scaffold-kb'
+  path: string // target directory, default: '.'
+  host: 'github' | 'generic' // default: 'github'
+  force: boolean // default: false
+  name?: string // default: derived from the target directory basename
+}
+
+/** Ownership decides the re-scaffold policy */
+export type ScaffoldFileKind = 'scaffold-owned' | 'seed'
+
+export type FileAction = 'created' | 'overwritten' | 'unchanged' | 'skipped'
+```
+
+Validation: `--host` must be `github` or `generic`; at most one positional argument.
+Re-scaffold policy: `seed` files (KB content) are never overwritten; `scaffold-owned`
+files are regenerated only when identical-check fails AND (`--force` OR interactive
+confirmation) — otherwise reported as `skipped`.
+
 ### KB Verify Command
 
 ```typescript

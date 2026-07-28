@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import { InMemoryFileSystemService } from '@pair/content-ops/test-utils/in-memory-fs'
-import { installCommand, handleUpdateCommand, handleUpdateLinkCommand } from './commands'
+import {
+  installCommand,
+  handleInstallCommand,
+  handleUpdateCommand,
+  handleUpdateLinkCommand,
+  handlePackageCommand,
+  handleScaffoldKbCommand,
+} from './commands'
 
 /**
  * pair-cli e2e suite.
@@ -95,6 +102,74 @@ describe('pair-cli e2e', () => {
       // Verify rollback setup is working even in disjoint paths (implicitly tested by logic running)
       const installedGuide = `${disjointTarget}/knowledge/guide.md`
       expect(fs.existsSync(installedGuide)).toBe(true)
+    })
+
+    /**
+     * #279 — external KB round-trip: scaffold-kb → author content → package → install.
+     * Genuinely e2e: three independently invoked commands hand state to each other
+     * (scaffold output is the package input; the package/scaffold registry declaration
+     * is what install consumes), proving the scaffold needs no install special-casing.
+     */
+    it('scaffolds an external KB repo, packages it with pair package, and installs it into a separate project', async () => {
+      const moduleDir = '/opt/pair-cli'
+      const kbRepo = '/work/acme-kb'
+      const consumer = '/work/consumer'
+      const fs = new InMemoryFileSystemService({}, moduleDir, kbRepo)
+
+      // 1. Scaffold the KB repo in place
+      await handleScaffoldKbCommand(
+        { command: 'scaffold-kb', path: '.', host: 'github', force: false },
+        fs,
+      )
+      expect(fs.existsSync(`${kbRepo}/pair.config.json`)).toBe(true)
+
+      // 2. The maintainer authors real KB content + one skill
+      await fs.writeFile(`${kbRepo}/.pair/knowledge/guidelines/testing.md`, '# Acme testing\n')
+      await fs.writeFile(
+        `${kbRepo}/.skills/acme-review/SKILL.md`,
+        '---\nname: acme-review\ndescription: Acme review skill\n---\n\n# acme-review\n',
+      )
+
+      // 3. The KB's own registry declaration is the CLI config on both sides —
+      //    no separate definition of "KB repo shape" anywhere.
+      const kbConfig = fs.readFileSync(`${kbRepo}/pair.config.json`)
+      await fs.writeFile(`${moduleDir}/config.json`, kbConfig)
+
+      // 4. Cut the release ZIP with the existing package command (what the
+      //    generated scripts/release.sh shells out to)
+      const zipPath = `${kbRepo}/dist/acme-kb-1.0.0.zip`
+      await handlePackageCommand(
+        {
+          command: 'package',
+          sourceDir: kbRepo,
+          layout: 'source',
+          output: zipPath,
+          name: 'acme-kb',
+          version: '1.0.0',
+          interactive: false,
+          tags: [],
+          license: 'MIT',
+        },
+        fs,
+      )
+      expect(fs.existsSync(zipPath)).toBe(true)
+      const packaged = Object.keys(JSON.parse(fs.readFileSync(zipPath)))
+      expect(packaged).toContain('.pair/knowledge/guidelines/testing.md')
+      expect(packaged).toContain('.skills/acme-review/SKILL.md')
+      expect(packaged).toContain('manifest.json')
+
+      // 5. A separate project installs the KB via the normal --source path
+      fs.chdir(consumer)
+      await handleInstallCommand(
+        { command: 'install', resolution: 'local', path: kbRepo, offline: true, kb: false },
+        fs,
+        { baseTarget: consumer },
+      )
+
+      expect(fs.readFileSync(`${consumer}/.pair/knowledge/guidelines/testing.md`)).toBe(
+        '# Acme testing\n',
+      )
+      expect(fs.existsSync(`${consumer}/.claude/skills/acme-kb-acme-review/SKILL.md`)).toBe(true)
     })
   })
 })

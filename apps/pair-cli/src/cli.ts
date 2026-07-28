@@ -6,6 +6,7 @@ import chalk from 'chalk'
 
 import { commandRegistry } from './commands'
 import { dispatchCommand } from './commands/dispatcher'
+import { requiresKbBootstrap } from './commands/bootstrap-policy'
 import {
   fileSystemService,
   FileSystemService,
@@ -236,9 +237,8 @@ function attachPreActionHook(
     // Skip bootstrap for root command (no subcommand matched)
     if (thisCommand === prog) return
 
-    // Skip bootstrap for package command - it doesn't need KB
-    const cmdName = actionCommand.name()
-    if (cmdName === 'package') return
+    // Skip bootstrap for KB-producing commands (package, scaffold-kb) — they don't need a KB
+    if (!requiresKbBootstrap(actionCommand.name())) return
 
     // Apply global log level or legacy --verbose alias if provided
     const globalOptions = prog.opts<{ logLevel?: string; verbose?: boolean }>()
