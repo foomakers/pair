@@ -22,8 +22,9 @@
  * Validation follows Claude Code's published schemas (required fields only —
  * `claude-code-marketplace.json` / `claude-code-plugin-manifest.json` on
  * schemastore), plus two project rules a generic schema can't express:
- * kebab-case public names, and skills-only distribution (D23 / R9.3 — no named
- * role agents are ever shipped as an asset).
+ * kebab-case public names, and skills-only distribution (D23 / R9.3 — no
+ * `agents`, `hooks` or `mcpServers` in either manifest, and no root-level
+ * component payload either, since `source: "./"` makes the repo the plugin root).
  */
 import { datasetSkillDirs, installedSkillDir, type DatasetTree } from './skill-md-mirror'
 
@@ -98,6 +99,15 @@ const requireRelativePath = (value: unknown, label: string): string => {
   }
   if (!value.startsWith('./')) {
     return fail(`${label} must be a plugin-root-relative path starting with './' (got ${value})`)
+  }
+  // A plugin cannot reach outside its own root (installed plugins are copied into
+  // ~/.claude/plugins/cache), so a '..' segment is never a valid component path —
+  // name that mistake here instead of letting it surface as a vague "stale entry".
+  if (value.split('/').includes('..')) {
+    return fail(
+      `${label} must stay inside the plugin root — a '..' segment escapes it and cannot ` +
+        `resolve in the plugin cache (got ${value})`,
+    )
   }
   return value
 }
@@ -217,8 +227,12 @@ export function expectedPluginSkillPaths(tree: DatasetTree): string[] {
  * with the file to edit — the automatic backstop for AC3's manual process.
  */
 export function assertSkillCatalogInSync(declared: string[], expected: string[]): void {
-  const seen = new Set<string>()
-  const duplicates = declared.filter(path => (seen.has(path) ? true : (seen.add(path), false)))
+  // Both sets are built explicitly (never as a side effect of the duplicate scan), so
+  // reordering or short-circuiting the checks below can't make this guard fail open.
+  const declaredSet = new Set(declared)
+  const expectedSet = new Set(expected)
+
+  const duplicates = declared.filter((path, i) => declared.indexOf(path) !== i)
   if (duplicates.length > 0) {
     fail(
       `.claude-plugin/plugin.json declares duplicate skill entries: ${[...new Set(duplicates)].join(', ')}. ` +
@@ -226,8 +240,7 @@ export function assertSkillCatalogInSync(declared: string[], expected: string[])
     )
   }
 
-  const expectedSet = new Set(expected)
-  const missing = expected.filter(path => !seen.has(path))
+  const missing = expected.filter(path => !declaredSet.has(path))
   const stale = declared.filter(path => !expectedSet.has(path))
   if (missing.length === 0 && stale.length === 0) return
 
@@ -268,15 +281,55 @@ export function assertDeclaredSkillsResolve(
 }
 
 /**
- * Asserts a manifest (plugin manifest or marketplace plugin entry) declares no
- * `agents`: pair distributes skills only. Subagents are an anonymous
- * context-isolation mechanic, never a shipped "agent" asset (D23 / R9.3).
+ * Component keys a manifest must never declare: pair distributes skills only
+ * (D23 / R9.3, and the release checklist's "no `agents`, `hooks`, or
+ * `mcpServers`" line). `hooks` is the highest-consequence member — shell
+ * commands that would run on every installed user's machine.
  */
-export function assertNoDistributedAgents(label: string, manifest: Record<string, unknown>): void {
-  if (manifest['agents'] !== undefined) {
+export const FORBIDDEN_COMPONENT_KEYS = ['agents', 'hooks', 'mcpServers'] as const
+
+/**
+ * Asserts a manifest (plugin manifest or marketplace plugin entry) declares none
+ * of {@link FORBIDDEN_COMPONENT_KEYS}. Subagents are an anonymous
+ * context-isolation mechanic, never a shipped "agent" asset; hooks and MCP
+ * servers are execution surfaces pair does not distribute at all.
+ */
+export function assertSkillsOnlyDistribution(
+  label: string,
+  manifest: Record<string, unknown>,
+): void {
+  const declared = FORBIDDEN_COMPONENT_KEYS.filter(key => manifest[key] !== undefined)
+  if (declared.length > 0) {
     fail(
-      `${label} declares "agents": pair distributes skills only — subagents are an anonymous ` +
-        `context-isolation mechanic, never a distributed agent asset (D23, R9.3). Remove the field.`,
+      `${label} declares ${declared.map(k => `"${k}"`).join(', ')}: pair distributes skills only — ` +
+        `subagents are an anonymous context-isolation mechanic (never a distributed agent asset), ` +
+        `and hooks/MCP servers are execution surfaces pair does not ship (D23, R9.3). ` +
+        `Remove the field(s).`,
+    )
+  }
+}
+
+/**
+ * Paths Claude Code discovers plugin components from, relative to the plugin
+ * root. With `source: "./"` the plugin root is the whole repository, so leaving a
+ * key out of `plugin.json` prevents a component from being *loaded*, never from
+ * being *copied* into every user's plugin cache. The payload-level skills-only
+ * guarantee is therefore the absence of these paths at the repo root (D23 / R9.3).
+ */
+export const ROOT_PLUGIN_COMPONENT_PATHS = ['agents', 'commands', 'hooks', '.mcp.json'] as const
+
+/**
+ * Asserts no root-level plugin component path exists. `exists` is injected — the
+ * assertion itself stays filesystem-free.
+ */
+export function assertNoRootPluginComponents(exists: (relPath: string) => boolean): void {
+  const present = ROOT_PLUGIN_COMPONENT_PATHS.filter(path => exists(path))
+  if (present.length > 0) {
+    fail(
+      `The plugin root (the repo, since the plugin source is "./") carries plugin component ` +
+        `path(s) ${present.join(', ')}: Claude Code discovers agents/commands/hooks/MCP servers ` +
+        `there regardless of what plugin.json declares. pair distributes skills only ` +
+        `(D23, R9.3) — move them under .claude/ or remove them.`,
     )
   }
 }
