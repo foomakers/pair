@@ -12,6 +12,11 @@
 - **Assignment — everything worked on carries an assignee:** every item an agent or a human touches (story, tech-debt, epic, PR) is **assigned to the person the work is done for** — on this project, the maintainer. This is not bookkeeping: the board is read filtered by assignee, so an unassigned item is invisible there even when it is open, has a PR and is green. It applies at the moment the work starts, to the follow-ups filed *during* the work (they are the ones most often left orphaned), and to the PR as well as the story — a PR whose `author` is set but whose `assignees` is empty does not appear in an assignee-filtered view. Skills that create or update items (`/pair-capability-write-issue`, `/pair-capability-publish-pr`) set the assignee as part of the write, never as a follow-up step.
 - **PR granularity — one PR per story (default):** A story's work lands in a single PR by default, even when the story is broken into multiple inline tasks/findings. Splitting into multiple PRs per story requires an explicit reason (e.g. unusually large story, or independently shippable/needed-sooner parts) — it is not the default. Per-task granularity within that one PR is expressed as commit-per-task (see Commit History Policy above), not as separate PRs. See ADL [2026-07-12-one-pr-per-story-default.md](../decision-log/2026-07-12-one-pr-per-story-default.md) for rationale.
 
+## Git Workflow
+
+- `code-host`: **omitted** — this project's code host is the same tool as its PM tool (GitHub), so the single-tool default applies and skills route every PR/review operation to GitHub without configuration. Declare `code-host` only in a split setup (e.g. Linear for the backlog + GitHub for the code); see [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
+- `base-branch`: `main` — the branch PRs target and feature branches are cut from.
+
 ## State Mapping
 
 Maps this project's GitHub Projects board columns to the 5 canonical macrostates (see [canonical-states.md](../../knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)). Skills read and write item state through this map, never the raw board labels.
