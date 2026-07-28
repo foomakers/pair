@@ -1,11 +1,11 @@
 ---
 title: Skills Catalog
-description: Complete catalog of all 40 pair skills organized by type — process, capability, and meta.
+description: Complete catalog of all 41 pair skills organized by type — process, capability, and meta.
 ---
 
-pair ships with 40 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
+pair ships with 41 skills organized into three types: **process** (workflow orchestration), **capability** (atomic operations), and **meta** (navigation). Each skill is a `SKILL.md` file invoked as a slash command by your AI coding assistant.
 
-> **Last updated:** 2026-07-24. Source: `packages/knowledge-hub/dataset/.skills/`
+> **Last updated:** 2026-07-28. Source: `packages/knowledge-hub/dataset/.skills/`
 
 ## Meta Skills
 
@@ -19,6 +19,7 @@ Process skills orchestrate multi-step workflows by composing capability skills.
 
 | Skill | Command | Description | Composes |
 | ----- | ------- | ----------- | -------- |
+| **brainstorm** | `/pair-process-brainstorm` | Runs discovery in three fixed phases — grill interview, domain integration, backlog tree triage — on a free theme or an existing `$root` issue, landing an integrated Draft epic/story tree while leaving the PRD untouched. | `/pair-capability-grill`; `/pair-capability-map-subdomains`, `/pair-capability-map-contexts`, `/pair-capability-record-decision` (optional); `/pair-process-plan-epics`, `/pair-process-plan-stories` (conditional) |
 | **specify-prd** | `/pair-process-specify-prd` | Creates or updates a Product Requirements Document through structured template analysis and iterative review — drafting a new PRD, or filling in a missing/outdated section. | — |
 | **bootstrap** | `/pair-process-bootstrap` | Orchestrates full project setup — PRD verification, project categorization, checklist, standards, quality gates, PM tool — for a brand-new project, end to end. | `/pair-process-specify-prd`, `/pair-capability-setup-pm`, `/pair-capability-record-decision`, assess-* (optional) |
 | **plan-initiatives** | `/pair-process-plan-initiatives` | Turns a PRD into prioritized (P0/P1/P2) strategic initiatives through structured analysis and validation. | `/pair-capability-write-issue` |

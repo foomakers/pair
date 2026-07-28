@@ -1,6 +1,6 @@
 ---
 name: pair-capability-grill
-description: "Interviews one question at a time, always with a recommendation, after exploring the KB/codebase first; sync mode drives systematic AI-human alignment on a story until shared understanding is confirmed. Invoke directly to interview on any topic ('grill me on the requirements'). Composed by /pair-process-refine-story and a future /brainstorm (planned — #230). Write-free — returns the synthesis, never writes adoption or issues."
+description: "Interviews one question at a time, always with a recommendation, after exploring the KB/codebase first; sync mode drives systematic AI-human alignment on a story until shared understanding is confirmed. Invoke directly to interview on any topic ('grill me on the requirements'). Composed by /pair-process-refine-story and /pair-process-brainstorm (phase 1). Write-free — returns the synthesis, never writes adoption or issues."
 version: 0.4.1
 author: Foomakers
 ---
@@ -29,7 +29,7 @@ Ask one question at a time, always with a recommended answer, after exploring th
 
 ### Interview Mode (default)
 
-Freeform exploration of `$topic`. No fixed checklist — the question queue grows from what Step 1's exploration leaves open and from what answers reveal. Used standalone or composed by `/brainstorm` (phase 1, planned — #230) to produce a raw requirements blob.
+Freeform exploration of `$topic`. No fixed checklist — the question queue grows from what Step 1's exploration leaves open and from what answers reveal. Used standalone or composed by `/pair-process-brainstorm` (phase 1) to produce a raw requirements blob.
 
 ### Sync Mode
 
@@ -97,7 +97,7 @@ Systematic AI↔human alignment on a specific story, covering all six aspects of
 
 ### Step 6: Return — Never Write
 
-1. **Act**: Return the synthesis to the caller (composed invocation) or print it in conversation (standalone). **Never** write to adoption files or PM tool issues in either mode — that stays with the composer (`/brainstorm`, `/pair-process-refine-story`) or the human.
+1. **Act**: Return the synthesis to the caller (composed invocation) or print it in conversation (standalone). **Never** write to adoption files or PM tool issues in either mode — that stays with the composer (`/pair-process-brainstorm`, `/pair-process-refine-story`) or the human.
 2. **Act (standalone, or session interrupted before Step 4's explicit yes)**: Offer an optional handoff file:
 
    > Save this as a handoff file in `.pair/working/`? (y/n)
@@ -138,10 +138,10 @@ SYNTHESIS:
 
 ## Composition Interface
 
-When composed by `/brainstorm` (phase 1, planned — #230):
+When composed by `/pair-process-brainstorm` (phase 1):
 
 - **Input**: `$mode` omitted (defaults `interview`); `$topic` from the free theme text or the `$root` issue's body; `$context` carries the issue if `$root` was given.
-- **Output**: Returns the raw requirements blob (R3.7). `/brainstorm` carries it into phase 2 (domain integration) — grill never touches the PM tool or adoption files itself.
+- **Output**: Returns the raw requirements blob (R3.7). `/pair-process-brainstorm` carries it into phase 2 (domain integration) — grill never touches the PM tool or adoption files itself.
 
 When composed by `/pair-process-refine-story` (phase 0, future extension):
 

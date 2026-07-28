@@ -78,4 +78,4 @@ The process is designed to:
 2. **🤖🤝👨‍💻 Code Review** (`/pair-process-review`) → Structured review with adoption compliance, merge flow, and parent cascade
 3. **🤖⚡ Status Update** → Automatic story/epic/initiative tracking update (handled by `/pair-process-implement` and `/pair-process-review`)
 
-> **Skill-enabled workflow**: Run `/pair-next` at session start to determine the most relevant skill. See [skills-guide.md](skills-guide.md) for the full catalog of 40 skills.
+> **Skill-enabled workflow**: Run `/pair-next` at session start to determine the most relevant skill. See [skills-guide.md](skills-guide.md) for the full catalog of 41 skills.

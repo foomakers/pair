@@ -1,6 +1,6 @@
 ---
 name: pair-capability-map-contexts
-description: "Maps subdomains to DDD bounded contexts and derives the integration pattern between them (integration strength, socio-technical distance, volatility), scoped to items just touched. Composed by /pair-process-refine-story, /pair-process-plan-tasks, a future /brainstorm (planned — #230); full-scope re-mapping only via /pair-process-bootstrap."
+description: "Maps subdomains to DDD bounded contexts and derives the integration pattern between them (integration strength, socio-technical distance, volatility), scoped to items just touched. Composed by /pair-process-refine-story, /pair-process-plan-tasks, /pair-process-brainstorm; full-scope re-mapping only via /pair-process-bootstrap."
 version: 0.4.1
 author: Foomakers
 ---
@@ -21,7 +21,7 @@ Map subdomains to bounded context boundaries and assess each relationship betwee
 | ---------------- | --------------------------------------------------------------------------- |
 | `/pair-process-refine-story`  | Technical analysis phase — identifies touched contexts/services.          |
 | `/pair-process-plan-tasks`    | Identifies touched contexts/services for the task breakdown.              |
-| `/brainstorm`    | Punctual/technical brainstorm touching one or a few contexts (planned — #230). |
+| `/pair-process-brainstorm`    | Punctual/technical discovery (phase 2) touching one or a few contexts. |
 | `/pair-process-bootstrap`     | Initial full-catalog mapping — the only caller allowed `$scope: all`.     |
 
 Invocable independently with an explicit `$scope` for ad hoc placement.

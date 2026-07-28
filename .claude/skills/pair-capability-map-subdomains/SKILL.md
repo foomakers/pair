@@ -1,6 +1,6 @@
 ---
 name: pair-capability-map-subdomains
-description: "Classifies business capabilities into DDD subdomains (core, supporting, generic) with a volatility rating, scoped to items just touched. Composed by /pair-process-refine-story, /pair-process-plan-initiatives, /pair-process-plan-epics, a future /brainstorm (planned — #230); full-scope re-mapping only via /pair-process-bootstrap."
+description: "Classifies business capabilities into DDD subdomains (core, supporting, generic) with a volatility rating, scoped to items just touched. Composed by /pair-process-refine-story, /pair-process-plan-initiatives, /pair-process-plan-epics, /pair-process-brainstorm; full-scope re-mapping only via /pair-process-bootstrap."
 version: 0.4.1
 author: Foomakers
 ---
@@ -22,7 +22,7 @@ Classify business capabilities into Domain-Driven Design subdomains — core, su
 | `/pair-process-refine-story`     | Functional/domain analysis phase — placement for the story's capability. |
 | `/pair-process-plan-initiatives` | Domain placement for a new initiative's capability area.          |
 | `/pair-process-plan-epics`       | Domain placement for an epic's capability area.                   |
-| `/brainstorm`       | Broad brainstorm touching multiple capabilities (planned — #230). |
+| `/pair-process-brainstorm`       | Broad/functional discovery (phase 2) touching multiple capabilities. |
 | `/pair-process-bootstrap`        | Initial full-catalog mapping — the only caller allowed `$scope: all`. |
 
 Invocable independently with an explicit `$scope` for ad hoc placement.
