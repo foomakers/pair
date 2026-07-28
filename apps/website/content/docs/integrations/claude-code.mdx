@@ -6,8 +6,47 @@ description: Set up pair with Claude Code — configure AGENTS.md, CLAUDE.md, th
 ## Prerequisites
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
-- A pair-enabled project (`pair-cli init` completed, `.pair/` directory exists)
+- A pair-enabled project (`pair-cli init` completed, `.pair/` directory exists) — required for the CLI channel, optional for the [marketplace channel](#install-channels)
 - Node.js 18+
+
+## Install Channels
+
+pair ships its skills through **two channels**. Pick one per project — never both at once, or the same skill is installed twice from two sources.
+
+| Channel | Command | What you get | Use it when |
+|---------|---------|--------------|-------------|
+| **Marketplace** (Claude Code native) | `/plugin marketplace add foomakers/pair` | The full skill catalog as the `pair` plugin, invoked as `/pair:pair-next` (or the bare `/pair-next`) | You work in Claude Code only and want zero setup |
+| **CLI** (tool-agnostic) | `pair-cli init` / `pair-cli update` | Skills written into your repo's `.claude/skills/` plus the `.pair/` knowledge base and adoption files | You want the KB and adoption files in the repo, or you also use Cursor, Windsurf, or Copilot |
+
+Both channels are built from the same source of truth — `packages/knowledge-hub` in the pair repository — so the skill names and content are identical.
+
+### Marketplace Install
+
+```bash
+# 1. register pair's marketplace (the repository itself)
+/plugin marketplace add foomakers/pair
+
+# 2. install the plugin
+/plugin install pair@pair
+```
+
+The marketplace manifest lives at `.claude-plugin/marketplace.json` in the pair repository, with the plugin manifest alongside it at `.claude-plugin/plugin.json`. The plugin ships **skills only** — no agents, no hooks, no MCP servers.
+
+Claude Code copies the plugin into its own cache (`~/.claude/plugins/cache`), so the knowledge base the skills reference travels with them and stays read-only.
+
+<Callout type="warn">
+  The marketplace channel installs **skills**, not your project's adoption files. Skill steps that read `.pair/adoption/` resolve against the plugin's own copy, so a project without its own `.pair/adoption/` gets the guideline defaults (each skill's documented graceful-degradation path). Run `pair-cli init` — the CLI channel — when you want project-specific adoption files driving the skills.
+</Callout>
+
+Update or remove the plugin with the standard Claude Code commands:
+
+```bash
+/plugin update pair@pair
+/plugin marketplace update pair
+/plugin uninstall pair@pair
+```
+
+No version is pinned in the manifest, so an update always fetches the current catalog.
 
 ## Configure Agent File
 

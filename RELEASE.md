@@ -50,6 +50,16 @@ The tag push triggers the **Release workflow** (`release.yml`) which:
 3. Packages the CLI bundle (`scripts/package-manual.sh`)
 4. Creates a GitHub Release with artifacts
 
+## Release Checklist: Skill Marketplace Manifest
+
+`.claude-plugin/marketplace.json` + `.claude-plugin/plugin.json` are the **native Claude Code install channel** (`/plugin marketplace add foomakers/pair`). They are **hand-maintained**, not generated — when the skill catalog changes (skill added, renamed, removed), update them in the same PR:
+
+- [ ] `.claude-plugin/plugin.json` `skills` lists one `./.claude/skills/pair-<flattened-name>` entry per dataset skill, and nothing stale
+- [ ] `claude plugin validate .` passes (the pinned-version warning is expected — see the [marketplace-plugin-packaging ADL](.pair/adoption/decision-log/2026-07-28-marketplace-plugin-packaging.md))
+- [ ] Skills only — no `agents`, `hooks`, or `mcpServers` in either manifest
+
+The catalog guard (`packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts`, run by `pnpm test`) fails the build when the manifest drifts from `packages/knowledge-hub/dataset/.skills/`, naming the exact entry to add or remove.
+
 ## Workflows
 
 | Workflow | File | Trigger | Purpose |
