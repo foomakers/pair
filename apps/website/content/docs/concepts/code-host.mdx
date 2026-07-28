@@ -1,0 +1,98 @@
+---
+title: Code Host vs PM Tool
+description: How pair works when your backlog and your code live in different tools — the optional code-host override, the routing rule, and the Linear + GitHub reference case.
+---
+
+pair distinguishes two tools that are usually the same one:
+
+- the **PM tool** — where the backlog lives (initiatives, epics, stories, state)
+- the **code host** — where the code lives (repositories, branches, pull requests, reviews)
+
+On GitHub or Azure DevOps these coincide, so you configure nothing. On Linear or Jira they cannot: those tools host no code. That is what the optional `code-host` field is for.
+
+## Zero Configuration by Default
+
+Omit `code-host` and **the code host is your PM tool**. Behavior is identical to a single-tool project — there is nothing to migrate and nothing to declare.
+
+Declaring the *same* tool in both places is treated exactly as omitting it: single-tool, no dual-write.
+
+## Declaring a Split Setup
+
+Add a `## Git Workflow` section to `.pair/adoption/tech/way-of-working.md`:
+
+```markdown
+## Git Workflow
+
+- `code-host`: `github` — repository `acme/platform`.
+- `base-branch`: `main`.
+```
+
+| Field         | Default         | Meaning                                                              |
+| ------------- | --------------- | -------------------------------------------------------------------- |
+| `code-host`   | _(the PM tool)_ | The tool hosting repositories, branches and pull requests             |
+| `base-branch` | `main`          | The branch PRs target and feature branches are cut from              |
+
+## The Routing Rule
+
+Skills never assume the two tools coincide — they route by field. The rule lives in **one** place (`.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md`), so no skill re-derives it:
+
+| Operation                                                        | Goes to     |
+| ---------------------------------------------------------------- | ----------- |
+| Create/update an issue, read its hierarchy, labels, state        | PM tool     |
+| **State transitions** (Ready, In Progress, Review, Done)          | PM tool     |
+| Close an issue, cascade to its parents                            | PM tool     |
+| Branches, pushes, pull request create/update/read                 | Code host   |
+| PR labels and required checks (the CI gate)                       | Code host   |
+| Code review submission and PR merge                               | Code host   |
+| Open-PR detection (`/pair-next` row 6)                            | Code host   |
+
+Two invariants follow:
+
+- **State transitions always happen on the PM tool.** PR states (draft/ready/approved/merged) live on the code host and are never mirrored onto the board — no state is duplicated.
+- **The pair review check registers on the code host only**, because that is where it gates the merge. The board sees the outcome through the linked PR.
+
+## Cross-Linking (No Native Integration Required)
+
+The two tools are linked by **text convention** in both directions. Native integrations (e.g. Linear's own GitHub app) may be enabled, but no skill depends on one:
+
+1. **PR → issue**: the PR body carries `Refs: <issue-id>` with the PM tool's own identifier — `Refs: ENG-412` on Linear, `Refs: #412` on GitHub, `Refs: PROJ-412` on Jira. `/pair-process-review` reads this to find the story from a PR.
+2. **Issue → PR**: `/pair-capability-publish-pr` posts the PR URL back onto the issue (a comment, or the tool's link field) as soon as the PR exists.
+
+If the issue id can't be resolved when writing the back-link, the PR is still created — you get a warning with a manual-link instruction, never a failed publish.
+
+## Reference Case: Linear + GitHub
+
+```markdown
+- Linear is adopted for project management.
+  Team: `ENG`. Access: Linear MCP Server.
+
+## Git Workflow
+
+- `code-host`: `github` — repository `acme/platform`.
+- `base-branch`: `main`.
+```
+
+The cycle then runs across both tools:
+
+```text
+/pair-process-refine-story    → story refined on Linear (ENG-412 → Todo)
+/pair-process-implement       → ENG-412 → In Progress on Linear; branch on GitHub
+/pair-capability-publish-pr   → PR on GitHub with "Refs: ENG-412";
+                                PR URL commented on ENG-412; ENG-412 → In Review
+/pair-process-review          → review + merge on GitHub; ENG-412 → Done on Linear
+```
+
+## Failure Modes
+
+| Situation                                        | Behavior                                                                                 |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `code-host` declared but unreachable/unauthenticated | Publish HALTs with a setup pointer. PM-side work already done is **not** rolled back      |
+| Issue id not found when linking back              | PR is still created; warning with a manual-link instruction                               |
+| Same tool in both fields                          | Treated exactly as omitted — no dual-write, no cross-link comment                        |
+
+## Related
+
+- [Adoption files](/docs/concepts/adoption-files) — where `way-of-working.md` lives
+- [Canonical states](/docs/concepts/canonical-states) — the state vocabulary the PM tool side writes
+- [Linear](/docs/pm-tools/linear) — the split setup end to end
+- [PM Tools overview](/docs/pm-tools) — choosing a PM tool
