@@ -1,6 +1,6 @@
 ---
 name: record-decision
-description: "Records a decision — ADR (architectural), ADL (non-architectural), DDR (domain, 3-criteria gate), or an analysis-log entry ($type: analysis, written as Category: Analysis, decision-log/) — and is the sole writer of adoption/context-map files. Invoke directly to record or backfill a decision already made ('write that down as an ADR'). Composed by /implement and /review."
+description: "Records a decision — ADR (architectural), ADL (non-architectural), DDR (domain, 3-criteria gate), or an analysis-log entry ($type: analysis, written as Category: Analysis, decision-log/) — and is the sole generic writer of adoption files, including the context map's decision-backed sections. Inline glossary/entity/rule maintenance in the context map stays with /brainstorm and /refine-story, per the context-map-maintenance guideline — the documented exception. Invoke directly to record or backfill a decision already made ('write that down as an ADR'). Composed by /implement and /review."
 version: 0.5.0
 author: Foomakers
 ---
@@ -9,7 +9,7 @@ author: Foomakers
 
 Record a decision as an ADR (architectural), ADL (non-architectural), or DDR (domain) — or, for a completed technical analysis that isn't itself a decision, an analysis-log entry ($type `analysis`, written as `Category: Analysis`, reusing `decision-log/`). Always update the corresponding adoption files — or, for DDR, the context map; for analysis-log, the pertinent adoption file's current-state summary — to keep them as the single source of truth for "what we use now."
 
-This skill is the **sole generic writer of adoption files** (assess-* are output-only and delegate persistence here); the exceptions are **owning skills that self-write their own config-registry section** in an adoption file, then compose this skill only for the decision record: `/setup-pm` (PM section of `way-of-working.md`), `/verify-quality` (Custom Gate Registry in `way-of-working.md`), and `/classify` (`## Tag Projection` in `tech/risk-matrix.md`) — each owns that one section end-to-end; this skill remains the sole *generic* writer. When a caller supplies pre-rendered `$content` and a `$target`, this skill acts as a **generic persister** — it writes `$content` into its owned section of `$target` (a heading-scoped merge) and records the decision, with **no per-domain rendering logic**.
+This skill is the **sole generic writer of adoption files** (assess-* are output-only and delegate persistence here); the exceptions are **owning skills that self-write their own config-registry section** in an adoption file, then compose this skill only for the decision record: `/setup-pm` (PM section of `way-of-working.md`), `/verify-quality` (Custom Gate Registry in `way-of-working.md`), and `/classify` (`## Tag Projection` in `tech/risk-matrix.md`) — each owns that one section end-to-end; this skill remains the sole *generic* writer. A second, guideline-authorized exception is **inline context-map maintenance**: `/brainstorm` (phase 2) and `/refine-story` write approved glossary terms, entities, and rules into `context-map.md` (or the owning `subdomain/<slug>.context.md`) inline as part of their own domain step, per [context-map-maintenance.md](../../../.pair/knowledge/guidelines/architecture/design-patterns/context-map-maintenance.md) — this skill stays the writer of the map's *decision-backed* sections (DDR-driven) and of every decision record. When a caller supplies pre-rendered `$content` and a `$target`, this skill acts as a **generic persister** — it writes `$content` into its owned section of `$target` (a heading-scoped merge) and records the decision, with **no per-domain rendering logic**.
 
 ## Arguments
 
@@ -214,7 +214,7 @@ When composed by `/bootstrap` or an `assess-*` proposal (generic persist):
 
 - **Input**: The caller passes `$content` (the rendered adoption body from an `assess-*` skill) and `$target` (the adoption file/section), plus `$type`, `$topic`, `$summary`.
 - **Output**: This skill writes `$content` into its owned section of `$target` (a heading-scoped merge) and records the ADR/ADL. It performs no per-domain rendering; the assess-* skill owns the content.
-- This keeps the invariant: **only `record-decision` writes adoption files generically** (the sole exception is `/setup-pm`, which writes the PM section of `way-of-working.md` directly); **only assess-* renders** its own adoption content; the caller orchestrates the two.
+- This keeps the invariant: **only `record-decision` writes adoption files generically** (the exceptions are the section-owning skills above — `/setup-pm`, `/verify-quality`, `/classify` — and the inline context-map maintenance `/brainstorm`/`/refine-story` perform in their own domain step); **only assess-* renders** its own adoption content; the caller orchestrates the two.
 
 When invoked **independently**:
 

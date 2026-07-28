@@ -54,6 +54,10 @@ The process is designed to:
 
 ## Operational Flow
 
+### 🔍 Discovery (optional entry point, before any level)
+
+- **🤖🤝👨‍💻 Structured Discovery** (`/pair-process-brainstorm`) → Turn a rough theme, or an existing epic/story `$root`, into an integrated **Draft** epic/story tree (interview → domain → triage). Human-initiated and optional: it feeds the levels below and never modifies the PRD. It is not one of the nine numbered steps and has no numbered how-to guide — see the ADL on `/pair-process-brainstorm`'s catalog exceptions.
+
 ### 📘 Induction
 
 1. **🤖🤝👨‍💻 PRD Creation** (`/pair-process-specify-prd`) → Generate Product Requirements Document from user needs & market insights

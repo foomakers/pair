@@ -88,7 +88,10 @@ describe('record-decision is the sole adoption writer (#224)', () => {
   const content = readFileSync(join(DATASET, 'record-decision', 'SKILL.md'), 'utf-8')
 
   it('documents itself as the sole/single adoption writer', () => {
-    expect(content.toLowerCase()).toMatch(/sole writer|single writer/)
+    // "generic" since #230: the section-owning skills (/setup-pm, /verify-quality,
+    // /classify) and the inline context-map maintenance of /brainstorm and
+    // /refine-story are the documented exceptions.
+    expect(content.toLowerCase()).toMatch(/sole (generic )?writer|single writer/)
   })
 
   it('accepts a generic pre-rendered {content, target} persist path', () => {
