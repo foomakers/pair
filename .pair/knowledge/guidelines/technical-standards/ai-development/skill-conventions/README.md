@@ -7,7 +7,7 @@ Single-source explanations for patterns that recur across many `SKILL.md` files.
 | Resolution cascade (Argument > Adoption > Assessment) | [resolution-cascade.md](resolution-cascade.md) | 10 skills |
 | Idempotency | [idempotency.md](idempotency.md) | 28 skills |
 | Graceful degradation | [graceful-degradation.md](graceful-degradation.md) | 34 skills |
-| Way-of-working / PM-tool resolution | [way-of-working-pm-resolution.md](way-of-working-pm-resolution.md) | 18 skills |
+| Way-of-working / PM-tool **+ code-host** resolution (incl. the PM↔code-host routing table and the `Refs:` cross-linking convention) | [way-of-working-pm-resolution.md](way-of-working-pm-resolution.md) | 18 skills |
 | Template resolution (adoption override > KB default, file-existence check) | [template-resolution.md](template-resolution.md) | all template-linking skills |
 | `/pair-capability-record-decision` invocation contract | [record-decision-contract.md](record-decision-contract.md) | 19 skills |
 | Output Format shapes (Decision / Report) | [output-shapes.md](output-shapes.md) | 10 skills (documentation-only — no logic change) |
