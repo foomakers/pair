@@ -64,7 +64,8 @@ This step decides **which** suites the standard gates below run, so the local ru
    ACTIVE_SUITES="$(required_suites_for_tier "$TIER")"    # e.g. "install lint type build unit"
    ```
 
-   - **Edge — pre-publish (no PR yet)**: when the branch has no PR, pass the **story id** as `$story` and the tier resolves from the story card (`gh issue view`), as above. A standalone run on a branch that already has a PR needs **no** `$story`: the PR's labels win, so a review-raised (D17) tag is never under-run versus CI.
+   - **Two different tools when the project splits them**: the PR labels come from the **code host** and the story card from the **PM tool** (the `gh` snippet above is the single-tool GitHub case, where they coincide). Resolve each side per the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md) and substitute that tool's command — the precedence (PR labels win, story card is the pre-publish fallback) is unchanged, because CI gates on the code host's PR labels either way.
+   - **Edge — pre-publish (no PR yet)**: when the branch has no PR, pass the **story id** as `$story` and the tier resolves from the story card on the PM tool (`gh issue view` for GitHub), as above. A standalone run on a branch that already has a PR needs **no** `$story`: the PR's labels win, so a review-raised (D17) tag is never under-run versus CI.
    - **Fail-safe (AC3)**: `resolve_tier` returns `red` for **no** `risk:*` tag or an **unknown/malformed** value — the widest matrix, never a silent skip. When the tier came from the fail-safe, say so explicitly in the report: `Tier: 🔴 red (fail-safe — no resolvable risk:* tag; running the full set)`.
    - **Widen-only**: because review never lowers a tier (D17), a later run can only widen the set versus an earlier one on the same item — never narrow.
 
@@ -218,7 +219,7 @@ When invoked **independently**:
 See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → run only what's detectable rather than failing) for the standard scenarios. Additional cases:
 
 - **Gate matrix / `tier-resolve.sh` / quality model not found**: fall back to running all adopted gates (the full-suite behavior) with the notice in Step 1.5 — never a silent skip.
-- **`gh` / PM tool not available to read tags**: cannot resolve a tag → apply the fail-safe (🔴 red, full set) and note that tags could not be read. Never assume green.
+- **`gh` / code host / PM tool not available to read tags**: cannot resolve a tag → apply the fail-safe (🔴 red, full set) and note that tags could not be read (and which side was unreachable — the code host's PR or the PM tool's story card). Never assume green.
 - If a standard gate command is not available (e.g., no test script in package.json), skip that gate and report: "Tests: SKIPPED — no test command found." (If the tier *required* that suite, it is instead a `Suite missing — CI will fail`, per Step 1.5.)
 - If no quality-related scripts are found at all, report: "No quality gates detected. Configure quality gate commands in package.json or way-of-working.md."
 - If a custom gate command fails to execute (command not found), report as WARNING: "Gate `[name]`: SKIPPED — command not found."

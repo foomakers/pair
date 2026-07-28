@@ -9,6 +9,8 @@ author: Foomakers
 
 Create or update issues in the adopted PM tool. Template-driven: reads the type-specific template, formats the issue body accordingly, and creates or updates via the PM tool API.
 
+**PM tool only — never the code host.** Every write here is a backlog-item write (body, labels, hierarchy, board state), so this skill reads `pm-tool` and nothing else. Pull requests, reviews and merges belong to the code host and are **never** written from here; when a project declares a separate `code-host`, the only thing that crosses over is the cross-link — `/publish-pr` composes this skill to post the **PR URL back onto the PM item** as a comment/link field. See the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
+
 ## Arguments
 
 | Argument   | Required | Description                                                                                                                                                     |
@@ -70,6 +72,8 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 1. **Check**: Resolve the PM tool implementation guide based on the adopted tool:
    - `github-projects` → [github-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md)
    - `filesystem` → [filesystem-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/filesystem-implementation.md)
+   - `azure-devops` → [azure-devops-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/azure-devops-implementation.md)
+   - `linear` → [linear-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/linear-implementation.md)
    - Other tools → use the tool-specific guide if available.
 2. **Skip**: If guide found, proceed to Step 6.
 3. **Act**: If guide not found, warn and proceed with best-effort PM tool interaction:
@@ -228,7 +232,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 ## Notes
 
-- This skill **modifies PM tool state** — it creates and updates issues.
+- This skill **modifies PM tool state** — it creates and updates issues. It never touches code-host state (branches, PRs, reviews).
 - No PM tool fallback: if the adopted tool fails, the skill HALTs. **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): `$id` prevents duplicate creation on re-invocation.
 - Template = source of truth for issue body format. Changes to template structure automatically affect all future issue creation.
 - Labels and hierarchy linking follow the PM tool implementation guide conventions.

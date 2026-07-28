@@ -31,8 +31,8 @@ Take a completed story branch to a review-ready pull request in one standalone s
 
 ## Adoption Inputs (read deterministically)
 
-- **[way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Merge Strategy`** — the same section the merge consumers read (`/review` Phase 6): `Method` (`squash` | `merge` | `rebase`, **default `squash`**) and the `Commit format` ([commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md)). Recorded on the PR as the intended merge strategy; **squash happens at merge, never here** (AC2). `base-branch` defaults to `main`; `branch-format` (to parse the branch id) comes from the [branch template](../../../.pair/knowledge/guidelines/collaboration/templates/branch-template.md). A consolidated `git-workflow` adoption section (base-branch + `code-host` alongside Merge Strategy) is #236's job.
-- **way-of-working.md → `code-host`** — the code host when it differs from the PM tool (#236). Absent ⇒ code host = PM tool (single-tool; AC4 degrades gracefully).
+- **[way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Merge Strategy`** — the same section the merge consumers read (`/review` Phase 6): `Method` (`squash` | `merge` | `rebase`, **default `squash`**) and the `Commit format` ([commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md)). Recorded on the PR as the intended merge strategy; **squash happens at merge, never here** (AC2). `branch-format` (to parse the branch id) comes from the [branch template](../../../.pair/knowledge/guidelines/collaboration/templates/branch-template.md).
+- **way-of-working.md → `## Git Workflow`** — `code-host` (the tool owning branches/PRs) and `base-branch` (default `main`). **`code-host` absent ⇒ code host = PM tool** (single-tool; the zero-configuration default, not a degradation), and the same tool named in both places is treated exactly as omitted. Resolution, the PM↔code-host routing table, and the cross-linking convention live in one place: [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md) — this skill states only which side each operation is on.
 - **way-of-working.md → `## State Mapping`** — board-column ↔ canonical-macrostate mapping (see [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)). Omitted ⇒ canonical names assumed.
 
 ## Algorithm
@@ -60,7 +60,7 @@ Each phase follows the **check → skip → act → verify** pattern. Phases run
 1. **Act**: Read the `## Merge Strategy` section (Adoption Inputs). Resolve, with defaults for anything omitted:
    - `Method` (default `squash`) — the intended merge method (`squash` | `merge` | `rebase`), recorded on the PR/output. **Applied at merge, not here** — this skill never rewrites branch history.
    - `Commit format` — the commit-message convention (informational; commits already exist on the branch).
-   - `base-branch` (default `main`) — the PR target branch. A configurable base lands with the `git-workflow` consolidation (#236).
+   - `base-branch` (default `main`, from `## Git Workflow`) — the PR target branch.
    - `branch-format` (default `feature/#<id>-<slug>`, per the branch template) — used only to parse/validate the branch, never to rename it.
 2. **Act**: Ensure the branch is pushed to the code host (`git push -u <remote> <branch>`); if already up to date, skip.
 3. **Verify**: The resolved base branch exists on the remote and the feature branch is pushed. Example: `Method: squash` (the default) ⇒ the output marks squash-on-merge (AC2).
@@ -86,10 +86,11 @@ Each phase follows the **check → skip → act → verify** pattern. Phases run
    - **No PR** → create it targeting `base-branch` on the code host.
    - **PR exists** → update its body and tags in place (edge case) — never open a second PR.
 3. **Act — tag propagation (copy, not analysis):** copy the story's estimated **classification tags** (e.g. risk/size labels) to the PR verbatim. This is a copy — the authoritative re-classification happens in review (G6). If the story carries **no classification tags**, create the PR without tags and note it in the output (projection may be inactive, D17) (edge case).
-4. **Act — code-host routing (AC4):** if `code-host` differs from the PM tool (#236), the PR lives on the code host and cross-links the PM item via the text convention `Refs: <issue-id>` in the body; board-state updates (next step) go to the PM tool. If `code-host` is absent, code host = PM tool (single-tool).
-5. **Act — ready-for-review:** mark the PR ready for review (not draft); if the host supports an explicit ready command (e.g. `gh pr ready`), use it.
-6. **Act — board state:** update the story's board state via the `## State Mapping` (canonical target: `Review`), using `/write-issue` when installed. If `/write-issue` is not installed or the PM tool is inaccessible, warn and continue — the PR is already ready.
-7. **Verify**: A single ready-for-review PR exists on the code host, tags reflect the story (or their absence is noted), and the board state is updated (or the failure is reported).
+4. **Act — code-host routing (AC4):** the PR is created/updated on the **code host**, the board state (step 6) is written on the **PM tool** — per the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md). When `code-host` is absent (or names the PM tool) both resolve to the same tool and the split is invisible. When they differ, add the text cross-link `Refs: <issue-id>` to the PR body — the PM tool's own item id, copied verbatim.
+5. **Act — back-link (bidirectional cross-link):** once the PR exists, post its **URL back on the PM item** (a comment, or the tool's link/URL field), via `/write-issue` when installed. This closes the loop the `Refs:` line opens, so the board reaches the PR without any native integration. **Skip when code host = PM tool** — the host already links the two natively, so a comment would be noise. If the **item id is not found** on the PM tool, keep the PR (it is valid work) and warn with the manual-link instruction (edge case) — never fail the publish over a back-link.
+6. **Act — ready-for-review:** mark the PR ready for review (not draft) on the code host; if the host supports an explicit ready command (e.g. `gh pr ready`), use it.
+7. **Act — board state:** update the story's board state on the **PM tool** via the `## State Mapping` (canonical target: `Review`), using `/write-issue` when installed. If `/write-issue` is not installed or the PM tool is inaccessible, warn and continue — the PR is already ready. PR state itself is never mirrored onto the board.
+8. **Verify**: A single ready-for-review PR exists on the code host, tags reflect the story (or their absence is noted), the cross-link exists in both directions when the tools differ (or the missing back-link is reported), and the board state is updated (or the failure is reported).
 
 ## Output Format
 
@@ -102,6 +103,7 @@ PUBLISH-PR REPORT:
 ├── PR:         [#PR-number — URL — Created | Updated]
 ├── Tags:       [copied: label, label | none on story — PR created without tags]
 ├── Code host:  [same as PM tool | <host> (board updates → PM tool)]
+├── Cross-link: [n-a (single tool) | Refs: <issue-id> + PR URL posted on <item> | back-link failed — manual link needed]
 ├── Conditional: [Services to Release: N deployable packages / n-a | Screenshots: UI touched / n-a]
 └── Board:      [→ Review | not updated — reason]
 
@@ -124,7 +126,7 @@ When invoked **independently** (hotfix, automation loop #212):
 - **Story id unresolvable** from handoff or branch (Phase 0).
 - **Quality gate red** (Phase 1) — report failing checks; no PR side effects (AC5).
 - **pr-template not found** (Phase 3) — cannot compose a PR without it.
-- **Code host unreachable** for create/update (Phase 4) — report and stop; nothing partial is left ready.
+- **Code host unreachable or unauthenticated** for create/update (Phase 4) — report with a setup pointer and stop; nothing partial is left ready. **PM-side work already done is not rolled back** (the board write is the PM tool's own state); re-invocation is idempotent and resumes at the code-host step.
 
 On HALT: report the blocker, propose resolution, make no PR side effects.
 
@@ -133,7 +135,8 @@ On HALT: report the blocker, propose resolution, make no PR side effects.
 See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline/template missing → minimal structure; PM tool inaccessible → do the PR, warn on the board step) for the standard scenarios. Additional cases:
 
 - **No `## Merge Strategy` section**: default to `squash` + the commit template, base `main` — the zero-configuration default, not a degradation (AC2). Consistent with the merge consumers, which also default to `squash`.
-- **No `code-host` declared**: code host = PM tool (single-tool; AC4 still satisfied in the degraded shape).
+- **No `code-host` declared**: code host = PM tool (single-tool) — the zero-configuration default, not a degradation; the cross-link step is skipped entirely.
+- **Back-link cannot be written** (item id not found, or `/write-issue` unavailable): keep the PR, warn with the manual-link instruction; the `Refs:` line in the body still links PR → item.
 - **No classification tags on the story**: create the PR without tags and note it (edge case) — never invent tags.
 - **`/checkpoint` not installed**: gather state from branch + story directly (Phase 0).
 - **`/write-issue` not installed**: skip the board-state update, warn, leave the PR ready.

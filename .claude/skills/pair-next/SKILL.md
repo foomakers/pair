@@ -148,6 +148,8 @@ Rows 12–15 are likewise project-wide and not surfaced under a scope; when the 
 
 **PM tool discovery**: Read [.pair/adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) to identify the PM tool (GitHub Projects, Jira, Linear, etc.) and access method.
 
+**Code host discovery**: **row 6's open-PR detection queries the code host, not the PM tool** — a PR read is a code-host operation. Resolve `code-host` from way-of-working.md → `## Git Workflow`; **absent ⇒ the code host is the PM tool**, so a single-tool project queries one tool exactly as before. When the two differ, match each open PR to its backlog item through the `Refs: <issue-id>` cross-link in the PR body (that is how "the PR's linked issue" is determined for the candidate-set restriction), while every item/state read below stays on the PM tool. Resolution + routing table: [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
+
 **State resolution**: The conditions below refer to canonical **macrostates** (`Draft`, `Ready`, `In Progress`, `Review`, `Done`), never board-specific labels. Resolve each item's board state to a macrostate via the `## State Mapping` section in way-of-working.md — omitted ⇒ canonical names are assumed. See [canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md) for the full resolution rule. When a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback: evaluate the [Definition of Ready criteria](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md) against the item instead of guessing from the board-state name.
 
 | #   | Condition                                                        | Suggestion          | Rationale                                   |
@@ -213,11 +215,12 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **Argument edge cases** (see Step 0): `--root` not found → HALT, no action; `--root` resolves to a Done issue → report and exit; `--filter` (or the subtree) matches nothing → report `no matching issues` and exit cleanly (an empty result is not an error).
 - If a suggested skill is not installed, tell the user which skill is needed and where to find it.
 - If way-of-working.md has no `## State Mapping` section, canonical macrostate names are assumed — this is the zero-configuration default, not a degradation.
+- If way-of-working.md declares no `code-host`, the code host is the PM tool — likewise the zero-configuration default, not a degradation. If a **declared** code host is unreachable, skip row 6's open-PR detection (say so) and evaluate the remaining rows from PM-tool state; never HALT a read-only recommendation over it.
 - If a board can't distinguish `Draft` from `Ready` (no dedicated Ready column), apply the Readiness Fallback ([Definition of Ready criteria](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/definition-of-ready-and-done.md)) rather than treating row 11's condition as unresolvable.
 
 ## Notes
 
-- This skill is read-only: it inspects state but never modifies files or PM tool data.
+- This skill is read-only: it inspects state but never modifies files, PM tool data, or code-host data.
 - Row order encodes the tie-break (delivery proximity) — see the **Tie-break** note under the Step 3 table.
 - Re-run `/pair-next` after completing any skill to get an updated recommendation.
 - **Full catalog coverage**: nearly all of the 41 skills can be suggested — process skills via the cascading checks (Steps 2-3), capability skills via targeted checks (row 7 `/pair-capability-checkpoint`, rows 12-16 including `/pair-capability-grill`) or process-skill composition. `/pair-capability-publish-pr` will be reachable via `/pair-process-implement` once wired (not yet composed), so `/pair-next` cannot surface it today. `/pair-process-brainstorm` is a human-initiated discovery entry point — it opens a theme the backlog does not yet contain, which no board-state condition can detect — so it is catalogued here but never suggested by the cascade.

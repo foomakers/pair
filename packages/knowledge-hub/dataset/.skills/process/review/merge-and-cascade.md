@@ -36,14 +36,16 @@ Disclosed from [SKILL.md](SKILL.md) Phase 6 — only reached when the reviewer p
 
 ### Step 6.3: Merge PR
 
-1. **Act**: Merge the PR using the adopted strategy (per [github-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md)):
+The merge happens on the **code host**; the item writes in Step 6.4 happen on the **PM tool**. When `code-host` is absent (or names the PM tool) both are the same tool and the two steps are indistinguishable. See the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
+
+1. **Act**: Merge the PR on the code host using the adopted strategy (for GitHub, per [github-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md)):
    - MCP-first: use `merge_pull_request` with `merge_method` and `commit_title` + `commit_message`.
    - CLI fallback: `gh pr merge <number> --squash --subject "<title>" --body "<body>"`.
-2. **Verify**: PR merged and closed.
+2. **Verify**: PR merged and closed on the code host.
 
 ### Step 6.4: Update Story & Parent Cascade
 
-1. **Act**: Close the user story issue in the PM tool:
+1. **Act**: Close the user story issue on the **PM tool** (an item write — never the code host; resolve the item id from the PR's `Refs: <issue-id>` cross-link when the tools are split). GitHub example:
    - MCP: `issue_write` with `method = update`, `state = closed`, `state_reason = completed`.
    - CLI: `gh issue close <story-number> --reason completed`.
 2. **Act**: Check parent epic — read sub-issues to determine if ALL stories are Done:
@@ -57,7 +59,7 @@ Disclosed from [SKILL.md](SKILL.md) Phase 6 — only reached when the reviewer p
 
 ### Step 6.5: Branch Cleanup
 
-1. **Act**: Delete the feature branch (remote):
+1. **Act**: Delete the feature branch on the code host (remote):
    - CLI: `git push origin --delete <branch>`.
 2. **Act**: Remove the story's checkpoint if one exists — `.pair/working/checkpoints/<story-id>.md` — so completed-story state does not linger as stale context (per the task-scoped cleanup rule; see `/checkpoint`).
 3. **Verify**: Feature branch deleted and story checkpoint removed (if any existed).
