@@ -23,6 +23,20 @@ This is distinct from the other two `.pair/` areas:
 
 Both subdirectories are created **on demand** by the skill that first needs them — a checkpoint capability creates `checkpoints/` the first time it writes state, a reporting capability creates `reports/<category>/` the first time it writes a report. `pair install` does not scaffold this structure.
 
+## Report Panels — Period Key and Idempotent Update
+
+A **panel** is a *recurring, period-scoped* report (cost monitoring, delivery/AI metrics, any periodic aggregate), as opposed to a **one-shot audit**, which is keyed by its run date (e.g. `reports/security/<YYYY-MM-DD>-audit.md`). Every panel writer follows the same convention, so periodic reporting stays one pattern instead of one per skill:
+
+- **Path**: `reports/<category>/<period-key>-<panel-name>.md` — e.g. `reports/cost/2026-07-cost-panel.md`. The category is the reporting area (`cost`, `metrics`, …); the panel name identifies the panel inside it.
+- **Period key**: the reporting window normalized to a filename-safe token — `YYYY-MM` (calendar month), `YYYY-Wnn` (ISO week), or `YYYY-MM-DD_YYYY-MM-DD` (explicit range). The **period**, not the run date, identifies the file.
+- **Idempotent by period**: re-running for the same period **updates that panel in place** — *one file per period*, never a second copy and never an appended duplicate. A different period writes a new file alongside it. Same inputs ⇒ same content.
+- **Headline-first (D22)**: headline figures (and the verdict, if the panel has one) at the top, readable in about one screen; per-item and per-category breakdowns in collapsed `<details>` sections.
+- **Output override**: a panel writer takes an `$output` argument for the target directory, defaulting to `<working>/reports/<category>/`, where `<working>` itself resolves the `working_path` override (see [Overriding the Path](#overriding-the-path)) — one knob, not two.
+- **Empty period**: the panel is still rendered and written, stating **"no data for the period"** and why the inputs are absent — an explicit empty panel, never a silent skip and never a failed run.
+- **Not writable** (read-only checkout, permissions): degrade to presenting the panel **inline** in the skill output, telling the human where to save it. A panel writer never fails a run over an unwritable reports area.
+
+Panels are read-only over their sources: a panel writer aggregates data other capabilities produced, and writes nothing outside its own panel file — never adoption, never backlog items.
+
 ## How It Is Protected (D14)
 
 `pair install`/`pair update` only ever touch paths **inside a configured registry's target** — the mirror cleanup deletes only entries within a registry `target` that are absent from that registry's `source`. A directory that is not a registry `source` or `target` is therefore never created, modified, or deleted. The working area is protected by exactly this: **it is never a registry target.**

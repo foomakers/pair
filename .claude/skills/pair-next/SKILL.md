@@ -80,7 +80,7 @@ The catalog is **derived from the installed corpus**: every skill directory unde
 | `/pair-capability-assess-infrastructure` | Assessment      | Assess infrastructure strategy                                               |
 | `/pair-capability-assess-observability`  | Assessment      | Assess observability strategy                                                |
 | `/pair-capability-assess-security`       | Assessment      | Assess security posture (review verdict + one-shot audit)                    |
-| `/pair-capability-assess-cost`           | Assessment      | Classify cost exposure (green/yellow/orange/red) at review — output-only     |
+| `/pair-capability-assess-cost`           | Assessment      | Classify cost exposure (green/yellow/orange/red) at review — output-only; report mode = period cost-monitoring panel |
 | `/pair-capability-assess-coupling`       | Assessment      | Assess coupling balance (strength × distance × volatility) — diff verdict + full audit |
 | `/pair-capability-analyze-debt`          | Analysis        | Analyze technical debt with prioritization                                   |
 | `/pair-capability-analyze-code-quality`  | Analysis        | Analyze code quality with metrics                                            |
