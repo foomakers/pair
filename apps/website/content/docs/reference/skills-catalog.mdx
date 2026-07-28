@@ -93,7 +93,7 @@ All `analyze-*` skills are **output-only report producers**: they analyze and re
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
 | **setup-pm** | `/pair-capability-setup-pm` | Configures the project management tool — creates/wires it up, applies its implementation guide, updates way-of-working, records the decision — whether the tool was already chosen or picked here. |
-| **setup-gates** | `/pair-capability-setup-gates` | Configures CI/CD quality gates — pipeline config, shared lint/format packages, husky hooks, the required deterministic secret-scanning job (gitleaks by default, R6.5/D24) — for the adopted tech stack. |
+| **setup-gates** | `/pair-capability-setup-gates` | Configures CI/CD quality gates — pipeline config, shared lint/format packages, husky hooks, the required deterministic secret-scanning job (gitleaks by default, R6.5/D24), and the required pair-review + pair-explicit-approval branch-protection checks that make the review unskippable — for the adopted tech stack. |
 | **manage-flags** | `/pair-capability-manage-flags` | Manages a feature flag's lifecycle — creation, activation, deactivation, cleanup — per the feature-flags guidelines. |
 
 ### Quality Assurance Capabilities
@@ -122,7 +122,7 @@ All `analyze-*` skills are **output-only report producers**: they analyze and re
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
 | **checkpoint** | `/pair-capability-checkpoint` | Writes and resumes a self-contained progress checkpoint (story, branch, tasks done, decisions, remaining todos) so work survives a context reset. |
-| **publish-pr** | `/pair-capability-publish-pr` | Publishes a completed story branch as a pull request: runs the quality gate, creates or updates ONE PR from the pr-template (conditional sections filled only when pertinent), copies the story's classification tags, marks it ready-for-review, and updates the board state. |
+| **publish-pr** | `/pair-capability-publish-pr` | Publishes a completed story branch as a pull request: runs the quality gate, creates or updates ONE PR from the pr-template (conditional sections filled only when pertinent), copies the story's classification tags, marks it ready-for-review, updates the board state, then enters the PR state flow — registers the required `pair-review` check as pending (merge blocked from t0) and dispatches the review to a clean-context subagent. |
 
 ## Skill Properties
 

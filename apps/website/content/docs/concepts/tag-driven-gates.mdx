@@ -57,7 +57,7 @@ Coverage can be protected by a **baseline regression guardrail** — a job insid
 
 ## Post-merge is build + deploy only
 
-Once a PR merges to the main branch, the gate does not run again — it already passed. The post-merge staging pipeline performs **build + deploy only**. The gate is the deterministic first filter before merge; review starts only once the gate is green.
+Once a PR merges to the main branch, the gate does not run again — it already passed. The post-merge staging pipeline performs **build + deploy only**. The gate is the deterministic first filter before merge; review starts only once the gate is green — see [PR State Flow](/docs/concepts/pr-state-flow) for what happens after that (the review as a required check, and the synthesis that decides whether the PR is mergeable).
 
 ## Setting it up (opt-in)
 

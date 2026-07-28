@@ -1,17 +1,19 @@
 ---
 name: pair-capability-publish-pr
-description: "Publishes a completed story branch as a pull request: runs the quality gate, creates or updates ONE PR from the pr-template (conditional sections filled only when pertinent), copies the story's classification tags, marks it ready-for-review, and updates the board state. Standalone — driven by a handoff/checkpoint, not by /pair-process-implement having run in the same session. Composed by a future closing phase of /pair-process-implement; reused by hotfix and automation loops. Composes /pair-capability-verify-quality, /pair-capability-checkpoint, /pair-capability-write-issue."
-version: 0.6.0
+description: "Publishes a completed story branch as a pull request: runs the quality gate, creates or updates ONE PR from the pr-template (conditional sections filled only when pertinent), copies the story's classification tags, marks it ready-for-review, updates the board state, then enters the PR state flow — registers the required `pair-review` check as pending (merge blocked from t0) and dispatches the review to a clean-context subagent. Standalone — driven by a handoff/checkpoint, not by /pair-process-implement having run in the same session. Composed by a future closing phase of /pair-process-implement; reused by hotfix and automation loops. Composes /pair-capability-verify-quality, /pair-capability-checkpoint, /pair-capability-write-issue."
+version: 0.7.0
 author: Foomakers
 ---
 
 # /pair-capability-publish-pr — Publish a Story Branch as a PR
 
-Take a completed story branch to a review-ready pull request in one standalone step: **gate → compose PR → propagate tags → ready-for-review → board state**. Reliable on a clean context (input is a handoff document, not session memory) and reusable outside `/pair-process-implement` — hotfix branches and automation loops (#212, G10) invoke it directly.
+Take a completed story branch to a review-ready pull request in one standalone step: **gate → compose PR → propagate tags → ready-for-review → board state → review dispatch**. Reliable on a clean context (input is a handoff document, not session memory) and reusable outside `/pair-process-implement` — hotfix branches and automation loops (#212, G10) invoke it directly.
 
 **One PR per story:** the story lands on ONE branch with ONE PR. If a PR already exists for the branch, this skill UPDATES it — it never opens a second PR for the same story.
 
-**Never merges.** This skill stops at a ready-for-review PR. Merge is a separate, human-gated step (`/pair-process-review` / `/pair-process-implement` Phase 4).
+**Never merges.** This skill stops at a PR under review. Merge is a separate, human-gated step (`/pair-process-review` / `/pair-process-implement` Phase 4).
+
+**The review is never optional.** Every PR this skill publishes enters the [PR state flow](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md) as `to-be-reviewed` with the **required** `pair-review` check registered as pending (so the merge is blocked from t0), and the review itself is dispatched to a clean-context subagent (Phase 5). This skill never renders the verdict — it only guarantees a review is pending and mechanically enforced.
 
 ## Composed Skills
 
@@ -107,6 +109,19 @@ Each phase follows the **check → skip → act → verify** pattern. Phases run
 7. **Act — board state:** update the story's board state on the **PM tool** via the `## State Mapping` (canonical target: `Review`), using `/pair-capability-write-issue` (default write mode, `$status: Review`) when installed. If `/pair-capability-write-issue` is not installed or the PM tool is inaccessible, warn and continue — the PR is already ready. PR state itself is never mirrored onto the board.
 8. **Verify**: A single ready-for-review PR exists on the code host, tags reflect the story (or their absence is noted), the cross-link exists in both directions when the tools differ — **exactly one** back-link comment, whether this run posted it or found it (or the missing back-link is reported) — and the board state is updated (or the failure is reported).
 
+### Phase 5: Enter the PR State Flow & Dispatch the Review (AC1)
+
+The PR is ready; it must now be **under review and mechanically blocked** — see the [PR state flow](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md) for the state model, the required checks, and the host mechanics ([github-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md) § PR state flow).
+
+1. **Check**: Does the current head commit already carry a `pair-review` check (from an earlier run on the same head)?
+2. **Skip**: If a `pair-review` check already exists on this head **and** a review has been submitted for it, do nothing here — the PR is already in the flow (idempotency). A new head commit always needs a fresh check + review.
+3. **Act — register the check as pending**: publish `pair-review` on the head commit with a pending/queued status **before** dispatching the review. This is what blocks the merge from t0: a crashed or never-started review leaves the required check unsatisfied instead of leaving the PR mergeable.
+4. **Act — label the state**: apply `pr-state:to-be-reviewed`, removing any other `pr-state:*` label (exactly one at a time). The label is a **view** — the required checks are the authority (pr-states.md).
+5. **Act — dispatch the review on a clean context**: spawn an **anonymous** subagent whose prompt is the PR reference only — no context from this session — with the single instruction to run `/pair-process-review $pr=<number>`. Mechanical isolation (D23): the reviewing context must not inherit the authoring context, otherwise the review inherits the author's assumptions. The subagent renders the verdict in the native code-host review, publishes the `pair-review` conclusion, and computes the synthesis state (`/pair-process-review` Step 5.4).
+6. **Act — degraded path (subagent unavailable)**: if the environment cannot spawn a subagent, do **not** run the review inline in this session (a self-context review defeats the isolation). Leave `pair-review` pending, note `Review: pending — dispatch unavailable, run /pair-process-review <pr> in a fresh session` in the output, and post the same instruction as a PR comment. The merge stays blocked meanwhile, so nothing is lost — only deferred.
+7. **Act — dispatch failure**: if the subagent fails or times out, the pending `pair-review` check stays in place (merge blocked) and the re-run guidance is posted as a PR comment. Re-invoking this skill re-dispatches (idempotent).
+8. **Verify**: The PR carries a `pair-review` check on its head commit, exactly one `pr-state:*` label, and either a submitted review or a recorded reason why it is still pending. This skill never publishes a verdict itself and never merges.
+
 ## Output Format
 
 ```text
@@ -120,9 +135,11 @@ PUBLISH-PR REPORT:
 ├── Code host:  [same as PM tool | <host> (board updates → PM tool)]
 ├── Cross-link: [n-a (single tool) | Refs: <issue-id> + PR URL posted on <item> | already linked — comment present, not re-posted | back-link failed — manual link needed]
 ├── Conditional: [Services to Release: N deployable packages / n-a | Screenshots: UI touched / n-a]
-└── Board:      [→ Review | not updated — reason]
+├── Board:      [→ Review | not updated — reason]
+├── PR state:   [pr-state:to-be-reviewed]
+└── Review:     [dispatched — subagent (clean context) | pending — dispatch unavailable, run /review <pr> | already submitted on this head]
 
-RESULT: [PR READY FOR REVIEW | HALTED — <reason>]
+RESULT: [PR UNDER REVIEW — merge blocked by required check `pair-review` | HALTED — <reason>]
 ```
 
 ## Composition Interface
@@ -155,11 +172,15 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **No classification tags on the story**: create the PR without tags and note it (edge case) — never invent tags.
 - **`/pair-capability-checkpoint` not installed**: gather state from branch + story directly (Phase 0).
 - **`/pair-capability-write-issue` not installed**: skip the board-state update, warn, leave the PR ready.
+- **Subagent spawning unavailable** (Phase 5): leave `pair-review` pending, post the re-run instruction as a PR comment, and note the deferral in the output. Never run the review inline in the authoring session (isolation, D23) and never mark the PR reviewed. Merge stays blocked — the outcome is deferred, not skipped.
+- **Code host has no check-run/required-check API** (Phase 5): publish the state as a `pr-state:*` label only, note `enforcement: advisory — see host manual setup` in the output, and continue. Documented degradation, never a silent claim of enforcement (pr-states.md).
+- **`/pair-process-review` not installed**: still register the pending `pair-review` check and label the state, then report that no reviewer flow is available. The PR stays blocked rather than silently mergeable.
 
 ## Notes
 
-- This skill **creates git-host artifacts** (a pushed branch, one PR) and updates board state — it does not modify source files and never merges.
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). Re-invocation detects the existing PR and updates it in place; detects an existing back-link comment and does not post a second one (Phase 4 step 5's Check — the one composed step that cannot dedupe itself); re-runs the gate (fast if already green); re-parses the handoff. Never a duplicate PR, never a duplicate back-link.
+- This skill **creates git-host artifacts** (a pushed branch, one PR, a pending `pair-review` check, a `pr-state:*` label) and updates board state — it does not modify source files, never renders a review verdict, and never merges.
+- **Gate ≠ review** ([pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md)): the Phase 1 gate is mechanical; the judgment verdict belongs to `/pair-process-review`, dispatched here on a clean context and enforced by the required `pair-review` check (R5.7).
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). Re-invocation detects the existing PR and updates it in place; re-runs the gate (fast if already green); re-parses the handoff. Never a duplicate PR.
 - Tag propagation is a **copy**; the authoritative classification is (re)done in `/pair-process-review` (G6).
 - The gate here is a local pre-flight only — CI remains authoritative (#210).
 - The handoff/checkpoint is the input contract (see the [checkpoint template](../../../.pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md)); it is consumed here, never loaded as ambient context elsewhere.

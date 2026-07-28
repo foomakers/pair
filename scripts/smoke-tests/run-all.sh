@@ -267,6 +267,7 @@ if [ "$IS_CI" = "true" ]; then
     "default-resolution.sh"
     "tier-aware-gate.sh"
     "coverage-gate.sh"
+    "pr-state-flow.sh"
   )
   
   for t in "${CI_TESTS[@]}"; do

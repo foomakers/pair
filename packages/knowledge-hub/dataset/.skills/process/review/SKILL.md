@@ -1,6 +1,6 @@
 ---
 name: review
-description: "Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) — validation, technical review, adoption compliance, completeness, decision — to decide whether it merges. Not a quick build/test sanity check (use /verify-quality). Composes /classify, /verify-quality, /verify-done, /record-decision, /analyze-debt, /assess-security (required), /verify-adoption, /assess-stack (optional)."
+description: "Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) — validation, technical review, adoption compliance, completeness, decision — to decide whether it merges. Gate before judgment: a red mechanical gate caps the verdict, and the decision is published as the required `pair-review` check plus the synthesized PR state (to-be-reviewed / ready-to-merge / not-approved), so merge stays blocked until gates are green, the review is approved, and (at risk:red) a human approves explicitly. Not a quick build/test sanity check (use /verify-quality). Composes /classify, /verify-quality, /verify-done, /record-decision, /analyze-debt, /assess-security (required), /verify-adoption, /assess-stack (optional)."
 version: 0.8.0
 author: Foomakers
 ---
@@ -107,10 +107,12 @@ Ask: _"Proceed with review?"_
 
 ### Step 2.1: Quality Gates
 
+**The gate is the first filter** (R5.4, [pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md)): mechanical checks run before judgment, and a red gate **caps** the outcome of this review.
+
 1. **Check**: Has `/verify-quality` already run on the current PR head commit?
 2. **Skip**: If all gates passing on current commit — record results, move to Step 2.2.
 3. **Act**: Compose `/verify-quality` with `$scope = all`.
-4. **Verify**: Record quality gate results. Failures become review findings (do not HALT — /review reports them).
+4. **Verify**: Record quality gate results. Failures become review findings (do not HALT — /review reports them) **and cap the decision**: with any gate red the review can **never** reach APPROVED / TECH-DEBT and the Step 5.4 synthesis can **never** yield `ready-to-merge` — the judgment review does not override a mechanical failure. Continue the review (the findings are still useful to the author) but carry `Gates: red` into Step 5.2.
 
 ### Step 2.2: Code Quality Assessment
 
@@ -223,7 +225,7 @@ Based on compiled findings:
 
 | Decision              | Condition                                                                                 |
 | --------------------- | ----------------------------------------------------------------------------------------- |
-| **APPROVED**          | No critical or major issues. All AC met. Quality gates pass.                              |
+| **APPROVED**          | No critical or major issues. All AC met. Quality gates pass (a red gate caps the decision — Step 2.1). |
 | **CHANGES-REQUESTED** | Critical issues found, missing ADRs, any **introduced** red security finding from `/assess-security` (AC4), failing tests, AC not met. A **red** `cost:*` class does not itself block — it surfaces a **blocking human sign-off** requirement in the Verdict (the human, not the skill, gates on cost). |
 | **TECH-DEBT**         | Only minor issues or debt items. Approve current PR, track debt separately.               |
 
@@ -242,7 +244,18 @@ The review is submitted on the **code host only** (where it gates the merge). It
 2. **Act**: On re-review, submit a **fresh** native review — both documented paths append (MCP `create`; `gh pr review` CLI), neither edits a submitted body. GitHub's latest-review-governs semantics mean the newest review carries the verdict while earlier reviews stay as visible history, so re-invocation is safe without editing in place (idempotency).
 3. **Verify**: The native review is submitted with the verdict-first body — no separate review-comment artifact exists.
 
-### Step 5.4: Determine Next Action
+### Step 5.4: Publish the `pair-review` Check & Synthesize the PR State (AC3, AC4, AC5)
+
+The verdict is judgment; the **merge block is mechanical**. This step turns the verdict into the required check and the PR state — see [pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md) for the model and [github-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md) § PR state flow for the host commands. Nothing here re-derives criteria: the tier comes from the PR's `risk:*` label via `resolve_tier` and the per-tier requirements come from [quality-model.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) §4 (**no classification criteria in this flow — D18**).
+
+1. **Check**: Does the current head commit already carry a `pair-review` check whose conclusion matches this verdict, and a matching `pr-state:*` label?
+2. **Skip**: If yes — nothing to publish, move to Step 5.5 (idempotent re-invocation).
+3. **Act — publish the check**: source the shipped [`pr-state.sh`](../../../.pair/knowledge/assets/pr-state.sh) and map the verdict with `review_check_conclusion` (`approved`/`tech-debt` ⇒ `success`, `changes-requested` ⇒ `failure`, anything else ⇒ `pending`). Publish `pair-review` on the **head commit** with that conclusion. A `pending` result is never published as completed — the required check stays unsatisfied so the merge stays blocked.
+4. **Act — resolve the requirements for the tier**: read the tier from the PR labels (`resolve_tier`, tags only, **untagged/malformed ⇒ 🔴 fail-safe**), then read that tier's row from quality-model §4 through its `Argument > Adoption > KB default` cascade: reviewer count, SLA, checklist depth (**extended checklist** at 🔴), and whether **explicit approval** is required. Record them in the review output; never invent or hardcode a threshold here. At 🔴, state the explicit-approval requirement in the Verdict block so the human reading the PR knows what is still missing (D10).
+5. **Act — synthesize the state**: `resolve_pr_state <gates> <verdict> <tier> <explicit-approval>` — `gates` from Step 2.1, `explicit-approval` = a human approval recorded on the current head (the pair review itself never counts). Apply the resulting `pr-state:to-be-reviewed` / `pr-state:ready-to-merge` / `pr-state:not-approved` label, removing any other `pr-state:*` label (exactly one at a time). A red gate or a 🔴 tier without explicit approval yields `to-be-reviewed`, never `ready-to-merge` (AC2, AC4).
+6. **Verify**: The head commit carries the `pair-review` check, the PR carries exactly one `pr-state:*` label matching the synthesis, and the tier requirements are recorded in the output. The label is a **view** — enforcement is the required checks (R5.7); this skill never edits branch protection and never bypasses a check.
+
+### Step 5.5: Determine Next Action
 
 1. **Check**: What was the review decision?
 2. **Skip**: If CHANGES-REQUESTED → output review report and stop. Author addresses findings, then re-invokes `/review`.
@@ -256,7 +269,7 @@ The review is submitted on the **code host only** (where it gates the merge). It
 
 ## Phase 6: Merge & Close (APPROVED only, optional)
 
-Only reached when the reviewer picked "Merge now" in Step 5.4 — see [merge-and-cascade.md](merge-and-cascade.md) for the merge-strategy, merge-commit, merge, parent-cascade, branch-cleanup, and post-merge-manual-test steps (Steps 6.1–6.6) plus the completion output.
+Only reached when the reviewer picked "Merge now" in Step 5.5 — see [merge-and-cascade.md](merge-and-cascade.md) for the merge-precondition (Step 6.0: `merge_allowed` on the synthesized PR state — HALT unless `ready-to-merge`), merge-strategy, merge-commit, merge, parent-cascade, branch-cleanup, and post-merge-manual-test steps (Steps 6.1–6.6) plus the completion output.
 
 ## Output Format
 
@@ -275,7 +288,10 @@ REVIEW COMPLETE:
 ├── DoD:        [N/N criteria met]
 ├── Adoption:   [Level N — summary]
 ├── Debt:       [N items flagged]
-└── Review:     [Submitted as native review body — no separate comment]
+├── Review:     [Submitted as native review body — no separate comment]
+├── Check:      [pair-review → success | failure | pending (blocks merge)]
+├── Tier req.:  [🟢/🟡/🔴 — N reviewer(s) / SLA / standard|extended checklist / explicit approval: required-and-present | required-and-MISSING | n-a]
+└── PR state:   [pr-state:to-be-reviewed | pr-state:ready-to-merge | pr-state:not-approved]
 ```
 
 At merge (Phase 6): see [merge-and-cascade.md](merge-and-cascade.md).
@@ -287,6 +303,7 @@ Review stops immediately when:
 - **PR not found or not open** (Phase 1)
 - **Missing ADR for new technical decision** (Phase 2, Step 2.3) — compose `/record-decision`, then resume
 - **Unresolved architectural non-conformity** (Phase 3) — must be addressed before decision
+- **PR state is not `ready-to-merge`** (Phase 6) — `merge_allowed` fails: gates red, review not approved, or a 🔴 PR without explicit human approval. Report which condition is unmet and stop; never bypass a required check.
 
 On HALT: report the blocker, compose the resolution skill if available, wait for developer.
 
@@ -299,7 +316,8 @@ See [idempotency convention](../../../.pair/knowledge/guidelines/technical-stand
 3. **Skill compositions**: /verify-quality, /verify-done, /assess-security results cached in session. Not re-run if already passing/current on current commit.
 4. **New commits**: if PR updated since last check, re-validates affected phases only.
 5. **Review report**: re-review appends a fresh native review (MCP `create` / `gh pr review`); GitHub's latest-review-governs semantics make the newest one carry the verdict while prior reviews remain as history. The report is always the review body, never a separate comment — so no duplicate comment artifact is created.
-6. **Merge**: detects already-merged PR. Skips Phase 6 if already merged. Resumes parent cascade if merge succeeded but status updates are incomplete.
+6. **PR state & check** (Step 5.4): re-publishing is a no-op when the head commit already carries a `pair-review` check matching the verdict and the `pr-state:*` label already matches the synthesis. A **new head commit** (including a force-push) has no check of its own, so the review re-runs on it and the merge stays blocked meanwhile. A tier raised between runs re-synthesizes on the new tier — raise-only, so a re-run never loosens a requirement.
+7. **Merge**: detects already-merged PR. Skips Phase 6 if already merged. Resumes parent cascade if merge succeeded but status updates are incomplete.
 
 ## Graceful Degradation
 
@@ -317,12 +335,15 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **PM tool not accessible**: the PR-side work (review, merge) still runs on the code host; the PM-side writes (issue close, parent cascade) are reported as not done rather than guessed. In a single-tool project this is the same tool, so the merge falls back to CLI only.
 - **Code host declared but unreachable/unauthenticated**: **HALT** with a setup pointer before any review is submitted — there is nothing to review against. PM-side reads already done are not rolled back.
 - **Merge fails** (conflicts, branch protection): Report the failure, ask reviewer to resolve. Do not force-push or bypass protections.
+- **Code host has no check-run/required-check API**: publish the `pr-state:*` label only, report `enforcement: advisory — host manual setup required` (see [pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md) degraded mode), and do NOT claim the merge is blocked. Does NOT HALT.
 - **/execute-manual-tests not installed**: Skip Step 6.6. Log "Manual test validation skipped — skill not installed." Does NOT block merge.
 - **No manual test suite**: Skip Step 6.6. Log "No manual test suite found." Does NOT block merge.
 
 ## Notes
 
-- This skill **reads code, submits the native review (verdict = the review action), and optionally merges PRs** — it does not modify source code and posts no separate review comment (AC2).
+- This skill **reads code, submits the native review (verdict = the review action), publishes the required `pair-review` check + the `pr-state:*` label, and optionally merges PRs** — it does not modify source code and posts no separate review comment (AC2).
+- **Gate ≠ review** ([pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md)): the mechanical gate is the first filter (Step 2.1) and the judgment verdict never overrides it; the merge block itself is the required check, not this skill's opinion. The `pr-state:*` label is a view — enforcement lives in branch protection (R5.7), which this skill never edits or bypasses.
+- **Per-tier requirements are read, never invented** — reviewer count, SLA, checklist depth, and the 🔴 explicit-approval requirement come from [quality-model.md](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) §4 through its `Argument > Adoption > KB default` cascade (D10). The tier comes from the PR's `risk:*` label (`resolve_tier`, tags only, untagged ⇒ 🔴 fail-safe): **this flow contains no classification criteria** (D18).
 - Review phases are sequential — each phase builds on findings from prior phases.
 - The reviewer can stop between phases; re-invoke to resume (see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md)).
 - Output follows [code-review-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/code-review-template.md) — the template defines structure, /review fills it with findings.

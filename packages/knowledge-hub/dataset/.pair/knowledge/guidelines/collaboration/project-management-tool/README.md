@@ -34,6 +34,8 @@ This framework does not cover:
 
 **[definition-of-ready-and-done.md](definition-of-ready-and-done.md)** - Canonical Definition of Ready (R3.8, 6 criteria) and Definition of Done (R3.9, 4 criteria + per-tier hooks) — companion to canonical-states.md, the source `/pair-capability-verify-done` and the user-story template read
 
+**[pr-states.md](pr-states.md)** - The PR state flow (gate ≠ review): the 3 PR states (`to-be-reviewed` → `ready-to-merge` / `not-approved`), the synthesis of gates × review verdict × tier × explicit approval, and the required `pair-review` / `pair-explicit-approval` checks that make merge blocking mechanical — the pull-request companion to canonical-states.md
+
 ### Implementation Guides
 
 **[filesystem-implementation.md](filesystem-implementation.md)** - Complete setup and usage guide for filesystem-based project management

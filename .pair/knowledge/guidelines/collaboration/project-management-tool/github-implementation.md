@@ -607,8 +607,110 @@ mcp__github__issue_write:
 gh issue close [NUMBER] --reason completed
 ```
 
+## PR state flow — required checks & branch protection
+
+GitHub mechanics for the two pair checks the [PR state flow](pr-states.md) requires. The **model** (states, synthesis, tier requirements, edge cases) lives in that document; only host specifics live here (R2.12).
+
+### The two pair checks
+
+| Check | Published by | Semantics |
+| --- | --- | --- |
+| `pair-review` | `/pair-process-review` (and registered `pending` at PR creation by `/pair-capability-publish-pr`) | `success` on APPROVED/TECH-DEBT, `failure` on CHANGES-REQUESTED, `pending` when the review has not produced a decision (never ran, crashed, timed out) |
+| `pair-explicit-approval` | a workflow job (below) | `success` when the tier does not require explicit approval, or when a **human** approving review exists on the current head; `failure` at 🔴 without one |
+
+Both are **required status checks** — a `pending` or absent required check blocks the merge on GitHub exactly like a failing one, which is what makes the review unskippable (R5.7).
+
+### Publish the `pair-review` check on the head commit
+
+```bash
+# Register it pending at PR creation (merge is blocked from t0, even if the review crashes)
+HEAD_SHA="$(gh pr view "$PR" --json headRefOid -q .headRefOid)"
+gh api "repos/$OWNER/$REPO/check-runs" -X POST \
+  -f name='pair-review' -f head_sha="$HEAD_SHA" -f status='queued' \
+  -f 'output[title]=pair review pending' \
+  -f 'output[summary]=Review subagent dispatched. Merge stays blocked until the verdict lands.'
+
+# Publish the verdict conclusion (success | failure), mapped by review_check_conclusion
+source .pair/knowledge/assets/pr-state.sh
+CONCLUSION="$(review_check_conclusion "$VERDICT")"   # approved|tech-debt|changes-requested
+gh api "repos/$OWNER/$REPO/check-runs" -X POST \
+  -f name='pair-review' -f head_sha="$HEAD_SHA" -f status='completed' \
+  -f conclusion="$CONCLUSION" \
+  -f 'output[title]=pair review' -f "output[summary]=$VERDICT_SUMMARY"
+```
+
+A `pending` conclusion means "no decision yet" — do **not** publish a `completed` check for it; leave the queued run in place so the required check stays unsatisfied.
+
+### `pair-explicit-approval` job (🔴 only, auto-passes below)
+
+Reads the `risk:*` label only (D18, fail-safe red) and asserts a **human** approval — the pair review's own submission never satisfies it, and `dismiss_stale_reviews` keeps it from surviving a force-push.
+
+```yaml
+name: pair-explicit-approval
+on:
+  pull_request:
+    # `labeled`/`unlabeled` are REQUIRED: a tier raised mid-review (🟡 → 🔴) must
+    # re-evaluate and re-block until a human approval is recorded.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, dismissed]
+
+jobs:
+  pair-explicit-approval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+          PR: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          source .pair/knowledge/assets/tier-resolve.sh   # tags only, no criteria
+          source .pair/knowledge/assets/pr-state.sh
+          TIER="$(resolve_tier "$PR_LABELS")"
+          if ! explicit_approval_required "$TIER"; then
+            echo "tier $TIER — explicit approval not required"; exit 0
+          fi
+          # A HUMAN approval on the CURRENT head: exclude bots and the PR author.
+          APPROVALS="$(gh pr view "$PR" --json reviews \
+            -q "[.reviews[] | select(.state==\"APPROVED\" and .commit.oid==\"$HEAD_SHA\"
+                 and .author.is_bot==false and .author.login!=\"$PR_AUTHOR\")] | length")"
+          [ "${APPROVALS:-0}" -ge 1 ] || {
+            echo "::error::risk:red PR requires an explicit human approval on the current head (D10)"
+            exit 1
+          }
+```
+
+### Branch protection payload
+
+```bash
+gh api "repos/$OWNER/$REPO/branches/main/protection" -X PUT --input - <<'JSON'
+{
+  "required_status_checks": {
+    "strict": true,
+    "contexts": ["base", "secret-scan", "pair-review", "pair-explicit-approval"]
+  },
+  "required_pull_request_reviews": { "dismiss_stale_reviews": true },
+  "enforce_admins": true,
+  "allow_force_pushes": false,
+  "restrictions": null
+}
+JSON
+```
+
+- Add the tier-scoped suite contexts (`unit`, `integration`, `e2e`) when the project runs them — on GitHub a job skipped via `if:` reports its required check as successful, so lower-tier PRs stay mergeable.
+- `dismiss_stale_reviews: true` is what invalidates a human approval after a force-push (edge case in [pr-states.md](pr-states.md)).
+
+### Degraded mode
+
+Without permission to write branch protection (no admin token, or a host/plan lacking the API), enforcement is **advisory**: the checks are still published and the `pr-state:*` label still computed, but nothing blocks the merge button. Apply the same contexts manually — repository **Settings → Branches → Branch protection rules → Require status checks to pass** — and record the gap until then; `/pair-capability-setup-gates` reports it rather than pretending the flow is enforced.
+
 ## Related Resources
 
+- **[PR state flow (gate ≠ review)](pr-states.md)** — the state model these checks enforce
 - **[GitHub Projects Documentation](https://docs.github.com/en/issues/planning-and-tracking-with-projects)**
 - **[GitHub Actions Documentation](https://docs.github.com/en/actions)**
 - **[MCP GitHub Server Guide](https://github.com/github/github-mcp-server)**
