@@ -34,11 +34,13 @@ Custom gates run **after** the standard gates (Lint, Type Check, Test). Add rows
 
 ## Git Workflow
 
-Optional. Where the **code** lives — the counterpart to the PM-tool declaration above, and the section every PR/branch operation reads. **Omitted by default**: pair assumes the code host is the same tool as the PM tool, so a single-tool project configures nothing here (convention over configuration, D21).
+Optional. Where the **code** lives and where a branch starts — the counterpart to the PM-tool declaration above, and the section every PR/branch operation reads. (Its sibling `## Merge Strategy` above owns how a PR *ends*: merge method, commit format, cleanup. The two are deliberately separate sections; `/publish-pr` reads both.) **Omitted by default**: pair assumes the code host is the same tool as the PM tool, so a single-tool project configures nothing here (convention over configuration, D21).
+
+**Required when the PM tool hosts no code.** `linear`, `jira` and `filesystem` track items but own no repositories, branches or pull requests, so there is nothing for an omitted `code-host` to fall back to — declare it, or every PR operation HALTs with a setup pointer. `github-projects`, `azure-devops` and other repository-hosting trackers need nothing.
 
 | Field         | Default         | Meaning                                                                                                    |
 | ------------- | --------------- | ---------------------------------------------------------------------------------------------------------- |
-| `code-host`   | _(the PM tool)_ | The tool hosting repositories, branches and pull requests. Declare it **only** when it differs from the PM tool. |
+| `code-host`   | *(the PM tool)* | The tool hosting repositories, branches and pull requests. Declare it **only** when it differs from the PM tool — which includes every case where the PM tool hosts no code at all (`linear`, `jira`, `filesystem`). |
 | `base-branch` | `main`          | The branch pull requests target and feature branches are cut from.                                          |
 
 - **`code-host` omitted ⇒ code host = PM tool.** Behavior is identical to a single-tool project — nothing to configure, nothing to migrate.

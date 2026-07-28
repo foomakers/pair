@@ -1,7 +1,7 @@
 ---
 name: pair-capability-verify-done
 description: "Checks a PR or work item against Definition of Done criteria (universal + project-specific), skipping already-passing criteria. Composed by /pair-process-review; invoke directly to check DoD on demand ('is PR #42 actually done')."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -41,6 +41,8 @@ Execute each criterion group in order. For every criterion, follow the **check �
 4. **Verify**: All AC met, or unmet criteria reported.
 
 ### Step 3: PR Approval per Risk Tier
+
+**Side**: this step's reads — the risk tier on the PR body and the approval count — are reads on the **code host**, per the routing table's first PR row; issue reads (Step 10) are PM-tool reads. The two are the same tool unless the project declares `code-host`; see the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
 
 1. **Check**: Does the PR carry a computed risk tier (🟢/🟡/🔴, from the compiled quality matrix — see [quality-model.md § 4](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md#4-per-tier-requirements))? Does it have the approvals that tier requires (🟢 0 reviewers/self-merge, 🟡 1 reviewer, 🔴 1 reviewer + explicit approval)?
 2. **Skip**: If no `$story`/PR context is available (universal-only run) — mark SKIPPED. If already verified earlier in this session — mark PASS (per canonical DoD's skip-already-passing rule), unless new commits or new PR activity landed since, in which case re-check (approvals are live state that can change mid-session).
@@ -93,7 +95,7 @@ Execute each criterion group in order. For every criterion, follow the **check �
 
 1. **Check**: Are there open critical/blocker-labeled issues linked to this story or PR?
 2. **Skip**: If the PM tool exposes no linked-issue/label data — mark SKIPPED with note: "No linked-issue data — critical-bug check not verifiable." If already verified earlier in this session — mark PASS (per canonical DoD's skip-already-passing rule), unless new commits or new PR activity landed since, in which case re-check (a critical/blocker label can be added mid-session).
-3. **Act**: Query the PM tool for issues referencing this story/PR carrying a critical/blocker severity label. Report any found.
+3. **Act**: Query the **PM tool** (issues are the PM tool's side, unlike the PR reads in Step 3) for issues referencing this story/PR carrying a critical/blocker severity label. Report any found.
 4. **Verify**: None found → PASS. Any found → FAIL, list them.
 
 ### Step 11: Manual Test Validation (Optional)

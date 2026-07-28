@@ -1,7 +1,7 @@
 ---
 name: pair-process-implement
 description: "Implements a refined user story task-by-task, via a 5-step cycle per task (context, branch, implementation, quality, commit). At the closing phase it writes a checkpoint and publishes the PR through a handoff-only subagent (clean context), resuming from the checkpoint when re-invoked on an interrupted story. Composes /pair-capability-verify-quality, /pair-capability-record-decision, /pair-capability-checkpoint, /pair-capability-publish-pr."
-version: 0.5.0
+version: 0.5.1
 author: Foomakers
 ---
 
@@ -53,7 +53,7 @@ The opening phase re-reads the checkpoint so an interrupted story resumes exactl
 
 1. **Check**: Is the user story already loaded in this session?
 2. **Skip**: If yes, confirm story ID and move to Step 0.1b.
-3. **Act**: Read the story from the PM tool — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
+3. **Act**: Read the story from the PM tool — resolution: see [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
    - Understand business value and acceptance criteria.
    - Confirm epic context.
 4. **Verify**: Story is fully loaded. If not → **HALT**.
@@ -113,7 +113,8 @@ Ask: _"Ready to proceed with implementation?"_
 3. **Act**: Create the branch from the adopted base branch (`## Git Workflow` → `base-branch`, default `main`) on the **code host** — branches and PRs are code-host operations, story/state writes (Step 0.1b, Step 2.8) are PM-tool operations; see the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md). Absent `code-host` ⇒ the same tool as the PM tool, so nothing changes for a single-tool project:
 
    ```bash
-   git checkout main && git pull origin main
+   # <base-branch> is the adopted value (## Git Workflow → base-branch), NOT a literal
+   git checkout <base-branch> && git pull origin <base-branch>
    git checkout -b feature/#<story-id>-<brief-description>
    ```
 

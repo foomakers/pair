@@ -36,16 +36,27 @@ Complete guide for implementing Linear as your project management tool, includin
    export LINEAR_API_KEY="lin_api_..."   # never commit this; use your secret store
    ```
 
-   All calls are `POST https://api.linear.app/graphql` with `Authorization: $LINEAR_API_KEY`.
+   All calls are `POST https://api.linear.app/graphql` with the key in an `Authorization` header.
+
+   **Keep the key out of `ps` and shell history.** Passing it inline (`-H "Authorization: $LINEAR_API_KEY"`) puts a full read/write workspace token in the process argument list — readable by any other user on the host via `ps aux` — and in your shell history. Read it from a mode-0600 header file instead (curl also accepts `--netrc`), and wrap endpoint + headers in one helper that every example below reuses:
+
+   ```bash
+   umask 077 && printf 'Authorization: %s\n' "$LINEAR_API_KEY" > "$HOME/.linear-headers"   # 0600, outside the repo
+
+   # usage: linear_gql '<json body>'
+   linear_gql() {
+     curl -s https://api.linear.app/graphql \
+       -H @"$HOME/.linear-headers" \
+       -H 'Content-Type: application/json' \
+       -d "$1"
+   }
+   ```
 
 1. **Verify access**
 
    ```bash
    # Resolve the team id + key (needed by every create mutation)
-   curl -s https://api.linear.app/graphql \
-     -H "Authorization: $LINEAR_API_KEY" \
-     -H 'Content-Type: application/json' \
-     -d '{"query":"{ teams { nodes { id key name } } }"}'
+   linear_gql '{"query":"{ teams { nodes { id key name } } }"}'
    ```
 
    With MCP, the equivalent is listing teams through the server's team tool.
@@ -158,12 +169,12 @@ Linear's default team states map as:
 
 GraphQL examples below; with MCP, use the server's equivalent tool with the same arguments.
 
+**Every snippet in this section (and in Code Review & PR Management) calls the `linear_gql` helper defined under [Verify access](#quick-setup) above** — same endpoint, same headers, defined once. Define it first (or inline `curl -s https://api.linear.app/graphql -H @"$HOME/.linear-headers" -H 'Content-Type: application/json' -d '<body>'`).
+
 ### Create
 
 ```bash
-curl -s https://api.linear.app/graphql \
-  -H "Authorization: $LINEAR_API_KEY" -H 'Content-Type: application/json' \
-  -d '{"query":"mutation($i:IssueCreateInput!){ issueCreate(input:$i){ success issue { id identifier url } } }",
+linear_gql '{"query":"mutation($i:IssueCreateInput!){ issueCreate(input:$i){ success issue { id identifier url } } }",
        "variables":{"i":{"teamId":"<team-id>","title":"[Story title]",
        "description":"[Story body — markdown per user-story-template]",
        "labelIds":["<user-story-label-id>"],"estimate":5,"priority":2}}}'
@@ -175,7 +186,7 @@ curl -s https://api.linear.app/graphql \
 
 ```bash
 # Attach a story to its epic issue
--d '{"query":"mutation($id:String!,$i:IssueUpdateInput!){ issueUpdate(id:$id,input:$i){ success } }",
+linear_gql '{"query":"mutation($id:String!,$i:IssueUpdateInput!){ issueUpdate(id:$id,input:$i){ success } }",
      "variables":{"id":"<story-id>","i":{"parentId":"<epic-id>"}}}'
 ```
 
@@ -183,10 +194,10 @@ curl -s https://api.linear.app/graphql \
 
 ```bash
 # 1. Resolve the target state id for the team (names are per-team, ids are stable)
--d '{"query":"{ team(id:\"<team-id>\"){ states { nodes { id name type } } } }"}'
+linear_gql '{"query":"{ team(id:\"<team-id>\"){ states { nodes { id name type } } } }"}'
 
 # 2. Write it
--d '{"query":"mutation($id:String!,$i:IssueUpdateInput!){ issueUpdate(id:$id,input:$i){ success } }",
+linear_gql '{"query":"mutation($id:String!,$i:IssueUpdateInput!){ issueUpdate(id:$id,input:$i){ success } }",
      "variables":{"id":"<issue-id>","i":{"stateId":"<state-id>"}}}'
 ```
 
@@ -196,14 +207,14 @@ The target state comes from the State Mapping resolution (write rule: first-mapp
 
 ```bash
 # Open stories in the team, excluding completed/canceled states
--d '{"query":"{ issues(filter:{team:{key:{eq:\"<TEAM-KEY>\"}}, state:{type:{nin:[\"completed\",\"canceled\"]}}}){ nodes { identifier title estimate state { name } } } }"}'
+linear_gql '{"query":"{ issues(filter:{team:{key:{eq:\"<TEAM-KEY>\"}}, state:{type:{nin:[\"completed\",\"canceled\"]}}}){ nodes { identifier title estimate state { name } } } }"}'
 ```
 
 ### Hierarchy Queries
 
 ```bash
 # An epic with its sub-issues and their states (parent cascade input)
--d '{"query":"{ issue(id:\"<epic-id>\"){ identifier children { nodes { identifier state { type } } } } }"}'
+linear_gql '{"query":"{ issue(id:\"<epic-id>\"){ identifier children { nodes { identifier state { type } } } } }"}'
 ```
 
 #### Recursive Parent Cascade Logic
@@ -222,10 +233,10 @@ When closing a story after merge, evaluate the parent hierarchy:
 The split works through two text conventions and nothing else — no native integration is required (Linear's own GitHub/GitLab integration may be enabled, but no skill depends on it):
 
 1. **PR → item**: the PR body carries `Refs: <issue-id>` with Linear's identifier verbatim, e.g. `Refs: ENG-412`. This is what `/pair-process-review` reads to find the story from a PR.
-2. **Item → PR**: the PR URL is posted back as a **comment on the Linear issue** right after the PR exists, completing the bidirectional link:
+2. **Item → PR**: the PR URL is posted back as a **comment on the Linear issue** right after the PR exists, completing the bidirectional link. `/pair-capability-publish-pr` does this through `/pair-capability-write-issue $mode: comment` — a comment, never an issue-body update, so the story's description is untouched; the underlying mutation is:
 
    ```bash
-   -d '{"query":"mutation($i:CommentCreateInput!){ commentCreate(input:$i){ success } }",
+   linear_gql '{"query":"mutation($i:CommentCreateInput!){ commentCreate(input:$i){ success } }",
         "variables":{"i":{"issueId":"<issue-id>","body":"PR: https://github.com/<org>/<repo>/pull/<n>"}}}'
    ```
 

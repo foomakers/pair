@@ -2,7 +2,7 @@
 
 How any skill that needs the project's tooling determines **which tool it is and how to reach it** — the **PM tool** for backlog items and state, the **code host** for branches, pull requests and reviews — and how it translates board-specific state into the canonical vocabulary the corpus uses.
 
-The two are the **same tool by default**. Only a project that declares `code-host` (see [Code-host resolution](#code-host-resolution)) splits them, and even then no skill re-derives the routing rule: it reads the table below.
+The two are the **same tool by default** — for the PM tools that can host code. A project splits them by declaring `code-host`, and a PM tool that hosts no code (Linear, Jira, `filesystem`) must declare it (see [Code-host resolution](#code-host-resolution)). Either way no skill re-derives the routing rule: it reads the table below.
 
 ## PM tool discovery
 
@@ -20,17 +20,33 @@ Skills refer to **canonical macrostates** (`Draft`, `Ready`, `In Progress`, `Rev
 
 ## Code-host resolution
 
-The **code host** is the tool that owns repositories, branches, pull requests and code reviews. It is resolved the same deterministic way the PM tool is, from the `## Git Workflow` section of way-of-working.md:
+The **code host** is the tool that owns repositories, branches, pull requests and code reviews. It is resolved the same deterministic way the PM tool is, from the `## Git Workflow` section of way-of-working.md.
+
+**Which PM tools can be the code host.** A PM tool is only a valid implicit code host if it actually hosts repositories, branches and pull requests. Two families:
+
+| PM tool family                                            | Hosts code? | `code-host` when omitted                            |
+| --------------------------------------------------------- | ----------- | --------------------------------------------------- |
+| Repository-hosting trackers — e.g. GitHub Projects, Azure DevOps, GitLab | Yes         | Resolves to the PM tool (the zero-configuration default) |
+| Trackers that **host no code** — e.g. Linear, Jira, **`filesystem`** | No          | Cannot resolve — must be declared (step 3 below)     |
+
+`filesystem` belongs to the second family: it tracks item state in files and has no repositories, branches or pull requests of its own, so a filesystem-tracked project still needs `code-host` declared before any PR operation.
 
 1. **Check**: Read [way-of-working.md](../../../../../../.pair/adoption/tech/way-of-working.md) → `## Git Workflow` → `code-host` (plus `base-branch`, default `main`).
-2. **Skip**: If `code-host` is **absent ⇒ the code host is the PM tool**. This is the zero-configuration default (D21), not a degradation: a single-tool project behaves exactly as it did before the field existed, and nothing needs to be declared.
-3. **Act**: If `code-host` names the **same** tool as `pm-tool`, treat it exactly as if it were omitted — single-tool, **no dual-write**, no cross-linking step.
-4. **Act**: If `code-host` names a **different** tool, resolve its access method (CLI/MCP/API) from the same section and route per the table below.
-5. **Verify**: The code host is identified and reachable. If a declared code host is **unreachable or unauthenticated**, **HALT** with a setup pointer — and note that **PM-side work already done is not rolled back** (state transitions and issue writes are the PM tool's, they stay committed; re-invocation is idempotent and picks up at the code-host step).
+2. **Skip**: If `code-host` is **absent and the PM tool hosts code** (first family above) **⇒ the code host is the PM tool**. This is the zero-configuration default, not a degradation: a single-tool project behaves exactly as it did before the field existed, and nothing needs to be declared.
+3. **Act**: If `code-host` is **absent and the PM tool hosts no code** (Linear, Jira, `filesystem`), there is nothing to fall back to: **HALT before any code-host operation** with a setup pointer —
+
+   > `<pm-tool>` hosts no repositories or pull requests. Declare `code-host` in `way-of-working.md` → `## Git Workflow` (see the schema in that file), or re-run `/pair-capability-setup-pm`.
+
+   PM-side operations (issue writes, state transitions) are unaffected and keep working — only branch/PR/review work is blocked.
+4. **Act**: If `code-host` names the **same** tool as `pm-tool`, treat it exactly as if it were omitted — single-tool, **no dual-write**, no cross-linking step.
+5. **Act**: If `code-host` names a **different** tool, resolve its access method (CLI/MCP/API) from the same section and route per the table below.
+6. **Verify**: The code host is identified and reachable. If a declared code host is **unreachable or unauthenticated**, **HALT** with a setup pointer — and note that **PM-side work already done is not rolled back** (state transitions and issue writes are the PM tool's, they stay committed; re-invocation is idempotent and picks up at the code-host step).
+
+**Section ownership** (so no skill has to guess which git-concerned section to read): `## Git Workflow` owns *where the code lives and where a branch starts* — `code-host`, `base-branch`. `## Merge Strategy` owns *how a PR ends* — merge method, commit format, branch cleanup, merge confirmation. They are deliberately siblings, not nested; a skill that spans both (`/pair-capability-publish-pr`) reads both.
 
 ## Routing table (which field an operation reads)
 
-Skills route by field, never by assumption. Everything on the left of the table reads `pm-tool`; everything on the right reads `code-host`.
+Skills route by field, never by assumption. The `Reads` column names the field each operation class resolves; the one operation whose side depends on its **target** (classification, which writes a card in refinement and a PR in review) has its own row and says so.
 
 | Operation class                                                                  | Reads       | Examples                                                                          |
 | -------------------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------- |
@@ -38,8 +54,9 @@ Skills route by field, never by assumption. Everything on the left of the table 
 | Read an **issue** — its hierarchy, its labels/tags, its **state**                 | `pm-tool`   | `/pair-next`, `/pair-capability-estimate`, `/pair-capability-classify`, `/pair-capability-verify-done`                                  |
 | **State transitions** (macrostate writes: `Ready`, `In Progress`, `Review`, `Done`) | `pm-tool`   | `/pair-process-refine-story`, `/pair-process-implement`, `/pair-capability-publish-pr` (board step), `/pair-process-review` (merge step)  |
 | Close an item                                                                    | `pm-tool`   | `/pair-process-review` merge cascade                                                           |
-| Branches and pushes, **pull request** create/update/read                          | `code-host` | `/pair-capability-publish-pr`, `/pair-process-implement`                                                       |
-| PR **labels/tags** and required checks (CI gate)                                  | `code-host` | `/pair-capability-verify-quality` (tier from the PR), `/pair-capability-setup-gates`                              |
+| Branches and pushes, **pull request** create/update/read (body, tier, approvals)   | `code-host` | `/pair-capability-publish-pr`, `/pair-process-implement`, `/pair-capability-verify-done` (PR tier + approval count, Step 3)     |
+| PR **labels/tags** and required checks (CI gate)                                  | `code-host` | `/pair-capability-verify-quality` (tier from the PR), `/pair-capability-setup-gates`, `/pair-capability-classify` (in review context — the target is the PR) |
+| **Classification** matrix + chromatic tags — written on whichever side the target is | both, by target | `/pair-capability-classify`: refinement ⇒ the **card** (`pm-tool`); review ⇒ the **PR** (`code-host`) |
 | Code **review** submission (approve / request-changes / comment) and PR **merge**  | `code-host` | `/pair-process-review`, `/pair-process-review` merge cascade                                                |
 | Open-PR detection                                                                | `code-host` | `/pair-next`                                                                           |
 
@@ -54,8 +71,8 @@ Invariants this table encodes:
 When PM tool and code host differ, the link between an item and its PR is **text-convention based** — no native integration is required or assumed. Native automations (e.g. a PM tool's own VCS integration) may coexist, but no skill depends on one:
 
 1. **Item → PR direction**: the PR body carries `Refs: <issue-id>` — the PM tool's own item identifier (e.g. `Refs: ENG-412`), written by `/pair-capability-publish-pr` from the story it was handed.
-2. **PR → item direction**: the PR URL is posted **back on the PM item** (a comment, or a link/URL field when the tool has one), completing the bidirectional link. `/pair-capability-publish-pr` does this through `/pair-capability-write-issue` right after the PR exists.
-3. **Item id not found** on the PM tool when linking back: the **PR is still created** (it is already valid work) — surface a warning with the manual-link instruction rather than failing the publish.
+2. **PR → item direction**: the PR URL is posted **back on the PM item as a comment** (or a link/URL field when the tool has one), completing the bidirectional link. `/pair-capability-publish-pr` does this right after the PR exists, through `/pair-capability-write-issue $mode: comment` — the **non-destructive** path: one comment, no template render, no body write, so the item's AC/DoD/task breakdown is untouched. Where `/pair-capability-write-issue` isn't installed, the same comment goes through the PM tool's implementation guide directly (Linear `commentCreate`, `gh issue comment`, the Azure DevOps work-item comments endpoint, the Jira comment API). A back-link is **never** written as a body update.
+3. **Item id not found** on the PM tool when linking back (or the PM tool errors): the **PR is still created** (it is already valid work) — surface a warning with the manual-link instruction rather than failing the publish. The back-link path therefore **warns, it never HALTs**; comment mode is specified with that exception so the non-blocking behavior survives the composition.
 4. `<issue-id>` is whatever the PM tool calls its item (`#412` on GitHub, `ENG-412` on Linear, `PROJ-412` on Jira). Skills copy the id verbatim; they never reformat it.
 
 ## What stays in the skill (the delta)

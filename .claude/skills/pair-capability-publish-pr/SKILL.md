@@ -1,7 +1,7 @@
 ---
 name: pair-capability-publish-pr
 description: "Publishes a completed story branch as a pull request: runs the quality gate, creates or updates ONE PR from the pr-template (conditional sections filled only when pertinent), copies the story's classification tags, marks it ready-for-review, and updates the board state. Standalone — driven by a handoff/checkpoint, not by /pair-process-implement having run in the same session. Composed by a future closing phase of /pair-process-implement; reused by hotfix and automation loops. Composes /pair-capability-verify-quality, /pair-capability-checkpoint, /pair-capability-write-issue."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
@@ -19,7 +19,7 @@ Take a completed story branch to a review-ready pull request in one standalone s
 | ----------------- | ---------- | ------------------------------------------------------------------------------------------------- |
 | `/pair-capability-verify-quality` | Capability | Yes — the pre-flight gate (Phase 1). A red gate HALTs before any PR is created or updated (AC5).   |
 | `/pair-capability-checkpoint`     | Capability | Optional — `$mode=resume` to read the handoff when one exists; if not installed, gather state from branch + story. |
-| `/pair-capability-write-issue`    | Capability | Optional — used to update the story's board state (Phase 4). If not installed, warn and continue.  |
+| `/pair-capability-write-issue`    | Capability | Optional — two distinct compositions in Phase 4: `$mode: comment` for the PR-URL back-link (step 5) and the default write mode for the board state (step 7). If not installed, warn and continue (back-link written directly per the PM tool's implementation guide, board step skipped). |
 
 ## Arguments
 
@@ -30,6 +30,8 @@ Take a completed story branch to a review-ready pull request in one standalone s
 | `$scope`     | No       | Forwarded to `/pair-capability-verify-quality` as its `$scope` (default `all`).                                                  |
 
 ## Adoption Inputs (read deterministically)
+
+Two sibling sections cover git concerns and the split is deliberate: **`## Merge Strategy` owns how a PR ends** (merge method, commit format, branch cleanup, merge confirmation — read by the merge consumers too), **`## Git Workflow` owns where the code lives and where it starts** (`code-host`, `base-branch`). This skill is the one reader of both, because it spans start (base branch) and intended end (merge method).
 
 - **[way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) → `## Merge Strategy`** — the same section the merge consumers read (`/pair-process-review` Phase 6): `Method` (`squash` | `merge` | `rebase`, **default `squash`**) and the `Commit format` ([commit template](../../../.pair/knowledge/guidelines/collaboration/templates/commit-template.md)). Recorded on the PR as the intended merge strategy; **squash happens at merge, never here** (AC2). `branch-format` (to parse the branch id) comes from the [branch template](../../../.pair/knowledge/guidelines/collaboration/templates/branch-template.md).
 - **way-of-working.md → `## Git Workflow`** — `code-host` (the tool owning branches/PRs) and `base-branch` (default `main`). **`code-host` absent ⇒ code host = PM tool** (single-tool; the zero-configuration default, not a degradation), and the same tool named in both places is treated exactly as omitted. Resolution, the PM↔code-host routing table, and the cross-linking convention live in one place: [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md) — this skill states only which side each operation is on.
@@ -74,6 +76,7 @@ Each phase follows the **check → skip → act → verify** pattern. Phases run
    - **Changes Made**: tasks completed + files added/modified/deleted (from `git diff --name-only <base-branch>...HEAD`).
    - **Testing**: quality-gate results from Phase 1.
 2. **Act — conditional sections (fill ONLY when pertinent; never leave an empty section):**
+   - **`Refs:` (PR Information)**: the template's cross-link slot. Fill it with the PM tool's item id verbatim ONLY when `code-host` differs from `pm-tool` (Phase 4 step 4); omit the line entirely on a single-tool project. Filling the slot rather than appending free text is what makes `/pair-process-review`'s and `/pair-next`'s read-back deterministic.
    - **Services to Release**: from `git diff --name-only <base-branch>...HEAD`, group changed files by owning package/service and keep only **deployable** ones. Detect deployable via the adoption's deployable-package globs when declared, else a path heuristic (e.g. `apps/*`, deployable `packages/*`) — exclude content/docs-only packages (e.g. `packages/knowledge-hub`, `apps/website` content). Include the section only if one or more deployable packages/services are touched; list each once. Omit when nothing deployable changed.
    - **Screenshots** (before/after): include ONLY when the diff touches UI. Detect UI via the adoption's UI package globs when declared, else a path heuristic (e.g. `apps/*/`, `*.tsx|*.css|*.svelte`, `**/components/**`). When touched but no screenshot is available, include the section with a `TODO: attach before/after` marker rather than fabricating content.
 3. **Act**: Omit every template section that does not apply (no placeholder-only sections).
@@ -86,10 +89,19 @@ Each phase follows the **check → skip → act → verify** pattern. Phases run
    - **No PR** → create it targeting `base-branch` on the code host.
    - **PR exists** → update its body and tags in place (edge case) — never open a second PR.
 3. **Act — tag propagation (copy, not analysis):** copy the story's estimated **classification tags** (e.g. risk/size labels) to the PR verbatim. This is a copy — the authoritative re-classification happens in review (G6). If the story carries **no classification tags**, create the PR without tags and note it in the output (projection may be inactive, D17) (edge case).
-4. **Act — code-host routing (AC4):** the PR is created/updated on the **code host**, the board state (step 6) is written on the **PM tool** — per the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md). When `code-host` is absent (or names the PM tool) both resolve to the same tool and the split is invisible. When they differ, add the text cross-link `Refs: <issue-id>` to the PR body — the PM tool's own item id, copied verbatim.
-5. **Act — back-link (bidirectional cross-link):** once the PR exists, post its **URL back on the PM item** (a comment, or the tool's link/URL field), via `/pair-capability-write-issue` when installed. This closes the loop the `Refs:` line opens, so the board reaches the PR without any native integration. **Skip when code host = PM tool** — the host already links the two natively, so a comment would be noise. If the **item id is not found** on the PM tool, keep the PR (it is valid work) and warn with the manual-link instruction (edge case) — never fail the publish over a back-link.
+4. **Act — code-host routing (AC4):** the PR is created/updated on the **code host**, the board state (step 6) is written on the **PM tool** — per the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md). When `code-host` is absent (or names the PM tool) both resolve to the same tool and the split is invisible. When they differ, fill the pr-template's conditional `Refs: <issue-id>` slot (Phase 3 step 2) — the PM tool's own item id, copied verbatim.
+5. **Act — back-link (bidirectional cross-link):** once the PR exists, post its **URL back on the PM item** as a *comment* — never a body write. This closes the loop the `Refs:` line opens, so the board reaches the PR without any native integration. **Skip when code host = PM tool** — the host already links the two natively, so a comment would be noise. Two mechanisms, in order:
+   - **`/pair-capability-write-issue` installed** → compose it in **comment mode**, which is non-destructive by contract (no template, no body render, no board write):
+
+     ```text
+     /pair-capability-write-issue $mode: comment $id: <issue-id> $comment: "PR: <pr-url>"
+     ```
+
+   - **not installed** → write the comment directly through the PM tool's implementation guide (e.g. Linear `commentCreate`, `gh issue comment`, the Azure DevOps work-item comments endpoint, the Jira comment API).
+
+   Never compose `/pair-capability-write-issue` in write mode for the back-link: write mode is a **full-body overwrite** and would replace the story's AC/DoD/task breakdown with the link. If the **item id is not found**, or the PM tool errors, keep the PR (it is valid work) and warn with the manual-link instruction (edge case) — comment mode warns rather than HALTing for exactly this reason, so the documented non-blocking behavior holds through the composition.
 6. **Act — ready-for-review:** mark the PR ready for review (not draft) on the code host; if the host supports an explicit ready command (e.g. `gh pr ready`), use it.
-7. **Act — board state:** update the story's board state on the **PM tool** via the `## State Mapping` (canonical target: `Review`), using `/pair-capability-write-issue` when installed. If `/pair-capability-write-issue` is not installed or the PM tool is inaccessible, warn and continue — the PR is already ready. PR state itself is never mirrored onto the board.
+7. **Act — board state:** update the story's board state on the **PM tool** via the `## State Mapping` (canonical target: `Review`), using `/pair-capability-write-issue` (default write mode, `$status: Review`) when installed. If `/pair-capability-write-issue` is not installed or the PM tool is inaccessible, warn and continue — the PR is already ready. PR state itself is never mirrored onto the board.
 8. **Verify**: A single ready-for-review PR exists on the code host, tags reflect the story (or their absence is noted), the cross-link exists in both directions when the tools differ (or the missing back-link is reported), and the board state is updated (or the failure is reported).
 
 ## Output Format
@@ -136,7 +148,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 - **No `## Merge Strategy` section**: default to `squash` + the commit template, base `main` — the zero-configuration default, not a degradation (AC2). Consistent with the merge consumers, which also default to `squash`.
 - **No `code-host` declared**: code host = PM tool (single-tool) — the zero-configuration default, not a degradation; the cross-link step is skipped entirely.
-- **Back-link cannot be written** (item id not found, or `/pair-capability-write-issue` unavailable): keep the PR, warn with the manual-link instruction; the `Refs:` line in the body still links PR → item.
+- **Back-link cannot be written** (item id not found, PM tool error, no comment mechanism, or `/pair-capability-write-issue` unavailable and no guide command): keep the PR, warn with the manual-link instruction; the `Refs:` line in the body still links PR → item. This is a warning by design, never a HALT.
 - **No classification tags on the story**: create the PR without tags and note it (edge case) — never invent tags.
 - **`/pair-capability-checkpoint` not installed**: gather state from branch + story directly (Phase 0).
 - **`/pair-capability-write-issue` not installed**: skip the board-state update, warn, leave the PR ready.

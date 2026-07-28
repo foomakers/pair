@@ -1,7 +1,7 @@
 ---
 name: write-issue
-description: "Creates or updates an issue in the adopted PM tool from a type-specific template (bug, story, epic, etc.), including topical labels (e.g. tech-debt) for deliberate promotion. Invoke directly to create/update one issue on demand. Composed by /refine-story, /plan-tasks, /plan-initiatives, /plan-epics, /plan-stories."
-version: 0.5.0
+description: "Creates or updates an issue in the adopted PM tool from a type-specific template (bug, story, epic, etc.), including topical labels (e.g. tech-debt) for deliberate promotion; `$mode: comment` posts a comment on an existing item without touching its body (the non-destructive cross-link path). Invoke directly to create/update one issue on demand. Composed by /refine-story, /plan-tasks, /plan-initiatives, /plan-epics, /plan-stories, /publish-pr."
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -9,15 +9,17 @@ author: Foomakers
 
 Create or update issues in the adopted PM tool. Template-driven: reads the type-specific template, formats the issue body accordingly, and creates or updates via the PM tool API.
 
-**PM tool only — never the code host.** Every write here is a backlog-item write (body, labels, hierarchy, board state), so this skill reads `pm-tool` and nothing else. Pull requests, reviews and merges belong to the code host and are **never** written from here; when a project declares a separate `code-host`, the only thing that crosses over is the cross-link — `/publish-pr` composes this skill to post the **PR URL back onto the PM item** as a comment/link field. See the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
+**PM tool only — never the code host.** Every write here is a backlog-item write (body, labels, hierarchy, board state, comments), so this skill reads `pm-tool` and nothing else. Pull requests, reviews and merges belong to the code host and are **never** written from here; when a project declares a separate `code-host`, the only thing that crosses over is the cross-link — `/publish-pr` composes this skill in **comment mode** (`$mode: comment`) to post the **PR URL back onto the PM item**. See the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
 
 ## Arguments
 
 | Argument   | Required | Description                                                                                                                                                     |
 | ---------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `$type`    | Yes      | Issue type: `story`, `task`, `epic`, or `initiative`. Determines which template is used. |
-| `$content` | Yes      | Structured content to fill the template — fields map to template sections.                                                                                      |
-| `$id`      | No       | Existing issue identifier. If provided → **update**; if absent → **create**.                                                                                    |
+| `$mode`    | No       | `write` (default) — create/update the item **body** from a template. `comment` — post a **comment** on an existing item and touch nothing else (the non-destructive path used for cross-links). |
+| `$type`    | Yes (write mode) | Issue type: `story`, `task`, `epic`, or `initiative`. Determines which template is used. Not required — and ignored — in `comment` mode. |
+| `$content` | Yes (write mode) | Structured content to fill the template — fields map to template sections. Not used in `comment` mode. |
+| `$comment` | Yes (comment mode) | Verbatim comment text to post on the item (e.g. `PR: https://github.com/acme/platform/pull/412`). Never template-rendered, never merged into the body. |
+| `$id`      | No       | Existing issue identifier. If provided → **update**; if absent → **create**. **Required in `comment` mode** (there is nothing to comment on otherwise). |
 | `$parent`  | No       | Parent issue identifier for hierarchy linking (e.g., epic → story, story → task).                                                                               |
 | `$status`  | No       | Target **macrostate** — one of `Draft`, `Ready`, `In Progress`, `Review`, `Done` (never a board-specific label). Resolved to the actual board state via the `state-mapping` resolution rule ([canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)) before the board field is updated. |
 | `$labels`  | No       | Additional **topical** labels to apply alongside the type label, e.g. `tech-debt` when a debt or quality finding is promoted to the backlog deliberately. A list of label names (created if the PM tool supports it). |
@@ -26,13 +28,15 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 
 ### Step 1: Validate Arguments
 
-1. **Check**: Is `$type` one of the supported types (`story`, `task`, `epic`, `initiative`)?
-2. **Skip**: If valid, proceed to Step 2.
-3. **Act**: If unsupported type → **HALT**:
+1. **Check**: Which mode is this? `$mode` defaults to `write`.
+2. **Act (`$mode: comment`)**: `$type` and `$content` are **not** required and are ignored. Require `$id` and `$comment`; if either is missing → **HALT**: `comment mode requires $id and $comment.` Then go to Step 2 and continue at **Step 7c** (Steps 3, 4 and 6 do not run — no template, no body render, no board write).
+3. **Check (`$mode: write`)**: Is `$type` one of the supported types (`story`, `task`, `epic`, `initiative`)?
+4. **Skip**: If valid, proceed to Step 2.
+5. **Act**: If unsupported type → **HALT**:
 
    > Unsupported issue type: `$type`. Supported: `story`, `task`, `epic`, `initiative`.
 
-4. **Verify**: `$type` is valid.
+6. **Verify**: The mode is resolved, and either `$type` is valid (write mode) or `$id` + `$comment` are present (comment mode).
 
 ### Step 2: Detect PM Tool
 
@@ -44,7 +48,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 
 4. **Verify**: PM tool identified (e.g., `github-projects`, `jira`, `linear`, `filesystem`).
 
-### Step 3: Load Template
+### Step 3: Load Template (write mode only)
 
 1. **Check**: Resolve the template path for `$type` **override-first** — see [template resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/template-resolution.md) (adoption `.pair/adoption/tech/templates/<name>-template.md` wins over the KB default below):
    - `story` → [user-story-template.md](../../../.pair/knowledge/guidelines/collaboration/templates/user-story-template.md)
@@ -58,7 +62,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 
 4. **Verify**: The template file's section list is extracted and available to Step 4 — every section name in it has a corresponding slot to fill or omit.
 
-### Step 4: Format Issue Body
+### Step 4: Format Issue Body (write mode only)
 
 1. **Check**: Does `$content` contain all required fields for the template?
 2. **Act**: Fill the template sections with `$content` data:
@@ -82,7 +86,7 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 
 4. **Verify**: Either the guide's steps for Step 7 are in hand, or the warning above was issued — one of the two always happened before proceeding.
 
-### Step 6: Resolve `$status` to a Board State
+### Step 6: Resolve `$status` to a Board State (write mode only)
 
 Skills never write board-specific labels — `$status` is always a canonical macrostate (`Draft`, `Ready`, `In Progress`, `Review`, `Done`). Resolve it to a board state before touching the board field.
 
@@ -116,15 +120,30 @@ Skills never write board-specific labels — `$status` is always a canonical mac
 3. **Act (Update)**:
    - Read the existing issue to confirm it exists.
    - If not found → **HALT**: `Issue #$id not found.`
-   - Update the issue body with the formatted content — a **full-body overwrite**, not a merge/append: the body is replaced with what `$content` renders to. Callers that add to an existing body (EXTEND triage, plan-tasks Task Breakdown) must therefore pass the **already-merged full body**, not just the delta (see the Composition Interface below).
+   - Update the issue body with the formatted content — in **write mode** (`$mode: write`) this is a **full-body overwrite**, not a merge/append: the body is replaced with what `$content` renders to. Callers that add to an existing body (EXTEND triage, plan-tasks Task Breakdown) must therefore pass the **already-merged full body**, not just the delta (see the Composition Interface below). Comment mode (Step 7c) never reaches here and never writes the body.
    - Preserve existing labels and hierarchy links unless explicitly changed.
    - If `$status` was provided, update the project board status field to the board state resolved in Step 6, per the implementation guide (e.g., GraphQL mutation for GitHub Projects). This is the **board field**, not the body text.
 4. **Verify**: Issue created or updated successfully. If `$status` was provided, confirm the board field reflects the resolved board state.
 
+### Step 7c: Post a Comment (`$mode: comment`)
+
+The **non-destructive** path: it appends a comment to the item and writes nothing else — no template is loaded, no body is rendered, the existing body and labels are left byte-identical, and no board field is touched. This is how a cross-link (the PR URL) reaches a PM item without overwriting the story's AC/DoD/task breakdown.
+
+1. **Act**: Post `$comment` verbatim on item `$id`, using the comment mechanism of the implementation guide resolved in Step 5:
+   - `linear` → `commentCreate` GraphQL mutation ([linear-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/linear-implementation.md))
+   - `github-projects` → `gh issue comment <id> --body "<comment>"` ([github-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md))
+   - `azure-devops` → the work-item comments endpoint ([azure-devops-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/azure-devops-implementation.md))
+   - `filesystem` → append the line under the item file's activity/notes section ([filesystem-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/filesystem-implementation.md))
+   - A tool with **no comment concept** but a link/URL field → write the value into that field instead; neither available → warn (next step).
+2. **Act — exceptions to this skill's HALTs (comment mode only):** a comment is an **additive annotation, never load-bearing work**, so failures here **warn, they do not HALT** — the caller's own artifact (the PR) is already valid and must not be invalidated by a missing annotation:
+   - `$id` **not found** ⇒ **warn** (`Item $id not found — post the link manually: <comment>`) and return a `warned` result. Step 7's `Issue #$id not found.` HALT does **not** apply in comment mode.
+   - Any **PM tool error** ⇒ **warn** with the same manual-link instruction and return `warned`. Step 8's HALT does **not** apply in comment mode.
+3. **Verify**: Either the comment exists on the item, or the warning + manual instruction was surfaced — and in both cases the item body, labels and board state are unchanged.
+
 ### Step 8: Handle Errors
 
 1. **Check**: Did the PM tool return an error during Step 7?
-2. **Skip**: If no error, proceed to output.
+2. **Skip**: If no error, proceed to output. **Comment mode is exempt** — its failures were already handled as warnings in Step 7c.2 and never reach here.
 3. **Act**: **HALT** with descriptive error:
 
    > PM tool error: `[error description]`. No fallback to alternative tools — resolve the issue with the adopted PM tool and re-invoke.
@@ -135,7 +154,7 @@ Skills never write board-specific labels — `$status` is always a canonical mac
 
 ```text
 ISSUE WRITTEN:
-├── Mode:     [Created | Updated]
+├── Mode:     [Created | Updated | Commented | Comment warned — manual link needed]
 ├── Type:     [story | task | epic | initiative]
 ├── ID:       [issue identifier — e.g., #42]
 ├── PM Tool:  [adopted tool name]
@@ -202,6 +221,12 @@ When composed by `/plan-stories`:
 - **Input**: `/plan-stories` invokes `/write-issue` with `$type: story`, `$content` containing the story data, and `$parent` linking to the parent epic. For an `EXTEND` triage outcome (see [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md)), it instead passes `$id` of the matched story and `$content` as the matched story's current full body with the additional scope already merged in by the caller — `/write-issue` overwrites the body as-is, it does not merge.
 - **Output**: Returns the issue identifier. `/plan-stories` uses it for status tracking.
 
+When composed by `/publish-pr` (the cross-link back-link, split PM-tool/code-host projects):
+
+- **Input**: `/publish-pr` invokes `/write-issue` with `$mode: comment`, `$id: <issue-id>` (the PM tool's own item id, verbatim) and `$comment: "PR: <pr-url>"` — no `$type`, no `$content`, no `$status`. Only the comment is written: the story body (AC, DoD, task breakdown) is never re-rendered or overwritten.
+- **Output**: `Commented`, or `Comment warned` with the manual-link instruction when the id doesn't resolve or the PM tool errors (Step 7c.2). Either way `/publish-pr` keeps the PR — a back-link failure never fails the publish, which is why comment mode warns instead of HALTing.
+- Only invoked when `code-host` differs from `pm-tool`; on a single-tool project the host links PR and item natively, so `/publish-pr` skips this composition.
+
 When invoked **independently**:
 
 - Interactive: create or update an issue directly in the adopted PM tool.
@@ -210,13 +235,14 @@ When invoked **independently**:
 
 ## HALT Conditions
 
-- **Unsupported `$type`** (Step 1) — lists currently supported types.
+- **Unsupported `$type`** (Step 1, write mode) — lists currently supported types.
+- **`comment` mode without `$id` or `$comment`** (Step 1) — nothing to comment on.
 - **No PM tool configured** (Step 2) — directs to configuration.
 - **Template not found** (Step 3) — missing knowledge base file.
 - **Target macrostate has no mapped board state** (Step 6) — reports the gap instead of guessing.
 - **Malformed `state-mapping` section** (Step 6) — points to canonical-states.md.
-- **`$id` provided but issue not found** (Step 7) — issue does not exist.
-- **PM tool error** (Step 8) — no fallback, descriptive error reported.
+- **`$id` provided but issue not found** (Step 7) — issue does not exist. **Not a HALT in `comment` mode** — warn with the manual-link instruction (Step 7c.2).
+- **PM tool error** (Step 8) — no fallback, descriptive error reported. **Not a HALT in `comment` mode** — warn (Step 7c.2).
 
 ## Extensibility
 
@@ -232,7 +258,8 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 ## Notes
 
-- This skill **modifies PM tool state** — it creates and updates issues. It never touches code-host state (branches, PRs, reviews).
+- This skill **modifies PM tool state** — it creates and updates issues, and posts comments on them. It never touches code-host state (branches, PRs, reviews).
+- **Comment mode is deliberately narrow**: one verbatim comment on one existing item, no template, no body write, no board write, warn-not-HALT on failure. It exists so a cross-link (or any additive annotation) never risks the item's body — the destructive full-body overwrite is write mode's contract alone.
 - No PM tool fallback: if the adopted tool fails, the skill HALTs. **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): `$id` prevents duplicate creation on re-invocation.
 - Template = source of truth for issue body format. Changes to template structure automatically affect all future issue creation.
 - Labels and hierarchy linking follow the PM tool implementation guide conventions.

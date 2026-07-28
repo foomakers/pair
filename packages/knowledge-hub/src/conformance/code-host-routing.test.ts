@@ -130,6 +130,8 @@ describe('code-host / PM-tool split — no skill assumes the two coincide (#236,
     ['process/review/SKILL.md', 'pair-process-review'],
     ['process/review/merge-and-cascade.md', 'pair-process-review'],
     ['capability/verify-quality/SKILL.md', 'pair-capability-verify-quality'],
+    ['capability/classify/SKILL.md', 'pair-capability-classify'],
+    ['capability/verify-done/SKILL.md', 'pair-capability-verify-done'],
     ['process/implement/SKILL.md', 'pair-process-implement'],
     ['next/SKILL.md', 'pair-next'],
   ]
@@ -161,6 +163,26 @@ describe('code-host / PM-tool split — no skill assumes the two coincide (#236,
     expect(content).toMatch(/never[^\n]*code host|not the code host|PM tool only/i)
   })
 
+  it('classify names the side per target: card ⇒ PM tool, PR ⇒ code host', () => {
+    const content = datasetSkill('capability/classify/SKILL.md')
+    // Tag/label writes are routed by target, not assumed to be the PM tool's.
+    expect(content).toMatch(/PR[^\n]*⇒[^\n]*code host|card[^\n]*⇒[^\n]*PM tool/i)
+    // The old conflation: a label-API failure attributed to the PM tool only.
+    expect(content).not.toMatch(/PM tool lacks label-API access/i)
+  })
+
+  it('verify-done marks its PR reads (tier + approvals) as code-host reads', () => {
+    const content = datasetSkill('capability/verify-done/SKILL.md')
+    expect(content).toMatch(/code host/i)
+    expect(content).toMatch(/(approval|tier)[\s\S]{0,200}code host/i)
+  })
+
+  it('implement cuts the branch from the ADOPTED base branch (snippet parametrised, not hardcoded main)', () => {
+    const content = datasetSkill('process/implement/SKILL.md')
+    expect(content).toContain('git checkout <base-branch>')
+    expect(content).not.toMatch(/git checkout main && git pull origin main/)
+  })
+
   it('review submits its verdict on the code host only — no status mirroring on the PM tool', () => {
     const content = datasetSkill('process/review/SKILL.md')
     expect(content).toMatch(/code host/i)
@@ -186,6 +208,84 @@ describe('code-host / PM-tool split — no skill assumes the two coincide (#236,
       expect(existsSync(mirrorPath), mirrorPath).toBe(true)
       expect(readFileSync(mirrorPath, 'utf-8'), mirrorPath).toMatch(/code host|code-host/i)
     }
+  })
+})
+
+describe('code-host / PM-tool split — the back-link is executable, not destructive (#236, AC3)', () => {
+  const writeIssue = datasetSkill('capability/write-issue/SKILL.md')
+
+  it('write-issue exposes a comment mode — a non-destructive path that never renders the body', () => {
+    expect(writeIssue).toContain('`$mode`')
+    expect(writeIssue).toContain('`$comment`')
+    expect(writeIssue).toMatch(
+      /comment mode[\s\S]{0,400}(no body|body is (never )?(touched|rewritten)|non-destructive)/i,
+    )
+  })
+
+  it('comment mode is exempt from the body-overwrite contract AND from the not-found HALT', () => {
+    // The full-body-overwrite rule must be scoped to write mode explicitly.
+    expect(writeIssue).toMatch(/full-body overwrite[\s\S]{0,400}(write mode|`\$mode: write`)/i)
+    // Back-link failures warn — they never HALT, because the PR is already valid work.
+    expect(writeIssue).toMatch(
+      /comment mode[\s\S]{0,300}(warn[^\n]*not HALT|never HALT|warn, don't HALT)/i,
+    )
+  })
+
+  it('write-issue carries a /publish-pr Composition Interface entry for the back-link', () => {
+    const composition = writeIssue.slice(writeIssue.indexOf('## Composition Interface'))
+    expect(composition).toMatch(/publish-pr/)
+    expect(composition).toMatch(/comment/i)
+  })
+
+  it('publish-pr composes the back-link through the comment mode (explicit arguments)', () => {
+    const content = datasetSkill('capability/publish-pr/SKILL.md')
+    expect(content).toMatch(/\$mode:\s*comment/)
+    expect(content).toMatch(/\$comment:/)
+  })
+
+  it('pr-template carries a conditional Refs: slot so the read-back is a deterministic slot', () => {
+    for (const root of [DATASET, REPO_ROOT]) {
+      const template = read(
+        root,
+        '.pair/knowledge/guidelines/collaboration/templates/pr-template.md',
+      )
+      expect(template).toContain('Refs:')
+      expect(template).toMatch(/Refs:[\s\S]{0,300}(code host ≠ PM tool|differs from the PM tool)/i)
+    }
+  })
+})
+
+describe('code-host / PM-tool split — a PM tool that hosts no code needs code-host (#236, AC1 edge)', () => {
+  it('the resolution rule names filesystem alongside Linear/Jira as hosting no code', () => {
+    const convention = dataset(ROUTING_CONVENTION)
+    const section = convention.slice(convention.indexOf('## Code-host resolution'))
+    expect(section).toMatch(/filesystem/i)
+    expect(section).toMatch(/linear/i)
+    // Absent code-host on a PM tool that hosts no code is NOT a silent resolution.
+    expect(section).toMatch(/hosts? no (code|repositor)/i)
+  })
+
+  it('setup-pm prompts for code-host on filesystem adoption too', () => {
+    const content = datasetSkill('capability/setup-pm/SKILL.md')
+    expect(content).toMatch(/hosts? no code[^\n]*filesystem|filesystem[^\n]*hosts? no code/i)
+  })
+
+  it('the concept page does not claim filesystem coincides with the code host', () => {
+    const page = read(REPO_ROOT, 'apps/website/content/docs/concepts/code-host.mdx')
+    expect(page).toMatch(/filesystem/i)
+  })
+})
+
+describe('code-host / PM-tool split — the design decision is recorded (#236)', () => {
+  it('an ADR records the optional code-host override, the cross-link and the review-check placement', () => {
+    const adr = read(
+      REPO_ROOT,
+      '.pair/adoption/tech/adr/adr-018-code-host-optional-wow-override.md',
+    )
+    expect(adr).toMatch(/^#\s+ADR-018/m)
+    expect(adr).toMatch(/code-host/)
+    expect(adr).toMatch(/Refs:/)
+    expect(adr).toMatch(/mirror/i)
   })
 })
 

@@ -1,7 +1,7 @@
 ---
 name: assess-pm
 description: "Evaluates and recommends which project management tool fits this project (Jira, Linear, GitHub Projects, etc.) when the choice is still open — proposes a choice, doesn't configure anything. /setup-pm configures the tool once picked; otherwise the caller persists the proposal via /record-decision."
-version: 0.5.0
+version: 0.5.1
 author: Foomakers
 ---
 

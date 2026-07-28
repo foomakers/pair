@@ -14,6 +14,19 @@ Single-source explanations for patterns that recur across many `SKILL.md` files.
 | To-issues triage (extend vs create) | [to-issues-triage.md](to-issues-triage.md) | 2 composing skills (new convention — no prior duplication to extract) |
 | Guided / Quick setup duality (guided asks; quick accepts defaults) | [guided-quick-setup.md](guided-quick-setup.md) | 2 precedents (`pair package` `--interactive`; the `assess-*` cascade) — documented, not retrofitted |
 
+## Skill `version:` frontmatter — when to bump
+
+Every `SKILL.md` carries a `version:`. It is **semver over the skill's contract**, not over its prose, and the rule is:
+
+| Change                                                                                              | Bump    |
+| --------------------------------------------------------------------------------------------------- | ------- |
+| New/removed/renamed argument, algorithm step or phase; changed routing, HALT set, or output shape     | **minor** |
+| Behavior-preserving correction — wording, a stale link label, a typo'd snippet, a pointer added       | **patch** |
+| Breaking contract change for composers (an argument's meaning changes, a composed skill becomes required) | **major** |
+| Nothing about the skill itself (only a guideline it points at moved)                                  | none    |
+
+Two consequences worth stating, because both have been asked in review: a **pure-pointer edit is a patch, not "no bump"** (a reader can tell which copy they have), and a **new algorithm step is always at least a minor** even when the step is optional. Sub-docs of a skill (`references/*`, disclosed detail files) have no frontmatter of their own — a change there bumps the owning `SKILL.md`.
+
 ## How a skill uses these files
 
 A skill's own section keeps its heading (e.g. `### Step 1: Resolution Cascade`, `## Graceful Degradation`) and states its **delta only**, then points here for the generic mechanics, e.g.:

@@ -1,7 +1,7 @@
 ---
 name: setup-pm
 description: "Configures the project management tool — creates/wires it up, applies its implementation guide, updates way-of-working, records the decision — whether the tool was already chosen or picked here. Invoke directly to set up a tracker ('configure Jira', 'set up GitHub Projects'). Composed by /bootstrap; /assess-pm delegates here once a tool is picked."
-version: 0.4.1
+version: 0.5.0
 author: Foomakers
 ---
 
@@ -52,10 +52,10 @@ Configure the project management tool for the current project. Guides the develo
    > | Tool | Best For | Implementation Guide |
    > |------|----------|---------------------|
    > | **GitHub Projects** | Teams using GitHub, remote collaboration, any size | Available |
-   > | **Filesystem** | Small teams, offline work, high security | Available |
+   > | **Filesystem** | Small teams, offline work, high security; tracks items in files — hosts no code, so it needs a separate `code-host` | Available |
    > | **Azure DevOps** | Microsoft ecosystem, enterprise boards + repos | Available |
-   > | **Linear** | Modern product teams; backlog only — needs a separate `code-host` | Available |
-   > | **Other** (Jira, etc.) | Enterprise, complex workflows | No implementation guide yet |
+   > | **Linear** | Modern product teams; backlog only — hosts no code, so it needs a separate `code-host` | Available |
+   > | **Other** (Jira, etc.) | Enterprise, complex workflows; Jira likewise hosts no code | No implementation guide yet |
    >
    > Which tool does your team use or want to adopt?
 
@@ -79,7 +79,7 @@ Configure the project management tool for the current project. Guides the develo
 
 2. **Act**: Walk the developer through the setup steps from the implementation guide:
    - For **GitHub Projects**: project creation, board configuration, label setup, automation rules, MCP integration
-   - For **Filesystem**: directory structure creation, status tracking files, workflow templates
+   - For **Filesystem**: directory structure creation, status tracking files, workflow templates — and the `code-host` declaration in `## Git Workflow`, because a filesystem tracker hosts no repositories
    - For **Azure DevOps**: organization/project defaults, work item type mapping, board columns, `az` authentication
    - For **Linear**: team + project creation, type labels, estimate scale, access path (MCP or GraphQL) — and the `code-host` declaration in `## Git Workflow`, because Linear hosts no repositories
 
@@ -100,7 +100,7 @@ Configure the project management tool for the current project. Guides the develo
    - Project identifier (e.g., GitHub org/project name, filesystem path)
    - Access method (e.g., MCP, CLI, direct)
    - Reference to implementation guide
-3. **Act — `## Git Workflow` (only when needed)**: if the selected PM tool **hosts no code** (e.g. Linear, Jira), ask which tool hosts the repositories and write `code-host` (+ `base-branch`) in the `## Git Workflow` section. When the PM tool *is* the code host (GitHub Projects, Azure DevOps), **write nothing** — omitted means "same tool", the zero-configuration default. See [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
+3. **Act — `## Git Workflow` (only when needed)**: if the selected PM tool **hosts no code** — `linear`, `jira`, **`filesystem`** (it tracks item state in files and has no repositories, branches or PRs) — ask which tool hosts the repositories and write `code-host` (+ `base-branch`) in the `## Git Workflow` section. When the PM tool *is* the code host (GitHub Projects, Azure DevOps), **write nothing** — omitted means "same tool", the zero-configuration default. See [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md) for the full hosts-code / hosts-no-code split.
 4. **Verify**: Way-of-working reflects current PM configuration, and `code-host` is declared iff the PM tool cannot host the code.
 
 ### Step 5: Record Decision

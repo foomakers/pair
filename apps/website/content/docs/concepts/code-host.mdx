@@ -8,13 +8,20 @@ pair distinguishes two tools that are usually the same one:
 - the **PM tool** — where the backlog lives (initiatives, epics, stories, state)
 - the **code host** — where the code lives (repositories, branches, pull requests, reviews)
 
-On GitHub or Azure DevOps these coincide, so you configure nothing. On Linear or Jira they cannot: those tools host no code. That is what the optional `code-host` field is for.
+On GitHub or Azure DevOps these coincide, so you configure nothing. On Linear, Jira or the `filesystem` tracker they cannot: those tools host no code. That is what the optional `code-host` field is for.
 
 ## Zero Configuration by Default
 
 Omit `code-host` and **the code host is your PM tool**. Behavior is identical to a single-tool project — there is nothing to migrate and nothing to declare.
 
 Declaring the *same* tool in both places is treated exactly as omitting it: single-tool, no dual-write.
+
+**One exception — a PM tool that hosts no code.** `linear`, `jira` and `filesystem` own no repositories, branches or pull requests, so an omitted `code-host` has nothing to fall back to. On those tools pair asks for `code-host` at setup, and a PR operation without it HALTs with a setup pointer rather than resolving to a tool that cannot host a PR.
+
+| PM tool                                    | Hosts code? | `code-host`         |
+| ------------------------------------------ | ----------- | ------------------- |
+| GitHub Projects, Azure DevOps              | Yes         | Omit it             |
+| Linear, Jira, `filesystem`                 | No          | Declare it          |
 
 ## Declaring a Split Setup
 
@@ -56,7 +63,7 @@ Two invariants follow:
 The two tools are linked by **text convention** in both directions. Native integrations (e.g. Linear's own GitHub app) may be enabled, but no skill depends on one:
 
 1. **PR → issue**: the PR body carries `Refs: <issue-id>` with the PM tool's own identifier — `Refs: ENG-412` on Linear, `Refs: #412` on GitHub, `Refs: PROJ-412` on Jira. `/pair-process-review` reads this to find the story from a PR.
-2. **Issue → PR**: `/pair-capability-publish-pr` posts the PR URL back onto the issue (a comment, or the tool's link field) as soon as the PR exists.
+2. **Issue → PR**: `/pair-capability-publish-pr` posts the PR URL back onto the issue as soon as the PR exists — as a **comment** (or the tool's link field), never as a body edit, so your story's acceptance criteria and task breakdown are untouched.
 
 If the issue id can't be resolved when writing the back-link, the PR is still created — you get a warning with a manual-link instruction, never a failed publish.
 
@@ -87,6 +94,7 @@ The cycle then runs across both tools:
 | Situation                                        | Behavior                                                                                 |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------- |
 | `code-host` declared but unreachable/unauthenticated | Publish HALTs with a setup pointer. PM-side work already done is **not** rolled back      |
+| `code-host` omitted on a PM tool that hosts no code (Linear, Jira, `filesystem`) | HALT before any PR operation, with a pointer to `## Git Workflow`. Item/state work keeps working |
 | Issue id not found when linking back              | PR is still created; warning with a manual-link instruction                               |
 | Same tool in both fields                          | Treated exactly as omitted — no dual-write, no cross-link comment                        |
 

@@ -14,7 +14,7 @@
 
 ## Git Workflow
 
-- `code-host`: **omitted** — this project's code host is the same tool as its PM tool (GitHub), so the single-tool default applies and skills route every PR/review operation to GitHub without configuration. Declare `code-host` only in a split setup (e.g. Linear for the backlog + GitHub for the code); see [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
+- `code-host`: `github` — the **same tool as `pm-tool`**, so the schema's own edge case applies: this is treated exactly as if the key were omitted (single-tool, no dual-write, no cross-link comment) and skills route every PR/review operation to GitHub. Declared explicitly only for readability; a split setup (e.g. Linear for the backlog + GitHub for the code) is what makes the key load-bearing. See [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
 - `base-branch`: `main` — the branch PRs target and feature branches are cut from.
 
 ## State Mapping

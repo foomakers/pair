@@ -106,7 +106,7 @@ All `analyze-*` skills are **output-only report producers**: they analyze and re
 | Skill | Command | Description |
 | ----- | ------- | ----------- |
 | **record-decision** | `/pair-capability-record-decision` | Records a decision — ADR (architectural), ADL (non-architectural), DDR (domain, 3-criteria gate), or an analysis-log entry ($type: analysis, written as Category: Analysis, decision-log/) — and is the sole generic writer of adoption files, including the context map's decision-backed sections. |
-| **write-issue** | `/pair-capability-write-issue` | Creates or updates an issue in the adopted PM tool from a type-specific template (bug, story, epic, etc.), including topical labels (e.g. tech-debt) for deliberate promotion. |
+| **write-issue** | `/pair-capability-write-issue` | Creates or updates an issue in the adopted PM tool from a type-specific template (bug, story, epic, etc.), including topical labels (e.g. tech-debt) for deliberate promotion; `$mode: comment` posts a comment on an existing item without touching its body (the non-destructive cross-link path). |
 | **estimate** | `/pair-capability-estimate` | Estimates story points for a refined user story using the project's adopted estimation methodology; confirms rather than re-estimating if already sized. |
 
 ### Discovery Capabilities
