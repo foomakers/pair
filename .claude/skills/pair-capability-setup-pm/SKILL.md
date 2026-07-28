@@ -53,7 +53,9 @@ Configure the project management tool for the current project. Guides the develo
    > |------|----------|---------------------|
    > | **GitHub Projects** | Teams using GitHub, remote collaboration, any size | Available |
    > | **Filesystem** | Small teams, offline work, high security | Available |
-   > | **Other** (Jira, Linear, Azure DevOps, etc.) | Enterprise, complex workflows | No implementation guide yet |
+   > | **Azure DevOps** | Microsoft ecosystem, enterprise boards + repos | Available |
+   > | **Linear** | Modern product teams; backlog only — needs a separate `code-host` | Available |
+   > | **Other** (Jira, etc.) | Enterprise, complex workflows | No implementation guide yet |
    >
    > Which tool does your team use or want to adopt?
 
@@ -72,10 +74,14 @@ Configure the project management tool for the current project. Guides the develo
 1. **Act**: Read the implementation guide for the selected tool:
    - GitHub: [github-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md)
    - Filesystem: [filesystem-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/filesystem-implementation.md)
+   - Azure DevOps: [azure-devops-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/azure-devops-implementation.md)
+   - Linear: [linear-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/linear-implementation.md)
 
 2. **Act**: Walk the developer through the setup steps from the implementation guide:
    - For **GitHub Projects**: project creation, board configuration, label setup, automation rules, MCP integration
    - For **Filesystem**: directory structure creation, status tracking files, workflow templates
+   - For **Azure DevOps**: organization/project defaults, work item type mapping, board columns, `az` authentication
+   - For **Linear**: team + project creation, type labels, estimate scale, access path (MCP or GraphQL) — and the `code-host` declaration in `## Git Workflow`, because Linear hosts no repositories
 
 3. **Act**: Gather project-specific details needed for configuration:
    - Project/organization name
@@ -94,7 +100,8 @@ Configure the project management tool for the current project. Guides the develo
    - Project identifier (e.g., GitHub org/project name, filesystem path)
    - Access method (e.g., MCP, CLI, direct)
    - Reference to implementation guide
-3. **Verify**: Way-of-working reflects current PM configuration.
+3. **Act — `## Git Workflow` (only when needed)**: if the selected PM tool **hosts no code** (e.g. Linear, Jira), ask which tool hosts the repositories and write `code-host` (+ `base-branch`) in the `## Git Workflow` section. When the PM tool *is* the code host (GitHub Projects, Azure DevOps), **write nothing** — omitted means "same tool", the zero-configuration default. See [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
+4. **Verify**: Way-of-working reflects current PM configuration, and `code-host` is declared iff the PM tool cannot host the code.
 
 ### Step 5: Record Decision
 
