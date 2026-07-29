@@ -35,6 +35,12 @@ export const scaffoldKbMetadata = {
     'Generates pair.config.json, README.md, .gitignore and scripts/release.sh',
     'The release script wraps the existing `pair package` command — no new release mechanism',
     'GitHub host also generates .github/workflows/release.yml (tag v* → release with ZIP)',
+    '--host is never inferred from the target repo remote: pass --host generic for GitLab,',
+    'Bitbucket or self-hosted, otherwise a GitHub workflow is generated',
     'Idempotent: re-running keeps authored KB content and asks before regenerating its own files',
+    'Refuses to scaffold into a configured project (.pair/adoption/ present), even with --force',
+    'Consumers install with: install --source <git-url-or-path>; --source <zip> is not yet',
+    'equivalent (it shares the official KB cache slot — foomakers/pair#395)',
+    'Human-facing report only: no --json output (interactive command; ask if you need it)',
   ],
 } as const

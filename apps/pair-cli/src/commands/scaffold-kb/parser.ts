@@ -1,4 +1,4 @@
-import type { KbHost } from './identity'
+import { validateKbName, type KbHost } from './identity'
 
 /**
  * Configuration for scaffold-kb command
@@ -51,6 +51,6 @@ export function parseScaffoldKbCommand(
     path: args[0] ?? '.',
     host: validateHost(options.host),
     force: options.force ?? false,
-    ...(options.name && { name: options.name }),
+    ...(options.name && { name: validateKbName(options.name) }),
   }
 }

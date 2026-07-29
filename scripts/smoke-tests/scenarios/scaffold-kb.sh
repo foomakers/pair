@@ -96,11 +96,45 @@ cd "$CONSUMER_DIR"
 run_pair install --source "$KB_DIR" --offline
 assert_success || exit 1
 assert_file "$CONSUMER_DIR/.pair/knowledge/mine.md" || exit 1
-if ! find "$CONSUMER_DIR/.claude/skills" -maxdepth 1 -name '*example-skill' | grep -q .; then
-  log_fail "Scaffolded skill not installed under .claude/skills"
-  ls -la "$CONSUMER_DIR/.claude/skills" 2>/dev/null || true
+# Exact name, no wildcard: `install` resolves the CONSUMER's config, so the KB's own
+# `skills.prefix` (acme-kb) does NOT apply — the skill lands under the default `pair-`
+# prefix. Pinned deliberately; foomakers/pair#397 tracks honouring the source KB's
+# registry declaration, and this assertion is what will flip when it lands.
+assert_dir "$CONSUMER_DIR/.claude/skills/pair-example-skill" || exit 1
+log_succ "Scaffolded KB installed into a separate project via --source"
+
+# 5. The published ZIP is a distinct install form — pin its behavior ----------
+# AC3 documents the ZIP as a distribution artifact, so the form must be exercised.
+# HOME is isolated because `install --source <zip>` currently extracts into the
+# version-keyed cache slot ~/.pair/kb/<cliVersion>/ shared with the OFFICIAL KB
+# (foomakers/pair#395): with a real HOME this would contaminate every other project
+# on the machine. The assertions below pin exactly that behavior so the fix is visible.
+log_info "Test 6: A separate project installs the published release ZIP (isolated HOME)"
+ZIP_CONSUMER_DIR=$(setup_workspace "scaffold-kb-test/zip-consumer")
+ISOLATED_HOME=$(setup_workspace "scaffold-kb-test/isolated-home")
+GENERIC_ZIP="$GENERIC_DIR/dist/generic-kb-1.0.0.zip"
+assert_file "$GENERIC_ZIP" || exit 1
+
+cd "$ZIP_CONSUMER_DIR"
+REAL_HOME="$HOME"
+export HOME="$ISOLATED_HOME"
+run_pair install --source "$GENERIC_ZIP" --offline
+ZIP_INSTALL_STATUS=$?
+export HOME="$REAL_HOME"
+
+if [ "$ZIP_INSTALL_STATUS" -ne 0 ]; then
+  log_fail "install --source <release ZIP> failed (exit $ZIP_INSTALL_STATUS)"
   exit 1
 fi
-log_succ "Scaffolded KB installed into a separate project via --source"
+assert_file "$ZIP_CONSUMER_DIR/.pair/knowledge/README.md" || exit 1
+assert_dir "$ZIP_CONSUMER_DIR/.claude/skills/pair-example-skill" || exit 1
+# Documented limitation, asserted rather than assumed: the external KB took over the
+# official KB's cache slot. foomakers/pair#395 must make this assertion fail.
+if ! grep -Fq '"generic-kb"' "$ISOLATED_HOME/.pair/kb/"*/manifest.json 2>/dev/null; then
+  log_fail "Expected the external KB manifest in the shared cache slot (see foomakers/pair#395)"
+  find "$ISOLATED_HOME/.pair" -maxdepth 3 2>/dev/null || true
+  exit 1
+fi
+log_succ "Release ZIP installs (pinned: it occupies the official KB cache slot, #395)"
 
 echo "=== $TEST_NAME Completed ==="

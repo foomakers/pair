@@ -21,6 +21,8 @@ export interface ScaffoldFile {
   path: string
   content: string
   kind: ScaffoldFileKind
+  /** Written with the executable bit set (generated shell scripts carry a shebang) */
+  executable?: boolean
 }
 
 export interface ScaffoldPlan {
@@ -34,15 +36,16 @@ export interface ScaffoldPlan {
 export const RELEASE_SCRIPT_PATH = 'scripts/release.sh'
 export const RELEASE_WORKFLOW_PATH = '.github/workflows/release.yml'
 
-function ownedFiles(identity: KbIdentity, host: KbHost): ScaffoldFile[] {
+function ownedFiles(identity: KbIdentity, host: KbHost, cliVersion?: string): ScaffoldFile[] {
   const files: ScaffoldFile[] = [
     { path: 'pair.config.json', content: renderPairConfig(identity), kind: 'scaffold-owned' },
     { path: 'README.md', content: renderReadme({ identity, host }), kind: 'scaffold-owned' },
     { path: '.gitignore', content: renderGitignore(), kind: 'scaffold-owned' },
     {
       path: RELEASE_SCRIPT_PATH,
-      content: renderReleaseScript({ identity, host }),
+      content: renderReleaseScript({ identity, host, ...(cliVersion && { cliVersion }) }),
       kind: 'scaffold-owned',
+      executable: true,
     },
   ]
 
@@ -82,12 +85,14 @@ export function buildScaffoldPlan(options: {
   root: string
   identity: KbIdentity
   host: KbHost
+  /** Version the generated release script pins pair-cli to (reproducible releases) */
+  cliVersion?: string
 }): ScaffoldPlan {
-  const { root, identity, host } = options
+  const { root, identity, host, cliVersion } = options
 
   return {
     root,
     directories: ['.pair/knowledge', '.skills'],
-    files: [...ownedFiles(identity, host), ...seedFiles(identity)],
+    files: [...ownedFiles(identity, host, cliVersion), ...seedFiles(identity)],
   }
 }

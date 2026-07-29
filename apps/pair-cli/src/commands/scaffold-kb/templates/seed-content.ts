@@ -42,10 +42,14 @@ export function renderExampleSkill(options: { identity: KbIdentity }): string {
     'Replace this skill with your own. One directory per skill under `.skills/`,',
     'each containing a `SKILL.md` with the frontmatter above.',
     '',
-    `Installed into a consuming project as \`${identity.skillPrefix}-example-skill\``,
-    `(the \`skills\` registry in \`pair.config.json\` flattens \`.skills/\` and prefixes`,
-    `every skill with \`${identity.skillPrefix}\`, so this KB's skills never collide`,
-    'with skills from another KB).',
+    'The `skills` registry in `pair.config.json` flattens `.skills/` and prefixes every',
+    `skill with \`${identity.skillPrefix}\`, so this KB's skills do not collide with`,
+    'another KB\'s.',
+    '',
+    '> **Prefix caveat:** `pair install --source` resolves the **consuming** project\'s',
+    "> config, not this KB's. The prefix above therefore only applies once that project",
+    '> adopts this `pair.config.json` (copy it in); with the default config the skill',
+    `> installs as \`pair-example-skill\`, not \`${identity.skillPrefix}-example-skill\`.`,
     '',
   ].join('\n')
 }

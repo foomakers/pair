@@ -396,6 +396,23 @@ pair scaffold-kb [path] [options]
 | `--host <host>` |       | Release automation host: `github` or `generic` (default: `github`) |
 | `--force`       | `-f`  | Regenerate scaffold-owned files without confirmation            |
 
+`--name` is embedded in generated YAML, bash, and Markdown: newlines and control
+characters are rejected, and the value is limited to 100 characters. Quote names that
+contain spaces (`--name "Acme KB"`) — an unquoted value is rejected as an extra
+positional argument rather than silently truncated.
+
+`--host` is never inferred from the target repository's `origin` remote: pass
+`--host generic` for GitLab, Bitbucket, or self-hosted, otherwise a GitHub Actions
+workflow is generated. The command has no `--json` output — it reports a human-facing
+summary only.
+
+### Refused Targets
+
+`scaffold-kb` fails, before writing anything, when the target exists and is not a
+directory, or when it is a configured pair project (`.pair/adoption/` present).
+`--force` does not bypass the second check: it is a wrong-target mistake, not an
+overwrite decision.
+
 ### What Gets Created
 
 | Path                            | Ownership                                          |
@@ -403,7 +420,7 @@ pair scaffold-kb [path] [options]
 | `.pair/knowledge/`, `.skills/`  | your content (seed files are never overwritten)     |
 | `pair.config.json`              | scaffold-owned — knowledge + skills registries      |
 | `README.md`, `.gitignore`       | scaffold-owned                                      |
-| `scripts/release.sh`            | scaffold-owned — wraps `pair package`                |
+| `scripts/release.sh`            | scaffold-owned — wraps `pair package` (mode `0755`)  |
 | `.github/workflows/release.yml` | scaffold-owned — `--host github` only                |
 
 No `.pair/adoption/` is created: a KB is knowledge, not a configured project.

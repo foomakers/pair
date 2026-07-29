@@ -1,5 +1,8 @@
 import type { KbHost, KbIdentity } from '../identity'
 
+/** Package name of the CLI the generated script shells out to. */
+const CLI_PACKAGE = '@foomakers/pair-cli'
+
 /** Where the generated script writes the packaged ZIP (shell form, `$VERSION` unexpanded). */
 export function releaseZipPath(identity: KbIdentity): string {
   return 'dist/' + identity.slug + '-$VERSION.zip'
@@ -10,7 +13,24 @@ export function releaseZipPattern(identity: KbIdentity): string {
   return `dist/${identity.slug}-<version>.zip`
 }
 
-function header(identity: KbIdentity): string[] {
+/**
+ * Single-quoted shell literal: the only interpolation form used for the KB name.
+ *
+ * The name is maintainer-supplied (possibly by a wrapper or automation), so it is
+ * never pasted into a double-quoted string — `--name 'x"; rm -rf /; #'` would
+ * otherwise execute when the maintainer, or CI with `contents: write`, runs the
+ * generated script.
+ */
+export function shellSingleQuoted(value: string): string {
+  return `'${value.replace(/'/g, "'\\''")}'`
+}
+
+/** How the generated script invokes pair-cli: pinned to the scaffolding CLI's own version. */
+export function defaultPairCliInvocation(cliVersion?: string): string {
+  return cliVersion ? `npx --yes ${CLI_PACKAGE}@${cliVersion}` : `npx --yes ${CLI_PACKAGE}`
+}
+
+function header(identity: KbIdentity, cliVersion?: string): string[] {
   return [
     '#!/usr/bin/env bash',
     '#',
@@ -21,29 +41,38 @@ function header(identity: KbIdentity): string[] {
     '# mechanism, so the KB ZIP is byte-for-byte what `pair install` already understands.',
     '#',
     '# Usage: bash scripts/release.sh <version>      # e.g. bash scripts/release.sh 1.0.0',
-    '# Env:   PAIR_CLI — how pair-cli is invoked (default: npx --yes @foomakers/pair-cli)',
+    '# Env:   PAIR_CLI — how pair-cli is invoked. Defaults to the pinned',
+    `#        \`${defaultPairCliInvocation(cliVersion)}\` so releases stay reproducible;`,
+    '#        override it to move to a newer CLI deliberately, e.g.',
+    `#        PAIR_CLI="npx --yes ${CLI_PACKAGE}@latest" bash scripts/release.sh 1.0.0`,
     '',
     'set -euo pipefail',
+    '',
+    '# Everything below runs from the KB repo root, wherever the script was invoked from.',
+    'KB_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"',
+    'cd "$KB_ROOT"',
     '',
   ]
 }
 
-function packagingSteps(identity: KbIdentity): string[] {
+function packagingSteps(identity: KbIdentity, cliVersion?: string): string[] {
   return [
+    `KB_NAME=${shellSingleQuoted(identity.name)}`,
+    '',
     'VERSION="${1:-}"',
     "if ! printf '%s' \"$VERSION\" | grep -Eq '^[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.-]+)?$'; then",
     '  echo "usage: bash scripts/release.sh <version>   (semver, e.g. 1.0.0)" >&2',
     '  exit 1',
     'fi',
     '',
-    'PAIR_CLI="${PAIR_CLI:-npx --yes @foomakers/pair-cli}"',
+    `PAIR_CLI="\${PAIR_CLI:-${defaultPairCliInvocation(cliVersion)}}"`,
     `ZIP="${releaseZipPath(identity)}"`,
     '',
-    `echo "==> Packaging ${identity.name} v$VERSION"`,
+    'echo "==> Packaging $KB_NAME v$VERSION"',
     '$PAIR_CLI package \\',
     '  -s . \\',
     '  --layout source \\',
-    `  --name "${identity.name}" \\`,
+    '  --name "$KB_NAME" \\',
     '  --pkg-version "$VERSION" \\',
     '  -o "$ZIP"',
     '',
@@ -56,31 +85,56 @@ function manualPublishNotice(): string[] {
   return [
     '  echo "    Your KB package is ready at $ZIP — publish it however your org does:"',
     '  echo "    attach it to a release, upload it to an artifact store, or serve it over HTTP."',
-    '  echo "    Consumers install it with: pair-cli install --source <url-or-path-of-the-zip>"',
+    '  echo "    Consumers install it with: pair-cli install --source <git-url-or-path-of-this-KB>"',
   ]
 }
 
-function githubPublishSteps(identity: KbIdentity): string[] {
+/**
+ * Guard: tag and release only when this directory is the root of its own git
+ * repository. Scaffolding a KB inside another repository's working tree would
+ * otherwise create (and push) `vX.Y.Z` tags in that unrelated repository.
+ */
+function repoRootGuard(): string[] {
   return [
-    'if ! command -v gh >/dev/null 2>&1 || ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then',
-    '  echo "==> No gh CLI or no git repository here — skipping tag and GitHub release."',
+    'GIT_TOPLEVEL="$(git -C "$KB_ROOT" rev-parse --show-toplevel 2>/dev/null || true)"',
+    '',
+    'if ! command -v gh >/dev/null 2>&1 || [ "$GIT_TOPLEVEL" != "$KB_ROOT" ]; then',
+    '  echo "==> No gh CLI, or $KB_ROOT is not the root of its own git repository —"',
+    '  echo "    skipping tag and GitHub release (nothing is tagged in an enclosing repo)."',
     ...manualPublishNotice(),
     '  exit 0',
     'fi',
     '',
+  ]
+}
+
+function tagSteps(): string[] {
+  return [
     'if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then',
     '  echo "==> Tag v$VERSION already exists — skipping tag creation"',
     'else',
-    `  git tag -a "v$VERSION" -m "${identity.name} v$VERSION"`,
-    '  git push origin "v$VERSION"',
+    '  git tag -a "v$VERSION" -m "$KB_NAME v$VERSION"',
+    '  if ! git push origin "v$VERSION"; then',
+    '    echo "==> Could not push v$VERSION to origin — removing the local tag and stopping here."',
+    '    git tag -d "v$VERSION" >/dev/null',
+    ...manualPublishNotice(),
+    '    exit 0',
+    '  fi',
     'fi',
     '',
+  ]
+}
+
+function githubPublishSteps(): string[] {
+  return [
+    ...repoRootGuard(),
+    ...tagSteps(),
     'if gh release view "v$VERSION" >/dev/null 2>&1; then',
     '  echo "==> Release v$VERSION already exists — uploading the ZIP"',
     '  gh release upload "v$VERSION" "$ZIP" --clobber',
     'else',
-    `  gh release create "v$VERSION" "$ZIP" --title "${identity.name} v$VERSION" \\`,
-    `    --notes "${identity.name} knowledge base v$VERSION. Install with: pair-cli install --source <zip-url>"`,
+    '  gh release create "v$VERSION" "$ZIP" --title "$KB_NAME v$VERSION" \\',
+    '    --notes "$KB_NAME knowledge base v$VERSION. Install with: pair-cli install --source <git-url-or-path-of-this-KB>"',
     'fi',
     '',
     'echo "==> Released v$VERSION"',
@@ -103,10 +157,22 @@ function genericPublishSteps(): string[] {
  * GitHub is the primary target (tag + release with the ZIP attached); every other
  * host degrades gracefully to "here is your ZIP, publish it however your org does",
  * which keeps `pair-cli` itself code-host agnostic — publishing never lives in the CLI.
+ *
+ * `cliVersion` pins the CLI the script shells out to, so a release cut today and one
+ * cut in six months package identically (and a broken upstream publish cannot silently
+ * change what maintainers ship).
  */
-export function renderReleaseScript(options: { identity: KbIdentity; host: KbHost }): string {
-  const { identity, host } = options
-  const publish = host === 'github' ? githubPublishSteps(identity) : genericPublishSteps()
+export function renderReleaseScript(options: {
+  identity: KbIdentity
+  host: KbHost
+  cliVersion?: string
+}): string {
+  const { identity, host, cliVersion } = options
+  const publish = host === 'github' ? githubPublishSteps() : genericPublishSteps()
 
-  return [...header(identity), ...packagingSteps(identity), ...publish].join('\n')
+  return [
+    ...header(identity, cliVersion),
+    ...packagingSteps(identity, cliVersion),
+    ...publish,
+  ].join('\n')
 }

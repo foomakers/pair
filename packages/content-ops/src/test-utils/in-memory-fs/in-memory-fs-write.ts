@@ -27,6 +27,14 @@ export async function writeFileBinary(
   await writeFile(state, path, content.toString('latin1'))
 }
 
+export async function chmod(state: InMemoryFsState, path: string, mode: number): Promise<void> {
+  const resolvedPath = state.resolvePath(path)
+  if (!state.files.has(resolvedPath) && !state.dirs.has(resolvedPath)) {
+    throw new Error(`File not found: ${path}`)
+  }
+  state.modes.set(resolvedPath, mode)
+}
+
 export async function unlink(state: InMemoryFsState, path: string): Promise<void> {
   const resolvedPath = state.resolvePath(path)
   if (!state.files.has(resolvedPath)) {

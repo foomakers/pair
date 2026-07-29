@@ -6,10 +6,13 @@ import { buildScaffoldPlan } from './scaffold-plan'
 import { applyScaffoldPlan, type ConfirmOverwrite } from './apply-plan'
 import { createConfirmOverwrite } from './confirm-overwrite'
 import { formatScaffoldReport } from './report-formatter'
+import { assertScaffoldTarget } from './target-guard'
 
 export interface ScaffoldKbHandlerOptions {
   /** Injected in tests; production uses the interactive/TTY-aware confirmation */
   confirmOverwrite?: ConfirmOverwrite
+  /** Version the generated release script pins pair-cli to (reproducible releases) */
+  cliVersion?: string
 }
 
 /**
@@ -29,8 +32,15 @@ export async function handleScaffoldKbCommand(
     ? config.path
     : path.join(fs.currentWorkingDirectory(), config.path)
 
+  await assertScaffoldTarget(root, fs)
+
   const identity = resolveKbIdentity({ name: config.name, targetPath: root })
-  const plan = buildScaffoldPlan({ root, identity, host: config.host })
+  const plan = buildScaffoldPlan({
+    root,
+    identity,
+    host: config.host,
+    ...(options.cliVersion && { cliVersion: options.cliVersion }),
+  })
 
   const result = await applyScaffoldPlan(plan, fs, {
     force: config.force,

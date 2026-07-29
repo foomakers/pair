@@ -173,7 +173,13 @@ function registerCommandFromMetadata(
 ): void {
   const { fsService, httpClient, version } = deps
   const cmdConfig = commandRegistry[commandName]
-  const cmd = prog.command(cmdConfig.metadata.name).description(cmdConfig.metadata.description)
+  const cmd = prog
+    .command(cmdConfig.metadata.name)
+    .description(cmdConfig.metadata.description)
+    // Commander tolerates extra positionals by default, which silently swallows an
+    // unquoted option value (`--name Acme KB` → name "Acme"). Reject them so the
+    // parsers' positional-arity validation is actually reachable.
+    .allowExcessArguments(false)
 
   addCommandOptions(cmd, cmdConfig.metadata.options)
   cmd.addHelpText(

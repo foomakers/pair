@@ -141,4 +141,40 @@ describe('handleScaffoldKbCommand', () => {
     const printed = vi.mocked(console.log).mock.calls.flat().join('\n')
     expect(printed).toContain('bash scripts/release.sh')
   })
+
+  it('refuses to scaffold into a configured pair project, even with --force', async () => {
+    const fs = newFs({ [`${cwd}/.pair/adoption/PRD.md`]: '# PRD\n' })
+
+    await expect(handleScaffoldKbCommand(config({ force: true }), fs)).rejects.toThrow(
+      /configured pair project/,
+    )
+    expect(fs.existsSync(`${cwd}/pair.config.json`)).toBe(false)
+  })
+
+  it('refuses a target that exists and is not a directory', async () => {
+    const fs = newFs()
+    await fs.writeFile(`${cwd}/nested`, 'not a folder\n')
+
+    await expect(handleScaffoldKbCommand(config({ path: 'nested' }), fs)).rejects.toThrow(
+      /exists and is not a directory/,
+    )
+  })
+
+  it('pins the generated release script to the given cliVersion', async () => {
+    const fs = newFs()
+
+    await handleScaffoldKbCommand(config(), fs, { cliVersion: '0.4.3' })
+
+    expect(fs.readFileSync(`${cwd}/scripts/release.sh`)).toContain(
+      'npx --yes @foomakers/pair-cli@0.4.3',
+    )
+  })
+
+  it('writes the generated release script as executable (mode 0o755)', async () => {
+    const fs = newFs()
+
+    await handleScaffoldKbCommand(config(), fs)
+
+    expect(fs.getMode(`${cwd}/scripts/release.sh`)).toBe(0o755)
+  })
 })

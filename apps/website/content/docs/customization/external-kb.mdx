@@ -3,9 +3,13 @@ title: Scaffold an External KB
 description: Create a private, self-hosted, or forked Knowledge Base repository with pair-cli scaffold-kb, and release it with the generated script.
 ---
 
+import { Callout } from 'fumadocs-ui/components/callout'
+
 `pair-cli scaffold-kb` creates an **external Knowledge Base repository**: a repo whose
 only job is to hold knowledge and skills, package them, and publish them. A project
-installs it exactly like the official KB — no special install path, no custom tooling.
+installs it through the normal `pair install --source <git-url-or-path>` path — no custom
+tooling, no special-casing in the CLI (see the ZIP caveat under
+[Install it in a project](#install-it-in-a-project)).
 
 Use it when you want your own KB (private, self-hosted, or a fork) instead of
 hand-assembling the structure described in [Publish a Knowledge Base](/docs/customization/organization).
@@ -47,6 +51,16 @@ project, while a KB is knowledge. Consuming projects keep their own adoption fil
 | `--host <host>` | `github` (default) or `generic` for any other code host            |
 | `-f, --force`   | Regenerate scaffold-owned files without asking                     |
 
+Quote a name with spaces (`--name "Acme KB"`); newlines and control characters are
+rejected because the name is embedded in generated YAML and bash. `--host` is not
+inferred from the target repository's remote — pass `--host generic` for GitLab,
+Bitbucket, or self-hosted, otherwise a GitHub Actions workflow is generated.
+
+`scaffold-kb` refuses to run when the target is not a directory, or when it is a
+configured pair project (`.pair/adoption/` present) — `--force` does not bypass that,
+so pointing it at a project root by mistake cannot replace that project's
+`pair.config.json` and `README.md`.
+
 ## What the KB declares
 
 `pair.config.json` declares exactly two registries — knowledge and skills:
@@ -70,9 +84,13 @@ project, while a KB is knowledge. Consuming projects keep their own adoption fil
 }
 ```
 
-The `prefix` namespaces this KB's skills once installed (`acme-kb-example-skill`), so
-two KBs never collide. Copy this file into a consuming project when you want that
-project to resolve registries the way your KB defines them.
+The `prefix` is meant to namespace this KB's skills once installed
+(`acme-kb-example-skill`), so two KBs never collide. Today it only takes effect if the
+consuming project adopts this config: `pair install --source` resolves the **consuming**
+project's `pair.config.json`, never the source KB's, so with a default project the
+skills install as `pair-example-skill`. Copy this file into the consuming project to get
+the declared prefix. Tracked in
+[foomakers/pair#397](https://github.com/foomakers/pair/issues/397).
 
 ## Add content
 
@@ -92,19 +110,28 @@ command — the same mechanism the official KB uses — and writes
 GitHub release with the ZIP attached. Pushing a `v*` tag runs the same script in CI via
 `.github/workflows/release.yml`.
 
-Set `PAIR_CLI` to change how the CLI is invoked (default: `npx --yes @foomakers/pair-cli`).
+The generated script pins the pair-cli version it invokes (the version that scaffolded
+the repo), so a release cut today and one cut in six months package identically. Set
+`PAIR_CLI` to move deliberately:
+`PAIR_CLI="npx --yes @foomakers/pair-cli@latest" bash scripts/release.sh 1.0.0`.
+
+Tagging only ever happens in the KB repository itself. If you scaffolded inside another
+repository's working tree, the script detects that its directory is not that repo's root
+and takes the manual-publish path instead of tagging the enclosing repository; if the
+tag cannot be pushed, the local tag is removed again.
 
 ### Hosts without automated release publishing
 
 Publishing never happens inside `pair-cli` — it lives entirely in the generated script,
-which keeps the CLI code-host agnostic. When the `gh` CLI (or a git repository) is not
-available, or when you scaffolded with `--host generic`, the script stops after
-packaging and tells you where the ZIP is:
+which keeps the CLI code-host agnostic. When the `gh` CLI is missing, the KB directory is
+not the root of its own git repository, or you scaffolded with `--host generic`, the
+script stops after packaging and tells you where the ZIP is:
 
 ```text
 ==> Packaged: dist/acme-kb-1.0.0.zip
-    Your KB package is ready — publish it however your org does:
+    Your KB package is ready at dist/acme-kb-1.0.0.zip — publish it however your org does:
     attach it to a release, upload it to an artifact store, or serve it over HTTP.
+    Consumers install it with: pair-cli install --source <git-url-or-path-of-this-KB>
 ```
 
 ## Install it in a project
@@ -113,15 +140,30 @@ packaging and tells you where the ZIP is:
 # from the repository (git)
 pair-cli install --source https://github.com/acme/acme-kb.git
 
-# from a published release ZIP
-pair-cli install --source https://github.com/acme/acme-kb/releases/download/v1.0.0/acme-kb-1.0.0.zip
-
 # from a local clone
 pair-cli install --source ../acme-kb --offline
 ```
 
-Registries the external KB does not ship (for example `adoption`) are reported as
-skipped — the install itself succeeds. See
+<Callout type="warn">
+  **Installing straight from a release ZIP is not equivalent yet.** `pair install --source path-or-url-of-the-zip` extracts the
+  external KB into the version-keyed cache slot (`~/.pair/kb/` followed by the CLI
+  version) that is shared with the official KB, mixing the two and rewriting that
+  slot's `manifest.json` for every project on the machine. Publish the ZIP as your
+  release artifact, but point consumers at the repository (git URL) or a local clone
+  until [foomakers/pair#395](https://github.com/foomakers/pair/issues/395) is fixed.
+</Callout>
+
+Registries the external KB does not ship (for example `adoption`, `github`) are currently
+counted as **failed** in the install summary, so a successful install of an external KB
+ends with a line like:
+
+```text
+! Installation finished with errors (2 ok, 3 failed, 79ms)
+```
+
+The command still exits `0` and everything the KB ships is installed — the registries it
+does not ship simply have no source to copy from. Making them report as skipped is
+tracked in [foomakers/pair#396](https://github.com/foomakers/pair/issues/396). See
 [Install from URL or Path](/docs/customization/install-from-url) for every source form.
 
 A project consumes **one** distribution channel for a given skill set: an external KB

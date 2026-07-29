@@ -121,10 +121,16 @@ export type ScaffoldFileKind = 'scaffold-owned' | 'seed'
 export type FileAction = 'created' | 'overwritten' | 'unchanged' | 'skipped'
 ```
 
-Validation: `--host` must be `github` or `generic`; at most one positional argument.
+Validation: `--host` must be `github` or `generic`; `--name` must be non-empty, free of
+newlines/control characters, and at most 100 characters (it is embedded in generated YAML
+and bash); at most one positional argument — Commander runs with
+`allowExcessArguments(false)`, so extra positionals are rejected rather than dropped.
+Refused targets: a path that exists and is not a directory, or a configured pair project
+(`.pair/adoption/` present) — not bypassable with `--force`.
 Re-scaffold policy: `seed` files (KB content) are never overwritten; `scaffold-owned`
 files are regenerated only when identical-check fails AND (`--force` OR interactive
-confirmation) — otherwise reported as `skipped`.
+confirmation) — otherwise reported as `skipped`. The generated `scripts/release.sh` is
+written with mode `0755`.
 
 ### KB Verify Command
 

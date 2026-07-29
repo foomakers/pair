@@ -41,7 +41,10 @@ export async function dispatchCommand(
     case 'package':
       return commandRegistry.package.handle(config, fs)
     case 'scaffold-kb':
-      return commandRegistry['scaffold-kb'].handle(config, fs)
+      // cliVersion pins the CLI in the generated release script (reproducible releases)
+      return commandRegistry['scaffold-kb'].handle(config, fs, {
+        ...(opts.cliVersion && { cliVersion: opts.cliVersion }),
+      })
     case 'validate-config':
       return commandRegistry['validate-config'].handle(config, fs)
     default:

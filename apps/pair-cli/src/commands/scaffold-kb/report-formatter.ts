@@ -38,7 +38,7 @@ function nextSteps(identity: KbIdentity, host: KbHost): string[] {
     '  1. Add knowledge under .pair/knowledge/ and skills under .skills/',
     '  2. git init && git commit (the scaffold ships a .gitignore)',
     publish,
-    `  4. Consume it: ${chalk.bold(`pair-cli install --source <repo-or-zip-of-${identity.slug}>`)}`,
+    `  4. Consume it: ${chalk.bold(`pair-cli install --source <git-url-or-path-of-${identity.slug}>`)}`,
     '',
   ]
 }

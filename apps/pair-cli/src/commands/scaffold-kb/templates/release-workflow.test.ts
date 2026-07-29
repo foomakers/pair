@@ -23,4 +23,20 @@ describe('renderReleaseWorkflow', () => {
   it('reuses the tag as the released version', () => {
     expect(workflow).toContain('${GITHUB_REF_NAME#v}')
   })
+
+  it('emits the workflow name as a quoted scalar so punctuation cannot break the YAML', () => {
+    const punctuated = renderReleaseWorkflow({
+      identity: { name: 'Acme: Core KB', slug: 'acme-core-kb', skillPrefix: 'acme-core-kb' },
+    })
+
+    expect(punctuated.split('\n')[0]).toBe('name: "Release Acme: Core KB"')
+  })
+
+  it('escapes quotes in the KB name', () => {
+    const quoted = renderReleaseWorkflow({
+      identity: { name: 'Acme "Core" KB', slug: 'acme-core-kb', skillPrefix: 'acme-core-kb' },
+    })
+
+    expect(quoted.split('\n')[0]).toBe('name: "Release Acme \\"Core\\" KB"')
+  })
 })

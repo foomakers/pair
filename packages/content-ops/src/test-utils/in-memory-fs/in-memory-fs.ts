@@ -68,6 +68,15 @@ export class InMemoryFileSystemService implements FileSystemService {
     return write.writeFileBinary(this.state, path, content)
   }
 
+  async chmod(path: string, mode: number): Promise<void> {
+    return write.chmod(this.state, path, mode)
+  }
+
+  /** Permission bits recorded by `chmod`, so tests can assert an executable file */
+  getMode(path: string): number | undefined {
+    return read.getMode(this.state, path)
+  }
+
   async unlink(path: string): Promise<void> {
     return write.unlink(this.state, path)
   }

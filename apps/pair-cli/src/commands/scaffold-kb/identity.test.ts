@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { resolveKbIdentity, slugifyKbName } from './identity'
+import { resolveKbIdentity, slugifyKbName, validateKbName } from './identity'
 
 describe('slugifyKbName', () => {
   it('lowercases and hyphenates separators', () => {
@@ -15,7 +15,37 @@ describe('slugifyKbName', () => {
   })
 })
 
+describe('validateKbName', () => {
+  it('accepts punctuation that generated artifacts must quote rather than reject', () => {
+    expect(validateKbName('Acme: Core KB')).toBe('Acme: Core KB')
+    expect(validateKbName('x"; touch /tmp/pwned; #')).toBe('x"; touch /tmp/pwned; #')
+  })
+
+  it('rejects a newline (it would inject top-level YAML keys into the workflow)', () => {
+    expect(() => validateKbName('Acme\nfoo: bar')).toThrow(/newlines or control characters/)
+  })
+
+  it('rejects other control characters', () => {
+    expect(() => validateKbName('Acme\u0007KB')).toThrow(/newlines or control characters/)
+  })
+
+  it('rejects an empty or blank name', () => {
+    expect(() => validateKbName('')).toThrow(/cannot be empty/)
+    expect(() => validateKbName('   ')).toThrow(/cannot be empty/)
+  })
+
+  it('rejects an absurdly long name', () => {
+    expect(() => validateKbName('a'.repeat(101))).toThrow(/100 characters/)
+  })
+})
+
 describe('resolveKbIdentity', () => {
+  it('rejects an unsafe explicit name before anything is generated', () => {
+    expect(() => resolveKbIdentity({ name: 'Acme\nKB', targetPath: '/work/acme' })).toThrow(
+      /newlines or control characters/,
+    )
+  })
+
   it('derives name and slug from the target directory basename', () => {
     expect(resolveKbIdentity({ targetPath: '/work/Acme KB' })).toEqual({
       name: 'acme-kb',

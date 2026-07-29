@@ -36,4 +36,10 @@ describe('parseScaffoldKbCommand', () => {
   it('rejects more than one positional argument', () => {
     expect(() => parseScaffoldKbCommand({}, ['a', 'b'])).toThrow(/positional/i)
   })
+
+  it('rejects a name that cannot be safely embedded in the generated artifacts', () => {
+    expect(() => parseScaffoldKbCommand({ name: 'Acme\nfoo: bar' })).toThrow(
+      /newlines or control characters/,
+    )
+  })
 })

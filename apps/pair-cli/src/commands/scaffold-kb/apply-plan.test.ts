@@ -115,4 +115,56 @@ describe('applyScaffoldPlan', () => {
     expect(prompted).toBe(0)
     expect(actionFor(result.outcomes, 'pair.config.json')).toBe('overwritten')
   })
+
+  it('writes a file marked executable with mode 0o755 (release script carries a shebang)', async () => {
+    const fs = newFs()
+    const scriptPlan: ScaffoldPlan = {
+      root,
+      directories: [],
+      files: [
+        {
+          path: 'scripts/release.sh',
+          content: '#!/usr/bin/env bash\n',
+          kind: 'scaffold-owned',
+          executable: true,
+        },
+      ],
+    }
+
+    await applyScaffoldPlan(scriptPlan, fs, { force: false, confirmOverwrite: neverConfirm })
+
+    expect(fs.getMode(`${root}/scripts/release.sh`)).toBe(0o755)
+  })
+
+  it('does not set the executable bit on a file not marked executable', async () => {
+    const fs = newFs()
+
+    await applyScaffoldPlan(plan(), fs, { force: false, confirmOverwrite: neverConfirm })
+
+    expect(fs.getMode(`${root}/pair.config.json`)).toBeUndefined()
+  })
+
+  it('repairs the executable bit on an unchanged file scaffolded before it was set', async () => {
+    const fs = newFs({ [`${root}/scripts/release.sh`]: '#!/usr/bin/env bash\n' })
+    const scriptPlan: ScaffoldPlan = {
+      root,
+      directories: [],
+      files: [
+        {
+          path: 'scripts/release.sh',
+          content: '#!/usr/bin/env bash\n',
+          kind: 'scaffold-owned',
+          executable: true,
+        },
+      ],
+    }
+
+    const result = await applyScaffoldPlan(scriptPlan, fs, {
+      force: false,
+      confirmOverwrite: neverConfirm,
+    })
+
+    expect(actionFor(result.outcomes, 'scripts/release.sh')).toBe('unchanged')
+    expect(fs.getMode(`${root}/scripts/release.sh`)).toBe(0o755)
+  })
 })

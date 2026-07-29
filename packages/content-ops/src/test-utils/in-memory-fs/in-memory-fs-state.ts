@@ -11,6 +11,8 @@ export class InMemoryFsState {
   readonly files = new Map<string, string>()
   readonly dirs = new Set<string>()
   readonly symlinks = new Map<string, string>()
+  /** Permission bits set through `chmod`; absent means "default mode" */
+  readonly modes = new Map<string, number>()
   moduleDirectory: string
   workingDirectory: string
 

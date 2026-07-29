@@ -51,6 +51,9 @@ async function resolveOutcome(
   return { path: file.path, action: 'skipped', reason: DECLINED_REASON }
 }
 
+/** 0o755: the generated release script carries a shebang, so it must be runnable directly. */
+const EXECUTABLE_MODE = 0o755
+
 async function applyFile(
   file: ScaffoldFile,
   plan: ScaffoldPlan,
@@ -63,6 +66,11 @@ async function applyFile(
   if (outcome.action === 'created' || outcome.action === 'overwritten') {
     await fs.mkdir(path.dirname(absolutePath), { recursive: true })
     await fs.writeFile(absolutePath, file.content)
+  }
+
+  // Also repairs the mode on an unchanged/kept file scaffolded before this was set
+  if (file.executable && fs.existsSync(absolutePath)) {
+    await fs.chmod(absolutePath, EXECUTABLE_MODE)
   }
 
   return outcome
