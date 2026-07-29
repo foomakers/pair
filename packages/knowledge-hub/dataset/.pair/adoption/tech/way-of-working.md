@@ -36,7 +36,7 @@ Custom gates run **after** the standard gates (Lint, Type Check, Test). Add rows
 
 Optional. Where the **code** lives and where a branch starts — the counterpart to the PM-tool declaration above, and the section every PR/branch operation reads. (Its sibling `## Merge Strategy` above owns how a PR *ends*: merge method, commit format, cleanup. The two are deliberately separate sections; `/publish-pr` reads both.) **Omitted by default**: pair assumes the code host is the same tool as the PM tool, so a single-tool project configures nothing here (convention over configuration, D21).
 
-**Required when the PM tool hosts no code.** `linear`, `jira` and `filesystem` track items but own no repositories, branches or pull requests, so there is nothing for an omitted `code-host` to fall back to — declare it, or every PR operation HALTs with a setup pointer. `github-projects`, `azure-devops` and other repository-hosting trackers need nothing.
+**Required when the PM tool hosts no code.** `linear`, `jira` and `filesystem` track items but own no repositories, branches or pull requests, so there is nothing for an omitted `code-host` to fall back to — declare it, or every PR operation HALTs with a setup pointer. `github-projects`, `azure-devops` and other repository-hosting trackers need nothing. **Existing project on one of those trackers?** Declare `code-host` once (or re-run `/setup-pm`, which backfills it) — a one-time upgrade step, after which nothing else changes.
 
 | Field         | Default         | Meaning                                                                                                    |
 | ------------- | --------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -44,7 +44,7 @@ Optional. Where the **code** lives and where a branch starts — the counterpart
 | `base-branch` | `main`          | The branch pull requests target and feature branches are cut from.                                          |
 
 - **`code-host` omitted ⇒ code host = PM tool.** Behavior is identical to a single-tool project — nothing to configure, nothing to migrate.
-- **The same tool named in both places is treated exactly as omitted** — single-tool, no dual-write.
+- **The same tool named in both places is treated exactly as omitted** — single-tool, no dual-write. Sameness is per **product**, not per spelling: `github` ≡ `github-projects`, `azure-devops` ≡ `azure-repos` (canonical alias list in the resolution convention below), so the schema's two vocabularies never accidentally read as a split.
 - Skills never assume the two coincide: issue/state operations route to the PM tool, PR/review operations route to `code-host`. The routing rule lives in one place — see [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md), including the `Refs: <issue-id>` cross-linking convention that keeps the two tools linked without any native integration.
 
 Example — split configuration (Linear for the backlog, GitHub for the code):

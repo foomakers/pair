@@ -136,14 +136,32 @@ describe('code-host / PM-tool split — no skill assumes the two coincide (#236,
     ['next/SKILL.md', 'pair-next'],
   ]
 
+  // The conflation the audit exists to kill: reading/writing a PR "from the PM tool".
+  // `PR` is matched CASE-SENSITIVELY and word-bounded on purpose: a /i flag makes the
+  // `PR` alternative hit the letters "pr" inside ordinary words (provided, prepend,
+  // approved, process), which turned the audit into a distance-from-a-random-word
+  // check — one that happened to pass by a single character. Only the spelled-out
+  // "pull request" is case-insensitive (sentence-initial "Pull request").
+  const PR_FROM_PM_TOOL = /\b(PR|[Pp]ull [Rr]equest)\b[^.\n]{0,60}\b(from|on|to|using) the PM tool/
+
   for (const [rel] of PR_SIDE) {
     it(`${rel} routes PR/review operations to the code host (never "the PM tool")`, () => {
       const content = datasetSkill(rel)
       expect(content).toMatch(/code host|code-host/i)
-      // The conflation the audit exists to kill: reading/writing a PR "from the PM tool".
-      expect(content).not.toMatch(/(PR|pull request)[^.\n]{0,40}(from|on|to|using) the PM tool/i)
+      expect(content).not.toMatch(PR_FROM_PM_TOOL)
     })
   }
+
+  it('the negative audit pattern is not satisfied by "pr" inside ordinary words', () => {
+    // Regression guard for the pattern itself: the old /i version matched these.
+    expect('is provided, prepend story-specific criteria from the PM tool').not.toMatch(
+      PR_FROM_PM_TOOL,
+    )
+    expect('the process reads the labels from the PM tool').not.toMatch(PR_FROM_PM_TOOL)
+    // ...while the real conflation still fails the audit.
+    expect('read the PR body from the PM tool').toMatch(PR_FROM_PM_TOOL)
+    expect('Pull request labels are read on the PM tool').toMatch(PR_FROM_PM_TOOL)
+  })
 
   it('publish-pr reads the Git Workflow adoption section (not a "#236 is pending" note)', () => {
     const content = datasetSkill('capability/publish-pr/SKILL.md')
@@ -243,6 +261,38 @@ describe('code-host / PM-tool split — the back-link is executable, not destruc
     expect(content).toMatch(/\$comment:/)
   })
 
+  it('the back-link step is idempotent: publish-pr checks for an existing comment before posting', () => {
+    const content = datasetSkill('capability/publish-pr/SKILL.md')
+    const step = content.slice(content.indexOf('5. **Check — back-link'))
+    // Check→Skip, like every other step in the phase — not Act-only.
+    expect(step).toMatch(/^5\.\s+\*\*Check/)
+    expect(step.slice(0, 1200)).toMatch(/\*\*Skip\*\*[\s\S]{0,200}(already|not post again)/i)
+    // And the reason it has to live here rather than in write-issue.
+    expect(step.slice(0, 1200)).toMatch(/cannot dedupe|no id|has no id/i)
+  })
+
+  it('write-issue scopes its idempotency claim to write mode (a comment has no id to dedupe on)', () => {
+    expect(writeIssue).toMatch(/\*\*Idempotent in write mode\*\*/)
+    expect(writeIssue).toMatch(/comment mode[\s\S]{0,300}(not self-deduplicating|append-only)/i)
+    // The duplicate-check responsibility is named, not left implicit.
+    expect(writeIssue).toMatch(/(caller|`\/publish-pr`)[^\n]{0,200}(Check|duplicate-check)/i)
+  })
+
+  it('every supported PM guide documents the comment mechanism write-issue routes to', () => {
+    const guides: ReadonlyArray<readonly [string, RegExp]> = [
+      ['linear-implementation.md', /commentCreate/],
+      ['github-implementation.md', /gh issue comment/],
+      ['azure-devops-implementation.md', /workItems\/<id>\/comments/],
+      ['filesystem-implementation.md', /##\s+Activity Log/],
+    ]
+    for (const [guide, mechanism] of guides) {
+      const content = dataset(`${PM_TOOL_KB}/${guide}`)
+      expect(content, guide).toMatch(mechanism)
+      // Each one is reachable as its own section (write-issue Step 7c links the anchor).
+      expect(content, guide).toMatch(/^##+\s+Comment/m)
+    }
+  })
+
   it('pr-template carries a conditional Refs: slot so the read-back is a deterministic slot', () => {
     for (const root of [DATASET, REPO_ROOT]) {
       const template = read(
@@ -251,6 +301,10 @@ describe('code-host / PM-tool split — the back-link is executable, not destruc
       )
       expect(template).toContain('Refs:')
       expect(template).toMatch(/Refs:[\s\S]{0,300}(code host ≠ PM tool|differs from the PM tool)/i)
+      // The token the read-back is specified against must appear VERBATIM: plain,
+      // at line start. A decorated `**Refs:**` never matches an anchored read-back.
+      expect(template).toMatch(/^Refs: /m)
+      expect(template).not.toMatch(/\*\*Refs:?\*\*/)
     }
   })
 })
@@ -265,14 +319,36 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
     expect(section).toMatch(/hosts? no (code|repositor)/i)
   })
 
+  it('defines identifier equality by PRODUCT (github ≡ github-projects), not by spelling', () => {
+    const convention = dataset(ROUTING_CONVENTION)
+    const section = convention.slice(convention.indexOf('## Code-host resolution'))
+    // The schema spells the same product two ways; the alias list is what stops a
+    // single-tool repo from resolving as a split (and dual-writing).
+    expect(section).toMatch(/alias/i)
+    expect(section).toMatch(/`github`[^\n]*`github-projects`|`github-projects`[^\n]*`github`/)
+    expect(section).toMatch(/azure-repos|azure-boards/)
+  })
+
+  it('flags the one-time upgrade step for an adoption that predates the field', () => {
+    const convention = dataset(ROUTING_CONVENTION)
+    const section = convention.slice(convention.indexOf('## Code-host resolution'))
+    expect(section).toMatch(/(once|one-time)[\s\S]{0,240}(setup-pm|backfill)/i)
+    // ...and the same line reaches the user-facing failure-mode table.
+    const page = read(REPO_ROOT, 'apps/website/content/docs/concepts/code-host.mdx')
+    expect(page).toMatch(/(once|one-time)[\s\S]{0,240}(setup-pm|backfill)/i)
+  })
+
   it('setup-pm prompts for code-host on filesystem adoption too', () => {
     const content = datasetSkill('capability/setup-pm/SKILL.md')
     expect(content).toMatch(/hosts? no code[^\n]*filesystem|filesystem[^\n]*hosts? no code/i)
   })
 
-  it('the concept page does not claim filesystem coincides with the code host', () => {
+  it('the concept page states the claim itself: filesystem hosts no code', () => {
     const page = read(REPO_ROOT, 'apps/website/content/docs/concepts/code-host.mdx')
-    expect(page).toMatch(/filesystem/i)
+    // Not a bare mention — the actual claim, so a page saying the opposite fails.
+    expect(page).toMatch(/filesystem[^.]{0,120}(hosts? no code|own no repositories)/i)
+    // ...and an omitted code-host there HALTs rather than resolving to filesystem.
+    expect(page).toMatch(/filesystem[^\n]*\|[\s\S]{0,80}HALT/i)
   })
 })
 

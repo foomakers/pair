@@ -1,7 +1,7 @@
 ---
 name: verify-done
 description: "Checks a PR or work item against Definition of Done criteria (universal + project-specific), skipping already-passing criteria. Composed by /review; invoke directly to check DoD on demand ('is PR #42 actually done')."
-version: 0.6.0
+version: 0.5.1
 author: Foomakers
 ---
 

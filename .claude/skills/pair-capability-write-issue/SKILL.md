@@ -1,7 +1,7 @@
 ---
 name: pair-capability-write-issue
 description: "Creates or updates an issue in the adopted PM tool from a type-specific template (bug, story, epic, etc.), including topical labels (e.g. tech-debt) for deliberate promotion; `$mode: comment` posts a comment on an existing item without touching its body (the non-destructive cross-link path). Invoke directly to create/update one issue on demand. Composed by /pair-process-refine-story, /pair-process-plan-tasks, /pair-process-plan-initiatives, /pair-process-plan-epics, /pair-process-plan-stories, /pair-capability-publish-pr."
-version: 0.6.0
+version: 0.6.1
 author: Foomakers
 ---
 
@@ -129,12 +129,14 @@ Skills never write board-specific labels — `$status` is always a canonical mac
 
 The **non-destructive** path: it appends a comment to the item and writes nothing else — no template is loaded, no body is rendered, the existing body and labels are left byte-identical, and no board field is touched. This is how a cross-link (the PR URL) reaches a PM item without overwriting the story's AC/DoD/task breakdown.
 
-1. **Act**: Post `$comment` verbatim on item `$id`, using the comment mechanism of the implementation guide resolved in Step 5:
-   - `linear` → `commentCreate` GraphQL mutation ([linear-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/linear-implementation.md))
-   - `github-projects` → `gh issue comment <id> --body "<comment>"` ([github-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md))
-   - `azure-devops` → the work-item comments endpoint ([azure-devops-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/azure-devops-implementation.md))
-   - `filesystem` → append the line under the item file's activity/notes section ([filesystem-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/filesystem-implementation.md))
-   - A tool with **no comment concept** but a link/URL field → write the value into that field instead; neither available → warn (next step).
+**Comment mode is append-only, therefore NOT self-deduplicating**: unlike write mode (where `$id` makes a re-run an update), a comment has no identity, so every invocation appends one. A caller that can legitimately re-run — the fix→re-publish loop, or a HALT recovery — must therefore do the **Check** itself (does the item already carry a comment with this content?) before composing this mode; `/pair-capability-publish-pr` Phase 4 step 5 is the reference implementation.
+
+1. **Act**: Post `$comment` verbatim on item `$id`, using the comment mechanism **documented by** the implementation guide resolved in Step 5 (each guide below carries the call; never invent an API):
+   - `linear` → `commentCreate` GraphQL mutation ([linear-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/linear-implementation.md#comment-on-an-issue-cross-link-back-link))
+   - `github-projects` → `gh issue comment <id> --body "<comment>"` ([github-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md#comment-on-an-issue-cross-link-back-link))
+   - `azure-devops` → the work-item comments endpoint ([azure-devops-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/azure-devops-implementation.md#comment-on-a-work-item-cross-link-back-link))
+   - `filesystem` → append a dated bullet under the item file's `## Activity Log` section, creating that section at the end of the file when absent ([filesystem-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/filesystem-implementation.md#comments-on-an-item-activity-log)). This is the one tool where the item **is** a file, so how the guarantee reads here: the append touches `## Activity Log` and nothing else — every other section (statement, AC, DoD, task breakdown), the file name and the file's **directory** (which is its board state) are left exactly as they were.
+   - A tool whose guide documents **no comment mechanism** but does document a link/URL field → write the value into that field instead. **No supported tool needs this branch today** (all four above document a comment call); it exists for a tracker adopted through a project's own override guide, and only when that guide documents such a field. Neither documented → warn (next step) rather than improvising a write.
 2. **Act — exceptions to this skill's HALTs (comment mode only):** a comment is an **additive annotation, never load-bearing work**, so failures here **warn, they do not HALT** — the caller's own artifact (the PR) is already valid and must not be invalidated by a missing annotation:
    - `$id` **not found** ⇒ **warn** (`Item $id not found — post the link manually: <comment>`) and return a `warned` result. Step 7's `Issue #$id not found.` HALT does **not** apply in comment mode.
    - Any **PM tool error** ⇒ **warn** with the same manual-link instruction and return `warned`. Step 8's HALT does **not** apply in comment mode.
@@ -226,6 +228,7 @@ When composed by `/pair-capability-publish-pr` (the cross-link back-link, split 
 - **Input**: `/pair-capability-publish-pr` invokes `/pair-capability-write-issue` with `$mode: comment`, `$id: <issue-id>` (the PM tool's own item id, verbatim) and `$comment: "PR: <pr-url>"` — no `$type`, no `$content`, no `$status`. Only the comment is written: the story body (AC, DoD, task breakdown) is never re-rendered or overwritten.
 - **Output**: `Commented`, or `Comment warned` with the manual-link instruction when the id doesn't resolve or the PM tool errors (Step 7c.2). Either way `/pair-capability-publish-pr` keeps the PR — a back-link failure never fails the publish, which is why comment mode warns instead of HALTing.
 - Only invoked when `code-host` differs from `pm-tool`; on a single-tool project the host links PR and item natively, so `/pair-capability-publish-pr` skips this composition.
+- **Dedup is the caller's**: `/pair-capability-publish-pr` first checks whether the item already carries a comment holding this PR URL and skips the composition if so, because comment mode cannot dedupe itself (Step 7c). Without that check a re-publish would accrete one `PR: <url>` comment per round.
 
 When invoked **independently**:
 
@@ -260,7 +263,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 - This skill **modifies PM tool state** — it creates and updates issues, and posts comments on them. It never touches code-host state (branches, PRs, reviews).
 - **Comment mode is deliberately narrow**: one verbatim comment on one existing item, no template, no body write, no board write, warn-not-HALT on failure. It exists so a cross-link (or any additive annotation) never risks the item's body — the destructive full-body overwrite is write mode's contract alone.
-- No PM tool fallback: if the adopted tool fails, the skill HALTs. **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): `$id` prevents duplicate creation on re-invocation.
+- No PM tool fallback: if the adopted tool fails, the skill HALTs. **Idempotent in write mode** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): `$id` prevents duplicate creation on re-invocation. **Comment mode is the documented exception**: a comment carries no `$id` of its own, so nothing here can dedupe it — re-invocation appends another comment, and the duplicate-check belongs to the caller (Step 7c).
 - Template = source of truth for issue body format. Changes to template structure automatically affect all future issue creation.
 - Labels and hierarchy linking follow the PM tool implementation guide conventions.
 - **Deliberate tech-debt promotion**: assess-* skills are output-only and never auto-create backlog items. When a debt or quality finding is worth scheduling, a human/agent promotes it here **deliberately** by passing `tech-debt` in `$labels` — a manual, selective act, never a 100% auto-conversion.

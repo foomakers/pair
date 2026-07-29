@@ -544,6 +544,23 @@ Add review tasks to the story file:
 - [ ] **Review-003:** Update API documentation with new endpoint
 ```
 
+## Comments on an Item (Activity Log)
+
+Filesystem has no comment API — the item **is** a markdown file — so a comment is an **append** to one dedicated section of that file: `## Activity Log`, at the end of the item file, created on first use.
+
+```markdown
+## Activity Log
+
+- **2026-07-29** — PR: https://github.com/acme/platform/pull/412
+```
+
+This is the mechanism `/pair-capability-write-issue $mode: comment` resolves for `filesystem` (it is how the PR back-link of a split setup reaches the item, since the code host is always a separate tool here — filesystem hosts no code). The rules that make it equivalent to a comment elsewhere:
+
+1. **Append only, one section.** Add a bullet under `## Activity Log` and change nothing else — the statement, acceptance criteria, Definition of Done, task checkboxes, Implementation Progress and any front-matter stay byte-identical.
+2. **Never a status write.** Board state on filesystem is the item's **directory** (see Status Management via File Location) — an activity entry never moves or renames the file.
+3. **Not idempotent by itself.** The bullet carries no id, so re-running appends a second one: a caller that can re-run (e.g. `/pair-capability-publish-pr`'s back-link) greps the section for the value first and skips when present.
+4. **Distinct from `Implementation Progress`**, which is the author's own dated work log; `## Activity Log` holds cross-links and annotations written _by tooling_.
+
 ## Best Practices
 
 ### File Management

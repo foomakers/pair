@@ -1,7 +1,7 @@
 ---
 name: publish-pr
 description: "Publishes a completed story branch as a pull request: runs the quality gate, creates or updates ONE PR from the pr-template (conditional sections filled only when pertinent), copies the story's classification tags, marks it ready-for-review, and updates the board state. Standalone — driven by a handoff/checkpoint, not by /implement having run in the same session. Composed by a future closing phase of /implement; reused by hotfix and automation loops. Composes /verify-quality, /checkpoint, /write-issue."
-version: 0.5.0
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -90,7 +90,9 @@ Each phase follows the **check → skip → act → verify** pattern. Phases run
    - **PR exists** → update its body and tags in place (edge case) — never open a second PR.
 3. **Act — tag propagation (copy, not analysis):** copy the story's estimated **classification tags** (e.g. risk/size labels) to the PR verbatim. This is a copy — the authoritative re-classification happens in review (G6). If the story carries **no classification tags**, create the PR without tags and note it in the output (projection may be inactive, D17) (edge case).
 4. **Act — code-host routing (AC4):** the PR is created/updated on the **code host**, the board state (step 6) is written on the **PM tool** — per the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md). When `code-host` is absent (or names the PM tool) both resolve to the same tool and the split is invisible. When they differ, fill the pr-template's conditional `Refs: <issue-id>` slot (Phase 3 step 2) — the PM tool's own item id, copied verbatim.
-5. **Act — back-link (bidirectional cross-link):** once the PR exists, post its **URL back on the PM item** as a *comment* — never a body write. This closes the loop the `Refs:` line opens, so the board reaches the PR without any native integration. **Skip when code host = PM tool** — the host already links the two natively, so a comment would be noise. Two mechanisms, in order:
+5. **Check — back-link already present?** Read the PM item's existing comments (link field where the tool has one instead) and look for one containing this PR's URL.
+   **Skip**: found → the back-link is already there; report it as `already linked` and do **not** post again. This is what keeps the step idempotent: a comment has no id, so `/write-issue` comment mode cannot dedupe it (see its Step 7c) — the check belongs here, or the normal fix→re-publish loop and any code-host HALT recovery would accrete one `PR: <url>` comment per round. If the item's comments cannot be read, treat it as *not found* and post (a duplicate comment is a lesser failure than a missing back-link) — say so in the report.
+   **Act — post the back-link (bidirectional cross-link):** post the PR **URL back on the PM item** as a *comment* — never a body write. This closes the loop the `Refs:` line opens, so the board reaches the PR without any native integration. **Skip the whole step when code host = PM tool** — the host already links the two natively, so a comment would be noise. Two mechanisms, in order:
    - **`/write-issue` installed** → compose it in **comment mode**, which is non-destructive by contract (no template, no body render, no board write):
 
      ```text
@@ -102,7 +104,7 @@ Each phase follows the **check → skip → act → verify** pattern. Phases run
    Never compose `/write-issue` in write mode for the back-link: write mode is a **full-body overwrite** and would replace the story's AC/DoD/task breakdown with the link. If the **item id is not found**, or the PM tool errors, keep the PR (it is valid work) and warn with the manual-link instruction (edge case) — comment mode warns rather than HALTing for exactly this reason, so the documented non-blocking behavior holds through the composition.
 6. **Act — ready-for-review:** mark the PR ready for review (not draft) on the code host; if the host supports an explicit ready command (e.g. `gh pr ready`), use it.
 7. **Act — board state:** update the story's board state on the **PM tool** via the `## State Mapping` (canonical target: `Review`), using `/write-issue` (default write mode, `$status: Review`) when installed. If `/write-issue` is not installed or the PM tool is inaccessible, warn and continue — the PR is already ready. PR state itself is never mirrored onto the board.
-8. **Verify**: A single ready-for-review PR exists on the code host, tags reflect the story (or their absence is noted), the cross-link exists in both directions when the tools differ (or the missing back-link is reported), and the board state is updated (or the failure is reported).
+8. **Verify**: A single ready-for-review PR exists on the code host, tags reflect the story (or their absence is noted), the cross-link exists in both directions when the tools differ — **exactly one** back-link comment, whether this run posted it or found it (or the missing back-link is reported) — and the board state is updated (or the failure is reported).
 
 ## Output Format
 
@@ -115,7 +117,7 @@ PUBLISH-PR REPORT:
 ├── PR:         [#PR-number — URL — Created | Updated]
 ├── Tags:       [copied: label, label | none on story — PR created without tags]
 ├── Code host:  [same as PM tool | <host> (board updates → PM tool)]
-├── Cross-link: [n-a (single tool) | Refs: <issue-id> + PR URL posted on <item> | back-link failed — manual link needed]
+├── Cross-link: [n-a (single tool) | Refs: <issue-id> + PR URL posted on <item> | already linked — comment present, not re-posted | back-link failed — manual link needed]
 ├── Conditional: [Services to Release: N deployable packages / n-a | Screenshots: UI touched / n-a]
 └── Board:      [→ Review | not updated — reason]
 
@@ -156,7 +158,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 ## Notes
 
 - This skill **creates git-host artifacts** (a pushed branch, one PR) and updates board state — it does not modify source files and never merges.
-- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). Re-invocation detects the existing PR and updates it in place; re-runs the gate (fast if already green); re-parses the handoff. Never a duplicate PR.
+- **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md). Re-invocation detects the existing PR and updates it in place; detects an existing back-link comment and does not post a second one (Phase 4 step 5's Check — the one composed step that cannot dedupe itself); re-runs the gate (fast if already green); re-parses the handoff. Never a duplicate PR, never a duplicate back-link.
 - Tag propagation is a **copy**; the authoritative classification is (re)done in `/review` (G6).
 - The gate here is a local pre-flight only — CI remains authoritative (#210).
 - The handoff/checkpoint is the input contract (see the [checkpoint template](../../../.pair/knowledge/guidelines/collaboration/templates/checkpoint-template.md)); it is consumed here, never loaded as ambient context elsewhere.

@@ -45,13 +45,14 @@ Skills never assume the two tools coincide — they route by field. The rule liv
 
 | Operation                                                        | Goes to     |
 | ---------------------------------------------------------------- | ----------- |
-| Create/update an issue, read its hierarchy, labels, state        | PM tool     |
+| Create/update an issue, read its hierarchy, labels, state (`/pair-capability-classify` reading a card) | PM tool     |
 | **State transitions** (Ready, In Progress, Review, Done)          | PM tool     |
 | Close an issue, cascade to its parents                            | PM tool     |
 | Branches, pushes, pull request create/update/read                 | Code host   |
 | PR labels and required checks (the CI gate)                       | Code host   |
 | Code review submission and PR merge                               | Code host   |
 | Open-PR detection (`/pair-next` row 6)                            | Code host   |
+| Classification matrix + chromatic tags                            | Whichever side the target is — refinement writes the **card** (PM tool), review writes the **PR** (code host) |
 
 Two invariants follow:
 
@@ -95,8 +96,10 @@ The cycle then runs across both tools:
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------- |
 | `code-host` declared but unreachable/unauthenticated | Publish HALTs with a setup pointer. PM-side work already done is **not** rolled back      |
 | `code-host` omitted on a PM tool that hosts no code (Linear, Jira, `filesystem`) | HALT before any PR operation, with a pointer to `## Git Workflow`. Item/state work keeps working |
+| **Existing** Linear/Jira/`filesystem` project upgrading pair | One-time step: declare `code-host` once (or re-run `/pair-capability-setup-pm`, which backfills it). Until then PR operations HALT as above; repository-hosting trackers are unaffected |
 | Issue id not found when linking back              | PR is still created; warning with a manual-link instruction                               |
-| Same tool in both fields                          | Treated exactly as omitted — no dual-write, no cross-link comment                        |
+| Back-link re-run (a fix round, or recovery from a HALT) | The existing comment is detected and **not** re-posted — exactly one `PR: <url>` comment per item |
+| Same tool in both fields                          | Treated exactly as omitted — no dual-write, no cross-link comment. Sameness is per product: `github` ≡ `github-projects`, `azure-devops` ≡ `azure-repos` |
 
 ## Related
 

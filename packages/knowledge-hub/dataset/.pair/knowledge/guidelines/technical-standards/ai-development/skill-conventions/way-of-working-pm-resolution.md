@@ -38,7 +38,17 @@ The **code host** is the tool that owns repositories, branches, pull requests an
    > `<pm-tool>` hosts no repositories or pull requests. Declare `code-host` in `way-of-working.md` → `## Git Workflow` (see the schema in that file), or re-run `/setup-pm`.
 
    PM-side operations (issue writes, state transitions) are unaffected and keep working — only branch/PR/review work is blocked.
-4. **Act**: If `code-host` names the **same** tool as `pm-tool`, treat it exactly as if it were omitted — single-tool, **no dual-write**, no cross-linking step.
+
+   **Upgrading an existing adoption**: this HALT is the one behavior change for a project that already tracks on a hosts-no-code tool (`linear`, `jira`, `filesystem`) and never had the field. Such a project declares `code-host` **once** — by hand in `## Git Workflow`, or by re-running `/setup-pm`, which backfills it — and is then permanently in the zero-configuration path again. Repository-hosting trackers need nothing.
+4. **Act**: If `code-host` names the **same** tool as `pm-tool`, treat it exactly as if it were omitted — single-tool, **no dual-write**, no cross-linking step. **Identifier equality is per product, not per spelling**: compare the two values case- and separator-insensitively after resolving them through the canonical aliases below, so a PM-tool value and a code-host value naming the same product always collapse to the single-tool path.
+
+   | Product      | Equivalent identifiers                                             |
+   | ------------ | ------------------------------------------------------------------ |
+   | GitHub       | `github`, `github-projects`, `github-enterprise`                    |
+   | Azure DevOps | `azure-devops`, `azure-boards`, `azure-repos`                       |
+   | GitLab       | `gitlab`, `gitlab-issues`                                          |
+
+   Anything outside one alias row is a **different product** ⇒ the split is active (`Refs:` slot + back-link comment). An adoption never relies on prose to say "these two are the same tool" — the alias row is what makes it so.
 5. **Act**: If `code-host` names a **different** tool, resolve its access method (CLI/MCP/API) from the same section and route per the table below.
 6. **Verify**: The code host is identified and reachable. If a declared code host is **unreachable or unauthenticated**, **HALT** with a setup pointer — and note that **PM-side work already done is not rolled back** (state transitions and issue writes are the PM tool's, they stay committed; re-invocation is idempotent and picks up at the code-host step).
 
@@ -70,8 +80,8 @@ Invariants this table encodes:
 
 When PM tool and code host differ, the link between an item and its PR is **text-convention based** — no native integration is required or assumed. Native automations (e.g. a PM tool's own VCS integration) may coexist, but no skill depends on one:
 
-1. **Item → PR direction**: the PR body carries `Refs: <issue-id>` — the PM tool's own item identifier (e.g. `Refs: ENG-412`), written by `/publish-pr` from the story it was handed.
-2. **PR → item direction**: the PR URL is posted **back on the PM item as a comment** (or a link/URL field when the tool has one), completing the bidirectional link. `/publish-pr` does this right after the PR exists, through `/write-issue $mode: comment` — the **non-destructive** path: one comment, no template render, no body write, so the item's AC/DoD/task breakdown is untouched. Where `/write-issue` isn't installed, the same comment goes through the PM tool's implementation guide directly (Linear `commentCreate`, `gh issue comment`, the Azure DevOps work-item comments endpoint, the Jira comment API). A back-link is **never** written as a body update.
+1. **Item → PR direction**: the PR body carries `Refs: <issue-id>` — the PM tool's own item identifier (e.g. `Refs: ENG-412`), written by `/publish-pr` from the story it was handed. The token is written **plain, at the start of its own line** — never bolded or otherwise decorated — because the consumers read it back by matching that literal. The PR template's conditional `Refs:` slot is the canonical rendering (resolved override-first, as every template is).
+2. **PR → item direction**: the PR URL is posted **back on the PM item as a comment** (or a link/URL field when the tool has one), completing the bidirectional link. `/publish-pr` does this right after the PR exists, through `/write-issue $mode: comment` — the **non-destructive** path: one comment, no template render, no body write, so the item's AC/DoD/task breakdown is untouched. Where `/write-issue` isn't installed, the same comment goes through the PM tool's implementation guide directly — each supported guide documents its own mechanism (Linear `commentCreate`, `gh issue comment`, the Azure DevOps work-item comments endpoint, the `filesystem` item file's `## Activity Log` append). A back-link is **never** written as a body update. Because a comment has no identifier, posting it is **not** self-deduplicating: the writer **checks for an existing comment carrying this PR URL first** and skips when it is already there, so a re-publish (fix round, HALT recovery) never accretes a second one.
 3. **Item id not found** on the PM tool when linking back (or the PM tool errors): the **PR is still created** (it is already valid work) — surface a warning with the manual-link instruction rather than failing the publish. The back-link path therefore **warns, it never HALTs**; comment mode is specified with that exception so the non-blocking behavior survives the composition.
 4. `<issue-id>` is whatever the PM tool calls its item (`#412` on GitHub, `ENG-412` on Linear, `PROJ-412` on Jira). Skills copy the id verbatim; they never reformat it.
 

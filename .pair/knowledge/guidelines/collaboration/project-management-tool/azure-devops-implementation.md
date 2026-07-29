@@ -190,6 +190,23 @@ az boards query --wiql \
      AND [System.State] <> 'Removed'"
 ```
 
+### Comment on a Work Item (cross-link back-link)
+
+The **work-item** comment mechanism (distinct from the PR threads under Code Review below) — what `/pair-capability-write-issue $mode: comment` resolves for `azure-devops`. `az boards` exposes no comment verb, so it goes through the work-item comments REST endpoint; nothing else on the item is written (no field, no state).
+
+```bash
+# POST a comment (api-version 7.1 requires the -preview suffix on this route)
+az rest --method post \
+  --uri "https://dev.azure.com/<org>/<project>/_apis/wit/workItems/<id>/comments?api-version=7.1-preview.3" \
+  --headers "Content-Type=application/json" \
+  --body '{"text":"PR: https://dev.azure.com/<org>/<project>/_git/<repo>/pullrequest/<n>"}'
+
+# re-run check: comments carry no caller id, so posting twice leaves two comments
+az rest --method get \
+  --uri "https://dev.azure.com/<org>/<project>/_apis/wit/workItems/<id>/comments?api-version=7.1-preview.3" \
+  --query "comments[].text"
+```
+
 ## Code Review & PR Management
 
 ### Create a Pull Request

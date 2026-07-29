@@ -214,6 +214,17 @@ gh pr create --project [PROJECT_ID]
 - Reporting and analytics workflows
 - Custom dashboard creation
 
+### Comment on an Issue (cross-link back-link)
+
+The **issue**-comment mechanism (distinct from the PR-review comments documented under Code Review below) — what `/write-issue $mode: comment` resolves for `github-projects`. It writes nothing but the comment: body, labels and project-board fields are untouched.
+
+```bash
+gh issue comment <issue-number> --body "PR: https://github.com/<org>/<repo>/pull/<n>"
+
+# re-run check: comments carry no caller id, so posting twice leaves two comments
+gh issue view <issue-number> --json comments --jq '.comments[].body'
+```
+
 ## Code Review & PR Management
 
 ### PR Review States

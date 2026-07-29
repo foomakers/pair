@@ -41,7 +41,8 @@ Complete guide for implementing Linear as your project management tool, includin
    **Keep the key out of `ps` and shell history.** Passing it inline (`-H "Authorization: $LINEAR_API_KEY"`) puts a full read/write workspace token in the process argument list — readable by any other user on the host via `ps aux` — and in your shell history. Read it from a mode-0600 header file instead (curl also accepts `--netrc`), and wrap endpoint + headers in one helper that every example below reuses:
 
    ```bash
-   umask 077 && printf 'Authorization: %s\n' "$LINEAR_API_KEY" > "$HOME/.linear-headers"   # 0600, outside the repo
+   # subshell, so the caller's umask is not left at 077 for the rest of the session
+   ( umask 077 && printf 'Authorization: %s\n' "$LINEAR_API_KEY" > "$HOME/.linear-headers" )
 
    # usage: linear_gql '<json body>'
    linear_gql() {
@@ -50,7 +51,12 @@ Complete guide for implementing Linear as your project management tool, includin
        -H 'Content-Type: application/json' \
        -d "$1"
    }
+
+   # delete it when done — it is a plaintext long-lived token, not a session secret
+   rm -f "$HOME/.linear-headers"
    ```
+
+   Three caveats on that file, because it trades an argv exposure for an at-rest one: `curl -H @file` needs **curl ≥ 7.55** (`curl --version`; on older curl use `--netrc` with a `machine api.linear.app` entry instead); `$HOME` is frequently cloud-synced or backed up, so prefer a keychain read (`security find-generic-password -w …` / `secret-tool lookup …`) piped into the header file when that is true of your machine; and **rotate the key** in Linear (Settings → Account → Security & access) on any suspicion — a personal API key carries your full workspace read/write scope.
 
 1. **Verify access**
 
@@ -210,6 +216,17 @@ The target state comes from the State Mapping resolution (write rule: first-mapp
 linear_gql '{"query":"{ issues(filter:{team:{key:{eq:\"<TEAM-KEY>\"}}, state:{type:{nin:[\"completed\",\"canceled\"]}}}){ nodes { identifier title estimate state { name } } } }"}'
 ```
 
+### Comment on an Issue (cross-link back-link)
+
+The comment mechanism `/pair-capability-write-issue $mode: comment` resolves for Linear. It is the **only** Linear write a cross-link performs: the issue description, labels and workflow state are untouched.
+
+```bash
+linear_gql '{"query":"mutation($i:CommentCreateInput!){ commentCreate(input:$i){ success } }",
+     "variables":{"i":{"issueId":"<issue-id>","body":"PR: https://github.com/<org>/<repo>/pull/<n>"}}}'
+```
+
+Comments carry no caller-supplied id, so this mutation is **not** idempotent — posting twice leaves two comments. Read the issue's comments first when the caller may re-run (`{ issue(id:"<issue-id>"){ comments { nodes { body } } } }`) and skip if the URL is already there.
+
 ### Hierarchy Queries
 
 ```bash
@@ -233,12 +250,7 @@ When closing a story after merge, evaluate the parent hierarchy:
 The split works through two text conventions and nothing else — no native integration is required (Linear's own GitHub/GitLab integration may be enabled, but no skill depends on it):
 
 1. **PR → item**: the PR body carries `Refs: <issue-id>` with Linear's identifier verbatim, e.g. `Refs: ENG-412`. This is what `/pair-process-review` reads to find the story from a PR.
-2. **Item → PR**: the PR URL is posted back as a **comment on the Linear issue** right after the PR exists, completing the bidirectional link. `/pair-capability-publish-pr` does this through `/pair-capability-write-issue $mode: comment` — a comment, never an issue-body update, so the story's description is untouched; the underlying mutation is:
-
-   ```bash
-   linear_gql '{"query":"mutation($i:CommentCreateInput!){ commentCreate(input:$i){ success } }",
-        "variables":{"i":{"issueId":"<issue-id>","body":"PR: https://github.com/<org>/<repo>/pull/<n>"}}}'
-   ```
+2. **Item → PR**: the PR URL is posted back as a **comment on the Linear issue** right after the PR exists, completing the bidirectional link. `/pair-capability-publish-pr` does this through `/pair-capability-write-issue $mode: comment` — a comment, never an issue-body update, so the story's description is untouched. The mutation (and the re-run check that keeps it from duplicating) is [Comment on an Issue](#comment-on-an-issue-cross-link-back-link) above.
 
 Two invariants follow, and skills rely on them:
 

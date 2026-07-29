@@ -22,10 +22,11 @@ Every `SKILL.md` carries a `version:`. It is **semver over the skill's contract*
 | --------------------------------------------------------------------------------------------------- | ------- |
 | New/removed/renamed argument, algorithm step or phase; changed routing, HALT set, or output shape     | **minor** |
 | Behavior-preserving correction — wording, a stale link label, a typo'd snippet, a pointer added       | **patch** |
+| **Side marker only** — naming which tool an operation already talked to (e.g. "this PR read is a code-host read"), where nothing about the step changes | **patch** |
 | Breaking contract change for composers (an argument's meaning changes, a composed skill becomes required) | **major** |
 | Nothing about the skill itself (only a guideline it points at moved)                                  | none    |
 
-Two consequences worth stating, because both have been asked in review: a **pure-pointer edit is a patch, not "no bump"** (a reader can tell which copy they have), and a **new algorithm step is always at least a minor** even when the step is optional. Sub-docs of a skill (`references/*`, disclosed detail files) have no frontmatter of their own — a change there bumps the owning `SKILL.md`.
+Two consequences worth stating, because both have been asked in review: a **pure-pointer edit is a patch, not "no bump"** (a reader can tell which copy they have), and a **new algorithm step is always at least a minor** even when the step is optional. The side-marker row is where the two meet: *documenting* which side an operation already talked to — including the pointer to how that side resolves — is a patch, while **moving** an operation to the other side, or changing what it writes there, is a routing change ⇒ minor. Sub-docs of a skill (`references/*`, disclosed detail files) have no frontmatter of their own — a change there bumps the owning `SKILL.md`.
 
 ## How a skill uses these files
 
