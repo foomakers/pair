@@ -54,6 +54,18 @@ async function resolveOutcome(
 /** 0o755: the generated release script carries a shebang, so it must be runnable directly. */
 const EXECUTABLE_MODE = 0o755
 
+/**
+ * Outcomes whose file content is ours: just written (`created`/`overwritten`) or
+ * byte-identical to what we would write (`unchanged`, where the mode is repaired for
+ * a KB scaffolded before the mode was set).
+ *
+ * `skipped` is deliberately excluded: that file is the maintainer's — either KB seed
+ * content or a scaffold-owned file whose regeneration was declined (or unattended, no
+ * TTY). Touching its mode would silently reset permissions the maintainer tightened
+ * while the report still says the file was kept, making the report untruthful.
+ */
+const OWNED_ACTIONS: readonly FileAction[] = ['created', 'overwritten', 'unchanged']
+
 async function applyFile(
   file: ScaffoldFile,
   plan: ScaffoldPlan,
@@ -68,8 +80,7 @@ async function applyFile(
     await fs.writeFile(absolutePath, file.content)
   }
 
-  // Also repairs the mode on an unchanged/kept file scaffolded before this was set
-  if (file.executable && fs.existsSync(absolutePath)) {
+  if (file.executable && OWNED_ACTIONS.includes(outcome.action) && fs.existsSync(absolutePath)) {
     await fs.chmod(absolutePath, EXECUTABLE_MODE)
   }
 

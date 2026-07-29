@@ -176,9 +176,13 @@ function registerCommandFromMetadata(
   const cmd = prog
     .command(cmdConfig.metadata.name)
     .description(cmdConfig.metadata.description)
-    // Commander tolerates extra positionals by default, which silently swallows an
-    // unquoted option value (`--name Acme KB` → name "Acme"). Reject them so the
-    // parsers' positional-arity validation is actually reachable.
+    // CLI-WIDE RULE (deliberate, every command): Commander tolerates extra positionals
+    // by default, which silently swallows an unquoted option value (`--name Acme KB` →
+    // name "Acme") and hides each parser's positional-arity validation. Rejecting them
+    // is a behavior change for any command that used to ignore a stray argument, so it
+    // is documented once as a cross-command rule in reference/cli/commands.mdx
+    // ("Rules that apply to every command") and reference/specs/cli-contracts.mdx
+    // ("CLI-Wide Rules") — not as a scaffold-kb detail. Pinned by cli.e2e.test.ts.
     .allowExcessArguments(false)
 
   addCommandOptions(cmd, cmdConfig.metadata.options)

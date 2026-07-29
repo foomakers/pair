@@ -170,6 +170,40 @@ describe('CLI unknown command handling (CP314)', () => {
   })
 })
 
+/**
+ * Cross-command rule, not a scaffold-kb detail (#279 review): every registered command
+ * runs with `allowExcessArguments(false)`, so a stray positional fails loudly instead of
+ * being dropped. Documented in reference/cli/commands.mdx + reference/specs/cli-contracts.mdx;
+ * pinned here on `install` (a command that used to ignore the extra argument) so the
+ * cross-command reach is visible in the suite and cannot regress silently.
+ */
+describe('CLI-wide rule: excess positional arguments are rejected', () => {
+  it('install rejects a second positional instead of ignoring it', async () => {
+    const { runCli } = await import('./cli.js')
+    const fs = new InMemoryFileSystemService({}, '/tmp', '/tmp')
+
+    await expect(
+      runCli(['node', 'pair', 'install', './t1', './t2'], {
+        fs,
+        httpClient: new NodeHttpClientService(),
+      }),
+    ).rejects.toThrow(/too many arguments/)
+  })
+
+  it('scaffold-kb rejects an unquoted --name value leaking into a positional', async () => {
+    const { runCli } = await import('./cli.js')
+    const fs = new InMemoryFileSystemService({}, '/tmp', '/tmp')
+
+    // `--name Acme KB` unquoted: without the rule, `KB` is silently dropped
+    await expect(
+      runCli(['node', 'pair', 'scaffold-kb', './kb', '--name', 'Acme', 'KB'], {
+        fs,
+        httpClient: new NodeHttpClientService(),
+      }),
+    ).rejects.toThrow(/too many arguments/)
+  })
+})
+
 describe('CLI banner suppression with --json (CP406/CP408)', () => {
   let logSpy: ReturnType<typeof vi.spyOn>
 

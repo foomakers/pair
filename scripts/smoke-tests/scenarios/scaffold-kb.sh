@@ -129,9 +129,14 @@ fi
 assert_file "$ZIP_CONSUMER_DIR/.pair/knowledge/README.md" || exit 1
 assert_dir "$ZIP_CONSUMER_DIR/.claude/skills/pair-example-skill" || exit 1
 # Documented limitation, asserted rather than assumed: the external KB took over the
-# official KB's cache slot. foomakers/pair#395 must make this assertion fail.
-if ! grep -Fq '"generic-kb"' "$ISOLATED_HOME/.pair/kb/"*/manifest.json 2>/dev/null; then
-  log_fail "Expected the external KB manifest in the shared cache slot (see foomakers/pair#395)"
+# official KB's cache slot. Pinned via assert_pinned_bug, so when foomakers/pair#395 lands
+# CI says "the pinned bug appears FIXED — update this assertion" instead of just going red.
+external_kb_took_official_cache_slot() {
+  grep -Fq '"generic-kb"' "$ISOLATED_HOME/.pair/kb/"*/manifest.json 2>/dev/null
+}
+if ! assert_pinned_bug "foomakers/pair#395" \
+  "install --source <zip> extracts the external KB into the official KB's cache slot" \
+  external_kb_took_official_cache_slot; then
   find "$ISOLATED_HOME/.pair" -maxdepth 3 2>/dev/null || true
   exit 1
 fi

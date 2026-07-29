@@ -167,4 +167,60 @@ describe('applyScaffoldPlan', () => {
     expect(actionFor(result.outcomes, 'scripts/release.sh')).toBe('unchanged')
     expect(fs.getMode(`${root}/scripts/release.sh`)).toBe(0o755)
   })
+
+  it('leaves the mode alone on a skipped file, so the "kept" report stays truthful', async () => {
+    // Maintainer customized the script AND tightened its permissions, then declines
+    // regeneration (or runs unattended, no TTY): resetting the mode to 0755 here would
+    // change the file on disk while the report line says it was kept.
+    const fs = newFs({ [`${root}/scripts/release.sh`]: '#!/usr/bin/env bash\n# customized\n' })
+    await fs.chmod(`${root}/scripts/release.sh`, 0o700)
+    const scriptPlan: ScaffoldPlan = {
+      root,
+      directories: [],
+      files: [
+        {
+          path: 'scripts/release.sh',
+          content: '#!/usr/bin/env bash\n',
+          kind: 'scaffold-owned',
+          executable: true,
+        },
+      ],
+    }
+
+    const result = await applyScaffoldPlan(scriptPlan, fs, {
+      force: false,
+      confirmOverwrite: neverConfirm,
+    })
+
+    expect(actionFor(result.outcomes, 'scripts/release.sh')).toBe('skipped')
+    expect(fs.readFileSync(`${root}/scripts/release.sh`)).toBe(
+      '#!/usr/bin/env bash\n# customized\n',
+    )
+    expect(fs.getMode(`${root}/scripts/release.sh`)).toBe(0o700)
+  })
+
+  it('leaves the mode alone on a skipped seed file', async () => {
+    const fs = newFs({ [`${root}/.skills/example-skill/run.sh`]: '#!/usr/bin/env bash\n# mine\n' })
+    await fs.chmod(`${root}/.skills/example-skill/run.sh`, 0o600)
+    const seedPlan: ScaffoldPlan = {
+      root,
+      directories: [],
+      files: [
+        {
+          path: '.skills/example-skill/run.sh',
+          content: '#!/usr/bin/env bash\n',
+          kind: 'seed',
+          executable: true,
+        },
+      ],
+    }
+
+    const result = await applyScaffoldPlan(seedPlan, fs, {
+      force: true,
+      confirmOverwrite: alwaysConfirm,
+    })
+
+    expect(actionFor(result.outcomes, '.skills/example-skill/run.sh')).toBe('skipped')
+    expect(fs.getMode(`${root}/.skills/example-skill/run.sh`)).toBe(0o600)
+  })
 })

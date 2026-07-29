@@ -31,6 +31,7 @@ Use `turbo` from the repository root to run cross-workspace tasks (e.g. `turbo b
 - vite-tsconfig-paths v5.1.4 is adopted to enable TypeScript `paths` resolution for Vite and Vitest.
 - @testing-library/react and @testing-library/jest-dom are adopted for React component testing (peer dependencies of UI workspaces).
 - vitest-axe v1.0.0-pre.5 is adopted for automated accessibility testing in vitest unit tests.
+- yaml v2.8.2 is adopted (devDependency) for parsing generated YAML in tests — generated YAML sinks are asserted by parsing, never by string-matching (see `.pair/adoption/decision-log/2026-07-29-yaml-parser-for-generated-yaml-tests.md`).
 - @axe-core/playwright v4.11.1 is adopted for automated accessibility testing in Playwright CT.
 - jsdom v25.0.1 is adopted as the DOM environment for vitest unit tests in React/UI workspaces (`apps/website/`, `packages/brand/`).
 - Playwright is adopted for E2E and component testing:

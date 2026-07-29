@@ -25,16 +25,27 @@ export function renderKnowledgeReadme(options: { identity: KbIdentity }): string
   ].join('\n')
 }
 
-/** Seed example skill, so the `.skills/` convention and prefixing are self-documenting. */
+/**
+ * Seed example skill, so the `.skills/` convention and prefixing are self-documenting.
+ *
+ * Every frontmatter value carrying the KB name is emitted as a JSON-quoted scalar
+ * (JSON is a subset of YAML), because a name containing `:`, `"` or `\` would
+ * otherwise break the document: unquoted `author: Acme: Core KB` is a YAML error
+ * ("mapping values are not allowed here") and a raw `"` / `\` corrupts the
+ * double-quoted `description` scalar. An agent runtime that YAML-parses SKILL.md
+ * would silently drop the KB's only shipped skill.
+ */
 export function renderExampleSkill(options: { identity: KbIdentity }): string {
   const { identity } = options
 
   return [
     '---',
     'name: example-skill',
-    `description: "Example skill shipped by the ${identity.name} knowledge base. Replace it with your own."`,
+    `description: ${JSON.stringify(
+      `Example skill shipped by the ${identity.name} knowledge base. Replace it with your own.`,
+    )}`,
     'version: 0.1.0',
-    `author: ${identity.name}`,
+    `author: ${JSON.stringify(identity.name)}`,
     '---',
     '',
     '# example-skill',

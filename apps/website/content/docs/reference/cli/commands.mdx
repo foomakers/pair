@@ -17,6 +17,15 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
 - [kb validate](#kb-validate) — Validate KB structure
 - [validate-config](#validate-config) — Validate configuration
 
+## Rules that apply to every command
+
+- **Extra positional arguments are an error.** Every command rejects positionals beyond the ones
+  documented for it: `pair install ./a ./b` fails with `error: too many arguments for 'install'`
+  (exit 1) instead of silently ignoring `./b`. This is what catches an unquoted option value —
+  `--name Acme KB` (which used to mean `--name Acme`) now fails instead of half-working; quote it:
+  `--name "Acme KB"`. Behavior change since `pair-cli` 0.4.3: a wrapper script or CI job that
+  passed a stray argument must drop it.
+
 ---
 
 ## install

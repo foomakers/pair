@@ -19,6 +19,17 @@ export interface KbIdentity {
 }
 
 const FALLBACK_SLUG = 'external-kb'
+
+/**
+ * Absurd-input protection, NOT a downstream limit — nothing breaks at 101.
+ *
+ * The tightest real bound the name feeds is the agent-skill frontmatter budget
+ * (`skills-conformance-check.ts`: description <= 1024, name+description <= 1024). The
+ * seed skill spends `13 ("example-skill") + 70 (fixed description prose)` = 83 chars, so
+ * the name could be ~940 before anything downstream complained. 100 is simply a
+ * human-plausible ceiling that keeps a pasted file or a runaway wrapper argument out of
+ * the generated README/YAML/bash; raise it freely if a real KB name needs more.
+ */
 const MAX_NAME_LENGTH = 100
 
 /** True if `value` contains a C0 control character or DEL — avoids a `no-control-regex` disable. */
@@ -43,11 +54,13 @@ export function slugifyKbName(value: string): string {
 /**
  * Reject KB names that cannot be safely embedded in generated artifacts.
  *
- * The name is interpolated into a YAML workflow, a bash release script and
- * Markdown. Quoting/escaping happens at every generation site (JSON-quoted YAML
- * scalar, single-quoted shell assignment), and this guard closes what quoting
- * cannot: newlines and control characters, which would break out of a `#`
- * comment or inject top-level YAML keys regardless of quoting.
+ * The name is interpolated into a YAML workflow, the seed skill's YAML frontmatter,
+ * a bash release script and Markdown. Quoting/escaping happens at every generation
+ * site — JSON-quoted YAML scalars (`release-workflow.ts`, `seed-content.ts`,
+ * asserted by parsing with a real YAML parser in `templates/yaml-safety.test.ts`)
+ * and a single-quoted shell assignment (`release-script.ts`) — and this guard closes
+ * what quoting cannot: newlines and control characters, which would break out of a
+ * `#` comment or inject top-level YAML keys regardless of quoting.
  */
 export function validateKbName(name: string): string {
   const rendered = JSON.stringify(name)

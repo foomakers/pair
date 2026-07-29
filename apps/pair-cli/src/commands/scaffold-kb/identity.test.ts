@@ -16,6 +16,9 @@ describe('slugifyKbName', () => {
 })
 
 describe('validateKbName', () => {
+  // Accepting punctuation is only safe because every generation site quotes it —
+  // proven by parsing the generated YAML in templates/yaml-safety.test.ts, not by
+  // string-matching (which is what let the seed-skill frontmatter sink slip through).
   it('accepts punctuation that generated artifacts must quote rather than reject', () => {
     expect(validateKbName('Acme: Core KB')).toBe('Acme: Core KB')
     expect(validateKbName('x"; touch /tmp/pwned; #')).toBe('x"; touch /tmp/pwned; #')

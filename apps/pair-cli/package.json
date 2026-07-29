@@ -67,7 +67,8 @@
     "ts-node": "catalog:",
     "typescript": "catalog:",
     "vite-tsconfig-paths": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "yaml": "catalog:"
   },
   "prettier": "@pair/prettier-config"
 }
