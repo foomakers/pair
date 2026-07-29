@@ -16,14 +16,14 @@ import { join } from 'path'
 // rendered as a consolidated panel under .pair/working/reports/cost/, idempotent by
 // period key. The period-keyed panel convention itself lives in the KB working-area
 // guideline (shared with #222's AI-metrics reports — one reports-area pattern, not
-// two); the skill applies it. Classification mode stays output-only.
+// two) and is asserted in its own working-area.test.ts, per ADL
+// 2026-07-18-conformance-test-per-file-not-per-story; this file asserts only that
+// assess-cost APPLIES it. Classification mode stays output-only.
 
 const DATASET_SKILLS = join(__dirname, '../../dataset/.skills')
 const MIRROR_SKILLS = join(__dirname, '../../../../.claude/skills')
 const DATASET_KB = join(__dirname, '../../dataset/.pair/knowledge')
 const MIRROR_KB = join(__dirname, '../../../../.pair/knowledge')
-
-const WORKING_AREA_REL = 'guidelines/collaboration/working-area.md'
 
 const ASSESS_COST_DATASET = readFileSync(
   join(DATASET_SKILLS, 'capability/assess-cost/SKILL.md'),
@@ -41,8 +41,6 @@ const COST_GUIDELINE_MIRROR = readFileSync(
   join(MIRROR_KB, 'guidelines/quality-assurance/cost-assessment.md'),
   'utf-8',
 )
-const WORKING_AREA_DATASET = readFileSync(join(DATASET_KB, WORKING_AREA_REL), 'utf-8')
-const WORKING_AREA_MIRROR = readFileSync(join(MIRROR_KB, WORKING_AREA_REL), 'utf-8')
 const NEXT_DATASET = readFileSync(join(DATASET_SKILLS, 'next/SKILL.md'), 'utf-8')
 const NEXT_MIRROR = readFileSync(join(MIRROR_SKILLS, 'pair-next/SKILL.md'), 'utf-8')
 const SKILLS_GUIDE_DATASET = readFileSync(join(DATASET_KB, 'skills-guide.md'), 'utf-8')
@@ -108,11 +106,51 @@ function argumentRow(content: string, arg: string): string {
   )
 }
 
+/**
+ * The slice of `content` between two headings — from `start` up to (not including)
+ * the next occurrence of `end` — or '' when `start` is absent.
+ *
+ * Report-mode claims are asserted against the STEP slice, not the whole file. A
+ * file-wide substring assertion goes vacuous the moment the phrase it matches also
+ * appears elsewhere in the spec: drift injection on the round-1 head showed that
+ * deleting the entire `## Report Mode` block (Steps 7–11, ~7.9k chars) left most of
+ * these assertions green, because the surviving Output Format template, Edge Cases
+ * and Notes carried every matched phrase — i.e. the regression class the guard exists
+ * for (steps removed or weakened) was not caught. Slicing gives each claim the
+ * section that actually has to carry it, the same first-anchor discipline
+ * `argumentRow` applies to table rows.
+ */
+function section(content: string, start: string, end: string): string {
+  const from = content.indexOf(start)
+  if (from === -1) return ''
+  const to = content.indexOf(end, from + start.length)
+  return content.slice(from, to === -1 ? content.length : to)
+}
+
+const REPORT_MODE_HEADING = '## Report Mode (period cost monitoring)'
+const OUTPUT_FORMAT_HEADING = '## Output Format'
+const COMPOSITION_HEADING = '## Composition Interface'
+const STEP_1_HEADING = '### Step 1: Detect Mode'
+const STEP_2_HEADING = '### Step 2: Resolve the Rule Set'
+
 describe('assess-cost.md — report mode (#281)', () => {
   for (const [label, content] of [
     ['dataset', ASSESS_COST_DATASET],
     ['mirror', ASSESS_COST_MIRROR],
   ] as const) {
+    // Steps 7–11 (the algorithm), the rendered output templates, and mode detection.
+    const steps = section(content, REPORT_MODE_HEADING, OUTPUT_FORMAT_HEADING)
+    const output = section(content, OUTPUT_FORMAT_HEADING, COMPOSITION_HEADING)
+    const modeDetection = section(content, STEP_1_HEADING, STEP_2_HEADING)
+
+    it(`${label} has the report-mode step section, the output templates and mode detection`, () => {
+      // Guards the slices themselves: if a heading is renamed or a section deleted,
+      // this fails loudly instead of turning every assertion below into a no-op.
+      expect(steps).not.toBe('')
+      expect(output).not.toBe('')
+      expect(modeDetection).not.toBe('')
+    })
+
     it(`${label} declares $mode with both classify and report`, () => {
       const row = argumentRow(content, 'mode')
       expect(row).not.toBe('')
@@ -121,64 +159,101 @@ describe('assess-cost.md — report mode (#281)', () => {
     })
 
     it(`${label} report mode is bidirectional: predicted class vs. real signals, drift flagged (AC1)`, () => {
-      const lower = content.toLowerCase()
+      const lower = steps.toLowerCase()
       expect(lower).toContain('bidirectional')
       expect(lower).toMatch(/predicted[^.\n]*\breal\b|predicted-vs-real/)
       expect(lower).toContain('drift')
     })
 
-    it(`${label} report mode is period-scoped over closed PRs (AC1)`, () => {
-      const lower = content.toLowerCase()
-      expect(lower).toContain('closed pr')
+    it(`${label} report mode is period-scoped over the window's merged PRs (AC1)`, () => {
+      const lower = steps.toLowerCase()
+      expect(lower).toContain('merged pr')
       expect(argumentRow(content, 'period')).not.toBe('')
     })
 
+    it(`${label} excludes closed-unmerged PRs — no merged diff, so no real class`, () => {
+      // Step 9.1 derives `real` from the MERGED diff, so an abandoned/rejected PR has
+      // no real class: collecting it would either stall the run or invent a class for
+      // a change that never shipped, polluting drift and the class distribution.
+      const lower = steps.toLowerCase()
+      expect(lower).toMatch(/closed-unmerged prs are excluded|closed-unmerged.{0,40}excluded/)
+      expect(lower).toMatch(/no merged diff/)
+      // Collection keys on the MERGE date, not any close date (`**merge** date`).
+      expect(lower).toMatch(/\*{0,2}merge\*{0,2} date/)
+    })
+
+    it(`${label} states how a PR resolves to its story before reading the prediction`, () => {
+      // Precedence 1 reads the STORY-side matrix, so without a PR->story rule the
+      // primary prediction source is unreachable and a period with real predictions
+      // silently headlines "cost was never assessed".
+      expect(steps).toContain('Story/Epic:')
+      expect(steps).toMatch(/linked issue/i)
+      expect(steps).toMatch(/US-<id>/)
+      // The unresolved case is a distinct, separately counted diagnosis.
+      expect(steps).toContain('prediction source unresolved')
+    })
+
+    it(`${label} bounds the window with a per-run PR cap and a "too large" degradation`, () => {
+      const lower = steps.toLowerCase()
+      expect(lower).toContain('window too large')
+      expect(lower).toMatch(/cap/)
+      expect(lower).toMatch(/(do not truncate|never a silently truncated|no partial panel)/)
+    })
+
     it(`${label} writes the consolidated panel into the cost reports area (AC2, D14)`, () => {
-      expect(content).toContain('.pair/working/reports/cost/')
-      expect(content.toLowerCase()).toContain('consolidated panel')
+      expect(steps).toContain('.pair/working/reports/cost/')
+      expect(steps.toLowerCase()).toContain('consolidated panel')
       expect(argumentRow(content, 'output')).not.toBe('')
     })
 
     it(`${label} renders the panel headline-first with collapsed breakdown (AC2, D22)`, () => {
-      // Panel-SPECIFIC markers: a bare `D22` + `<details>` pair was already true
-      // before report mode existed (classification mode's Output Format), so it
-      // guarded nothing about the panel. These assert the rendered panel shape.
-      expect(content).toMatch(/^#\s*Cost Panel — <period-key>\s*$/m)
-      expect(content).toContain('**Monitored**')
-      expect(content).toContain('**Drift**')
-      expect(content).toContain('<summary>Per-PR predicted vs. real</summary>')
-      expect(content).toContain('<summary>Class distribution — predicted vs. real</summary>')
+      // Panel-SPECIFIC markers on the Output Format slice: a bare `D22` + `<details>`
+      // pair was already true before report mode existed (classification mode's own
+      // template), so it guarded nothing about the panel.
+      expect(output).toMatch(/^#\s*Cost Panel — <period-key>\s*$/m)
+      expect(output).toContain('**Monitored**')
+      expect(output).toContain('**Drift**')
+      expect(output).toContain('<summary>Per-PR predicted vs. real</summary>')
+      expect(output).toContain('<summary>Class distribution — predicted vs. real</summary>')
     })
 
     it(`${label} is idempotent by period key — same period updates in place (AC3)`, () => {
-      const lower = content.toLowerCase()
+      const lower = steps.toLowerCase()
       expect(lower).toContain('period key')
       expect(lower).toContain('in place')
       expect(lower).toMatch(/one file per period|never a second (file|panel)|not duplicated/)
     })
 
     it(`${label} reuses the KB period-keyed panel convention rather than restating it`, () => {
-      expect(content).toContain('working-area.md')
+      expect(steps).toContain('working-area.md')
     })
 
     it(`${label} degrades gracefully when there is no cost data for the period (AC4)`, () => {
-      expect(content).toContain('no cost data for this period')
-      expect(content.toLowerCase()).toContain('tag projection')
+      expect(steps).toContain('no cost data for this period')
+      expect(steps.toLowerCase()).toContain('tag projection')
     })
 
     it(`${label} keeps unpredicted PRs as "no prediction — real only", never dropped`, () => {
-      expect(content).toContain('no prediction — real only')
-      expect(content.toLowerCase()).toMatch(/never drop|not dropped|never silently drop/)
+      expect(steps).toContain('no prediction — real only')
+      expect(steps.toLowerCase()).toMatch(/never drop|not dropped|never silently drop/)
     })
 
     it(`${label} reports deploy-match as not available without deploy telemetry`, () => {
-      const lower = content.toLowerCase()
+      const lower = steps.toLowerCase()
       expect(lower).toContain('deploy-match')
       expect(lower).toMatch(/deploy-match[\s\S]{0,240}not available/)
     })
 
+    it(`${label} makes the telemetry-present deploy-match branch executable or explicitly deferred`, () => {
+      // Named declaration + a definition of "observed cost movement", plus the status
+      // of the positive path — otherwise it reads as a promise the spec cannot keep.
+      expect(steps).toContain('## Cost & Billing Telemetry')
+      expect(steps).toContain('observed cost movement')
+      expect(steps.toLowerCase()).toMatch(/deferred/)
+    })
+
     it(`${label} presents the panel inline when the reports area is not writable`, () => {
-      const lower = content.toLowerCase()
+      const lower = steps.toLowerCase()
       expect(lower).toContain('not writable')
       expect(lower).toMatch(/not writable[\s\S]{0,240}inline/)
     })
@@ -191,78 +266,63 @@ describe('assess-cost.md — report mode (#281)', () => {
     })
 
     it(`${label} report mode consumes the cost class, it does not redefine the criteria`, () => {
-      expect(content.toLowerCase()).toMatch(/does not re-?derive|never re-?derives|not redefined/)
+      expect(steps.toLowerCase()).toMatch(/does not re-?derive|never re-?derives|not redefined/)
     })
 
     it(`${label} sources the predicted class from refinement only — never the review-time class`, () => {
       // Without this precedence, `predicted` would be read from the PR body/label that
       // review overwrites with the REVIEW-time class — the same computation `real` uses —
       // so every re-classified PR would report `match` and AC1's drift would be invisible.
-      const lower = content.toLowerCase()
+      const lower = steps.toLowerCase()
       expect(lower).toContain('never read the review-time class as the prediction')
       expect(lower).toMatch(/refinement-time only|shift-left value/)
       // Unresolvable prediction degrades, never fabricates a match.
       expect(lower).toContain('never a fabricated match')
+      // Cross-references cite the rule by its real number (8.2.1, not 8.2).
+      expect(steps).toContain("Step 8.2.1's precedence rule")
+    })
+
+    it(`${label} names the current catalog as the drift baseline and a confounder`, () => {
+      // `real` is re-derived against TODAY's catalog while each prediction was made
+      // against the catalog at refinement, so a catalog change inside the window reads
+      // as drift even when every prediction was right at the time.
+      const lower = steps.toLowerCase()
+      expect(lower).toMatch(/current.{0,40}(catalog|rule set)/)
+      expect(lower).toContain('confounder')
+      expect(output.toLowerCase()).toMatch(/current.{0,40}(catalog|rule set)/)
     })
 
     it(`${label} defaults to classify — report mode never runs implicitly`, () => {
       const row = argumentRow(content, 'mode')
       expect(row.toLowerCase()).toContain('default')
-      const lower = content.toLowerCase()
+      const lower = modeDetection.toLowerCase()
       expect(lower).toMatch(/report.{0,80}never runs implicitly|never runs implicitly/)
       // The pre-fix "no surface in context → report" auto-detect must stay gone.
-      expect(lower).not.toContain('no surface in context')
+      expect(content.toLowerCase()).not.toContain('no surface in context')
+    })
+
+    it(`${label} treats $output as report-only and never as a mode signal`, () => {
+      // A report-only argument supplied in a classify run must be reported, not dropped;
+      // and it must not select the only file-writing mode.
+      expect(modeDetection).toContain('$output')
+      expect(modeDetection.toLowerCase()).toMatch(/not a mode signal/)
+      expect(modeDetection.toLowerCase()).toMatch(/ignored/)
+      expect(argumentRow(content, 'output').toLowerCase()).toContain('not a mode signal')
     })
 
     it(`${label} qualifies the no-cost-data headline when real-only rows are listed`, () => {
       // AC4's literal phrase is kept, but a bare "no cost data" headline above a table
       // of real classes contradicts itself — the predicted/real distinction is required.
-      expect(content).toContain('no closed PRs in the window')
-      expect(content).toMatch(/no _?predicted_? cost data/i)
-      expect(content.toLowerCase()).toContain('real-only rows below')
+      expect(steps).toContain('no closed PRs in the window')
+      expect(steps).toMatch(/no _?predicted_? cost data/i)
+      expect(steps.toLowerCase()).toContain('real-only rows below')
     })
 
-    it(`${label} cites the R6.3/R6.4 cost-monitoring requirements`, () => {
-      expect(content).toContain('R6.3')
-      expect(content).toContain('R6.4')
-    })
-  }
-})
-
-describe('working-area.md — period-keyed report panels (#281)', () => {
-  for (const [label, content] of [
-    ['dataset', WORKING_AREA_DATASET],
-    ['mirror', WORKING_AREA_MIRROR],
-  ] as const) {
-    it(`${label} defines the period key and its normalized forms`, () => {
-      expect(content.toLowerCase()).toContain('period key')
-      expect(content).toContain('YYYY-MM')
-    })
-
-    it(`${label} normalizes a whole-month/whole-week range to the shorter key`, () => {
-      // Two keys for one window (`2026-07` vs `2026-07-01_2026-07-31`) would produce
-      // two panels for the same period, defeating the one-file-per-period guarantee.
-      const lower = content.toLowerCase()
-      expect(lower).toMatch(/normaliz/)
-      expect(lower).toContain('one window, one key')
-      expect(content).toContain('2026-07-01_2026-07-31')
-    })
-
-    it(`${label} requires the panel to be updated in place — one file per period`, () => {
-      const lower = content.toLowerCase()
-      expect(lower).toContain('in place')
-      expect(lower).toContain('one file per period')
-    })
-
-    it(`${label} requires headline-first rendering (D22) and honors the output override`, () => {
-      expect(content).toContain('D22')
-      expect(content.toLowerCase()).toMatch(/override/)
-    })
-
-    it(`${label} states the empty-period and not-writable degradations`, () => {
-      const lower = content.toLowerCase()
-      expect(lower).toMatch(/no data for (the|this) period/)
-      expect(lower).toContain('not writable')
+    it(`${label} cites the R6.3/R6.4 cost-monitoring requirements and where they live`, () => {
+      expect(steps).toContain('R6.3')
+      expect(steps).toContain('R6.4')
+      // The citation must not dangle: quality-model.md §3.3 carries the pointer back.
+      expect(steps).toContain('quality-model.md')
     })
   }
 })

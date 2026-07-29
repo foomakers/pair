@@ -11,6 +11,10 @@ const QUALITY_MODEL = readFileSync(
   join(__dirname, '../../dataset/.pair/knowledge/guidelines/quality-assurance/quality-model.md'),
   'utf-8',
 )
+const QUALITY_MODEL_MIRROR = readFileSync(
+  join(__dirname, '../../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md'),
+  'utf-8',
+)
 const RISK_MATRIX_EXAMPLE = readFileSync(
   join(__dirname, '../../dataset/.pair/knowledge/assets/risk-matrix-example.md'),
   'utf-8',
@@ -152,6 +156,28 @@ describe('quality-model.md — structure', () => {
       expect(QUALITY_MODEL).toContain(theme)
     }
   })
+})
+
+describe('quality-model.md — cost monitoring pointer (#281, R6.3/R6.4)', () => {
+  // §3.3 covers the cost CLASS (R6.2). Monitoring the predicted class against the real
+  // one (R6.3) and surfacing drift periodically (R6.4) is assess-cost's report mode:
+  // without this pointer the skill's R6.3/R6.4 citation dangles — an installed
+  // project's KB (what an agent reads at Step 0) would carry no doc-layer rule for it.
+  for (const [label, content] of [
+    ['dataset', QUALITY_MODEL],
+    ['mirror', QUALITY_MODEL_MIRROR],
+  ] as const) {
+    it(`${label} names R6.3/R6.4 and points at assess-cost report mode`, () => {
+      expect(content).toContain('R6.3')
+      expect(content).toContain('R6.4')
+      expect(content).toMatch(/R6\.3\/R6\.4[^\n]*report mode/)
+    })
+
+    it(`${label} links the report-panel convention and names the current-catalog caveat`, () => {
+      expect(content).toMatch(/working-area\.md#report-panels/)
+      expect(content.toLowerCase()).toMatch(/current at run time|confounder/)
+    })
+  }
 })
 
 describe('risk-matrix-example.md', () => {
