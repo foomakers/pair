@@ -69,7 +69,7 @@ Transform epics into user stories through vertical slicing, INVEST validation, a
 ### Step 3: Story Identification & Triage Proposal
 
 1. **Check**: Is `$candidates` provided?
-2. **Skip**: If provided, that **is** this run's candidate tree — never re-derive it from the epic (a caller like `/brainstorm` already produced it from its own analysis, and re-deriving would discard it). Keep each candidate's rationale, carry it into item 4's triage, and proceed to item 3 for validation only.
+2. **Skip**: If provided, that **is** this run's candidate tree — never re-derive it from the epic (a caller like `/brainstorm` already produced it from its own analysis, and re-deriving would discard it). Keep each candidate's rationale, apply only the vertical-slicing validation of item 4, and go to item 5's triage.
 3. **Act**: If `$candidates` is absent, analyze epic components for story candidates (the candidate tree for this run):
    - **Workflow steps**: distinct user journey phases.
    - **CRUD operations**: create, read, update, delete patterns.

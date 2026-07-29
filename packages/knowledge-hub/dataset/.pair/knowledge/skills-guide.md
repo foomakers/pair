@@ -259,9 +259,10 @@ Skills read from and write to adoption files in `.pair/adoption/`:
 | Way of working | `tech/way-of-working.md` | `/implement`, `/review`, `/estimate` | `/assess-methodology`, `/setup-pm` |
 | Decisions (ADR) | `tech/adr/*.md` | `/verify-adoption`, `/review` | `/record-decision` |
 | Decisions (ADL) | `decision-log/*.md` | `/verify-adoption` | `/record-decision` |
+| Domain (context map / subdomain contexts) | `product/context-map.md`, `product/subdomain/*.context.md` | `/brainstorm`, `/refine-story`, `/plan-initiatives`, `/plan-epics`, `/plan-stories`, `/plan-tasks` | `/record-decision` (decision-backed sections), `/brainstorm`, `/refine-story` (inline glossary/entity/rule maintenance) |
 
 ## Navigation
 
 - **Start here**: Run `/next` to determine what to do
-- **Process flow**: `/specify-prd` → `/bootstrap` → `/plan-initiatives` → ... → `/implement` → `/review`
+- **Process flow**: (`/brainstorm` — optional discovery) → `/specify-prd` → `/bootstrap` → `/plan-initiatives` → ... → `/implement` → `/review`
 - **Independent capability**: Any capability skill can be invoked directly (e.g., `/estimate`, `/analyze-debt`)

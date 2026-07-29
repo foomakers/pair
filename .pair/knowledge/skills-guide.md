@@ -259,9 +259,10 @@ Skills read from and write to adoption files in `.pair/adoption/`:
 | Way of working | `tech/way-of-working.md` | `/pair-process-implement`, `/pair-process-review`, `/pair-capability-estimate` | `/pair-capability-assess-methodology`, `/pair-capability-setup-pm` |
 | Decisions (ADR) | `tech/adr/*.md` | `/pair-capability-verify-adoption`, `/pair-process-review` | `/pair-capability-record-decision` |
 | Decisions (ADL) | `decision-log/*.md` | `/pair-capability-verify-adoption` | `/pair-capability-record-decision` |
+| Domain (context map / subdomain contexts) | `product/context-map.md`, `product/subdomain/*.context.md` | `/pair-process-brainstorm`, `/pair-process-refine-story`, `/pair-process-plan-initiatives`, `/pair-process-plan-epics`, `/pair-process-plan-stories`, `/pair-process-plan-tasks` | `/pair-capability-record-decision` (decision-backed sections), `/pair-process-brainstorm`, `/pair-process-refine-story` (inline glossary/entity/rule maintenance) |
 
 ## Navigation
 
 - **Start here**: Run `/pair-next` to determine what to do
-- **Process flow**: `/pair-process-specify-prd` → `/pair-process-bootstrap` → `/pair-process-plan-initiatives` → ... → `/pair-process-implement` → `/pair-process-review`
+- **Process flow**: (`/pair-process-brainstorm` — optional discovery) → `/pair-process-specify-prd` → `/pair-process-bootstrap` → `/pair-process-plan-initiatives` → ... → `/pair-process-implement` → `/pair-process-review`
 - **Independent capability**: Any capability skill can be invoked directly (e.g., `/pair-capability-estimate`, `/pair-capability-analyze-debt`)

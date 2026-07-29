@@ -37,6 +37,7 @@ const VARIANTS = [
     planStories: '/plan-stories',
     refine: '/refine-story',
     setupPm: '/setup-pm',
+    recordDecision: '/record-decision',
   },
   {
     label: 'mirror',
@@ -48,6 +49,7 @@ const VARIANTS = [
     planStories: '/pair-process-plan-stories',
     refine: '/pair-process-refine-story',
     setupPm: '/pair-capability-setup-pm',
+    recordDecision: '/pair-capability-record-decision',
   },
 ] as const
 
@@ -145,6 +147,23 @@ describe('brainstorm — phase 1 grill interview, level asked first (AC1) (#230)
       expect(p1).toMatch(/punctual/i)
     })
 
+    it(`${v.label} phase 1 asks the THEME when neither $root nor $theme was given`, () => {
+      // Review finding (PR #387 round 2, Minor-4): the Arguments table promised
+      // "phase 1's opening questions ask for the level and then the theme", but only
+      // the level was asked — leaving grill's `$topic` undefined on the bare
+      // `/brainstorm` invocation, which is AC1's own scenario.
+      const p1 = phase(v.content, 1)
+      expect(p1).toMatch(/\*\*second question\*\* asks the theme/)
+      expect(p1).toMatch(/neither `\$root` nor `\$theme`/)
+      // The theme question must precede the grill composition it feeds.
+      const themeAt = p1.search(/second question\*\* asks the theme/)
+      const grillAt = p1.indexOf(`Compose \`${v.grill}\``)
+      expect(themeAt).toBeGreaterThan(-1)
+      expect(grillAt).toBeGreaterThan(themeAt)
+      // And the Verify beat requires a non-empty topic.
+      expect(p1).toMatch(/non-empty `\$topic`/)
+    })
+
     it(`${v.label} phase 1 produces the raw requirements blob (R3.7)`, () => {
       const p1 = phase(v.content, 1)
       expect(p1).toMatch(/raw requirements blob/)
@@ -215,6 +234,46 @@ describe('brainstorm — parametrization: $root + orientation deduction (AC2) (#
       expect(matrix).toMatch(/root's type selects the writer/)
     })
 
+    it(`${v.label} resolves a $root with no recognized type on an explicit fallback row`, () => {
+      // Review finding (PR #387 round 2, Major-1): the matrix had rows for type
+      // initiative/epic/story, a tag MODIFIER row ("level unchanged, writer
+      // unchanged") and a no-$root row — so a $root carrying no type label (10 open
+      // issues in this repo, incl. #280 and #393) matched no base row: the modifier's
+      // "unchanged" referred to nothing, Step 0's Verify was unsatisfiable, and
+      // phase 1's level question fired only on the no-$root path.
+      const matrix = section(v.content, 'Orientation Matrix')
+      const fallback =
+        matrix.split('\n').find(line => line.startsWith('|') && /no recognized type/i.test(line)) ??
+        ''
+      expect(fallback).not.toBe('')
+      // Level: asked, exactly as on the no-root path.
+      expect(fallback).toMatch(/asked first \(phase 1\)/)
+      // Writer: leaf treatment — siblings under the root's parent epic, root as EXTEND target.
+      expect(fallback).toContain(`\`${v.planStories}\` with \`$epic:`)
+      expect(fallback).toMatch(/parent epic/)
+      expect(fallback).toMatch(/EXTEND target/)
+      expect(fallback).toMatch(/HALT/)
+      // Every input has a base row, so the modifier always has a base to modify.
+      expect(matrix).toMatch(/exactly one base row/)
+      // Step 0 and phase 1 honour the fallback, not just the table.
+      const step0 = v.content.match(/### Step 0:[\s\S]*?(?=\n### )/)?.[0] ?? ''
+      expect(step0).toMatch(/fallback row/)
+      expect(phase(v.content, 1)).toMatch(/fallback row/)
+    })
+
+    it(`${v.label} resolves the free-theme (no $root) row's writer on the answered level`, () => {
+      // Review finding (PR #387 round 2, Minor-13): the guard pinned the three type
+      // rows but not the no-$root row, so its writer resolution could regress unseen.
+      const matrix = section(v.content, 'Orientation Matrix')
+      const freeTheme =
+        matrix.split('\n').find(line => line.startsWith('|') && /free theme/i.test(line)) ?? ''
+      expect(freeTheme).not.toBe('')
+      expect(freeTheme).toContain(`\`${v.planEpics}\` with \`$initiative:`)
+      expect(freeTheme).toContain(`\`${v.planStories}\` with \`$epic:`)
+      expect(freeTheme).toMatch(/broad/)
+      expect(freeTheme).toMatch(/punctual/)
+    })
+
     it(`${v.label} resolves the tag row as a modifier with an explicit precedence note`, () => {
       // Review finding (PR #387, Minor): two tag-driven rows overlapped with no
       // stated precedence, so an epic labelled tech-debt matched both.
@@ -269,6 +328,17 @@ describe('brainstorm — phase 2 domain integration, scoped (AC3) (#230)', () =>
       expect(gd).toMatch(/context-map\.md/)
       expect(gd).toMatch(/not an error|expected steady state/)
     })
+
+    it(`${v.label} lists a Graceful Degradation entry for ${v.recordDecision} too`, () => {
+      // Review finding (PR #387 round 2, Minor-8): every other optional composition
+      // had a Graceful Degradation bullet; record-decision's degrade path lived only
+      // in its Composed Skills cell, so that section read as complete while it was not.
+      const gd = section(v.content, 'Graceful Degradation')
+      const bullet = gd.split('\n').find(line => line.includes(`\`${v.recordDecision}\``)) ?? ''
+      expect(bullet).toMatch(/not installed/)
+      expect(bullet).toMatch(/Phase 2/)
+      expect(bullet).toMatch(/rationale/)
+    })
   }
 })
 
@@ -280,6 +350,20 @@ describe('brainstorm — phase 3 to-issues tree triage (AC4) (#230)', () => {
       expect(p3).toContain(`\`${v.planStories}\``)
     })
 
+    it(`${v.label} Composed Skills rows for both writers match the matrix (no-root included)`, () => {
+      // Review finding (PR #387 round 2, Minor-7): the /plan-epics row carried the
+      // symmetric "or absent and the level is broad" clause while the /plan-stories
+      // row named only epic/story roots, though the matrix's free-theme row and
+      // phase 3 item 6 also select it for a no-$root punctual discovery.
+      const composed = section(v.content, 'Composed Skills')
+      const row = (skill: string): string =>
+        composed.split('\n').find(line => line.includes(`\`${skill}\``)) ?? ''
+      expect(row(v.planEpics)).toMatch(/absent and the level is broad/)
+      expect(row(v.planStories)).toMatch(/absent and the level is punctual/)
+      // …and the untyped-root fallback is named there as well.
+      expect(row(v.planStories)).toMatch(/untyped/)
+    })
+
     it(`${v.label} passes the resolved parent AND the candidate tree to the writer`, () => {
       // Review finding (PR #387, Major-2): phase 3 named no arguments, so
       // plan-stories fell back to "highest-priority Todo epic" and re-derived its
@@ -289,6 +373,55 @@ describe('brainstorm — phase 3 to-issues tree triage (AC4) (#230)', () => {
       expect(p3).toContain(`\`${v.planStories}\` with \`$epic:`)
       expect(p3).toContain('`$candidates:')
       expect(p3).toMatch(/instead of re-deriving their own/)
+    })
+
+    it(`${v.label} composes exactly ONE writer and writes exactly one level`, () => {
+      // Review finding (PR #387 round 2, Major-2): item 7's plan-epics bullet
+      // appended a second pass ("then, for the slices under each confirmed epic,
+      // /plan-stories …") that item 5's tree (epics only), the matrix writer column,
+      // the /plan-stories Composed Skills row and the single `Writer:` output slot
+      // all contradicted — so an executor either invented story slices phase 2 never
+      // produced or silently dropped the clause.
+      const p3 = phase(v.content, 3)
+      expect(p3).toMatch(/One writer per run, one level written/)
+      expect(p3).toMatch(/does \*\*not\*\* cascade/)
+      // The tree is one level deep, stated where it is assembled (item 5).
+      expect(p3).toMatch(/\*\*one level deep\*\*/)
+      expect(p3).toMatch(/never carries two levels/)
+      // The plan-epics composition bullet must not itself chain plan-stories.
+      const planEpicsBullet =
+        p3
+          .split('\n')
+          .find(
+            line =>
+              line.trimStart().startsWith(`- \`${v.planEpics}\``) && line.includes('$initiative:'),
+          ) ?? ''
+      expect(planEpicsBullet).not.toBe('')
+      expect(planEpicsBullet).not.toContain(v.planStories)
+      // Output Format carries a single Writer slot, consistent with the above.
+      expect(v.content).toMatch(/├── Writer:/)
+    })
+
+    it(`${v.label} HALTs when a story or untyped root has no parent epic (orphan)`, () => {
+      // Review finding (PR #387 round 2, Minor-6): the "No parent to hang the tree
+      // from" HALT was scoped "free-theme discovery only", yet item 6 resolves a
+      // story root's parent epic with no HALT when it does not exist — and orphan
+      // stories are a normal PM-tool state (sub-issue links are optional).
+      const p3 = phase(v.content, 3)
+      expect(p3).toMatch(/orphan story/i)
+      const halt = v.content.slice(v.content.search(/^## HALT Conditions/m)).split(/\n## /)[0] ?? ''
+      expect(halt).not.toMatch(/free-theme discovery only/)
+      expect(halt).toMatch(/\*\*any\*\* root or none/)
+    })
+
+    it(`${v.label} evaluates the key-match half of the phase-3 Check after the parent resolves`, () => {
+      // Review finding (PR #387 round 2, Minor-5): item 1's Check read "items under
+      // the resolved parent whose idempotency keys match", but the tree is assembled
+      // at item 5 and the parent resolved at item 6 — unevaluable where written.
+      const p3 = phase(v.content, 3)
+      expect(p3).toMatch(/once item 6 has resolved the parent/)
+      const idem = section(v.content, 'Idempotent Re-invocation')
+      expect(idem).toMatch(/after\*\* item 6 has resolved that parent/)
     })
 
     it(`${v.label} treats a story root as an EXTEND target, never a candidate`, () => {
@@ -434,6 +567,19 @@ describe('brainstorm — writers accept a caller-supplied candidate tree (#230)'
         expect(step3).toMatch(/Is `\$candidates` provided\?/)
         expect(step3).toMatch(/never re-derive it from the/)
       })
+
+      it(`${w.parent} writer (${label}) Skip beat points forward at validation then triage`, () => {
+        // Review finding (PR #387 round 2, Minor-3): plan-stories' Skip beat pointed
+        // back at item 3 (the re-derive branch it exists to bypass) and called item 4
+        // "triage" — an executor following it literally re-derived the tree anyway.
+        const content = read(path)
+        const step3 = content.match(/### Step 3[:.][\s\S]*?(?=\n### )/)?.[0] ?? ''
+        const skip = step3.split('\n').find(line => /^2\. \*\*Skip\*\*/.test(line)) ?? ''
+        expect(skip).not.toBe('')
+        expect(skip).toMatch(/of item 4/)
+        expect(skip).toMatch(/item 5's triage/)
+        expect(skip).not.toMatch(/item 3/)
+      })
     }
   }
 })
@@ -502,6 +648,35 @@ describe('brainstorm — present in the narrative process flow, not only the cat
       // Marked as outside the nine numbered steps, so a count sweep cannot read it
       // as a tenth step (per the ADL).
       expect(flow).toMatch(/not one of the nine numbered steps/)
+    })
+  }
+
+  for (const [label, guide, command] of [
+    ['dataset', read(join(DATASET_KB, 'skills-guide.md')), '/brainstorm'],
+    ['mirror', read(join(MIRROR_KB, 'skills-guide.md')), '/pair-process-brainstorm'],
+  ] as const) {
+    it(`${label} skills-guide Navigation process flow prefixes the optional discovery entry`, () => {
+      // Review finding (PR #387 round 2, Minor-9): the third narrative surface —
+      // skills-guide's own Navigation flow — still started at Induction, in the very
+      // file whose process-skill table now carries the Discovery row.
+      const nav = guide.slice(guide.search(/^## Navigation/m))
+      const flow = nav.split('\n').find(line => line.includes('Process flow')) ?? ''
+      expect(flow).toContain(`\`${command}\``)
+      expect(flow).toMatch(/optional/i)
+      // Prefixed, i.e. it comes before the Induction entry point.
+      expect(flow.indexOf(command)).toBeLessThan(flow.indexOf('specify-prd'))
+    })
+
+    it(`${label} skills-guide Adoption Files table has a domain (context map) row`, () => {
+      // Review finding (PR #387 round 2, Minor-10): this PR re-scopes
+      // /record-decision's writer monopoly to admit /brainstorm and /refine-story as
+      // inline writers of the context map, so the table that exists to answer "who
+      // writes this adoption file" must carry the row.
+      const table = guide.slice(guide.search(/^## Adoption Files/m)).split(/\n## /)[0] ?? ''
+      const row = table.split('\n').find(line => line.includes('context-map.md')) ?? ''
+      expect(row).not.toBe('')
+      expect(row).toContain(`\`${command}\``)
+      expect(row).toMatch(/inline glossary/)
     })
   }
 
