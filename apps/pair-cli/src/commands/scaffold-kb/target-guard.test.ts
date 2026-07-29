@@ -26,16 +26,12 @@ describe('assertScaffoldTarget', () => {
     const target = '/work/afile'
     const fs = newFs({ [target]: 'not a folder' })
 
-    await expect(assertScaffoldTarget(target, fs)).rejects.toThrow(
-      /exists and is not a directory/,
-    )
+    await expect(assertScaffoldTarget(target, fs)).rejects.toThrow(/exists and is not a directory/)
   })
 
   it('rejects a configured pair project — .pair/adoption/ present', async () => {
     const fs = newFs({ [`${root}/.pair/adoption/PRD.md`]: '# PRD\n' })
 
-    await expect(assertScaffoldTarget(root, fs)).rejects.toThrow(
-      /configured pair project/,
-    )
+    await expect(assertScaffoldTarget(root, fs)).rejects.toThrow(/configured pair project/)
   })
 })

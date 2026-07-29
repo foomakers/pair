@@ -21,7 +21,7 @@ describe('shellSingleQuoted', () => {
 
   it('neutralises quotes, semicolons and expansions', () => {
     expect(shellSingleQuoted('x"; touch /tmp/pwned; #')).toBe(`'x"; touch /tmp/pwned; #'`)
-    expect(shellSingleQuoted('$(whoami)`id`')).toBe('\'$(whoami)`id`\'')
+    expect(shellSingleQuoted('$(whoami)`id`')).toBe("'$(whoami)`id`'")
   })
 
   it('escapes an embedded single quote by closing and reopening the literal', () => {
