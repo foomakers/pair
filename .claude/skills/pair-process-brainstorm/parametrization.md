@@ -36,3 +36,9 @@ The **level sizes the discovery** — how wide the interview goes, how many slic
 ## The triple is a proposal
 
 The deduced triple (level, orientation, writer) is always **stated up-front** and is a proposal: the developer can override level or orientation in the same turn (equivalently, by passing `$level` / `$orientation`) — the writer follows from the root's type and the resolved level, never from an override of its own.
+## `$domain-placed` — what phase 3 may claim, and when it must stay silent
+
+Phase 3 hands `/pair-process-plan-epics` the capability areas phase 2 already settled, so the writer's own domain step is a **confirm-only pass** and the developer approves **one** subdomain-catalog delta per run, not two. Two rules make that safe:
+
+- **Scope.** The argument names areas placed **or confirmed as already recorded** in the **subdomain catalog** — both branches of phase 2's Check/Skip count, which is what makes the fresh-session resume path work: a confirmed placement is as good as a fresh one. `/pair-process-plan-epics` reads it from the arguments rather than from same-session context.
+- **Omission.** It is **omitted entirely** when phase 2 composed `/pair-capability-map-contexts` only — the `punctual` sub-cases of the fallback and no-`$root` rows. Nothing reached the subdomain catalog on those paths, so claiming otherwise would fire `/pair-process-plan-epics`' Step 3.5 Skip and the new epics' capability areas would never be classified core/supporting/generic with a volatility rating, and no catalog delta would ever be presented. Passing an empty value is not the same thing: the argument must be absent.

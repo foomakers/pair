@@ -205,7 +205,9 @@ describe('brainstorm — phase 1 grill interview, level asked first (AC1) (#230)
       // exists. The old title said "stops after phase 1" but the interruption-only
       // wording satisfied it, so the guard read as coverage it did not provide.
       expect(p1).toMatch(/whenever the run ends before phase 3 completes/)
-      expect(p1).toMatch(/not\*\* scoped to an interrupted interview/)
+      expect(p1).toMatch(/whenever the run ends before phase 3 completes/)
+      // Rationale moved to resume.md (progressive disclosure); still guarded there.
+      expect(v.resume).toMatch(/not any single HALT's/)
       // Both blob states are persisted and distinguishable.
       expect(p1).toMatch(/`partial` \| `complete`/)
       // Phase 3's "phases 1-2 keep their output" claim now has a writer.
@@ -456,7 +458,8 @@ describe('brainstorm — phase 3 to-issues tree triage (AC4) (#230)', () => {
       // story root's parent epic with no HALT when it does not exist — and orphan
       // stories are a normal PM-tool state (sub-issue links are optional).
       const p3 = phase(v.content, 3)
-      expect(p3).toMatch(/orphan story/i)
+      // The HALT catalogue is canonical in its own section, not restated per phase.
+      expect(section(v.content, 'HALT Conditions')).toMatch(/orphan/i)
       const halt = v.content.slice(v.content.search(/^## HALT Conditions/m)).split(/\n## /)[0] ?? ''
       expect(halt).not.toMatch(/free-theme discovery only/)
       expect(halt).toMatch(/\*\*any\*\* root or none/)
@@ -477,7 +480,7 @@ describe('brainstorm — phase 3 to-issues tree triage (AC4) (#230)', () => {
       // would match its own idempotency key and report ALREADY EXISTS.
       const p3 = phase(v.content, 3)
       expect(p3).toMatch(/EXTEND target/)
-      expect(p3).toMatch(/never a candidate/)
+      expect(p3).toMatch(/never as a candidate/)
     })
 
     it(`${v.label} HALTs rather than writing under an unrelated parent (free theme)`, () => {
@@ -810,8 +813,13 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
     // message pointing at brainstorm. The invariant the finding was about is asserted
     // instead: the three sibling files exist and are pointed at (above) plus a FIXED
     // budget. Raise the budget only together with another disclosure split.
+    // Round-5 finding: this measured `.length` — UTF-16 code units, not bytes. The
+    // file's em-dashes and arrows are 3 bytes / 1 code unit each, so a file reported
+    // as 28,607 "B" was really 28,927 B — already 255 B OVER the budget this guard
+    // claimed to enforce, and the failure message would have printed the wrong
+    // number. Measure what the name says.
     const BUDGET_BYTES = 28 * 1024
-    const size = BRAINSTORM_DATASET.length
+    const size = Buffer.byteLength(BRAINSTORM_DATASET, 'utf-8')
     expect(size).toBeGreaterThan(0)
     expect(size, `brainstorm/SKILL.md is ${size} B, budget ${BUDGET_BYTES} B`).toBeLessThan(
       BUDGET_BYTES,
@@ -823,7 +831,7 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
       // Review finding (round 3, Minor): the preamble claimed the level is deduced
       // "with $root", contradicting the matrix's own fallback row.
       expect(preamble(v.content)).toMatch(
-        /or asked, when the root carries no recognized type label/,
+        /or asked, on the fallback row/,
       )
     })
 
@@ -863,8 +871,11 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
       expect(fallback).toMatch(/rather than a HALT/)
       // Phase 3 item 6 carries the same two sub-cases…
       const p3 = phase(v.content, 3)
-      expect(p3).toMatch(/when the root's parent is an \*\*initiative\*\*/)
-      expect(p3).toMatch(/label `#\[ID\]` with its real type and re-run/)
+      // Canonical in HALT Conditions (the not-a-HALT case) + parametrization.md's row.
+      expect(section(v.content, 'HALT Conditions')).toMatch(
+        /parent is an \*\*initiative\*\* never reaches this HALT/,
+      )
+      // Remedy is canonical in HALT Conditions (asserted just below), not per phase.
       // …and the HALT names the labelling remedy, not only the /plan-epics pointer.
       const halt = section(v.content, 'HALT Conditions')
       expect(halt).toMatch(/label `#\[ID\]` with its real type and re-run/)
@@ -876,8 +887,11 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
       // handoff offer", leaving the story's interruption edge case unspecified on
       // the one branch where there is no grill to offer it.
       const p1 = phase(v.content, 1)
-      expect(p1).toMatch(/when the interview ran \*\*inline\*\*/)
-      expect(p1).toMatch(/there is no grill to offer it/)
+      // Round 5 widened this: the inline case was only ONE of the paths where grill
+      // makes no offer (it also never offers after its own explicit yes, or at a
+      // later HALT), so the guard now pins the general rule that covers all of them.
+      expect(p1).toMatch(/brainstorm is the writer whenever grill made none/i)
+      expect(p1).toMatch(/inline interview/)
       const gd = v.degradation
       const bullet =
         gd.split('\n').find(line => line.includes(`\`${v.grill}\` not installed`)) ?? ''
@@ -889,8 +903,9 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
       // a re-ask", false on the two paths where the level is ASKED — nothing
       // persisted it, so a fresh-session resume re-asked exactly that question.
       const p1 = phase(v.content, 1)
-      expect(p1).toMatch(/records the \*\*resolved parametrization\*\*/)
-      expect(p1).toMatch(/without re-asking the level/)
+      expect(p1).toMatch(/records[\s\S]{0,80}\*\*resolved parametrization\*\*/)
+      // The persisted parametrization is what removes the re-ask; resume.md owns the why.
+      expect(v.resume).toMatch(/reads them back instead of re-asking/)
       // The resume list is qualified accordingly, not absolute.
       expect(v.resume).toMatch(/on the three \*\*type rows\*\*/)
       expect(v.resume).toMatch(/where the level is \*\*asked\*\* rather than deduced/)
@@ -902,7 +917,7 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
       // the scope and the composed writer's Step 3.5 mapped the SAME scope again —
       // two subdomain-catalog deltas to approve in one run.
       const p3 = phase(v.content, 3)
-      expect(p3).toMatch(/\*\*confirm-only pass\*\*/)
+      expect(p3).toMatch(/confirm-only pass/)
       expect(p3).toMatch(/Step 3\.5/)
       expect(p3).toMatch(/one\*\* subdomain-catalog delta per run/)
     })
@@ -957,8 +972,8 @@ describe('brainstorm — round-4 review fixes (#230)', () => {
       const step0 = v.content.match(/### Step 0:[\s\S]*?(?=\n### )/)?.[0] ?? ''
       const verify = step0.split('\n').find(line => /^5\. \*\*Verify\*\*/.test(line)) ?? ''
       expect(verify).not.toBe('')
-      expect(verify).toMatch(/from the \*\*fallback row\*\* all the same/)
-      expect(verify).toMatch(/on the \*\*no-`\$root`\*\* path the row resolves them later/)
+      expect(verify).toMatch(/with its row identified all the same/)
+      expect(verify).toMatch(/on the \*\*no-`\$root`\*\* path the row resolves the rest later/i)
       expect(verify).toMatch(/never that a parent is invented/)
       // …and the Skip beat states the same, so the two beats agree.
       const skip = step0.split('\n').find(line => /^2\. \*\*Skip\*\*/.test(line)) ?? ''
@@ -998,7 +1013,8 @@ describe('brainstorm — round-4 review fixes (#230)', () => {
       // approval prompt) ran a second time.
       const p3 = phase(v.content, 3)
       expect(p3).toContain('`$domain-placed:')
-      expect(p3).toMatch(/placed \*\*or confirmed as already recorded\*\*/)
+      // Scope + omission rule live in parametrization.md, pointed at from phase 3.
+      expect(v.matrix).toMatch(/placed \*\*or confirmed as already recorded\*\*/)
       expect(p3).toMatch(/in-band/)
       // The resume list ties it to the fresh-session path.
       expect(v.resume).toMatch(/\$domain-placed/)
@@ -1026,6 +1042,75 @@ describe('brainstorm — round-4 review fixes (#230)', () => {
       // The Check names the argument too, so the predicate is evaluable from inputs.
       const check = step.split('\n').find(line => /^1\. \*\*Check\*\*/.test(line)) ?? ''
       expect(check).toContain('`$domain-placed`')
+    })
+  }
+})
+
+/**
+ * Round-5 review: the handoff's lifecycle. Round 4 fixed "a COMPLETED blob is
+ * never persisted" by widening Phase 1 item 6's trigger — correct, but it created
+ * a gap one level up: the file had no terminal state and no identity, so a
+ * finished discovery's handoff lingered and Phase 1 item 2 consumed it
+ * unconditionally. Concrete failure it allowed: interview completes -> tree
+ * written -> a later, legitimate discovery on the same root finds the stale
+ * `complete` blob, skips the interview without asking, re-triages last month's
+ * candidates, and yields nothing while the human is never interviewed. A second
+ * shape: a handoff written for `#205` was matched by a run on `#300`.
+ *
+ * `/checkpoint` already owns the opposite rule ("the checkpoint is removed so
+ * finished-story state never lingers"), so these pin the same shape here.
+ */
+describe('brainstorm — the interview handoff has identity and a terminal state (#230 round 5)', () => {
+  for (const v of VARIANTS) {
+    it(`${v.label} keys the handoff file per discovery, so two roots cannot collide`, () => {
+      expect(v.content).toMatch(/\.pair\/working\/brainstorm-<root-id \| theme-slug>\.md/)
+      // Phase 1 item 1's Check must match THIS root/theme before item 2 may skip.
+      expect(v.content).toMatch(/for this same root\/theme/)
+      expect(v.content).toMatch(/keyed to another discovery is not a match/)
+    })
+
+    it(`${v.label} retires the handoff once the confirmed tree is written`, () => {
+      // The terminal state. Without it a `complete` blob is consumed forever.
+      expect(v.content).toMatch(/retire this discovery's handoff/i)
+      expect(v.content).toMatch(/remove it, or mark it `consumed`/)
+      expect(v.content).toMatch(/terminal state/)
+    })
+
+    it(`${v.label} offers a complete blob instead of skipping the interview silently`, () => {
+      expect(v.content).toMatch(/is \*\*not\*\* carried in silently/)
+      expect(v.content).toMatch(/resume the finished interview[\s\S]{0,60}start a fresh one/)
+      // A retired handoff reads as absent, or the offer would fire on a consumed file.
+      expect(v.content).toMatch(/marked `consumed`[\s\S]{0,40}counts as \*\*absent\*\*/)
+    })
+
+    it(`${v.label} names brainstorm as the writer whenever grill made no offer`, () => {
+      // Round 4 left the mechanism sentence scoped to the inline-interview case, so
+      // a complete blob produced on any other path had no named writer.
+      expect(v.content).toMatch(/brainstorm is the writer whenever grill made none/i)
+      expect(v.content).toMatch(/ended with grill's explicit yes/)
+    })
+
+    it(`${v.label} does not claim the handoff records a parent that cannot exist yet`, () => {
+      // On the no-PM-tool path the parent is unresolvable by construction: parents
+      // are PM-tool items resolved after that HALT.
+      expect(v.content).toMatch(/writer \+ parent \*\*when already resolved\*\*/)
+      expect(v.content).toMatch(/no-PM-tool path the parent is not, by construction/)
+    })
+
+    it(`${v.label} scopes $domain-placed to the subdomain catalog and states when it is omitted`, () => {
+      // Unscoped, the payload fired plan-epics' Step 3.5 Skip on a path where phase 2
+      // ran /map-contexts only — so nothing was ever classified core/supporting.
+      expect(v.content).toMatch(/placed or confirmed \*\*in the subdomain catalog\*\*/)
+      expect(v.content).toMatch(
+        new RegExp(`\\*\\*omitted entirely\\*\\*[\\s\\S]{0,80}\`\\${v.mapCtx}\` only`),
+      )
+    })
+
+    it(`${v.label} points the Step 0 writer resolution at the row that actually carries it`, () => {
+      // Round 5: the Verify pointed at Phase 1 item 3, which records the level and
+      // resolves orientation — it never mentions the writer.
+      const step0 = v.content.slice(0, v.content.indexOf('### Phase 1'))
+      expect(step0).not.toMatch(/the writer once the level is answered \(Phase 1 item 3\)/)
     })
   }
 })
