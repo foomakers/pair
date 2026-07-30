@@ -11,8 +11,9 @@ import { join } from 'path'
 // land separately (#228) and are deliberately NOT asserted here.
 //
 // Story #281 adds the skill's SECOND mode — `$mode: report`: bidirectional cost
-// monitoring (refinement-time predicted class vs. real/observed signals on closed
-// PRs, drift flagged, deploy-match degraded to "not available" without telemetry)
+// monitoring (refinement-time predicted class vs. real/observed signals on merged
+// PRs — closed-unmerged excluded, drift flagged, deploy-match degraded to "not
+// available" without telemetry)
 // rendered as a consolidated panel under .pair/working/reports/cost/, idempotent by
 // period key. The period-keyed panel convention itself lives in the KB working-area
 // guideline (shared with #222's AI-metrics reports — one reports-area pattern, not
@@ -193,11 +194,33 @@ describe('assess-cost.md — report mode (#281)', () => {
       expect(steps).toContain('prediction source unresolved')
     })
 
-    it(`${label} bounds the window with a per-run PR cap and a "too large" degradation`, () => {
+    it(`${label} bounds context by batching instead of refusing a large window`, () => {
+      // The default $period is the current calendar MONTH, which on an active repo
+      // holds far more PRs than any small per-run cap: a cap would make the default
+      // window produce no panel at all (AC2) and contradict the panel convention's
+      // "never a silent skip and never a failed run". Bounded memory must come from
+      // batching + discarding each diff, not from refusing to write.
       const lower = steps.toLowerCase()
-      expect(lower).toContain('window too large')
-      expect(lower).toMatch(/cap/)
-      expect(lower).toMatch(/(do not truncate|never a silently truncated|no partial panel)/)
+      expect(lower).toContain('no per-run pr cap')
+      expect(lower).toMatch(/batch/)
+      expect(lower).toMatch(/discard the diff/)
+      expect(lower).not.toContain('window too large')
+      // Truncation stays illegitimate unless it is visible in the headline.
+      expect(lower).toContain('never a _silently_ truncated panel')
+      expect(steps).toContain('**Coverage**: N of M merged PRs processed')
+    })
+
+    it(`${label} records the resolved rule-set revision in the panel headline`, () => {
+      // The panel is updated in place and warns that drift is measured against the
+      // CURRENT catalog; without the resolved input revision that caveat cannot be
+      // checked against a re-run. An input revision (not a wall clock) also keeps
+      // the convention's "same inputs => same content".
+      expect(steps.toLowerCase()).toContain('rule-set revision')
+      expect(output).toContain('**Rule set**')
+      expect(output).toMatch(/cost-assessment\.md` @ <revision>/)
+      // A run timestamp would break panel idempotency — explicitly ruled out.
+      expect(steps.toLowerCase()).toMatch(/generated at/)
+      expect(content.toLowerCase()).not.toContain('generated: <timestamp>')
     })
 
     it(`${label} writes the consolidated panel into the cost reports area (AC2, D14)`, () => {
@@ -313,7 +336,10 @@ describe('assess-cost.md — report mode (#281)', () => {
     it(`${label} qualifies the no-cost-data headline when real-only rows are listed`, () => {
       // AC4's literal phrase is kept, but a bare "no cost data" headline above a table
       // of real classes contradicts itself — the predicted/real distinction is required.
-      expect(steps).toContain('no closed PRs in the window')
+      // "no CLOSED PRs" would contradict the `Excluded: N closed unmerged` line
+      // rendered right under it when the window holds only abandoned PRs.
+      expect(steps).toContain('no merged PRs in the window')
+      expect(steps).not.toContain('no closed PRs in the window')
       expect(steps).toMatch(/no _?predicted_? cost data/i)
       expect(steps.toLowerCase()).toContain('real-only rows below')
     })

@@ -11,7 +11,8 @@ import { join } from 'path'
 // Currently asserted: the "Report Panels — Period Key and Idempotent Update"
 // section added by #281 — the convention every periodic panel writer applies
 // (path, period key + normalization, in-place idempotency, headline-first D22,
-// output override, empty-period and not-writable degradations). The panel's
+// input-provenance headline, output override, empty-period / not-writable /
+// partial-coverage degradations). The panel's
 // *semantics* (what a given panel measures) stay in the writing skill; only the
 // shared form lives here (ADL 2026-07-28-reports-area-period-keyed-panels).
 
@@ -80,6 +81,30 @@ describe('working-area.md — period-keyed report panels (#281)', () => {
       expect(panels).toContain('D22')
       expect(panels.toLowerCase()).toMatch(/override/)
       expect(panels).toContain('$output')
+    })
+
+    it(`${label} requires input provenance in the headline and forbids a run timestamp`, () => {
+      // A panel is updated in place, so without the resolved revision of the inputs
+      // it was derived through, a regenerated panel is indistinguishable from the
+      // pre-change one. An input revision keeps "same inputs => same content";
+      // a wall-clock "generated at" line would break it.
+      const lower = panels.toLowerCase()
+      expect(lower).toContain('provenance')
+      expect(lower).toMatch(/resolved revision of the inputs/)
+      expect(lower).toContain('generated at')
+      expect(panels).toMatch(/same inputs ⇒ same content/i)
+    })
+
+    it(`${label} keeps a large or partially processed period from losing its panel`, () => {
+      // A period bigger than one run must still yield a panel with the shortfall in
+      // the headline — never a refusal (that is the "failed run / silent skip" the
+      // empty-period bullet already rules out) and never a silently partial panel.
+      const lower = panels.toLowerCase()
+      expect(lower).toContain('partial coverage')
+      expect(panels).toMatch(/Coverage: N of M/)
+      expect(lower).toMatch(/never a reason to refuse a panel/)
+      expect(lower).toMatch(/batch/)
+      expect(lower).toMatch(/never look complete/)
     })
 
     it(`${label} states the empty-period and not-writable degradations`, () => {

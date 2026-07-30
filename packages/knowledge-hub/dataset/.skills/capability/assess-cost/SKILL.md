@@ -106,7 +106,9 @@ The panel's path, period key, in-place idempotency, headline-first shape, empty-
 
    **Closed-unmerged PRs are excluded** (abandoned/rejected/superseded). A PR closed without merging has **no merged diff**, so Step 9.1 cannot derive a `real` class for it: it never shipped, and counting it would pollute both the drift count and the class distribution with a non-event. They are not rendered as rows and not counted anywhere in the panel; the headline states how many the window held (`**Excluded**: N closed unmerged`) so the exclusion is visible rather than a silent gap between the tracker's "closed" count and the panel's.
 
-   **Window bound (context safety).** Step 9.1 re-classifies **every** merged diff in the window, so the run cost grows with the PR count. Cap: **25 merged PRs per run** (KB default; a project may tune it in `tech/risk-matrix.md` `## Overrides`). Over the cap, **do not truncate and do not write a partial panel** — degrade with `window too large — narrow the period`, naming the count found and the cap, and suggest the sub-windows that fit (e.g. per ISO week instead of the quarter). A silently truncated panel would under-report drift while looking complete.
+   **Window size (context safety without a refused panel).** Step 9.1 re-classifies **every** merged diff in the window, so the work grows with the PR count — but the consolidated panel is **always produced**, including for the default window (the current calendar month, which on an active repo routinely holds 50–100+ merged PRs). Process the window **one PR at a time, in small batches** (~10 PRs per batch): per PR retain only its panel row (id, predicted, real, drift, deploy match, top real signal) and **discard the diff before moving to the next**, so context stays flat regardless of how many PRs the period holds. There is **no per-run PR cap**: sharding a month into per-week sub-windows would yield 4–5 panels instead of the one consolidated view the period is supposed to have (AC2), and refusing to write is exactly the "silent skip / failed run" the panel convention rules out. Announce the count found before classifying (`N merged PRs in <period-key>`) so a human who wanted a narrower window can say so — advisory, never a refusal.
+
+   **Never a _silently_ truncated panel.** If a run cannot process every merged PR of the window (executor limits reached, a diff unreadable, tracker pagination exhausted), the panel is still written and its headline states the shortfall explicitly — `**Coverage**: N of M merged PRs processed` plus the reason — with the unprocessed PRs listed by id (Step 11.5). Truncation is legitimate only when it is visible where the figures are read; a partial panel that looks complete would under-report drift.
 
 2. **Act**: For each PR collect (a) the **predicted** cost class, resolved by the precedence rule in 8.2.1 below; (b) the surface needed to derive the **real** class (the merged diff); (c) the deploy reference, if the project declares deploy/billing telemetry in `infrastructure.md` (Step 9.2).
 
@@ -119,7 +121,7 @@ The panel's path, period key, in-place idempotency, headline-first shape, empty-
    **When no story resolves**, record the row's reason as **`prediction source unresolved`** (still a `no prediction — real only` row) and count it separately from PRs whose story _was_ reachable and carried no cost class. The two are different diagnoses and Step 11.3's headline must not conflate them: `cost was never assessed` is a process finding, an unresolved story link is a **traceability** finding (missing `Story/Epic:` line / link / branch token) — reporting the second as the first hides real predictions behind "cost was never assessed".
 
    **Never read the review-time class as the prediction.** `/review` re-derives cost from the merged diff and, on a raise, **overwrites the PR-description matrix row in place and re-applies the projected `cost:*` label** — so a review-touched PR body/label holds the _review_ class, which is the same computation Step 9 performs. Pairing them would report `match` for every re-classified PR and make the drift invisible (refinement said green, review raised to orange ⇒ the row must read `under-predicted`, not `match`). A PR body row is therefore usable as the prediction only when the refinement value is provably intact — the story record still holds it, or the review record states the pre-raise value; when neither does, the row is `no prediction — real only`, not a guess.
-3. **Verify**: Every **merged** PR of the window is in the set (closed-unmerged ones counted as excluded, not as rows), the set is within the cap, and every predicted value present came from refinement (never from review). A PR whose prediction is missing — cost never assessed, story unresolvable, or only a review-time class recoverable — is **retained** and marked `no prediction — real only` with its reason: never dropped, silently or otherwise, and never paired against a review-time class.
+3. **Verify**: Every **merged** PR of the window is in the set (closed-unmerged ones counted as excluded, not as rows), any PR the run could not process is named in the panel's `**Coverage**` line rather than dropped, and every predicted value present came from refinement (never from review). A PR whose prediction is missing — cost never assessed, story unresolvable, or only a review-time class recoverable — is **retained** and marked `no prediction — real only` with its reason: never dropped, silently or otherwise, and never paired against a review-time class.
 
 ### Step 9: Pair Predicted vs. Real (bidirectional)
 
@@ -142,13 +144,15 @@ The panel's path, period key, in-place idempotency, headline-first shape, empty-
 ### Step 11: Render and Write the Consolidated Panel
 
 1. **Act**: Render the **consolidated panel** headline-first per the convention (D22): the headline block at the top, the per-PR and per-class breakdowns in collapsed `<details>` sections. The headline states the **current-catalog caveat** from Step 10.1 (drift measured against today's rule set; catalog changes inside the window are a confounder) so the figures are never read as pure prediction quality.
+
+   **Rule-set provenance (makes that caveat falsifiable).** The headline also records the **resolved rule-set revision** — the revision (commit or version) of the cost catalog and of the adoption files Step 2 resolved `real` through. Without it, a `2026-07` panel regenerated after a catalog change is indistinguishable in provenance from the pre-change one, so a reader cannot tell whether a jump in under-predicted rows is the confounder the caveat warns about or real drift. This is a **resolved input**, not a wall clock: it satisfies the convention's provenance bullet and keeps `Same inputs ⇒ same content` (a `generated at` timestamp would break it, and is never added).
 2. **Act**: Write it to the panel path from Step 7, creating the directory when absent. Per the convention, the **period key** identifies the file: a re-run for the same period **updates that panel in place** — one file per period, never a second file, never appended. This is a direct write of an operational artifact (D14), the same exception `/assess-security`'s audit and `/assess-coupling`'s full scope use; no adoption content is ever written here.
 3. **Act**: **No cost data** — render and write the panel with the headline `no cost data for this period` plus the reason, rather than failing (AC4); cost monitoring depends on cost having been assessed, so it says so. Two **distinct** shapes — the headline must never be contradicted by the table under it:
-   - **Empty window — no merged PR at all**: `no cost data for this period — no closed PRs in the window` (naming the closed-unmerged ones excluded, if any). The headline _is_ the whole panel; no per-PR table follows.
+   - **Empty window — no merged PR at all**: `no cost data for this period — no merged PRs in the window` (naming the closed-unmerged ones excluded, if any). The headline _is_ the whole panel; no per-PR table follows. The literal says _merged_, not _closed_: a window holding 3 abandoned PRs and 0 merged renders `**Excluded**: 3 closed unmerged` right under it, which a "no closed PRs" headline would contradict.
    - **Merged PRs but no prediction on any of them**: `no cost data for this period — no _predicted_ cost data, so drift is not computable; N real-only rows below`, plus the reason **split by diagnosis** (Step 8.2.1): _cost was never assessed_ (e.g. Tag Projection not activated, quality-model §5) vs. _`prediction source unresolved`_ (the PR carried no `Story/Epic:` line, link or `US-<id>` branch token, so the story-side matrix was unreachable — a traceability gap, not evidence that cost went unassessed). Reporting the second as the first is forbidden: it hides predictions that exist. The real-only rows **are** listed (every PR stays `no prediction — real only`, per Step 8.3), and the qualifier is **required**: a bare "no cost data" headline above a table of real classes contradicts itself and costs the panel its credibility.
 4. **Act**: **Reports area not writable** (read-only checkout, permissions): present the panel **inline** in the output and tell the human where to save it; the run still succeeds.
-5. **Act**: **Window too large** (over Step 8.1's cap): report `window too large — narrow the period` with the count and the cap, and write **nothing** — a partial panel keyed to the full period would claim coverage it does not have.
-6. **Verify**: Exactly one panel exists for the period at the resolved path (created or updated in place), or the inline / window-too-large degradation was reported instead.
+5. **Act**: **Incomplete coverage** (Step 8.1: a merged PR of the window could not be processed — executor limits, unreadable diff, tracker pagination): still **write the panel**, with `**Coverage**: N of M merged PRs processed` in the headline, the reason, and the unprocessed ids listed. A partial panel keyed to the full period is acceptable only while it says so in the headline; it is never presented as complete, and the run is never refused over window size.
+6. **Verify**: Exactly one panel exists for the period at the resolved path (created or updated in place), or the inline degradation was reported instead; when fewer than all merged PRs were processed, the headline carries the `**Coverage**` line.
 
 ## Output Format
 
@@ -180,10 +184,10 @@ No signal detected renders as: `Class: green — no cost surface touched` with a
 ```text
 COST REPORT (report mode — writes exactly one file: the period panel):
 ├── Period:   [<period-key>] — [start .. end]
-├── PRs:      [N merged monitored — N with a prediction, N no prediction — real only (N never assessed, N prediction source unresolved); N closed unmerged excluded]
-├── Drift:    [N drifted — N under-predicted, N over-predicted | none] (vs. the CURRENT catalog)
+├── PRs:      [N merged monitored (of M in the window — coverage line in the panel when N < M) — N with a prediction, N no prediction — real only (N never assessed, N prediction source unresolved); N closed unmerged excluded]
+├── Drift:    [N drifted — N under-predicted, N over-predicted | none] (vs. the CURRENT catalog, <catalog-revision>)
 ├── Deploy:   [N matched | not available — no deploy telemetry declared (matched path deferred, #399)]
-├── Panel:    [.pair/working/reports/cost/<period-key>-cost-panel.md — created | updated in place | inline (reports area not writable) | not written (window too large — narrow the period)]
+├── Panel:    [.pair/working/reports/cost/<period-key>-cost-panel.md — created | updated in place | inline (reports area not writable)]
 └── Data:     [ok | no cost data for this period — cost never assessed / Tag Projection not activated / prediction source unresolved]
 ```
 
@@ -193,8 +197,10 @@ The panel itself (headline-first, D22):
 # Cost Panel — <period-key>
 
 **Monitored**: N merged PRs (<start> .. <end>) · **Drift**: N (N under-predicted, N over-predicted) · **No prediction**: N (N never assessed, N prediction source unresolved) · **Excluded**: N closed unmerged · **Deploy match**: N matched | not available
+**Coverage**: N of M merged PRs processed — <reason> (omit this line when N = M; list the unprocessed ids in the per-PR section)
+**Rule set**: cost catalog `cost-assessment.md` @ <revision> + adoption `tech/risk-matrix.md` @ <revision> — the resolved inputs `real` was derived from (provenance, not a run timestamp)
 
-_Drift is measured against the **current** cost catalog/adoption (Step 10.1): a catalog change inside the window shifts `real` for predictions that were correct when made._
+_Drift is measured against the **current** cost catalog/adoption (Step 10.1), i.e. the revision above: a catalog change inside the window shifts `real` for predictions that were correct when made — compare this line across re-runs to tell that confounder apart from real drift._
 
 <details>
 <summary>Per-PR predicted vs. real</summary>
@@ -216,7 +222,7 @@ _Drift is measured against the **current** cost catalog/adoption (Step 10.1): a 
 </details>
 ```
 
-An **empty window** renders the same panel with the headline `no cost data for this period — no closed PRs in the window` and no per-PR table. **Merged PRs but no predictions** renders the qualified headline `no cost data for this period — no _predicted_ cost data, so drift is not computable; N real-only rows below`, with the reason split into _never assessed_ vs. _`prediction source unresolved`_, _followed by_ the real-only per-PR table (Step 11.3). A window **over the cap** writes no panel at all (Step 11.5).
+An **empty window** renders the same panel with the headline `no cost data for this period — no merged PRs in the window` and no per-PR table. **Merged PRs but no predictions** renders the qualified headline `no cost data for this period — no _predicted_ cost data, so drift is not computable; N real-only rows below`, with the reason split into _never assessed_ vs. _`prediction source unresolved`_, _followed by_ the real-only per-PR table (Step 11.3). A window whose PRs could not all be processed still writes its panel, carrying the `**Coverage**: N of M merged PRs processed` line (Step 11.5) — there is no window size that produces no panel.
 
 ## Composition Interface
 
@@ -232,7 +238,7 @@ When composed by `/refine-story` / `/classify` (shift-left, refinement):
 
 When invoked **independently** (`/assess-cost` on a branch or story): full one-shot classification, verdict returned to the developer.
 
-In **report mode** the skill is standalone: it composes nothing and is composed by nothing — it consumes what classification mode and the quality model already produced (predicted classes recorded at refinement, closed PRs from the tracker) and hands back the panel path. **Trigger, by design: on demand only** — a human (or an automation loop) runs `/assess-cost $mode: report` when the period's monitoring is wanted, and the `next` catalog row is its discovery surface. No in-tree caller invokes it, and none is planned here; should a cadence be wanted later, the retro/metrics flow (#222) is the intended driver and this section is where that caller gets listed. Cadence stays the caller's concern (D18).
+In **report mode** the skill is standalone: it composes nothing and is composed by nothing — it consumes what classification mode and the quality model already produced (predicted classes recorded at refinement, merged PRs from the tracker) and hands back the panel path. **Trigger, by design: on demand only** — a human (or an automation loop) runs `/assess-cost $mode: report` when the period's monitoring is wanted, and the `next` catalog row is its discovery surface. No in-tree caller invokes it, and none is planned here; should a cadence be wanted later, the retro/metrics flow (#222) is the intended driver and this section is where that caller gets listed. Cadence stays the caller's concern (D18).
 
 > Review-side wiring — `/assess-cost` listed as a Composed Skill of `/review` (its Step 2.5, Cost Assessment) and the `### Cost` section of the code-review template — **landed in #228** and is in-tree. Review-time classification is `classify` mode; report mode adds nothing to that wiring and depends on nothing further.
 
@@ -247,7 +253,7 @@ In **report mode** the skill is standalone: it composes nothing and is composed 
 - **PR closed without merging** (report mode): **excluded** — no merged diff exists, so no `real` class can be derived; it is counted as `**Excluded**: N closed unmerged` in the headline and contributes to neither drift nor the class distribution (Step 8.1).
 - **PR with no predicted class** (report mode): retained as `no prediction — real only`, contributing to the real-class distribution but not to drift — never dropped from the panel. Applies equally when only a **review-time** class is recoverable: that class is the same computation as `real`, so it is not a prediction (Step 8.2.1).
 - **PR whose story cannot be resolved** (report mode): `no prediction — real only` with the reason `prediction source unresolved` — counted and reported _separately_ from "cost was never assessed", because the missing thing is the PR→story link (`Story/Epic:` line, linked issue, `US-<id>` branch token), not the assessment (Step 8.2.1).
-- **Window over the PR cap** (report mode): `window too large — narrow the period` with the count and the cap; **no panel is written** — never a silently truncated one (Step 11.5).
+- **Large window** (report mode): no PR cap and no refusal — PRs are processed in small batches, each diff discarded after its row, so the default monthly window still yields one consolidated panel (Step 8.1). If some PR could not be processed, the panel is written **with** `**Coverage**: N of M merged PRs processed` and the unprocessed ids — never a silently truncated one (Step 11.5).
 - **No deploy telemetry** (report mode): the deploy-match dimension reads `not available` for the whole period rather than fabricating a match; the matched path is deferred until a telemetry integration lands (#399, Step 9.2).
 - **Report-only argument in a classify run** (`$output` without `$mode: report`/`$period`): ignored **with a warning** naming it — never silently dropped, and never a reason to enter report mode (Step 1.4).
 - **Reports area not writable** (report mode): the panel is presented inline with a save hint; the run succeeds (Step 11.4).
@@ -259,7 +265,7 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **cost-assessment guideline absent** (KB partially installed): assess against quality-model §3.3's inline signal list only, and note the reduced catalog in the output rather than HALTing.
 - **`/classify` not available** (independent invocation): the class is still emitted; it simply isn't folded into a compiled matrix by a caller — the developer reads the verdict directly.
 - **PM tool unreachable in report mode**: **HALT** with no partial panel written — a panel covering only the PRs that happened to be reachable would misreport drift. Classification mode is unaffected (it never reads the tracker).
-- **Window too large in report mode** (more merged PRs than Step 8.1's cap): degrade with `window too large — narrow the period` (count + cap + suggested sub-windows) and write nothing — the same "no partial panel" rule as an unreachable tracker, for the same reason.
+- **Window larger than one run can finish** (report mode): degrade by **writing the panel anyway** with the `**Coverage**: N of M merged PRs processed` line, the reason and the unprocessed ids (Step 11.5) — unlike an unreachable tracker, the PRs that were read are real data, and the shortfall is stated where the figures are read instead of costing the period its panel.
 - **working-area guideline absent** (KB partially installed): apply the convention as summarized in Steps 7 and 11 (period-keyed filename, in-place update, headline-first) and note the reduced reference — never HALT.
 
 ## Notes
