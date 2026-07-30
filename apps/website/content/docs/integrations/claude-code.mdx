@@ -15,19 +15,21 @@ pair ships its skills through **two channels**. Pick one per project — never b
 
 | Channel | Command | What you get | Use it when |
 |---------|---------|--------------|-------------|
-| **Marketplace** (Claude Code native) | `/plugin marketplace add foomakers/pair` | The full skill catalog as the `pair` plugin, invoked as `/pair:pair-next` (or the bare `/pair-next`) | You work in Claude Code only and want zero setup |
+| **Marketplace** (Claude Code native) | `/plugin marketplace add foomakers/pair` | The full skill catalog as the `pair` plugin, invoked as `/pair:pair-next` (or the bare `/pair-next`) | You work in Claude Code only, want zero setup, and only need knowledge-base-reading skills — adoption-dependent skills need the CLI channel ([see the caveat below](#adoption-files-on-the-marketplace-channel) / [#392](https://github.com/foomakers/pair/issues/392)) |
 | **CLI** (tool-agnostic) | `pair-cli init` / `pair-cli update` | Skills written into your repo's `.claude/skills/` plus the `.pair/` knowledge base and adoption files | You want the KB and adoption files in the repo, or you also use Cursor, Windsurf, or Copilot |
 
 Both channels are built from the same source of truth — `packages/knowledge-hub` in the pair repository — so the skill names and content are identical.
 
 <Callout type="warn">
   **Install one channel, not both.** Because the content is identical, installing both puts the
-  same skill name in `.claude/skills/` *and* in the plugin catalog. The bare `/pair-…` form then
-  stops being unique — and every cross-skill composition in the corpus (a process skill invoking
-  `/pair-capability-verify-quality`, `/pair-capability-classify`, …) plus every doc reference uses
-  exactly that bare form. So the cost of running both channels is not untidiness: multi-phase
-  processes become ambiguous about which copy they are composing. Nothing detects this state today —
-  keeping to one channel per project is on you.
+  same skill name in `.claude/skills/` *and* in the plugin catalog — and every cross-skill
+  composition in the corpus (a process skill invoking `/pair-capability-verify-quality`,
+  `/pair-capability-classify`, …) plus every doc reference uses the bare `/pair-…` form, which now
+  matches two sources. **Resolution order between project scope and the plugin is unspecified — do
+  not rely on it** (we have verified bare-name resolution only with the plugin as the *sole* source;
+  the both-installed case has not been observed). Use the prefixed `/pair:pair-…` form if you ever
+  need to be sure which copy runs. Nothing detects this state today — keeping to one channel per
+  project is on you.
 </Callout>
 
 ### Marketplace Install
@@ -40,9 +42,11 @@ Both channels are built from the same source of truth — `packages/knowledge-hu
 /plugin install pair@pair
 ```
 
-The marketplace manifest lives at `.claude-plugin/marketplace.json` in the pair repository, with the plugin manifest alongside it at `.claude-plugin/plugin.json`. The plugin ships **skills only** — no agents, no hooks, no MCP servers.
+The marketplace manifest lives at `.claude-plugin/marketplace.json` in the pair repository, with the plugin manifest alongside it at `.claude-plugin/plugin.json`. The plugin ships **skills only** — no agents, hooks, MCP or LSP servers, commands, monitors, settings overrides or plugin dependencies. A guard in the pair repository allowlists the keys either manifest may declare, so nothing else can be added by hand without failing the build.
 
 Claude Code copies the plugin into its own cache (`~/.claude/plugins/cache`), so the knowledge base the skills reference travels with them and stays read-only.
+
+### Adoption Files on the Marketplace Channel
 
 <Callout type="warn">
   **Adoption files: the marketplace channel reads pair's, not yours.** The plugin's source is the
@@ -55,10 +59,17 @@ Claude Code copies the plugin into its own cache (`~/.claude/plugins/cache`), so
   (`way-of-working.md`: GitHub Projects on the `foomakers/pair` board), pair's risk-matrix and
   coverage deltas, and pair's tech stack — running against **your** credentials. So skills whose
   behavior depends on adoption files — `/pair-capability-write-issue`, `/pair-process-review`,
-  `/pair-capability-verify-quality`, and any process skill composing them — require the **CLI
-  channel** (`pair-cli init`), which puts your own `.pair/adoption/` in your repo. On the marketplace
-  channel, stick to skills that only read the knowledge base. Project-scoped adoption resolution for
-  the plugin channel is tracked in
+  `/pair-capability-verify-quality`, `/pair-capability-record-decision`, and any process skill
+  composing them — require the **CLI channel** (`pair-cli init`), which puts your own
+  `.pair/adoption/` in your repo. On the marketplace channel, stick to skills that only read the
+  knowledge base.
+
+  **Adoption *writes* have no correct destination on this channel at all.**
+  `/pair-capability-record-decision` is the sole writer of adoption files (ADRs, ADLs, context maps)
+  and resolves its targets skill-relative, so on the marketplace channel your recorded decision is
+  written **inside the plugin cache** — invisible to your repository and destroyed by the next
+  `/plugin update`. Record decisions on the CLI channel; there is no marketplace-channel workaround.
+  Project-scoped adoption resolution, read *and* write, is tracked in
   [#392](https://github.com/foomakers/pair/issues/392).
 </Callout>
 
