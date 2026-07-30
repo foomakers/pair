@@ -4,7 +4,7 @@ _Comprehensive setup and usage guide for Linear integration with pair_
 
 Complete guide for implementing Linear as your project management tool, including access setup (MCP or GraphQL API), issue hierarchy mapping, state mapping, estimates, and cross-topic integration with other collaboration areas.
 
-**Linear is the reference case for a split configuration.** Linear hosts the backlog but hosts **no code**: it has no repositories, no branches and no pull requests. A project on Linear therefore always declares a separate `code-host` (GitHub, GitLab, Azure Repos, …) in `way-of-working.md` → `## Git Workflow`, and every PR/review operation routes there while every item/state operation stays here. The routing rule and the cross-linking convention live in one place — [way-of-working / PM-tool + code-host resolution](../../technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md). See [Code Review & PR Management](#code-review--pr-management) below.
+**Linear is the reference case for a split configuration.** Linear hosts the backlog but hosts **no code**: it has no repositories, no branches and no pull requests. A project on Linear therefore always declares a separate `code-host` (GitHub, GitLab, Azure Repos, …) in `way-of-working.md` → `## Git Workflow`, and every PR/review operation routes there while every item/state operation stays here. The KB ships a code-host implementation guide for **GitHub and Azure DevOps**; any other reachable host (GitLab, Bitbucket, self-hosted) is warn-once-and-best-effort through its own CLI/API — a missing guide is never a HALT, an unreachable host is. The routing rule and the cross-linking convention live in one place — [way-of-working / PM-tool + code-host resolution](../../technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md). See [Code Review & PR Management](#code-review--pr-management) below.
 
 ## Quick Setup
 
@@ -33,16 +33,21 @@ Complete guide for implementing Linear as your project management tool, includin
 1. **GraphQL API setup (path B)**
 
    ```bash
-   export LINEAR_API_KEY="lin_api_..."   # never commit this; use your secret store
+   # read the key FROM your secret store — never type the literal into the shell
+   export LINEAR_API_KEY="$(security find-generic-password -s linear-api-key -w)"   # macOS
+   # export LINEAR_API_KEY="$(secret-tool lookup service linear-api-key)"          # Linux (libsecret)
    ```
 
    All calls are `POST https://api.linear.app/graphql` with the key in an `Authorization` header.
 
-   **Keep the key out of `ps` and shell history.** Passing it inline (`-H "Authorization: $LINEAR_API_KEY"`) puts a full read/write workspace token in the process argument list — readable by any other user on the host via `ps aux` — and in your shell history. Read it from a mode-0600 header file instead, and wrap endpoint + headers in one helper that every example below reuses:
+   **Keep the key out of `ps` and shell history.** Typing `export LINEAR_API_KEY="lin_api_..."` with the literal value writes a full read/write workspace token into your shell-history file, which is why the assignment above reads it from the secret store instead (store it there once, interactively — `security add-generic-password -s linear-api-key -a "$USER" -w`, prompted, so the value never reaches argv either). Passing it inline (`-H "Authorization: $LINEAR_API_KEY"`) has the same class of problem at call time: the token lands in the process argument list, readable by any other user on the host via `ps aux`. Read it from a mode-0600 header file instead, and wrap endpoint + headers in one helper that every example below reuses:
 
    ```bash
-   # subshell, so the caller's umask is not left at 077 for the rest of the session
-   ( umask 077 && printf 'Authorization: %s\n' "$LINEAR_API_KEY" > "$HOME/.linear-headers" )
+   # subshell, so the caller's umask is not left at 077 for the rest of the session;
+   # rm -f first — umask constrains mode at CREATION, so `>` onto a pre-existing
+   # world-readable file would truncate it and keep its old permissions
+   ( umask 077 && rm -f "$HOME/.linear-headers" &&
+     printf 'Authorization: %s\n' "$LINEAR_API_KEY" > "$HOME/.linear-headers" )
 
    # usage: linear_gql '<json body>'
    linear_gql() {
@@ -71,7 +76,7 @@ Complete guide for implementing Linear as your project management tool, includin
 
      Do **not** use `--netrc`: it makes curl send `Authorization: Basic base64(user:password)`, while Linear requires the raw, non-`Bearer` key (Troubleshooting's first entry is exactly that failure).
 
-   - `$HOME` is frequently cloud-synced or backed up, so prefer a keychain read (`security find-generic-password -w …` / `secret-tool lookup …`) piped into the header file when that is true of your machine.
+   - `$HOME` is frequently cloud-synced or backed up, and the header file is an at-rest copy of the token: when that is true of your machine, skip the file entirely and use the `-K -` variant above — the key stays in the environment (from the secret store) and never touches disk.
    - **Rotate the key** in Linear (Settings → Account → Security & access) on any suspicion — a personal API key carries your full workspace read/write scope.
 
 1. **Verify access**
@@ -122,6 +127,8 @@ pair's hierarchy maps to Linear concepts:
 | Bug          | Issue with the `bug` label              | Linear has no separate issue type; the label carries the type      |
 
 Linear has **one** issue type, so pair's item types are expressed through **labels** (`user story`, `epic`, `bug`, `tech-debt`) plus the parent/child relation. Labels are created once per team and reused.
+
+**Classification labels are provisioned the same way.** When the project's adoption declares the matrix→tag projection (`tech/risk-matrix.md`, D17), the chromatic labels `/classify` applies (`risk:green|yellow|red`, `cost:green|yellow|orange|red`) must exist on the team **before** the first classified issue, exactly like the type labels above — Linear's `issueUpdate` takes label **ids**, it does not create labels on the fly. Create them once (`issueLabelCreate` per label, or in the team's Settings → Labels). If a label is missing, `/classify` reports the tagging gap and does **not** invent it (tagging failure is non-blocking): the matrix stays in the issue body, but the label-based tier read is unavailable — and on a split project the PR-side gate resolution (`/verify-quality`) then falls back to its fail-safe red. Same rule on the code host: the mirrored `risk:*`/`cost:*` PR labels are created once on the repository.
 
 ## State Mapping
 
@@ -191,7 +198,7 @@ Linear's default team states map as:
 
 GraphQL examples below; with MCP, use the server's equivalent tool with the same arguments.
 
-**Every snippet in this section (and in Code Review & PR Management) calls the `linear_gql` helper defined under [Verify access](#quick-setup) above** — same endpoint, same headers, defined once. Define it first (or inline `curl -s https://api.linear.app/graphql -H @"$HOME/.linear-headers" -H 'Content-Type: application/json' -d '<body>'`).
+**Every snippet in this section (and in Code Review & PR Management) calls the `linear_gql` helper defined under [Essential Setup Steps → GraphQL API setup (path B)](#essential-setup-steps) above** — same endpoint, same headers, defined once. Define it first (or inline `curl -s https://api.linear.app/graphql -H @"$HOME/.linear-headers" -H 'Content-Type: application/json' -d '<body>'`).
 
 ### Create
 

@@ -1,7 +1,7 @@
 ---
 name: verify-quality
 description: "Checks whether the codebase passes the quality gates the CI pre-merge gate would run for the item/PR risk tier — resolves the `risk:*` tag, applies the KB gate matrix (🟢 lint+type+build; +unit from 🟡; +integration/E2E on 🔴), and reports pass/fail per gate so local verification mirrors CI for the tier check set (tier-check parity, no over-checking on green work; the coverage-guardrail and secret-scan CI layers are NOT mirrored locally). Fail-safe red when untagged. Skips gates already passing. Composed by /implement and /review; invoke directly before pushing."
-version: 0.5.1
+version: 0.6.0
 author: Foomakers
 ---
 
@@ -52,13 +52,22 @@ This step decides **which** suites the standard gates below run, so the local ru
 
    ```bash
    source .pair/knowledge/assets/tier-resolve.sh   # tags only, no criteria (D18)
-   # Primary: read the CURRENT-BRANCH PR's labels — the authoritative tier CI gates on.
-   # `gh pr view` with NO argument resolves the PR of the checked-out branch, so a
-   # review-raised (D17) tag on the PR is always honoured — never a stale story-card tier.
+   # Primary — the CURRENT-BRANCH PR's labels, read from the CODE HOST: the authoritative
+   # tier CI gates on. `gh pr view` with NO argument resolves the PR of the checked-out
+   # branch, so a review-raised (D17) tag on the PR is always honoured — never a stale
+   # story-card tier. `gh` here IS the code-host command for GitHub; on another code host
+   # substitute that host's equivalent (routing table).
    LABELS="$(gh pr view --json labels -q '.labels[].name' 2>/dev/null)"
+   REASON=""
    if [ -z "$LABELS" ] && [ -n "$story" ]; then
-     # Pre-publish only (no PR yet): fall back to the story card by id.
-     LABELS="$(gh issue view "$story" --json labels -q '.labels[].name' 2>/dev/null)"  # story card
+     # Pre-publish only (no PR yet): fall back to the story card — a PM-TOOL read, which on
+     # a split project is a DIFFERENT tool. Substitute the PM tool's own command for `gh
+     # issue view` (Linear GraphQL, az boards, the item file, …) — otherwise this line
+     # fails and the tier silently drops to the fail-safe for the WRONG reason.
+     LABELS="$(gh issue view "$story" --json labels -q '.labels[].name' 2>/dev/null)" ||
+       REASON="story card unreadable — the PM tool is not reachable by this command (split tools?)"
+     [ -z "$LABELS" ] && [ -z "$REASON" ] &&
+       REASON="story card reachable but carries no risk:* tag"
    fi
    TIER="$(resolve_tier "$LABELS")"                       # green | yellow | red (red = fail-safe if empty)
    ACTIVE_SUITES="$(required_suites_for_tier "$TIER")"    # e.g. "install lint type build unit"
@@ -66,7 +75,7 @@ This step decides **which** suites the standard gates below run, so the local ru
 
    - **Two different tools when the project splits them**: the PR labels come from the **code host** and the story card from the **PM tool** (the `gh` snippet above is the single-tool GitHub case, where they coincide). Resolve each side per the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md) and substitute that tool's command — the precedence (PR labels win, story card is the pre-publish fallback) is unchanged, because CI gates on the code host's PR labels either way.
    - **Edge — pre-publish (no PR yet)**: when the branch has no PR, pass the **story id** as `$story` and the tier resolves from the story card on the PM tool (`gh issue view` for GitHub), as above. A standalone run on a branch that already has a PR needs **no** `$story`: the PR's labels win, so a review-raised (D17) tag is never under-run versus CI.
-   - **Fail-safe (AC3)**: `resolve_tier` returns `red` for **no** `risk:*` tag or an **unknown/malformed** value — the widest matrix, never a silent skip. When the tier came from the fail-safe, say so explicitly in the report: `Tier: 🔴 red (fail-safe — no resolvable risk:* tag; running the full set)`.
+   - **Fail-safe (AC3)**: `resolve_tier` returns `red` for **no** `risk:*` tag or an **unknown/malformed** value — the widest matrix, never a silent skip. When the tier came from the fail-safe, say so explicitly in the report: `Tier: 🔴 red (fail-safe — no resolvable risk:* tag; running the full set)`. **Report the reason the snippet resolved, never a generic one**: an unreachable PM tool is `Tier: 🔴 red (fail-safe — story card unreadable: PM tool not reachable by this command; running the full set)`, distinct from a reachable card with no tag. Misattributing the first as the second hides a configuration problem (a split project running the single-tool `gh issue view`) behind a correct-looking widen.
    - **Widen-only**: because review never lowers a tier (D17), a later run can only widen the set versus an earlier one on the same item — never narrow.
 
 3. **Act — the tier→checks matrix** (projection of [quality-model.md §4](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md); the executable copy is `required_suites_for_tier`, the single source — this skill does not restate an independent matrix):

@@ -428,6 +428,92 @@ describe('code-host / PM-tool split — a PM tool that hosts no code needs code-
   })
 })
 
+describe('code-host / PM-tool split — the machine-read slots are actually machine-readable (#236, AC3)', () => {
+  const PR_TEMPLATE = '.pair/knowledge/guidelines/collaboration/templates/pr-template.md'
+
+  it('the Refs: line carries no trailing whitespace (a hard-break would be captured as part of the id)', () => {
+    for (const root of [DATASET, REPO_ROOT]) {
+      const template = read(root, PR_TEMPLATE)
+      const line = template.split('\n').find(l => l.startsWith('Refs:'))
+      expect(line, root).toBeDefined()
+      expect(line, root).toBe(line?.trimEnd())
+    }
+  })
+
+  it('the convention specifies the anchored extraction rule (trim), so "verbatim" is unambiguous', () => {
+    for (const root of [DATASET, REPO_ROOT]) {
+      const convention = read(root, ROUTING_CONVENTION)
+      expect(convention, root).toMatch(/\^Refs:/)
+      expect(convention, root).toMatch(/trim/i)
+    }
+  })
+
+  it('base-branch resolution order (incl. the legacy placement) is single-sourced in the convention', () => {
+    const convention = dataset(ROUTING_CONVENTION)
+    // `base-branch` is code-formatted in the prose, so the backticks sit between
+    // the key and the word — match across them rather than forcing the doc to
+    // drop the code span.
+    expect(convention).toMatch(/`?base-branch`? resolution/i)
+    expect(convention).toMatch(/legacy/i)
+    expect(convention).toMatch(/## Merge Strategy[\s\S]{0,200}default `main`|`main`/)
+  })
+
+  it('both base-branch readers point at that single source instead of resolving on their own', () => {
+    for (const rel of ['capability/publish-pr/SKILL.md', 'process/implement/SKILL.md']) {
+      const content = datasetSkill(rel)
+      expect(content, rel).toMatch(/base-branch[\s\S]{0,600}(resolution order|legacy)/i)
+      expect(content, rel).toContain('way-of-working-pm-resolution.md')
+    }
+  })
+
+  it('a declared code host with no KB implementation guide degrades (warn + best effort), never a HALT', () => {
+    const convention = dataset(ROUTING_CONVENTION)
+    expect(convention).toMatch(/no (KB )?implementation guide|undocumented/i)
+    expect(convention).toMatch(/(warn|best[- ]effort)/i)
+  })
+
+  it('publish-pr cross-references the board-state step by its actual number', () => {
+    const content = datasetSkill('capability/publish-pr/SKILL.md')
+    expect(content).toMatch(/board state \(step 7\)/)
+    expect(content).not.toMatch(/board state \(step 6\)/)
+  })
+
+  it('classify renders the unreadable refinement floor instead of inventing a rendering', () => {
+    const content = datasetSkill('capability/classify/SKILL.md')
+    const output = content.slice(content.indexOf('## Output Format'))
+    expect(output.slice(0, output.indexOf('## Worked Examples'))).toMatch(/floor unreadable/i)
+  })
+
+  it('verify-quality distinguishes an unreachable PM tool from a genuinely untagged item', () => {
+    const content = datasetSkill('capability/verify-quality/SKILL.md')
+    expect(content).toMatch(/PM tool[^\n]*(unreachable|not reachable)/i)
+  })
+
+  it('the branching guideline is parametrised on base-branch, not hardcoded on main', () => {
+    const rel =
+      '.pair/knowledge/guidelines/technical-standards/git-workflow/development-process.md'
+    for (const root of [DATASET, REPO_ROOT]) {
+      const guideline = read(root, rel)
+      expect(guideline, root).toContain('<base-branch>')
+      expect(guideline, root).not.toMatch(/git checkout main\b/)
+    }
+  })
+
+  it('the PM-tool selection page discloses that a hosts-no-code tracker needs code-host', () => {
+    const page = read(REPO_ROOT, 'apps/website/content/docs/pm-tools/index.mdx')
+    expect(page).toMatch(/code-host/)
+    // "host **no code**" — the claim is emphasised in the prose, so allow the
+    // bold markers between the verb and the phrase.
+    expect(page).toMatch(/(Filesystem|Linear)[\s\S]{0,400}hosts? \*{0,2}no code/i)
+  })
+
+  it('the Linear guide says who provisions the chromatic risk:/cost: labels', () => {
+    const guide = dataset(LINEAR_GUIDELINE)
+    expect(guide).toMatch(/`risk:/)
+    expect(guide).toMatch(/`risk:[\s\S]{0,600}(issueLabelCreate|reports the gap|created once)/i)
+  })
+})
+
 describe('code-host / PM-tool split — the design decision is recorded (#236)', () => {
   it('an ADR records the optional code-host override, the cross-link and the review-check placement', () => {
     const adr = read(

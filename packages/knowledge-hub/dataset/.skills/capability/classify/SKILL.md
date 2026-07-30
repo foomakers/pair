@@ -89,7 +89,7 @@ Tag *emission* is declared, not implicit (quality-model §5) — the matrix in S
 ```text
 CLASSIFY ([refinement | review]):
 ├── Target:   [#story | #PR]
-├── Tier:     risk:[green | yellow | red]   [(raised from refinement risk:yellow) — review only]
+├── Tier:     risk:[green | yellow | red]   [(raised from refinement risk:yellow) — review only | (refinement floor unreadable — review value only, NOT confirmed) — review only]
 ├── Cost:     cost:[green | yellow | orange | red]
 ├── Model:    [KB defaults | + Criticality Table | + Overrides | + Tag Projection]
 ├── Tags:     [applied: risk:red | proposed (awaiting answer) | opted out (Active: none) | tagging failed — non-blocking]
@@ -106,7 +106,7 @@ CLASSIFY ([refinement | review]):
 | Security relevance | [g/y/r] | [path heuristic | assess-security verdict] | |
 | Coupling balance | [g/y/r | not assessed] | [subdomain volatility + integrations | assess-coupling verdict | absent] | |
 
-Confidence: [high | low — unreadable diff, path/service-level fallback]
+Confidence: [high | low — unreadable diff, path/service-level fallback | low — refinement floor unreadable]
 
 </details>
 ```
@@ -166,6 +166,7 @@ Review raw max = red (Change/diff risk, Security relevance), so `max(red, yellow
 - **Unreadable diff (huge/binary)**: fall back to file-path/service-level evidence; flag low confidence in the `<details>`.
 - **Projection defined but the target's host lacks label-API access** (PM tool for a card, code host for a PR): matrix still written to the body; tagging failure reported, non-blocking.
 - **Coupling sources absent**: coupling dimension "not assessed", excluded from the max, never blocks (D21).
+- **Refinement floor unreadable** (review, split tools, the PR carries no `Refs:` line — or the PM item is unreachable): the never-lower `max()` has no floor to apply, so report the tier as the **review-computed value, explicitly flagged as unconfirmed** (`Tier: risk:yellow (refinement floor unreadable — review value only, NOT confirmed)`, `Confidence: low`) and name the missing cross-link. Never silently present it as a confirmed tier: the floor may have been higher (D17).
 - **PR with no classification present** (read by a downstream consumer, not produced here): treated as `red` (fail-safe, quality-model §3.2).
 
 ## Graceful Degradation

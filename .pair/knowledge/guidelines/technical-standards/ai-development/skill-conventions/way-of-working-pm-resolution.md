@@ -49,10 +49,18 @@ The **code host** is the tool that owns repositories, branches, pull requests an
    | GitLab       | `gitlab`, `gitlab-issues`                                          |
 
    Anything outside one alias row is a **different product** ⇒ the split is active (`Refs:` slot + back-link comment). An adoption never relies on prose to say "these two are the same tool" — the alias row is what makes it so.
-5. **Act**: If `code-host` names a **different** tool, resolve its access method (CLI/MCP/API) from the same section and route per the table below.
+5. **Act**: If `code-host` names a **different** tool, resolve its access method (CLI/MCP/API) from the same section and route per the table below. **Reachable but undocumented host** — the KB ships an implementation guide for GitHub and Azure DevOps only, so a declared `gitlab`, `bitbucket` or self-hosted host has **no KB implementation guide**: **warn once and proceed best-effort** through that host's own CLI/API (the same warn-and-best-effort degradation `/pair-capability-write-issue` applies to a PM tool with no guide). A missing guide is **never** a HALT by itself — only an unreachable or unauthenticated host is (step 6).
 6. **Verify**: The code host is identified and reachable. If a declared code host is **unreachable or unauthenticated**, **HALT** with a setup pointer — and note that **PM-side work already done is not rolled back** (state transitions and issue writes are the PM tool's, they stay committed; re-invocation is idempotent and picks up at the code-host step).
 
 **Section ownership** (so no skill has to guess which git-concerned section to read): `## Git Workflow` owns *where the code lives and where a branch starts* — `code-host`, `base-branch`. `## Merge Strategy` owns *how a PR ends* — merge method, commit format, branch cleanup, merge confirmation. They are deliberately siblings, not nested; a skill that spans both (`/pair-capability-publish-pr`) reads both.
+
+**`base-branch` resolution** — one order, applied by every reader (`/pair-capability-publish-pr` when it targets a PR, `/pair-process-implement` when it cuts a branch); neither resolves it on its own:
+
+1. `## Git Workflow` → `base-branch` — the current placement.
+2. `## Merge Strategy` → `base-branch` — the **legacy** placement (`/pair-capability-publish-pr` ≤ 0.4.1 documented the key there), **still honored** so no existing adoption silently reverts to `main`.
+3. Otherwise the default `main`.
+
+First hit wins. Moving a legacy declaration up to `## Git Workflow` is optional tidying, never a prerequisite — and because the order lives here rather than in one skill, two readers can never disagree on which branch a PR targets.
 
 ## Routing table (which field an operation reads)
 
@@ -80,7 +88,7 @@ Invariants this table encodes:
 
 When PM tool and code host differ, the link between an item and its PR is **text-convention based** — no native integration is required or assumed. Native automations (e.g. a PM tool's own VCS integration) may coexist, but no skill depends on one:
 
-1. **Item → PR direction**: the PR body carries `Refs: <issue-id>` — the PM tool's own item identifier (e.g. `Refs: ENG-412`), written by `/pair-capability-publish-pr` from the story it was handed. The token is written **plain, at the start of its own line** — never bolded or otherwise decorated — because the consumers read it back by matching that literal. The PR template's conditional `Refs:` slot is the canonical rendering (resolved override-first, as every template is).
+1. **Item → PR direction**: the PR body carries `Refs: <issue-id>` — the PM tool's own item identifier (e.g. `Refs: ENG-412`), written by `/pair-capability-publish-pr` from the story it was handed. The token is written **plain, at the start of its own line** — never bolded or otherwise decorated — because the consumers read it back by matching that literal. The PR template's conditional `Refs:` slot is the canonical rendering (resolved override-first, as every template is). **Extraction is anchored and trimmed**: read the line back with `^Refs:[ \t]*(.+?)[ \t]*$` (multiline) and take group 1 — the template's metadata lines carry markdown hard-break trailing spaces, so *verbatim* means **the id's own characters**, never the line's surrounding whitespace. An empty group 1 is a **missing** id (report it), never a valid one.
 2. **PR → item direction**: the PR URL is posted **back on the PM item as a comment** (or a link/URL field when the tool has one), completing the bidirectional link. `/pair-capability-publish-pr` does this right after the PR exists, through `/pair-capability-write-issue $mode: comment` — the **non-destructive** path: one comment, no template render, no body write, so the item's AC/DoD/task breakdown is untouched. Where `/pair-capability-write-issue` isn't installed, the same comment goes through the PM tool's implementation guide directly — each supported guide documents its own mechanism (Linear `commentCreate`, `gh issue comment`, the Azure DevOps work-item comments endpoint, the `filesystem` item file's `## Activity Log` append). A back-link is **never** written as a body update. Because a comment has no identifier, posting it is **not** self-deduplicating: the writer **checks for an existing comment carrying this PR URL first** and skips when it is already there, so a re-publish (fix round, HALT recovery) never accretes a second one.
 3. **Item id not found** on the PM tool when linking back (or the PM tool errors): the **PR is still created** (it is already valid work) — surface a warning with the manual-link instruction rather than failing the publish. The back-link path therefore **warns, it never HALTs**; comment mode is specified with that exception so the non-blocking behavior survives the composition.
 4. `<issue-id>` is whatever the PM tool calls its item:
@@ -92,7 +100,7 @@ When PM tool and code host differ, the link between an item and its PR is **text
    | Jira         | `PROJ-412`                       | the issue key                                                               |
    | `filesystem` | the item file's **stem** (`01-01-001`) | the file name without `.md` and without its status directory — the id must survive the file MOVING between `not-started/`, `in-progress/`, … , so resolve it by **glob across the status directories** (`**/01-01-001*.md`), never by path |
 
-   `filesystem` is the tracker where this slot is **always** required (it hosts no code, so the split is mandatory), and it is also the one whose item has no native id — hence the stem rule above, which is what `/pair-capability-write-issue $mode: comment $id: …` resolves to locate the item file's `## Activity Log`. Skills copy the id verbatim; they never reformat it.
+   `filesystem` is the tracker where this slot is **always** required (it hosts no code, so the split is mandatory), and it is also the one whose item has no native id — hence the stem rule above, which is what `/pair-capability-write-issue $mode: comment $id: …` resolves to locate the item file's `## Activity Log`. Skills copy the id verbatim; they never reformat it — *verbatim* being exactly what group 1 of the extraction rule above yields (surrounding whitespace is not part of the id).
 
 ## What stays in the skill (the delta)
 

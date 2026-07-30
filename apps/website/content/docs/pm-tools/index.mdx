@@ -16,18 +16,20 @@ You focus on the work. pair keeps the board in sync.
 
 ## Supported Options
 
-| Tool | Best For | External Service |
-|------|----------|-----------------|
-| [Filesystem](/docs/pm-tools/filesystem) | Solo devs, offline work, simple projects | No |
-| [GitHub Projects](/docs/pm-tools/github-projects) | Teams already on GitHub, open source projects | Yes (free) |
-| [Linear](/docs/pm-tools/linear) | Teams wanting a polished PM experience | Yes (paid) |
-| [Azure DevOps](/docs/pm-tools/azure-devops) | Teams in the Microsoft ecosystem, enterprise requirements | Yes (free tier) |
+| Tool | Best For | External Service | Hosts your code? |
+|------|----------|-----------------|------------------|
+| [Filesystem](/docs/pm-tools/filesystem) | Solo devs, offline work, simple projects | No | No — declare a [`code-host`](/docs/concepts/code-host) |
+| [GitHub Projects](/docs/pm-tools/github-projects) | Teams already on GitHub, open source projects | Yes (free) | Yes |
+| [Linear](/docs/pm-tools/linear) | Teams wanting a polished PM experience | Yes (paid) | No — declare a [`code-host`](/docs/concepts/code-host) |
+| [Azure DevOps](/docs/pm-tools/azure-devops) | Teams in the Microsoft ecosystem, enterprise requirements | Yes (free tier) | Yes (Azure Repos) |
+
+**Two tools, or one?** GitHub Projects and Azure DevOps host repositories, branches and pull requests themselves, so the PM tool *is* the code host and there is nothing extra to configure. Filesystem and Linear host **no code**, so those projects are split by construction: add one line — `code-host: github` — to `way-of-working.md` → `## Git Workflow`, and pair routes item/state work to the PM tool and branch/PR/review work to the code host, cross-linking the two with a `Refs: <issue-id>` line in the PR body. See [Code host](/docs/concepts/code-host).
 
 ### Choosing a Tool
 
-- **Starting solo or want zero dependencies?** Use [Filesystem](/docs/pm-tools/filesystem) — everything lives in your repo as Markdown files.
-- **Team on GitHub?** Use [GitHub Projects](/docs/pm-tools/github-projects) — issues, labels, and project boards you already know.
-- **Want a dedicated PM tool?** Use [Linear](/docs/pm-tools/linear) — clean UI, fast workflows, great API.
+- **Starting solo or want zero dependencies?** Use [Filesystem](/docs/pm-tools/filesystem) — everything lives in your repo as Markdown files (plus a `code-host` for the PRs).
+- **Team on GitHub?** Use [GitHub Projects](/docs/pm-tools/github-projects) — issues, labels, and project boards you already know, and one tool for everything.
+- **Want a dedicated PM tool?** Use [Linear](/docs/pm-tools/linear) — clean UI, fast workflows, great API (plus a `code-host` for the PRs).
 - **Microsoft shop or enterprise?** Use [Azure DevOps](/docs/pm-tools/azure-devops) — Boards work items, branch policies, and pipelines in one place.
 
 You can switch between tools at any time by updating `way-of-working.md`. Your adoption files and Knowledge Base stay the same.

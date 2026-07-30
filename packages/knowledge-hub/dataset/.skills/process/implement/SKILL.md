@@ -110,10 +110,10 @@ Ask: _"Ready to proceed with implementation?"_
 
 1. **Check**: Does a branch for this story already exist? (`git branch --list 'feature/#<story-id>-*'`)
 2. **Skip**: If branch exists, switch to it (`git checkout <branch>`) and move to Step 1.3.
-3. **Act**: Create the branch from the adopted base branch (`## Git Workflow` → `base-branch`, default `main`) on the **code host** — branches and PRs are code-host operations, story/state writes (Step 0.1b, Step 2.8) are PM-tool operations; see the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md). Absent `code-host` ⇒ the same tool as the PM tool, so nothing changes for a single-tool project:
+3. **Act**: Create the branch from the adopted base branch — resolved by the convention's **`base-branch` resolution** order (`## Git Workflow` → legacy `## Merge Strategy` → default `main`), never re-derived here, so this skill and `/publish-pr` (the other reader of the key) cannot disagree on the branch — on the **code host**: branches and PRs are code-host operations, story/state writes (Step 0.1b, Step 2.8) are PM-tool operations; see the [routing table + `base-branch` resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md). Absent `code-host` ⇒ the same tool as the PM tool, so nothing changes for a single-tool project:
 
    ```bash
-   # <base-branch> is the adopted value (## Git Workflow → base-branch), NOT a literal
+   # <base-branch> is the resolved adopted value, NOT a literal
    git checkout <base-branch> && git pull origin <base-branch>
    git checkout -b feature/#<story-id>-<brief-description>
    ```

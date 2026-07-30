@@ -2,16 +2,17 @@
 
 ## PR Information
 
-> Conditional — the `Refs:` line below is included ONLY when the code host differs from the PM tool (`way-of-working.md` → `## Git Workflow` → `code-host`); omit the line entirely on a single-tool project, where the host links PR and item natively. It is the PR → item half of the text-convention cross-link: `/pair-capability-publish-pr` writes it verbatim from the story id, `/pair-process-review` Step 1.2 and `/pair-next`'s open-PR row read it back. Keep the token PLAIN — nothing before it on the line, no bold — so those anchored read-backs match the literal `Refs: <issue-id>` the convention specifies.
+> Conditional — the `Refs:` line closing this block is included ONLY when the code host differs from the PM tool (`way-of-working.md` → `## Git Workflow` → `code-host`); omit the line entirely on a single-tool project, where the host links PR and item natively. It is the PR → item half of the text-convention cross-link: `/pair-capability-publish-pr` writes it verbatim from the story id, `/pair-process-review` Step 1.2 and `/pair-next`'s open-PR row read it back. Keep the token PLAIN — nothing before it on the line, no bold, **no trailing markdown hard-break spaces** — and keep it in its own paragraph, so the convention's anchored read-back (`^Refs:[ \t]*(.+?)[ \t]*$`) captures the item id and nothing else.
 
 **PR Title:** [US-XXX] [type]: [brief description of changes]  
 **Story/Epic:** [Link to user story or epic]  
-Refs: [PM-tool item id — renders as `Refs: ENG-412`]  
 **Type:** [Feature/Bug Fix/Refactor/Chore/Documentation/Hotfix]  
 **Priority:** [High/Medium/Low]  
 **Assignee:** [Developer name]  
 **Reviewers:** [@reviewer1, @reviewer2]  
-**Labels:** [feature, bug-fix, documentation, etc.]
+**Labels:** [feature, bug-fix, documentation, etc.]  
+
+Refs: [PM-tool item id — renders as `Refs: ENG-412`]
 
 ## Summary
 
