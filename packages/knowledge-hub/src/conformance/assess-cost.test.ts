@@ -249,9 +249,18 @@ describe('assess-cost.md — report mode (#281)', () => {
       const lower = steps.toLowerCase()
       expect(lower).toContain('coverage never regresses')
       expect(lower).toMatch(/not unconditional/)
-      expect(lower).toMatch(/higher coverage/)
       expect(lower).toMatch(/keep it|kept rather than overwritten/)
       expect(output).toMatch(/kept \(existing panel covers more of the period/)
+      // Round-5 finding 2: the basis is the absolute `**Monitored**` count, because
+      // an open period's denominator grows and "complete as of then" is not
+      // comparable across runs.
+      expect(lower).toMatch(/how many prs each panel actually processed/)
+      expect(lower).toMatch(/completeness is not the comparison basis/)
+      // Round-5 finding 1: merging rows without recomputing the headline lets the
+      // table name more PRs than the headline counts, and leaves a PR listed as
+      // unprocessed above a row it now has.
+      expect(lower).toMatch(/recompute the headline over the union of processed prs/)
+      expect(lower).toMatch(/must never still be named as unprocessed/)
     })
 
     it(`${label} renders unprocessed PRs only in the Coverage line, counted separately`, () => {

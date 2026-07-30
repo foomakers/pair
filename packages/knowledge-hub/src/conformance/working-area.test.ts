@@ -122,9 +122,17 @@ describe('working-area.md — period-keyed report panels (#281)', () => {
       const lower = panels.toLowerCase()
       expect(lower).toContain('no coverage regression')
       expect(lower).toMatch(/not unconditional/)
-      expect(lower).toMatch(/higher coverage/)
       expect(lower).toMatch(/keep it/)
       expect(lower).toMatch(/run output/)
+      // The comparison is on the ABSOLUTE processed count, not on "completeness":
+      // an open period's denominator grows, so a panel that was complete when
+      // written can cover fewer items than a later partial one (round-5 finding 2).
+      expect(lower).toMatch(/how many items each panel actually processed/)
+      expect(lower).toMatch(/completeness is not the comparison basis/)
+      // Merging separable rows is allowed ONLY with a recomputed headline, or the
+      // table ends up contradicting the line above it (round-5 finding 1).
+      expect(lower).toMatch(/merge in the rows[\s\S]{0,160}recompute the headline/)
+      expect(lower).toMatch(/struck from the items-left-out list/)
     })
 
     it(`${label} states the empty-period and not-writable degradations`, () => {

@@ -81,7 +81,7 @@ See [adl-template.md](templates/adl-template.md) for the full template.
 
 The ADR template captures architectural decisions with these sections:
 
-1. **Status** — `Proposed`, `Accepted`, `Deprecated`, or `Superseded by ADR-YYYY-MM-DD-<topic>`
+1. **Status** — `Proposed`, `Accepted`, `Deprecated`, `Superseded by ADR-YYYY-MM-DD-<topic>`, or `Accepted (amended YYYY-MM-DD — <what changed>)` when a later decision narrows or extends an accepted ADR in place rather than superseding it. An amended ADR keeps its original **Date** and carries the amendment as its own paragraph naming what changed and which decision changed it — so the record reads as one decision with a history, not two competing ones. See the [ADR template](templates/adr-template.md).
 2. **Date** — When the decision was made
 3. **Context** — Business requirement or technical challenge, current system state, stakeholders
 4. **Options Considered** — Each option with description, pros, and cons
