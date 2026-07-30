@@ -23,12 +23,12 @@ Labels are **per team**: resolve label ids for the adopted team before using the
 
 ## Creating Issues
 
-All examples use the GraphQL API (`POST https://api.linear.app/graphql`, `Authorization: $LINEAR_API_KEY`). With MCP, call the server's equivalent tool with the same arguments.
+All examples use the GraphQL API through the **`linear_gql` helper** defined once in [linear-implementation.md → GraphQL API setup](../project-management-tool/linear-implementation.md#quick-setup) — endpoint and credentials live there, and the key is never passed inline on the command line. Define the helper before running anything below. With MCP, call the server's equivalent tool with the same arguments.
 
 ### User Story
 
 ```bash
--d '{"query":"mutation($i:IssueCreateInput!){ issueCreate(input:$i){ success issue { id identifier url } } }",
+linear_gql '{"query":"mutation($i:IssueCreateInput!){ issueCreate(input:$i){ success issue { id identifier url } } }",
      "variables":{"i":{"teamId":"<team-id>","title":"[Story title]",
      "description":"[Story body — markdown per user-story-template]",
      "parentId":"<epic-id>","labelIds":["<user-story-label-id>"],
@@ -53,11 +53,11 @@ Tasks are **checklist items inside the story description** (`- [ ] T1 — …`),
 
 ```bash
 # Attach an existing story to its epic
--d '{"query":"mutation($id:String!,$i:IssueUpdateInput!){ issueUpdate(id:$id,input:$i){ success } }",
+linear_gql '{"query":"mutation($id:String!,$i:IssueUpdateInput!){ issueUpdate(id:$id,input:$i){ success } }",
      "variables":{"id":"<story-id>","i":{"parentId":"<epic-id>"}}}'
 
 # Inspect the relation both ways
--d '{"query":"{ issue(id:\"<id>\"){ identifier parent { identifier } children { nodes { identifier state { type } } } } }"}'
+linear_gql '{"query":"{ issue(id:\"<id>\"){ identifier parent { identifier } children { nodes { identifier state { type } } } } }"}'
 ```
 
 Set the parent **at creation time** where possible — orphan issues break the parent-cascade queries `/review` runs on merge.
@@ -91,8 +91,8 @@ Workflow states are per-team and freely renamed, so they are resolved through th
 
 ```bash
 # Resolve the target state id (names are per-team, ids are stable), then write it
--d '{"query":"{ team(id:\"<team-id>\"){ states { nodes { id name type } } } }"}'
--d '{"query":"mutation($id:String!,$i:IssueUpdateInput!){ issueUpdate(id:$id,input:$i){ success } }",
+linear_gql '{"query":"{ team(id:\"<team-id>\"){ states { nodes { id name type } } } }"}'
+linear_gql '{"query":"mutation($id:String!,$i:IssueUpdateInput!){ issueUpdate(id:$id,input:$i){ success } }",
      "variables":{"id":"<issue-id>","i":{"stateId":"<state-id>"}}}'
 ```
 
@@ -111,7 +111,7 @@ State transitions **always** happen on Linear; PR states live on the code host a
 ### Assignment
 
 ```bash
--d '{"query":"mutation($id:String!,$i:IssueUpdateInput!){ issueUpdate(id:$id,input:$i){ success } }",
+linear_gql '{"query":"mutation($id:String!,$i:IssueUpdateInput!){ issueUpdate(id:$id,input:$i){ success } }",
      "variables":{"id":"<issue-id>","i":{"assigneeId":"<user-id>"}}}'
 ```
 
@@ -119,13 +119,13 @@ State transitions **always** happen on Linear; PR states live on the code host a
 
 ```bash
 # Stories ready for development (Ready-mapped state), highest priority first
--d '{"query":"{ issues(filter:{team:{key:{eq:\"<TEAM-KEY>\"}}, state:{name:{eq:\"Todo\"}}, labels:{name:{eq:\"user story\"}}}, orderBy:updatedAt){ nodes { identifier title estimate priority } } }"}'
+linear_gql '{"query":"{ issues(filter:{team:{key:{eq:\"<TEAM-KEY>\"}}, state:{name:{eq:\"Todo\"}}, labels:{name:{eq:\"user story\"}}}, orderBy:updatedAt){ nodes { identifier title estimate priority } } }"}'
 
 # Open items assigned to me
--d '{"query":"{ viewer { assignedIssues(filter:{state:{type:{nin:[\"completed\",\"canceled\"]}}}){ nodes { identifier title state { name } } } } }"}'
+linear_gql '{"query":"{ viewer { assignedIssues(filter:{state:{type:{nin:[\"completed\",\"canceled\"]}}}){ nodes { identifier title state { name } } } } }"}'
 
 # Items in the current cycle
--d '{"query":"{ issues(filter:{team:{key:{eq:\"<TEAM-KEY>\"}}, cycle:{isActive:{eq:true}}}){ nodes { identifier title state { name } } } }"}'
+linear_gql '{"query":"{ issues(filter:{team:{key:{eq:\"<TEAM-KEY>\"}}, cycle:{isActive:{eq:true}}}){ nodes { identifier title state { name } } } }"}'
 ```
 
 ## Best Practices

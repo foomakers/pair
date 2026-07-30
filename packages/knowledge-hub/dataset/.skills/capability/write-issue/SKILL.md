@@ -21,8 +21,10 @@ Create or update issues in the adopted PM tool. Template-driven: reads the type-
 | `$comment` | Yes (comment mode) | Verbatim comment text to post on the item (e.g. `PR: https://github.com/acme/platform/pull/412`). Never template-rendered, never merged into the body. |
 | `$id`      | No       | Existing issue identifier. If provided → **update**; if absent → **create**. **Required in `comment` mode** (there is nothing to comment on otherwise). |
 | `$parent`  | No       | Parent issue identifier for hierarchy linking (e.g., epic → story, story → task).                                                                               |
-| `$status`  | No       | Target **macrostate** — one of `Draft`, `Ready`, `In Progress`, `Review`, `Done` (never a board-specific label). Resolved to the actual board state via the `state-mapping` resolution rule ([canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)) before the board field is updated. |
-| `$labels`  | No       | Additional **topical** labels to apply alongside the type label, e.g. `tech-debt` when a debt or quality finding is promoted to the backlog deliberately. A list of label names (created if the PM tool supports it). |
+| `$status`  | No       | Target **macrostate** — one of `Draft`, `Ready`, `In Progress`, `Review`, `Done` (never a board-specific label). Resolved to the actual board state via the `state-mapping` resolution rule ([canonical-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/canonical-states.md)) before the board field is updated. **Ignored in `comment` mode** (Step 6 and the board write never run — comment mode touches no board field). |
+| `$labels`  | No       | Additional **topical** labels to apply alongside the type label, e.g. `tech-debt` when a debt or quality finding is promoted to the backlog deliberately. A list of label names (created if the PM tool supports it). **Ignored in `comment` mode** (Step 7.2 never runs — labels are left byte-identical). |
+
+**In `comment` mode only `$id` and `$comment` are read**; `$type`, `$content`, `$status`, `$labels` and `$parent` are ignored — passing one is a caller mistake, never a partial write.
 
 ## Algorithm
 
@@ -120,7 +122,7 @@ Skills never write board-specific labels — `$status` is always a canonical mac
 3. **Act (Update)**:
    - Read the existing issue to confirm it exists.
    - If not found → **HALT**: `Issue #$id not found.`
-   - Update the issue body with the formatted content — in **write mode** (`$mode: write`) this is a **full-body overwrite**, not a merge/append: the body is replaced with what `$content` renders to. Callers that add to an existing body (EXTEND triage, plan-tasks Task Breakdown) must therefore pass the **already-merged full body**, not just the delta (see the Composition Interface below). Comment mode (Step 7c) never reaches here and never writes the body.
+   - Update the issue body with the formatted content — in **write mode** (`$mode: write`) this is a **full-body overwrite**, not a merge/append: the body is replaced with what `$content` renders to. Callers that add to an existing body (EXTEND triage, plan-tasks Task Breakdown) must therefore pass the **already-merged full body**, not just the delta (see the Composition Interface below). That contract is also what makes a comment durable where the item **is** a file: on `filesystem` the back-link lives in the body's `## Activity Log` section, so a later write-mode render preserves it only because the caller read-merges the current body first — dropping the section is a caller bug, not an accepted behavior. Comment mode (Step 7c) never reaches here and never writes the body.
    - Preserve existing labels and hierarchy links unless explicitly changed.
    - If `$status` was provided, update the project board status field to the board state resolved in Step 6, per the implementation guide (e.g., GraphQL mutation for GitHub Projects). This is the **board field**, not the body text.
 4. **Verify**: Issue created or updated successfully. If `$status` was provided, confirm the board field reflects the resolved board state.
@@ -157,13 +159,15 @@ The **non-destructive** path: it appends a comment to the item and writes nothin
 ```text
 ISSUE WRITTEN:
 ├── Mode:     [Created | Updated | Commented | Comment warned — manual link needed]
-├── Type:     [story | task | epic | initiative]
+├── Type:     [story | task | epic | initiative | n-a (comment mode)]
 ├── ID:       [issue identifier — e.g., #42]
 ├── PM Tool:  [adopted tool name]
-├── Template: [template file used]
-├── Parent:   [parent issue ID or "none"]
+├── Template: [template file used | n-a (comment mode)]
+├── Parent:   [parent issue ID | "none" | n-a (comment mode)]
 └── Status:   [Success | HALT — reason]
 ```
+
+In **comment mode** the three `n-a (comment mode)` values are the specified rendering, not an omission: no `$type` is taken, no template is resolved and no hierarchy is touched, so there is nothing to report on those rows (`Status: Success` on a posted comment, or the warning text from Step 7c.2).
 
 **Return value**: The issue identifier (e.g., `#42`) — used by composing skills in chain operations.
 

@@ -560,6 +560,9 @@ This is the mechanism `/pair-capability-write-issue $mode: comment` resolves for
 2. **Never a status write.** Board state on filesystem is the item's **directory** (see Status Management via File Location) — an activity entry never moves or renames the file.
 3. **Not idempotent by itself.** The bullet carries no id, so re-running appends a second one: a caller that can re-run (e.g. `/pair-capability-publish-pr`'s back-link) greps the section for the value first and skips when present.
 4. **Distinct from `Implementation Progress`**, which is the author's own dated work log; `## Activity Log` holds cross-links and annotations written _by tooling_.
+5. **Reading it is a grep of this section**, not an API call: a caller checking "does a comment with this URL already exist?" (e.g. `/pair-capability-publish-pr`'s back-link check) greps `## Activity Log` in the item file.
+6. **It survives later body renders through the caller's contract.** `$mode: write` is a **full-body overwrite**, so a skill that re-renders an item (`/pair-process-plan-tasks`, a re-refinement) must pass the already-merged full body — which includes the existing `## Activity Log`. Read → merge → write; a render that drops the section is a caller bug, not a property of this mechanism.
+7. **The item `$id` is the file stem** (`01-01-001`), never a path: the file moves between the status directories as its state changes, so a caller resolves the item by **glob across them** (`**/01-01-001*.md`). That stem is also what the PR's `Refs:` line carries (see the [cross-linking convention](../../technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md)).
 
 ## Best Practices
 

@@ -1,7 +1,7 @@
 ---
 name: pair-process-implement
 description: "Implements a refined user story task-by-task, via a 5-step cycle per task (context, branch, implementation, quality, commit). At the closing phase it writes a checkpoint and publishes the PR through a handoff-only subagent (clean context), resuming from the checkpoint when re-invoked on an interrupted story. Composes /pair-capability-verify-quality, /pair-capability-record-decision, /pair-capability-checkpoint, /pair-capability-publish-pr."
-version: 0.5.1
+version: 0.6.0
 author: Foomakers
 ---
 

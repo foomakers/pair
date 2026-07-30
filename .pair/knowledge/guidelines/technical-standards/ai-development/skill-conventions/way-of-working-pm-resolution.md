@@ -35,7 +35,7 @@ The **code host** is the tool that owns repositories, branches, pull requests an
 2. **Skip**: If `code-host` is **absent and the PM tool hosts code** (first family above) **⇒ the code host is the PM tool**. This is the zero-configuration default, not a degradation: a single-tool project behaves exactly as it did before the field existed, and nothing needs to be declared.
 3. **Act**: If `code-host` is **absent and the PM tool hosts no code** (Linear, Jira, `filesystem`), there is nothing to fall back to: **HALT before any code-host operation** with a setup pointer —
 
-   > `<pm-tool>` hosts no repositories or pull requests. Declare `code-host` in `way-of-working.md` → `## Git Workflow` (see the schema in that file), or re-run `/pair-capability-setup-pm`.
+   > `<pm-tool>` hosts no repositories or pull requests. Declare `code-host` in `way-of-working.md` → `## Git Workflow` (schema: the **Code-host resolution** section of this convention — `.pair/adoption/` is user-owned, so an adoption that predates the field does not carry it), or re-run `/pair-capability-setup-pm`, which backfills the section.
 
    PM-side operations (issue writes, state transitions) are unaffected and keep working — only branch/PR/review work is blocked.
 
@@ -83,7 +83,16 @@ When PM tool and code host differ, the link between an item and its PR is **text
 1. **Item → PR direction**: the PR body carries `Refs: <issue-id>` — the PM tool's own item identifier (e.g. `Refs: ENG-412`), written by `/pair-capability-publish-pr` from the story it was handed. The token is written **plain, at the start of its own line** — never bolded or otherwise decorated — because the consumers read it back by matching that literal. The PR template's conditional `Refs:` slot is the canonical rendering (resolved override-first, as every template is).
 2. **PR → item direction**: the PR URL is posted **back on the PM item as a comment** (or a link/URL field when the tool has one), completing the bidirectional link. `/pair-capability-publish-pr` does this right after the PR exists, through `/pair-capability-write-issue $mode: comment` — the **non-destructive** path: one comment, no template render, no body write, so the item's AC/DoD/task breakdown is untouched. Where `/pair-capability-write-issue` isn't installed, the same comment goes through the PM tool's implementation guide directly — each supported guide documents its own mechanism (Linear `commentCreate`, `gh issue comment`, the Azure DevOps work-item comments endpoint, the `filesystem` item file's `## Activity Log` append). A back-link is **never** written as a body update. Because a comment has no identifier, posting it is **not** self-deduplicating: the writer **checks for an existing comment carrying this PR URL first** and skips when it is already there, so a re-publish (fix round, HALT recovery) never accretes a second one.
 3. **Item id not found** on the PM tool when linking back (or the PM tool errors): the **PR is still created** (it is already valid work) — surface a warning with the manual-link instruction rather than failing the publish. The back-link path therefore **warns, it never HALTs**; comment mode is specified with that exception so the non-blocking behavior survives the composition.
-4. `<issue-id>` is whatever the PM tool calls its item (`#412` on GitHub, `ENG-412` on Linear, `PROJ-412` on Jira). Skills copy the id verbatim; they never reformat it.
+4. `<issue-id>` is whatever the PM tool calls its item:
+
+   | PM tool      | `<issue-id>`                     | Resolution                                                                 |
+   | ------------ | -------------------------------- | -------------------------------------------------------------------------- |
+   | GitHub       | `#412`                           | the issue number                                                            |
+   | Linear       | `ENG-412`                        | the issue `identifier`                                                      |
+   | Jira         | `PROJ-412`                       | the issue key                                                               |
+   | `filesystem` | the item file's **stem** (`01-01-001`) | the file name without `.md` and without its status directory — the id must survive the file MOVING between `not-started/`, `in-progress/`, … , so resolve it by **glob across the status directories** (`**/01-01-001*.md`), never by path |
+
+   `filesystem` is the tracker where this slot is **always** required (it hosts no code, so the split is mandatory), and it is also the one whose item has no native id — hence the stem rule above, which is what `/pair-capability-write-issue $mode: comment $id: …` resolves to locate the item file's `## Activity Log`. Skills copy the id verbatim; they never reformat it.
 
 ## What stays in the skill (the delta)
 

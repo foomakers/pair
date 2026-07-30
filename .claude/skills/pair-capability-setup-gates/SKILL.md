@@ -1,13 +1,15 @@
 ---
 name: pair-capability-setup-gates
 description: "Configures CI/CD quality gates — pipeline config, shared lint/format packages, husky hooks, the required deterministic secret-scanning job (gitleaks by default, R6.5/D24) — for the adopted tech stack. Invoke directly to set up or reconfigure gates; idempotent — confirms existing configuration rather than re-configuring."
-version: 0.5.0
+version: 0.5.1
 author: Foomakers
 ---
 
 # /pair-capability-setup-gates — Quality Gate Configuration
 
 Configure CI/CD quality gates for the project. Reads quality assurance guidelines and the adopted tech stack to produce appropriate pipeline configuration. Writes gate configuration to [way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) and CI/CD pipeline files.
+
+**Which side these operations are on** (routing table: *PR labels/tags and required checks* ⇒ `code-host`): the pipeline files, shared configs and hooks are **repo** files and the required-check registration that gates a merge is a **code-host** operation — never the PM tool, even when the two are the same product. This skill never writes to the PM tool. Resolution and routing live in one place: [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
 
 ## Arguments
 

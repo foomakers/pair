@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync, existsSync } from 'fs'
-import { join } from 'path'
+import { readFileSync, existsSync, readdirSync } from 'fs'
+import { join, relative } from 'path'
 
 // Story #236 — code host separate from PM tool (WoW override), GitHub + Linear
 // reference case. Four invariants, all content invariants on the source-of-record
@@ -35,6 +35,18 @@ const WOW_TEMPLATE = '.pair/adoption/tech/way-of-working.md'
 const read = (root: string, rel: string): string => readFileSync(join(root, rel), 'utf-8')
 const dataset = (rel: string): string => read(DATASET, rel)
 const datasetSkill = (rel: string): string => dataset(`.skills/${rel}`)
+
+/** Every markdown file of every skill in the dataset, as `.skills/`-relative paths. */
+const allSkillDocs = (): string[] => {
+  const root = join(DATASET, '.skills')
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
+      const abs = join(dir, entry.name)
+      if (entry.isDirectory()) return walk(abs)
+      return entry.isFile() && entry.name.endsWith('.md') ? [relative(root, abs)] : []
+    })
+  return walk(root).sort()
+}
 
 describe('code-host / PM-tool split — WoW schema (#236, AC1)', () => {
   const wow = dataset(WOW_TEMPLATE)
@@ -134,23 +146,54 @@ describe('code-host / PM-tool split — no skill assumes the two coincide (#236,
     ['capability/verify-done/SKILL.md', 'pair-capability-verify-done'],
     ['process/implement/SKILL.md', 'pair-process-implement'],
     ['next/SKILL.md', 'pair-next'],
+    // Named in the routing table's "required checks (CI gate)" row, so it is audited
+    // like every other consumer the table cites.
+    ['capability/setup-gates/SKILL.md', 'pair-capability-setup-gates'],
   ]
 
-  // The conflation the audit exists to kill: reading/writing a PR "from the PM tool".
-  // `PR` is matched CASE-SENSITIVELY and word-bounded on purpose: a /i flag makes the
-  // `PR` alternative hit the letters "pr" inside ordinary words (provided, prepend,
+  // The conflation the audit exists to kill: treating a PR as something the PM tool
+  // owns. Two shapes, because the sentence can run either way:
+  //   PR-first    — "read the PR body from/on/to/in/using the PM tool"
+  //   PM-first    — "the PM tool's PR", "the PM tool's pull requests"
+  // `PR`/`PRs` is matched CASE-SENSITIVELY and word-bounded on purpose: a /i flag makes
+  // the `PR` alternative hit the letters "pr" inside ordinary words (provided, prepend,
   // approved, process), which turned the audit into a distance-from-a-random-word
   // check — one that happened to pass by a single character. Only the spelled-out
   // "pull request" is case-insensitive (sentence-initial "Pull request").
-  const PR_FROM_PM_TOOL = /\b(PR|[Pp]ull [Rr]equest)\b[^.\n]{0,60}\b(from|on|to|using) the PM tool/
+  // The gap between the two halves is TEMPERED against `code host`: a contrastive
+  // sentence that routes both sides explicitly ("the PR on the code host, the state on
+  // the PM tool") is correct, and widening the verb set to `on`/`in` would otherwise
+  // flag it. Only an unrouted gap counts as a conflation.
+  const PR_TOKEN = String.raw`\b(PRs?|[Pp]ull [Rr]equests?)\b`
+  const PR_FROM_PM_TOOL = new RegExp(
+    `${PR_TOKEN}(?:(?!code[- ]host)[^.\\n]){0,60}\\b(from|on|to|in|using) the PM tool`,
+  )
+  // The possessive half is deliberately TIGHT — the PR token must be the head of the
+  // possessive phrase ("the PM tool's PR", "the PM tool's own pull requests"), with at
+  // most a couple of adjectives and no punctuation in between. A loose gap here matches
+  // legitimate contrastive prose ("issues are the PM tool's side, unlike the PR reads").
+  const PM_TOOL_OWNS_PR = new RegExp(String.raw`the PM tool'?s(?: [a-z-]+){0,2} ${PR_TOKEN}`)
+  const conflates = (content: string): boolean =>
+    PR_FROM_PM_TOOL.test(content) || PM_TOOL_OWNS_PR.test(content)
 
   for (const [rel] of PR_SIDE) {
     it(`${rel} routes PR/review operations to the code host (never "the PM tool")`, () => {
       const content = datasetSkill(rel)
       expect(content).toMatch(/code host|code-host/i)
-      expect(content).not.toMatch(PR_FROM_PM_TOOL)
+      expect(conflates(content), rel).toBe(false)
     })
   }
+
+  // AC4 reads "given the FULL skill catalog, no skill assumes the two coincide" — so the
+  // negative half runs over every skill doc in the dataset, not only the hand-maintained
+  // PR_SIDE list above (which stays as the *positive* evidence set). A skill added
+  // tomorrow is audited without touching this file.
+  it('AC4 — no skill doc in the catalog conflates a PR with the PM tool (full-catalog grep)', () => {
+    const docs = allSkillDocs()
+    expect(docs.length).toBeGreaterThan(40) // sanity: the walk actually found the corpus
+    const offenders = docs.filter(rel => conflates(datasetSkill(rel)))
+    expect(offenders).toEqual([])
+  })
 
   it('the negative audit pattern is not satisfied by "pr" inside ordinary words', () => {
     // Regression guard for the pattern itself: the old /i version matched these.
@@ -158,9 +201,19 @@ describe('code-host / PM-tool split — no skill assumes the two coincide (#236,
       PR_FROM_PM_TOOL,
     )
     expect('the process reads the labels from the PM tool').not.toMatch(PR_FROM_PM_TOOL)
-    // ...while the real conflation still fails the audit.
-    expect('read the PR body from the PM tool').toMatch(PR_FROM_PM_TOOL)
-    expect('Pull request labels are read on the PM tool').toMatch(PR_FROM_PM_TOOL)
+    // ...while the real conflation still fails the audit, in every shape it takes.
+    expect(conflates('read the PR body from the PM tool')).toBe(true)
+    expect(conflates('Pull request labels are read on the PM tool')).toBe(true)
+    expect(conflates('list open PRs from the PM tool')).toBe(true)
+    expect(conflates('the pull request is created in the PM tool')).toBe(true)
+    expect(conflates("approve the PM tool's PR")).toBe(true)
+    expect(conflates("the PM tool's pull requests carry the tier")).toBe(true)
+    // ...and correctly routed / merely contrastive sentences still pass.
+    expect(conflates('create the PR on the code host; write the state on the PM tool')).toBe(false)
+    expect(conflates("issues are the PM tool's side, unlike the PR reads in Step 3")).toBe(false)
+    expect(
+      conflates('$id: <issue-id> (the PM tool\'s own item id) and $comment: "PR: <url>"'),
+    ).toBe(false)
   })
 
   it('publish-pr reads the Git Workflow adoption section (not a "#236 is pending" note)', () => {
@@ -187,6 +240,18 @@ describe('code-host / PM-tool split — no skill assumes the two coincide (#236,
     expect(content).toMatch(/PR[^\n]*⇒[^\n]*code host|card[^\n]*⇒[^\n]*PM tool/i)
     // The old conflation: a label-API failure attributed to the PM tool only.
     expect(content).not.toMatch(/PM tool lacks label-API access/i)
+  })
+
+  it('classify routes its READ side too: the refinement floor is a PM-tool read, id from Refs:', () => {
+    const content = datasetSkill('capability/classify/SKILL.md')
+    const step = content.slice(content.indexOf('3. **Act** (review only, never-lower)'))
+    const point = step.slice(0, step.indexOf('\n4.'))
+    // The never-lower floor comes from the ITEM — the opposite side from the Step 4 PR write.
+    expect(point).toMatch(/item read[^\n]*⇒[^\n]*`?pm-tool`?|story body[\s\S]{0,120}pm-tool/i)
+    // ...and on a split project the id is resolved from the PR's cross-link, so the
+    // standalone `$target: <PR>` entry point can still reach the story (D17).
+    expect(point).toContain('Refs:')
+    expect(point).toMatch(/split|differ/i)
   })
 
   it('verify-done marks its PR reads (tier + approvals) as code-host reads', () => {
@@ -263,12 +328,23 @@ describe('code-host / PM-tool split — the back-link is executable, not destruc
 
   it('the back-link step is idempotent: publish-pr checks for an existing comment before posting', () => {
     const content = datasetSkill('capability/publish-pr/SKILL.md')
-    const step = content.slice(content.indexOf('5. **Check — back-link'))
+    const step = content.slice(content.indexOf('5. **Check — does a back-link apply'))
     // Check→Skip, like every other step in the phase — not Act-only.
     expect(step).toMatch(/^5\.\s+\*\*Check/)
-    expect(step.slice(0, 1200)).toMatch(/\*\*Skip\*\*[\s\S]{0,200}(already|not post again)/i)
+    expect(step.slice(0, 2400)).toMatch(/\*\*Skip\*\*[\s\S]{0,200}(already|not post again)/i)
     // And the reason it has to live here rather than in write-issue.
-    expect(step.slice(0, 1200)).toMatch(/cannot dedupe|no id|has no id/i)
+    expect(step.slice(0, 2400)).toMatch(/cannot dedupe|no id|has no id/i)
+  })
+
+  it('AC1 — the single-tool skip is hoisted ABOVE the PM-item comment read (no new read by default)', () => {
+    const content = datasetSkill('capability/publish-pr/SKILL.md')
+    const step = content
+      .slice(content.indexOf('5. **Check — does a back-link apply'))
+      .slice(0, 2400)
+    const skipAt = step.search(/skip this entire step/i)
+    const readAt = step.search(/Read the PM item's existing comments/)
+    expect(skipAt).toBeGreaterThanOrEqual(0)
+    expect(readAt).toBeGreaterThan(skipAt)
   })
 
   it('write-issue scopes its idempotency claim to write mode (a comment has no id to dedupe on)', () => {

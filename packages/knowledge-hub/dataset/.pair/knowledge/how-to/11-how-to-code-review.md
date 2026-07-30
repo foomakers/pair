@@ -70,7 +70,7 @@ Follow [project management tool guidelines](../guidelines/collaboration/project-
 
 **HALT ALL WORK** if this phase is not successfully completed.
 
-1. **Set PR status** to "pending" in GitHub
+1. **Set PR status** to "pending" on the code host (a PR write routes to `code-host`; absent ⇒ the same tool as the PM tool)
 2. **Load PR** from the code host — details, changes, metadata, files changed (a PR read routes to `code-host`; absent ⇒ the same tool as the PM tool)
 3. **Load story context** — acceptance criteria, task completion claims, business context
 4. **Classify review type** — feature, bug, refactor, docs, or config

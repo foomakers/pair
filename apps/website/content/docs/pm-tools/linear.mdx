@@ -63,7 +63,7 @@ Task                →   Checklist item in story issue body
 |------------|--------------|------------------|
 | Start implementing a story | Issue status → "In Progress" | Feature branch created |
 | Complete a task | Checkbox marked in issue description | Commit on the branch |
-| Create PR | PR URL commented on the issue; status → "In Review" | PR opened with `Refs: <issue-id>` |
+| Create PR | PR URL commented on the issue; status → "In Review" _(only if the team has an In Review state — Linear's default teams don't, and skills report the gap instead of guessing)_ | PR opened with `Refs: <issue-id>` |
 | Review | _(nothing — review state is never mirrored)_ | Review submitted; merge gated here |
 | Merge PR | Issue status → "Done" | PR merged, branch deleted |
 | All stories in epic done | Parent issue status → "Done" | — |

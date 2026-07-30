@@ -38,7 +38,7 @@ Complete guide for implementing Linear as your project management tool, includin
 
    All calls are `POST https://api.linear.app/graphql` with the key in an `Authorization` header.
 
-   **Keep the key out of `ps` and shell history.** Passing it inline (`-H "Authorization: $LINEAR_API_KEY"`) puts a full read/write workspace token in the process argument list — readable by any other user on the host via `ps aux` — and in your shell history. Read it from a mode-0600 header file instead (curl also accepts `--netrc`), and wrap endpoint + headers in one helper that every example below reuses:
+   **Keep the key out of `ps` and shell history.** Passing it inline (`-H "Authorization: $LINEAR_API_KEY"`) puts a full read/write workspace token in the process argument list — readable by any other user on the host via `ps aux` — and in your shell history. Read it from a mode-0600 header file instead, and wrap endpoint + headers in one helper that every example below reuses:
 
    ```bash
    # subshell, so the caller's umask is not left at 077 for the rest of the session
@@ -52,11 +52,27 @@ Complete guide for implementing Linear as your project management tool, includin
        -d "$1"
    }
 
-   # delete it when done — it is a plaintext long-lived token, not a session secret
-   rm -f "$HOME/.linear-headers"
+   # cleanup helper — DEFINED here, CALLED when you are finished (see the note below)
+   linear_gql_cleanup() { rm -f "$HOME/.linear-headers"; }
    ```
 
-   Three caveats on that file, because it trades an argv exposure for an at-rest one: `curl -H @file` needs **curl ≥ 7.55** (`curl --version`; on older curl use `--netrc` with a `machine api.linear.app` entry instead); `$HOME` is frequently cloud-synced or backed up, so prefer a keychain read (`security find-generic-password -w …` / `secret-tool lookup …`) piped into the header file when that is true of your machine; and **rotate the key** in Linear (Settings → Account → Security & access) on any suspicion — a personal API key carries your full workspace read/write scope.
+   **Delete the header file when you're finished, not here.** Every snippet in this guide goes through `linear_gql`, so removing the file inside the setup block makes the very next call — starting with **Verify access** below — fail with a curl file-read error. Run `linear_gql_cleanup` at the end of the session: this is a plaintext long-lived token, not a session secret.
+
+   Three caveats on that file, because it trades an argv exposure for an at-rest one:
+
+   - `curl -H @file` needs **curl ≥ 7.55** (`curl --version`). On older curl, carry the header through a **config file on stdin** — `-K -` predates the `@file` header syntax and keeps the key off both argv and disk:
+
+     ```bash
+     linear_gql() {
+       printf 'url = "https://api.linear.app/graphql"\nheader = "Authorization: %s"\nheader = "Content-Type: application/json"\n' \
+         "$LINEAR_API_KEY" | curl -s -K - -d "$1"
+     }
+     ```
+
+     Do **not** use `--netrc`: it makes curl send `Authorization: Basic base64(user:password)`, while Linear requires the raw, non-`Bearer` key (Troubleshooting's first entry is exactly that failure).
+
+   - `$HOME` is frequently cloud-synced or backed up, so prefer a keychain read (`security find-generic-password -w …` / `secret-tool lookup …`) piped into the header file when that is true of your machine.
+   - **Rotate the key** in Linear (Settings → Account → Security & access) on any suspicion — a personal API key carries your full workspace read/write scope.
 
 1. **Verify access**
 

@@ -14,8 +14,7 @@
 
 ## Git Workflow
 
-- `code-host`: `github` — the **same product as `pm-tool`** (`github-projects`): per the resolution convention's canonical alias list, `github` ≡ `github-projects`, so this resolves through the identifier-equality rule (not through this sentence) exactly as if the key were omitted — single-tool, no dual-write, no cross-link comment — and skills route every PR/review operation to GitHub. Declared explicitly only for readability; a split setup (e.g. Linear for the backlog + GitHub for the code) is what makes the key load-bearing. See [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
-- `base-branch`: `main` — the branch PRs target and feature branches are cut from.
+**Nothing declared here — both keys are at their defaults**, and `.pair/adoption/` is delta-only (D21, ADR-018): a key belongs in this section only when it differs from the default. `code-host` omitted ⇒ the code host **is** the PM tool (GitHub Projects hosts the repo), so this is the zero-configuration single-tool path — no dual-write, no cross-link comment, every PR/review operation on GitHub; `base-branch` omitted ⇒ `main`. A split setup (e.g. Linear for the backlog + GitHub for the code) is what makes `code-host` load-bearing. Schema and resolution rule: [way-of-working / PM-tool + code-host resolution](../../knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
 
 ## State Mapping
 
