@@ -375,12 +375,53 @@ test('#373 resume with NO prior log: round-0 is a FRESH first review (posted), n
   assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'clean fresh review on resume → no synthesis (cycleHasRemediation stayed false)')
 })
 
-test('#373 fresh story: no continuation probe runs (fresh path unchanged, AC6)', async () => {
+// This assertion was INVERTED on purpose. It previously required that no probe run
+// on a fresh story — the cost saving that gated the probe on `resuming`, i.e. on the
+// caller having passed `prNumber`. That gate is what let a `resumeFromRunId` resume
+// (same args, cached implement/PR agents, so `story.prNumber` absent) skip the probe
+// and post a SECOND and THIRD first review on a PR that already had one. The guard
+// must not depend on the caller's bookkeeping, so the probe now runs whenever the PR
+// exists. What the test's real intent — "fresh path unchanged" — protects is the
+// OUTCOME, and that is asserted below: on a fresh story the first review is still
+// POSTED, never silenced.
+test('fresh story: the probe runs (guard independent of caller bookkeeping) and the first review still POSTS', async () => {
   const { calls } = await runWorkflow({
     args: { stories: [STORY] },
     dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
   })
-  assert.ok(!calls.some(c => c.opts.label?.startsWith('probe:')), 'no existence-probe on a fresh (non-resume) story')
+  assert.ok(
+    calls.some(c => c.opts.label?.startsWith('probe:')),
+    'the probe runs on every story with a PR — not only when the caller passed prNumber',
+  )
+  // Fresh path outcome unchanged: both signals come back false (no log, no marker),
+  // so round-0 is a POSTED first review, not a silent one.
+  const review = calls.find(c => c.opts.agentType === 'reviewer')
+  assert.ok(review, 'a review round ran')
+  assert.match(
+    review.prompt,
+    /post/i,
+    'round-0 on a fresh story still posts the first review (the probe must not silence it)',
+  )
+})
+
+test('the probe cannot silence a fresh first review even if it returns garbage', async () => {
+  // Fail-open direction, pinned: a malformed probe return must leave both signals
+  // false so the review is POSTED (visible) rather than suppressed (silent). This is
+  // the property that makes running the probe unconditionally safe.
+  const { calls } = await runWorkflow({
+    args: { stories: [STORY] },
+    dispatch: (prompt, opts) => {
+      if (opts.agentType === 'contract-generator')
+        return { status: 'cache-hit', contract: validContract() }
+      if (opts.label?.startsWith('probe:')) return { nonsense: true }
+      if (opts.agentType === 'reviewer') return { verdict: 'Approved', findings: [] }
+      if (opts.phase === 'Implement') return { gatesPassed: true, branch: 'b' }
+      if (opts.phase === 'PR') return { prNumber: 7 }
+      return { fixed: true }
+    },
+  })
+  const review = calls.find(c => c.opts.agentType === 'reviewer')
+  assert.match(review.prompt, /post/i, 'a garbage probe return must not silence the first review')
 })
 
 test('#373 escalate documents the manual out-of-band convention (funnel into the same log; next run synthesizes) — AC4', async () => {
@@ -560,4 +601,79 @@ test('#373 escalate ON A CONTINUATION: resume + existing log + never-converging 
   assert.ok(flush.prompt.includes('Do NOT delete the log'), 'the continuation anchor log is kept')
   assert.ok(/minimize|supersede/i.test(flush.prompt), 'a new escalate-flush supersedes/minimizes the prior one (finding 2)')
   assert.ok(!calls.some(c => c.opts.label?.startsWith('synth:')), 'no synthesis on escalation')
+})
+
+// ── Input contract: a batch that drives nothing must FAIL, not report success ──
+// Regression origin: the workflow was invoked with `args: "#234 #236 #281 …"` — the
+// shape its own invocation line suggested. `JSON.parse` threw, the catch coerced the
+// input to `undefined`, `STORIES` fell back to `[]`, and the run exited in ~30ms with
+// `{ batch: [], note: 'PRs are ready-for-merge or escalated…' }`. Nothing ran, and the
+// result was shaped exactly like a successful batch.
+
+async function expectThrow({ args }) {
+  try {
+    await runWorkflow({ args, dispatch: stdDispatch() })
+  } catch (e) {
+    return e.message
+  }
+  throw new Error('expected the workflow to throw on invalid args, but it resolved')
+}
+
+test('args as a bare list of issue refs THROWS (the silent-no-op regression) and names the required shape', async () => {
+  const msg = await expectThrow({ args: '#234 #236 #281' })
+  assert.match(msg, /not JSON/i)
+  // The message must be actionable: say what to pass, and why ids alone cannot work.
+  assert.match(msg, /id, title, branch|\{ id, title, branch \}/)
+  assert.match(msg, /worktree add/, 'explains why branch is required')
+  assert.match(msg, /"stories"/, 'shows the literal shape to pass')
+})
+
+test('args missing entirely THROWS and says nothing was run', async () => {
+  const msg = await expectThrow({ args: undefined })
+  assert.match(msg, /must be \{ stories: \[\.\.\.\] \}/)
+  assert.match(msg, /Nothing was run/i)
+})
+
+test('args object without a stories array THROWS (not treated as an empty batch)', async () => {
+  const msg = await expectThrow({ args: { batch: [{ id: '1' }] } })
+  assert.match(msg, /must be \{ stories/)
+})
+
+test('a story missing branch (or title) THROWS, naming the story and the missing keys', async () => {
+  const msg = await expectThrow({ args: { stories: [{ id: '234', title: 'x' }] } })
+  assert.match(msg, /#234/)
+  assert.match(msg, /missing branch/)
+  assert.match(msg, /undefined/, 'explains the consequence: it would reach a shell command')
+})
+
+test('an EXPLICIT empty list stays a legal no-op — a computed "nothing to do" is not an error', async () => {
+  const { result, calls } = await runWorkflow({ args: { stories: [] }, dispatch: stdDispatch() })
+  assert.equal(calls.length, 0)
+  assert.deepEqual(result.batch, [])
+})
+
+test('a bare array of stories is accepted (unambiguous) and drives the batch', async () => {
+  const { result } = await runWorkflow({
+    args: [{ id: '234', title: 't', branch: 'b' }],
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  assert.equal(result.batch.length, 1)
+})
+
+test('a JSON string is still accepted (the documented escape hatch keeps working)', async () => {
+  const { result } = await runWorkflow({
+    args: JSON.stringify({ stories: [{ id: '234', title: 't', branch: 'b' }] }),
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  assert.equal(result.batch.length, 1)
+})
+
+test('a leading # on the id is normalized away (worktree paths and markers never carry it)', async () => {
+  const { calls } = await runWorkflow({
+    args: { stories: [{ id: '#234', title: 't', branch: 'b' }] },
+    dispatch: stdDispatch({ contractResult: { status: 'cache-hit', contract: validContract() } }),
+  })
+  const impl = calls.find(c => c.opts.phase === 'Implement')
+  assert.match(impl.prompt, /pair-worktrees\/234\b/, 'worktree path uses the bare id')
+  assert.ok(!/pair-worktrees\/#/.test(impl.prompt), 'no stray # in a shell path')
 })

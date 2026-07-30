@@ -2,6 +2,15 @@ export const meta = {
   name: 'implement-batch',
   description:
     'Drive a mutex-safe batch of ready Pair stories, each to a review-approved PR (implement -> PR -> independent review <-> fix loop). Stops at PR-ready; NEVER merges (human gate).',
+  whenToUse:
+    'REQUIRED args shape: {"stories":[{"id":"234","title":"...","branch":"feature/US-234-..."}]} — ' +
+    'a bare list of issue refs ("#234 #236") is NOT accepted and the run throws: title feeds the ' +
+    'prompts and branch feeds `git worktree add`, and the sandbox has no gh/filesystem access to ' +
+    'derive them. Optional per story: notes (scope directive) and prNumber (re-enter the review ' +
+    'loop on an existing PR). Pre-filter for mutex safety — no two stories may touch the same ' +
+    'shared skill/file. A dependency must be MERGED, not just PR-ready, before its dependent ' +
+    'enters a batch. Prefer ONE long run over pause/resume cycles: each stop kills the agents and ' +
+    'loses the in-worktree review log.',
   phases: [
     { title: 'Contracts', model: 'haiku' },
     { title: 'Implement', model: 'opus' },
@@ -35,21 +44,66 @@ export const meta = {
 // Chains advance ACROSS runs: after you merge these PRs, re-run with the next
 // batch (the now-unblocked heads). A story's dependency must be MERGED, not
 // just PR-ready, before its dependent enters a batch.
-let _args = args
-if (typeof _args === 'string') {
-  try {
-    _args = JSON.parse(_args)
-  } catch {
-    _args = undefined
-  }
-}
 // Each story: { id, title, branch }. Add { prNumber } to RESUME an existing PR
 // mid-review — implement+PR are skipped and the story re-enters the review<->fix
 // loop directly (drives remaining findings, incl. minor, to zero).
 // Optional { notes } = a scope directive threaded into the implement+PR prompts
 // (overrides the issue body on conflict), e.g. "resolve all findings in ONE PR,
 // do not split".
-const STORIES = _args?.stories ?? []
+//
+// #401: the input is validated LOUDLY. The previous version coerced an unparseable
+// string to `undefined` and fell through to `STORIES = []`, so a caller who
+// passed a bare list of refs (`args: "#234 #236"`) got a run that spawned ZERO
+// agents, exited in ~30ms and returned the SUCCESS-shaped
+// `{ batch: [], note: 'PRs are ready-for-merge or escalated…' }` — a silent
+// no-op reported as a completed batch, indistinguishable from a real run whose
+// stories all failed. An orchestrator asked to drive stories and driving none
+// must fail, not report success. An EXPLICIT empty list stays a legal no-op:
+// a caller that computed "nothing to do" is not making a mistake.
+function parseBatchArgs(raw) {
+  let a = raw
+  if (typeof a === 'string') {
+    const t = a.trim()
+    try {
+      a = JSON.parse(t)
+    } catch {
+      throw new Error(
+        `implement-batch: \`args\` is a string that is not JSON: ${JSON.stringify(t.slice(0, 60))}. ` +
+          `A bare list of issue refs is NOT a valid batch — each story needs { id, title, branch }: ` +
+          `title goes into the implement/PR prompts and branch into \`git worktree add\`, and this ` +
+          `sandbox has no gh/filesystem access to derive either. Pass, verbatim: ` +
+          `{"stories":[{"id":"234","title":"PR state flow…","branch":"feature/US-234-pr-state-flow"}]}`,
+      )
+    }
+  }
+  // A bare array is unambiguous — read it as the story list.
+  if (Array.isArray(a)) a = { stories: a }
+  if (!a || typeof a !== 'object' || !Array.isArray(a.stories))
+    throw new Error(
+      `implement-batch: \`args\` must be { stories: [...] } (or a bare array of stories). Received: ` +
+        `${a === undefined || a === null ? String(a) : JSON.stringify(a).slice(0, 80)}. ` +
+        `Nothing was run — this is an input error, not an empty batch.`,
+    )
+  const stories = a.stories.map((s, i) => {
+    if (!s || typeof s !== 'object' || Array.isArray(s))
+      throw new Error(`implement-batch: stories[${i}] is not an object: ${JSON.stringify(s)}.`)
+    // `#234` and `234` name the same story; normalize once so no prompt, worktree
+    // path or marker ever carries a stray `#`.
+    const id = String(s.id ?? '').trim().replace(/^#/, '')
+    const missing = ['id', 'title', 'branch'].filter(
+      k => !String((k === 'id' ? id : s[k]) ?? '').trim(),
+    )
+    if (missing.length)
+      throw new Error(
+        `implement-batch: stories[${i}]${id ? ` (#${id})` : ''} is missing ${missing.join(', ')}. ` +
+          `All three are required — id + title feed the prompts, branch feeds \`git worktree add\`; ` +
+          `an absent one would reach a shell command as \`undefined\`.`,
+      )
+    return { ...s, id }
+  })
+  return stories
+}
+const STORIES = parseBatchArgs(args)
 const MAX_FIX_ROUNDS = 2
 
 // ── Schemas (orchestration return-value contracts) ─────────────────────────
@@ -367,7 +421,21 @@ async function driveStory(story) {
   // (so we never post a second one even if the untracked log is gone — findings 1 & 3).
   let isContinuation = false
   let firstReviewPosted = false
-  if (resuming) {
+  // #401: the probe used to be gated on `resuming`, i.e. on the CALLER having passed
+  // `prNumber` in the story object. That made the duplicate-first-review guard
+  // depend on the caller's bookkeeping, and a `Workflow({resumeFromRunId})` resume
+  // replays the implement/PR agents from cache with the SAME args — so
+  // `story.prNumber` is absent, `resuming` is false, the probe never runs,
+  // `firstReviewPosted` stays false, and round-0 posts ANOTHER first review on a PR
+  // that already carries one. Observed three times on a single story across three
+  // pause/resume cycles: that story was re-reviewed from scratch each time instead of
+  // advancing through its fix rounds, and ended up the least-progressed of its batch.
+  // The gate is now the PR's existence — a fact the script knows — instead of an
+  // argument the caller must remember. One cheap sonnet/low probe per story per run
+  // costs far less than one duplicated opus/xhigh review round, and on a genuinely
+  // fresh story both signals come back false, leaving the fresh path's behaviour
+  // identical (the first review still posts).
+  if (pr?.prNumber) {
     const probe = await agent(
       `Story ${tag}: read-only CONTINUATION PROBE (no review, no edits). ${wtClause(story)} Report TWO booleans: (1) \`logExists\` — is the review working log \`${reviewLog}\` present in the worktree? (2) \`firstReviewPosted\` — does PR #${pr.prNumber} ALREADY carry the first-review comment? Match it DETERMINISTICALLY, not by judgment: fetch the PR comments via \`gh\` and report whether ANY comment's raw body contains the EXACT marker substring \`${firstReviewMarker}\` (the first review always emits this hidden marker verbatim; a minimized/outdated comment still counts — its raw body still contains the marker). Do NOT infer from a comment's structure or tone — it is a plain substring match. Return { logExists, firstReviewPosted }. Do NOT create, modify, or delete the log, do NOT post or minimize any comment, and do NOT run the review — this is a cheap probe to decide whether an in-flight review cycle is being CONTINUED and whether a first review was already posted.`,
       { agentType: 'implementer', phase: 'Review', label: `probe:${tag}`, model: 'sonnet', effort: 'low', schema: PROBE_SCHEMA },
