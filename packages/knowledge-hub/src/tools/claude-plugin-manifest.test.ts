@@ -16,6 +16,7 @@ import {
   ROOT_PLUGIN_COMPONENT_PATHS,
   SCHEMA_COMPONENT_KEYS,
   ALLOWED_PLUGIN_MANIFEST_KEYS,
+  ALLOWED_MARKETPLACE_MANIFEST_KEYS,
   ALLOWED_MARKETPLACE_ENTRY_KEYS,
 } from './claude-plugin-manifest'
 
@@ -73,8 +74,14 @@ describe('.claude-plugin marketplace + plugin manifests (real repo)', () => {
     expect(() => assertDeclaredSkillsResolve(declared, hasSkillMd)).not.toThrow()
   })
 
-  it('distributes skills only — allowlisted keys in both manifests', () => {
+  it('distributes skills only — allowlisted keys on all three hand-edited surfaces', () => {
     expect(() => assertSkillsOnlyDistribution('.claude-plugin/plugin.json', plugin)).not.toThrow()
+    // The marketplace manifest's OWN top level is a third surface, with its own
+    // behaviour-bearing keys (forceRemoveDeletedPlugins, allowCrossMarketplaceDependenciesOn,
+    // metadata.pluginRoot) that neither of the other two allowlists would ever see.
+    expect(() =>
+      assertSkillsOnlyDistribution('.claude-plugin/marketplace.json', marketplace, 'marketplace'),
+    ).not.toThrow()
     for (const entry of marketplace.plugins) {
       expect(() =>
         assertSkillsOnlyDistribution(
@@ -99,8 +106,11 @@ describe('.claude-plugin marketplace + plugin manifests (real repo)', () => {
     // Claude Code falls back to the git commit SHA when `version` is absent, so
     // `/plugin update` always yields the current catalog. Pinning a version in a
     // HAND-maintained manifest would strand users at the last remembered bump —
-    // see the marketplace-plugin-packaging ADL. `claude plugin validate --strict`
-    // warns about the omission; that is the accepted tradeoff, not an oversight.
+    // see the marketplace-plugin-packaging ADL (Decision 4). Plain
+    // `claude plugin validate .` passes with a "no version specified" WARNING;
+    // `--strict` turns that warning into a FAILURE (non-zero exit, verified on CLI
+    // v2.1.220), so no gate may run `--strict` while this decision stands. The
+    // warning is the accepted tradeoff, not an oversight.
     expect(plugin.version).toBeUndefined()
     expect(marketplace.plugins[0]!.version).toBeUndefined()
   })
@@ -114,7 +124,7 @@ describe('.claude-plugin marketplace + plugin manifests (real repo)', () => {
     expect(declared.some(p => p.endsWith('/agent-browser'))).toBe(false)
   })
 
-  it('ships no root-level plugin component payload beyond skills (D23, R9.3)', () => {
+  it('ships no root-level plugin component payload beyond skills (skills-only rule)', () => {
     // With `source: "./"` the whole repo IS the plugin payload, so non-declaration in
     // plugin.json prevents *loading* a component, not *copying* it. The payload-level
     // guarantee is the absence of the paths Claude Code discovers at the plugin root.
@@ -369,6 +379,66 @@ describe('assertSkillsOnlyDistribution — allowlist, not denylist', () => {
     expect(() =>
       assertSkillsOnlyDistribution('marketplace.json → pair', entryMetadata, 'marketplace-entry'),
     ).not.toThrow()
+    const marketplaceMetadata = Object.fromEntries(
+      ALLOWED_MARKETPLACE_MANIFEST_KEYS.map(k => [k, 'x']),
+    )
+    expect(() =>
+      assertSkillsOnlyDistribution(
+        'marketplace.json',
+        { ...marketplaceMetadata, metadata: { version: '1', description: 'x' } },
+        'marketplace',
+      ),
+    ).not.toThrow()
+  })
+
+  // The marketplace manifest's own top level is the third hand-edited surface. Its
+  // behaviour-bearing keys are marketplace-specific — they never appear in a plugin
+  // manifest or a plugins[] entry, so neither of the other two allowlists covers them.
+  // All three pass `claude plugin validate .` (probe-verified, CLI v2.1.220).
+  const marketplaceBehaviourKeys: Record<string, unknown> = {
+    forceRemoveDeletedPlugins: true,
+    allowCrossMarketplaceDependenciesOn: ['their-marketplace'],
+    skills: ['./.claude/skills/x'],
+  }
+
+  it.each(Object.keys(marketplaceBehaviourKeys))(
+    'FAILS when the marketplace manifest itself declares %s',
+    key => {
+      const message = captureThrownMessage(() =>
+        assertSkillsOnlyDistribution(
+          'marketplace.json',
+          {
+            name: 'pair',
+            owner: { name: 'Foomakers' },
+            plugins: [{ name: 'pair', source: './' }],
+            [key]: marketplaceBehaviourKeys[key],
+          },
+          'marketplace',
+        ),
+      )
+      expect(message).toContain(key)
+      expect(message).toContain('marketplace.json')
+    },
+  )
+
+  it('FAILS on metadata.pluginRoot — an allowlist over top-level keys alone misses it', () => {
+    // `metadata` is legitimately permitted (version/description), so the nested
+    // behaviour key needs its own check: pluginRoot rebases relative plugin sources
+    // and therefore changes which directory ships from under `source: "./"`.
+    const message = captureThrownMessage(() =>
+      assertSkillsOnlyDistribution(
+        'marketplace.json',
+        {
+          name: 'pair',
+          owner: { name: 'Foomakers' },
+          plugins: [{ name: 'pair', source: './' }],
+          metadata: { description: 'x', pluginRoot: './packages' },
+        },
+        'marketplace',
+      ),
+    )
+    expect(message).toContain('metadata.pluginRoot')
+    expect(message).toMatch(/ships as the plugin payload/)
   })
 
   // Drift injection over EVERY component/behaviour key the published schema
@@ -465,5 +535,18 @@ describe('assertNoRootPluginComponents — payload-level skills-only guarantee',
     // The manifest `skills` field is additive, not exclusive: a root `skills/` dir
     // would ship AND load skills absent from plugin.json, bypassing the catalog guard.
     expect(ROOT_PLUGIN_COMPONENT_PATHS).toContain('skills')
+  })
+
+  it('is DERIVED from the schema component keys, so it cannot lag the schema', () => {
+    // The list used to be hand-enumerated and lagged by one corner at a time
+    // (`monitors` — unsandboxed background scripts, hooks' trust tier — was missing).
+    // Deriving it means a component key added to SCHEMA_COMPONENT_KEYS extends the
+    // root-payload guard in the same edit as the manifest allowlist.
+    for (const key of SCHEMA_COMPONENT_KEYS) {
+      expect(ROOT_PLUGIN_COMPONENT_PATHS).toContain(key)
+    }
+    expect(ROOT_PLUGIN_COMPONENT_PATHS).toContain('monitors')
+    // `.mcp.json` is the one root path that is a file, not a directory per key.
+    expect(ROOT_PLUGIN_COMPONENT_PATHS).toContain('.mcp.json')
   })
 })

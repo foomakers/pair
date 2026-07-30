@@ -23,9 +23,12 @@
  * `claude-code-marketplace.json` / `claude-code-plugin-manifest.json` on
  * schemastore), plus two project rules a generic schema can't express:
  * kebab-case public names, and skills-only distribution — an **allowlist** of
- * permitted keys in either manifest (so a component key the schema adds tomorrow
- * fails closed), plus the absence of a root-level component payload, since
- * `source: "./"` makes the repo the plugin root.
+ * permitted keys on each of the three hand-edited surfaces (the plugin manifest,
+ * the marketplace manifest's own top level, and each `plugins[]` entry), so a
+ * component key the schema adds tomorrow fails closed, plus the absence of a
+ * root-level component payload, since `source: "./"` makes the repo the plugin
+ * root. That root-payload list is derived from the schema's component keys rather
+ * than hand-enumerated, so the two halves of the rule cannot drift apart.
  *
  * Rule of record for skills-only distribution:
  * `.pair/adoption/decision-log/2026-07-28-marketplace-plugin-packaging.md`
@@ -357,45 +360,114 @@ export const ALLOWED_MARKETPLACE_ENTRY_KEYS = [
   'strict',
 ] as const
 
-export type ManifestKind = 'plugin' | 'marketplace-entry'
+/**
+ * Keys `.claude-plugin/marketplace.json` may declare at its OWN top level — the
+ * third surface, distinct from the plugin manifest and from each `plugins[]`
+ * entry. The schema gives it 9 properties (verified against schemastore
+ * 2026-07-30); the two omitted here change host behaviour rather than describing
+ * the marketplace:
+ * - `forceRemoveDeletedPlugins` — lets the marketplace uninstall plugins from a
+ *   user's machine on refresh;
+ * - `allowCrossMarketplaceDependenciesOn` — extends trust to plugins from other
+ *   marketplaces (the `dependencies` hole one level up).
+ *
+ * `metadata` is permitted for its descriptive fields only; its `pluginRoot`
+ * sub-key is rejected separately by {@link assertSkillsOnlyDistribution} because
+ * it relocates the base path of relative plugin sources, i.e. silently changes
+ * what payload ships from under `source: "./"` (ADL Decision 1's invariant).
+ */
+export const ALLOWED_MARKETPLACE_MANIFEST_KEYS = [
+  '$schema',
+  'name',
+  'description',
+  'owner',
+  'plugins',
+  'version',
+  'metadata',
+] as const
+
+/** `metadata` sub-keys that only describe the marketplace (see above). */
+export const ALLOWED_MARKETPLACE_METADATA_KEYS = ['version', 'description'] as const
+
+export type ManifestKind = 'plugin' | 'marketplace' | 'marketplace-entry'
+
+const ALLOWLIST_BY_KIND: Record<ManifestKind, readonly string[]> = {
+  plugin: ALLOWED_PLUGIN_MANIFEST_KEYS,
+  marketplace: ALLOWED_MARKETPLACE_MANIFEST_KEYS,
+  'marketplace-entry': ALLOWED_MARKETPLACE_ENTRY_KEYS,
+}
+
+const KIND_DESCRIPTION: Record<ManifestKind, { subject: string; permitted: string }> = {
+  plugin: { subject: 'plugin manifest', permitted: 'metadata plus "skills"' },
+  marketplace: {
+    subject: 'marketplace manifest',
+    permitted: 'marketplace metadata plus "owner"/"plugins"',
+  },
+  'marketplace-entry': {
+    subject: 'marketplace entry',
+    permitted: 'metadata plus "source"/"category"/"tags"/"strict"',
+  },
+}
 
 /**
- * Asserts a manifest (plugin manifest or marketplace plugin entry) declares only
- * allowlisted keys — the automatic half of skills-only distribution (ADL
- * `2026-07-28-marketplace-plugin-packaging.md`, Decision 5). Subagents are an
- * anonymous context-isolation mechanic, never a shipped "agent" asset; hooks,
- * MCP/LSP servers, monitors and commands are execution surfaces pair does not
- * distribute; `settings`/`userConfig`/`dependencies` mutate or extend the host.
+ * Offending `metadata.*` sub-keys on a marketplace manifest. `metadata` is allowed
+ * for its descriptive fields, so its behaviour-bearing sub-key needs its own check
+ * — an allowlist over top-level keys alone would let `metadata.pluginRoot` through.
+ */
+function offendingMetadataKeys(manifest: Record<string, unknown>, kind: ManifestKind): string[] {
+  if (kind !== 'marketplace') return []
+  const metadata = manifest['metadata']
+  if (typeof metadata !== 'object' || metadata === null || Array.isArray(metadata)) return []
+  return Object.keys(metadata as Record<string, unknown>)
+    .filter(key => !ALLOWED_MARKETPLACE_METADATA_KEYS.includes(key as never))
+    .map(key => `metadata.${key}`)
+}
+
+/**
+ * Asserts a manifest declares only allowlisted keys — the automatic half of
+ * skills-only distribution (ADL `2026-07-28-marketplace-plugin-packaging.md`,
+ * Decision 5). Covers all three hand-edited surfaces: the plugin manifest, the
+ * marketplace manifest's own top level, and each of its `plugins[]` entries.
+ * Subagents are an anonymous context-isolation mechanic, never a shipped "agent"
+ * asset; hooks, MCP/LSP servers, monitors and commands are execution surfaces pair
+ * does not distribute; `settings`/`userConfig`/`dependencies` mutate or extend the
+ * host.
  */
 export function assertSkillsOnlyDistribution(
   label: string,
   manifest: Record<string, unknown>,
   kind: ManifestKind = 'plugin',
 ): void {
-  const allowed: readonly string[] =
-    kind === 'plugin' ? ALLOWED_PLUGIN_MANIFEST_KEYS : ALLOWED_MARKETPLACE_ENTRY_KEYS
+  const allowed = ALLOWLIST_BY_KIND[kind]
   const declared = Object.keys(manifest).filter(
     key => manifest[key] !== undefined && !allowed.includes(key),
   )
-  if (declared.length === 0) return
+  const nested = offendingMetadataKeys(manifest, kind)
 
-  const permitted =
-    kind === 'plugin'
-      ? 'metadata plus "skills"'
-      : 'metadata plus "source"/"category"/"tags"/"strict"'
-  const catalogNote = declared.includes('skills')
-    ? ` A "skills" key on a marketplace entry REPLACES plugin.json's catalog and is invisible to ` +
-      `assertSkillCatalogInSync, which reads plugin.json only — the catalog is plugin.json's alone.`
+  const offending = [...declared, ...nested]
+  if (offending.length === 0) return
+
+  const { subject, permitted } = KIND_DESCRIPTION[kind]
+  const catalogNote =
+    kind === 'marketplace-entry' && declared.includes('skills')
+      ? ` A "skills" key on a marketplace entry REPLACES plugin.json's catalog and is invisible to ` +
+        `assertSkillCatalogInSync, which reads plugin.json only — the catalog is plugin.json's alone.`
+      : ''
+  const pluginRootNote = nested.includes('metadata.pluginRoot')
+    ? ` "metadata.pluginRoot" rebases relative plugin sources, so it silently changes which ` +
+      `directory ships as the plugin payload from under source: "./".`
     : ''
   fail(
-    `${label} declares ${declared.map(k => `"${k}"`).join(', ')}: pair distributes skills only — ` +
-      `a ${kind === 'plugin' ? 'plugin manifest' : 'marketplace entry'} may carry ${permitted} and ` +
-      `nothing else (an allowlist, so an unknown or newly specified key fails closed).${catalogNote} ` +
+    `${label} declares ${offending.map(k => `"${k}"`).join(', ')}: pair distributes skills only — ` +
+      `a ${subject} may carry ${permitted} and ` +
+      `nothing else (an allowlist, so an unknown or newly specified key fails closed).${catalogNote}` +
+      `${pluginRootNote} ` +
       `Component/behaviour keys ship execution surfaces (hooks, mcpServers, lspServers, monitors, ` +
-      `commands), auto-enable third-party plugins (dependencies) or mutate the host (settings, ` +
-      `userConfig, channels, outputStyles, themes); subagents are an anonymous context-isolation ` +
-      `mechanic, never a distributed agent asset. Remove the field(s) — rule of record: ` +
-      `.pair/adoption/decision-log/2026-07-28-marketplace-plugin-packaging.md, Decision 5.`,
+      `commands), auto-enable third-party plugins (dependencies, ` +
+      `allowCrossMarketplaceDependenciesOn) or mutate the host (settings, userConfig, channels, ` +
+      `outputStyles, themes, forceRemoveDeletedPlugins); subagents are an anonymous ` +
+      `context-isolation mechanic, never a distributed agent asset. Remove the field(s) — rule of ` +
+      `record: .pair/adoption/decision-log/2026-07-28-marketplace-plugin-packaging.md, Decision 5.`,
   )
 }
 
@@ -407,19 +479,25 @@ export function assertSkillsOnlyDistribution(
  * guarantee is therefore the absence of these paths at the repo root (ADL
  * `2026-07-28-marketplace-plugin-packaging.md`, Decision 5).
  *
- * `skills` is on the list too: a root-level `skills/` directory is auto-discovered
- * *in addition to* the manifest's `skills` field, so it would ship AND load skills
- * that never appear in `plugin.json` — bypassing {@link assertSkillCatalogInSync}
- * entirely. pair's skills live under `.claude/skills/`, which is declared, never
- * auto-discovered.
+ * DERIVED from {@link SCHEMA_COMPONENT_KEYS} — one directory per component key —
+ * rather than hand-enumerated, so this list can never lag the schema by one
+ * corner again (`monitors`, for instance: "background watch scripts the host arms
+ * as persistent Monitor tasks, unsandboxed, same trust tier as hooks"). A key a
+ * future schema revision introduces extends the allowlist rejection AND this
+ * root-payload check from the same edit. Guarding a name Claude Code happens not
+ * to auto-discover costs nothing — pair ships no root component directory under
+ * any of these names, and the failure message says where they belong instead.
+ *
+ * `skills` is included deliberately: a root-level `skills/` directory is
+ * auto-discovered *in addition to* the manifest's `skills` field, so it would ship
+ * AND load skills that never appear in `plugin.json` — bypassing
+ * {@link assertSkillCatalogInSync} entirely. pair's skills live under
+ * `.claude/skills/`, which is declared, never auto-discovered.
+ *
+ * `.mcp.json` is the one root path that is a file rather than a directory named
+ * after its key, so it is appended explicitly.
  */
-export const ROOT_PLUGIN_COMPONENT_PATHS = [
-  'agents',
-  'commands',
-  'hooks',
-  'skills',
-  '.mcp.json',
-] as const
+export const ROOT_PLUGIN_COMPONENT_PATHS = [...SCHEMA_COMPONENT_KEYS, '.mcp.json'] as const
 
 /**
  * Asserts no root-level plugin component path exists. `exists` is injected — the
@@ -430,10 +508,11 @@ export function assertNoRootPluginComponents(exists: (relPath: string) => boolea
   if (present.length > 0) {
     fail(
       `The plugin root (the repo, since the plugin source is "./") carries plugin component ` +
-        `path(s) ${present.join(', ')}: Claude Code auto-discovers agents/commands/hooks/skills/MCP ` +
-        `servers there regardless of what plugin.json declares (a root skills/ dir would even load ` +
-        `skills the catalog guard never sees). pair distributes skills only — move them under ` +
-        `.claude/ or remove them. Rule of record: ` +
+        `path(s) ${present.join(', ')}: Claude Code auto-discovers components there regardless of ` +
+        `what plugin.json declares (a root skills/ dir would even load skills the catalog guard ` +
+        `never sees; a root monitors/ or hooks/ would arm unsandboxed scripts on every installed ` +
+        `machine). pair distributes skills only — move them under .claude/ or remove them. ` +
+        `Rule of record: ` +
         `.pair/adoption/decision-log/2026-07-28-marketplace-plugin-packaging.md, Decision 5.`,
     )
   }
