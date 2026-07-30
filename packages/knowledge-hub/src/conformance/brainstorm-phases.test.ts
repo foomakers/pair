@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readdirSync, readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 
 // Conformance guard for story #230: /pair-process-brainstorm — structured discovery
@@ -192,12 +192,27 @@ describe('brainstorm — phase 1 grill interview, level asked first (AC1) (#230)
       expect(p1).toMatch(/R3\.7/)
     })
 
-    it(`${v.label} offers the blob as a .pair/working/ handoff when the session stops after phase 1`, () => {
+    it(`${v.label} writes the blob as a .pair/working/ handoff whenever the run ends before phase 3 completes`, () => {
       // Scoped to Phase 1: the handoff instruction must live in the phase that
       // produces the blob, not merely somewhere in the file.
       const p1 = phase(v.content, 1)
       expect(p1).toMatch(/\.pair\/working\//)
       expect(p1).toMatch(/handoff/i)
+      // Review finding (round 4, Major): the trigger read "if the session stops
+      // BEFORE the interview reaches explicit shared understanding", so a COMPLETED
+      // blob was never written anywhere — while three surfaces (phase 3's no-PM-tool
+      // HALT, resume.md item 2, the story's after-phase-1 edge case) assume one
+      // exists. The old title said "stops after phase 1" but the interruption-only
+      // wording satisfied it, so the guard read as coverage it did not provide.
+      expect(p1).toMatch(/whenever the run ends before phase 3 completes/)
+      expect(p1).toMatch(/not\*\* scoped to an interrupted interview/)
+      // Both blob states are persisted and distinguishable.
+      expect(p1).toMatch(/`partial` \| `complete`/)
+      // Phase 3's "phases 1-2 keep their output" claim now has a writer.
+      const p3 = phase(v.content, 3)
+      expect(p3).toMatch(/write phase 1's handoff if it is not already on disk/)
+      // …and the resume list says the completed blob is on disk to be detected.
+      expect(v.resume).toMatch(/a \*\*completed\*\* blob is written too/)
     })
   }
 })
@@ -382,6 +397,19 @@ describe('brainstorm — phase 3 to-issues tree triage (AC4) (#230)', () => {
       expect(row(v.planStories)).toMatch(/absent and the level is punctual/)
       // …and the untyped-root fallback is named there as well.
       expect(row(v.planStories)).toMatch(/untyped/)
+      // Review finding (round 4, Minor): third instance of "the Composed-Skills
+      // summary disagrees with the matrix" — the round-3 M8 fix (untyped root whose
+      // parent is an INITIATIVE -> /plan-epics, sibling epics) reached the matrix,
+      // phase 3 and the HALT list but not these two cells, which still asserted
+      // untyped => /plan-stories with no exception. An executor resolving the writer
+      // from the first summary in the file picks /plan-stories, finds no parent epic
+      // and HALTs — exactly the defect M8 removed. Both sub-cases are pinned so this
+      // surface cannot drift a fourth time.
+      expect(row(v.planEpics)).toMatch(/\*\*untyped\*\* root whose parent is an \*\*initiative\*\*/)
+      expect(row(v.planStories)).toMatch(/\*\*untyped\*\* root \*\*with an epic parent\*\*/)
+      // Output Format's parent parenthetical must list the same case Step 0 does.
+      const writerLine = v.content.split('\n').find(line => line.includes('├── Writer:')) ?? ''
+      expect(writerLine).toContain("root's parent initiative")
     })
 
     it(`${v.label} passes the resolved parent AND the candidate tree to the writer`, () => {
@@ -773,27 +801,21 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
     })
   }
 
-  it('dataset SKILL.md is no longer the largest in the skill corpus', () => {
-    // The finding measured size against the corpus (brainstorm 29 KB vs review 27.8,
-    // implement 26.7), so the guard is relative and self-maintaining rather than a
-    // magic byte budget: whatever the corpus grows to, brainstorm must not be its
-    // biggest SKILL.md.
-    const sizes = readdirSync(DATASET_SKILLS, { withFileTypes: true })
-      .filter(group => group.isDirectory())
-      .flatMap(group =>
-        readdirSync(join(DATASET_SKILLS, group.name), { withFileTypes: true })
-          .filter(skill => skill.isDirectory())
-          .map(skill => ({
-            name: `${group.name}/${skill.name}`,
-            size: read(join(DATASET_SKILLS, group.name, skill.name, 'SKILL.md')).length,
-          })),
-      )
-    const brainstorm = sizes.find(s => s.name === 'process/brainstorm')?.size ?? 0
-    const largestOther = Math.max(
-      ...sizes.filter(s => s.name !== 'process/brainstorm').map(s => s.size),
+  it('dataset SKILL.md stays inside the progressive-disclosure byte budget', () => {
+    // Review finding (round 4, Minor): the first version of this guard asserted a
+    // CORPUS RANK (brainstorm < max(all other SKILL.md)) and called itself
+    // "self-maintaining". It was the opposite: it coupled this skill's guard to every
+    // other skill's size, so an unrelated PR that shrank the current largest file
+    // (review 27.8 KB, implement 26.7 KB — 279 bytes of headroom) turned it red with a
+    // message pointing at brainstorm. The invariant the finding was about is asserted
+    // instead: the three sibling files exist and are pointed at (above) plus a FIXED
+    // budget. Raise the budget only together with another disclosure split.
+    const BUDGET_BYTES = 28 * 1024
+    const size = BRAINSTORM_DATASET.length
+    expect(size).toBeGreaterThan(0)
+    expect(size, `brainstorm/SKILL.md is ${size} B, budget ${BUDGET_BYTES} B`).toBeLessThan(
+      BUDGET_BYTES,
     )
-    expect(brainstorm).toBeGreaterThan(0)
-    expect(brainstorm).toBeLessThan(largestOther)
   })
 
   for (const v of VARIANTS) {
@@ -918,6 +940,92 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
       expect(content).toMatch(/four orchestrators/)
       expect(content).toContain(`\`${command}\``)
       expect(content).not.toMatch(/three orchestrators/)
+    })
+  }
+})
+
+describe('brainstorm — round-4 review fixes (#230)', () => {
+  for (const v of VARIANTS) {
+    it(`${v.label} Step 0's Verify scopes the writer/parent clause per path`, () => {
+      // Review finding (round 4, Minor): the Verify required the writer AND parent to
+      // be "resolved from that row all the same" whenever the level is queued — true
+      // for the fallback row, false for the no-$root row, where the writer resolves
+      // once the level is answered and the parent only once phase 2's placement is
+      // confirmed. Its own Skip beat said nothing, so the two beats of one step
+      // disagreed: an executor either blocked Step 0 on a bare /brainstorm or invented
+      // a parent, which the skill forbids in three places.
+      const step0 = v.content.match(/### Step 0:[\s\S]*?(?=\n### )/)?.[0] ?? ''
+      const verify = step0.split('\n').find(line => /^5\. \*\*Verify\*\*/.test(line)) ?? ''
+      expect(verify).not.toBe('')
+      expect(verify).toMatch(/from the \*\*fallback row\*\* all the same/)
+      expect(verify).toMatch(/on the \*\*no-`\$root`\*\* path the row resolves them later/)
+      expect(verify).toMatch(/never that a parent is invented/)
+      // …and the Skip beat states the same, so the two beats agree.
+      const skip = step0.split('\n').find(line => /^2\. \*\*Skip\*\*/.test(line)) ?? ''
+      expect(skip).toMatch(/neither is resolved here/)
+    })
+
+    it(`${v.label} states the level only SIZES the discovery on the initiative-parent fallback`, () => {
+      // Review finding (round 4, Minor): on the fallback row's initiative-parent
+      // sub-case the level is still asked, but the item type is keyed on the parent and
+      // the writer is never overridable — so answering "punctual — a single story"
+      // yields epic-sized candidates with no clause reconciling the two. Silently
+      // wrong for the common PM state of a mis-parented, unlabelled story.
+      const fallback =
+        v.matrix
+          .split('\n')
+          .find(line => line.startsWith('|') && /no recognized type/i.test(line)) ?? ''
+      expect(fallback).toMatch(/only sizes the discovery/)
+      expect(fallback).toMatch(/never overridable/)
+      // The rationale names the mis-parented-story case and the labelling remedy.
+      expect(v.matrix).toMatch(/mis-parented, unlabelled story/)
+      expect(v.matrix).toMatch(/label the root with its real type and re-run/)
+      // Phase 3 item 5 keys the item type on the parent, not the answered level…
+      expect(phase(v.content, 3)).toMatch(
+        /item type follows the resolved parent, not the answered level/,
+      )
+      // …and Step 0's up-front proposal warns before the level is even asked.
+      const step0 = v.content.match(/### Step 0:[\s\S]*?(?=\n### )/)?.[0] ?? ''
+      expect(step0).toMatch(/sizes the interview only/)
+    })
+
+    it(`${v.label} passes the domain placement in-band as $domain-placed`, () => {
+      // Review finding (round 4, Minor): plan-epics' Step 3.5 Skip fired on a
+      // predicate carried by no argument — "the caller already composed
+      // /map-subdomains in this run" — while on the resume path brainstorm's phase 2
+      // CONFIRMS a recorded placement instead of composing it. The literal predicate
+      // was false exactly on the path the fix targeted, so the mapping (and its
+      // approval prompt) ran a second time.
+      const p3 = phase(v.content, 3)
+      expect(p3).toContain('`$domain-placed:')
+      expect(p3).toMatch(/placed \*\*or confirmed as already recorded\*\*/)
+      expect(p3).toMatch(/in-band/)
+      // The resume list ties it to the fresh-session path.
+      expect(v.resume).toMatch(/\$domain-placed/)
+    })
+  }
+
+  const PLAN_EPICS_COPIES = [
+    ['dataset', join(DATASET_SKILLS, 'process/plan-epics/SKILL.md')],
+    ['mirror', join(MIRROR_SKILLS, 'pair-process-plan-epics/SKILL.md')],
+  ] as const
+
+  for (const [label, path] of PLAN_EPICS_COPIES) {
+    it(`plan-epics (${label}) declares $domain-placed and skips on placed OR confirmed`, () => {
+      const content = read(path)
+      const args = content.slice(content.search(/^## Arguments/m)).split(/\n## /)[0] ?? ''
+      const row = args.split('\n').find(line => line.includes('`$domain-placed`'))
+      expect(row).toBeDefined()
+      expect(row).toMatch(/\|\s*No\s*\|/)
+      expect(row).toMatch(/placed \*\*or confirmed\*\*/)
+      const step = content.match(/### Step 3\.5[\s\S]*?(?=\n### )/)?.[0] ?? ''
+      const skip = step.split('\n').find(line => /^2\. \*\*Skip\*\*/.test(line)) ?? ''
+      expect(skip).toContain('`$domain-placed`')
+      expect(skip).toMatch(/confirmed a placement already recorded/)
+      expect(skip).toMatch(/fresh-session resume qualifies/)
+      // The Check names the argument too, so the predicate is evaluable from inputs.
+      const check = step.split('\n').find(line => /^1\. \*\*Check\*\*/.test(line)) ?? ''
+      expect(check).toContain('`$domain-placed`')
     })
   }
 })

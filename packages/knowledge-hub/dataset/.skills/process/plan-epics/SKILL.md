@@ -22,6 +22,7 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
 | -------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `$initiative`  | No       | Initiative identifier (e.g., `#10`). If omitted, selects highest-priority Todo initiative.                                                                                                         |
 | `$candidates`  | No       | Caller-supplied candidate tree (epic name + user value + rationale each) — e.g. the tree `/brainstorm`'s phase 3 hands over. When provided, Step 3 triages **these** candidates instead of deriving its own from the initiative. |
+| `$domain-placed` | No     | Capability areas the **caller** has already placed **or confirmed** in the subdomain catalog for this run (e.g. `/brainstorm` phase 2). When it covers the approved breakdown's areas, Step 3.5 confirms that placement instead of re-composing `/map-subdomains` — one subdomain-catalog delta per run, not two. Carried in-band precisely so the fact survives a fresh session, rather than depending on same-session context. |
 
 ## Algorithm
 
@@ -92,8 +93,8 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
 
 ### Step 3.5: Domain Mapping (scoped)
 
-1. **Check**: Is `/map-subdomains` installed, and has the **caller already placed this scope in this run**?
-2. **Skip**: If not installed → warn and proceed to Step 4 without domain mapping. If `$candidates` came from a caller whose own domain step already composed `/map-subdomains` on the **same capability areas** in this run (e.g. `/brainstorm` phase 2) → **confirm that placement and proceed to Step 4; do not re-compose** `/map-subdomains`: the same scope is mapped once per run, and the developer approves **one** subdomain-catalog delta, not two.
+1. **Check**: Is `/map-subdomains` installed, and has the caller **already placed or confirmed this scope in this run** — declared in-band as `$domain-placed`?
+2. **Skip**: If not installed → warn and proceed to Step 4 without domain mapping. If `$domain-placed` names the **same capability areas** the approved breakdown covers — the caller's own domain step either composed `/map-subdomains` on them or confirmed a placement already recorded (e.g. `/brainstorm` phase 2, **either** branch of its Check/Skip, so a fresh-session resume qualifies too) → **confirm that placement and proceed to Step 4; do not re-compose** `/map-subdomains`: the same scope is mapped once per run, and the developer approves **one** subdomain-catalog delta, not two.
 3. **Act**: Otherwise compose `/map-subdomains` with `$scope` set to the capability area(s) covered by the approved epic breakdown (not `all` — full-catalog remapping stays `/bootstrap`-only).
 4. **Verify**: Subdomain catalog delta (if any) approved by developer. Epic creation always proceeds to Step 4 regardless of the domain-mapping outcome.
 
@@ -154,6 +155,6 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 - This skill **modifies PM tool state** — creates and extends epic issues linked to initiatives.
 - **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md) and [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md). This skill's check: exact idempotency-key match is proposed `ALREADY EXISTS #ID` (skip) at triage time, before any write (Step 3) — Step 4 only executes the confirmed proposal; substantial-overlap match proposes EXTEND instead of a duplicate CREATE (Step 3) — re-running the same candidate tree never duplicates.
-- **Caller-supplied tree** — with `$candidates` (e.g. `/brainstorm` phase 3), Step 3 triages the supplied candidates and derives none: the caller owns the grouping, this skill owns triage, the epic template, and the writes. Without it, behaviour is unchanged. Step 3.5 is a **confirm-only pass** on that path when the caller already mapped the same capability areas in this run — one placement, one catalog delta to approve.
+- **Caller-supplied tree** — with `$candidates` (e.g. `/brainstorm` phase 3), Step 3 triages the supplied candidates and derives none: the caller owns the grouping, this skill owns triage, the epic template, and the writes. Without it, behaviour is unchanged. Step 3.5 is a **confirm-only pass** on that path when `$domain-placed` names the same capability areas the caller already placed **or confirmed** in this run — one placement, one catalog delta to approve. The fact travels in the arguments, not in same-session context, so it holds when the caller itself resumed a partially completed run.
 - Epic 0 rule: for new projects, always assess if a bootstrap/foundation epic is needed before functional epics.
 - Domain mapping (Step 3.5) is scoped to this run's epic breakdown — see [map-subdomains](../../capability/map-subdomains/SKILL.md).
