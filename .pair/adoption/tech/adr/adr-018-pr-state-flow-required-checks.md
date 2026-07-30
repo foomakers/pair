@@ -71,6 +71,27 @@ Accepted
   rather than silently assumed); the checks are host artifacts, so the host mechanics live in an
   implementation guide instead of the host-agnostic model.
 
+### Option 4: A separate reviewer identity (second human account, or a GitHub App)
+
+- **Description**: The reviewing agent authenticates as its **own** identity — a second user account or a
+  GitHub App installation — instead of as the author. Its native review is then a real `APPROVE` event by
+  a non-author, and the 🔴 explicit-approval requirement could be satisfied by a reviewer that is not the
+  author (with the human approval still required as a second, human-typed signal, or replaced by it).
+- **Pros**: Removes the two constraints this design accepts — the verdict would be a native APPROVE
+  instead of a `--comment` degradation, and the App path additionally unlocks the Checks API
+  (`checks: write`), so `pair-review` could be a real check run rather than a commit status. It also makes
+  "who reviewed" auditable per-identity rather than per-body-token.
+- **Cons / why not now**: An identity is **project infrastructure**, not a code change — it needs a
+  second seat (or an App registration, install, private key, and a secret store), which the flow cannot
+  provision for an adopting project and which a solo-maintainer repository may not want to pay for. It
+  also does **not** by itself satisfy the 🔴 rule as specified: a bot/App approval is exactly what
+  `pair-explicit-approval` excludes (`user.type == "User"`), so adopting it would mean *changing the rule*
+  (deciding that a distinct non-human reviewer identity may grant the 🔴 gate) — a design decision, not a
+  configuration one. **Deferred, explicitly**: it is the same missing ingredient as the second-human-account
+  constraint below, and it belongs to the same follow-up story as the solo-approval token, where the two
+  options (human token vs. distinct reviewer identity) are weighed together instead of one being adopted
+  by accident.
+
 ## Decision
 
 **Adopt Option 3.** The merge authority is the set of **required code-host checks**; the `pr-state:*`
@@ -91,6 +112,28 @@ label is an advisory view that can never enable a merge. Concretely:
   return `ready-to-merge` while any mechanical check is red.
 - **Host specifics** (check-run publication, branch-protection payload, the `pair-explicit-approval`
   job, manual/degraded setup) live in `github-implementation.md` (R2.12), not in the model.
+- **The explicit-approval job is an authorization control, and is designed as one.** "Deterministic"
+  is only true if its code cannot come from the change it authorizes, so two properties are part of the
+  decision, not implementation detail:
+  - **Trusted ref.** The job and every projection it sources are read from the **target branch**
+    (`pull_request_target` + a checkout pinned to `base.sha`), never from the PR's tree. Verified by
+    counter-example: with the pre-fix `pull_request` + default-checkout form, a `risk:red` PR carrying a
+    neutered `explicit_approval_required` published `pair-explicit-approval=success` on its own head —
+    a self-granted 🔴 gate. With the base-pinned form the identical tamper changes nothing.
+  - **Head-pinned verdict.** The result is published as a commit status on
+    `github.event.pull_request.head.sha` — the only commit branch protection evaluates. `$GITHUB_SHA` is
+    *not* that commit for either trigger (measured: base tip for `pull_request_target`, the
+    `refs/pull/<n>/merge` commit for `pull_request_review`), so a verdict published against it would
+    leave a 🔴 PR blocked *after* the human approves.
+
+  A project unwilling to enable `pull_request_target` gets the same guarantee by inlining the projection
+  into the job (no checkout at all), at the cost of a second copy to keep in sync.
+- **The review is dispatched, never nested, and never merges.** `/pair-capability-publish-pr` runs inside `/pair-process-implement`'s
+  handoff subagent, so it returns a `review-dispatch-required` signal and the **top-level session**
+  spawns the reviewing subagent (harnesses commonly forbid nested delegation, which would have made the
+  documented primary path unreachable). The dispatch prompt is bounded to phases 1–5, and `/pair-process-review`
+  carries a **non-interactive contract** for its two human prompts so a dispatched review neither stalls
+  nor self-answers itself into a merge. The merge stays a human act at every tier.
 
 ## Consequences
 
@@ -115,6 +158,19 @@ label is an advisory view that can never enable a merge. Concretely:
   otherwise a required context that never reports blocks every merge with no escape hatch.
 - Adding a code host means adding an implementation-guide section, not touching the model or the
   evaluator. Hosts lacking required checks remain usable in advisory mode.
+- **A distinct reviewer identity stays out of scope**, deliberately (Option 4): the dispatched reviewer
+  runs as the author's account, so its verdict is a `--comment` review by construction, and a second
+  human account remains the only way to satisfy 🔴. The identity question is recorded here so it is not
+  rediscovered per project; it is weighed in the same follow-up story as the solo-approval token.
+- **Merge blocking was verified end-to-end on a live code host** (throwaway repository, 2026-07-30):
+  labels → workflow → contexts observed on the head commit → protection applied with
+  `enforce_admins: true` → one PR per tier. Observed: a **pending** `pair-review` blocks
+  (`Required status check "pair-review" is pending.`), a **failing** one blocks, an **absent** one blocks
+  as "expected", 🟢 with both contexts green **merges**, 🔴 without a human approval blocks, a 🟡→🔴 raise
+  re-blocks within one run, a `pull_request_review` submission re-reports the approval context **on the
+  same head SHA**, and the tampered PR above stays blocked. The evidence table lives in
+  `github-implementation.md` § "Verified on a throwaway repository". Applying protection to *this*
+  repository remains a human act (admin scope) — see the way-of-working status line.
 - Verification split per the gate-tooling ADL (2026-07-13): `pr-state.sh` behavior is executed by
   `scripts/smoke-tests/scenarios/pr-state-flow.sh`; the content invariants of the guideline and the
   skills are asserted in `packages/knowledge-hub/src/conformance/pr-state-flow.test.ts`.

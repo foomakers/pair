@@ -117,10 +117,23 @@ The PR is ready; it must now be **under review and mechanically blocked** — se
 2. **Skip**: If a `pair-review` check already exists on this head **and** a review has been submitted for it, do nothing here — the PR is already in the flow (idempotency). A new head commit always needs a fresh check + review.
 3. **Act — register the check as pending**: publish `pair-review` on the head commit with a pending status **before** dispatching the review, using the mechanism the host's implementation guide prescribes for an ordinary (non-App) agent token — on GitHub a **commit status**, not a check run. This is what blocks the merge from t0: a crashed or never-started review leaves the required check unsatisfied instead of leaving the PR mergeable. If the publication is **refused** (missing token scope, no status API), do not claim enforcement: report `pair-review: NOT PUBLISHED — advisory` and continue (degradation below).
 4. **Act — label the state**: apply `pr-state:to-be-reviewed`, removing any other `pr-state:*` label (exactly one at a time). The label family is provisioned once per repository (implementation guide) and does **not** auto-create; if the label is absent or the label API is unavailable, report it and continue — **non-blocking** (degradation below). The label is a **view** — the required checks are the authority (pr-states.md).
-5. **Act — dispatch the review on a clean context**: spawn an **anonymous** subagent whose prompt is the PR reference only — no context from this session — with the single instruction to run `/review $pr=<number>`. Mechanical isolation (D23): the reviewing context must not inherit the authoring context, otherwise the review inherits the author's assumptions. The subagent renders the verdict in the native code-host review, publishes the `pair-review` conclusion, and computes the synthesis state (`/review` Step 5.4).
-6. **Act — degraded path (subagent unavailable)**: if the environment cannot spawn a subagent, do **not** run the review inline in this session (a self-context review defeats the isolation). Leave `pair-review` pending, note `Review: pending — dispatch unavailable, run /review <pr> in a fresh session` in the output, and post the same instruction as a PR comment. The merge stays blocked meanwhile, so nothing is lost — only deferred.
-7. **Act — dispatch failure**: if the subagent fails or times out, the pending `pair-review` check stays in place (merge blocked) and the re-run guidance is posted as a PR comment. Re-invoking this skill re-dispatches (idempotent).
-8. **Verify**: The PR carries a `pair-review` check on its head commit, exactly one `pr-state:*` label, and either a submitted review or a recorded reason why it is still pending. This skill never publishes a verdict itself and never merges.
+5. **Act — hand the review dispatch to whoever can actually spawn it (AC1)**: the review must run on a **clean context** — an **anonymous** subagent whose prompt is the PR reference only, no context from this session (mechanical isolation, D23: the reviewing context must not inherit the authoring context). **Who spawns it depends on where this skill is running**, because harnesses commonly forbid **nested** subagent dispatch — and this skill is itself frequently running *inside* a subagent (`/implement` Step 3.3 publishes the PR from a handoff-only subagent), where spawning a second level would fail on the primary path:
+   - **This skill is running inside a subagent** (or nested dispatch is unavailable/refused) → do **not** attempt to nest. Emit the signal **`Review: review-dispatch-required — /review $pr=<number>`** and return it to the caller; **the caller dispatches** (for `/implement`, Step 3.3 in the top-level session — the actor is named there). The `pair-review` check is already `pending`, so the merge stays blocked until the review lands: nothing is lost, and the dispatch happens one frame up where it is allowed.
+   - **This skill is running at the top level** (invoked directly in a session that can spawn subagents) → spawn the anonymous review subagent here, now.
+6. **The dispatch prompt** (identical for either actor) is the PR reference plus a **bounded** instruction — the review must not merge:
+
+   ```text
+   Run /review $pr=<number> $dispatched=true.
+   Phases 1–5 only: produce the verdict, publish the `pair-review` check, synthesize the PR state.
+   NEVER run Phase 6 and NEVER merge, even if the verdict is APPROVED and every gate is green —
+   the merge is a human act (pr-states.md). Stop after Phase 5 and report.
+   ```
+
+   `/review`'s own non-interactive contract (its Arguments section) already forbids Phase 6 and defines what to do at its two human prompts (Step 1.4 "Proceed with review?" → continue without asking; Step 5.5 "Merge now?" → always "the author merges"), so a dispatched review neither stalls on an unanswerable question nor self-answers itself into a merge. The prompt states it too: belt and braces, since the constraint is an authorization boundary.
+
+7. **Act — degraded path (no dispatch anywhere)**: if neither this skill nor its caller can spawn a subagent, do **not** run the review inline in this session (a self-context review defeats the isolation). Leave `pair-review` pending, note `Review: pending — dispatch unavailable, run /review <pr> in a fresh session` in the output, and post the same instruction as a PR comment. The merge stays blocked meanwhile, so nothing is lost — only deferred.
+8. **Act — dispatch failure**: if the subagent fails or times out, the pending `pair-review` check stays in place (merge blocked) and the re-run guidance is posted as a PR comment. Re-invoking this skill re-dispatches (idempotent).
+9. **Verify**: The PR carries a `pair-review` check on its head commit, exactly one `pr-state:*` label, and either a dispatched/submitted review or a recorded reason why it is still pending (`review-dispatch-required` counts as recorded **only** because the caller's contract picks it up — see Composition Interface). This skill never publishes a verdict itself and never merges.
 
 ## Output Format
 
@@ -137,7 +150,7 @@ PUBLISH-PR REPORT:
 ├── Conditional: [Services to Release: N deployable packages / n-a | Screenshots: UI touched / n-a]
 ├── Board:      [→ Review | not updated — reason]
 ├── PR state:   [pr-state:to-be-reviewed]
-└── Review:     [dispatched — subagent (clean context) | pending — dispatch unavailable, run /review <pr> | already submitted on this head]
+└── Review:     [dispatched — subagent (clean context) | review-dispatch-required — /review $pr=<n> (caller dispatches) | pending — dispatch unavailable, run /review <pr> | already submitted on this head]
 
 RESULT: [PR UNDER REVIEW — merge blocked by required check `pair-review` | HALTED — <reason>]
 ```
@@ -148,6 +161,7 @@ When composed by a future closing phase of `/implement` (wired in #256):
 
 - **Input**: `/implement` invokes `/publish-pr` after the last task's commit, passing `$story` (and, when it wrote one, the checkpoint as `$handoff`). `/implement` owns task iteration; `/publish-pr` owns the gate→PR→board sequence.
 - **Output**: The PR number/URL and board-state result flow back to `/implement`'s Phase 3 output. A HALTed gate propagates as `/implement`'s HALT.
+- **Review-dispatch contract (AC1)**: `/implement` publishes the PR from a **handoff-only subagent**, so this skill's Phase 5 runs one level down and must not nest a second subagent. It therefore returns **`Review: review-dispatch-required — /review $pr=<n>`**, and `/implement` Step 3.3 — running in the **top-level** session — spawns the anonymous review subagent with the bounded prompt (phases 1–5, never Phase 6/merge). The `pair-review` check is already `pending` before the return, so the merge is blocked across the handoff. When this skill runs at the top level instead, it dispatches itself and returns `Review: dispatched`.
 
 When invoked **independently** (hotfix, automation loop #212):
 
@@ -172,7 +186,8 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **No classification tags on the story**: create the PR without tags and note it (edge case) — never invent tags.
 - **`/checkpoint` not installed**: gather state from branch + story directly (Phase 0).
 - **`/write-issue` not installed**: skip the board-state update, warn, leave the PR ready.
-- **Subagent spawning unavailable** (Phase 5): leave `pair-review` pending, post the re-run instruction as a PR comment, and note the deferral in the output. Never run the review inline in the authoring session (isolation, D23) and never mark the PR reviewed. Merge stays blocked — the outcome is deferred, not skipped.
+- **Nested subagent dispatch unavailable** (Phase 5 — the common case: this skill is itself running in `/implement`'s handoff subagent and the harness forbids a second level): return `Review: review-dispatch-required — /review $pr=<n>` and let the **caller** dispatch (`/implement` Step 3.3). This is the primary path when nested, not a degradation — the review still runs, one frame up, on a clean context.
+- **Subagent spawning unavailable anywhere** (Phase 5 — the caller cannot spawn either, or this skill was invoked at top level in an environment without subagents): leave `pair-review` pending, post the re-run instruction as a PR comment, and note the deferral in the output. Never run the review inline in the authoring session (isolation, D23) and never mark the PR reviewed. Merge stays blocked — the outcome is deferred, not skipped.
 - **Code host has no check-run/required-check API** (Phase 5): publish the state as a `pr-state:*` label only, note `enforcement: advisory — see host manual setup` in the output, and continue. Documented degradation, never a silent claim of enforcement (pr-states.md).
 - **`pair-review` publication refused** (Phase 5 — token without the status scope, host API rejects it): the check is not published, so enforcement is **advisory**; report `pair-review: NOT PUBLISHED — advisory` (with the host error) and still dispatch the review. Never report a blocked merge that is not blocked.
 - **`pr-state:*` label absent / no label API** (Phase 5): report `pr-state label: not applied` and continue — **non-blocking**, the required checks remain the merge authority. The labels are provisioned once per repository (host implementation guide); never invent a different label name.

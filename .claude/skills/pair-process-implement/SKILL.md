@@ -305,8 +305,17 @@ The PR is produced on a **guaranteed-clean context**: a fresh subagent whose ent
 1. **Check**: Is subagent spawning available in this tool/environment?
 2. **Act — primary path (subagent)**: Spawn an **anonymous subagent** whose prompt is the **handoff document only** — the checkpoint contents (or the path `.pair/working/checkpoints/<story-id>.md`) plus a single instruction: run `/pair-capability-publish-pr $story=<story-id> $handoff=.pair/working/checkpoints/<story-id>.md`. Pass **no other session context** — the subagent's context is the handoff and nothing else (clean context / fresh context reset within one execution, R4.1). The subagent runs `/pair-capability-publish-pr` (gate → PR → tags → ready-for-review → board) and returns the PR number/URL and board result.
 3. **Act — degraded inline path (AC3)**: If subagent spawning is **unavailable** (tool/environment cannot spawn one — subagent spawning unavailable), do NOT skip the split: the checkpoint is already written (Step 3.2), then compose `/pair-capability-publish-pr` **inline** in the current session (`$story`, `$handoff` = the checkpoint). **Note the degradation in the output** (`Context: degraded — inline publish, no subagent reset`). Behavior is otherwise equivalent to the primary path.
-4. **Act — edge case (subagent fails mid-PR)**: The checkpoint remains valid. Re-invoking `/pair-process-implement` re-runs this closing phase; `/pair-capability-publish-pr` is **idempotent** — it detects an existing PR and updates it in place rather than opening a second one. Never open a second PR for the story.
-5. **Verify**: A single ready-for-review PR exists (created or updated), and its number/URL is captured for the output. A red quality gate inside `/pair-capability-publish-pr` propagates here as a **HALT** (no PR side effects) — implement does not create the PR itself.
+4. **Act — dispatch the review (AC1 of #234; this session is the actor)**: `/pair-capability-publish-pr` Phase 5 registers the `pair-review` check as **pending** (merge blocked from t0) but cannot spawn the review subagent from inside the handoff subagent — nested dispatch is commonly forbidden — so it returns **`Review: review-dispatch-required — /pair-process-review $pr=<n>`**. When that signal comes back, **this top-level session** spawns the anonymous review subagent (a sibling of the publish subagent, not a nested one), prompt = the PR reference plus the bounded instruction:
+
+   ```text
+   Run /review $pr=<number> $dispatched=true.
+   Phases 1–5 only: verdict, `pair-review` check, PR-state synthesis.
+   NEVER run Phase 6 and NEVER merge, whatever the verdict — the merge is a human act.
+   ```
+
+   Pass no authoring context (D23 isolation: the reviewer must not inherit the author's assumptions). If `/pair-capability-publish-pr` returns `Review: dispatched` instead (it ran at top level), there is nothing to do here. If this session cannot spawn the reviewer either, record `Review: pending — dispatch unavailable, run /pair-process-review <pr> in a fresh session`: the merge stays blocked, so the review is deferred, never skipped.
+5. **Act — edge case (subagent fails mid-PR)**: The checkpoint remains valid. Re-invoking `/pair-process-implement` re-runs this closing phase; `/pair-capability-publish-pr` is **idempotent** — it detects an existing PR and updates it in place rather than opening a second one. Never open a second PR for the story.
+6. **Verify**: A single ready-for-review PR exists (created or updated), its number/URL is captured for the output, and the review is either dispatched or explicitly recorded as deferred. A red quality gate inside `/pair-capability-publish-pr` propagates here as a **HALT** (no PR side effects) — implement does not create the PR itself.
 
 Note: the checkpoint is **not** removed here — it must survive the review/fix loop so a re-review or fix round can resume from it. Cleanup happens at merge (Phase 4).
 
@@ -330,6 +339,7 @@ IMPLEMENTATION COMPLETE:
 ├── Checkpoint: [.pair/working/checkpoints/<id>.md — written]
 ├── Context:    [clean — subagent handoff-only | degraded — inline publish, no subagent reset]
 ├── PR:         [#PR-number — URL — Created | Updated (from /publish-pr)]
+├── Review:     [dispatched — subagent (clean context) | pending — dispatch unavailable, run /review <pr>]
 └── Quality:    [All gates passing]
 ```
 
@@ -369,7 +379,7 @@ The skill resumes from the first incomplete step — never re-does completed wor
 
 See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (PM tool not accessible → ask the developer directly; adoption file missing → proceed with guideline defaults) for the standard scenarios. Additional cases:
 
-- **Subagent spawning unavailable**: take the degraded inline path (Step 3.3) — checkpoint still written, `/pair-capability-publish-pr` composed inline, degradation noted in the output. Never skip the checkpoint/PR split.
+- **Subagent spawning unavailable**: take the degraded inline path (Step 3.3) — checkpoint still written, `/pair-capability-publish-pr` composed inline, degradation noted in the output. Never skip the checkpoint/PR split. The review dispatch degrades the same way: `pair-review` stays pending (merge blocked) and the re-run instruction is recorded, never an inline self-review.
 - **`/pair-capability-checkpoint` not installed**: skip the resume probe and the write step; resume from git+PM state (Idempotent Re-invocation) and synthesize the handoff inline for `/pair-capability-publish-pr`.
 - **`/pair-capability-publish-pr` not installed**: **HALT** — implement composes the gate/PR/board sequence, it never re-implements it. Report the missing dependency.
 - **`/pair-capability-assess-stack` not installed**: Warn on new dependency, continue without validation.

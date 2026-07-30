@@ -47,11 +47,11 @@ The synthesis is a table, not a heuristic. It is implemented once, in the shippe
 
 ### Per-tier requirements are read, never restated
 
-Reviewer count, SLA, checklist depth, and whether explicit approval is required come from the **quality model** ([quality-model.md](../../quality-assurance/quality-model.md) §4) through its `Argument > Adoption > KB default` cascade — 🟢 `risk:green` self-merge at green checks · 🟡 `risk:yellow` 1 reviewer / 1 working day · 🔴 `risk:red` 1 reviewer / 2 working days + extended checklist + **explicit approval** (D10). This document does **not** copy those thresholds; a project that overrides `tier.red.reviewers` in `tech/risk-matrix.md` changes them in exactly one place.
+Reviewer count, SLA, checklist depth, and whether explicit approval is required come from the **quality model** ([quality-model.md](../../quality-assurance/quality-model.md) §4, per-tier requirements table) through its `Argument > Adoption > KB default` cascade. This document copies **none** of those values — not even as an illustration: a project that overrides `tier.red.reviewers` or `tier.red.sla_days` in `tech/risk-matrix.md` changes them in exactly one place, and a restatement here would be the first thing to go stale. The only requirement this flow *names* is the one that changes the merge topology: at 🔴 (`risk:red`) the quality model demands an **explicit human approval** (D10), which the synthesis below consumes as its fourth input.
 
 **How the pair review maps onto those requirements:** at 🟡 the **pair review satisfies** the tier's single **reviewer approval** — an approving `pair-review` verdict on green gates *is* that approval, and no additional human approval is demanded (so 🟡 differs from 🟢 in gate breadth and in the review being blocking, not in an extra approver). 🔴 is the only tier adding a requirement the review cannot meet by itself: an **explicit human approval** from a non-author account (D10).
 
-The tier itself is read from the PR's `risk:*` label via [`tier-resolve.sh`](../../../assets/tier-resolve.sh) (`resolve_tier`). **This flow contains no classification criteria** (D18): it never inspects the diff, the code, file paths, or change size — grep-verifiable, in both the guideline and the evaluator. **Fail-safe: an untagged, unknown, or malformed tier is treated as 🔴** (consistent with the pre-merge gate's own fail-safe, [tier-aware-pipeline.md](../../infrastructure/cicd-strategy/tier-aware-pipeline.md)) — so a missing classification demands *more*, never less.
+The tier itself is read from the PR's `risk:*` label via [`tier-resolve.sh`](../../../assets/tier-resolve.sh) (`resolve_tier`). **This flow contains no classification criteria** (D18): it never inspects the diff, the code, file paths, or change size — grep-verifiable, in both the guideline and the evaluator. **Fail-safe: an untagged, unknown, or malformed tier is treated as 🔴 red** (consistent with the pre-merge gate's own fail-safe, [tier-aware-pipeline.md](../../infrastructure/cicd-strategy/tier-aware-pipeline.md)) — so a missing classification demands *more*, never less.
 
 ## Enforcement: required checks are the authority, labels are a view
 
@@ -61,7 +61,12 @@ Merge blocking is **mechanical**. Three required-check layers sit on the protect
 | --- | --- | --- | --- |
 | Gate | the pre-merge pipeline's jobs (base, secret-scan, and the suites for the tier) | always | any job red, or a required suite missing |
 | Review | **`pair-review`** — the check the review flow publishes on the head commit (on GitHub a **commit status**, which the agent's own token can write; the Checks API cannot — see the implementation guide) | always | conclusion is `failure` (CHANGES-REQUESTED) **or** still `pending`/absent (review never ran, crashed, or was skipped) |
-| Explicit approval | **`pair-explicit-approval`** — verifies a human approval exists on the current head when the tier demands it | always (auto-passes below 🔴) | tier is 🔴 (or untagged ⇒ 🔴) and no human approval is recorded on the current head |
+| Explicit approval | **`pair-explicit-approval`** — a deterministic host job that verifies a human approval exists on the current head when the tier demands it | always (auto-passes below 🔴) | tier is 🔴 (or untagged ⇒ 🔴) and no human approval is recorded on the current head |
+
+Two properties of the explicit-approval layer are **host-agnostic invariants**, not GitHub trivia — an implementation that misses either one silently voids AC4:
+
+- **It runs from a trusted ref.** The job's code (and any shared projection it reads) comes from the **target branch**, never from the pull request's own tree. Otherwise the change under review can rewrite the check that authorizes it and self-grant the 🔴 approval — an authorization control defined by the thing it authorizes is not a control.
+- **Its verdict is pinned to the head commit** the host's protection actually evaluates, on **every** re-evaluation — including the one triggered by the approval itself. A verdict recorded against any other commit leaves a 🔴 PR blocked *after* the human approves.
 
 Because `pair-review` is a **required status check** (R5.7), the review **cannot be skipped**: a PR with no review check, a failed one, or one still pending is not mergeable on the code host — not by convention, but by branch protection. The same holds for `pair-explicit-approval` at 🔴 (AC4/D10).
 

@@ -39,6 +39,13 @@ So the review cannot be skipped, and a crashed review can never leave a PR quiet
 
 A second required check, **`pair-explicit-approval`**, enforces the 🔴 tier's extra requirement: a **human, non-author** approval on the current head commit (the AI review does not count, and a bot cannot substitute). It auto-passes at 🟢 and 🟡, so lower-risk PRs are never slowed down by it.
 
+Because it is an *authorization* check, two implementation properties are non-negotiable — the host guide's job template has both:
+
+- **it runs from the target branch's code**, never the pull request's own — otherwise a PR could rewrite the check that authorizes it and self-grant the 🔴 approval;
+- **its verdict is pinned to the PR head commit** on every re-evaluation, including the one the approval itself triggers — a verdict recorded anywhere else would leave a 🔴 PR blocked *after* the human approved.
+
+The review is dispatched to that clean-context subagent with a bounded instruction: produce the verdict and the checks, **never merge**. Merging stays a human act at every tier.
+
 <Callout type="warn">
   **A 🔴 merge needs a second human account.** GitHub rejects an approving review from the PR author,
   so on a single-maintainer repository no 🔴 PR can satisfy `pair-explicit-approval`. Either add a

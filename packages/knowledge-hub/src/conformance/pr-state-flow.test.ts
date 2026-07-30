@@ -57,6 +57,8 @@ const HOW_TO_CODE_REVIEW = readFileSync(
   'utf-8',
 )
 const WOW_TEMPLATE = readFileSync(join(DATASET, '.pair/adoption/tech/way-of-working.md'), 'utf-8')
+const IMPLEMENT_PATH = join(DATASET, '.skills/process/implement/SKILL.md')
+const IMPLEMENT = readFileSync(IMPLEMENT_PATH, 'utf-8')
 
 /** Every relative markdown link in `content` resolves to a file on disk. */
 const assertLinksResolve = (content: string, fromPath: string, targets: string[]): void => {
@@ -374,5 +376,118 @@ describe('doc coherence & cross-links for the PR state flow (#234)', () => {
 
   it('the way-of-working TEMPLATE carries a status placeholder, not an applied-as-fact claim', () => {
     expect(WOW_TEMPLATE).toMatch(/Status: \[applied \| not yet applied\]/)
+  })
+})
+
+// --- review round 2 on PR #390 -------------------------------------------------
+// The authorization control must not be readable from the PR's own tree, the
+// required contexts must land on the commit branch protection evaluates, and the
+// review dispatch must be executable (no nested delegation) and non-mergeable.
+
+describe('pair-explicit-approval runs from a TRUSTED ref (round 2)', () => {
+  it('triggers on pull_request_target, never on plain pull_request (the PR cannot ship its own gate)', () => {
+    expect(GITHUB_GUIDE).toMatch(/^\s*pull_request_target:/m)
+    // a bare `pull_request:` trigger would run the PR's own workflow file
+    expect(GITHUB_GUIDE).not.toMatch(/^\s{2}pull_request:\s*$/m)
+  })
+
+  it('pins the checkout to the BASE sha, never to the PR head, and disables credentials', () => {
+    expect(GITHUB_GUIDE).toMatch(/ref:\s*\$\{\{\s*github\.event\.pull_request\.base\.sha\s*\}\}/)
+    expect(GITHUB_GUIDE).not.toMatch(
+      /ref:\s*\$\{\{\s*github\.event\.pull_request\.head\.(sha|ref)\s*\}\}/,
+    )
+    expect(GITHUB_GUIDE).toMatch(/persist-credentials:\s*false/)
+  })
+
+  it('explains the tampering threat the trusted ref defends against, and the fork caveat', () => {
+    expect(GITHUB_GUIDE).toMatch(/tamper/i)
+    expect(GITHUB_GUIDE).toMatch(/(self-grant|self-approve|bypass)/i)
+    expect(GITHUB_GUIDE).toMatch(/fork/i)
+    // the inline alternative for projects that refuse pull_request_target
+    expect(GITHUB_GUIDE).toMatch(/inline/i)
+  })
+
+  it('publishes pair-explicit-approval as a commit status pinned to the PR HEAD sha', () => {
+    expect(GITHUB_GUIDE).toMatch(/statuses\/\$HEAD_SHA[\s\S]{0,400}pair-explicit-approval/)
+    expect(GITHUB_GUIDE).toMatch(/statuses:\s*write/)
+  })
+
+  it('states WHY the status is posted explicitly: the run’s own SHA is not the PR head', () => {
+    expect(GITHUB_GUIDE).toMatch(
+      /(GITHUB_SHA|the run'?s? (own )?(head )?sha)[\s\S]{0,320}(base|not the (PR )?head)/i,
+    )
+    expect(GITHUB_GUIDE).toMatch(/pull_request_review[\s\S]{0,400}head (commit|sha)/i)
+  })
+})
+
+describe('copy-pasteable host recipe is actually runnable (round 2)', () => {
+  it('defines the repository variables once and uses ONE form (repos/$REPO/...)', () => {
+    expect(GITHUB_GUIDE).toMatch(/REPO="\$\(gh repo view --json nameWithOwner/)
+    // no mixed `repos/$OWNER/$REPO/` form in the new section
+    expect(GITHUB_GUIDE).not.toMatch(/repos\/\$OWNER\/\$REPO/)
+  })
+
+  it('ships enforce_admins FALSE in the payload, pointing at the step that flips it', () => {
+    expect(GITHUB_GUIDE).toMatch(/"enforce_admins": false/)
+    expect(GITHUB_GUIDE).not.toMatch(/"enforce_admins": true/)
+  })
+
+  it('paginates the reviews query — an approval on page 2 must not read as zero', () => {
+    expect(GITHUB_GUIDE).toMatch(/--paginate[^\n]*pulls\/\$PR\/reviews/)
+    expect(GITHUB_GUIDE).not.toMatch(/reviews\?per_page=100/)
+  })
+
+  it('ordering step 2 covers the approval-time re-run, not only PR open', () => {
+    expect(GITHUB_GUIDE).toMatch(/### Ordering/)
+    expect(GITHUB_GUIDE).toMatch(/(approv|review submission)[\s\S]{0,240}head (commit|sha)/i)
+  })
+})
+
+describe('pr-states.md does not restate tier thresholds (round 2)', () => {
+  it('links quality-model §4 instead of copying reviewer/SLA/checklist values', () => {
+    expect(GUIDELINE).not.toMatch(/1 working day/)
+    expect(GUIDELINE).not.toMatch(/2 working days/)
+    expect(GUIDELINE).not.toMatch(/extended checklist/i)
+    expect(GUIDELINE).toMatch(/quality-model\.md/)
+  })
+})
+
+describe('review dispatch is executable and never merges (round 2)', () => {
+  it('publish-pr emits a review-dispatch-required signal instead of nesting a subagent', () => {
+    expect(PUBLISH_PR).toMatch(/review-dispatch-required/)
+    expect(PUBLISH_PR).toMatch(/nest(ed|ing)?[\s\S]{0,200}subagent|subagent[\s\S]{0,200}nest/i)
+  })
+
+  it('the dispatch prompt forbids the merge phase (phases 1–5 only)', () => {
+    expect(PUBLISH_PR).toMatch(/never merge|do not merge|phases 1–5 only/i)
+    expect(PUBLISH_PR).toMatch(/Phase 6/)
+  })
+
+  it('implement Step 3.3 is the actor that dispatches the review when the signal comes back', () => {
+    expect(IMPLEMENT).toMatch(/review-dispatch-required/)
+    expect(IMPLEMENT).toMatch(/\/review \$pr=/)
+    expect(IMPLEMENT).toMatch(/never merge|do not merge|phases 1–5 only/i)
+  })
+
+  it('review defines NON-INTERACTIVE behaviour for the two human prompts when dispatched', () => {
+    expect(REVIEW).toMatch(/dispatched/i)
+    // Step 1.4 confirmation is skipped rather than stalling
+    expect(REVIEW).toMatch(/Proceed with review\?[\s\S]{0,600}(dispatched|non-interactive)/i)
+    // Step 5.5 never self-answers "merge now"
+    expect(REVIEW).toMatch(
+      /(dispatched|non-interactive)[\s\S]{0,400}(never|does not)[\s\S]{0,80}Phase 6/i,
+    )
+  })
+})
+
+describe('"extended" checklist depth is defined, not decorative (round 2)', () => {
+  it('quality-model §4 defines what standard vs extended checklist depth means', () => {
+    expect(QUALITY_MODEL).toMatch(/checklist depth/i)
+    expect(QUALITY_MODEL).toMatch(/extended[\s\S]{0,400}(no section skipped|every section)/i)
+    expect(QUALITY_MODEL).toMatch(/code-review-template\.md/)
+  })
+
+  it('review Step 5.4 reads that definition instead of naming a non-existent artifact', () => {
+    expect(REVIEW).toMatch(/checklist depth[\s\S]{0,300}quality-model/i)
   })
 })

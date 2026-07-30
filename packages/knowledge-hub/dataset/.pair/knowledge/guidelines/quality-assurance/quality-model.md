@@ -64,6 +64,13 @@ Cost class = **highest detected signal**. The signal catalog (paid-SDK imports, 
 | 🟡 Yellow | Blocked until reviewed | 1 reviewer | 1 working day | standard | reviewer approval |
 | 🔴 Red | Blocked until reviewed and approved | 1 reviewer | 2 working days | extended | explicit approval required |
 
+**Checklist depth** is that table's third column and means exactly this — there is no separate "extended checklist" artifact anywhere, and none is needed:
+
+| Depth | Meaning |
+| --- | --- |
+| `standard` (🟢/🟡) | The [code-review template](../collaboration/templates/code-review-template.md) — resolved per [template resolution](../technical-standards/ai-development/skill-conventions/template-resolution.md) — as designed: verdict first, the Assessments block, and the Details sections that the change actually touches. Sections with nothing to say are collapsed/omitted. |
+| `extended` (🔴) | The **same** template with **no section skipped**: every Assessments subsection (all Security dimensions, Cost, Architecture) and every Details section is answered explicitly — "not applicable" is written out rather than omitted — and the Definition-of-Done check is run in full. Depth, not a different document. |
+
 Reviewer counts and SLAs are **KB defaults** (D10), resolved through the same **Argument > Adoption > KB default** cascade as every other rule in this document — not fixed forever. A project may override either per tier in `tech/risk-matrix.md`'s Overrides section (§6), e.g. requiring 2 reviewers at 🔴 Red for a larger team:
 
 ```markdown

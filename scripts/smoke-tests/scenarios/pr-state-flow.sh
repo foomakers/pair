@@ -33,6 +33,9 @@ PUBLISH_PR="$DATASET/.skills/capability/publish-pr/SKILL.md"
 REVIEW="$DATASET/.skills/process/review/SKILL.md"
 MERGE_CASCADE="$DATASET/.skills/process/review/merge-and-cascade.md"
 SETUP_GATES="$DATASET/.skills/capability/setup-gates/SKILL.md"
+IMPLEMENT="$DATASET/.skills/process/implement/SKILL.md"
+QUALITY_MODEL="$DATASET/.pair/knowledge/guidelines/quality-assurance/quality-model.md"
+ADR="$REPO_ROOT/.pair/adoption/tech/adr/adr-018-pr-state-flow-required-checks.md"
 
 FAILED=0
 check() { # check <description> <expected> <actual>
@@ -52,7 +55,8 @@ audit() { # audit <description> <file> <pattern...>
   log_succ "$desc"
 }
 
-for f in "$EVALUATOR" "$TIER_RESOLVER" "$GUIDELINE" "$GITHUB_GUIDE" "$PUBLISH_PR" "$REVIEW" "$MERGE_CASCADE" "$SETUP_GATES"; do
+for f in "$EVALUATOR" "$TIER_RESOLVER" "$GUIDELINE" "$GITHUB_GUIDE" "$PUBLISH_PR" "$REVIEW" \
+  "$MERGE_CASCADE" "$SETUP_GATES" "$IMPLEMENT" "$QUALITY_MODEL" "$ADR"; do
   assert_file "$f" || exit 1
 done
 
@@ -88,7 +92,15 @@ check "review crashed/errored"          to-be-reviewed "$(resolve_pr_state pass 
 # --- AC4: 🔴 additionally requires an explicit human approval (D10) ---
 check "🔴 approved, no human approval"  to-be-reviewed "$(resolve_pr_state pass approved red 0 2>/dev/null)"
 check "🔴 approved + human approval"    ready-to-merge "$(resolve_pr_state pass approved red 1 2>/dev/null)"
-check "🟡→🔴 raise re-blocks"           to-be-reviewed "$(resolve_pr_state pass approved red 0 2>/dev/null)"
+# A real transition: the SAME PR, gates green and review approved throughout, with the
+# tier driven by the label set through resolve_tier — 🟡 clears, the raise to 🔴 re-blocks.
+LABELS_BEFORE="risk:yellow user story"
+LABELS_AFTER="risk:red user story" # raise-only (D17): the yellow label is replaced
+STATE_BEFORE="$(resolve_pr_state pass approved "$(resolve_tier "$LABELS_BEFORE" 2>/dev/null)" 0 2>/dev/null)"
+STATE_AFTER="$(resolve_pr_state pass approved "$(resolve_tier "$LABELS_AFTER" 2>/dev/null)" 0 2>/dev/null)"
+check "🟡 label set clears the merge"   ready-to-merge "$STATE_BEFORE"
+check "🟡→🔴 raise re-blocks it"        to-be-reviewed "$STATE_AFTER"
+check "the raise actually transitioned" "ready-to-merge->to-be-reviewed" "$STATE_BEFORE->$STATE_AFTER"
 
 # --- Fail-safe: untagged / malformed tier is treated as 🔴 ---
 check "untagged tier (fail-safe red)"   to-be-reviewed "$(resolve_pr_state pass approved '' 0 2>/dev/null)"
@@ -192,59 +204,134 @@ else
   log_fail "explicit-approval job lost the tag resolution / head pinning"; FAILED=1
 fi
 
-# --- EXECUTED host assertions (read-only) -----------------------------------
-# The recipe is only real if the host API behaves as documented; doc-content
-# invariants alone cannot catch an endpoint that refuses the skills' token or a
-# field that does not exist. These probes are READ-ONLY (no status published, no
-# label created, no protection written) and are SKIPPED — never failed — without
-# gh/token/network, so offline and unauthenticated CI runs stay green.
+# --- Round 2: the approval job is an AUTHORIZATION control, so its code must come
+# from the base ref and its verdict must land on the commit protection reads. ---
+audit "approval job runs from a trusted ref + posts a head-pinned status" "$GITHUB_GUIDE" \
+  'pull_request_target:' 'ref: \${{ github.event.pull_request.base.sha }}' \
+  'persist-credentials: false' 'statuses: write' 'cancel-in-progress: true' \
+  "statuses/\\\$HEAD_SHA" "context='pair-explicit-approval'"
+if grep -Eq '^  pull_request:[[:space:]]*$' "$GITHUB_GUIDE"; then
+  log_fail "approval job trigger fell back to plain pull_request (PR ships its own gate)"; FAILED=1
+else
+  log_succ "no plain pull_request trigger on the authorization job"
+fi
+if grep -q 'ref: ${{ github.event.pull_request.head.sha }}' "$GITHUB_GUIDE"; then
+  log_fail "a checkout is pinned to the PR head (tamperable authorization control)"; FAILED=1
+else
+  log_succ "no checkout is pinned to the PR head"
+fi
+# The copy-pasteable payload must not walk into the enforce_admins trap, and the
+# approval query must paginate (an approval on page 2 is not zero approvals).
+if grep -q '"enforce_admins": true' "$GITHUB_GUIDE"; then
+  log_fail "branch-protection payload ships enforce_admins: true (no escape hatch)"; FAILED=1
+else
+  log_succ "branch-protection payload ships enforce_admins: false"
+fi
+if grep -q 'reviews?per_page=100' "$GITHUB_GUIDE"; then
+  log_fail "approval query is capped at one page (an approval on page 2 reads as zero)"; FAILED=1
+else
+  log_succ "approval query is not capped at a single page"
+fi
+if grep -q -- '--paginate' "$GITHUB_GUIDE"; then
+  log_succ "approval query paginates the reviews stream"
+else
+  log_fail "approval query lost --paginate"; FAILED=1
+fi
+# One variable convention: no snippet may mix `repos/$OWNER/$REPO` with `repos/$REPO`.
+if grep -q 'repos/\$OWNER/\$REPO' "$GITHUB_GUIDE"; then
+  log_fail "guide mixes repos/\$OWNER/\$REPO with repos/\$REPO (404 for a copy-paster)"; FAILED=1
+else
+  log_succ "guide uses one repository-variable form"
+fi
+
+# --- Round 2: the review dispatch must be executable (no nested delegation) and
+# must never merge; pr-states must not restate quality-model thresholds. ---
+audit "publish-pr hands the dispatch to the caller instead of nesting" "$PUBLISH_PR" \
+  'review-dispatch-required' 'NEVER run Phase 6'
+audit "implement dispatches the review from the top-level session" "$IMPLEMENT" \
+  'review-dispatch-required' 'NEVER merge'
+audit "review defines the non-interactive (dispatched) contract" "$REVIEW" \
+  'dispatched' 'non-interactive'
+for pat in '1 working day' '2 working days' 'extended checklist'; do
+  if grep -q "$pat" "$GUIDELINE"; then
+    log_fail "pr-states.md restates a quality-model threshold ('$pat')"; FAILED=1
+  else
+    log_succ "pr-states.md does not restate '$pat'"
+  fi
+done
+audit "quality-model defines what 'extended' checklist depth means" "$QUALITY_MODEL" \
+  'Checklist depth' 'no section skipped'
+audit "ADR-018 records the trusted-ref decision and the reviewer-identity question" "$ADR" \
+  'Trusted ref' 'reviewer identity' 'Head-pinned verdict' 'throwaway repository'
+
+# --- The 🔴 approval filter, executed against a COMMITTED payload fixture ------
+# The approval query is the one piece of the recipe that decides authorization, so
+# it is asserted deterministically — offline, in CI, with no dependency on any
+# third-party pull request staying reachable. The fixture is a real REST
+# `pulls/{n}/reviews` payload (captured 2026-07-30) extended with a Bot review and
+# a stale approval on another commit, so the filter has something to reject.
+FIXTURE="$REPO_ROOT/scripts/smoke-tests/fixtures/github-pr-reviews.json"
+assert_file "$FIXTURE" || exit 1
+audit "fixture carries the fields the documented filter reads" "$FIXTURE" \
+  '"commit_id"' '"state"' '"type"' '"login"'
+if command -v jq >/dev/null 2>&1; then
+  # The exact filter shipped in github-implementation.md's job.
+  FILTER='[.[] | select(.state=="APPROVED" and .commit_id==$head and .user.type=="User" and .user.login!=$author)] | length'
+  HEAD='cc1fba122f0c912ba01288fe90ab2632e7e41057'
+  check "filter counts the human non-author approval on the head" 1 \
+    "$(jq --arg head "$HEAD" --arg author pr-author "$FILTER" "$FIXTURE")"
+  check "filter rejects a stale approval on another commit" 0 \
+    "$(jq --arg head 1111111111111111111111111111111111111111 --arg author pr-author "$FILTER" "$FIXTURE")"
+  check "filter rejects the author's own approval" 0 \
+    "$(jq --arg head 0000000000000000000000000000000000000000 --arg author pr-author "$FILTER" "$FIXTURE")"
+  # With the only human-on-head review authored by the PR author, the Bot approval
+  # on the same head commit is all that is left — and it must not count.
+  check "filter rejects a Bot approval on the head" 0 \
+    "$(jq --arg head "$HEAD" --arg author sergiou87 "$FILTER" "$FIXTURE")"
+else
+  log_warn "approval-filter assertions skipped — jq not installed (fixture shape still asserted)"
+fi
+
+# --- LIVE host probes: WARN-ONLY by construction -------------------------------
+# Useful (they catch an endpoint that starts refusing the skills' token) but never
+# authoritative: they never set FAILED, never fall back to a third-party
+# repository, and are skipped whole offline/unauthenticated. The behaviour they
+# probe is already asserted above against the fixture.
 if [ "${IS_OFFLINE:-false}" != "true" ] && command -v gh >/dev/null 2>&1 &&
   gh auth status >/dev/null 2>&1; then
   PROBE_REPO="${PAIR_HOST_PROBE_REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)}"
-  if [ -z "$PROBE_REPO" ]; then
-    log_warn "host probe skipped — no repository resolvable"
+  PROBE_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || true)"
+  if [ -n "$PROBE_REPO" ] && [ -n "$PROBE_SHA" ] &&
+    gh api "repos/$PROBE_REPO/commits/$PROBE_SHA/status" --jq '.state' >/dev/null 2>&1; then
+    log_succ "host: commit-statuses API reachable with the agent token ($PROBE_REPO)"
   else
-    # 1. The commit-statuses surface (where `pair-review` is published) is reachable
-    #    with the ordinary token. The Checks API is not — hence the statuses recipe.
-    PROBE_SHA="$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || true)"
-    if [ -n "$PROBE_SHA" ] &&
-      gh api "repos/$PROBE_REPO/commits/$PROBE_SHA/status" --jq '.state' >/dev/null 2>&1; then
-      log_succ "host: commit-statuses API reachable with the agent token ($PROBE_REPO)"
-    else
-      log_warn "host probe skipped — commit-statuses read not available for $PROBE_SHA"
+    log_warn "host probe skipped — commit-statuses read not available"
+  fi
+  # A reviewed PR of THIS repository only — no external fallback.
+  PROBE_PR=""
+  for n in $(gh api "repos/$PROBE_REPO/pulls?state=all&per_page=10" --jq '.[].number' 2>/dev/null); do
+    if [ "$(gh api "repos/$PROBE_REPO/pulls/$n/reviews?per_page=1" --jq 'length' 2>/dev/null)" = "1" ]; then
+      PROBE_PR="$n"
+      break
     fi
-
-    # 2. The approval query's fields exist on the REST reviews payload
-    #    (`commit_id` + `user.type`) — the only endpoint carrying both.
-    #    Prefer a PR of this repo; fall back to a public reference PR whose review
-    #    payload is immutable (override with PAIR_HOST_PROBE_REVIEW_REF=owner/repo#N).
-    PROBE_PR="" PROBE_PR_REPO="$PROBE_REPO"
-    for n in $(gh api "repos/$PROBE_REPO/pulls?state=all&per_page=10" --jq '.[].number' 2>/dev/null); do
-      if [ "$(gh api "repos/$PROBE_REPO/pulls/$n/reviews?per_page=1" --jq 'length' 2>/dev/null)" = "1" ]; then
-        PROBE_PR="$n"
-        break
-      fi
-    done
-    if [ -z "$PROBE_PR" ]; then
-      REF="${PAIR_HOST_PROBE_REVIEW_REF:-cli/cli#13981}"
-      PROBE_PR_REPO="${REF%%#*}" PROBE_PR="${REF##*#}"
-      log_info "no reviewed PR on $PROBE_REPO — probing the reference payload $REF"
-    fi
-    SHAPE="$(gh api "repos/$PROBE_PR_REPO/pulls/$PROBE_PR/reviews?per_page=1" \
+  done
+  if [ -z "$PROBE_PR" ]; then
+    log_warn "host probe skipped — no PR of $PROBE_REPO carries a native review"
+  else
+    SHAPE="$(gh api "repos/$PROBE_REPO/pulls/$PROBE_PR/reviews?per_page=1" \
       --jq '.[0] | (has("commit_id") and has("state") and (.user | has("type")))' 2>/dev/null)"
-    if [ -z "$SHAPE" ]; then
-      log_warn "host probe skipped — reviews payload unreachable for $PROBE_PR_REPO#$PROBE_PR"
-    else
-      check "host: reviews REST payload carries commit_id + user.type" true "$SHAPE"
-      # 3. The trap the recipe documents: `gh pr view --json reviews` carries NO bot
-      #    flag, so a bot-exclusion filter there silently yields zero approvals.
-      HAS_BOT_FLAG="$(gh pr view "$PROBE_PR" --repo "$PROBE_PR_REPO" --json reviews \
-        --jq '.reviews[0].author | has("is_bot")' 2>/dev/null)"
-      check "host: gh pr view reviews exposes no bot flag (trap confirmed)" false "$HAS_BOT_FLAG"
-    fi
+    [ "$SHAPE" = true ] &&
+      log_succ "host: live reviews payload matches the fixture shape (#$PROBE_PR)" ||
+      log_warn "host probe inconclusive — live reviews payload unreadable (#$PROBE_PR)"
+    # The trap the recipe documents: `gh pr view --json reviews` carries NO bot flag.
+    HAS_BOT_FLAG="$(gh pr view "$PROBE_PR" --repo "$PROBE_REPO" --json reviews \
+      --jq '.reviews[0].author | has("is_bot")' 2>/dev/null)"
+    [ "$HAS_BOT_FLAG" = false ] &&
+      log_succ "host: gh pr view reviews exposes no bot flag (trap confirmed)" ||
+      log_warn "host probe inconclusive — bot-flag trap not observable (#$PROBE_PR)"
   fi
 else
-  log_warn "host probes skipped — offline or gh not authenticated (doc invariants still asserted)"
+  log_warn "live host probes skipped — offline or gh not authenticated (fixture assertions still ran)"
 fi
 
 if [ "$FAILED" -ne 0 ]; then

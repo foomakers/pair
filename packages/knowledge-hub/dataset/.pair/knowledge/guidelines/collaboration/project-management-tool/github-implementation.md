@@ -616,9 +616,17 @@ GitHub mechanics for the two pair checks the [PR state flow](pr-states.md) requi
 | Check | Published by | Semantics |
 | --- | --- | --- |
 | `pair-review` | `/review`, as a **commit status** (registered `pending` at PR creation by `/publish-pr`) | `success` on APPROVED/TECH-DEBT, `failure` on CHANGES-REQUESTED, `pending` when the review has not produced a decision (never ran, crashed, timed out) |
-| `pair-explicit-approval` | a workflow job (below) | `success` when the tier does not require explicit approval, or when a **human** approving review exists on the current head; `failure` at 🔴 without one |
+| `pair-explicit-approval` | a workflow job (below), also as a **commit status pinned to the PR head SHA** | `success` when the tier does not require explicit approval, or when a **human** approving review exists on the current head; `failure` at 🔴 without one |
 
 Both are **required status checks** — a `pending` or absent required check blocks the merge on GitHub exactly like a failing one, which is what makes the review unskippable (R5.7).
+
+**Variables used by every snippet in this section** — defined once, and every call below uses the **same single-variable form** `repos/$REPO/…` (never a two-variable owner+name form, which is what produces `repos/owner/owner/repo/…` and a 404 when `REPO` already holds `owner/repo`):
+
+```bash
+REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"   # owner/repo — matches `github.repository`
+PR=<pr-number>
+HEAD_SHA="$(gh pr view "$PR" --json headRefOid -q .headRefOid)"
+```
 
 **Token prerequisite (why a commit status, not a check run).** The Checks API (`POST /repos/{owner}/{repo}/check-runs`) is writable **only by a GitHub App installation token**: with an ordinary user token or PAT it answers `403 You must authenticate via a GitHub App`. The skills that publish the verdict (`/publish-pr` Phase 5, `/review` Step 5.4) run agent-side with exactly that ordinary token, so a check run is not an option for them. The **commit-statuses API** accepts the same token and branch protection treats a status **context** as a required check identically. The token needs `repo:status` (classic PAT) / `Commit statuses: write` (fine-grained); inside a workflow that is `permissions: statuses: write`. If a project does publish through a GitHub App instead, keep the check-run form — but then the publication must happen inside a workflow holding `checks: write`, plus a relay that carries the agent's verdict there.
 
@@ -637,10 +645,8 @@ Run this before the first `/publish-pr`. **Non-blocking**: if the labels are abs
 ### Publish the `pair-review` status on the head commit
 
 ```bash
-HEAD_SHA="$(gh pr view "$PR" --json headRefOid -q .headRefOid)"
-
 # Register it pending at PR creation (merge is blocked from t0, even if the review crashes)
-gh api "repos/$OWNER/$REPO/statuses/$HEAD_SHA" -X POST \
+gh api "repos/$REPO/statuses/$HEAD_SHA" -X POST \
   -f state='pending' -f context='pair-review' \
   -f description='Review dispatched — merge blocked until the verdict lands'
 
@@ -648,7 +654,7 @@ gh api "repos/$OWNER/$REPO/statuses/$HEAD_SHA" -X POST \
 source .pair/knowledge/assets/pr-state.sh
 STATE="$(review_check_conclusion "$VERDICT")"   # approved|tech-debt ⇒ success · changes-requested ⇒ failure
 [ "$STATE" = pending ] && { echo "no decision yet — leaving the pending status in place"; exit 0; }
-gh api "repos/$OWNER/$REPO/statuses/$HEAD_SHA" -X POST \
+gh api "repos/$REPO/statuses/$HEAD_SHA" -X POST \
   -f state="$STATE" -f context='pair-review' \
   -f description="$(printf '%.140s' "$VERDICT_SUMMARY")" \
   -f target_url="$REVIEW_URL"
@@ -662,31 +668,53 @@ If the POST is refused (`403`/`404` — token without `repo:status`), enforcemen
 
 Reads the `risk:*` label only (D18, fail-safe red) and asserts a **human** approval — the pair review's own submission never satisfies it, and `dismiss_stale_reviews` keeps it from surviving a force-push.
 
+Four properties are load-bearing and easy to get wrong; all four are encoded in the template below, and each was **verified on a live repository** (§ Verified on a throwaway repository).
+
+1. **The job must run from a trusted ref.** This job is an **authorization control**, so its code must not come from the change it authorizes. On a `pull_request` event GitHub runs the **PR's own** version of the workflow file, and `actions/checkout` with the default ref checks out the PR's tree — so a PR could **tamper** with the job body or with the sourced `explicit_approval_required()` and make the required context report `success` with no human approval, i.e. **self-grant** the 🔴 gate. That is not theoretical: it was reproduced (a `risk:red` PR shipping a neutered `explicit_approval_required` published `pair-explicit-approval=success — tier red — explicit approval not required` on its own head). `pull_request_target` runs the **base** version of the workflow, and pinning the checkout to `github.event.pull_request.base.sha` makes the sourced assets base versions too. The pin matters for the review trigger as well: on `pull_request_review` the workflow _file_ comes from the default branch, but `GITHUB_REF` is `refs/pull/<n>/merge`, so a **default checkout there also lands on the PR's merged tree**. Distinguish this from workflows whose job body only _narrows_ what is tested — there tampering weakens a check; here it would remove an authorization control.
+2. **The verdict must be pinned to the PR head commit.** Branch protection evaluates required contexts **on the head SHA**, and `$GITHUB_SHA` is _not_ that commit for either trigger — measured: `pull_request_target` ⇒ the base branch tip, `pull_request_review` ⇒ the ephemeral `refs/pull/<n>/merge` commit. A job that published against `$GITHUB_SHA` would report on a commit the PR's protection never reads, leaving a 🔴 PR blocked _after_ the human approves. The job therefore `POST`s a **commit status** pinned to `github.event.pull_request.head.sha`, which is deterministic and independent of any event-to-SHA association (that is why the workflow needs `statuses: write`). GitHub _does_ currently attach a run's own check-run to the PR head for both triggers (measured), but that association is incidental where this one is explicit.
+3. **One producer per required context.** The job is therefore named `explicit-approval-gate`, **not** `pair-explicit-approval`: the required context is the commit status it posts, and giving a check-run the same name would leave two independent producers writing one context. The job's own check-run stays as unrequired, human-readable detail.
+4. **Only the newest evaluation may publish.** Two label mutations seconds apart (e.g. `--remove-label risk:yellow --add-label risk:red`) fire two events, and without a concurrency guard a slower older run can overwrite the newer verdict — observed: a stale run re-published the previous tier's result _after_ the current one. A `concurrency` group with `cancel-in-progress` plus a **fresh label read** (the event payload's label list is a snapshot; the API's is current) makes the last-written status always match the PR's current labels.
+
 ```yaml
 name: pair-explicit-approval
 on:
-  pull_request:
+  # `pull_request_target`, NOT `pull_request`: the workflow file and the sourced
+  # assets must come from the BASE branch (property 1 above).
+  pull_request_target:
     # `labeled`/`unlabeled` are REQUIRED: a tier raised mid-review (🟡 → 🔴) must
     # re-evaluate and re-block until a human approval is recorded.
     types: [opened, synchronize, reopened, labeled, unlabeled]
   pull_request_review:
     types: [submitted, dismissed]
 
-# Least privilege: read the PR's reviews, nothing more. (Add `statuses: write` only
-# if this same workflow is also made responsible for publishing `pair-review`.)
+# Only the NEWEST evaluation may publish (property 4): two label mutations seconds
+# apart race, and a stale run must never overwrite the current verdict.
+concurrency:
+  group: pair-explicit-approval-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# Least privilege. `statuses: write` is what lets the job pin its verdict to the PR
+# head commit (property 2); nothing here ever checks out or executes PR code.
 permissions:
   contents: read
   pull-requests: read
+  statuses: write
 
 jobs:
-  pair-explicit-approval:
+  # NOT named `pair-explicit-approval` (property 3): the required context is the
+  # head-pinned commit status this job posts, and one context = one producer.
+  explicit-approval-gate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # TRUSTED REF — the base commit, never the PR head. This is what makes the
+          # two sourced functions untamperable from the pull request's side.
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
       - env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
           PR: ${{ github.event.pull_request.number }}
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -694,28 +722,50 @@ jobs:
           set -euo pipefail
           source .pair/knowledge/assets/tier-resolve.sh   # tags only, no criteria
           source .pair/knowledge/assets/pr-state.sh
+          # Labels read FRESH from the API (property 4), not from the event payload:
+          # a payload snapshot is stale the moment a second label event lands.
+          PR_LABELS="$(gh pr view "$PR" --repo "$REPO" --json labels --jq '[.labels[].name] | join(" ")')"
           TIER="$(resolve_tier "$PR_LABELS")"
-          if ! explicit_approval_required "$TIER"; then
-            echo "tier $TIER — explicit approval not required"; exit 0
+          STATE=success
+          DESC="tier $TIER — explicit approval not required"
+          if explicit_approval_required "$TIER"; then
+            # A HUMAN approval on the CURRENT head: exclude bots and the PR author.
+            # Use the REST reviews endpoint — it is the only one carrying BOTH the
+            # account type and the reviewed commit. `gh pr view --json reviews` exposes
+            # `author.login` and NO bot flag whatsoever, so filtering there on a
+            # bot-exclusion field matches nothing and silently yields 0 approvals.
+            # `--paginate` (no per_page cap): reviews accumulate over a PR's life, so
+            # the approval can sit on page 2 — a single page would read it as zero and
+            # block the PR forever. Aggregate by counting the paginated stream.
+            APPROVALS="$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
+              --jq '.[] | select(.state=="APPROVED" and .commit_id==env.HEAD_SHA
+                     and .user.type=="User" and .user.login!=env.PR_AUTHOR) | .id' \
+              | grep -c . || true)"
+            if [ "${APPROVALS:-0}" -ge 1 ]; then
+              DESC="explicit human approval recorded on the current head"
+            else
+              STATE=failure
+              DESC="risk:red — needs an explicit human approval on the current head (D10)"
+            fi
           fi
-          # A HUMAN approval on the CURRENT head: exclude bots and the PR author.
-          # Use the REST reviews endpoint — it is the only one carrying BOTH the
-          # account type and the reviewed commit. `gh pr view --json reviews` exposes
-          # `author.login` and NO bot flag whatsoever, so filtering there on a
-          # bot-exclusion field matches nothing and silently yields 0 approvals.
-          APPROVALS="$(gh api "repos/$REPO/pulls/$PR/reviews?per_page=100" \
-            --jq '[.[] | select(.state=="APPROVED" and .commit_id==env.HEAD_SHA
-                   and .user.type=="User" and .user.login!=env.PR_AUTHOR)] | length')"
-          [ "${APPROVALS:-0}" -ge 1 ] || {
-            echo "::error::risk:red PR requires an explicit human approval on the current head (D10)"
-            exit 1
-          }
+          # Pin the context to the PR head commit (property 2). Publish BEFORE failing
+          # the job, so the required context always reports.
+          gh api "repos/$REPO/statuses/$HEAD_SHA" -X POST \
+            -f state="$STATE" -f context='pair-explicit-approval' \
+            -f description="$(printf '%.140s' "$DESC")"
+          [ "$STATE" = success ] || { echo "::error::$DESC"; exit 1; }
 ```
+
+**Residual caveats of the trusted-ref form**, stated explicitly rather than assumed away:
+
+- **Forks.** With `pull_request_target` the workflow runs in the **base** repository's context with a write-capable `GITHUB_TOKEN`, which is only safe because this job **never checks out or executes head-ref code** — the checkout is pinned to `base.sha` and no step runs anything from the PR. Never add a step here that builds, installs, or runs the PR's code; put that in the ordinary `pull_request` gate pipeline, which has a read-only token on forks. Conversely, a plain `pull_request` run from a fork gets a **read-only** token and could not `POST` the status at all — another reason for the target trigger.
+- **Base-branch assets.** `tier-resolve.sh` and `pr-state.sh` are sourced from the base commit, so they must already exist on the base branch: the workflow is added and observed **before** protection is applied (ordering below), and a PR that only _introduces_ those assets cannot satisfy the context on its own.
+- **Projects that refuse `pull_request_target` entirely** (a common blanket policy) get the same guarantee by keeping the plain `pull_request` trigger and writing the two functions **inline** in the job body — the `resolve_tier` / `explicit_approval_required` logic is a handful of `case` lines — with no checkout step at all, so there is nothing from the PR's tree to tamper with. The cost is a second copy of the projection, which must then be kept in sync with the shipped assets (a conformance grep is the usual mitigation).
 
 ### Branch protection payload
 
 ```bash
-gh api "repos/$OWNER/$REPO/branches/main/protection" -X PUT --input - <<'JSON'
+gh api "repos/$REPO/branches/main/protection" -X PUT --input - <<'JSON'
 {
   "required_status_checks": {
     "strict": false,
@@ -725,28 +775,55 @@ gh api "repos/$OWNER/$REPO/branches/main/protection" -X PUT --input - <<'JSON'
     "dismiss_stale_reviews": true,
     "required_approving_review_count": 0
   },
-  "enforce_admins": true,
+  "enforce_admins": false,
   "allow_force_pushes": false,
   "restrictions": null
 }
 JSON
 ```
 
+`"enforce_admins": false` is **deliberate in this payload** — copy-paste as written. It is flipped to `true` only in ordering step 4 below, once one PR has actually merged through the rule; shipping `true` here walks straight into the "every PR blocked with no escape hatch" trap described in the next bullets.
+
 - **`required_approving_review_count: 0` is explicit on purpose.** The approval authority is the tier-scoped `pair-explicit-approval` job, not a blanket host rule. Leaving the field unset lets an unstated API default decide, and a default of ≥1 would demand a human approving review on **every** PR — contradicting quality-model §4's 🟢 "self-merge once gate checks are green" row and making the tier-scoped job redundant.
 - **`"strict": false`** — the branch does not have to be up to date with the base. With `strict: true` every base update rewrites the head, and `pair-review` is published **per head commit**, so each base update voids the verdict and demands a fresh agent review: churn bordering on livelock on a busy `main`. Enable `strict` only if the project accepts re-earning the review check on every base update (and pair with an auto-update bot).
 - `dismiss_stale_reviews: true` invalidates a human approval after a force-push. It is belt-and-braces: `pair-explicit-approval` already pins the approval to the current head (`commit_id == HEAD_SHA`), so the 🔴 requirement is head-scoped even without it (edge case in [pr-states.md](pr-states.md)).
-- `enforce_admins: true` removes the admin bypass — apply it only **after** both contexts have been observed reporting on a real PR (ordering below); a required context that never reports leaves every PR blocked with no escape hatch.
+- `enforce_admins: true` removes the admin bypass — flip it on only **after** both contexts have been observed reporting on a real PR and one PR has merged through the rule (ordering below); a required context that never reports leaves every PR blocked with no escape hatch.
 - Add the tier-scoped suite contexts (`unit`, `integration`, `e2e`) when the project runs them — on GitHub a job skipped via `if:` reports its required check as successful, so lower-tier PRs stay mergeable.
 
 ### Ordering: add the job, observe the contexts, then protect
 
 Applying branch protection **before** the two contexts ever report makes every PR permanently unmergeable — a required context that has never reported stays pending forever, and `enforce_admins: true` removes the bypass. Apply in this order:
 
-1. **Provision** the `pr-state:*` labels and add the `pair-explicit-approval` workflow to the repository (neither needs admin scope).
-2. **Observe** on a real PR: `gh api "repos/$OWNER/$REPO/commits/$HEAD_SHA/status" --jq '.statuses[].context'` must list `pair-review`, and the Checks tab must show `pair-explicit-approval`. Publishing the status and querying the reviews need no admin scope — only the protection `PUT` does.
-3. **Protect**: `PUT` the payload above with those contexts, keeping `enforce_admins: false` until one PR has merged through the new rule.
+1. **Provision** the `pr-state:*` labels and add the `pair-explicit-approval` workflow to the repository (neither needs admin scope). The workflow must be on the **base** branch — that is where `pull_request_target` reads it from.
+2. **Observe at PR open** on a real PR — both contexts must appear on the **head commit**, which is the only commit protection evaluates:
+
+   ```bash
+   gh api "repos/$REPO/commits/$HEAD_SHA/status" --jq '.statuses[].context'
+   # expect: pair-review  AND  pair-explicit-approval
+   ```
+
+3. **Observe the approval-time re-run** — this is the failure mode the head-pinned status exists for. Submit a review on that PR (any `pull_request_review` submission triggers the job), then re-run the same command and confirm the `pair-explicit-approval` context re-reports **on the same head SHA** with an updated timestamp. If it were left to the workflow run's own check, the re-run would land on the base branch's commit and the PR would stay blocked _after_ the human approval — the same "permanently unmergeable" trap, one step later. Also confirm the `pair-review` context still reflects the latest verdict on that head.
+4. **Protect**: `PUT` the payload above with those contexts, keeping `enforce_admins: false`; flip it to `true` only after one PR has merged through the new rule.
 
 **Second human account prerequisite.** At 🔴 the job demands a **non-author** human approving review, and GitHub rejects an approving review from the PR author. On a **single-maintainer** repository no 🔴 PR can therefore satisfy it: either keep the `pair-explicit-approval` context out of the required list there, or add a second human reviewer account. See [pr-states.md](pr-states.md) § Edge cases.
+
+### Verified on a throwaway repository (2026-07-30)
+
+The recipe above is not a design sketch: every branch of it was executed end-to-end on a disposable repository (labels → workflow → contexts observed → protection `PUT` with `enforce_admins: true` → one PR per tier). What the host actually did:
+
+| Scenario | Merge attempt result (`gh pr merge --admin`) |
+| --- | --- |
+| 🟢, `pair-review` **pending** | blocked — `Required status check "pair-review" is pending.` |
+| 🟢, `pair-review` **failure** (CHANGES-REQUESTED) | blocked — `Required status check "pair-review" is failing.` |
+| 🟢, `pair-review` **success**, approval context success | **merged** (self-merge at 🟢 with `required_approving_review_count: 0`) |
+| 🔴, no `pair-review` published at all | blocked — `2 of 2 required status checks have not succeeded: 1 expected and 1 failing.` (a never-reported context blocks exactly like a red one) |
+| 🔴, no human approval | `pair-explicit-approval=failure`, merge blocked |
+| 🟡 → 🔴 raise via `labeled`/`unlabeled` | context flipped `success` → `failure` within one run, merge re-blocked |
+| review submitted (`pull_request_review`) | the context **re-reported on the same head SHA** (timestamp advanced) — the approval-time re-run lands where protection reads it |
+| PR shipping a neutered `explicit_approval_required` **and** an `exit 0` in the job body | context still `failure`, merge still blocked — the base-pinned checkout ignores the PR's version. With the pre-fix `pull_request` + default-checkout form the same tamper published `pair-explicit-approval=success — tier red — explicit approval not required` |
+| direct push to the protected branch | rejected — `Changes must be made through a pull request` |
+
+Two things remain **unverified by construction** and stay documented rather than claimed: a _successful_ 🔴 path (it needs a second human account to approve — see below), and any fork-specific behaviour (the sandbox had no forks).
 
 ### Degraded mode
 

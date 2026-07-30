@@ -29,10 +29,21 @@ Review a pull request through 6 sequential phases (5 review + 1 optional merge).
 
 ## Arguments
 
-| Argument | Required | Description                                                                      |
-| -------- | -------- | -------------------------------------------------------------------------------- |
-| `$pr`    | Yes      | PR number or URL to review                                                       |
-| `$story` | No       | Story ID for requirements validation. If omitted, extracted from PR description. |
+| Argument     | Required | Description                                                                                                                                                                                                                                          |
+| ------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$pr`        | Yes      | PR number or URL to review                                                                                                                                                                                                                           |
+| `$story`     | No       | Story ID for requirements validation. If omitted, extracted from PR description.                                                                                                                                                                     |
+| `$dispatched` | No       | `true` when this run was **dispatched** (spawned by `/pair-capability-publish-pr`'s caller, an automation loop, a CI job) rather than invoked by a human in an interactive session. Default `false`. Sets the **non-interactive contract** below. Never merges (Phase 6 is unreachable). |
+
+### The non-interactive (dispatched) contract
+
+Two steps of this flow ask a human a question: Step 1.4 ("Proceed with review?") and Step 5.5 ("Merge now or let the author merge?"). In a **dispatched** run there is nobody to answer, so guessing is not an option in either direction — stalling wastes the run, and self-answering Step 5.5 would let the reviewing agent merge its own APPROVED verdict. With `$dispatched: true` (or whenever the run has no interactive human — e.g. the invocation prompt is a bare `/pair-process-review $pr=<n>` from another agent):
+
+- **Step 1.4** — do **not** ask. Emit the same READY block as output and continue directly to Step 1.5.
+- **Step 5.5** — do **not** ask, and never self-answer "Merge now". The outcome is always option 2 (**author/human merges**): produce the report and stop after Phase 5.
+- **A dispatched run never reaches Phase 6**: it does not merge, does not cascade, does not delete a branch, even on APPROVED with `merge_allowed` true. The human merge gate is the point of the flow ([pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md): "a human still performs the merge; pair never auto-merges"). The dispatch instruction says so explicitly, and this contract holds even if it does not.
+
+Everything else (phases 1–5, the verdict, the `pair-review` publication, the state synthesis) is identical to an interactive run.
 
 ## Session State
 
@@ -94,7 +105,7 @@ REVIEW READY:
 └── AC: [N criteria to validate]
 ```
 
-Ask: _"Proceed with review?"_
+Ask: _"Proceed with review?"_ — **only in an interactive run**. A **dispatched** run (`$dispatched: true`, or no human in the loop) emits this block and continues to Step 1.5 without asking; it never stalls waiting for an answer that cannot come (see the non-interactive contract above).
 
 ### Step 1.5: Classification (risk matrix from the diff)
 
@@ -251,7 +262,7 @@ The verdict is judgment; the **merge block is mechanical**. This step turns the 
 1. **Check**: Does the current head commit already carry a `pair-review` check whose conclusion matches this verdict, and a matching `pr-state:*` label?
 2. **Skip**: If yes — nothing to publish, move to Step 5.5 (idempotent re-invocation).
 3. **Act — publish the check**: source the shipped [`pr-state.sh`](../../../.pair/knowledge/assets/pr-state.sh) and map the verdict with `review_check_conclusion` (`approved`/`tech-debt` ⇒ `success`, `changes-requested` ⇒ `failure`, anything else ⇒ `pending`). Publish `pair-review` on the **head commit** with that conclusion, through the mechanism the host guide prescribes for an ordinary agent token — on GitHub a **commit status** (the Checks API is writable only by a GitHub App). A `pending` result is never published as resolved — the required check stays unsatisfied so the merge stays blocked. If publication is **refused** (missing scope, no status API), report `pair-review: NOT PUBLISHED — advisory` and continue: the verdict still lives in the native review, but never claim a merge is blocked when it is not.
-4. **Act — resolve the requirements for the tier**: read the tier from the PR labels (`resolve_tier`, tags only, **untagged/malformed ⇒ 🔴 fail-safe**), then read that tier's row from quality-model §4 through its `Argument > Adoption > KB default` cascade: reviewer count, SLA, checklist depth (**extended checklist** at 🔴), and whether **explicit approval** is required. Record them in the review output; never invent or hardcode a threshold here. At 🔴, state the explicit-approval requirement in the Verdict block so the human reading the PR knows what is still missing (D10).
+4. **Act — resolve the requirements for the tier**: read the tier from the PR labels (`resolve_tier`, tags only, **untagged/malformed ⇒ 🔴 fail-safe**), then read that tier's row from quality-model §4 through its `Argument > Adoption > KB default` cascade: reviewer count, SLA, **checklist depth** — `standard` vs `extended` as [quality-model](../../../.pair/knowledge/guidelines/quality-assurance/quality-model.md) §4 defines it (there is no separate extended-checklist artifact: `extended` is the same code-review template with **no section skipped**, "not applicable" written out rather than omitted) — and whether **explicit approval** is required. Record them in the review output; never invent or hardcode a threshold here. At 🔴, state the explicit-approval requirement in the Verdict block so the human reading the PR knows what is still missing (D10).
 5. **Act — synthesize the state**: `resolve_pr_state <gates> <verdict> <tier> <explicit-approval>` — `gates` from Step 2.1, `explicit-approval` = a **non-author human** approval recorded on the current head (the pair review itself never counts; on a single-maintainer repo 🔴 therefore needs a second human account — see pr-states.md). Apply the resulting `pr-state:to-be-reviewed` / `pr-state:ready-to-merge` / `pr-state:not-approved` label, removing any other `pr-state:*` label (exactly one at a time); the labels are provisioned once per repository and if absent this step is **non-blocking** (degradation below). A red gate or a 🔴 tier without explicit approval yields `to-be-reviewed`, never `ready-to-merge` (AC2, AC4).
 6. **Verify**: The head commit carries the `pair-review` check (or the publication failure is reported), the PR carries exactly one `pr-state:*` label matching the synthesis (or its absence is reported), and the tier requirements are recorded in the output. The label is a **view** — enforcement is the required checks (R5.7); this skill never edits branch protection and never bypasses a check.
 
@@ -259,17 +270,18 @@ The verdict is judgment; the **merge block is mechanical**. This step turns the 
 
 1. **Check**: What was the review decision?
 2. **Skip**: If CHANGES-REQUESTED → output review report and stop. Author addresses findings, then re-invokes `/pair-process-review`.
-3. **Act**: If APPROVED or TECH-DEBT → ask reviewer:
+3. **Act — dispatched run**: if this run is **dispatched** (non-interactive — see the contract in Arguments), do **not** ask and do **not** self-answer: the outcome is option 2 below (the human merges). Output the report and stop. A self-answered "Merge now" here would let the reviewing agent merge on its own verdict, which is exactly what the human merge gate forbids.
+4. **Act — interactive run**: If APPROVED or TECH-DEBT → ask reviewer:
 
    > PR approved. Merge now or let the author merge?
    > 1. **Merge now** — proceed to Phase 6
    > 2. **Author merges** — stop here, author re-invokes `/pair-process-implement` Phase 4
 
-4. **Verify**: If "Merge now" selected → proceed to Phase 6. Otherwise → output and stop.
+5. **Verify**: If a human explicitly selected "Merge now" → proceed to Phase 6. Otherwise (including every dispatched run) → output and stop.
 
 ## Phase 6: Merge & Close (APPROVED only, optional)
 
-Only reached when the reviewer picked "Merge now" in Step 5.5 — see [merge-and-cascade.md](./merge-and-cascade.md) for the merge-precondition (Step 6.0: `merge_allowed` on the synthesized PR state — HALT unless `ready-to-merge`), merge-strategy, merge-commit, merge, parent-cascade, branch-cleanup, and post-merge-manual-test steps (Steps 6.1–6.6) plus the completion output.
+Only reached when a **human reviewer** picked "Merge now" in Step 5.5 of an **interactive** run — a dispatched run stops at Phase 5 by contract (Arguments § non-interactive) — see [merge-and-cascade.md](./merge-and-cascade.md) for the merge-precondition (Step 6.0: `merge_allowed` on the synthesized PR state — HALT unless `ready-to-merge`), merge-strategy, merge-commit, merge, parent-cascade, branch-cleanup, and post-merge-manual-test steps (Steps 6.1–6.6) plus the completion output.
 
 ## Output Format
 
