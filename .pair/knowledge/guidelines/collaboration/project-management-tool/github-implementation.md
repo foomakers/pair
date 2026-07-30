@@ -620,6 +620,22 @@ GitHub mechanics for the two pair checks the [PR state flow](pr-states.md) requi
 
 Both are **required status checks** — a `pending` or absent required check blocks the merge on GitHub exactly like a failing one, which is what makes the review unskippable (R5.7).
 
+#### What each context proves — and what it does not
+
+A commit status is written by `POST /repos/{owner}/{repo}/statuses/{sha}`, which **any principal with push access can call, for any context name**, and branch protection evaluates the **most recent** status per context. There is no producer-identity restriction on a status context unless one is pinned in the protection payload. Read the two checks accordingly:
+
+| Context | What it guarantees | What it does **not** guarantee |
+| --- | --- | --- |
+| `pair-review` | **Anti-accident**: an absent or `pending` context blocks, so a review that never ran, crashed, or was skipped can never leave the PR mergeable. Verified on a live host. | **Unforgeability.** It is published with the ordinary agent token, so by construction anyone with push access — including the authoring agent — can `POST` `state=success` for the context. It is **not** an authorization control; treat it as "the review cannot be silently skipped", never as "someone independent approved". |
+| `pair-explicit-approval` | **Authorization**, to the extent the producer is pinned: the payload below pins the context to the **GitHub Actions app id**, so a status posted by a user token or PAT does not satisfy it, and the job that does post it runs from a trusted ref (property 1 below). | Absolute unforgeability — see the residual immediately below. The only form with no residual is a **GitHub App check-run** whose `app_id` is pinned to an App the repository's own workflows cannot present (Option 4 in ADR-018 — deferred, [#398](https://github.com/foomakers/pair/issues/398)). |
+
+**Residual on the app pin, and the companion repository settings that shrink it.** A status posted by _any_ workflow using the default `GITHUB_TOKEN` is attributed to the GitHub Actions app, so a pull request that **adds** a `pull_request` workflow declaring `permissions: statuses: write` can post the pinned context itself. Two settings close that in practice — apply both when the flow is used as an authorization control:
+
+- **Settings → Actions → General → Workflow permissions: _Read repository contents and packages permissions_.** This removes the implicit write token, so any workflow needing `statuses: write` must request it explicitly in its own YAML — visible in the diff instead of ambient. (It does not _prevent_ an explicit request; that is what the next setting is for.)
+- **Require review on workflow changes**: a `CODEOWNERS` entry for `/.github/workflows/**` plus `"required_pull_request_reviews": { "require_code_owner_reviews": true }`, so a PR that edits or adds a workflow needs a human code-owner approval before it can merge — the same human signal the 🔴 gate is asking for.
+
+Stated plainly rather than assumed away: with neither setting applied, `pair-explicit-approval` is hardened (no PAT/user-token path) but not unforgeable, and `pair-review` is forgeable by design. The unforgeable form is the App/check-run path.
+
 **Variables used by every snippet in this section** — defined once, and every call below uses the **same single-variable form** `repos/$REPO/…` (never a two-variable owner+name form, which is what produces `repos/owner/owner/repo/…` and a 404 when `REPO` already holds `owner/repo`):
 
 ```bash
@@ -668,12 +684,13 @@ If the POST is refused (`403`/`404` — token without `repo:status`), enforcemen
 
 Reads the `risk:*` label only (D18, fail-safe red) and asserts a **human** approval — the pair review's own submission never satisfies it, and `dismiss_stale_reviews` keeps it from surviving a force-push.
 
-Four properties are load-bearing and easy to get wrong; all four are encoded in the template below, and each was **verified on a live repository** (§ Verified on a throwaway repository).
+Five properties are load-bearing and easy to get wrong; all five are encoded in the template below, and the first four were **verified on a live repository** (§ Verified on a throwaway repository).
 
-1. **The job must run from a trusted ref.** This job is an **authorization control**, so its code must not come from the change it authorizes. On a `pull_request` event GitHub runs the **PR's own** version of the workflow file, and `actions/checkout` with the default ref checks out the PR's tree — so a PR could **tamper** with the job body or with the sourced `explicit_approval_required()` and make the required context report `success` with no human approval, i.e. **self-grant** the 🔴 gate. That is not theoretical: it was reproduced (a `risk:red` PR shipping a neutered `explicit_approval_required` published `pair-explicit-approval=success — tier red — explicit approval not required` on its own head). `pull_request_target` runs the **base** version of the workflow, and pinning the checkout to `github.event.pull_request.base.sha` makes the sourced assets base versions too. The pin matters for the review trigger as well: on `pull_request_review` the workflow *file* comes from the default branch, but `GITHUB_REF` is `refs/pull/<n>/merge`, so a **default checkout there also lands on the PR's merged tree**. Distinguish this from workflows whose job body only *narrows* what is tested — there tampering weakens a check; here it would remove an authorization control.
-2. **The verdict must be pinned to the PR head commit.** Branch protection evaluates required contexts **on the head SHA**, and `$GITHUB_SHA` is *not* that commit for either trigger — measured: `pull_request_target` ⇒ the base branch tip, `pull_request_review` ⇒ the ephemeral `refs/pull/<n>/merge` commit. A job that published against `$GITHUB_SHA` would report on a commit the PR's protection never reads, leaving a 🔴 PR blocked *after* the human approves. The job therefore `POST`s a **commit status** pinned to `github.event.pull_request.head.sha`, which is deterministic and independent of any event-to-SHA association (that is why the workflow needs `statuses: write`). GitHub *does* currently attach a run's own check-run to the PR head for both triggers (measured), but that association is incidental where this one is explicit.
+1. **The job must run from a trusted ref.** This job is an **authorization control**, so its code must not come from the change it authorizes. On a `pull_request` event GitHub runs the **PR's own** version of the workflow file, and `actions/checkout` with the default ref checks out the PR's tree — so a PR could **tamper** with the job body or with the sourced `explicit_approval_required()` and make the required context report `success` with no human approval, i.e. **self-grant** the 🔴 gate. That is not theoretical: it was reproduced (a `risk:red` PR shipping a neutered `explicit_approval_required` published `pair-explicit-approval=success — tier red — explicit approval not required` on its own head). `pull_request_target` runs the **base** version of the workflow, and pinning the checkout to `github.event.pull_request.base.sha` makes the sourced assets base versions too. The pin matters for the review trigger as well: on `pull_request_review` the workflow _file_ comes from the default branch, but `GITHUB_REF` is `refs/pull/<n>/merge`, so a **default checkout there also lands on the PR's merged tree**. Distinguish this from workflows whose job body only _narrows_ what is tested — there tampering weakens a check; here it would remove an authorization control.
+2. **The verdict must be pinned to the PR head commit.** Branch protection evaluates required contexts **on the head SHA**, and `$GITHUB_SHA` is _not_ that commit for either trigger — measured: `pull_request_target` ⇒ the base branch tip, `pull_request_review` ⇒ the ephemeral `refs/pull/<n>/merge` commit. A job that published against `$GITHUB_SHA` would report on a commit the PR's protection never reads, leaving a 🔴 PR blocked _after_ the human approves. The job therefore `POST`s a **commit status** pinned to `github.event.pull_request.head.sha`, which is deterministic and independent of any event-to-SHA association (that is why the workflow needs `statuses: write`). GitHub _does_ currently attach a run's own check-run to the PR head for both triggers (measured), but that association is incidental where this one is explicit.
 3. **One producer per required context.** The job is therefore named `explicit-approval-gate`, **not** `pair-explicit-approval`: the required context is the commit status it posts, and giving a check-run the same name would leave two independent producers writing one context. The job's own check-run stays as unrequired, human-readable detail.
-4. **Only the newest evaluation may publish.** Two label mutations seconds apart (e.g. `--remove-label risk:yellow --add-label risk:red`) fire two events, and without a concurrency guard a slower older run can overwrite the newer verdict — observed: a stale run re-published the previous tier's result *after* the current one. A `concurrency` group with `cancel-in-progress` plus a **fresh label read** (the event payload's label list is a snapshot; the API's is current) makes the last-written status always match the PR's current labels.
+4. **Only the newest evaluation may publish.** Two label mutations seconds apart (e.g. `--remove-label risk:yellow --add-label risk:red`) fire two events, and without a concurrency guard a slower older run can overwrite the newer verdict — observed: a stale run re-published the previous tier's result _after_ the current one. A `concurrency` group with `cancel-in-progress` plus a **fresh label read** (the event payload's label list is a snapshot; the API's is current) makes the verdict of the last **completed** evaluation the one that stands. Runs that never complete are property 5's job.
+5. **An interrupted evaluation must leave the context blocking.** A job that publishes only at the end leaves the **previous** status standing when it dies mid-flight — and the previous status can be a `success` from a lower tier, so a 🟡 → 🔴 raise whose evaluation is cancelled (`cancel-in-progress`) or aborted (`set -euo pipefail` on a transient `gh` failure, or the base branch not yet carrying `tier-resolve.sh`/`pr-state.sh`) would silently keep the merge enabled at 🔴 with no human approval. Nothing required reports red in that state, because the job's own check-run is deliberately not a required context (property 3). The job therefore posts **`state=pending` on the head SHA as its very first step**, before resolving anything: an interrupted evaluation leaves a pending — i.e. merge-blocking — context, and only a completed one resolves it. Same pending-first pattern `pair-review` already uses. (An `if: ${{ failure() }}` publish step is weaker: it does not run on hard cancellation.)
 
 ```yaml
 name: pair-explicit-approval
@@ -706,6 +723,17 @@ jobs:
   explicit-approval-gate:
     runs-on: ubuntu-latest
     steps:
+      # PENDING FIRST (property 5), before anything that can fail or be cancelled:
+      # a run that dies later must not leave a previous `success` standing. No
+      # checkout needed — this step only writes the blocking placeholder.
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh api "repos/$REPO/statuses/$HEAD_SHA" -X POST \
+            -f state='pending' -f context='pair-explicit-approval' \
+            -f description='evaluating tier + human approval on this head'
       - uses: actions/checkout@v4
         with:
           # TRUSTED REF — the base commit, never the PR head. This is what makes the
@@ -730,6 +758,10 @@ jobs:
           DESC="tier $TIER — explicit approval not required"
           if explicit_approval_required "$TIER"; then
             # A HUMAN approval on the CURRENT head: exclude bots and the PR author.
+            # The predicate is NOT written out here — it is `human_approval_jq_filter`
+            # from the sourced pr-state.sh, so this job and the tests that verify it
+            # read one text and cannot drift (it rejects non-APPROVED, another commit,
+            # `user.type != "User"`, and the author's own approval).
             # Use the REST reviews endpoint — it is the only one carrying BOTH the
             # account type and the reviewed commit. `gh pr view --json reviews` exposes
             # `author.login` and NO bot flag whatsoever, so filtering there on a
@@ -738,9 +770,7 @@ jobs:
             # the approval can sit on page 2 — a single page would read it as zero and
             # block the PR forever. Aggregate by counting the paginated stream.
             APPROVALS="$(gh api --paginate "repos/$REPO/pulls/$PR/reviews" \
-              --jq '.[] | select(.state=="APPROVED" and .commit_id==env.HEAD_SHA
-                     and .user.type=="User" and .user.login!=env.PR_AUTHOR) | .id' \
-              | grep -c . || true)"
+              --jq "$(human_approval_jq_filter)" | grep -c . || true)"
             if [ "${APPROVALS:-0}" -ge 1 ]; then
               DESC="explicit human approval recorded on the current head"
             else
@@ -759,21 +789,33 @@ jobs:
 **Residual caveats of the trusted-ref form**, stated explicitly rather than assumed away:
 
 - **Forks.** With `pull_request_target` the workflow runs in the **base** repository's context with a write-capable `GITHUB_TOKEN`, which is only safe because this job **never checks out or executes head-ref code** — the checkout is pinned to `base.sha` and no step runs anything from the PR. Never add a step here that builds, installs, or runs the PR's code; put that in the ordinary `pull_request` gate pipeline, which has a read-only token on forks. Conversely, a plain `pull_request` run from a fork gets a **read-only** token and could not `POST` the status at all — another reason for the target trigger.
-- **Base-branch assets.** `tier-resolve.sh` and `pr-state.sh` are sourced from the base commit, so they must already exist on the base branch: the workflow is added and observed **before** protection is applied (ordering below), and a PR that only *introduces* those assets cannot satisfy the context on its own.
-- **Projects that refuse `pull_request_target` entirely** (a common blanket policy) get the same guarantee by keeping the plain `pull_request` trigger and writing the two functions **inline** in the job body — the `resolve_tier` / `explicit_approval_required` logic is a handful of `case` lines — with no checkout step at all, so there is nothing from the PR's tree to tamper with. The cost is a second copy of the projection, which must then be kept in sync with the shipped assets (a conformance grep is the usual mitigation).
+- **Base-branch assets.** `tier-resolve.sh` and `pr-state.sh` are sourced from the base commit, so they must already exist on the base branch: the workflow is added and observed **before** protection is applied (ordering below), and a PR that only _introduces_ those assets cannot satisfy the context on its own.
+- **Projects that refuse `pull_request_target` entirely** (a common blanket policy) get the same guarantee by keeping the plain `pull_request` trigger and writing the projections **inline** in the job body — `resolve_tier` / `explicit_approval_required` are a handful of `case` lines and `human_approval_jq_filter` is one string — with no checkout step at all, so there is nothing from the PR's tree to tamper with. The cost is a second copy of the projection, which must then be kept in sync with the shipped assets (a conformance grep is the usual mitigation).
 
 ### Branch protection payload
 
+Use the **`checks` form**, not the legacy `contexts` array: `contexts` accepts a status from _any_ source, while each `checks[]` entry may pin an `app_id` — which is what keeps a user/PAT-posted status from satisfying the authorization gate (see § What each context proves).
+
 ```bash
-gh api "repos/$REPO/branches/main/protection" -X PUT --input - <<'JSON'
+# The producer of `pair-explicit-approval` is the GitHub Actions app (the job posts the
+# status with the default GITHUB_TOKEN). Resolve its id rather than hardcoding it:
+ACTIONS_APP_ID="$(gh api /apps/github-actions --jq .id)"   # 15368 on github.com
+
+gh api "repos/$REPO/branches/main/protection" -X PUT --input - <<JSON
 {
   "required_status_checks": {
     "strict": false,
-    "contexts": ["base", "secret-scan", "pair-review", "pair-explicit-approval"]
+    "checks": [
+      { "context": "base" },
+      { "context": "secret-scan" },
+      { "context": "pair-review" },
+      { "context": "pair-explicit-approval", "app_id": $ACTIONS_APP_ID }
+    ]
   },
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": true,
-    "required_approving_review_count": 0
+    "required_approving_review_count": 0,
+    "require_code_owner_reviews": true
   },
   "enforce_admins": false,
   "allow_force_pushes": false,
@@ -784,6 +826,8 @@ JSON
 
 `"enforce_admins": false` is **deliberate in this payload** — copy-paste as written. It is flipped to `true` only in ordering step 4 below, once one PR has actually merged through the rule; shipping `true` here walks straight into the "every PR blocked with no escape hatch" trap described in the next bullets.
 
+- **`app_id` on `pair-explicit-approval` is the producer pin.** Without it (or with the legacy `contexts` array) the required context is satisfied by _whoever posts it last_, including `gh api …/statuses/$HEAD_SHA -f state=success -f context='pair-explicit-approval'` run with the agent's own token — the 🔴 human gate self-granted in one command. With the pin, only a status from the GitHub Actions app counts. `pair-review` is deliberately left **unpinned**: it is published by the agent's ordinary token, i.e. not by an app, so pinning it would make it unsatisfiable. That check is an anti-accident control, not an authorization control (§ What each context proves).
+- **`require_code_owner_reviews: true` + a `CODEOWNERS` entry for `/.github/workflows/**`** is the companion that keeps a PR from shipping its own status-writing workflow. It bites only on PRs touching owned paths, and it needs a code owner **other than the author** to be effective — the same second-account prerequisite as 🔴 itself. Omit it (and accept the residual, recorded) on a single-maintainer repository.
 - **`required_approving_review_count: 0` is explicit on purpose.** The approval authority is the tier-scoped `pair-explicit-approval` job, not a blanket host rule. Leaving the field unset lets an unstated API default decide, and a default of ≥1 would demand a human approving review on **every** PR — contradicting quality-model §4's 🟢 "self-merge once gate checks are green" row and making the tier-scoped job redundant.
 - **`"strict": false`** — the branch does not have to be up to date with the base. With `strict: true` every base update rewrites the head, and `pair-review` is published **per head commit**, so each base update voids the verdict and demands a fresh agent review: churn bordering on livelock on a busy `main`. Enable `strict` only if the project accepts re-earning the review check on every base update (and pair with an auto-update bot).
 - `dismiss_stale_reviews: true` invalidates a human approval after a force-push. It is belt-and-braces: `pair-explicit-approval` already pins the approval to the current head (`commit_id == HEAD_SHA`), so the 🔴 requirement is head-scoped even without it (edge case in [pr-states.md](pr-states.md)).
@@ -794,7 +838,7 @@ JSON
 
 Applying branch protection **before** the two contexts ever report makes every PR permanently unmergeable — a required context that has never reported stays pending forever, and `enforce_admins: true` removes the bypass. Apply in this order:
 
-1. **Provision** the `pr-state:*` labels and add the `pair-explicit-approval` workflow to the repository (neither needs admin scope). The workflow must be on the **base** branch — that is where `pull_request_target` reads it from.
+1. **Provision** the `pr-state:*` labels and add the `pair-explicit-approval` workflow to the repository (neither needs admin scope). The workflow must be on the **base** branch — that is where `pull_request_target` reads it from. If the flow is meant as an authorization control, apply the two companion settings now as well (workflow permissions → read-only, `CODEOWNERS` on `/.github/workflows/**`) — see § What each context proves.
 2. **Observe at PR open** on a real PR — both contexts must appear on the **head commit**, which is the only commit protection evaluates:
 
    ```bash
@@ -802,7 +846,7 @@ Applying branch protection **before** the two contexts ever report makes every P
    # expect: pair-review  AND  pair-explicit-approval
    ```
 
-3. **Observe the approval-time re-run** — this is the failure mode the head-pinned status exists for. Submit a review on that PR (any `pull_request_review` submission triggers the job), then re-run the same command and confirm the `pair-explicit-approval` context re-reports **on the same head SHA** with an updated timestamp. If it were left to the workflow run's own check, the re-run would land on the base branch's commit and the PR would stay blocked *after* the human approval — the same "permanently unmergeable" trap, one step later. Also confirm the `pair-review` context still reflects the latest verdict on that head.
+3. **Observe the approval-time re-run** — this is the failure mode the head-pinned status exists for. Submit a review on that PR (any `pull_request_review` submission triggers the job), then re-run the same command and confirm the `pair-explicit-approval` context re-reports **on the same head SHA** with an updated timestamp. If it were left to the workflow run's own check, the re-run would land on the base branch's commit and the PR would stay blocked _after_ the human approval — the same "permanently unmergeable" trap, one step later. Also confirm the `pair-review` context still reflects the latest verdict on that head.
 4. **Protect**: `PUT` the payload above with those contexts, keeping `enforce_admins: false`; flip it to `true` only after one PR has merged through the new rule.
 
 **Second human account prerequisite.** At 🔴 the job demands a **non-author** human approving review, and GitHub rejects an approving review from the PR author. On a **single-maintainer** repository no 🔴 PR can therefore satisfy it: either keep the `pair-explicit-approval` context out of the required list there, or add a second human reviewer account. See [pr-states.md](pr-states.md) § Edge cases.
@@ -823,7 +867,9 @@ The recipe above is not a design sketch: every branch of it was executed end-to-
 | PR shipping a neutered `explicit_approval_required` **and** an `exit 0` in the job body | context still `failure`, merge still blocked — the base-pinned checkout ignores the PR's version. With the pre-fix `pull_request` + default-checkout form the same tamper published `pair-explicit-approval=success — tier red — explicit approval not required` |
 | direct push to the protected branch | rejected — `Changes must be made through a pull request` |
 
-Two things remain **unverified by construction** and stay documented rather than claimed: a *successful* 🔴 path (it needs a second human account to approve — see below), and any fork-specific behaviour (the sandbox had no forks).
+Two things remain **unverified by construction** and stay documented rather than claimed: a _successful_ 🔴 path (it needs a second human account to approve — see below), and any fork-specific behaviour (the sandbox had no forks). The producer pin (`checks[].app_id`), the companion workflow-permission settings and the pending-first step were added **after** that session and are likewise **not** in the table.
+
+**What this table is.** A **point-in-time observation** on a disposable repository, retained as prose: the sandbox was deleted, so no run URL, PR number or API dump is re-checkable, and the table is not evidence a reader can audit. It is re-verified the only durable way — by **re-running the ordering steps above on the adopting repository** (steps 2 and 3 reproduce the two rows that matter most: both contexts on the head SHA, and the approval-time re-run). Treat any row that contradicts what your own repository does as stale, not as authority.
 
 ### Degraded mode
 

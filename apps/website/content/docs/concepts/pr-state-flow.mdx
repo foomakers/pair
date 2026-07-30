@@ -42,7 +42,16 @@ A second required check, **`pair-explicit-approval`**, enforces the 🔴 tier's 
 Because it is an *authorization* check, two implementation properties are non-negotiable — the host guide's job template has both:
 
 - **it runs from the target branch's code**, never the pull request's own — otherwise a PR could rewrite the check that authorizes it and self-grant the 🔴 approval;
-- **its verdict is pinned to the PR head commit** on every re-evaluation, including the one the approval itself triggers — a verdict recorded anywhere else would leave a 🔴 PR blocked *after* the human approved.
+- **its verdict is pinned to the PR head commit** on every re-evaluation, including the one the approval itself triggers — a verdict recorded anywhere else would leave a 🔴 PR blocked *after* the human approved;
+- **its producer is pinned and it publishes "pending" first** — a status context is writable by anyone with push access, so the protected branch pins *who* may satisfy it (`checks[].app_id`), and the job marks the context pending before it evaluates, so a cancelled run can't leave a stale `success` from a lower tier.
+
+<Callout type="info">
+  **The two checks are not equally strong, by design.** `pair-explicit-approval` is the *authorization*
+  control. `pair-review` is an *anti-accident* control: it is published with the reviewing agent's own
+  credentials, so anyone with push access could post it — what it guarantees is that a review which never
+  ran or crashed leaves the merge blocked, not that an independent party approved. Enforcing identity is
+  the other check's job.
+</Callout>
 
 The review is dispatched to that clean-context subagent with a bounded instruction: produce the verdict and the checks, **never merge**. Merging stays a human act at every tier.
 
@@ -52,6 +61,8 @@ The review is dispatched to that clean-context subagent with a bounded instructi
   second human reviewer account, or deliberately keep that context out of the required list there and
   accept that the 🔴 human-approval rule is advisory (recorded, not silently dropped). At 🟡 there is
   no such constraint: the pair review itself *is* the reviewer approval the quality model asks for.
+  A solo-maintainer approval token (a verified human token instead of a second account) is tracked as
+  [pair#398](https://github.com/foomakers/pair/issues/398).
 </Callout>
 
 ## Labels are a view; checks are the authority

@@ -178,8 +178,13 @@ audit "setup-gates wires both pair required checks + degraded mode" "$SETUP_GATE
   'pair-review' 'pair-explicit-approval' 'DEGRADED'
 audit "github guide carries the status + branch-protection recipe" "$GITHUB_GUIDE" \
   'pair-review' 'pair-explicit-approval' 'required_status_checks' 'dismiss_stale_reviews' \
-  'statuses/\$HEAD_SHA' 'user.type=="User"' 'gh label create "pr-state:' \
+  'statuses/\$HEAD_SHA' 'human_approval_jq_filter' 'gh label create "pr-state:' \
   'required_approving_review_count": 0'
+# The authorization predicate itself lives in ONE place — the shipped evaluator —
+# and the job/test read it from there (round 3), so it cannot drift.
+audit "the approval predicate ships in the evaluator, not as doc prose" "$EVALUATOR" \
+  'human_approval_jq_filter' 'user.type=="User"' 'commit_id==env.HEAD_SHA' \
+  'user.login!=env.PR_AUTHOR'
 
 # The publication command must be runnable with the ORDINARY token the skills hold:
 # POST /check-runs is GitHub-App-only (403), so no command may call it, and the
@@ -275,19 +280,26 @@ assert_file "$FIXTURE" || exit 1
 audit "fixture carries the fields the documented filter reads" "$FIXTURE" \
   '"commit_id"' '"state"' '"type"' '"login"'
 if command -v jq >/dev/null 2>&1; then
-  # The exact filter shipped in github-implementation.md's job.
-  FILTER='[.[] | select(.state=="APPROVED" and .commit_id==$head and .user.type=="User" and .user.login!=$author)] | length'
+  # NOT a transliteration (round 3): the predicate under test is the *shipped*
+  # `human_approval_jq_filter` from pr-state.sh — the same string the workflow feeds
+  # to `gh api --jq` — sourced above and pushed through the same
+  # `jq … | grep -c .` pipeline the job uses. Drift between recipe and test is
+  # therefore impossible rather than merely unlikely.
+  FILTER="$(human_approval_jq_filter)"
   HEAD='cc1fba122f0c912ba01288fe90ab2632e7e41057'
+  count_approvals() { # count_approvals <head-sha> <pr-author>
+    HEAD_SHA="$1" PR_AUTHOR="$2" jq -r "$FILTER" "$FIXTURE" | grep -c . || true
+  }
   check "filter counts the human non-author approval on the head" 1 \
-    "$(jq --arg head "$HEAD" --arg author pr-author "$FILTER" "$FIXTURE")"
+    "$(count_approvals "$HEAD" pr-author)"
   check "filter rejects a stale approval on another commit" 0 \
-    "$(jq --arg head 1111111111111111111111111111111111111111 --arg author pr-author "$FILTER" "$FIXTURE")"
+    "$(count_approvals 1111111111111111111111111111111111111111 pr-author)"
   check "filter rejects the author's own approval" 0 \
-    "$(jq --arg head 0000000000000000000000000000000000000000 --arg author pr-author "$FILTER" "$FIXTURE")"
+    "$(count_approvals 0000000000000000000000000000000000000000 pr-author)"
   # With the only human-on-head review authored by the PR author, the Bot approval
   # on the same head commit is all that is left — and it must not count.
   check "filter rejects a Bot approval on the head" 0 \
-    "$(jq --arg head "$HEAD" --arg author sergiou87 "$FILTER" "$FIXTURE")"
+    "$(count_approvals "$HEAD" sergiou87)"
 else
   log_warn "approval-filter assertions skipped — jq not installed (fixture shape still asserted)"
 fi
@@ -333,6 +345,69 @@ if [ "${IS_OFFLINE:-false}" != "true" ] && command -v gh >/dev/null 2>&1 &&
 else
   log_warn "live host probes skipped — offline or gh not authenticated (fixture assertions still ran)"
 fi
+
+# --- Round 3: the authorization context must be producer-pinned, the job must fail
+# closed when interrupted, and neither doc may overclaim what `pair-review` proves.
+audit "branch protection pins the producer of the authorization context" "$GITHUB_GUIDE" \
+  '"checks": \[' 'app_id' '/apps/github-actions'
+if grep -q '"contexts": \[' "$GITHUB_GUIDE"; then
+  log_fail "payload still uses the legacy contexts form (any principal satisfies the gate)"; FAILED=1
+else
+  log_succ "payload uses the checks form (no unpinned required context)"
+fi
+audit "the companion repository settings are stated, not assumed" "$GITHUB_GUIDE" \
+  'read-only' 'CODEOWNERS' 'require_code_owner_reviews'
+audit "setup-gates carries the producer pin + pending-first as authorization properties" "$SETUP_GATES" \
+  'app_id' 'pending result as its first step' 'anti-accident'
+audit "pair-review is documented as anti-accident, not authorization" "$GITHUB_GUIDE" \
+  'anti-accident' 'forgeable' 'What each context proves'
+audit "pr-states.md draws the same distinction" "$GUIDELINE" \
+  'anti-accident' 'forgeable' 'authorization'
+audit "ADR-018 records the pin, the residual and the honest claim" "$ADR" \
+  'app_id' 'anti-accident' 'forgeable' 'point-in-time'
+# Pending FIRST: the status must be published before the job can fail or be cancelled,
+# otherwise a stale lower-tier `success` survives the interruption.
+PENDING_LINE="$(grep -n "state='pending' -f context='pair-explicit-approval'" "$GITHUB_GUIDE" | head -1 | cut -d: -f1)"
+CHECKOUT_LINE="$(grep -n 'uses: actions/checkout' "$GITHUB_GUIDE" | head -1 | cut -d: -f1)"
+RESOLVE_LINE="$(grep -n 'TIER="\$(resolve_tier' "$GITHUB_GUIDE" | head -1 | cut -d: -f1)"
+if [ -n "$PENDING_LINE" ] && [ -n "$CHECKOUT_LINE" ] && [ -n "$RESOLVE_LINE" ] &&
+  [ "$PENDING_LINE" -lt "$CHECKOUT_LINE" ] && [ "$PENDING_LINE" -lt "$RESOLVE_LINE" ]; then
+  log_succ "approval job publishes pending BEFORE checkout/tier resolution (fails closed)"
+else
+  log_fail "approval job does not publish pending first (an interrupted run leaves a stale success)"; FAILED=1
+fi
+# Both merge paths — not just the reviewer's — carry the synthesis precondition.
+POST_REVIEW_MERGE="$DATASET/.skills/process/implement/post-review-merge.md"
+assert_file "$POST_REVIEW_MERGE" || exit 1
+audit "implement Phase 4 (the author-side merge) runs the same precondition" "$POST_REVIEW_MERGE" \
+  'merge_allowed' 'ready-to-merge' 'HALT' 'resolve_pr_state' 'human_approval_jq_filter'
+if grep -q 'at least one approval' "$POST_REVIEW_MERGE"; then
+  log_fail "implement Phase 4 still merges on 'at least one approval' (skips the synthesis)"; FAILED=1
+else
+  log_succ "implement Phase 4 no longer merges on an approval count"
+fi
+audit "pr-states.md names implement Phase 4 as a merge actor" "$GUIDELINE" \
+  '/implement` Phase 4'
+# The deferred solo-maintainer token is citable from every place that defers to it.
+audit "pr-states.md cites the deferral issue" "$GUIDELINE" '#398'
+audit "ADR-018 cites the deferral issue" "$ADR" '#398'
+DOCS_PAGE="$REPO_ROOT/apps/website/content/docs/concepts/pr-state-flow.mdx"
+ROOT_WOW="$REPO_ROOT/.pair/adoption/tech/way-of-working.md"
+DATASET_WOW="$DATASET/.pair/adoption/tech/way-of-working.md"
+for f in "$DOCS_PAGE" "$ROOT_WOW" "$DATASET_WOW"; do assert_file "$f" || exit 1; done
+audit "the docs page cites the deferral issue" "$DOCS_PAGE" '398'
+audit "this repo's way-of-working cites the deferral issue + the app pin" "$ROOT_WOW" '#398' 'app_id'
+audit "the way-of-working TEMPLATE carries the full ordering (incl. the approval re-run)" \
+  "$DATASET_WOW" 'same head SHA' 'github-implementation.md'
+audit "publish-pr no longer describes its caller in the future tense" "$PUBLISH_PR" \
+  "closing phase (Step 3.3)"
+if grep -q 'future closing phase' "$PUBLISH_PR" || grep -q 'wired in #256' "$PUBLISH_PR"; then
+  log_fail "publish-pr still documents /implement as a future caller"; FAILED=1
+else
+  log_succ "publish-pr documents /implement's closing phase as the current caller"
+fi
+audit "the host evidence table states what kind of artifact it is" "$GITHUB_GUIDE" \
+  'point-in-time' 're-running the ordering steps'
 
 if [ "$FAILED" -ne 0 ]; then
   log_fail "$TEST_NAME had failures"; exit 1

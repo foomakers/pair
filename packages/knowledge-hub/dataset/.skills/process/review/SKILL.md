@@ -277,6 +277,8 @@ The verdict is judgment; the **merge block is mechanical**. This step turns the 
    > 1. **Merge now** — proceed to Phase 6
    > 2. **Author merges** — stop here, author re-invokes `/implement` Phase 4
 
+   Either route enforces the **same** precondition before merging (`merge_allowed` on the re-synthesized state — Step 6.0 here, Step 4.1 there), so routing to the author never skips the 🔴 explicit-approval requirement.
+
 5. **Verify**: If a human explicitly selected "Merge now" → proceed to Phase 6. Otherwise (including every dispatched run) → output and stop.
 
 ## Phase 6: Merge & Close (APPROVED only, optional)

@@ -1,7 +1,7 @@
 ---
 name: publish-pr
-description: "Publishes a completed story branch as a pull request: runs the quality gate, creates or updates ONE PR from the pr-template (conditional sections filled only when pertinent), copies the story's classification tags, marks it ready-for-review, updates the board state, then enters the PR state flow — registers the required `pair-review` check as pending (merge blocked from t0) and dispatches the review to a clean-context subagent. Standalone — driven by a handoff/checkpoint, not by /implement having run in the same session. Composed by a future closing phase of /implement; reused by hotfix and automation loops. Composes /verify-quality, /checkpoint, /write-issue."
-version: 0.7.0
+description: "Publishes a completed story branch as a pull request: runs the quality gate, creates or updates ONE PR from the pr-template (conditional sections filled only when pertinent), copies the story's classification tags, marks it ready-for-review, updates the board state, then enters the PR state flow — registers the required `pair-review` check as pending (merge blocked from t0) and dispatches the review to a clean-context subagent. Standalone — driven by a handoff/checkpoint, not by /implement having run in the same session. Composed by /implement's closing phase (Step 3.3); reused by hotfix and automation loops. Composes /verify-quality, /checkpoint, /write-issue."
+version: 0.5.0
 author: Foomakers
 ---
 
@@ -157,7 +157,7 @@ RESULT: [PR UNDER REVIEW — merge blocked by required check `pair-review` | HAL
 
 ## Composition Interface
 
-When composed by a future closing phase of `/implement` (wired in #256):
+When composed by `/implement`'s closing phase (Step 3.3):
 
 - **Input**: `/implement` invokes `/publish-pr` after the last task's commit, passing `$story` (and, when it wrote one, the checkpoint as `$handoff`). `/implement` owns task iteration; `/publish-pr` owns the gate→PR→board sequence.
 - **Output**: The PR number/URL and board-state result flow back to `/implement`'s Phase 3 output. A HALTed gate propagates as `/implement`'s HALT.

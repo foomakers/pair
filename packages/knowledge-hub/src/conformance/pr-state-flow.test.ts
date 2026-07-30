@@ -170,12 +170,13 @@ describe('pr-states.md — the PR state flow model (#234)', () => {
 })
 
 describe('pr-state.sh — the deterministic synthesis evaluator (#234)', () => {
-  it('exposes the four entry points the flow composes', () => {
+  it('exposes the five entry points the flow composes', () => {
     for (const fn of [
       'resolve_pr_state',
       'merge_allowed',
       'explicit_approval_required',
       'review_check_conclusion',
+      'human_approval_jq_filter',
     ]) {
       expect(EVALUATOR).toContain(fn)
     }
@@ -326,8 +327,10 @@ describe('github-implementation.md — host mechanics for the required checks (R
   it('queries approvals via the REST reviews endpoint — `author.is_bot` does not exist', () => {
     expect(GITHUB_GUIDE).not.toMatch(/is_bot/)
     expect(GITHUB_GUIDE).toMatch(/pulls\/\$PR\/reviews/)
-    expect(GITHUB_GUIDE).toMatch(/user\.type\s*==\s*"User"/)
-    expect(GITHUB_GUIDE).toMatch(/commit_id\s*==/)
+    // the predicate itself lives in the shipped evaluator (round 3), not inline here
+    expect(GITHUB_GUIDE).toMatch(/human_approval_jq_filter/)
+    expect(EVALUATOR).toMatch(/user\.type\s*==\s*"User"/)
+    expect(EVALUATOR).toMatch(/commit_id\s*==\s*env\.HEAD_SHA/)
   })
 
   it('provisions the pr-state:* label family (labels never autocreate)', () => {
@@ -489,5 +492,129 @@ describe('"extended" checklist depth is defined, not decorative (round 2)', () =
 
   it('review Step 5.4 reads that definition instead of naming a non-existent artifact', () => {
     expect(REVIEW).toMatch(/checklist depth[\s\S]{0,300}quality-model/i)
+  })
+})
+
+// --- review round 3 on PR #390 -------------------------------------------------
+// A required status context is writable by any push-access principal, so the
+// authorization context must pin its producer and fail closed when interrupted; and
+// the docs must not claim more than the mechanism delivers. Both merge paths — not
+// only the reviewer's — must carry the synthesis precondition.
+
+const POST_REVIEW_MERGE_PATH = join(DATASET, '.skills/process/implement/post-review-merge.md')
+const POST_REVIEW_MERGE = readFileSync(POST_REVIEW_MERGE_PATH, 'utf-8')
+const ADR_018 = readFileSync(
+  join(__dirname, '../../../../.pair/adoption/tech/adr/adr-018-pr-state-flow-required-checks.md'),
+  'utf-8',
+)
+const DOCS_PAGE = readFileSync(
+  join(__dirname, '../../../../apps/website/content/docs/concepts/pr-state-flow.mdx'),
+  'utf-8',
+)
+const ROOT_WOW = readFileSync(
+  join(__dirname, '../../../../.pair/adoption/tech/way-of-working.md'),
+  'utf-8',
+)
+
+describe('the authorization context pins its producer (round 3)', () => {
+  it('uses the checks form with an app_id, never the legacy unpinned contexts array', () => {
+    expect(GITHUB_GUIDE).toMatch(/"checks":\s*\[/)
+    expect(GITHUB_GUIDE).toMatch(/"context":\s*"pair-explicit-approval",\s*"app_id"/)
+    expect(GITHUB_GUIDE).not.toMatch(/"contexts":\s*\[/)
+    expect(GITHUB_GUIDE).toMatch(/\/apps\/github-actions/)
+  })
+
+  it('setup-gates wires the pin and the pending-first property, not just the contexts', () => {
+    expect(SETUP_GATES).toMatch(/app_id/)
+    expect(SETUP_GATES).toMatch(/pending result as its first step/)
+    expect(SETUP_GATES).toMatch(/anti-accident/)
+  })
+
+  it('states the companion repository settings that shrink the residual', () => {
+    expect(GITHUB_GUIDE).toMatch(/read-only/i)
+    expect(GITHUB_GUIDE).toMatch(/CODEOWNERS/)
+    expect(GITHUB_GUIDE).toMatch(/require_code_owner_reviews/)
+  })
+
+  it('records that pair-review is anti-accident, NOT authorization (and names the unforgeable form)', () => {
+    for (const doc of [GITHUB_GUIDE, GUIDELINE, ADR_018]) {
+      expect(doc).toMatch(/anti-accident/i)
+      expect(doc).toMatch(/forgeable/i)
+    }
+    expect(GITHUB_GUIDE).toMatch(/App[\s\S]{0,120}check-run|check-run[\s\S]{0,120}App/i)
+    expect(DOCS_PAGE).toMatch(/anti-accident/i)
+  })
+
+  it('publishes a pending status FIRST, so an interrupted evaluation fails closed', () => {
+    const pendingAt = GITHUB_GUIDE.indexOf("state='pending' -f context='pair-explicit-approval'")
+    const checkoutAt = GITHUB_GUIDE.indexOf('uses: actions/checkout')
+    const resolveAt = GITHUB_GUIDE.indexOf('TIER="$(resolve_tier')
+    expect(pendingAt).toBeGreaterThan(-1)
+    expect(pendingAt).toBeLessThan(checkoutAt)
+    expect(pendingAt).toBeLessThan(resolveAt)
+    expect(GITHUB_GUIDE).toMatch(/cancel|interrupt/i)
+  })
+})
+
+describe('the 🔴 approval predicate is shipped once, not transliterated (round 3)', () => {
+  it('lives in pr-state.sh and is consumed by name in the workflow snippet', () => {
+    expect(EVALUATOR).toMatch(/human_approval_jq_filter\(\)/)
+    expect(GITHUB_GUIDE).toMatch(/--jq "\$\(human_approval_jq_filter\)"/)
+  })
+})
+
+describe('BOTH merge paths carry the synthesis precondition (round 3)', () => {
+  it('implement Phase 4 Step 4.1 re-synthesizes and HALTs instead of counting approvals', () => {
+    expect(POST_REVIEW_MERGE).toContain('merge_allowed')
+    expect(POST_REVIEW_MERGE).toContain('resolve_pr_state')
+    expect(POST_REVIEW_MERGE).toContain('ready-to-merge')
+    expect(POST_REVIEW_MERGE).toContain('human_approval_jq_filter')
+    expect(POST_REVIEW_MERGE).toMatch(/HALT/)
+    expect(POST_REVIEW_MERGE).not.toMatch(/at least one approval/i)
+  })
+
+  it('review Phase 6 keeps the same precondition (the reviewer-side path)', () => {
+    expect(MERGE_CASCADE).toContain('merge_allowed')
+    expect(MERGE_CASCADE).toMatch(/HALT/)
+  })
+
+  it('pr-states.md names /implement Phase 4 in the actor table', () => {
+    expect(GUIDELINE).toMatch(/`\/implement` Phase 4/)
+  })
+
+  it('implement links the state model instead of restating it', () => {
+    assertLinksResolve(POST_REVIEW_MERGE, POST_REVIEW_MERGE_PATH, ['pr-states.md', 'pr-state.sh'])
+  })
+})
+
+describe('the deferred solo-maintainer token is citable everywhere it is deferred (round 3)', () => {
+  it('cites #398 in the model, the ADR, the docs page and this repo’s way-of-working', () => {
+    expect(GUIDELINE).toContain('#398')
+    expect(ADR_018).toContain('#398')
+    expect(DOCS_PAGE).toContain('398')
+    expect(ROOT_WOW).toContain('#398')
+  })
+
+  it('drops the "does not exist in this flow" phrasing in favour of the tracked issue', () => {
+    expect(GUIDELINE).not.toMatch(/it does not exist in this flow/)
+  })
+})
+
+describe('doc coherence, round 3', () => {
+  it('the way-of-working TEMPLATE carries the approval-time re-run and links the ordering steps', () => {
+    expect(WOW_TEMPLATE).toMatch(/same head SHA/)
+    expect(WOW_TEMPLATE).toMatch(/github-implementation\.md/)
+  })
+
+  it('publish-pr documents /implement’s closing phase as a current caller, not a future one', () => {
+    expect(PUBLISH_PR).not.toMatch(/future closing phase/)
+    expect(PUBLISH_PR).not.toMatch(/wired in #256/)
+    expect(PUBLISH_PR).toMatch(/closing phase \(Step 3\.3\)/)
+  })
+
+  it('the host evidence table says what kind of artifact it is (point-in-time, re-runnable)', () => {
+    expect(GITHUB_GUIDE).toMatch(/point-in-time/i)
+    expect(GITHUB_GUIDE).toMatch(/re-running the ordering steps/i)
+    expect(ADR_018).toMatch(/point-in-time/i)
   })
 })

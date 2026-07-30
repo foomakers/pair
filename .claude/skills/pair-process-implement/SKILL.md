@@ -321,7 +321,9 @@ Note: the checkpoint is **not** removed here — it must survive the review/fix 
 
 ## Phase 4: Post-Review Merge
 
-After code review approval (typically via `/pair-process-review`), re-invoke `/pair-process-implement` to merge and close — see [post-review-merge.md](./post-review-merge.md) for the verify-approval, merge-commit, merge, parent-cascade, and checkpoint-cleanup steps (Steps 4.1–4.5) plus the completion output.
+After code review approval (typically via `/pair-process-review`), re-invoke `/pair-process-implement` to merge and close — see [post-review-merge.md](./post-review-merge.md) for the merge-precondition, merge-commit, merge, parent-cascade, and checkpoint-cleanup steps (Steps 4.1–4.5) plus the completion output.
+
+This is one of the flow's **two** merge paths (the other is `/pair-process-review` Phase 6), and both carry the **same** blocking precondition: the PR-state synthesis must be `ready-to-merge` (`merge_allowed` from [`pr-state.sh`](../../../.pair/knowledge/assets/pr-state.sh)), re-evaluated on the current head — an approving review alone is not the condition. See [pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md).
 
 On story completion (Done, at merge), the checkpoint is no longer needed — `post-review-merge.md` Step 4.5 removes `.pair/working/checkpoints/<story-id>.md` so finished-story state never lingers (checkpoint lifecycle: written at the closing phase, cleaned up at merge).
 
@@ -357,7 +359,7 @@ Implementation stops immediately when:
 - **Commit template not found** (Step 2.8 / Step 3.1) — cannot commit without template
 - **`/pair-capability-publish-pr` not installed** (Step 3.3) — implement composes the PR sequence, never re-implements it
 - **Quality gate red inside `/pair-capability-publish-pr`** (Step 3.3) — propagates as implement's HALT; no PR side effects (the PR-template-not-found and gate HALTs live in `/pair-capability-publish-pr`)
-- **PR not approved** (Step 4.1) — cannot merge without review approval
+- **PR state is not `ready-to-merge`** (Step 4.1) — `merge_allowed` fails: red gate, review not approved/still pending, or 🔴 without an explicit non-author human approval on the current head. Never bypass a required check to merge
 
 On HALT: report the blocker clearly, propose resolution, wait for developer.
 
@@ -371,7 +373,7 @@ See [idempotency convention](../../../.pair/knowledge/guidelines/technical-stand
 4. **Tasks**: scans task checklist and git log to identify completed tasks. Skips them.
 5. **PR**: the closing phase re-composes `/pair-capability-publish-pr`, which detects an existing PR and updates it in place — never a duplicate. A subagent that failed mid-PR is recovered this way (the checkpoint stays valid, the rerun is idempotent).
 6. **Quality gates**: re-runs all gates (fast if already passing).
-7. **Merge**: if PR exists and is approved, proceeds directly to Phase 4 (merge).
+7. **Merge**: if a PR exists and its state synthesizes to `ready-to-merge`, proceeds directly to Phase 4 (merge); otherwise Phase 4's Step 4.1 HALTs with the unmet condition.
 
 The skill resumes from the first incomplete step — never re-does completed work.
 

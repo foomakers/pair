@@ -101,6 +101,26 @@ merge_allowed() {
   esac
 }
 
+# human_approval_jq_filter — echoes the ONE jq predicate that decides whether an
+# explicit human approval (D10) exists on the CURRENT head commit. It ships here,
+# next to the synthesis it feeds, instead of being written inline in each code host's
+# workflow: the host job and its tests then read the SAME text, so the authorization
+# predicate cannot drift between the recipe and what is verified ("one executable
+# projection", as for tier-resolve.sh).
+#
+#   Input  : a REST `GET /repos/{owner}/{repo}/pulls/{n}/reviews` payload (an array).
+#   Env    : HEAD_SHA (the only commit branch protection evaluates), PR_AUTHOR (login).
+#   Output : one line per qualifying review id — count them; and always read ALL pages
+#            (`--paginate`), since an approval can sit past page 1.
+#
+# Rejects by construction: a non-APPROVED review, an approval on any other commit
+# (i.e. stale after a force-push), a non-human account (`user.type != "User"` — bots
+# and GitHub Apps, so the pair review itself can never satisfy the gate), and the PR
+# author's own approval.
+human_approval_jq_filter() {
+  printf '%s' '.[] | select(.state=="APPROVED" and .commit_id==env.HEAD_SHA and .user.type=="User" and .user.login!=env.PR_AUTHOR) | .id'
+}
+
 # review_check_conclusion <verdict> — maps a review verdict onto the conclusion the
 # REQUIRED `pair-review` check must carry on the code host (R5.7):
 #   approved | tech-debt   ⇒ success

@@ -2,11 +2,14 @@
 
 Disclosed from [SKILL.md](SKILL.md) Phase 4 — only reached when `/implement` is re-invoked after code review approval (typically via `/review`), to merge and close the story.
 
-### Step 4.1: Verify Review Approval
+### Step 4.1: Merge Precondition — PR state must be `ready-to-merge` (BLOCKING)
 
-1. **Check**: Is the PR approved by the reviewer?
-2. **Skip**: If not approved → **HALT**. Wait for review completion.
-3. **Verify**: PR has at least one approval.
+This is the author-side merge path, and it carries the **same** precondition as the reviewer-side one (`/pair-process-review` Phase 6, Step 6.0): the merge is permitted by the **synthesis**, never by "a review happened". An approving verdict alone is not the condition — a 🔴 PR with an approved review and no explicit human approval must not merge here either (D10). See [pr-states.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/pr-states.md).
+
+1. **Act**: Re-read the **current** signals on the PR's head commit — gate checks, the review verdict, the `risk:*` tier, and non-author human approvals (they may have changed since the verdict: a new commit, a tier raise, a dismissed approval).
+2. **Act**: Synthesize with the shipped evaluator [`pr-state.sh`](../../../.pair/knowledge/assets/pr-state.sh) — `resolve_pr_state <gates> <review> <tier> <explicit_approval>`, then `merge_allowed <state>`. Tier comes from the label via `resolve_tier`; the human-approval input uses `human_approval_jq_filter` (non-bot, non-author, on the current head), never a raw approval count.
+3. **Skip**: Review not submitted yet → **HALT**, wait for review completion.
+4. **Verify**: State is `ready-to-merge` → continue to Step 4.2. Any other state → **HALT**, naming the unmet condition (red gate, review not approved / still pending, or 🔴 without an explicit human approval). Never bypass, dismiss, or re-run a required check to get a green merge button.
 
 ### Step 4.2: Prepare Merge Commit Message
 
