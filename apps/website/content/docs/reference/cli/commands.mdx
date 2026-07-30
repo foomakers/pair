@@ -23,8 +23,10 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
   documented for it: `pair install ./a ./b` fails with `error: too many arguments for 'install'`
   (exit 1) instead of silently ignoring `./b`. This is what catches an unquoted option value —
   `--name Acme KB` (which used to mean `--name Acme`) now fails instead of half-working; quote it:
-  `--name "Acme KB"`. This is a behavior change shipping in the next `pair-cli` release (0.4.3
-  and earlier ignore the stray argument): a wrapper script or CI job that passed one must drop it.
+  `--name "Acme KB"`. This is a behavior change — earlier releases ignored the stray argument, so a
+  wrapper script or CI job that passed one must drop it. The
+  [CHANGELOG](https://github.com/foomakers/pair/blob/main/apps/pair-cli/CHANGELOG.md) names the
+  release that introduced it.
 
 ---
 
@@ -413,8 +415,9 @@ pair scaffold-kb [path] [options]
 | `--host <host>` |       | Release automation host: `github` or `generic` (default: `github`) |
 | `--force`       | `-f`  | Regenerate scaffold-owned files without confirmation            |
 
-`--name` is embedded in generated YAML, bash, and Markdown: newlines and control
-characters are rejected, and the value is limited to 100 characters. Quote names that
+`--name` is embedded in generated YAML, bash, and Markdown: newlines, control characters
+and `${{` (which GitHub Actions would evaluate as a live expression in the generated
+workflow) are rejected, and the value is limited to 100 characters. Quote names that
 contain spaces (`--name "Acme KB"`) — an unquoted value is rejected as an extra
 positional argument rather than silently truncated.
 

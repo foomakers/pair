@@ -13,9 +13,11 @@ These apply to **every** command below, not to a single one.
   registered commands, so a stray positional fails with `error: too many arguments for '<command>'`
   and exit code 1 instead of being silently dropped. This makes each command's positional-arity
   validation reachable, and catches the classic unquoted option value (`--name Acme KB` used to
-  bind `name` to `Acme` and discard `KB`). Behavior change shipping in the next `pair-cli` release
-  (0.4.3 and earlier ignore the extra argument) — a wrapper or CI invocation carrying one (e.g.
-  `pair install ./a ./b`) now fails; drop the extra argument or quote the value.
+  bind `name` to `Acme` and discard `KB`). This is a behavior change — earlier releases ignored the
+  extra argument, so a wrapper or CI invocation carrying one (e.g. `pair install ./a ./b`) now
+  fails; drop the extra argument or quote the value. The
+  [CHANGELOG](https://github.com/foomakers/pair/blob/main/apps/pair-cli/CHANGELOG.md) names the
+  release that introduced it.
 
 ## Command Option Types
 
@@ -134,8 +136,9 @@ export type FileAction = 'created' | 'overwritten' | 'unchanged' | 'skipped'
 ```
 
 Validation: `--host` must be `github` or `generic`; `--name` must be non-empty, free of
-newlines/control characters, and at most 100 characters (it is embedded in generated YAML
-and bash); at most one positional argument (extra positionals are rejected — see
+newlines/control characters and of `${{` (GitHub Actions would evaluate it as a live
+expression in the generated workflow), and at most 100 characters (it is embedded in
+generated YAML and bash); at most one positional argument (extra positionals are rejected — see
 [CLI-Wide Rules](#cli-wide-rules), which applies to every command).
 Refused targets: a path that exists and is not a directory, or a configured pair project
 (`.pair/adoption/` present) — not bypassable with `--force`.

@@ -51,8 +51,9 @@ project, while a KB is knowledge. Consuming projects keep their own adoption fil
 | `--host <host>` | `github` (default) or `generic` for any other code host            |
 | `-f, --force`   | Regenerate scaffold-owned files without asking                     |
 
-Quote a name with spaces (`--name "Acme KB"`); newlines and control characters are
-rejected because the name is embedded in generated YAML and bash. `--host` is not
+Quote a name with spaces (`--name "Acme KB"`); newlines, control characters and `${{`
+(a live GitHub Actions expression) are rejected because the name is embedded in generated
+YAML and bash. `--host` is not
 inferred from the target repository's remote — pass `--host generic` for GitLab,
 Bitbucket, or self-hosted, otherwise a GitHub Actions workflow is generated.
 

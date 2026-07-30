@@ -5,12 +5,14 @@ export const scaffoldKbMetadata = {
   name: 'scaffold-kb',
   description: 'Scaffold an external knowledge base repository (pure KB + release script)',
   usage: 'pair scaffold-kb [path] [options]',
+  // Comments share one column so the block reads as a table in `pair scaffold-kb --help`:
+  // every command is padded to the width of the longest one (`--name "Acme KB"`) + 1.
   examples: [
-    'pair scaffold-kb                          # Scaffold a KB repo in the current directory',
-    'pair scaffold-kb ../acme-kb               # Scaffold into another directory',
-    'pair scaffold-kb ../acme-kb --name "Acme KB"  # Set the KB name explicitly',
-    'pair scaffold-kb --host generic            # Non-GitHub host: release script only',
-    'pair scaffold-kb --force                   # Regenerate scaffold-owned files without asking',
+    'pair scaffold-kb                             # Scaffold a KB repo in the current directory',
+    'pair scaffold-kb ../acme-kb                  # Scaffold into another directory',
+    'pair scaffold-kb ../acme-kb --name "Acme KB" # Set the KB name explicitly',
+    'pair scaffold-kb --host generic              # Non-GitHub host: release script only',
+    'pair scaffold-kb --force                     # Regenerate scaffold-owned files, no prompt',
   ],
   options: [
     {

@@ -27,14 +27,22 @@ function skippedLines(outcomes: FileOutcome[]): string[] {
 }
 
 /**
- * Files a previous `--host` generated and this one does not manage: named, never deleted.
+ * Scaffold-owned paths the chosen `--host` does not manage: named, never deleted.
  * Silent when there are none, so the normal report keeps its two lines.
+ *
+ * The list is matched by existence, so the file is NOT necessarily a leftover of an earlier
+ * scaffold — on a first run it can be the maintainer's own hand-written release workflow. The
+ * hint is therefore conditional on that provenance instead of advising deletion outright.
  */
 function unmanagedLines(unmanaged: string[], host: KbHost): string[] {
+  const otherHost: KbHost = host === 'github' ? 'generic' : 'github'
+  const hint = chalk.dim(
+    `(if an earlier --host ${otherHost} scaffold generated it, delete it to stop CI runs on v* tags)`,
+  )
+
   return unmanaged.map(
     relativePath =>
-      `  ${chalk.yellow('!')} ${relativePath} exists but is not managed by --host ${host} ` +
-      chalk.dim('(delete it if you do not want CI runs on v* tags)'),
+      `  ${chalk.yellow('!')} ${relativePath} exists but is not managed by --host ${host} ${hint}`,
   )
 }
 

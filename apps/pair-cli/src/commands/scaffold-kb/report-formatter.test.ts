@@ -54,6 +54,19 @@ describe('formatScaffoldReport', () => {
 
     expect(switched).toContain('.github/workflows/release.yml')
     expect(switched).toContain('not managed by --host generic')
-    expect(switched).toContain('delete it if you do not want CI runs on v* tags')
+    expect(switched).toContain('stop CI runs on v* tags')
+  })
+
+  // The path is matched by existence, so on a first-ever scaffold it can be the maintainer's
+  // OWN hand-written release workflow, which this command never generated. The hint must be
+  // conditional on that provenance instead of telling them to delete an unrelated file.
+  it('does not present the unmanaged file as something the scaffold created', () => {
+    const switched = formatScaffoldReport(
+      { ...result, unmanaged: ['.github/workflows/release.yml'] },
+      { identity, host: 'generic' },
+    )
+
+    expect(switched).toContain('if an earlier --host github scaffold generated it')
+    expect(switched).not.toContain('delete it if you do not want')
   })
 })

@@ -64,6 +64,76 @@ function hasControlCharacter(value: string): boolean {
  */
 const ACTIONS_EXPRESSION_OPENER = '${{'
 
+/**
+ * Where the rejected name came from, so the diagnostic blames the right thing:
+ * `flag` = an explicit `--name`, `directory` = derived from the target directory basename
+ * (the user passed no `--name`, so naming the flag would point at nothing they typed).
+ */
+export type KbNameSource = 'flag' | 'directory'
+
+const SOURCE_SUBJECT: Record<KbNameSource, string> = {
+  flag: 'Invalid --name',
+  directory: 'Invalid KB name',
+}
+
+/** Says where the name came from, right after the offending value. */
+const SOURCE_ORIGIN: Record<KbNameSource, string> = {
+  flag: '',
+  directory: ' derived from the target directory',
+}
+
+/** Says what to do about it — only the derived case has an action the user did not know about. */
+const SOURCE_HINT: Record<KbNameSource, string> = {
+  flag: '',
+  directory: ' — pass --name to set it explicitly',
+}
+
+/**
+ * True for code points a terminal shows as nothing (or as a line break): C0 controls, DEL and
+ * the C1 block (which contains U+0085 NEL), plus U+2028/U+2029.
+ */
+function isInvisible(code: number): boolean {
+  return code <= 0x1f || (code >= 0x7f && code <= 0x9f) || UNICODE_LINE_BREAKS.has(code)
+}
+
+/**
+ * The name as a double-quoted literal with every invisible code point shown as `\uXXXX`.
+ *
+ * `JSON.stringify` is NOT enough here: it escapes only code units below 0x20 (plus quote and
+ * backslash), so DEL, U+0085, U+2028 and U+2029 — exactly the class this module rejects —
+ * would print raw and the offending name would look perfectly legal on screen. Legible
+ * characters (accents, CJK, punctuation) are left as they are so the name stays recognizable.
+ */
+function renderName(value: string): string {
+  let rendered = ''
+
+  for (let i = 0; i < value.length; i += 1) {
+    const char = value.charAt(i)
+    const code = value.charCodeAt(i)
+
+    if (isInvisible(code)) {
+      rendered += `\\u${code.toString(16).padStart(4, '0')}`
+    } else if (char === '"' || char === '\\') {
+      rendered += `\\${char}`
+    } else {
+      rendered += char
+    }
+  }
+
+  return `"${rendered}"`
+}
+
+/**
+ * `Invalid --name "x": <rule>.` — or, for a derived name,
+ * `Invalid KB name "x" derived from the target directory: <rule> — pass --name to set it
+ * explicitly.` `rule` carries no trailing period: the hint is appended after it.
+ */
+function invalidName(name: string, source: KbNameSource, rule: string): Error {
+  const subject = `${SOURCE_SUBJECT[source]} ${renderName(name)}${SOURCE_ORIGIN[source]}`
+
+  return new Error(`${subject}: ${rule}${SOURCE_HINT[source]}.`)
+}
+
 /** Lowercase, hyphen-separated slug — empty string when nothing usable remains. */
 export function slugifyKbName(value: string): string {
   return value
@@ -90,27 +160,23 @@ export function slugifyKbName(value: string): string {
  * accepted on purpose: it is the maintainer's own KB name, and the generation sites quote
  * it. The boundary is a conscious one, not the limit of what was thought of.
  */
-export function validateKbName(name: string): string {
-  const rendered = JSON.stringify(name)
-
+export function validateKbName(name: string, source: KbNameSource = 'flag'): string {
   if (name.trim() === '') {
-    throw new Error(`Invalid --name ${rendered}: the KB name cannot be empty.`)
+    throw invalidName(name, source, 'the KB name cannot be empty')
   }
   if (hasControlCharacter(name)) {
-    throw new Error(
-      `Invalid --name ${rendered}: the KB name cannot contain newlines or control characters.`,
-    )
+    throw invalidName(name, source, 'the KB name cannot contain newlines or control characters')
   }
   if (name.includes(ACTIONS_EXPRESSION_OPENER)) {
-    throw new Error(
-      `Invalid --name ${rendered}: the KB name cannot contain '${ACTIONS_EXPRESSION_OPENER}' ` +
-        `(it would become a live GitHub Actions expression in the generated workflow).`,
+    throw invalidName(
+      name,
+      source,
+      `the KB name cannot contain '${ACTIONS_EXPRESSION_OPENER}' ` +
+        '(it would become a live GitHub Actions expression in the generated workflow)',
     )
   }
   if (name.length > MAX_NAME_LENGTH) {
-    throw new Error(
-      `Invalid --name ${rendered}: the KB name cannot exceed ${MAX_NAME_LENGTH} characters.`,
-    )
+    throw invalidName(name, source, `the KB name cannot exceed ${MAX_NAME_LENGTH} characters`)
   }
 
   return name
@@ -119,13 +185,20 @@ export function validateKbName(name: string): string {
 /**
  * Resolve the KB identity from an explicit `--name` or, absent that, from the
  * target directory basename. `targetPath` is expected to be already resolved.
+ *
+ * The source is passed to the validation so a rejected DERIVED name (e.g. a directory whose
+ * slug is longer than `MAX_NAME_LENGTH`) is not reported as an invalid `--name` the user never
+ * passed.
  */
 export function resolveKbIdentity(input: {
   name?: string | undefined
   targetPath: string
 }): KbIdentity {
   const derived = slugifyKbName(path.basename(input.targetPath))
-  const name = validateKbName(input.name ?? (derived || FALLBACK_SLUG))
+  const name =
+    input.name === undefined
+      ? validateKbName(derived || FALLBACK_SLUG, 'directory')
+      : validateKbName(input.name, 'flag')
   const slug = slugifyKbName(name) || FALLBACK_SLUG
 
   return { name, slug, skillPrefix: slug }

@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest'
 import { resolveKbIdentity, slugifyKbName, validateKbName } from './identity'
 
+/** The thrown message, so a diagnostic can be asserted character by character. */
+function messageOf(call: () => unknown): string {
+  try {
+    call()
+  } catch (error) {
+    return (error as Error).message
+  }
+  throw new Error('expected the call to throw, it returned')
+}
+
 describe('slugifyKbName', () => {
   it('lowercases and hyphenates separators', () => {
     expect(slugifyKbName('Acme Standards KB')).toBe('acme-standards-kb')
@@ -65,13 +75,55 @@ describe('validateKbName', () => {
   it('rejects an absurdly long name', () => {
     expect(() => validateKbName('a'.repeat(101))).toThrow(/100 characters/)
   })
+
+  // The diagnostic must SHOW the offender. `JSON.stringify` escapes only code units below
+  // 0x20 (plus quote and backslash), so DEL and the three Unicode line breaks would reach
+  // the terminal raw: the rejected name looks identical to a legal one on screen and the
+  // user cannot tell what to fix — for exactly the class this guard rejects.
+  it.each([
+    ['U+0085 NEL', 'Acme\u0085KB', '\\u0085'],
+    ['U+2028 LINE SEPARATOR', 'Acme\u2028KB', '\\u2028'],
+    ['U+2029 PARAGRAPH SEPARATOR', 'Acme\u2029KB', '\\u2029'],
+    ['U+007F DEL', 'Acme\u007fKB', '\\u007f'],
+  ])('escapes the invisible %s in the diagnostic', (_label, name, escape) => {
+    const message = messageOf(() => validateKbName(name))
+
+    expect(message).toContain(escape)
+    expect(message).not.toContain(name)
+  })
+
+  it('escapes the control character without mangling legible punctuation or accents', () => {
+    const message = messageOf(() => validateKbName('Acmé \u0007"Core" KB'))
+
+    expect(message).toContain('\\u0007')
+    expect(message).toContain('Acmé ')
+    expect(message).toContain('\\"Core\\"')
+  })
+
+  // A name derived from the target directory basename must not be reported as a bad flag:
+  // the user never passed --name, so "Invalid --name" points at nothing they can see.
+  it('names the target directory instead of --name when the name was derived', () => {
+    const message = messageOf(() => validateKbName('a'.repeat(101), 'directory'))
+
+    expect(message).toContain('derived from the target directory')
+    expect(message).toContain('pass --name')
+    expect(message).not.toContain('Invalid --name')
+  })
 })
 
 describe('resolveKbIdentity', () => {
   it('rejects an unsafe explicit name before anything is generated', () => {
     expect(() => resolveKbIdentity({ name: 'Acme\nKB', targetPath: '/work/acme' })).toThrow(
-      /newlines or control characters/,
+      /Invalid --name/,
     )
+  })
+
+  it('blames the target directory when the derived name is the invalid one', () => {
+    const message = messageOf(() => resolveKbIdentity({ targetPath: `/work/${'a'.repeat(105)}` }))
+
+    expect(message).toContain('derived from the target directory')
+    expect(message).toContain('pass --name')
+    expect(message).not.toContain('Invalid --name')
   })
 
   it('derives name and slug from the target directory basename', () => {

@@ -30,7 +30,9 @@ Every file a generator plans carries an explicit **ownership kind**:
 
 Byte-identical files are reported as `unchanged`: no write, no prompt, no churn — so a re-run on untouched output is a no-op. With no TTY the confirmation resolves to "no" (keep the file, report it skipped), so nothing is ever silently overwritten in CI or scripts.
 
-The generator emits a plan (`{ path, content, kind }[]`) that is pure and separately testable, and an apply step that turns the plan into per-file outcomes (`created` / `overwritten` / `unchanged` / `skipped`). Confirmation is injected as a function, so idempotency is unit-tested without prompting or mocking a filesystem.
+A third category is **reported, never touched**: a scaffold-owned path that belongs to a *variant the run did not select* (`.github/workflows/release.yml` when the run passes `--host generic`). The run neither writes it nor deletes it — deleting would break the never-destroy stance above, and staying silent would hide a workflow that still fires on every `v*` tag while the regenerated release path no longer publishes. It is named in the report, and whether to remove it is the maintainer's call. Because such a path is matched by existence, the report wording must not assume the generator created it (it can be the maintainer's own file).
+
+The generator emits a plan (`{ path, content, kind }[]` plus the paths the selected variant does not manage) that is pure and separately testable, and an apply step that turns the plan into per-file outcomes (`created` / `overwritten` / `unchanged` / `skipped`) plus the subset of unmanaged paths that actually exist on disk. Confirmation is injected as a function, so idempotency is unit-tested without prompting or mocking a filesystem.
 
 ## Alternatives Considered
 
@@ -43,6 +45,7 @@ The generator emits a plan (`{ path, content, kind }[]`) that is pure and separa
 
 - Re-running a generator is safe and boring: unchanged output is a no-op, authored content survives, generated files refresh only deliberately.
 - Any future scaffolding command (project, marketplace repo, service template) reuses these two kinds and the same plan/apply split instead of inventing its own overwrite rules; a reviewer can reject a generator that writes files without an ownership kind.
+- A generator with host/variant-specific outputs also declares the paths the selected variant does **not** manage: they are neither deleted nor written, only named in the report (`ScaffoldPlan.unmanaged` → `ApplyResult.unmanaged` → one report line each, in `apps/pair-cli/src/commands/scaffold-kb/`). Silently leaving them unmentioned is as much a defect as deleting them.
 - The report must name every skipped file and why, otherwise the "kept your version" decision is invisible.
 - `--force` remains the single explicit escape hatch, and it still cannot touch `seed` content.
 

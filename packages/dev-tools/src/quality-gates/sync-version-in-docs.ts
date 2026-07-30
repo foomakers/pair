@@ -19,6 +19,12 @@
  *
  * REPO_ROOT is resolved from this file's location: packages/dev-tools/src/quality-gates
  * -> src -> dev-tools -> packages -> repo root (up 4).
+ *
+ * RULE FOR DOC AUTHORS: every occurrence of the old version is rewritten on EVERY .md/.mdx
+ * line (only the `isExternalLine` forms are spared), prose included and unreviewed. So never
+ * name a version in a sentence that is not about "the current release" — e.g. "0.4.3 and
+ * earlier ignore the extra argument" becomes a factual inversion the moment it is synced.
+ * Point at the CHANGELOG instead; wording without a literal version cannot be rewritten.
  */
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'fs'
 import { join, relative, resolve } from 'path'
