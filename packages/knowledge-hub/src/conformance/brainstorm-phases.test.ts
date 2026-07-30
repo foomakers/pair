@@ -457,7 +457,6 @@ describe('brainstorm — phase 3 to-issues tree triage (AC4) (#230)', () => {
       // from" HALT was scoped "free-theme discovery only", yet item 6 resolves a
       // story root's parent epic with no HALT when it does not exist — and orphan
       // stories are a normal PM-tool state (sub-issue links are optional).
-      const p3 = phase(v.content, 3)
       // The HALT catalogue is canonical in its own section, not restated per phase.
       expect(section(v.content, 'HALT Conditions')).toMatch(/orphan/i)
       const halt = v.content.slice(v.content.search(/^## HALT Conditions/m)).split(/\n## /)[0] ?? ''
@@ -869,9 +868,7 @@ describe('brainstorm — round-3 review fixes (#230)', () => {
       expect(fallback).toMatch(/Parent is an `initiative`/)
       expect(fallback).toContain(`\`${v.planEpics}\` with \`$initiative:`)
       expect(fallback).toMatch(/rather than a HALT/)
-      // Phase 3 item 6 carries the same two sub-cases…
-      const p3 = phase(v.content, 3)
-      // Canonical in HALT Conditions (the not-a-HALT case) + parametrization.md's row.
+      // Phase 3 item 6's two sub-cases are canonical in HALT Conditions (the not-a-HALT case) + parametrization.md's row.
       expect(section(v.content, 'HALT Conditions')).toMatch(
         /parent is an \*\*initiative\*\* never reaches this HALT/,
       )
