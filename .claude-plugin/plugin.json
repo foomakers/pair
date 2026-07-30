@@ -1,7 +1,6 @@
 {
   "$schema": "https://www.schemastore.org/claude-code-plugin-manifest.json",
   "name": "pair",
-  "displayName": "pair",
   "description": "AI-assisted SDLC skill catalog: refine, plan, implement and review with pair's knowledge base.",
   "author": {
     "name": "Foomakers",

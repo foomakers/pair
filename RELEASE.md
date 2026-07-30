@@ -55,10 +55,10 @@ The tag push triggers the **Release workflow** (`release.yml`) which:
 `.claude-plugin/marketplace.json` + `.claude-plugin/plugin.json` are the **native Claude Code install channel** (`/plugin marketplace add foomakers/pair`). They are **hand-maintained**, not generated — when the skill catalog changes (skill added, renamed, removed), update them in the same PR:
 
 - [ ] `.claude-plugin/plugin.json` `skills` lists one `./.claude/skills/pair-<flattened-name>` entry per dataset skill, and nothing stale
-- [ ] `claude plugin validate .` passes (the pinned-version warning is expected — see the [marketplace-plugin-packaging ADL](.pair/adoption/decision-log/2026-07-28-marketplace-plugin-packaging.md))
-- [ ] Skills only — no `agents`, `hooks`, or `mcpServers` in either manifest, and no root-level `agents/`, `commands/`, `hooks/` or `.mcp.json` (with `source: "./"` the repo IS the plugin payload, so Claude Code would load those regardless of the manifest)
+- [ ] `claude plugin validate .` passes (the pinned-version warning is expected — see the [marketplace-plugin-packaging ADL](.pair/adoption/decision-log/2026-07-28-marketplace-plugin-packaging.md)). Do **not** add `--strict`: it turns that expected warning into a failure, and the no-version-pin is a deliberate decision (ADL Decision 4)
+- [ ] Skills only — `plugin.json` carries metadata + `skills` and nothing else; the marketplace entry carries metadata + `source`/`category`/`tags`/`strict` and **no `skills`** (an entry-level `skills` silently REPLACES the plugin's catalog); no root-level `agents/`, `commands/`, `hooks/`, `skills/` or `.mcp.json` (with `source: "./"` the repo IS the plugin payload, so Claude Code auto-discovers those regardless of the manifest)
 
-The catalog guard (`packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts`, run by `pnpm test`) fails the build when the manifest drifts from `packages/knowledge-hub/dataset/.skills/`, naming the exact entry to add or remove. It also enforces the skills-only rule automatically — all three manifest keys and the four root-level component paths — so that line is a checklist reminder, not the only backstop.
+The catalog guard (`packages/knowledge-hub/src/tools/claude-plugin-manifest.test.ts`, run by `pnpm test`) fails the build when the manifest drifts from `packages/knowledge-hub/dataset/.skills/`, naming the exact entry to add or remove. It also enforces the skills-only rule automatically — as an **allowlist** of permitted manifest keys (so `settings`, `dependencies`, `monitors`, `commands` and anything a future schema adds fail closed too) plus the five root-level component paths — so that line is a checklist reminder, not the only backstop.
 
 ## Workflows
 
