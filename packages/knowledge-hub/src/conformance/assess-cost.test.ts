@@ -205,6 +205,17 @@ describe('assess-cost.md — report mode (#281)', () => {
       expect(lower).toMatch(/batch/)
       expect(lower).toMatch(/discard the diff/)
       expect(lower).not.toContain('window too large')
+      // The context bound rests on retain-and-discard, not on a skill-local batch
+      // constant the doc layer does not own (working-area.md says only "in batches").
+      // "one PR at a time, in small batches (~10 per batch)" left the unit of work
+      // ambiguous — 1 or 10 — so the number is gone and the rule is explicit.
+      expect(steps).not.toMatch(/~\s*\d+\s*PRs? per batch/i)
+      expect(lower).toMatch(/no batch size is prescribed here/)
+      expect(lower).toMatch(/not on any batch constant/)
+      // The announced count is output, never an implied prompt: report mode may run
+      // unattended, so a run that waited for an answer would stall forever.
+      expect(lower).toContain('continue without waiting')
+      expect(lower).toMatch(/never a prompt/)
       // Truncation stays illegitimate unless it is visible in the headline.
       expect(lower).toContain('never a _silently_ truncated panel')
       expect(steps).toContain('**Coverage**: N of M merged PRs processed')
@@ -218,9 +229,48 @@ describe('assess-cost.md — report mode (#281)', () => {
       expect(steps.toLowerCase()).toContain('rule-set revision')
       expect(output).toContain('**Rule set**')
       expect(output).toMatch(/cost-assessment\.md` @ <revision>/)
-      // A run timestamp would break panel idempotency — explicitly ruled out.
+      // A run timestamp would break panel idempotency. Asserted on the RENDERED
+      // template, not only on the prose that forbids it: the prose assertion below
+      // is satisfied by the prohibition sentence itself, so on its own it stays
+      // green while the regression it exists to catch (a `**Generated**: <ISO-8601>`
+      // line added to the panel headline) lands untouched.
+      expect(output).not.toMatch(/^\*\*Generated/im)
+      expect(output).not.toMatch(/<timestamp>|<ISO-8601>|<YYYY-MM-DD>T/)
+      // Secondary: the prohibition is stated, so an executor cannot re-add one.
       expect(steps.toLowerCase()).toMatch(/generated at/)
-      expect(content.toLowerCase()).not.toContain('generated: <timestamp>')
+    })
+
+    it(`${label} never lets a lower-coverage re-run overwrite a more complete panel`, () => {
+      // The in-place update (Step 11.2) is not unconditional: a context-tight re-run
+      // that processes 40 of 73 must not replace a 73-of-73 panel, or the complete
+      // figures are destroyed and the resulting drop in drift reads as improvement
+      // while being a pure run artifact — and "same inputs => same content" would
+      // depend on how far a run got rather than on its inputs.
+      const lower = steps.toLowerCase()
+      expect(lower).toContain('coverage never regresses')
+      expect(lower).toMatch(/not unconditional/)
+      expect(lower).toMatch(/higher coverage/)
+      expect(lower).toMatch(/keep it|kept rather than overwritten/)
+      expect(output).toMatch(/kept \(existing panel covers more of the period/)
+    })
+
+    it(`${label} renders unprocessed PRs only in the Coverage line, counted separately`, () => {
+      // One rendering site for the ids (the headline Coverage line, where the
+      // shortfall is stated), and `unprocessed` as a fifth classification member:
+      // folding an unmeasured PR into `no prediction` inflates the never-assessed
+      // figure with PRs that were never measured at all — the very conflation the
+      // 8.2.1 diagnosis split exists to prevent.
+      expect(steps).toContain('**Coverage**: N of M merged PRs processed')
+      expect(steps.toLowerCase()).toMatch(/no per-pr row/)
+      expect(steps).toMatch(/fifth, separately counted member — `unprocessed`/)
+      expect(steps.toLowerCase()).toMatch(/never.{0,40}folded into `no prediction`/)
+      // The figures are over the PROCESSED PRs; M appears only in the Coverage line
+      // (otherwise `Monitored: N` and the distribution silently disagree on N vs. M).
+      expect(steps).toContain('What the figures count')
+      expect(steps).toMatch(/\*\*Monitored\*\*`?, the drift counts/)
+      // The panel template must not send the ids to the per-PR section instead.
+      expect(output).not.toMatch(/unprocessed ids in the per-PR section/)
+      expect(output).toMatch(/unprocessed: #ID/)
     })
 
     it(`${label} writes the consolidated panel into the cost reports area (AC2, D14)`, () => {

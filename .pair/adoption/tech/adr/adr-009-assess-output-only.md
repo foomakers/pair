@@ -2,11 +2,11 @@
 
 ## Status
 
-Accepted
+Accepted (amended 2026-07-28 — D14 operational-report exception, see the amendment in Decision)
 
 ## Date
 
-2026-07-12
+2026-07-12 (amended 2026-07-28)
 
 ## Context
 
@@ -25,7 +25,7 @@ Accepted
 
 ### Option 2: assess-* output-only; record-decision as the sole adoption writer
 
-- **Description**: Every `assess-*` skill becomes output-only — it produces a proposal (`{ content, target, decision-metadata }`) plus a human-facing report and writes nothing. The caller (a process skill such as `/pair-process-bootstrap`/`/pair-process-review`, or a human/agent) persists the proposal by composing `/record-decision(content, target)`. `record-decision` stays generic: it writes `content` to `target` and records the ADR/ADL, with no per-domain rendering logic. `assess-debt` loses any `$mode:scan` and never auto-creates items; debt is reported and never blocks (R7.2). Deliberate promotion to the backlog goes through `/pair-capability-write-issue` with a `tech-debt` label.
+- **Description**: Every `assess-*` skill becomes output-only — it produces a proposal (`{ content, target, decision-metadata }`) plus a human-facing report and writes nothing (see the operational-report amendment below). The caller (a process skill such as `/pair-process-bootstrap`/`/pair-process-review`, or a human/agent) persists the proposal by composing `/record-decision(content, target)`. `record-decision` stays generic: it writes `content` to `target` and records the ADR/ADL, with no per-domain rendering logic. `assess-debt` loses any `$mode:scan` and never auto-creates items; debt is reported and never blocks (R7.2). Deliberate promotion to the backlog goes through `/pair-capability-write-issue` with a `tech-debt` label.
 - **Pros**: Assessing has zero side effects; a single adoption writer (`record-decision`); no backlog pollution; clear contract (assess renders content, record-decision persists, caller orchestrates); mirror/adoption drift is easier to reason about.
 - **Cons**: Composing flows must be rewired to persist proposals; a small orchestration step moves from the assess skill to the caller.
 

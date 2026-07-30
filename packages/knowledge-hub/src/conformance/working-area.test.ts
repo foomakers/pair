@@ -105,6 +105,26 @@ describe('working-area.md — period-keyed report panels (#281)', () => {
       expect(lower).toMatch(/never a reason to refuse a panel/)
       expect(lower).toMatch(/batch/)
       expect(lower).toMatch(/never look complete/)
+      // The items left out are named in that one line, not as empty per-item rows.
+      expect(lower).toMatch(/no per-item row/)
+      // The headline figures are over the processed items; the found count only
+      // qualifies them, so a partial panel cannot mix the two denominators.
+      expect(lower).toMatch(/count the \*\*processed\*\* items/)
+    })
+
+    it(`${label} forbids a lower-coverage run from overwriting a more complete panel`, () => {
+      // Without this the two sibling rules contradict each other: "re-running for the
+      // same period updates that panel in place / same inputs => same content" plus
+      // "a partial run still writes its panel" lets a 40-of-73 re-run destroy a
+      // 73-of-73 panel — same inputs, different content, and the drop in the figures
+      // reads as real movement to anyone comparing periods. Authoritative here
+      // because it binds EVERY panel writer, not just the cost panel (#222 inherits).
+      const lower = panels.toLowerCase()
+      expect(lower).toContain('no coverage regression')
+      expect(lower).toMatch(/not unconditional/)
+      expect(lower).toMatch(/higher coverage/)
+      expect(lower).toMatch(/keep it/)
+      expect(lower).toMatch(/run output/)
     })
 
     it(`${label} states the empty-period and not-writable degradations`, () => {
