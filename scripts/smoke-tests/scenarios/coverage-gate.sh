@@ -17,6 +17,13 @@
 #   6. the guardrail reads adoption config + a coverage number only — it carries NO
 #      classification criteria (D18): it never inspects the diff, code, or paths.
 #
+# It also DEMONSTRATES the opt-in commit-back ratchet (story #372) end-to-end
+# through its CLI — the loop-termination sequence (AC4) is run, not asserted in
+# prose: enabled ⇒ raise proposed, then the automated commit is skipped, and even
+# with the marker lost the fixpoint proposes nothing. Plus AC1 (default off),
+# AC3 (never lowers), AC5 (a PR run never writes) and AC6 (a refused write is a
+# warning that leaves the verdict untouched).
+#
 # Per the gate-tooling ADL (2026-07-13) this shell/asset surface is verified with a
 # smoke test, not a vitest unit test.
 source "$(dirname "$0")/../lib/utils.sh"
@@ -186,6 +193,187 @@ if grep -qi 'machine-maintained' "$GATE" "$EXAMPLE" "$GUIDELINE"; then
   log_fail "'machine-maintained' wording still present (should be removed)"; FAILED=1
 else
   log_succ "no misleading 'machine-maintained' wording remains"
+fi
+
+# ===========================================================================
+# Commit-back ratchet (story #372) — CLI demonstration
+#
+# The ratchet's decisions live in the unit-tested module
+# packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts; what is proven
+# HERE is the CLI wiring and, above all, that the CI LOOP TERMINATES (AC4) —
+# run as a real sequence, not asserted in prose.
+#
+# Every invocation is either `--dry-run` or a path that refuses before writing,
+# so this scenario can create no git/gh side effect. Fixtures are temp files.
+# ===========================================================================
+RATCHET_DIR="$TMP_DIR/ratchet"
+mkdir -p "$RATCHET_DIR"
+R_CFG="$RATCHET_DIR/coverage-baseline.md"
+R_WOW="$RATCHET_DIR/way-of-working.md"
+
+write_ratchet_cfg() { # write_ratchet_cfg <shared-baseline>
+  cat >"$R_CFG" <<EOF
+# coverage config (fixture) — surrounding markdown MUST survive untouched
+
+\`\`\`ini
+target.shared=90
+baseline.shared=$1
+baseline.frontend=19
+\`\`\`
+
+## Notes
+
+- trailing prose
+EOF
+}
+write_ratchet_wow() { # write_ratchet_wow <enabled|disabled>
+  printf -- '- **Coverage guardrail**: `enabled`\n- **Coverage baseline commit-back**: `%s`\n' "$1" >"$R_WOW"
+}
+
+# ratchet <event> <ref> <head-commit-message> <measured-shared> [extra-args...]
+# Echoes the CLI's combined output; always run WITHOUT a token in the env.
+ratchet() {
+  local event="$1" ref="$2" msg="$3" pct="$4"; shift 4
+  (
+    cd "$REPO_ROOT" || exit 1
+    env -u COVERAGE_RATCHET_TOKEN \
+      GITHUB_EVENT_NAME="$event" \
+      GITHUB_REF_NAME="$ref" \
+      PAIR_RATCHET_HEAD_COMMIT_MESSAGE="$msg" \
+      pnpm --filter @pair/knowledge-hub coverage:ratchet \
+      --config "$R_CFG" \
+      --way-of-working "$R_WOW" \
+      --base-branch main \
+      --measured "shared=$pct" \
+      "$@" 2>&1
+  )
+}
+expect_out() { # expect_out <description> <needle> <output>
+  case "$3" in
+  *"$2"*) log_succ "$1" ;;
+  *) log_fail "$1: output did not contain '$2'"; echo "$3" | sed 's/^/      | /'; FAILED=1 ;;
+  esac
+}
+refute_out() { # refute_out <description> <needle> <output>
+  case "$3" in
+  *"$2"*) log_fail "$1: output unexpectedly contained '$2'"; FAILED=1 ;;
+  *) log_succ "$1" ;;
+  esac
+}
+# cfg_untouched <description> — the fixture config is byte-identical to $CFG_BEFORE
+# (compared quietly: `check` would echo the whole file on every pass).
+cfg_untouched() {
+  if [ "$CFG_BEFORE" = "$(cat "$R_CFG")" ]; then
+    log_succ "$1"
+  else
+    log_fail "$1: the config was modified"; diff <(printf '%s' "$CFG_BEFORE") "$R_CFG" || true; FAILED=1
+  fi
+}
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  log_fail "pnpm not available — cannot demonstrate the #372 ratchet CLI"; FAILED=1
+else
+  write_ratchet_cfg 84
+
+  # --- AC1: default off. The flag is `disabled` => nothing is written and the
+  # step only says why (the framework default is the same, absent flag). ---
+  write_ratchet_wow disabled
+  CFG_BEFORE="$(cat "$R_CFG")"
+  OUT="$(ratchet push main 'feat: unrelated work' 90.5 --dry-run)"
+  expect_out "AC1 flag disabled -> skipped" "SKIPPED (flag-disabled)" "$OUT"
+  cfg_untouched "AC1 config untouched"
+
+  # --- From here the flag is enabled. ---
+  write_ratchet_wow enabled
+
+  # --- AC5: a pull-request run NEVER writes back (fork or not). ---
+  OUT="$(ratchet pull_request feature/US-1-foo 'feat: from a PR' 90.5 --dry-run)"
+  expect_out "AC5 pull_request run -> skipped" "SKIPPED (not-base-push)" "$OUT"
+  OUT="$(ratchet push feature/US-1-foo 'feat: branch push' 90.5 --dry-run)"
+  expect_out "AC5 non-base push -> skipped" "SKIPPED (not-base-push)" "$OUT"
+
+  # --- AC2: a base-branch push above the baseline PROPOSES a raise, as a bot PR
+  # on a dedicated branch — never a push to the base branch. ---
+  OUT="$(ratchet push main 'feat: improved coverage' 90.5 --dry-run)"
+  expect_out "AC2 raise planned (84 -> 89)"      "shared — raise"                    "$OUT"
+  expect_out "AC2 lands on the ratchet branch"   "HEAD:refs/heads/chore/coverage-baseline-ratchet" "$OUT"
+  expect_out "AC2 opens a PR against the base"   "gh pr create --base main"          "$OUT"
+  expect_out "AC2 pushes with a lease, not a bare force" "push --force-with-lease"    "$OUT"
+  # The lease is only meaningful if the destination has a remote-tracking ref: a
+  # CI checkout fetches the base ref only, and without this git rejects every
+  # non-fast-forward lease push as 'stale info' (the ratchet would work once,
+  # then warn forever). The fetch itself is tolerated — first run, no branch yet.
+  expect_out "AC2 maps a remote-tracking ref for the lease" \
+    "config --add remote.origin.fetch +refs/heads/chore/coverage-baseline-ratchet" "$OUT"
+  expect_out "AC2 fetch failure is tolerated"     "fetch --no-tags origin"            "$OUT"
+  expect_out "AC2 restores the checkout afterwards" "restores the workspace"          "$OUT"
+  refute_out "AC2 never pushes to the base ref"  "refs/heads/main"                    "$OUT"
+  refute_out "AC2 never stages everything"       "git add -A"                         "$OUT"
+  refute_out "AC2 never switches the checkout to a bot branch" "git checkout"         "$OUT"
+  cfg_untouched "AC2 dry run wrote nothing"
+
+  # === AC4 — LOOP TERMINATION, demonstrated as a sequence ===
+  # Round 2a: the run reacting to the ratchet's own commit (squash subject taken
+  # from the ratchet PR title, so it carries the marker) must NOT propose again.
+  OUT="$(ratchet push main 'chore: ratchet coverage baseline [coverage-baseline-ratchet] (#999)' 90.5 --dry-run)"
+  expect_out "AC4 marked commit -> skipped" "SKIPPED (automated-commit)" "$OUT"
+  # Round 2b: a plain merge commit, whose subject GitHub generates WITHOUT the
+  # PR title — caught by the ratchet branch name.
+  OUT="$(ratchet push main 'Merge pull request #999 from foomakers/chore/coverage-baseline-ratchet' 90.5 --dry-run)"
+  expect_out "AC4 merge commit -> skipped" "SKIPPED (automated-commit)" "$OUT"
+  # Round 2c: the guarantee that does NOT depend on the marker surviving — the
+  # ratchet is a FIXPOINT. With the raise merged (baseline now 89) and the same
+  # coverage measured, a HUMAN commit message proposes nothing at all.
+  write_ratchet_cfg 89
+  OUT="$(ratchet push main 'feat: another human change' 90.5 --dry-run)"
+  expect_out "AC4 fixpoint -> no raise even from a human commit" "no raise" "$OUT"
+  refute_out "AC4 fixpoint plans no commands" "DRY RUN" "$OUT"
+
+  # --- AC3: never lowers. Equal and below both hold. ---
+  write_ratchet_cfg 84
+  OUT="$(ratchet push main 'feat: coverage exactly at the baseline' 84 --dry-run)"
+  expect_out "AC3 equal coverage -> no raise" "no raise" "$OUT"
+  OUT="$(ratchet push main 'feat: coverage dropped' 40 --dry-run)"
+  expect_out "AC3 drop -> hold, never lowered" "shared — hold" "$OUT"
+  cfg_untouched "AC3 config untouched by a drop"
+
+  # --- Edge case: a type measured but absent from the config is reported, never written. ---
+  OUT="$(ratchet push main 'feat: new package' 90.5 --measured backend=77 --dry-run)"
+  expect_out "unknown type -> reported, not written" "backend — no-baseline-configured" "$OUT"
+
+  # --- AC6: a refused write (no credential) degrades to a WARNING, exits 0 and
+  # writes nothing. Run WITHOUT --dry-run: this is the real write path refusing. ---
+  if OUT="$(ratchet push main 'feat: improved coverage' 90.5)"; then
+    log_succ "AC6 refused write still exits 0 (gate verdict untouched)"
+  else
+    log_fail "AC6 refused write exited non-zero — it must never fail the run"; FAILED=1
+  fi
+  expect_out "AC6 warns rather than failing"      "::warning::"              "$OUT"
+  expect_out "AC6 names the reason (credential)"  "COVERAGE_RATCHET_TOKEN"   "$OUT"
+  cfg_untouched "AC6 nothing written on refusal"
+fi
+
+# --- Audit: the decided PR-vs-push model + the credential requirement are
+# documented where a consumer reads them (guideline + adoption), not only in the
+# workflow YAML (#372 DoD). ---
+WOW="$REPO_ROOT/.pair/adoption/tech/way-of-working.md"
+if grep -qi 'coverage baseline commit-back' "$GUIDELINE" \
+  && grep -q 'COVERAGE_RATCHET_TOKEN' "$GUIDELINE" \
+  && grep -q 'chore/coverage-baseline-ratchet' "$GUIDELINE"; then
+  log_succ "guideline documents the commit-back flag, its credential and the bot-PR model"
+else
+  log_fail "guideline missing commit-back flag / credential / bot-PR documentation"; FAILED=1
+fi
+if grep -qi 'Coverage baseline commit-back' "$WOW" && grep -q 'COVERAGE_RATCHET_TOKEN' "$WOW"; then
+  log_succ "adoption line declares the commit-back flag + its credential"
+else
+  log_fail "adoption way-of-working missing the commit-back flag"; FAILED=1
+fi
+# The gate itself must still never persist, in any configuration.
+if grep -q 'NEVER WRITES' "$GATE"; then
+  log_succ "gate still declares it never writes (persistence stays a separate side effect)"
+else
+  log_fail "gate no longer states that it never writes"; FAILED=1
 fi
 
 if [ "$FAILED" -ne 0 ]; then

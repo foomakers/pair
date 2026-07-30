@@ -19,7 +19,8 @@
     "mdlint:fix": "markdownlint-fix",
     "check:links": "ts-node src/tools/check-broken-links.ts",
     "transfer:dataset": "ts-node src/tools/transfer-dataset.ts",
-    "skills:conformance": "ts-node src/tools/skills-conformance-check.ts"
+    "skills:conformance": "ts-node src/tools/skills-conformance-check.ts",
+    "coverage:ratchet": "ts-node src/tools/coverage-baseline-ratchet.ts"
   },
   "devDependencies": {
     "@pair/eslint-config": "workspace:*",
