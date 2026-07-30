@@ -130,7 +130,8 @@ assert_file "$ZIP_CONSUMER_DIR/.pair/knowledge/README.md" || exit 1
 assert_dir "$ZIP_CONSUMER_DIR/.claude/skills/pair-example-skill" || exit 1
 # Documented limitation, asserted rather than assumed: the external KB took over the
 # official KB's cache slot. Pinned via assert_pinned_bug, so when foomakers/pair#395 lands
-# CI says "the pinned bug appears FIXED — update this assertion" instead of just going red.
+# the run says "the pinned bug appears FIXED — update this assertion" instead of just going
+# red. It fires on a local `pnpm smoke-tests` only: the suite is not in CI (foomakers/pair#400).
 external_kb_took_official_cache_slot() {
   grep -Fq '"generic-kb"' "$ISOLATED_HOME/.pair/kb/"*/manifest.json 2>/dev/null
 }

@@ -44,6 +44,25 @@ describe('buildScaffoldPlan', () => {
     expect(seeds).toEqual(['.pair/knowledge/README.md', '.skills/example-skill/SKILL.md'])
   })
 
+  // Host-switch honesty: the plan states which scaffold-owned files the chosen host does
+  // NOT manage, so a re-scaffold with a different --host can report the leftovers instead
+  // of leaving an orphaned workflow firing on every v* tag push.
+  it('lists the workflow as unmanaged on the generic host', () => {
+    expect(planFor('generic').unmanaged).toEqual(['.github/workflows/release.yml'])
+  })
+
+  it('has nothing unmanaged on the github host (it manages every scaffold-owned file)', () => {
+    expect(planFor('github').unmanaged).toEqual([])
+  })
+
+  it('never plans a file it also declares unmanaged', () => {
+    const plan = planFor('generic')
+
+    for (const orphan of plan.unmanaged) {
+      expect(plan.files.map(f => f.path)).not.toContain(orphan)
+    }
+  })
+
   it('carries the root and non-empty content for every planned file', () => {
     const plan = planFor('github')
 

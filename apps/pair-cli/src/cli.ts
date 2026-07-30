@@ -182,7 +182,8 @@ function registerCommandFromMetadata(
     // is a behavior change for any command that used to ignore a stray argument, so it
     // is documented once as a cross-command rule in reference/cli/commands.mdx
     // ("Rules that apply to every command") and reference/specs/cli-contracts.mdx
-    // ("CLI-Wide Rules") — not as a scaffold-kb detail. Pinned by cli.e2e.test.ts.
+    // ("CLI-Wide Rules") — not as a scaffold-kb detail. Pinned by cli.test.ts
+    // ("CLI-wide rule: excess positional arguments are rejected").
     .allowExcessArguments(false)
 
   addCommandOptions(cmd, cmdConfig.metadata.options)

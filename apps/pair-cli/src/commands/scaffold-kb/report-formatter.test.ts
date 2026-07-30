@@ -7,6 +7,7 @@ const identity = { name: 'acme-kb', slug: 'acme-kb', skillPrefix: 'acme-kb' }
 const result: ApplyResult = {
   root: '/work/acme-kb',
   directories: ['.pair/knowledge', '.skills'],
+  unmanaged: [],
   outcomes: [
     { path: 'pair.config.json', action: 'created' },
     { path: 'README.md', action: 'unchanged' },
@@ -37,5 +38,22 @@ describe('formatScaffoldReport', () => {
   it('tells the maintainer how to release and how consumers install', () => {
     expect(report).toContain('bash scripts/release.sh')
     expect(report).toContain('pair-cli install --source')
+  })
+
+  it('says nothing about unmanaged files when there are none', () => {
+    expect(report).not.toContain('not managed by')
+  })
+
+  // Host switch: leftovers are named, never deleted — an orphaned workflow keeps firing on
+  // every v* tag push and would otherwise be invisible in a "2 updated, 4 unchanged" line.
+  it('names a scaffold-owned file the current --host no longer manages', () => {
+    const switched = formatScaffoldReport(
+      { ...result, unmanaged: ['.github/workflows/release.yml'] },
+      { identity, host: 'generic' },
+    )
+
+    expect(switched).toContain('.github/workflows/release.yml')
+    expect(switched).toContain('not managed by --host generic')
+    expect(switched).toContain('delete it if you do not want CI runs on v* tags')
   })
 })

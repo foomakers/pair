@@ -31,6 +31,14 @@ export interface ScaffoldPlan {
   /** Directories to create, relative to the root */
   directories: string[]
   files: ScaffoldFile[]
+  /**
+   * Scaffold-owned paths this `--host` does NOT manage (e.g. the GitHub workflow under
+   * `--host generic`). A previous scaffold with another host may have left them on disk,
+   * where an orphaned `release.yml` keeps firing on every `v*` tag push while the
+   * regenerated `release.sh` no longer publishes. Never deleted — the ownership model
+   * forbids destroying maintainer-visible files — but reported, so the switch is visible.
+   */
+  unmanaged: string[]
 }
 
 export const RELEASE_SCRIPT_PATH = 'scripts/release.sh'
@@ -58,6 +66,15 @@ function ownedFiles(identity: KbIdentity, host: KbHost, cliVersion?: string): Sc
   }
 
   return files
+}
+
+/**
+ * Scaffold-owned paths the given host does not generate. Only the GitHub workflow is
+ * host-specific today: `--host generic` produces the release script alone, so a repo
+ * previously scaffolded with `--host github` keeps a workflow nothing manages anymore.
+ */
+function unmanagedFiles(host: KbHost): string[] {
+  return host === 'github' ? [] : [RELEASE_WORKFLOW_PATH]
 }
 
 function seedFiles(identity: KbIdentity): ScaffoldFile[] {
@@ -94,5 +111,6 @@ export function buildScaffoldPlan(options: {
     root,
     directories: ['.pair/knowledge', '.skills'],
     files: [...ownedFiles(identity, host, cliVersion), ...seedFiles(identity)],
+    unmanaged: unmanagedFiles(host),
   }
 }

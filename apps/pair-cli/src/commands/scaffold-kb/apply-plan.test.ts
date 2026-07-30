@@ -9,6 +9,7 @@ function plan(): ScaffoldPlan {
   return {
     root,
     directories: ['.pair/knowledge', '.skills'],
+    unmanaged: [],
     files: [
       { path: 'pair.config.json', content: '{"owned":true}\n', kind: 'scaffold-owned' },
       { path: '.pair/knowledge/README.md', content: '# seed\n', kind: 'seed' },
@@ -121,6 +122,7 @@ describe('applyScaffoldPlan', () => {
     const scriptPlan: ScaffoldPlan = {
       root,
       directories: [],
+      unmanaged: [],
       files: [
         {
           path: 'scripts/release.sh',
@@ -149,6 +151,7 @@ describe('applyScaffoldPlan', () => {
     const scriptPlan: ScaffoldPlan = {
       root,
       directories: [],
+      unmanaged: [],
       files: [
         {
           path: 'scripts/release.sh',
@@ -177,6 +180,7 @@ describe('applyScaffoldPlan', () => {
     const scriptPlan: ScaffoldPlan = {
       root,
       directories: [],
+      unmanaged: [],
       files: [
         {
           path: 'scripts/release.sh',
@@ -199,12 +203,41 @@ describe('applyScaffoldPlan', () => {
     expect(fs.getMode(`${root}/scripts/release.sh`)).toBe(0o700)
   })
 
+  // Host switch: the file belongs to a host we no longer generate for. Never deleted
+  // (the ownership ADL forbids destroying maintainer-visible files) — but reported, so
+  // an orphaned workflow does not keep firing on v* tags unnoticed.
+  it('reports an unmanaged file that exists on disk', async () => {
+    const fs = newFs({ [`${root}/.github/workflows/release.yml`]: 'name: release\n' })
+    const switched: ScaffoldPlan = { ...plan(), unmanaged: ['.github/workflows/release.yml'] }
+
+    const result = await applyScaffoldPlan(switched, fs, {
+      force: false,
+      confirmOverwrite: neverConfirm,
+    })
+
+    expect(result.unmanaged).toEqual(['.github/workflows/release.yml'])
+    expect(fs.existsSync(`${root}/.github/workflows/release.yml`)).toBe(true)
+  })
+
+  it('stays silent about an unmanaged file that does not exist', async () => {
+    const fs = newFs()
+    const switched: ScaffoldPlan = { ...plan(), unmanaged: ['.github/workflows/release.yml'] }
+
+    const result = await applyScaffoldPlan(switched, fs, {
+      force: false,
+      confirmOverwrite: neverConfirm,
+    })
+
+    expect(result.unmanaged).toEqual([])
+  })
+
   it('leaves the mode alone on a skipped seed file', async () => {
     const fs = newFs({ [`${root}/.skills/example-skill/run.sh`]: '#!/usr/bin/env bash\n# mine\n' })
     await fs.chmod(`${root}/.skills/example-skill/run.sh`, 0o600)
     const seedPlan: ScaffoldPlan = {
       root,
       directories: [],
+      unmanaged: [],
       files: [
         {
           path: '.skills/example-skill/run.sh',

@@ -26,6 +26,18 @@ function skippedLines(outcomes: FileOutcome[]): string[] {
     .map(o => `  ${chalk.yellow('!')} kept ${o.path} ${chalk.dim(`(${o.reason ?? 'skipped'})`)}`)
 }
 
+/**
+ * Files a previous `--host` generated and this one does not manage: named, never deleted.
+ * Silent when there are none, so the normal report keeps its two lines.
+ */
+function unmanagedLines(unmanaged: string[], host: KbHost): string[] {
+  return unmanaged.map(
+    relativePath =>
+      `  ${chalk.yellow('!')} ${relativePath} exists but is not managed by --host ${host} ` +
+      chalk.dim('(delete it if you do not want CI runs on v* tags)'),
+  )
+}
+
 function nextSteps(identity: KbIdentity, host: KbHost): string[] {
   const publish =
     host === 'github'
@@ -55,6 +67,7 @@ export function formatScaffoldReport(
     `  ${chalk.green('✓')} KB scaffold ready — ${chalk.bold(identity.name)} at ${result.root}`,
     `  ${chalk.dim(countsLine(result.outcomes))}`,
     ...skippedLines(result.outcomes),
+    ...unmanagedLines(result.unmanaged, host),
     ...nextSteps(identity, host),
   ].join('\n')
 }

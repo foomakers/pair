@@ -17,6 +17,12 @@ export interface ApplyResult {
   root: string
   directories: string[]
   outcomes: FileOutcome[]
+  /**
+   * Plan-declared unmanaged paths (see `ScaffoldPlan.unmanaged`) that actually exist on
+   * disk — leftovers from a scaffold with a different `--host`. Left untouched; the report
+   * names them so a host switch cannot silently orphan a workflow.
+   */
+  unmanaged: string[]
 }
 
 export interface ApplyOptions {
@@ -110,5 +116,9 @@ export async function applyScaffoldPlan(
     outcomes.push(await applyFile(file, plan, fs, options))
   }
 
-  return { root: plan.root, directories: plan.directories, outcomes }
+  const unmanaged = plan.unmanaged.filter(relativePath =>
+    fs.existsSync(path.join(plan.root, relativePath)),
+  )
+
+  return { root: plan.root, directories: plan.directories, outcomes, unmanaged }
 }

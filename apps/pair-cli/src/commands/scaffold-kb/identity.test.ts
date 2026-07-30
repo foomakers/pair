@@ -32,6 +32,31 @@ describe('validateKbName', () => {
     expect(() => validateKbName('Acme\u0007KB')).toThrow(/newlines or control characters/)
   })
 
+  // Quoting does not fix these: YAML 1.1 parsers (still shipped by some agent runtimes)
+  // treat U+0085/U+2028/U+2029 as line breaks, so a quoted scalar containing one is split
+  // into a broken document even though the JSON escape looks safe to a YAML 1.2 parser.
+  it.each([
+    ['U+0085 NEL', 'Acme\u0085foo: bar'],
+    ['U+2028 LINE SEPARATOR', 'Acme\u2028foo: bar'],
+    ['U+2029 PARAGRAPH SEPARATOR', 'Acme\u2029foo: bar'],
+  ])('rejects %s (a line break under YAML 1.1)', (_label, name) => {
+    expect(() => validateKbName(name)).toThrow(/newlines or control characters/)
+  })
+
+  // Quoting does not fix this either: `${{ ... }}` is evaluated by GitHub Actions BEFORE
+  // YAML quoting matters, so the generated workflow fails to parse with an invalid-context
+  // error (or, worse, interpolates a context value into the release job).
+  it('rejects a GitHub Actions expression (it is evaluated before quoting applies)', () => {
+    expect(() => validateKbName('Acme ${{ secrets.GITHUB_TOKEN }} KB')).toThrow(
+      /\$\{\{.*GitHub Actions expression/s,
+    )
+  })
+
+  it('accepts a lone ${ or {{ — only the Actions expression opener is unsafe', () => {
+    expect(validateKbName('Acme ${HOME} KB')).toBe('Acme ${HOME} KB')
+    expect(validateKbName('Acme {{ mustache }} KB')).toBe('Acme {{ mustache }} KB')
+  })
+
   it('rejects an empty or blank name', () => {
     expect(() => validateKbName('')).toThrow(/cannot be empty/)
     expect(() => validateKbName('   ')).toThrow(/cannot be empty/)

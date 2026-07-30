@@ -133,6 +133,31 @@ describe('handleScaffoldKbCommand', () => {
     expect(fs.existsSync(`${cwd}/scripts/release.sh`)).toBe(true)
   })
 
+  // Re-scaffolding with a different --host leaves the previous host's file behind: the
+  // GitHub workflow keeps firing on every v* tag push while the regenerated release.sh
+  // no longer publishes anything. Reported (never deleted) so it cannot go unnoticed.
+  it('reports the workflow orphaned by a host switch, without deleting it', async () => {
+    const fs = newFs()
+    await handleScaffoldKbCommand(config({ host: 'github' }), fs)
+    vi.mocked(console.log).mockClear()
+
+    await handleScaffoldKbCommand(config({ host: 'generic', force: true }), fs)
+
+    const printed = vi.mocked(console.log).mock.calls.flat().join('\n')
+    expect(fs.existsSync(`${cwd}/.github/workflows/release.yml`)).toBe(true)
+    expect(printed).toContain('.github/workflows/release.yml')
+    expect(printed).toContain('not managed by --host generic')
+  })
+
+  it('reports nothing unmanaged when the generic host never had a workflow', async () => {
+    const fs = newFs()
+
+    await handleScaffoldKbCommand(config({ host: 'generic' }), fs)
+
+    const printed = vi.mocked(console.log).mock.calls.flat().join('\n')
+    expect(printed).not.toContain('not managed by')
+  })
+
   it('prints the scaffold report', async () => {
     const fs = newFs()
 

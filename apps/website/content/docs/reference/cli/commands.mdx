@@ -23,8 +23,8 @@ Complete reference for all `pair-cli` commands with syntax, options, and example
   documented for it: `pair install ./a ./b` fails with `error: too many arguments for 'install'`
   (exit 1) instead of silently ignoring `./b`. This is what catches an unquoted option value —
   `--name Acme KB` (which used to mean `--name Acme`) now fails instead of half-working; quote it:
-  `--name "Acme KB"`. Behavior change since `pair-cli` 0.4.3: a wrapper script or CI job that
-  passed a stray argument must drop it.
+  `--name "Acme KB"`. This is a behavior change shipping in the next `pair-cli` release (0.4.3
+  and earlier ignore the stray argument): a wrapper script or CI job that passed one must drop it.
 
 ---
 
@@ -350,13 +350,18 @@ Validate KB structure, links, and metadata using layout-aware validation.
 ### Usage
 
 ```bash
-pair kb validate [path] [options]
+pair kb validate [options]
 ```
+
+This command takes **no positional argument** — the KB directory is passed as
+`--path <path>` (a stray positional is rejected, see
+[Rules that apply to every command](#rules-that-apply-to-every-command)).
 
 ### Options
 
 | Option                     | Description                                                 |
 | -------------------------- | ----------------------------------------------------------- |
+| `--path <path>`            | KB directory to validate (default: current directory)       |
 | `--layout <mode>`          | Layout mode: `source` or `target` (default: `target`)      |
 | `--strict`                 | Enable external link checking via HTTP HEAD (slow)          |
 | `--ignore-config`          | Skip config-based registry structure validation             |
@@ -368,6 +373,9 @@ pair kb validate [path] [options]
 ```bash
 # Validate current directory
 pair kb validate
+
+# Validate another directory
+pair kb validate --path ./my-kb
 
 # Validate source layout
 pair kb validate --layout source

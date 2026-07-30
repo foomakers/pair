@@ -63,7 +63,12 @@ so pointing it at a project root by mistake cannot replace that project's
 
 ## What the KB declares
 
-`pair.config.json` declares exactly two registries — knowledge and skills:
+`pair.config.json` declares exactly two registries — knowledge and skills (**abridged**
+below: the generated file also carries a `description` on each registry, and the `skills`
+registry lists the canonical `.claude/skills/` target plus five `symlink` targets —
+`.github/skills/`, `.cursor/skills/`, `.agent/skills/`, `.agents/skills/`,
+`.windsurf/skills/` — so every agent tool picks the skills up. Those extra targets are the
+scaffold's, not something you added):
 
 ```json
 {
@@ -179,10 +184,18 @@ duplicates anything.
 | `pair.config.json`, `README.md`, `.gitignore`, `scripts/release.sh`, workflow | regenerated only after confirmation (or `--force`) |
 | Anything under `.pair/knowledge/` or `.skills/`               | never touched                                          |
 | Unmodified files                                              | left as they are, reported as unchanged                |
+| Files of a **different** `--host` (e.g. the workflow after switching to `generic`) | left in place and named in the report as not managed by the current host |
 
 Without a terminal to ask (CI, scripts), a modified scaffold-owned file is **kept** and
 reported as skipped — nothing is silently overwritten. Use `--force` to regenerate
 deliberately.
+
+Switching `--host` does not delete the previous host's files, because `scaffold-kb` never
+destroys anything on disk. Re-running with `--host generic` in a repo scaffolded for GitHub
+therefore leaves `.github/workflows/release.yml` behind, where it keeps running on every
+`v*` tag push while the regenerated `scripts/release.sh` no longer publishes a release. The
+report names it — `.github/workflows/release.yml exists but is not managed by --host generic`
+— and deleting it is your call.
 
 ## Related
 
