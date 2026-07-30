@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 
 // Conformance guard for story #230: /pair-process-brainstorm — structured discovery
@@ -20,6 +20,16 @@ const MIRROR_KB = join(__dirname, '../../../../.pair/knowledge')
 const BRAINSTORM_DATASET_PATH = join(DATASET_SKILLS, 'process/brainstorm/SKILL.md')
 const BRAINSTORM_MIRROR_PATH = join(MIRROR_SKILLS, 'pair-process-brainstorm/SKILL.md')
 
+// Sibling reference files (progressive disclosure — review round 3): the normative
+// deduction matrix and the per-phase resume list live beside SKILL.md, as /review
+// does with degradation-levels.md and merge-and-cascade.md.
+const MATRIX_DATASET_PATH = join(DATASET_SKILLS, 'process/brainstorm/parametrization.md')
+const MATRIX_MIRROR_PATH = join(MIRROR_SKILLS, 'pair-process-brainstorm/parametrization.md')
+const RESUME_DATASET_PATH = join(DATASET_SKILLS, 'process/brainstorm/resume.md')
+const RESUME_MIRROR_PATH = join(MIRROR_SKILLS, 'pair-process-brainstorm/resume.md')
+const DEGRADATION_DATASET_PATH = join(DATASET_SKILLS, 'process/brainstorm/degradation.md')
+const DEGRADATION_MIRROR_PATH = join(MIRROR_SKILLS, 'pair-process-brainstorm/degradation.md')
+
 const read = (path: string): string => (existsSync(path) ? readFileSync(path, 'utf-8') : '')
 
 const BRAINSTORM_DATASET = read(BRAINSTORM_DATASET_PATH)
@@ -30,6 +40,12 @@ const VARIANTS = [
   {
     label: 'dataset',
     content: BRAINSTORM_DATASET,
+    matrix: read(MATRIX_DATASET_PATH),
+    resume: read(RESUME_DATASET_PATH),
+    degradation: read(DEGRADATION_DATASET_PATH),
+    matrixPath: MATRIX_DATASET_PATH,
+    resumePath: RESUME_DATASET_PATH,
+    degradationPath: DEGRADATION_DATASET_PATH,
     grill: '/grill',
     mapSub: '/map-subdomains',
     mapCtx: '/map-contexts',
@@ -42,6 +58,12 @@ const VARIANTS = [
   {
     label: 'mirror',
     content: BRAINSTORM_MIRROR,
+    matrix: read(MATRIX_MIRROR_PATH),
+    resume: read(RESUME_MIRROR_PATH),
+    degradation: read(DEGRADATION_MIRROR_PATH),
+    matrixPath: MATRIX_MIRROR_PATH,
+    resumePath: RESUME_MIRROR_PATH,
+    degradationPath: DEGRADATION_MIRROR_PATH,
     grill: '/pair-capability-grill',
     mapSub: '/pair-capability-map-subdomains',
     mapCtx: '/pair-capability-map-contexts',
@@ -196,8 +218,7 @@ describe('brainstorm — parametrization: $root + orientation deduction (AC2) (#
     })
 
     it(`${v.label} carries an orientation matrix deducing level/orientation from type and tags`, () => {
-      const matrix =
-        v.content.slice(v.content.search(/^## Orientation Matrix/m)).split(/\n## /)[0] ?? ''
+      const matrix = v.matrix
       expect(matrix).not.toBe('')
       expect(matrix).toMatch(/epic.*broad.*functional/i)
       expect(matrix).toMatch(/story.*punctual/i)
@@ -206,9 +227,9 @@ describe('brainstorm — parametrization: $root + orientation deduction (AC2) (#
     })
 
     it(`${v.label} states the deduced values up-front and accepts an override`, () => {
-      // Scoped to the Orientation Matrix section (where the rule lives) and to
+      // Scoped to the matrix reference file (where the rule lives) and to
       // Step 0's up-front statement template (where it is executed).
-      const matrix = section(v.content, 'Orientation Matrix')
+      const matrix = v.matrix
       expect(matrix).toMatch(/stated up-front/)
       expect(matrix).toMatch(/override/i)
       const step0 = v.content.match(/### Step 0:[\s\S]*?(?=\n### )/)?.[0] ?? ''
@@ -220,7 +241,7 @@ describe('brainstorm — parametrization: $root + orientation deduction (AC2) (#
       // routed an epic root to plan-epics, which can only hang epics off an
       // INITIATIVE. The writer column must key on type: initiative -> plan-epics,
       // epic -> plan-stories under the root, story -> plan-stories under its parent.
-      const matrix = section(v.content, 'Orientation Matrix')
+      const matrix = v.matrix
       const row = (signal: string): string =>
         matrix.split('\n').find(line => line.startsWith('|') && line.includes(signal)) ?? ''
 
@@ -241,7 +262,7 @@ describe('brainstorm — parametrization: $root + orientation deduction (AC2) (#
       // issues in this repo, incl. #280 and #393) matched no base row: the modifier's
       // "unchanged" referred to nothing, Step 0's Verify was unsatisfiable, and
       // phase 1's level question fired only on the no-$root path.
-      const matrix = section(v.content, 'Orientation Matrix')
+      const matrix = v.matrix
       const fallback =
         matrix.split('\n').find(line => line.startsWith('|') && /no recognized type/i.test(line)) ??
         ''
@@ -264,7 +285,7 @@ describe('brainstorm — parametrization: $root + orientation deduction (AC2) (#
     it(`${v.label} resolves the free-theme (no $root) row's writer on the answered level`, () => {
       // Review finding (PR #387 round 2, Minor-13): the guard pinned the three type
       // rows but not the no-$root row, so its writer resolution could regress unseen.
-      const matrix = section(v.content, 'Orientation Matrix')
+      const matrix = v.matrix
       const freeTheme =
         matrix.split('\n').find(line => line.startsWith('|') && /free theme/i.test(line)) ?? ''
       expect(freeTheme).not.toBe('')
@@ -277,7 +298,7 @@ describe('brainstorm — parametrization: $root + orientation deduction (AC2) (#
     it(`${v.label} resolves the tag row as a modifier with an explicit precedence note`, () => {
       // Review finding (PR #387, Minor): two tag-driven rows overlapped with no
       // stated precedence, so an epic labelled tech-debt matched both.
-      const matrix = section(v.content, 'Orientation Matrix')
+      const matrix = v.matrix
       expect(matrix).toMatch(/Most specific row wins/i)
       expect(matrix).toMatch(/modifier/)
       // Exactly one tag-driven row remains.
@@ -323,8 +344,7 @@ describe('brainstorm — phase 2 domain integration, scoped (AC3) (#230)', () =>
     })
 
     it(`${v.label} degrades gracefully when context-map.md is absent (no failure)`, () => {
-      const gd =
-        v.content.slice(v.content.search(/^## Graceful Degradation/m)).split(/\n## /)[0] ?? ''
+      const gd = v.degradation
       expect(gd).toMatch(/context-map\.md/)
       expect(gd).toMatch(/not an error|expected steady state/)
     })
@@ -333,7 +353,7 @@ describe('brainstorm — phase 2 domain integration, scoped (AC3) (#230)', () =>
       // Review finding (PR #387 round 2, Minor-8): every other optional composition
       // had a Graceful Degradation bullet; record-decision's degrade path lived only
       // in its Composed Skills cell, so that section read as complete while it was not.
-      const gd = section(v.content, 'Graceful Degradation')
+      const gd = v.degradation
       const bullet = gd.split('\n').find(line => line.includes(`\`${v.recordDecision}\``)) ?? ''
       expect(bullet).toMatch(/not installed/)
       expect(bullet).toMatch(/Phase 2/)
@@ -420,7 +440,7 @@ describe('brainstorm — phase 3 to-issues tree triage (AC4) (#230)', () => {
       // at item 5 and the parent resolved at item 6 — unevaluable where written.
       const p3 = phase(v.content, 3)
       expect(p3).toMatch(/once item 6 has resolved the parent/)
-      const idem = section(v.content, 'Idempotent Re-invocation')
+      const idem = v.resume
       expect(idem).toMatch(/after\*\* item 6 has resolved that parent/)
     })
 
@@ -494,7 +514,7 @@ describe('brainstorm — per-phase idempotency matches the claim (#230)', () => 
   // orchestrators was missing.
   for (const v of VARIANTS) {
     it(`${v.label} carries an Idempotent Re-invocation section with a per-phase resume list`, () => {
-      const idem = section(v.content, 'Idempotent Re-invocation')
+      const idem = v.resume
       expect(idem).not.toBe('')
       expect(idem).toMatch(/idempotency\.md/)
       expect(idem).toMatch(/Phase 1/)
@@ -724,4 +744,180 @@ describe('brainstorm — forward references retired now that it ships (#230)', (
       expect(guide).not.toMatch(/planned — #230/)
     }
   })
+})
+
+describe('brainstorm — round-3 review fixes (#230)', () => {
+  for (const v of VARIANTS) {
+    it(`${v.label} keeps branch-specific reference in sibling files behind pointers`, () => {
+      // Review finding (round 3, Minor): at 29 KB SKILL.md was the largest in the
+      // corpus, with material only a fraction of runs reach (matrix rationale, the
+      // itemized resume list) inline — against progressive disclosure, which /review
+      // and /implement satisfy with sibling reference files.
+      expect(existsSync(v.matrixPath)).toBe(true)
+      expect(existsSync(v.resumePath)).toBe(true)
+      expect(existsSync(v.degradationPath)).toBe(true)
+      // The pointers are sharp and named where the material used to be.
+      expect(section(v.content, 'Parametrization')).toMatch(
+        /\[parametrization\.md\]\((\.\/)?parametrization\.md\)/,
+      )
+      expect(section(v.content, 'Idempotent Re-invocation')).toMatch(
+        /\[resume\.md\]\((\.\/)?resume\.md\)/,
+      )
+      expect(section(v.content, 'Graceful Degradation')).toMatch(
+        /\[degradation\.md\]\((\.\/)?degradation\.md\)/,
+      )
+      // The moved material is moved, not copied.
+      expect(v.content).not.toMatch(/^\| type `initiative`/m)
+      expect(v.content).not.toMatch(/^\| \*\*no recognized type\*\*/m)
+      expect(v.content).not.toMatch(/not installed\*\* \(Phase 2\)/)
+    })
+  }
+
+  it('dataset SKILL.md is no longer the largest in the skill corpus', () => {
+    // The finding measured size against the corpus (brainstorm 29 KB vs review 27.8,
+    // implement 26.7), so the guard is relative and self-maintaining rather than a
+    // magic byte budget: whatever the corpus grows to, brainstorm must not be its
+    // biggest SKILL.md.
+    const sizes = readdirSync(DATASET_SKILLS, { withFileTypes: true })
+      .filter(group => group.isDirectory())
+      .flatMap(group =>
+        readdirSync(join(DATASET_SKILLS, group.name), { withFileTypes: true })
+          .filter(skill => skill.isDirectory())
+          .map(skill => ({
+            name: `${group.name}/${skill.name}`,
+            size: read(join(DATASET_SKILLS, group.name, skill.name, 'SKILL.md')).length,
+          })),
+      )
+    const brainstorm = sizes.find(s => s.name === 'process/brainstorm')?.size ?? 0
+    const largestOther = Math.max(
+      ...sizes.filter(s => s.name !== 'process/brainstorm').map(s => s.size),
+    )
+    expect(brainstorm).toBeGreaterThan(0)
+    expect(brainstorm).toBeLessThan(largestOther)
+  })
+
+  for (const v of VARIANTS) {
+    it(`${v.label} preamble admits the level is ASKED on the fallback row`, () => {
+      // Review finding (round 3, Minor): the preamble claimed the level is deduced
+      // "with $root", contradicting the matrix's own fallback row.
+      expect(preamble(v.content)).toMatch(
+        /or asked, when the root carries no recognized type label/,
+      )
+    })
+
+    it(`${v.label} states the $theme precedence when $root is also given`, () => {
+      // Review finding (round 3, Minor): $theme was documented as "$root absent"
+      // with no rule for both, while phase 1 read "the free theme … or the root's
+      // subject" — unresolvable for an executor.
+      const args = section(v.content, 'Arguments')
+      const row = args.split('\n').find(line => line.includes('`$theme`')) ?? ''
+      expect(row).toMatch(/Precedence with `\$root`/)
+      expect(row).toMatch(/narrows the topic inside `\$root`/)
+      // …and phase 1's grill composition applies that precedence.
+      expect(phase(v.content, 1)).toMatch(/\*\*`\$theme` when it was given\*\*/)
+      expect(phase(v.content, 1)).toMatch(/wins over the root's subject/)
+    })
+
+    it(`${v.label} free-theme row keys orientation on the argument/tag, not on the level`, () => {
+      // Review finding (round 3, Minor): "follows the answered level, functional
+      // default" — orientation is not derivable from level.
+      const freeTheme =
+        v.matrix.split('\n').find(line => line.startsWith('|') && /free theme/i.test(line)) ?? ''
+      expect(freeTheme).toMatch(/unless `\$orientation` or the tag modifier flips it/)
+      expect(freeTheme).not.toMatch(/follows the answered level/)
+    })
+
+    it(`${v.label} resolves an untyped root under an INITIATIVE to the plan-epics writer`, () => {
+      // Review finding (round 3, Minor): the fallback row's leaf treatment left an
+      // untyped root whose parent is an initiative (an unlabelled epic-shaped
+      // container) with no parent epic — the run HALTed telling the developer to
+      // create an epic when a missing LABEL was the actual defect.
+      const fallback =
+        v.matrix
+          .split('\n')
+          .find(line => line.startsWith('|') && /no recognized type/i.test(line)) ?? ''
+      expect(fallback).toMatch(/Parent is an `initiative`/)
+      expect(fallback).toContain(`\`${v.planEpics}\` with \`$initiative:`)
+      expect(fallback).toMatch(/rather than a HALT/)
+      // Phase 3 item 6 carries the same two sub-cases…
+      const p3 = phase(v.content, 3)
+      expect(p3).toMatch(/when the root's parent is an \*\*initiative\*\*/)
+      expect(p3).toMatch(/label `#\[ID\]` with its real type and re-run/)
+      // …and the HALT names the labelling remedy, not only the /plan-epics pointer.
+      const halt = section(v.content, 'HALT Conditions')
+      expect(halt).toMatch(/label `#\[ID\]` with its real type and re-run/)
+      expect(halt).toMatch(/never reaches this HALT/)
+    })
+
+    it(`${v.label} offers the .pair/working/ handoff on the grill-not-installed path too`, () => {
+      // Review finding (round 3, Minor): the handoff was phrased as "take grill's
+      // handoff offer", leaving the story's interruption edge case unspecified on
+      // the one branch where there is no grill to offer it.
+      const p1 = phase(v.content, 1)
+      expect(p1).toMatch(/when the interview ran \*\*inline\*\*/)
+      expect(p1).toMatch(/there is no grill to offer it/)
+      const gd = v.degradation
+      const bullet =
+        gd.split('\n').find(line => line.includes(`\`${v.grill}\` not installed`)) ?? ''
+      expect(bullet).toMatch(/`\.pair\/working\/` handoff/)
+    })
+
+    it(`${v.label} records the resolved parametrization in the phase-1 handoff`, () => {
+      // Review finding (round 3, Minor): resume item 1 claimed the triple is "never
+      // a re-ask", false on the two paths where the level is ASKED — nothing
+      // persisted it, so a fresh-session resume re-asked exactly that question.
+      const p1 = phase(v.content, 1)
+      expect(p1).toMatch(/records the \*\*resolved parametrization\*\*/)
+      expect(p1).toMatch(/without re-asking the level/)
+      // The resume list is qualified accordingly, not absolute.
+      expect(v.resume).toMatch(/on the three \*\*type rows\*\*/)
+      expect(v.resume).toMatch(/where the level is \*\*asked\*\* rather than deduced/)
+      expect(v.resume).toMatch(/the level question fires again/)
+    })
+
+    it(`${v.label} states the writer's domain step is a confirm-only pass after phase 2`, () => {
+      // Review finding (round 3, Minor): on the initiative-root path phase 2 mapped
+      // the scope and the composed writer's Step 3.5 mapped the SAME scope again —
+      // two subdomain-catalog deltas to approve in one run.
+      const p3 = phase(v.content, 3)
+      expect(p3).toMatch(/\*\*confirm-only pass\*\*/)
+      expect(p3).toMatch(/Step 3\.5/)
+      expect(p3).toMatch(/one\*\* subdomain-catalog delta per run/)
+    })
+  }
+
+  const PLAN_EPICS = [
+    ['dataset', join(DATASET_SKILLS, 'process/plan-epics/SKILL.md')],
+    ['mirror', join(MIRROR_SKILLS, 'pair-process-plan-epics/SKILL.md')],
+  ] as const
+
+  for (const [label, path] of PLAN_EPICS) {
+    it(`plan-epics (${label}) Step 3.5 skips re-mapping a scope the caller already placed`, () => {
+      const content = read(path)
+      const step = content.match(/### Step 3\.5[\s\S]*?(?=\n### )/)?.[0] ?? ''
+      expect(step).not.toBe('')
+      const skip = step.split('\n').find(line => /^2\. \*\*Skip\*\*/.test(line)) ?? ''
+      expect(skip).toMatch(/same capability areas/)
+      expect(skip).toMatch(/do not re-compose/)
+      expect(skip).toMatch(/one\*\* subdomain-catalog delta/)
+    })
+  }
+
+  const IDEMPOTENCY =
+    'guidelines/technical-standards/ai-development/skill-conventions/idempotency.md'
+
+  for (const [label, kb, command] of [
+    ['dataset', join(DATASET_KB, IDEMPOTENCY), '/brainstorm'],
+    ['installed KB', join(MIRROR_KB, IDEMPOTENCY), '/pair-process-brainstorm'],
+  ] as const) {
+    it(`${label} idempotency convention counts brainstorm among the orchestrators`, () => {
+      // Review finding (round 3, Minor): the convention enumerated "the three
+      // orchestrators", but brainstorm now carries exactly the itemized per-phase
+      // resume list that enumeration describes.
+      const content = read(kb)
+      expect(content).toMatch(/four orchestrators/)
+      expect(content).toContain(`\`${command}\``)
+      expect(content).not.toMatch(/three orchestrators/)
+    })
+  }
 })

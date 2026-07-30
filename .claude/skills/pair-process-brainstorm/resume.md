@@ -1,0 +1,13 @@
+# /pair-process-brainstorm — Idempotent Re-invocation (per-phase resume list)
+
+Reference file for [SKILL.md](./SKILL.md). See the [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md): `/pair-process-brainstorm` is one of the **four orchestrators** that resume per-phase rather than by a single artifact check, so this is its itemized list. Read it when a re-invocation lands on a partially completed discovery.
+
+Re-invoking `/pair-process-brainstorm` on a partially completed discovery is safe and expected — per-phase:
+
+1. **Root, level, orientation, writer** (Step 0): on the three **type rows** the triple is re-deduced from the same root and tags — a deterministic read, never a re-ask; a prior override stated in the session (or passed as `$level`/`$orientation`) still wins. On the two paths where the level is **asked** rather than deduced — the matrix's **fallback row** (untyped `$root`) and the **no-`$root`** path — the resolved level, orientation, and `$theme` are what phase 1 records in its `.pair/working/` handoff (Phase 1 item 6), so a fresh-session resume reads them back instead of re-asking. Without that handoff (the run was interrupted before it was written, or the file was deleted) the level question fires again — the one re-ask in the skill, and the reason the handoff carries the parametrization and not only the blob. Passing `$level`/`$orientation` on the re-run, or labelling the root, removes it.
+2. **Phase 1 — interview**: detects a complete blob (session or `.pair/working/` handoff) and carries it forward; a partial handoff resumes from its first open item — answered items are never re-asked.
+3. **Phase 2 — placement**: detects the blob's areas already present in `context-map.md` / the owning `subdomain/<slug>.context.md` and confirms them instead of re-composing `/map-*`; partial placement resumes at the first unrecorded area. Glossary/rule maintenance re-checks each term before adding it (Context Map Maintenance), so a re-run never duplicates an entry.
+4. **Phase 3 — triage**: detects a tree already proposed for this discovery (a session-confirmed list — evaluable immediately; or items under the resolved parent matching the candidates' idempotency keys — evaluated only **after** item 6 has resolved that parent, which is why the phase's Check is split across it) and re-presents that outcome; otherwise the composed writer's own `ALREADY EXISTS #ID` check makes the write a no-op per already-created candidate.
+5. **PRD**: never written, so nothing to detect — the invariant holds on every run.
+
+The skill resumes from the first incomplete phase — never re-does a completed one; idempotency ensures correct state.

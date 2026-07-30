@@ -170,6 +170,9 @@ describe('assess-coupling catalog registration (#263)', () => {
     it(`${label} skills-guide lists assess-coupling and states 30 capability / 41 total`, () => {
       expect(guide).toMatch(/assess-coupling/)
       expect(guide).toContain('30 capability')
+      // Round-3 nit: the title promised the total too, but only the capability
+      // count was asserted (the guide states it as "Total: 41").
+      expect(guide).toMatch(/Total: 41/)
     })
   }
 })

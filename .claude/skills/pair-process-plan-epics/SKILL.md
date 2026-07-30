@@ -92,9 +92,9 @@ Transform strategic initiatives into comprehensive epic breakdowns. Each epic de
 
 ### Step 3.5: Domain Mapping (scoped)
 
-1. **Check**: Is `/pair-capability-map-subdomains` installed?
-2. **Skip**: If not installed → warn and proceed to Step 4 without domain mapping.
-3. **Act**: Compose `/pair-capability-map-subdomains` with `$scope` set to the capability area(s) covered by the approved epic breakdown (not `all` — full-catalog remapping stays `/pair-process-bootstrap`-only).
+1. **Check**: Is `/pair-capability-map-subdomains` installed, and has the **caller already placed this scope in this run**?
+2. **Skip**: If not installed → warn and proceed to Step 4 without domain mapping. If `$candidates` came from a caller whose own domain step already composed `/pair-capability-map-subdomains` on the **same capability areas** in this run (e.g. `/pair-process-brainstorm` phase 2) → **confirm that placement and proceed to Step 4; do not re-compose** `/pair-capability-map-subdomains`: the same scope is mapped once per run, and the developer approves **one** subdomain-catalog delta, not two.
+3. **Act**: Otherwise compose `/pair-capability-map-subdomains` with `$scope` set to the capability area(s) covered by the approved epic breakdown (not `all` — full-catalog remapping stays `/pair-process-bootstrap`-only).
 4. **Verify**: Subdomain catalog delta (if any) approved by developer. Epic creation always proceeds to Step 4 regardless of the domain-mapping outcome.
 
 ### Step 4: Epic Creation
@@ -154,6 +154,6 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 
 - This skill **modifies PM tool state** — creates and extends epic issues linked to initiatives.
 - **Idempotent** — see [idempotency convention](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/idempotency.md) and [to-issues-triage.md](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/to-issues-triage.md). This skill's check: exact idempotency-key match is proposed `ALREADY EXISTS #ID` (skip) at triage time, before any write (Step 3) — Step 4 only executes the confirmed proposal; substantial-overlap match proposes EXTEND instead of a duplicate CREATE (Step 3) — re-running the same candidate tree never duplicates.
-- **Caller-supplied tree** — with `$candidates` (e.g. `/pair-process-brainstorm` phase 3), Step 3 triages the supplied candidates and derives none: the caller owns the grouping, this skill owns triage, the epic template, and the writes. Without it, behaviour is unchanged.
+- **Caller-supplied tree** — with `$candidates` (e.g. `/pair-process-brainstorm` phase 3), Step 3 triages the supplied candidates and derives none: the caller owns the grouping, this skill owns triage, the epic template, and the writes. Without it, behaviour is unchanged. Step 3.5 is a **confirm-only pass** on that path when the caller already mapped the same capability areas in this run — one placement, one catalog delta to approve.
 - Epic 0 rule: for new projects, always assess if a bootstrap/foundation epic is needed before functional epics.
 - Domain mapping (Step 3.5) is scoped to this run's epic breakdown — see [map-subdomains](../../../.skills/capability/map-subdomains/SKILL.md).

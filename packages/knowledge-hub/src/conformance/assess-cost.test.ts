@@ -124,6 +124,9 @@ describe('assess-cost catalog registration (#226)', () => {
     it(`${label} skills-guide lists assess-cost and states 30 capability / 41 total`, () => {
       expect(guide).toMatch(/assess-cost/)
       expect(guide).toContain('30 capability')
+      // Round-3 nit: the title promised the total too, but only the capability
+      // count was asserted (the guide states it as "Total: 41").
+      expect(guide).toMatch(/Total: 41/)
     })
   }
 })

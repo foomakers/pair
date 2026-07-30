@@ -87,11 +87,15 @@ describe('analyze-debt has no scan-mode and never auto-creates (#224)', () => {
 describe('record-decision is the sole adoption writer (#224)', () => {
   const content = readFileSync(join(DATASET, 'record-decision', 'SKILL.md'), 'utf-8')
 
-  it('documents itself as the sole/single adoption writer', () => {
-    // "generic" since #230: the section-owning skills (/setup-pm, /verify-quality,
-    // /classify) and the inline context-map maintenance of /brainstorm and
-    // /refine-story are the documented exceptions.
-    expect(content.toLowerCase()).toMatch(/sole (generic )?writer|single writer/)
+  it('documents itself as the sole GENERIC adoption writer, naming the inline exception', () => {
+    // Since #230 the claim is qualified: the section-owning skills (/setup-pm,
+    // /verify-quality, /classify) and the inline context-map maintenance of
+    // /brainstorm and /refine-story are the documented exceptions. Pinned on the
+    // qualified wording (review round 3, Minor): matching a bare /sole writer/
+    // would let a regression to the unqualified monopoly claim stay green.
+    expect(content.toLowerCase()).toMatch(/sole \*{0,2}generic\*{0,2} writer/)
+    expect(content).toMatch(/context-map/)
+    expect(content).toMatch(/brainstorm/)
   })
 
   it('accepts a generic pre-rendered {content, target} persist path', () => {
@@ -99,4 +103,40 @@ describe('record-decision is the sole adoption writer (#224)', () => {
     expect(content).toMatch(/\$target/)
     expect(content.toLowerCase()).toContain('generic persist')
   })
+})
+
+describe('the record-decision invocation contract states the SAME exception list (#230)', () => {
+  // Review finding (PR #387 round 3, Major): the KB doc that declares itself the
+  // single statement of the invariant ("stated once here") still carried the
+  // pre-#230 wording — "the one exception is /setup-pm" — so a skill author or a
+  // writer-monopoly audit reading the canonical contract applied the superseded
+  // rule and would score /brainstorm's inline context-map write as a violation.
+  // Pinned on both copies (dataset source + repo-root installed KB) so the two
+  // statements of one invariant cannot drift apart again.
+  const CONTRACT =
+    'guidelines/technical-standards/ai-development/skill-conventions/record-decision-contract.md'
+  const COPIES = [
+    ['dataset', join(__dirname, '../../dataset/.pair/knowledge', CONTRACT)],
+    ['installed KB', join(__dirname, '../../../../.pair/knowledge', CONTRACT)],
+  ] as const
+
+  for (const [label, path] of COPIES) {
+    it(`${label} copy names both exception classes, not "the one exception"`, () => {
+      const contract = readFileSync(path, 'utf-8')
+      expect(contract).toMatch(/sole \*{0,2}generic writer of adoption files\*{0,2}/)
+      // The exclusive phrasing is what made the doc wrong; it must not come back.
+      expect(contract).not.toMatch(/the one exception/i)
+      // Class 1 — section owners.
+      expect(contract).toMatch(/setup-pm/)
+      expect(contract).toMatch(/verify-quality/)
+      expect(contract).toMatch(/classify/)
+      // Class 2 — guideline-authorized inline context-map maintenance.
+      expect(contract).toMatch(/context-map/)
+      expect(contract).toMatch(/brainstorm/)
+      expect(contract).toMatch(/refine-story/)
+      expect(contract).toMatch(/context-map-maintenance\.md/)
+      // And the drift-resolution rule: the skill's own list is authoritative.
+      expect(contract).toMatch(/authoritative list/)
+    })
+  }
 })
