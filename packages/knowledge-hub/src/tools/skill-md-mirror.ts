@@ -42,8 +42,11 @@
 import { readdirSync, readFileSync } from 'fs'
 import { join, relative, sep, posix } from 'path'
 // Dataset/root artifact paths are ALWAYS posix (they are content identities, not
-// host paths), hence `posix.dirname`/`posix.basename`; only the on-disk dataset
-// walk above uses the platform-native `join`/`relative`/`sep`.
+// host paths), hence `posix.dirname`/`posix.basename`. The platform-native
+// `join`/`relative`/`sep` are used in exactly two places, both converting AT the
+// boundary: `readSkillsDatasetFromDisk` walks the real dataset on disk, and
+// `producedMarkdownPaths` normalises `walkMarkdownFiles`' platform-joined output
+// back to posix.
 import {
   InMemoryFileSystemService,
   copyDirectoryWithTransforms,
@@ -54,6 +57,24 @@ import {
 
 /** The exact naming-transform options the `skills` registry uses in config.json. */
 export const SKILL_COPY_OPTS = { flatten: true, prefix: 'pair' } as const
+
+/**
+ * The FULL `SyncOptions` the guard runs the pipeline with: content-ops' defaults
+ * (`defaultBehavior: 'overwrite'`) overlaid with the registry's flatten/prefix.
+ *
+ * Exported so the pin test can assert the RESOLVED behavior still equals the
+ * registry's declared `behavior`, not just flatten/prefix. Without that pin, a
+ * registry flip to 'mirror' would leave the guard silently simulating
+ * 'overwrite' — in an in-memory destination that starts empty the pipeline's
+ * stale-entry cleanup is a no-op, so no other assertion would notice — and the
+ * ACCEPTED RESIDUAL above, whose whole justification is "behavior 'overwrite',
+ * no mirror-delete", would become quietly false. That is the same silent-drift
+ * class this guard exists to close, one level up.
+ */
+export function skillCopySyncOptions(): ReturnType<typeof defaultSyncOptions> &
+  typeof SKILL_COPY_OPTS {
+  return { ...defaultSyncOptions(), ...SKILL_COPY_OPTS }
+}
 
 const SKILL_FILE = 'SKILL.md'
 
@@ -173,10 +194,12 @@ export function datasetSkillArtifacts(tree: DatasetTree): string[] {
  * That nested-flatten mapping is CURRENT PIPELINE BEHAVIOR, mirrored here
  * faithfully — and it is a DEFECT, tracked in #407 (a skill's `references/`
  * sub-doc installs outside its skill dir with both links broken). Do NOT read it
- * as a sanctioned layout for a new `references/` sub-doc: when #407 fixes the
- * transform, this derivation and its tests follow the corrected mapping
- * automatically-by-review (the guard composes the real transform, so the
- * expectations here must be updated in that PR).
+ * as a sanctioned layout for a new `references/` sub-doc. Nor does it self-correct:
+ * #407's fix changes the copy pipeline's per-file PLACEMENT (`copy-directory-transforms.ts`
+ * maps `dirname(file)` through `transformPath` and joins), not `transformPath` itself,
+ * so this derivation goes STALE — what actually happens is that the produced-paths
+ * cross-check (derivation vs. the pipeline's real output set) fails loudly, and
+ * this function plus its expectations must be updated in that PR.
  *
  * That correspondence is not taken on trust — a guard test asserts this
  * derivation reproduces the pipeline's actual output paths set-for-set.
@@ -210,8 +233,9 @@ async function runCopyPipeline(tree: DatasetTree): Promise<InMemoryFileSystemSer
     target: VIRTUAL_TARGET_REL,
     datasetRoot: VIRTUAL_DATASET_ROOT,
     // Same SyncOptions the `skills` registry resolves to: default sync options
-    // (behavior 'overwrite') with the registry's flatten/prefix applied.
-    options: { ...defaultSyncOptions(), ...SKILL_COPY_OPTS },
+    // (behavior 'overwrite') with the registry's flatten/prefix applied — pinned
+    // to the registry, behavior included, by `skillCopySyncOptions`' test.
+    options: skillCopySyncOptions(),
   })
   return fileService
 }

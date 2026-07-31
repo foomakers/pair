@@ -11,6 +11,7 @@ import {
   assertRootArtifactMatches,
   diffSkillMd,
   SKILL_COPY_OPTS,
+  skillCopySyncOptions,
   type DatasetTree,
 } from './skill-md-mirror'
 
@@ -28,6 +29,17 @@ const ROOT_CLAUDE_SKILLS = join(REPO_ROOT, '.claude/skills')
  * underlying cause, never collapsed into `undefined` — which would mislabel it
  * as missing and hand the developer a hint (`pair update`) that cannot fix an
  * EACCES. `read` is injectable so that branch is actually covered by a test.
+ *
+ * PLACEMENT (deliberate, and the reason it differs from its sibling): the
+ * assertion helper `assertRootArtifactMatches` lives in the production module
+ * because TWO callers must drive the same code path (this real on-disk guard and
+ * the drift-injection suite). This reader has exactly one caller and one job —
+ * binding the guard to THIS repo checkout (`ROOT_CLAUDE_SKILLS` + real `fs`),
+ * i.e. test-environment wiring, not logic any production consumer shares — so it
+ * stays test-side, with its own covering suite below ("root-copy read
+ * distinguishes a missing copy from an unreadable one"). Rule of thumb for the next
+ * guard helper: shared/reusable assertion or derivation → module; "where does
+ * this checkout keep its files" → test file.
  */
 const rootMirrorContent = (
   datasetArtifact: string,
@@ -197,19 +209,32 @@ describe('root-copy read distinguishes a missing copy from an unreadable one', (
  * registry change (e.g. prefix `pair` -> `p`) fails HERE — correctly attributed
  * — instead of the guard silently computing the wrong root path and blaming the
  * mirror / `pair update` (finding: hardcoded duplication of the config).
+ *
+ * `behavior` is pinned too, via the RESOLVED options the guard actually runs
+ * (`skillCopySyncOptions`): a registry flip to 'mirror' would otherwise leave the
+ * guard simulating 'overwrite' with nothing failing (the in-memory destination
+ * starts empty, so the pipeline's stale-entry cleanup is a no-op), and the
+ * module's ACCEPTED RESIDUAL for orphans — justified by "behavior 'overwrite',
+ * no mirror-delete" — would become quietly false.
  */
 describe('SKILL_COPY_OPTS stays pinned to the pair-cli skills registry', () => {
-  it('flatten/prefix/source match apps/pair-cli/config.json asset_registries.skills', () => {
+  it('flatten/prefix/source/behavior match apps/pair-cli/config.json asset_registries.skills', () => {
     const config = JSON.parse(
       readFileSync(join(REPO_ROOT, 'apps/pair-cli/config.json'), 'utf-8'),
     ) as {
-      asset_registries: { skills: { source: string; flatten: boolean; prefix: string } }
+      asset_registries: {
+        skills: { source: string; flatten: boolean; prefix: string; behavior: string }
+      }
     }
     const registry = config.asset_registries.skills
     expect(SKILL_COPY_OPTS.flatten).toBe(registry.flatten)
     expect(SKILL_COPY_OPTS.prefix).toBe(registry.prefix)
     // the guard reads the dataset from the registry's declared source dir (.skills)
     expect(DATASET_SKILLS.endsWith(registry.source)).toBe(true)
+    // ...and runs the pipeline with the registry's declared copy behavior
+    expect(skillCopySyncOptions().defaultBehavior).toBe(registry.behavior)
+    expect(skillCopySyncOptions().flatten).toBe(registry.flatten)
+    expect(skillCopySyncOptions().prefix).toBe(registry.prefix)
   })
 })
 
