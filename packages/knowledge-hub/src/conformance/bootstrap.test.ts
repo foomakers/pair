@@ -61,6 +61,19 @@ describe('prerequisite: the Guided/Quick Setup Convention exists (#276)', () => 
     expect(existsSync(join(__dirname, '../../dataset', CONVENTION_REL))).toBe(true)
     expect(existsSync(join(ROOT, CONVENTION_REL))).toBe(true)
   })
+
+  // The convention enumerates its shipped adopters to prove "guided is always
+  // the default" is false. Bootstrap is now one of them, so the enumeration
+  // must name it — otherwise the convention documents a stale adopter set and
+  // the next adopter reads a list that is missing the closest precedent.
+  it('enumerates bootstrap among its shipped adopters, in both copies', () => {
+    for (const p of [join(__dirname, '../../dataset', CONVENTION_REL), join(ROOT, CONVENTION_REL)]) {
+      const c = read(p)
+      expect(c).toMatch(/bootstrap/i)
+      // the count of enumerated adopters must not still say "two"
+      expect(c).not.toMatch(/two shipped adopters/i)
+    }
+  })
 })
 
 describe('bootstrap quick mode: selector + declared default (AC1/AC2)', () => {
