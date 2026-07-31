@@ -32,7 +32,15 @@ export function resolveRoot(): string {
 // adjective — "N pair/composable/agent/idempotent skills". Subset counts
 // ("9 process skills") do NOT match: the adjective, when present, must be one of
 // the whitelisted total-count words.
-export const SKILL_COUNT_RE = /(\d+)\+?\s+(?:pair\s+|composable\s+|agent\s+|idempotent\s+)?skills/g
+export const SKILL_COUNT_RE =
+  /(\d+)\+?\s+(?:declared\s+)?(?:pair\s+|composable\s+|agent\s+|idempotent\s+)?skills/g
+
+// A quoted `claude plugin details` transcript: `Skills (41)`. Pinned because it is
+// an assertion about our OWN plugin manifest, not a third-party observation — and
+// because the marketplace docs quoted `Skills (40)` while the dataset held 41, drift
+// no phrasing above could catch. Anchored on the literal capitalized `Skills (`, so
+// the sibling `Agents (0)` / `Hooks (0)` counts in the same transcript never match.
+export const SKILL_COUNT_PROBE_RE = /\bSkills \((\d+)\)/g
 
 // How-to guide count phrasings. Requires a how-to qualifier so arbitrary
 // "N guides" prose ("5 guides at the museum") never false-positives: a match
@@ -89,10 +97,12 @@ export function countHowToGuides(howToDir: string): number | null {
 /** Check 1: every "N skills" phrasing in content matches the actual skill count. */
 export function findSkillCountMismatches(content: string, rel: string, actual: number): string[] {
   const errors: string[] = []
-  for (const m of content.matchAll(SKILL_COUNT_RE)) {
-    const n = m[1]
-    if (n !== undefined && parseInt(n, 10) !== actual) {
-      errors.push(`Skill count mismatch in ${rel}: docs say "${m[0]}", actual count is ${actual}`)
+  for (const re of [SKILL_COUNT_RE, SKILL_COUNT_PROBE_RE]) {
+    for (const m of content.matchAll(re)) {
+      const n = m[1]
+      if (n !== undefined && parseInt(n, 10) !== actual) {
+        errors.push(`Skill count mismatch in ${rel}: docs say "${m[0]}", actual count is ${actual}`)
+      }
     }
   }
   return errors

@@ -28,7 +28,9 @@ describe('compareVersions', () => {
     const result = compareVersions(installed({ version: '1.1.0' }), current({ version: '1.2.0' }))
 
     expect(result.status).toBe('drift')
-    expect(result.migrationUrl).toBe('https://pair.foomakers.com/docs/migrations/v1.1.0-to-v1.2.0')
+    expect(result.migrationUrl).toBe(
+      'https://pair.foomakers.com/docs/migrations/v1.1.0-to-v1.2.0',
+    )
   })
 
   it('reports drift WITHOUT a migration URL on downgrade (installed newer than current)', () => {

@@ -62,6 +62,30 @@ describe('findSkillCountMismatches', () => {
   it('ignores subset counts ("N process skills")', () => {
     expect(findSkillCountMismatches('9 process skills', 'a.mdx', 35)).toHaveLength(0)
   })
+
+  // The two phrasings the marketplace docs introduced, both of which drifted
+  // silently (docs said 40 while the dataset held 41) because neither matched.
+  it('flags a wrong "N declared pair skills"', () => {
+    const errs = findSkillCountMismatches('exactly the 40 declared pair skills', 'a.mdx', 41)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('40 declared pair skills')
+  })
+
+  it('flags a wrong `Skills (N)` probe transcript', () => {
+    const errs = findSkillCountMismatches('reports `Skills (40)`, `Agents (0)`', 'a.mdx', 41)
+    expect(errs).toHaveLength(1)
+    expect(errs[0]).toContain('Skills (40)')
+  })
+
+  it('passes a matching `Skills (N)` probe transcript', () => {
+    expect(findSkillCountMismatches('reports `Skills (41)`', 'a.mdx', 41)).toHaveLength(0)
+  })
+
+  it('does not read a sibling `Agents (N)`/`Hooks (N)` count as a skill count', () => {
+    expect(
+      findSkillCountMismatches('`Agents (0)`, `Hooks (0)`, `MCP servers (0)`', 'a.mdx', 41),
+    ).toHaveLength(0)
+  })
 })
 
 describe('findGuideCountMismatches', () => {
