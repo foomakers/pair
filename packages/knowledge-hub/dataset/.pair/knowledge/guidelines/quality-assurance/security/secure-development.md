@@ -343,6 +343,10 @@ jobs:
 
 INCIDENT_TYPE=$1
 SEVERITY=$2
+# Login the incident issue is assigned to. Declared here (not left to the
+# environment) because an unset value sends --assignee "" and gh then fails the
+# create outright — the incident issue would not exist at all.
+SECURITY_ONCALL=${SECURITY_ONCALL:-@me}
 
 echo "🚨 Security incident detected: $INCIDENT_TYPE (Severity: $SEVERITY)"
 
@@ -367,10 +371,17 @@ case $SEVERITY in
         echo "⚠️  High priority security incident response..."
 
         # Create incident tracking issue
+        # --assignee is not optional: an unassigned incident issue is invisible
+        # in the assignee-filtered view the team reads (see the PM-tool adapter's
+        # "Item Visibility: Membership and Assignee" section).
+        # No --project on purpose: an incident is not a backlog item, so it is
+        # deliberately board-less. If your team DOES track incidents on the board,
+        # add --project and the adapter's add-item step (Step 2b) after this call.
         gh issue create \
             --title "🚨 Security Incident: $INCIDENT_TYPE" \
             --body "High priority security incident requiring immediate attention" \
-            --label "security,incident,high-priority"
+            --label "security,incident,high-priority" \
+            --assignee "$SECURITY_ONCALL"
         ;;
 esac
 

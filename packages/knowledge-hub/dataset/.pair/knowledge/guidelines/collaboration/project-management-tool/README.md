@@ -74,6 +74,24 @@ All implementation guides include:
 - ✅ Team collaboration patterns
 - ✅ Development workflow integration
 
+### Adapter Contract — Required Coverage
+
+Every implementation guide in this directory is an **adapter**: skills stay tool-agnostic and delegate tool-specific mechanics here. An adapter that omits one of the following is incomplete, and the omission surfaces as an item that exists, is open, is green — and is invisible to the team.
+
+Why this coverage lives in the **adapters** and not in the skills, and why the contract is gate-enforced rather than advisory, is recorded as an ADL in the adopting project's decision log — in this repository, `.pair/adoption/decision-log/2026-07-31-pm-adapter-visibility-contract.md`. (Referenced as a path, not a link: the decision log is per-project `add`-behaviour content, so the file does not exist in a freshly seeded install.)
+
+**Membership and assignee are independent, and both are required for visibility** — assigned but not a member is invisible on the board; a member but unassigned is invisible in the assignee-filtered view the team reads. Fixing one does not fix the other.
+
+Every adapter therefore carries a **level-3** section headed **`### Item Visibility: Membership and Assignee`** — level 3 exactly, because the conformance guard locates the section by that heading level and reads only its body. Documenting:
+
+1. **Board membership semantics** — whether membership in the tracked view is **explicit** (a separate call, e.g. GitHub Projects' `addProjectV2ItemById`, because an issue and a project item are distinct objects) or **implicit** (creating the item is its membership, e.g. Azure Boards' team project, or the file's location in a filesystem backlog). State it either way, in the words `membership is explicit` / `membership is implicit`: **silence is what makes an agent invent an add-item step that does not exist for that tool**, or skip one that does. Write it in the pinned sentence form — **`Board membership is explicit …`** or **`Board membership is implicit …`** — the `Board` prefix included: the guard pins that whole phrase for every adapter whose semantics it knows, so `membership is implicit` without it reddens the gate.
+2. **The assignee mechanic** — the concrete field/flag that sets the assignee `as part of the create, never as a follow-up step`, per the Assignment rule in the project's `way-of-working.md`.
+3. **The unresolvable-assignee behaviour** — `if the assignee cannot be resolved`, report it and `never drop it silently`. Dropping it reproduces the invisibility the section exists to remove.
+4. **The status-write precondition** — for explicit-membership tools, that membership precedes the state write, plus what happens when the item lookup returns nothing (an explicit branch, never an unhandled empty value and never a silently skipped board write reported as success).
+5. **Implicit membership that can still miss the read view** — "implicit" answers *how* membership happens, not *whether the item is visible*. Where creating the item makes it a member and it can still land outside the view the team reads (Azure Boards: an **area path** outside the team's configured areas; Linear: a project-scoped view the issue was never added to), name the **field** that decides it AND carry that field on the create recipe, not only in prose. An adapter that stops at "membership is implicit" hands an agent a create that satisfies the contract and produces an invisible item — the exact failure the contract exists to prevent.
+
+Conformance coverage is **data-driven over the `*-implementation.md` files present**, in both the dataset and the generated root mirror — see `packages/knowledge-hub/src/conformance/pm-tool-adapter-contract.test.ts`. Adding an adapter therefore enrols it in the contract automatically; **no adapter count is asserted anywhere**, and an omission fails the gate instead of being discovered in production.
+
 ## Tool Selection Decision Framework
 
 ### Decision Matrix

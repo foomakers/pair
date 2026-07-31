@@ -25,17 +25,22 @@ Labels are **per team**: resolve label ids for the adopted team before using the
 
 All examples use the GraphQL API through the **`linear_gql` helper** defined once in [linear-implementation.md → GraphQL API setup](../project-management-tool/linear-implementation.md#quick-setup) — endpoint and credentials live there, and the key is never passed inline on the command line. Define the helper before running anything below. With MCP, call the server's equivalent tool with the same arguments.
 
+> **The authoritative create recipe is the adapter's.** Every `issueCreate` below carries `assigneeId`, because an issue without an assignee is open, green — and invisible in the assignee-filtered view the team reads. The full mechanics (resolving the user id, membership is implicit via `teamId`, when `projectId` becomes part of visibility, what to do when the assignee cannot be resolved) live in [linear-implementation.md → Item Visibility: Membership and Assignee](../project-management-tool/linear-implementation.md#item-visibility-membership-and-assignee). The snippets here are abbreviations of it, never an alternative to it.
+
 ### User Story
 
 ```bash
 linear_gql '{"query":"mutation($i:IssueCreateInput!){ issueCreate(input:$i){ success issue { id identifier url } } }",
      "variables":{"i":{"teamId":"<team-id>","title":"[Story title]",
      "description":"[Story body — markdown per user-story-template]",
+     "assigneeId":"<user-id>",
      "parentId":"<epic-id>","labelIds":["<user-story-label-id>"],
      "estimate":5,"priority":2}}}'
 ```
 
 `issue.identifier` (e.g. `ENG-412`) is the item id pair uses in commits, branch names, and the PR's `Refs:` line.
+
+Add `"projectId":"<project-id>"` to the same `input` **only when [way-of-working.md](../../../../adoption/tech/way-of-working.md) names a project view** — on Linear membership comes from the required `teamId`, so a project is a grouping inside the team, not what makes the issue visible. JSON carries no comments, which is why the condition is stated here rather than inside the snippet.
 
 ### Epic
 

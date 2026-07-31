@@ -203,13 +203,50 @@ GraphQL examples below; with MCP, use the server's equivalent tool with the same
 ### Create
 
 ```bash
+# assigneeId is part of the create, never a follow-up; add projectId too when the
+# adopted board is a project view — see Item Visibility: Membership and Assignee.
 linear_gql '{"query":"mutation($i:IssueCreateInput!){ issueCreate(input:$i){ success issue { id identifier url } } }",
        "variables":{"i":{"teamId":"<team-id>","title":"[Story title]",
        "description":"[Story body — markdown per user-story-template]",
+       "assigneeId":"<user-id>",
        "labelIds":["<user-story-label-id>"],"estimate":5,"priority":2}}}'
 ```
 
 `issue.identifier` (e.g. `ENG-412`) is the **item id** pair uses everywhere — in commits, branch names, and the PR's `Refs:` line.
+
+### Item Visibility: Membership and Assignee
+
+**Visibility takes two independent writes, and neither substitutes for the other.**
+
+| Missing            | Symptom                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| Assignee           | Open, in the team's view, green — and absent from the assignee-filtered view teams read |
+| Board membership   | not possible in the team view; when the adopted board is a project view, a missing `projectId` reproduces it — see below |
+
+**Board membership is implicit on Linear — an issue always belongs to a team.** `issueCreate` requires `teamId`, so an issue cannot exist without membership; there is **no separate add-to-board step**. Do not invent one: unlike GitHub Projects, where an issue and a project item are distinct objects requiring an explicit `addProjectV2ItemById`, a Linear issue is a member of its team the moment it exists. Consequently a state write can never fail for "not a member yet". Optional `projectId` narrows _which_ project view shows it, but it is a grouping within the team, never the thing that makes the issue visible **in the team view**.
+
+**Implicit membership is not the same as "cannot be invisible."** When [way-of-working.md](../../../../adoption/tech/way-of-working.md) names a **project** view rather than the team view as the board the team reads, `projectId` becomes part of visibility and must be set on the create — an issue with the right `teamId` and no `projectId` is then created, assigned, and absent from the view the team actually reads, exactly as on GitHub. Read the adopted board from `way-of-working.md`; only when it is the team view is `projectId` genuinely optional.
+
+**The assignee is not implicit** and is still required — the board is read filtered by assignee (Assignment rule in [way-of-working.md](../../../../adoption/tech/way-of-working.md)). Set it **as part of the create**, never as a follow-up step:
+
+```bash
+# Create with the assignee — resolve the user id first
+linear_gql '{"query":"{ users(filter:{isMe:{eq:true}}) { nodes { id name } } }"}'
+
+# projectId is required when way-of-working.md names a project view, not the team
+# view — without it the issue is created, assigned, and absent from that board.
+linear_gql '{"query":"mutation($i:IssueCreateInput!){ issueCreate(input:$i){ success issue { identifier } } }",
+       "variables":{"i":{"teamId":"<team-id>","title":"[title]","assigneeId":"<user-id>",
+       "projectId":"<project-id>"}}}'
+
+# Existing issue — assigning is idempotent, so it is safe to run unconditionally
+linear_gql '{"query":"mutation($id:String!,$i:IssueUpdateInput!){ issueUpdate(id:$id,input:$i){ success } }",
+     "variables":{"id":"<issue-id>","i":{"assigneeId":"<user-id>"}}}'
+```
+
+A pull request needs the same write on the code host — a PR's `author` is **not** its `assignees`, so an author-only PR is invisible in an assignee-filtered view. On Linear the code host is separate from the PM tool (see the way-of-working override), so that write belongs to the host's own adapter.
+
+**If the assignee cannot be resolved** (not a workspace member, SSO restriction): **report it** — never drop it silently, which reproduces the invisibility this recipe exists to prevent.
 
 ### Link Parent-Child
 

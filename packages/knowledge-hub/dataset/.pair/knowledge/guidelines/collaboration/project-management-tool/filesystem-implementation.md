@@ -203,6 +203,22 @@ Status changes are reflected by moving files between directories:
 - **under-review/**: Completed work awaiting review/validation
 - **completed/**: Finished and accepted items
 
+### Item Visibility: Membership and Assignee
+
+**Board membership is implicit here — the file's location _is_ its membership.** Writing the file under `03-user-stories/[status]/` puts the item in the tracked view; there is **no separate add-to-board step**. Do not invent one: unlike GitHub Projects, where an issue and a project item are distinct objects requiring an explicit `addProjectV2ItemById`, a file that exists in the backlog tree is already a member of it. Consequently a status write can never fail for "not a member yet" — the failure mode is a file in the _wrong_ directory, not a missing one.
+
+**The assignee is not implicit** and is still required — the backlog is read filtered by assignee (Assignment rule in [way-of-working.md](../../../../adoption/tech/way-of-working.md)). There is no assignee field in a filesystem board, so it lives in the item file's header as an **`Assignee`** line, written as part of the create, never as a follow-up step:
+
+```markdown
+**Assignee**: [name or handle of the person the work is done for]
+```
+
+**Where the line goes**: the item templates carry **no `Assignee` field**, so copying a template does not leave a slot for it. Add it to the item's context block — for a user story, in **`## Epic Context`** immediately after `**Priority**`; for a task, in the same header block that carries the parent story; for an **epic** or an **initiative**, in its own header/context block, the one carrying `**Priority**`. Writing it anywhere the grep below finds it is correct; leaving it out because the template lacked a field is not.
+
+**Why the slot is not in the shared templates** (a deliberate choice, not an oversight): on every other adapter the assignee is a **native tracker field** — GitHub's `assignees`, Azure's `--assigned-to`, Linear's `assigneeId` — so a template slot would be dead weight there, and a second source of truth competing with the field the board actually filters on. The templates therefore stay tool-neutral and this adapter owns the convention, which is why the placement rule is stated here and is looser than a template field would be. Recorded with the rest of the contract rationale in this repository's `.pair/adoption/decision-log/2026-07-31-pm-adapter-visibility-contract.md`.
+
+Grep is the filtered view: `grep -rl 'Assignee.*<name>' .pair/adoption/product/backlog/` — which is exactly why an item with the line missing is invisible. **If the assignee cannot be resolved**: **report it** — never drop it silently by writing the file with the line omitted or left as a placeholder.
+
 ## Working with Initiatives
 
 ### Creating Initiatives
@@ -232,6 +248,7 @@ Fill out all sections of the initiative template:
 - **Business Objective**: Clear statement of business goals
 - **Success Metrics**: Measurable outcomes and KPIs
 - **Priority**: P0 (Must-Have) | P1 (Should-Have) | P2 (Could-Have)
+- **Assignee**: the person the work is done for — required, see [Item Visibility](#item-visibility-membership-and-assignee)
 - **Estimated Timeline**: High-level timeframe
 - **Dependencies**: External dependencies and blockers
 - **Epic References**: Links to related epics (added as epics are created)
@@ -333,6 +350,7 @@ Fill out all required sections:
 - **Parent Epic**: Link to parent epic file
 - **Acceptance Criteria**: Clear, testable conditions
 - **Priority and Sizing**: Business priority and development estimate
+- **Assignee**: the person the work is done for — required, see [Item Visibility](#item-visibility-membership-and-assignee)
 
 ### Refining User Stories
 

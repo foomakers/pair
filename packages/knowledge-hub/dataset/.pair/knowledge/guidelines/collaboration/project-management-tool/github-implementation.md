@@ -43,6 +43,8 @@ npm install -g @github/github-mcp-server
 - Issue workflow automation
 - Integration with project boards
 
+**Creating an issue?** The create recipe — assignee **and** project membership, which are two independent writes — lives in [Item Visibility: Membership and Assignee](#item-visibility-membership-and-assignee) further down this file. It sits next to the board-status mechanics it depends on rather than here.
+
 ### Project Tracking
 
 #### → See [../project-tracking/](../project-tracking/README.md)
@@ -203,8 +205,15 @@ npm install -g @github/github-mcp-server
 ```bash
 # Fallback commands when MCP unavailable
 gh project list --owner [ORG]
-gh issue create --project [PROJECT_ID]
-gh pr create --project [PROJECT_ID]
+
+# --project takes the project's TITLE, never its node ID and never its number
+# (gh 2.97 documents "-p, --project title"; numbers belong to `gh project`).
+# Both flags need the `project` OAuth scope: gh auth refresh -s project
+# Passing it at create time is what makes the item a board member —
+# see "Item Visibility: Membership and Assignee" below for why that matters
+# and for the Step 2b path when this flag is not used.
+gh issue create --assignee "[login]" --project "[project title]"
+gh pr create --assignee "[login]" --project "[project title]"
 ```
 
 ### API Integration
@@ -383,6 +392,63 @@ mcp__github__issue_write:
 # Step 3: Repeat for initiative (epic's parent)
 ```
 
+### Item Visibility: Membership and Assignee
+
+**Visibility takes two independent writes, and neither substitutes for the other.**
+
+| Missing            | Symptom                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| Assignee           | Open, on the board, green — and absent from the assignee-filtered view teams read   |
+| Project membership | Open, assigned, green — and absent from the board entirely                          |
+
+**Board membership is explicit on GitHub**: an issue and a project item are **distinct objects**. `mcp__github__issue_write` has **no project field at all**, and `gh issue create` produces only the issue **unless you pass `--project`**. Either way membership is a separate decision, made by `--project` at create time or by `addProjectV2ItemById` afterwards (Step 2b below). This is tool-specific — on tools where membership is implicit, the guide says so; never assume the GitHub shape elsewhere.
+
+**Both membership writes need the `project` OAuth scope.** `--project` (on `gh issue create`, `gh pr create`, `gh issue edit --add-project`) and the `addProjectV2ItemById` mutation are both refused by a default `gh auth login` token: `your authentication token is missing required scopes [project]`. Grant it once with `gh auth refresh -s project` — the same scope the `projectV2` queries in Steps 1-3 need, and the same one the token the MCP server runs with must carry. `gh` resolves the project **before** it creates the issue, so a missing scope fails the whole command and **no issue is created**: nothing is half-written, and re-running after the refresh is safe.
+
+**A missing-scope error is reported, never worked around by dropping `--project`.** Retrying without the flag succeeds and lands on exactly the defect this section exists to remove — open, assigned, green, off the board. Same discipline as the status write below: report it, never silently degrade to a create that skips membership.
+
+The assignee is required by the Assignment rule in [way-of-working.md](../../../../adoption/tech/way-of-working.md): the board is read filtered by assignee. Set it **as part of the create**, never as a follow-up step.
+
+#### Create an Issue with its Assignee and its Membership
+
+**Creating does not imply membership.** Both writes belong to the create, because the two failure modes above are independent: an issue created with an assignee and no membership is open, assigned, green and absent from the board — which is the exact defect this section exists to prevent, and it is reachable through the **most common** path, a follow-up issue filed with no status transition.
+
+```text
+# MCP-first — NOTE: issue_write has no project field.
+# This call creates the issue and its assignee ONLY.
+# Step 2b is REQUIRED after it, not optional.
+mcp__github__issue_write:
+  method: create
+  owner: [org]
+  repo: [repo]
+  title: "[item title]"
+  body: "[body — markdown per the item's template]"
+  labels: ["[type label]", "[classification labels]"]
+  assignees: ["[login]"]
+```
+
+```bash
+# CLI fallback — one shot: --project takes the project's TITLE, never its node
+# ID and never its number, and the project is the one named in way-of-working.md.
+# Needs the `project` OAuth scope (gh auth refresh -s project); without it the
+# command fails and creates NOTHING — report that, never retry without --project.
+gh issue create --title "[title]" --body-file [file] --assignee "[login]" --project "[project title]"
+
+# Without --project (or after any MCP create): membership is still missing.
+# Run Step 2b below — it is idempotent, so it is safe to run unconditionally.
+#
+# No project named in way-of-working.md at all: omit --project AND skip Step 2b.
+# That is the Step 1 no-project outcome, not a workaround — there is no board to
+# be absent from, so the item is not invisible.
+
+# Existing issue — --add-assignee adds without replacing, so it is safe to run unconditionally
+gh issue edit [NUMBER] --add-assignee "[login]"
+```
+
+A pull request needs the same write: `gh pr create --assignee "[login]"`. A PR's `author` is **not** its `assignees`, so an author-only PR is invisible in an assignee-filtered view.
+
+**If the assignee cannot be resolved** (not a repository collaborator, org/SSO restriction): **report it** — never drop it silently, which reproduces the invisibility this recipe exists to prevent.
+
 ### Project Board Status Transitions
 
 Update the project board status field for intermediate transitions (Todo → Refined, Refined → In Progress) and final transitions (→ Done).
@@ -410,6 +476,16 @@ gh api graphql -f query='{
 }'
 ```
 
+**Branch on the discovery outcome — this is where "there is no board" is observed, before any item lookup:**
+
+| Discovery outcome                                    | Meaning                                                           | Next                                                      |
+| ---------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------- |
+| A project id + status field id                       | The board exists                                                  | Step 2                                                    |
+| The query **succeeded** and returned **no project**  | No project is configured — there is no board field to write at all | **Skip Steps 2-3** — there is no board field to write; the membership step **no-ops** (see Step 2b) |
+| The query **failed** (error, 404, permission denied) | Unknown — not evidence of absence                                 | **Report it.** Never a no-op, never "board write skipped" |
+
+Keep the last two apart: "no project configured" is a **successful** query with an empty result; an error or a permission denial says nothing about whether the project exists, and treating it as absence is how a failed board write disappears into a green report.
+
 #### Step 2: Find the Item ID for the Issue
 
 ```bash
@@ -430,7 +506,62 @@ gh api graphql -f query='{
 # Use pageInfo.endCursor for pagination if needed
 ```
 
+**Branch on the result — an empty id is a state, not an error to ignore:**
+
+| Lookup result                | Meaning                                    | Next                                        |
+| ---------------------------- | ------------------------------------------ | ------------------------------------------- |
+| An item id                   | The issue is already a project item        | Step 3                                      |
+| No match after the last page | The issue is **not a project item yet**    | **Step 2b**, then Step 3 on the returned id |
+
+(The "no project configured at all" outcome is not reachable here — it is observed in **Step 1**, whose table above owns it.)
+
+Never carry an empty id into Step 3: `updateProjectV2ItemFieldValue` fails with `gh: Could not resolve to a node with the global id of ''`. **And never treat the empty id as "board write skipped" and report success** — a silently skipped board write is exactly how an item ends up open, assigned, green, and absent from the board. Paginate to the last page before concluding "not an item": a match on page 3 that was never fetched looks identical to no match.
+
+**When the issue belongs to more than one project**: target the project named in [way-of-working.md](../../../../adoption/tech/way-of-working.md). Never take the first project found.
+
+#### Step 2b: Add the Issue as a Project Item (idempotent — safe as an unconditional precondition)
+
+Reached whenever Step 2 found nothing, and safe to run even when it found something (see **Idempotent** below) — so the conditional shape is an optimisation, never a requirement. Membership must exist before the status field can be written — the field lives on the **item**, not on the issue.
+
+`[PROJECT_ID]` below comes from **Step 1**: run it first when you arrive here straight from the create recipe rather than through Step 2.
+
+```bash
+# Get the issue's node id, then add it to the project
+ISSUE_NODE_ID=$(gh api graphql -f query='{
+  repository(owner: "[ORG]", name: "[REPO]") {
+    issue(number: [ISSUE_NUMBER]) { id }
+  }
+}' --jq '.data.repository.issue.id')
+
+# Abort if the lookup yielded nothing — same empty-id discipline as Step 3.
+# An empty value would send contentId: "" and corrupt the mutation instead of failing.
+[ -n "$ISSUE_NODE_ID" ] || { echo "issue node id lookup failed — aborting" >&2; exit 1; }
+
+# Parameterised, never interpolated into the query document: values travel as
+# GraphQL variables (-F), so an unexpected value fails cleanly rather than
+# rewriting the query. Returns the item id — feed it straight into Step 3.
+# Needs the `project` OAuth scope, exactly like --project on the create:
+# gh auth refresh -s project. A missing scope is reported, never skipped.
+gh api graphql \
+  -f query='mutation($project: ID!, $content: ID!) {
+    addProjectV2ItemById(input: { projectId: $project, contentId: $content }) {
+      item { id }
+    }
+  }' \
+  -F project="[PROJECT_ID]" \
+  -F content="$ISSUE_NODE_ID" \
+  --jq '.data.addProjectV2ItemById.item.id'
+```
+
+**Idempotent**: `addProjectV2ItemById` on an issue that is already an item returns that existing item instead of duplicating it, so this step is safe to run unconditionally — including as a precondition of every status write, without a preceding existence check. Prefer that unconditional shape: a Step 2 that returned a stale or partially-paginated result otherwise reaches Step 3 with no membership.
+
+**No project configured at all**: a project with **no board at all** has no field to write, so the membership step **no-ops** — it is **never a HALT** for a project that legitimately has no board. This is its own degradation, and it is **not** the one in [canonical-states.md](canonical-states.md): that document's write rule 5 **HALTs** when a board _exists_ but no board state maps to the target macrostate. Nor is it the D4 readiness fallback ([definition-of-ready-and-done.md](definition-of-ready-and-done.md)), which is a board that exists and lacks a _Ready column_.
+
+The no-op applies **only** to the Step 1 outcome "discovery succeeded and returned no project". A discovery that **failed** — error, 404, permission denied — is **reported**, never absorbed as a no-op; otherwise this branch launders an error into a success and reproduces the very defect the empty-id rule above forbids.
+
 #### Step 3: Update the Status Field
+
+Requires an item id from Step 2 or Step 2b — the item exists by this point, by construction.
 
 ```bash
 # Transition to any status (e.g., Ready, In Progress, Done)
