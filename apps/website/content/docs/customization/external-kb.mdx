@@ -44,23 +44,10 @@ project, while a KB is knowledge. Consuming projects keep their own adoption fil
 
 ### Options
 
-| Option          | Description                                                       |
-| --------------- | ----------------------------------------------------------------- |
-| `[path]`        | Target directory (default: current directory)                      |
-| `--name <name>` | KB name (default: derived from the directory name)                 |
-| `--host <host>` | `github` (default) or `generic` for any other code host            |
-| `-f, --force`   | Regenerate scaffold-owned files without asking                     |
-
-Quote a name with spaces (`--name "Acme KB"`); newlines, control characters and `${{`
-(a live GitHub Actions expression) are rejected because the name is embedded in generated
-YAML and bash. `--host` is not
-inferred from the target repository's remote — pass `--host generic` for GitLab,
-Bitbucket, or self-hosted, otherwise a GitHub Actions workflow is generated.
-
-`scaffold-kb` refuses to run when the target is not a directory, or when it is a
-configured pair project (`.pair/adoption/` present) — `--force` does not bypass that,
-so pointing it at a project root by mistake cannot replace that project's
-`pair.config.json` and `README.md`.
+`[path]`, `--name`, `--host` and `--force` — with the `--name` validation rules, why `--host` is
+never inferred from the target's remote, and what `--force` does *not* bypass — are documented once
+in the [CLI reference](/docs/reference/cli/commands#scaffold-kb). This page covers the lifecycle
+around the command, not its syntax.
 
 ## What the KB declares
 
