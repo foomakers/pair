@@ -31,8 +31,12 @@
 # then throws away, and the regression guard would never fire). So bootstrapping is
 # ADVISORY: the gate echoes the suggested `baseline.<type>=NN` to stderr for a human
 # to copy into the committed config, and passes without blocking until that commit
-# lands. Automated commit-back of a bootstrapped baseline is provider-specific and
-# tracked separately — see story #372.
+# lands. THIS FILE NEVER WRITES, in any configuration. Automated commit-back
+# (story #372) is a SEPARATE, nested opt-in that lives outside this gate: when
+# `Coverage baseline commit-back: enabled` is set, a push to the base branch
+# proposes a raised baseline as a bot pull request (never a push to the base
+# branch, never from a pull-request run). It is a side effect that may fail alone
+# — a refused write is a warning and leaves this gate's verdict untouched.
 #
 # See:
 #   .pair/knowledge/guidelines/infrastructure/cicd-strategy/tier-aware-pipeline.md

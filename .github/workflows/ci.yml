@@ -114,7 +114,55 @@ jobs:
           BRAND_PCT="$(pct packages/brand/coverage/coverage-summary.json || true)"
           WEBSITE_PCT="$(pct apps/website/coverage/coverage-summary.json || true)"
           echo "coverage: brand(shared)=${BRAND_PCT}%  website(frontend)=${WEBSITE_PCT}%"
+          # Hand the measured numbers to the commit-back step (#372) so the
+          # extraction is not duplicated. Values only — no decision is made here.
+          # VALIDATED before writing: $GITHUB_ENV is the classic Actions
+          # environment-injection sink, and a value carrying a newline would
+          # define arbitrary further variables for every later step. These come
+          # from a coverage report, so a stray value is a tooling bug rather than
+          # an attack — but the guard costs one case statement and removes the
+          # sink entirely. A non-numeric value is dropped with a warning: the
+          # ratchet then sees no measurement and proposes nothing, which is the
+          # conservative outcome (it never blocks the gate — AC6).
+          for kv in "PAIR_COV_SHARED=${BRAND_PCT}" "PAIR_COV_FRONTEND=${WEBSITE_PCT}"; do
+            case "${kv#*=}" in
+              '' | *[!0-9.]*)
+                echo "::warning::${kv%%=*}: non-numeric coverage value, not exported to the ratchet"
+                ;;
+              *) echo "$kv" >>"$GITHUB_ENV" ;;
+            esac
+          done
           coverage_gate "$TIER" shared   "$BRAND_PCT"   "$CFG"
           coverage_gate "$TIER" frontend "$WEBSITE_PCT" "$CFG"
+      # Coverage baseline commit-back (story #372) — OPT-IN and nested under the
+      # guardrail above: `Coverage baseline commit-back` in way-of-working.md is
+      # `disabled` here (and is the framework default), so today this step is a
+      # no-op that prints WHY it skipped and writes nothing (AC1).
+      # Thin entrypoint (ADL 2026-07-13): every decision — the skip predicate
+      # (flag / base-branch push only / ratchet-marker loop guard), the monotonic
+      # ratchet, the git+gh command plan and the refusal classification — lives in
+      # the unit-tested module packages/knowledge-hub/src/tools/coverage-baseline-ratchet.ts;
+      # the CLI wiring is demonstrated by the coverage-gate smoke scenario.
+      # Placed AFTER the guardrail and always exiting 0: a refused write degrades
+      # to a ::warning:: and can never change the gate's verdict (AC6).
+      - name: Coverage baseline commit-back (ratchet — opt-in #372)
+        env:
+          # Attacker-controlled text: read via env, never interpolated into the script.
+          PAIR_RATCHET_HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          PAIR_RATCHET_BASE_BRANCH: main
+          # Dedicated, repo-scoped credential (contents:write + pull-requests:write,
+          # no protection bypass). Absent => the step warns, the gate is unaffected.
+          # Least privilege in the EVENT dimension too: bound to the only event
+          # allowed to write, so a pull-request run — where the diff under test can
+          # influence what this job executes — never has the token in its
+          # environment. Belt to the module's own `not-base-push` skip (braces).
+          COVERAGE_RATCHET_TOKEN: ${{ (github.event_name == 'push' && github.ref_name == 'main') && secrets.COVERAGE_RATCHET_TOKEN || '' }}
+        run: |
+          set -euo pipefail
+          pnpm --filter @pair/knowledge-hub coverage:ratchet \
+            --config .pair/adoption/tech/coverage-baseline.md \
+            --way-of-working .pair/adoption/tech/way-of-working.md \
+            --measured "shared=${PAIR_COV_SHARED:-}" \
+            --measured "frontend=${PAIR_COV_FRONTEND:-}"
       - name: Run E2E tests
         run: pnpm --filter @pair/website e2e
