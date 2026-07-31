@@ -17,7 +17,17 @@
  *      SKILL.md matches the real corpus dir count. Hard error, like every other
  *      check here (promoted from WARN once #313/T1 (#325) regenerated next's
  *      catalog to the real, stable count).
- *   5. KB prose counts — the skill-count figures restated in the onboarding KB
+ *   5. Entrypoint depth — every `SKILL.md` sits at the registry's ENTRY depth
+ *      (`<category>/<name>/SKILL.md`, or the bare `<name>/SKILL.md` meta skill),
+ *      never below it. A `SKILL.md` inside a skill's sub-directory (e.g.
+ *      `process/review/references/SKILL.md`) installs as CONTENT under the bounded
+ *      flatten (#407, ADR-020): no name prefix, no frontmatter `name:` sync, no
+ *      skill-name mapping — a skill nobody can invoke, and until this check nothing
+ *      saw it (the corpus walk below only reads `<category>/<name>/SKILL.md`, and
+ *      the mirror-equality guard derives the installed path from the same
+ *      transform, so it agrees with itself). The convention it enforces:
+ *      `skill-conventions/nested-sub-documents.md`, authoring rule 1.
+ *   6. KB prose counts — the skill-count figures restated in the onboarding KB
  *      prose (way-of-working.md, getting-started.md, skills-guide.md) match the
  *      real corpus, across every restated form: the number-before-noun
  *      "N skills"/"N Agent Skills" total, the "(P process + C capability + N
@@ -311,6 +321,53 @@ export function checkCategoryLabelCounts(
   return errors
 }
 
+// --- Entrypoint depth ---
+
+/**
+ * The `skills` registry's ENTRY depth in directory segments: `<category>/<name>`
+ * (2) or the bare meta skill `<name>` (1). Same fact as `flattenDepth` in the
+ * registry config, pinned to `SKILL_COPY_OPTS` by test rather than imported, so
+ * this gate script stays dependency-free (it runs via ts-node before any build).
+ */
+export const ENTRY_DEPTH = 2
+
+/**
+ * Every `SKILL.md` must sit AT the entry depth, never below it.
+ *
+ * A `SKILL.md` inside a skill's sub-directory (`process/review/references/SKILL.md`)
+ * is legitimately-shaped CONTENT for the copy pipeline's layout guards — telling it
+ * apart would need the marker-file knowledge ADR-020 keeps out of a transform four
+ * non-skill registries share. So it installs at
+ * `pair-process-review/references/SKILL.md`: no prefix, frontmatter `name:` left
+ * unsynced, absent from the skill-name map — a skill nobody can invoke, with no
+ * signal anywhere. Static corpus knowledge is the right layer for it; this is that
+ * check (`nested-sub-documents.md`, authoring rule 1).
+ *
+ * Takes the RECURSIVE markdown walk, not `collectSkillFiles`: the whole point is
+ * to see files the entry walk never reaches.
+ */
+export function checkEntrypointDepth(skillsDir: string, markdownFiles: string[]): string[] {
+  const errors: string[] = []
+  for (const file of markdownFiles) {
+    if (basename(file) !== 'SKILL.md') continue
+    const rel = relative(skillsDir, file)
+    const depth = rel.split(sep).length - 1
+    if (depth >= 1 && depth <= ENTRY_DEPTH) continue
+    const where =
+      depth > ENTRY_DEPTH
+        ? `below the entry depth, so it installs as content inside another skill`
+        : `at the registry root, so it installs as a loose file with no skill directory`
+    errors.push(
+      `${rel}: SKILL.md is ${depth} directory level(s) deep — ${where}. ` +
+        `A skill entrypoint must sit at the entry depth (1..${ENTRY_DEPTH}: '<category>/<name>/SKILL.md', ` +
+        `or '<name>/SKILL.md' for the meta skill): no prefix, no frontmatter name sync and no ` +
+        `skill-name mapping are applied anywhere else, so the skill would be non-invocable. ` +
+        `Move it to the skill root, or rename it if it is a sub-document.`,
+    )
+  }
+  return errors
+}
+
 // --- Corpus walk ---
 
 /**
@@ -372,6 +429,8 @@ export function runChecks(skillsDir: string): RunResult {
     for (const e of checkLinks(file, fm.body)) errors.push(`${rel}: ${e}`)
   }
 
+  errors.push(...checkEntrypointDepth(skillsDir, collectSkillMarkdownFiles(skillsDir)))
+
   const nextFile = files.find(f => basename(dirname(f)) === 'next')
   if (nextFile) {
     errors.push(...checkCatalogCounts(readFileSync(nextFile, 'utf-8'), files.length))
@@ -399,7 +458,7 @@ if (require.main === module) {
 
   if (errors.length === 0) {
     console.log(
-      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, catalog counts, KB prose counts incl. category headings/table cells)`,
+      `PASS — ${skillCount} skills conformant (frontmatter portability, size limits, pointer resolution, entrypoint depth, catalog counts, KB prose counts incl. category headings/table cells)`,
     )
     process.exit(0)
   } else {

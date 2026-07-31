@@ -153,6 +153,7 @@ With the default config (`prefix: "pair"`, `flatten: true`):
 | `process/review/` | `pair-process-review/` | `/pair-process-review` |
 | `capability/verify-quality/` | `pair-capability-verify-quality/` | `/pair-capability-verify-quality` |
 | `capability/record-decision/` | `pair-capability-record-decision/` | `/pair-capability-record-decision` |
+| `process/review/references/` (sub-dir of a skill) | `pair-process-review/references/` | none — content, not a skill |
 
 ### Collision Detection
 
@@ -170,16 +171,23 @@ If two different source paths flatten to the same installed name (e.g. `a/b/` an
 
 The naming transform applies two functions in order:
 
-1. **Flatten**: Replace `/` with `-`
+1. **Flatten**: Replace `/` with `-`, bounded to the registry's entry depth (`flattenDepth: 2` for skills — see [Configuration](/docs/reference/configuration))
    - `capability/verify-quality` → `capability-verify-quality`
+   - `process/review/references` → `process-review/references` (a skill's own sub-directory is preserved, not flattened into a sibling)
 
-2. **Prefix**: Prepend the prefix with `-` separator
+2. **Prefix**: Prepend the prefix with `-` separator (only the top-level segment)
    - `capability-verify-quality` → `pair-capability-verify-quality`
+   - `process-review/references` → `pair-process-review/references`
 
 ```typescript
-// Flatten: replaces '/' with '-'
-function flattenPath(dirName: string): string {
-  return dirName.replace(/\//g, '-')
+// Flatten: joins the first `flattenDepth` segments with '-' and preserves the
+// rest as a real sub-path. Omit flattenDepth to join every separator.
+function flattenPath(dirName: string, flattenDepth?: number): string {
+  const segments = dirName.split('/')
+  if (flattenDepth === undefined || segments.length <= flattenDepth) {
+    return segments.join('-')
+  }
+  return [segments.slice(0, flattenDepth).join('-'), ...segments.slice(flattenDepth)].join('/')
 }
 
 // Prefix: prepends prefix with '-' separator

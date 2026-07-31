@@ -254,8 +254,20 @@ describe('bounded flatten is not less traversal-safe than the unbounded form (#4
     expect(() => flattenPath('./evil', 1)).toThrow(/refusing to preserve/)
   })
 
-  it('the unbounded form stays safe by construction, as before', () => {
+  it('a multi-segment unbounded path stays safe by construction, as before', () => {
+    // Every separator becomes a hyphen, so the `..` is inert — unchanged.
     expect(flattenPath('../evil')).toBe('..-evil')
+  })
+
+  it('a SINGLE-segment path is refused in BOTH forms — no separator to hyphenate', () => {
+    // #411 round 4: the "safe by construction" claim covers only multi-segment
+    // paths. `flattenPath('..')` returned '..' verbatim, so the unbounded default
+    // four registries use was the LESS safe of the two once round 3 hardened the
+    // bounded form. Applied by shape now, so the two branches are symmetric.
+    expect(() => flattenPath('..')).toThrow(/refusing to preserve/)
+    expect(() => flattenPath('.')).toThrow(/refusing to preserve/)
+    expect(() => flattenPath('..', 2)).toThrow(/refusing to preserve/)
+    expect(() => flattenPath('..', 1)).toThrow(/refusing to preserve/)
   })
 
   it('a `..` in the head of a deeper bound is refused too', () => {

@@ -14,7 +14,7 @@ Introduce a `.skills/` directory within the KB dataset as the source of truth fo
 2. **Naming transforms**: Flatten (`navigator/next` → `navigator-next`) + prefix (`pair-navigator-next`) to produce unique, tool-compatible directory names. **Amended by ADR-020**: flatten joins only the registry's ENTRY segments (`flattenDepth: 2` for `skills`); a deeper segment is content *of* the skill and installs inside it (`process/review/references` → `pair-process-review/references`, not the sibling `pair-process-review-references`).
 3. **Multi-target distribution**: One canonical target (`.claude/skills/`) receives the physical copy; 5 secondary targets (`.github/skills/`, `.cursor/skills/`, `.agent/skills/`, `.agents/skills/`, `.windsurf/skills/`) receive symlinks pointing to canonical.
 4. **Link rewriting**: Relative markdown links inside skill files are rewritten after flatten/prefix copy to maintain correctness.
-5. **Configuration**: Skills registry defined in `config.json` with `flatten: true`, `flattenDepth: 2` (ADR-020), `prefix: "pair"`, `behavior: "mirror"`, and explicit `targets[]` array.
+5. **Configuration**: Skills registry defined in `config.json` with `flatten: true`, `flattenDepth: 2` (ADR-020), `prefix: "pair"`, `behavior: "overwrite"`, and explicit `targets[]` array.
 
 ## Rationale
 

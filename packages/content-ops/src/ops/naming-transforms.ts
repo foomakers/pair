@@ -49,18 +49,23 @@ function assertValidFlattenDepth(flattenDepth: number, operation: string, path: 
 }
 
 /**
- * A bounded result is joined onto a destination root by the copy pipeline, so a
- * `.`/`..` segment surviving in it could escape that root. The unbounded form is
- * traversal-safe by construction (every separator becomes a hyphen); the bounded
- * form has to say no explicitly.
+ * A result is joined onto a destination root by the copy pipeline, so a `.`/`..`
+ * segment surviving in it could escape that root.
  *
- * Checks EVERY segment, not only the preserved tail. Round-3 review of PR #411:
- * with `flattenDepth === 1` the head is a single un-joined segment, so
- * `flattenPath('../evil', 1)` returned `'../evil'` — leaving the bounded form
- * strictly LESS traversal-safe than the unbounded one it replaces, in exactly the
- * dimension this guard advertises. Not reachable through the CLI today (dir names
- * come from `dirname(relative(...))`, and no registry declares depth 1), which is
- * why it was a hole rather than a live bug.
+ * The "safe by construction" argument for the unbounded form — every separator
+ * becomes a hyphen, so `../evil` → `..-evil` is inert — holds only for a path with
+ * a separator to hyphenate. A SINGLE segment has none, in either form:
+ * `flattenPath('..')` returned `'..'` unchanged. So the guard is applied by SHAPE,
+ * not by branch (round-4 review of PR #411): every segment of a bounded result
+ * plus any single-segment result, bounded or not. That keeps the two branches
+ * symmetric — the bounded form is never LESS safe than the unbounded one it
+ * replaces (round-3's hole: `flattenPath('../evil', 1)` returned `'../evil'`), and
+ * never MORE strict than it either.
+ *
+ * Not reachable through the CLI (directory names come from
+ * `dirname(relative(root, path))`, which yields neither `.` nor `..` for a file
+ * under the root, and the source root's own files bypass the transform), so this
+ * is defensive depth for a programmatic `@pair/content-ops` caller.
  */
 function assertNoTraversal(segments: string[], dirName: string): void {
   const offender = segments.find(segment => segment === '.' || segment === '..')
@@ -95,8 +100,8 @@ function assertNoTraversal(segments: string[], dirName: string): void {
  * Omitted ⇒ every separator is flattened, exactly as before. Registries whose
  * entries are single-segment are unaffected either way.
  *
- * Throws when `flattenDepth` is present but not a positive integer, and when the
- * preserved tail contains a `.`/`..` segment (see the two assertions above).
+ * Throws when `flattenDepth` is present but not a positive integer, and when a
+ * `.`/`..` segment would survive into the result (see the two assertions above).
  */
 export function flattenPath(dirName: string, flattenDepth?: number): string {
   // Validated before ANY early return: an invalid depth must be rejected
@@ -105,17 +110,16 @@ export function flattenPath(dirName: string, flattenDepth?: number): string {
   if (flattenDepth !== undefined) assertValidFlattenDepth(flattenDepth, 'flattenPath', dirName)
   const trimmed = dirName.replace(/^\/+/, '').replace(/\/+$/, '')
   if (trimmed === '') return ''
-  if (flattenDepth === undefined) return trimmed.replace(/\//g, '-')
 
   const segments = trimmed.split('/')
+  // No separator to hyphenate ⇒ the segment survives verbatim, in BOTH forms.
+  if (segments.length === 1) assertNoTraversal(segments, dirName)
+  if (flattenDepth === undefined) return trimmed.replace(/\//g, '-')
+
   // Fewer segments than the entry depth: nothing below the entry to preserve, so
   // this is the unbounded result — a shallower entry is never padded.
-  if (segments.length <= flattenDepth) {
-    // With flattenDepth 1 a single segment is returned UN-joined, so hyphen-joining
-    // cannot neutralise a `..` here either.
-    if (segments.length === 1) assertNoTraversal(segments, dirName)
-    return segments.join('-')
-  }
+  if (segments.length <= flattenDepth) return segments.join('-')
+
   assertNoTraversal(segments, dirName)
   const tail = segments.slice(flattenDepth)
   return [segments.slice(0, flattenDepth).join('-'), ...tail].join('/')

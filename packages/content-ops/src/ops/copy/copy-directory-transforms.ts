@@ -1,9 +1,14 @@
 import { join, relative, dirname } from 'path/posix'
-import { logger, createError } from '../../observability'
+import { logger } from '../../observability'
 import { copyFileHelper } from '../../file-system'
 import { FileSystemService } from '../../file-system'
 import { SyncOptions } from '../SyncOptions'
-import { transformPath, detectCollisions, isRegistryEntryPath } from '../naming-transforms'
+import { transformPath, isRegistryEntryPath } from '../naming-transforms'
+import {
+  validateNoCollisions,
+  validateNoShallowEntryWithSubdir,
+  validateNoDeepEntry,
+} from './layout-validation'
 import { rewriteLinksAfterTransform, PathMappingEntry } from '../link-rewriter'
 import { syncFrontmatter } from '../frontmatter-transform'
 import {
@@ -37,158 +42,6 @@ async function collectFiles(
     }
   }
   return result
-}
-
-/**
- * Collects unique subdirectory names from a file list, validates no
- * flatten collisions exist, and throws if any are found.
- */
-function validateNoCollisions(
-  files: string[],
-  transformOpts: TransformOpts,
-  srcPath: string,
-): void {
-  const dirSet = new Set<string>()
-  for (const filePath of files) {
-    const dir = dirname(filePath)
-    if (dir !== '.') dirSet.add(dir)
-  }
-  const transformedDirs = [...dirSet].map(d => transformPath(d, transformOpts))
-  const collisions = detectCollisions(transformedDirs)
-  if (collisions.length > 0) {
-    throw createError({
-      type: 'IO_ERROR',
-      message: `Flatten naming collision detected: ${collisions.join(', ')}. Different source paths resolve to the same target name.`,
-      operation: 'copyDir',
-      path: srcPath,
-    })
-  }
-}
-
-/**
- * Two facts about the source tree's shape, from the flat file list: which
- * directories hold files DIRECTLY, and for each directory one example
- * sub-directory (ancestors included, since a file list only names leaf dirs).
- * Consumed by `validateNoShallowEntryWithSubdir`.
- */
-function collectDirShapes(files: string[]): {
-  dirsWithOwnFiles: Set<string>
-  firstChildDirOf: Map<string, string>
-} {
-  const dirsWithOwnFiles = new Set<string>()
-  const firstChildDirOf = new Map<string, string>()
-  for (const filePath of files) {
-    const dir = dirname(filePath)
-    // The source ROOT is never an entry: its files are copied straight to the
-    // destination root, untransformed.
-    if (dir === '.') continue
-    dirsWithOwnFiles.add(dir)
-    const segments = dir.split('/')
-    for (let i = 1; i < segments.length; i++) {
-      const parent = segments.slice(0, i).join('/')
-      if (!firstChildDirOf.has(parent)) {
-        firstChildDirOf.set(parent, segments.slice(0, i + 1).join('/'))
-      }
-    }
-  }
-  return { dirsWithOwnFiles, firstChildDirOf }
-}
-
-/**
- * Rejects the one source shape a bounded flatten cannot represent: an entry that
- * sits SHALLOWER than `flattenDepth` and owns a sub-directory (#407 review).
- *
- * `flattenDepth` is a positional statement about the source layout — "an entry is
- * N segments deep" (ADR-020). A registry whose entries are not all at that depth
- * breaks it: in `.skills/` today `next/` is a ONE-segment entry while
- * `process/review/` is two, so `next/references` — content of `next` — has the
- * same shape as the entry `process/review`. It would install as the sibling
- * `pair-next-references/`, reintroducing for `next` all four defects this option
- * removes for a two-segment entry: misplacement outside the skill, a dead
- * `./references/…` forward link, a bogus `references` skill-name mapping that
- * leaks into unrelated files, and a path written as the sub-doc's `name:`.
- *
- * That shape is unrepresentable, not merely unhandled, so it fails loudly here —
- * before any file is copied — rather than being guessed at. A category directory
- * (only sub-directories) and an entry (files of its own) are told apart by
- * whether the directory holds files DIRECTLY: no `SKILL.md` knowledge, per
- * ADR-020's coupling argument. Files at the source ROOT are exempt: they are
- * copied straight to the destination root and are never entries.
- */
-function validateNoShallowEntryWithSubdir(
-  files: string[],
-  transformOpts: TransformOpts,
-  srcPath: string,
-): void {
-  const { flattenDepth } = transformOpts
-  if (!transformOpts.flatten || flattenDepth === undefined || flattenDepth < 2) return
-
-  const { dirsWithOwnFiles, firstChildDirOf } = collectDirShapes(files)
-
-  for (const dir of dirsWithOwnFiles) {
-    const depth = dir.split('/').length
-    if (depth >= flattenDepth) continue
-    const child = firstChildDirOf.get(dir)
-    if (child === undefined) continue
-    throw createError({
-      type: 'IO_ERROR',
-      message:
-        `Ambiguous layout for a bounded flatten (flattenDepth=${flattenDepth}): '${dir}' is ${depth} segment(s) deep, ` +
-        `holds files directly AND owns the sub-directory '${child}'. '${child}' is ${flattenDepth} segment(s) deep, so it cannot be told apart ` +
-        `from a real entry and would install as a sibling entry instead of inside '${dir}'. ` +
-        `Move '${dir}' ${flattenDepth - depth} level(s) deeper (e.g. under a category directory), or drop the sub-directory.`,
-      operation: 'copyDir',
-      path: join(srcPath, dir),
-    })
-  }
-}
-
-/**
- * The DEEPER half of the same layout mismatch, and the reason it needs its own
- * rule: `validateNoShallowEntryWithSubdir` above rejects an entry SHALLOWER than
- * `flattenDepth`. An entry DEEPER than it is equally unrepresentable and was
- * silently mis-installed — a regression introduced by the bounded flatten itself.
- *
- * `capability/sub/foo/SKILL.md` (three segments, `flattenDepth` 2) installed at
- * `pair-capability-sub/foo/SKILL.md`: a pseudo-entry directory with NO `SKILL.md`
- * at its root, so the skill loader never sees the skill. Two further defects
- * followed silently, because `isRegistryEntryPath` reports false for it: the
- * frontmatter `name:` was left unsynced, and no entry reached `skillNameMap`, so
- * a `/foo` reference in an unrelated skill stayed dangling. Before the bounded
- * flatten the same source produced a perfectly usable `pair-capability-sub-foo/`.
- *
- * Telling a too-deep ENTRY from legitimate CONTENT uses the shape data already
- * collected, with no `SKILL.md` knowledge (ADR-020's coupling argument): a
- * directory deeper than `flattenDepth` that holds files directly is content **iff**
- * its nearest ancestor at depth <= `flattenDepth` also holds files directly — that
- * ancestor is the entry the content belongs to. `process/review/references` passes
- * (its depth-2 ancestor `process/review` holds files); `capability/sub/foo` fails
- * (`capability/sub` holds none, so nothing owns it).
- */
-function validateNoDeepEntry(files: string[], transformOpts: TransformOpts, srcPath: string): void {
-  const { flattenDepth } = transformOpts
-  if (!transformOpts.flatten || flattenDepth === undefined || flattenDepth < 1) return
-
-  const { dirsWithOwnFiles } = collectDirShapes(files)
-
-  for (const dir of dirsWithOwnFiles) {
-    const segments = dir.split('/')
-    if (segments.length <= flattenDepth) continue
-    const ancestor = segments.slice(0, flattenDepth).join('/')
-    if (dirsWithOwnFiles.has(ancestor)) continue // content of a real entry
-    throw createError({
-      type: 'IO_ERROR',
-      message:
-        `Ambiguous layout for a bounded flatten (flattenDepth=${flattenDepth}): '${dir}' is ` +
-        `${segments.length} segment(s) deep and holds files directly, but its ancestor at depth ` +
-        `${flattenDepth} ('${ancestor}') holds none — so nothing owns it as content and it is an ` +
-        `entry too deep. It would install at a path with no entry root, invisible to the skill ` +
-        `loader, with an unsynced frontmatter name and no skill-name mapping. ` +
-        `Move it to depth ${flattenDepth}, or give '${ancestor}' files of its own.`,
-      operation: 'copyDir',
-      path: join(srcPath, dir),
-    })
-  }
 }
 
 /**
@@ -341,18 +194,35 @@ async function copyAllFilesWithTransform(params: {
 }
 
 /**
- * Copies a directory with flatten/prefix naming transforms applied.
- * Each file's directory path (relative to source) is transformed, then
- * the file is copied to the transformed location under the target.
+ * The naming-transform options for this copy, from the caller's `SyncOptions`.
+ *
+ * `flattenDepth` is DROPPED when `flatten` is false, deliberately: it is a bound
+ * ON flattening, so with no flattening there is nothing to bound. Keeping it
+ * would leave the pipeline internally inconsistent — `transformPath` ignores the
+ * depth unless `flatten` is set, while `isRegistryEntryPath` consults it
+ * unconditionally, so a `{ flatten: false, flattenDepth: 2 }` copy would apply an
+ * UNBOUNDED path transform yet classify a third-level directory as content
+ * (silently dropping it from the skill-name map and the frontmatter `name:` sync).
+ * The CLI rejects that combination at config validation
+ * (`validateFlattenDepthField`), but `copyDirectoryWithTransforms` is public API
+ * of `@pair/content-ops`; normalising here keeps ONE source of truth for
+ * "bounded?" instead of gating every consumer of the option (#411 review).
  */
 function buildTransformOpts(options?: SyncOptions): TransformOpts {
   const flatten = options?.flatten ?? false
   const prefix = options?.prefix
-  const flattenDepth = options?.flattenDepth
+  const flattenDepth = flatten ? options?.flattenDepth : undefined
   const base: TransformOpts = flattenDepth === undefined ? { flatten } : { flatten, flattenDepth }
   return prefix ? { ...base, prefix } : base
 }
 
+/**
+ * Copies a directory with flatten/prefix naming transforms applied.
+ * Each file's directory path (relative to source) is transformed, then the file
+ * is copied to the transformed location under the target. Source-layout
+ * invariants are checked FIRST (see `layout-validation.ts`), so an unrepresentable
+ * layout aborts before anything is written.
+ */
 export async function copyDirectoryWithTransforms(params: {
   fileService: FileSystemService
   srcPath: string
@@ -415,10 +285,20 @@ export async function copyDirectoryWithTransforms(params: {
  * because one source subdirectory then maps to exactly one top-level target
  * directory. Under a BOUNDED flatten (`flattenDepth`, #407) a source
  * subdirectory maps to a target SUB-PATH instead, so cleanup descends into a
- * transformed entry as well: without that, a `references/` removed from the
- * source would stay installed forever and its progressive-disclosure docs would
- * keep being loaded. Descent is gated on `flattenDepth` being present, so the
- * unbounded path stays byte-for-byte as before.
+ * transformed entry as well: at that granularity a `references/` removed from the
+ * source is what would otherwise stay installed forever, with its
+ * progressive-disclosure docs still being loaded. Descent is gated on
+ * `flattenDepth` being present, so the unbounded path stays byte-for-byte as before.
+ *
+ * NOT a live fix — FORWARD-COMPATIBILITY, and deliberately so: this whole
+ * function runs only under `behavior: 'mirror'`, and the one registry declaring
+ * `flattenDepth` today (`skills`) declares `behavior: 'overwrite'`, so on the real
+ * `pair update` path a deleted `references/` still survives — exactly as a deleted
+ * whole skill directory always has under `overwrite`. The descent keeps the
+ * library's mirror contract correct at the granularity the bounded flatten
+ * introduced, for a `skills` flip to `mirror` or any other registry adopting the
+ * option; it is exercised by unit tests, not by production configuration.
+ * Recorded as an ACCEPTED RESIDUAL in ADR-020's Trade-offs (#411 review).
  *
  * `topLevelFiles` (file names copied directly from the source root, with no
  * subdirectory of their own) must be included in `expected` alongside the
