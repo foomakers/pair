@@ -116,8 +116,22 @@ jobs:
           echo "coverage: brand(shared)=${BRAND_PCT}%  website(frontend)=${WEBSITE_PCT}%"
           # Hand the measured numbers to the commit-back step (#372) so the
           # extraction is not duplicated. Values only — no decision is made here.
-          echo "PAIR_COV_SHARED=${BRAND_PCT}" >>"$GITHUB_ENV"
-          echo "PAIR_COV_FRONTEND=${WEBSITE_PCT}" >>"$GITHUB_ENV"
+          # VALIDATED before writing: $GITHUB_ENV is the classic Actions
+          # environment-injection sink, and a value carrying a newline would
+          # define arbitrary further variables for every later step. These come
+          # from a coverage report, so a stray value is a tooling bug rather than
+          # an attack — but the guard costs one case statement and removes the
+          # sink entirely. A non-numeric value is dropped with a warning: the
+          # ratchet then sees no measurement and proposes nothing, which is the
+          # conservative outcome (it never blocks the gate — AC6).
+          for kv in "PAIR_COV_SHARED=${BRAND_PCT}" "PAIR_COV_FRONTEND=${WEBSITE_PCT}"; do
+            case "${kv#*=}" in
+              '' | *[!0-9.]*)
+                echo "::warning::${kv%%=*}: non-numeric coverage value, not exported to the ratchet"
+                ;;
+              *) echo "$kv" >>"$GITHUB_ENV" ;;
+            esac
+          done
           coverage_gate "$TIER" shared   "$BRAND_PCT"   "$CFG"
           coverage_gate "$TIER" frontend "$WEBSITE_PCT" "$CFG"
       # Coverage baseline commit-back (story #372) — OPT-IN and nested under the
