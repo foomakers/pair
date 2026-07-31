@@ -19,9 +19,11 @@
  * The guard must survive INDIRECTION, because the gate no longer names a
  * formatter — it delegates (`pnpm format:check`). Scanning the gate string alone
  * would miss the likeliest regression: editing the gate to `pnpm format`, or
- * redefining `format:check` as `turbo prettier:fix`. So every `pnpm <script>` /
- * `pnpm run <script>` reference is expanded transitively against the root scripts
- * before scanning.
+ * redefining `format:check` as `turbo prettier:fix`. So every package-runner
+ * reference to a root script is expanded transitively against the root scripts
+ * before scanning — tolerating runner flags (`pnpm -s format`, `pnpm -w format`)
+ * and the `npm run` / `yarn` spellings, since a single token between the runner
+ * and the script name would otherwise defeat the whole expansion.
  *
  * Per the gate-tooling ADL (2026-07-13) the logic lives here as a tested module;
  * `main()` behind a `require.main` guard is the thin CLI — the ADR-014 shape
@@ -41,12 +43,55 @@ export const REPO_ROOT = resolve(__dirname, '..', '..', '..', '..')
 export const ROOT_PACKAGE_JSON = resolve(REPO_ROOT, 'package.json')
 
 /**
- * The two write-mode formatters, plus the shell entrypoint that bypasses turbo.
+ * Every shape in which the two formatters can be invoked in WRITE mode. Both
+ * tools are reachable three ways — the turbo task, the package's `bin` alias (as
+ * a name or as the `.sh` file it points at), and the underlying CLI with its
+ * write flag — and an asymmetric list would ban one tool's shell entrypoint while
+ * letting the other's through, which is exactly how the regression comes back.
+ *
  * Deliberately an explicit list rather than a `/:fix/` pattern: `lint:fix` is an
- * eslint autofix, a different concern, and banning every `:fix` string would
- * make the guard fire on things it has no opinion about.
+ * eslint autofix, a different concern, and banning every `:fix` string would make
+ * the guard fire on things it has no opinion about.
+ *
+ * The CLI patterns stop at a command separator (`&& | ; { }`), so `prettier:check`
+ * in one command cannot pair up with a `--write` belonging to another.
  */
-const WRITE_MODE_FORMATTERS = ['prettier:fix', 'mdlint:fix', 'markdownlint-fix.sh'] as const
+const WRITE_MODE_FORMATTERS: readonly { readonly name: string; readonly pattern: RegExp }[] = [
+  { name: 'prettier:fix', pattern: /\bprettier:fix\b/ },
+  { name: 'mdlint:fix', pattern: /\bmdlint:fix\b/ },
+  { name: 'prettier-fix', pattern: /\bprettier-fix(?:\.sh)?\b/ },
+  { name: 'markdownlint-fix', pattern: /\bmarkdownlint-fix(?:\.sh)?\b/ },
+  { name: 'prettier --write', pattern: /\bprettier\b[^&|;{}\n]*\s--write\b/ },
+  { name: 'markdownlint --fix', pattern: /\bmarkdownlint\b[^&|;{}\n]*\s--fix\b/ },
+]
+
+/** The package runners a root script can delegate through. */
+const RUNNER = '(?:pnpm|npm|yarn)'
+
+/**
+ * Runner flags between the runner and the script name (`-s`, `-w`, `--silent`,
+ * `--filter=x`). Without this, the captured "script name" is the flag, the lookup
+ * misses, and the referenced body is never scanned.
+ */
+const RUNNER_FLAGS = '(?:\\s+-{1,2}[A-Za-z0-9-]+(?:=\\S+)?)*'
+
+/** Characters a script name may contain (`format:check`, `@scope/pkg`). */
+const SCRIPT_NAME = '[A-Za-z0-9_:@./-]+'
+
+/** `pnpm x` / `pnpm run x` / `pnpm -s x` / `npm run x` / `yarn x`, capturing x. */
+function scriptReference(name: string = SCRIPT_NAME): RegExp {
+  return new RegExp(`\\b${RUNNER}${RUNNER_FLAGS}\\s+(?:run\\s+)?(${name})`, 'g')
+}
+
+/** Escapes a script name for literal use inside a pattern (`:` and `.` are safe). */
+function escapeForPattern(name: string): string {
+  return name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Whether a command invokes `<runner> <script>` — not merely mentions its name. */
+export function referencesScript(command: string, script: string): boolean {
+  return scriptReference(escapeForPattern(script)).test(command)
+}
 
 /** The root script the gate must keep calling — drop it and the guard is gone. */
 export const GUARD_SCRIPT = 'gate:composition'
@@ -63,19 +108,19 @@ export const PRE_PUSH_REMEDY =
 const MAX_EXPANSION_DEPTH = 10
 
 /**
- * Every write-mode formatter present in a gate command, in the order they are
- * declared. Returns all offenders rather than the first, so a partial fix cannot
- * look clean.
+ * Every write-mode formatter present in a gate command, in the order the offender
+ * list declares them (not the order the command names them). Returns all
+ * offenders rather than the first, so a partial fix cannot look clean.
  */
 export function findWriteModeFormatters(gateCommand: string): string[] {
-  return WRITE_MODE_FORMATTERS.filter(f => gateCommand.includes(f))
+  return WRITE_MODE_FORMATTERS.filter(f => f.pattern.test(gateCommand)).map(f => f.name)
 }
 
 /**
- * Inlines `pnpm <script>` / `pnpm run <script>` references to sibling root
- * scripts, transitively, so the scan sees what the gate ACTUALLY runs instead of
- * the name it hides behind. Bounded depth + visited set: a script that reaches
- * itself is expanded once, never forever.
+ * Inlines runner references to sibling root scripts (`pnpm x`, `pnpm run x`,
+ * `pnpm -s x`, `npm run x`, `yarn x`), transitively, so the scan sees what the
+ * gate ACTUALLY runs instead of the name it hides behind. Bounded depth + visited
+ * set: a script that reaches itself is expanded once, never forever.
  *
  * The reference is kept next to its expansion (`pnpm x { … }`) so a failure
  * message shows the delegation path that reached the offender.
@@ -87,7 +132,7 @@ export function expandScriptReferences(
   depth = 0,
 ): string {
   if (depth >= MAX_EXPANSION_DEPTH) return command
-  return command.replace(/\bpnpm\s+(?:run\s+)?([A-Za-z0-9_:@./-]+)/g, (match, name: string) => {
+  return command.replace(scriptReference(), (match, name: string) => {
     const body = scripts[name]
     if (typeof body !== 'string' || visited.has(name)) return match
     const seen = new Set(visited)
@@ -101,10 +146,24 @@ export interface GateCheckResult {
   message: string
 }
 
+/** Names the offenders AND the resolved delegation path that reached them. */
+function writeModeFailure(offenders: string[], expanded: string): GateCheckResult {
+  return {
+    ok: false,
+    message:
+      `quality-gate reaches ${offenders.length} formatter(s) in WRITE mode: ${offenders.join(', ')}.\n` +
+      `Resolved gate: ${expanded}\n` +
+      `At pre-push the commits already exist, so this rewrites the working tree and cannot fix\n` +
+      `what is being pushed — it only pollutes the next diff with unrelated files.\n` +
+      `Use the :check variants and keep the fix in \`pnpm format\`. ${PRE_PUSH_REMEDY}`,
+  }
+}
+
 /**
  * Checks the repo's own gate composition and reports:
  * 1. any write-mode formatter reachable from it (directly or via delegation),
- * 2. the gate having dropped the guard itself (`pnpm gate:composition`),
+ * 2. the gate having stopped RUNNING the guard itself (`pnpm gate:composition`) —
+ *    `referencesScript`, not a substring, so `echo gate:composition` does not count,
  * 3. the remedy script named in the failure message having disappeared.
  *
  * Takes the file TEXT (not a path) so it is testable without a fixture on disk
@@ -128,19 +187,9 @@ export function checkRootGate(packageJsonText: string): GateCheckResult {
   const expanded = expandScriptReferences(scripts, gate)
 
   const offenders = findWriteModeFormatters(expanded)
-  if (offenders.length > 0) {
-    return {
-      ok: false,
-      message:
-        `quality-gate reaches ${offenders.length} formatter(s) in WRITE mode: ${offenders.join(', ')}.\n` +
-        `Resolved gate: ${expanded}\n` +
-        `At pre-push the commits already exist, so this rewrites the working tree and cannot fix\n` +
-        `what is being pushed — it only pollutes the next diff with unrelated files.\n` +
-        `Use the :check variants and keep the fix in \`pnpm format\`. ${PRE_PUSH_REMEDY}`,
-    }
-  }
+  if (offenders.length > 0) return writeModeFailure(offenders, expanded)
 
-  if (!expanded.includes(GUARD_SCRIPT)) {
+  if (!referencesScript(expanded, GUARD_SCRIPT)) {
     return {
       ok: false,
       message:

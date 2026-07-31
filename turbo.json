@@ -1,5 +1,13 @@
 {
   "$schema": "https://turborepo.org/schema.json",
+  "//": "globalDependencies: the formatter tasks are cacheable, and since #394 their ignore SOURCES include the repo-root .gitignore plus the shared ignore files and the bin wrappers that pass them. Without this, adding a generated dir to .gitignore touches no package file, so turbo replays a pre-change result — a stale PASS, or a stale FAIL a developer cannot clear.",
+  "globalDependencies": [
+    ".gitignore",
+    "tools/prettier-config/.prettierignore",
+    "tools/prettier-config/bin/**",
+    "tools/markdownlint-config/.markdownlintignore",
+    "tools/markdownlint-config/bin/**"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

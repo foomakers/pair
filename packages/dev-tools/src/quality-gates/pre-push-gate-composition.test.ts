@@ -3,6 +3,7 @@ import { readFileSync } from 'fs'
 import {
   findWriteModeFormatters,
   expandScriptReferences,
+  referencesScript,
   checkRootGate,
   checkThisRepoGate,
   ROOT_PACKAGE_JSON,
@@ -22,7 +23,8 @@ import {
 //
 // This guard exists because the regression is a one-word edit away, and its
 // symptom (a diff polluted with unrelated files) looks like author error rather
-// than tooling behaviour. Twice in one day it polluted a PR here.
+// than tooling behaviour. Three times in two days it polluted a PR here (#388,
+// #408, #411 — see the ADL's Context).
 describe('the pre-push gate never runs a formatter in write mode (#394)', () => {
   it('flags prettier:fix', () => {
     expect(findWriteModeFormatters('turbo ts:check test lint && turbo prettier:fix')).toEqual([
@@ -39,7 +41,31 @@ describe('the pre-push gate never runs a formatter in write mode (#394)', () => 
   it('flags the markdownlint-fix shell entrypoint, not only the turbo task', () => {
     expect(
       findWriteModeFormatters("./tools/markdownlint-config/bin/markdownlint-fix.sh '*.md'"),
-    ).toEqual(['markdownlint-fix.sh'])
+    ).toEqual(['markdownlint-fix'])
+  })
+
+  // The offender list must be SYMMETRIC across the two tools: listing markdownlint's
+  // shell entrypoint while omitting prettier's makes the prettier `.sh`/bin form an
+  // equally plausible regression that walks straight past the guard.
+  it("flags the prettier-fix shell entrypoint too, not only markdownlint's", () => {
+    expect(findWriteModeFormatters('./tools/prettier-config/bin/prettier-fix.sh')).toEqual([
+      'prettier-fix',
+    ])
+  })
+
+  it('flags the bin aliases the tool packages declare (`turbo prettier-fix`)', () => {
+    expect(findWriteModeFormatters('turbo prettier-fix')).toEqual(['prettier-fix'])
+    expect(findWriteModeFormatters('turbo markdownlint-fix')).toEqual(['markdownlint-fix'])
+  })
+
+  it('flags the raw CLIs with their write flag, bypassing every alias', () => {
+    expect(findWriteModeFormatters('prettier --write .')).toEqual(['prettier --write'])
+    expect(findWriteModeFormatters("markdownlint --fix '**/*.md'")).toEqual(['markdownlint --fix'])
+  })
+
+  it('does not pair a check-mode invocation with a --write from another command', () => {
+    // The write flag belongs to the second command; `prettier:check` is innocent.
+    expect(findWriteModeFormatters('turbo prettier:check && other-tool --write')).toEqual([])
   })
 
   it('flags every offender, so a partial fix cannot look clean', () => {
@@ -88,6 +114,27 @@ describe('script references are expanded transitively before scanning (#394)', (
     expect(findWriteModeFormatters(expanded)).toEqual(['prettier:fix'])
   })
 
+  // A single token between the runner and the script name used to defeat the whole
+  // expansion: the captured "name" became the flag, the lookup missed, and the
+  // referenced body was never scanned — `pnpm -s format` in the gate passed green.
+  it.each(['pnpm -s format', 'pnpm -w format', 'pnpm --silent format', 'pnpm -r run format'])(
+    'inlines a reference carrying runner flags: %s',
+    command => {
+      const expanded = expandScriptReferences({ format: 'turbo prettier:fix' }, command)
+      expect(findWriteModeFormatters(expanded)).toEqual(['prettier:fix'])
+    },
+  )
+
+  // The repo standardizes on pnpm, but nothing stops an edit from spelling the
+  // delegation with npm/yarn, and the offending write would run all the same.
+  it.each(['npm run format', 'yarn format', 'yarn run format'])(
+    'inlines the npm/yarn spellings too: %s',
+    command => {
+      const expanded = expandScriptReferences({ format: 'turbo prettier:fix' }, command)
+      expect(findWriteModeFormatters(expanded)).toEqual(['prettier:fix'])
+    },
+  )
+
   it('follows more than one hop (gate -> format:check -> mdlint:fix)', () => {
     const expanded = expandScriptReferences(
       {
@@ -113,6 +160,22 @@ describe('script references are expanded transitively before scanning (#394)', (
   it('leaves an unknown reference alone (a package script is not a root script)', () => {
     const expanded = expandScriptReferences({}, 'pnpm --filter @pair/dev-tools pre-push-gate:check')
     expect(expanded).toBe('pnpm --filter @pair/dev-tools pre-push-gate:check')
+  })
+})
+
+// The guard-present check must require the gate to RUN the guard. Substring
+// matching accepts anything that merely NAMES it — `echo gate:composition`, or a
+// comment — which is a green guard doing nothing.
+describe('referencesScript distinguishes running a script from naming it (#394)', () => {
+  it('accepts a real invocation, with or without flags/`run`', () => {
+    expect(referencesScript(`pnpm ${GUARD_SCRIPT}`, GUARD_SCRIPT)).toBe(true)
+    expect(referencesScript(`pnpm run ${GUARD_SCRIPT}`, GUARD_SCRIPT)).toBe(true)
+    expect(referencesScript(`pnpm -s ${GUARD_SCRIPT}`, GUARD_SCRIPT)).toBe(true)
+  })
+
+  it('rejects a mention that runs nothing', () => {
+    expect(referencesScript(`echo ${GUARD_SCRIPT}`, GUARD_SCRIPT)).toBe(false)
+    expect(referencesScript(`# keep ${GUARD_SCRIPT} in the gate`, GUARD_SCRIPT)).toBe(false)
   })
 })
 
@@ -168,9 +231,32 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
     expect(r.message).toContain('prettier:fix')
   })
 
+  it.each([
+    ['a flagged reference', 'turbo lint && pnpm -s format'],
+    ['the npm spelling', 'turbo lint && npm run format'],
+  ])('fails when the gate reaches the formatter through %s', (_label, gate) => {
+    const r = checkRootGate(pkg({ 'quality-gate': `${gate} && pnpm ${GUARD_SCRIPT}` }))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('prettier:fix')
+  })
+
+  it('fails when a gate script calls the prettier bin wrapper directly', () => {
+    const r = checkRootGate(pkg({ 'format:check': './tools/prettier-config/bin/prettier-fix.sh' }))
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('prettier-fix')
+  })
+
   it('fails when the gate drops the guard itself', () => {
     const r = checkRootGate(
       pkg({ 'quality-gate': 'turbo ts:check test lint && pnpm format:check && pnpm dup:check' }),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain(GUARD_SCRIPT)
+  })
+
+  it('fails when the gate only MENTIONS the guard instead of running it', () => {
+    const r = checkRootGate(
+      pkg({ 'quality-gate': `turbo lint && pnpm format:check && echo ${GUARD_SCRIPT}` }),
     )
     expect(r.ok).toBe(false)
     expect(r.message).toContain(GUARD_SCRIPT)
