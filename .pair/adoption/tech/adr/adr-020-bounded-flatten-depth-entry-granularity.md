@@ -60,7 +60,7 @@ Corollary, recorded because it is not obvious: once flatten is bounded, a sub-di
 - A skill may ship a nested `references/` (or any sub-dir) and it installs **inside** the skill, with both link directions intact — the standard progressive-disclosure layout becomes usable in the pair corpus.
 - Non-skill registries are byte-for-byte unaffected; the change is provably scoped by the absence of the option.
 - An invalid depth fails loudly at config validation (`pair update`/`install`/`package`) and in `flattenPath` itself, instead of silently reverting to the defect.
-- A bounded flatten cannot produce a traversal-unsafe result: a `.`/`..` segment that would survive into the result is rejected rather than joined onto the destination root. Applied by SHAPE, not by branch, so the two forms stay symmetric — the unbounded form's "safe by construction" argument (every separator becomes a hyphen) does not cover a single-segment path, which has no separator, so that case is rejected in both forms.
+- A bounded flatten cannot produce a traversal-unsafe result: a `.`/`..` segment that would survive into the result is rejected rather than joined onto the destination root. Applied by SHAPE, not by branch — the unbounded form's "safe by construction" argument (every separator becomes a hyphen) does not cover a single-segment path, which has no separator, so that case is rejected in both forms. The invariant is that each form is checked exactly where its own output could carry a live `.`/`..`, so neither form is less safe than the other; they are deliberately NOT equally strict, since a preserved tail is live where a hyphenated segment is inert.
 
 ### Trade-offs and Limitations
 

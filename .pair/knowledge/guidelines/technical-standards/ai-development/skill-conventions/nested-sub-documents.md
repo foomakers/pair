@@ -29,9 +29,9 @@ The sub-directory installs **inside** the skill, not as a sibling directory of i
 - **Relative links keep working in both directions.** `SKILL.md` → `./references/deep-dive.md` and `deep-dive.md` → `../SKILL.md` are both correct in the source tree AND in the installed tree, because the whole directory moves together. Write plain relative links; do not pre-compensate for the install path. (True for a skill at the standard `<category>/<skill-name>` depth — see the exclusions below.)
 - **A sub-document is content, not a skill.** It is not a separate installed entry, gets no name prefix, and its frontmatter (if any) is left alone. Do not give a sub-document a `name:` matching a skill name, and do not expect a sub-directory name to be invocable.
 
-## The two exclusions: every entry must sit at the declared depth
+## The two exclusions: layouts the entry depth cannot represent
 
-The pipeline is told **how deep an entry is** (`flattenDepth` in the registry config — 2 for `<category>/<skill-name>`) and cannot represent a directory holding files at any other depth. Both sides fail the copy **loudly**, before a single file is written, rather than installing something broken.
+The pipeline is told **how deep an entry is** (`flattenDepth` in the registry config — 2 for `<category>/<skill-name>`). A directory holding files at another depth is tolerated while it stays unambiguous — pair's own root-level `next` skill installs fine as `pair-next` — and becomes unrepresentable only in the two shapes below. Both fail the copy **loudly**, before a single file is written, rather than installing something broken.
 
 ### Too shallow: a directory above the entry depth that holds files of its own
 
@@ -57,3 +57,4 @@ A `SKILL.md` one level too deep (`<category>/<sub>/<skill-name>/SKILL.md` at `fl
 2. **Point at sub-documents with relative links** from `SKILL.md`, at the step that needs them, so the executor follows the pointer when it gets there — the same way it follows pointers to guideline files.
 3. **Keep the entrypoint self-sufficient for the happy path.** A sub-document is for depth (long catalogs, worked examples, edge-case tables), not for material the skill needs on every run.
 4. **One level is usually enough.** Deeper nesting is preserved too, but it costs the reader a hop for no gain in most cases.
+5. **Link a sub-document only from within its own skill.** Link rewriting for content OUTSIDE the skills registry (a knowledge-base guideline, an `AGENTS.md`) maps a skill's **entrypoint** path only — `<registry>/<category>/<skill-name>/SKILL.md` → the installed skill directory. A link from outside to a sub-document path is left pointing at the source tree, which a consuming project does not install: a silently dead link. From outside, link the skill's `SKILL.md` and let it point onward (rule 2); per-file mappings are the follow-up if a direct deep link ever becomes necessary. Links *inside* the copied registry are rebased by the copy itself, so this constrains only the cross-registry direction.

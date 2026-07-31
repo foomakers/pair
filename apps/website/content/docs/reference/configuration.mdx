@@ -122,7 +122,7 @@ Compare with the unbounded result for the same source: `.claude/skills/pair-proc
 Notes:
 - Set it when your registry's entries own sub-directories (e.g. an Agent Skills `references/` progressive-disclosure directory).
 - A directory deeper than `flattenDepth` is treated as **content**, not an entry: it gets no prefix, no frontmatter `name` sync, and no skill-reference mapping.
-- Every entry must sit at that same depth. A source layout the depth cannot represent — an entry shallower than `flattenDepth` that owns a sub-directory, or one deeper than it — **aborts the copy** with an explicit error instead of installing something broken.
+- Entries normally all sit at that depth, and a mixed-depth corpus is still workable: a shallower entry is fine while it owns no sub-directory (pair's own root-level `next` skill installs beside 39 two-segment ones), and **aborts the copy** only once it does. So does an entry deeper than the depth that nothing owns as content. Either way the copy fails with an explicit error before writing anything, instead of installing something broken.
 
 ## Example: Skills Registry
 

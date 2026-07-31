@@ -87,6 +87,7 @@ For the **folder-organized layout**, start with a single assistant:
       "source": ".skills",
       "behavior": "mirror",
       "flatten": true,
+      "flattenDepth": 2,
       "prefix": "acme",
       "description": "Acme team skills",
       "targets": [
@@ -97,6 +98,8 @@ For the **folder-organized layout**, start with a single assistant:
 }
 ```
 
+`flattenDepth: 2` says an entry is `<category>/<name>` deep, so anything below it (a skill's `references/` progressive-disclosure directory) installs **inside** the skill instead of beside it. Set it whenever your skills own sub-directories — see [Bounded Flattening](/docs/reference/configuration#bounded-flattening-flattendepth).
+
 This delivers all skills to Claude. When your team adopts other assistants (GitHub Copilot, Cursor, Windsurf), update `targets`:
 
 ```json
@@ -106,6 +109,7 @@ This delivers all skills to Claude. When your team adopts other assistants (GitH
       "source": ".skills",
       "behavior": "mirror",
       "flatten": true,
+      "flattenDepth": 2,
       "prefix": "acme",
       "description": "Acme team skills",
       "targets": [

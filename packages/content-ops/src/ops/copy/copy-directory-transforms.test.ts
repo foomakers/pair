@@ -415,6 +415,30 @@ describe('copyDirectoryWithTransforms (via copyPathOps, flatten/prefix)', () => 
       ).rejects.toThrow(/entry too deep|holds none/)
     })
 
+    // Round-5 Minor on PR #411: the second way out ("give the ancestor files of
+    // its own") makes THIS rule pass by reclassifying the offender as content —
+    // which, for a registry whose entries carry an entrypoint file, produces the
+    // very non-invocable install the same message cites as the reason to reject.
+    // Consumers of this package have no `skills:conformance` gate to catch the
+    // follow-on shape, so the advice must stay qualified.
+    it('qualifies the "give the ancestor files" remedy as content-only (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/capability/sub/foo/SKILL.md': '---\nname: foo\n---\n# /foo',
+      })
+
+      await expect(
+        copyPathOps({
+          fileService,
+          source: 'source',
+          target: 'target',
+          datasetRoot: '/dataset',
+          options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+        }),
+      ).rejects.toThrow(
+        /IF 'capability\/sub\/foo' is meant to be CONTENT of it .* installs as content, not as an entry/s,
+      )
+    })
+
     // The rule must NOT fire on legitimate content, which is the whole point of
     // the story: `references` is deeper than flattenDepth too, but its depth-2
     // ancestor holds files, so something owns it.

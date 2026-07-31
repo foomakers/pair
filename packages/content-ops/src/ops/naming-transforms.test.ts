@@ -263,7 +263,10 @@ describe('bounded flatten is not less traversal-safe than the unbounded form (#4
     // #411 round 4: the "safe by construction" claim covers only multi-segment
     // paths. `flattenPath('..')` returned '..' verbatim, so the unbounded default
     // four registries use was the LESS safe of the two once round 3 hardened the
-    // bounded form. Applied by shape now, so the two branches are symmetric.
+    // bounded form. Applied by shape now, so neither form is less safe than the
+    // other — NOT equally strict: see 'still flattens a .. into a hyphen when it
+    // sits within the entry segments' for the deliberate asymmetry (a preserved
+    // sub-path is live, a hyphenated one is inert).
     expect(() => flattenPath('..')).toThrow(/refusing to preserve/)
     expect(() => flattenPath('.')).toThrow(/refusing to preserve/)
     expect(() => flattenPath('..', 2)).toThrow(/refusing to preserve/)

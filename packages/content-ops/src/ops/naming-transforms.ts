@@ -57,10 +57,17 @@ function assertValidFlattenDepth(flattenDepth: number, operation: string, path: 
  * a separator to hyphenate. A SINGLE segment has none, in either form:
  * `flattenPath('..')` returned `'..'` unchanged. So the guard is applied by SHAPE,
  * not by branch (round-4 review of PR #411): every segment of a bounded result
- * plus any single-segment result, bounded or not. That keeps the two branches
- * symmetric — the bounded form is never LESS safe than the unbounded one it
- * replaces (round-3's hole: `flattenPath('../evil', 1)` returned `'../evil'`), and
- * never MORE strict than it either.
+ * plus any single-segment result, bounded or not.
+ *
+ * The invariant is "each form is validated exactly where its OWN output could
+ * carry a live `.`/`..`", which is what makes neither form less safe than the
+ * other — not equal strictness. The bounded form is deliberately stricter where a
+ * tail survives: `flattenPath('a/../b', 1)` throws while `flattenPath('a/../b')`
+ * returns the inert `'a-..-b'`, and a `..` among the JOINED entry segments stays
+ * unchecked in both (`flattenPath('process/../review', 3)` → `'process-..-review'`).
+ * Do not "restore symmetry" by weakening the tail check — a preserved sub-path is
+ * live, a hyphenated one is not; round-3's hole was exactly that
+ * (`flattenPath('../evil', 1)` returned `'../evil'`).
  *
  * Not reachable through the CLI (directory names come from
  * `dirname(relative(root, path))`, which yields neither `.` nor `..` for a file

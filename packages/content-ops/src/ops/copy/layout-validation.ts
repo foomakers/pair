@@ -155,7 +155,12 @@ export function validateNoShallowEntryWithSubdir(
  * `process/review/references/SKILL.md`) is correctly-shaped content here, and
  * recognising it would need the marker-file knowledge this layer refuses. That
  * one is caught statically over the dataset corpus by the skills conformance
- * gate instead (`skills:conformance`).
+ * gate instead (`skills:conformance`). A consumer of this package has no such
+ * gate, so the error message QUALIFIES its second way out ("give the ancestor
+ * files of its own"): that remedy silences this rule by turning the offender
+ * into content, which is right for a marker-less registry and wrong for one
+ * whose entries carry an entrypoint file — say so rather than advise it flatly
+ * (round-5 review of PR #411).
  */
 export function validateNoDeepEntry(
   files: string[],
@@ -180,7 +185,9 @@ export function validateNoDeepEntry(
         `${flattenDepth} ('${ancestor}') holds none — so nothing owns it as content and it is an ` +
         `entry too deep. It would install at a path with no entry root, invisible to the skill ` +
         `loader, with an unsynced frontmatter name and no skill-name mapping. ` +
-        `Move it to depth ${flattenDepth}, or give '${ancestor}' files of its own.`,
+        `Move it to depth ${flattenDepth}, or give '${ancestor}' files of its own IF '${dir}' is ` +
+        `meant to be CONTENT of it — note that an entrypoint file inside content installs as ` +
+        `content, not as an entry, i.e. with exactly the symptoms above.`,
       operation: 'copyDir',
       path: join(srcPath, dir),
     })
