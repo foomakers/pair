@@ -17,7 +17,11 @@
 # against the ignore file's own directory).
 #
 # Requires: SCRIPT_DIR (the wrapper's bin/ directory).
-# Effect: sets IGNORE_FILE, and registers the temp file's cleanup on EXIT.
+# Effect: sets IGNORE_FILE, and registers the temp file's cleanup on EXIT — REPLACING
+# any EXIT trap the caller already set (POSIX `trap` assigns, it does not compose). The
+# two current callers (markdownlint-check.sh, markdownlint-fix.sh) set none; a third
+# that does would lose its own cleanup silently, so source this BEFORE installing yours
+# and re-install a combined handler that also removes "$IGNORE_FILE".
 
 IGNORE_FILE="$SCRIPT_DIR/../.markdownlintignore"
 

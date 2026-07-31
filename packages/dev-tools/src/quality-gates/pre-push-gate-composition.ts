@@ -29,8 +29,8 @@
  * body is never read (it lives in another package.json), so a write-mode tool
  * reached through a package script is caught by NAME — the offender patterns below
  * — not by expansion. Every package-level write script in this repo is named
- * `prettier:fix`, `mdlint:fix` or `lint:fix`, all of which the patterns match; a
- * differently named one would be a blind spot.
+ * `prettier:fix`, `mdlint:fix`, `lint:fix`, `sync-version` or `benchmark-update-link`,
+ * all of which the patterns match; a differently named one would be a blind spot.
  *
  * Per the gate-tooling ADL (2026-07-13) the logic lives here as a tested module;
  * `main()` behind a `require.main` guard is the thin CLI — the ADR-014 shape
@@ -63,9 +63,24 @@ export const ROOT_PACKAGE_JSON = resolve(REPO_ROOT, 'package.json')
  * same one-word edit. Nothing in the gate runs it today; that is precisely when a
  * guard is cheap to widen.
  *
+ * Formatters and eslint are not the only writers this repo can reach. Two ROOT
+ * scripts that exist TODAY write files and would otherwise pass green:
+ *
+ * - `sync-version` (→ `sync-version-in-docs.ts`) rewrites version strings in every
+ *   `.md`/`.mdx` it walks. Appending `&& pnpm sync-version <old>` to the gate is
+ *   AC1's exact failure mode on docs the branch never touched. Its `--check`
+ *   dry-run is legitimate in a gate, so the pattern spares an invocation that
+ *   carries `--check` in the SAME command segment — same bounded-segment trick as
+ *   the CLI write flags below, in reverse.
+ * - `test:perf` (→ `benchmark-update-link.ts`) writes a scratch KB tree and
+ *   `reports/performance/benchmark-report.json`. No check mode exists, so it is
+ *   banned outright.
+ *
  * Still an explicit list rather than a `/:fix/` pattern — a guard that fires on any
  * `:fix` string, including things it has no opinion about, gets disabled — so a new
- * write-mode tool needs a line here.
+ * write-mode tool needs a line here. That is the residual gap the ADL records: the
+ * invariant is "no step reachable from the gate writes", the ENFORCEMENT is this
+ * list, so a newly added, differently named writer is caught by review, not here.
  *
  * The CLI patterns stop at a command separator (`&& | ; { }`), so `prettier:check`
  * in one command cannot pair up with a `--write` belonging to another.
@@ -80,6 +95,11 @@ const WRITE_MODE_FORMATTERS: readonly { readonly name: string; readonly pattern:
   { name: 'prettier --write', pattern: /\bprettier\b[^&|;{}\n]*\s--write\b/ },
   { name: 'markdownlint --fix', pattern: /\bmarkdownlint\b[^&|;{}\n]*\s--fix\b/ },
   { name: 'eslint --fix', pattern: /\beslint\b[^&|;{}\n]*\s--fix\b/ },
+  // `\bsync-version\b` also matches the `sync-version-in-docs(.ts)` spelling, since
+  // `-` is a word boundary — one entry covers the script name and the module path.
+  { name: 'sync-version', pattern: /\bsync-version\b(?![^&|;{}\n]*--check\b)/ },
+  { name: 'test:perf', pattern: /\btest:perf\b/ },
+  { name: 'benchmark-update-link', pattern: /\bbenchmark-update-link(?:\.ts)?\b/ },
 ]
 
 /** The package runners a root script can delegate through. */
@@ -116,10 +136,24 @@ export const GUARD_SCRIPT = 'gate:composition'
 /** The root script the failure message points developers at. Must exist. */
 export const REMEDY_SCRIPT = 'format'
 
-/** What a developer should run instead. Named in the failure so it is actionable. */
+/**
+ * What a developer should run instead. Named in the failure so it is actionable.
+ *
+ * The second step is not optional advice: `packages/knowledge-hub/dataset/.skills/**`
+ * IS in format scope (workspace package), while its generated twin
+ * `.claude/skills/pair-<prefixed>/**` is NOT (`.claude/` is not a workspace member),
+ * and `skill-md-mirror` asserts the two are byte-equal through the real `pair update`
+ * transform. So a format-only edit to the dataset copy turns a green `format:check`
+ * into a red `skills:conformance` LATER IN THE SAME GATE. Advertising `pnpm format`
+ * alone would hand the developer a loop back to `--no-verify`. Structural fix (one
+ * format scope for both copies) is #414.
+ */
 export const PRE_PUSH_REMEDY =
   'Formatting is checked, not applied, before a push: run `pnpm format` and commit the result. ' +
-  'Applying it here could not fix the commits being pushed anyway.'
+  'Applying it here could not fix the commits being pushed anyway. ' +
+  'If `pnpm format` touched `packages/knowledge-hub/dataset/.skills/**`, re-sync the generated ' +
+  '`.claude/skills/**` copies (`pair update`) in the same commit, or `skills:conformance` fails ' +
+  'later in this same gate on the mirror-equality guard.'
 
 /** Bounds the transitive expansion, so a cyclic or deep script graph terminates. */
 const MAX_EXPANSION_DEPTH = 10

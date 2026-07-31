@@ -208,6 +208,7 @@ node_modules/
 **/.cache/
 apps/website/gen/
 apps/*/dist/
+apps/[!x]ebsite/build/
 docs/performance/report.md
 !packages/dev-tools/src/release
 apps/website
@@ -227,6 +228,11 @@ assert_reanchor() { # assert_reanchor <label> <REL> <expected-file>
 # cwd is a package: anchored-inside-cwd re-anchored (also through a glob segment),
 # patterns outside cwd dropped, `**/` and bare-name patterns verbatim, and the entry
 # that IS cwd becomes `**`.
+#
+# `apps/[!x]ebsite/build/` pins the bracket-negation fixup: gitignore negates a class
+# with `!`, ERE with `^`. Passed through unchanged, `[!x]ebsite` is a class matching a
+# literal `!` or `x` — it does NOT match `website`, so the pattern gets DROPPED and
+# `build/` is checked (the inverse of the intent, silently).
 cat > "$WORKSPACE/expected-website" <<'EOF'
 # a comment
 
@@ -234,6 +240,7 @@ node_modules/
 **/.cache/
 /gen/
 /dist/
+/build/
 **
 EOF
 assert_reanchor 'anchored inside cwd + glob segment + ignored-dir-is-cwd' \

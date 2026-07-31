@@ -22,9 +22,14 @@
 #   anchored, elsewhere                  -> dropped (cannot match anything under cwd)
 # Order is preserved: gitignore is last-match-wins.
 #
-# Known approximation: a mid-pattern `**` (`apps/**/gen/`) consumes exactly one path
-# segment here, so it is dropped rather than re-anchored when cwd is deeper. No such
-# entry exists in this repo; `**/`-prefixed patterns — the common form — are exact.
+# Known approximations (no root .gitignore entry in this repo uses either form, and both
+# would fail as an over- or under-ignore inside ONE path segment, never as an error):
+#   - a mid-pattern `**` (`apps/**/gen/`) consumes exactly one path segment here, so it is
+#     dropped rather than re-anchored when cwd is deeper. `**/`-prefixed patterns — the
+#     common form — are exact.
+#   - bracket expressions are passed through to ERE verbatim except for the leading-`!`
+#     negation (`[!abc]` -> `[^abc]`). A class whose FIRST character is a literal `]`
+#     (`[]abc]`, legal in a POSIX class) therefore breaks; ranges and plain sets are fine.
 
 # Does one glob path segment match one literal path segment?
 function seg_match(pat, s,   re, i, ch) {
@@ -35,7 +40,14 @@ function seg_match(pat, s,   re, i, ch) {
     ch = substr(pat, i, 1)
     if (ch == "*") re = re "[^/]*"
     else if (ch == "?") re = re "[^/]"
-    else if (ch == "[" || ch == "]") re = re ch          # keep bracket expressions
+    else if (ch == "[") {
+      # Bracket expressions are passed through, with ONE fixup: gitignore negates a
+      # class with `!`, ERE with `^`. Unfixed, `[!abc]` would become a class matching a
+      # literal `!`, a, b, c — the exact INVERSE of the intended set.
+      re = re "["
+      if (substr(pat, i + 1, 1) == "!") { re = re "^"; i++ }
+    }
+    else if (ch == "]") re = re ch
     else if (index(".+(){}|^$\\/", ch) > 0) re = re "\\" ch
     else re = re ch
   }

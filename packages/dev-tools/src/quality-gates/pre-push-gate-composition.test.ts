@@ -102,8 +102,54 @@ describe('the pre-push gate never runs a write-mode step (#394)', () => {
     expect(findWriteModeFormatters('eslint . && other-tool --fix')).toEqual([])
   })
 
+  // The invariant is "no step reachable from the gate WRITES", and formatters are not
+  // the only writers this repo already has. `pnpm sync-version` → sync-version-in-docs.ts
+  // writeFileSync's every .md/.mdx it walks, i.e. it rewrites version strings in docs the
+  // branch never touched — AC1's exact failure mode, from a real, currently-defined root
+  // script whose only job is to write.
+  it('flags sync-version — it rewrites version strings in every doc it walks', () => {
+    expect(findWriteModeFormatters('turbo lint && pnpm sync-version 0.4.2')).toEqual([
+      'sync-version',
+    ])
+  })
+
+  it('flags the sync-version module path too (same entry, `-` is a word boundary)', () => {
+    expect(
+      findWriteModeFormatters('ts-node src/quality-gates/sync-version-in-docs.ts 0.4.2'),
+    ).toEqual(['sync-version'])
+  })
+
+  // sync-version has a legitimate dry-run (`--check`, exit 1 on drift) that a gate could
+  // reasonably run. Sparing it keeps the guard from banning the one non-writing form —
+  // bounded to the same command segment, so a `--check` next door does not launder a write.
+  it('spares `sync-version --check` (dry-run) but not a --check in the next command', () => {
+    expect(findWriteModeFormatters('pnpm sync-version 0.4.2 --check')).toEqual([])
+    expect(findWriteModeFormatters('pnpm sync-version 0.4.2 && other-tool --check')).toEqual([
+      'sync-version',
+    ])
+  })
+
+  // `pnpm test:perf` → benchmark-update-link.ts writes a scratch KB tree and
+  // reports/performance/benchmark-report.json. No check mode exists: banned outright.
+  it('flags test:perf and the benchmark module it runs (no dry-run exists)', () => {
+    expect(findWriteModeFormatters('pnpm test:perf')).toEqual(['test:perf'])
+    expect(findWriteModeFormatters('ts-node src/quality-gates/benchmark-update-link.ts')).toEqual([
+      'benchmark-update-link',
+    ])
+  })
+
   it('names the remedy, so a failure is actionable', () => {
     expect(PRE_PUSH_REMEDY).toContain(`pnpm ${REMEDY_SCRIPT}`)
+  })
+
+  // The remedy is two-step or it is a trap: `pnpm format` fixes the dataset SKILL.md and
+  // cannot reach its generated .claude twin (not a workspace member), while skill-md-mirror
+  // asserts byte equality — so format:check-green becomes skills:conformance-red later in
+  // the SAME gate. Reproduced on the real MD049 drift this branch cleared.
+  it('the remedy warns that a dataset .skills edit needs the .claude mirror re-synced', () => {
+    expect(PRE_PUSH_REMEDY).toContain('packages/knowledge-hub/dataset/.skills/**')
+    expect(PRE_PUSH_REMEDY).toContain('.claude/skills/**')
+    expect(PRE_PUSH_REMEDY).toContain('skills:conformance')
   })
 })
 
@@ -264,6 +310,30 @@ describe('checkRootGate reads the repo gate rather than trusting a copy (#394)',
     )
     expect(r.ok).toBe(false)
     expect(r.message).toContain('lint:fix')
+  })
+
+  // Same shape as the lint:fix reproduction, on a stronger case: sync-version is a real
+  // root script that exists only to write. Appending it to the gate used to report ok=true.
+  it('fails when the gate appends `pnpm sync-version` (rewrites untouched docs)', () => {
+    const r = checkRootGate(
+      pkg({
+        'quality-gate': `turbo ts:check test lint && pnpm format:check && pnpm ${GUARD_SCRIPT} && pnpm sync-version 0.4.2`,
+        'sync-version': 'pnpm --filter @pair/dev-tools sync-version',
+      }),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('sync-version')
+  })
+
+  it('fails when the gate appends `pnpm test:perf` (writes a scratch tree + a report)', () => {
+    const r = checkRootGate(
+      pkg({
+        'quality-gate': `turbo lint && pnpm format:check && pnpm ${GUARD_SCRIPT} && pnpm test:perf`,
+        'test:perf': 'pnpm --filter @pair/dev-tools benchmark-update-link',
+      }),
+    )
+    expect(r.ok).toBe(false)
+    expect(r.message).toContain('test:perf')
   })
 
   it('fails when a gate script calls the prettier bin wrapper directly', () => {
