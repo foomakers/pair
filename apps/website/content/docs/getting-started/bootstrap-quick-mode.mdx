@@ -31,7 +31,9 @@ With the PRD in place, expect at most two questions:
 - **Which PM tool?** — the choice is organisational, not technical, so there is no safe default to guess. Skipped if your `way-of-working.md` already names one.
 - **Which tech stack?** — normally read straight from `package.json`, lockfiles and config. Only asked on a genuinely empty repository, where there is nothing to read.
 
-Everything else — project categorization, the per-section architecture/infrastructure/way-of-working decisions, the adoption documents, the standard quality-gate pipeline — is resolved from defaults and reported, not asked.
+Everything else — project categorization, the per-section architecture/infrastructure/way-of-working decisions, the testing and AI sections that follow from your stack, the adoption documents, the standard quality-gate pipeline — is resolved from defaults and reported, not asked.
+
+The `assess-*` skills bootstrap composes do not add confirmations of their own either: in quick mode their resolved values are accepted as-is and listed in the final summary, instead of being confirmed one skill at a time (there are eight of them).
 
 When it finishes, the summary names the depth that ran and how many questions it asked:
 

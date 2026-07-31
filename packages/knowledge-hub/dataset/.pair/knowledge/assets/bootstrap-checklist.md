@@ -119,15 +119,17 @@ The `hardcoded fallback` tier for a setup skill running its **quick** depth — 
 
 **Deliberately absent from this table** — a quick run must not invent these:
 
-- **Tech stack** — read from project state (`package.json`, lockfiles, config files), or asked. No per-type stack is safe: a Type A project is as plausibly a Python CLI as a Next.js portfolio.
+- **Tech stack** — read from project state (`package.json`, lockfiles, config files), or asked. No per-type stack is safe: a Type A project is as plausibly a Python CLI as a Next.js portfolio. Once it is resolved, the test runner follows from it and the AI tooling follows from project state, so the `Testing — strategy` and `AI development tooling` rows below cover only what does **not** follow — they never name a framework or a vendor.
 - **Project management tool** — organisational, not technical. Read from `way-of-working.md`, or asked.
-- **[Context-Specific Examples](#context-specific-examples)** (below) are worked examples of three *already-decided* projects, including their stack and PM tool. They illustrate; they are never a default source.
+- **[Context-Specific Examples](#context-specific-examples)** (below) are worked examples of three _already-decided_ projects, including their stack and PM tool. They illustrate; they are never a default source.
 
 | Section / decision            | Type A (Pet / PoC)                                            | Type B (Startup / Scale-up)                                | Type C (Enterprise)                                                             |
 | ----------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | Architecture — core pattern   | Modular Monolith (per [Decision Framework](#decision-framework)) | Modular Monolith with microservice preparation              | Modular Monolith until a domain split is justified — evaluate per Decision Framework |
 | Architecture — style          | Layered                                                       | Hexagonal                                                  | Hexagonal                                                                       |
 | Architecture — data           | Single database                                               | Single database, read replica when load requires            | Database per bounded context, integration via events                            |
+| Testing — strategy            | unit tests on core logic, no enforced coverage threshold (runner follows the stack) | + integration tests on critical boundaries, [70/20/10 pyramid](../guidelines/testing/test-strategy/test-pyramid.md), [80-85% on standard code](../guidelines/testing/test-strategy/coverage-strategy.md) | idem + E2E on critical journeys, 90-95% on critical business logic, differential coverage enforced in CI |
+| AI development tooling        | [maturity Level 1-2](../guidelines/technical-standards/ai-development/README.md#ai-development-maturity-model) — the assistant already in project state, human review of all AI-generated code | Level 2-3 — + project MCP integration and agent skills, AI-assisted review in the PR flow | Level 3 — + standardized AI development environments, a governed tool list, enhanced security review of AI-generated code |
 | Infrastructure — environments | prod only                                                     | dev + prod                                                  | dev + staging + prod                                                            |
 | Infrastructure — hosting      | managed platform (PaaS), no orchestration                     | managed platform or containers                              | containers or managed cloud, IaC mandatory                                      |
 | Infrastructure — CI/CD        | repository-native CI: build, test, deploy from `main`         | repository-native CI + preview environments                 | repository-native CI + gated promotion per environment                          |
@@ -379,15 +381,15 @@ The `hardcoded fallback` tier for a setup skill running its **quick** depth — 
 
 #### Architecture Foundation Decisions:
 
-- ✅ **Monolith vs Microservices**: Modular Monolith → *Single Next.js application*
-- ✅ **Architectural Style**: Layered → *Pages/Components/Utils structure*
-- ✅ **Data Strategy**: Static + Headless CMS → *Markdown files + optional Sanity*
+- ✅ **Monolith vs Microservices**: Modular Monolith → _Single Next.js application_
+- ✅ **Architectural Style**: Layered → _Pages/Components/Utils structure_
+- ✅ **Data Strategy**: Static + Headless CMS → _Markdown files + optional Sanity_
 
 #### Process Methodology Decisions:
 
-- ✅ **Iteration Model**: Kanban → *Feature-based development, no sprints*
-- ✅ **Release Strategy**: Continuous deployment → *Vercel auto-deploy on push*
-- ✅ **Quality Gates**: Minimal → *TypeScript + basic testing*
+- ✅ **Iteration Model**: Kanban → _Feature-based development, no sprints_
+- ✅ **Release Strategy**: Continuous deployment → _Vercel auto-deploy on push_
+- ✅ **Quality Gates**: Minimal → _TypeScript + basic testing_
 
 #### Project Management Tool:
 
@@ -422,9 +424,9 @@ Monitoring: Vercel built-in monitoring
 
 #### Architecture Foundation Decisions:
 
-- ✅ **Monolith vs Microservices**: Modular Monolith → *Single deployable with service layers*
-- ✅ **Architectural Style**: Event-Driven → *Real-time data processing architecture*
-- ✅ **Data Strategy**: Polyglot Persistence → *PostgreSQL + ClickHouse + Redis*
+- ✅ **Monolith vs Microservices**: Modular Monolith → _Single deployable with service layers_
+- ✅ **Architectural Style**: Event-Driven → _Real-time data processing architecture_
+- ✅ **Data Strategy**: Polyglot Persistence → _PostgreSQL + ClickHouse + Redis_
 
 #### Project Management Tool:
 
@@ -432,9 +434,9 @@ Monitoring: Vercel built-in monitoring
 
 #### Process Methodology Decisions:
 
-- ✅ **Iteration Model**: 2-week Sprints → *Balanced planning with fast delivery*
-- ✅ **Release Strategy**: Sprint-based with feature flags → *Risk mitigation*
-- ✅ **Quality Gates**: High → *95% test coverage, performance budgets*
+- ✅ **Iteration Model**: 2-week Sprints → _Balanced planning with fast delivery_
+- ✅ **Release Strategy**: Sprint-based with feature flags → _Risk mitigation_
+- ✅ **Quality Gates**: High → _95% test coverage, performance budgets_
 
 #### Final Tech Stack (Definitive):
 
@@ -466,15 +468,15 @@ Testing: Jest 29.x + Cypress 13.x + Artillery (load testing)
 
 #### Architecture Foundation Decisions:
 
-- ✅ **Monolith vs Microservices**: Domain Microservices → *Customer, Sales, Marketing, Integration services*
-- ✅ **Architectural Style**: Hexagonal + CQRS → *Complex business logic isolation*
-- ✅ **Data Strategy**: Database per Service + Event Sourcing → *Audit requirements*
+- ✅ **Monolith vs Microservices**: Domain Microservices → _Customer, Sales, Marketing, Integration services_
+- ✅ **Architectural Style**: Hexagonal + CQRS → _Complex business logic isolation_
+- ✅ **Data Strategy**: Database per Service + Event Sourcing → _Audit requirements_
 
 #### Process Methodology Decisions:
 
-- ✅ **Iteration Model**: 3-week Sprints → *Enterprise coordination needs*
-- ✅ **Release Strategy**: Quarterly releases with monthly patches → *Risk management*
-- ✅ **Quality Gates**: Enterprise → *Security scans, compliance checks, performance testing*
+- ✅ **Iteration Model**: 3-week Sprints → _Enterprise coordination needs_
+- ✅ **Release Strategy**: Quarterly releases with monthly patches → _Risk management_
+- ✅ **Quality Gates**: Enterprise → _Security scans, compliance checks, performance testing_
 
 #### Project Management Tool:
 

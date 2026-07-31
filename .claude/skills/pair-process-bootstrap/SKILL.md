@@ -127,7 +127,7 @@ One entry point, two resolution depths. Quick mode is **additive**: a second res
 
 4. **Verify**: Assessment data collected (via skills or manually) and persisted via `/pair-capability-record-decision`. All adoption files written from assess-\* proposals are consistent.
 
-**Quick mode**: composed assess-\* skills must be invoked with their own quick signal — the resolution cascade's **Path A `$choice`**, resolved from project state — never plain, because the assess-\* family's declared default is guided (Path C, the full interview). A domain project state cannot resolve falls back to the per-project-type default named in [quick-mode-defaults.md](./quick-mode-defaults.md); the tech stack on a genuinely empty repo is the one exception and is still asked (Step 2.3). The manual-assessment path (item 3) asks nothing either — it takes the same defaults and reports them.
+**Quick mode**: composed assess-\* skills must be invoked with their own quick signal — the resolution cascade's **Path A `$choice`**, resolved from project state — never plain, because the assess-\* family's declared default is guided (Path C, the full interview). **Path A's confirmation round is not run here**: the [resolution cascade](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/resolution-cascade.md) Path A steps 3-4 ask the developer to confirm the override, and each assess-\* skill declares its own prompt for it — eight composed skills would emit up to eight confirmations inside a depth that asks nothing. In quick mode the resolved `$choice` is accepted as-is and reported once in the Step 4.3 summary. This is a **disclosed per-adopter deviation**, like the explicit-`guided` no-op above; see [quick-mode-defaults.md](./quick-mode-defaults.md) § Disclosed deviations. A domain project state cannot resolve falls back to the per-project-type default named in [quick-mode-defaults.md](./quick-mode-defaults.md); the tech stack on a genuinely empty repo is the one exception and is still asked (Step 2.3). The manual-assessment path (item 3) asks nothing either — it takes the same defaults and reports them.
 
 ### Step 2.3: Gather Information per Section
 
@@ -139,10 +139,10 @@ For each missing adoption file, work through the relevant checklist section. Ref
 2. **Tech Stack** — languages, frameworks, libraries with versions
    - Reference: [Technical Standards](../../../.pair/knowledge/guidelines/technical-standards/README.md)
 
-3. *`Infrastructure`* — deployment, CI/CD, monitoring, environments
+3. **Infrastructure** — deployment, CI/CD, monitoring, environments
    - Reference: [Infrastructure Guidelines](../../../.pair/knowledge/guidelines/infrastructure/README.md)
 
-4. *`UX/UI`* — design system, accessibility, device support
+4. **UX/UI** — design system, accessibility, device support
    - Reference: [UX Guidelines](../../../.pair/knowledge/guidelines/user-experience/README.md)
 
 5. **Way of Working** — processes, quality gates, release cycles
@@ -154,7 +154,7 @@ For each missing adoption file, work through the relevant checklist section. Ref
 - Wait for developer responses before proceeding
 - Record each significant decision via `/pair-capability-record-decision` (`non-architectural` → ADL, `architectural` → ADR)
 
-**Quick mode**: no section questions — each section is filled from one named KB anchor, [Bootstrap Checklist](../../../.pair/knowledge/assets/bootstrap-checklist.md) § `Quick-Mode Per-Project-Type Defaults` (plus § `Decision Framework` for the core architectural pattern), with the same `/pair-capability-record-decision` calls. The § `Context-Specific Examples` are worked examples of already-decided projects — **never** a default source. Exception: an undetectable tech stack (empty repo, nothing to read from project state) is still asked; the table has no stack row by design ([quick-mode-defaults.md](./quick-mode-defaults.md)).
+**Quick mode**: no section questions — each section is filled from one named KB anchor, [Bootstrap Checklist](../../../.pair/knowledge/assets/bootstrap-checklist.md) § `Quick-Mode Per-Project-Type Defaults` (plus § `Decision Framework` for the core architectural pattern), with the same `/pair-capability-record-decision` calls. The § `Context-Specific Examples` are worked examples of already-decided projects — **never** a default source. The **testing** and **AI** sub-sections of `tech-stack.md` (separate assess-\* invocations — see [assess-orchestration.md](./assess-orchestration.md)) have their own rows in the same table; the test runner and the assistant follow from the resolved stack and project state, the strategy values from the table. Exception: an undetectable tech stack (empty repo, nothing to read from project state) is still asked; the table has no stack row by design ([quick-mode-defaults.md](./quick-mode-defaults.md)).
 
 ## Phase 3: Standards Generation
 

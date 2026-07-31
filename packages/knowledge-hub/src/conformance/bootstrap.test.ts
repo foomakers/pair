@@ -173,11 +173,17 @@ const stepSections = (skill: string): Map<string, string> => {
 // a present-and-approve round. Those are exactly the steps quick mode has to
 // say something about — and the derivation makes a FUTURE interview step fail
 // this guard unless its author adds the note too.
+//
+// The last two shapes are the ones Step 4.3 itself uses ("…for final approval",
+// "**Verify**: Developer approves"): without them a future approval gate written
+// in Step 4.3's own phrasing would land with no quick-mode note and stay green.
 const INTERVIEW_MARKERS = [
   /^\s*>.*\?\s*$/m,
   /Ask \d+(-\d+)? focused questions/i,
   /for developer review/i,
   /until approved/i,
+  /for (final )?approval/i,
+  /Developer approves/i,
 ]
 
 describe('quick mode is declared where the questions are (AC1)', () => {
@@ -214,6 +220,24 @@ describe('quick mode is declared where the questions are (AC1)', () => {
     expect(sections.get('2.2')?.toLowerCase()).toMatch(/path a/)
   })
 
+  // Path A is `$choice` PLUS a confirmation round (resolution-cascade.md steps
+  // 3-4), and each assess-* skill declares its own prompt for it. Naming Path A
+  // without suppressing that round would put up to EIGHT confirmations
+  // (assess-orchestration.md sequences eight skills) inside a depth that claims
+  // to ask nothing — so the suppression has to be stated, not implied.
+  it('suppresses Path A’s confirmation round in quick mode, as a disclosed deviation', () => {
+    const step = sections.get('2.2') ?? ''
+    expect(step).toMatch(/confirmation round[^.]*not run|not run[^.]*confirmation round/i)
+    expect(step.toLowerCase()).toMatch(/deviation/)
+
+    // and the deviation is disclosed where the other one (the explicit-`guided`
+    // no-op) already is, not buried in the step note
+    const defaults = datasetDefaults()
+    expect(defaults).toMatch(/##\s*Disclosed deviations/)
+    expect(defaults).toMatch(/Path A[\s\S]{0,400}confirmation round[\s\S]{0,400}not run/i)
+    expect(defaults.toLowerCase()).toMatch(/loud no-op/)
+  })
+
   it('qualifies the approval-round HALT conditions as guided-only', () => {
     const halt = datasetSkill().split('## HALT Conditions')[1] ?? ''
     expect(halt).toMatch(/Adoption file generation rejected[^\n]*guided only/i)
@@ -231,7 +255,18 @@ describe('the fallback tier points at a KB anchor that exists (AC3)', () => {
       expect(c).toContain(ANCHOR)
       // one column per project type, and the rows quick mode resolves from
       expect(c).toMatch(/Type A[^|]*\|[^|]*Type B[^|]*\|[^|]*Type C/)
-      for (const row of ['Architecture — style', 'Infrastructure —', 'UX/UI', 'Way of Working —']) {
+      for (const row of [
+        'Architecture — style',
+        'Infrastructure —',
+        'UX/UI',
+        'Way of Working —',
+        // tech-stack.md's testing and AI sections are SEPARATE assess-*
+        // invocations (assess-orchestration.md), each needing its own resolved
+        // value — without these rows quick mode has nothing to resolve them
+        // from and must either invent a value or ask.
+        'Testing — strategy',
+        'AI development tooling',
+      ]) {
         expect(c, `${p}: missing fallback row ${row}`).toContain(row)
       }
       // and it must NOT invent the two non-defaultable ones
@@ -244,6 +279,19 @@ describe('the fallback tier points at a KB anchor that exists (AC3)', () => {
     expect(c).toContain('Quick-Mode Per-Project-Type Defaults')
     // the worked examples are explicitly ruled out as a default source
     expect(c).toMatch(/Context-Specific Examples/)
+  })
+
+  // Eight assess-* invocations, not five sections: the testing and the AI
+  // section of tech-stack.md are their own skills. Quick mode must say where
+  // each resolves from, or "at most two questions" is not true.
+  it('resolves the testing and AI sections of tech-stack.md without a question', () => {
+    const doc = datasetDefaults()
+    expect(doc).toMatch(/testing section of `tech-stack\.md`/i)
+    expect(doc).toMatch(/AI section of `tech-stack\.md`/i)
+    expect(doc).toContain('Testing — strategy')
+    expect(doc).toContain('AI development tooling')
+    // and the still-asked list stays at ONE stack question, not three
+    expect(doc).toMatch(/one\*\* question, not three|one question, not three/i)
   })
 
   it('keeps the cascade tiers disjoint — decision-log belongs to preferences only', () => {
@@ -362,6 +410,22 @@ describe('no regression on the guided path (AC2)', () => {
 
   it('reports the resolved depth in the output format', () => {
     expect(c).toMatch(/Mode:\s*\[?\s*guided/i)
+  })
+
+  // the guided Step 2.3 list is one list: all five items bold. Two of them
+  // drifted to `*`code`*` in a quick-mode commit, which is exactly the kind of
+  // silent edit to guided-path text AC2 exists to prevent.
+  it('keeps the Step 2.3 section list in a single emphasis style', () => {
+    const step = stepSections(c).get('2.3') ?? ''
+    for (const item of [
+      '**Architecture**',
+      '**Tech Stack**',
+      '**Infrastructure**',
+      '**UX/UI**',
+      '**Way of Working**',
+    ]) {
+      expect(step, `Step 2.3 list item ${item}`).toContain(item)
+    }
   })
 })
 

@@ -95,7 +95,7 @@
 ### Expected Result
 
 - Total elapsed under **10 min**, with both splits recorded
-- **Bootstrap asked no question outside the two still-asked decisions** — no categorization confirmation, no per-section interview, no per-document approval round, no custom-gate question. This assertion is scoped to bootstrap (the `T0 → T1` window); the planning/refinement turns in step 5 are interactive and not covered by it
+- **Bootstrap asked no question outside the two still-asked decisions** — no categorization confirmation, no per-section interview, no per-document approval round, no custom-gate question, and **no `assess-*` Path A override confirmation** (the disclosed deviation in `quick-mode-defaults.md` § Disclosed deviations: with eight composable assess-\* skills, that round alone would be up to eight questions). This assertion is scoped to bootstrap (the `T0 → T1` window); the planning/refinement turns in step 5 are interactive and not covered by it
 - The completion summary reports `Mode: quick — N questions asked` with `N` matching what was actually asked
 - `.pair/adoption/tech/architecture.md`, `tech-stack.md` and `way-of-working.md` are populated
 - One user story exists and is workable (it has acceptance criteria, so `/pair-process-implement` can start on it)
@@ -161,8 +161,10 @@
 
 ### Steps
 
-1. Simulate a non-interactive environment (CI runner, or an agent session with stdin closed) rooted at a third clean project
-2. Request the guided depth explicitly
+1. `mkdir -p $WORKDIR/nontty && cd $WORKDIR/nontty && git init && $CLI install` — a **third** clean project
+2. Author a PRD as in MT-CP902 (Phase 0 is BLOCKING in both depths, so without it the run HALTs on the PRD before the depth fallback is reachable — see Notes)
+3. Simulate a non-interactive environment (CI runner, or an agent session with stdin closed) rooted at `$WORKDIR/nontty`
+4. Request the guided depth explicitly
 
 ### Expected Result
 
@@ -170,9 +172,14 @@
 - The run never blocks waiting for input that cannot arrive
 - If a still-asked decision (PM tool, undetectable stack) is then unresolvable, the run **HALTs** and names the input to pass explicitly — it does not guess
 
+### Notes
+
+- **Sub-case, if step 2 is skipped on purpose**: with no PRD the correct behaviour is a HALT at Phase 0 — `/pair-process-specify-prd` cannot run without a TTY either — and the depth fallback above is never reached. That is a PASS for the no-hang guarantee and **not** an observation of the fallback; run step 2 to test the fallback itself.
+
 ---
 
 ## Changelog
 
 - Added for #278 (bootstrap quick mode): MT-CP901..906.
+- Review round 2 (#408): MT-CP906 gained its own project setup + PRD (its preconditions were unreachable otherwise) and a "no PRD ⇒ HALT at Phase 0" sub-case; MT-CP903 now also asserts no `assess-*` Path A confirmation.
 - Review round 1 (#408): added MT-CP902 (PRD authored outside the stopwatch) — the PRD is a third question-generating input, not a quick-mode default; the timed test is now MT-CP903 with a bootstrap/story split, and its "no question" assertion is scoped to the bootstrap window.
