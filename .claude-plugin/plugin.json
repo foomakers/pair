@@ -9,7 +9,14 @@
   "homepage": "https://pair.foomakers.com/docs",
   "repository": "https://github.com/foomakers/pair",
   "license": "MIT",
-  "keywords": ["sdlc", "agile", "ddd", "code-review", "knowledge-base", "project-management"],
+  "keywords": [
+    "sdlc",
+    "agile",
+    "ddd",
+    "code-review",
+    "knowledge-base",
+    "project-management"
+  ],
   "skills": [
     "./.claude/skills/pair-capability-analyze-code-quality",
     "./.claude/skills/pair-capability-analyze-debt",
@@ -43,6 +50,7 @@
     "./.claude/skills/pair-capability-write-issue",
     "./.claude/skills/pair-next",
     "./.claude/skills/pair-process-bootstrap",
+    "./.claude/skills/pair-process-brainstorm",
     "./.claude/skills/pair-process-implement",
     "./.claude/skills/pair-process-plan-epics",
     "./.claude/skills/pair-process-plan-initiatives",

@@ -860,3 +860,84 @@ describe('copyDirectoryWithTransforms (via copyPathOps, flatten/prefix)', () => 
     })
   })
 })
+
+describe('exclude — a registry entry the copy must not install (#277 enabler)', () => {
+  it('skips an excluded entry and installs the rest', async () => {
+    const fileService = createTestFileService({
+      '/dataset/source/process/review/SKILL.md': '---\nname: review\n---\n# /review',
+      '/dataset/source/process/setup/SKILL.md': '---\nname: setup\n---\n# /setup',
+    })
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true, prefix: 'pair', exclude: ['process/setup'], targets: [] },
+    })
+
+    expect(await fileService.exists('/dataset/target/pair-process-review/SKILL.md')).toBe(true)
+    expect(await fileService.exists('/dataset/target/pair-process-setup/SKILL.md')).toBe(false)
+  })
+
+  it('excludes the entry’s whole subtree, not just its own files', async () => {
+    const fileService = createTestFileService({
+      '/dataset/source/process/setup/SKILL.md': '---\nname: setup\n---\n# /setup',
+      '/dataset/source/process/setup/references/deep.md': '# deep',
+      '/dataset/source/process/review/SKILL.md': '---\nname: review\n---\n# /review',
+    })
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true, prefix: 'pair', exclude: ['process/setup'], targets: [] },
+    })
+
+    expect(await fileService.exists('/dataset/target/pair-process-review/SKILL.md')).toBe(true)
+    expect(await fileService.exists('/dataset/target/pair-process-setup/SKILL.md')).toBe(false)
+    expect(await fileService.exists('/dataset/target/pair-process-setup-references/deep.md')).toBe(
+      false,
+    )
+  })
+
+  it('matches on the entry path only — a prefix that is not a path segment is not excluded', async () => {
+    // `process/setup-helper` must survive an exclusion of `process/setup`: a
+    // string-prefix match would silently drop it, which is the classic shape of
+    // this bug.
+    const fileService = createTestFileService({
+      '/dataset/source/process/setup/SKILL.md': '---\nname: setup\n---\n# /setup',
+      '/dataset/source/process/setup-helper/SKILL.md': '---\nname: helper\n---\n# /helper',
+    })
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true, prefix: 'pair', exclude: ['process/setup'], targets: [] },
+    })
+
+    expect(await fileService.exists('/dataset/target/pair-process-setup/SKILL.md')).toBe(false)
+    expect(await fileService.exists('/dataset/target/pair-process-setup-helper/SKILL.md')).toBe(
+      true,
+    )
+  })
+
+  it('is a no-op when absent, so every other registry is unaffected', async () => {
+    const fileService = createTestFileService({
+      '/dataset/source/process/setup/SKILL.md': '---\nname: setup\n---\n# /setup',
+    })
+
+    await copyPathOps({
+      fileService,
+      source: 'source',
+      target: 'target',
+      datasetRoot: '/dataset',
+      options: { flatten: true, prefix: 'pair', targets: [] },
+    })
+
+    expect(await fileService.exists('/dataset/target/pair-process-setup/SKILL.md')).toBe(true)
+  })
+})

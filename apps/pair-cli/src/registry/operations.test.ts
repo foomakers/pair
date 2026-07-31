@@ -473,3 +473,31 @@ describe('BUG #03: doCopyAndUpdateLinks must signal missing source', () => {
     expect(String(result['reason'])).toContain('/absolute/missing/path')
   })
 })
+
+describe('exclude flows from the registry config into the copy options (#277)', () => {
+  it('passes exclude through when the registry declares it', () => {
+    const options = buildCopyOptions({
+      source: '.skills',
+      behavior: 'overwrite',
+      description: 'skills',
+      include: [],
+      exclude: ['process/setup'],
+      flatten: true,
+      prefix: 'pair',
+      targets: [],
+    })
+    expect(options.exclude).toEqual(['process/setup'])
+  })
+
+  it('omits it entirely when the registry declares none, so nothing changes for other registries', () => {
+    const options = buildCopyOptions({
+      source: '.knowledge',
+      behavior: 'mirror',
+      description: 'kb',
+      include: [],
+      flatten: false,
+      targets: [],
+    })
+    expect(options.exclude).toBeUndefined()
+  })
+})

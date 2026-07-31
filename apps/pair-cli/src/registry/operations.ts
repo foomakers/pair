@@ -158,11 +158,17 @@ export function buildCopyOptions(registryConfig: RegistryConfig): SyncOptions {
     include,
     flatten: registryConfig.flatten,
     targets: registryConfig.targets,
+<<<<<<< HEAD
     // #407: without this the copy pipeline always ran unbounded, so a skill's
     // nested `references/` installed as a sibling pseudo-skill.
     ...(registryConfig.flattenDepth !== undefined && {
       flattenDepth: registryConfig.flattenDepth,
     }),
+=======
+    // Optional access on purpose: `buildCopyOptions` is called with hand-built
+    // RegistryConfig objects too, not only with output of `parseRegistry`.
+    ...(registryConfig.exclude?.length ? { exclude: registryConfig.exclude } : {}),
+>>>>>>> c1692f05 ([US-277] feat: registry-level exclude — the enabler for a marketplace-only setup skill)
     ...(registryConfig.prefix && { prefix: registryConfig.prefix }),
   }
 

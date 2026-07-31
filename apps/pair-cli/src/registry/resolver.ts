@@ -10,6 +10,12 @@ export interface RegistryConfig {
   behavior: Behavior
   description: string
   include: string[]
+  /**
+   * Registry entries never installed, as source-relative paths. See
+   * `SyncOptions.exclude` (#277): the marketplace setup skill must exist only
+   * when installed from the marketplace, so the CLI must not also write it.
+   */
+  exclude?: string[]
   flatten: boolean
   /**
    * Bounds `flatten` to this registry's ENTRY granularity (#407): only the first
@@ -76,6 +82,7 @@ function normalizeRegistryConfig(name: string, raw: Record<string, unknown>): Re
     behavior: (raw['behavior'] as Behavior) || 'mirror',
     description: String(raw['description'] || ''),
     include: Array.isArray(raw['include']) ? (raw['include'] as string[]) : [],
+    exclude: Array.isArray(raw['exclude']) ? (raw['exclude'] as string[]) : [],
     flatten: typeof raw['flatten'] === 'boolean' ? raw['flatten'] : false,
     // Carried through as-is (no coercion): validateFlattenDepthField rejects a
     // non-positive-integer loudly rather than letting a config typo degrade into

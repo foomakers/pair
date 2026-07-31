@@ -45,6 +45,43 @@ async function collectFiles(
 }
 
 /**
+/**
+ * The source files this copy will actually install: collected, then stripped of
+ * every excluded entry.
+ *
+ * Filtered HERE, before validation and before any `mkdir`, so an excluded entry
+ * cannot contribute a flatten collision, a directory mapping, or a link-rewrite
+ * pass — it is as if it were never in the source. Extracted from
+ * `copyDirectoryWithTransforms` only to keep it under the 50-line ceiling.
+ */
+async function collectInstallableFiles(
+  fileService: FileSystemService,
+  srcPath: string,
+  exclude: string[] | undefined,
+): Promise<string[]> {
+  const collected = await collectFiles(fileService, srcPath, srcPath)
+  return collected.filter(f => !isExcluded(f, exclude))
+}
+
+/**
+ * Whether a source-relative file path falls under one of the excluded entries.
+ *
+ * Segment-wise, never a string prefix: `process/setup` excludes
+ * `process/setup/SKILL.md` and `process/setup/references/deep.md`, and leaves
+ * `process/setup-helper/SKILL.md` alone. A plain `startsWith` would drop the
+ * latter — the classic shape of this bug, and the reason there is a test for it.
+ */
+function isExcluded(filePath: string, exclude: string[] | undefined): boolean {
+  if (!exclude || exclude.length === 0) return false
+  const segments = filePath.split('/')
+  return exclude.some(entry => {
+    const entrySegments = entry.replace(/^\/+/, '').replace(/\/+$/, '').split('/')
+    if (entrySegments.length > segments.length) return false
+    return entrySegments.every((seg, i) => seg === segments[i])
+  })
+}
+
+/**
  * Copies a single file to its transformed location and tracks the
  * directory mapping for later link rewriting.
  */
@@ -235,7 +272,7 @@ export async function copyDirectoryWithTransforms(params: {
   const { fileService, srcPath, destPath, options } = params
   const transformOpts = buildTransformOpts(options)
 
-  const files = await collectFiles(fileService, srcPath, srcPath)
+  const files = await collectInstallableFiles(fileService, srcPath, options?.exclude)
   validateNoCollisions(files, transformOpts, srcPath)
   validateNoShallowEntryWithSubdir(files, transformOpts, srcPath)
   validateNoDeepEntry(files, transformOpts, srcPath)

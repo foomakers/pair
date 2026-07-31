@@ -28,6 +28,25 @@ export type SyncOptions = {
    * Omitted ⇒ every separator is flattened, exactly as before.
    */
   flattenDepth?: number
+
+  /**
+   * Registry entries this copy must NOT install, as source-relative paths
+   * (`process/setup`). An entry's whole subtree is skipped.
+   *
+   * Why it exists (#277): the Claude Code marketplace channel ships a setup skill
+   * that must exist ONLY when installed from the marketplace — if the CLI also
+   * wrote it into the project, the same skill name would answer from two trees
+   * (`~/.claude/plugins/cache` and the project's `.claude/skills/`) and the
+   * resolution order between them is unspecified.
+   *
+   * Matching is per PATH SEGMENT, never a string prefix: excluding
+   * `process/setup` must not also drop `process/setup-helper`.
+   *
+   * NOTE: this prevents WRITING an entry, not having it. The skills registry runs
+   * `behavior: overwrite`, which performs no cleanup, so an excluded entry that is
+   * already present in a target is left untouched.
+   */
+  exclude?: string[]
   /** Prefix to prepend to top-level directory names */
   prefix?: string
   /** Target configurations for multi-target distribution (empty array = no targets) */
