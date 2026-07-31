@@ -4,6 +4,7 @@
  * Prefix: prepends a prefix to the top-level directory name.
  * Both operations are independent and composable.
  */
+import { createError } from '../observability'
 
 /**
  * Naming transform options applied during a copy. One name for the concept
@@ -17,13 +18,33 @@
  */
 export type TransformOpts = { flatten: boolean; prefix?: string; flattenDepth?: number }
 
-/** A `flattenDepth` given as a JSON-config typo must fail loudly, not silently full-flatten. */
-function assertValidFlattenDepth(flattenDepth: number): void {
-  if (!Number.isInteger(flattenDepth) || flattenDepth < 1) {
-    throw new Error(
-      `flattenPath: flattenDepth must be a positive integer, got ${flattenDepth}. ` +
+/**
+ * The one predicate for a valid `flattenDepth`, shared with the CLI config
+ * boundary (`validateFlattenDepthField`) so the rule cannot drift between the
+ * two places that enforce it. Each boundary keeps its own message; only the
+ * rule is shared.
+ */
+export function isValidFlattenDepth(value: unknown): boolean {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1
+}
+
+/**
+ * A `flattenDepth` given as a JSON-config typo must fail loudly, not silently
+ * full-flatten. Thrown as the ops layer's typed `IO_ERROR` (like the sibling
+ * collision error in `copy-directory-transforms.ts`) so a programmatic
+ * `@pair/content-ops` consumer that skipped CLI validation still gets
+ * `operation`/`path` context through the CLI error formatter.
+ */
+function assertValidFlattenDepth(flattenDepth: number, operation: string, path: string): void {
+  if (!isValidFlattenDepth(flattenDepth)) {
+    throw createError({
+      type: 'IO_ERROR',
+      message:
+        `${operation}: flattenDepth must be a positive integer, got ${flattenDepth}. ` +
         'Omit it to flatten every separator.',
-    )
+      operation,
+      path,
+    })
   }
 }
 
@@ -36,10 +57,14 @@ function assertValidFlattenDepth(flattenDepth: number): void {
 function assertNoTraversalInTail(tail: string[], dirName: string): void {
   const offender = tail.find(segment => segment === '.' || segment === '..')
   if (offender !== undefined) {
-    throw new Error(
-      `flattenPath: refusing to preserve the relative segment '${offender}' of '${dirName}' — ` +
+    throw createError({
+      type: 'IO_ERROR',
+      message:
+        `flattenPath: refusing to preserve the relative segment '${offender}' of '${dirName}' — ` +
         'a preserved sub-path is joined onto the destination root and could escape it.',
-    )
+      operation: 'flattenPath',
+      path: dirName,
+    })
   }
 }
 
@@ -66,10 +91,13 @@ function assertNoTraversalInTail(tail: string[], dirName: string): void {
  * preserved tail contains a `.`/`..` segment (see the two assertions above).
  */
 export function flattenPath(dirName: string, flattenDepth?: number): string {
+  // Validated before ANY early return: an invalid depth must be rejected
+  // regardless of the path it happens to be paired with, or the fail-loudly
+  // guarantee becomes dependent on the other argument.
+  if (flattenDepth !== undefined) assertValidFlattenDepth(flattenDepth, 'flattenPath', dirName)
   const trimmed = dirName.replace(/^\/+/, '').replace(/\/+$/, '')
   if (trimmed === '') return ''
   if (flattenDepth === undefined) return trimmed.replace(/\//g, '-')
-  assertValidFlattenDepth(flattenDepth)
 
   const segments = trimmed.split('/')
   // Fewer segments than the entry depth: nothing below the entry to preserve, so
@@ -97,9 +125,11 @@ export function flattenPath(dirName: string, flattenDepth?: number): string {
  */
 export function isRegistryEntryPath(dirName: string, flattenDepth?: number): boolean {
   if (flattenDepth === undefined) return true
+  // Same ordering rationale as `flattenPath`: validate the depth before the
+  // empty-path early return.
+  assertValidFlattenDepth(flattenDepth, 'isRegistryEntryPath', dirName)
   const trimmed = dirName.replace(/^\/+/, '').replace(/\/+$/, '')
   if (trimmed === '') return true
-  assertValidFlattenDepth(flattenDepth)
   return trimmed.split('/').length <= flattenDepth
 }
 

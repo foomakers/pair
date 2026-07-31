@@ -5,6 +5,7 @@ import {
   transformPath,
   detectCollisions,
   isRegistryEntryPath,
+  isValidFlattenDepth,
 } from './naming-transforms'
 
 describe('flattenPath', () => {
@@ -149,6 +150,13 @@ describe('flattenPath with a bounded depth (#407)', () => {
     expect(() => flattenPath('a/b/c/d', depth)).toThrow(/positive integer/)
   })
 
+  // The depth is rejected whatever path it is paired with: an early return for a
+  // trivial path must not decide whether the value is validated at all.
+  it.each([0, -1, 1.5, NaN])('throws on the depth %s even for an empty path', depth => {
+    expect(() => flattenPath('', depth)).toThrow(/positive integer/)
+    expect(() => isRegistryEntryPath('', depth)).toThrow(/positive integer/)
+  })
+
   // The unbounded form is traversal-safe by construction (every separator
   // becomes a hyphen). A preserved tail is not: the copy pipeline joins it onto
   // the destination root, so `process/review/../../../../etc` would resolve to
@@ -163,6 +171,31 @@ describe('flattenPath with a bounded depth (#407)', () => {
 
   it('still flattens a .. into a hyphen when it sits within the entry segments', () => {
     expect(flattenPath('process/../review', 3)).toBe('process-..-review')
+  })
+})
+
+// The copy-time failure convention in this layer is the typed IO_ERROR, so a
+// programmatic consumer that skipped CLI validation still gets
+// `operation`/`path` context through the CLI error formatter.
+describe('flattenPath failure typing (#407 review)', () => {
+  it('throws the ops layer IO_ERROR for an invalid depth', () => {
+    expect(() => flattenPath('a/b/c', 0)).toThrow(expect.objectContaining({ name: 'IO_ERROR' }))
+  })
+
+  it('throws the ops layer IO_ERROR for a traversal segment in the tail', () => {
+    expect(() => flattenPath('a/b/../c', 2)).toThrow(expect.objectContaining({ name: 'IO_ERROR' }))
+  })
+})
+
+// One predicate, shared with the CLI config boundary so the two enforcement
+// points cannot drift into two different rules.
+describe('isValidFlattenDepth (#407 review)', () => {
+  it.each([1, 2, 10])('accepts the positive integer %s', value => {
+    expect(isValidFlattenDepth(value)).toBe(true)
+  })
+
+  it.each([0, -1, 1.5, NaN, '2', null, undefined, {}])('rejects %s', value => {
+    expect(isValidFlattenDepth(value)).toBe(false)
   })
 })
 

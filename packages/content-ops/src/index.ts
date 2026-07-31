@@ -61,6 +61,7 @@ export {
   transformPath,
   detectCollisions,
   isRegistryEntryPath,
+  isValidFlattenDepth,
   type TransformOpts,
 } from './ops/naming-transforms'
 export {

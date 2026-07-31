@@ -1,4 +1,10 @@
-import { Behavior, FileSystemService, validateTargets, type TargetConfig } from '@pair/content-ops'
+import {
+  Behavior,
+  FileSystemService,
+  isValidFlattenDepth,
+  validateTargets,
+  type TargetConfig,
+} from '@pair/content-ops'
 import type { RegistryConfig } from './resolver'
 import { getCanonicalTarget } from './layout'
 import { DEFAULT_WORKING_PATH, validateWorkingPath } from './working-area'
@@ -144,11 +150,15 @@ function validateFlattenField(name: string, reg: Record<string, unknown>): strin
  * Rejected loudly rather than coerced: a typo (`0`, `-1`, `"2"`, `1.5`) would
  * otherwise degrade into an unbounded flatten — reintroducing the very defect
  * the option exists to fix — and it is meaningless without `flatten: true`.
+ *
+ * The predicate itself comes from `@pair/content-ops` (`isValidFlattenDepth`),
+ * the same one `flattenPath` asserts on, so the deliberate double boundary
+ * cannot drift into two different rules. Only the message is this layer's.
  */
 function validateFlattenDepthField(name: string, reg: Record<string, unknown>): string[] {
   const flattenDepth = reg['flattenDepth']
   if (flattenDepth === undefined) return []
-  if (typeof flattenDepth !== 'number' || !Number.isInteger(flattenDepth) || flattenDepth < 1) {
+  if (!isValidFlattenDepth(flattenDepth)) {
     return [`Registry '${name}' flattenDepth must be a positive integer`]
   }
   if (reg['flatten'] !== true) {

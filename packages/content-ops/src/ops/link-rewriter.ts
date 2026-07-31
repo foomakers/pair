@@ -78,11 +78,15 @@ function reRootTarget(
  * misplace a same-directory sibling link (see #313 T5 fixture regression).
  *
  * Scope: this function alone only rebases links resolving inside the SAME
- * directory the current file lives in. Resolution is two-stage (see
- * `resolveAbsoluteTarget`): own-dir rebase first, then `rebaseWithinMovedDirs`
- * for a target in ANY other directory the same copy moved — a sub-doc's
- * `../SKILL.md`, or one skill linking into another (e.g. plan-epics →
- * map-subdomains) — and only then the coarser `reRootTarget` fallback.
+ * directory the current file lives in, which is why it is NOT the first stage of
+ * resolution (see `resolveAbsoluteTarget`): `movedDirs` already contains the
+ * file's own directory, so `rebaseWithinMovedDirs` subsumes this case AND picks
+ * the most specific move — necessary when a sub-directory of the file's own
+ * directory moved somewhere else (an unbounded flatten turns `./references/x.md`
+ * into a sibling entry). Asking this function first would let the less specific
+ * own-directory match win and leave the link pointing at a path that does not
+ * exist. It stays as the fallback for a caller that passes no `movedDirs`
+ * (`rewriteLinksInFile` is public API).
  */
 function rebaseWithinMovedDir(
   absoluteTarget: string,
@@ -107,8 +111,17 @@ type ComputeNewHrefParams = {
 
 /**
  * Resolves the absolute target a link points at, after accounting for the
- * current copy operation: a same-directory rebase takes priority over the
- * coarser dataset-root re-root (see `rebaseWithinMovedDir` docs).
+ * current copy operation. Three stages, most specific first (see the
+ * `rebaseWithinMovedDir` docs for why that order):
+ *
+ * 1. `rebaseWithinMovedDirs` — through whichever directory THIS copy moved
+ *    contains the target, longest `originalDir` winning. Covers the file's own
+ *    directory (it is in `movedDirs`), a sub-directory of it that moved
+ *    elsewhere, a sub-doc's `../SKILL.md`, and one skill linking into another.
+ * 2. `rebaseWithinMovedDir` — the own-directory rebase, as the fallback for a
+ *    caller that passes no `movedDirs`.
+ * 3. `reRootTarget` — the coarser dataset-root re-root, which only knows about
+ *    the overall content-root move.
  */
 function resolveAbsoluteTarget(params: {
   originalFileDir: string
@@ -122,14 +135,17 @@ function resolveAbsoluteTarget(params: {
     params
   const absoluteTarget = posix.resolve(originalFileDir, pathPart)
 
+  // Every directory this copy moved, most specific (longest originalDir) first —
+  // including the file's own. A sub-doc linking UP to its skill resolves here,
+  // and so does a link DOWN into a sub-directory that moved somewhere other than
+  // under this file (the unbounded-flatten sibling case): the nested move wins
+  // over the file's own, which is why this runs before the own-dir rebase.
+  const viaMovedDir = rebaseWithinMovedDirs(absoluteTarget, movedDirs)
+  if (viaMovedDir) return viaMovedDir
+  // Fallback for a caller that passes no movedDirs (`rewriteLinksInFile` is
+  // public API): rebase a target inside the file's own directory.
   const rebased = rebaseWithinMovedDir(absoluteTarget, originalFileDir, newFileDir)
   if (rebased) return rebased
-  // The target is outside the file's own directory. It may still live in another
-  // directory this same copy moved — the commonest case being a sub-doc linking
-  // UP to its skill. Most specific (longest originalDir) wins, so a nested entry
-  // is preferred over its parent.
-  const viaSibling = rebaseWithinMovedDirs(absoluteTarget, movedDirs)
-  if (viaSibling) return viaSibling
   if (datasetRoot && sourceContentRoot) {
     return reRootTarget(absoluteTarget, datasetRoot, sourceContentRoot)
   }

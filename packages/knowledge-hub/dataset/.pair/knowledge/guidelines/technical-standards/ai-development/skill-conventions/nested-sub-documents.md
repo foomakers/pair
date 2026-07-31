@@ -26,8 +26,19 @@ The distribution pipeline flattens only the **entry** part of the source path an
 
 The sub-directory installs **inside** the skill, not as a sibling directory of its own. Two consequences for the author:
 
-- **Relative links keep working in both directions.** `SKILL.md` → `./references/deep-dive.md` and `deep-dive.md` → `../SKILL.md` are both correct in the source tree AND in the installed tree, because the whole directory moves together. Write plain relative links; do not pre-compensate for the install path.
+- **Relative links keep working in both directions.** `SKILL.md` → `./references/deep-dive.md` and `deep-dive.md` → `../SKILL.md` are both correct in the source tree AND in the installed tree, because the whole directory moves together. Write plain relative links; do not pre-compensate for the install path. (True for a skill at the standard `<category>/<skill-name>` depth — see the exclusion below.)
 - **A sub-document is content, not a skill.** It is not a separate installed entry, gets no name prefix, and its frontmatter (if any) is left alone. Do not give a sub-document a `name:` matching a skill name, and do not expect a sub-directory name to be invocable.
+
+## The one exclusion: a skill that is not at the standard depth
+
+The pipeline is told **how deep an entry is** (`flattenDepth` in the registry config — 2 for `<category>/<skill-name>`). A skill that sits **shallower** than that — directly at the registry root, with no category directory — cannot ship a sub-directory: its `<skill-name>/references/` has exactly the shape of a real `<category>/<skill-name>` entry, so it would install as a **sibling** `<prefix>-<skill-name>-references/` rather than inside the skill. The pipeline **fails the copy loudly** in that case instead of installing something broken:
+
+```text
+Ambiguous layout for a bounded flatten (flattenDepth=2): 'next' is 1 segment(s) deep,
+holds files directly AND owns the sub-directory 'next/references'. …
+```
+
+To give such a skill a sub-directory, first move it under a category directory (that renames the installed skill, so it changes the name users invoke — decide deliberately).
 
 ## Authoring rules
 
