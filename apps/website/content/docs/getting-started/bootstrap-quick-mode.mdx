@@ -1,0 +1,70 @@
+---
+title: Bootstrap Quick Mode
+description: Bootstrap your project's adoption files in one shot with KB-sensible defaults, instead of answering the full interview.
+---
+
+Bootstrap has two resolution depths and one entry point. **Guided** — the default — interviews you decision by decision. **Quick** takes the same defaults without asking, so an empty project reaches a first workable story in minutes.
+
+This page is about the `/pair-process-bootstrap` skill. For installing the CLI and the Knowledge Base first, see the [Quickstart](/docs/getting-started/quickstart).
+
+## Which depth do you want?
+
+| | Guided (default) | Quick |
+|---|---|---|
+| **You get asked** | every decision, one at a time | only what has no safe default |
+| **Best for** | a first setup, or a project whose direction is still open | an experienced user, a spike, a CI/scripted setup |
+| **Time** | as long as the conversation takes | minutes |
+| **Files written** | adoption files | the same adoption files |
+
+Quick mode is **additive**. It is a second depth of the same skill, not a separate skill and not a replacement: if you omit the argument, the interview you already know runs exactly as before.
+
+## Run it
+
+```text
+/pair-process-bootstrap $mode: quick
+```
+
+Expect at most two questions:
+
+- **Which PM tool?** — the choice is organisational, not technical, so there is no safe default to guess. Skipped if your `way-of-working.md` already names one.
+- **Which tech stack?** — normally read straight from `package.json`, lockfiles and config. Only asked on a genuinely empty repository, where there is nothing to read.
+
+Everything else — project categorization, the per-section architecture/infrastructure/way-of-working decisions, the adoption documents, the standard quality-gate pipeline — is resolved from defaults and reported, not asked.
+
+When it finishes, the summary names the depth that ran and how many questions it asked:
+
+```text
+BOOTSTRAP COMPLETE:
+├── Mode:            quick — 1 question asked
+├── PRD:             verified
+├── Categorization:  Type B — .pair/adoption/decision-log/...
+...
+```
+
+## Nothing about the output is "quick mode"
+
+Every file quick mode writes is a normal adoption file, in the normal location and format: `.pair/adoption/tech/*.md`, the gate registry in `way-of-working.md`, ADRs and ADLs in the decision log. There is no quick-mode-only file, marker, or format.
+
+So a default you disagree with is not a lock-in — edit the file by hand, or re-run the relevant phase, and the change sticks like any other adopted decision. Accepting a default costs you nothing you cannot change later.
+
+An already-configured project is **confirmed, not overwritten**: each phase checks its own output first, in both depths.
+
+## Where the defaults come from
+
+Quick mode does not invent its own resolution order. It follows the shared Guided / Quick Setup Convention that `pair package` and the `assess-*` skills already use — highest wins:
+
+1. **Explicit argument** — anything you named in the invocation
+2. **Project state** — what is already on disk: `.pair/adoption/**`, the PRD, `package.json`, lockfiles, CI workflows, `git config`
+3. **Saved preferences** — decisions a previous run recorded in the decision log
+4. **Fallback** — the per-project-type defaults in the KB bootstrap checklist
+
+Bootstrap only declares which of its own decisions each tier fills. That mapping, decision by decision, lives next to the skill in `quick-mode-defaults.md` (`.claude/skills/pair-process-bootstrap/quick-mode-defaults.md` once the KB is installed).
+
+## In CI or a non-interactive session
+
+Guided needs a terminal. With no TTY, bootstrap warns and runs quick instead rather than hanging on input that can never arrive. If a still-asked decision cannot be resolved either, the run halts and tells you which input to pass explicitly — it does not guess.
+
+## Next
+
+- [Adopter Checklist](/docs/getting-started/checklist) — verify the setup that quick mode just produced
+- [Quickstart: Solo](/docs/getting-started/quickstart-solo) · [Team](/docs/getting-started/quickstart-team) · [Organization](/docs/getting-started/quickstart-org) — environment-specific configuration

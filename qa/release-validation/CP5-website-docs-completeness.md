@@ -19,6 +19,7 @@
 **Getting Started** (6 pages):
 - `$BASE_URL/docs/getting-started`
 - `$BASE_URL/docs/getting-started/quickstart`
+- `$BASE_URL/docs/getting-started/bootstrap-quick-mode`
 - `$BASE_URL/docs/getting-started/quickstart-solo`
 - `$BASE_URL/docs/getting-started/quickstart-team`
 - `$BASE_URL/docs/getting-started/quickstart-org`
