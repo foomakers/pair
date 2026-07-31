@@ -129,7 +129,7 @@ describe('PM-tool adapter contract — every adapter present documents visibilit
     'azure-devops-implementation.md': '--area',
     'linear-implementation.md': 'projectId',
     // No separate field exists here: the file's path IS both membership and view.
-    'filesystem-implementation.md': "location",
+    'filesystem-implementation.md': 'location',
   }
 
   it.each(adapterCases)(
@@ -615,37 +615,38 @@ type CreateRecipeCase = {
   occurrence: number
 }
 
-const createRecipeCases = KB_ROOTS.flatMap(({ label, dir }) =>
-  markdownFiles(dir)
-    .flatMap(path =>
-      fencedCommands(readFileSync(path, 'utf-8')).flatMap(command => {
-        const family = CREATE_FAMILIES.find(candidate => candidate.match.test(command))
-        return family
-          ? [
-              {
-                corpus: label,
-                file: path.slice(dir.length + 1),
-                tool: family.tool,
-                family,
-                command,
-              },
-            ]
-          : []
-      }),
-    )
-    .reduce<{ perFile: Map<string, number>; out: CreateRecipeCase[] }>(
-      // `occurrence` numbers recipes WITHIN a file. It exists to disambiguate two
-      // recipes in the same document; numbering across the corpus made a case name
-      // depend on how many recipes happened to precede it in unrelated files, so
-      // adding a snippet to one adapter renamed the cases of every later one.
-      (acc, recipe) => {
-        const n = (acc.perFile.get(recipe.file) ?? 0) + 1
-        acc.perFile.set(recipe.file, n)
-        acc.out.push({ ...recipe, occurrence: n })
-        return acc
-      },
-      { perFile: new Map(), out: [] },
-    ).out,
+const createRecipeCases = KB_ROOTS.flatMap(
+  ({ label, dir }) =>
+    markdownFiles(dir)
+      .flatMap(path =>
+        fencedCommands(readFileSync(path, 'utf-8')).flatMap(command => {
+          const family = CREATE_FAMILIES.find(candidate => candidate.match.test(command))
+          return family
+            ? [
+                {
+                  corpus: label,
+                  file: path.slice(dir.length + 1),
+                  tool: family.tool,
+                  family,
+                  command,
+                },
+              ]
+            : []
+        }),
+      )
+      .reduce<{ perFile: Map<string, number>; out: CreateRecipeCase[] }>(
+        // `occurrence` numbers recipes WITHIN a file. It exists to disambiguate two
+        // recipes in the same document; numbering across the corpus made a case name
+        // depend on how many recipes happened to precede it in unrelated files, so
+        // adding a snippet to one adapter renamed the cases of every later one.
+        (acc, recipe) => {
+          const n = (acc.perFile.get(recipe.file) ?? 0) + 1
+          acc.perFile.set(recipe.file, n)
+          acc.out.push({ ...recipe, occurrence: n })
+          return acc
+        },
+        { perFile: new Map(), out: [] },
+      ).out,
 )
 
 describe('KB-wide — no issue-create recipe omits the assignee (gh, az, linear) (#402)', () => {
