@@ -206,7 +206,9 @@ npm install -g @github/github-mcp-server
 # Fallback commands when MCP unavailable
 gh project list --owner [ORG]
 
-# --project takes the project's TITLE (or number), never its node ID.
+# --project takes the project's TITLE, never its node ID and never its number
+# (gh 2.97 documents "-p, --project title"; numbers belong to `gh project`).
+# Both flags need the `project` OAuth scope: gh auth refresh -s project
 # Passing it at create time is what makes the item a board member —
 # see "Item Visibility: Membership and Assignee" below for why that matters
 # and for the Step 2b path when this flag is not used.
@@ -401,6 +403,10 @@ mcp__github__issue_write:
 
 **Board membership is explicit on GitHub**: an issue and a project item are **distinct objects**. `mcp__github__issue_write` has **no project field at all**, and `gh issue create` produces only the issue **unless you pass `--project`**. Either way membership is a separate decision, made by `--project` at create time or by `addProjectV2ItemById` afterwards (Step 2b below). This is tool-specific — on tools where membership is implicit, the guide says so; never assume the GitHub shape elsewhere.
 
+**Both membership writes need the `project` OAuth scope.** `--project` (on `gh issue create`, `gh pr create`, `gh issue edit --add-project`) and the `addProjectV2ItemById` mutation are both refused by a default `gh auth login` token: `your authentication token is missing required scopes [project]`. Grant it once with `gh auth refresh -s project` — the same scope the `projectV2` queries in Steps 1-3 need, and the same one the token the MCP server runs with must carry. `gh` resolves the project **before** it creates the issue, so a missing scope fails the whole command and **no issue is created**: nothing is half-written, and re-running after the refresh is safe.
+
+**A missing-scope error is reported, never worked around by dropping `--project`.** Retrying without the flag succeeds and lands on exactly the defect this section exists to remove — open, assigned, green, off the board. Same discipline as the status write below: report it, never silently degrade to a create that skips membership.
+
 The assignee is required by the Assignment rule in [way-of-working.md](../../../../adoption/tech/way-of-working.md): the board is read filtered by assignee. Set it **as part of the create**, never as a follow-up step.
 
 #### Create an Issue with its Assignee and its Membership
@@ -422,8 +428,10 @@ mcp__github__issue_write:
 ```
 
 ```bash
-# CLI fallback — one shot: --project takes the project's TITLE (or number),
-# never its node ID, and the project is the one named in way-of-working.md.
+# CLI fallback — one shot: --project takes the project's TITLE, never its node
+# ID and never its number, and the project is the one named in way-of-working.md.
+# Needs the `project` OAuth scope (gh auth refresh -s project); without it the
+# command fails and creates NOTHING — report that, never retry without --project.
 gh issue create --title "[title]" --body-file [file] --assignee "[login]" --project "[project title]"
 
 # Without --project (or after any MCP create): membership is still missing.
@@ -469,7 +477,7 @@ gh api graphql -f query='{
 | Discovery outcome                                    | Meaning                                                           | Next                                                      |
 | ---------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------- |
 | A project id + status field id                       | The board exists                                                  | Step 2                                                    |
-| The query **succeeded** and returned **no project**  | No project is configured — there is no board field to write at all | The membership step **no-ops** (see Step 2b)              |
+| The query **succeeded** and returned **no project**  | No project is configured — there is no board field to write at all | **Skip Steps 2-3** — there is no board field to write; the membership step **no-ops** (see Step 2b) |
 | The query **failed** (error, 404, permission denied) | Unknown — not evidence of absence                                 | **Report it.** Never a no-op, never "board write skipped" |
 
 Keep the last two apart: "no project configured" is a **successful** query with an empty result; an error or a permission denial says nothing about whether the project exists, and treating it as absence is how a failed board write disappears into a green report.
@@ -526,6 +534,8 @@ ISSUE_NODE_ID=$(gh api graphql -f query='{
 # Parameterised, never interpolated into the query document: values travel as
 # GraphQL variables (-F), so an unexpected value fails cleanly rather than
 # rewriting the query. Returns the item id — feed it straight into Step 3.
+# Needs the `project` OAuth scope, exactly like --project on the create:
+# gh auth refresh -s project. A missing scope is reported, never skipped.
 gh api graphql \
   -f query='mutation($project: ID!, $content: ID!) {
     addProjectV2ItemById(input: { projectId: $project, contentId: $content }) {

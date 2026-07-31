@@ -343,6 +343,10 @@ jobs:
 
 INCIDENT_TYPE=$1
 SEVERITY=$2
+# Login the incident issue is assigned to. Declared here (not left to the
+# environment) because an unset value sends --assignee "" and gh then fails the
+# create outright — the incident issue would not exist at all.
+SECURITY_ONCALL=${SECURITY_ONCALL:-@me}
 
 echo "🚨 Security incident detected: $INCIDENT_TYPE (Severity: $SEVERITY)"
 

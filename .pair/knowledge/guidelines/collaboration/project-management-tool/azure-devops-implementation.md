@@ -152,7 +152,7 @@ Azure Boards states differ per process and per team board columns. Skills resolv
 
 **Board membership is implicit on Azure Boards.** A work item belongs to its team project the moment it is created (`--project`), and the board is a view over the project's work items — there is **no separate add-to-board call**. Do not invent one: unlike GitHub Projects, where an issue and a project item are distinct objects requiring an explicit `addProjectV2ItemById`, here creating the work item **is** its membership. Area path and iteration path refine _which_ board view shows it, they do not grant membership.
 
-**Implicit membership is not the same as "cannot be invisible."** A work item whose **area path** falls outside the area paths configured for the team (Project settings → Team configuration → Areas) is genuinely absent from that team's board — created, assigned, and invisible in the view the team actually reads. So set the area path to one the team's board covers, taking the team named in [way-of-working.md](../../../../adoption/tech/way-of-working.md). This is the Azure analogue of the GitHub membership defect: the field write itself cannot fail, but the item can still land outside the read view.
+**Implicit membership is not the same as "cannot be invisible."** A work item whose **area path** falls outside the area paths configured for the team (Project settings → Team configuration → Areas) is genuinely absent from that team's board — created, assigned, and invisible in the view the team actually reads. So pass `--area` on the create with a path the team's board covers, taking the team named in [way-of-working.md](../../../../adoption/tech/way-of-working.md). This is the Azure analogue of the GitHub membership defect: the field write itself cannot fail, but the item can still land outside the read view.
 
 **The assignee is not implicit** and is still required — the board is read filtered by assignee (Assignment rule in [way-of-working.md](../../../../adoption/tech/way-of-working.md)). Set it via `--assigned-to` as part of the create, never as a follow-up step. **If the assignee cannot be resolved** (not a project member, AAD/licensing restriction): **report it** — never drop it silently, which leaves the item invisible in the filtered view.
 
@@ -160,11 +160,14 @@ Azure Boards states differ per process and per team board columns. Skills resolv
 
 ```bash
 # Create a user story (PBI in Scrum process) — assignee set as part of the create
+# --area: the team's board reads only its configured area paths, so an item
+# outside them is created, assigned, and absent from that board.
 az boards work-item create \
   --type "Product Backlog Item" \
   --title "[Story title]" \
   --description "[Story body — markdown per user-story-template]" \
   --assigned-to "[user@example.com]" \
+  --area "[team area path]" \
   --project <project>
 
 # Existing work item: set or correct the assignee

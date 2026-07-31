@@ -159,6 +159,28 @@ describe('PM-tool adapter contract — every adapter present documents visibilit
     },
   )
 
+  // Round-3 finding: the "implicit membership is not the same as 'cannot be
+  // invisible'" caveat was prose-only in both implicit-membership adapters —
+  // deleting it from both corpora left the suite green. It is the sentence that
+  // stops an agent reading "implicit" as "nothing else can hide the item".
+  const IMPLICIT_CAVEAT_FILES = ['azure-devops-implementation.md', 'linear-implementation.md']
+  const caveatCases = CORPORA.flatMap(({ label, dir }) =>
+    IMPLICIT_CAVEAT_FILES.filter(file => existsSync(join(dir, file))).map(file => ({
+      corpus: label,
+      file,
+      content: readFileSync(join(dir, file), 'utf-8'),
+    })),
+  )
+
+  it.each(caveatCases)(
+    '$corpus/$file states implicit membership still allows an invisible item',
+    ({ content }) => {
+      expect(normalize(section(content, VISIBILITY_HEADING))).toContain(
+        'implicit membership is not the same as',
+      )
+    },
+  )
+
   it.each(adapterCases)(
     '$corpus/$file sets the assignee as part of the create, not as a follow-up (AC3)',
     ({ content }) => {
@@ -371,22 +393,70 @@ describe('github-implementation.md — assignee is part of the write (#402 AC3)'
       // could never match. That exact vacuity was caught by injection-testing this
       // guard — the regression was reinstated and the suite stayed green.
       expect(content).not.toMatch(/gh (issue|pr) create --project \[PROJECT_ID\]/i)
-      expect(normalize(content)).toContain("takes the project's title (or number), never its node")
+      // "(or number)" was dropped: gh 2.97.0 documents `-p, --project title` (title
+      // only, identically for `gh pr create` and `gh issue edit --add-project`); the
+      // numeric form belongs to the separate `gh project` commands. The pinned half
+      // is the never-a-node-ID one, which is what an agent gets wrong.
+      expect(normalize(content)).toContain("takes the project's title, never its node")
+      expect(normalize(content)).not.toContain('(or number)')
+    },
+  )
+
+  // The `project` OAuth scope. A default `gh auth login` token does not carry it,
+  // and gh resolves projects BEFORE creating the issue — so `--project` on a
+  // scope-less token fails the whole command and creates nothing. Undocumented, the
+  // obvious agent recovery is to retry without `--project`, which lands exactly on
+  // the off-board item this story exists to remove.
+  it.each(githubCases)('$corpus: names the project scope and how to grant it', ({ content }) => {
+    const body = normalize(section(content, VISIBILITY_HEADING))
+    expect(body).toContain('gh auth refresh -s project')
+    expect(body).toContain('missing required scopes [project]')
+  })
+
+  it.each(githubCases)(
+    '$corpus: forbids working around a missing scope by dropping --project',
+    ({ content }) => {
+      expect(normalize(section(content, VISIBILITY_HEADING))).toContain(
+        'never worked around by dropping --project',
+      )
+    },
+  )
+
+  // Round-3 finding: every no-project remediation was prose-only, so a future edit
+  // could restore the round-1 defect (a failed board write laundered into a green
+  // report) with CI green. The two assertions above pin the PERMISSION to skip; these
+  // pin its LIMIT — the failed-discovery branch and the Step 1 outcome that owns it.
+  it.each(githubCases)(
+    '$corpus: a FAILED discovery is reported, never absorbed as the no-op',
+    ({ content }) => {
+      const body = normalize(content)
+      expect(body).toContain('never absorbed as a no-op')
+      expect(body).toContain('not evidence of absence')
+      // The no-project branch states its terminal state, not just the membership no-op:
+      // Steps 2-3 interpolate a project number/id that does not exist.
+      expect(body).toContain('skip steps 2-3')
     },
   )
 })
 
 /**
- * The adapter is authoritative, but it is not the only place the KB teaches
- * `gh issue create`. `issue-management/github-issues.md` carried two create
- * recipes with neither `--assignee` nor `--project` — the exact item this story
- * exists to forbid — and an agent reaching them by index or grep saw nothing
- * pointing back at the adapter. Two contradictory recipes per tool is worse than
- * one incomplete one, so the invariant is enforced KB-wide rather than per file.
+ * The adapter is authoritative, but it is not the only place the KB teaches an
+ * issue create. `issue-management/github-issues.md` carried two create recipes with
+ * neither `--assignee` nor `--project` — the exact item this story exists to forbid
+ * — and an agent reaching them by index or grep saw nothing pointing back at the
+ * adapter. Two contradictory recipes per tool is worse than one incomplete one, so
+ * the invariant is enforced KB-wide rather than per file.
  *
- * Whole-command discipline, same as the adapter assertions above: the flag must
- * be on the `gh issue create` invocation itself, not merely somewhere in the file
- * (a neighbouring `gh pr create --assignee` satisfied the naive form).
+ * ALL THREE tracker CLIs are guarded, not just gh: the first cut matched
+ * `gh issue create` alone while the prose it protects is tool-wide, so azure's
+ * `--assigned-to` and Linear's `assigneeId` were pinned by nothing (verified by
+ * deleting them from both corpora — the suite stayed green). The adapters' own
+ * `### Create` sections are covered too: `section()` stops at the next `###`, so
+ * they sit outside the body the per-adapter assertions above read.
+ *
+ * Whole-command discipline, same as the adapter assertions above: the flag must be
+ * on the create invocation itself, not merely somewhere in the file (a neighbouring
+ * `gh pr create --assignee` satisfied the naive form).
  */
 const KB_ROOTS = [
   { label: 'dataset', dir: join(__dirname, '../../dataset/.pair/knowledge') },
@@ -401,35 +471,170 @@ function markdownFiles(dir: string): string[] {
   })
 }
 
-/** Joins backslash continuations so a multi-line `gh issue create` reads as one command. */
-function logicalLines(markdown: string): string[] {
-  return markdown.replace(/\\\n\s*/g, ' ').split('\n')
+/**
+ * Shell commands inside fenced code blocks, one logical line each.
+ *
+ * Fenced-only, and command-shaped: a plain-prose sentence mentioning a create verb
+ * is NOT a recipe. The earlier substring filter (`line.includes('gh issue create ')`)
+ * passed only incidentally — the prose mention in the adapter happens to be written
+ * with a code span, so a backtick and not a space followed the phrase. Written
+ * without code spans, that sentence would have reddened the guard with a message
+ * about a recipe the author never added.
+ *
+ * Fence tracking is marker-aware (a ```` block is not closed by an inner ```), so a
+ * file that quotes fences cannot silently swallow the recipes after it. Two joins,
+ * because the KB uses both shapes: trailing-backslash continuations (`az`, `gh`) and
+ * a single-quoted argument spanning lines (the `linear_gql` JSON payloads). Comment
+ * lines are dropped before joining — an apostrophe in a comment would otherwise
+ * unbalance the quote count and hide the command underneath it.
+ */
+/** Marks a fence boundary in the line stream: no command spans two code blocks. */
+const FENCE_BREAK = ' fence'
+
+/** Code-block lines only, shell prompts stripped, blanks and comments dropped. */
+function fencedLines(markdown: string): string[] {
+  const lines: string[] = []
+  let open: string | null = null
+
+  for (const raw of markdown.split('\n')) {
+    const marker = /^\s*(`{3,}|~{3,})/.exec(raw)?.[1]
+    if (marker) {
+      if (open === null) open = marker
+      else if (marker[0] === open[0] && marker.length >= open.length) open = null
+      lines.push(FENCE_BREAK)
+      continue
+    }
+    if (open === null) continue
+    const line = raw.replace(/^\s*\$\s+/, '').trim()
+    if (line !== '' && !line.startsWith('#')) lines.push(line)
+  }
+  return lines
 }
 
+/** Joins trailing-backslash continuations and single-quoted arguments spanning lines. */
+function joinContinuations(lines: string[]): string[] {
+  const commands: string[] = []
+  let pending = ''
+  const flush = (): void => {
+    if (pending) commands.push(pending)
+    pending = ''
+  }
+
+  for (const line of lines) {
+    if (line === FENCE_BREAK) {
+      flush()
+      continue
+    }
+    const body = line.replace(/\\$/, '').trim()
+    pending = pending ? `${pending} ${body}` : body
+    const unbalancedQuote = (pending.split("'").length - 1) % 2 === 1
+    if (!line.endsWith('\\') && !unbalancedQuote) flush()
+  }
+  flush()
+  return commands
+}
+
+function fencedCommands(markdown: string): string[] {
+  return joinContinuations(fencedLines(markdown))
+}
+
+/**
+ * One family per tracker CLI. `match` selects the create invocations; `required` is
+ * the flag/field without which the created item is invisible in the view the team
+ * reads. Each family also carries its own non-empty guard, so a discovery that stops
+ * matching one tool reddens instead of going quietly vacuous.
+ */
+const CREATE_FAMILIES = [
+  { tool: 'gh', match: /^gh issue create\b/, required: /--assignee\b/, flag: '--assignee' },
+  {
+    tool: 'az',
+    match: /^az boards work-item create\b/,
+    required: /--assigned-to\b/,
+    flag: '--assigned-to',
+  },
+  {
+    tool: 'linear',
+    match: /^linear_gql\b.*\bissueCreate\b/,
+    required: /assigneeId/,
+    flag: 'assigneeId',
+  },
+]
+
 const createRecipeCases = KB_ROOTS.flatMap(({ label, dir }) =>
-  markdownFiles(dir).flatMap(path =>
-    logicalLines(readFileSync(path, 'utf-8'))
-      .filter(line => line.includes('gh issue create '))
-      .map((command, index) => ({
-        corpus: label,
-        file: path.slice(dir.length + 1),
-        occurrence: index + 1,
-        command,
-      })),
-  ),
+  markdownFiles(dir)
+    .flatMap(path =>
+      fencedCommands(readFileSync(path, 'utf-8')).flatMap(command => {
+        const family = CREATE_FAMILIES.find(candidate => candidate.match.test(command))
+        return family
+          ? [
+              {
+                corpus: label,
+                file: path.slice(dir.length + 1),
+                tool: family.tool,
+                family,
+                command,
+              },
+            ]
+          : []
+      }),
+    )
+    .map((recipe, index) => ({ ...recipe, occurrence: index + 1 })),
 )
 
-describe('KB-wide — no issue-create recipe omits the assignee (#402)', () => {
-  it('finds the create recipes it means to guard', () => {
-    // Non-empty guard, not a count: if the discovery breaks, the cases below would
-    // pass vacuously over an empty list.
-    expect(createRecipeCases.length).toBeGreaterThan(0)
+describe('KB-wide — no issue-create recipe omits the assignee (gh, az, linear) (#402)', () => {
+  it.each(
+    KB_ROOTS.flatMap(({ label }) => CREATE_FAMILIES.map(({ tool }) => ({ corpus: label, tool }))),
+  )('$corpus: finds the $tool create recipes it means to guard', ({ corpus, tool }) => {
+    // Non-empty per family, not a count: if the discovery breaks for one tool, the
+    // cases below would pass vacuously over the recipes of the other two.
+    expect(
+      createRecipeCases.filter(c => c.corpus === corpus && c.tool === tool).length,
+    ).toBeGreaterThan(0)
   })
 
   it.each(createRecipeCases)(
-    '$corpus/$file recipe $occurrence sets --assignee on the create itself',
-    ({ command }) => {
-      expect(command).toMatch(/gh issue create\b[^\n]*--assignee\b/)
+    '$corpus/$file $tool recipe $occurrence sets the assignee on the create itself',
+    ({ command, family }) => {
+      expect(command, `missing ${family.flag}`).toMatch(family.required)
+    },
+  )
+})
+
+/**
+ * The two implicit-membership adapters name a real visibility field in their prose;
+ * the create recipe below it must actually carry that field, or copying the recipe
+ * still reproduces the story's symptom one layer under the warning.
+ */
+const VISIBILITY_FIELD_CASES = CORPORA.flatMap(({ label, dir }) =>
+  [
+    {
+      file: 'azure-devops-implementation.md',
+      field: '--area',
+      match: /^az boards work-item create\b.*--area\b/,
+    },
+    {
+      file: 'linear-implementation.md',
+      field: 'projectId',
+      match: /^linear_gql\b.*\bissueCreate\b.*projectId/,
+    },
+  ]
+    .filter(({ file }) => existsSync(join(dir, file)))
+    .map(entry => ({
+      corpus: label,
+      ...entry,
+      content: readFileSync(join(dir, entry.file), 'utf-8'),
+    })),
+)
+
+describe('implicit-membership adapters ship the visibility field on a create recipe (#402)', () => {
+  it.each(VISIBILITY_FIELD_CASES)(
+    '$corpus/$file has a create recipe carrying $field',
+    ({ content, match, field }) => {
+      const commands = fencedCommands(content)
+      expect(
+        commands.some(command => match.test(command)),
+        `no create recipe with ${field}`,
+      ).toBe(true)
     },
   )
 })
