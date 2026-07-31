@@ -213,7 +213,9 @@ async function copyAllFilesWithTransform(params: {
 function buildTransformOpts(options?: SyncOptions): TransformOpts {
   const flatten = options?.flatten ?? false
   const prefix = options?.prefix
-  return prefix ? { flatten, prefix } : { flatten }
+  const flattenDepth = options?.flattenDepth
+  const base: TransformOpts = flattenDepth === undefined ? { flatten } : { flatten, flattenDepth }
+  return prefix ? { ...base, prefix } : base
 }
 
 export async function copyDirectoryWithTransforms(params: {

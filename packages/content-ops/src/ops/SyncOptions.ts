@@ -19,6 +19,15 @@ export type SyncOptions = {
   include: string[]
   /** Flatten directory hierarchy into hyphen-separated names */
   flatten: boolean
+  /**
+   * Bound flattening to the registry's ENTRY granularity: only the first
+   * `flattenDepth` segments are joined, deeper ones stay a real sub-path.
+   * The skills registry's entries are two segments (`process/review`), so a
+   * third is content *of* that skill — without this it installed as the sibling
+   * `pair-process-review-references/` with both relative links dead (#407).
+   * Omitted ⇒ every separator is flattened, exactly as before.
+   */
+  flattenDepth?: number
   /** Prefix to prepend to top-level directory names */
   prefix?: string
   /** Target configurations for multi-target distribution (empty array = no targets) */

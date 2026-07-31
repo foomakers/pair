@@ -101,3 +101,62 @@ describe('detectCollisions', () => {
     expect(detectCollisions(['a-b'])).toEqual([])
   })
 })
+
+// ---------------------------------------------------------------------------
+// #407 — a skill's nested `references/` sub-dir must install INSIDE the skill
+// ---------------------------------------------------------------------------
+//
+// The skills registry's entry granularity is TWO segments (`process/review`,
+// `capability/write-issue`), so a deeper segment is content *of* that entry, not
+// a separate one. Flattening every slash turned `process/review/references` into
+// the sibling pseudo-skill `pair-process-review-references`, which breaks the
+// skill's link to `./references/deep.md` and the sub-doc's link back up.
+//
+// `flattenDepth` bounds the flattening to the entry: segments beyond it are
+// preserved. Absent, behaviour is unchanged — every other registry keeps
+// flattening everything, so this cannot regress them.
+describe('flattenPath with a bounded depth (#407)', () => {
+  it('flattens exactly the entry segments and preserves what is below', () => {
+    expect(flattenPath('process/review/references', 2)).toBe('process-review/references')
+  })
+
+  it('preserves more than one level below the entry', () => {
+    expect(flattenPath('process/review/references/deep', 2)).toBe('process-review/references/deep')
+  })
+
+  it('leaves an entry-depth path exactly as the unbounded form does', () => {
+    expect(flattenPath('process/review', 2)).toBe(flattenPath('process/review'))
+  })
+
+  it('is a no-op beyond the available segments (a shallower entry is not padded)', () => {
+    expect(flattenPath('review', 2)).toBe('review')
+  })
+
+  it('without a depth, flattens everything — unchanged for every other registry', () => {
+    expect(flattenPath('process/review/references')).toBe('process-review-references')
+  })
+})
+
+describe('transformPath with a bounded flatten depth (#407)', () => {
+  it('prefixes the entry and keeps the nested dir underneath it', () => {
+    expect(
+      transformPath('process/review/references', {
+        flatten: true,
+        prefix: 'pair',
+        flattenDepth: 2,
+      }),
+    ).toBe('pair-process-review/references')
+  })
+
+  it('is identical to today for a path at entry depth', () => {
+    expect(
+      transformPath('process/review', { flatten: true, prefix: 'pair', flattenDepth: 2 }),
+    ).toBe('pair-process-review')
+  })
+
+  it('reproduces the #407 defect when the depth is absent (regression witness)', () => {
+    expect(transformPath('process/review/references', { flatten: true, prefix: 'pair' })).toBe(
+      'pair-process-review-references',
+    )
+  })
+})

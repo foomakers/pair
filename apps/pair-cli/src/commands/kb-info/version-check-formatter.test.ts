@@ -82,7 +82,7 @@ describe('formatVersionCheckHuman', () => {
     )
 
     const output = formatVersionCheckHuman(result)
-    const installedLine = output.split('\n').find((l) => l.includes('Installed:')) ?? ''
+    const installedLine = output.split('\n').find(l => l.includes('Installed:')) ?? ''
     expect(installedLine).toContain('non-stable')
   })
 })

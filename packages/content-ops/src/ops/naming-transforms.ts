@@ -8,11 +8,32 @@
 /**
  * Flatten a path by replacing directory separators with hyphens.
  * Example: 'catalog/next' → 'catalog-next'
+ *
+ * `maxDepth` bounds the flattening to a registry's **entry granularity**: only
+ * the first `maxDepth` segments are joined, and anything deeper is preserved as
+ * a real sub-path.
+ * Example: 'process/review/references' with maxDepth 2 → 'process-review/references'
+ *
+ * Why it exists (#407): the skills registry's entries are two segments deep
+ * (`process/review`), so a third segment is content *of* that skill, not a
+ * separate skill. Flattening every slash installed it as the SIBLING pseudo-skill
+ * `pair-process-review-references`, which breaks the skill's own link to
+ * `./references/deep.md` and the sub-doc's link back up — the first skill using
+ * the standard `references/` progressive-disclosure layout would install unusable.
+ *
+ * Omitted ⇒ every separator is flattened, exactly as before. Registries whose
+ * entries are single-segment are unaffected either way.
  */
-export function flattenPath(dirName: string): string {
+export function flattenPath(dirName: string, maxDepth?: number): string {
   const trimmed = dirName.replace(/^\/+/, '').replace(/\/+$/, '')
   if (trimmed === '') return ''
-  return trimmed.replace(/\//g, '-')
+  if (maxDepth === undefined || maxDepth < 1) return trimmed.replace(/\//g, '-')
+
+  const segments = trimmed.split('/')
+  // Fewer segments than the entry depth: nothing below the entry to preserve, so
+  // this is the unbounded result — a shallower entry is never padded.
+  if (segments.length <= maxDepth) return segments.join('-')
+  return [segments.slice(0, maxDepth).join('-'), ...segments.slice(maxDepth)].join('/')
 }
 
 /**
@@ -38,13 +59,16 @@ export function prefixPath(dirName: string, prefix: string): string {
  */
 export function transformPath(
   dirName: string,
-  options: { flatten?: boolean; prefix?: string },
+  options: { flatten?: boolean; prefix?: string; flattenDepth?: number },
 ): string {
   let result = dirName
   if (options.flatten) {
-    result = flattenPath(result)
+    result = flattenPath(result, options.flattenDepth)
   }
   if (options.prefix) {
+    // prefixPath already prefixes only the top-level segment, so a preserved
+    // sub-path stays under the prefixed entry: 'process-review/references' →
+    // 'pair-process-review/references'.
     result = prefixPath(result, options.prefix)
   }
   return result

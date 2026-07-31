@@ -361,6 +361,48 @@ describe('copyDirectoryWithTransforms (via copyPathOps, flatten/prefix)', () => 
       expect(skill).toContain('[edge cases](./edge-cases.md)')
       expect(edgeCases).toContain('[SKILL](./SKILL.md)')
     })
+    // #407 (placement half — landed). The standard Agent-Skills
+    // progressive-disclosure layout. Before `flattenDepth`, this installed as the
+    // SIBLING dir `pair-process-review-references/`: not a sub-doc of the skill at
+    // all, so the skill's own `./references/deep.md` pointed at nothing.
+    it('installs a nested references/ dir INSIDE the skill, not as a sibling (#407)', async () => {
+      const fileService = createTestFileService({
+        '/dataset/source/process/review/SKILL.md':
+          '---\nname: review\n---\n# /review\nDetail in [deep dive](./references/deep.md).',
+        '/dataset/source/process/review/references/deep.md':
+          '# Deep dive\nBack to [SKILL](../SKILL.md).',
+      })
+
+      await copyPathOps({
+        fileService,
+        source: 'source',
+        target: 'target',
+        datasetRoot: '/dataset',
+        options: { flatten: true, prefix: 'pair', flattenDepth: 2, targets: [] },
+      })
+
+      expect(
+        await fileService.exists('/dataset/target/pair-process-review/references/deep.md'),
+      ).toBe(true)
+      // ...and NOT as a sibling pseudo-skill, which was the defect.
+      expect(
+        await fileService.exists('/dataset/target/pair-process-review-references/deep.md'),
+      ).toBe(false)
+
+      // The skill's FORWARD link is correct with no rewrite: both files moved
+      // together, so the same-dir-relative href still resolves.
+      const skill = await fileService.readFile('/dataset/target/pair-process-review/SKILL.md')
+      expect(skill).toContain('[deep dive](./references/deep.md)')
+    })
+
+    // The remaining half of #407, deliberately NOT asserted as passing.
+    // `rebaseWithinMovedDir` only rebases targets INSIDE the file's own directory;
+    // `../SKILL.md` points at the PARENT, so it falls through to the source-root
+    // fallback and becomes `../../../source/process/review/SKILL.md` — a path back
+    // into the dataset layout. Fixing it means anchoring the rebase at the moved
+    // ENTRY (`process/review` → `pair-process-review`) rather than at the file's
+    // directory, which changes the rewriter's signature and its callers.
+    it.todo('rewrites a nested sub-doc back-link to stay ../SKILL.md (#407, link half)')
   })
 
   describe('mirror behavior — idempotent updates (AC4)', () => {

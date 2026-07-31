@@ -11,4 +11,9 @@ export type CopyPathOpsResult = {
 }
 
 /** Naming transform options (flatten and/or prefix) applied during a copy. */
-export type TransformOpts = { flatten: boolean; prefix?: string }
+/**
+ * `flattenDepth` bounds flattening to the registry's entry granularity, so a
+ * deeper segment is preserved as a real sub-path instead of becoming a sibling
+ * entry. Omitted ⇒ every separator is flattened, as before (#407).
+ */
+export type TransformOpts = { flatten: boolean; prefix?: string; flattenDepth?: number }
