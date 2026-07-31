@@ -1,7 +1,7 @@
 ---
 name: review
 description: "Reviews a pull request through 6 sequential phases (5 review + optional merge with parent cascade) — validation, technical review, adoption compliance, completeness, decision — to decide whether it merges. Not a quick build/test sanity check (use /verify-quality). Composes /classify, /verify-quality, /verify-done, /record-decision, /analyze-debt, /assess-security (required), /verify-adoption, /assess-stack (optional)."
-version: 0.7.0
+version: 0.8.0
 author: Foomakers
 ---
 
@@ -55,7 +55,7 @@ CODE REVIEW STATE:
 
 1. **Check**: Is the PR already loaded in this session?
 2. **Skip**: If yes, confirm PR number and move to Step 1.2.
-3. **Act**: Read PR from the PM tool — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md):
+3. **Act**: Read the PR from the **code host** — a PR/review operation, so it reads `code-host`, not `pm-tool` (resolution + routing table: see [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md); absent `code-host` ⇒ same tool as the PM tool):
    - PR metadata (author, branch, target, status)
    - Changed files and diff
    - PR description and linked story
@@ -65,7 +65,7 @@ CODE REVIEW STATE:
 
 1. **Check**: Is the story already loaded?
 2. **Skip**: If yes, move to Step 1.3.
-3. **Act**: Extract story ID from PR description or `$story` argument. Read story from PM tool:
+3. **Act**: Extract the story ID from the PR description (the `Refs: <issue-id>` cross-link when the tools are split) or the `$story` argument. Read the story from the **PM tool** — an item read, so it reads `pm-tool`:
    - Acceptance criteria
    - Task breakdown and completion claims
    - Epic context
@@ -229,9 +229,11 @@ Based on compiled findings:
 
 ### Step 5.3: Submit Review
 
-The compiled report **is the body of the native GitHub review** — the verdict is the review action; there is **no separate PR comment** (decision Q5, AC2).
+The compiled report **is the body of the native review on the code host** — the verdict is the review action; there is **no separate PR comment** (decision Q5, AC2).
 
-1. **Act**: Submit the native review using the PM tool (per [github-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md)), passing the compiled verdict-first report as the review **body**:
+The review is submitted on the **code host only** (where it gates the merge). It is **never mirrored** onto the PM tool: the board reaches the outcome through the linked PR reference, so no review state is duplicated. See the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
+
+1. **Act**: Submit the native review on the code host (for GitHub, per [github-implementation.md](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md); another host's implementation guide supplies the equivalent commands), passing the compiled verdict-first report as the review **body**:
    - **APPROVED / TECH-DEBT**: `event = APPROVE`.
    - **CHANGES-REQUESTED**: `event = REQUEST_CHANGES`.
    - MCP-first: `pull_request_review_write` with `method = create`, the report as `body`, and the appropriate `event`.
@@ -312,7 +314,8 @@ See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standar
 - **Self-authored PR (self-review)**: GitHub blocks `APPROVE` / `REQUEST_CHANGES` on your own PR, so the native verdict action is rejected for solo authors. Fall back to `event = COMMENT` (`gh pr review <number> --comment --body-file <report>`), keeping the verdict token at the head of the body — the full verdict-first report is still recorded as a review, so nothing is lost (unlike a rejected APPROVE/REQUEST_CHANGES). Does NOT HALT.
 - **Story not found**: Review proceeds with PR-only validation (no AC check). Phase 6 skips parent cascade.
 - **Code review template not found**: **HALT** — cannot produce review without template (a required dependency, not optional).
-- **PM tool not accessible**: Phase 6 merge via CLI only.
+- **PM tool not accessible**: the PR-side work (review, merge) still runs on the code host; the PM-side writes (issue close, parent cascade) are reported as not done rather than guessed. In a single-tool project this is the same tool, so the merge falls back to CLI only.
+- **Code host declared but unreachable/unauthenticated**: **HALT** with a setup pointer before any review is submitted — there is nothing to review against. PM-side reads already done are not rolled back.
 - **Merge fails** (conflicts, branch protection): Report the failure, ask reviewer to resolve. Do not force-push or bypass protections.
 - **/execute-manual-tests not installed**: Skip Step 6.6. Log "Manual test validation skipped — skill not installed." Does NOT block merge.
 - **No manual test suite**: Skip Step 6.6. Log "No manual test suite found." Does NOT block merge.

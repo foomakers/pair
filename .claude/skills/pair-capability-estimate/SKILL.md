@@ -1,7 +1,7 @@
 ---
 name: pair-capability-estimate
 description: "Estimates story points for a refined user story using the project's adopted estimation methodology; confirms rather than re-estimating if already sized. Composed by /pair-process-refine-story; invoke directly to size a story on demand ('estimate story #87')."
-version: 0.4.1
+version: 0.4.2
 author: Foomakers
 ---
 
@@ -20,7 +20,7 @@ Apply the adopted estimation methodology to size a refined user story. Reads the
 
 ### Step 1: Load Story
 
-1. **Check**: Read the story from the PM tool — resolution: see [way-of-working / PM-tool resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
+1. **Check**: Read the story from the PM tool — resolution: see [way-of-working / PM-tool + code-host resolution](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
 2. **Verify**: Story exists and has acceptance criteria. If not refined → **HALT**: "Story must be refined before estimation."
 
 ### Step 2: Check Existing Estimate

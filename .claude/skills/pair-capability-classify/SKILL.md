@@ -1,7 +1,7 @@
 ---
 name: pair-capability-classify
 description: "Builds the classification matrix by applying the quality model (KB default + `tech/risk-matrix.md` adoption delta) — from the story context in refinement, from the code/diff in review (confirm-or-raise, never lower). Emits chromatic tags only when the adoption declares the matrix→tag projection. Composed by /pair-process-refine-story (refinement context) and /pair-process-review (review context); invoke directly to classify a card or PR on demand."
-version: 0.1.0
+version: 0.2.0
 author: Foomakers
 ---
 
@@ -19,7 +19,7 @@ Two invocation contexts, one model:
 | Argument   | Required | Description                                                                                                                             |
 | ---------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `$context` | No       | `refinement` — classify from the story context. `review` — classify from the diff. Auto-detected: called by `/pair-process-refine-story` → `refinement`; by `/pair-process-review` → `review`; a PR/diff in context → `review`; otherwise → `refinement`. |
-| `$target`  | No       | The card/PR to classify (story ID or PR number). Default: the item in context.                                                          |
+| `$target`  | No       | The card/PR to classify (story ID or PR number). Default: the item in context. **The target names the side every write goes to**: a **card ⇒ the PM tool**, a **PR ⇒ the code host** (they are the same tool unless the project declares `code-host` — see the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md)). |
 | `$override`| No       | An explicit tier or dimension override passed by a human (resolution cascade **Argument** layer, quality-model §Resolution order). Raises only — never lowers a review value below the model result. |
 
 ## Prerequisite: the quality model
@@ -60,12 +60,12 @@ Per `$context`, collect the source for each dimension (quality-model §3.1, "Sou
 
 1. **Act**: Resolve each of the five dimensions (Service/domain criticality, Change/diff risk, Business impact, Security relevance, Coupling balance) to `green`/`yellow`/`red` per quality-model §3.1, applying the resolution cascade (Step 1's effective rule set) to each — e.g. a service listed `High` in the Criticality Table overrides the Medium default (AC5); a service **not** listed in an existing table resolves to conservative High.
 2. **Act**: **Risk tier = max(assessed dimensions)** (quality-model §3.2), projected as `risk:green|yellow|red`. Compute the **cost class** independently as the highest detected signal (quality-model §3.3, `cost:green|yellow|orange|red`) — always written to the body, never part of the risk max.
-3. **Act** (review only, never-lower): read the refinement-time tier from the story body. The review tier is `max(review-computed, refinement-tier)` per dimension and overall — the review pass may **raise** a dimension (e.g. the diff reveals a schema migration ⇒ `risk:red`) but **never lowers** a value the story's refinement already set (quality-model §3.2, D17). A `$override` may raise further; it never lowers below the model result.
+3. **Act** (review only, never-lower): read the refinement-time tier from the story body — **an item read ⇒ `pm-tool`** ([routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md)), the opposite side from Step 4's PR write. **When the tools are split, resolve the story's item id from the PR's `Refs:` cross-link line first** (composed from `/pair-process-review` the story is already in session; the standalone `$target: <PR>` path has only the PR, and without the id the refinement floor is unreadable — the never-lower rule would silently degrade to the review value alone, the D17 violation this point exists to prevent). `Refs:` absent on a split project ⇒ report the floor as **unreadable** and keep the review value, flagged, rather than treating it as `green`. The review tier is `max(review-computed, refinement-tier)` per dimension and overall — the review pass may **raise** a dimension (e.g. the diff reveals a schema migration ⇒ `risk:red`) but **never lowers** a value the story's refinement already set (quality-model §3.2, D17). A `$override` may raise further; it never lowers below the model result.
 4. **Verify**: Every dimension is `green`/`yellow`/`red`/`not assessed`; the tier equals the max of the assessed dimensions; in review, no dimension is below its refinement value. **Determinism**: the same card/PR under the same model + adoption yields an identical matrix and tier on every run (AC4).
 
 ### Step 4: Write the Matrix to the Body (always)
 
-1. **Act**: Render the matrix as **1 line + `<details>`** (D22 reading budget — never an inline table) and write it into the card/PR body's classification section. This write happens **regardless of tag projection** — §3.2/§3.3 body output never depends on it.
+1. **Act**: Render the matrix as **1 line + `<details>`** (D22 reading budget — never an inline table) and write it into the target body's classification section — **card ⇒ the PM tool, PR ⇒ the code host** (routing by target, per the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md); one tool unless `code-host` is declared). In review context the target is the **PR**, so this is a code-host write. This write happens **regardless of tag projection** — §3.2/§3.3 body output never depends on it.
 2. **Verify**: The body carries a 1-line verdict (`risk:<tier>`, plus `cost:<class>` and any not-assessed note) and a collapsed `<details>` with the per-dimension breakdown and confidence.
 
 ### Step 5: Tag Projection (adoption-gated)
@@ -81,7 +81,7 @@ Tag *emission* is declared, not implicit (quality-model §5) — the matrix in S
    > 2. No, don't tag anything (records the opt-out so this isn't asked again)
 
    On **yes**, write the `## Tag Projection` → `Active: risk` section into `tech/risk-matrix.md`; on **no**, write `Active: none`. This registry write is `classify`'s own (the §5 precedent — the same self-write `/pair-capability-verify-quality` performs for its gate registry), not adoption **decision** content, so it does not route through `/pair-capability-record-decision`.
-4. **Act**: Apply the resolved tags to the card/PR. `classify` output wins for **classification** tags (`risk:*`, `cost:*`, …); foreign/manual tags are left untouched. **PM tool lacks label-API access** ⇒ the matrix stays in the body (Step 4), the tagging failure is reported, **non-blocking** (AC edge case).
+4. **Act**: Apply the resolved tags to the target — **card ⇒ PM-tool labels, PR ⇒ code-host labels** (same routing as Step 4). `classify` output wins for **classification** tags (`risk:*`, `cost:*`, …); foreign/manual tags are left untouched. **The target's host lacks label-API access** (PM tool for a card, code host for a PR) ⇒ the matrix stays in the body (Step 4), the tagging failure is reported, **non-blocking** (AC edge case).
 5. **Verify**: Either the declared tags are applied, or the proposal was answered and recorded (no re-prompt next run), or the opt-out is honored — and the body matrix from Step 4 exists in every case.
 
 ## Output Format
@@ -89,7 +89,7 @@ Tag *emission* is declared, not implicit (quality-model §5) — the matrix in S
 ```text
 CLASSIFY ([refinement | review]):
 ├── Target:   [#story | #PR]
-├── Tier:     risk:[green | yellow | red]   [(raised from refinement risk:yellow) — review only]
+├── Tier:     risk:[green | yellow | red]   [(raised from refinement risk:yellow) — review only | (refinement floor unreadable — review value only, NOT confirmed) — review only]
 ├── Cost:     cost:[green | yellow | orange | red]
 ├── Model:    [KB defaults | + Criticality Table | + Overrides | + Tag Projection]
 ├── Tags:     [applied: risk:red | proposed (awaiting answer) | opted out (Active: none) | tagging failed — non-blocking]
@@ -106,7 +106,7 @@ CLASSIFY ([refinement | review]):
 | Security relevance | [g/y/r] | [path heuristic | assess-security verdict] | |
 | Coupling balance | [g/y/r | not assessed] | [subdomain volatility + integrations | assess-coupling verdict | absent] | |
 
-Confidence: [high | low — unreadable diff, path/service-level fallback]
+Confidence: [high | low — unreadable diff, path/service-level fallback | low — refinement floor unreadable]
 
 </details>
 ```
@@ -164,13 +164,14 @@ Review raw max = red (Change/diff risk, Security relevance), so `max(red, yellow
 - **`tech/risk-matrix.md` absent or malformed**: KB defaults apply completely; no tags emitted; nothing fails (quality-model §6, D21).
 - **Conflicting manual tags on the card**: `classify` output wins for classification tags (`risk:*`, `cost:*`); foreign tags untouched.
 - **Unreadable diff (huge/binary)**: fall back to file-path/service-level evidence; flag low confidence in the `<details>`.
-- **Projection defined but PM tool lacks label-API access**: matrix still written to the body; tagging failure reported, non-blocking.
+- **Projection defined but the target's host lacks label-API access** (PM tool for a card, code host for a PR): matrix still written to the body; tagging failure reported, non-blocking.
 - **Coupling sources absent**: coupling dimension "not assessed", excluded from the max, never blocks (D21).
+- **Refinement floor unreadable** (review, split tools, the PR carries no `Refs:` line — or the PM item is unreachable): the never-lower `max()` has no floor to apply, so report the tier as the **review-computed value, explicitly flagged as unconfirmed** (`Tier: risk:yellow (refinement floor unreadable — review value only, NOT confirmed)`, `Confidence: low`) and name the missing cross-link. Never silently present it as a confirmed tier: the floor may have been higher (D17).
 - **PR with no classification present** (read by a downstream consumer, not produced here): treated as `red` (fail-safe, quality-model §3.2).
 
 ## Graceful Degradation
 
-See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → minimal run, ask directly; adoption file missing → run against KB defaults; PM tool unreachable → matrix returned to caller, tagging deferred). Additional cases:
+See [graceful degradation](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/graceful-degradation.md) (guideline missing → minimal run, ask directly; adoption file missing → run against KB defaults; the target's host unreachable — PM tool for a card, code host for a PR → matrix returned to caller, tagging deferred). Additional cases:
 
 - **`/pair-capability-assess-security` not available** (review): fall back to the path-heuristic security relevance (quality-model §3.1) instead of the verdict; note the fallback.
 - **`/pair-capability-assess-coupling` not installed / no DDD artifacts**: coupling dimension "not assessed" (never a HALT).

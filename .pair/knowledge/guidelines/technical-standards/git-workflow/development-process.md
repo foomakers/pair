@@ -8,7 +8,9 @@ This document establishes a comprehensive Git workflow that supports our rapid d
 
 ### 1. Branch Structure
 
-#### Main Branch (main)
+#### Base Branch (`main` by default)
+
+> `main` is the **default**, not a literal: the branch every feature branch starts from and merges back into is the adopted `base-branch` (`way-of-working.md` → `## Git Workflow`; resolution order — including the legacy `## Merge Strategy` placement — in [way-of-working / PM-tool + code-host resolution](../ai-development/skill-conventions/way-of-working-pm-resolution.md)). Read `<base-branch>` in every snippet below as that resolved value; on a project that declares nothing it *is* `main`.
 
 - **Purpose**: Production-ready code
 - **Protection**: Branch protection rules enabled
@@ -19,7 +21,7 @@ This document establishes a comprehensive Git workflow that supports our rapid d
 
 - **Naming Convention**: `feature/brief-description` or `feat/ticket-id-description`
 - **Lifecycle**: Short-lived (days, not weeks)
-- **Origin**: Always branch from latest `main`
+- **Origin**: Always branch from the latest `<base-branch>` (the adopted base branch, `main` by default — see above)
 - **Merge**: Via pull request with squash
 - **PR granularity — one PR per story**: A story is delivered on ONE branch with ONE PR, opened the first time and updated for all subsequent work on it (further tasks are commits/checkboxes within that same PR). Never open a second PR for the same story unless a human explicitly says so.
 
@@ -34,9 +36,9 @@ This document establishes a comprehensive Git workflow that supports our rapid d
 #### Creating Feature Branches
 
 ```bash
-# Update main branch
-git checkout main
-git pull origin main
+# Update the base branch (<base-branch> is the adopted value, NOT a literal)
+git checkout <base-branch>
+git pull origin <base-branch>
 
 # Create and switch to feature branch
 git checkout -b feature/user-authentication
@@ -157,11 +159,11 @@ pnpm type-check
 # Squash multiple commits into one (if needed)
 git rebase -i HEAD~3
 
-# Update branch with latest main
-git checkout main
-git pull origin main
+# Update branch with the latest base branch (<base-branch>: adopted value, not a literal)
+git checkout <base-branch>
+git pull origin <base-branch>
 git checkout feature/user-authentication
-git rebase main
+git rebase <base-branch>
 ```
 
 ### 2. Creating Pull Requests
@@ -262,21 +264,22 @@ Closes #[issue number]
 
 - All CI/CD checks must pass
 - Required reviews approved
-- Branch is up-to-date with main
+- Branch is up-to-date with `<base-branch>`
 - No merge conflicts
 
 #### Merge Process
 
 ```bash
-# Option 1: GitHub UI (Recommended)
-# Use "Squash and merge" button in GitHub PR interface
+# Option 1: the code host's UI (Recommended)
+# Use the "Squash and merge" control in the PR interface of the adopted code host
+# (way-of-working.md -> ## Git Workflow -> code-host; absent => the PM tool's own host)
 
-# Option 2: Command line
-git checkout main
-git pull origin main
+# Option 2: Command line (<base-branch> is the adopted value, NOT a literal)
+git checkout <base-branch>
+git pull origin <base-branch>
 git merge --squash feature/user-authentication
 git commit -m "feat(auth): implement user authentication with JWT tokens"
-git push origin main
+git push origin <base-branch>
 ```
 
 ### 2. Post-Merge Actions
@@ -387,7 +390,7 @@ fi
 #### Prevention
 
 - Keep feature branches short-lived
-- Regularly sync with main branch
+- Regularly sync with the base branch
 - Communicate about overlapping changes
 
 #### Resolution Process
@@ -395,7 +398,7 @@ fi
 ```bash
 # Step 1: Update your branch
 git fetch origin
-git rebase origin/main
+git rebase origin/<base-branch>
 
 # Step 2: Resolve conflicts in your editor
 # Edit conflicted files, remove markers, test changes

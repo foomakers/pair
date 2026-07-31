@@ -4,12 +4,14 @@
 
 Systematic project management tool orchestration through platform evaluation, implementation optimization, and workflow integration that enables teams to select, adopt, and maximize the effectiveness of project management solutions across diverse organizational contexts and project requirements.
 
+**PM tool ≠ code host.** These guides cover the tool that holds the **backlog**. The tool that holds the **code** (branches, pull requests, reviews) is the *code host*, and it is the same tool by default — a project only declares `code-host` in `way-of-working.md` → `## Git Workflow` when the two differ (Linear + GitHub being the reference case). Which field each operation reads is defined once, in [way-of-working / PM-tool + code-host resolution](../../technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
+
 ## Scope
 
 This framework covers:
 
 - Project management tool selection, setup, and implementation guidance
-- GitHub Projects, Azure DevOps, and filesystem-based project management implementations
+- GitHub Projects, Azure DevOps, Linear, and filesystem-based project management implementations
 - Tool-specific workflow configuration and optimization strategies
 - Integration patterns with development tools and communication platforms
 - Migration strategies and tool evaluation frameworks
@@ -54,6 +56,12 @@ This framework does not cover:
 - Work item hierarchy mapping (Initiative→Epic, Epic→Feature, Story→PBI, Task→Task)
 - State mapping example for Azure Boards columns
 - Pull request and merge workflow
+
+**[linear-implementation.md](linear-implementation.md)** - Complete setup and usage guide for Linear-based project management
+
+- Two access paths documented (Linear MCP Server, GraphQL API) — adoption picks one
+- Issue hierarchy mapping (labels-as-types + parent/sub-issue), estimates, and the default state mapping
+- The **reference split configuration**: Linear hosts no code, so PR/review work routes to a declared `code-host` and the two tools are linked by the `Refs: <issue-id>` convention
 
 ### Quick Reference
 
@@ -266,7 +274,7 @@ This framework has been optimized for clarity and usability:
 
 ### Cross-Topic Integration
 
-Both implementation guides include comprehensive cross-topic navigation to:
+Every implementation guide includes comprehensive cross-topic navigation to:
 
 - **Issue Management**: Integration with issue tracking workflows
 - **Project Tracking**: Progress monitoring and reporting approaches
@@ -290,4 +298,4 @@ Each guide provides:
 
 **Skill**: Use `/pair-capability-assess-pm` to evaluate and adopt a PM tool from these guidelines via the resolution cascade. Use `/pair-capability-setup-pm` for tool configuration.
 
-_This framework provides comprehensive guidance for selecting and implementing project management tools that integrate seamlessly with development workflows and team collaboration patterns._
+*This framework provides comprehensive guidance for selecting and implementing project management tools that integrate seamlessly with development workflows and team collaboration patterns.*

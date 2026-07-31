@@ -544,6 +544,26 @@ Add review tasks to the story file:
 - [ ] **Review-003:** Update API documentation with new endpoint
 ```
 
+## Comments on an Item (Activity Log)
+
+Filesystem has no comment API — the item **is** a markdown file — so a comment is an **append** to one dedicated section of that file: `## Activity Log`, at the end of the item file, created on first use.
+
+```markdown
+## Activity Log
+
+- **2026-07-29** — PR: https://github.com/acme/platform/pull/412
+```
+
+This is the mechanism `/pair-capability-write-issue $mode: comment` resolves for `filesystem` (it is how the PR back-link of a split setup reaches the item, since the code host is always a separate tool here — filesystem hosts no code). The rules that make it equivalent to a comment elsewhere:
+
+1. **Append only, one section.** Add a bullet under `## Activity Log` and change nothing else — the statement, acceptance criteria, Definition of Done, task checkboxes, Implementation Progress and any front-matter stay byte-identical.
+2. **Never a status write.** Board state on filesystem is the item's **directory** (see Status Management via File Location) — an activity entry never moves or renames the file.
+3. **Not idempotent by itself.** The bullet carries no id, so re-running appends a second one: a caller that can re-run (e.g. `/pair-capability-publish-pr`'s back-link) greps the section for the value first and skips when present.
+4. **Distinct from `Implementation Progress`**, which is the author's own dated work log; `## Activity Log` holds cross-links and annotations written _by tooling_.
+5. **Reading it is a grep of this section**, not an API call: a caller checking "does a comment with this URL already exist?" (e.g. `/pair-capability-publish-pr`'s back-link check) greps `## Activity Log` in the item file.
+6. **It survives later body renders through the caller's contract.** `$mode: write` is a **full-body overwrite**, so a skill that re-renders an item (`/pair-process-plan-tasks`, a re-refinement) must pass the already-merged full body — which includes the existing `## Activity Log`. Read → merge → write; a render that drops the section is a caller bug, not a property of this mechanism.
+7. **The item `$id` is the file stem** (`01-01-001`), never a path: the file moves between the status directories as its state changes, so a caller resolves the item by **glob across them** (`**/01-01-001*.md`). That stem is also what the PR's `Refs:` line carries (see the [cross-linking convention](../../technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md)).
+
 ## Best Practices
 
 ### File Management

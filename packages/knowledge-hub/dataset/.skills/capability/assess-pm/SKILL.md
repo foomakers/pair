@@ -1,7 +1,7 @@
 ---
 name: assess-pm
 description: "Evaluates and recommends which project management tool fits this project (Jira, Linear, GitHub Projects, etc.) when the choice is still open — proposes a choice, doesn't configure anything. /setup-pm configures the tool once picked; otherwise the caller persists the proposal via /record-decision."
-version: 0.5.0
+version: 0.5.1
 author: Foomakers
 ---
 
@@ -47,6 +47,8 @@ Read [resolution cascade](../../../.pair/knowledge/guidelines/technical-standard
    - Implementation guides for supported tools:
      - [GitHub Implementation](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/github-implementation.md)
      - [Filesystem Implementation](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/filesystem-implementation.md)
+     - [Azure DevOps Implementation](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/azure-devops-implementation.md)
+     - [Linear Implementation](../../../.pair/knowledge/guidelines/collaboration/project-management-tool/linear-implementation.md) — note: Linear hosts no code, so adopting it implies a separate `code-host`
 2. **Act**: Read project context:
    - [adoption/product/PRD.md](../../../.pair/adoption/product/PRD.md) — team size, collaboration needs
    - [adoption/tech/way-of-working.md](../../../.pair/adoption/tech/way-of-working.md) — methodology (PM tool should support it)

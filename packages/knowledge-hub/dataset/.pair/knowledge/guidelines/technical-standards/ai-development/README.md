@@ -13,7 +13,7 @@ Establish enterprise-grade standards for AI development that maximize developmen
 - **[AI Tools](ai-tools.md)** - AI development tool selection, configuration, and best practices
 - **[Documentation Standards](documentation-standards.md)** - AI-specific documentation requirements and patterns
 - **[MCP Integration](mcp-integration.md)** - Model Context Protocol implementation and integration standards
-- **[Skill Conventions](skill-conventions/README.md)** - Single-source shared conventions for the `SKILL.md` corpus (resolution cascade, idempotency, graceful degradation, template resolution, PM-tool resolution, and more)
+- **[Skill Conventions](skill-conventions/README.md)** - Single-source shared conventions for the `SKILL.md` corpus (resolution cascade, idempotency, graceful degradation, template resolution, PM-tool + code-host resolution, and more)
 
 ### Key Focus Areas
 

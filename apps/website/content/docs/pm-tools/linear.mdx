@@ -1,7 +1,9 @@
 ---
 title: Linear
-description: Configure pair to manage work items with Linear — setup, mapping model, and first-run walkthrough.
+description: Configure pair to manage work items with Linear — setup, the required code-host declaration, mapping model, and first-run walkthrough.
 ---
+
+**Linear hosts no code.** It has no repositories, branches or pull requests, so a Linear project always declares a separate **code host** (usually GitHub). This is pair's reference split setup — see [Code host vs PM tool](/docs/concepts/code-host) for the routing rule and cross-linking convention.
 
 ## Configuration
 
@@ -10,14 +12,23 @@ Add these lines to `.pair/adoption/tech/way-of-working.md`:
 ```markdown
 - Linear is adopted for project management.
   Team: <your-team-key>. Project: <your-project-name>.
-  See `.pair/knowledge/guidelines/collaboration/project-management-tool/README.md` for usage.
+  Access: Linear MCP Server (fallback: GraphQL API).
+  See `.pair/knowledge/guidelines/collaboration/project-management-tool/linear-implementation.md` for usage.
+
+## Git Workflow
+
+- `code-host`: `github` — repository `<org>/<repo>`.
+- `base-branch`: `main`.
 ```
+
+Issue and state operations go to Linear; branch, PR, review and merge operations go to the code host. The two are linked by `Refs: <issue-id>` in the PR body plus the PR URL commented back on the Linear issue — no native integration required.
 
 ### Prerequisites
 
 - Linear account with a team and project created
-- Linear API key (Settings > API > Personal API Keys)
-- Linear MCP Server configured for your AI assistant
+- Linear API key (Settings → Account → Security & access → Personal API keys)
+- One access path: Linear MCP Server, **or** direct GraphQL API access
+- A code host for the repositories, declared as `code-host`
 
 ### Linear MCP Server
 
@@ -48,13 +59,16 @@ Task                →   Checklist item in story issue body
 
 ### Status Transitions
 
-| pair Action | Linear Effect |
-|------------|--------------|
-| Start implementing a story | Issue status → "In Progress" |
-| Complete a task | Checkbox marked in issue description |
-| Create PR | PR linked to issue via branch naming |
-| Merge PR | Issue status → "Done" |
-| All stories in epic done | Parent issue status → "Done" |
+| pair Action | Linear Effect | Code Host Effect |
+|------------|--------------|------------------|
+| Start implementing a story | Issue status → "In Progress" | Feature branch created |
+| Complete a task | Checkbox marked in issue description | Commit on the branch |
+| Create PR | PR URL commented on the issue; status → "In Review" _(only if the team has an In Review state — Linear's default teams don't, and skills report the gap instead of guessing)_ | PR opened with `Refs: <issue-id>` |
+| Review | _(nothing — review state is never mirrored)_ | Review submitted; merge gated here |
+| Merge PR | Issue status → "Done" | PR merged, branch deleted |
+| All stories in epic done | Parent issue status → "Done" | — |
+
+State transitions always happen on Linear. PR states live on the code host and are never mirrored onto Linear, so no state is duplicated.
 
 ### Labels and Properties
 
@@ -96,6 +110,8 @@ pair creates Linear sub-issues under the epic, sets priority, and assigns them t
 
 ## Related
 
+- [Code host vs PM tool](/docs/concepts/code-host) — the split setup, routing rule and cross-linking convention
+- [Canonical states](/docs/concepts/canonical-states) — mapping Linear workflow states to macrostates
 - [PM Tools overview](/docs/pm-tools) — choosing the right tool
 - [Filesystem](/docs/pm-tools/filesystem) — zero-dependency alternative
 - [GitHub Projects](/docs/pm-tools/github-projects) — GitHub-native option

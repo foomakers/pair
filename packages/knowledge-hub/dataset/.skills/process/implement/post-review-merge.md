@@ -33,12 +33,12 @@ Disclosed from [SKILL.md](SKILL.md) Phase 4 — only reached when `/implement` i
 
 ### Step 4.3: Merge PR
 
-1. **Act**: Merge the PR with the confirmed commit message and the configured merge strategy.
-2. **Verify**: PR merged and closed.
+1. **Act**: Merge the PR with the confirmed commit message and the configured merge strategy, **on the code host** (`## Git Workflow` → `code-host`; absent ⇒ the PM tool's own host). The state write in Step 4.4 goes to the **PM tool** — see the [routing table](../../../.pair/knowledge/guidelines/technical-standards/ai-development/skill-conventions/way-of-working-pm-resolution.md).
+2. **Verify**: PR merged and closed on the code host.
 
 ### Step 4.4: Update Story & Parents
 
-1. **Act**: Update user story status to "Done" in the PM tool.
+1. **Act**: Update user story status to "Done" on the **PM tool** — state transitions always happen there, never on the code host (resolve the item id from the PR's `Refs: <issue-id>` cross-link when the two tools differ).
 2. **Act**: Check parent epic — if ALL stories in the epic are Done, update epic status to "Done".
 3. **Act**: Check parent initiative — if ALL epics in the initiative are Done, update initiative status to "Done".
 4. **Verify**: Story and parent hierarchy updated recursively.
