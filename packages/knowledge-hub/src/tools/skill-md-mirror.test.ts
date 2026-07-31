@@ -162,7 +162,6 @@ describe('directional guard ignores root-only artifacts with no dataset source',
       'pair-process-review/scratch.md',
     )
   })
-
 })
 
 /**

@@ -225,7 +225,12 @@ async function runCopyPipeline(tree: DatasetTree): Promise<InMemoryFileSystemSer
  */
 async function producedMarkdownPaths(fileService: InMemoryFileSystemService): Promise<string[]> {
   return (await walkMarkdownFiles(VIRTUAL_DEST, fileService))
-    .map(p => p.split(sep).join('/').slice(VIRTUAL_DEST.length + 1))
+    .map(p =>
+      p
+        .split(sep)
+        .join('/')
+        .slice(VIRTUAL_DEST.length + 1),
+    )
     .sort()
 }
 
