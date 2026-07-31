@@ -62,7 +62,9 @@ This is a **pnpm monorepo** using **Turbo** for task orchestration and build cac
 
 ```bash
 pnpm install              # Install all dependencies
-pnpm quality-gate         # Full quality check (ts:check + test + lint + prettier + mdlint + hygiene)
+pnpm quality-gate         # Full quality check (ts:check + test + lint + format check + hygiene)
+pnpm format               # Apply formatting (prettier + markdownlint, write mode)
+pnpm format:check         # Check formatting only — what the gate runs; never writes
 pnpm test                 # Run all tests (Turbo)
 pnpm build                # Build all packages (Turbo)
 pnpm lint                 # Lint all packages (Turbo)
@@ -118,7 +120,13 @@ Before committing, always run:
 pnpm quality-gate
 ```
 
-This runs (in order): `ts:check`, `test`, `lint`, `prettier:fix`, `mdlint:fix`, `hygiene:check`, `docs:staleness`.
+This runs (in order): `ts:check`, `test`, `lint`, `format:check` (prettier + markdownlint, **check mode**), `gate:composition`, `hygiene:check`, `docs:staleness`, `skills:conformance`, `dup:check`.
+
+The gate never formats. It is the pre-push hook, where the commits already exist: a write-mode
+formatter would rewrite the working tree without touching what is being pushed, so it only pollutes
+the next diff. On a `format:check` failure, run `pnpm format` and commit the result — `gate:composition`
+guards the gate against a write-mode formatter creeping back in. See ADL
+[2026-07-31-pre-push-gate-is-check-only.md](.pair/adoption/decision-log/2026-07-31-pre-push-gate-is-check-only.md).
 
 ### Custom Gate Registry
 

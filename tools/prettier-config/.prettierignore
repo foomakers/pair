@@ -8,9 +8,10 @@ out/
 **/node_modules/
 **/.cache/
 
-# Generated build artifacts — never authored, so never formatted.
-# Before #394 the gate ran prettier in WRITE mode and silently rewrote these on
-# every push; in check mode they would BLOCK every push instead. A generated file
-# must be able to do neither.
-**/.source/
-**/test-results/
+# Generated artifacts are NOT enumerated here. The wrappers in ./bin pass the
+# repo's own .gitignore files as additional --ignore-path entries (prettier 3.6
+# accepts the flag repeatedly), so "gitignored => never formatted" holds by
+# construction. That matters since #394: in write mode a generated file was
+# silently rewritten on every push, in check mode it would BLOCK every push —
+# a generated file must be able to do neither, and enumerating them reactively
+# only re-arms the same failure the next time a tool writes somewhere new.
