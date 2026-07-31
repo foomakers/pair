@@ -8,6 +8,16 @@
 
 `risk:<tier>` · `cost:<class>` — **[APPROVED | CHANGES-REQUESTED | TECH-DEBT]** — [one-line reason]
 
+<!-- Open-findings count: the ONE number a merger needs above the fold. A report that
+lists resolved findings under a heading like "Remaining Minor" reads as if work is
+pending — observed on PR #388, where all four items were ticked and past-tense and the
+maintainer still had to ask twice. State the count explicitly, and title a section by
+what its items ARE (`Minor — closed`), never by a word that could mean either. The
+`- [ ]` checkboxes in the first-review comment are the findings AS RAISED; they are
+ticked off in the remediation report, not in place, so an unticked box upstream is
+history and not an open item. Say so when the count is zero. -->
+> **Open findings: <N>.** <When 0: every finding is resolved; nothing on this PR is waiting on anyone.>
+
 <!-- Unassessed-chip fallback: the chip is NEVER dropped — the verdict line always carries both `risk:` and `cost:` prefixes and stays scannable. `cost:n/a` renders when `/assess-cost` is absent (cost is a single-source dimension). `risk:n/a` renders ONLY when `/classify` is entirely absent (no matrix at all, per skill Step 1.5) — a single unassessed dimension (Security relevance, or Coupling until #263) is EXCLUDED from `max(assessed)` (§3.1 / D21), NOT propagated to the tier, so the risk chip still shows the max of the other assessed dimensions. `n/a` is a rendering placeholder, not a tag value (no `cost:not assessed` / `risk:not assessed` tag is ever emitted). This keeps the top-line degradation consistent with the section degradation, whose collapsed body reads "not assessed". -->
 
 <!-- Classification-changed drift note: include ONLY when the review-time tier/cost differs from the story's refinement-time classification. Raise-only per quality-model §3.2 / D17 — a drift note fires upward, never records a silent downgrade. Omit the line entirely when unchanged. -->
